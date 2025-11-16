@@ -506,15 +506,17 @@ function initTabs(){
     const tab = btn.getAttribute('data-tab');
 
     // Show/hide groups
-    // main ".content" holds live top sections; other sections are siblings
-    document.querySelector('.content').style.display = (tab==='live') ? 'grid' : 'none';
+    // LIVE-Bereich bleibt auch im Smart-Home-Tab sichtbar
+    const showLive = (tab === 'live' || tab === 'smarthome');
+    const liveEl = document.querySelector('.content');
+    if (liveEl) liveEl.style.display = showLive ? 'grid' : 'none';
+
     for (const k of ['history','settings','smarthome']) {
       const el = sections[k];
       if (el) el.classList.toggle('hidden', tab !== k);
     }
   }));
 }
-
 function renderSmartHome(){
   const onTxt = (v)=> v ? 'AN' : 'AUS';
   const d = (k)=> state[k]?.value;

@@ -25,9 +25,7 @@
 - /config liefert `installerLocked` abhängig von Session.
 
 ## 0.3.30 – 2025-11-01
-- Default-Passwort für Installer: **install2025!** (falls kein Wert gesetzt).
-
-## 0.3.31 – 2025-11-01
+- ## 0.3.31 – 2025-11-01
 - Fix: Syntaxfehler im Login-Endpoint behoben; /api/set prüft jetzt sauber die Session.
 
 ## 0.3.32 – 2025-11-01
