@@ -90,6 +90,141 @@ class NexoWattVis extends utils.Adapter {
       });
     }
   }
+
+  async ensureSmartHomeStates() {
+    // State to expose SmartHome structure built from enum.rooms / enum.functions
+    await this.setObjectNotExistsAsync('smartHome.structure', {
+      type: 'state',
+      common: {
+        name: 'SmartHome structure (from enum.rooms / enum.functions)',
+        type: 'string',
+        role: 'json',
+        read: true,
+        write: false,
+        def: '{}'
+      },
+      native: {}
+    });
+  }
+
+  async buildSmartHomeStructureFromEnums() {
+    try {
+      // Read all room enums and function enums
+      const roomEnums = await this.getForeignObjectsAsync('enum.rooms.*', 'enum');
+      const functionEnums = await this.getForeignObjectsAsync('enum.functions.*', 'enum');
+
+      const rooms = {};
+      const roomByStateId = {};
+
+      // Build base room objects and a mapping from stateId -> roomKey[]
+      for (const [enumId, obj] of Object.entries(roomEnums || {})) {
+        if (!obj || !obj.common) continue;
+
+        const roomKeyParts = enumId.split('.');
+        const roomKey = roomKeyParts[roomKeyParts.length - 1] || enumId;
+        const roomName = obj.common.name || roomKey;
+
+        if (!rooms[roomKey]) {
+          rooms[roomKey] = {
+            id: enumId,
+            name: roomName,
+            functions: {}
+          };
+        }
+
+        const members = Array.isArray(obj.common.members) ? obj.common.members : [];
+        for (const stateId of members) {
+          if (!roomByStateId[stateId]) {
+            roomByStateId[stateId] = [];
+          }
+          roomByStateId[stateId].push(roomKey);
+        }
+      }
+
+      // Assign function enums to rooms based on their members
+      for (const [enumId, obj] of Object.entries(functionEnums || {})) {
+        if (!obj || !obj.common) continue;
+
+        const funcKeyParts = enumId.split('.');
+        const funcKey = funcKeyParts[funcKeyParts.length - 1] || enumId;
+
+        const members = Array.isArray(obj.common.members) ? obj.common.members : [];
+        for (const stateId of members) {
+          const assignedRooms = roomByStateId[stateId] || ['_noRoom_'];
+
+          for (const roomKey of assignedRooms) {
+            if (!rooms[roomKey]) {
+              // If a state is in a function enum, but not in any room enum
+              rooms[roomKey] = {
+                id: roomKey === '_noRoom_' ? null : 'enum.rooms.' + roomKey,
+                name: roomKey === '_noRoom_' ? 'Ohne Raum' : roomKey,
+                functions: {}
+              };
+            }
+
+            if (!rooms[roomKey].functions[funcKey]) {
+              rooms[roomKey].functions[funcKey] = [];
+            }
+
+            rooms[roomKey].functions[funcKey].push({
+              id: stateId
+            });
+          }
+        }
+      }
+
+      // Collect all state IDs we need metadata for
+      const neededStateIds = new Set();
+      for (const room of Object.values(rooms)) {
+        for (const funcKey of Object.keys(room.functions)) {
+          for (const entry of room.functions[funcKey]) {
+            if (entry && entry.id) {
+              neededStateIds.add(entry.id);
+            }
+          }
+        }
+      }
+
+      // Load foreign state objects to get human readable name / role
+      const stateObjects = {};
+      for (const id of neededStateIds) {
+        try {
+          const obj = await this.getForeignObjectAsync(id);
+          if (obj) {
+            stateObjects[id] = obj;
+          }
+        } catch (e) {
+          // ignore missing objects
+          this.log.debug && this.log.debug('Could not read foreign object for SmartHome enum state ' + id + ': ' + e);
+        }
+      }
+
+      // Enrich entries with name / role
+      for (const room of Object.values(rooms)) {
+        for (const funcKey of Object.keys(room.functions)) {
+          room.functions[funcKey] = room.functions[funcKey].map(entry => {
+            const obj = stateObjects[entry.id];
+            return {
+              id: entry.id,
+              name: obj && obj.common && obj.common.name ? obj.common.name : entry.id,
+              role: obj && obj.common && obj.common.role ? obj.common.role : ''
+            };
+          });
+        }
+      }
+
+      // Finally, write JSON structure to state
+      await this.setStateAsync('smartHome.structure', {
+        val: JSON.stringify(rooms),
+        ack: true
+      });
+
+      this.log.info('SmartHome structure from enums built with ' + Object.keys(rooms).length + ' rooms.');
+    } catch (err) {
+      this.log.error('Error while building SmartHome structure from enums: ' + err);
+    }
+  }
+
 async syncInstallerConfigToStates() {
     const cfg = (this.config && this.config.installerConfig) || {};
     const toSet = {
@@ -132,10 +267,22 @@ async syncInstallerConfigToStates() {
       try { await this.delObjectAsync('installer.password'); } catch(_e) { /* ignore */ }
 
       await this.ensureSettingsStates();
+      await this.ensureSmartHomeStates();
       await this.syncInstallerConfigToStates();
 
       // write settings-config defaults
       await this.syncSettingsConfigToStates();
+
+      // build SmartHome structure from enums (if enabled)
+      if (this.config && this.config.smartHome && this.config.smartHome.enabled) {
+        await this.buildSmartHomeStructureFromEnums();
+      } else {
+        try {
+          await this.setStateAsync('smartHome.structure', { val: '{}', ack: true });
+        } catch (_e) {
+          // ignore if state does not exist yet
+        }
+      }
 
       // finally subscribe and read initial values
       await this.subscribeConfiguredStates();
