@@ -506,8 +506,8 @@ function initTabs(){
     const tab = btn.getAttribute('data-tab');
 
     // Show/hide groups
-    // LIVE-Bereich bleibt auch im Smart-Home-Tab sichtbar
-    const showLive = (tab === 'live' || tab === 'smarthome');
+    // LIVE-Bereich nur im LIVE-Tab sichtbar
+    const showLive = (tab === 'live');
     const liveEl = document.querySelector('.content');
     if (liveEl) liveEl.style.display = showLive ? 'grid' : 'none';
 

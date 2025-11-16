@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.19",
+    "version": "0.4.20",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
@@ -323,7 +323,7 @@
         "en": "Add Smart Home tab placeholder controlled by admin setting.",
         "de": "Smart-Home-Tab-Vorbereitung, sichtbar bei aktivierter Smart-Home-Option im Admin."
       },
-      "0.4.19": {
+      "0.4.20": {
         "en": "Prepared SmartHome tab: initial SmartVisu-like functions (heat pump, room temperature, wallbox lock, grid limit, PV curtailment) in NexoWatt design.",
         "de": "SmartHome-Tab vorbereitet: erste SmartVisu-\u00e4hnliche Funktionen (W\u00e4rmepumpe, Raumtemperatur, Wallbox-Sperre, Netzlimit, PV-Abregelung) im NexoWatt-Design."
       }
