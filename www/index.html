@@ -1,0 +1,270 @@
+
+<!DOCTYPE html>
+
+<html lang="de">
+
+<link rel="icon" type="image/png" href="./assets/icons/nexowatt-32.png" sizes="32x32">
+<link rel="icon" type="image/png" href="./assets/icons/nexowatt-192.png" sizes="192x192">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#0c0f12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>NexoWatt EMS UI</title>
+<link href="/static/styles.css" rel="stylesheet"/>
+<!-- NexoWatt PWA / Icons -->
+    <link rel="icon" type="image/png" sizes="16x16" href="./assets/icons/nexowatt-16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/icons/nexowatt-32.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="./assets/icons/nexowatt-48.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="./assets/icons/nexowatt-192.png">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <meta name="theme-color" content="#0c0f12">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
+<link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,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">
+<!-- NexoWatt iOS Icons -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="./assets/icons/nexowatt-180.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="./assets/icons/nexowatt-152.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="./assets/icons/nexowatt-120.png">
+</head>
+<body>
+<header class="topbar"><div class="brand"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></div>
+<button aria-label="Menu" id="menuBtn">☰</button>
+<h1>NexoWatt EMS</h1>
+<nav class="tabs">
+<button class="tab active" data-tab="live">LIVE</button>
+<button class="tab" id="historyTabBtn" data-tab="history">HISTORY</button>
+<button class="tab" id="smarthomeTabBtn" data-tab="smarthome" style="display:none">SMART HOME</button>
+</nav>
+<div class="status-dot" id="liveDot" title="Live Verbindung"></div>
+<div class="menu hidden" id="menuDropdown"><button class="menu-item" id="menuOpenSettings">Einstellungen</button></div></header>
+<main class="content">
+<section class="card energy-web">
+<div class="card-header">
+<div class="legend-color"></div>
+<span>Energiefluss</span>
+</div>
+<div class="web-wrap">
+<svg class="web" preserveaspectratio="xMidYMid meet" viewbox="0 0 600 600">
+<defs>
+<filter height="140%" id="soft" width="140%" x="-20%" y="-20%">
+<fegaussianblur in="SourceGraphic" stddeviation="0.2"></fegaussianblur>
+</filter>
+</defs>
+<!-- lines -->
+<line class="flow grid" id="lineGrid" x1="160" x2="300" y1="300" y2="300"></line>
+<line class="flow pv" id="linePV" x1="300" x2="300" y1="160" y2="300"></line>
+<line class="flow consumer" id="lineC1" style="opacity:0" x1="300" x2="300" y1="300" y2="300"></line>
+<line class="flow consumer" id="lineC2" x1="300" x2="440" y1="300" y2="300"></line>
+<line class="flow consumer" id="lineRest" x1="300" x2="300" y1="300" y2="460"></line>
+<!-- nodes -->
+<g class="hub">
+<circle class="hub-dot" cx="300" cy="300" r="10"></circle>
+<circle class="hub-dot center" cx="300" cy="300" r="4"></circle>
+</g>
+<!-- Grid node (left) -->
+<g class="node grid" transform="translate(160,300)">
+<circle class="ring grid" r="44"></circle>
+<g class="ico" transform="translate(0,0)">
+  <image href="/static/icons/grid.png" x="-14" y="-14" width="28" height="28" />
+</g>
+<text class="val" id="gridVal" text-anchor="middle" y="-48">--</text>
+<text class="lbl" text-anchor="middle" y="28">Netz</text>
+</g>
+<!-- PV node (top) -->
+<g class="node pv" transform="translate(300,160)">
+<circle class="ring pv" r="44"></circle>
+<g class="ico" transform="translate(0,0)">
+  <image href="/static/icons/solar.png" x="-14" y="-14" width="28" height="28" />
+</g>
+<text class="val" id="pvVal" text-anchor="middle" y="-48">--</text>
+<text class="lbl" text-anchor="middle" y="28">PV</text>
+</g>
+<!-- Wallbox right -->
+<g class="node consumer charger" id="nodeEvcs" transform="translate(440,300)">
+<circle class="ring charger" r="44"></circle>
+<g class="ico" transform="translate(0,0)">
+  <image href="/static/icons/ev.png" x="-14" y="-14" width="28" height="28" />
+</g>
+<text class="val" id="c2Val" text-anchor="middle" y="58">--</text>
+<text class="lbl" text-anchor="middle" y="28">Ladestation</text>
+</g>
+<!-- Batterie bottom -->
+<g class="node consumer battery" transform="translate(300,460)">
+<circle class="ring battery" r="44"></circle>
+<g class="ico" transform="translate(0,0)">
+  <image href="/static/icons/battery.png" x="-14" y="-14" width="28" height="28" />
+</g>
+<text class="minor" id="batterySocIn" text-anchor="middle" y="-14">-- %</text>
+<text class="minor" id="batteryTime" text-anchor="middle" x="300" y="480"></text>
+<text class="val" id="restVal" text-anchor="middle" y="58">--</text>
+<text class="lbl" text-anchor="middle" y="28">Batterie</text>
+</g>
+<!-- center node -->
+<g class="node center" transform="translate(300,300)">
+<circle class="ring center" r="44"></circle>
+<g class="ico" transform="translate(0,0)">
+  <image href="/static/icons/building.png" x="-14" y="-14" width="28" height="28" />
+</g>
+<text class="minor" id="centerPower" text-anchor="middle" y="-14">0 W</text>
+<text class="lbl" text-anchor="middle" y="28">Gebäude</text>
+</g>
+<!-- battery labels along vertical line -->
+</svg>
+</div>
+</section>
+<section class="grid">
+<div class="card kpi">
+<div class="card-header"><span>Autarkie</span></div>
+<div class="kpi-body">
+<div class="bar"><div id="autarkyBar"></div></div>
+<div class="bar-label" id="autarkyValue">-- %</div>
+</div>
+</div>
+<div class="card kpi">
+<div class="card-header"><span>Eigenverbrauch</span></div>
+<div class="kpi-body">
+<div class="bar"><div id="selfVerbrauchBar"></div></div>
+<div class="bar-label" id="selfVerbrauchValue">-- %</div>
+</div>
+</div>
+<div class="card kpi">
+<div class="card-header"><span>Speicher System</span></div>
+<div class="row">
+<div class="bar small"><div id="storageSocBar"></div></div>
+<div class="mini">
+<div><small>SoC</small> <b id="storageSocValue">-- %</b></div>
+<div><small>Laden</small> <b id="storageLadenPower">--</b></div>
+<div><small>Entladen</small> <b id="storageEntladenPower">--</b></div>
+</div>
+</div>
+</div>
+<div class="card kpi">
+<div class="card-header"><span>Netz</span></div>
+<div class="row two">
+<div><small>Bezug</small><b id="gridBuyPowerCard">--</b></div>
+<div><small>Einspeisung</small><b id="gridSellPowerCard">--</b></div>
+</div>
+<div class="row one"><div><small>Gesamt</small><b id="gridEnergyKwh">--</b></div></div>
+</div>
+<div class="card kpi">
+<div class="card-header"><span>Produktion</span></div>
+<div class="row two">
+<div><small>PV</small><b id="productionTotal">--</b></div>
+<div><small>CO₂</small><b id="co2Savings">--</b></div>
+</div>
+<div class="row one"><div><small>Gesamt</small><b id="productionEnergyKwh">--</b></div></div>
+</div>
+<div class="card kpi">
+<div class="card-header"><span>Verbrauch</span></div>
+<div class="row two">
+<div><small>EVCS</small><b id="consumptionEvcs">--</b></div>
+<div><small>Gebäude</small><b id="consumptionBuilding">--</b></div>
+</div>
+<div class="row one"><div><small>Gesamt</small><b id="consumptionEnergyKwh">--</b></div></div>
+</div>
+
+</div>
+
+
+<div class="card kpi hidden" id="tariffCard">
+  <div class="card-header"><span>Tarif</span></div>
+  <div class="row two">
+    <div><small>Aktuell</small><b id="priceCurrent">--</b></div>
+    <div><small>Durchschnitt</small><b id="priceAverage">--</b></div>
+  </div>
+</div>
+<div class="card kpi clickable" id="evcsCard">
+  <div class="card-header"><span>Ladestation</span></div>
+  <div class="row two">
+    <div><small>Status</small><b id="evcsStatus">--</b></div>
+    <div><small>Letzte Ladung</small><b id="evcsLastChargeKwh">--</b></div>
+  </div>
+</div>
+
+<div id="evcsModal" class="modal hidden">
+  <div class="dialog">
+    <div class="dialog-header">
+      <span>Ladestation</span>
+      <button id="evcsClose" class="btn small">×</button>
+    </div>
+    <div class="evcs-body">
+      <div class="evcs-gauge"><div class="gauge-value" id="evcsPowerBig">0 W</div></div>
+      <div class="row two">
+        <div><small>Status</small><b id="evcsStatusModal">--</b></div>
+        <div><small>Ladestation</small><label class="switch"><input type="checkbox" id="evcsActiveToggle"><span></span></label></div>
+      </div>
+      <div class="row one">
+        <div style="width:100%"><small>Modus</small>
+          <input type="range" id="evcsModeSlider" min="1" max="3" step="1">
+          <div class="mode-labels"><span>Boost</span><span>Min+PV</span><span>PV</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</section>
+</main>
+<script src="/static/app.js"></script>
+
+<section class="hidden settings-wrap" data-tab-content="settings">
+  <section class="card">
+    <div class="card-header"><span>Allgemeine Einstellungen</span></div>
+    <div class="form">
+      <label class="row"><span>Benachrichtigungen</span>
+        <input type="checkbox" id="s_notify" data-scope="settings" data-key="notifyEnabled">
+      </label>
+      <label class="row"><span>E-Mail</span>
+        <input type="email" id="s_email" data-scope="settings" data-key="email">
+      </label>
+      <label class="row"><span>Dynamischer Zeittarif</span>
+        <input type="checkbox" id="s_dyn" data-scope="settings" data-key="dynamicTariff">
+      </label>
+      <label class="row"><span>Speicher Leistung (W)</span>
+        <input type="number" id="s_storagePower" step="1" data-scope="settings" data-key="storagePower">
+      </label>
+      <label class="row"><span>Strompreis (€)</span>
+        <input type="number" id="s_price" step="0.01" data-scope="settings" data-key="price">
+      </label>
+      <div class="row"><span>Priorität (Speicher ↔ Ladestation)</span>
+        <input type="range" min="0" max="100" id="s_priority" min="1" max="2" step="1" data-scope="settings" data-key="priority">
+      </div>
+      <div class="row"><span>Modus Tarif</span>
+        <input type="range" min="0" max="1" id="s_tariffMode" min="1" max="2" step="1" data-scope="settings" data-key="tariffMode">
+        <small>0 = Manuell, 1 = Automatisch</small>
+      </div>
+    
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="openInstallerAdmin">Installer</button>
+      </div>
+    </div>
+  </section>
+
+  
+</section>
+</section>
+
+<section class="hidden smarthome-wrap" data-tab-content="smarthome">
+  <section class="card">
+    <div class="card-header"><span>Smart Home</span></div>
+    <div class="card-body">
+      <p>Smart-Home-Ansicht ist vorbereitet und wird in einem nächsten Schritt mit Leben gefüllt.</p>
+    </div>
+  </section>
+</section>
+
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+        navigator.serviceWorker.register('./sw.js').catch(console.error);
+    });
+}
+</script>
+</body>
+</html>
