@@ -300,7 +300,9 @@ app.get('/config', (req, res) => {
         if (scope === 'installer') {
           if (!isInstallerAuthed(req)) return res.status(403).json({ ok: false, error: 'forbidden' });
           map = (this.config && this.config.installer) || {};
-        
+        } else if (scope === 'smartHome') {
+          const sh = (this.config && this.config.smartHome && this.config.smartHome.datapoints) || {};
+          map = sh;
         } else {
           map = (this.config && this.config.settings) || {};
         }
@@ -353,6 +355,7 @@ app.get('/config', (req, res) => {
     const dps = (this.config && this.config.datapoints) || {};
     const settings = (this.config && this.config.settings) || {};
     const installer = (this.config && this.config.installer) || {};
+    const smartHome = (this.config && this.config.smartHome && this.config.smartHome.datapoints) || {};
         const namespace = this.namespace + '.';
     const settingsLocalKeys = ['notifyEnabled','email','dynamicTariff','storagePower','price','priority','tariffMode','evcsMaxPower'];
     const keys = [
@@ -362,12 +365,14 @@ app.get('/config', (req, res) => {
       // include any mapped external settings and installer keys
       ...Object.keys(settings).map(k => 'settings.' + k),
       ...Object.keys(installer).map(k => 'installer.' + k),
+      ...Object.keys(smartHome).map(k => 'smartHome_' + k),
     ];
 
     for (const key of keys) {
       let id;
       if (key.startsWith('settings.')) id = settings[key.slice(9)];
       else if (key.startsWith('installer.')) id = installer[key.slice(10)];
+      else if (key.startsWith('smartHome_')) id = smartHome[key.slice(10)];
       else id = dps[key];
       if (!id && key.startsWith('settings.')) id = namespace + key;
       if (!id) continue;
@@ -406,6 +411,8 @@ app.get('/config', (req, res) => {
     for (const [k, dpId] of Object.entries(settings)) { if (dpId === id) return 'settings.' + k; }
     const installer = (this.config && this.config.installer) || {};
     for (const [k, dpId] of Object.entries(installer)) { if (dpId === id) return 'installer.' + k; }
+    const smartHome = (this.config && this.config.smartHome && this.config.smartHome.datapoints) || {};
+    for (const [k, dpId] of Object.entries(smartHome)) { if (dpId === id) return 'smartHome_' + k; }
     
     // direct mapping for local states
     const prefS = this.namespace + '.settings.';

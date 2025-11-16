@@ -521,18 +521,32 @@ function renderSmartHome(){
   const onTxt = (v)=> v ? 'AN' : 'AUS';
   const d = (k)=> state[k]?.value;
   const get = (path) => {
-    // allow mapping from smartHome.datapoints.* in the future
+    // Werte aus dem State-Mapping lesen (z.B. smartHome_*)
     return d(path);
   };
   const hp = get('smartHome_heatPumpOn');
   const rt = get('smartHome_roomTemp');
   const wl = get('smartHome_wallboxLock');
+  const gl = get('smartHome_gridLimit');
+  const pc = get('smartHome_pvCurtailment');
+
   const hpEl = document.getElementById('smhHeatPump');
   const rtEl = document.getElementById('smhRoomTemp');
   const wlEl = document.getElementById('smhWallboxLock');
-  if (hpEl) hpEl.textContent = (hp===undefined?'--':onTxt(!!hp));
-  if (rtEl) rtEl.textContent = (rt===undefined?'--':Number(rt).toFixed(1)+' °C');
-  if (wlEl) wlEl.textContent = (wl===undefined?'--':(wl?'Gesperrt':'Freigabe'));
+  const glEl = document.getElementById('smhGridLimit');
+  const pcEl = document.getElementById('smhPvCurtailment');
+
+  if (hpEl) hpEl.textContent = (hp === undefined ? '--' : onTxt(!!hp));
+  if (rtEl) rtEl.textContent = (rt === undefined || rt === null || isNaN(rt) ? '--' : Number(rt).toFixed(1) + ' °C');
+  if (wlEl) wlEl.textContent = (wl === undefined ? '--' : (wl ? 'Gesperrt' : 'Freigabe'));
+  if (glEl) {
+    const val = (gl === undefined || gl === null || isNaN(gl)) ? null : Number(gl);
+    glEl.textContent = (val === null ? '--' : val.toFixed(0) + ' W');
+  }
+  if (pcEl) {
+    const val = (pc === undefined || pc === null || isNaN(pc)) ? null : Number(pc);
+    pcEl.textContent = (val === null ? '--' : val.toFixed(0) + ' %');
+  }
 }
 
 const _renderOrig = render;

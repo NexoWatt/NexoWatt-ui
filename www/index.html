@@ -251,10 +251,60 @@
 </section>
 
 <section class="hidden smarthome-wrap" data-tab-content="smarthome">
-  <section class="card">
-    <div class="card-header"><span>Smart Home</span></div>
+  <section class="card smh-card">
+    <div class="card-header"><span>Smart Home – Haustechnik</span></div>
+    <div class="card-body smh-grid">
+      <div class="smh-item">
+        <div class="smh-label">
+          <span class="smh-title">Wärmepumpe</span>
+          <span class="smh-sub">Status</span>
+        </div>
+        <div class="smh-value" id="smhHeatPump">--</div>
+      </div>
+      <div class="smh-item">
+        <div class="smh-label">
+          <span class="smh-title">Raumtemperatur</span>
+          <span class="smh-sub">Referenzraum</span>
+        </div>
+        <div class="smh-value" id="smhRoomTemp">--</div>
+      </div>
+      <div class="smh-item">
+        <div class="smh-label">
+          <span class="smh-title">Wallbox-Zugriff</span>
+          <span class="smh-sub">Sperre / Freigabe</span>
+        </div>
+        <div class="smh-value" id="smhWallboxLock">--</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card smh-card">
+    <div class="card-header"><span>Netz &amp; PV – Vorgaben</span></div>
+    <div class="card-body smh-grid">
+      <div class="smh-item">
+        <div class="smh-label">
+          <span class="smh-title">Netzbezugslimit</span>
+          <span class="smh-sub">Maximaler Hausanschluss</span>
+        </div>
+        <div class="smh-value" id="smhGridLimit">--</div>
+      </div>
+      <div class="smh-item">
+        <div class="smh-label">
+          <span class="smh-title">PV-Abregelung</span>
+          <span class="smh-sub">Aktuell gültige Vorgabe</span>
+        </div>
+        <div class="smh-value" id="smhPvCurtailment">--</div>
+      </div>
+    </div>
+    <div class="card-footer smh-hint">
+      <span>Hinweis: Die Steuerung dieser Werte wird in einem nächsten Schritt direkt aus den §14a- / EVU-Vorgaben angebunden.</span>
+    </div>
+  </section>
+
+  <section class="card smh-card smh-placeholder">
+    <div class="card-header"><span>Räume &amp; Gewerke (Vorbereitung)</span></div>
     <div class="card-body">
-      <p>Smart-Home-Ansicht ist vorbereitet und wird in einem nächsten Schritt mit Leben gefüllt.</p>
+      <p>Die raumbasierte Ansicht wie in Smart-Home-Visualisierungen (Licht, Beschattung, Heizung, Szenen …) wird in einem späteren Schritt automatisch aus deinen ioBroker-Räumen aufgebaut.</p>
     </div>
   </section>
 </section>
