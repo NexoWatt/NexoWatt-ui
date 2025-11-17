@@ -107,7 +107,7 @@ class NexoWattVis extends utils.Adapter {
     });
   }
 
-    async buildSmartHomeStructureFromEnums() {
+  async buildSmartHomeStructureFromEnums() {
     try {
       // Read all room enums and function enums
       const roomEnums = await this.getForeignObjectsAsync('enum.rooms.*', 'enum');
@@ -195,9 +195,7 @@ class NexoWattVis extends utils.Adapter {
           }
         } catch (e) {
           // ignore missing objects
-          if (this.log.debug) {
-            this.log.debug('Could not read foreign object for SmartHome enum state ' + id + ': ' + e);
-          }
+          this.log.debug && this.log.debug('Could not read foreign object for SmartHome enum state ' + id + ': ' + e);
         }
       }
 
@@ -226,7 +224,6 @@ class NexoWattVis extends utils.Adapter {
       this.log.error('Error while building SmartHome structure from enums: ' + err);
     }
   }
-
 
 async syncInstallerConfigToStates() {
     const cfg = (this.config && this.config.installerConfig) || {};
@@ -276,18 +273,15 @@ async syncInstallerConfigToStates() {
       // write settings-config defaults
       await this.syncSettingsConfigToStates();
 
-      // build SmartHome structure from enums (if enabled)
-      if (this.config && this.config.smartHome && this.config.smartHome.enabled) {
+// Always build SmartHome structure from enums so the VIS can use it,
+// regardless of whether the SmartHome panel is currently enabled.
+      try {
         await this.buildSmartHomeStructureFromEnums();
-      } else {
-        try {
-          await this.setStateAsync('smartHome.structure', { val: '{}', ack: true });
-        } catch (_e) {
-          // ignore if state does not exist yet
-        }
+      } catch (e) {
+        this.log.error('Failed to build SmartHome structure from enums: ' + e);
       }
 
-      // finally subscribe and read initial values
+// finally subscribe and read initial values
       await this.subscribeConfiguredStates();
 
       this.log.info('NexoWatt VIS adapter ready.');
