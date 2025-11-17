@@ -107,7 +107,7 @@ class NexoWattVis extends utils.Adapter {
     });
   }
 
-  async buildSmartHomeStructureFromEnums() {
+    async buildSmartHomeStructureFromEnums() {
     try {
       // Read all room enums and function enums
       const roomEnums = await this.getForeignObjectsAsync('enum.rooms.*', 'enum');
@@ -195,7 +195,9 @@ class NexoWattVis extends utils.Adapter {
           }
         } catch (e) {
           // ignore missing objects
-          this.log.debug && this.log.debug('Could not read foreign object for SmartHome enum state ' + id + ': ' + e);
+          if (this.log.debug) {
+            this.log.debug('Could not read foreign object for SmartHome enum state ' + id + ': ' + e);
+          }
         }
       }
 
@@ -224,6 +226,7 @@ class NexoWattVis extends utils.Adapter {
       this.log.error('Error while building SmartHome structure from enums: ' + err);
     }
   }
+
 
 async syncInstallerConfigToStates() {
     const cfg = (this.config && this.config.installerConfig) || {};
