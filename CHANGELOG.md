@@ -1,6 +1,3 @@
-### 0.4.22 (2025-11-17)
-- SmartHome: Struktur aus ioBroker-Kategorien (enum.rooms/enum.functions) wird beim Adapterstart immer aufgebaut und in `smartHome.structure` geschrieben.
-
 ### 0.4.10 (2025-11-07)
 - Fix: Produktion → Gesamt (kWh) und CO₂‑Ersparnis werden korrekt aus den Admin-Datenpunkten gelesen.
 - Anzeige: CO₂‑Ersparnis zeigt nun ein ' t' für Tonnen an.

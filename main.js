@@ -273,15 +273,15 @@ async syncInstallerConfigToStates() {
       // write settings-config defaults
       await this.syncSettingsConfigToStates();
 
-// Always build SmartHome structure from enums so the VIS can use it,
-// regardless of whether the SmartHome panel is currently enabled.
+      // build SmartHome structure from enums on every start
+      // (VIS decides separately, ob der SmartHome-Tab sichtbar ist)
       try {
         await this.buildSmartHomeStructureFromEnums();
       } catch (e) {
         this.log.error('Failed to build SmartHome structure from enums: ' + e);
       }
 
-// finally subscribe and read initial values
+      // finally subscribe and read initial values
       await this.subscribeConfiguredStates();
 
       this.log.info('NexoWatt VIS adapter ready.');
