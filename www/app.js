@@ -672,71 +672,6 @@ function renderSmartHomeStructure(){
   }
   const activeKey = window.currentSmartHomeRoom;
 
-  function detectRoomType(roomKey, roomObj) {
-    const name = (resolveDisplayName(roomObj && roomObj.name, roomKey) || '').toString().toLowerCase();
-    const id = (roomObj && roomObj.id ? String(roomObj.id) : String(roomKey || '')).toLowerCase();
-
-    const ref = name || id;
-
-    if (ref.includes('wohnzimmer') || ref.includes('living')) return 'living';
-    if (ref.includes('küche') || ref.includes('kueche') || ref.includes('kitchen')) return 'kitchen';
-    if (ref.includes('schlaf') || ref.includes('bed')) return 'bedroom';
-    if (ref.includes('kind') || ref.includes('child') || ref.includes('kinder')) return 'child';
-    if (ref.includes('bad') || ref.includes('bath')) return 'bath';
-    if (ref.includes('flur') || ref.includes('corridor') || ref.includes('hall')) return 'hall';
-
-    return 'generic';
-  }
-
-  function getRoomIconUrl(roomType) {
-    switch (roomType) {
-      case 'living':
-        return '/static/icons/idea_165783.png';
-      case 'kitchen':
-        return '/static/icons/wall-plug_5556108.png';
-      case 'bedroom':
-      case 'child':
-        return '/static/icons/man_13608853.png';
-      case 'bath':
-        return '/static/icons/window_988670.png';
-      case 'hall':
-        return '/static/icons/reminder_17281454.png';
-      default:
-        return '/static/icons/window_988670.png';
-    }
-  }
-
-  function detectGroupType(entities, funcKey) {
-    const fk = (funcKey || '').toLowerCase();
-
-    if (fk.includes('light') || fk.includes('beleuchtung')) return 'light';
-    if (fk.includes('shade') || fk.includes('jalous') || fk.includes('shutter') || fk.includes('beschattung')) return 'blind';
-    if (fk.includes('climate') || fk.includes('heating') || fk.includes('heizung') || fk.includes('temperatur')) return 'temp';
-
-    for (const ent of entities) {
-      if (!ent) continue;
-      const role = (ent.role || '').toLowerCase();
-      if (role.includes('light') || role.includes('switch')) return 'light';
-      if (role.includes('blind') || role.includes('shutter') || role.includes('jalous')) return 'blind';
-      if (role.includes('temperature') || role.includes('climate') || role.includes('heating')) return 'temp';
-    }
-
-    return 'generic';
-  }
-
-  function getGroupIconUrl(groupType) {
-    switch (groupType) {
-      case 'light':
-        return '/static/icons/idea_165783.png';
-      case 'temp':
-        return '/static/icons/air-conditioner_740977.png';
-      case 'blind':
-        return '/static/icons/curtain_7055702.png';
-      default:
-        return '/static/icons/wall-plug_5556108.png';
-    }
-  }
-
   // Build room tabs
   for (const key of roomKeys) {
     const room = structure[key] || {};
@@ -744,18 +679,7 @@ function renderSmartHomeStructure(){
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'smh-room-tab' + (key === activeKey ? ' active' : '');
-
-    const roomType = detectRoomType(key, room);
-    const icon = document.createElement('img');
-    icon.className = 'smh-room-tab-icon';
-    icon.src = getRoomIconUrl(roomType);
-    icon.alt = '';
-    btn.appendChild(icon);
-
-    const label = document.createElement('span');
-    label.textContent = roomName;
-    btn.appendChild(label);
-
+    btn.textContent = roomName;
     btn.addEventListener('click', () => {
       window.currentSmartHomeRoom = key;
       renderSmartHomeStructure();
@@ -804,6 +728,24 @@ function renderSmartHomeStructure(){
     return names[0] || fallback;
   }
 
+  function detectGroupType(entities, funcKey) {
+    const fk = (funcKey || '').toLowerCase();
+
+    if (fk.includes('light') || fk.includes('beleuchtung')) return 'light';
+    if (fk.includes('shade') || fk.includes('jalous') || fk.includes('shutter') || fk.includes('beschattung')) return 'blind';
+    if (fk.includes('climate') || fk.includes('heating') || fk.includes('heizung') || fk.includes('temperatur')) return 'temp';
+
+    for (const ent of entities) {
+      if (!ent) continue;
+      const role = (ent.role || '').toLowerCase();
+      if (role.includes('light') || role.includes('switch')) return 'light';
+      if (role.includes('blind') || role.includes('shutter') || role.includes('jalous')) return 'blind';
+      if (role.includes('temperature') || role.includes('climate') || role.includes('heating')) return 'temp';
+    }
+
+    return 'generic';
+  }
+
   for (const fKey of sortedFuncKeys) {
     const entries = Array.isArray(funcs[fKey]) ? funcs[fKey] : [];
     if (!entries.length) continue;
@@ -838,10 +780,8 @@ function renderSmartHomeStructure(){
       groupHeader.className = 'smh-entity-group-header';
 
       const groupType = detectGroupType(groupEntities, fKey);
-      const icon = document.createElement('img');
-      icon.className = 'smh-entity-group-icon-img smh-entity-group-icon-' + groupType;
-      icon.src = getGroupIconUrl(groupType);
-      icon.alt = '';
+      const icon = document.createElement('span');
+      icon.className = 'smh-entity-group-icon smh-entity-group-icon-' + groupType;
       groupHeader.appendChild(icon);
 
       const groupTitle = document.createElement('span');
