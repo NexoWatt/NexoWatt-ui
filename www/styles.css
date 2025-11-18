@@ -609,6 +609,21 @@ body {
   width: 120px;
 }
 
+.smh-entity-group {
+  border-radius: 10px;
+  border: 1px solid #222a33;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  background: #151a20;
+}
+
+.smh-entity-group-header {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.8;
+  margin-bottom: 4px;
+}
+
 /* Switch AN-Zustand im NexoWatt-Grün */
 .smh-entity-toggle.is-on {
   background: #00ff9c;

@@ -569,57 +569,16 @@ function detectSmartHomeEntityType(ent) {
   const r = role.toLowerCase();
   const type = (ent && ent.type) ? String(ent.type).toLowerCase() : '';
   const writable = !!(ent && ent.write);
-  const unit = ent && ent.unit ? String(ent.unit).toLowerCase() : '';
-
   if (!r && !type) return 'sensor';
-
-  // klassische Schalter
+  // explicit roles
   if (r.includes('switch') || r.includes('light') || r.includes('socket')) return 'switch';
-
-  // Dimmer (z.B. Helligkeit)
   if (r.startsWith('level.dimmer') || r.startsWith('level.brightness')) return 'dimmer';
-
-  // Rollläden / Jalousien
   if (r.includes('blind') || r.includes('shutter') || r.startsWith('level.blind')) return 'blind';
-
-  // Temperatur (Ist-Temperatur vs. Soll-Temperatur)
-  if (r.startsWith('value.temperature') || r.startsWith('level.temperature')) {
-    if (writable) return 'tempSetpoint';
-    return 'temperature';
-  }
-
-  // Speziell für deine Objekte:
-  // level.wave + Prozent -> als Dimmer behandeln
-  if (r.includes('level.wave')) return 'dimmer';
-  if (writable && type === 'number' && unit === '%') return 'dimmer';
-
-  // Fallbacks
+  if (r.startsWith('value.temperature')) return 'temperature';
+  // fallback: boolean + writable -> switch
   if (writable && type === 'boolean') return 'switch';
-
   return 'sensor';
 }
-
-function formatSmartHomeValue(ent, rawVal) {
-  const kind = detectSmartHomeEntityType(ent);
-  if (rawVal === undefined || rawVal === null || (typeof rawVal === 'number' && isNaN(rawVal))) {
-    return '--';
-  }
-  if (kind === 'temperature' || kind === 'tempSetpoint') {
-    const n = Number(rawVal);
-    if (isNaN(n)) return '--';
-    return n.toFixed(1) + ' °C';
-  }
-  if (kind === 'switch') {
-    return rawVal ? 'AN' : 'AUS';
-  }
-  if (typeof rawVal === 'number') {
-    const unit = ent && ent.unit ? String(ent.unit) : '';
-    return unit ? (String(rawVal) + ' ' + unit) : String(rawVal);
-  }
-  return String(rawVal);
-}
-
-
 
 function formatSmartHomeValue(ent, rawVal) {
   const kind = detectSmartHomeEntityType(ent);
@@ -755,28 +714,16 @@ function renderSmartHomeStructure(){
         rawVal = state[keyVal].value;
       }
 
-      if (kind === 'dimmer' || kind === 'blind' || kind === 'tempSetpoint') {
+      if (kind === 'dimmer' || kind === 'blind') {
         const wrap = document.createElement('div');
         wrap.className = 'smh-entity-slider';
 
         const slider = document.createElement('input');
         slider.type = 'range';
-
-        let min = (typeof ent.min === 'number') ? ent.min : null;
-        let max = (typeof ent.max === 'number') ? ent.max : null;
-
-        // sinnvolle Defaults für Temperatur-Sollwerte
-        if (kind === 'tempSetpoint') {
-          if (min === null) min = 16;
-          if (max === null) max = 26;
-        } else {
-          if (min === null) min = 0;
-          if (max === null) max = 100;
-        }
-
+        const min = (typeof ent.min === 'number') ? ent.min : 0;
+        const max = (typeof ent.max === 'number') ? ent.max : 100;
         slider.min = String(min);
         slider.max = String(max);
-
         const initial = (typeof rawVal === 'number' && !isNaN(rawVal)) ? rawVal : min;
         slider.value = String(initial);
 
@@ -793,17 +740,10 @@ function renderSmartHomeStructure(){
         wrap.appendChild(slider);
         wrap.appendChild(label);
         row.appendChild(wrap);
-      }
- else {
+      } else {
         const valueSpan = document.createElement('span');
         valueSpan.className = (kind === 'switch') ? 'smh-entity-toggle' : 'smh-entity-value';
         valueSpan.textContent = formatSmartHomeValue(ent, rawVal);
-
-        // AN-Farbe initial setzen
-        if (kind === 'switch' && rawVal) {
-          valueSpan.classList.add('is-on');
-        }
-
         row.appendChild(valueSpan);
 
         if (kind === 'switch') {
@@ -815,14 +755,7 @@ function renderSmartHomeStructure(){
               current = !!cur;
             }
             const next = !current;
-
             valueSpan.textContent = formatSmartHomeValue(ent, next);
-            if (next) {
-              valueSpan.classList.add('is-on');
-            } else {
-              valueSpan.classList.remove('is-on');
-            }
-
             sendSmartHomeCommand(ent, next);
           });
         }
