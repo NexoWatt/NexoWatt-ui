@@ -608,125 +608,126 @@ async function sendSmartHomeCommand(ent, newVal) {
   }
 }
 
+
+function resolveDisplayName(name, fallback) {
+  if (!name) return fallback;
+  if (typeof name === 'string') return name;
+  if (typeof name === 'object') {
+    return name.de || name.en || Object.values(name)[0] || fallback;
+  }
+  return fallback;
+}
+
 function renderSmartHomeStructure(){
-  const container = document.getElementById('smhRoomsBody');
-  if (!container) return;
+  const tabsEl = document.getElementById('smhRoomTabs');
+  const contentEl = document.getElementById('smhRoomContent');
+  if (!tabsEl || !contentEl) return;
 
   const structure = getSmartHomeStructure();
 
   // Clear previous content
-  container.innerHTML = '';
+  tabsEl.innerHTML = '';
+  contentEl.innerHTML = '';
 
   if (!structure || !Object.keys(structure).length) {
     const p = document.createElement('p');
     p.className = 'smh-placeholder-text';
     p.textContent = 'Sobald in ioBroker Räume und Funktionen gepflegt sind, werden sie hier automatisch angezeigt.';
-    container.appendChild(p);
+    contentEl.appendChild(p);
     return;
   }
 
   const roomKeys = Object.keys(structure).sort((a, b) => {
-    const an = (structure[a]?.name || a).toString().toLowerCase();
-    const bn = (structure[b]?.name || b).toString().toLowerCase();
+    const an = resolveDisplayName(structure[a]?.name, a).toString().toLowerCase();
+    const bn = resolveDisplayName(structure[b]?.name, b).toString().toLowerCase();
     if (an < bn) return -1;
     if (an > bn) return 1;
     return 0;
   });
 
+  if (!window.currentSmartHomeRoom || !roomKeys.includes(window.currentSmartHomeRoom)) {
+    window.currentSmartHomeRoom = roomKeys[0];
+  }
+
+  const activeKey = window.currentSmartHomeRoom;
+
+  // Build room tabs
   for (const key of roomKeys) {
     const room = structure[key] || {};
-    const roomName = room.name || key;
-    const funcs = room.functions || {};
-    const funcKeys = Object.keys(funcs);
-    if (!funcKeys.length) continue;
+    const roomName = resolveDisplayName(room.name, key);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'smh-room-tab' + (key === activeKey ? ' active' : '');
+    btn.textContent = roomName;
+    btn.addEventListener('click', () => {
+      window.currentSmartHomeRoom = key;
+      renderSmartHomeStructure();
+    });
+    tabsEl.appendChild(btn);
+  }
 
-    const roomEl = document.createElement('div');
-    roomEl.className = 'smh-room';
+  // Build detail view for active room
+  const room = structure[activeKey] || {};
+  const funcs = room.functions || {};
+  const funcNames = room.functionNames || {};
 
-    const headerEl = document.createElement('div');
-    headerEl.className = 'smh-room-header';
+  const funcKeys = Object.keys(funcs);
+  if (!funcKeys.length) {
+    const p = document.createElement('p');
+    p.className = 'smh-placeholder-text';
+    p.textContent = 'Für diesen Raum sind noch keine Funktionen verknüpft.';
+    contentEl.appendChild(p);
+    return;
+  }
 
-    const nameEl = document.createElement('div');
-    nameEl.className = 'smh-room-name';
-    nameEl.textContent = roomName;
+  const sortedFuncKeys = funcKeys.sort();
+  for (const fKey of sortedFuncKeys) {
+    const entries = Array.isArray(funcs[fKey]) ? funcs[fKey] : [];
+    if (!entries.length) continue;
 
-    const idEl = document.createElement('div');
-    idEl.className = 'smh-room-id';
-    idEl.textContent = key;
+    const funcCard = document.createElement('div');
+    funcCard.className = 'smh-func-card';
 
-    headerEl.appendChild(nameEl);
-    headerEl.appendChild(idEl);
-    roomEl.appendChild(headerEl);
+    const funcHeader = document.createElement('div');
+    funcHeader.className = 'smh-func-header';
+    funcHeader.textContent = resolveDisplayName(funcNames[fKey], fKey);
+    funcCard.appendChild(funcHeader);
 
-    const funcsWrap = document.createElement('div');
-    funcsWrap.className = 'smh-room-funcs';
+    for (const ent of entries) {
+      if (!ent || !ent.id) continue;
+      const row = document.createElement('div');
+      const type = detectSmartHomeEntityType(ent);
+      row.className = 'smh-entity-row' + (type === 'switch' ? ' interactive' : '');
 
-    const sortedFuncKeys = funcKeys.sort();
-    for (const fKey of sortedFuncKeys) {
-      const entries = Array.isArray(funcs[fKey]) ? funcs[fKey] : [];
-      if (!entries.length) continue;
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'smh-entity-name';
+      nameSpan.textContent = ent.name || ent.id;
+      row.appendChild(nameSpan);
 
-      const funcBlock = document.createElement('div');
-
-      const funcTitle = document.createElement('div');
-      funcTitle.className = 'smh-func-title';
-      funcTitle.textContent = fKey;
-      funcBlock.appendChild(funcTitle);
-
-      const entitiesWrap = document.createElement('div');
-      entitiesWrap.className = 'smh-entities';
-
-      for (const ent of entries) {
-        if (!ent || !ent.id) continue;
-        const entEl = document.createElement('div');
-        const type = detectSmartHomeEntityType(ent);
-        entEl.className = 'smh-entity' + (type === 'switch' ? ' interactive' : '');
-
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = ent.name || ent.id;
-        entEl.appendChild(nameSpan);
-
-        // Value / state
-        const keyVal = ent.key || null;
-        let rawVal;
-        if (keyVal && window.state && window.state[keyVal]) {
-          rawVal = window.state[keyVal].value;
-        }
-        const valueSpan = document.createElement('span');
-        valueSpan.className = 'smh-entity-value';
-        valueSpan.textContent = formatSmartHomeValue(ent, rawVal);
-        entEl.appendChild(valueSpan);
-
-        // Role info (smaller, muted)
-        if (ent.role) {
-          const roleSpan = document.createElement('span');
-          roleSpan.className = 'smh-entity-role';
-          roleSpan.textContent = '[' + ent.role + ']';
-          entEl.appendChild(roleSpan);
-        }
-
-        if (type === 'switch') {
-          entEl.addEventListener('click', () => {
-            const current = !!rawVal;
-            const next = !current;
-            valueSpan.textContent = formatSmartHomeValue(ent, next);
-            sendSmartHomeCommand(ent, next);
-          });
-        }
-
-        entitiesWrap.appendChild(entEl);
+      const keyVal = ent.key || null;
+      let rawVal;
+      if (keyVal && window.state && window.state[keyVal]) {
+        rawVal = window.state[keyVal].value;
       }
 
-      if (entitiesWrap.childElementCount) {
-        funcBlock.appendChild(entitiesWrap);
-        funcsWrap.appendChild(funcBlock);
+      const valueSpan = document.createElement('span');
+      valueSpan.className = (type === 'switch') ? 'smh-entity-toggle' : 'smh-entity-value';
+      valueSpan.textContent = formatSmartHomeValue(ent, rawVal);
+      row.appendChild(valueSpan);
+
+      if (type === 'switch') {
+        row.addEventListener('click', () => {
+          const current = !!rawVal;
+          const next = !current;
+          valueSpan.textContent = formatSmartHomeValue(ent, next);
+          sendSmartHomeCommand(ent, next);
+        });
       }
+
+      funcCard.appendChild(row);
     }
 
-    if (funcsWrap.childElementCount) {
-      roomEl.appendChild(funcsWrap);
-      container.appendChild(roomEl);
-    }
+    contentEl.appendChild(funcCard);
   }
 }
 

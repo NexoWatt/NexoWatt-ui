@@ -606,3 +606,77 @@ body {
 .smh-entity.interactive:hover {
   background: #1b2230;
 }
+
+.smh-room-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.smh-room-tab {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #222a33;
+  background: #181d23;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.smh-room-tab.active {
+  background: #2d7dff;
+  border-color: #2d7dff;
+}
+
+.smh-room-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.smh-func-card {
+  padding: 8px 0;
+  border-top: 1px solid #1e252c;
+}
+
+.smh-func-card:first-child {
+  border-top: none;
+}
+
+.smh-func-header {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.smh-entity-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.smh-entity-name {
+  font-size: 13px;
+}
+
+.smh-entity-toggle,
+.smh-entity-value {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid #222a33;
+  background: #181d23;
+}
+
+.smh-entity-row.interactive .smh-entity-toggle {
+  border-color: #2d7dff;
+}
+
+.smh-entity-row.interactive {
+  cursor: pointer;
+}
+
+.smh-entity-row.interactive:hover .smh-entity-toggle {
+  background: #1b2230;
+}

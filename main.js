@@ -151,6 +151,12 @@ class NexoWattVis extends utils.Adapter {
         const funcKeyParts = enumId.split('.');
         const funcKey = funcKeyParts[funcKeyParts.length - 1] || enumId;
 
+        // human readable function name (handles multi-lang objects)
+        let funcName = obj.common.name || funcKey;
+        if (funcName && typeof funcName === 'object') {
+          funcName = funcName.de || funcName.en || Object.values(funcName)[0] || funcKey;
+        }
+
         const members = Array.isArray(obj.common.members) ? obj.common.members : [];
         for (const stateId of members) {
           const assignedRooms = roomByStateId[stateId] || ['_noRoom_'];
@@ -168,6 +174,12 @@ class NexoWattVis extends utils.Adapter {
             if (!rooms[roomKey].functions[funcKey]) {
               rooms[roomKey].functions[funcKey] = [];
             }
+
+            // store function display name per room
+            if (!rooms[roomKey].functionNames) {
+              rooms[roomKey].functionNames = {};
+            }
+            rooms[roomKey].functionNames[funcKey] = funcName;
 
             rooms[roomKey].functions[funcKey].push({
               id: stateId
