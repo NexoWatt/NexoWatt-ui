@@ -502,6 +502,19 @@ function draw(){
     if (liveBtn) liveBtn.addEventListener('click', ()=>{ window.location.href = '/'; });
     const histBtn = document.getElementById('historyTabBtn');
     if (histBtn) histBtn.addEventListener('click', ()=>{ /* already here */ });
+    const smhBtn = document.getElementById('smarthomeTabBtn');
+    if (smhBtn) {
+      smhBtn.addEventListener('click', ()=>{ window.location.href = '/?tab=smarthome'; });
+      try {
+        fetch('/config')
+          .then(r => r.json())
+          .then(cfg => {
+            const enabled = !!(cfg && cfg.smartHome && cfg.smartHome.enabled);
+            smhBtn.style.display = enabled ? '' : 'none';
+          })
+          .catch(()=>{});
+      } catch(_e) {}
+    }
     const openInstallerAdmin = document.getElementById('openInstallerAdmin');
     if (openInstallerAdmin) {
       openInstallerAdmin.addEventListener('click', ()=>{

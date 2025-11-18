@@ -394,6 +394,17 @@ async function loadConfig() {
       if (btn) {
         const enabled = !!(SERVER_CFG.smartHome && SERVER_CFG.smartHome.enabled);
         btn.style.display = enabled ? '' : 'none';
+
+        // Optional: direkt in den SmartHome-Tab springen, wenn ?tab=smarthome gesetzt ist
+        if (enabled) {
+          try {
+            const qs = new URLSearchParams(window.location.search || '');
+            const targetTab = qs.get('tab');
+            if (targetTab === 'smarthome') {
+              btn.click();
+            }
+          } catch(_ignore) {}
+        }
       }
     } catch(_e) {}
   } catch(e) { console.warn('cfg', e); }
