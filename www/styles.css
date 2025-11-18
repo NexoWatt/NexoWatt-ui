@@ -633,3 +633,10 @@ body {
   border-radius: 4px;
   object-fit: contain;
 }
+
+/* Schalter AN im NexoWatt-Grün */
+.smh-entity-toggle.is-on {
+  background: #00ff9c;
+  border-color: #00ff9c;
+  color: #000000;
+}

@@ -564,6 +564,7 @@ function getSmartHomeStructure(){
   }
 }
 
+
 function detectSmartHomeEntityType(ent) {
   const role = (ent && ent.role) ? String(ent.role) : '';
   const r = role.toLowerCase();
@@ -905,7 +906,6 @@ function renderSmartHomeStructure(){
     contentEl.appendChild(funcCard);
   }
 }
-
 
 
 const _renderOrig = render;
