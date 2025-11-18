@@ -44,6 +44,9 @@ class NexoWattVis extends utils.Adapter {
     this.stateCache = {};
     this.sseClients = new Set();
 
+    this.smartHomeEnumKeyById = {};
+    this.smartHomeEnumIds = new Set();
+
     this.on('ready', this.onReady.bind(this));
     this.on('stateChange', this.onStateChange.bind(this));
     this.on('unload', this.onUnload.bind(this));
@@ -199,13 +202,19 @@ class NexoWattVis extends utils.Adapter {
         }
       }
 
-      // Enrich entries with name / role
+      // Enrich entries with name / role and assign a dynamic key for VIS
+      const enumKeyById = {};
+      let enumIdx = 0;
       for (const room of Object.values(rooms)) {
         for (const funcKey of Object.keys(room.functions)) {
           room.functions[funcKey] = room.functions[funcKey].map(entry => {
             const obj = stateObjects[entry.id];
+            if (!enumKeyById[entry.id]) {
+              enumKeyById[entry.id] = 'smartEnum_' + (enumIdx++);
+            }
             return {
               id: entry.id,
+              key: enumKeyById[entry.id],
               name: obj && obj.common && obj.common.name ? obj.common.name : entry.id,
               role: obj && obj.common && obj.common.role ? obj.common.role : ''
             };
@@ -213,18 +222,35 @@ class NexoWattVis extends utils.Adapter {
         }
       }
 
+      // Save mapping for later state-change handling
+      this.smartHomeEnumKeyById = enumKeyById;
+      this.smartHomeEnumIds = new Set(Object.keys(enumKeyById));
+
+      // Subscribe to all SmartHome enum states and push initial values
+      for (const [id, key] of Object.entries(enumKeyById)) {
+        try {
+          this.subscribeForeignStates(id);
+          const st = await this.getForeignStateAsync(id);
+          if (st && st.val !== undefined) {
+            this.updateValue(key, st.val, st.ts || Date.now());
+          }
+        } catch (e) {
+          this.log.debug && this.log.debug('Could not subscribe/read SmartHome enum state ' + id + ': ' + e);
+        }
+      }
+
       // Finally, write JSON structure to state
-      const json = JSON.stringify(rooms);
+      const jsonRooms = JSON.stringify(rooms);
       await this.setStateAsync('smartHome.structure', {
-        val: json,
+        val: jsonRooms,
         ack: true
       });
 
-      // expose also via SSE cache so the VIS can render without extra polling
+      // Also push structure into live state cache for VIS clients
       try {
-        this.updateValue('smartHome.structure', json, Date.now());
+        this.updateValue('smartHome.structure', jsonRooms, Date.now());
       } catch (e) {
-        this.log.debug && this.log.debug('Could not push SmartHome structure to SSE cache: ' + e);
+        this.log.debug && this.log.debug('Could not push SmartHome structure to state cache: ' + e);
       }
 
       this.log.info('SmartHome structure from enums built with ' + Object.keys(rooms).length + ' rooms.');
@@ -472,6 +498,20 @@ app.get('/config', (req, res) => {
       }
     });
 
+// generic SmartHome enum control endpoint (auto-generated entities)
+    app.post('/api/smartHome/command', async (req, res) => {
+      try {
+        const id = req.body && req.body.id;
+        const value = req.body && req.body.value;
+        if (!id) return res.status(400).json({ ok: false, error: 'missing id' });
+        await this.setForeignStateAsync(id, value);
+        res.json({ ok: true });
+      } catch (e) {
+        this.log.warn('smartHome command error: ' + e.message);
+        res.status(500).json({ ok: false, error: 'internal error' });
+      }
+    });
+
     // server-sent events for live updates
     app.get('/events', (req, res) => {
       res.set({
@@ -565,7 +605,11 @@ app.get('/config', (req, res) => {
     for (const [k, dpId] of Object.entries(installer)) { if (dpId === id) return 'installer.' + k; }
     const smartHome = (this.config && this.config.smartHome && this.config.smartHome.datapoints) || {};
     for (const [k, dpId] of Object.entries(smartHome)) { if (dpId === id) return 'smartHome_' + k; }
-    
+
+    // dynamic SmartHome enum datapoints (auto-generated structure)
+    const dyn = this.smartHomeEnumKeyById || {};
+    if (dyn[id]) return dyn[id];
+
     // direct mapping for local states
     const prefS = this.namespace + '.settings.';
     const prefI = this.namespace + '.installer.';

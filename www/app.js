@@ -554,13 +554,57 @@ function getSmartHomeStructure(){
   const entry = state && state['smartHome.structure'];
   if (!entry || entry.value === undefined || entry.value === null) return null;
   try {
-    const json = (typeof entry.value === 'string') ? entry.value : String(entry.value);
-    const data = JSON.parse(json);
+    const raw = (typeof entry.value === 'string') ? entry.value : String(entry.value);
+    const data = JSON.parse(raw);
     if (!data || typeof data !== 'object') return null;
     return data;
-  } catch(e){
+  } catch (e) {
     console.warn('SmartHome structure JSON parse error', e);
     return null;
+  }
+}
+
+
+function detectSmartHomeEntityType(ent) {
+  const role = (ent && ent.role) ? String(ent.role) : '';
+  const r = role.toLowerCase();
+  if (!r) return 'sensor';
+  if (r.includes('switch') || r.includes('light') || r.includes('socket')) return 'switch';
+  if (r.startsWith('level.dimmer') || r.startsWith('level.brightness')) return 'dimmer';
+  if (r.includes('blind') || r.includes('shutter') || r.startsWith('level.blind')) return 'blind';
+  if (r.startsWith('value.temperature')) return 'temperature';
+  return 'sensor';
+}
+
+function formatSmartHomeValue(ent, rawVal) {
+  const type = detectSmartHomeEntityType(ent);
+  if (rawVal === undefined || rawVal === null || (typeof rawVal === 'number' && isNaN(rawVal))) {
+    return '--';
+  }
+  if (type === 'temperature') {
+    const n = Number(rawVal);
+    if (isNaN(n)) return '--';
+    return n.toFixed(1) + ' °C';
+  }
+  if (type === 'switch') {
+    return rawVal ? 'AN' : 'AUS';
+  }
+  if (typeof rawVal === 'number') {
+    return String(rawVal);
+  }
+  return String(rawVal);
+}
+
+async function sendSmartHomeCommand(ent, newVal) {
+  if (!ent || !ent.id) return;
+  try {
+    await fetch('/api/smartHome/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: ent.id, value: newVal })
+    });
+  } catch (e) {
+    console.warn('smartHome command failed', e);
   }
 }
 
@@ -568,12 +612,12 @@ function renderSmartHomeStructure(){
   const container = document.getElementById('smhRoomsBody');
   if (!container) return;
 
-  const data = getSmartHomeStructure();
+  const structure = getSmartHomeStructure();
 
-  // clear container
+  // Clear previous content
   container.innerHTML = '';
 
-  if (!data || !Object.keys(data).length){
+  if (!structure || !Object.keys(structure).length) {
     const p = document.createElement('p');
     p.className = 'smh-placeholder-text';
     p.textContent = 'Sobald in ioBroker Räume und Funktionen gepflegt sind, werden sie hier automatisch angezeigt.';
@@ -581,18 +625,20 @@ function renderSmartHomeStructure(){
     return;
   }
 
-  const roomKeys = Object.keys(data).sort((a,b) => {
-    const an = (data[a]?.name || a).toString().toLowerCase();
-    const bn = (data[b]?.name || b).toString().toLowerCase();
+  const roomKeys = Object.keys(structure).sort((a, b) => {
+    const an = (structure[a]?.name || a).toString().toLowerCase();
+    const bn = (structure[b]?.name || b).toString().toLowerCase();
     if (an < bn) return -1;
     if (an > bn) return 1;
     return 0;
   });
 
-  for (const key of roomKeys){
-    const room = data[key] || {};
+  for (const key of roomKeys) {
+    const room = structure[key] || {};
     const roomName = room.name || key;
     const funcs = room.functions || {};
+    const funcKeys = Object.keys(funcs);
+    if (!funcKeys.length) continue;
 
     const roomEl = document.createElement('div');
     roomEl.className = 'smh-room';
@@ -615,8 +661,8 @@ function renderSmartHomeStructure(){
     const funcsWrap = document.createElement('div');
     funcsWrap.className = 'smh-room-funcs';
 
-    const funcKeys = Object.keys(funcs).sort();
-    for (const fKey of funcKeys){
+    const sortedFuncKeys = funcKeys.sort();
+    for (const fKey of sortedFuncKeys) {
       const entries = Array.isArray(funcs[fKey]) ? funcs[fKey] : [];
       if (!entries.length) continue;
 
@@ -630,38 +676,57 @@ function renderSmartHomeStructure(){
       const entitiesWrap = document.createElement('div');
       entitiesWrap.className = 'smh-entities';
 
-      for (const ent of entries){
+      for (const ent of entries) {
         if (!ent || !ent.id) continue;
         const entEl = document.createElement('div');
-        entEl.className = 'smh-entity';
+        const type = detectSmartHomeEntityType(ent);
+        entEl.className = 'smh-entity' + (type === 'switch' ? ' interactive' : '');
 
         const nameSpan = document.createElement('span');
         nameSpan.textContent = ent.name || ent.id;
         entEl.appendChild(nameSpan);
 
-        if (ent.role){
+        // Value / state
+        const keyVal = ent.key || null;
+        let rawVal;
+        if (keyVal && window.state && window.state[keyVal]) {
+          rawVal = window.state[keyVal].value;
+        }
+        const valueSpan = document.createElement('span');
+        valueSpan.className = 'smh-entity-value';
+        valueSpan.textContent = formatSmartHomeValue(ent, rawVal);
+        entEl.appendChild(valueSpan);
+
+        // Role info (smaller, muted)
+        if (ent.role) {
           const roleSpan = document.createElement('span');
           roleSpan.className = 'smh-entity-role';
           roleSpan.textContent = '[' + ent.role + ']';
           entEl.appendChild(roleSpan);
         }
 
+        if (type === 'switch') {
+          entEl.addEventListener('click', () => {
+            const current = !!rawVal;
+            const next = !current;
+            valueSpan.textContent = formatSmartHomeValue(ent, next);
+            sendSmartHomeCommand(ent, next);
+          });
+        }
+
         entitiesWrap.appendChild(entEl);
       }
 
-      if (entitiesWrap.childElementCount){
+      if (entitiesWrap.childElementCount) {
         funcBlock.appendChild(entitiesWrap);
         funcsWrap.appendChild(funcBlock);
       }
     }
 
-    if (!funcsWrap.childElementCount){
-      // no functions with entities -> skip room
-      continue;
+    if (funcsWrap.childElementCount) {
+      roomEl.appendChild(funcsWrap);
+      container.appendChild(roomEl);
     }
-
-    roomEl.appendChild(funcsWrap);
-    container.appendChild(roomEl);
   }
 }
 
@@ -764,6 +829,7 @@ render = function(){
 
   _renderOrig();
   renderSmartHome();
+  renderSmartHomeStructure();
 }
 
 
@@ -875,13 +941,6 @@ render = function(){
     setText('pvPowerBig', (pv===undefined?'--':formatPower(pv)));
     setText('consumptionTotalBig', (load===undefined?'--':formatPower(load)));
   } catch(e) { console.warn(e); }
-
-  // Auto-generierte SmartHome-Ansicht (Räume & Funktionen)
-  try {
-    renderSmartHomeStructure();
-  } catch(e) {
-    console.warn('SmartHome auto structure render error', e);
-  }
 }
 
 // SIDE-VALUES
