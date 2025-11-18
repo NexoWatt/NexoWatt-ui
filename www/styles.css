@@ -608,3 +608,10 @@ body {
 .smh-entity-slider input[type="range"] {
   width: 120px;
 }
+
+/* Switch AN-Zustand im NexoWatt-Grün */
+.smh-entity-toggle.is-on {
+  background: #00ff9c;
+  border-color: #00ff9c;
+  color: #000000;
+}

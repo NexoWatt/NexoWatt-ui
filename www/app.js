@@ -569,16 +569,33 @@ function detectSmartHomeEntityType(ent) {
   const r = role.toLowerCase();
   const type = (ent && ent.type) ? String(ent.type).toLowerCase() : '';
   const writable = !!(ent && ent.write);
+  const unit = ent && ent.unit ? String(ent.unit).toLowerCase() : '';
+
   if (!r && !type) return 'sensor';
-  // explicit roles
+
+  // klassische Schalter
   if (r.includes('switch') || r.includes('light') || r.includes('socket')) return 'switch';
+
+  // Dimmer (z.B. Helligkeit)
   if (r.startsWith('level.dimmer') || r.startsWith('level.brightness')) return 'dimmer';
+
+  // Rollläden / Jalousien
   if (r.includes('blind') || r.includes('shutter') || r.startsWith('level.blind')) return 'blind';
+
+  // Temperatur
   if (r.startsWith('value.temperature')) return 'temperature';
-  // fallback: boolean + writable -> switch
+
+  // Speziell für deine Objekte:
+  // level.wave + Prozent -> als Dimmer behandeln
+  if (r.includes('level.wave')) return 'dimmer';
+  if (writable && type === 'number' && unit === '%') return 'dimmer';
+
+  // Fallbacks
   if (writable && type === 'boolean') return 'switch';
+
   return 'sensor';
 }
+
 
 function formatSmartHomeValue(ent, rawVal) {
   const kind = detectSmartHomeEntityType(ent);
@@ -744,6 +761,12 @@ function renderSmartHomeStructure(){
         const valueSpan = document.createElement('span');
         valueSpan.className = (kind === 'switch') ? 'smh-entity-toggle' : 'smh-entity-value';
         valueSpan.textContent = formatSmartHomeValue(ent, rawVal);
+
+        // AN-Farbe initial setzen
+        if (kind === 'switch' && rawVal) {
+          valueSpan.classList.add('is-on');
+        }
+
         row.appendChild(valueSpan);
 
         if (kind === 'switch') {
@@ -755,7 +778,14 @@ function renderSmartHomeStructure(){
               current = !!cur;
             }
             const next = !current;
+
             valueSpan.textContent = formatSmartHomeValue(ent, next);
+            if (next) {
+              valueSpan.classList.add('is-on');
+            } else {
+              valueSpan.classList.remove('is-on');
+            }
+
             sendSmartHomeCommand(ent, next);
           });
         }
