@@ -618,10 +618,41 @@ body {
 }
 
 .smh-entity-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   font-weight: 600;
-  opacity: 0.8;
+  opacity: 0.9;
   margin-bottom: 4px;
+}
+
+.smh-entity-group-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid #2d7dff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+
+/* Icon-Varianten */
+.smh-entity-group-icon-light::before {
+  content: 'L';
+}
+
+.smh-entity-group-icon-temp::before {
+  content: '°';
+}
+
+.smh-entity-group-icon-blind::before {
+  content: 'J';
+}
+
+.smh-entity-group-icon-generic::before {
+  content: '·';
 }
 
 /* Switch AN-Zustand im NexoWatt-Grün */
