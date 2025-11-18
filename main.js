@@ -214,10 +214,18 @@ class NexoWattVis extends utils.Adapter {
       }
 
       // Finally, write JSON structure to state
+      const json = JSON.stringify(rooms);
       await this.setStateAsync('smartHome.structure', {
-        val: JSON.stringify(rooms),
+        val: json,
         ack: true
       });
+
+      // expose also via SSE cache so the VIS can render without extra polling
+      try {
+        this.updateValue('smartHome.structure', json, Date.now());
+      } catch (e) {
+        this.log.debug && this.log.debug('Could not push SmartHome structure to SSE cache: ' + e);
+      }
 
       this.log.info('SmartHome structure from enums built with ' + Object.keys(rooms).length + ' rooms.');
     } catch (err) {

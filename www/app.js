@@ -549,6 +549,122 @@ function renderSmartHome(){
   }
 }
 
+
+function getSmartHomeStructure(){
+  const entry = state && state['smartHome.structure'];
+  if (!entry || entry.value === undefined || entry.value === null) return null;
+  try {
+    const json = (typeof entry.value === 'string') ? entry.value : String(entry.value);
+    const data = JSON.parse(json);
+    if (!data || typeof data !== 'object') return null;
+    return data;
+  } catch(e){
+    console.warn('SmartHome structure JSON parse error', e);
+    return null;
+  }
+}
+
+function renderSmartHomeStructure(){
+  const container = document.getElementById('smhRoomsBody');
+  if (!container) return;
+
+  const data = getSmartHomeStructure();
+
+  // clear container
+  container.innerHTML = '';
+
+  if (!data || !Object.keys(data).length){
+    const p = document.createElement('p');
+    p.className = 'smh-placeholder-text';
+    p.textContent = 'Sobald in ioBroker Räume und Funktionen gepflegt sind, werden sie hier automatisch angezeigt.';
+    container.appendChild(p);
+    return;
+  }
+
+  const roomKeys = Object.keys(data).sort((a,b) => {
+    const an = (data[a]?.name || a).toString().toLowerCase();
+    const bn = (data[b]?.name || b).toString().toLowerCase();
+    if (an < bn) return -1;
+    if (an > bn) return 1;
+    return 0;
+  });
+
+  for (const key of roomKeys){
+    const room = data[key] || {};
+    const roomName = room.name || key;
+    const funcs = room.functions || {};
+
+    const roomEl = document.createElement('div');
+    roomEl.className = 'smh-room';
+
+    const headerEl = document.createElement('div');
+    headerEl.className = 'smh-room-header';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'smh-room-name';
+    nameEl.textContent = roomName;
+
+    const idEl = document.createElement('div');
+    idEl.className = 'smh-room-id';
+    idEl.textContent = key;
+
+    headerEl.appendChild(nameEl);
+    headerEl.appendChild(idEl);
+    roomEl.appendChild(headerEl);
+
+    const funcsWrap = document.createElement('div');
+    funcsWrap.className = 'smh-room-funcs';
+
+    const funcKeys = Object.keys(funcs).sort();
+    for (const fKey of funcKeys){
+      const entries = Array.isArray(funcs[fKey]) ? funcs[fKey] : [];
+      if (!entries.length) continue;
+
+      const funcBlock = document.createElement('div');
+
+      const funcTitle = document.createElement('div');
+      funcTitle.className = 'smh-func-title';
+      funcTitle.textContent = fKey;
+      funcBlock.appendChild(funcTitle);
+
+      const entitiesWrap = document.createElement('div');
+      entitiesWrap.className = 'smh-entities';
+
+      for (const ent of entries){
+        if (!ent || !ent.id) continue;
+        const entEl = document.createElement('div');
+        entEl.className = 'smh-entity';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = ent.name || ent.id;
+        entEl.appendChild(nameSpan);
+
+        if (ent.role){
+          const roleSpan = document.createElement('span');
+          roleSpan.className = 'smh-entity-role';
+          roleSpan.textContent = '[' + ent.role + ']';
+          entEl.appendChild(roleSpan);
+        }
+
+        entitiesWrap.appendChild(entEl);
+      }
+
+      if (entitiesWrap.childElementCount){
+        funcBlock.appendChild(entitiesWrap);
+        funcsWrap.appendChild(funcBlock);
+      }
+    }
+
+    if (!funcsWrap.childElementCount){
+      // no functions with entities -> skip room
+      continue;
+    }
+
+    roomEl.appendChild(funcsWrap);
+    container.appendChild(roomEl);
+  }
+}
+
 const _renderOrig = render;
 render = function(){
 
@@ -759,6 +875,13 @@ render = function(){
     setText('pvPowerBig', (pv===undefined?'--':formatPower(pv)));
     setText('consumptionTotalBig', (load===undefined?'--':formatPower(load)));
   } catch(e) { console.warn(e); }
+
+  // Auto-generierte SmartHome-Ansicht (Räume & Funktionen)
+  try {
+    renderSmartHomeStructure();
+  } catch(e) {
+    console.warn('SmartHome auto structure render error', e);
+  }
 }
 
 // SIDE-VALUES
