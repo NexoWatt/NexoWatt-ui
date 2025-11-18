@@ -551,7 +551,7 @@ function renderSmartHome(){
 
 
 function getSmartHomeStructure(){
-  const entry = window.state && window.state['smartHome.structure'];
+  const entry = state && state['smartHome.structure'];
   if (!entry || entry.value === undefined || entry.value === null) return null;
   try {
     const raw = (typeof entry.value === 'string') ? entry.value : String(entry.value);
@@ -710,8 +710,8 @@ function renderSmartHomeStructure(){
 
       const keyVal = ent.key || null;
       let rawVal;
-      if (keyVal && window.state && window.state[keyVal]) {
-        rawVal = window.state[keyVal].value;
+      if (keyVal && state && state[keyVal]) {
+        rawVal = state[keyVal].value;
       }
 
       if (kind === 'dimmer' || kind === 'blind') {
@@ -750,8 +750,8 @@ function renderSmartHomeStructure(){
           row.addEventListener('click', () => {
             // read latest value from state to avoid stale closure
             let current = false;
-            if (keyVal && window.state && window.state[keyVal]) {
-              const cur = window.state[keyVal].value;
+            if (keyVal && state && state[keyVal]) {
+              const cur = state[keyVal].value;
               current = !!cur;
             }
             const next = !current;
