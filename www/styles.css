@@ -627,37 +627,9 @@ body {
   margin-bottom: 4px;
 }
 
-.smh-entity-group-icon {
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  border: 1px solid #2d7dff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-}
-
-/* Icon-Varianten */
-.smh-entity-group-icon-light::before {
-  content: 'L';
-}
-
-.smh-entity-group-icon-temp::before {
-  content: '°';
-}
-
-.smh-entity-group-icon-blind::before {
-  content: 'J';
-}
-
-.smh-entity-group-icon-generic::before {
-  content: '·';
-}
-
-/* Switch AN-Zustand im NexoWatt-Grün */
-.smh-entity-toggle.is-on {
-  background: #00ff9c;
-  border-color: #00ff9c;
-  color: #000000;
+.smh-entity-group-icon-img {
+  width: clamp(14px, 2.5vw, 22px);
+  height: auto;
+  border-radius: 4px;
+  object-fit: contain;
 }
