@@ -151,10 +151,20 @@ class NexoWattVis extends utils.Adapter {
         const funcKeyParts = enumId.split('.');
         const funcKey = funcKeyParts[funcKeyParts.length - 1] || enumId;
 
-        // human readable function name (handles multi-lang objects)
+        // human readable function name (handles multi-lang objects and fallback mapping)
         let funcName = obj.common.name || funcKey;
         if (funcName && typeof funcName === 'object') {
           funcName = funcName.de || funcName.en || Object.values(funcName)[0] || funcKey;
+        }
+        const funcFallbacks = {
+          lighting: 'Beleuchtung',
+          shading: 'Beschattung',
+          climate: 'Klima',
+          heating: 'Heizung',
+          security: 'Sicherheit'
+        };
+        if (!funcName || funcName === funcKey) {
+          if (funcFallbacks[funcKey]) funcName = funcFallbacks[funcKey];
         }
 
         const members = Array.isArray(obj.common.members) ? obj.common.members : [];
@@ -175,7 +185,6 @@ class NexoWattVis extends utils.Adapter {
               rooms[roomKey].functions[funcKey] = [];
             }
 
-            // store function display name per room
             if (!rooms[roomKey].functionNames) {
               rooms[roomKey].functionNames = {};
             }
@@ -214,7 +223,7 @@ class NexoWattVis extends utils.Adapter {
         }
       }
 
-      // Enrich entries with name / role and assign a dynamic key for VIS
+      // Enrich entries with name / role and assign dynamic keys for VIS
       const enumKeyById = {};
       let enumIdx = 0;
       for (const room of Object.values(rooms)) {
@@ -224,21 +233,27 @@ class NexoWattVis extends utils.Adapter {
             if (!enumKeyById[entry.id]) {
               enumKeyById[entry.id] = 'smartEnum_' + (enumIdx++);
             }
+            const common = obj && obj.common || {};
             return {
               id: entry.id,
               key: enumKeyById[entry.id],
-              name: obj && obj.common && obj.common.name ? obj.common.name : entry.id,
-              role: obj && obj.common && obj.common.role ? obj.common.role : ''
+              name: common && common.name ? common.name : entry.id,
+              role: common && common.role ? common.role : '',
+              type: common && common.type ? common.type : '',
+              write: !!(common && common.write),
+              min: common && (typeof common.min === 'number') ? common.min : null,
+              max: common && (typeof common.max === 'number') ? common.max : null,
+              unit: common && common.unit ? common.unit : ''
             };
           });
         }
       }
 
-      // Save mapping for later state-change handling
+      // store mapping for later state-change handling
       this.smartHomeEnumKeyById = enumKeyById;
       this.smartHomeEnumIds = new Set(Object.keys(enumKeyById));
 
-      // Subscribe to all SmartHome enum states and push initial values
+      // subscribe to all SmartHome enum states and push initial values
       for (const [id, key] of Object.entries(enumKeyById)) {
         try {
           this.subscribeForeignStates(id);
@@ -510,7 +525,7 @@ app.get('/config', (req, res) => {
       }
     });
 
-// generic SmartHome enum control endpoint (auto-generated entities)
+    // generic SmartHome enum control endpoint (auto-generated entities)
     app.post('/api/smartHome/command', async (req, res) => {
       try {
         const id = req.body && req.body.id;

@@ -515,96 +515,11 @@ body {
   .smh-card { margin-top: 12px; }
 }
 
-
+/* SmartHome rooms overview */
 .smh-rooms-body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.smh-room {
-  border-top: 1px solid #1e252c;
-  padding-top: 8px;
-  margin-top: 8px;
-}
-
-.smh-room:first-child {
-  border-top: none;
-  padding-top: 0;
-  margin-top: 0;
-}
-
-.smh-room-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 4px;
-}
-
-.smh-room-name {
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.smh-room-id {
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.smh-room-funcs {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.smh-func-title {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  margin-bottom: 2px;
-}
-
-.smh-entities {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 4px;
-}
-
-.smh-entity {
-  font-size: 12px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: #181d23;
-  border: 1px solid #222a33;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.smh-entity-role {
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.smh-placeholder-text {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.smh-entity.interactive {
-  cursor: pointer;
-  border-color: #2d7dff;
-}
-
-.smh-entity-value {
-  font-weight: 500;
-}
-
-.smh-entity.interactive:hover {
-  background: #1b2230;
 }
 
 .smh-room-tabs {
@@ -679,4 +594,14 @@ body {
 
 .smh-entity-row.interactive:hover .smh-entity-toggle {
   background: #1b2230;
+}
+
+.smh-entity-slider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.smh-entity-slider input[type="range"] {
+  width: 120px;
 }
