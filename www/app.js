@@ -600,7 +600,6 @@ function detectSmartHomeEntityType(ent) {
     return 'sensor';
   }
 
-  // Zusätzliche Heuristiken (Kompatibilität)
   // klassische Schalter
   if (r.includes('switch') || r.includes('light') || r.includes('socket')) return 'switch';
 
@@ -640,6 +639,13 @@ function formatSmartHomeValue(ent, rawVal) {
     return n.toFixed(1) + ' °C';
   }
 
+  // Dimmer / Level -> Prozent
+  if (kind === 'dimmer') {
+    const n = Number(rawVal);
+    if (isNaN(n)) return '--';
+    return n.toFixed(0) + ' %';
+  }
+
   // Schalt- oder Rückmelde-Boolean -> AN/AUS
   if (kind === 'switch' || type === 'boolean') {
     return rawVal ? 'AN' : 'AUS';
@@ -647,7 +653,8 @@ function formatSmartHomeValue(ent, rawVal) {
 
   // Numerische Werte mit Einheit
   if (typeof rawVal === 'number') {
-    const unit = ent && ent.unit ? String(ent.unit) : '';
+    let unitRaw = (ent && ent.unit != null) ? String(ent.unit) : '';
+    const unit = (unitRaw && unitRaw.toLowerCase() !== 'null' && unitRaw.toLowerCase() !== 'undefined') ? unitRaw : '';
     return unit ? (String(rawVal) + ' ' + unit) : String(rawVal);
   }
 
