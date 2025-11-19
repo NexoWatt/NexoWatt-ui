@@ -585,6 +585,22 @@ function detectSmartHomeEntityType(ent) {
 
   if (!r && !type) return 'sensor';
 
+  // Basislogik nach KNX / ioBroker-Rollen
+  const baseRole = r.split('.')[0];
+  if (baseRole === 'switch') {
+    // Schalten
+    return 'switch';
+  }
+  if (baseRole === 'level') {
+    // Level = Slider (Dimmer / Prozentwert)
+    return 'dimmer';
+  }
+  if (baseRole === 'indicator' || baseRole === 'value') {
+    // reine Anzeige / Rückmeldung
+    return 'sensor';
+  }
+
+  // Zusätzliche Heuristiken (Kompatibilität)
   // klassische Schalter
   if (r.includes('switch') || r.includes('light') || r.includes('socket')) return 'switch';
 
@@ -600,22 +616,6 @@ function detectSmartHomeEntityType(ent) {
     return 'temperature';
   }
 
-  // Einfache KNX-Logik:
-  // switch  = Schalten
-  // level   = Slider (0-100%)
-  // value   = reine Anzeige
-  // indicator = Rückmelde-Status (Anzeige)
-  const baseRole = r.split('.')[0];
-  if (baseRole === 'switch') {
-    return 'switch';
-  }
-  if (baseRole === 'level') {
-    if (writable && type === 'number') return 'dimmer';
-  }
-  if (baseRole === 'indicator' || baseRole === 'value') {
-    return 'sensor';
-  }
-
   // Speziell für prozentuale Level (z.B. Helligkeit, Jalousie)
   if (r.includes('level.wave')) return 'dimmer';
   if (writable && type === 'number' && unit === '%') return 'dimmer';
@@ -625,27 +625,35 @@ function detectSmartHomeEntityType(ent) {
 
   return 'sensor';
 }
-
 function formatSmartHomeValue(ent, rawVal) {
   const kind = detectSmartHomeEntityType(ent);
+  const type = (ent && ent.type) ? String(ent.type).toLowerCase() : '';
+
   if (rawVal === undefined || rawVal === null || (typeof rawVal === 'number' && isNaN(rawVal))) {
     return '--';
   }
+
+  // Temperatur
   if (kind === 'temperature' || kind === 'tempSetpoint') {
     const n = Number(rawVal);
     if (isNaN(n)) return '--';
     return n.toFixed(1) + ' °C';
   }
-  if (kind === 'switch') {
+
+  // Schalt- oder Rückmelde-Boolean -> AN/AUS
+  if (kind === 'switch' || type === 'boolean') {
     return rawVal ? 'AN' : 'AUS';
   }
+
+  // Numerische Werte mit Einheit
   if (typeof rawVal === 'number') {
     const unit = ent && ent.unit ? String(ent.unit) : '';
     return unit ? (String(rawVal) + ' ' + unit) : String(rawVal);
   }
+
+  // Fallback: String
   return String(rawVal);
 }
-
 async function sendSmartHomeCommand(ent, newVal) {
   if (!ent || !ent.id) return;
   try {
