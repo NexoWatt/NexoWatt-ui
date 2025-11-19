@@ -395,7 +395,7 @@ async function loadConfig() {
         const enabled = !!(SERVER_CFG.smartHome && SERVER_CFG.smartHome.enabled);
         btn.style.display = enabled ? '' : 'none';
 
-        // Optional: direkt in den SmartHome-Tab springen, wenn ?tab=smarthome gesetzt ist
+        // Direkt in den SmartHome-Tab springen, wenn ?tab=smarthome gesetzt ist
         if (enabled) {
           try {
             const qs = new URLSearchParams(window.location.search || '');
@@ -600,6 +600,22 @@ function detectSmartHomeEntityType(ent) {
     return 'temperature';
   }
 
+  // Einfache KNX-Logik:
+  // switch  = Schalten
+  // level   = Slider (0-100%)
+  // value   = reine Anzeige
+  // indicator = Rückmelde-Status (Anzeige)
+  const baseRole = r.split('.')[0];
+  if (baseRole === 'switch') {
+    return 'switch';
+  }
+  if (baseRole === 'level') {
+    if (writable && type === 'number') return 'dimmer';
+  }
+  if (baseRole === 'indicator' || baseRole === 'value') {
+    return 'sensor';
+  }
+
   // Speziell für prozentuale Level (z.B. Helligkeit, Jalousie)
   if (r.includes('level.wave')) return 'dimmer';
   if (writable && type === 'number' && unit === '%') return 'dimmer';
@@ -688,14 +704,18 @@ function renderSmartHomeStructure(){
   function detectGroupType(entities, funcKey) {
     const fk = (funcKey || '').toLowerCase();
 
-    if (fk.includes('light') || fk.includes('beleuchtung')) return 'light';
+    // Funktionsnamen auswerten
+    if (fk.includes('light') || fk.includes('beleuchtung') || fk.includes('dimm')) return 'light';
     if (fk.includes('shade') || fk.includes('jalous') || fk.includes('shutter') || fk.includes('beschattung')) return 'blind';
     if (fk.includes('climate') || fk.includes('heating') || fk.includes('heizung') || fk.includes('temperatur')) return 'temp';
 
+    // Rollen der enthaltenen Datenpunkte auswerten
     for (const ent of entities) {
       if (!ent) continue;
       const role = (ent.role || '').toLowerCase();
-      if (role.includes('light') || role.includes('switch')) return 'light';
+      const base = role.split('.')[0];
+
+      if (base === 'switch' || base === 'level' || role.includes('light')) return 'light';
       if (role.includes('blind') || role.includes('shutter') || role.includes('jalous')) return 'blind';
       if (role.includes('temperature') || role.includes('climate') || role.includes('heating')) return 'temp';
     }
