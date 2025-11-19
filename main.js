@@ -119,6 +119,27 @@ class NexoWattVis extends utils.Adapter {
       const rooms = {};
       const roomByStateId = {};
 
+      const channelStateCache = {};
+
+      // Expand enum member (state/channel/device) to a list of concrete state IDs
+      const expandToStateIds = async (id) => {
+        try {
+          const obj = await this.getForeignObjectAsync(id);
+          if (!obj) return [];
+          if (obj.type === 'state') return [id];
+          if (obj.type === 'channel' || obj.type === 'device') {
+            if (channelStateCache[id]) return channelStateCache[id];
+            const states = await this.getForeignObjectsAsync(id + '.*', 'state');
+            const ids = Object.keys(states || {});
+            channelStateCache[id] = ids;
+            return ids;
+          }
+        } catch (e) {
+          this.log.debug && this.log.debug('SmartHome expandToStateIds error for ' + id + ': ' + e);
+        }
+        return [];
+      };
+
       // Build base room objects and a mapping from stateId -> roomKey[]
       for (const [enumId, obj] of Object.entries(roomEnums || {})) {
         if (!obj || !obj.common) continue;
@@ -136,11 +157,16 @@ class NexoWattVis extends utils.Adapter {
         }
 
         const members = Array.isArray(obj.common.members) ? obj.common.members : [];
-        for (const stateId of members) {
-          if (!roomByStateId[stateId]) {
-            roomByStateId[stateId] = [];
+        for (const memberId of members) {
+          const stateIds = await expandToStateIds(memberId);
+          const effectiveIds = (stateIds && stateIds.length) ? stateIds : [memberId];
+
+          for (const stateId of effectiveIds) {
+            if (!roomByStateId[stateId]) {
+              roomByStateId[stateId] = [];
+            }
+            roomByStateId[stateId].push(roomKey);
           }
-          roomByStateId[stateId].push(roomKey);
         }
       }
 
@@ -168,31 +194,36 @@ class NexoWattVis extends utils.Adapter {
         }
 
         const members = Array.isArray(obj.common.members) ? obj.common.members : [];
-        for (const stateId of members) {
-          const assignedRooms = roomByStateId[stateId] || ['_noRoom_'];
+        for (const memberId of members) {
+          const stateIds = await expandToStateIds(memberId);
+          const effectiveIds = (stateIds && stateIds.length) ? stateIds : [memberId];
 
-          for (const roomKey of assignedRooms) {
-            if (!rooms[roomKey]) {
-              // If a state is in a function enum, but not in any room enum
-              rooms[roomKey] = {
-                id: roomKey === '_noRoom_' ? null : 'enum.rooms.' + roomKey,
-                name: roomKey === '_noRoom_' ? 'Ohne Raum' : roomKey,
-                functions: {}
-              };
+          for (const stateId of effectiveIds) {
+            const assignedRooms = roomByStateId[stateId] || roomByStateId[memberId] || ['_noRoom_'];
+
+            for (const roomKey of assignedRooms) {
+              if (!rooms[roomKey]) {
+                // If a state is in a function enum, but not in any room enum
+                rooms[roomKey] = {
+                  id: roomKey === '_noRoom_' ? null : 'enum.rooms.' + roomKey,
+                  name: roomKey === '_noRoom_' ? 'Ohne Raum' : roomKey,
+                  functions: {}
+                };
+              }
+
+              if (!rooms[roomKey].functions[funcKey]) {
+                rooms[roomKey].functions[funcKey] = [];
+              }
+
+              if (!rooms[roomKey].functionNames) {
+                rooms[roomKey].functionNames = {};
+              }
+              rooms[roomKey].functionNames[funcKey] = funcName;
+
+              rooms[roomKey].functions[funcKey].push({
+                id: stateId
+              });
             }
-
-            if (!rooms[roomKey].functions[funcKey]) {
-              rooms[roomKey].functions[funcKey] = [];
-            }
-
-            if (!rooms[roomKey].functionNames) {
-              rooms[roomKey].functionNames = {};
-            }
-            rooms[roomKey].functionNames[funcKey] = funcName;
-
-            rooms[roomKey].functions[funcKey].push({
-              id: stateId
-            });
           }
         }
       }
