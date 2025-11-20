@@ -138,7 +138,7 @@ class NexoWattVis extends utils.Adapter {
                 return ids;
               }
             }
-            // Fallback: nur dieser State
+            // Fallback: only this state
             return [id];
           }
           if (obj.type === 'channel' || obj.type === 'device') {
@@ -242,51 +242,34 @@ class NexoWattVis extends utils.Adapter {
         }
       }
 
-
-      // Fallback: states that are in a room enum but not in any function enum
-      try {
-        const usedStateIds = new Set();
-        for (const room of Object.values(rooms)) {
-          for (const funcKey of Object.keys(room.functions || {})) {
-            for (const entry of room.functions[funcKey] || []) {
-              if (entry && entry.id) {
-                usedStateIds.add(entry.id);
-              }
+      // Auto-assign states that are only in rooms (but not in any function) to a generic function per room
+      const statesInFunctions = new Set();
+      for (const room of Object.values(rooms)) {
+        for (const funcKey of Object.keys(room.functions)) {
+          for (const entry of room.functions[funcKey]) {
+            if (entry && entry.id) {
+              statesInFunctions.add(entry.id);
             }
           }
         }
+      }
 
-        const fallbackKey = '__auto__';
-        const fallbackName = 'Allgemein';
+      for (const [roomKey, room] of Object.entries(rooms)) {
+        for (const [stateId, assignedRooms] of Object.entries(roomByStateId)) {
+          if (!assignedRooms || !assignedRooms.includes(roomKey)) continue;
+          if (statesInFunctions.has(stateId)) continue;
 
-        for (const [stateId, roomKeys] of Object.entries(roomByStateId)) {
-          if (!roomKeys || !roomKeys.length) continue;
-          if (usedStateIds.has(stateId)) continue;
-
-          for (const roomKey of roomKeys) {
-            if (!rooms[roomKey]) {
-              rooms[roomKey] = {
-                id: roomKey === '_noRoom_' ? null : 'enum.rooms.' + roomKey,
-                name: roomKey === '_noRoom_' ? 'Ohne Raum' : roomKey,
-                functions: {}
-              };
+          const funcKey = '__auto__';
+          if (!room.functions[funcKey]) {
+            room.functions[funcKey] = [];
+            if (!room.functionNames) {
+              room.functionNames = {};
             }
-
-            if (!rooms[roomKey].functions[fallbackKey]) {
-              rooms[roomKey].functions[fallbackKey] = [];
-            }
-            rooms[roomKey].functions[fallbackKey].push({ id: stateId });
-
-            if (!rooms[roomKey].functionNames) {
-              rooms[roomKey].functionNames = {};
-            }
-            if (!rooms[roomKey].functionNames[fallbackKey]) {
-              rooms[roomKey].functionNames[fallbackKey] = fallbackName;
-            }
+            room.functionNames[funcKey] = 'Allgemein';
           }
+
+          room.functions[funcKey].push({ id: stateId });
         }
-      } catch (e) {
-        this.log.debug && this.log.debug('SmartHome fallback function assignment error: ' + e);
       }
 
       // Collect all state IDs we need metadata for

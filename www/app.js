@@ -394,17 +394,6 @@ async function loadConfig() {
       if (btn) {
         const enabled = !!(SERVER_CFG.smartHome && SERVER_CFG.smartHome.enabled);
         btn.style.display = enabled ? '' : 'none';
-
-        // Direkt in den SmartHome-Tab springen, wenn ?tab=smarthome gesetzt ist
-        if (enabled) {
-          try {
-            const qs = new URLSearchParams(window.location.search || '');
-            const targetTab = qs.get('tab');
-            if (targetTab === 'smarthome') {
-              btn.click();
-            }
-          } catch(_ignore) {}
-        }
       }
     } catch(_e) {}
   } catch(e) { console.warn('cfg', e); }
@@ -585,21 +574,6 @@ function detectSmartHomeEntityType(ent) {
 
   if (!r && !type) return 'sensor';
 
-  // Basislogik nach KNX / ioBroker-Rollen
-  const baseRole = r.split('.')[0];
-  if (baseRole === 'switch') {
-    // Schalten
-    return 'switch';
-  }
-  if (baseRole === 'level') {
-    // Level = Slider (Dimmer / Prozentwert)
-    return 'dimmer';
-  }
-  if (baseRole === 'indicator' || baseRole === 'value') {
-    // reine Anzeige / Rückmeldung
-    return 'sensor';
-  }
-
   // klassische Schalter
   if (r.includes('switch') || r.includes('light') || r.includes('socket')) return 'switch';
 
@@ -627,39 +601,21 @@ function detectSmartHomeEntityType(ent) {
 
 function formatSmartHomeValue(ent, rawVal) {
   const kind = detectSmartHomeEntityType(ent);
-  const type = (ent && ent.type) ? String(ent.type).toLowerCase() : '';
-
   if (rawVal === undefined || rawVal === null || (typeof rawVal === 'number' && isNaN(rawVal))) {
     return '--';
   }
-
-  // Temperatur
   if (kind === 'temperature' || kind === 'tempSetpoint') {
     const n = Number(rawVal);
     if (isNaN(n)) return '--';
     return n.toFixed(1) + ' °C';
   }
-
-  // Dimmer / Level -> Prozent
-  if (kind === 'dimmer') {
-    const n = Number(rawVal);
-    if (isNaN(n)) return '--';
-    return n.toFixed(0) + ' %';
-  }
-
-  // Schalt- oder Rückmelde-Boolean -> AN/AUS
-  if (kind === 'switch' || type === 'boolean') {
+  if (kind === 'switch') {
     return rawVal ? 'AN' : 'AUS';
   }
-
-  // Numerische Werte mit Einheit
   if (typeof rawVal === 'number') {
-    let unitRaw = (ent && ent.unit != null) ? String(ent.unit) : '';
-    const unit = (unitRaw && unitRaw.toLowerCase() !== 'null' && unitRaw.toLowerCase() !== 'undefined') ? unitRaw : '';
+    const unit = ent && ent.unit ? String(ent.unit) : '';
     return unit ? (String(rawVal) + ' ' + unit) : String(rawVal);
   }
-
-  // Fallback: String
   return String(rawVal);
 }
 
@@ -721,18 +677,14 @@ function renderSmartHomeStructure(){
   function detectGroupType(entities, funcKey) {
     const fk = (funcKey || '').toLowerCase();
 
-    // Funktionsnamen auswerten
-    if (fk.includes('light') || fk.includes('beleuchtung') || fk.includes('dimm')) return 'light';
+    if (fk.includes('light') || fk.includes('beleuchtung')) return 'light';
     if (fk.includes('shade') || fk.includes('jalous') || fk.includes('shutter') || fk.includes('beschattung')) return 'blind';
     if (fk.includes('climate') || fk.includes('heating') || fk.includes('heizung') || fk.includes('temperatur')) return 'temp';
 
-    // Rollen der enthaltenen Datenpunkte auswerten
     for (const ent of entities) {
       if (!ent) continue;
       const role = (ent.role || '').toLowerCase();
-      const base = role.split('.')[0];
-
-      if (base === 'switch' || base === 'level' || role.includes('light')) return 'light';
+      if (role.includes('light') || role.includes('switch')) return 'light';
       if (role.includes('blind') || role.includes('shutter') || role.includes('jalous')) return 'blind';
       if (role.includes('temperature') || role.includes('climate') || role.includes('heating')) return 'temp';
     }
@@ -835,6 +787,7 @@ function renderSmartHomeStructure(){
       const groupEntities = groupsMap[gKey];
       if (!groupEntities.length) continue;
 
+      // Kachel-Container
       const groupDiv = document.createElement('div');
       groupDiv.className = 'smh-entity-group';
 
@@ -855,86 +808,44 @@ function renderSmartHomeStructure(){
 
       groupDiv.appendChild(groupHeader);
 
-            // Ger&auml;te-basiertes Grouping: alle States eines Kanals in einer Zeile b&uuml;ndeln
+      // --- Eine Zeile pro Gerät / Kachel ---
+      const row = document.createElement('div');
+      row.className = 'smh-entity-row';
 
-      const devices = new Map();
-
-      const deriveDeviceKey = (ent) => {
-        if (!ent) return '';
-        if (ent.deviceKey) return ent.deviceKey;
-
-        const name = (ent.name && typeof ent.name === 'string') ? ent.name : '';
-        if (name) {
-          const lower = name.toLowerCase();
-          const separators = [
-            ' schalten',
-            ' dimmen',
-            ' wert',
-            ' status',
-            ' rückmeldung',
-            ' rueckmeldung',
-            ' störung',
-            ' stoerung'
-          ];
-          let cut = -1;
-          for (const sep of separators) {
-            const pos = lower.indexOf(sep);
-            if (pos > 0) {
-              cut = pos;
-              break;
-            }
-          }
-          if (cut > 0) {
-            return name.slice(0, cut).trim();
-          }
-        }
-
-        if (ent.id && ent.id.includes('.')) {
-          return ent.id.split('.').slice(0, -1).join('.');
-        }
-
-        return ent.id || name || '';
-      };
+      // passende Entitäten für diese Kachel finden
+      let switchEnt = null;
+      let dimmerEnt = null;
+      let tempEnt = null;
+      let indicatorEnt = null;
+      let valueEnt = null;
 
       for (const ent of groupEntities) {
-        if (!ent || !ent.id) continue;
-
-        const devKey = deriveDeviceKey(ent);
-
-        let dev = devices.get(devKey);
-        if (!dev) {
-          dev = {
-            key: devKey,
-            all: [],
-            switchEnt: null,
-            dimmerEnt: null,
-            indicatorEnt: null,
-            valueEnt: null,
-            tempEnt: null
-          };
-          devices.set(devKey, dev);
-        }
-
+        if (!ent) continue;
         const kind = detectSmartHomeEntityType(ent);
-        dev.all.push(ent);
-
-        if (kind === 'switch') {
-          if (!dev.switchEnt) dev.switchEnt = ent;
-        } else if (kind === 'dimmer' || kind === 'blind') {
-          if (!dev.dimmerEnt) dev.dimmerEnt = ent;
-        } else if (kind === 'temperature' || kind === 'tempSetpoint') {
-          if (!dev.tempEnt) dev.tempEnt = ent;
+        if (kind === 'switch' && !switchEnt) {
+          switchEnt = ent;
+        } else if ((kind === 'dimmer' || kind === 'blind') && !dimmerEnt) {
+          dimmerEnt = ent;
+        } else if ((kind === 'temperature' || kind === 'tempSetpoint') && !tempEnt) {
+          tempEnt = ent;
         } else {
-          const t = (ent && ent.type) ? String(ent.type).toLowerCase() : '';
+          const t = (ent.type || '').toString().toLowerCase();
           if (t === 'boolean') {
-            if (!dev.indicatorEnt) dev.indicatorEnt = ent;
-          } else {
-            if (!dev.valueEnt) dev.valueEnt = ent;
+            if (!indicatorEnt) indicatorEnt = ent;
+          } else if (!valueEnt) {
+            valueEnt = ent;
           }
         }
       }
 
-      const readStateValue = (ent) => {
+      const baseEnt = switchEnt || dimmerEnt || tempEnt || valueEnt || indicatorEnt || groupEntities[0];
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'smh-entity-name';
+      nameSpan.textContent = baseEnt.name || baseEnt.id;
+      row.appendChild(nameSpan);
+
+      const readVal = (ent) => {
         if (!ent || !ent.key) return undefined;
         const keyVal = ent.key;
         if (state && state[keyVal]) {
@@ -943,112 +854,93 @@ function renderSmartHomeStructure(){
         return undefined;
       };
 
-      for (const dev of devices.values()) {
-        const baseEnt = dev.switchEnt || dev.dimmerEnt || dev.tempEnt || dev.valueEnt || dev.indicatorEnt || dev.all[0];
-        if (!baseEnt) continue;
+      // Slider (Dimmer oder Temperatur-Soll)
+      const sliderEnt = dimmerEnt || tempEnt;
+      if (sliderEnt) {
+        const kind = detectSmartHomeEntityType(sliderEnt);
+        const wrap = document.createElement('div');
+        wrap.className = 'smh-entity-slider';
 
-        const row = document.createElement('div');
-        const baseKind = detectSmartHomeEntityType(baseEnt);
-        row.className = 'smh-entity-row' + (dev.switchEnt ? ' interactive' : '');
+        const slider = document.createElement('input');
+        slider.type = 'range';
 
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'smh-entity-name';
-        nameSpan.textContent = baseEnt.name || baseEnt.id;
-        row.appendChild(nameSpan);
+        let min = (typeof sliderEnt.min === 'number') ? sliderEnt.min : null;
+        let max = (typeof sliderEnt.max === 'number') ? sliderEnt.max : null;
 
-        // Slider, falls Dimmer oder Temperatur-Soll vorhanden
-        const sliderEnt = dev.dimmerEnt || dev.tempEnt;
-        if (sliderEnt) {
-          const kind = detectSmartHomeEntityType(sliderEnt);
-          const wrap = document.createElement('div');
-          wrap.className = 'smh-entity-slider';
-
-          const slider = document.createElement('input');
-          slider.type = 'range';
-
-          let min = (typeof sliderEnt.min === 'number') ? sliderEnt.min : null;
-          let max = (typeof sliderEnt.max === 'number') ? sliderEnt.max : null;
-
-          // sinnvolle Defaults f&uuml;r Temperatur-Sollwerte
-          if (kind === 'tempSetpoint') {
-            if (min === null) min = 16;
-            if (max === null) max = 26;
-          } else {
-            if (min === null) min = 0;
-            if (max === null) max = 100;
-          }
-
-          slider.min = String(min);
-          slider.max = String(max);
-
-          const currentVal = readStateValue(sliderEnt);
-          const initial = (typeof currentVal === 'number' && !isNaN(currentVal)) ? currentVal : min;
-          slider.value = String(initial);
-
-          const label = document.createElement('span');
-          label.className = 'smh-entity-value';
-          label.textContent = formatSmartHomeValue(sliderEnt, initial);
-
-          slider.addEventListener('change', () => {
-            const val = Number(slider.value);
-            label.textContent = formatSmartHomeValue(sliderEnt, val);
-            sendSmartHomeCommand(sliderEnt, val);
-          });
-
-          wrap.appendChild(slider);
-          wrap.appendChild(label);
-          row.appendChild(wrap);
+        if (kind === 'tempSetpoint') {
+          if (min === null) min = 16;
+          if (max === null) max = 26;
+        } else {
+          if (min === null) min = 0;
+          if (max === null) max = 100;
         }
 
-        // Wert / Status rechts
-        const statusEnt = dev.indicatorEnt || dev.valueEnt || dev.switchEnt;
-        if (statusEnt) {
-          const kind = detectSmartHomeEntityType(statusEnt);
-          const keyVal = statusEnt.key || null;
-          let rawVal;
-          if (keyVal && state && state[keyVal]) {
-            rawVal = state[keyVal].value;
-          }
+        slider.min = String(min);
+        slider.max = String(max);
 
-          const valueSpan = document.createElement('span');
-          valueSpan.className = (kind === 'switch') ? 'smh-entity-toggle' : 'smh-entity-value';
-          valueSpan.textContent = formatSmartHomeValue(statusEnt, rawVal);
+        const currentRaw = readVal(sliderEnt);
+        const initial = (typeof currentRaw === 'number' && !isNaN(currentRaw)) ? currentRaw : min;
+        slider.value = String(initial);
 
-          // AN-Farbe initial setzen
-          if (kind === 'switch' && rawVal) {
-            valueSpan.classList.add('is-on');
-          }
+        const label = document.createElement('span');
+        label.className = 'smh-entity-value';
+        label.textContent = formatSmartHomeValue(sliderEnt, initial);
 
-          row.appendChild(valueSpan);
+        slider.addEventListener('change', () => {
+          const val = Number(slider.value);
+          label.textContent = formatSmartHomeValue(sliderEnt, val);
+          sendSmartHomeCommand(sliderEnt, val);
+        });
 
-          if (kind === 'switch') {
-            row.addEventListener('click', () => {
-              // read latest value from state to avoid stale closure
-              let current = false;
-              if (keyVal && state && state[keyVal]) {
-                const cur = state[keyVal].value;
-                current = !!cur;
-              }
-              const next = !current;
-
-              valueSpan.textContent = formatSmartHomeValue(statusEnt, next);
-              if (next) {
-                valueSpan.classList.add('is-on');
-              } else {
-                valueSpan.classList.remove('is-on');
-              }
-
-              sendSmartHomeCommand(statusEnt, next);
-            });
-          }
-        }
-
-        groupDiv.appendChild(row);
+        wrap.appendChild(slider);
+        wrap.appendChild(label);
+        row.appendChild(wrap);
       }
 
+      // Status / Schalter
+      const statusEnt = indicatorEnt || valueEnt || switchEnt;
+      if (statusEnt) {
+        const kind = detectSmartHomeEntityType(statusEnt);
+        const keyVal = statusEnt.key || null;
+        let rawVal;
+        if (keyVal && state && state[keyVal]) {
+          rawVal = state[keyVal].value;
+        }
+
+        const valueSpan = document.createElement('span');
+        valueSpan.className = (kind === 'switch') ? 'smh-entity-toggle' : 'smh-entity-value';
+        valueSpan.textContent = formatSmartHomeValue(statusEnt, rawVal);
+
+        if (kind === 'switch' && rawVal) {
+          valueSpan.classList.add('is-on');
+        }
+
+        row.appendChild(valueSpan);
+
+        if (kind === 'switch') {
+          row.classList.add('interactive');
+          row.addEventListener('click', () => {
+            let current = false;
+            if (keyVal && state && state[keyVal]) {
+              current = !!state[keyVal].value;
+            }
+            const next = !current;
+
+            valueSpan.textContent = formatSmartHomeValue(statusEnt, next);
+            if (next) {
+              valueSpan.classList.add('is-on');
+            } else {
+              valueSpan.classList.remove('is-on');
+            }
+
+            sendSmartHomeCommand(statusEnt, next);
+          });
+        }
+      }
+
+      groupDiv.appendChild(row);
       funcCard.appendChild(groupDiv);
     }
-
     contentEl.appendChild(funcCard);
   }
 }
