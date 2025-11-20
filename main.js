@@ -242,6 +242,53 @@ class NexoWattVis extends utils.Adapter {
         }
       }
 
+
+      // Fallback: states that are in a room enum but not in any function enum
+      try {
+        const usedStateIds = new Set();
+        for (const room of Object.values(rooms)) {
+          for (const funcKey of Object.keys(room.functions || {})) {
+            for (const entry of room.functions[funcKey] || []) {
+              if (entry && entry.id) {
+                usedStateIds.add(entry.id);
+              }
+            }
+          }
+        }
+
+        const fallbackKey = '__auto__';
+        const fallbackName = 'Allgemein';
+
+        for (const [stateId, roomKeys] of Object.entries(roomByStateId)) {
+          if (!roomKeys || !roomKeys.length) continue;
+          if (usedStateIds.has(stateId)) continue;
+
+          for (const roomKey of roomKeys) {
+            if (!rooms[roomKey]) {
+              rooms[roomKey] = {
+                id: roomKey === '_noRoom_' ? null : 'enum.rooms.' + roomKey,
+                name: roomKey === '_noRoom_' ? 'Ohne Raum' : roomKey,
+                functions: {}
+              };
+            }
+
+            if (!rooms[roomKey].functions[fallbackKey]) {
+              rooms[roomKey].functions[fallbackKey] = [];
+            }
+            rooms[roomKey].functions[fallbackKey].push({ id: stateId });
+
+            if (!rooms[roomKey].functionNames) {
+              rooms[roomKey].functionNames = {};
+            }
+            if (!rooms[roomKey].functionNames[fallbackKey]) {
+              rooms[roomKey].functionNames[fallbackKey] = fallbackName;
+            }
+          }
+        }
+      } catch (e) {
+        this.log.debug && this.log.debug('SmartHome fallback function assignment error: ' + e);
+      }
+
       // Collect all state IDs we need metadata for
       const neededStateIds = new Set();
       for (const room of Object.values(rooms)) {

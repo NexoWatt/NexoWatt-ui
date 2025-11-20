@@ -856,14 +856,50 @@ function renderSmartHomeStructure(){
       groupDiv.appendChild(groupHeader);
 
             // Ger&auml;te-basiertes Grouping: alle States eines Kanals in einer Zeile b&uuml;ndeln
+
       const devices = new Map();
+
+      const deriveDeviceKey = (ent) => {
+        if (!ent) return '';
+        if (ent.deviceKey) return ent.deviceKey;
+
+        const name = (ent.name && typeof ent.name === 'string') ? ent.name : '';
+        if (name) {
+          const lower = name.toLowerCase();
+          const separators = [
+            ' schalten',
+            ' dimmen',
+            ' wert',
+            ' status',
+            ' rückmeldung',
+            ' rueckmeldung',
+            ' störung',
+            ' stoerung'
+          ];
+          let cut = -1;
+          for (const sep of separators) {
+            const pos = lower.indexOf(sep);
+            if (pos > 0) {
+              cut = pos;
+              break;
+            }
+          }
+          if (cut > 0) {
+            return name.slice(0, cut).trim();
+          }
+        }
+
+        if (ent.id && ent.id.includes('.')) {
+          return ent.id.split('.').slice(0, -1).join('.');
+        }
+
+        return ent.id || name || '';
+      };
 
       for (const ent of groupEntities) {
         if (!ent || !ent.id) continue;
 
-        const devKey = ent.deviceKey
-          ? ent.deviceKey
-          : (ent.id.includes('.') ? ent.id.split('.').slice(0, -1).join('.') : ent.id);
+        const devKey = deriveDeviceKey(ent);
 
         let dev = devices.get(devKey);
         if (!dev) {
