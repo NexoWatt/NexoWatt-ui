@@ -138,7 +138,7 @@ class NexoWattVis extends utils.Adapter {
                 return ids;
               }
             }
-            // Fallback: only this state
+            // Fallback: nur dieser State
             return [id];
           }
           if (obj.type === 'channel' || obj.type === 'device') {
@@ -239,36 +239,6 @@ class NexoWattVis extends utils.Adapter {
               });
             }
           }
-        }
-      }
-
-      // Auto-assign states that are only in rooms (but not in any function) to a generic function per room
-      const statesInFunctions = new Set();
-      for (const room of Object.values(rooms)) {
-        for (const funcKey of Object.keys(room.functions)) {
-          for (const entry of room.functions[funcKey]) {
-            if (entry && entry.id) {
-              statesInFunctions.add(entry.id);
-            }
-          }
-        }
-      }
-
-      for (const [roomKey, room] of Object.entries(rooms)) {
-        for (const [stateId, assignedRooms] of Object.entries(roomByStateId)) {
-          if (!assignedRooms || !assignedRooms.includes(roomKey)) continue;
-          if (statesInFunctions.has(stateId)) continue;
-
-          const funcKey = '__auto__';
-          if (!room.functions[funcKey]) {
-            room.functions[funcKey] = [];
-            if (!room.functionNames) {
-              room.functionNames = {};
-            }
-            room.functionNames[funcKey] = 'Allgemein';
-          }
-
-          room.functions[funcKey].push({ id: stateId });
         }
       }
 
