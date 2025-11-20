@@ -126,7 +126,21 @@ class NexoWattVis extends utils.Adapter {
         try {
           const obj = await this.getForeignObjectAsync(id);
           if (!obj) return [];
-          if (obj.type === 'state') return [id];
+          if (obj.type === 'state') {
+            const parts = id.split('.');
+            if (parts.length > 2) {
+              const parentId = parts.slice(0, -1).join('.');
+              if (channelStateCache[parentId]) return channelStateCache[parentId];
+              const states = await this.getForeignObjectsAsync(parentId + '.*', 'state');
+              const ids = Object.keys(states || {});
+              if (ids.length) {
+                channelStateCache[parentId] = ids;
+                return ids;
+              }
+            }
+            // Fallback: nur dieser State
+            return [id];
+          }
           if (obj.type === 'channel' || obj.type === 'device') {
             if (channelStateCache[id]) return channelStateCache[id];
             const states = await this.getForeignObjectsAsync(id + '.*', 'state');
