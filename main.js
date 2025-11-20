@@ -108,6 +108,20 @@ class NexoWattVis extends utils.Adapter {
       },
       native: {}
     });
+
+    // State to expose SmartHome device profiles (grouped per room / device)
+    await this.setObjectNotExistsAsync('smartHome.devices', {
+      type: 'state',
+      common: {
+        name: 'SmartHome device profiles (grouped per room / device)',
+        type: 'string',
+        role: 'json',
+        read: true,
+        write: false,
+        def: '{}'
+      },
+      native: {}
+    });
   }
 
   async buildSmartHomeStructureFromEnums() {
@@ -311,7 +325,103 @@ class NexoWattVis extends utils.Adapter {
         }
       }
 
-      // Finally, write JSON structure to state
+      
+      // Build derived SmartHome device profiles (per room / device)
+      try {
+        const deviceRooms = {};
+        const getBaseId = (id) => {
+          if (!id) return '';
+          const parts = String(id).split('.');
+          if (parts.length <= 2) return id;
+          return parts.slice(0, parts.length - 1).join('.');
+        };
+
+        for (const [roomKey, room] of Object.entries(rooms)) {
+          if (!room) continue;
+          const devicesMap = {};
+
+          const roomPath = (() => {
+            if (Array.isArray(room.path)) return room.path;
+            if (room.id && typeof room.id === 'string' && room.id.startsWith('enum.rooms.')) {
+              const raw = room.id.substring('enum.rooms.'.length);
+              return raw ? raw.split('.') : [room.name || roomKey];
+            }
+            return [room.name || roomKey];
+          })();
+
+          const functions = room.functions || {};
+          for (const [funcKey, entries] of Object.entries(functions)) {
+            const funcName = room.functionNames && room.functionNames[funcKey] ? room.functionNames[funcKey] : funcKey;
+            if (!Array.isArray(entries)) continue;
+
+            for (const ent of entries) {
+              if (!ent || !ent.id) continue;
+
+              const baseId = getBaseId(ent.id);
+              const deviceKey = baseId || ent.id;
+
+              let dev = devicesMap[deviceKey];
+              if (!dev) {
+                dev = {
+                  deviceKey,
+                  idBase: baseId || ent.id,
+                  name: ent.name || deviceKey,
+                  roomKey,
+                  roomName: room.name || roomKey,
+                  roomPath,
+                  functions: [],
+                  states: []
+                };
+                devicesMap[deviceKey] = dev;
+              }
+
+              // functions (per device)
+              if (!dev.functions.find(f => f.key === funcKey)) {
+                dev.functions.push({ key: funcKey, name: funcName });
+              }
+
+              // states (per device)
+              if (!dev.states.find(s => s.id === ent.id)) {
+                dev.states.push({
+                  id: ent.id,
+                  key: ent.key,
+                  name: ent.name,
+                  role: ent.role,
+                  type: ent.type,
+                  write: ent.write,
+                  min: ent.min,
+                  max: ent.max,
+                  unit: ent.unit
+                });
+              }
+            }
+          }
+
+          deviceRooms[roomKey] = {
+            id: room.id || null,
+            name: room.name || roomKey,
+            path: roomPath,
+            devices: Object.values(devicesMap)
+          };
+        }
+
+        const jsonDevices = JSON.stringify(deviceRooms);
+        await this.setStateAsync('smartHome.devices', {
+          val: jsonDevices,
+          ack: true
+        });
+
+        // Also push device profiles into live state cache for VIS clients
+        try {
+          this.updateValue('smartHome.devices', jsonDevices, Date.now());
+        } catch (e) {
+          this.log.debug && this.log.debug('Could not push SmartHome devices structure to state cache: ' + e);
+        }
+      } catch (e) {
+        this.log.warn && this.log.warn('Error while building SmartHome device profiles: ' + e);
+      }
+
+// Finally, write JSON structure to state
       const jsonRooms = JSON.stringify(rooms);
       await this.setStateAsync('smartHome.structure', {
         val: jsonRooms,
