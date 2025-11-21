@@ -108,20 +108,6 @@ class NexoWattVis extends utils.Adapter {
       },
       native: {}
     });
-
-    // State to expose SmartHome device profiles (grouped per room / device)
-    await this.setObjectNotExistsAsync('smartHome.devices', {
-      type: 'state',
-      common: {
-        name: 'SmartHome device profiles (grouped per room / device)',
-        type: 'string',
-        role: 'json',
-        read: true,
-        write: false,
-        def: '{}'
-      },
-      native: {}
-    });
   }
 
   async buildSmartHomeStructureFromEnums() {
@@ -325,103 +311,7 @@ class NexoWattVis extends utils.Adapter {
         }
       }
 
-      
-      // Build derived SmartHome device profiles (per room / device)
-      try {
-        const deviceRooms = {};
-        const getBaseId = (id) => {
-          if (!id) return '';
-          const parts = String(id).split('.');
-          if (parts.length <= 2) return id;
-          return parts.slice(0, parts.length - 1).join('.');
-        };
-
-        for (const [roomKey, room] of Object.entries(rooms)) {
-          if (!room) continue;
-          const devicesMap = {};
-
-          const roomPath = (() => {
-            if (Array.isArray(room.path)) return room.path;
-            if (room.id && typeof room.id === 'string' && room.id.startsWith('enum.rooms.')) {
-              const raw = room.id.substring('enum.rooms.'.length);
-              return raw ? raw.split('.') : [room.name || roomKey];
-            }
-            return [room.name || roomKey];
-          })();
-
-          const functions = room.functions || {};
-          for (const [funcKey, entries] of Object.entries(functions)) {
-            const funcName = room.functionNames && room.functionNames[funcKey] ? room.functionNames[funcKey] : funcKey;
-            if (!Array.isArray(entries)) continue;
-
-            for (const ent of entries) {
-              if (!ent || !ent.id) continue;
-
-              const baseId = getBaseId(ent.id);
-              const deviceKey = baseId || ent.id;
-
-              let dev = devicesMap[deviceKey];
-              if (!dev) {
-                dev = {
-                  deviceKey,
-                  idBase: baseId || ent.id,
-                  name: ent.name || deviceKey,
-                  roomKey,
-                  roomName: room.name || roomKey,
-                  roomPath,
-                  functions: [],
-                  states: []
-                };
-                devicesMap[deviceKey] = dev;
-              }
-
-              // functions (per device)
-              if (!dev.functions.find(f => f.key === funcKey)) {
-                dev.functions.push({ key: funcKey, name: funcName });
-              }
-
-              // states (per device)
-              if (!dev.states.find(s => s.id === ent.id)) {
-                dev.states.push({
-                  id: ent.id,
-                  key: ent.key,
-                  name: ent.name,
-                  role: ent.role,
-                  type: ent.type,
-                  write: ent.write,
-                  min: ent.min,
-                  max: ent.max,
-                  unit: ent.unit
-                });
-              }
-            }
-          }
-
-          deviceRooms[roomKey] = {
-            id: room.id || null,
-            name: room.name || roomKey,
-            path: roomPath,
-            devices: Object.values(devicesMap)
-          };
-        }
-
-        const jsonDevices = JSON.stringify(deviceRooms);
-        await this.setStateAsync('smartHome.devices', {
-          val: jsonDevices,
-          ack: true
-        });
-
-        // Also push device profiles into live state cache for VIS clients
-        try {
-          this.updateValue('smartHome.devices', jsonDevices, Date.now());
-        } catch (e) {
-          this.log.debug && this.log.debug('Could not push SmartHome devices structure to state cache: ' + e);
-        }
-      } catch (e) {
-        this.log.warn && this.log.warn('Error while building SmartHome device profiles: ' + e);
-      }
-
-// Finally, write JSON structure to state
+      // Finally, write JSON structure to state
       const jsonRooms = JSON.stringify(rooms);
       await this.setStateAsync('smartHome.structure', {
         val: jsonRooms,
@@ -826,7 +716,156 @@ app.get('/config', (req, res) => {
 }
 
 if (module.parent) {
-  module.exports = (options) => new NexoWattVis(options);
+  
+
+/**
+ * Detect device technology.
+ */
+function detectDeviceType(id) {
+    if (!id) return "generic";
+    if (id.startsWith("knx.")) return "knx";
+    if (id.startsWith("shelly.") || id.includes("shelly")) return "shelly";
+    if (id.startswith("hm-rpc.") or id.startswith("hm-rega.")) return "homematic";
+    if (id.startswith("mqtt.")) return "mqtt";
+    if (id.startswith("zigbee.")) return "zigbee";
+    return "generic";
+}
+
+/**
+ * Smart Home Step2: enhance structure with device types
+ */
+async function enhanceSmartHomeStructure() {
+    const roomsJSON = await this.getStateAsync("smartHome.roomsJSON");
+    const functionsJSON = await this.getStateAsync("smartHome.functionsJSON");
+
+    if (!roomsJSON || !functionsJSON) return;
+
+    const rooms = JSON.parse(roomsJSON.val || "{}");
+    const functions = JSON.parse(functionsJSON.val || "{}");
+
+    for (const [id, room] of Object.entries(rooms)) {
+        room.deviceDetails = [];
+        for (const dev of room.devices) {
+            room.deviceDetails.push({
+                id: dev,
+                type: detectDeviceType(dev)
+            });
+        }
+    }
+
+    for (const [id, func] of Object.entries(functions)) {
+        func.deviceDetails = [];
+        for (const dev of func.devices) {
+            func.deviceDetails.push({
+                id: dev,
+                type: detectDeviceType(dev)
+            });
+        }
+    }
+
+    await this.setStateAsync("smartHome.roomsJSON", { val: JSON.stringify(rooms), ack: true });
+    await this.setStateAsync("smartHome.functionsJSON", { val: JSON.stringify(functions), ack: true });
+
+    this.log.info("SmartHome Step2: Device type enhanced");
+}
+
+
+
+/**
+ * Detect device functional capability (switch, dimmer, heating, shutter, sensor)
+ */
+function detectFunctionType(id, obj) {
+    if (!id || !obj) return "unknown";
+    const role = obj.common ? obj.common.role || "" : "";
+
+    if (role.includes("light") && role.includes("dimmer")) return "dimmer";
+    if (role.includes("light") || role.includes("switch")) return "switch";
+    if (role.includes("temperature") || role.includes("heating")) return "heating";
+    if (role.includes("blinds") || role.includes("shutter")) return "shutter";
+    if (role.includes("sensor")) return "sensor";
+
+    return "unknown";
+}
+
+/**
+ * Step3: Enhance with function type
+ */
+async function extendWithFunctionTypes() {
+    const roomsJSON = await this.getStateAsync("smartHome.roomsJSON");
+    const functionsJSON = await this.getStateAsync("smartHome.functionsJSON");
+
+    if (!roomsJSON || !functionsJSON) return;
+
+    const rooms = JSON.parse(roomsJSON.val || "{}");
+    const functions = JSON.parse(functionsJSON.val || "{}");
+
+    for (const room of Object.values(rooms)) {
+        for (const dev of room.deviceDetails) {
+            const obj = await this.getObjectAsync(dev.id);
+            dev.function = detectFunctionType(dev.id, obj || {});
+        }
+    }
+
+    for (const func of Object.values(functions)) {
+        for (const dev of func.deviceDetails) {
+            const obj = await this.getObjectAsync(dev.id);
+            dev.function = detectFunctionType(dev.id, obj || {});
+        }
+    }
+
+    await this.setStateAsync("smartHome.roomsJSON", { val: JSON.stringify(rooms), ack: true });
+    await this.setStateAsync("smartHome.functionsJSON", { val: JSON.stringify(functions), ack: true });
+
+    this.log.info("SmartHome Step3: Function types added");
+}
+
+
+
+/**
+ * Step4: Map device+function to widget types
+ */
+function getWidgetForDevice(dev) {
+    if (!dev || !dev.function) return "unknown-widget";
+
+    // Dimmer
+    if (dev.function === "dimmer") return "widget-dimmer";
+
+    // Switch
+    if (dev.function === "switch") return "widget-switch";
+
+    // Heating (RTR)
+    if (dev.function === "heating") return "widget-heating";
+
+    // Shutter / Jalousie
+    if (dev.function === "shutter") return "widget-shutter";
+
+    // Sensor
+    if (dev.function === "sensor") return "widget-sensor";
+
+    return "unknown-widget";
+}
+
+/**
+ * Step4 aggregator function
+ */
+async function assignWidgets() {
+    const roomsJSON = await this.getStateAsync("smartHome.roomsJSON");
+    if (!roomsJSON) return;
+
+    const rooms = JSON.parse(roomsJSON.val || "{}");
+
+    for (const room of Object.values(rooms)) {
+        for (const dev of room.deviceDetails) {
+            dev.widget = getWidgetForDevice(dev);
+        }
+    }
+
+    await this.setStateAsync("smartHome.roomsJSON", { val: JSON.stringify(rooms), ack: true });
+
+    this.log.info("SmartHome Step4: Widgets assigned");
+}
+
+module.exports = (options) => new NexoWattVis(options);
 } else {
   // For local dev run
   new NexoWattVis();

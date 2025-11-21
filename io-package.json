@@ -336,8 +336,8 @@
         "de": "SmartHome: Struktur aus enum.rooms / enum.functions wird beim Adapterstart immer in den State 'smartHome.structure' geschrieben."
       },
       "0.4.58": {
-        "en": "Backend: derive SmartHome device profiles per room/device (no UI changes yet).",
-        "de": "Backend: SmartHome-Geräteprofile pro Raum/Gerät werden abgeleitet (noch keine UI-Änderungen)."
+        "en": "SmartHome page UI refined (own design based on SmartHomeUI template).",
+        "de": "SmartHome-Seite optisch überarbeitet (eigenes Design auf Basis der SmartHomeUI-Vorlage)."
       }
     },
     "title": "NexoWatt EMS UI",
