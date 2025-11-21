@@ -39,10 +39,12 @@
 <nav class="tabs">
 <button class="tab active" data-tab="live">LIVE</button>
 <button class="tab" id="historyTabBtn" data-tab="history">HISTORY</button>
-<button class="tab" id="smarthomeTabBtn"  style="display:none" onclick="window.location.href=\'smarthome.html\'">SMART HOME</button>
+<button  class="tab" id="smarthomeTabBtn"  style="display:none" onclick="window.location.href=\'smarthome.html\'" onclick="loadSmartHomeContent()">SMART HOME</button>
 </nav>
 <div class="status-dot" id="liveDot" title="Live Verbindung"></div>
 <div class="menu hidden" id="menuDropdown"><button class="menu-item" id="menuOpenSettings">Einstellungen</button></div></header>
+<div id="content-area"></div>
+
 <main class="content">
 <section class="card energy-web">
 <div class="card-header">
