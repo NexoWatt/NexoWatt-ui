@@ -24,151 +24,6 @@ async function loadSmartHomeData() {
 document.addEventListener("DOMContentLoaded", loadSmartHomeData);
 </script>
 <script>
-async function saveDeviceSettings(dev){
-    const newIcon=document.getElementById("popup-icon-select").value;
-    const newRoom=document.getElementById("popup-room-edit").value;
-
-    await fetch('/set/smartHome.deviceSettings.'+encodeURIComponent(dev.id)+'.icon',{
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({val:newIcon})
-    });
-
-    await fetch('/set/smartHome.deviceSettings.'+encodeURIComponent(dev.id)+'.room',{
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({val:newRoom})
-    });
-}
-</script>
-
-<script>
-async function updateDeviceName(dev){
-    const newName = await loadDeviceSettings(dev.id);
-    const el = document.getElementById('name-'+dev.id.replace(/[^a-zA-Z0-9]/g,''));
-    if(el) el.innerText = newName;
-}
-</script>
-
-<script>
-async function loadDeviceSettings(id){
-    try{
-        const resp=await fetch('/state/smartHome.deviceSettings.'+encodeURIComponent(id)+'.name');
-        const data=await resp.json();
-        return data.val || id;
-    }catch(e){
-        return id;
-    }
-}
-
-async function getDisplayName(dev){
-    const name = await loadDeviceSettings(dev.id);
-    return name;
-}
-</script>
-
-<script>
-async function saveDeviceName(dev){
-    const newName=document.getElementById("popup-name-edit").value;
-    await fetch('/set/smartHome.deviceSettings.'+encodeURIComponent(dev.id)+'.name',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({val:newName})
-    });
-    document.getElementById("popup-name").innerText=newName;
-}
-</script>
-
-<script>
-async function updateDeviceStatus(dev, el){
-    const val = await fetchState(dev.id);
-    if(val === null) return;
-
-    el.classList.remove("active-light","active-heating","active-shutter","active-error");
-    el.querySelector(".device-value").classList.remove("active");
-
-    if(dev.widget==="widget-switch" || dev.widget==="widget-dimmer"){
-        if(parseFloat(val) > 0){ 
-            el.classList.add("active-light");
-            el.querySelector(".device-value").classList.add("active");
-        }
-    }
-    if(dev.widget==="widget-heating"){
-        if(parseFloat(val) > 0){
-            el.classList.add("active-heating");
-        }
-    }
-    if(dev.widget==="widget-shutter"){
-        if(val==="up" || val==="down"){
-            el.classList.add("active-shutter");
-        }
-    }
-    if(val==="error" || val==="fault"){
-        el.classList.add("active-error");
-    }
-}
-
-// integrate into polling
-async function pollDeviceState(dev, el){
-    const val = await fetchState(dev.id);
-    if(val !== null){
-        el.querySelector(".device-value").innerText = val;
-    }
-    updateDeviceStatus(dev, el); updateDeviceName(dev);
-}
-</script>
-
-<script>
-function groupDevices(room){
-    const groups={
-        light:[],
-        heating:[],
-        shutter:[],
-        sensor:[],
-        other:[]
-    };
-
-    /* grouped rendering */ renderGroupedDevices(room); return; room.deviceDetails.forEach(dev=>{
-        if(dev.widget==="widget-switch" || dev.widget==="widget-dimmer")
-            groups.light.push(dev);
-        else if(dev.widget==="widget-heating")
-            groups.heating.push(dev);
-        else if(dev.widget==="widget-shutter")
-            groups.shutter.push(dev);
-        else if(dev.widget==="widget-sensor")
-            groups.sensor.push(dev);
-        else
-            groups.other.push(dev);
-    });
-
-    return groups;
-}
-
-function renderGroupedDevices(room){
-    const groups=groupDevices(room);
-    const root=document.getElementById("device-list");
-    root.innerHTML="";
-
-    const labels={
-        light:"Beleuchtung",
-        heating:"Heizung",
-        shutter:"Beschattung",
-        sensor:"Sensoren",
-        other:"Weitere Geräte"
-    };
-
-    Object.keys(groups).forEach(key=>{
-        if(groups[key].length===0) return;
-        const block=document.createElement("div");
-        block.innerHTML=`<h3 style='color:white;margin:12px 0;'>${labels[key]}</h3>`;
-        groups[key].forEach(dev=>{
-            const devEl=document.getElementById("dev-"+dev.id.replace(/[^a-zA-Z0-9]/g,''));
-            if(devEl) block.appendChild(devEl.cloneNode(true));
-        });
-        root.appendChild(block);
-    });
-}
-</script>
-
-<script>
 function getRoomIcon(roomName){
     roomName = roomName.toLowerCase();
 
@@ -299,18 +154,18 @@ function openRoomView(room) {
     const root = document.getElementById("smarthome-root");
     root.innerHTML = `
         <div class="room-header">
-<img class='room-header-icon' src='' onload='this.src=getRoomIcon(room.name)'/>
-<div class="room-title">${room.name}</div>
+            <button class="back-btn" onclick="renderRoomOverview()">Zurück</button>
+            <div class="room-title">${room.name}</div>
         </div>
         <div id="device-list"></div>
     `;
     const list = document.getElementById("device-list"); startLiveUpdates(room);
 
-    /* grouped rendering */ renderGroupedDevices(room); return; room.deviceDetails.forEach(dev => {
-        const devEl = document.createElement; devEl.onclick = () => openPopup(dev);("div"); devEl.id='dev-'+dev.id.replace(/[^a-zA-Z0-9]/g,'');
+    room.deviceDetails.forEach(dev => {
+        const devEl = document.createElement("div"); devEl.id='dev-'+dev.id.replace(/[^a-zA-Z0-9]/g,'');
         devEl.className = "device-item";
         devEl.innerHTML = `
-            <img class='device-icon' style='width:22px;margin-right:8px;opacity:.85;' src='' onload='this.src=getDeviceIcon(dev)'/><div class='device-info'><div class="device-name" id='name-'+dev.id.replace(/[^a-zA-Z0-9]/g,'')'>${dev.id}</div>
+            <img class='device-icon' style='width:22px;margin-right:8px;opacity:.85;' src='' onload='this.src=getDeviceIcon(dev)'/><div class='device-info'><div class="device-name">${dev.id}</div>
             <div class="device-value" style="font-size:12px;opacity:0.7;">…</div></div><div class="device-widget">${${renderWidget(dev)}</div>
         `;
         list.appendChild(devEl);
@@ -419,7 +274,7 @@ async function pollDeviceState(dev, el){
 }
 
 function startLiveUpdates(room){
-    /* grouped rendering */ renderGroupedDevices(room); return; room.deviceDetails.forEach(dev=>{
+    room.deviceDetails.forEach(dev=>{
         const el = document.getElementById("dev-"+dev.id.replace(/[^a-zA-Z0-9]/g,''));
         if(!el) return;
         setInterval(()=>pollDeviceState(dev, el), 3000);
@@ -511,106 +366,3 @@ function startLiveUpdates(room){
     margin-left: 12px;
 }
 </style>
-
-<style>
-.room-header {
-    display:flex;
-    align-items:center;
-    gap:12px;
-    padding:12px 0;
-    margin-bottom:12px;
-}
-
-.room-header-icon {
-    width:32px;
-    opacity:.9;
-}
-
-.room-title {
-    font-size:22px;
-    font-weight:700;
-}
-
-.device-item {
-    transition: transform .1s ease-in-out;
-}
-.device-item:active {
-    transform: scale(0.97);
-}
-</style>
-
-<style>
-.device-item.active-light { border:2px solid #FFD34A; }
-.device-item.active-heating { border:2px solid #FF6B3B; }
-.device-item.active-shutter { border:2px solid #A78BFA; }
-.device-item.active-error { border:2px solid #FF3B30; }
-.device-value.active { color: #FFD34A !important; }
-</style>
-
-<!-- DEVICE DETAIL POPUP -->
-<div id="device-popup-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
- background:rgba(0,0,0,0.55); backdrop-filter:blur(4px); z-index:9999; align-items:center; justify-content:center;">
-  <div id="device-popup" style="width:85%; max-width:480px; background:#1f232b; border-radius:20px; padding:24px;
-   color:white; box-shadow:0 8px 24px rgba(0,0,0,0.5); position:relative;">
-
-    <button onclick="closePopup()" 
-    style='position:absolute; top:14px; right:14px; background:#283039; color:white; border:none; padding:6px 12px; border-radius:10px;'>X</button>
-
-    <img id="popup-icon" src="" style="width:42px; margin-bottom:12px; opacity:0.9;">
-    <div id="popup-name" style="font-size:22px; font-weight:700; margin-bottom:8px;"></div>
-    <div id="popup-value" style="font-size:16px; opacity:0.7; margin-bottom:20px;"></div>
-
-    <div id="popup-widget" style="margin-bottom:24px;"></div>
-
-    <h3 style="margin-top:14px; margin-bottom:6px;">Einstellungen</h3>
-    <label>Name ändern:</label>
-    <input id="popup-name-edit" style="width:100%; padding:6px; border-radius:8px; margin-bottom:12px;" />
-<h3 style="margin-top:14px; margin-bottom:6px;">Icon ändern</h3>
-<select id="popup-icon-select" style="width:100%; padding:6px; border-radius:8px; margin-bottom:12px;">
-  <option value="light">Licht</option>
-  <option value="heating">Heizung</option>
-  <option value="shutter">Beschattung</option>
-  <option value="sensor">Sensor</option>
-</select>
-
-<h3 style="margin-top:14px; margin-bottom:6px;">Raum ändern</h3>
-<input id="popup-room-edit" style="width:100%; padding:6px; border-radius:8px; margin-bottom:12px;" />
-
-<button onclick='saveDeviceSettings(dev)'
- style='width:100%; background:#4CD964; color:white; border:none; padding:10px; border-radius:10px;'>Einstellungen speichern</button>
-<button onclick='saveDeviceName(dev)' style='width:100%; background:#4CD964; color:white; border:none; padding:10px; border-radius:10px;'>Speichern</button>
-  </div>
-</div>
-
-<script>
-let popupInterval=null;
-
-function openPopup(dev){
-  const overlay=document.getElementById("device-popup-overlay");
-  const icon=document.getElementById("popup-icon");
-  const name=document.getElementById("popup-name");
-  const value=document.getElementById("popup-value");
-  const edit=document.getElementById("popup-name-edit");
-  const widget=document.getElementById("popup-widget");
-
-  icon.src=getDeviceIcon(dev);
-  name.innerText=dev.id;
-  edit.value=dev.id;
-  value.innerText="…";
-
-  widget.innerHTML = renderWidget(dev);
-
-  overlay.style.display="flex";
-
-  if(popupInterval) clearInterval(popupInterval);
-  popupInterval = setInterval(async ()=>{
-      const v=await fetchState(dev.id);
-      if(v!==null) value.innerText=v;
-  },1500);
-}
-
-function closePopup(){
-  document.getElementById("device-popup-overlay").style.display="none";
-  if(popupInterval) clearInterval(popupInterval);
-}
-</script>
