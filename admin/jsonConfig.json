@@ -617,7 +617,6 @@
         },
         "smartHome.rooms": {
           "type": "table",
-          "attr": "smartHomeRooms",
           "label": "Räume / Bereiche",
           "items": [
             {
@@ -635,11 +634,11 @@
               "attr": "enabled",
               "title": "Aktiv"
             }
-          ]
+          ],
+          "sm": 12
         },
         "smartHome.devices": {
           "type": "table",
-          "attr": "smartHomeDevices",
           "label": "Funktionen / Geräte",
           "items": [
             {
@@ -680,7 +679,8 @@
               "attr": "idLevel",
               "title": "Level/Dimm-Objekt (optional)"
             }
-          ]
+          ],
+          "sm": 12
         }
       },
       "label": "SmartHome (vorbereitet)",
