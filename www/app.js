@@ -698,7 +698,7 @@ function renderSmartHomeStructure(){
   if (!structure || !Object.keys(structure).length) {
     const p = document.createElement('p');
     p.className = 'smh-placeholder-text';
-    p.textContent = 'Sobald in ioBroker Räume und Funktionen gepflegt sind, werden sie hier automatisch angezeigt.';
+    p.textContent = 'Sobald im Adapter unter SmartHome Räume und Geräte konfiguriert sind, werden sie hier angezeigt.';
     contentEl.appendChild(p);
     return;
   }
