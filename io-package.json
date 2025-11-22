@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.67",
+    "version": "0.4.68",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
@@ -350,6 +350,10 @@
       "0.4.67": {
         "en": "SmartHome admin: widen columns and extend widget types (switch, dimmer, jalousie, thermostat, window, status).",
         "de": "SmartHome-Admin: Spalten verbreitert und Widget-Typen erweitert (Schalter, Dimmer, Jalousie, Thermostat, Fenster, Status)."
+      },
+      "0.4.68": {
+        "en": "SmartHome admin: enlarged columns, two-row layout per device and additional datapoints for thermostats (setpoint/actual).",
+        "de": "SmartHome-Admin: Spalten vergrößert, 2-Zeilen-Layout pro Gerät und zusätzliche Datenpunkte für Thermostate (Soll/Ist)."
       }
     },
     "title": "NexoWatt EMS UI",
