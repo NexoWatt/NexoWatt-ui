@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.56",
+    "version": "0.4.60",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
@@ -334,6 +334,10 @@
       "0.4.22": {
         "en": "SmartHome: always builds enum.rooms / enum.functions structure into state 'smartHome.structure' on adapter start.",
         "de": "SmartHome: Struktur aus enum.rooms / enum.functions wird beim Adapterstart immer in den State 'smartHome.structure' geschrieben."
+      },
+      "0.4.60": {
+        "en": "SmartHome: manual rooms & device tables added (beta).",
+        "de": "SmartHome: Manuelle Räume- und Geräte-Tabellen hinzugefügt (Beta)."
       }
     },
     "title": "NexoWatt EMS UI",
@@ -450,7 +454,9 @@
         "wallboxLock": "",
         "gridLimit": "",
         "pvCurtailment": ""
-      }
+      },
+      "rooms": [],
+      "devices": []
     },
     "futureOptions": {
       "theme": "nexowatt-dark",

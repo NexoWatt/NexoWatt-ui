@@ -615,72 +615,186 @@
           "sm": 12,
           "md": 6
         },
+        "smartHome.roomsTableHeader": {
+          "type": "header",
+          "text": "Räume / Bereiche"
+        },
         "smartHome.rooms": {
           "type": "table",
           "label": "Räume / Bereiche",
+          "sm": 12,
+          "md": 12,
+          "lg": 12,
           "items": [
-            {
-              "type": "text",
-              "attr": "name",
-              "title": "Raumname"
-            },
-            {
-              "type": "text",
-              "attr": "icon",
-              "title": "Icon (optional)"
-            },
             {
               "type": "checkbox",
               "attr": "enabled",
-              "title": "Aktiv"
+              "width": "10%",
+              "title": "Aktiv",
+              "filter": false,
+              "sort": false,
+              "default": true
+            },
+            {
+              "type": "text",
+              "attr": "id",
+              "width": "15%",
+              "title": "Raum-ID",
+              "filter": true,
+              "sort": true,
+              "default": ""
+            },
+            {
+              "type": "text",
+              "attr": "name",
+              "width": "35%",
+              "title": "Raumname",
+              "filter": true,
+              "sort": true,
+              "default": ""
+            },
+            {
+              "type": "select",
+              "attr": "icon",
+              "width": "20%",
+              "title": "Icon",
+              "filter": false,
+              "sort": false,
+              "options": [
+                {
+                  "label": "Standard",
+                  "value": "default"
+                },
+                {
+                  "label": "Wohnzimmer",
+                  "value": "living"
+                },
+                {
+                  "label": "Schlafzimmer",
+                  "value": "bed"
+                },
+                {
+                  "label": "Küche",
+                  "value": "kitchen"
+                },
+                {
+                  "label": "Bad",
+                  "value": "bath"
+                },
+                {
+                  "label": "Büro",
+                  "value": "office"
+                },
+                {
+                  "label": "Außenbereich",
+                  "value": "garden"
+                }
+              ],
+              "default": "default"
+            },
+            {
+              "type": "color",
+              "attr": "color",
+              "width": "20%",
+              "title": "Farbe (optional)",
+              "default": ""
             }
-          ],
-          "sm": 12
+          ]
+        },
+        "smartHome.devicesTableHeader": {
+          "type": "header",
+          "text": "Funktionen / Geräte"
         },
         "smartHome.devices": {
           "type": "table",
           "label": "Funktionen / Geräte",
+          "sm": 12,
+          "md": 12,
+          "lg": 12,
           "items": [
             {
-              "type": "text",
-              "attr": "label",
-              "title": "Anzeigename"
+              "type": "checkbox",
+              "attr": "enabled",
+              "width": "8%",
+              "title": "Aktiv",
+              "filter": false,
+              "sort": false,
+              "default": true
             },
             {
               "type": "text",
-              "attr": "room",
-              "title": "Raum"
+              "attr": "id",
+              "width": "15%",
+              "title": "Geräte-ID",
+              "filter": true,
+              "sort": true,
+              "default": ""
+            },
+            {
+              "type": "text",
+              "attr": "name",
+              "width": "27%",
+              "title": "Funktionsname",
+              "filter": true,
+              "sort": true,
+              "default": ""
             },
             {
               "type": "select",
-              "attr": "type",
-              "title": "Kacheltyp",
+              "attr": "roomId",
+              "width": "18%",
+              "title": "Raum-Zuordnung (ID)",
+              "filter": true,
+              "sort": false,
+              "default": ""
+            },
+            {
+              "type": "select",
+              "attr": "widget",
+              "width": "17%",
+              "title": "Widget-Typ",
+              "filter": false,
+              "sort": false,
               "options": [
-                "switch",
-                "light",
-                "dimmer",
-                "sensor",
-                "climate",
-                "cover"
-              ]
+                {
+                  "label": "Schalter (Ein/Aus)",
+                  "value": "switch"
+                },
+                {
+                  "label": "Dimmer",
+                  "value": "dimmer"
+                },
+                {
+                  "label": "Jalousie/Rollladen",
+                  "value": "shutter"
+                },
+                {
+                  "label": "Temperatur-Sollwert",
+                  "value": "temp_set"
+                },
+                {
+                  "label": "Temperatur-Istwert",
+                  "value": "temp_actual"
+                },
+                {
+                  "label": "Sensor (nur Anzeige)",
+                  "value": "sensor"
+                }
+              ],
+              "default": "switch"
             },
             {
               "type": "objectId",
-              "attr": "idControl",
-              "title": "Haupt-Datenpunkt"
-            },
-            {
-              "type": "objectId",
-              "attr": "idStatus",
-              "title": "Status-Datenpunkt (optional)"
-            },
-            {
-              "type": "objectId",
-              "attr": "idLevel",
-              "title": "Level/Dimm-Objekt (optional)"
+              "attr": "stateId",
+              "width": "15%",
+              "title": "Datenpunkt-ID",
+              "types": [
+                "state"
+              ],
+              "button": true,
+              "placeholder": "z.B. KNX, ZigBee, etc."
             }
-          ],
-          "sm": 12
+          ]
         }
       },
       "label": "SmartHome (vorbereitet)",
