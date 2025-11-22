@@ -287,6 +287,7 @@ class NexoWattVis extends utils.Adapter {
       // subscribe to all SmartHome enum states and push initial values
       for (const [id, key] of Object.entries(enumKeyById)) {
         try {
+          if (!id || typeof id !== 'string') continue;
           this.subscribeForeignStates(id);
           const st = await this.getForeignStateAsync(id);
           if (st && st.val !== undefined) {
@@ -625,7 +626,7 @@ app.get('/config', (req, res) => {
       else if (key.startsWith('smartHome_')) id = smartHome[key.slice(10)];
       else id = dps[key];
       if (!id && key.startsWith('settings.')) id = namespace + key;
-      if (!id) continue;
+      if (!id || typeof id !== 'string') continue;
 
       // subscribe
       this.subscribeForeignStates(id);
