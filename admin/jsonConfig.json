@@ -866,7 +866,7 @@
           "md": 6
         },
         "smartHome.rooms": {
-          "type": "table",
+          "type": "array",
           "label": "Räume",
           "attr": "smartHome.rooms",
           "sm": 12,
@@ -898,7 +898,8 @@
                 "md": 4
               }
             }
-          }
+          },
+          "itemLabel": "Raum"
         },
         "smartHome.devices": {
           "type": "array",

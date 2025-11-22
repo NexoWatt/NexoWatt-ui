@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.69",
+    "version": "0.4.70",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
@@ -346,6 +346,10 @@
       "0.4.69": {
         "en": "SmartHome admin: bigger per-device editor (array/panel layout) and extra thermostat datapoints (setpoint/actual).",
         "de": "SmartHome-Admin: größere Geräte-Editoren (Array/Panel-Layout) und zusätzliche Thermostat-Datenpunkte (Soll/Ist)."
+      },
+      "0.4.70": {
+        "en": "SmartHome admin: fixed schema.items.forEach error by changing rooms to array/panel layout.",
+        "de": "SmartHome-Admin: schema.items.forEach-Fehler behoben, Räume jetzt als Array/Panel-Layout."
       }
     },
     "title": "NexoWatt EMS UI",
