@@ -338,6 +338,10 @@
       "0.4.61": {
         "en": "Reworked SmartHome tab: manual rooms & devices configuration.",
         "de": "SmartHome-Reiter neu aufgebaut: manuelle Konfiguration von Räumen und Funktionen."
+      },
+      "0.4.63": {
+        "en": "SmartHome admin: tables for rooms and devices; preparation for manual structure.",
+        "de": "SmartHome Admin: Tabellen für Räume und Geräte, Vorbereitung für manuelle Struktur."
       }
     },
     "title": "NexoWatt EMS UI",
