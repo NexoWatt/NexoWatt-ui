@@ -873,7 +873,7 @@
           "items": [
             {
               "type": "text",
-              "label": "Raum-ID",
+              "label": "ID",
               "attr": "id",
               "xs": 12,
               "sm": 6,
@@ -889,7 +889,7 @@
             },
             {
               "type": "text",
-              "label": "Icon (optional)",
+              "label": "Icon",
               "attr": "icon",
               "xs": 12,
               "sm": 6,
@@ -905,7 +905,7 @@
           "items": [
             {
               "type": "text",
-              "label": "Geräte-ID",
+              "label": "ID",
               "attr": "id",
               "xs": 12,
               "sm": 6,
@@ -929,7 +929,7 @@
             },
             {
               "type": "select",
-              "label": "Widget-Typ",
+              "label": "Typ",
               "attr": "type",
               "options": [
                 {
@@ -953,8 +953,20 @@
                   "value": "climate"
                 },
                 {
-                  "label": "Rollo",
+                  "label": "Jalousie/Rollo",
                   "value": "cover"
+                },
+                {
+                  "label": "Thermostat",
+                  "value": "thermostat"
+                },
+                {
+                  "label": "Fenster",
+                  "value": "window"
+                },
+                {
+                  "label": "Status",
+                  "value": "status"
                 }
               ],
               "xs": 12,
@@ -963,7 +975,7 @@
             },
             {
               "type": "objectId",
-              "label": "Schalten/Wert",
+              "label": "DP Schalten",
               "attr": "controlId",
               "types": [
                 "state"
@@ -974,7 +986,7 @@
             },
             {
               "type": "objectId",
-              "label": "Status (optional)",
+              "label": "Status",
               "attr": "statusId",
               "types": [
                 "state"
@@ -985,7 +997,7 @@
             },
             {
               "type": "objectId",
-              "label": "Level/Dimmer (optional)",
+              "label": "Level/Dimmer",
               "attr": "levelId",
               "types": [
                 "state"
