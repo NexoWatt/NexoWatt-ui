@@ -99,7 +99,7 @@ class NexoWattVis extends utils.Adapter {
     await this.setObjectNotExistsAsync('smartHome.structure', {
       type: 'state',
       common: {
-        name: 'SmartHome structure (from SmartHome config)',
+        name: 'SmartHome structure (from enum.rooms / enum.functions)',
         type: 'string',
         role: 'json',
         read: true,
@@ -108,154 +108,6 @@ class NexoWattVis extends utils.Adapter {
       },
       native: {}
     });
-  }
-
-  async buildSmartHomeStructureFromConfig() {
-    try {
-      const cfg = (this.config && this.config.smartHome) || {};
-      const roomsCfg = Array.isArray(cfg.rooms) ? cfg.rooms : [];
-      const devicesCfg = Array.isArray(cfg.devices) ? cfg.devices : [];
-
-      const rooms = {};
-
-      // Prepare room objects from config
-      for (const room of roomsCfg) {
-        if (!room || !room.id) continue;
-        const key = String(room.id);
-        rooms[key] = {
-          id: key,
-          name: room.name || key,
-          functions: {},
-          functionNames: {}
-        };
-      }
-
-      const functionNameByType = {
-        switch: 'Schalten',
-        light: 'Beleuchtung',
-        dimmer: 'Beleuchtung',
-        sensor: 'Sensoren',
-        climate: 'Klima',
-        cover: 'Beschattung'
-      };
-
-      const neededStateIds = new Set();
-      const deviceEntries = [];
-
-      for (const dev of devicesCfg) {
-        if (!dev || !dev.id) continue;
-
-        const roomKey = dev.roomId || '_noRoom_';
-        if (!rooms[roomKey]) {
-          rooms[roomKey] = {
-            id: roomKey === '_noRoom_' ? null : roomKey,
-            name: roomKey === '_noRoom_' ? 'Ohne Raum' : roomKey,
-            functions: {},
-            functionNames: {}
-          };
-        }
-
-        const tileType = dev.type || 'switch';
-        const funcKey = tileType;
-        const funcName = functionNameByType[tileType] || tileType;
-
-        const room = rooms[roomKey];
-        if (!room.functions[funcKey]) room.functions[funcKey] = [];
-        room.functionNames[funcKey] = funcName;
-
-        const label = dev.label || dev.id;
-        const rawIds = [];
-
-        if (dev.controlId) rawIds.push(String(dev.controlId));
-        if (dev.statusId) rawIds.push(String(dev.statusId));
-        if (dev.levelId) rawIds.push(String(dev.levelId));
-
-        const uniqueIds = Array.from(new Set(rawIds.filter(Boolean)));
-
-        for (const stateId of uniqueIds) {
-          neededStateIds.add(stateId);
-          deviceEntries.push({
-            roomKey,
-            funcKey,
-            stateId,
-            label
-          });
-        }
-      }
-
-      // Load foreign state objects for metadata
-      const stateObjects = {};
-      for (const id of neededStateIds) {
-        try {
-          const obj = await this.getForeignObjectAsync(id);
-          if (obj) {
-            stateObjects[id] = obj;
-          }
-        } catch (e) {
-          this.log.debug && this.log.debug('Could not read foreign object for SmartHome config state ' + id + ': ' + e);
-        }
-      }
-
-      // Assign dynamic keys
-      const enumKeyById = {};
-      let enumIdx = 0;
-      for (const id of neededStateIds) {
-        enumKeyById[id] = 'smartEnum_' + (enumIdx++);
-      }
-
-      // Build final room/function entries
-      for (const entry of deviceEntries) {
-        const room = rooms[entry.roomKey];
-        if (!room) continue;
-        if (!room.functions[entry.funcKey]) room.functions[entry.funcKey] = [];
-
-        const obj = stateObjects[entry.stateId];
-        const common = (obj && obj.common) || {};
-
-        room.functions[entry.funcKey].push({
-          id: entry.stateId,
-          key: enumKeyById[entry.stateId],
-          name: entry.label || (common && common.name) || entry.stateId,
-          role: common && common.role ? common.role : '',
-          type: common && common.type ? common.type : '',
-          write: !!(common && common.write),
-          min: (common && typeof common.min === 'number') ? common.min : null,
-          max: (common && typeof common.max === 'number') ? common.max : null,
-          unit: common && common.unit ? common.unit : ''
-        });
-      }
-
-      // store mapping for later state-change handling
-      this.smartHomeEnumKeyById = enumKeyById;
-      this.smartHomeEnumIds = new Set(Object.keys(enumKeyById));
-
-      // subscribe to all SmartHome config states and push initial values
-      for (const [id, key] of Object.entries(enumKeyById)) {
-        try {
-          this.subscribeForeignStates(id);
-          const st = await this.getForeignStateAsync(id);
-          if (st && st.val !== undefined) {
-            this.updateValue(key, st.val, st.ts || Date.now());
-          }
-        } catch (e) {
-          this.log.debug && this.log.debug('Could not subscribe/read SmartHome config state ' + id + ': ' + e);
-        }
-      }
-
-      const jsonRooms = JSON.stringify(rooms);
-      await this.setStateAsync('smartHome.structure', {
-        val: jsonRooms,
-        ack: true
-      });
-
-      try {
-        this.updateValue('smartHome.structure', jsonRooms, Date.now());
-      } catch (e) {
-        this.log.debug && this.log.debug('Could not push SmartHome structure to state cache: ' + e);
-      }
-    } catch (e) {
-      this.log.error('Failed to build SmartHome structure from config: ' + e);
-    }
   }
 
   async buildSmartHomeStructureFromEnums() {
@@ -513,12 +365,12 @@ async syncInstallerConfigToStates() {
       // write settings-config defaults
       await this.syncSettingsConfigToStates();
 
-      // build SmartHome structure from config on every start
+      // build SmartHome structure from enums on every start
       // (VIS decides separately, ob der SmartHome-Tab sichtbar ist)
       try {
-        await this.buildSmartHomeStructureFromConfig();
+        await this.buildSmartHomeStructureFromEnums();
       } catch (e) {
-        this.log.error('Failed to build SmartHome structure from config: ' + e);
+        this.log.error('Failed to build SmartHome structure from enums: ' + e);
       }
 
       // finally subscribe and read initial values
