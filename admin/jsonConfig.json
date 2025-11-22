@@ -617,170 +617,68 @@
         },
         "smartHome.rooms": {
           "type": "table",
-          "label": {
-            "de": "Räume / Bereiche",
-            "en": "Rooms / Areas"
-          },
-          "sm": 12,
-          "md": 12,
-          "lg": 12,
+          "attr": "smartHomeRooms",
+          "label": "Räume / Bereiche",
           "items": [
             {
               "type": "text",
               "attr": "name",
-              "width": "40%",
-              "title": {
-                "de": "Raumname",
-                "en": "Room name"
-              },
-              "filter": true,
-              "sort": true,
-              "default": ""
+              "title": "Raumname"
             },
             {
               "type": "text",
               "attr": "icon",
-              "width": "30%",
-              "title": {
-                "de": "Icon (optional)",
-                "en": "Icon (optional)"
-              },
-              "filter": false,
-              "sort": false,
-              "default": ""
+              "title": "Icon (optional)"
             },
             {
               "type": "checkbox",
               "attr": "enabled",
-              "width": "15%",
-              "title": {
-                "de": "Aktiv",
-                "en": "Enabled"
-              },
-              "default": true
+              "title": "Aktiv"
             }
           ]
         },
         "smartHome.devices": {
           "type": "table",
-          "label": {
-            "de": "Funktionen / Geräte",
-            "en": "Functions / Devices"
-          },
-          "sm": 12,
-          "md": 12,
-          "lg": 12,
+          "attr": "smartHomeDevices",
+          "label": "Funktionen / Geräte",
           "items": [
             {
               "type": "text",
               "attr": "label",
-              "width": "20%",
-              "title": {
-                "de": "Anzeigename",
-                "en": "Display name"
-              },
-              "filter": true,
-              "sort": true,
-              "default": ""
+              "title": "Anzeigename"
             },
             {
               "type": "text",
               "attr": "room",
-              "width": "15%",
-              "title": {
-                "de": "Raum",
-                "en": "Room"
-              },
-              "filter": true,
-              "sort": true,
-              "default": ""
+              "title": "Raum"
             },
             {
               "type": "select",
               "attr": "type",
-              "width": "15%",
-              "title": {
-                "de": "Kacheltyp",
-                "en": "Tile type"
-              },
-              "default": "switch",
+              "title": "Kacheltyp",
               "options": [
-                {
-                  "label": {
-                    "de": "Schalter / Steckdose",
-                    "en": "Switch / outlet"
-                  },
-                  "value": "switch"
-                },
-                {
-                  "label": {
-                    "de": "Licht (An/Aus)",
-                    "en": "Light (on/off)"
-                  },
-                  "value": "light"
-                },
-                {
-                  "label": {
-                    "de": "Dimmer",
-                    "en": "Dimmer"
-                  },
-                  "value": "dimmer"
-                },
-                {
-                  "label": {
-                    "de": "Sensor (nur Anzeige)",
-                    "en": "Sensor (readonly)"
-                  },
-                  "value": "sensor"
-                },
-                {
-                  "label": {
-                    "de": "Heizung / Klima",
-                    "en": "Climate"
-                  },
-                  "value": "climate"
-                },
-                {
-                  "label": {
-                    "de": "Rollladen / Jalousie",
-                    "en": "Cover / shutter"
-                  },
-                  "value": "cover"
-                }
+                "switch",
+                "light",
+                "dimmer",
+                "sensor",
+                "climate",
+                "cover"
               ]
             },
             {
               "type": "objectId",
               "attr": "idControl",
-              "width": "25%",
-              "title": {
-                "de": "Haupt-Datenpunkt (Schalten/Wert)",
-                "en": "Main datapoint (set/value)"
-              },
-              "filter": false,
-              "sort": false
+              "title": "Haupt-Datenpunkt"
             },
             {
               "type": "objectId",
               "attr": "idStatus",
-              "width": "25%",
-              "title": {
-                "de": "Status-Datenpunkt (optional)",
-                "en": "Status datapoint (optional)"
-              },
-              "filter": false,
-              "sort": false
+              "title": "Status-Datenpunkt (optional)"
             },
             {
               "type": "objectId",
               "attr": "idLevel",
-              "width": "25%",
-              "title": {
-                "de": "Level/Dimm-Objekt (optional)",
-                "en": "Level / dimmer object (optional)"
-              },
-              "filter": false,
-              "sort": false
+              "title": "Level/Dimm-Objekt (optional)"
             }
           ]
         }
