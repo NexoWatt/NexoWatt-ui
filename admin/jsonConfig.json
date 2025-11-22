@@ -873,7 +873,7 @@
           "items": [
             {
               "type": "text",
-              "label": "Raum-ID (intern, eindeutig)",
+              "label": "Raum-ID",
               "attr": "id",
               "xs": 12,
               "sm": 6,
@@ -881,7 +881,7 @@
             },
             {
               "type": "text",
-              "label": "Raumname (Anzeige)",
+              "label": "Name",
               "attr": "name",
               "xs": 12,
               "sm": 6,
@@ -905,7 +905,7 @@
           "items": [
             {
               "type": "text",
-              "label": "Geräte-ID (intern, eindeutig)",
+              "label": "Geräte-ID",
               "attr": "id",
               "xs": 12,
               "sm": 6,
@@ -913,7 +913,7 @@
             },
             {
               "type": "text",
-              "label": "Anzeigename",
+              "label": "Name",
               "attr": "label",
               "xs": 12,
               "sm": 6,
@@ -921,7 +921,7 @@
             },
             {
               "type": "text",
-              "label": "Raum-ID (Zuweisung)",
+              "label": "Raum",
               "attr": "roomId",
               "xs": 12,
               "sm": 6,
@@ -929,15 +929,33 @@
             },
             {
               "type": "select",
-              "label": "Kacheltyp",
+              "label": "Widget-Typ",
               "attr": "type",
               "options": [
-                "switch",
-                "light",
-                "dimmer",
-                "sensor",
-                "climate",
-                "cover"
+                {
+                  "label": "Schalter",
+                  "value": "switch"
+                },
+                {
+                  "label": "Licht",
+                  "value": "light"
+                },
+                {
+                  "label": "Dimmer",
+                  "value": "dimmer"
+                },
+                {
+                  "label": "Sensor",
+                  "value": "sensor"
+                },
+                {
+                  "label": "Klima",
+                  "value": "climate"
+                },
+                {
+                  "label": "Rollo",
+                  "value": "cover"
+                }
               ],
               "xs": 12,
               "sm": 6,
@@ -945,7 +963,7 @@
             },
             {
               "type": "objectId",
-              "label": "Datenpunkt Schalten/Wert",
+              "label": "Schalten/Wert",
               "attr": "controlId",
               "types": [
                 "state"
@@ -956,7 +974,7 @@
             },
             {
               "type": "objectId",
-              "label": "Status-Datenpunkt (optional)",
+              "label": "Status (optional)",
               "attr": "statusId",
               "types": [
                 "state"
@@ -967,7 +985,7 @@
             },
             {
               "type": "objectId",
-              "label": "Level/Dimm-Objekt (optional)",
+              "label": "Level/Dimmer (optional)",
               "attr": "levelId",
               "types": [
                 "state"
