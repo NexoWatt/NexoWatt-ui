@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.58",
+    "version": "0.4.56",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
@@ -334,10 +334,6 @@
       "0.4.22": {
         "en": "SmartHome: always builds enum.rooms / enum.functions structure into state 'smartHome.structure' on adapter start.",
         "de": "SmartHome: Struktur aus enum.rooms / enum.functions wird beim Adapterstart immer in den State 'smartHome.structure' geschrieben."
-      },
-      "0.4.58": {
-        "en": "SmartHome page UI refined (own design based on SmartHomeUI template).",
-        "de": "SmartHome-Seite optisch überarbeitet (eigenes Design auf Basis der SmartHomeUI-Vorlage)."
       }
     },
     "title": "NexoWatt EMS UI",
