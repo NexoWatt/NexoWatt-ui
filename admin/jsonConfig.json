@@ -58,13 +58,13 @@
       "items": {
         "datapoints.autarky": {
           "type": "objectId",
-          "label": "KPI \u2013 Autarkie (%)",
+          "label": "KPI – Autarkie (%)",
           "types": [
             "state"
           ],
           "button": true,
           "placeholder": "z.B. 0_userdata.0.nexowatt.autarky",
-          "help": "Autarkie in %. Falls leer, wird aus PV/Verbrauch gesch\u00e4tzt.",
+          "help": "Autarkie in %. Falls leer, wird aus PV/Verbrauch geschätzt.",
           "newLine": false,
           "attr": "datapoints.autarky",
           "xs": 12,
@@ -73,13 +73,13 @@
         },
         "datapoints.selfConsumption": {
           "type": "objectId",
-          "label": "KPI \u2013 Eigenverbrauch (%)",
+          "label": "KPI – Eigenverbrauch (%)",
           "types": [
             "state"
           ],
           "button": true,
           "placeholder": "z.B. 0_userdata.0.nexowatt.selfConsumption",
-          "help": "Eigenverbrauch in %. Falls leer, wird gesch\u00e4tzt.",
+          "help": "Eigenverbrauch in %. Falls leer, wird geschätzt.",
           "newLine": false,
           "attr": "datapoints.selfConsumption",
           "xs": 12,
@@ -88,7 +88,7 @@
         },
         "datapoints.pvPower": {
           "type": "objectId",
-          "label": "PV / Produktion \u2013 Leistung (W)",
+          "label": "PV / Produktion – Leistung (W)",
           "types": [
             "state"
           ],
@@ -103,7 +103,7 @@
         },
         "datapoints.productionTotal": {
           "type": "objectId",
-          "label": "PV / Produktion \u2013 Leistung (W)",
+          "label": "PV / Produktion – Leistung (W)",
           "types": [
             "state"
           ],
@@ -118,7 +118,7 @@
         },
         "datapoints.consumptionTotal": {
           "type": "objectId",
-          "label": "Verbrauch / Geb\u00e4ude \u2013 Gesamtleistung (W)",
+          "label": "Verbrauch / Gebäude – Gesamtleistung (W)",
           "types": [
             "state"
           ],
@@ -133,7 +133,7 @@
         },
         "datapoints.gridBuyPower": {
           "type": "objectId",
-          "label": "Netz \u2013 Bezug (W)",
+          "label": "Netz – Bezug (W)",
           "types": [
             "state"
           ],
@@ -148,7 +148,7 @@
         },
         "datapoints.gridSellPower": {
           "type": "objectId",
-          "label": "Netz \u2013 Einspeisung (W)",
+          "label": "Netz – Einspeisung (W)",
           "types": [
             "state"
           ],
@@ -163,7 +163,7 @@
         },
         "datapoints.storageChargePower": {
           "type": "objectId",
-          "label": "Batterie \u2013 Ladeleistung (W)",
+          "label": "Batterie – Ladeleistung (W)",
           "types": [
             "state"
           ],
@@ -177,7 +177,7 @@
         },
         "datapoints.storageDischargePower": {
           "type": "objectId",
-          "label": "Batterie \u2013 Entladeleistung (W)",
+          "label": "Batterie – Entladeleistung (W)",
           "types": [
             "state"
           ],
@@ -191,7 +191,7 @@
         },
         "datapoints.storageSoc": {
           "type": "objectId",
-          "label": "Batterie \u2013 SoC (%)",
+          "label": "Batterie – SoC (%)",
           "types": [
             "state"
           ],
@@ -200,7 +200,7 @@
           "attr": "datapoints.storageSoc",
           "datapoints.co2Savings": {
             "type": "objectId",
-            "label": "CO\u2082 \u2013 Ersparnis",
+            "label": "CO₂ – Ersparnis",
             "types": [
               "state"
             ],
@@ -210,11 +210,11 @@
             "xs": 12,
             "sm": 12,
             "md": 6,
-            "help": "CO\u2082-Ersparnis (z.\u202fB. kg oder g). Wird in der Produktion-Kachel angezeigt."
+            "help": "CO₂-Ersparnis (z. B. kg oder g). Wird in der Produktion-Kachel angezeigt."
           },
           "datapoints.productionEnergyKwh": {
             "type": "objectId",
-            "label": "Produktion \u2013 Energie gesamt (kWh)",
+            "label": "Produktion – Energie gesamt (kWh)",
             "types": [
               "state"
             ],
@@ -227,7 +227,7 @@
           },
           "datapoints.consumptionEnergyKwh": {
             "type": "objectId",
-            "label": "Verbrauch \u2013 Energie gesamt (kWh)",
+            "label": "Verbrauch – Energie gesamt (kWh)",
             "types": [
               "state"
             ],
@@ -240,7 +240,7 @@
           },
           "datapoints.gridEnergyKwh": {
             "type": "objectId",
-            "label": "Netz \u2013 Energie gesamt (kWh)",
+            "label": "Netz – Energie gesamt (kWh)",
             "types": [
               "state"
             ],
@@ -258,7 +258,7 @@
         },
         "datapoints.consumptionEvcs": {
           "type": "objectId",
-          "label": "Wallbox (EVCS) \u2013 Leistung (W)",
+          "label": "Wallbox (EVCS) – Leistung (W)",
           "types": [
             "state"
           ],
@@ -267,12 +267,12 @@
           "attr": "datapoints.consumptionEvcs",
           "xs": 12,
           "sm": 12,
-          "help": "Ladeleistung der Wallbox/EVCS in W (z.\u202fB. go-e/openWB/KEBA).",
+          "help": "Ladeleistung der Wallbox/EVCS in W (z. B. go-e/openWB/KEBA).",
           "md": 6
         },
         "datapoints.consumptionOther": {
           "type": "objectId",
-          "label": "Verbrauch \u2013 Sonstiges (W) (optional)",
+          "label": "Verbrauch – Sonstiges (W) (optional)",
           "types": [
             "state"
           ],
@@ -344,7 +344,7 @@
         },
         "datapoints.storageCapacityKwh": {
           "type": "objectId",
-          "label": "Speicher Kapazit\u00e4t (kWh)",
+          "label": "Speicher Kapazität (kWh)",
           "attr": "datapoints.storageCapacityKwh",
           "types": [
             "state"
@@ -352,7 +352,7 @@
           "button": true,
           "newLine": false,
           "placeholder": "z.B. 0_userdata.0.nexowatt.storage.capacity_kwh",
-          "help": "Kapazit\u00e4t des Batteriespeichers in kWh (Zahl).",
+          "help": "Kapazität des Batteriespeichers in kWh (Zahl).",
           "xs": 12,
           "sm": 12,
           "md": 6
@@ -387,9 +387,9 @@
         },
         "settings.flowSubtractEvFromBuilding": {
           "type": "checkbox",
-          "label": "EV-Leistung vom Geb\u00e4ude-Verbrauch abziehen",
+          "label": "EV-Leistung vom Gebäude-Verbrauch abziehen",
           "default": true,
-          "help": "Wenn aktiv, wird die Ladeleistung der Wallbox (consumptionEvcs) von 'Geb\u00e4ude' (Mitte) subtrahiert.",
+          "help": "Wenn aktiv, wird die Ladeleistung der Wallbox (consumptionEvcs) von 'Gebäude' (Mitte) subtrahiert.",
           "attr": "settings.flowSubtractEvFromBuilding",
           "xs": 12,
           "sm": 12,
@@ -419,7 +419,7 @@
           "type": "checkbox",
           "label": "PV-Vorzeichen invertieren",
           "default": false,
-          "help": "Standard: PV > 0 (Erzeugung Richtung Geb\u00e4ude).",
+          "help": "Standard: PV > 0 (Erzeugung Richtung Gebäude).",
           "attr": "settings.flowInvertPv",
           "xs": 12,
           "sm": 12,
@@ -437,7 +437,7 @@
         },
         "settings.flowGridShowNet": {
           "type": "checkbox",
-          "label": "Netz: Netto (Bezug\u2212Einspeisung) anzeigen",
+          "label": "Netz: Netto (Bezug−Einspeisung) anzeigen",
           "default": false,
           "help": "Wenn aus, wird die dominante Richtung (Bezug oder Einspeisung) mit ihrem Betrag angezeigt.",
           "attr": "settings.flowGridShowNet",
@@ -447,13 +447,13 @@
         },
         "datapoints.priceCurrent": {
           "type": "objectId",
-          "label": "Tarif \u2013 aktuell (\u20ac/kWh oder ct/kWh)",
+          "label": "Tarif – aktuell (€/kWh oder ct/kWh)",
           "types": [
             "state"
           ],
           "button": true,
           "placeholder": "z.B. 0_userdata.0.nexowatt.price.current",
-          "help": "Numerisch. Wenn in ct/kWh geliefert, wird automatisch in \u20ac/kWh umgerechnet.",
+          "help": "Numerisch. Wenn in ct/kWh geliefert, wird automatisch in €/kWh umgerechnet.",
           "attr": "datapoints.priceCurrent",
           "xs": 12,
           "sm": 12,
@@ -461,13 +461,13 @@
         },
         "datapoints.priceAverage": {
           "type": "objectId",
-          "label": "Tarif \u2013 Durchschnitt (\u20ac/kWh oder ct/kWh)",
+          "label": "Tarif – Durchschnitt (€/kWh oder ct/kWh)",
           "types": [
             "state"
           ],
           "button": true,
           "placeholder": "z.B. 0_userdata.0.nexowatt.price.average",
-          "help": "Numerisch. Wenn in ct/kWh geliefert, wird automatisch in \u20ac/kWh umgerechnet.",
+          "help": "Numerisch. Wenn in ct/kWh geliefert, wird automatisch in €/kWh umgerechnet.",
           "attr": "datapoints.priceAverage",
           "xs": 12,
           "sm": 12,
@@ -475,7 +475,7 @@
         },
         "datapoints.co2Savings": {
           "type": "objectId",
-          "label": "CO\u2082 \u2013 Ersparnis",
+          "label": "CO₂ – Ersparnis",
           "types": [
             "state"
           ],
@@ -488,7 +488,7 @@
         },
         "datapoints.productionEnergyKwh": {
           "type": "objectId",
-          "label": "Produktion \u2013 Energie gesamt (kWh)",
+          "label": "Produktion – Energie gesamt (kWh)",
           "types": [
             "state"
           ],
@@ -501,7 +501,7 @@
         },
         "datapoints.consumptionEnergyKwh": {
           "type": "objectId",
-          "label": "Verbrauch \u2013 Energie gesamt (kWh)",
+          "label": "Verbrauch – Energie gesamt (kWh)",
           "types": [
             "state"
           ],
@@ -514,7 +514,7 @@
         },
         "datapoints.gridEnergyKwh": {
           "type": "objectId",
-          "label": "Netz \u2013 Energie gesamt (kWh)",
+          "label": "Netz – Energie gesamt (kWh)",
           "types": [
             "state"
           ],
@@ -542,7 +542,7 @@
         },
         "smartHome.datapoints.heatPumpOn": {
           "type": "objectId",
-          "label": "W\u00e4rmepumpe EIN/AUS (bool)",
+          "label": "Wärmepumpe EIN/AUS (bool)",
           "types": [
             "state"
           ],
@@ -557,7 +557,7 @@
         },
         "smartHome.datapoints.roomTemp": {
           "type": "objectId",
-          "label": "Raumtemperatur (\u00b0C)",
+          "label": "Raumtemperatur (°C)",
           "types": [
             "state"
           ],
@@ -614,6 +614,175 @@
           "xs": 12,
           "sm": 12,
           "md": 6
+        },
+        "smartHome.rooms": {
+          "type": "table",
+          "label": {
+            "de": "Räume / Bereiche",
+            "en": "Rooms / Areas"
+          },
+          "sm": 12,
+          "md": 12,
+          "lg": 12,
+          "items": [
+            {
+              "type": "text",
+              "attr": "name",
+              "width": "40%",
+              "title": {
+                "de": "Raumname",
+                "en": "Room name"
+              },
+              "filter": true,
+              "sort": true,
+              "default": ""
+            },
+            {
+              "type": "text",
+              "attr": "icon",
+              "width": "30%",
+              "title": {
+                "de": "Icon (optional)",
+                "en": "Icon (optional)"
+              },
+              "filter": false,
+              "sort": false,
+              "default": ""
+            },
+            {
+              "type": "checkbox",
+              "attr": "enabled",
+              "width": "15%",
+              "title": {
+                "de": "Aktiv",
+                "en": "Enabled"
+              },
+              "default": true
+            }
+          ]
+        },
+        "smartHome.devices": {
+          "type": "table",
+          "label": {
+            "de": "Funktionen / Geräte",
+            "en": "Functions / Devices"
+          },
+          "sm": 12,
+          "md": 12,
+          "lg": 12,
+          "items": [
+            {
+              "type": "text",
+              "attr": "label",
+              "width": "20%",
+              "title": {
+                "de": "Anzeigename",
+                "en": "Display name"
+              },
+              "filter": true,
+              "sort": true,
+              "default": ""
+            },
+            {
+              "type": "text",
+              "attr": "room",
+              "width": "15%",
+              "title": {
+                "de": "Raum",
+                "en": "Room"
+              },
+              "filter": true,
+              "sort": true,
+              "default": ""
+            },
+            {
+              "type": "select",
+              "attr": "type",
+              "width": "15%",
+              "title": {
+                "de": "Kacheltyp",
+                "en": "Tile type"
+              },
+              "default": "switch",
+              "options": [
+                {
+                  "label": {
+                    "de": "Schalter / Steckdose",
+                    "en": "Switch / outlet"
+                  },
+                  "value": "switch"
+                },
+                {
+                  "label": {
+                    "de": "Licht (An/Aus)",
+                    "en": "Light (on/off)"
+                  },
+                  "value": "light"
+                },
+                {
+                  "label": {
+                    "de": "Dimmer",
+                    "en": "Dimmer"
+                  },
+                  "value": "dimmer"
+                },
+                {
+                  "label": {
+                    "de": "Sensor (nur Anzeige)",
+                    "en": "Sensor (readonly)"
+                  },
+                  "value": "sensor"
+                },
+                {
+                  "label": {
+                    "de": "Heizung / Klima",
+                    "en": "Climate"
+                  },
+                  "value": "climate"
+                },
+                {
+                  "label": {
+                    "de": "Rollladen / Jalousie",
+                    "en": "Cover / shutter"
+                  },
+                  "value": "cover"
+                }
+              ]
+            },
+            {
+              "type": "objectId",
+              "attr": "idControl",
+              "width": "25%",
+              "title": {
+                "de": "Haupt-Datenpunkt (Schalten/Wert)",
+                "en": "Main datapoint (set/value)"
+              },
+              "filter": false,
+              "sort": false
+            },
+            {
+              "type": "objectId",
+              "attr": "idStatus",
+              "width": "25%",
+              "title": {
+                "de": "Status-Datenpunkt (optional)",
+                "en": "Status datapoint (optional)"
+              },
+              "filter": false,
+              "sort": false
+            },
+            {
+              "type": "objectId",
+              "attr": "idLevel",
+              "width": "25%",
+              "title": {
+                "de": "Level/Dimm-Objekt (optional)",
+                "en": "Level / dimmer object (optional)"
+              },
+              "filter": false,
+              "sort": false
+            }
+          ]
         }
       },
       "label": "SmartHome (vorbereitet)",
@@ -631,7 +800,7 @@
               "value": "nexowatt-dark"
             },
             {
-              "label": "NexoWatt Light (sp\u00e4ter)",
+              "label": "NexoWatt Light (später)",
               "value": "nexowatt-light"
             }
           ],
@@ -667,7 +836,7 @@
       "items": {
         "installerInfo": {
           "type": "header",
-          "text": "Einstellungen nur f\u00fcr Installateure \u2013 werden in die Datenpunkte unter nexowatt-vis.0.installer.* geschrieben.",
+          "text": "Einstellungen nur für Installateure – werden in die Datenpunkte unter nexowatt-vis.0.installer.* geschrieben.",
           "xs": 12,
           "sm": 12,
           "md": 6
@@ -683,7 +852,7 @@
         },
         "installerConfig.para14a": {
           "type": "checkbox",
-          "label": "\u00a714a aktiv",
+          "label": "§14a aktiv",
           "attr": "installerConfig.para14a",
           "xs": 12,
           "sm": 6,
@@ -729,7 +898,7 @@
               "value": 2
             },
             {
-              "label": "3 = Multi\u2011Use",
+              "label": "3 = Multi‑Use",
               "value": 3
             }
           ],
@@ -817,7 +986,7 @@
           ],
           "button": true,
           "newLine": false,
-          "label": "PV / Produktion \u2013 Leistung (W)",
+          "label": "PV / Produktion – Leistung (W)",
           "attr": "history.datapoints.pvPower",
           "xs": 12,
           "sm": 12,
@@ -830,7 +999,7 @@
           ],
           "button": true,
           "newLine": false,
-          "label": "Verbrauch / Geb\u00e4ude \u2013 Leistung (W)",
+          "label": "Verbrauch / Gebäude – Leistung (W)",
           "attr": "history.datapoints.consumptionTotal",
           "xs": 12,
           "sm": 12,
@@ -843,7 +1012,7 @@
           ],
           "button": true,
           "newLine": false,
-          "label": "Netz \u2013 Bezug (W)",
+          "label": "Netz – Bezug (W)",
           "attr": "history.datapoints.gridBuyPower",
           "xs": 12,
           "sm": 12,
@@ -856,7 +1025,7 @@
           ],
           "button": true,
           "newLine": false,
-          "label": "Netz \u2013 Einspeisung (W)",
+          "label": "Netz – Einspeisung (W)",
           "attr": "history.datapoints.gridSellPower",
           "xs": 12,
           "sm": 12,
@@ -869,7 +1038,7 @@
           ],
           "button": true,
           "newLine": false,
-          "label": "Batterie \u2013 Ladeleistung (W)",
+          "label": "Batterie – Ladeleistung (W)",
           "attr": "history.datapoints.storageChargePower",
           "xs": 12,
           "sm": 12,
@@ -882,7 +1051,7 @@
           ],
           "button": true,
           "newLine": false,
-          "label": "Batterie \u2013 Entladeleistung (W)",
+          "label": "Batterie – Entladeleistung (W)",
           "attr": "history.datapoints.storageDischargePower",
           "xs": 12,
           "sm": 12,
@@ -895,7 +1064,7 @@
           ],
           "button": true,
           "newLine": false,
-          "label": "Batterie \u2013 SoC (%)",
+          "label": "Batterie – SoC (%)",
           "attr": "history.datapoints.storageSoc",
           "xs": 12,
           "sm": 12,
@@ -910,7 +1079,7 @@
         "datapoints.consumptionEvcs": {
           "type": "objectId",
           "label": "Leistung (W)",
-          "tooltip": "Wert f\u00fcr aktuelle Ladeleistung der Ladestation",
+          "tooltip": "Wert für aktuelle Ladeleistung der Ladestation",
           "newLine": false
         },
         "datapoints.evcsStatus": {
@@ -928,7 +1097,7 @@
         "settings.evcsMode": {
           "type": "objectId",
           "label": "Betriebsmodus (1-3)",
-          "tooltip": "Schieberegler 1\u20263 (z. B. 1=Netz-Min, 2=Min+PV, 3=PV). Leer lassen, wenn Adapter-eigenen Datenpunkt verwenden soll.",
+          "tooltip": "Schieberegler 1…3 (z. B. 1=Netz-Min, 2=Min+PV, 3=PV). Leer lassen, wenn Adapter-eigenen Datenpunkt verwenden soll.",
           "newLine": false
         },
         "settingsConfig.evcsMaxPowerKw": {
@@ -937,12 +1106,10 @@
           "default": 11,
           "min": 1,
           "max": 350,
-          "tooltip": "Wird f\u00fcr die F\u00fcllung des Kreises im EVCS\u2011Popup verwendet (100% = hier eingetragene kW).",
+          "tooltip": "Wird für die Füllung des Kreises im EVCS‑Popup verwendet (100% = hier eingetragene kW).",
           "newLine": true
         }
       }
     }
-  },
-  "smartHomeRooms": [],
-  "smartHomeDevices": []
+  }
 }
