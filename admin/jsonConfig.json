@@ -529,277 +529,6 @@
       "label": "Datenpunkte",
       "title": "Datenpunkte"
     },
-    "smarthome_vorbereitet": {
-      "type": "panel",
-      "items": {
-        "smartHome.enabled": {
-          "type": "checkbox",
-          "label": "SmartHome-Bereich aktivieren (Beta)",
-          "attr": "smartHome.enabled",
-          "xs": 12,
-          "sm": 12,
-          "md": 6
-        },
-        "smartHome.datapoints.heatPumpOn": {
-          "type": "objectId",
-          "label": "Wärmepumpe EIN/AUS (bool)",
-          "types": [
-            "state"
-          ],
-          "button": true,
-          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.*",
-          "help": "SmartHome-Datenpunkt",
-          "newLine": false,
-          "attr": "smartHome.datapoints.heatPumpOn",
-          "xs": 12,
-          "sm": 12,
-          "md": 6
-        },
-        "smartHome.datapoints.roomTemp": {
-          "type": "objectId",
-          "label": "Raumtemperatur (°C)",
-          "types": [
-            "state"
-          ],
-          "button": true,
-          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.*",
-          "help": "SmartHome-Datenpunkt",
-          "newLine": false,
-          "attr": "smartHome.datapoints.roomTemp",
-          "xs": 12,
-          "sm": 12,
-          "md": 6
-        },
-        "smartHome.datapoints.wallboxLock": {
-          "type": "objectId",
-          "label": "Wallbox verriegeln (bool)",
-          "types": [
-            "state"
-          ],
-          "button": true,
-          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.*",
-          "help": "SmartHome-Datenpunkt",
-          "newLine": false,
-          "attr": "smartHome.datapoints.wallboxLock",
-          "xs": 12,
-          "sm": 12,
-          "md": 6
-        },
-        "smartHome.datapoints.gridLimit": {
-          "type": "objectId",
-          "label": "Netzbezugslimit (W)",
-          "types": [
-            "state"
-          ],
-          "button": true,
-          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.*",
-          "help": "SmartHome-Datenpunkt",
-          "newLine": false,
-          "attr": "smartHome.datapoints.gridLimit",
-          "xs": 12,
-          "sm": 12,
-          "md": 6
-        },
-        "smartHome.datapoints.pvCurtailment": {
-          "type": "objectId",
-          "label": "PV-Abregelung (%)",
-          "types": [
-            "state"
-          ],
-          "button": true,
-          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.*",
-          "help": "SmartHome-Datenpunkt",
-          "newLine": false,
-          "attr": "smartHome.datapoints.pvCurtailment",
-          "xs": 12,
-          "sm": 12,
-          "md": 6
-        },
-        "smartHome.roomsTableHeader": {
-          "type": "header",
-          "text": "Räume / Bereiche"
-        },
-        "smartHome.rooms": {
-          "type": "table",
-          "label": "Räume / Bereiche",
-          "sm": 12,
-          "md": 12,
-          "lg": 12,
-          "items": [
-            {
-              "type": "checkbox",
-              "attr": "enabled",
-              "width": "10%",
-              "title": "Aktiv",
-              "filter": false,
-              "sort": false,
-              "default": true
-            },
-            {
-              "type": "text",
-              "attr": "id",
-              "width": "15%",
-              "title": "Raum-ID",
-              "filter": true,
-              "sort": true,
-              "default": ""
-            },
-            {
-              "type": "text",
-              "attr": "name",
-              "width": "35%",
-              "title": "Raumname",
-              "filter": true,
-              "sort": true,
-              "default": ""
-            },
-            {
-              "type": "select",
-              "attr": "icon",
-              "width": "20%",
-              "title": "Icon",
-              "filter": false,
-              "sort": false,
-              "options": [
-                {
-                  "label": "Standard",
-                  "value": "default"
-                },
-                {
-                  "label": "Wohnzimmer",
-                  "value": "living"
-                },
-                {
-                  "label": "Schlafzimmer",
-                  "value": "bed"
-                },
-                {
-                  "label": "Küche",
-                  "value": "kitchen"
-                },
-                {
-                  "label": "Bad",
-                  "value": "bath"
-                },
-                {
-                  "label": "Büro",
-                  "value": "office"
-                },
-                {
-                  "label": "Außenbereich",
-                  "value": "garden"
-                }
-              ],
-              "default": "default"
-            },
-            {
-              "type": "color",
-              "attr": "color",
-              "width": "20%",
-              "title": "Farbe (optional)",
-              "default": ""
-            }
-          ]
-        },
-        "smartHome.devicesTableHeader": {
-          "type": "header",
-          "text": "Funktionen / Geräte"
-        },
-        "smartHome.devices": {
-          "type": "table",
-          "label": "Funktionen / Geräte",
-          "sm": 12,
-          "md": 12,
-          "lg": 12,
-          "items": [
-            {
-              "type": "checkbox",
-              "attr": "enabled",
-              "width": "8%",
-              "title": "Aktiv",
-              "filter": false,
-              "sort": false,
-              "default": true
-            },
-            {
-              "type": "text",
-              "attr": "id",
-              "width": "15%",
-              "title": "Geräte-ID",
-              "filter": true,
-              "sort": true,
-              "default": ""
-            },
-            {
-              "type": "text",
-              "attr": "name",
-              "width": "27%",
-              "title": "Funktionsname",
-              "filter": true,
-              "sort": true,
-              "default": ""
-            },
-            {
-              "type": "select",
-              "attr": "roomId",
-              "width": "18%",
-              "title": "Raum-Zuordnung (ID)",
-              "filter": true,
-              "sort": false,
-              "default": ""
-            },
-            {
-              "type": "select",
-              "attr": "widget",
-              "width": "17%",
-              "title": "Widget-Typ",
-              "filter": false,
-              "sort": false,
-              "options": [
-                {
-                  "label": "Schalter (Ein/Aus)",
-                  "value": "switch"
-                },
-                {
-                  "label": "Dimmer",
-                  "value": "dimmer"
-                },
-                {
-                  "label": "Jalousie/Rollladen",
-                  "value": "shutter"
-                },
-                {
-                  "label": "Temperatur-Sollwert",
-                  "value": "temp_set"
-                },
-                {
-                  "label": "Temperatur-Istwert",
-                  "value": "temp_actual"
-                },
-                {
-                  "label": "Sensor (nur Anzeige)",
-                  "value": "sensor"
-                }
-              ],
-              "default": "switch"
-            },
-            {
-              "type": "objectId",
-              "attr": "stateId",
-              "width": "15%",
-              "title": "Datenpunkt-ID",
-              "types": [
-                "state"
-              ],
-              "button": true,
-              "placeholder": "z.B. KNX, ZigBee, etc."
-            }
-          ]
-        }
-      },
-      "label": "SmartHome (vorbereitet)",
-      "title": "SmartHome (vorbereitet)"
-    },
     "erweitert___zukunft": {
       "type": "panel",
       "items": {
@@ -1120,6 +849,140 @@
           "max": 350,
           "tooltip": "Wird für die Füllung des Kreises im EVCS‑Popup verwendet (100% = hier eingetragene kW).",
           "newLine": true
+        }
+      }
+    },
+    "smarthome": {
+      "type": "panel",
+      "label": "SmartHome",
+      "title": "SmartHome",
+      "items": {
+        "smartHome.enabled": {
+          "type": "checkbox",
+          "label": "SmartHome-Bereich aktivieren",
+          "attr": "smartHome.enabled",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "smartHome.rooms": {
+          "type": "array",
+          "label": "Räume",
+          "attr": "smartHome.rooms",
+          "sm": 12,
+          "items": {
+            "type": "panel",
+            "items": {
+              "smartHome.rooms.id": {
+                "type": "text",
+                "label": "Raum-ID (intern, eindeutig)",
+                "attr": "id",
+                "xs": 12,
+                "sm": 6,
+                "md": 4
+              },
+              "smartHome.rooms.name": {
+                "type": "text",
+                "label": "Raumname (Anzeige)",
+                "attr": "name",
+                "xs": 12,
+                "sm": 6,
+                "md": 4
+              },
+              "smartHome.rooms.icon": {
+                "type": "text",
+                "label": "Icon (optional)",
+                "attr": "icon",
+                "xs": 12,
+                "sm": 6,
+                "md": 4
+              }
+            }
+          }
+        },
+        "smartHome.devices": {
+          "type": "array",
+          "label": "Funktionen / Geräte",
+          "attr": "smartHome.devices",
+          "sm": 12,
+          "items": {
+            "type": "panel",
+            "items": {
+              "smartHome.devices.id": {
+                "type": "text",
+                "label": "Geräte-ID (intern, eindeutig)",
+                "attr": "id",
+                "xs": 12,
+                "sm": 6,
+                "md": 3
+              },
+              "smartHome.devices.label": {
+                "type": "text",
+                "label": "Anzeigename",
+                "attr": "label",
+                "xs": 12,
+                "sm": 6,
+                "md": 3
+              },
+              "smartHome.devices.roomId": {
+                "type": "text",
+                "label": "Raum-ID (Zuweisung)",
+                "attr": "roomId",
+                "xs": 12,
+                "sm": 6,
+                "md": 3
+              },
+              "smartHome.devices.type": {
+                "type": "select",
+                "label": "Kacheltyp",
+                "attr": "type",
+                "options": [
+                  "switch",
+                  "light",
+                  "dimmer",
+                  "sensor",
+                  "climate",
+                  "cover"
+                ],
+                "xs": 12,
+                "sm": 6,
+                "md": 3
+              },
+              "smartHome.devices.controlId": {
+                "type": "objectId",
+                "label": "Datenpunkt Schalten/Wert",
+                "attr": "controlId",
+                "types": [
+                  "state"
+                ],
+                "xs": 12,
+                "sm": 12,
+                "md": 6
+              },
+              "smartHome.devices.statusId": {
+                "type": "objectId",
+                "label": "Status-Datenpunkt (optional)",
+                "attr": "statusId",
+                "types": [
+                  "state"
+                ],
+                "xs": 12,
+                "sm": 12,
+                "md": 6
+              },
+              "smartHome.devices.levelId": {
+                "type": "objectId",
+                "label": "Level/Dimm-Objekt (optional)",
+                "attr": "levelId",
+                "types": [
+                  "state"
+                ],
+                "xs": 12,
+                "sm": 12,
+                "md": 6
+              }
+            }
+          }
         }
       }
     }
