@@ -870,8 +870,8 @@
           "label": "Räume",
           "attr": "smartHome.rooms",
           "sm": 12,
-          "items": {
-            "smartHome.rooms.id": {
+          "items": [
+            {
               "type": "text",
               "label": "Raum-ID (intern, eindeutig)",
               "attr": "id",
@@ -879,7 +879,7 @@
               "sm": 6,
               "md": 4
             },
-            "smartHome.rooms.name": {
+            {
               "type": "text",
               "label": "Raumname (Anzeige)",
               "attr": "name",
@@ -887,7 +887,7 @@
               "sm": 6,
               "md": 4
             },
-            "smartHome.rooms.icon": {
+            {
               "type": "text",
               "label": "Icon (optional)",
               "attr": "icon",
@@ -895,15 +895,15 @@
               "sm": 6,
               "md": 4
             }
-          }
+          ]
         },
         "smartHome.devices": {
           "type": "table",
           "label": "Funktionen / Geräte",
           "attr": "smartHome.devices",
           "sm": 12,
-          "items": {
-            "smartHome.devices.id": {
+          "items": [
+            {
               "type": "text",
               "label": "Geräte-ID (intern, eindeutig)",
               "attr": "id",
@@ -911,7 +911,7 @@
               "sm": 6,
               "md": 3
             },
-            "smartHome.devices.label": {
+            {
               "type": "text",
               "label": "Anzeigename",
               "attr": "label",
@@ -919,7 +919,7 @@
               "sm": 6,
               "md": 3
             },
-            "smartHome.devices.roomId": {
+            {
               "type": "text",
               "label": "Raum-ID (Zuweisung)",
               "attr": "roomId",
@@ -927,7 +927,7 @@
               "sm": 6,
               "md": 3
             },
-            "smartHome.devices.type": {
+            {
               "type": "select",
               "label": "Kacheltyp",
               "attr": "type",
@@ -943,7 +943,7 @@
               "sm": 6,
               "md": 3
             },
-            "smartHome.devices.controlId": {
+            {
               "type": "objectId",
               "label": "Datenpunkt Schalten/Wert",
               "attr": "controlId",
@@ -954,7 +954,7 @@
               "sm": 12,
               "md": 6
             },
-            "smartHome.devices.statusId": {
+            {
               "type": "objectId",
               "label": "Status-Datenpunkt (optional)",
               "attr": "statusId",
@@ -965,7 +965,7 @@
               "sm": 12,
               "md": 6
             },
-            "smartHome.devices.levelId": {
+            {
               "type": "objectId",
               "label": "Level/Dimm-Objekt (optional)",
               "attr": "levelId",
@@ -976,7 +976,7 @@
               "sm": 12,
               "md": 6
             }
-          }
+          ]
         }
       }
     }

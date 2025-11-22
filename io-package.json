@@ -344,8 +344,8 @@
         "de": "SmartHome Admin: Tabellen für Räume und Geräte, Vorbereitung für manuelle Struktur."
       },
       "0.4.64": {
-        "en": "SmartHome admin: fix table schema so rooms and devices can be edited.",
-        "de": "SmartHome Admin: Tabellenschema korrigiert, Räume und Geräte können jetzt bearbeitet werden."
+        "en": "SmartHome admin: fixed table schema, rooms and devices can be edited without GUI error.",
+        "de": "SmartHome-Admin: Tabellenschema korrigiert, Räume und Geräte können ohne GUI-Fehler bearbeitet werden."
       }
     },
     "title": "NexoWatt EMS UI",
@@ -368,7 +368,8 @@
     "loglevel": "info",
     "type": "visualization",
     "adminUI": {
-      "config": "json"
+      "config": "json",
+      "tab": "html"
     },
     "keywords": [
       "visualization",
