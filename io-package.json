@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.64",
+    "version": "0.4.62",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
@@ -339,13 +339,9 @@
         "en": "Reworked SmartHome tab: manual rooms & devices configuration.",
         "de": "SmartHome-Reiter neu aufgebaut: manuelle Konfiguration von Räumen und Funktionen."
       },
-      "0.4.63": {
-        "en": "SmartHome admin: tables for rooms and devices; preparation for manual structure.",
-        "de": "SmartHome Admin: Tabellen für Räume und Geräte, Vorbereitung für manuelle Struktur."
-      },
-      "0.4.64": {
-        "en": "SmartHome admin: fixed table schema, rooms and devices can be edited without GUI error.",
-        "de": "SmartHome-Admin: Tabellenschema korrigiert, Räume und Geräte können ohne GUI-Fehler bearbeitet werden."
+      "0.4.62": {
+        "en": "SmartHome: structure now built from manual rooms/devices configuration instead of enums.",
+        "de": "SmartHome: Struktur wird jetzt aus der manuellen Raum-/Gerätekonfiguration aufgebaut (keine enum-Auswertung mehr)."
       }
     },
     "title": "NexoWatt EMS UI",
@@ -368,8 +364,7 @@
     "loglevel": "info",
     "type": "visualization",
     "adminUI": {
-      "config": "json",
-      "tab": "html"
+      "config": "json"
     },
     "keywords": [
       "visualization",
