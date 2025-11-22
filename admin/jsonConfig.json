@@ -866,123 +866,101 @@
           "md": 6
         },
         "smartHome.rooms": {
-          "type": "array",
+          "type": "table",
           "label": "Räume",
           "attr": "smartHome.rooms",
           "sm": 12,
-          "items": {
-            "type": "panel",
-            "items": {
-              "smartHome.rooms.id": {
-                "type": "text",
-                "label": "Raum-ID (intern, eindeutig)",
-                "attr": "id",
-                "xs": 12,
-                "sm": 6,
-                "md": 4
-              },
-              "smartHome.rooms.name": {
-                "type": "text",
-                "label": "Raumname (Anzeige)",
-                "attr": "name",
-                "xs": 12,
-                "sm": 6,
-                "md": 4
-              },
-              "smartHome.rooms.icon": {
-                "type": "text",
-                "label": "Icon (optional)",
-                "attr": "icon",
-                "xs": 12,
-                "sm": 6,
-                "md": 4
-              }
+          "newLine": true,
+          "items": [
+            {
+              "type": "text",
+              "attr": "id",
+              "title": "Raum-ID (intern, eindeutig)",
+              "width": "25%"
+            },
+            {
+              "type": "text",
+              "attr": "name",
+              "title": "Raumname (Anzeige)",
+              "width": "45%"
+            },
+            {
+              "type": "text",
+              "attr": "icon",
+              "title": "Icon (optional)",
+              "width": "30%"
             }
-          }
+          ],
+          "compact": true
         },
         "smartHome.devices": {
-          "type": "array",
+          "type": "table",
           "label": "Funktionen / Geräte",
           "attr": "smartHome.devices",
           "sm": 12,
-          "items": {
-            "type": "panel",
-            "items": {
-              "smartHome.devices.id": {
-                "type": "text",
-                "label": "Geräte-ID (intern, eindeutig)",
-                "attr": "id",
-                "xs": 12,
-                "sm": 6,
-                "md": 3
-              },
-              "smartHome.devices.label": {
-                "type": "text",
-                "label": "Anzeigename",
-                "attr": "label",
-                "xs": 12,
-                "sm": 6,
-                "md": 3
-              },
-              "smartHome.devices.roomId": {
-                "type": "text",
-                "label": "Raum-ID (Zuweisung)",
-                "attr": "roomId",
-                "xs": 12,
-                "sm": 6,
-                "md": 3
-              },
-              "smartHome.devices.type": {
-                "type": "select",
-                "label": "Kacheltyp",
-                "attr": "type",
-                "options": [
-                  "switch",
-                  "light",
-                  "dimmer",
-                  "sensor",
-                  "climate",
-                  "cover"
-                ],
-                "xs": 12,
-                "sm": 6,
-                "md": 3
-              },
-              "smartHome.devices.controlId": {
-                "type": "objectId",
-                "label": "Datenpunkt Schalten/Wert",
-                "attr": "controlId",
-                "types": [
-                  "state"
-                ],
-                "xs": 12,
-                "sm": 12,
-                "md": 6
-              },
-              "smartHome.devices.statusId": {
-                "type": "objectId",
-                "label": "Status-Datenpunkt (optional)",
-                "attr": "statusId",
-                "types": [
-                  "state"
-                ],
-                "xs": 12,
-                "sm": 12,
-                "md": 6
-              },
-              "smartHome.devices.levelId": {
-                "type": "objectId",
-                "label": "Level/Dimm-Objekt (optional)",
-                "attr": "levelId",
-                "types": [
-                  "state"
-                ],
-                "xs": 12,
-                "sm": 12,
-                "md": 6
-              }
+          "newLine": true,
+          "items": [
+            {
+              "type": "text",
+              "attr": "id",
+              "title": "Geräte-ID (intern, eindeutig)",
+              "width": "10%"
+            },
+            {
+              "type": "text",
+              "attr": "label",
+              "title": "Anzeigename",
+              "width": "15%"
+            },
+            {
+              "type": "text",
+              "attr": "roomId",
+              "title": "Raum-ID (Zuweisung)",
+              "width": "10%"
+            },
+            {
+              "type": "select",
+              "attr": "type",
+              "options": [
+                "switch",
+                "light",
+                "dimmer",
+                "sensor",
+                "climate",
+                "cover"
+              ],
+              "title": "Kacheltyp",
+              "width": "10%"
+            },
+            {
+              "type": "objectId",
+              "attr": "controlId",
+              "types": [
+                "state"
+              ],
+              "title": "Datenpunkt Schalten/Wert",
+              "width": "25%"
+            },
+            {
+              "type": "objectId",
+              "attr": "statusId",
+              "types": [
+                "state"
+              ],
+              "title": "Status-Datenpunkt (optional)",
+              "width": "15%"
+            },
+            {
+              "type": "objectId",
+              "attr": "levelId",
+              "types": [
+                "state"
+              ],
+              "title": "Level/Dimm-Objekt (optional)",
+              "width": "15%"
             }
-          }
+          ],
+          "compact": true
         }
       }
     }
