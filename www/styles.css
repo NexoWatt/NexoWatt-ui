@@ -640,3 +640,94 @@ body {
   border-color: #00ff9c;
   color: #000000;
 }
+
+
+/* === SmartHome: HomeKit-like cards per device (NexoWatt design) === */
+.smh-func-card {
+  margin-top: 12px;
+  padding-top: 4px;
+}
+
+.smh-func-header {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+/* One tile per device */
+.smh-entity-group {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+  width: calc(50% - 8px);
+  min-height: 90px;
+  margin: 4px 4px 8px 0;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #151a20, #1e2835);
+  border: 1px solid #222a33;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+@media (max-width: 480px) {
+  .smh-entity-group {
+    width: 100%;
+  }
+}
+
+.smh-entity-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.9;
+  margin-bottom: 6px;
+}
+
+.smh-entity-group-icon-img {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.smh-entity-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.smh-entity-name {
+  font-size: 13px;
+}
+
+.smh-entity-toggle,
+.smh-entity-value {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid #222a33;
+  background: #181d23;
+}
+
+.smh-entity-row.interactive {
+  cursor: pointer;
+}
+
+.smh-entity-row.interactive:hover .smh-entity-toggle {
+  background: #1b2230;
+}
+
+.smh-entity-slider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.smh-entity-slider input[type="range"] {
+  width: 100%;
+}
+

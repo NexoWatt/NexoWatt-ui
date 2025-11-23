@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.68",
+    "version": "0.4.71",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
@@ -354,6 +354,10 @@
       "0.4.68": {
         "en": "SmartHome admin: enlarged columns, two-row layout per device and additional datapoints for thermostats (setpoint/actual).",
         "de": "SmartHome-Admin: Spalten vergrößert, 2-Zeilen-Layout pro Gerät und zusätzliche Datenpunkte für Thermostate (Soll/Ist)."
+      },
+      "0.4.71": {
+        "en": "SmartHome admin: devices editor as array/panel (more space, extra thermostat datapoints). SmartHome VIS: HomeKit-like tiles per device in NexoWatt design.",
+        "de": "SmartHome-Admin: Geräte-Editor als Array/Panel (mehr Platz, zusätzliche Thermostat-Datenpunkte). SmartHome-VIS: HomeKit-ähnliche Kacheln pro Gerät im NexoWatt-Design."
       }
     },
     "title": "NexoWatt EMS UI",

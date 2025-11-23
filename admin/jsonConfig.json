@@ -898,115 +898,114 @@
           ]
         },
         "smartHome.devices": {
-          "type": "table",
+          "type": "array",
           "label": "Funktionen / Geräte",
           "attr": "smartHome.devices",
           "sm": 12,
-          "items": [
-            {
-              "type": "text",
-              "label": "ID",
-              "attr": "id",
-              "xs": 12,
-              "sm": 6,
-              "md": 3
-            },
-            {
-              "type": "text",
-              "label": "Name",
-              "attr": "label",
-              "xs": 12,
-              "sm": 6,
-              "md": 3
-            },
-            {
-              "type": "text",
-              "label": "Raum",
-              "attr": "roomId",
-              "xs": 12,
-              "sm": 6,
-              "md": 3
-            },
-            {
-              "type": "select",
-              "label": "Typ",
-              "attr": "type",
-              "options": [
-                {
-                  "label": "Schalter",
-                  "value": "switch"
-                },
-                {
-                  "label": "Licht",
-                  "value": "light"
-                },
-                {
-                  "label": "Dimmer",
-                  "value": "dimmer"
-                },
-                {
-                  "label": "Sensor",
-                  "value": "sensor"
-                },
-                {
-                  "label": "Klima",
-                  "value": "climate"
-                },
-                {
-                  "label": "Jalousie/Rollo",
-                  "value": "cover"
-                },
-                {
-                  "label": "Thermostat",
-                  "value": "thermostat"
-                },
-                {
-                  "label": "Fenster",
-                  "value": "window"
-                },
-                {
-                  "label": "Status",
-                  "value": "status"
-                }
-              ],
-              "xs": 12,
-              "sm": 6,
-              "md": 3
-            },
-            {
-              "type": "objectId",
-              "label": "DP Schalten",
-              "attr": "controlId",
-              "types": [
-                "state"
-              ],
-              "xs": 12,
-              "sm": 12,
-              "md": 6
-            },
-            {
-              "type": "objectId",
-              "label": "Status",
-              "attr": "statusId",
-              "types": [
-                "state"
-              ],
-              "xs": 12,
-              "sm": 12,
-              "md": 6
-            },
-            {
-              "type": "objectId",
-              "label": "Level/Dimmer",
-              "attr": "levelId",
-              "types": [
-                "state"
-              ],
-              "xs": 12,
-              "sm": 12,
-              "md": 6
+          "itemLabel": "Funktion / Gerät",
+          "items": {
+            "type": "panel",
+            "items": {
+              "smartHome.devices.id": {
+                "type": "text",
+                "label": "ID",
+                "attr": "id",
+                "xs": 12,
+                "sm": 6,
+                "md": 3
+              },
+              "smartHome.devices.label": {
+                "type": "text",
+                "label": "Name",
+                "attr": "label",
+                "xs": 12,
+                "sm": 6,
+                "md": 3
+              },
+              "smartHome.devices.roomId": {
+                "type": "text",
+                "label": "Raum",
+                "attr": "roomId",
+                "xs": 12,
+                "sm": 6,
+                "md": 3
+              },
+              "smartHome.devices.type": {
+                "type": "select",
+                "label": "Typ",
+                "attr": "type",
+                "options": [
+                  "switch",
+                  "light",
+                  "dimmer",
+                  "sensor",
+                  "climate",
+                  "cover",
+                  "thermostat",
+                  "window",
+                  "status"
+                ],
+                "xs": 12,
+                "sm": 6,
+                "md": 3
+              },
+              "smartHome.devices.controlId": {
+                "type": "objectId",
+                "label": "DP Schalten",
+                "attr": "controlId",
+                "types": [
+                  "state"
+                ],
+                "xs": 12,
+                "sm": 12,
+                "md": 6
+              },
+              "smartHome.devices.statusId": {
+                "type": "objectId",
+                "label": "Status",
+                "attr": "statusId",
+                "types": [
+                  "state"
+                ],
+                "xs": 12,
+                "sm": 6,
+                "md": 3
+              },
+              "smartHome.devices.levelId": {
+                "type": "objectId",
+                "label": "Level/Dimmer",
+                "attr": "levelId",
+                "types": [
+                  "state"
+                ],
+                "xs": 12,
+                "sm": 6,
+                "md": 3
+              },
+              "smartHome.devices.setpointId": {
+                "type": "objectId",
+                "label": "DP Soll (z.B. Temp.)",
+                "attr": "setpointId",
+                "types": [
+                  "state"
+                ],
+                "xs": 12,
+                "sm": 6,
+                "md": 6
+              },
+              "smartHome.devices.actualId": {
+                "type": "objectId",
+                "label": "DP Ist (z.B. Temp.)",
+                "attr": "actualId",
+                "types": [
+                  "state"
+                ],
+                "xs": 12,
+                "sm": 6,
+                "md": 6
+              }
             }
-          ]
+          }
         }
       }
     }
