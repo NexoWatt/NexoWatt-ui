@@ -918,14 +918,10 @@
           ]
         },
         "smartHome.configLink": {
-          "type": "sendTo",
-          "label": "SmartHome-Einstellungen öffnen",
-          "command": "openSmartHomeConfig",
-          "jsonData": "{\"origin\": \"${data._origin}\", \"originIp\": \"${data._originIp}\"}",
-          "openUrl": true,
-          "variant": "contained",
-          "icon": "web",
-          "sm": 12
+          "type": "staticText",
+          "label": "SmartHome-Einstellungen",
+          "sm": 12,
+          "text": "<p><button onclick=\"var host = window.location.hostname;var protocol = window.location.protocol || 'http:';var port = 8188;var url = protocol + '//' + host + ':' + port + '/smarthome-config';window.open(url, '_blank');return false;\">SmartHome-Einstellungen öffnen</button></p>"
         }
       }
     }
