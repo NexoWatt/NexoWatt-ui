@@ -50,6 +50,7 @@ class NexoWattVis extends utils.Adapter {
     this.on('ready', this.onReady.bind(this));
     this.on('stateChange', this.onStateChange.bind(this));
     this.on('unload', this.onUnload.bind(this));
+    this.on('message', this.onMessage.bind(this));
   }
 
   
@@ -101,12 +102,12 @@ class NexoWattVis extends utils.Adapter {
           this.log.debug(`openSmartHomeConfig -> ${url}`);
 
           if (obj.callback) {
-            this.sendTo(obj.from, obj.command, { openUrl: url, window: '_blank' }, obj.callback);
+            obj.callback({ openUrl: url, window: '_blank' });
           }
         } catch (e) {
           this.log.error(`Error in openSmartHomeConfig: ${e.message}`);
           if (obj.callback) {
-            this.sendTo(obj.from, obj.command, { error: e.message }, obj.callback);
+            obj.callback({ error: e.message });
           }
         }
         break;
