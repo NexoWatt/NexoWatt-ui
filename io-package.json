@@ -360,8 +360,8 @@
         "de": "SmartHome-Admin: Geräte-Editor als Array/Panel (mehr Platz, zusätzliche Thermostat-Datenpunkte). SmartHome-VIS: HomeKit-ähnliche Kacheln pro Gerät im NexoWatt-Design."
       },
       "0.4.72": {
-        "en": "SmartHome: structure is now built from manual rooms/devices configuration (no enums).",
-        "de": "SmartHome: Struktur wird jetzt ausschließlich aus der manuellen Räume-/Geräte-Konfiguration aufgebaut (keine Enums mehr)."
+        "en": "SmartHome backend now builds room/function structure only from manual rooms/devices config (no enum auto-discovery).",
+        "de": "SmartHome-Backend baut Räume-/Funktions-Struktur jetzt ausschließlich aus der manuellen Räume-/Geräte-Konfiguration (keine Enum-Autoerkennung mehr)."
       }
     },
     "title": "NexoWatt EMS UI",
