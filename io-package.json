@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.73",
+    "version": "0.4.74",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
@@ -359,9 +359,9 @@
         "en": "SmartHome admin: devices editor as array/panel (more space, extra thermostat datapoints). SmartHome VIS: HomeKit-like tiles per device in NexoWatt design.",
         "de": "SmartHome-Admin: Geräte-Editor als Array/Panel (mehr Platz, zusätzliche Thermostat-Datenpunkte). SmartHome-VIS: HomeKit-ähnliche Kacheln pro Gerät im NexoWatt-Design."
       },
-      "0.4.73": {
-        "en": "SmartHome admin: devices/functions now editable as a table.",
-        "de": "SmartHome-Admin: Geräte/Funktionen jetzt als Tabelle editierbar."
+      "0.4.74": {
+        "en": "SmartHome: build structure from instance configuration (rooms/devices) instead of enums; keeps enums as fallback.",
+        "de": "SmartHome: Struktur wird aus der Instanzkonfiguration (Räume/Geräte) aufgebaut, Enums bleiben als Fallback."
       }
     },
     "title": "NexoWatt EMS UI",

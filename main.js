@@ -99,7 +99,7 @@ class NexoWattVis extends utils.Adapter {
     await this.setObjectNotExistsAsync('smartHome.structure', {
       type: 'state',
       common: {
-        name: 'SmartHome structure (from enum.rooms / enum.functions)',
+        name: 'SmartHome structure',
         type: 'string',
         role: 'json',
         read: true,
@@ -317,6 +317,215 @@ class NexoWattVis extends utils.Adapter {
     }
   }
 
+  async buildSmartHomeStructureFromConfig() {
+    try {
+      const cfg = (this.config && this.config.smartHome) || {};
+      const roomsCfg = Array.isArray(cfg.rooms) ? cfg.rooms : [];
+      const devicesCfg = Array.isArray(cfg.devices) ? cfg.devices : [];
+
+      // Wenn nichts konfiguriert ist, auf alte Enum-Logik zurückfallen
+      if (!roomsCfg.length && !devicesCfg.length) {
+        this.log.info('SmartHome: keine Räume/Geräte in der Instanzkonfiguration gefunden, verwende Enums.');
+        return this.buildSmartHomeStructureFromEnums();
+      }
+
+      const rooms = {};
+      let autoRoomIdx = 0;
+
+      // Räume aus der Konfiguration übernehmen
+      for (const r of roomsCfg) {
+        if (!r) continue;
+        let key = '';
+        if (r.id && typeof r.id === 'string') {
+          key = r.id.trim();
+        }
+        if (!key && r.name) {
+          if (typeof r.name === 'string') {
+            key = r.name.trim();
+          } else if (typeof r.name === 'object') {
+            key = r.name.de || r.name.en || '';
+          }
+        }
+        if (!key) {
+          key = 'room_' + (autoRoomIdx++);
+        }
+        const name = r.name && r.name !== '' ? r.name : key;
+        const icon = r.icon || '';
+
+        if (!rooms[key]) {
+          rooms[key] = {
+            id: key,
+            name,
+            icon,
+            functions: {},
+            functionNames: {}
+          };
+        } else {
+          if (!rooms[key].name) rooms[key].name = name;
+          if (!rooms[key].icon && icon) rooms[key].icon = icon;
+        }
+      }
+
+      const funcNameFallbacks = {
+        switch: 'Schalten',
+        light: 'Beleuchtung',
+        dimmer: 'Beleuchtung',
+        sensor: 'Sensoren',
+        climate: 'Klima',
+        cover: 'Beschattung',
+        thermostat: 'Heizung',
+        window: 'Fenster',
+        status: 'Status',
+        generic: 'Funktion'
+      };
+
+      const ensureRoom = (roomIdRaw) => {
+        let key = (roomIdRaw && String(roomIdRaw).trim()) || '_noRoom_';
+        if (!rooms[key]) {
+          const name = key === '_noRoom_' ? 'Ohne Raum' : roomIdRaw;
+          rooms[key] = {
+            id: key === '_noRoom_' ? null : key,
+            name,
+            functions: {},
+            functionNames: {}
+          };
+        }
+        return rooms[key];
+      };
+
+      let usedDevices = 0;
+
+      // Geräte/Funktionen aus der Konfiguration übernehmen
+      for (const dev of devicesCfg) {
+        if (!dev) continue;
+
+        const id = dev.controlId || dev.statusId || dev.levelId || dev.setpointId || dev.actualId;
+        if (!id) {
+          this.log.debug && this.log.debug('SmartHome-Konfiguration: Gerät ohne gültigen Datenpunkt übersprungen: ' + JSON.stringify(dev));
+          continue;
+        }
+
+        const room = ensureRoom(dev.roomId || '_noRoom_');
+        const funcKey = (dev.type || 'generic').toLowerCase();
+        const funcName = funcNameFallbacks[funcKey] || funcKey || 'Funktion';
+
+        if (!room.functions[funcKey]) {
+          room.functions[funcKey] = [];
+        }
+        if (!room.functionNames) {
+          room.functionNames = {};
+        }
+        if (!room.functionNames[funcKey]) {
+          room.functionNames[funcKey] = funcName;
+        }
+
+        room.functions[funcKey].push({ id });
+        usedDevices++;
+      }
+
+      if (!Object.keys(rooms).length || !usedDevices) {
+        this.log.info('SmartHome-Konfiguration enthält keine nutzbaren Räume/Geräte. Leere Struktur geschrieben.');
+        const emptyJson = '{}';
+        await this.setStateAsync('smartHome.structure', { val: emptyJson, ack: true });
+        try {
+          this.updateValue('smartHome.structure', emptyJson, Date.now());
+        } catch (e) {
+          this.log.debug && this.log.debug('Could not push empty SmartHome structure to state cache: ' + e);
+        }
+        return;
+      }
+
+// Collect all state IDs we need metadata for
+      const neededStateIds = new Set();
+      for (const room of Object.values(rooms)) {
+        for (const funcKey of Object.keys(room.functions)) {
+          for (const entry of room.functions[funcKey]) {
+            if (entry && entry.id) {
+              neededStateIds.add(entry.id);
+            }
+          }
+        }
+      }
+
+      // Load foreign state objects to get human readable name / role
+      const stateObjects = {};
+      for (const id of neededStateIds) {
+        try {
+          const obj = await this.getForeignObjectAsync(id);
+          if (obj) {
+            stateObjects[id] = obj;
+          }
+        } catch (e) {
+          // ignore missing objects
+          this.log.debug && this.log.debug('Could not read foreign object for SmartHome enum state ' + id + ': ' + e);
+        }
+      }
+
+      // Enrich entries with name / role and assign dynamic keys for VIS
+      const enumKeyById = {};
+      let enumIdx = 0;
+      for (const room of Object.values(rooms)) {
+        for (const funcKey of Object.keys(room.functions)) {
+          room.functions[funcKey] = room.functions[funcKey].map(entry => {
+            const obj = stateObjects[entry.id];
+            if (!enumKeyById[entry.id]) {
+              enumKeyById[entry.id] = 'smartEnum_' + (enumIdx++);
+            }
+            const common = obj && obj.common || {};
+            return {
+              id: entry.id,
+              key: enumKeyById[entry.id],
+              name: common && common.name ? common.name : entry.id,
+              role: common && common.role ? common.role : '',
+              type: common && common.type ? common.type : '',
+              write: !!(common && common.write),
+              min: common && (typeof common.min === 'number') ? common.min : null,
+              max: common && (typeof common.max === 'number') ? common.max : null,
+              unit: common && common.unit ? common.unit : ''
+            };
+          });
+        }
+      }
+
+      // store mapping for later state-change handling
+      this.smartHomeEnumKeyById = enumKeyById;
+      this.smartHomeEnumIds = new Set(Object.keys(enumKeyById));
+
+      // subscribe to all SmartHome enum states and push initial values
+      for (const [id, key] of Object.entries(enumKeyById)) {
+        try {
+          this.subscribeForeignStates(id);
+          const st = await this.getForeignStateAsync(id);
+          if (st && st.val !== undefined) {
+            this.updateValue(key, st.val, st.ts || Date.now());
+          }
+        } catch (e) {
+          this.log.debug && this.log.debug('Could not subscribe/read SmartHome enum state ' + id + ': ' + e);
+        }
+      }
+
+      // Finally, write JSON structure to state
+      const jsonRooms = JSON.stringify(rooms);
+      await this.setStateAsync('smartHome.structure', {
+        val: jsonRooms,
+        ack: true
+      });
+
+      // Also push structure into live state cache for VIS clients
+      try {
+        this.updateValue('smartHome.structure', jsonRooms, Date.now());
+      } catch (e) {
+        this.log.debug && this.log.debug('Could not push SmartHome structure to state cache: ' + e);
+      }
+
+      
+      this.log.info('SmartHome structure from config built with ' + Object.keys(rooms).length + ' rooms.');
+    } catch (err) {
+      this.log.error('Error while building SmartHome structure from config: ' + err);
+    }
+  }
+
+
 async syncInstallerConfigToStates() {
     const cfg = (this.config && this.config.installerConfig) || {};
     const toSet = {
@@ -365,12 +574,12 @@ async syncInstallerConfigToStates() {
       // write settings-config defaults
       await this.syncSettingsConfigToStates();
 
-      // build SmartHome structure from enums on every start
-      // (VIS decides separately, ob der SmartHome-Tab sichtbar ist)
+      // build SmartHome structure on every start
+      // (VIS entscheidet separat, ob der SmartHome-Tab sichtbar ist)
       try {
-        await this.buildSmartHomeStructureFromEnums();
+        await this.buildSmartHomeStructureFromConfig();
       } catch (e) {
-        this.log.error('Failed to build SmartHome structure from enums: ' + e);
+        this.log.error('Failed to build SmartHome structure from config: ' + e);
       }
 
       // finally subscribe and read initial values
