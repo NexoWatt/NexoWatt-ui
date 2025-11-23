@@ -902,79 +902,121 @@
           "label": "Funktionen / Geräte",
           "attr": "smartHome.devices",
           "sm": 12,
-          "items": {
-            "id": {
+          "items": [
+            {
               "type": "text",
-              "label": "ID",
-              "attr": "id"
+              "attr": "id",
+              "title": "ID",
+              "width": "12%",
+              "filter": true,
+              "sort": true
             },
-            "label": {
+            {
               "type": "text",
-              "label": "Name",
-              "attr": "label"
+              "attr": "label",
+              "title": "Name",
+              "width": "15%",
+              "filter": true,
+              "sort": true
             },
-            "roomId": {
+            {
               "type": "text",
-              "label": "Raum",
-              "attr": "roomId"
+              "attr": "roomId",
+              "title": "Raum",
+              "width": "10%",
+              "filter": true,
+              "sort": true
             },
-            "type": {
+            {
               "type": "select",
-              "label": "Typ",
               "attr": "type",
+              "title": "Typ",
+              "width": "10%",
               "options": [
-                "switch",
-                "light",
-                "dimmer",
-                "sensor",
-                "climate",
-                "cover",
-                "thermostat",
-                "window",
-                "status"
+                {
+                  "label": "Schalter",
+                  "value": "switch"
+                },
+                {
+                  "label": "Licht",
+                  "value": "light"
+                },
+                {
+                  "label": "Dimmer",
+                  "value": "dimmer"
+                },
+                {
+                  "label": "Sensor",
+                  "value": "sensor"
+                },
+                {
+                  "label": "Klima",
+                  "value": "climate"
+                },
+                {
+                  "label": "Beschattung",
+                  "value": "cover"
+                },
+                {
+                  "label": "Thermostat",
+                  "value": "thermostat"
+                },
+                {
+                  "label": "Fenster/Tür",
+                  "value": "window"
+                },
+                {
+                  "label": "Status",
+                  "value": "status"
+                }
               ]
             },
-            "controlId": {
+            {
               "type": "objectId",
-              "label": "DP Schalten",
               "attr": "controlId",
+              "title": "DP Schalten",
+              "width": "13%",
               "types": [
                 "state"
               ]
             },
-            "statusId": {
+            {
               "type": "objectId",
-              "label": "DP Status",
               "attr": "statusId",
+              "title": "DP Status",
+              "width": "13%",
               "types": [
                 "state"
               ]
             },
-            "levelId": {
+            {
               "type": "objectId",
-              "label": "DP Level/Dimmer",
               "attr": "levelId",
+              "title": "DP Level/Dimmer",
+              "width": "13%",
               "types": [
                 "state"
               ]
             },
-            "setpointId": {
+            {
               "type": "objectId",
-              "label": "DP Soll (z.B. Temp.)",
               "attr": "setpointId",
+              "title": "DP Soll",
+              "width": "7%",
               "types": [
                 "state"
               ]
             },
-            "actualId": {
+            {
               "type": "objectId",
-              "label": "DP Ist (z.B. Temp.)",
               "attr": "actualId",
+              "title": "DP Ist",
+              "width": "7%",
               "types": [
                 "state"
               ]
             }
-          }
+          ]
         }
       }
     }
