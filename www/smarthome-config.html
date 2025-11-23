@@ -11,6 +11,154 @@
   <meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
 
   <link href="/static/styles.css" rel="stylesheet"/>
+
+  <style>
+    .nw-sh-page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+    .nw-sh-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .nw-sh-toolbar h2 {
+      margin: 0;
+      font-size: 1.3rem;
+    }
+    .nw-sh-toolbar-status {
+      font-size: 0.85rem;
+      opacity: 0.8;
+    }
+    .nw-sh-toolbar-buttons {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .nw-btn {
+      border: none;
+      border-radius: 999px;
+      padding: 0.45rem 1rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: #1e88e5;
+      color: #fff;
+    }
+    .nw-btn.secondary {
+      background: #37474f;
+    }
+    .nw-btn:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+    .nw-sh-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 0.85rem;
+    }
+    .nw-sh-card {
+      background: #111827;
+      border-radius: 0.9rem;
+      padding: 0.75rem 0.85rem 0.9rem;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      border: 1px solid rgba(148,163,184,0.35);
+    }
+    .nw-sh-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.25rem;
+    }
+    .nw-sh-chip {
+      font-size: 0.7rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: rgba(148,163,184,0.25);
+      color: #e5e7eb;
+      white-space: nowrap;
+    }
+    .nw-sh-chip.on {
+      background: rgba(56, 189, 248, 0.2);
+      color: #7dd3fc;
+    }
+    .nw-sh-id {
+      font-size: 0.72rem;
+      opacity: 0.8;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .nw-sh-fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.35rem 0.5rem;
+      align-items: center;
+    }
+    .nw-sh-field-full {
+      grid-column: 1 / -1;
+    }
+    .nw-sh-label {
+      font-size: 0.72rem;
+      opacity: 0.85;
+      margin-bottom: 0.1rem;
+      display: block;
+    }
+    .nw-sh-input,
+    .nw-sh-select {
+      width: 100%;
+      box-sizing: border-box;
+      border-radius: 0.6rem;
+      border: 1px solid rgba(148,163,184,0.5);
+      background: rgba(15,23,42,0.9);
+      color: #e5e7eb;
+      padding: 0.3rem 0.55rem;
+      font-size: 0.8rem;
+      outline: none;
+    }
+    .nw-sh-input:focus,
+    .nw-sh-select:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 1px rgba(56,189,248,0.45);
+    }
+    .nw-sh-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .nw-sh-toggle input {
+      cursor: pointer;
+    }
+    .nw-sh-footer {
+      margin-top: 1.25rem;
+      font-size: 0.8rem;
+      opacity: 0.75;
+    }
+    .nw-sh-empty {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      opacity: 0.8;
+    }
+    @media (max-width: 640px) {
+      .nw-sh-fields {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 <body class="nw-body">
   <header class="nw-header">
@@ -20,13 +168,10 @@
     </div>
   </header>
 
-  <main class="nw-main" style="padding: 1rem;">
-    <div id="nw-sh-config-root" class="nw-card">
-      <h2>SmartHome-Konfiguration</h2>
-      <p>Hier wird nach und nach die Konfiguration von Räumen und Funktionen aufgebaut.</p>
-      <p>Aktueller Status:</p>
-      <pre id="nw-sh-config-status">Lade Konfiguration...</pre>
-    </div>
+  <main class="nw-main">
+    <section id="nw-sh-config-root" class="nw-sh-page">
+      <!-- Inhalt wird per JS aufgebaut -->
+    </section>
   </main>
 
   <script src="/static/js/smarthome-config.js"></script>
