@@ -392,10 +392,12 @@ class NexoWattVis extends utils.Adapter {
       const roomsCfg = Array.isArray(cfg.rooms) ? cfg.rooms : [];
       const devicesCfg = Array.isArray(cfg.devices) ? cfg.devices : [];
 
-      // Wenn nichts konfiguriert ist, auf alte Enum-Logik zurückfallen
+      // Wenn nichts konfiguriert ist, keine Enums mehr verwenden, sondern leere Struktur schreiben
       if (!roomsCfg.length && !devicesCfg.length) {
-        this.log.info('SmartHome: keine Räume/Geräte in der Instanzkonfiguration gefunden, verwende Enums.');
-        return this.buildSmartHomeStructureFromEnums();
+        this.log.info('SmartHome: keine Räume/Geräte in der Instanzkonfiguration gefunden. Schreibe leere SmartHome-Struktur.');
+        const emptyJson = '{}';
+        await this.setStateAsync('smartHome.structure', { val: emptyJson, ack: true });
+        return;
       }
 
       const rooms = {};
