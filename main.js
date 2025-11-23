@@ -600,10 +600,10 @@ async syncInstallerConfigToStates() {
 
     app.use('/static', express.static(path.join(__dirname, 'www')));
 
-// --- SmartHome config page ---
-app.get('/smarthome-config', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'www', 'smarthome-config.html'));
-});
+    // SmartHome Config Page
+    app.get('/smarthome-config', (_req, res) => {
+      res.sendFile(path.join(__dirname, 'www', 'smarthome-config.html'));
+    });
 
 // --- Static PWA assets ---
 app.get('/manifest.webmanifest', (_req, res) => {
@@ -625,47 +625,47 @@ app.get('/favicon.ico', (_req, res) => {
 app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
 
 
-// --- SmartHome configuration API ---
-app.get('/api/smarthome/config', (_req, res) => {
-  try {
-    const cfg = (this.config && this.config.smartHome) || {};
-    res.json({ ok: true, smartHome: cfg });
-  } catch (e) {
-    this.log.error('Error in GET /api/smarthome/config: ' + e);
-    res.status(500).json({ ok: false, error: 'Internal error' });
-  }
-});
+    // SmartHome configuration API
+    app.get('/api/smarthome/config', (_req, res) => {
+      try {
+        const cfg = (this.config && this.config.smartHome) || {};
+        res.json({ ok: true, smartHome: cfg });
+      } catch (e) {
+        this.log.error('Error in GET /api/smarthome/config: ' + e);
+        res.status(500).json({ ok: false, error: 'Internal error' });
+      }
+    });
 
-app.post('/api/smarthome/config', async (req, res) => {
-  try {
-    const body = req.body || {};
-    const newCfg = body.smartHome;
-    if (!newCfg || typeof newCfg !== 'object') {
-      return res.status(400).json({ ok: false, error: 'smartHome config missing or invalid' });
-    }
+    app.post('/api/smarthome/config', async (req, res) => {
+      try {
+        const body = req.body || {};
+        const newCfg = body.smartHome;
+        if (!newCfg || typeof newCfg !== 'object') {
+          return res.status(400).json({ ok: false, error: 'smartHome config missing or invalid' });
+        }
 
-    const objId = 'system.adapter.' + this.namespace;
-    const obj = await this.getForeignObjectAsync(objId);
-    if (!obj || typeof obj !== 'object') {
-      return res.status(500).json({ ok: false, error: 'Adapter object not found' });
-    }
-    if (!obj.native) obj.native = {};
-    obj.native.smartHome = newCfg;
+        const objId = 'system.adapter.' + this.namespace;
+        const obj = await this.getForeignObjectAsync(objId);
+        if (!obj || typeof obj !== 'object') {
+          return res.status(500).json({ ok: false, error: 'Adapter object not found' });
+        }
+        if (!obj.native) obj.native = {};
+        obj.native.smartHome = newCfg;
 
-    await this.setForeignObjectAsync(objId, obj);
+        await this.setForeignObjectAsync(objId, obj);
 
-    if (!this.config) this.config = {};
-    this.config.smartHome = newCfg;
-    if (typeof this.buildSmartHomeStructureFromConfig === 'function') {
-      await this.buildSmartHomeStructureFromConfig();
-    }
+        if (!this.config) this.config = {};
+        this.config.smartHome = newCfg;
+        if (typeof this.buildSmartHomeStructureFromConfig === 'function') {
+          await this.buildSmartHomeStructureFromConfig();
+        }
 
-    res.json({ ok: true });
-  } catch (e) {
-    this.log.error('Error in POST /api/smarthome/config: ' + e);
-    res.status(500).json({ ok: false, error: 'Internal error' });
-  }
-});
+        res.json({ ok: true });
+      } catch (e) {
+        this.log.error('Error in POST /api/smarthome/config: ' + e);
+        res.status(500).json({ ok: false, error: 'Internal error' });
+      }
+    });
 
 
     // JSON body parser

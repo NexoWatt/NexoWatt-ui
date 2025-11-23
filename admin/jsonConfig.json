@@ -869,7 +869,7 @@
           "type": "staticText",
           "label": "SmartHome-Konfiguration",
           "sm": 12,
-          "text": "<p>Die SmartHome-Konfiguration erfolgt über eine separate Seite.</p><p><button onclick=\"var host = window.location.hostname; window.open('http://' + host + ':8188/smarthome-config', '_blank'); return false;\">SmartHome-Einstellungen öffnen</button></p><p>Standard-Port: 8188.</p>"
+          "text": "<p>Die SmartHome-Konfiguration erfolgt über eine separate Einstellungsseite.</p><p><button onclick=\"var host = window.location.hostname; window.open('http://' + host + ':8188/smarthome-config', '_blank'); return false;\">SmartHome-Einstellungen öffnen</button></p><p>Standard-Port: 8188. Die Seite muss im Adapter verfügbar sein.</p>"
         }
       }
     }
