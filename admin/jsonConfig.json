@@ -902,23 +902,23 @@
           "label": "Funktionen / Geräte",
           "attr": "smartHome.devices",
           "sm": 12,
-          "items": [
-            {
+          "items": {
+            "id": {
               "type": "text",
               "label": "ID",
               "attr": "id"
             },
-            {
+            "label": {
               "type": "text",
               "label": "Name",
               "attr": "label"
             },
-            {
+            "roomId": {
               "type": "text",
               "label": "Raum",
               "attr": "roomId"
             },
-            {
+            "type": {
               "type": "select",
               "label": "Typ",
               "attr": "type",
@@ -934,7 +934,7 @@
                 "status"
               ]
             },
-            {
+            "controlId": {
               "type": "objectId",
               "label": "DP Schalten",
               "attr": "controlId",
@@ -942,7 +942,7 @@
                 "state"
               ]
             },
-            {
+            "statusId": {
               "type": "objectId",
               "label": "DP Status",
               "attr": "statusId",
@@ -950,7 +950,7 @@
                 "state"
               ]
             },
-            {
+            "levelId": {
               "type": "objectId",
               "label": "DP Level/Dimmer",
               "attr": "levelId",
@@ -958,7 +958,7 @@
                 "state"
               ]
             },
-            {
+            "setpointId": {
               "type": "objectId",
               "label": "DP Soll (z.B. Temp.)",
               "attr": "setpointId",
@@ -966,7 +966,7 @@
                 "state"
               ]
             },
-            {
+            "actualId": {
               "type": "objectId",
               "label": "DP Ist (z.B. Temp.)",
               "attr": "actualId",
@@ -974,7 +974,7 @@
                 "state"
               ]
             }
-          ]
+          }
         }
       }
     }
