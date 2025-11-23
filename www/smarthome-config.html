@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>NexoWatt SmartHome Konfiguration</title>
+
+  <link rel="icon" type="image/png" href="./assets/icons/nexowatt-32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="./assets/icons/nexowatt-192.png" sizes="192x192">
+  <meta name="theme-color" content="#0c0f12">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
+
+  <link href="/static/styles.css" rel="stylesheet"/>
+</head>
+<body class="nw-body">
+  <header class="nw-header">
+    <div class="nw-header-title">
+      <span class="nw-header-logo-text">NexoWatt</span>
+      <span class="nw-header-subtitle">SmartHome Konfiguration</span>
+    </div>
+  </header>
+
+  <main class="nw-main" style="padding: 1rem;">
+    <div id="nw-sh-config-root" class="nw-card">
+      <h2>SmartHome-Konfiguration</h2>
+      <p>Hier wird nach und nach die Konfiguration von Räumen und Funktionen aufgebaut.</p>
+      <p>Aktueller Status:</p>
+      <pre id="nw-sh-config-status">Lade Konfiguration...</pre>
+    </div>
+  </main>
+
+  <script src="/static/js/smarthome-config.js"></script>
+</body>
+</html>
