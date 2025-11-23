@@ -918,13 +918,12 @@
           ]
         },
         "smartHome.configLink": {
-          "type": "staticLink",
+          "type": "sendTo",
           "label": "SmartHome-Einstellungen öffnen",
-          "href": "http://%ip%:8188/smarthome-config",
-          "target": "_blank",
-          "button": true,
+          "command": "openSmartHomeConfig",
+          "jsonData": "{\"origin\": \"${data._origin}\", \"originIp\": \"${data._originIp}\"}",
+          "openUrl": true,
           "variant": "contained",
-          "color": "primary",
           "icon": "web",
           "sm": 12
         }

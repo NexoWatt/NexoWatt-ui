@@ -53,6 +53,75 @@ class NexoWattVis extends utils.Adapter {
   }
 
   
+
+  /**
+   * Handle messages from admin (jsonConfig sendTo).
+   * Used e.g. to open SmartHome config page with correct host/IP.
+   * @param {object} obj
+   */
+  onMessage(obj) {
+    if (!obj) {
+      return;
+    }
+    const command = obj.command;
+    const message = obj.message || {};
+
+    switch (command) {
+      case 'openSmartHomeConfig': {
+        try {
+          const origin = message.origin || message._origin || '';
+          const originIp = message.originIp || message._originIp;
+
+          // Determine protocol (http/https)
+          let protocol = 'http';
+          if (origin.startsWith('https://')) {
+            protocol = 'https';
+          } else if (origin.startsWith('http://')) {
+            protocol = 'http';
+          } else if (this.config && this.config.secure) {
+            protocol = 'https';
+          }
+
+          // Determine host (IP or hostname)
+          let host = originIp;
+          if (!host && origin) {
+            const m = origin.match(/^https?:\/\/([^:/]+)(?::\d+)?/);
+            if (m) {
+              host = m[1];
+            }
+          }
+          if (!host) {
+            host = '127.0.0.1';
+          }
+
+          // Use adapter port (same as dashboard / SmartHome page)
+          const port = (this.config && this.config.port) || 8188;
+
+          const url = `${protocol}://${host}:${port}/smarthome-config`;
+          this.log.debug(`openSmartHomeConfig -> ${url}`);
+
+          if (obj.callback) {
+            this.sendTo(obj.from, obj.command, { openUrl: url, window: '_blank' }, obj.callback);
+          }
+        } catch (e) {
+          this.log.error(`Error in openSmartHomeConfig: ${e.message}`);
+          if (obj.callback) {
+            this.sendTo(obj.from, obj.command, { error: e.message }, obj.callback);
+          }
+        }
+        break;
+      }
+
+      default: {
+        // Unknown command; just answer if callback is requested
+        if (obj.callback) {
+          this.sendTo(obj.from, obj.command, {}, obj.callback);
+        }
+        break;
+      }
+    }
+  }
+
   async ensureInstallerStates() {
     const defs = {
       adminUrl:     { type: 'string', role: 'state', def: '' },
