@@ -60,10 +60,12 @@ class NexoWattVis extends utils.Adapter {
    * Used e.g. to open SmartHome config page with correct host/IP.
    * @param {object} obj
    */
+
   onMessage(obj) {
     if (!obj) {
       return;
     }
+
     const command = obj.command;
     const message = obj.message || {};
 
@@ -102,6 +104,7 @@ class NexoWattVis extends utils.Adapter {
           this.log.debug(`openSmartHomeConfig -> ${url}`);
 
           if (obj.callback) {
+            // Answer via sendTo so admin/jsonConfig gets the response correctly
             this.sendTo(obj.from, obj.command, { openUrl: url, window: '_blank' }, obj.callback);
           }
         } catch (e) {
@@ -706,7 +709,7 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
       }
     });
 
-    app.post('/api/smarthome/config', bodyParser, async (req, res) => {
+    app.post('/api/smarthome/config', async (req, res) => {
       try {
         const body = req.body || {};
         const newCfg = body.smartHome;

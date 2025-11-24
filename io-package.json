@@ -424,7 +424,20 @@
     ],
     "welcomeScreen": "adapter/nexowatt-vis/tab.html",
     "messagebox": true,
-    "message": true
+    "supportedMessages": {
+      "openSmartHomeConfig": true,
+      "custom": true
+    },
+    "localLinks": {
+      "_default": {
+        "link": "%protocol%://%ip%:%port%/",
+        "color": "#00c853"
+      },
+      "SmartHome-Konfiguration": {
+        "link": "%protocol%://%ip%:%port%/smarthome-config",
+        "color": "#00c853"
+      }
+    }
   },
   "native": {
     "port": 8188,
