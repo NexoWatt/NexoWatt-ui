@@ -68,6 +68,7 @@ class NexoWattVis extends utils.Adapter {
     const message = obj.message || {};
 
     switch (command) {
+      
       case 'openSmartHomeConfig': {
         try {
           const origin = message.origin || message._origin || '';
@@ -75,9 +76,9 @@ class NexoWattVis extends utils.Adapter {
 
           // Determine protocol (http/https)
           let protocol = 'http';
-          if (origin.startsWith('https://')) {
+          if (origin && origin.startsWith('https://')) {
             protocol = 'https';
-          } else if (origin.startsWith('http://')) {
+          } else if (origin && origin.startsWith('http://')) {
             protocol = 'http';
           } else if (this.config && this.config.secure) {
             protocol = 'https';
@@ -102,28 +103,19 @@ class NexoWattVis extends utils.Adapter {
           this.log.debug(`openSmartHomeConfig -> ${url}`);
 
           if (obj.callback) {
-            this.sendTo(
-              obj.from,
-              obj.command,
-              { openUrl: url, window: '_blank' },
-              obj.callback
-            );
+            // Answer via sendTo so jsonConfig button with openUrl works reliably
+            this.sendTo(obj.from, obj.command, { openUrl: url, window: '_blank' }, obj.callback);
           }
         } catch (e) {
           this.log.error(`Error in openSmartHomeConfig: ${e.message}`);
           if (obj.callback) {
-            this.sendTo(
-              obj.from,
-              obj.command,
-              { error: e.message },
-              obj.callback
-            );
+            this.sendTo(obj.from, obj.command, { error: e.message }, obj.callback);
           }
         }
         break;
       }
 
-      default: {
+default: {
         // Unknown command; just answer if callback is requested
         if (obj.callback) {
           this.sendTo(obj.from, obj.command, {}, obj.callback);
@@ -716,7 +708,7 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
       }
     });
 
-    app.post('/api/smarthome/config', bodyParser, async (req, res) => {
+    app.post('/api/smarthome/config', async (req, res) => {
       try {
         const body = req.body || {};
         const newCfg = body.smartHome;

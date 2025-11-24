@@ -422,7 +422,8 @@
         }
       }
     ],
-    "welcomeScreen": "adapter/nexowatt-vis/tab.html"
+    "welcomeScreen": "adapter/nexowatt-vis/tab.html",
+    "messagebox": true
   },
   "native": {
     "port": 8188,
