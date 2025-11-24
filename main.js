@@ -102,12 +102,22 @@ class NexoWattVis extends utils.Adapter {
           this.log.debug(`openSmartHomeConfig -> ${url}`);
 
           if (obj.callback) {
-            obj.callback({ openUrl: url, window: '_blank' });
+            this.sendTo(
+              obj.from,
+              obj.command,
+              { openUrl: url, window: '_blank' },
+              obj.callback
+            );
           }
         } catch (e) {
           this.log.error(`Error in openSmartHomeConfig: ${e.message}`);
           if (obj.callback) {
-            obj.callback({ error: e.message });
+            this.sendTo(
+              obj.from,
+              obj.command,
+              { error: e.message },
+              obj.callback
+            );
           }
         }
         break;
@@ -706,7 +716,7 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
       }
     });
 
-    app.post('/api/smarthome/config', async (req, res) => {
+    app.post('/api/smarthome/config', bodyParser, async (req, res) => {
       try {
         const body = req.body || {};
         const newCfg = body.smartHome;
