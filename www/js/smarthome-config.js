@@ -7,7 +7,16 @@
     loading: false,
     saving: false,
     lastSaveOk: null,
-    lastError: null
+    lastError: null,
+    picker: {
+      open: false,
+      targetIndex: null,
+      targetField: null,
+      query: '',
+      loading: false,
+      error: null,
+      results: []
+    }
   };
 
   function getRoot() {
@@ -24,11 +33,22 @@
       .replace(/'/g, '&#039;');
   }
 
+  function ensureDatapointsArray() {
+    if (!state.smartHome || typeof state.smartHome !== 'object') {
+      state.smartHome = { enabled: false, datapoints: [] };
+    }
+    if (!Array.isArray(state.smartHome.datapoints)) {
+      state.smartHome.datapoints = [];
+    }
+  }
+
   function render() {
     const root = getRoot();
     if (!root) return;
 
-    const dp = Array.isArray(state.smartHome.datapoints) ? state.smartHome.datapoints : [];
+    ensureDatapointsArray();
+
+    const dp = state.smartHome.datapoints;
     const enabled = !!state.smartHome.enabled;
     const statusText = state.loading
       ? 'Lade Konfiguration...'
@@ -41,14 +61,16 @@
             : 'Bereit.';
 
     const cardsHtml = dp.map((item, index) => {
+      item = item || {};
       const id = escapeHtml(item.id || '');
       const label = escapeHtml(item.label || '');
       const room = escapeHtml(item.room || '');
       const func = escapeHtml(item.function || '');
       const widget = escapeHtml(item.widget || '');
-      const switchId = escapeHtml(item.switchId || '');
       const category = escapeHtml(item.category || '');
+      const switchId = escapeHtml(item.switchId || '');
       const enabledFlag = item.enabled !== false;
+      const isDimmer = widget === 'dimmer';
 
       return `
         <article class="nw-sh-card" data-index="${index}">
@@ -60,6 +82,13 @@
             <div class="nw-sh-field-full">
               <label class="nw-sh-label">Alias / Anzeigename</label>
               <input class="nw-sh-input" data-index="${index}" data-field="label" value="${label}" placeholder="z.B. Deckenlicht Wohnen">
+            </div>
+            <div class="nw-sh-field-full">
+              <label class="nw-sh-label">Haupt-Datenpunkt (ID)</label>
+              <div class="nw-sh-input-row">
+                <input class="nw-sh-input" data-index="${index}" data-field="id" value="${id}" placeholder="z.B. 0_userdata.0.licht.wohnen.level">
+                <button class="nw-btn tiny" type="button" data-index="${index}" data-target-field="id" data-dp-picker="1">DP wählen</button>
+              </div>
             </div>
             <div>
               <label class="nw-sh-label">Raum</label>
@@ -88,14 +117,19 @@
                 <option value="button" ${widget === 'button' ? 'selected' : ''}>Taster / Szene</option>
               </select>
             </div>
-            <div class="nw-sh-field-full">
-              <label class="nw-sh-label">Schalt-Datenpunkt (Ein/Aus, nur Dimmer)</label>
-              <input class="nw-sh-input" data-index="${index}" data-field="switchId" value="${switchId}" placeholder="optional, z.B. KNX.Licht.Wohnen.Schalten">
-            </div>
             <div>
               <label class="nw-sh-label">Kategorie (Admin)</label>
               <input class="nw-sh-input" data-index="${index}" data-field="category" value="${category}" placeholder="z.B. licht">
             </div>
+            ${isDimmer ? `
+            <div class="nw-sh-field-full">
+              <label class="nw-sh-label">Schalt-Datenpunkt (Ein/Aus, nur Dimmer)</label>
+              <div class="nw-sh-input-row">
+                <input class="nw-sh-input" data-index="${index}" data-field="switchId" value="${switchId}" placeholder="optional, z. B. KNX.Licht.Wohnen.Schalten">
+                <button class="nw-btn tiny" type="button" data-index="${index}" data-target-field="switchId" data-dp-picker="1">DP wählen</button>
+              </div>
+            </div>
+            ` : ''}
             <div>
               <label class="nw-sh-label">Status</label>
               <label class="nw-sh-toggle">
@@ -108,6 +142,74 @@
       `;
     }).join('');
 
+    let pickerHtml = '';
+    if (state.picker && state.picker.open) {
+      const picker = state.picker;
+      const rows = (picker.results || []).map(obj => {
+        const id = escapeHtml(obj.id || '');
+        const name = escapeHtml(obj.name || '');
+        const role = escapeHtml(obj.role || '');
+        const type = escapeHtml(obj.type || '');
+        return `
+          <tr class="nw-sh-picker-row" data-picker-id="${id}">
+            <td>${id}</td>
+            <td>${name}</td>
+            <td>${role}</td>
+            <td>${type}</td>
+          </tr>
+        `;
+      }).join('');
+
+      let inner;
+      if (picker.loading) {
+        inner = '<div class="nw-sh-empty">Suche läuft...</div>';
+      } else if (rows) {
+        inner = `<table class="nw-sh-picker-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Rolle</th>
+              <th>Typ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>`;
+      } else {
+        inner = '<div class="nw-sh-empty">Keine Ergebnisse.</div>';
+      }
+
+      const statusLine = picker.error
+        ? `<span class="nw-sh-error">${escapeHtml(picker.error)}</span>`
+        : '';
+
+      pickerHtml = `
+        <div class="nw-sh-picker-overlay" id="nw-sh-picker">
+          <div class="nw-sh-picker-dialog">
+            <div class="nw-sh-picker-header">
+              <h3>ioBroker-Datenpunkt auswählen</h3>
+              <button type="button" class="nw-sh-picker-close" data-picker-close>&times;</button>
+            </div>
+            <div class="nw-sh-picker-body">
+              <div class="nw-sh-picker-search-row">
+                <input class="nw-sh-input" id="nw-sh-picker-query" placeholder="Suche nach ID oder Name..." value="${escapeHtml(picker.query || '')}">
+                <button class="nw-btn secondary" type="button" data-picker-search>${picker.loading ? 'Suche...' : 'Suchen'}</button>
+              </div>
+              <div class="nw-sh-picker-status">${statusLine}</div>
+              <div class="nw-sh-picker-results">
+                ${inner}
+              </div>
+            </div>
+            <div class="nw-sh-picker-footer">
+              <button class="nw-btn secondary" type="button" data-picker-close>Abbrechen</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     root.innerHTML = `
       <div class="nw-sh-toolbar">
         <div>
@@ -115,16 +217,19 @@
           <div class="nw-sh-toolbar-status">${escapeHtml(statusText)}</div>
         </div>
         <div class="nw-sh-toolbar-buttons">
+          <button class="nw-btn secondary" id="nw-sh-add" ${state.loading || state.saving ? 'disabled' : ''}>+ Widget</button>
           <button class="nw-btn secondary" id="nw-sh-reload" ${state.loading || state.saving ? 'disabled' : ''}>Neu laden</button>
           <button class="nw-btn" id="nw-sh-save" ${state.loading || state.saving ? 'disabled' : ''}>Speichern</button>
         </div>
       </div>
 
-      ${dp.length ? `<section class="nw-sh-grid">${cardsHtml}</section>` : `<p class="nw-sh-empty">Noch keine SmartHome-Datenpunkte konfiguriert. Bitte zuerst im ioBroker-Admin unter &quot;SmartHome Datenpunkte&quot; Datenpunkte hinzufügen und speichern.</p>`}
+      ${dp.length ? `<section class="nw-sh-grid">${cardsHtml}</section>` : `<p class="nw-sh-empty">Noch keine SmartHome-Datenpunkte konfiguriert. Du kannst hier neue Widgets mit &quot;+ Widget&quot; hinzufügen oder im ioBroker-Admin unter &quot;SmartHome Datenpunkte&quot; Datenpunkte anlegen.</p>`}
 
       <footer class="nw-sh-footer">
         <div>SmartHome ist aktuell <strong>${enabled ? 'aktiv' : 'inaktiv'}</strong> (umschaltbar in der Instanzkonfiguration im ioBroker-Admin).</div>
       </footer>
+
+      ${pickerHtml}
     `;
 
     attachEvents();
@@ -148,9 +253,64 @@
       });
     }
 
+    const addBtn = root.querySelector('#nw-sh-add');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        addDatapoint();
+      });
+    }
+
     root.querySelectorAll('input[data-field], select[data-field]').forEach(el => {
       el.addEventListener('change', onFieldChange);
     });
+
+    root.querySelectorAll('[data-dp-picker="1"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const index = parseInt(btn.getAttribute('data-index'), 10);
+        const field = btn.getAttribute('data-target-field') || 'id';
+        if (!isNaN(index)) {
+          openPicker(index, field);
+        }
+      });
+    });
+
+    const picker = document.getElementById('nw-sh-picker');
+    if (picker) {
+      picker.querySelectorAll('[data-picker-close]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          closePicker();
+        });
+      });
+
+      const searchBtn = picker.querySelector('[data-picker-search]');
+      if (searchBtn) {
+        searchBtn.addEventListener('click', () => {
+          pickerSearch().catch(console.error);
+        });
+      }
+
+      const queryInput = picker.querySelector('#nw-sh-picker-query');
+      if (queryInput) {
+        queryInput.addEventListener('keydown', ev => {
+          if (ev.key === 'Enter') {
+            ev.preventDefault();
+            pickerSearch().catch(console.error);
+          } else if (ev.key === 'Escape') {
+            ev.preventDefault();
+            closePicker();
+          }
+        });
+      }
+
+      picker.querySelectorAll('.nw-sh-picker-row').forEach(row => {
+        row.addEventListener('click', () => {
+          const id = row.getAttribute('data-picker-id');
+          if (id) {
+            applyPickedId(id);
+          }
+        });
+      });
+    }
   }
 
   function onFieldChange(ev) {
@@ -159,6 +319,7 @@
     const field = el.getAttribute('data-field');
     if (isNaN(index) || !field) return;
 
+    ensureDatapointsArray();
     const dp = state.smartHome.datapoints[index];
     if (!dp) return;
 
@@ -167,6 +328,107 @@
     } else {
       dp[field] = el.value;
     }
+  }
+
+  function addDatapoint() {
+    ensureDatapointsArray();
+    state.smartHome.datapoints.push({
+      id: '',
+      label: '',
+      room: '',
+      function: '',
+      widget: '',
+      category: '',
+      switchId: '',
+      enabled: true
+    });
+    render();
+  }
+
+  function openPicker(index, field) {
+    ensureDatapointsArray();
+    const dp = state.smartHome.datapoints[index];
+    if (!dp) return;
+
+    state.picker.open = true;
+    state.picker.targetIndex = index;
+    state.picker.targetField = field || 'id';
+    state.picker.query = dp[field] || dp.id || '';
+    state.picker.loading = false;
+    state.picker.error = null;
+    state.picker.results = [];
+    render();
+  }
+
+  function closePicker() {
+    state.picker.open = false;
+    state.picker.targetIndex = null;
+    state.picker.targetField = null;
+    state.picker.query = '';
+    state.picker.loading = false;
+    state.picker.error = null;
+    state.picker.results = [];
+    render();
+  }
+
+  async function pickerSearch() {
+    const pickerRoot = document.getElementById('nw-sh-picker');
+    if (!pickerRoot) return;
+
+    const input = pickerRoot.querySelector('#nw-sh-picker-query');
+    const q = input ? input.value.trim() : '';
+    state.picker.query = q;
+
+    if (!q || q.length < 2) {
+      state.picker.error = 'Bitte mindestens 2 Zeichen für die Suche eingeben.';
+      state.picker.results = [];
+      state.picker.loading = false;
+      render();
+      return;
+    }
+
+    state.picker.loading = true;
+    state.picker.error = null;
+    state.picker.results = [];
+    render();
+
+    try {
+      const res = await fetch('/api/iobroker/objects?q=' + encodeURIComponent(q));
+      if (!res.ok) {
+        throw new Error('HTTP ' + res.status);
+      }
+      const body = await res.json();
+      if (!body.ok && body.ok !== undefined) {
+        throw new Error(body.error || 'Unbekannter Fehler');
+      }
+      const list = Array.isArray(body.objects) ? body.objects : [];
+      state.picker.results = list;
+      state.picker.loading = false;
+      render();
+    } catch (e) {
+      state.picker.loading = false;
+      state.picker.error = e && e.message ? e.message : String(e);
+      render();
+    }
+  }
+
+  function applyPickedId(id) {
+    const index = state.picker.targetIndex;
+    const field = state.picker.targetField || 'id';
+    ensureDatapointsArray();
+    const dp = state.smartHome.datapoints[index];
+    if (!dp) {
+      closePicker();
+      return;
+    }
+
+    dp[field] = id;
+    if (field === 'id' && !dp.label) {
+      const parts = id.split('.');
+      dp.label = parts[parts.length - 1];
+    }
+
+    closePicker();
   }
 
   async function loadConfig() {
@@ -182,13 +444,10 @@
       const body = await res.json();
       const cfg = (body && body.smartHome) || {};
 
-      if (!cfg.datapoints || !Array.isArray(cfg.datapoints)) {
-        cfg.datapoints = [];
-      }
-
       state.smartHome = cfg;
       state.loading = false;
       state.lastSaveOk = null;
+      state.lastError = null;
       render();
     } catch (e) {
       state.loading = false;
@@ -203,6 +462,7 @@
     render();
 
     try {
+      ensureDatapointsArray();
       const payload = {
         smartHome: state.smartHome
       };

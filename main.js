@@ -695,6 +695,49 @@ app.get('/favicon.ico', (_req, res) => {
 app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
 
 
+    
+    // Simple ioBroker object search API for SmartHome config page
+    app.get('/api/iobroker/objects', async (req, res) => {
+      try {
+        const q = (req.query && req.query.q ? String(req.query.q) : '').trim();
+        const limit = req.query && req.query.limit ? parseInt(req.query.limit, 10) || 50 : 50;
+
+        if (!q || q.length < 2) {
+          return res.json({ ok: true, objects: [] });
+        }
+
+        const pattern = '*' + q + '*';
+        const objs = await this.getForeignObjectsAsync(pattern, 'state');
+        const list = [];
+
+        if (objs && typeof objs === 'object') {
+          for (const id of Object.keys(objs)) {
+            const obj = objs[id] || {};
+            const common = obj.common || {};
+            let name = common.name;
+            if (name && typeof name === 'object') {
+              name = name.de || name.en || name['en-US'] || Object.values(name)[0];
+            }
+            if (typeof name !== 'string') {
+              name = '';
+            }
+            list.push({
+              id,
+              name,
+              role: common.role || '',
+              type: obj.type || ''
+            });
+            if (list.length >= limit) break;
+          }
+        }
+
+        res.json({ ok: true, objects: list });
+      } catch (e) {
+        this.log.error('Error in GET /api/iobroker/objects: ' + e);
+        res.status(500).json({ ok: false, error: 'Internal error' });
+      }
+    });
+
     // SmartHome configuration API
     app.get('/api/smarthome/config', (_req, res) => {
       try {

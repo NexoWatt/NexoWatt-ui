@@ -368,8 +368,8 @@
         "de": "SmartHome: POST-Parsing der Konfiguration korrigiert und smartHome.datapoints[] automatisch in die Geräte-Struktur der VIS überführt."
       },
       "0.4.91": {
-        "en": "SmartHome config: added optional switch datapoint for dimmer widgets (separate on/off).",
-        "de": "SmartHome-Konfiguration: Optionalen Schalt-Datenpunkt für Dimmer-Widgets (separates Ein/Aus) ergänzt."
+        "en": "SmartHome config: add object picker and + widget button; support optional switch datapoint for dimmer.",
+        "de": "SmartHome-Konfiguration: Objekt-Auswahl und +Widget-Button ergänzt; optionaler Schalt-Datenpunkt für Dimmer."
       }
     },
     "title": "NexoWatt EMS UI",
