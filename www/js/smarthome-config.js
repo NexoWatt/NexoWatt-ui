@@ -371,48 +371,49 @@
     render();
   }
 
-  async function pickerSearch() {
-    const pickerRoot = document.getElementById('nw-sh-picker');
-    if (!pickerRoot) return;
+  
+async function pickerSearch() {
+  const pickerRoot = document.getElementById('nw-sh-picker');
+  if (!pickerRoot) return;
 
-    const input = pickerRoot.querySelector('#nw-sh-picker-query');
-    const q = input ? input.value.trim() : '';
-    state.picker.query = q;
+  const input = pickerRoot.querySelector('#nw-sh-picker-query');
+  const q = (input && input.value) ? input.value.trim() : '';
+  state.picker.query = q;
 
-    if (!q || q.length < 2) {
-      state.picker.error = 'Bitte mindestens 2 Zeichen für die Suche eingeben.';
-      state.picker.results = [];
-      state.picker.loading = false;
-      render();
-      return;
-    }
-
-    state.picker.loading = true;
-    state.picker.error = null;
+  if (!q || q.length < 2) {
+    state.picker.error = 'Bitte mindestens 2 Zeichen für die Suche eingeben.';
     state.picker.results = [];
+    state.picker.loading = false;
     render();
-
-    try {
-      const res = await fetch('/api/iobroker/objects?q=' + encodeURIComponent(q));
-      if (!res.ok) {
-        throw new Error('HTTP ' + res.status);
-      }
-      const body = await res.json();
-      if (!body.ok && body.ok !== undefined) {
-        throw new Error(body.error || 'Unbekannter Fehler');
-      }
-      const list = Array.isArray(body.objects) ? body.objects : [];
-      state.picker.results = list;
-      state.picker.loading = false;
-      render();
-    } catch (e) {
-      state.picker.loading = false;
-      state.picker.error = e && e.message ? e.message : String(e);
-      render();
-    }
+    return;
   }
 
-  function applyPickedId(id) {
+  // Nur Datenpunkte verwenden, die in der SmartHome-Admin-Tabelle hinterlegt sind
+  const sm = state.smartHome || {};
+  const dps = Array.isArray(sm.datapoints) ? sm.datapoints : [];
+  const term = q.toLowerCase();
+
+  const results = dps
+    .filter(dp => dp && dp.id)
+    .map(dp => {
+      const id = String(dp.id);
+      const name = String(dp.label || id);
+      const role = String(dp.category || '');
+      const type = '';
+      return { id, name, role, type };
+    })
+    .filter(obj => {
+      const hay = (obj.id + ' ' + obj.name + ' ' + obj.role + ' ' + obj.type).toLowerCase();
+      return hay.includes(term);
+    });
+
+  state.picker.results = results;
+  state.picker.loading = false;
+  state.picker.error = results.length ? null : 'Kein passender Datenpunkt in der SmartHome-Tabelle gefunden.';
+  render();
+}
+
+function applyPickedId(id) {
     const index = state.picker.targetIndex;
     const field = state.picker.targetField || 'id';
     ensureDatapointsArray();
