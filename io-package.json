@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.90",
+    "version": "0.4.91",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
@@ -366,6 +366,10 @@
       "0.4.90": {
         "en": "SmartHome: fixed config POST body parsing and map smartHome.datapoints[] into devices structure for VIS.",
         "de": "SmartHome: POST-Parsing der Konfiguration korrigiert und smartHome.datapoints[] automatisch in die Geräte-Struktur der VIS überführt."
+      },
+      "0.4.91": {
+        "en": "SmartHome config: added optional switch datapoint for dimmer widgets (separate on/off).",
+        "de": "SmartHome-Konfiguration: Optionalen Schalt-Datenpunkt für Dimmer-Widgets (separates Ein/Aus) ergänzt."
       }
     },
     "title": "NexoWatt EMS UI",

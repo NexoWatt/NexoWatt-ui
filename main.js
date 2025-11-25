@@ -734,12 +734,22 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
                 devType = dp.function.trim();
               }
 
+              const isDimmer = devType === 'dimmer';
+
+              const controlId = isDimmer
+                ? (dp.switchId || dp.id || '')
+                : (dp.id || '');
+
+              const levelId = isDimmer
+                ? (dp.levelId || dp.id || '')
+                : (dp.levelId || '');
+
               devices.push({
                 roomId,
                 type: devType,
-                controlId: dp.id,
+                controlId,
                 statusId: dp.statusId || '',
-                levelId: dp.levelId || '',
+                levelId,
                 setpointId: dp.setpointId || '',
                 actualId: dp.actualId || ''
               });

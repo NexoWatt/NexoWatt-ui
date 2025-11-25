@@ -46,6 +46,7 @@
       const room = escapeHtml(item.room || '');
       const func = escapeHtml(item.function || '');
       const widget = escapeHtml(item.widget || '');
+      const switchId = escapeHtml(item.switchId || '');
       const category = escapeHtml(item.category || '');
       const enabledFlag = item.enabled !== false;
 
@@ -86,6 +87,10 @@
                 <option value="value" ${widget === 'value' ? 'selected' : ''}>Wert / Anzeige</option>
                 <option value="button" ${widget === 'button' ? 'selected' : ''}>Taster / Szene</option>
               </select>
+            </div>
+            <div class="nw-sh-field-full">
+              <label class="nw-sh-label">Schalt-Datenpunkt (Ein/Aus, nur Dimmer)</label>
+              <input class="nw-sh-input" data-index="${index}" data-field="switchId" value="${switchId}" placeholder="optional, z.B. KNX.Licht.Wohnen.Schalten">
             </div>
             <div>
               <label class="nw-sh-label">Kategorie (Admin)</label>
