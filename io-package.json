@@ -362,6 +362,10 @@
       "0.4.74": {
         "en": "SmartHome: build structure from instance configuration (rooms/devices) instead of enums; keeps enums as fallback.",
         "de": "SmartHome: Struktur wird aus der Instanzkonfiguration (Räume/Geräte) aufgebaut, Enums bleiben als Fallback."
+      },
+      "0.4.90": {
+        "en": "SmartHome: fixed config POST body parsing and map smartHome.datapoints[] into devices structure for VIS.",
+        "de": "SmartHome: POST-Parsing der Konfiguration korrigiert und smartHome.datapoints[] automatisch in die Geräte-Struktur der VIS überführt."
       }
     },
     "title": "NexoWatt EMS UI",
@@ -423,21 +427,7 @@
       }
     ],
     "welcomeScreen": "adapter/nexowatt-vis/tab.html",
-    "messagebox": true,
-    "supportedMessages": {
-      "openSmartHomeConfig": true,
-      "custom": true
-    },
-    "localLinks": {
-      "_default": {
-        "link": "%protocol%://%ip%:%port%/",
-        "color": "#00c853"
-      },
-      "SmartHome-Konfiguration": {
-        "link": "%protocol%://%ip%:%port%/smarthome-config",
-        "color": "#00c853"
-      }
-    }
+    "messagebox": true
   },
   "native": {
     "port": 8188,

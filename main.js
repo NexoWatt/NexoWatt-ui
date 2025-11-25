@@ -60,12 +60,10 @@ class NexoWattVis extends utils.Adapter {
    * Used e.g. to open SmartHome config page with correct host/IP.
    * @param {object} obj
    */
-
   onMessage(obj) {
     if (!obj) {
       return;
     }
-
     const command = obj.command;
     const message = obj.message || {};
 
@@ -104,13 +102,12 @@ class NexoWattVis extends utils.Adapter {
           this.log.debug(`openSmartHomeConfig -> ${url}`);
 
           if (obj.callback) {
-            // Answer via sendTo so admin/jsonConfig gets the response correctly
-            this.sendTo(obj.from, obj.command, { openUrl: url, window: '_blank' }, obj.callback);
+            obj.callback({ openUrl: url, window: '_blank' });
           }
         } catch (e) {
           this.log.error(`Error in openSmartHomeConfig: ${e.message}`);
           if (obj.callback) {
-            this.sendTo(obj.from, obj.command, { error: e.message }, obj.callback);
+            obj.callback({ error: e.message });
           }
         }
         break;
@@ -709,12 +706,51 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
       }
     });
 
-    app.post('/api/smarthome/config', async (req, res) => {
+    app.post('/api/smarthome/config', bodyParser, async (req, res) => {
       try {
         const body = req.body || {};
         const newCfg = body.smartHome;
         if (!newCfg || typeof newCfg !== 'object') {
           return res.status(400).json({ ok: false, error: 'smartHome config missing or invalid' });
+        }
+
+        // Auto-map simple datapoints[] into devices[] if rooms/devices are still empty.
+        // This allows you to maintain a simple table in the SmartHome config page,
+        // while the backend builds the full rooms/devices structure for the VIS.
+        try {
+          if (Array.isArray(newCfg.datapoints)) {
+            const devices = [];
+            for (const dp of newCfg.datapoints) {
+              if (!dp || !dp.id) continue;
+              if (dp.enabled === false) continue;
+
+              const roomLabel = (dp.room && dp.room.toString().trim()) || '';
+              const roomId = roomLabel || '_noRoom_';
+
+              let devType = 'generic';
+              if (dp.widget && typeof dp.widget === 'string' && dp.widget.trim()) {
+                devType = dp.widget.trim();
+              } else if (dp.function && typeof dp.function === 'string' && dp.function.trim()) {
+                devType = dp.function.trim();
+              }
+
+              devices.push({
+                roomId,
+                type: devType,
+                controlId: dp.id,
+                statusId: dp.statusId || '',
+                levelId: dp.levelId || '',
+                setpointId: dp.setpointId || '',
+                actualId: dp.actualId || ''
+              });
+            }
+
+            if (devices.length && (!Array.isArray(newCfg.devices) || !newCfg.devices.length)) {
+              newCfg.devices = devices;
+            }
+          }
+        } catch (e) {
+          this.log.error('Error while normalizing SmartHome config: ' + e);
         }
 
         const objId = 'system.adapter.' + this.namespace;
