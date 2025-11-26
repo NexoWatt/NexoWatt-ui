@@ -441,7 +441,12 @@
     const q = input ? input.value.trim() : '';
     state.picker.query = q;
 
-    if (!q || q.length < 2) {
+    // Leere Eingabe bedeutet: alle States (Wildcard) laden.
+    // Bei nur einem Zeichen geben wir eine kurze Fehlermeldung aus.
+    let effectiveQuery = q;
+    if (!effectiveQuery) {
+      effectiveQuery = '*';
+    } else if (effectiveQuery.length < 2) {
       state.picker.error = 'Bitte mindestens 2 Zeichen für die Suche eingeben.';
       state.picker.results = [];
       state.picker.loading = false;
@@ -455,7 +460,7 @@
     render();
 
     try {
-      const res = await fetch('/api/iobroker/objects?q=' + encodeURIComponent(q));
+      const res = await fetch('/api/iobroker/objects?q=' + encodeURIComponent(effectiveQuery));
       if (!res.ok) {
         throw new Error('HTTP ' + res.status);
       }

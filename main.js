@@ -699,14 +699,13 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
     // Simple ioBroker object search API for SmartHome config page
     app.get('/api/iobroker/objects', async (req, res) => {
       try {
-        const q = (req.query && req.query.q ? String(req.query.q) : '').trim();
-        const limit = req.query && req.query.limit ? parseInt(req.query.limit, 10) || 50 : 50;
+        let q = (req.query && req.query.q ? String(req.query.q) : '').trim();
+        const limitRaw = req.query && req.query.limit ? parseInt(req.query.limit, 10) || 50 : 50;
+        const limit = Math.max(1, Math.min(200, limitRaw));
 
-        if (!q || q.length < 2) {
-          return res.json({ ok: true, objects: [] });
-        }
-
-        const pattern = '*' + q + '*';
+        // Wenn keine Suchzeichen eingegeben wurden, alle States durchsuchen (Wildcard),
+        // ansonsten nach ID/Name filtern.
+        const pattern = (!q ? '*' : ('*' + q + '*'));
         const objs = await this.getForeignObjectsAsync(pattern, 'state');
         const list = [];
 
