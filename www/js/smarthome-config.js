@@ -441,13 +441,17 @@
     const q = input ? input.value.trim() : '';
     state.picker.query = q;
 
-    if (!q || q.length < 2) {
-      state.picker.error = 'Bitte mindestens 2 Zeichen für die Suche eingeben.';
+    // Leere Eingabe: alle States laden (serverseitig begrenzt).
+    // Mit Text-Eingabe wird gefiltert.
+    if (q && q.length < 2) {
+      state.picker.error = 'Bitte mindestens 2 Zeichen für die Suche eingeben oder das Feld leer lassen, um alle Datenpunkte zu sehen.';
       state.picker.results = [];
       state.picker.loading = false;
       render();
       return;
     }
+
+    const url = q ? ('/api/iobroker/objects?q=' + encodeURIComponent(q)) : '/api/iobroker/objects';
 
     state.picker.loading = true;
     state.picker.error = null;
@@ -455,7 +459,7 @@
     render();
 
     try {
-      const res = await fetch('/api/iobroker/objects?q=' + encodeURIComponent(q));
+      const res = await fetch(url);
       if (!res.ok) {
         throw new Error('HTTP ' + res.status);
       }
