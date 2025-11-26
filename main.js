@@ -798,9 +798,9 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
               });
             }
 
-            if (devices.length && (!Array.isArray(newCfg.devices) || !newCfg.devices.length)) {
-              newCfg.devices = devices;
-            }
+            // Always derive devices[] from datapoints[] so that changes in the
+            // SmartHome-Konfiguration im Admin direkt in der VIS-Struktur ankommen.
+            newCfg.devices = devices;
           }
         } catch (e) {
           this.log.error('Error while normalizing SmartHome config: ' + e);
