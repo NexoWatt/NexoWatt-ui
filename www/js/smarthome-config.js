@@ -69,14 +69,21 @@
       const widget = escapeHtml(item.widget || '');
       const category = escapeHtml(item.category || '');
       const switchId = escapeHtml(item.switchId || '');
+      const statusId = escapeHtml(item.statusId || '');
+      const levelId = escapeHtml(item.levelId || '');
+      const setpointId = escapeHtml(item.setpointId || '');
+      const actualId = escapeHtml(item.actualId || '');
       const enabledFlag = item.enabled !== false;
       const isDimmer = widget === 'dimmer';
+      const isCover = widget === 'cover';
+      const isThermostat = widget === 'thermostat';
 
       return `
         <article class="nw-sh-card" data-index="${index}">
           <header class="nw-sh-card-header">
             <span class="nw-sh-chip ${enabledFlag ? 'on' : ''}">${enabledFlag ? 'Aktiv' : 'Inaktiv'}</span>
             <span class="nw-sh-id" title="${id}">${id || 'kein Datenpunkt ausgewählt'}</span>
+            <button class="nw-btn tiny danger" type="button" data-index="${index}" data-action="delete" title="Widget löschen">✕</button>
           </header>
           <div class="nw-sh-fields">
             <div class="nw-sh-field-full">
@@ -113,6 +120,8 @@
                 <option value=""></option>
                 <option value="switch" ${widget === 'switch' ? 'selected' : ''}>Schalter</option>
                 <option value="dimmer" ${widget === 'dimmer' ? 'selected' : ''}>Dimmer</option>
+                <option value="cover" ${widget === 'cover' ? 'selected' : ''}>Jalousie / Rollladen</option>
+                <option value="thermostat" ${widget === 'thermostat' ? 'selected' : ''}>Heizung (RTR)</option>
                 <option value="value" ${widget === 'value' ? 'selected' : ''}>Wert / Anzeige</option>
                 <option value="button" ${widget === 'button' ? 'selected' : ''}>Taster / Szene</option>
               </select>
@@ -127,6 +136,38 @@
               <div class="nw-sh-input-row">
                 <input class="nw-sh-input" data-index="${index}" data-field="switchId" value="${switchId}" placeholder="optional, z. B. KNX.Licht.Wohnen.Schalten">
                 <button class="nw-btn tiny" type="button" data-index="${index}" data-target-field="switchId" data-dp-picker="1">DP wählen</button>
+              </div>
+            </div>
+            ` : ''}
+            ${isCover ? `
+            <div class="nw-sh-field-full">
+              <label class="nw-sh-label">Positions-Datenpunkt (0–100 %, optional)</label>
+              <div class="nw-sh-input-row">
+                <input class="nw-sh-input" data-index="${index}" data-field="levelId" value="${levelId}" placeholder="z.B. 0_userdata.0.Rolladen.Wohnen.Position">
+                <button class="nw-btn tiny" type="button" data-index="${index}" data-target-field="levelId" data-dp-picker="1">DP wählen</button>
+              </div>
+            </div>
+            ` : ''}
+            ${isThermostat ? `
+            <div class="nw-sh-field-full">
+              <label class="nw-sh-label">Solltemperatur (Setpoint)</label>
+              <div class="nw-sh-input-row">
+                <input class="nw-sh-input" data-index="${index}" data-field="setpointId" value="${setpointId}" placeholder="z.B. 0_userdata.0.Heizung.Wohnen.Soll">
+                <button class="nw-btn tiny" type="button" data-index="${index}" data-target-field="setpointId" data-dp-picker="1">DP wählen</button>
+              </div>
+            </div>
+            <div class="nw-sh-field-full">
+              <label class="nw-sh-label">Isttemperatur (Istwert, optional)</label>
+              <div class="nw-sh-input-row">
+                <input class="nw-sh-input" data-index="${index}" data-field="actualId" value="${actualId}" placeholder="z.B. 0_userdata.0.Heizung.Wohnen.Ist">
+                <button class="nw-btn tiny" type="button" data-index="${index}" data-target-field="actualId" data-dp-picker="1">DP wählen</button>
+              </div>
+            </div>
+            <div class="nw-sh-field-full">
+              <label class="nw-sh-label">Modus-Datenpunkt (Heizen/Kühlen, optional)</label>
+              <div class="nw-sh-input-row">
+                <input class="nw-sh-input" data-index="${index}" data-field="statusId" value="${statusId}" placeholder="z.B. 0_userdata.0.Heizung.Wohnen.Mode">
+                <button class="nw-btn tiny" type="button" data-index="${index}" data-target-field="statusId" data-dp-picker="1">DP wählen</button>
               </div>
             </div>
             ` : ''}
@@ -274,6 +315,15 @@
       });
     });
 
+    root.querySelectorAll('[data-action="delete"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const index = parseInt(btn.getAttribute('data-index'), 10);
+        if (!isNaN(index)) {
+          removeDatapoint(index);
+        }
+      });
+    });
+
     const picker = document.getElementById('nw-sh-picker');
     if (picker) {
       picker.querySelectorAll('[data-picker-close]').forEach(btn => {
@@ -340,11 +390,23 @@
       widget: '',
       category: '',
       switchId: '',
+      statusId: '',
+      levelId: '',
+      setpointId: '',
+      actualId: '',
       enabled: true
     });
     render();
   }
 
+
+  function removeDatapoint(index) {
+    ensureDatapointsArray();
+    if (typeof index !== 'number' || isNaN(index)) return;
+    if (index < 0 || index >= state.smartHome.datapoints.length) return;
+    state.smartHome.datapoints.splice(index, 1);
+    render();
+  }
   function openPicker(index, field) {
     ensureDatapointsArray();
     const dp = state.smartHome.datapoints[index];
@@ -371,49 +433,48 @@
     render();
   }
 
-  
-async function pickerSearch() {
-  const pickerRoot = document.getElementById('nw-sh-picker');
-  if (!pickerRoot) return;
+  async function pickerSearch() {
+    const pickerRoot = document.getElementById('nw-sh-picker');
+    if (!pickerRoot) return;
 
-  const input = pickerRoot.querySelector('#nw-sh-picker-query');
-  const q = (input && input.value) ? input.value.trim() : '';
-  state.picker.query = q;
+    const input = pickerRoot.querySelector('#nw-sh-picker-query');
+    const q = input ? input.value.trim() : '';
+    state.picker.query = q;
 
-  if (!q || q.length < 2) {
-    state.picker.error = 'Bitte mindestens 2 Zeichen für die Suche eingeben.';
+    if (!q || q.length < 2) {
+      state.picker.error = 'Bitte mindestens 2 Zeichen für die Suche eingeben.';
+      state.picker.results = [];
+      state.picker.loading = false;
+      render();
+      return;
+    }
+
+    state.picker.loading = true;
+    state.picker.error = null;
     state.picker.results = [];
-    state.picker.loading = false;
     render();
-    return;
+
+    try {
+      const res = await fetch('/api/iobroker/objects?q=' + encodeURIComponent(q));
+      if (!res.ok) {
+        throw new Error('HTTP ' + res.status);
+      }
+      const body = await res.json();
+      if (!body.ok && body.ok !== undefined) {
+        throw new Error(body.error || 'Unbekannter Fehler');
+      }
+      const list = Array.isArray(body.objects) ? body.objects : [];
+      state.picker.results = list;
+      state.picker.loading = false;
+      render();
+    } catch (e) {
+      state.picker.loading = false;
+      state.picker.error = e && e.message ? e.message : String(e);
+      render();
+    }
   }
 
-  // Nur Datenpunkte verwenden, die in der SmartHome-Admin-Tabelle hinterlegt sind
-  const sm = state.smartHome || {};
-  const dps = Array.isArray(sm.datapoints) ? sm.datapoints : [];
-  const term = q.toLowerCase();
-
-  const results = dps
-    .filter(dp => dp && dp.id)
-    .map(dp => {
-      const id = String(dp.id);
-      const name = String(dp.label || id);
-      const role = String(dp.category || '');
-      const type = '';
-      return { id, name, role, type };
-    })
-    .filter(obj => {
-      const hay = (obj.id + ' ' + obj.name + ' ' + obj.role + ' ' + obj.type).toLowerCase();
-      return hay.includes(term);
-    });
-
-  state.picker.results = results;
-  state.picker.loading = false;
-  state.picker.error = results.length ? null : 'Kein passender Datenpunkt in der SmartHome-Tabelle gefunden.';
-  render();
-}
-
-function applyPickedId(id) {
+  function applyPickedId(id) {
     const index = state.picker.targetIndex;
     const field = state.picker.targetField || 'id';
     ensureDatapointsArray();

@@ -370,10 +370,6 @@
       "0.4.91": {
         "en": "SmartHome config: add object picker and + widget button; support optional switch datapoint for dimmer.",
         "de": "SmartHome-Konfiguration: Objekt-Auswahl und +Widget-Button ergänzt; optionaler Schalt-Datenpunkt für Dimmer."
-      },
-      "0.4.92": {
-        "de": "SmartHome-Konfiguration: Datenpunkt-Auswahl verwendet jetzt nur noch die in der Admin-Tabelle definierten SmartHome-Datenpunkte.",
-        "en": "SmartHome configuration: datapoint picker now only offers SmartHome datapoints defined in the Admin tab."
       }
     },
     "title": "NexoWatt EMS UI",
