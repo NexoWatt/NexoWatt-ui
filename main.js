@@ -102,7 +102,8 @@ class NexoWattVis extends utils.Adapter {
           this.log.debug(`openSmartHomeConfig -> ${url}`);
 
           if (obj.callback) {
-            obj.callback({ openUrl: url, window: '_blank' });
+            // Use sendTo so jsonConfig (type: sendTo, openUrl: true) can open the URL in Admin
+            this.sendTo(obj.from, obj.command, { openUrl: url, window: '_blank' }, obj.callback);
           }
         } catch (e) {
           this.log.error(`Error in openSmartHomeConfig: ${e.message}`);
@@ -152,7 +153,8 @@ class NexoWattVis extends utils.Adapter {
       storagePower:  { type:'number',  role:'value.power', def:0 },
       price:         { type:'number',  role:'value', def:0 },
       priority:      { type:'number',  role:'value', def:1 },
-      tariffMode:    { type:'number',  role:'value', def:1 }
+      tariffMode:    { type:'number',  role:'value', def:1 },
+      evcsMaxPower:  { type:'number',  role:'value.power', def:0 }
     };
     for (const [key, c] of Object.entries(defs)) {
       const id = `settings.${key}`;
@@ -1031,9 +1033,27 @@ app.get('/config', (req, res) => {
     const dps = (this.config && this.config.datapoints) || {};
     const settings = (this.config && this.config.settings) || {};
     const installer = (this.config && this.config.installer) || {};
-    const smartHome = (this.config && this.config.smartHome && this.config.smartHome.datapoints) || {};
-        const namespace = this.namespace + '.';
+
+    // Legacy SmartHome datapoint mapping (e.g. heatPumpOn, roomTemp, ...).
+    // In the new SmartHome config we primarily work with rooms/devices,
+    // so we only use this mapping if it is still in the old "object" format.
+    let smartHome = {};
+    try {
+      const shRaw = this.config && this.config.smartHome && this.config.smartHome.datapoints;
+      if (shRaw && typeof shRaw === 'object' && !Array.isArray(shRaw)) {
+        for (const [k, v] of Object.entries(shRaw)) {
+          if (typeof v === 'string' && v) {
+            smartHome[k] = v;
+          }
+        }
+      }
+    } catch (e) {
+      this.log.debug && this.log.debug('subscribeConfiguredStates: could not normalize smartHome.datapoints: ' + e);
+    }
+
+    const namespace = this.namespace + '.';
     const settingsLocalKeys = ['notifyEnabled','email','dynamicTariff','storagePower','price','priority','tariffMode','evcsMaxPower'];
+
     const keys = [
       ...Object.keys(dps),
       // always include built-in local settings keys so UI keeps values on reload
@@ -1041,17 +1061,45 @@ app.get('/config', (req, res) => {
       // include any mapped external settings and installer keys
       ...Object.keys(settings).map(k => 'settings.' + k),
       ...Object.keys(installer).map(k => 'installer.' + k),
+      // legacy SmartHome_* mapping
       ...Object.keys(smartHome).map(k => 'smartHome_' + k),
     ];
 
     for (const key of keys) {
       let id;
-      if (key.startsWith('settings.')) id = settings[key.slice(9)];
-      else if (key.startsWith('installer.')) id = installer[key.slice(10)];
-      else if (key.startsWith('smartHome_')) id = smartHome[key.slice(10)];
-      else id = dps[key];
-      if (!id && key.startsWith('settings.')) id = namespace + key;
-      if (!id) continue;
+      if (key.startsWith('settings.')) {
+        const k = key.slice(9);
+        const mapped = settings[k];
+        if (typeof mapped === 'string' && mapped) {
+          id = mapped;
+        } else {
+          // local settings.<key> state
+          id = namespace + 'settings.' + k;
+        }
+      } else if (key.startsWith('installer.')) {
+        const k = key.slice(10);
+        const mapped = installer[k];
+        if (typeof mapped === 'string' && mapped) {
+          id = mapped;
+        } else {
+          // local installer.<key> state
+          id = namespace + 'installer.' + k;
+        }
+      } else if (key.startsWith('smartHome_')) {
+        const k = key.slice(10);
+        const mapped = smartHome[k];
+        if (typeof mapped === 'string' && mapped) {
+          id = mapped;
+        } else {
+          continue; // ignore invalid legacy entries
+        }
+      } else {
+        id = dps[key];
+      }
+
+      if (!id || typeof id !== 'string') {
+        continue;
+      }
 
       // subscribe
       this.subscribeForeignStates(id);
