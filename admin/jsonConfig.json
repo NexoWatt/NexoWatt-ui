@@ -865,58 +865,6 @@
           "sm": 12,
           "md": 6
         },
-        "smartHome.datapoints": {
-          "type": "table",
-          "label": "SmartHome Datenpunkte",
-          "attr": "smartHome.datapoints",
-          "sm": 12,
-          "items": [
-            {
-              "type": "objectId",
-              "label": "Datenpunkt",
-              "attr": "id",
-              "types": [
-                "state"
-              ],
-              "xs": 12,
-              "sm": 6,
-              "md": 4
-            },
-            {
-              "type": "text",
-              "label": "Alias / Name",
-              "attr": "label",
-              "xs": 12,
-              "sm": 6,
-              "md": 4
-            },
-            {
-              "type": "select",
-              "label": "Kategorie",
-              "attr": "category",
-              "options": [
-                "licht",
-                "steckdose",
-                "sensor",
-                "jalousie",
-                "heizung",
-                "szene",
-                "sonstiges"
-              ],
-              "xs": 12,
-              "sm": 6,
-              "md": 2
-            },
-            {
-              "type": "checkbox",
-              "label": "Aktiv",
-              "attr": "enabled",
-              "xs": 12,
-              "sm": 6,
-              "md": 2
-            }
-          ]
-        },
         "smartHome.configLink": {
           "type": "sendTo",
           "label": {

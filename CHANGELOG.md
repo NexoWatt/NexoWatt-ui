@@ -1,3 +1,8 @@
+### 0.4.100 – 2025-11-27
+- SmartHome-Admin-Reiter aufgeräumt: alte Datenpunkt-Tabelle entfernt.
+- Button „SmartHome-Einstellungen öffnen“ führt direkt auf die neue SmartHome-Konfigurationsseite.
+- Leerer-Zustand der SmartHome-Konfigurationsseite aktualisiert (Hinweis auf DP-Suche statt Admin-Tabelle).
+
 ### 0.4.10 (2025-11-07)
 - Fix: Produktion → Gesamt (kWh) und CO₂‑Ersparnis werden korrekt aus den Admin-Datenpunkten gelesen.
 - Anzeige: CO₂‑Ersparnis zeigt nun ein ' t' für Tonnen an.

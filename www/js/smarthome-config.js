@@ -264,7 +264,7 @@
         </div>
       </div>
 
-      ${dp.length ? `<section class="nw-sh-grid">${cardsHtml}</section>` : `<p class="nw-sh-empty">Noch keine SmartHome-Datenpunkte konfiguriert. Du kannst hier neue Widgets mit &quot;+ Widget&quot; hinzufügen oder im ioBroker-Admin unter &quot;SmartHome Datenpunkte&quot; Datenpunkte anlegen.</p>`}
+      ${dp.length ? `<section class="nw-sh-grid">${cardsHtml}</section>` : `<p class="nw-sh-empty">Noch keine SmartHome-Datenpunkte konfiguriert. Du kannst hier neue Widgets mit &quot;+ Widget&quot; hinzufügen und die passenden ioBroker-Datenpunkte direkt über die Suche auswählen.</p>`}
 
       <footer class="nw-sh-footer">
         <div>SmartHome ist aktuell <strong>${enabled ? 'aktiv' : 'inaktiv'}</strong> (umschaltbar in der Instanzkonfiguration im ioBroker-Admin).</div>
