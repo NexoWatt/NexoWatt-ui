@@ -325,8 +325,16 @@ class NexoWattVis extends utils.Adapter {
       for (const room of Object.values(rooms)) {
         for (const funcKey of Object.keys(room.functions)) {
           for (const entry of room.functions[funcKey]) {
-            if (entry && entry.id) {
-              neededStateIds.add(entry.id);
+            if (!entry) continue;
+            const ids = new Set();
+            if (entry.id) ids.add(entry.id);
+            if (entry.controlId) ids.add(entry.controlId);
+            if (entry.statusId) ids.add(entry.statusId);
+            if (entry.levelId) ids.add(entry.levelId);
+            if (entry.setpointId) ids.add(entry.setpointId);
+            if (entry.actualId) ids.add(entry.actualId);
+            for (const id of ids) {
+              neededStateIds.add(id);
             }
           }
         }
@@ -357,10 +365,11 @@ class NexoWattVis extends utils.Adapter {
               enumKeyById[entry.id] = 'smartEnum_' + (enumIdx++);
             }
             const common = obj && obj.common || {};
-            return {
+
+            const base = {
               id: entry.id,
               key: enumKeyById[entry.id],
-              name: common && common.name ? common.name : entry.id,
+              name: entry.label || (common && common.name ? common.name : entry.id),
               role: common && common.role ? common.role : '',
               type: common && common.type ? common.type : '',
               write: !!(common && common.write),
@@ -368,8 +377,17 @@ class NexoWattVis extends utils.Adapter {
               max: common && (typeof common.max === 'number') ? common.max : null,
               unit: common && common.unit ? common.unit : ''
             };
+
+            if (entry.controlId) base.controlId = entry.controlId;
+            if (entry.statusId) base.statusId = entry.statusId;
+            if (entry.levelId) base.levelId = entry.levelId;
+            if (entry.setpointId) base.setpointId = entry.setpointId;
+            if (entry.actualId) base.actualId = entry.actualId;
+            if (entry.type) base.deviceType = entry.type;
+
+            return base;
           });
-        }
+         }
       }
 
       // store mapping for later state-change handling
@@ -491,7 +509,7 @@ class NexoWattVis extends utils.Adapter {
       for (const dev of devicesCfg) {
         if (!dev) continue;
 
-        const id = dev.controlId || dev.statusId || dev.levelId || dev.setpointId || dev.actualId;
+        const id = dev.levelId || dev.controlId || dev.statusId || dev.setpointId || dev.actualId;
         if (!id) {
           this.log.debug && this.log.debug('SmartHome-Konfiguration: Gerät ohne gültigen Datenpunkt übersprungen: ' + JSON.stringify(dev));
           continue;
@@ -511,7 +529,18 @@ class NexoWattVis extends utils.Adapter {
           room.functionNames[funcKey] = funcName;
         }
 
-        room.functions[funcKey].push({ id });
+        const entry = {
+          id,
+          controlId: dev.controlId || '',
+          statusId: dev.statusId || '',
+          levelId: dev.levelId || '',
+          setpointId: dev.setpointId || '',
+          actualId: dev.actualId || '',
+          type: (dev.type || '').toLowerCase(),
+          label: dev.label || ''
+        };
+
+        room.functions[funcKey].push(entry);
         usedDevices++;
       }
 
@@ -564,10 +593,11 @@ class NexoWattVis extends utils.Adapter {
               enumKeyById[entry.id] = 'smartEnum_' + (enumIdx++);
             }
             const common = obj && obj.common || {};
-            return {
+
+            const base = {
               id: entry.id,
               key: enumKeyById[entry.id],
-              name: common && common.name ? common.name : entry.id,
+              name: entry.label || (common && common.name ? common.name : entry.id),
               role: common && common.role ? common.role : '',
               type: common && common.type ? common.type : '',
               write: !!(common && common.write),
@@ -575,8 +605,17 @@ class NexoWattVis extends utils.Adapter {
               max: common && (typeof common.max === 'number') ? common.max : null,
               unit: common && common.unit ? common.unit : ''
             };
+
+            if (entry.controlId) base.controlId = entry.controlId;
+            if (entry.statusId) base.statusId = entry.statusId;
+            if (entry.levelId) base.levelId = entry.levelId;
+            if (entry.setpointId) base.setpointId = entry.setpointId;
+            if (entry.actualId) base.actualId = entry.actualId;
+            if (entry.type) base.deviceType = entry.type;
+
+            return base;
           });
-        }
+         }
       }
 
       // store mapping for later state-change handling
@@ -823,7 +862,8 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
                 statusId: dp.statusId || '',
                 levelId,
                 setpointId: dp.setpointId || '',
-                actualId: dp.actualId || ''
+                actualId: dp.actualId || '',
+                label: dp.label || ''
               });
             }
 

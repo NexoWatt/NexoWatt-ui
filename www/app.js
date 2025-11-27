@@ -661,17 +661,17 @@ function formatSmartHomeValue(ent, rawVal) {
   // Fallback: String
   return String(rawVal);
 }
-async function sendSmartHomeCommand(ent, newVal) {
-  if (!ent || !ent.id) return;
-  try {
-    await fetch('/api/smartHome/command', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: ent.id, value: newVal })
-    });
-  } catch (e) {
+async function sendSmartHomeCommand(ent, newVal, options) {
+  if (!ent) return;
+  const targetId = (options && options.targetId) || ent.id;
+  if (!targetId) return;
+  fetch('/api/smartHome/command', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: targetId, value: newVal })
+  }).catch(e => {
     console.warn('smartHome command failed', e);
-  }
+  });
 }
 
 function resolveDisplayName(name, fallback) {
@@ -929,7 +929,20 @@ function renderSmartHomeStructure(){
           slider.addEventListener('change', () => {
             const val = Number(slider.value);
             label.textContent = formatSmartHomeValue(ent, val);
-            sendSmartHomeCommand(ent, val);
+
+            const levelId = ent.levelId || ent.id;
+            if (levelId) {
+              sendSmartHomeCommand(ent, val, { targetId: levelId });
+            } else {
+              sendSmartHomeCommand(ent, val);
+            }
+
+            // Optional: für Dimmer mit separatem Schalt-Datenpunkt zusätzlich Ein/Aus setzen
+            if (ent.controlId) {
+              const baseMin = (typeof ent.min === 'number') ? ent.min : 0;
+              const isOn = val > baseMin;
+              sendSmartHomeCommand(ent, isOn, { targetId: ent.controlId });
+            }
           });
 
           wrap.appendChild(slider);
@@ -964,7 +977,8 @@ function renderSmartHomeStructure(){
                 valueSpan.classList.remove('is-on');
               }
 
-              sendSmartHomeCommand(ent, next);
+              const targetId = ent.controlId || ent.id;
+              sendSmartHomeCommand(ent, next, { targetId });
             });
           }
         }
