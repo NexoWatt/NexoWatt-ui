@@ -1,6 +1,9 @@
 ### 0.4.103 – 2025-11-27
-- Fix: SmartHome-Konfigbutton im Admin verwendet jetzt immer die Host-IP des Admin-Aufrufs (ohne Admin-Port) und öffnet `http(s)://<host>:<port>/smarthome-config`.
-- Fix: `subscribeConfiguredStates()` ignoriert ungültige Mappings (Boolean/Objekte) und verhindert den „pattern needs to be of type 'string'“-Fehler.
+- Fix: SmartHome-Konfigbutton erzeugt jetzt eine protokoll-relative URL `//<host>:<port>/smarthome-config`, sodass die Admin-Oberfläche automatisch das korrekte `http/https` und die Host-IP des NexoWatt-Adapters verwendet.
+
+### 0.4.102 – 2025-11-27
+- Fix: SmartHome-Konfigbutton im Admin öffnet nun korrekt `http(s)://<host>:<port>/smarthome-config` ohne zusätzlichen Admin-Port 8081.
+- Fix: `subscribeConfiguredStates()` filtert ungültige Einstellungen (Boolean/Objekte) und vermeidet den Fehler „Parameter 'pattern' needs to be of type 'string'“.
 
 ### 0.4.100 – 2025-11-27
 - SmartHome-Admin-Reiter aufgeräumt: alte Datenpunkt-Tabelle entfernt.
