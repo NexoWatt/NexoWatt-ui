@@ -696,10 +696,23 @@ function renderSmartHomeStructure(){
   contentEl.innerHTML = '';
 
   if (!structure || !Object.keys(structure).length) {
+    const wrap = document.createElement('div');
+    wrap.className = 'smh-empty-state';
+
     const p = document.createElement('p');
     p.className = 'smh-placeholder-text';
-    p.textContent = 'Sobald in ioBroker Räume und Funktionen gepflegt sind, werden sie hier automatisch angezeigt.';
-    contentEl.appendChild(p);
+    p.textContent = 'Sobald du im SmartHome-Konfigurator Geräte hinterlegt hast, werden sie hier nach Räumen und Funktionen angezeigt.';
+    wrap.appendChild(p);
+
+    const btn = document.createElement('a');
+    btn.href = '/smarthome-config';
+    btn.target = '_blank';
+    btn.rel = 'noopener';
+    btn.className = 'btn sm smh-open-config';
+    btn.textContent = 'SmartHome konfigurieren';
+    wrap.appendChild(btn);
+
+    contentEl.appendChild(wrap);
     return;
   }
 

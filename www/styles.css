@@ -731,3 +731,18 @@ body {
   width: 100%;
 }
 
+/* SmartHome – Empty state helper */
+.smh-empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0 8px;
+}
+
+.smh-empty-state .smh-placeholder-text {
+  margin: 0;
+}
+
+.smh-open-config {
+  align-self: flex-start;
+}
