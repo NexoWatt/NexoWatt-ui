@@ -746,3 +746,10 @@ body {
 .smh-open-config {
   align-self: flex-start;
 }
+
+
+/* kleiner Schalt-Button für Dimmer direkt im Slider-Bereich */
+.smh-entity-slider .smh-entity-toggle-inline {
+  margin-right: 0.75rem;
+  cursor: pointer;
+}

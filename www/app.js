@@ -926,22 +926,76 @@ function renderSmartHomeStructure(){
           label.className = 'smh-entity-value';
           label.textContent = formatSmartHomeValue(ent, initial);
 
+          const baseMin = (typeof ent.min === 'number') ? ent.min : 0;
+          let lastOnLevel = (typeof initial === 'number' && initial > baseMin) ? initial : max;
+
+          let dimmerToggle = null;
+          const updateToggleVisual = (on) => {
+            if (!dimmerToggle) return;
+            if (on) {
+              dimmerToggle.classList.add('is-on');
+            } else {
+              dimmerToggle.classList.remove('is-on');
+            }
+          };
+
+          // separater Schalt-Button für Dimmer mit Schalt-Datenpunkt
+          if (kind === 'dimmer' && ent.controlId) {
+            dimmerToggle = document.createElement('span');
+            dimmerToggle.className = 'smh-entity-toggle smh-entity-toggle-inline';
+            updateToggleVisual(initial > baseMin);
+
+            dimmerToggle.addEventListener('click', () => {
+              const current = Number(slider.value);
+              const currentlyOn = current > baseMin;
+              let nextLevel;
+              if (currentlyOn) {
+                nextLevel = min;
+              } else {
+                // auf letzten nicht-Null-Level oder Max springen
+                nextLevel = (typeof lastOnLevel === 'number' && lastOnLevel > baseMin) ? lastOnLevel : max;
+              }
+              lastOnLevel = nextLevel > baseMin ? nextLevel : lastOnLevel;
+
+              slider.value = String(nextLevel);
+              label.textContent = formatSmartHomeValue(ent, nextLevel);
+
+              const levelId = ent.levelId || ent.id;
+              if (levelId) {
+                sendSmartHomeCommand({ id: levelId }, nextLevel);
+              } else {
+                sendSmartHomeCommand(ent, nextLevel);
+              }
+
+              const isOnNow = nextLevel > baseMin;
+              updateToggleVisual(isOnNow);
+              // Schalt-Datenpunkt setzen
+              sendSmartHomeCommand({ id: ent.controlId }, isOnNow);
+            });
+
+            wrap.appendChild(dimmerToggle);
+          }
+
           slider.addEventListener('change', () => {
             const val = Number(slider.value);
             label.textContent = formatSmartHomeValue(ent, val);
+            if (val > baseMin) {
+              lastOnLevel = val;
+            }
 
+            // Wenn wir einen separaten Level-Datenpunkt haben, diesen gezielt ansprechen
             const levelId = ent.levelId || ent.id;
             if (levelId) {
-              sendSmartHomeCommand(ent, val, { targetId: levelId });
+              sendSmartHomeCommand({ id: levelId }, val);
             } else {
               sendSmartHomeCommand(ent, val);
             }
 
             // Optional: für Dimmer mit separatem Schalt-Datenpunkt zusätzlich Ein/Aus setzen
             if (ent.controlId) {
-              const baseMin = (typeof ent.min === 'number') ? ent.min : 0;
               const isOn = val > baseMin;
-              sendSmartHomeCommand(ent, isOn, { targetId: ent.controlId });
+              updateToggleVisual(isOn);
+              sendSmartHomeCommand({ id: ent.controlId }, isOn);
             }
           });
 
