@@ -786,10 +786,23 @@ function renderSmartHomeStructure(){
 
   const funcKeys = Object.keys(funcs);
   if (!funcKeys.length) {
+    const wrap = document.createElement('div');
+    wrap.className = 'smh-empty-state';
+
     const p = document.createElement('p');
     p.className = 'smh-placeholder-text';
     p.textContent = 'Für diesen Raum sind noch keine Funktionen verknüpft.';
-    contentEl.appendChild(p);
+    wrap.appendChild(p);
+
+    const btn = document.createElement('a');
+    btn.href = '/smarthome-config';
+    btn.target = '_blank';
+    btn.rel = 'noopener';
+    btn.className = 'btn sm smh-open-config';
+    btn.textContent = 'SmartHome konfigurieren';
+    wrap.appendChild(btn);
+
+    contentEl.appendChild(wrap);
     return;
   }
 
