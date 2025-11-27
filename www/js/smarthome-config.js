@@ -224,7 +224,7 @@
 
       const statusLine = picker.error
         ? `<span class="nw-sh-error">${escapeHtml(picker.error)}</span>`
-        : '';
+        : `<span class="nw-sh-hint">Leeres Suchfeld zeigt bis zu 1000 Datenpunkte. Mit mindestens 2 Zeichen nach ID oder Name filtern.</span>`;
 
       pickerHtml = `
         <div class="nw-sh-picker-overlay" id="nw-sh-picker">

@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.98",
+    "version": "0.4.99",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
@@ -370,6 +370,10 @@
       "0.4.91": {
         "en": "SmartHome config: add object picker and + widget button; support optional switch datapoint for dimmer.",
         "de": "SmartHome-Konfiguration: Objekt-Auswahl und +Widget-Button ergänzt; optionaler Schalt-Datenpunkt für Dimmer."
+      },
+      "0.4.99": {
+        "en": "SmartHome datapoint picker: increased object search limit to 1000 and added hint text. Minor UX polish.",
+        "de": "SmartHome-Datenpunkt-Picker: Suchlimit auf 1000 Objekte erhöht und Hinweistexte ergänzt. Kleine UX-Verbesserungen."
       }
     },
     "title": "NexoWatt EMS UI",
