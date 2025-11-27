@@ -71,7 +71,17 @@ class NexoWattVis extends utils.Adapter {
       case 'openSmartHomeConfig': {
         try {
           const origin = message.origin || message._origin || '';
-          const originIp = message.originIp || message._originIp;
+          let originIp = message.originIp || message._originIp || '';
+          // ioBroker Admin may pass "host:port" here (e.g. "192.168.10.184:8081").
+          // We only need the host part for the SmartHome config URL.
+          if (typeof originIp === 'string' && originIp.includes(':')) {
+            const ipv6Match = originIp.match(/^\[([^\]]+)\](?::\d+)?$/);
+            if (ipv6Match) {
+              originIp = ipv6Match[1];
+            } else {
+              originIp = originIp.split(':')[0];
+            }
+          }
 
           // Determine protocol (http/https)
           let protocol = 'http';
@@ -102,13 +112,13 @@ class NexoWattVis extends utils.Adapter {
           this.log.debug(`openSmartHomeConfig -> ${url}`);
 
           if (obj.callback) {
-            // Use sendTo so jsonConfig (type: sendTo, openUrl: true) can open the URL in Admin
+            // Reply via sendTo so jsonConfig (type: sendTo, openUrl: true) can open the URL in Admin
             this.sendTo(obj.from, obj.command, { openUrl: url, window: '_blank' }, obj.callback);
           }
         } catch (e) {
           this.log.error(`Error in openSmartHomeConfig: ${e.message}`);
           if (obj.callback) {
-            obj.callback({ error: e.message });
+            this.sendTo(obj.from, obj.command, { error: e.message }, obj.callback);
           }
         }
         break;
@@ -153,8 +163,7 @@ class NexoWattVis extends utils.Adapter {
       storagePower:  { type:'number',  role:'value.power', def:0 },
       price:         { type:'number',  role:'value', def:0 },
       priority:      { type:'number',  role:'value', def:1 },
-      tariffMode:    { type:'number',  role:'value', def:1 },
-      evcsMaxPower:  { type:'number',  role:'value.power', def:0 }
+      tariffMode:    { type:'number',  role:'value', def:1 }
     };
     for (const [key, c] of Object.entries(defs)) {
       const id = `settings.${key}`;
@@ -1068,38 +1077,28 @@ app.get('/config', (req, res) => {
     for (const key of keys) {
       let id;
       if (key.startsWith('settings.')) {
-        const k = key.slice(9);
-        const mapped = settings[k];
-        if (typeof mapped === 'string' && mapped) {
-          id = mapped;
-        } else {
-          // local settings.<key> state
-          id = namespace + 'settings.' + k;
-        }
+        id = settings[key.slice(9)];
       } else if (key.startsWith('installer.')) {
-        const k = key.slice(10);
-        const mapped = installer[k];
-        if (typeof mapped === 'string' && mapped) {
-          id = mapped;
-        } else {
-          // local installer.<key> state
-          id = namespace + 'installer.' + k;
-        }
+        id = installer[key.slice(10)];
       } else if (key.startsWith('smartHome_')) {
-        const k = key.slice(10);
-        const mapped = smartHome[k];
-        if (typeof mapped === 'string' && mapped) {
-          id = mapped;
-        } else {
-          continue; // ignore invalid legacy entries
-        }
+        id = smartHome[key.slice(10)];
       } else {
         id = dps[key];
       }
 
-      if (!id || typeof id !== 'string') {
-        continue;
+      // If the mapping exists but is not a string (e.g. boolean/config object), ignore it.
+      if (id && typeof id !== 'string') {
+        id = null;
       }
+
+      // For local settings/installer keys without external mapping subscribe to own states.
+      if (!id && key.startsWith('settings.')) {
+        id = namespace + key;
+      } else if (!id && key.startsWith('installer.')) {
+        id = namespace + key;
+      }
+
+      if (!id) continue;
 
       // subscribe
       this.subscribeForeignStates(id);

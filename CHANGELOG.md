@@ -1,3 +1,7 @@
+### 0.4.102 – 2025-11-27
+- Fix: SmartHome-Konfigbutton im Admin öffnet nun korrekt `http(s)://<host>:<port>/smarthome-config` ohne zusätzlichen Admin-Port 8081.
+- Fix: `subscribeConfiguredStates()` filtert ungültige Einstellungen (Boolean/Objekte) und vermeidet den Fehler „Parameter 'pattern' needs to be of type 'string'“.
+
 ### 0.4.100 – 2025-11-27
 - SmartHome-Admin-Reiter aufgeräumt: alte Datenpunkt-Tabelle entfernt.
 - Button „SmartHome-Einstellungen öffnen“ führt direkt auf die neue SmartHome-Konfigurationsseite.
