@@ -71,17 +71,7 @@ class NexoWattVis extends utils.Adapter {
       case 'openSmartHomeConfig': {
         try {
           const origin = message.origin || message._origin || '';
-          let originIp = message.originIp || message._originIp || '';
-          // ioBroker Admin may pass "host:port" here (e.g. "192.168.10.184:8081").
-          // We only need the host part for the SmartHome config URL.
-          if (typeof originIp === 'string' && originIp.includes(':')) {
-            const ipv6Match = originIp.match(/^\[([^\]]+)\](?::\d+)?$/);
-            if (ipv6Match) {
-              originIp = ipv6Match[1];
-            } else {
-              originIp = originIp.split(':')[0];
-            }
-          }
+          const originIp = message.originIp || message._originIp || '';
 
           // Determine protocol (http/https)
           let protocol = 'http';
@@ -93,12 +83,33 @@ class NexoWattVis extends utils.Adapter {
             protocol = 'https';
           }
 
-          // Determine host (IP or hostname)
-          let host = originIp;
-          if (!host && origin) {
-            const m = origin.match(/^https?:\/\/([^:/]+)(?::\d+)?/);
+          // Determine host (IP only, no port, no protocol)
+          let host = '';
+          if (typeof originIp === 'string' && originIp) {
+            let tmp = originIp.trim();
+            // Strip protocol if present, e.g. "http://192.168.10.184:8081"
+            const protoMatch = tmp.match(/^https?:\/\/(.+)$/);
+            if (protoMatch) {
+              tmp = protoMatch[1];
+            }
+            // IPv6 in brackets: "[2001:db8::1]:8081"
+            const ipv6Match = tmp.match(/^\[([^\]]+)\](?::\d+)?$/);
+            if (ipv6Match) {
+              host = ipv6Match[1];
+            } else {
+              // host[:port] -> host
+              host = tmp.split(':')[0];
+            }
+          } else if (origin) {
+            const m = origin.match(/^https?:\/\/([^/]+)/);
             if (m) {
-              host = m[1];
+              let tmp = m[1]; // host[:port]
+              const ipv6Match = tmp.match(/^\[([^\]]+)\](?::\d+)?$/);
+              if (ipv6Match) {
+                host = ipv6Match[1];
+              } else {
+                host = tmp.split(':')[0];
+              }
             }
           }
           if (!host) {
@@ -1070,7 +1081,7 @@ app.get('/config', (req, res) => {
       // include any mapped external settings and installer keys
       ...Object.keys(settings).map(k => 'settings.' + k),
       ...Object.keys(installer).map(k => 'installer.' + k),
-      // legacy SmartHome_* mapping
+      // legacy SmartHome_* mapping if present
       ...Object.keys(smartHome).map(k => 'smartHome_' + k),
     ];
 
