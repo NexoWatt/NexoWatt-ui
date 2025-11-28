@@ -1216,7 +1216,7 @@ function renderSmartHomeStructure(){
 
     contentEl.appendChild(funcCard);
   }
-
+}
 
 
 const _renderOrig = render;
