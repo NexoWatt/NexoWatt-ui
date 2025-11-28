@@ -507,7 +507,8 @@ class NexoWattVis extends utils.Adapter {
       let usedDevices = 0;
 
       // Geräte/Funktionen aus der Konfiguration übernehmen
-      for (const dev of devicesCfg) {
+      for (let devIndex = 0; devIndex < devicesCfg.length; devIndex++) {
+        const dev = devicesCfg[devIndex];
         if (!dev) continue;
 
         // Für Thermostate den Sollwert-Datenpunkt bevorzugen,
@@ -548,12 +549,14 @@ class NexoWattVis extends utils.Adapter {
           actualId: dev.actualId || '',
           invertDirection: !!dev.invertDirection,
           type: devType,
-          label: dev.label || ''
+          label: dev.label || '',
+          widgetIndex: devIndex
         };
 
         room.functions[funcKey].push(entry);
         usedDevices++;
       }
+
 
       if (!Object.keys(rooms).length || !usedDevices) {
         this.log.info('SmartHome-Konfiguration enthält keine nutzbaren Räume/Geräte. Leere Struktur geschrieben.');
