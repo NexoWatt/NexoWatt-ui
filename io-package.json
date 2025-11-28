@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.113",
+    "version": "0.4.114",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
@@ -390,6 +390,10 @@
       "0.4.113": {
         "de": "SmartHome: RTR-Solltemperatur jetzt von 15–35 °C einstellbar; Werte in Kreisen mit getrenntem Zahlen-/Einheitenlayout.",
         "en": "SmartHome: thermostat setpoint now adjustable from 15–35 °C; circle values show number and unit with improved layout."
+      },
+      "0.4.114": {
+        "de": "SmartHome: Gerätekacheln kompakter und responsive nebeneinander, Funktionsicons vergrößert.",
+        "en": "SmartHome: device tiles more compact and responsive in a grid, function icons enlarged."
       }
     },
     "title": "NexoWatt EMS UI",

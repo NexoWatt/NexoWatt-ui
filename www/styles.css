@@ -787,3 +787,54 @@ body {
   border: 1px solid #283241;
   font-size: 11px;
 }
+
+/* SmartHome – Funktionskacheln kompakter & responsive nebeneinander */
+
+.smh-func-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 4px;
+  border-top: 1px solid #1e252c;
+}
+
+.smh-func-card:first-child {
+  border-top: none;
+}
+
+.smh-func-header {
+  flex: 1 1 100%;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+/* Gerätekacheln: kleinere, aber „cardartige“ Tiles, die nebeneinander brechen */
+.smh-entity-group {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+  flex: 1 1 260px;
+  max-width: 420px;
+  min-height: 80px;
+  margin: 4px 4px 8px 0;
+  padding: 8px 10px;
+  border-radius: 16px;
+}
+
+/* Auf kleineren Screens jeweils eine Kachel pro Zeile */
+@media (max-width: 900px) {
+  .smh-entity-group {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+}
+
+/* Funktionsicons größer darstellen */
+.smh-entity-group-icon-img {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+}
