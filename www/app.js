@@ -929,10 +929,6 @@ function renderSmartHomeStructure(){
         const isThermostat = (ent.deviceType === 'thermostat' || ent.deviceType === 'climate');
         row.className = 'smh-entity-row' + (kind === 'switch' ? ' interactive' : '');
 
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'smh-entity-name';
-        nameSpan.textContent = ent.name || ent.id;
-        row.appendChild(nameSpan);
 
         const keyVal = isThermostat && ent.setpointKey ? ent.setpointKey : (ent.key || null);
         let rawVal;

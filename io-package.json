@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.114",
+    "version": "0.4.115",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
@@ -394,6 +394,10 @@
       "0.4.114": {
         "de": "SmartHome: Gerätekacheln kompakter und responsive nebeneinander, Funktionsicons vergrößert.",
         "en": "SmartHome: device tiles more compact and responsive in a grid, function icons enlarged."
+      },
+      "0.4.115": {
+        "de": "SmartHome: doppelte Gerätenamen in den Kacheln entfernt – Titel nur noch im Kopf der Kachel.",
+        "en": "SmartHome: removed duplicated device name inside tiles – title now only in tile header."
       }
     },
     "title": "NexoWatt EMS UI",
