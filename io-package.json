@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.112",
+    "version": "0.4.113",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
@@ -386,6 +386,10 @@
       "0.4.112": {
         "de": "Bugfix: SmartHome-THERMOSTAT (RTR) Kachel ohne Syntaxfehler, inkl. Ist/Soll und Heizen/Kühlen.",
         "en": "Bugfix: SmartHome thermostat (RTR) tile without syntax errors, including current/set temp and heat/cool mode."
+      },
+      "0.4.113": {
+        "de": "SmartHome: RTR-Solltemperatur jetzt von 15–35 °C einstellbar; Werte in Kreisen mit getrenntem Zahlen-/Einheitenlayout.",
+        "en": "SmartHome: thermostat setpoint now adjustable from 15–35 °C; circle values show number and unit with improved layout."
       }
     },
     "title": "NexoWatt EMS UI",

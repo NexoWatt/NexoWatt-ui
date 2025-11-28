@@ -674,6 +674,35 @@ function formatSmartHomeValue(ent, rawVal) {
   // Fallback: String
   return String(rawVal);
 }
+function renderValueWithUnit(el, formatted) {
+  if (!el) return;
+  if (formatted === undefined || formatted === null) {
+    el.textContent = '';
+    return;
+  }
+  const str = String(formatted);
+  const m = str.match(/^(-?\d+(?:[\.,]\d+)?)(.*)$/);
+  if (!m) {
+    el.textContent = str;
+    return;
+  }
+  const num = m[1].replace(',', '.');
+  const unit = m[2] ? m[2].trim() : '';
+
+  el.innerHTML = '';
+  const mainSpan = document.createElement('span');
+  mainSpan.className = 'smh-entity-value-main';
+  mainSpan.textContent = num;
+  el.appendChild(mainSpan);
+
+  if (unit) {
+    const unitSpan = document.createElement('span');
+    unitSpan.className = 'smh-entity-value-unit';
+    unitSpan.textContent = ' ' + unit;
+    el.appendChild(unitSpan);
+  }
+}
+
 async function sendSmartHomeCommand(ent, newVal, options) {
   if (!ent) return;
   const targetId = (options && options.targetId) || ent.id;
@@ -923,8 +952,8 @@ function renderSmartHomeStructure(){
 
           // sinnvolle Defaults für Temperatur-Sollwerte
           if (kind === 'tempSetpoint') {
-            if (min === null) min = 16;
-            if (max === null) max = 26;
+            if (min === null) min = 15;
+            if (max === null) max = 35;
           } else {
             if (min === null) min = 0;
             if (max === null) max = 100;
@@ -938,7 +967,7 @@ function renderSmartHomeStructure(){
 
           const label = document.createElement('span');
           label.className = 'smh-entity-value';
-          label.textContent = formatSmartHomeValue(ent, initial);
+          renderValueWithUnit(label, formatSmartHomeValue(ent, initial));
 
           const baseMin = (typeof ent.min === 'number') ? ent.min : 0;
           let lastOnLevel = (typeof initial === 'number' && initial > baseMin) ? initial : max;
@@ -974,7 +1003,7 @@ function renderSmartHomeStructure(){
               lastOnLevel = nextLevel > baseMin ? nextLevel : lastOnLevel;
 
               slider.value = String(nextLevel);
-              label.textContent = formatSmartHomeValue(ent, nextLevel);
+              renderValueWithUnit(label, formatSmartHomeValue(ent, nextLevel));
 
               // für Dimmer weiterhin den Level-Datenpunkt benutzen
               const levelId = ent.levelId || ent.id;
@@ -1026,7 +1055,7 @@ function renderSmartHomeStructure(){
 
           slider.addEventListener('change', () => {
             const val = Number(slider.value);
-            label.textContent = formatSmartHomeValue(ent, val);
+            renderValueWithUnit(label, formatSmartHomeValue(ent, val));
             if (val > baseMin) {
               lastOnLevel = val;
             }
@@ -1084,9 +1113,9 @@ function renderSmartHomeStructure(){
               const actualState = state && state[ent.actualKey];
               const actualVal = actualState ? actualState.value : undefined;
               if (typeof actualVal === 'number' && !isNaN(actualVal)) {
-                actualSpan.textContent = actualVal.toFixed(1) + ' °C';
+                renderValueWithUnit(actualSpan, actualVal.toFixed(1) + ' °C');
               } else {
-                actualSpan.textContent = '--';
+                renderValueWithUnit(actualSpan, '--');
               }
 
               actualWrap.appendChild(actualLabel);
@@ -1148,7 +1177,7 @@ function renderSmartHomeStructure(){
         } else {
           const valueSpan = document.createElement('span');
           valueSpan.className = (kind === 'switch') ? 'smh-entity-toggle' : 'smh-entity-value';
-          valueSpan.textContent = formatSmartHomeValue(ent, rawVal);
+          renderValueWithUnit(valueSpan, formatSmartHomeValue(ent, rawVal));
 
           // AN-Farbe initial setzen
           if (kind === 'switch' && rawVal) {
@@ -1167,7 +1196,7 @@ function renderSmartHomeStructure(){
               }
               const next = !current;
 
-              valueSpan.textContent = formatSmartHomeValue(ent, next);
+              renderValueWithUnit(valueSpan, formatSmartHomeValue(ent, next));
               if (next) {
                 valueSpan.classList.add('is-on');
               } else {

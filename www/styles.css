@@ -586,6 +586,16 @@ body {
   border: 1px solid #222a33;
   background: #181d23;
 }
+.smh-entity-value-main {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.smh-entity-value-unit {
+  font-size: 10px;
+  opacity: 0.85;
+}
+
 
 .smh-entity-row.interactive .smh-entity-toggle {
   border-color: #2d7dff;
