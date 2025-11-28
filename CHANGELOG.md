@@ -1,3 +1,7 @@
+### 0.4.109 – 2025-11-28
+- SmartHome: `invertDirection` aus der neuen SmartHome-Konfiguration wird jetzt korrekt in die `smartHome.structure` übernommen.
+- VIS: Jalousie-/Rollladen-Pfeile (▲/▼) berücksichtigen die invertierte Richtung damit „hoch/runter“ auch bei invertierten DPs logisch passt.
+
 ### 0.4.103 – 2025-11-27
 - Fix: SmartHome-Konfigbutton im Admin verwendet jetzt immer die Host-IP des Admin-Aufrufs (ohne Admin-Port) und öffnet `http(s)://<host>:<port>/smarthome-config`.
 - Fix: `subscribeConfiguredStates()` ignoriert ungültige Mappings (Boolean/Objekte) und verhindert den „pattern needs to be of type 'string'“-Fehler.
