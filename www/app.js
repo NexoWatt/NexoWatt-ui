@@ -891,12 +891,9 @@ function renderSmartHomeStructure(){
     const groupsMap = {};
     for (const ent of entries) {
       if (!ent || !ent.id) continue;
-      // Wenn widgetIndex vorhanden ist (manuelle Konfiguration), immer eine eigene Gruppe pro Widget
-      const widgetKey = (typeof ent.widgetIndex === 'number') ? ('w_' + String(ent.widgetIndex)) : null;
-      const gKey = widgetKey || getGroupKey(ent) || (ent.name || ent.id);
+      const gKey = getGroupKey(ent) || (ent.name || ent.id);
       if (!groupsMap[gKey]) groupsMap[gKey] = [];
       groupsMap[gKey].push(ent);
-    }
     }
 
     const groupKeys = Object.keys(groupsMap);

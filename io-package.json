@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.116",
+    "version": "0.4.115",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
@@ -398,10 +398,6 @@
       "0.4.115": {
         "de": "SmartHome: doppelte Gerätenamen in den Kacheln entfernt – Titel nur noch im Kopf der Kachel.",
         "en": "SmartHome: removed duplicated device name inside tiles – title now only in tile header."
-      },
-      "0.4.116": {
-        "de": "SmartHome: Jede Widget-Konfiguration erzeugt jetzt eine eigene Kachel (auch bei identischen Datenpunkten).",
-        "en": "SmartHome: each widget configuration now renders as its own tile (even if data points are identical)."
       }
     },
     "title": "NexoWatt EMS UI",
