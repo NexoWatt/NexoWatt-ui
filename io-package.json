@@ -1,26 +1,26 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.107",
+    "version": "0.4.108",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
         "de": "Erste Version: Responsives NexoWatt EMS Dashboard"
       },
       "0.0.2": {
-        "de": "Logos hinzugef\u00fcgt, Standard-Datenpunkte vorbelegt, GitHub-Readme aktualisiert.",
+        "de": "Logos hinzugefügt, Standard-Datenpunkte vorbelegt, GitHub-Readme aktualisiert.",
         "en": "Added logos, default datapoints prefilled, updated GitHub readme."
       },
       "0.0.3": {
-        "de": "Fix: Tab-Titel in den Instanzeinstellungen (title\u2192label).",
-        "en": "Fix: Tab titles in instance settings (title\u2192label)."
+        "de": "Fix: Tab-Titel in den Instanzeinstellungen (title→label).",
+        "en": "Fix: Tab titles in instance settings (title→label)."
       },
       "0.0.4": {
         "de": "Fix: jsonConfig validiert wieder; Tabs zeigen Titel & Label.",
         "en": "Fix: jsonConfig validates again; tabs show title & label."
       },
       "0.0.5": {
-        "de": "Datenpunkte jetzt als ausw\u00e4hlbare Objekt-IDs mit Suchdialog.",
+        "de": "Datenpunkte jetzt als auswählbare Objekt-IDs mit Suchdialog.",
         "en": "Datapoints are now selectable object IDs with search dialog."
       },
       "0.0.6": {
@@ -28,7 +28,7 @@
         "en": "Fix: jsonConfig explicit 'attr' for each field; ID search dialog should appear."
       },
       "0.0.7": {
-        "de": "Schema-Fix: Root 'tabs.items' jetzt als Objekt statt Array \u2192 Admin-Suche f\u00fcr IDs aktiv.",
+        "de": "Schema-Fix: Root 'tabs.items' jetzt als Objekt statt Array → Admin-Suche für IDs aktiv.",
         "en": "Schema fix: root 'tabs.items' changed to object instead of array so Admin ID search works."
       },
       "0.0.8": {
@@ -36,11 +36,11 @@
         "en": "Switched inputs to 'objectId' (instead of 'id'); fixed tabs structure."
       },
       "0.0.9": {
-        "de": "PV-Kreis entfernt, Energiefluss-Monitor hinzugef\u00fcgt; Oberfl\u00e4che auf Deutsch.",
+        "de": "PV-Kreis entfernt, Energiefluss-Monitor hinzugefügt; Oberfläche auf Deutsch.",
         "en": "Removed PV ring, added energy-flow monitor; UI translated to German."
       },
       "0.0.10": {
-        "de": "Runder Energiemonitor mit Icons + SoC-Ring und Lade-/Entladezeit. Neuer Datenpunkt: Speicher Kapazit\u00e4t (kWh).",
+        "de": "Runder Energiemonitor mit Icons + SoC-Ring und Lade-/Entladezeit. Neuer Datenpunkt: Speicher Kapazität (kWh).",
         "en": "Round energy monitor with icons + SoC ring and charge/discharge time. New datapoint: storage capacity (kWh)."
       },
       "0.0.11": {
@@ -48,11 +48,11 @@
         "en": "New round energy monitor (dark), grid in red."
       },
       "0.0.12": {
-        "de": "Donut mit SVG-Icons und Segmentl\u00e4ngen als Anteil am Gesamtfluss.",
+        "de": "Donut mit SVG-Icons und Segmentlängen als Anteil am Gesamtfluss.",
         "en": "Donut uses SVG icons and segment lengths as share of total flow."
       },
       "0.0.13": {
-        "de": "Donut: SVG-Icons, Segmente pro Quadrant b\u00fcndig am Ring, Anteil am Gesamtfluss.",
+        "de": "Donut: SVG-Icons, Segmente pro Quadrant bündig am Ring, Anteil am Gesamtfluss.",
         "en": "Donut: SVG icons, quadrant-aligned segments hugging ring, share-of-total."
       },
       "0.0.14": {
@@ -60,11 +60,11 @@
         "en": "SVG icons tighter to ring. Layout: PV top, Grid left, Storage bottom, Load right."
       },
       "0.0.15": {
-        "de": "Energymonitor jetzt responsiv (Gr\u00f6\u00dfe + Icon-Abst\u00e4nde skalieren).",
+        "de": "Energymonitor jetzt responsiv (Größe + Icon-Abstände skalieren).",
         "en": "Energy monitor responsive."
       },
       "0.0.16": {
-        "de": "Header: NexoWatt-Logo links eingef\u00fcgt. Donut visuell verfeinert (Farben/Strich).",
+        "de": "Header: NexoWatt-Logo links eingefügt. Donut visuell verfeinert (Farben/Strich).",
         "en": "Header brand logo added left. Donut refined (colors/strokes)."
       },
       "0.0.17": {
@@ -77,11 +77,11 @@
       },
       "0.0.19": {
         "en": "Increase donut graph size and layout width",
-        "de": "Donut-Graph vergr\u00f6\u00dfert und Layout-Breite erh\u00f6ht"
+        "de": "Donut-Graph vergrößert und Layout-Breite erhöht"
       },
       "0.0.20": {
         "en": "New dynamic Energy Graph: PV, Grid, Load always present; up to 7 extra nodes; optional cascade; topbar tweaks.",
-        "de": "Neuer dynamischer Energie-Graph: PV, Netz, Verbrauch immer sichtbar; bis zu 7 zus\u00e4tzliche Knoten; optionale Kaskade; Topbar-Anpassungen."
+        "de": "Neuer dynamischer Energie-Graph: PV, Netz, Verbrauch immer sichtbar; bis zu 7 zusätzliche Knoten; optionale Kaskade; Topbar-Anpassungen."
       },
       "0.0.21": {
         "en": "Energy graph visible again and smaller; initial render on load; center readouts restored.",
@@ -101,7 +101,7 @@
       },
       "0.0.25": {
         "en": "Top-left brand set to NexoWatt logo; battery labels added (SoC, charge, discharge) aligned towards the battery.",
-        "de": "Logo oben links auf NexoWatt gesetzt; Batterie-Beschriftungen (SoC, Laden, Entladen) entlang zur Batterie hinzugef\u00fcgt."
+        "de": "Logo oben links auf NexoWatt gesetzt; Batterie-Beschriftungen (SoC, Laden, Entladen) entlang zur Batterie hinzugefügt."
       },
       "0.0.26": {
         "en": "Top-left brand icon updated to the provided NexoWatt logo (PNG).",
@@ -117,15 +117,15 @@
       },
       "0.0.29": {
         "en": "Icons moved above text inside circles; circles enlarged; labels and values placed inside; battery SoC shown inside battery only.",
-        "de": "Icons \u00fcber die Texte in den Kreisen; Kreise vergr\u00f6\u00dfert; Namen & Leistungen in den Kreisen; Batterie-SoC nur in der Batterie."
+        "de": "Icons über die Texte in den Kreisen; Kreise vergrößert; Namen & Leistungen in den Kreisen; Batterie-SoC nur in der Batterie."
       },
       "0.0.30": {
         "en": "Battery circle enlarged and inner layout tuned. Energy monitor respects existing datapoint settings.",
-        "de": "Batteriekreis vergr\u00f6\u00dfert und Innenlayout angepasst. Energiemonitor ber\u00fccksichtigt die bestehenden Datenpunkte."
+        "de": "Batteriekreis vergrößert und Innenlayout angepasst. Energiemonitor berücksichtigt die bestehenden Datenpunkte."
       },
       "0.0.32": {
         "en": "Add hamburger submenu with Settings; add settings panel with SoC badge toggle; minor styles",
-        "de": "Untermen\u00fc (Hamburger) mit 'Einstellungen' hinzugef\u00fcgt; Einstellungsseite inkl. SoC-Badge-Schalter; kleinere Styles"
+        "de": "Untermenü (Hamburger) mit 'Einstellungen' hinzugefügt; Einstellungsseite inkl. SoC-Badge-Schalter; kleinere Styles"
       },
       "0.3.3": {
         "en": "Fix: LIVE tab switches back to main page (initTabs on startup).",
@@ -133,46 +133,46 @@
       },
       "0.3.4": {
         "en": "Removed settings cards (SoC badge & refresh interval) and About panel from both main & settings view.",
-        "de": "Einstellungs-Karten (SoC-Badge & Aktualisierungsintervall) und \u00dcber-Panel aus Haupt- und Einstellungsansicht entfernt."
+        "de": "Einstellungs-Karten (SoC-Badge & Aktualisierungsintervall) und Über-Panel aus Haupt- und Einstellungsansicht entfernt."
       },
       "0.3.5": {
         "en": "Added Settings and password-protected Installer pages with ioBroker state bindings and admin link.",
-        "de": "Neue Seiten: Einstellungen und passwortgesch\u00fctzte Installateur-Ansicht inkl. ioBroker-State-Zuordnungen und Admin-Link."
+        "de": "Neue Seiten: Einstellungen und passwortgeschützte Installateur-Ansicht inkl. ioBroker-State-Zuordnungen und Admin-Link."
       },
       "0.3.6": {
         "en": "Menu cleanup (removed About), Settings page without Installer button, pre-login before Installer view, improved Installer layout.",
-        "de": "Men\u00fc bereinigt (\u00dcber entfernt), Einstellungen ohne Installateur-Button, Login vor Installateur-Seite, bessere Installateur-Proportionen."
+        "de": "Menü bereinigt (Über entfernt), Einstellungen ohne Installateur-Button, Login vor Installateur-Seite, bessere Installateur-Proportionen."
       },
       "0.3.7": {
         "en": "Menu reliability improvements (submenu toggle hardened).",
-        "de": "Untermen\u00fc zuverl\u00e4ssig: Toggle/Schlie\u00dfen robuster (StopPropagation + ESC)."
+        "de": "Untermenü zuverlässig: Toggle/Schließen robuster (StopPropagation + ESC)."
       },
       "0.3.8": {
         "en": "Fix submenu + live status: DOMContentLoaded init and auto-reconnecting SSE.",
-        "de": "Untermen\u00fc + Live-Status gefixt: Initialisierung nach DOM-Load und automatische SSE-Reconnects."
+        "de": "Untermenü + Live-Status gefixt: Initialisierung nach DOM-Load und automatische SSE-Reconnects."
       },
       "0.3.9": {
         "en": "SSE auto-reconnect + DOMContentLoaded init (submenu + live green).",
-        "de": "SSE Auto-Reconnect + DOMContentLoaded-Init (Untermen\u00fc + Live gr\u00fcn)."
+        "de": "SSE Auto-Reconnect + DOMContentLoaded-Init (Untermenü + Live grün)."
       },
       "0.3.10": {
         "en": "Fix: JS syntax error (extra '}') prevented menu & live status. Now resolved.",
-        "de": "Fix: JS-Syntaxfehler (extra '}') blockierte Men\u00fc & Live-Status. Behoben."
+        "de": "Fix: JS-Syntaxfehler (extra '}') blockierte Menü & Live-Status. Behoben."
       },
       "0.3.11": {
         "en": "Fix: Installer panel hidden on LIVE; console warning fixed (chg undefined); menu uses hideAllPanels; 'NexoWatt Admin' label; responsive grids.",
-        "de": "Fix: Installateur-Panel auf LIVE verborgen; Konsolen-Warnung (chg undefined) behoben; Men\u00fc ruft hideAllPanels; Button hei\u00dft 'NexoWatt Admin'; responsive Grids."
+        "de": "Fix: Installateur-Panel auf LIVE verborgen; Konsolen-Warnung (chg undefined) behoben; Menü ruft hideAllPanels; Button heißt 'NexoWatt Admin'; responsive Grids."
       },
       "0.3.12": {
         "en": "Bigger brand logo and improved energy flow monitor proportions (responsive).",
-        "de": "Gr\u00f6\u00dferes Logo links oben und bessere Proportionen des Energiefluss-Monitors (responsiv)."
+        "de": "Größeres Logo links oben und bessere Proportionen des Energiefluss-Monitors (responsiv)."
       },
       "0.3.23": {
-        "de": "Installer (Login+Token) erg\u00e4nzt, /api/set mit Tokenpflicht; Donut-Render chg/dchg fix.",
+        "de": "Installer (Login+Token) ergänzt, /api/set mit Tokenpflicht; Donut-Render chg/dchg fix.",
         "en": "Added installer (login+token), token-protected /api/set; donut render chg/dchg fix."
       },
       "0.3.24": {
-        "de": "Installer-Schutz geh\u00e4rtet: kein prompt(); Formular bleibt gesperrt bis erfolgreichem Login; Panel-Init abgesichert.",
+        "de": "Installer-Schutz gehärtet: kein prompt(); Formular bleibt gesperrt bis erfolgreichem Login; Panel-Init abgesichert.",
         "en": "Hardened installer lock: removed prompt(); form stays locked until successful login; guarded panel init."
       },
       "0.3.24.1": {
@@ -189,11 +189,11 @@
       },
       "0.3.26": {
         "en": "Fix: Installer login form wrapped in <form>, cancel button closes panel; removed stray top-level await causing crash; keep settings hidden unless token present.",
-        "de": "Fix: Installer-Login in ein <form> verpackt, Abbrechen-Button schlie\u00dft den Installer; doppelten Top\u2011Level-Block mit await entfernt (Crash behoben); Einstellungen bleiben gesperrt ohne Token."
+        "de": "Fix: Installer-Login in ein <form> verpackt, Abbrechen-Button schließt den Installer; doppelten Top‑Level-Block mit await entfernt (Crash behoben); Einstellungen bleiben gesperrt ohne Token."
       },
       "0.3.27": {
         "en": "Fix: Remove extra closing braces in app.js (line ~418); add hidden username field to password form to satisfy browser accessibility hint.",
-        "de": "Fix: \u00dcberz\u00e4hlige schlie\u00dfende Klammern in app.js (ca. Zeile 418) entfernt; verstecktes Username-Feld im Passwort-Formular erg\u00e4nzt (Browser-Hinweis)."
+        "de": "Fix: Überzählige schließende Klammern in app.js (ca. Zeile 418) entfernt; verstecktes Username-Feld im Passwort-Formular ergänzt (Browser-Hinweis)."
       },
       "0.3.28": {
         "en": "Fix: donut render used undefined chg2/dchg2; replaced with charge/discharge and removed duplicate vars.",
@@ -201,15 +201,15 @@
       },
       "0.3.29": {
         "en": "Feature: Cookie-based installer session (HttpOnly); client no longer handles tokens; /config reflects lock state; guard /api/set by cookie session.",
-        "de": "Feature: Cookie-basierte Installer-Session (HttpOnly); kein Token mehr im Client; /config meldet Lock-Status; /api/set durch Session gesch\u00fctzt."
+        "de": "Feature: Cookie-basierte Installer-Session (HttpOnly); kein Token mehr im Client; /config meldet Lock-Status; /api/set durch Session geschützt."
       },
       "0.3.30": {
         "en": "Default installer password = 'install2025!' if none configured; lock active by default.",
-        "de": "Standard-Installer-Passwort = 'install2025!' falls nicht konfiguriert; Bereich standardm\u00e4\u00dfig gesperrt."
+        "de": "Standard-Installer-Passwort = 'install2025!' falls nicht konfiguriert; Bereich standardmäßig gesperrt."
       },
       "0.3.31": {
         "en": "Fix: stabilize cookie-based login route and guard; remove stray partial insertion causing SyntaxError in main.js; default password 'install2025!'.",
-        "de": "Fix: Cookie-Login/Guard bereinigt; fehlerhafte Teil-Einf\u00fcgung in main.js behoben (SyntaxError); Standard-Passwort 'install2025!'."
+        "de": "Fix: Cookie-Login/Guard bereinigt; fehlerhafte Teil-Einfügung in main.js behoben (SyntaxError); Standard-Passwort 'install2025!'."
       },
       "0.3.32": {
         "en": "Fix: remove duplicated else/closing braces in main.js login route causing SyntaxError around line 131.",
@@ -217,19 +217,19 @@
       },
       "0.3.33": {
         "en": "Fix: removed stray top-level 'await' in www/app.js (line ~275) that caused SyntaxError in browsers.",
-        "de": "Fix: \u00fcberfl\u00fcssiges Top-Level-`await` in www/app.js (~Zeile 275) entfernt (Browser-SyntaxError)."
+        "de": "Fix: überflüssiges Top-Level-`await` in www/app.js (~Zeile 275) entfernt (Browser-SyntaxError)."
       },
       "0.3.34": {
         "en": "Fix: removed leftover token code in app.js (invalid 'let null=null' and invalid assignment).",
-        "de": "Fix: verbliebenen Token-Code in app.js entfernt (ung\u00fcltiges 'let null=null' und fehlerhafte Zuweisung)."
+        "de": "Fix: verbliebenen Token-Code in app.js entfernt (ungültiges 'let null=null' und fehlerhafte Zuweisung)."
       },
       "0.3.35": {
         "en": "Fix: add missing closing brace to end of initMenu() in app.js; resolves 'Unexpected end of input'.",
-        "de": "Fix: fehlende schlie\u00dfende Klammer am Ende von initMenu() in app.js erg\u00e4nzt; behebt 'Unexpected end of input'."
+        "de": "Fix: fehlende schließende Klammer am Ende von initMenu() in app.js ergänzt; behebt 'Unexpected end of input'."
       },
       "0.3.65": {
         "en": "History: legend overlap fixed; raw-sample query; negative power below zero; auto y-scale; energy from timestamps.",
-        "de": "Historie: Legenden-\u00dcberlappung behoben; Rohwert-Abfrage; negative Leistungen unter 0; automatische Y-Skalierung; Energie via Zeitstempel."
+        "de": "Historie: Legenden-Überlappung behoben; Rohwert-Abfrage; negative Leistungen unter 0; automatische Y-Skalierung; Energie via Zeitstempel."
       },
       "0.3.66": {
         "en": "Fix: duplicate yPow declaration removed. Zero baseline highlighted.",
@@ -237,7 +237,7 @@
       },
       "0.3.67": {
         "en": "History: SoC anchored at zero line; enforced sign conventions (load/buy/charge positive, discharge/sell negative).",
-        "de": "Historie: SoC an der 0\u2011Linie verankert; Vorzeichen-Logik erzwungen (Verbrauch/Bezug/Beladung positiv, Entladung/Einspeisung negativ)."
+        "de": "Historie: SoC an der 0‑Linie verankert; Vorzeichen-Logik erzwungen (Verbrauch/Bezug/Beladung positiv, Entladung/Einspeisung negativ)."
       },
       "0.3.68": {
         "en": "Fix: removed duplicate 'y0' const in history.js to avoid SyntaxError.",
@@ -249,7 +249,7 @@
       },
       "0.3.70": {
         "en": "History colors: buy=red, pv=yellow, charge=green, discharge unchanged, feed-in=blue.",
-        "de": "Historie-Farben: Bezug=Rot, PV=Gelb, Beladung=Gr\u00fcn, Entladung unver\u00e4ndert, Einspeisung=Blau."
+        "de": "Historie-Farben: Bezug=Rot, PV=Gelb, Beladung=Grün, Entladung unverändert, Einspeisung=Blau."
       },
       "0.3.71": {
         "en": "Color tweak: load (Verbrauch) set to purple.",
@@ -260,64 +260,64 @@
         "de": "Fix: Einstellungen bleiben nach Reload in der VIS sichtbar; States werden beim Start erstellt und ausgelesen.\nVerbesserung: Lokale Settings-States sind immer in /api/state enthalten."
       },
       "0.3.85": {
-        "en": "EVCS modal: power ring now fills proportional to rated kW. Admin \u2192 EVCS: new field \u201cMax charging power (kW)\u201d.",
-        "de": "EVCS\u2011Popup: Kreis f\u00fcllt sich proportional zur Max\u2011Leistung. Admin \u2192 EVCS: neues Feld \u201eMaximale Ladeleistung (kW)\u201c."
+        "en": "EVCS modal: power ring now fills proportional to rated kW. Admin → EVCS: new field “Max charging power (kW)”.",
+        "de": "EVCS‑Popup: Kreis füllt sich proportional zur Max‑Leistung. Admin → EVCS: neues Feld „Maximale Ladeleistung (kW)“."
       },
       "0.3.86": {
-        "en": "Fix: Self-consumption card not updating when mapped \u2014 support German element IDs (selfVerbrauch*).",
-        "de": "Fix: Eigenverbrauch wurde nicht angezeigt \u2014 deutsche Element\u2011IDs (selfVerbrauch*) werden jetzt mit gesetzt."
+        "en": "Fix: Self-consumption card not updating when mapped — support German element IDs (selfVerbrauch*).",
+        "de": "Fix: Eigenverbrauch wurde nicht angezeigt — deutsche Element‑IDs (selfVerbrauch*) werden jetzt mit gesetzt."
       },
       "0.3.87": {
         "en": "Fix: Storage card now shows charge/discharge even with German element IDs.",
-        "de": "Fix: Speicher\u2011Karte zeigt Laden/Entladen nun auch mit deutschen Element\u2011IDs."
+        "de": "Fix: Speicher‑Karte zeigt Laden/Entladen nun auch mit deutschen Element‑IDs."
       },
       "0.3.88": {
         "en": "History: added Live toggle. When enabled, the chart auto-updates every 30s and keeps the end time at now.",
-        "de": "Historie: neuer Live\u2011Schalter. Aktiviert h\u00e4lt den Chart das Ende auf \u201eJetzt\u201c und l\u00e4dt alle 30\u202fs automatisch nach."
+        "de": "Historie: neuer Live‑Schalter. Aktiviert hält den Chart das Ende auf „Jetzt“ und lädt alle 30 s automatisch nach."
       },
       "0.3.89": {
         "en": "Revert History page to previous behavior: removed Live toggle and SSE connection. History is static again; use LIVE tab for realtime.",
-        "de": "Historie wieder wie zuvor: Live\u2011Schalter und SSE entfernt. Historie ist wieder statisch; Realtime wie gewohnt \u00fcber LIVE."
+        "de": "Historie wieder wie zuvor: Live‑Schalter und SSE entfernt. Historie ist wieder statisch; Realtime wie gewohnt über LIVE."
       },
       "0.3.90": {
         "en": "Fix history.html SyntaxError after revert (extra IIFE brace removed).",
-        "de": "Fix SyntaxError in history.html nach Revert (\u00fcberfl\u00fcssige geschlossene Klammer entfernt)."
+        "de": "Fix SyntaxError in history.html nach Revert (überflüssige geschlossene Klammer entfernt)."
       },
       "0.3.91": {
         "en": "History: live status dot (SSE) restored; no Live toggle. Errors are suppressed and auto-reconnect is slower to avoid console spam.",
-        "de": "Historie: Live\u2011Statuspunkt (SSE) wieder aktiv; kein Live\u2011Schalter. Fehler werden abgefangen, Reconnect mit weniger Konsole\u2011Spam."
+        "de": "Historie: Live‑Statuspunkt (SSE) wieder aktiv; kein Live‑Schalter. Fehler werden abgefangen, Reconnect mit weniger Konsole‑Spam."
       },
       "0.3.92": {
         "en": "History auto-advance restored: if 'To' is close to now, the chart auto-updates every 30s (no visible toggle).",
-        "de": "Historie l\u00e4uft wieder automatisch weiter: Wenn \u201eBis\u201c nahe \u201eJetzt\u201c liegt, aktualisiert der Chart alle 30\u202fs (ohne sichtbaren Schalter)."
+        "de": "Historie läuft wieder automatisch weiter: Wenn „Bis“ nahe „Jetzt“ liegt, aktualisiert der Chart alle 30 s (ohne sichtbaren Schalter)."
       },
       "0.3.93": {
         "en": "Service Worker cache updated (v3) and network-first for JS/HTML to prevent stale pages. Fixes issues where HISTORY didn't reflect latest code.",
-        "de": "Service\u2011Worker Cache aktualisiert (v3) und Network\u2011First f\u00fcr JS/HTML. Verhindert veraltete Seiten \u2013 HISTORY l\u00e4dt jetzt sicher den neuesten Code."
+        "de": "Service‑Worker Cache aktualisiert (v3) und Network‑First für JS/HTML. Verhindert veraltete Seiten – HISTORY lädt jetzt sicher den neuesten Code."
       },
       "0.3.95": {
         "en": "History reverted 1:1 to v0.3.84 behaviour (renderer & range logic). Uses new SW cache v3 to avoid stale files.",
-        "de": "Historie 1:1 auf Stand v0.3.84 zur\u00fcckgesetzt (Renderer & Zeitbereich). Nutzt neuen SW\u2011Cache v3, damit keine alten Dateien h\u00e4ngen bleiben."
+        "de": "Historie 1:1 auf Stand v0.3.84 zurückgesetzt (Renderer & Zeitbereich). Nutzt neuen SW‑Cache v3, damit keine alten Dateien hängen bleiben."
       },
       "0.3.96": {
-        "en": "History re\u2011revert + robust auto\u2011advance: exactly like v0.3.84 renderer, but auto updates every 15s when 'To' \u2248 now; SSE status dot restored.",
-        "de": "Historie wie v0.3.84 (Renderer), plus robuster Auto\u2011Weiterlauf (alle 15\u202fs, wenn \u201eBis\u201c \u2248 Jetzt) und wieder gr\u00fcner Status\u2011Punkt (SSE)."
+        "en": "History re‑revert + robust auto‑advance: exactly like v0.3.84 renderer, but auto updates every 15s when 'To' ≈ now; SSE status dot restored.",
+        "de": "Historie wie v0.3.84 (Renderer), plus robuster Auto‑Weiterlauf (alle 15 s, wenn „Bis“ ≈ Jetzt) und wieder grüner Status‑Punkt (SSE)."
       },
       "0.3.99": {
-        "en": "History visual: back to per-point look \u2014 force 1\u2011min step, disable step-lines, show small point markers, use LTTB sampling.",
-        "de": "Historie-Ansicht: wieder mit einzelnen Datenpunkten \u2014 1\u2011Min\u2011Aufl\u00f6sung erzwungen, keine Stufenlinien, Punkte sichtbar, LTTB-Sampling."
+        "en": "History visual: back to per-point look — force 1‑min step, disable step-lines, show small point markers, use LTTB sampling.",
+        "de": "Historie-Ansicht: wieder mit einzelnen Datenpunkten — 1‑Min‑Auflösung erzwungen, keine Stufenlinien, Punkte sichtbar, LTTB-Sampling."
       },
       "0.3.100": {
-        "en": "History: SoC line (right % axis). Live: Service Worker fetch fixed (Network\u2011First for JS/HTML; No\u2011Store for API/Events). All else same as 0.3.96 look.",
-        "de": "Historie: SoC\u2011Linie (rechte %-Achse). Live: Service\u2011Worker Fetch korrigiert (Network\u2011First f\u00fcr JS/HTML; No\u2011Store f\u00fcr API/Events). Optik wie 0.3.96."
+        "en": "History: SoC line (right % axis). Live: Service Worker fetch fixed (Network‑First for JS/HTML; No‑Store for API/Events). All else same as 0.3.96 look.",
+        "de": "Historie: SoC‑Linie (rechte %-Achse). Live: Service‑Worker Fetch korrigiert (Network‑First für JS/HTML; No‑Store für API/Events). Optik wie 0.3.96."
       },
       "0.4.10": {
-        "en": "Fix: bind and display Production \u2192 Total (kWh) and CO\u2082 savings, add ' t' unit for CO\u2082.",
-        "de": "Fix: Bindung und Anzeige f\u00fcr Produktion \u2192 Gesamt (kWh) und CO\u2082\u2011Ersparnis; zus\u00e4tzlich ' t' als Einheit f\u00fcr CO\u2082."
+        "en": "Fix: bind and display Production → Total (kWh) and CO₂ savings, add ' t' unit for CO₂.",
+        "de": "Fix: Bindung und Anzeige für Produktion → Gesamt (kWh) und CO₂‑Ersparnis; zusätzlich ' t' als Einheit für CO₂."
       },
       "0.4.17": {
         "en": "UI tweaks (sticky header, white menu icon, spacing) and fixed production tile to use current PV power. Settings from history open settings page directly.",
-        "de": "UI-Optimierungen (fixierter Header, wei\u00dfes Men\u00fc-Icon, Abst\u00e4nde) und Bugfix: Produktions-Kachel nutzt nun die aktuelle PV-Leistung. Einstellungen aus der Historie \u00f6ffnen direkt die Einstellungsseite."
+        "de": "UI-Optimierungen (fixierter Header, weißes Menü-Icon, Abstände) und Bugfix: Produktions-Kachel nutzt nun die aktuelle PV-Leistung. Einstellungen aus der Historie öffnen direkt die Einstellungsseite."
       },
       "0.4.18": {
         "en": "Add Smart Home tab placeholder controlled by admin setting.",
@@ -325,11 +325,11 @@
       },
       "0.4.20": {
         "en": "Prepared SmartHome tab: initial SmartVisu-like functions (heat pump, room temperature, wallbox lock, grid limit, PV curtailment) in NexoWatt design.",
-        "de": "SmartHome-Tab vorbereitet: erste SmartVisu-\u00e4hnliche Funktionen (W\u00e4rmepumpe, Raumtemperatur, Wallbox-Sperre, Netzlimit, PV-Abregelung) im NexoWatt-Design."
+        "de": "SmartHome-Tab vorbereitet: erste SmartVisu-ähnliche Funktionen (Wärmepumpe, Raumtemperatur, Wallbox-Sperre, Netzlimit, PV-Abregelung) im NexoWatt-Design."
       },
       "0.4.21": {
         "en": "Add SmartHome structure state built from enum.rooms / enum.functions as basis for auto-generated SmartHome page.",
-        "de": "SmartHome-Struktur-State aus enum.rooms / enum.functions hinzugef\u00fcgt \u2013 Grundlage f\u00fcr automatisch erzeugte SmartHome-Seite."
+        "de": "SmartHome-Struktur-State aus enum.rooms / enum.functions hinzugefügt – Grundlage für automatisch erzeugte SmartHome-Seite."
       },
       "0.4.22": {
         "en": "SmartHome: always builds enum.rooms / enum.functions structure into state 'smartHome.structure' on adapter start.",
@@ -337,15 +337,15 @@
       },
       "0.4.61": {
         "en": "Reworked SmartHome tab: manual rooms & devices configuration.",
-        "de": "SmartHome-Reiter neu aufgebaut: manuelle Konfiguration von R\u00e4umen und Funktionen."
+        "de": "SmartHome-Reiter neu aufgebaut: manuelle Konfiguration von Räumen und Funktionen."
       },
       "0.4.63": {
         "en": "SmartHome admin: tables for rooms and devices; preparation for manual structure.",
-        "de": "SmartHome Admin: Tabellen f\u00fcr R\u00e4ume und Ger\u00e4te, Vorbereitung f\u00fcr manuelle Struktur."
+        "de": "SmartHome Admin: Tabellen für Räume und Geräte, Vorbereitung für manuelle Struktur."
       },
       "0.4.66": {
         "en": "SmartHome admin configuration: simplified table layout (shorter column titles, widget type selector with German labels).",
-        "de": "SmartHome-Admin: Tabellenlayout vereinfacht (k\u00fcrzere Spaltentitel, Widget-Typ-Auswahl mit deutschen Bezeichnungen)."
+        "de": "SmartHome-Admin: Tabellenlayout vereinfacht (kürzere Spaltentitel, Widget-Typ-Auswahl mit deutschen Bezeichnungen)."
       },
       "0.4.67": {
         "en": "SmartHome admin: widen columns and extend widget types (switch, dimmer, jalousie, thermostat, window, status).",
@@ -353,31 +353,31 @@
       },
       "0.4.68": {
         "en": "SmartHome admin: enlarged columns, two-row layout per device and additional datapoints for thermostats (setpoint/actual).",
-        "de": "SmartHome-Admin: Spalten vergr\u00f6\u00dfert, 2-Zeilen-Layout pro Ger\u00e4t und zus\u00e4tzliche Datenpunkte f\u00fcr Thermostate (Soll/Ist)."
+        "de": "SmartHome-Admin: Spalten vergrößert, 2-Zeilen-Layout pro Gerät und zusätzliche Datenpunkte für Thermostate (Soll/Ist)."
       },
       "0.4.71": {
         "en": "SmartHome admin: devices editor as array/panel (more space, extra thermostat datapoints). SmartHome VIS: HomeKit-like tiles per device in NexoWatt design.",
-        "de": "SmartHome-Admin: Ger\u00e4te-Editor als Array/Panel (mehr Platz, zus\u00e4tzliche Thermostat-Datenpunkte). SmartHome-VIS: HomeKit-\u00e4hnliche Kacheln pro Ger\u00e4t im NexoWatt-Design."
+        "de": "SmartHome-Admin: Geräte-Editor als Array/Panel (mehr Platz, zusätzliche Thermostat-Datenpunkte). SmartHome-VIS: HomeKit-ähnliche Kacheln pro Gerät im NexoWatt-Design."
       },
       "0.4.74": {
         "en": "SmartHome: build structure from instance configuration (rooms/devices) instead of enums; keeps enums as fallback.",
-        "de": "SmartHome: Struktur wird aus der Instanzkonfiguration (R\u00e4ume/Ger\u00e4te) aufgebaut, Enums bleiben als Fallback."
+        "de": "SmartHome: Struktur wird aus der Instanzkonfiguration (Räume/Geräte) aufgebaut, Enums bleiben als Fallback."
       },
       "0.4.90": {
         "en": "SmartHome: fixed config POST body parsing and map smartHome.datapoints[] into devices structure for VIS.",
-        "de": "SmartHome: POST-Parsing der Konfiguration korrigiert und smartHome.datapoints[] automatisch in die Ger\u00e4te-Struktur der VIS \u00fcberf\u00fchrt."
+        "de": "SmartHome: POST-Parsing der Konfiguration korrigiert und smartHome.datapoints[] automatisch in die Geräte-Struktur der VIS überführt."
       },
       "0.4.91": {
         "en": "SmartHome config: add object picker and + widget button; support optional switch datapoint for dimmer.",
-        "de": "SmartHome-Konfiguration: Objekt-Auswahl und +Widget-Button erg\u00e4nzt; optionaler Schalt-Datenpunkt f\u00fcr Dimmer."
+        "de": "SmartHome-Konfiguration: Objekt-Auswahl und +Widget-Button ergänzt; optionaler Schalt-Datenpunkt für Dimmer."
       },
       "0.4.99": {
         "en": "SmartHome datapoint picker: increased object search limit to 1000 and added hint text. Minor UX polish.",
-        "de": "SmartHome-Datenpunkt-Picker: Suchlimit auf 1000 Objekte erh\u00f6ht und Hinweistexte erg\u00e4nzt. Kleine UX-Verbesserungen."
+        "de": "SmartHome-Datenpunkt-Picker: Suchlimit auf 1000 Objekte erhöht und Hinweistexte ergänzt. Kleine UX-Verbesserungen."
       },
       "0.4.100": {
         "en": "SmartHome admin tab cleaned up: old datapoint table removed; SmartHome configuration is now managed entirely via the separate configuration page.",
-        "de": "SmartHome-Admin-Reiter aufger\u00e4umt: alte Datenpunkt-Tabelle entfernt; die SmartHome-Konfiguration erfolgt jetzt vollst\u00e4ndig \u00fcber die separate Konfigurationsseite."
+        "de": "SmartHome-Admin-Reiter aufgeräumt: alte Datenpunkt-Tabelle entfernt; die SmartHome-Konfiguration erfolgt jetzt vollständig über die separate Konfigurationsseite."
       }
     },
     "title": "NexoWatt EMS UI",
@@ -387,7 +387,7 @@
     },
     "desc": {
       "en": "OpenEMS-like responsive dashboard with NexoWatt colors (green/black). All datapoints can be linked in adapter settings.",
-      "de": "OpenEMS-\u00e4hnliches responsives Dashboard in NexoWatt-Farben (gr\u00fcn/schwarz). Alle Datenpunkte sind in den Adaptereinstellungen verkn\u00fcpfbar."
+      "de": "OpenEMS-ähnliches responsives Dashboard in NexoWatt-Farben (grün/schwarz). Alle Datenpunkte sind in den Adaptereinstellungen verknüpfbar."
     },
     "authors": [
       "Visu Helper"

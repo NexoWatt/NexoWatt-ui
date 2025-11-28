@@ -932,6 +932,8 @@ function renderSmartHomeStructure(){
           let dimmerToggle = null;
           const updateToggleVisual = (on) => {
             if (!dimmerToggle) return;
+            // AN/AUS-Text wie beim Schalt-Widget
+            dimmerToggle.textContent = on ? 'AN' : 'AUS';
             if (on) {
               dimmerToggle.classList.add('is-on');
             } else {
