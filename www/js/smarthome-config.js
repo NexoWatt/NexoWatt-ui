@@ -141,22 +141,22 @@
             </div>
             ` : ''}
             ${isCover ? `
-        <div class="nw-sh-field-full">
-          <label class="nw-sh-label">Positions-Datenpunkt (0–100 %, optional)</label>
-          <div class="nw-sh-input-row">
-            <input class="nw-sh-input" data-index="${index}" data-field="levelId" value="${levelId}" placeholder="z.B. 0_userdata.0.Rolladen.Wohnen.Position">
-            <button class="nw-btn tiny" type="button" data-index="${index}" data-target-field="levelId" data-dp-picker="1">DP wählen</button>
-          </div>
-        </div>
-        <div>
-          <label class="nw-sh-label">Pfeilrichtung</label>
-          <label class="nw-sh-toggle">
-            <input type="checkbox" data-index="${index}" data-field="invertDirection" ${invertDirection ? 'checked' : ''}>
-            Auf/Ab invertiert
-          </label>
-        </div>
-        ` : ''}
-${isThermostat ? `
+            <div class="nw-sh-field-full">
+              <label class="nw-sh-label">Positions-Datenpunkt (0–100 %, optional)</label>
+              <div class="nw-sh-input-row">
+                <input class="nw-sh-input" data-index="${index}" data-field="levelId" value="${levelId}" placeholder="z.B. 0_userdata.0.Rolladen.Wohnen.Position">
+                <button class="nw-btn tiny" type="button" data-index="${index}" data-target-field="levelId" data-dp-picker="1">DP wählen</button>
+              </div>
+            </div>
+            <div class="nw-sh-field-full">
+              <label class="nw-sh-label">Pfeilrichtung invertieren</label>
+              <label class="nw-sh-toggle">
+                <input type="checkbox" data-index="${index}" data-field="invertDirection" ${invertDirection ? 'checked' : ''}>
+                Auf / Ab vertauschen
+              </label>
+            </div>
+            ` : ''}
+            ${isThermostat ? `
             <div class="nw-sh-field-full">
               <label class="nw-sh-label">Solltemperatur (Setpoint)</label>
               <div class="nw-sh-input-row">
