@@ -898,154 +898,149 @@ function renderSmartHomeStructure(){
         }
 
         if (kind === 'dimmer' || kind === 'blind' || kind === 'tempSetpoint') {
-          const wrap = document.createElement('div');
-          wrap.className = 'smh-entity-slider';
+  const wrap = document.createElement('div');
+  wrap.className = 'smh-entity-slider';
 
-          const slider = document.createElement('input');
-          slider.type = 'range';
+  const slider = document.createElement('input');
+  slider.type = 'range';
 
-          let min = (typeof ent.min === 'number') ? ent.min : null;
-          let max = (typeof ent.max === 'number') ? ent.max : null;
+  let min = (typeof ent.min === 'number') ? ent.min : null;
+  let max = (typeof ent.max === 'number') ? ent.max : null;
 
-          // sinnvolle Defaults für Temperatur-Sollwerte
-          if (kind === 'tempSetpoint') {
-            if (min === null) min = 16;
-            if (max === null) max = 26;
-          } else {
-            if (min === null) min = 0;
-            if (max === null) max = 100;
-          }
+  // sinnvolle Defaults für Temperatur-Sollwerte
+  if (kind === 'tempSetpoint') {
+    if (min === null) min = 16;
+    if (max === null) max = 26;
+  } else {
+    if (min === null) min = 0;
+    if (max === null) max = 100;
+  }
 
-          slider.min = String(min);
-          slider.max = String(max);
+  slider.min = String(min);
+  slider.max = String(max);
 
-          const initial = (typeof rawVal === 'number' && !isNaN(rawVal)) ? rawVal : min;
-          slider.value = String(initial);
+  const initial = (typeof rawVal === 'number' && !isNaN(rawVal)) ? rawVal : min;
+  slider.value = String(initial);
 
-          const label = document.createElement('span');
-          label.className = 'smh-entity-value';
-          label.textContent = formatSmartHomeValue(ent, initial);
+  const label = document.createElement('span');
+  label.className = 'smh-entity-value';
+  label.textContent = formatSmartHomeValue(ent, initial);
 
-          const baseMin = (typeof ent.min === 'number') ? ent.min : 0;
-          let lastOnLevel = (typeof initial === 'number' && initial > baseMin) ? initial : max;
+  const baseMin = (typeof ent.min === 'number') ? ent.min : 0;
+  let lastOnLevel = (typeof initial === 'number' && initial > baseMin) ? initial : max;
 
-          let dimmerToggle = null;
-          const updateToggleVisual = (on) => {
-            if (!dimmerToggle) return;
-            if (on) {
-              dimmerToggle.classList.add('is-on');
-            } else {
-              dimmerToggle.classList.remove('is-on');
-            }
-          };
+  let dimmerToggle = null;
+  const updateToggleVisual = (on) => {
+    if (!dimmerToggle) return;
+    if (on) {
+      dimmerToggle.classList.add('is-on');
+    } else {
+      dimmerToggle.classList.remove('is-on');
+    }
+  };
 
-          // separater Schalt-Button für Dimmer mit Schalt-Datenpunkt
-          if (kind === 'dimmer' && ent.controlId) {
-            dimmerToggle = document.createElement('span');
-            dimmerToggle.className = 'smh-entity-toggle smh-entity-toggle-inline';
-            dimmerToggle.textContent = initial > baseMin ? 'AN' : 'AUS';
-            updateToggleVisual(initial > baseMin);
+  // separater Schalt-Button für Dimmer mit Schalt-Datenpunkt
+  if (kind === 'dimmer' && ent.controlId) {
+    dimmerToggle = document.createElement('span');
+    dimmerToggle.className = 'smh-entity-toggle smh-entity-toggle-inline';
+    updateToggleVisual(initial > baseMin);
 
-            dimmerToggle.addEventListener('click', () => {
-              const current = Number(slider.value);
-              const currentlyOn = current > baseMin;
-              let nextLevel;
-              if (currentlyOn) {
-                nextLevel = min;
-              } else {
-                // auf letzten nicht-Null-Level oder Max springen
-                nextLevel = (typeof lastOnLevel === 'number' && lastOnLevel > baseMin) ? lastOnLevel : max;
-              }
-              lastOnLevel = nextLevel > baseMin ? nextLevel : lastOnLevel;
+    dimmerToggle.addEventListener('click', () => {
+      const current = Number(slider.value);
+      const currentlyOn = current > baseMin;
+      let nextLevel;
+      if (currentlyOn) {
+        nextLevel = min;
+      } else {
+        // auf letzten nicht-Null-Level oder Max springen
+        nextLevel = (typeof lastOnLevel === 'number' && lastOnLevel > baseMin) ? lastOnLevel : max;
+      }
+      lastOnLevel = nextLevel > baseMin ? nextLevel : lastOnLevel;
 
-              slider.value = String(nextLevel);
-              label.textContent = formatSmartHomeValue(ent, nextLevel);
+      slider.value = String(nextLevel);
+      label.textContent = formatSmartHomeValue(ent, nextLevel);
 
-              const levelId = ent.levelId || ent.id;
-              if (levelId) {
-                sendSmartHomeCommand({ id: levelId }, nextLevel);
-              } else {
-                sendSmartHomeCommand(ent, nextLevel);
-              }
+      const levelId = ent.levelId || ent.id;
+      if (levelId) {
+        sendSmartHomeCommand({ id: levelId }, nextLevel);
+      } else {
+        sendSmartHomeCommand(ent, nextLevel);
+      }
 
-              const isOnNow = nextLevel > baseMin;
-              updateToggleVisual(isOnNow);
-              if (dimmerToggle) {
-                dimmerToggle.textContent = isOnNow ? 'AN' : 'AUS';
-              }
-              // Schalt-Datenpunkt setzen
-              sendSmartHomeCommand({ id: ent.controlId }, isOnNow);
-            });
+      const isOnNow = nextLevel > baseMin;
+      updateToggleVisual(isOnNow);
+      // Schalt-Datenpunkt setzen
+      sendSmartHomeCommand({ id: ent.controlId }, isOnNow);
+    });
 
-            wrap.appendChild(dimmerToggle);
-          }
+    wrap.appendChild(dimmerToggle);
+  }
 
-          // Auf-/Ab-Taster für Jalousie (Rollladen)
-          let blindDownBtn = null;
-          let blindUpBtn = null;
-          if (kind === 'blind' && ent.controlId) {
-            const invert = !!ent.invertDirection;
+  // Up/Down-Pfeile für Jalousien (blind)
+  if (kind === 'blind') {
+    const invertDir = !!ent.invertDirection;
+    const downBtn = document.createElement('span');
+    downBtn.className = 'smh-entity-toggle smh-entity-toggle-inline';
+    downBtn.textContent = '▼';
 
-            const sendBlindCommand = (dir) => {
-              let val = dir === 'down' ? 0 : 1;
-              if (invert) {
-                val = val === 0 ? 1 : 0;
-              }
-              const targetId = ent.controlId || ent.id;
-              if (targetId) {
-                sendSmartHomeCommand(ent, val, { targetId });
-              }
-            };
+    const upBtn = document.createElement('span');
+    upBtn.className = 'smh-entity-toggle smh-entity-toggle-inline';
+    upBtn.textContent = '▲';
 
-            blindDownBtn = document.createElement('span');
-            blindDownBtn.className = 'smh-entity-toggle smh-entity-toggle-inline';
-            blindDownBtn.textContent = '▼';
-            blindDownBtn.addEventListener('click', () => sendBlindCommand('down'));
+    const controlId = ent.controlId || ent.id;
 
-            blindUpBtn = document.createElement('span');
-            blindUpBtn.className = 'smh-entity-toggle smh-entity-toggle-inline';
-            blindUpBtn.textContent = '▲';
-            blindUpBtn.addEventListener('click', () => sendBlindCommand('up'));
-          }
+    const sendBlindCommand = (direction) => {
+      // direction: 'up' | 'down'
+      if (!controlId) return;
+      let valDown = 0;
+      let valUp = 1;
+      if (invertDir) {
+        valDown = 1;
+        valUp = 0;
+      }
+      const targetVal = direction === 'down' ? valDown : valUp;
+      sendSmartHomeCommand({ id: controlId }, targetVal);
+    };
 
-          slider.addEventListener('change', () => {
-            const val = Number(slider.value);
-            label.textContent = formatSmartHomeValue(ent, val);
-            if (val > baseMin) {
-              lastOnLevel = val;
-            }
+    downBtn.addEventListener('click', () => {
+      sendBlindCommand('down');
+    });
 
-            // Wenn wir einen separaten Level-Datenpunkt haben, diesen gezielt ansprechen
-            const levelId = ent.levelId || ent.id;
-            if (levelId) {
-              sendSmartHomeCommand({ id: levelId }, val);
-            } else {
-              sendSmartHomeCommand(ent, val);
-            }
+    upBtn.addEventListener('click', () => {
+      sendBlindCommand('up');
+    });
 
-            // Optional: für Dimmer mit separatem Schalt-Datenpunkt zusätzlich Ein/Aus setzen
-            if (kind === 'dimmer' && ent.controlId) {
-              const isOn = val > baseMin;
-              updateToggleVisual(isOn);
-              if (dimmerToggle) {
-                dimmerToggle.textContent = isOn ? 'AN' : 'AUS';
-              }
-              sendSmartHomeCommand({ id: ent.controlId }, isOn);
-            }
-          });
+    wrap.appendChild(downBtn);
+    wrap.appendChild(upBtn);
+  }
 
-          // Reihenfolge: Dimmer-Toggle / Runter / Slider / Rauf / Wert
-          if (blindDownBtn) {
-            wrap.appendChild(blindDownBtn);
-          }
-          wrap.appendChild(slider);
-          if (blindUpBtn) {
-            wrap.appendChild(blindUpBtn);
-          }
-          wrap.appendChild(label);
+  slider.addEventListener('change', () => {
+    const val = Number(slider.value);
+    label.textContent = formatSmartHomeValue(ent, val);
+    if (val > baseMin) {
+      lastOnLevel = val;
+    }
 
-          row.appendChild(wrap);
-        } else {
+    // Wenn wir einen separaten Level-Datenpunkt haben, diesen gezielt ansprechen
+    const levelId = ent.levelId || ent.id;
+    if (levelId) {
+      sendSmartHomeCommand({ id: levelId }, val);
+    } else {
+      sendSmartHomeCommand(ent, val);
+    }
+
+    // Optional: für Dimmer mit separatem Schalt-Datenpunkt zusätzlich Ein/Aus setzen
+    if (kind === 'dimmer' && ent.controlId) {
+      const isOn = val > baseMin;
+      updateToggleVisual(isOn);
+      sendSmartHomeCommand({ id: ent.controlId }, isOn);
+    }
+  });
+
+  wrap.appendChild(slider);
+  wrap.appendChild(label);
+  row.appendChild(wrap);
+} else {
           const valueSpan = document.createElement('span');
           valueSpan.className = (kind === 'switch') ? 'smh-entity-toggle' : 'smh-entity-value';
           valueSpan.textContent = formatSmartHomeValue(ent, rawVal);

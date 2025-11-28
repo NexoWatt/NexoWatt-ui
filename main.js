@@ -383,8 +383,8 @@ class NexoWattVis extends utils.Adapter {
             if (entry.levelId) base.levelId = entry.levelId;
             if (entry.setpointId) base.setpointId = entry.setpointId;
             if (entry.actualId) base.actualId = entry.actualId;
-            if (entry.invertDirection) base.invertDirection = true;
             if (entry.type) base.deviceType = entry.type;
+            if (entry.invertDirection) base.invertDirection = !!entry.invertDirection;
 
             return base;
           });
@@ -537,9 +537,9 @@ class NexoWattVis extends utils.Adapter {
           levelId: dev.levelId || '',
           setpointId: dev.setpointId || '',
           actualId: dev.actualId || '',
-          invertDirection: !!dev.invertDirection,
           type: (dev.type || '').toLowerCase(),
-          label: dev.label || ''
+          label: dev.label || '',
+          invertDirection: !!dev.invertDirection
         };
 
         room.functions[funcKey].push(entry);
@@ -832,48 +832,56 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
         // while the backend builds the full rooms/devices structure for the VIS.
         try {
           if (Array.isArray(newCfg.datapoints)) {
-            const devices = [];
-            for (const dp of newCfg.datapoints) {
-              if (!dp || !dp.id) continue;
-              if (dp.enabled === false) continue;
+  const devices = [];
+  for (const dp of newCfg.datapoints) {
+    if (!dp || !dp.id) continue;
+    if (dp.enabled === false) continue;
 
-              const roomLabel = (dp.room && dp.room.toString().trim()) || '';
-              const roomId = roomLabel || '_noRoom_';
+    const roomLabel = (dp.room && dp.room.toString().trim()) || '';
+    const roomId = roomLabel || '_noRoom_';
 
-              let devType = 'generic';
-              if (dp.widget && typeof dp.widget === 'string' && dp.widget.trim()) {
-                devType = dp.widget.trim();
-              } else if (dp.function && typeof dp.function === 'string' && dp.function.trim()) {
-                devType = dp.function.trim();
-              }
+    let devType = 'generic';
+    if (dp.widget && typeof dp.widget === 'string' && dp.widget.trim()) {
+      devType = dp.widget.trim();
+    } else if (dp.function && typeof dp.function === 'string' && dp.function.trim()) {
+      devType = dp.function.trim();
+    }
 
-              const isDimmer = devType === 'dimmer';
-              const isCover = devType === 'cover';
+    const isDimmer = devType === 'dimmer';
+    const isCover = devType === 'cover';
 
-              const controlId = isDimmer
-                ? (dp.switchId || dp.id || '')
-                : (dp.id || '');
+    let controlId;
+    let levelId;
 
-              const levelId = isDimmer
-                ? (dp.levelId || dp.id || '')
-                : (dp.levelId || '');
+    if (isDimmer) {
+      controlId = dp.switchId || dp.id || '';
+      levelId = dp.levelId || dp.id || '';
+    } else if (isCover) {
+      controlId = dp.id || '';
+      levelId = dp.levelId || dp.id || '';
+    } else {
+      controlId = dp.id || '';
+      levelId = dp.levelId || '';
+    }
 
-              devices.push({
-                roomId,
-                type: devType,
-                controlId,
-                statusId: dp.statusId || '',
-                levelId,
-                setpointId: dp.setpointId || '',
-                actualId: dp.actualId || '',
-                invertDirection: !!dp.invertDirection,
-                label: dp.label || ''
-              });
-            }
+    devices.push({
+      roomId,
+      type: devType,
+      controlId,
+      statusId: dp.statusId || '',
+      levelId,
+      setpointId: dp.setpointId || '',
+      actualId: dp.actualId || '',
+      invertDirection: !!dp.invertDirection,
+      label: dp.label || ''
+    });
+  }
 
-            // Always derive devices[] from datapoints[] so that changes in the
-            // SmartHome-Konfiguration im Admin direkt in der VIS-Struktur ankommen.
-            newCfg.devices = devices;
+  // Always derive devices[] from datapoints[] so that changes in the
+  // SmartHome-Konfiguration im Admin direkt in der VIS-Struktur ankommen.
+  newCfg.devices = devices;
+}
+
           }
         } catch (e) {
           this.log.error('Error while normalizing SmartHome config: ' + e);
