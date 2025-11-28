@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.110",
+    "version": "0.4.112",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
@@ -378,6 +378,14 @@
       "0.4.100": {
         "en": "SmartHome admin tab cleaned up: old datapoint table removed; SmartHome configuration is now managed entirely via the separate configuration page.",
         "de": "SmartHome-Admin-Reiter aufgeräumt: alte Datenpunkt-Tabelle entfernt; die SmartHome-Konfiguration erfolgt jetzt vollständig über die separate Konfigurationsseite."
+      },
+      "0.4.111": {
+        "de": "SmartHome: RTR-Bedienkachel mit Ist-/Soll-Temperatur und Heizen/Kühlen-Modus in der VIS.",
+        "en": "SmartHome: thermostat (RTR) tile with current/set temperature and heat/cool mode in the VIS."
+      },
+      "0.4.112": {
+        "de": "Bugfix: SmartHome-THERMOSTAT (RTR) Kachel ohne Syntaxfehler, inkl. Ist/Soll und Heizen/Kühlen.",
+        "en": "Bugfix: SmartHome thermostat (RTR) tile without syntax errors, including current/set temp and heat/cool mode."
       }
     },
     "title": "NexoWatt EMS UI",

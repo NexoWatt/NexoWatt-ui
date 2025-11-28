@@ -510,14 +510,23 @@ class NexoWattVis extends utils.Adapter {
       for (const dev of devicesCfg) {
         if (!dev) continue;
 
-        const id = dev.levelId || dev.controlId || dev.statusId || dev.setpointId || dev.actualId;
+        // Für Thermostate den Sollwert-Datenpunkt bevorzugen,
+        // sonst wie bisher Level-/Schalt-Datenpunkte verwenden.
+        let id;
+        const devType = (dev.type || '').toLowerCase();
+        if (devType === 'thermostat' || devType === 'climate') {
+          id = dev.setpointId || dev.controlId || dev.levelId || dev.statusId || dev.actualId;
+        } else {
+          id = dev.levelId || dev.controlId || dev.statusId || dev.setpointId || dev.actualId;
+        }
+
         if (!id) {
           this.log.debug && this.log.debug('SmartHome-Konfiguration: Gerät ohne gültigen Datenpunkt übersprungen: ' + JSON.stringify(dev));
           continue;
         }
 
         const room = ensureRoom(dev.roomId || '_noRoom_');
-        const funcKey = (dev.type || 'generic').toLowerCase();
+        const funcKey = devType || 'generic';
         const funcName = funcNameFallbacks[funcKey] || funcKey || 'Funktion';
 
         if (!room.functions[funcKey]) {
@@ -538,7 +547,7 @@ class NexoWattVis extends utils.Adapter {
           setpointId: dev.setpointId || '',
           actualId: dev.actualId || '',
           invertDirection: !!dev.invertDirection,
-          type: (dev.type || '').toLowerCase(),
+          type: devType,
           label: dev.label || ''
         };
 
@@ -590,16 +599,18 @@ class NexoWattVis extends utils.Adapter {
       for (const room of Object.values(rooms)) {
         for (const funcKey of Object.keys(room.functions)) {
           room.functions[funcKey] = room.functions[funcKey].map(entry => {
-            const obj = stateObjects[entry.id];
-            if (!enumKeyById[entry.id]) {
-              enumKeyById[entry.id] = 'smartEnum_' + (enumIdx++);
+            // Haupt-Datenpunkt (id) immer mappen
+            const mainId = entry.id;
+            const obj = stateObjects[mainId];
+            if (!enumKeyById[mainId]) {
+              enumKeyById[mainId] = 'smartEnum_' + (enumIdx++);
             }
             const common = obj && obj.common || {};
 
             const base = {
-              id: entry.id,
-              key: enumKeyById[entry.id],
-              name: entry.label || (common && common.name ? common.name : entry.id),
+              id: mainId,
+              key: enumKeyById[mainId],
+              name: entry.label || (common && common.name ? common.name : mainId),
               role: common && common.role ? common.role : '',
               type: common && common.type ? common.type : '',
               write: !!(common && common.write),
@@ -608,17 +619,38 @@ class NexoWattVis extends utils.Adapter {
               unit: common && common.unit ? common.unit : ''
             };
 
+            // zusätzliche Datenpunkte (Setpunkt, Istwert, Modus) mit eigenen Keys versehen,
+            // damit die VIS sie separat aus dem State-Cache lesen kann.
+            if (entry.setpointId) {
+              if (!enumKeyById[entry.setpointId]) {
+                enumKeyById[entry.setpointId] = 'smartEnum_' + (enumIdx++);
+              }
+              base.setpointId = entry.setpointId;
+              base.setpointKey = enumKeyById[entry.setpointId];
+            }
+            if (entry.actualId) {
+              if (!enumKeyById[entry.actualId]) {
+                enumKeyById[entry.actualId] = 'smartEnum_' + (enumIdx++);
+              }
+              base.actualId = entry.actualId;
+              base.actualKey = enumKeyById[entry.actualId];
+            }
+            if (entry.statusId) {
+              if (!enumKeyById[entry.statusId]) {
+                enumKeyById[entry.statusId] = 'smartEnum_' + (enumIdx++);
+              }
+              base.statusId = entry.statusId;
+              base.modeKey = enumKeyById[entry.statusId];
+            }
             if (entry.controlId) base.controlId = entry.controlId;
-            if (entry.statusId) base.statusId = entry.statusId;
             if (entry.levelId) base.levelId = entry.levelId;
-            if (entry.setpointId) base.setpointId = entry.setpointId;
-            if (entry.actualId) base.actualId = entry.actualId;
             if (entry.type) base.deviceType = entry.type;
 
             return base;
           });
          }
       }
+
 
       // store mapping for later state-change handling
       this.smartHomeEnumKeyById = enumKeyById;

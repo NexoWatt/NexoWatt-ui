@@ -754,3 +754,26 @@ body {
   cursor: pointer;
   font-size: 16px;
 }
+
+
+/* SmartHome – RTR (Thermostat) Zusatz-Elemente */
+.smh-entity-actual-wrap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-left: 8px;
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+.smh-entity-actual {
+  font-weight: 500;
+}
+
+.smh-entity-mode {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #283241;
+  font-size: 11px;
+}

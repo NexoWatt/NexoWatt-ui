@@ -897,6 +897,7 @@ function renderSmartHomeStructure(){
 
         const row = document.createElement('div');
         const kind = detectSmartHomeEntityType(ent);
+        const isThermostat = (ent.deviceType === 'thermostat' || ent.deviceType === 'climate');
         row.className = 'smh-entity-row' + (kind === 'switch' ? ' interactive' : '');
 
         const nameSpan = document.createElement('span');
@@ -904,7 +905,7 @@ function renderSmartHomeStructure(){
         nameSpan.textContent = ent.name || ent.id;
         row.appendChild(nameSpan);
 
-        const keyVal = ent.key || null;
+        const keyVal = isThermostat && ent.setpointKey ? ent.setpointKey : (ent.key || null);
         let rawVal;
         if (keyVal && state && state[keyVal]) {
           rawVal = state[keyVal].value;
@@ -957,11 +958,12 @@ function renderSmartHomeStructure(){
             dimmerToggle = document.createElement('span');
             dimmerToggle.className = 'smh-entity-toggle smh-entity-toggle-inline';
             dimmerToggle.textContent = initial > baseMin ? 'AN' : 'AUS';
-            updateToggleVisual(initial > baseMin);
+            if (initial > baseMin) {
+              dimmerToggle.classList.add('is-on');
+            }
 
             dimmerToggle.addEventListener('click', () => {
-              const current = Number(slider.value);
-              const currentlyOn = current > baseMin;
+              const currentlyOn = lastOnLevel > baseMin;
               let nextLevel;
               if (currentlyOn) {
                 nextLevel = min;
@@ -974,6 +976,7 @@ function renderSmartHomeStructure(){
               slider.value = String(nextLevel);
               label.textContent = formatSmartHomeValue(ent, nextLevel);
 
+              // für Dimmer weiterhin den Level-Datenpunkt benutzen
               const levelId = ent.levelId || ent.id;
               if (levelId) {
                 sendSmartHomeCommand({ id: levelId }, nextLevel);
@@ -996,8 +999,8 @@ function renderSmartHomeStructure(){
           // Auf-/Ab-Taster für Jalousie (Rollladen)
           let blindDownBtn = null;
           let blindUpBtn = null;
-          if (kind === 'blind' && ent.controlId) {
-            const invert = !!ent.invertDirection;
+          if (kind === 'blind') {
+            let invert = !!ent.invertDirection;
 
             const sendBlindCommand = (dir) => {
               let val = dir === 'down' ? 0 : 1;
@@ -1028,16 +1031,23 @@ function renderSmartHomeStructure(){
               lastOnLevel = val;
             }
 
+            // Level-Datenpunkt anhand des Widget-Typs bestimmen:
+            let levelId;
+            if (kind === 'tempSetpoint' && isThermostat && ent.setpointId) {
+              levelId = ent.setpointId;
+            } else {
+              levelId = ent.levelId || ent.id;
+            }
+
             // Wenn wir einen separaten Level-Datenpunkt haben, diesen gezielt ansprechen
-            const levelId = ent.levelId || ent.id;
             if (levelId) {
               sendSmartHomeCommand({ id: levelId }, val);
             } else {
               sendSmartHomeCommand(ent, val);
             }
 
-            // Optional: für Dimmer mit separatem Schalt-Datenpunkt zusätzlich Ein/Aus setzen
             if (kind === 'dimmer' && ent.controlId) {
+              // Dimmer-Schaltpunkt basierend auf Level setzen
               const isOn = val > baseMin;
               updateToggleVisual(isOn);
               if (dimmerToggle) {
@@ -1056,6 +1066,83 @@ function renderSmartHomeStructure(){
             wrap.appendChild(blindUpBtn);
           }
           wrap.appendChild(label);
+
+          // Zusatz-Elemente speziell für Thermostate: Ist-Temperatur und Modus
+          if (kind === 'tempSetpoint' && isThermostat) {
+            // Ist-Temperatur-Anzeige (falls konfiguriert)
+            if (ent.actualKey) {
+              const actualWrap = document.createElement('span');
+              actualWrap.className = 'smh-entity-value smh-entity-actual-wrap';
+
+              const actualLabel = document.createElement('span');
+              actualLabel.textContent = 'Ist:';
+              actualLabel.style.opacity = '0.8';
+              actualLabel.style.marginRight = '4px';
+
+              const actualSpan = document.createElement('span');
+              actualSpan.className = 'smh-entity-value smh-entity-actual';
+              const actualState = state && state[ent.actualKey];
+              const actualVal = actualState ? actualState.value : undefined;
+              if (typeof actualVal === 'number' && !isNaN(actualVal)) {
+                actualSpan.textContent = actualVal.toFixed(1) + ' °C';
+              } else {
+                actualSpan.textContent = '--';
+              }
+
+              actualWrap.appendChild(actualLabel);
+              actualWrap.appendChild(actualSpan);
+              wrap.appendChild(actualWrap);
+            }
+
+            // Modus-Umschaltung Heizen/Kühlen (falls konfiguriert)
+            if (ent.modeKey && ent.statusId) {
+              const modeSpan = document.createElement('span');
+              modeSpan.className = 'smh-entity-toggle smh-entity-toggle-inline smh-entity-mode';
+
+              const modeState = state && state[ent.modeKey];
+              let modeVal = modeState ? modeState.value : undefined;
+
+              const modeLabelFor = (v) => {
+                if (v === undefined || v === null) return 'Modus';
+                if (typeof v === 'boolean') {
+                  return v ? 'Kühlen' : 'Heizen';
+                }
+                if (typeof v === 'number') {
+                  return v >= 0.5 ? 'Kühlen' : 'Heizen';
+                }
+                const s = String(v).toLowerCase();
+                if (s.includes('cool') || s.includes('kühl')) return 'Kühlen';
+                if (s.includes('heat') || s.includes('heiz')) return 'Heizen';
+                return String(v);
+              };
+
+              modeSpan.textContent = modeLabelFor(modeVal);
+
+              const isToggleable = typeof modeVal === 'boolean' || typeof modeVal === 'number';
+              if (isToggleable) {
+                modeSpan.addEventListener('click', () => {
+                  const currentState = state && state[ent.modeKey];
+                  const current = currentState ? currentState.value : modeVal;
+                  let next = current;
+                  if (typeof current === 'boolean') {
+                    next = !current;
+                  } else if (typeof current === 'number') {
+                    next = current >= 0.5 ? 0 : 1;
+                  } else {
+                    return;
+                  }
+
+                  modeSpan.textContent = modeLabelFor(next);
+                  const targetId = ent.statusId || ent.controlId || ent.id;
+                  if (targetId) {
+                    sendSmartHomeCommand({ id: targetId }, next, { targetId });
+                  }
+                });
+              }
+
+              wrap.appendChild(modeSpan);
+            }
+          }
 
           row.appendChild(wrap);
         } else {
