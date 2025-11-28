@@ -932,8 +932,6 @@ function renderSmartHomeStructure(){
           let dimmerToggle = null;
           const updateToggleVisual = (on) => {
             if (!dimmerToggle) return;
-            // AN/AUS-Text wie beim Schalt-Widget
-            dimmerToggle.textContent = on ? 'AN' : 'AUS';
             if (on) {
               dimmerToggle.classList.add('is-on');
             } else {
@@ -945,6 +943,7 @@ function renderSmartHomeStructure(){
           if (kind === 'dimmer' && ent.controlId) {
             dimmerToggle = document.createElement('span');
             dimmerToggle.className = 'smh-entity-toggle smh-entity-toggle-inline';
+            dimmerToggle.textContent = initial > baseMin ? 'AN' : 'AUS';
             updateToggleVisual(initial > baseMin);
 
             dimmerToggle.addEventListener('click', () => {
@@ -971,11 +970,42 @@ function renderSmartHomeStructure(){
 
               const isOnNow = nextLevel > baseMin;
               updateToggleVisual(isOnNow);
+              if (dimmerToggle) {
+                dimmerToggle.textContent = isOnNow ? 'AN' : 'AUS';
+              }
               // Schalt-Datenpunkt setzen
               sendSmartHomeCommand({ id: ent.controlId }, isOnNow);
             });
 
             wrap.appendChild(dimmerToggle);
+          }
+
+          // Auf-/Ab-Taster für Jalousie (Rollladen)
+          let blindDownBtn = null;
+          let blindUpBtn = null;
+          if (kind === 'blind' && ent.controlId) {
+            const invert = !!ent.invertDirection;
+
+            const sendBlindCommand = (dir) => {
+              let val = dir === 'down' ? 0 : 1;
+              if (invert) {
+                val = val === 0 ? 1 : 0;
+              }
+              const targetId = ent.controlId || ent.id;
+              if (targetId) {
+                sendSmartHomeCommand(ent, val, { targetId });
+              }
+            };
+
+            blindDownBtn = document.createElement('span');
+            blindDownBtn.className = 'smh-entity-toggle smh-entity-toggle-inline';
+            blindDownBtn.textContent = '▼';
+            blindDownBtn.addEventListener('click', () => sendBlindCommand('down'));
+
+            blindUpBtn = document.createElement('span');
+            blindUpBtn.className = 'smh-entity-toggle smh-entity-toggle-inline';
+            blindUpBtn.textContent = '▲';
+            blindUpBtn.addEventListener('click', () => sendBlindCommand('up'));
           }
 
           slider.addEventListener('change', () => {
@@ -994,15 +1024,26 @@ function renderSmartHomeStructure(){
             }
 
             // Optional: für Dimmer mit separatem Schalt-Datenpunkt zusätzlich Ein/Aus setzen
-            if (ent.controlId) {
+            if (kind === 'dimmer' && ent.controlId) {
               const isOn = val > baseMin;
               updateToggleVisual(isOn);
+              if (dimmerToggle) {
+                dimmerToggle.textContent = isOn ? 'AN' : 'AUS';
+              }
               sendSmartHomeCommand({ id: ent.controlId }, isOn);
             }
           });
 
+          // Reihenfolge: Dimmer-Toggle / Runter / Slider / Rauf / Wert
+          if (blindDownBtn) {
+            wrap.appendChild(blindDownBtn);
+          }
           wrap.appendChild(slider);
+          if (blindUpBtn) {
+            wrap.appendChild(blindUpBtn);
+          }
           wrap.appendChild(label);
+
           row.appendChild(wrap);
         } else {
           const valueSpan = document.createElement('span');

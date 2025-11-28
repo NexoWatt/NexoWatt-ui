@@ -73,6 +73,7 @@
       const levelId = escapeHtml(item.levelId || '');
       const setpointId = escapeHtml(item.setpointId || '');
       const actualId = escapeHtml(item.actualId || '');
+      const invertDirection = !!item.invertDirection;
       const enabledFlag = item.enabled !== false;
       const isDimmer = widget === 'dimmer';
       const isCover = widget === 'cover';
@@ -146,6 +147,13 @@
                 <input class="nw-sh-input" data-index="${index}" data-field="levelId" value="${levelId}" placeholder="z.B. 0_userdata.0.Rolladen.Wohnen.Position">
                 <button class="nw-btn tiny" type="button" data-index="${index}" data-target-field="levelId" data-dp-picker="1">DP wählen</button>
               </div>
+            </div>
+            <div class="nw-sh-field-full">
+              <label class="nw-sh-label">Pfeilrichtung invertieren</label>
+              <label class="nw-sh-toggle">
+                <input type="checkbox" data-index="${index}" data-field="invertDirection" ${invertDirection ? 'checked' : ''}>
+                Auf / Ab vertauschen
+              </label>
             </div>
             ` : ''}
             ${isThermostat ? `
@@ -394,6 +402,7 @@
       levelId: '',
       setpointId: '',
       actualId: '',
+      invertDirection: false,
       enabled: true
     });
     render();

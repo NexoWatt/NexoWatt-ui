@@ -1,7 +1,3 @@
-### 0.4.108 – 2025-11-28
-- SmartHome: Dimmer-Kacheln mit separatem Schalt-Datenpunkt zeigen jetzt den gleichen AN/AUS-Schaltbutton wie „Schalten“.
-- SmartHome: Der Inline-Schaltbutton beim Dimmer wird automatisch mit dem aktuellen Status synchronisiert (Slider & Schalter).
-
 ### 0.4.103 – 2025-11-27
 - Fix: SmartHome-Konfigbutton im Admin verwendet jetzt immer die Host-IP des Admin-Aufrufs (ohne Admin-Port) und öffnet `http(s)://<host>:<port>/smarthome-config`.
 - Fix: `subscribeConfiguredStates()` ignoriert ungültige Mappings (Boolean/Objekte) und verhindert den „pattern needs to be of type 'string'“-Fehler.
