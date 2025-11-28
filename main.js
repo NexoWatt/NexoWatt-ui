@@ -613,7 +613,6 @@ class NexoWattVis extends utils.Adapter {
             if (entry.levelId) base.levelId = entry.levelId;
             if (entry.setpointId) base.setpointId = entry.setpointId;
             if (entry.actualId) base.actualId = entry.actualId;
-            if (entry.invertDirection) base.invertDirection = true;
             if (entry.type) base.deviceType = entry.type;
 
             return base;

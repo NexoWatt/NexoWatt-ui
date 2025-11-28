@@ -579,25 +579,40 @@ function getSmartHomeStructure(){
 function detectSmartHomeEntityType(ent) {
   const role = (ent && ent.role) ? String(ent.role) : '';
   const r = role.toLowerCase();
-  const type = (ent && ent.type) ? String(ent.type).toLowerCase() : '';
+  const dpType = (ent && ent.type) ? String(ent.type).toLowerCase() : '';
+  const deviceType = ent && ent.deviceType ? String(ent.deviceType).toLowerCase() : '';
   const writable = !!(ent && ent.write);
   const unit = ent && ent.unit ? String(ent.unit).toLowerCase() : '';
 
-  if (!r && !type) return 'sensor';
+  if (!r && !dpType && !deviceType) return 'sensor';
 
-  // Basislogik nach KNX / ioBroker-Rollen
+  // 1) Expliziter Gerätetyp aus der SmartHome-Konfiguration
+  if (deviceType) {
+    if (deviceType === 'cover' || deviceType === 'blind') return 'blind';
+    if (deviceType === 'dimmer' || deviceType === 'light') return 'dimmer';
+    if (deviceType === 'switch') return 'switch';
+    if (deviceType === 'thermostat' || deviceType === 'climate') return 'tempSetpoint';
+  }
+
+  // 2) Basislogik nach KNX / ioBroker-Rollen
   const baseRole = r.split('.')[0];
+
+  // Rollläden / Jalousien zuerst, damit level.blind nicht als generischer Dimmer behandelt wird
+  if (r.includes('blind') || r.includes('shutter') || r.startsWith('level.blind')) {
+    return 'blind';
+  }
+
   if (baseRole === 'switch') {
     // Schalten
     return 'switch';
   }
-  if (baseRole === 'level') {
-    // Level = Slider (Dimmer / Prozentwert)
-    return 'dimmer';
-  }
   if (baseRole === 'indicator' || baseRole === 'value') {
     // reine Anzeige / Rückmeldung
     return 'sensor';
+  }
+  if (baseRole === 'level') {
+    // Level = Slider (Dimmer / Prozentwert)
+    return 'dimmer';
   }
 
   // klassische Schalter
@@ -605,9 +620,6 @@ function detectSmartHomeEntityType(ent) {
 
   // Dimmer (z.B. Helligkeit)
   if (r.startsWith('level.dimmer') || r.startsWith('level.brightness')) return 'dimmer';
-
-  // Rollläden / Jalousien
-  if (r.includes('blind') || r.includes('shutter') || r.startsWith('level.blind')) return 'blind';
 
   // Temperatur (Ist vs. Soll)
   if (r.startsWith('value.temperature') || r.startsWith('level.temperature')) {
@@ -617,13 +629,14 @@ function detectSmartHomeEntityType(ent) {
 
   // Speziell für prozentuale Level (z.B. Helligkeit, Jalousie)
   if (r.includes('level.wave')) return 'dimmer';
-  if (writable && type === 'number' && unit === '%') return 'dimmer';
+  if (writable && dpType === 'number' && unit === '%') return 'dimmer';
 
   // Fallbacks
-  if (writable && type === 'boolean') return 'switch';
+  if (writable && dpType === 'boolean') return 'switch';
 
   return 'sensor';
 }
+
 function formatSmartHomeValue(ent, rawVal) {
   const kind = detectSmartHomeEntityType(ent);
   const type = (ent && ent.type) ? String(ent.type).toLowerCase() : '';
