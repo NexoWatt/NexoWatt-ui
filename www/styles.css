@@ -752,4 +752,5 @@ body {
 .smh-entity-slider .smh-entity-toggle-inline {
   margin-right: 0.75rem;
   cursor: pointer;
+  font-size: 16px;
 }

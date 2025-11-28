@@ -1,3 +1,8 @@
+### 0.4.110 – 2025-11-28
+- SmartHome VIS: Pfeiltasten (▲/▼) für Jalousien wurden optisch vergrößert (größere Schrift in `.smh-entity-toggle-inline`).
+- Sonst keine funktionalen Änderungen.
+
+
 ### 0.4.109 (2025-11-28)
 - Fix: SmartHome erkennt Jalousien/Rollläden mit Typ *cover/blind* nun korrekt als `blind`.
 - Fix: ON/OFF-Icon bleibt für Dimmer, Jalousien bekommen wie vorgesehen die Auf/Ab-Pfeile.
