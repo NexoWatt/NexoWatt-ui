@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-vis",
-  "version": "0.4.119-smarthome-cards-ui",
+  "version": "0.4.120-smarthome-cards-ui2",
   "description": "Responsive NexoWatt EMS visualization adapter (OpenEMS-like) for ioBroker.",
   "author": "Visu Helper",
   "license": "MIT",

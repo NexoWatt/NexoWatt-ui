@@ -819,11 +819,13 @@ body {
 .smh-entity-group {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 8px;
   box-sizing: border-box;
-  flex: 1 1 260px;
-  max-width: 420px;
-  min-height: 80px;
+  flex: 0 1 260px;
+  max-width: 320px;
+  min-height: 72px;
   margin: 4px 4px 8px 0;
   padding: 8px 10px;
   border-radius: 16px;
