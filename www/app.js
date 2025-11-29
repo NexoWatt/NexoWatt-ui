@@ -887,18 +887,18 @@ function renderSmartHomeStructure(){
     funcHeader.textContent = resolveDisplayName(funcNames[fKey], fKey);
     funcCard.appendChild(funcHeader);
 
-    // Gruppen pro Kanal / Funktion bilden (z.B. Licht Schalten + Dimmen, Ist+Soll Temperatur)
+    // Gruppen pro Kanal / Funktion bilden – jetzt eine Kachel pro Entity
     const groupsMap = {};
     for (const ent of entries) {
-      if (!ent || !ent.id) continue;
+      if (!ent) continue;
       // Wenn widgetIndex vorhanden ist (manuelle Konfiguration), immer eine eigene Gruppe pro Widget
       const widgetKey = (typeof ent.widgetIndex === 'number') ? ('w_' + String(ent.widgetIndex)) : null;
-      const gKey = widgetKey || getGroupKey(ent) || (ent.name || ent.id);
+      const baseKey = ent.id || ent.setpointId || ent.key || ent.name;
+      const gKey = widgetKey || baseKey;
+      if (!gKey) continue;
       if (!groupsMap[gKey]) groupsMap[gKey] = [];
       groupsMap[gKey].push(ent);
     }
-    }
-
     const groupKeys = Object.keys(groupsMap);
     for (const gKey of groupKeys) {
       const groupEntities = groupsMap[gKey];
