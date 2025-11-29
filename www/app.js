@@ -887,18 +887,19 @@ function renderSmartHomeStructure(){
     funcHeader.textContent = resolveDisplayName(funcNames[fKey], fKey);
     funcCard.appendChild(funcHeader);
 
-    // Gruppen pro Kanal / Funktion bilden – jetzt eine Kachel pro Entity
+    // Gruppen: ab jetzt immer eine Kachel pro Widget/Eintrag
     const groupsMap = {};
-    for (const ent of entries) {
+    for (let idx = 0; idx < entries.length; idx++) {
+      const ent = entries[idx];
       if (!ent) continue;
-      // Wenn widgetIndex vorhanden ist (manuelle Konfiguration), immer eine eigene Gruppe pro Widget
+      // widgetIndex aus der Server-Struktur verwenden, falls vorhanden
       const widgetKey = (typeof ent.widgetIndex === 'number') ? ('w_' + String(ent.widgetIndex)) : null;
-      const baseKey = ent.id || ent.setpointId || ent.key || ent.name;
-      const gKey = widgetKey || baseKey;
+      const keyFallback = ent.id || ent.setpointId || ent.controlId || ent.levelId || ent.statusId || ent.actualId || ent.name || ('idx_' + idx);
+      const gKey = widgetKey || keyFallback;
       if (!gKey) continue;
-      if (!groupsMap[gKey]) groupsMap[gKey] = [];
-      groupsMap[gKey].push(ent);
+      groupsMap[gKey] = [ent];
     }
+
     const groupKeys = Object.keys(groupsMap);
     for (const gKey of groupKeys) {
       const groupEntities = groupsMap[gKey];
