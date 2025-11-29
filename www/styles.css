@@ -738,12 +738,16 @@ body {
 
 .smh-entity-slider {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  justify-content: flex-start;
+  gap: 6px 10px;
 }
 
 .smh-entity-slider input[type="range"] {
-  width: 100%;
+  flex: 1 1 140px;
+  min-width: 120px;
+  max-width: 100%;
 }
 
 /* SmartHome – Empty state helper */
@@ -764,7 +768,7 @@ body {
 
 
 /* kleiner Schalt-Button für Dimmer direkt im Slider-Bereich */
-.smh-entity-slider .smh-entity-toggle-inline {
+.smh-entity-slider ..smh-entity-toggle-inline {
   margin-right: 0.75rem;
   cursor: pointer;
   font-size: 13px;
@@ -819,15 +823,15 @@ body {
 .smh-entity-group {
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
   align-items: flex-start;
   gap: 8px;
   box-sizing: border-box;
-  flex: 0 1 260px;
-  max-width: 320px;
-  min-height: 72px;
-  margin: 4px 4px 8px 0;
-  padding: 8px 10px;
+  flex: 1 1 280px;
+  width: auto;
+  max-width: 360px;
+  min-height: 80px;
+  margin: 6px 8px 10px 0;
+  padding: 10px 12px;
   border-radius: 16px;
 }
 
