@@ -982,7 +982,7 @@ function renderSmartHomeStructure(){
           };
 
           // separater Schalt-Button für Dimmer mit Schalt-Datenpunkt
-          if (kind === 'dimmer' && ent.controlId) {
+          if (kind === 'dimmer' && ent.switchId) {
             dimmerToggle = document.createElement('span');
             dimmerToggle.className = 'smh-entity-toggle smh-entity-toggle-inline';
             dimmerToggle.textContent = initial > baseMin ? 'AN' : 'AUS';
@@ -1018,7 +1018,7 @@ function renderSmartHomeStructure(){
                 dimmerToggle.textContent = isOnNow ? 'AN' : 'AUS';
               }
               // Schalt-Datenpunkt setzen
-              sendSmartHomeCommand({ id: ent.controlId }, isOnNow);
+              sendSmartHomeCommand({ id: ent.switchId }, isOnNow);
             });
 
             wrap.appendChild(dimmerToggle);
@@ -1035,7 +1035,7 @@ function renderSmartHomeStructure(){
               if (invert) {
                 val = val === 0 ? 1 : 0;
               }
-              const targetId = ent.controlId || ent.id;
+              const targetId = ent.switchId || ent.id;
               if (targetId) {
                 sendSmartHomeCommand(ent, val, { targetId });
               }
@@ -1053,6 +1053,15 @@ function renderSmartHomeStructure(){
           }
 
           slider.addEventListener('change', () => {
+            // store last level
+            if(ent && ent.levelId){ lastDimmerLevels[ent.levelId] = Number(slider.value); }
+            // Auto-on hybrid logic
+            if (ent && ent.switchId) {
+                if (!adapterStates[ent.switchId]) {
+                    window.fetch(`/set/${ent.switchId}`, {method:'POST', body: JSON.stringify({val: true})});
+                }
+            }
+            
             const val = Number(slider.value);
             renderValueWithUnit(label, formatSmartHomeValue(ent, val));
             if (val > baseMin) {
@@ -1074,14 +1083,14 @@ function renderSmartHomeStructure(){
               sendSmartHomeCommand(ent, val);
             }
 
-            if (kind === 'dimmer' && ent.controlId) {
+            if (kind === 'dimmer' && ent.switchId) {
               // Dimmer-Schaltpunkt basierend auf Level setzen
               const isOn = val > baseMin;
               updateToggleVisual(isOn);
               if (dimmerToggle) {
                 dimmerToggle.textContent = isOn ? 'AN' : 'AUS';
               }
-              sendSmartHomeCommand({ id: ent.controlId }, isOn);
+              sendSmartHomeCommand({ id: ent.switchId }, isOn);
             }
           });
 
@@ -1161,7 +1170,7 @@ function renderSmartHomeStructure(){
                   }
 
                   modeSpan.textContent = modeLabelFor(next);
-                  const targetId = ent.statusId || ent.controlId || ent.id;
+                  const targetId = ent.statusId || ent.switchId || ent.id;
                   if (targetId) {
                     sendSmartHomeCommand({ id: targetId }, next, { targetId });
                   }
@@ -1202,7 +1211,7 @@ function renderSmartHomeStructure(){
                 valueSpan.classList.remove('is-on');
               }
 
-              const targetId = ent.controlId || ent.id;
+              const targetId = ent.switchId || ent.id;
               sendSmartHomeCommand(ent, next, { targetId });
             });
           }
