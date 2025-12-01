@@ -943,49 +943,6 @@ function renderSmartHomeStructure(){
           const wrap = document.createElement('div');
           wrap.className = 'smh-entity-slider';
 
-          
-      // --- Blind header ---
-      if (kind === 'blind') {
-        const n = Number(current);
-        displaySpan.textContent = isNaN(n) ? '--' : Math.round(n) + ' %';
-        
-        const header = document.createElement('div');
-        header.className = 'smh-entity-header';
-
-        const left = document.createElement('div');
-        left.className = 'smh-entity-title';
-
-        const icon = document.createElement('img');
-        icon.className = 'smh-entity-icon';
-        if(ent.icon) icon.src = ent.icon;
-        left.appendChild(icon);
-
-        const t = document.createElement('span');
-        t.textContent = ent.name || '';
-        left.appendChild(t);
-
-        const btns = document.createElement('div');
-        btns.className = 'smh-blind-buttons';
-
-        const upBtn = document.createElement('span');
-        upBtn.className = 'material-icons smh-blind-btn';
-        upBtn.textContent = '';
-        upBtn.onclick = () => { if(ent.upId) sendSmartHomeCommand({id: ent.upId}, true); };
-
-        const downBtn = document.createElement('span');
-        downBtn.className = 'material-icons smh-blind-btn';
-        downBtn.textContent = '';
-        downBtn.onclick = () => { if(ent.downId) sendSmartHomeCommand({id: ent.downId}, true); };
-
-        btns.appendChild(upBtn);
-        btns.appendChild(downBtn);
-
-        header.appendChild(left);
-        header.appendChild(btns);
-        funcCard.appendChild(header);
-      }
-      // --- End Blind header ---
-
           const slider = document.createElement('input');
           slider.type = 'range';
 
@@ -1025,7 +982,7 @@ function renderSmartHomeStructure(){
           };
 
           // separater Schalt-Button für Dimmer mit Schalt-Datenpunkt
-          if (kind === 'dimmer') {
+          if (kind === 'dimmer' && ent.switchId) {
             dimmerToggle = document.createElement('span');
             dimmerToggle.className = 'smh-entity-toggle smh-entity-toggle-inline';
             dimmerToggle.textContent = initial > baseMin ? 'AN' : 'AUS';
@@ -1061,9 +1018,7 @@ function renderSmartHomeStructure(){
                 dimmerToggle.textContent = isOnNow ? 'AN' : 'AUS';
               }
               // Schalt-Datenpunkt setzen
-              if (ent.switchId) {
-                sendSmartHomeCommand({ id: ent.switchId }, isOnNow);
-              }
+              sendSmartHomeCommand({ id: ent.switchId }, isOnNow);
             });
 
             wrap.appendChild(dimmerToggle);
@@ -1073,9 +1028,6 @@ function renderSmartHomeStructure(){
           let blindDownBtn = null;
           let blindUpBtn = null;
           if (kind === 'blind') {
-        const n = Number(current);
-        displaySpan.textContent = isNaN(n) ? '--' : Math.round(n) + ' %';
-        
             let invert = !!ent.invertDirection;
 
             const sendBlindCommand = (dir) => {
@@ -1122,7 +1074,7 @@ function renderSmartHomeStructure(){
               sendSmartHomeCommand(ent, val);
             }
 
-            if (kind === 'dimmer') {
+            if (kind === 'dimmer' && ent.switchId) {
               // Dimmer-Schaltpunkt basierend auf Level setzen
               const isOn = val > baseMin;
               updateToggleVisual(isOn);
