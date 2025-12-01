@@ -913,17 +913,19 @@ function renderSmartHomeStructure(){
       groupHeader.className = 'smh-entity-group-header';
 
       const groupType = detectGroupType(groupEntities, fKey);
-      const icon = document.createElement('img');
-      icon.className = 'smh-entity-group-icon-img smh-entity-group-icon-' + groupType;
-      icon.src = getGroupIconUrl(groupType);
-      icon.alt = '';
-      groupHeader.appendChild(icon);
+      if (groupType !== 'blind') {
+        const icon = document.createElement('img');
+        icon.className = 'smh-entity-group-icon-img smh-entity-group-icon-' + groupType;
+        icon.src = getGroupIconUrl(groupType);
+        icon.alt = '';
+        groupHeader.appendChild(icon);
 
-      const groupTitle = document.createElement('span');
-      groupTitle.textContent = groupName;
-      groupHeader.appendChild(groupTitle);
+        const groupTitle = document.createElement('span');
+        groupTitle.textContent = groupName;
+        groupHeader.appendChild(groupTitle);
 
-      groupDiv.appendChild(groupHeader);
+        groupDiv.appendChild(groupHeader);
+      }
 
       for (const ent of groupEntities) {
         if (!ent || !ent.id) continue;
