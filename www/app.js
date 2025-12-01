@@ -659,7 +659,7 @@ function formatSmartHomeValue(ent, rawVal) {
     return n.toFixed(0) + ' %';
   }
 
-  // Schalt- oder Rückmelde-Boolean -> AN/AUS
+  // Schalt- oder Rückmelde-Boolean -> AN/
   if (kind === 'switch' || type === 'boolean') {
     return rawVal ? 'AN' : 'AUS';
   }
@@ -965,6 +965,31 @@ function renderSmartHomeStructure(){
       toggle.textContent = 'AUS';
 
       header.appendChild(titleBox);
+      header.appendChild(toggle);
+      funcCard.appendChild(header);
+
+          
+      // Header for dimmer
+      const header = document.createElement('div');
+      header.className = 'smh-entity-header';
+
+      const left = document.createElement('div');
+      left.className = 'smh-entity-title';
+
+      const icon = document.createElement('img');
+      icon.className = 'smh-entity-icon';
+      if(ent.icon) icon.src = ent.icon;
+      left.appendChild(icon);
+
+      const t = document.createElement('span');
+      t.textContent = ent.name || '';
+      left.appendChild(t);
+
+      const toggle = document.createElement('button');
+      toggle.className = 'smh-toggle-button';
+      toggle.textContent = 'AUS';
+
+      header.appendChild(left);
       header.appendChild(toggle);
       funcCard.appendChild(header);
 
