@@ -1134,7 +1134,6 @@ if (kind === 'dimmer' || kind === 'blind' || kind === 'tempSetpoint') {
           
       // --- Blind header ---
       if (kind === 'blind') {
-        ';
         
         const header = document.createElement('div');
         header.className = 'smh-entity-header';
@@ -1354,7 +1353,6 @@ if (kind === 'dimmer') {
           let blindDownBtn = null;
           let blindUpBtn = null;
           if (kind === 'blind') {
-        ';
         
             let invert = !!ent.invertDirection;
 
