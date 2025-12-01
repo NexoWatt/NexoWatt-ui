@@ -38,7 +38,7 @@ class NexoWattVis extends utils.Adapter {
   constructor(options) {
     super({
       ...options,
-      name: 'nexowatt-vis',
+      name: 'nexowatt-ui',
     });
 
     this.stateCache = {};
