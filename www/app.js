@@ -941,98 +941,10 @@ function renderSmartHomeStructure(){
         }
 
         
-// --- Blind Widget (Jalousie) ---
-if (kind === 'blind') {
-    const val = Number(rawVal);
-    const header = document.createElement('div');
-    header.className = 'smh-entity-header';
-    const ic = document.createElement('i');
-    ic.className = 'material-icons';
-    ic.textContent = 'blinds';
-    const title = document.createElement('span');
-    title.textContent = ent.name || ent.key;
-    header.appendChild(ic);
-    header.appendChild(title);
-
-    const controls = document.createElement('div');
-    controls.className = 'smh-blind-controls';
-
-    const downBtn = document.createElement('button');
-    downBtn.textContent = '▼';
-    downBtn.onclick = () => ent.downId && sendSmartHomeCommand({id: ent.downId}, true);
-
-    const slider = document.createElement('input');
-    slider.type='range'; slider.min=0; slider.max=100;
-    slider.value = isNaN(val)?0:val;
-    slider.oninput = () => {
-        const v = Number(slider.value);
-        ent.levelId && sendSmartHomeCommand({id: ent.levelId}, v);
-        valueBox.textContent = v + ' %';
-    };
-
-    const upBtn = document.createElement('button');
-    upBtn.textContent='▲';
-    upBtn.onclick = ()=> ent.upId && sendSmartHomeCommand({id: ent.upId}, true);
-
-    controls.appendChild(downBtn);
-    controls.appendChild(slider);
-    controls.appendChild(upBtn);
-
-    const valueBox = document.createElement('div');
-    valueBox.className = 'smh-blind-value';
-    valueBox.textContent = isNaN(val)?'--':Math.round(val)+' %';
-
-    funcCard.appendChild(header);
-    funcCard.appendChild(controls);
-    funcCard.appendChild(valueBox);
-}
 
 
-// --- Clean Blind Widget (Jalousie) ---
-if (kind === 'blind') {
-    const val = Number(rawVal);
-    const header = document.createElement('div');
-    header.className = 'smh-entity-header';
-    const ic = document.createElement('i');
-    ic.className = 'material-icons';
-    ic.textContent = 'blinds';
-    const title = document.createElement('span');
-    title.textContent = ent.name || ent.key;
-    header.appendChild(ic);
-    header.appendChild(title);
 
-    const controls = document.createElement('div');
-    controls.className = 'smh-blind-controls';
 
-    const downBtn = document.createElement('button');
-    downBtn.textContent = '▼';
-    downBtn.onclick = () => ent.downId && sendSmartHomeCommand({id: ent.downId}, true);
-
-    const slider = document.createElement('input');
-    slider.type='range'; slider.min=0; slider.max=100;
-    slider.value = isNaN(val)?0:val;
-    slider.oninput = () => {
-        const v = Number(slider.value);
-        ent.levelId && sendSmartHomeCommand({id: ent.levelId}, v);
-        valueBox.textContent = v + ' %';
-    };
-
-    const upBtn = document.createElement('button');
-    upBtn.textContent='▲';
-    upBtn.onclick = ()=> ent.upId && sendSmartHomeCommand({id: ent.upId}, true);
-
-    controls.appendChild(downBtn);
-    controls.appendChild(slider);
-    controls.appendChild(upBtn);
-
-    const valueBox = document.createElement('div');
-    valueBox.className = 'smh-blind-value';
-    valueBox.textContent = isNaN(val)?'--':Math.round(val)+' %';
-
-    funcCard.appendChild(header);
-    funcCard.appendChild(controls);
-    funcCard.appendChild(valueBox);
-}
 
 if (kind === 'dimmer' || kind === 'blind' || kind === 'tempSetpoint') {
           const wrap = document.createElement('div');
@@ -1119,98 +1031,10 @@ if (kind === 'dimmer' || kind === 'blind' || kind === 'tempSetpoint') {
 
           // separater Schalt-Button für Dimmer mit Schalt-Datenpunkt
           
-// --- Blind Widget (Jalousie) ---
-if (kind === 'blind') {
-    const val = Number(rawVal);
-    const header = document.createElement('div');
-    header.className = 'smh-entity-header';
-    const ic = document.createElement('i');
-    ic.className = 'material-icons';
-    ic.textContent = 'blinds';
-    const title = document.createElement('span');
-    title.textContent = ent.name || ent.key;
-    header.appendChild(ic);
-    header.appendChild(title);
-
-    const controls = document.createElement('div');
-    controls.className = 'smh-blind-controls';
-
-    const downBtn = document.createElement('button');
-    downBtn.textContent = '▼';
-    downBtn.onclick = () => ent.downId && sendSmartHomeCommand({id: ent.downId}, true);
-
-    const slider = document.createElement('input');
-    slider.type='range'; slider.min=0; slider.max=100;
-    slider.value = isNaN(val)?0:val;
-    slider.oninput = () => {
-        const v = Number(slider.value);
-        ent.levelId && sendSmartHomeCommand({id: ent.levelId}, v);
-        valueBox.textContent = v + ' %';
-    };
-
-    const upBtn = document.createElement('button');
-    upBtn.textContent='▲';
-    upBtn.onclick = ()=> ent.upId && sendSmartHomeCommand({id: ent.upId}, true);
-
-    controls.appendChild(downBtn);
-    controls.appendChild(slider);
-    controls.appendChild(upBtn);
-
-    const valueBox = document.createElement('div');
-    valueBox.className = 'smh-blind-value';
-    valueBox.textContent = isNaN(val)?'--':Math.round(val)+' %';
-
-    funcCard.appendChild(header);
-    funcCard.appendChild(controls);
-    funcCard.appendChild(valueBox);
-}
 
 
-// --- Clean Blind Widget (Jalousie) ---
-if (kind === 'blind') {
-    const val = Number(rawVal);
-    const header = document.createElement('div');
-    header.className = 'smh-entity-header';
-    const ic = document.createElement('i');
-    ic.className = 'material-icons';
-    ic.textContent = 'blinds';
-    const title = document.createElement('span');
-    title.textContent = ent.name || ent.key;
-    header.appendChild(ic);
-    header.appendChild(title);
 
-    const controls = document.createElement('div');
-    controls.className = 'smh-blind-controls';
 
-    const downBtn = document.createElement('button');
-    downBtn.textContent = '▼';
-    downBtn.onclick = () => ent.downId && sendSmartHomeCommand({id: ent.downId}, true);
-
-    const slider = document.createElement('input');
-    slider.type='range'; slider.min=0; slider.max=100;
-    slider.value = isNaN(val)?0:val;
-    slider.oninput = () => {
-        const v = Number(slider.value);
-        ent.levelId && sendSmartHomeCommand({id: ent.levelId}, v);
-        valueBox.textContent = v + ' %';
-    };
-
-    const upBtn = document.createElement('button');
-    upBtn.textContent='▲';
-    upBtn.onclick = ()=> ent.upId && sendSmartHomeCommand({id: ent.upId}, true);
-
-    controls.appendChild(downBtn);
-    controls.appendChild(slider);
-    controls.appendChild(upBtn);
-
-    const valueBox = document.createElement('div');
-    valueBox.className = 'smh-blind-value';
-    valueBox.textContent = isNaN(val)?'--':Math.round(val)+' %';
-
-    funcCard.appendChild(header);
-    funcCard.appendChild(controls);
-    funcCard.appendChild(valueBox);
-}
 
 if (kind === 'dimmer') {
             dimmerToggle = document.createElement('span');
@@ -1308,98 +1132,10 @@ if (kind === 'dimmer') {
             }
 
             
-// --- Blind Widget (Jalousie) ---
-if (kind === 'blind') {
-    const val = Number(rawVal);
-    const header = document.createElement('div');
-    header.className = 'smh-entity-header';
-    const ic = document.createElement('i');
-    ic.className = 'material-icons';
-    ic.textContent = 'blinds';
-    const title = document.createElement('span');
-    title.textContent = ent.name || ent.key;
-    header.appendChild(ic);
-    header.appendChild(title);
-
-    const controls = document.createElement('div');
-    controls.className = 'smh-blind-controls';
-
-    const downBtn = document.createElement('button');
-    downBtn.textContent = '▼';
-    downBtn.onclick = () => ent.downId && sendSmartHomeCommand({id: ent.downId}, true);
-
-    const slider = document.createElement('input');
-    slider.type='range'; slider.min=0; slider.max=100;
-    slider.value = isNaN(val)?0:val;
-    slider.oninput = () => {
-        const v = Number(slider.value);
-        ent.levelId && sendSmartHomeCommand({id: ent.levelId}, v);
-        valueBox.textContent = v + ' %';
-    };
-
-    const upBtn = document.createElement('button');
-    upBtn.textContent='▲';
-    upBtn.onclick = ()=> ent.upId && sendSmartHomeCommand({id: ent.upId}, true);
-
-    controls.appendChild(downBtn);
-    controls.appendChild(slider);
-    controls.appendChild(upBtn);
-
-    const valueBox = document.createElement('div');
-    valueBox.className = 'smh-blind-value';
-    valueBox.textContent = isNaN(val)?'--':Math.round(val)+' %';
-
-    funcCard.appendChild(header);
-    funcCard.appendChild(controls);
-    funcCard.appendChild(valueBox);
-}
 
 
-// --- Clean Blind Widget (Jalousie) ---
-if (kind === 'blind') {
-    const val = Number(rawVal);
-    const header = document.createElement('div');
-    header.className = 'smh-entity-header';
-    const ic = document.createElement('i');
-    ic.className = 'material-icons';
-    ic.textContent = 'blinds';
-    const title = document.createElement('span');
-    title.textContent = ent.name || ent.key;
-    header.appendChild(ic);
-    header.appendChild(title);
 
-    const controls = document.createElement('div');
-    controls.className = 'smh-blind-controls';
 
-    const downBtn = document.createElement('button');
-    downBtn.textContent = '▼';
-    downBtn.onclick = () => ent.downId && sendSmartHomeCommand({id: ent.downId}, true);
-
-    const slider = document.createElement('input');
-    slider.type='range'; slider.min=0; slider.max=100;
-    slider.value = isNaN(val)?0:val;
-    slider.oninput = () => {
-        const v = Number(slider.value);
-        ent.levelId && sendSmartHomeCommand({id: ent.levelId}, v);
-        valueBox.textContent = v + ' %';
-    };
-
-    const upBtn = document.createElement('button');
-    upBtn.textContent='▲';
-    upBtn.onclick = ()=> ent.upId && sendSmartHomeCommand({id: ent.upId}, true);
-
-    controls.appendChild(downBtn);
-    controls.appendChild(slider);
-    controls.appendChild(upBtn);
-
-    const valueBox = document.createElement('div');
-    valueBox.className = 'smh-blind-value';
-    valueBox.textContent = isNaN(val)?'--':Math.round(val)+' %';
-
-    funcCard.appendChild(header);
-    funcCard.appendChild(controls);
-    funcCard.appendChild(valueBox);
-}
 
 if (kind === 'dimmer') {
               // Dimmer-Schaltpunkt basierend auf Level setzen
