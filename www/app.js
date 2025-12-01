@@ -953,45 +953,7 @@ if (kind === 'dimmer' || kind === 'blind' || kind === 'tempSetpoint') {
           wrap.className = 'smh-entity-slider';
 
           
-      // --- Blind header ---
-      if (kind === 'blind') {
-        
-        const header = document.createElement('div');
-        header.className = 'smh-entity-header';
-
-        const left = document.createElement('div');
-        left.className = 'smh-entity-title';
-
-        const icon = document.createElement('img');
-        icon.className = 'smh-entity-icon';
-        if(ent.icon) icon.src = ent.icon;
-        left.appendChild(icon);
-
-        const t = document.createElement('span');
-        t.textContent = ent.name || '';
-        left.appendChild(t);
-
-        const btns = document.createElement('div');
-        btns.className = 'smh-blind-buttons';
-
-        const upBtn = document.createElement('span');
-        upBtn.className = 'material-icons smh-blind-btn';
-        upBtn.textContent = '';
-        upBtn.onclick = () => { if(ent.upId) sendSmartHomeCommand({id: ent.upId}, true); };
-
-        const downBtn = document.createElement('span');
-        downBtn.className = 'material-icons smh-blind-btn';
-        downBtn.textContent = '';
-        downBtn.onclick = () => { if(ent.downId) sendSmartHomeCommand({id: ent.downId}, true); };
-
-        btns.appendChild(upBtn);
-        btns.appendChild(downBtn);
-
-        header.appendChild(left);
-        header.appendChild(btns);
-        funcCard.appendChild(header);
-      }
-      // --- End Blind header ---
+      
 
           const slider = document.createElement('input');
           slider.type = 'range';
@@ -1011,7 +973,12 @@ if (kind === 'dimmer' || kind === 'blind' || kind === 'tempSetpoint') {
           slider.min = String(min);
           slider.max = String(max);
 
-          const initial = (typeof rawVal === 'number' && !isNaN(rawVal)) ? rawVal : min;
+          let initial = (typeof rawVal === 'number' && !isNaN(rawVal)) ? rawVal : min;
+          if (kind === 'blind' && typeof initial === 'number' && typeof min === 'number' && typeof max === 'number') {
+            if (ent.invertDirection) {
+              initial = max + min - initial;
+            }
+          }
           slider.value = String(initial);
 
           const label = document.createElement('span');
@@ -1111,11 +1078,23 @@ if (kind === 'dimmer') {
             blindUpBtn.addEventListener('click', () => sendBlindCommand('up'));
           }
 
+          // Live-Update des Labels beim Verschieben
+          slider.addEventListener('input', () => {
+            const uiVal = Number(slider.value);
+            renderValueWithUnit(label, formatSmartHomeValue(ent, uiVal));
+          });
+
           slider.addEventListener('change', () => {
-            const val = Number(slider.value);
-            renderValueWithUnit(label, formatSmartHomeValue(ent, val));
-            if (val > baseMin) {
-              lastOnLevel = val;
+            const uiVal = Number(slider.value);
+            renderValueWithUnit(label, formatSmartHomeValue(ent, uiVal));
+            if (uiVal > baseMin) {
+              lastOnLevel = uiVal;
+            }
+
+            // Für Jalousien ggf. Richtung invertieren (Slider-Anzeige vs. tatsächlicher Wert)
+            let sendVal = uiVal;
+            if (kind === 'blind' && typeof min === 'number' && typeof max === 'number' && ent.invertDirection) {
+              sendVal = max + min - uiVal;
             }
 
             // Level-Datenpunkt anhand des Widget-Typs bestimmen:
@@ -1128,9 +1107,9 @@ if (kind === 'dimmer') {
 
             // Wenn wir einen separaten Level-Datenpunkt haben, diesen gezielt ansprechen
             if (levelId) {
-              sendSmartHomeCommand({ id: levelId }, val);
+              sendSmartHomeCommand({ id: levelId }, sendVal);
             } else {
-              sendSmartHomeCommand(ent, val);
+              sendSmartHomeCommand(ent, sendVal);
             }
 
             
@@ -1141,12 +1120,14 @@ if (kind === 'dimmer') {
 
 if (kind === 'dimmer') {
               // Dimmer-Schaltpunkt basierend auf Level setzen
-              const isOn = val > baseMin;
+              const isOn = uiVal > baseMin;
               updateToggleVisual(isOn);
               if (dimmerToggle) {
                 dimmerToggle.textContent = isOn ? 'AN' : 'AUS';
               }
-              sendSmartHomeCommand({ id: ent.switchId }, isOn);
+              if (ent.switchId) {
+                sendSmartHomeCommand({ id: ent.switchId }, isOn);
+              }
             }
           });
 
