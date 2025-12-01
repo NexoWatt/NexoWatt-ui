@@ -698,7 +698,6 @@ if (kind === 'blind') {
     funcCard.appendChild(header);
     funcCard.appendChild(controls);
     funcCard.appendChild(valueBox);
-    continue;
 }
 
 
@@ -746,7 +745,6 @@ if (kind === 'blind') {
     funcCard.appendChild(header);
     funcCard.appendChild(controls);
     funcCard.appendChild(valueBox);
-    continue;
 }
 
 if (kind === 'dimmer') {
@@ -1080,7 +1078,6 @@ if (kind === 'blind') {
     funcCard.appendChild(header);
     funcCard.appendChild(controls);
     funcCard.appendChild(valueBox);
-    continue;
 }
 
 
@@ -1128,7 +1125,6 @@ if (kind === 'blind') {
     funcCard.appendChild(header);
     funcCard.appendChild(controls);
     funcCard.appendChild(valueBox);
-    continue;
 }
 
 if (kind === 'dimmer' || kind === 'blind' || kind === 'tempSetpoint') {
@@ -1261,7 +1257,6 @@ if (kind === 'blind') {
     funcCard.appendChild(header);
     funcCard.appendChild(controls);
     funcCard.appendChild(valueBox);
-    continue;
 }
 
 
@@ -1309,7 +1304,6 @@ if (kind === 'blind') {
     funcCard.appendChild(header);
     funcCard.appendChild(controls);
     funcCard.appendChild(valueBox);
-    continue;
 }
 
 if (kind === 'dimmer') {
@@ -1453,7 +1447,6 @@ if (kind === 'blind') {
     funcCard.appendChild(header);
     funcCard.appendChild(controls);
     funcCard.appendChild(valueBox);
-    continue;
 }
 
 
@@ -1501,7 +1494,6 @@ if (kind === 'blind') {
     funcCard.appendChild(header);
     funcCard.appendChild(controls);
     funcCard.appendChild(valueBox);
-    continue;
 }
 
 if (kind === 'dimmer') {
