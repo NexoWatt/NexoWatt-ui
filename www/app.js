@@ -641,124 +641,31 @@ function formatSmartHomeValue(ent, rawVal) {
   const kind = detectSmartHomeEntityType(ent);
   const type = (ent && ent.type) ? String(ent.type).toLowerCase() : '';
 
+  // Leere / ungültige Werte
   if (rawVal === undefined || rawVal === null || (typeof rawVal === 'number' && isNaN(rawVal))) {
     return '--';
   }
 
-  // Temperatur
+  // Temperatur und Solltemperatur in °C
   if (kind === 'temperature' || kind === 'tempSetpoint') {
     const n = Number(rawVal);
     if (isNaN(n)) return '--';
     return n.toFixed(1) + ' °C';
   }
 
-  // Dimmer / Level -> Prozent
-  
-// --- Blind Widget (Jalousie) ---
-if (kind === 'blind') {
-    const val = Number(rawVal);
-    const header = document.createElement('div');
-    header.className = 'smh-entity-header';
-    const ic = document.createElement('i');
-    ic.className = 'material-icons';
-    ic.textContent = 'blinds';
-    const title = document.createElement('span');
-    title.textContent = ent.name || ent.key;
-    header.appendChild(ic);
-    header.appendChild(title);
-
-    const controls = document.createElement('div');
-    controls.className = 'smh-blind-controls';
-
-    const downBtn = document.createElement('button');
-    downBtn.textContent = '▼';
-    downBtn.onclick = () => ent.downId && sendSmartHomeCommand({id: ent.downId}, true);
-
-    const slider = document.createElement('input');
-    slider.type='range'; slider.min=0; slider.max=100;
-    slider.value = isNaN(val)?0:val;
-    slider.oninput = () => {
-        const v = Number(slider.value);
-        ent.levelId && sendSmartHomeCommand({id: ent.levelId}, v);
-        valueBox.textContent = v + ' %';
-    };
-
-    const upBtn = document.createElement('button');
-    upBtn.textContent='▲';
-    upBtn.onclick = ()=> ent.upId && sendSmartHomeCommand({id: ent.upId}, true);
-
-    controls.appendChild(downBtn);
-    controls.appendChild(slider);
-    controls.appendChild(upBtn);
-
-    const valueBox = document.createElement('div');
-    valueBox.className = 'smh-blind-value';
-    valueBox.textContent = isNaN(val)?'--':Math.round(val)+' %';
-
-    funcCard.appendChild(header);
-    funcCard.appendChild(controls);
-    funcCard.appendChild(valueBox);
-}
-
-
-// --- Clean Blind Widget (Jalousie) ---
-if (kind === 'blind') {
-    const val = Number(rawVal);
-    const header = document.createElement('div');
-    header.className = 'smh-entity-header';
-    const ic = document.createElement('i');
-    ic.className = 'material-icons';
-    ic.textContent = 'blinds';
-    const title = document.createElement('span');
-    title.textContent = ent.name || ent.key;
-    header.appendChild(ic);
-    header.appendChild(title);
-
-    const controls = document.createElement('div');
-    controls.className = 'smh-blind-controls';
-
-    const downBtn = document.createElement('button');
-    downBtn.textContent = '▼';
-    downBtn.onclick = () => ent.downId && sendSmartHomeCommand({id: ent.downId}, true);
-
-    const slider = document.createElement('input');
-    slider.type='range'; slider.min=0; slider.max=100;
-    slider.value = isNaN(val)?0:val;
-    slider.oninput = () => {
-        const v = Number(slider.value);
-        ent.levelId && sendSmartHomeCommand({id: ent.levelId}, v);
-        valueBox.textContent = v + ' %';
-    };
-
-    const upBtn = document.createElement('button');
-    upBtn.textContent='▲';
-    upBtn.onclick = ()=> ent.upId && sendSmartHomeCommand({id: ent.upId}, true);
-
-    controls.appendChild(downBtn);
-    controls.appendChild(slider);
-    controls.appendChild(upBtn);
-
-    const valueBox = document.createElement('div');
-    valueBox.className = 'smh-blind-value';
-    valueBox.textContent = isNaN(val)?'--':Math.round(val)+' %';
-
-    funcCard.appendChild(header);
-    funcCard.appendChild(controls);
-    funcCard.appendChild(valueBox);
-}
-
-if (kind === 'dimmer') {
+  // Dimmer-Level und Jalousie-Position als Prozent
+  if (kind === 'dimmer' || kind === 'blind') {
     const n = Number(rawVal);
     if (isNaN(n)) return '--';
-    return n.toFixed(0) + ' %';
+    return Math.round(n) + ' %';
   }
 
-  // Schalt- oder Rückmelde-Boolean -> AN/AUS
+  // Schalter / boolsche Werte als AN / AUS
   if (kind === 'switch' || type === 'boolean') {
     return rawVal ? 'AN' : 'AUS';
   }
 
-  // Numerische Werte mit Einheit
+  // Numerische Werte mit Einheit (falls vorhanden)
   if (typeof rawVal === 'number') {
     let unitRaw = (ent && ent.unit != null) ? String(ent.unit) : '';
     const unit = (unitRaw && unitRaw.toLowerCase() !== 'null' && unitRaw.toLowerCase() !== 'undefined') ? unitRaw : '';
