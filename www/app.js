@@ -946,7 +946,7 @@ function renderSmartHomeStructure(){
           
       // --- Blind header ---
       if (kind === 'blind') {
-        const n = Number(currentState);
+        const n = Number(current);
         displaySpan.textContent = isNaN(n) ? '--' : Math.round(n) + ' %';
         
         const header = document.createElement('div');
@@ -1073,7 +1073,7 @@ function renderSmartHomeStructure(){
           let blindDownBtn = null;
           let blindUpBtn = null;
           if (kind === 'blind') {
-        const n = Number(currentState);
+        const n = Number(current);
         displaySpan.textContent = isNaN(n) ? '--' : Math.round(n) + ' %';
         
             let invert = !!ent.invertDirection;
