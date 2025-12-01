@@ -943,6 +943,46 @@ function renderSmartHomeStructure(){
           const wrap = document.createElement('div');
           wrap.className = 'smh-entity-slider';
 
+          
+      // --- Blind header ---
+      if (kind === 'blind') {
+        const header = document.createElement('div');
+        header.className = 'smh-entity-header';
+
+        const left = document.createElement('div');
+        left.className = 'smh-entity-title';
+
+        const icon = document.createElement('img');
+        icon.className = 'smh-entity-icon';
+        if(ent.icon) icon.src = ent.icon;
+        left.appendChild(icon);
+
+        const t = document.createElement('span');
+        t.textContent = ent.name || '';
+        left.appendChild(t);
+
+        const btns = document.createElement('div');
+        btns.className = 'smh-blind-buttons';
+
+        const upBtn = document.createElement('span');
+        upBtn.className = 'material-icons smh-blind-btn';
+        upBtn.textContent = 'expand_less';
+        upBtn.onclick = () => { if(ent.upId) sendSmartHomeCommand({id: ent.upId}, true); };
+
+        const downBtn = document.createElement('span');
+        downBtn.className = 'material-icons smh-blind-btn';
+        downBtn.textContent = 'expand_more';
+        downBtn.onclick = () => { if(ent.downId) sendSmartHomeCommand({id: ent.downId}, true); };
+
+        btns.appendChild(upBtn);
+        btns.appendChild(downBtn);
+
+        header.appendChild(left);
+        header.appendChild(btns);
+        funcCard.appendChild(header);
+      }
+      // --- End Blind header ---
+
           const slider = document.createElement('input');
           slider.type = 'range';
 
