@@ -946,6 +946,9 @@ function renderSmartHomeStructure(){
           
       // --- Blind header ---
       if (kind === 'blind') {
+        const n = Number(currentState);
+        displaySpan.textContent = isNaN(n) ? '--' : Math.round(n) + ' %';
+        
         const header = document.createElement('div');
         header.className = 'smh-entity-header';
 
@@ -966,12 +969,12 @@ function renderSmartHomeStructure(){
 
         const upBtn = document.createElement('span');
         upBtn.className = 'material-icons smh-blind-btn';
-        upBtn.textContent = 'expand_less';
+        upBtn.textContent = '';
         upBtn.onclick = () => { if(ent.upId) sendSmartHomeCommand({id: ent.upId}, true); };
 
         const downBtn = document.createElement('span');
         downBtn.className = 'material-icons smh-blind-btn';
-        downBtn.textContent = 'expand_more';
+        downBtn.textContent = '';
         downBtn.onclick = () => { if(ent.downId) sendSmartHomeCommand({id: ent.downId}, true); };
 
         btns.appendChild(upBtn);
@@ -1070,6 +1073,9 @@ function renderSmartHomeStructure(){
           let blindDownBtn = null;
           let blindUpBtn = null;
           if (kind === 'blind') {
+        const n = Number(currentState);
+        displaySpan.textContent = isNaN(n) ? '--' : Math.round(n) + ' %';
+        
             let invert = !!ent.invertDirection;
 
             const sendBlindCommand = (dir) => {
