@@ -24,23 +24,6 @@ async function loadSmartHomeData() {
 document.addEventListener("DOMContentLoaded", loadSmartHomeData);
 </script>
 <script>
-async function saveDeviceSettings(dev){
-    const newIcon=document.getElementById("popup-icon-select").value;
-    const newRoom=document.getElementById("popup-room-edit").value;
-
-    await fetch('/set/smartHome.deviceSettings.'+encodeURIComponent(dev.id)+'.icon',{
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({val:newIcon})
-    });
-
-    await fetch('/set/smartHome.deviceSettings.'+encodeURIComponent(dev.id)+'.room',{
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({val:newRoom})
-    });
-}
-</script>
-
-<script>
 async function updateDeviceName(dev){
     const newName = await loadDeviceSettings(dev.id);
     const el = document.getElementById('name-'+dev.id.replace(/[^a-zA-Z0-9]/g,''));
@@ -564,21 +547,7 @@ function startLiveUpdates(room){
 
     <h3 style="margin-top:14px; margin-bottom:6px;">Einstellungen</h3>
     <label>Name ändern:</label>
-    <input id="popup-name-edit" style="width:100%; padding:6px; border-radius:8px; margin-bottom:12px;" />
-<h3 style="margin-top:14px; margin-bottom:6px;">Icon ändern</h3>
-<select id="popup-icon-select" style="width:100%; padding:6px; border-radius:8px; margin-bottom:12px;">
-  <option value="light">Licht</option>
-  <option value="heating">Heizung</option>
-  <option value="shutter">Beschattung</option>
-  <option value="sensor">Sensor</option>
-</select>
-
-<h3 style="margin-top:14px; margin-bottom:6px;">Raum ändern</h3>
-<input id="popup-room-edit" style="width:100%; padding:6px; border-radius:8px; margin-bottom:12px;" />
-
-<button onclick='saveDeviceSettings(dev)'
- style='width:100%; background:#4CD964; color:white; border:none; padding:10px; border-radius:10px;'>Einstellungen speichern</button>
-<button onclick='saveDeviceName(dev)' style='width:100%; background:#4CD964; color:white; border:none; padding:10px; border-radius:10px;'>Speichern</button>
+    <input id="popup-name-edit" style="width:100%; padding:6px; border-radius:8px; margin-bottom:12px;" /><button onclick='saveDeviceName(dev)' style='width:100%; background:#4CD964; color:white; border:none; padding:10px; border-radius:10px;'>Speichern</button>
   </div>
 </div>
 

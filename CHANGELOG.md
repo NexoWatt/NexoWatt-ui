@@ -1,3 +1,13 @@
+### 0.4.110 – 2025-11-28
+- SmartHome VIS: Pfeiltasten (▲/▼) für Jalousien wurden optisch vergrößert (größere Schrift in `.smh-entity-toggle-inline`).
+- Sonst keine funktionalen Änderungen.
+
+
+### 0.4.109 (2025-11-28)
+- Fix: SmartHome erkennt Jalousien/Rollläden mit Typ *cover/blind* nun korrekt als `blind`.
+- Fix: ON/OFF-Icon bleibt für Dimmer, Jalousien bekommen wie vorgesehen die Auf/Ab-Pfeile.
+
+
 ### 0.4.103 – 2025-11-27
 - Fix: SmartHome-Konfigbutton im Admin verwendet jetzt immer die Host-IP des Admin-Aufrufs (ohne Admin-Port) und öffnet `http(s)://<host>:<port>/smarthome-config`.
 - Fix: `subscribeConfiguredStates()` ignoriert ungültige Mappings (Boolean/Objekte) und verhindert den „pattern needs to be of type 'string'“-Fehler.
