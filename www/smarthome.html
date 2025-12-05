@@ -1,616 +1,849 @@
-<div id='smarthome-root'></div>
+<div id="smarthome-root"></div>
 
-<script>
-async function loadSmartHomeData() {
-    try {
-        const resp = await fetch('/state/smartHome.roomsJSON');
-        const data = await resp.json();
-        const rooms = JSON.parse(data.val || "{}");
-        const root = document.getElementById("smarthome-root");
-        root.innerHTML = "";
-        Object.values(rooms).forEach(room => {
-            const el = document.createElement("div");
-            el.className = "room-tile";
-            el.innerHTML = `
-                <img class='room-icon' src='' style='width:28px;opacity:.85;margin-bottom:6px;' onload='this.src=getRoomIcon(room.name)'/><div class="room-name">${room.name}</div>
-                <div class="room-count">${room.deviceDetails.length} Geräte</div>
-            `;
-            root.appendChild(el);
-        });
-    } catch (e) {
-        console.error(e);
-    }
-}
-document.addEventListener("DOMContentLoaded", loadSmartHomeData);
-</script>
-<script>
-async function saveDeviceSettings(dev){
-    const newIcon=document.getElementById("popup-icon-select").value;
-    const newRoom=document.getElementById("popup-room-edit").value;
-
-    await fetch('/set/smartHome.deviceSettings.'+encodeURIComponent(dev.id)+'.icon',{
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({val:newIcon})
-    });
-
-    await fetch('/set/smartHome.deviceSettings.'+encodeURIComponent(dev.id)+'.room',{
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({val:newRoom})
-    });
-}
-</script>
-
-<script>
-async function updateDeviceName(dev){
-    const newName = await loadDeviceSettings(dev.id);
-    const el = document.getElementById('name-'+dev.id.replace(/[^a-zA-Z0-9]/g,''));
-    if(el) el.innerText = newName;
-}
-</script>
-
-<script>
-async function loadDeviceSettings(id){
-    try{
-        const resp=await fetch('/state/smartHome.deviceSettings.'+encodeURIComponent(id)+'.name');
-        const data=await resp.json();
-        return data.val || id;
-    }catch(e){
-        return id;
-    }
-}
-
-async function getDisplayName(dev){
-    const name = await loadDeviceSettings(dev.id);
-    return name;
-}
-</script>
-
-<script>
-async function saveDeviceName(dev){
-    const newName=document.getElementById("popup-name-edit").value;
-    await fetch('/set/smartHome.deviceSettings.'+encodeURIComponent(dev.id)+'.name',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({val:newName})
-    });
-    document.getElementById("popup-name").innerText=newName;
-}
-</script>
-
-<script>
-async function updateDeviceStatus(dev, el){
-    const val = await fetchState(dev.id);
-    if(val === null) return;
-
-    el.classList.remove("active-light","active-heating","active-shutter","active-error");
-    el.querySelector(".device-value").classList.remove("active");
-
-    if(dev.widget==="widget-switch" || dev.widget==="widget-dimmer"){
-        if(parseFloat(val) > 0){ 
-            el.classList.add("active-light");
-            el.querySelector(".device-value").classList.add("active");
-        }
-    }
-    if(dev.widget==="widget-heating"){
-        if(parseFloat(val) > 0){
-            el.classList.add("active-heating");
-        }
-    }
-    if(dev.widget==="widget-shutter"){
-        if(val==="up" || val==="down"){
-            el.classList.add("active-shutter");
-        }
-    }
-    if(val==="error" || val==="fault"){
-        el.classList.add("active-error");
-    }
-}
-
-// integrate into polling
-async function pollDeviceState(dev, el){
-    const val = await fetchState(dev.id);
-    if(val !== null){
-        el.querySelector(".device-value").innerText = val;
-    }
-    updateDeviceStatus(dev, el); updateDeviceName(dev);
-}
-</script>
-
-<script>
-function groupDevices(room){
-    const groups={
-        light:[],
-        heating:[],
-        shutter:[],
-        sensor:[],
-        other:[]
-    };
-
-    /* grouped rendering */ renderGroupedDevices(room); return; room.deviceDetails.forEach(dev=>{
-        if(dev.widget==="widget-switch" || dev.widget==="widget-dimmer")
-            groups.light.push(dev);
-        else if(dev.widget==="widget-heating")
-            groups.heating.push(dev);
-        else if(dev.widget==="widget-shutter")
-            groups.shutter.push(dev);
-        else if(dev.widget==="widget-sensor")
-            groups.sensor.push(dev);
-        else
-            groups.other.push(dev);
-    });
-
-    return groups;
-}
-
-function renderGroupedDevices(room){
-    const groups=groupDevices(room);
-    const root=document.getElementById("device-list");
-    root.innerHTML="";
-
-    const labels={
-        light:"Beleuchtung",
-        heating:"Heizung",
-        shutter:"Beschattung",
-        sensor:"Sensoren",
-        other:"Weitere Geräte"
-    };
-
-    Object.keys(groups).forEach(key=>{
-        if(groups[key].length===0) return;
-        const block=document.createElement("div");
-        block.innerHTML=`<h3 style='color:white;margin:12px 0;'>${labels[key]}</h3>`;
-        groups[key].forEach(dev=>{
-            const devEl=document.getElementById("dev-"+dev.id.replace(/[^a-zA-Z0-9]/g,''));
-            if(devEl) block.appendChild(devEl.cloneNode(true));
-        });
-        root.appendChild(block);
-    });
-}
-</script>
-
-<script>
-function getRoomIcon(roomName){
-    roomName = roomName.toLowerCase();
-
-    if(roomName.includes("wohn") || roomName.includes("living"))
-        return "icons/nexowatt/room-living.svg";
-
-    if(roomName.includes("küche") || roomName.includes("kueche") || roomName.includes("kitchen"))
-        return "icons/nexowatt/room-kitchen.svg";
-
-    if(roomName.includes("schlaf") || roomName.includes("bed"))
-        return "icons/nexowatt/room-bedroom.svg";
-
-    if(roomName.includes("bad") || roomName.includes("bath"))
-        return "icons/nexowatt/room-bath.svg";
-
-    if(roomName.includes("büro") || roomName.includes("office"))
-        return "icons/nexowatt/room-office.svg";
-
-    if(roomName.includes("garage"))
-        return "icons/nexowatt/room-garage.svg";
-
-    return "icons/nexowatt/room-living.svg";
-}
-</script>
-
-<script>
-function getDeviceIcon(dev){
-    if(dev.widget === "widget-switch") return "icons/nexowatt/icon-power.svg";
-    if(dev.widget === "widget-dimmer") return "icons/nexowatt/icon-dimmer.svg";
-    if(dev.widget === "widget-heating") return "icons/nexowatt/icon-heating.svg";
-    if(dev.widget === "widget-shutter") return "icons/nexowatt/icon-shutter.svg";
-    if(dev.widget === "widget-sensor") return "icons/nexowatt/icon-sensor.svg";
-    return "icons/nexowatt/icon-warning.svg";
-}
-</script>
-
-<script>
-// generic state writer
-async function writeState(id, val){
-    await fetch('/set/' + encodeURIComponent(id), {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({val:val})
-    });
-}
-
-// widget renderer
-function renderWidget(dev){
-    if(dev.widget === "widget-switch"){
-        return `<button onclick="writeState('${dev.id}', true)">Ein</button>
-                <button onclick="writeState('${dev.id}', false)">Aus</button>`;
-    }
-    if(dev.widget === "widget-dimmer"){
-        return `<input type='range' min='0' max='100' 
-                oninput="writeState('${dev.id}', this.value)" />`;
-    }
-    if(dev.widget === "widget-heating"){
-        return `<input type='number' min='5' max='30'
-                onchange="writeState('${dev.id}', this.value)" placeholder='SOLL °C'/>`;
-    }
-    if(dev.widget === "widget-shutter"){
-        return `<button onclick="writeState('${dev.id}', 'up')">Hoch</button>
-                <button onclick="writeState('${dev.id}', 'stop')">Stopp</button>
-                <button onclick="writeState('${dev.id}', 'down')">Runter</button>`;
-    }
-    if(dev.widget === "widget-sensor"){
-        return `<div>(Sensorwert)</div>`;
-    }
-    return `<div>Kein Widget</div>`;
-}
-
-// replace device list rendering
-html_original_openRoom = openRoomView.toString();
-</script>
-
+<script src="js/device-api.js"></script>
 
 <style>
+/* Layout für Raum-Übersicht */
 #smarthome-root {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px,1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 16px;
   padding: 20px;
 }
-.room-tile {
-  background: #1b1e24;
-  border-radius: 14px;
-  padding: 18px;
-  color: white;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.35);
-}
-.room-name {
-  font-size: 18px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-.room-count {
-  font-size: 14px;
-  opacity: .7;
-}
-</style>
 
-<script>
-let smartHomeData = null;
-
-async function loadSmartHomeData() {
-    const resp = await fetch('/state/smartHome.roomsJSON');
-    const data = await resp.json();
-    smartHomeData = JSON.parse(data.val || "{}");
-    renderRoomOverview();
-}
-
-function renderRoomOverview() {
-    const root = document.getElementById("smarthome-root");
-    root.innerHTML = "";
-    Object.values(smartHomeData).forEach(room => {
-        const el = document.createElement("div");
-        el.className = "room-tile";
-        el.onclick = () => openRoomView(room);
-        el.innerHTML = `
-            <img class='room-icon' src='' style='width:28px;opacity:.85;margin-bottom:6px;' onload='this.src=getRoomIcon(room.name)'/><div class="room-name">${room.name}</div>
-            <div class="room-count">${room.deviceDetails.length} Geräte</div>
-        `;
-        root.appendChild(el);
-    });
-}
-
-function openRoomView(room) {
-    const root = document.getElementById("smarthome-root");
-    root.innerHTML = `
-        <div class="room-header">
-<img class='room-header-icon' src='' onload='this.src=getRoomIcon(room.name)'/>
-<div class="room-title">${room.name}</div>
-        </div>
-        <div id="device-list"></div>
-    `;
-    const list = document.getElementById("device-list"); startLiveUpdates(room);
-
-    /* grouped rendering */ renderGroupedDevices(room); return; room.deviceDetails.forEach(dev => {
-        const devEl = document.createElement; devEl.onclick = () => openPopup(dev);("div"); devEl.id='dev-'+dev.id.replace(/[^a-zA-Z0-9]/g,'');
-        devEl.className = "device-item";
-        devEl.innerHTML = `
-            <img class='device-icon' style='width:22px;margin-right:8px;opacity:.85;' src='' onload='this.src=getDeviceIcon(dev)'/><div class='device-info'><div class="device-name" id='name-'+dev.id.replace(/[^a-zA-Z0-9]/g,'')'>${dev.id}</div>
-            <div class="device-value" style="font-size:12px;opacity:0.7;">…</div></div><div class="device-widget">${${renderWidget(dev)}</div>
-        `;
-        list.appendChild(devEl);
-    });
-}
-
-document.addEventListener("DOMContentLoaded", loadSmartHomeData);
-</script>
-<script>
-// generic state writer
-async function writeState(id, val){
-    await fetch('/set/' + encodeURIComponent(id), {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({val:val})
-    });
-}
-
-// widget renderer
-function renderWidget(dev){
-    if(dev.widget === "widget-switch"){
-        return `<button onclick="writeState('${dev.id}', true)">Ein</button>
-                <button onclick="writeState('${dev.id}', false)">Aus</button>`;
-    }
-    if(dev.widget === "widget-dimmer"){
-        return `<input type='range' min='0' max='100' 
-                oninput="writeState('${dev.id}', this.value)" />`;
-    }
-    if(dev.widget === "widget-heating"){
-        return `<input type='number' min='5' max='30'
-                onchange="writeState('${dev.id}', this.value)" placeholder='SOLL °C'/>`;
-    }
-    if(dev.widget === "widget-shutter"){
-        return `<button onclick="writeState('${dev.id}', 'up')">Hoch</button>
-                <button onclick="writeState('${dev.id}', 'stop')">Stopp</button>
-                <button onclick="writeState('${dev.id}', 'down')">Runter</button>`;
-    }
-    if(dev.widget === "widget-sensor"){
-        return `<div>(Sensorwert)</div>`;
-    }
-    return `<div>Kein Widget</div>`;
-}
-
-// replace device list rendering
-html_original_openRoom = openRoomView.toString();
-</script>
-
-
-<style>
-.room-header {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 10px 0;
-}
-.back-btn {
-    background: #283039;
-    color: white;
-    border: none;
-    padding: 8px 14px;
-    border-radius: 10px;
-    cursor: pointer;
-}
-.room-title {
-    font-size: 20px;
-    font-weight: 700;
-}
-#device-list {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 12px;
-    margin-top: 20px;
-}
-.device-item {
-    background: #1b1e24;
-    padding: 14px;
-    border-radius: 12px;
-    color: white;
-}
-.device-name {
-    font-size: 16px;
-    font-weight: 600;
-}
-.device-widget {
-    margin-top: 6px;
-    opacity: 0.8;
-    font-size: 14px;
-}
-</style>
-
-<script>
-// fetch value helper
-async function fetchState(id){
-    try{
-        const resp = await fetch('/state/' + encodeURIComponent(id));
-        const data = await resp.json();
-        return data.val;
-    }catch(e){return null;}
-}
-
-async function pollDeviceState(dev, el){
-    const val = await fetchState(dev.id);
-    if(val !== null){
-        el.querySelector(".device-value").innerText = val;
-    }
-}
-
-function startLiveUpdates(room){
-    /* grouped rendering */ renderGroupedDevices(room); return; room.deviceDetails.forEach(dev=>{
-        const el = document.getElementById("dev-"+dev.id.replace(/[^a-zA-Z0-9]/g,''));
-        if(!el) return;
-        setInterval(()=>pollDeviceState(dev, el), 3000);
-    });
-}
-</script>
-
-<style>
-/* Improve room tiles */
+/* Raum-Kachel */
 .room-tile {
   background: linear-gradient(145deg, #21252d, #1a1d23);
   border-radius: 16px;
   padding: 22px;
-  color: white;
-  box-shadow: 0 6px 14px rgba(0,0,0,0.45);
-  transition: transform .15s, background .15s;
+  color: #ffffff;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
 }
+
 .room-tile:hover {
   transform: translateY(-4px);
   background: linear-gradient(145deg, #262b34, #1d2229);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.55);
 }
 
-/* device cards */
-.device-item {
-  background: #20242d;
-  padding: 16px;
-  border-radius: 14px;
-  color: white;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+.room-icon {
+  width: 28px;
+  opacity: 0.85;
+  margin-bottom: 6px;
 }
-.device-name {
-  font-size: 17px;
+
+.room-name {
+  font-size: 18px;
   font-weight: 600;
-}
-.device-widget button {
-  background:#283039;
-  border:none;
-  padding:8px 14px;
-  border-radius:10px;
-  color:white;
-  margin-right:6px;
-}
-.device-widget input[type=range] {
-  width:100%;
-}
-</style>
-
-<style>
-.device-item {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px;
-    background: #1f232b;
-    border-radius: 14px;
-    color: white;
-    gap: 12px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.45);
+  margin-bottom: 4px;
 }
 
-.device-info {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
+.room-count {
+  font-size: 14px;
+  opacity: 0.7;
 }
 
-.device-icon {
-    width: 26px !important;
-    height: 26px;
-    margin-right: 14px;
-}
-
-.device-name {
-    font-size: 16px;
-    font-weight: 600;
-}
-
-.device-value {
-    font-size: 13px !important;
-    opacity: 0.7;
-    margin-top: 4px;
-}
-
-.device-widget {
-    margin-left: 12px;
-}
-</style>
-
-<style>
+/* Header im Raum-Detail */
 .room-header {
-    display:flex;
-    align-items:center;
-    gap:12px;
-    padding:12px 0;
-    margin-bottom:12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  margin-bottom: 12px;
 }
 
 .room-header-icon {
-    width:32px;
-    opacity:.9;
+  width: 32px;
+  opacity: 0.9;
 }
 
 .room-title {
-    font-size:22px;
-    font-weight:700;
+  font-size: 22px;
+  font-weight: 700;
 }
 
+/* Back-Button */
+.back-btn {
+  background: #283039;
+  color: #ffffff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-right: 8px;
+}
+.back-btn:hover {
+  background: #343d48;
+}
+
+/* Geräte-Liste im Raum */
+#device-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* Geräte-Kachel */
 .device-item {
-    transition: transform .1s ease-in-out;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px;
+  background: #1f232b;
+  border-radius: 16px;
+  color: #ffffff;
+  gap: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  transition: transform 0.08s ease-in-out, box-shadow 0.08s ease-in-out, background 0.12s ease-in-out, border 0.12s ease-in-out;
 }
+
 .device-item:active {
-    transform: scale(0.97);
+  transform: scale(0.97);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.device-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+}
+
+.device-icon {
+  width: 26px;
+  height: 26px;
+  opacity: 0.9;
+}
+
+.device-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.device-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.device-value {
+  font-size: 13px;
+  opacity: 0.7;
+  margin-top: 4px;
+}
+
+/* Status-Badge / Typ-Badge rechts */
+.device-widget {
+  margin-left: 12px;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #222a33;
+  background: #181d23;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+/* NEXOWATT: Switch ON in Grün (Variante A) */
+.device-item.switch-on {
+  background: linear-gradient(135deg, #00ff9c, #02c873);
+  border: 1px solid #00ff9c;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+  color: #000000;
+}
+
+.device-item.switch-on .device-name,
+.device-item.switch-on .device-value {
+  color: #000000;
+}
+
+.device-item.switch-on .device-widget {
+  border-color: rgba(0, 0, 0, 0.15);
+  background: rgba(0, 0, 0, 0.06);
+  color: #000000;
+}
+
+/* Weitere Zustände (optional) */
+.device-item.heating-on {
+  border: 2px solid #ff6b3b;
+}
+
+.device-item.shutter-moving {
+  border: 2px solid #a78bfa;
+}
+
+.device-item.has-error {
+  border: 2px solid #ff3b30;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  #smarthome-root {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  #device-list {
+    grid-template-columns: 1fr;
+  }
+
+  .device-item {
+    padding: 12px;
+  }
+}
+
+/* Popup-Overlay (übernommen & leicht bereinigt) */
+#device-popup-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+}
+
+#device-popup {
+  width: 85%;
+  max-width: 480px;
+  background: #1f232b;
+  border-radius: 20px;
+  padding: 24px;
+  color: #ffffff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  position: relative;
+}
+
+#device-popup-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: #283039;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+#popup-icon {
+  width: 42px;
+  margin-bottom: 12px;
+  opacity: 0.9;
+}
+
+#popup-name {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+#popup-value {
+  font-size: 16px;
+  opacity: 0.7;
+  margin-bottom: 20px;
+}
+
+#popup-widget {
+  margin-bottom: 24px;
+}
+
+#popup-name-edit,
+#popup-room-edit,
+#popup-icon-select {
+  width: 100%;
+  padding: 6px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  border: 1px solid #2a313a;
+  background: #161a20;
+  color: #ffffff;
+}
+
+.popup-primary-btn {
+  width: 100%;
+  background: #4cd964;
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.popup-primary-btn:hover {
+  background: #3ac555;
 }
 </style>
-
-<style>
-.device-item.active-light { border:2px solid #FFD34A; }
-.device-item.active-heating { border:2px solid #FF6B3B; }
-.device-item.active-shutter { border:2px solid #A78BFA; }
-.device-item.active-error { border:2px solid #FF3B30; }
-.device-value.active { color: #FFD34A !important; }
-</style>
-
-<!-- DEVICE DETAIL POPUP -->
-<div id="device-popup-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
- background:rgba(0,0,0,0.55); backdrop-filter:blur(4px); z-index:9999; align-items:center; justify-content:center;">
-  <div id="device-popup" style="width:85%; max-width:480px; background:#1f232b; border-radius:20px; padding:24px;
-   color:white; box-shadow:0 8px 24px rgba(0,0,0,0.5); position:relative;">
-
-    <button onclick="closePopup()" 
-    style='position:absolute; top:14px; right:14px; background:#283039; color:white; border:none; padding:6px 12px; border-radius:10px;'>X</button>
-
-    <img id="popup-icon" src="" style="width:42px; margin-bottom:12px; opacity:0.9;">
-    <div id="popup-name" style="font-size:22px; font-weight:700; margin-bottom:8px;"></div>
-    <div id="popup-value" style="font-size:16px; opacity:0.7; margin-bottom:20px;"></div>
-
-    <div id="popup-widget" style="margin-bottom:24px;"></div>
-
-    <h3 style="margin-top:14px; margin-bottom:6px;">Einstellungen</h3>
-    <label>Name ändern:</label>
-    <input id="popup-name-edit" style="width:100%; padding:6px; border-radius:8px; margin-bottom:12px;" />
-<h3 style="margin-top:14px; margin-bottom:6px;">Icon ändern</h3>
-<select id="popup-icon-select" style="width:100%; padding:6px; border-radius:8px; margin-bottom:12px;">
-  <option value="light">Licht</option>
-  <option value="heating">Heizung</option>
-  <option value="shutter">Beschattung</option>
-  <option value="sensor">Sensor</option>
-</select>
-
-<h3 style="margin-top:14px; margin-bottom:6px;">Raum ändern</h3>
-<input id="popup-room-edit" style="width:100%; padding:6px; border-radius:8px; margin-bottom:12px;" />
-
-<button onclick='saveDeviceSettings(dev)'
- style='width:100%; background:#4CD964; color:white; border:none; padding:10px; border-radius:10px;'>Einstellungen speichern</button>
-<button onclick='saveDeviceName(dev)' style='width:100%; background:#4CD964; color:white; border:none; padding:10px; border-radius:10px;'>Speichern</button>
-  </div>
-</div>
 
 <script>
-let popupInterval=null;
+/**
+ * Globale Datenstrukturen
+ */
+let smartHomeRooms = {};
+let smartHomeDeviceIntervals = {};
+let currentPopupDevice = null;
 
-function openPopup(dev){
-  const overlay=document.getElementById("device-popup-overlay");
-  const icon=document.getElementById("popup-icon");
-  const name=document.getElementById("popup-name");
-  const value=document.getElementById("popup-value");
-  const edit=document.getElementById("popup-name-edit");
-  const widget=document.getElementById("popup-widget");
-
-  icon.src=getDeviceIcon(dev);
-  name.innerText=dev.id;
-  edit.value=dev.id;
-  value.innerText="…";
-
-  widget.innerHTML = renderWidget(dev);
-
-  overlay.style.display="flex";
-
-  if(popupInterval) clearInterval(popupInterval);
-  popupInterval = setInterval(async ()=>{
-      const v=await fetchState(dev.id);
-      if(v!==null) value.innerText=v;
-  },1500);
+/**
+ * Hilfsfunktionen
+ */
+function sanitizeId(id) {
+  return String(id || '').replace(/[^a-zA-Z0-9]/g, '');
 }
 
-function closePopup(){
-  document.getElementById("device-popup-overlay").style.display="none";
-  if(popupInterval) clearInterval(popupInterval);
+function isTruthyOn(val) {
+  const num = Number(val);
+  if (!Number.isNaN(num)) {
+    return num > 0;
+  }
+  if (val === true || val === 'true') return true;
+  if (val === 1 || val === '1') return true;
+  if (typeof val === 'string') {
+    const v = val.toLowerCase();
+    if (v === 'on' || v === 'ein' || v === 'an') return true;
+  }
+  return false;
+}
+
+/**
+ * Icon-Auswahl für Räume.
+ */
+function getRoomIcon(roomName) {
+  const name = (roomName || '').toLowerCase();
+
+  if (name.includes('wohn') || name.includes('living'))
+    return 'icons/nexowatt/room-living.svg';
+
+  if (name.includes('küche') || name.includes('kueche') || name.includes('kitchen'))
+    return 'icons/nexowatt/room-kitchen.svg';
+
+  if (name.includes('schlaf') || name.includes('bed'))
+    return 'icons/nexowatt/room-bedroom.svg';
+
+  if (name.includes('bad') || name.includes('bath'))
+    return 'icons/nexowatt/room-bath.svg';
+
+  if (name.includes('büro') || name.includes('office'))
+    return 'icons/nexowatt/room-office.svg';
+
+  if (name.includes('garage'))
+    return 'icons/nexowatt/room-garage.svg';
+
+  return 'icons/nexowatt/room-living.svg';
+}
+
+/**
+ * Icon-Auswahl pro Gerät (vereinheitlicht)
+ */
+function getDeviceIcon(dev) {
+  const widget = dev.widget || '';
+  const t = (dev.deviceType || dev.role || '').toLowerCase();
+
+  if (widget === 'widget-switch' || t.includes('switch') || t.includes('socket'))
+    return 'icons/nexowatt/icon-power.svg';
+  if (widget === 'widget-dimmer' || t.includes('dimmer') || t.includes('brightness'))
+    return 'icons/nexowatt/icon-dimmer.svg';
+  if (widget === 'widget-heating' || t.includes('heat') || t.includes('thermostat') || t.includes('climate'))
+    return 'icons/nexowatt/icon-heating.svg';
+  if (widget === 'widget-shutter' || t.includes('jalous') || t.includes('blind') || t.includes('shutter'))
+    return 'icons/nexowatt/icon-shutter.svg';
+  if (widget === 'widget-sensor' || !dev.write)
+    return 'icons/nexowatt/icon-sensor.svg';
+
+  return 'icons/nexowatt/icon-warning.svg';
+}
+
+/**
+ * Widget-Typ aus entry ableiten
+ */
+function detectWidget(entry) {
+  const dt = (entry.deviceType || entry.role || '').toLowerCase();
+
+  if (dt.includes('switch') || dt.includes('socket') || dt.includes('light'))
+    return 'widget-switch';
+
+  if (dt.includes('dimmer') || dt.includes('brightness') || entry.levelId)
+    return 'widget-dimmer';
+
+  if (dt.includes('jalous') || dt.includes('blind') || dt.includes('shutter'))
+    return 'widget-shutter';
+
+  if (dt.includes('heat') || dt.includes('thermostat') || dt.includes('climate') || entry.setpointId)
+    return 'widget-heating';
+
+  if (!entry.write)
+    return 'widget-sensor';
+
+  // Fallback: Schalter
+  return 'widget-switch';
+}
+
+/**
+ * Struktur aus smartHome.structure in ein Rooms-Objekt mit deviceDetails übersetzen.
+ */
+function normalizeRooms(structureJson) {
+  const out = {};
+
+  const rooms = structureJson || {};
+  for (const [roomKey, room] of Object.entries(rooms)) {
+    const normRoom = {
+      ...room,
+      key: roomKey,
+      deviceDetails: []
+    };
+
+    // Falls bereits deviceDetails vorhanden sind, übernehmen
+    if (Array.isArray(room.deviceDetails) && room.deviceDetails.length) {
+      normRoom.deviceDetails = room.deviceDetails.map(dev => ({
+        ...dev,
+        widget: dev.widget || detectWidget(dev)
+      }));
+    } else if (room.functions) {
+      // Neu erzeugen aus functions[*]
+      for (const [funcKey, arr] of Object.entries(room.functions)) {
+        const list = Array.isArray(arr) ? arr : [];
+        for (const entry of list) {
+          if (!entry || !entry.id) continue;
+
+          const widget = detectWidget(entry);
+          const devObj = {
+            id: entry.id,
+            name: entry.name || entry.label || entry.id,
+            roomKey,
+            roomName: room.name || roomKey,
+            functionKey: funcKey,
+            functionName: (room.functionNames && room.functionNames[funcKey]) || funcKey,
+            widget,
+            deviceType: entry.deviceType || entry.type || '',
+            role: entry.role || '',
+            write: !!entry.write,
+            unit: entry.unit || '',
+            min: typeof entry.min === 'number' ? entry.min : null,
+            max: typeof entry.max === 'number' ? entry.max : null,
+            controlId: entry.controlId || '',
+            statusId: entry.statusId || '',
+            levelId: entry.levelId || '',
+            setpointId: entry.setpointId || '',
+            actualId: entry.actualId || '',
+            invertDirection: !!entry.invertDirection
+          };
+
+          normRoom.deviceDetails.push(devObj);
+        }
+      }
+    }
+
+    out[roomKey] = normRoom;
+  }
+
+  return out;
+}
+
+/**
+ * Widget-Label (rechter Badge)
+ */
+function renderWidgetLabel(dev) {
+  switch (dev.widget) {
+    case 'widget-switch':
+      return 'Schalter';
+    case 'widget-dimmer':
+      return 'Dimmer';
+    case 'widget-heating':
+      return 'Heizung';
+    case 'widget-shutter':
+      return 'Beschattung';
+    case 'widget-sensor':
+      return 'Sensor';
+    default:
+      return 'Gerät';
+  }
+}
+
+/**
+ * IDs für Steuerung/Status ableiten
+ */
+function getControlId(dev) {
+  return dev.controlId || dev.levelId || dev.statusId || dev.id;
+}
+
+function getStatusId(dev) {
+  return dev.statusId || dev.levelId || dev.controlId || dev.id;
+}
+
+/**
+ * Status auslesen & Kachel-Optik aktualisieren
+ */
+async function updateDeviceVisual(dev, el) {
+  if (!el) return;
+
+  const statusId = getStatusId(dev);
+  let val = null;
+
+  try {
+    if (window.NexoWattDeviceApi && NexoWattDeviceApi.fetchState) {
+      val = await NexoWattDeviceApi.fetchState(statusId);
+    }
+  } catch (e) {
+    console.error('fetchState failed for', statusId, e);
+  }
+
+  const valueEl = el.querySelector('.device-value');
+  if (valueEl) {
+    if (dev.widget === 'widget-switch') {
+      valueEl.innerText = isTruthyOn(val) ? 'EIN' : 'AUS';
+    } else if (val !== null && val !== undefined) {
+      valueEl.innerText = String(val) + (dev.unit ? ' ' + dev.unit : '');
+    } else {
+      valueEl.innerText = '…';
+    }
+  }
+
+  // Klassen für Optik
+  el.classList.remove('switch-on', 'heating-on', 'shutter-moving', 'has-error');
+
+  if (dev.widget === 'widget-switch' && isTruthyOn(val)) {
+    el.classList.add('switch-on');
+  }
+
+  // einfache Heizungs-/Beschattungs-Indikatoren optional:
+  if (dev.widget === 'widget-heating' && isTruthyOn(val)) {
+    el.classList.add('heating-on');
+  }
+}
+
+/**
+ * Polling starten
+ */
+function startDevicePolling(roomKey) {
+  // vorhandene Intervalle stoppen
+  Object.values(smartHomeDeviceIntervals).forEach(clearInterval);
+  smartHomeDeviceIntervals = {};
+
+  const room = smartHomeRooms[roomKey];
+  if (!room || !Array.isArray(room.deviceDetails)) return;
+
+  for (const dev of room.deviceDetails) {
+    const safeId = sanitizeId(dev.id);
+    const el = document.getElementById('dev-' + safeId);
+    if (!el) continue;
+
+    // initialer Status
+    updateDeviceVisual(dev, el);
+
+    const handle = setInterval(() => {
+      updateDeviceVisual(dev, el);
+    }, 3000);
+
+    smartHomeDeviceIntervals['dev-' + safeId] = handle;
+  }
+}
+
+/**
+ * Tile-Klick für Switch (Variante A)
+ */
+async function handleSwitchTileClick(dev, el) {
+  const controlId = getControlId(dev);
+  if (!controlId) return;
+
+  try {
+    if (window.NexoWattDeviceApi && NexoWattDeviceApi.toggle) {
+      await NexoWattDeviceApi.toggle(controlId);
+    } else if (window.NexoWattDeviceApi && NexoWattDeviceApi.writeState) {
+      // Fallback: Status lesen & selbst toggeln
+      const statusId = getStatusId(dev);
+      const cur = await NexoWattDeviceApi.fetchState(statusId);
+      const newVal = !isTruthyOn(cur);
+      await NexoWattDeviceApi.writeState(controlId, newVal);
+    }
+  } catch (e) {
+    console.error('toggle failed for', controlId, e);
+  }
+
+  // Danach Status neu laden
+  await updateDeviceVisual(dev, el);
+}
+
+/**
+ * Raum-Übersicht rendern
+ */
+function renderRoomOverview() {
+  const root = document.getElementById('smarthome-root');
+  root.innerHTML = '';
+
+  const roomsArr = Object.values(smartHomeRooms || {});
+  if (!roomsArr.length) {
+    const info = document.createElement('div');
+    info.style.color = '#ffffff';
+    info.style.opacity = '0.7';
+    info.style.fontSize = '14px';
+    info.innerText = 'Keine SmartHome-Räume konfiguriert.';
+    root.appendChild(info);
+    return;
+  }
+
+  for (const room of roomsArr) {
+    const el = document.createElement('div');
+    el.className = 'room-tile';
+    const deviceCount = Array.isArray(room.deviceDetails) ? room.deviceDetails.length : 0;
+
+    el.innerHTML = `
+      <img class="room-icon" src="${getRoomIcon(room.name)}" />
+      <div class="room-name">${room.name || room.key}</div>
+      <div class="room-count">${deviceCount} Geräte</div>
+    `;
+
+    el.onclick = () => openRoomView(room.key);
+    document.getElementById('smarthome-root').appendChild(el);
+  }
+}
+
+/**
+ * Raum-Detailseite rendern
+ */
+function openRoomView(roomKey) {
+  const room = smartHomeRooms[roomKey];
+  if (!room) return;
+
+  const root = document.getElementById('smarthome-root');
+  root.innerHTML = '';
+
+  const header = document.createElement('div');
+  header.className = 'room-header';
+
+  const backBtn = document.createElement('button');
+  backBtn.className = 'back-btn';
+  backBtn.innerText = 'Zurück';
+  backBtn.onclick = () => {
+    Object.values(smartHomeDeviceIntervals).forEach(clearInterval);
+    smartHomeDeviceIntervals = {};
+    renderRoomOverview();
+  };
+
+  const icon = document.createElement('img');
+  icon.className = 'room-header-icon';
+  icon.src = getRoomIcon(room.name);
+
+  const title = document.createElement('div');
+  title.className = 'room-title';
+  title.innerText = room.name || room.key;
+
+  header.appendChild(backBtn);
+  header.appendChild(icon);
+  header.appendChild(title);
+
+  const listWrap = document.createElement('div');
+  listWrap.id = 'device-list';
+
+  root.appendChild(header);
+  root.appendChild(listWrap);
+
+  // Kacheln
+  for (const dev of room.deviceDetails || []) {
+    const safeId = sanitizeId(dev.id);
+    const devEl = document.createElement('div');
+    devEl.className = 'device-item';
+    devEl.id = 'dev-' + safeId;
+
+    const iconSrc = getDeviceIcon(dev);
+    const widgetLabel = renderWidgetLabel(dev);
+
+    devEl.innerHTML = `
+      <div class="device-main">
+        <img class="device-icon" src="${iconSrc}" />
+        <div class="device-info">
+          <div class="device-name" id="name-${safeId}">${dev.name || dev.id}</div>
+          <div class="device-value">…</div>
+        </div>
+      </div>
+      <div class="device-widget">${widgetLabel}</div>
+    `;
+
+    // Variante A: komplette Kachel klickbar für Switch
+    devEl.addEventListener('click', (ev) => {
+      // Wenn später spezielle UI-Elemente drin sind, kann man hier ausfiltern:
+      // if (ev.target.closest('.some-inner-control')) return;
+
+      if (dev.widget === 'widget-switch') {
+        handleSwitchTileClick(dev, devEl);
+      } else {
+        openPopup(dev); // andere Widgets: Popup mit Detail/Settings
+      }
+    });
+
+    listWrap.appendChild(devEl);
+  }
+
+  // Polling starten
+  startDevicePolling(roomKey);
+}
+
+/**
+ * SmartHome-Daten laden
+ */
+async function loadSmartHomeData() {
+  try {
+    // Primär smartHome.structure verwenden
+    let structure = {};
+    try {
+      const resp = await fetch('/state/smartHome.structure');
+      if (resp.ok) {
+        const data = await resp.json();
+        structure = JSON.parse(data.val || '{}');
+      }
+    } catch (e) {
+      console.error('Could not load smartHome.structure', e);
+    }
+
+    smartHomeRooms = normalizeRooms(structure);
+    renderRoomOverview();
+  } catch (e) {
+    console.error('loadSmartHomeData failed', e);
+    const root = document.getElementById('smarthome-root');
+    root.innerHTML = '<div style="color:#fff;opacity:.7;">Fehler beim Laden der SmartHome-Daten.</div>';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', loadSmartHomeData);
+
+/**
+ * POPUP-LOGIK (Name/Icon/Raum ändern)
+ */
+
+function openPopup(dev) {
+  currentPopupDevice = dev;
+
+  const overlay = document.getElementById('device-popup-overlay');
+  const iconEl = document.getElementById('popup-icon');
+  const nameEl = document.getElementById('popup-name');
+  const valueEl = document.getElementById('popup-value');
+  const editNameEl = document.getElementById('popup-name-edit');
+  const roomEditEl = document.getElementById('popup-room-edit');
+  const widgetEl = document.getElementById('popup-widget');
+
+  iconEl.src = getDeviceIcon(dev);
+  nameEl.innerText = dev.name || dev.id;
+  editNameEl.value = dev.name || dev.id;
+  roomEditEl.value = dev.roomName || dev.roomKey || '';
+
+  valueEl.innerText = '…';
+  widgetEl.innerHTML = renderWidgetLabel(dev);
+
+  overlay.style.display = 'flex';
+
+  // aktuellen Wert im Popup nachladen
+  (async () => {
+    const statusId = getStatusId(dev);
+    try {
+      if (window.NexoWattDeviceApi && NexoWattDeviceApi.fetchState) {
+        const v = await NexoWattDeviceApi.fetchState(statusId);
+        if (v !== null && v !== undefined) {
+          valueEl.innerText = String(v) + (dev.unit ? ' ' + dev.unit : '');
+        }
+      }
+    } catch (e) {
+      console.error('fetchState in popup failed for', statusId, e);
+    }
+  })();
+}
+
+function closePopup() {
+  const overlay = document.getElementById('device-popup-overlay');
+  overlay.style.display = 'none';
+  currentPopupDevice = null;
+}
+
+/**
+ * Name/Settings speichern (SmartHome.deviceSettings.* States)
+ */
+async function saveDeviceSettings() {
+  if (!currentPopupDevice) return;
+  const dev = currentPopupDevice;
+  const id = dev.id;
+
+  const newIcon = document.getElementById('popup-icon-select').value;
+  const newRoom = document.getElementById('popup-room-edit').value;
+
+  try {
+    await fetch('/set/smartHome.deviceSettings.' + encodeURIComponent(id) + '.icon', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ val: newIcon })
+    });
+
+    await fetch('/set/smartHome.deviceSettings.' + encodeURIComponent(id) + '.room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ val: newRoom })
+    });
+  } catch (e) {
+    console.error('saveDeviceSettings failed for', id, e);
+  }
+}
+
+async function saveDeviceName() {
+  if (!currentPopupDevice) return;
+  const dev = currentPopupDevice;
+  const id = dev.id;
+
+  const newName = document.getElementById('popup-name-edit').value || id;
+
+  try {
+    await fetch('/set/smartHome.deviceSettings.' + encodeURIComponent(id) + '.name', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ val: newName })
+    });
+
+    // Popup aktualisieren
+    document.getElementById('popup-name').innerText = newName;
+
+    // Kachel im Raum aktualisieren (wenn sichtbar)
+    const safeId = sanitizeId(id);
+    const labelEl = document.getElementById('name-' + safeId);
+    if (labelEl) {
+      labelEl.innerText = newName;
+    }
+  } catch (e) {
+    console.error('saveDeviceName failed for', id, e);
+  }
 }
 </script>
+
+<!-- DEVICE DETAIL POPUP -->
+<div id="device-popup-overlay">
+  <div id="device-popup">
+    <button id="device-popup-close" onclick="closePopup()">X</button>
+
+    <img id="popup-icon" src="" />
+    <div id="popup-name"></div>
+    <div id="popup-value"></div>
+
+    <div id="popup-widget"></div>
+
+    <h3 style="margin-top:14px; margin-bottom:6px;">Einstellungen</h3>
+    <label for="popup-name-edit">Name ändern:</label>
+    <input id="popup-name-edit" />
+
+    <h3 style="margin-top:14px; margin-bottom:6px;">Icon ändern</h3>
+    <select id="popup-icon-select">
+      <option value="light">Licht</option>
+      <option value="heating">Heizung</option>
+      <option value="shutter">Beschattung</option>
+      <option value="sensor">Sensor</option>
+    </select>
+
+    <h3 style="margin-top:14px; margin-bottom:6px;">Raum ändern</h3>
+    <input id="popup-room-edit" />
+
+    <button class="popup-primary-btn" onclick="saveDeviceSettings()">Einstellungen speichern</button>
+    <button class="popup-primary-btn" onclick="saveDeviceName()">Namen speichern</button>
+  </div>
+</div>
