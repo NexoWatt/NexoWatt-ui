@@ -123,92 +123,674 @@ async syncInstallerConfigToStates() {
   }
 
 
-  buildSmartHomeDevicesFromConfig() {
-    const smCfg = (this.config && this.config.smartHome) || {};
-    const enabled = !!smCfg.enabled;
-    const dps = smCfg.datapoints || {};
-    const devices = [];
+  /**
+ * Returns the SmartHomeConfig structure from adapter config.
+ * This is the future generic model for rooms, functions and devices.
+ *
+ * smartHomeConfig: {
+ *   version: 1,
+ *   rooms: [
+ *     { id: 'living', name: 'Wohnen', icon: 'room-living', floor: 'EG', order: 10, enabled: true }
+ *   ],
+ *   functions: [
+ *     { id: 'light', name: 'Licht', icon: 'func-light', order: 10, enabled: true }
+ *   ],
+ *   devices: [
+ *     {
+ *       id: 'living_light_ceiling',
+ *       type: 'switch', // switch|dimmer|blind|rtr|sensor|scene
+ *       roomId: 'living',
+ *       functionId: 'light',
+ *       alias: 'Deckenlicht',
+ *       icon: 'light-ceiling',
+ *       size: 'm', // s|m|l
+ *       tags: ['wohnen', 'licht'],
+ *       behavior: { readOnly: false, invert: false },
+ *       io: {
+ *         switch: { readId: 'knx.0.living.light.ceiling', writeId: 'knx.0.living.light.ceiling' }
+ *       }
+ *     }
+ *   ]
+ * }
+ */
+getSmartHomeConfig() {
+  const cfg = this.config || {};
+  const shc = cfg.smartHomeConfig || {};
+  const out = {
+    version: typeof shc.version === 'number' ? shc.version : 1,
+    rooms: Array.isArray(shc.rooms) ? shc.rooms : [],
+    functions: Array.isArray(shc.functions) ? shc.functions : [],
+    devices: Array.isArray(shc.devices) ? shc.devices : [],
+  };
+  return out;
+}
 
-    if (!enabled) {
-      this.smartHomeDevices = [];
-      return this.smartHomeDevices;
-    }
+buildSmartHomeDevicesFromConfig() {
+  const smCfg = (this.config && this.config.smartHome) || {};
+  const enabled = !!smCfg.enabled;
+  const dps = smCfg.datapoints || {};
+  const devices = [];
 
-    const pushSwitch = (id, opts) => {
-      if (!id) return;
+  if (!enabled) {
+    this.smartHomeDevices = [];
+    return this.smartHomeDevices;
+  }
+
+  // --- SmartHomeConfig v1: rooms/functions/devices (primary source) ---
+  const shc = this.getSmartHomeConfig ? this.getSmartHomeConfig() : null;
+  const rooms = (shc && Array.isArray(shc.rooms)) ? shc.rooms : [];
+  const funcs = (shc && Array.isArray(shc.functions)) ? shc.functions : [];
+  const cfgDevices = (shc && Array.isArray(shc.devices)) ? shc.devices : [];
+  const hasConfigDevices = cfgDevices.length > 0;
+
+  const resolveRoomName = (roomId) => {
+    if (!roomId) return '';
+    const r = rooms.find(rm => rm && rm.id === roomId);
+    return (r && r.name) || roomId;
+  };
+
+  const resolveFunctionName = (fnId) => {
+    if (!fnId) return '';
+    const f = funcs.find(fn => fn && fn.id === fnId);
+    return (f && f.name) || fnId;
+  };
+
+  if (hasConfigDevices) {
+    cfgDevices.forEach(cfgDev => {
+      if (!cfgDev || !cfgDev.id) return;
+      const type = cfgDev.type || 'switch';
+      const roomName = resolveRoomName(cfgDev.roomId);
+      const fnName = resolveFunctionName(cfgDev.functionId);
+      const behavior = cfgDev.behavior || {};
+      const ioCfg = cfgDev.io || {};
+      const size = cfgDev.size || 'm';
+
       const dev = {
-        id: opts.id,
-        type: 'switch',
-        room: opts.room,
-        function: opts.func,
-        alias: opts.alias,
-        icon: opts.icon,
+        id: cfgDev.id,
+        type,
+        room: roomName,
+        function: fnName,
+        alias: cfgDev.alias || cfgDev.id,
+        icon: cfgDev.icon || '',
         ui: {
-          size: 'm',
+          size,
           showRoom: true,
           showValue: true,
-          unit: '',
-          precision: 0,
-          highlightOnState: true,
-          colorProfile: 'primary',
+          unit: (cfgDev.ui && cfgDev.ui.unit) || cfgDev.unit || '',
+          precision: (cfgDev.ui && typeof cfgDev.ui.precision === 'number')
+            ? cfgDev.ui.precision
+            : (typeof cfgDev.precision === 'number' ? cfgDev.precision : undefined),
         },
         behavior: {
-          readOnly: false,
+          readOnly: !!behavior.readOnly,
+          favorite: !!behavior.favorite,
         },
-        io: {
-          switch: {
-            readId: id,
-            writeId: id,
-          },
-        },
+        io: {},
       };
+
+      if (type === 'switch' || type === 'scene') {
+        const sw = ioCfg.switch || {};
+        const readId = sw.readId || sw.writeId || '';
+        const writeId = sw.writeId || sw.readId || '';
+        if (!readId && !writeId) {
+          // keine IO-Zuordnung -> trotzdem anzeigen, aber ohne Switch-IO
+        } else {
+          dev.io.switch = { readId, writeId };
+        }
+        // Szenen farblich etwas absetzen (UI-seitig evtl. später)
+        if (type === 'scene') {
+          dev.ui.unit = dev.ui.unit || '';
+        }
+      } else if (type === 'dimmer' || type === 'blind') {
+        const lvl = ioCfg.level || {};
+        const readId = lvl.readId || '';
+        const writeId = lvl.writeId || lvl.readId || '';
+        if (readId || writeId) {
+          dev.io.level = {
+            readId,
+            writeId,
+            min: typeof lvl.min === 'number' ? lvl.min : 0,
+            max: typeof lvl.max === 'number' ? lvl.max : 100,
+          };
+        }
+        if (type === 'blind') {
+          const cover = ioCfg.cover || {};
+          dev.io.cover = {
+            positionId: lvl.readId || '',
+            upId: cover.upId || '',
+            downId: cover.downId || '',
+            stopId: cover.stopId || '',
+          };
+        }
+      } else if (type === 'rtr') {
+        const climate = ioCfg.climate || {};
+        dev.io.climate = {
+          currentTempId: climate.currentTempId || '',
+          setpointId: climate.setpointId || '',
+          modeId: climate.modeId || '',
+          humidityId: climate.humidityId || '',
+          minSetpoint: typeof climate.minSetpoint === 'number' ? climate.minSetpoint : 15,
+          maxSetpoint: typeof climate.maxSetpoint === 'number' ? climate.maxSetpoint : 30,
+        };
+        if (!dev.ui.unit) {
+          dev.ui.unit = '°C';
+        }
+        if (typeof dev.ui.precision !== 'number') {
+          dev.ui.precision = 1;
+        }
+      } else if (type === 'sensor') {
+        const sensor = ioCfg.sensor || {};
+        if (sensor.readId) {
+          dev.io.sensor = { readId: sensor.readId };
+        }
+      }
+
       devices.push(dev);
-    };
-
-    // vorhandene SmartHome-Datenpunkte als einfache Switch-Kacheln abbilden
-    pushSwitch(dps.heatPumpOn, {
-      id: 'heatPumpOn',
-      alias: 'Wärmepumpe',
-      room: 'Technik',
-      func: 'Heizung',
-      icon: 'HP',
-    });
-
-    pushSwitch(dps.wallboxLock, {
-      id: 'wallboxLock',
-      alias: 'Wallbox-Sperre',
-      room: 'Ladestation',
-      func: 'EV',
-      icon: 'EV',
     });
 
     this.smartHomeDevices = devices;
     return this.smartHomeDevices;
   }
 
-  async getSmartHomeDevicesWithState() {
-    const devices = (this.smartHomeDevices && this.smartHomeDevices.length)
-      ? this.smartHomeDevices
-      : this.buildSmartHomeDevicesFromConfig();
+  // --- Fallback: altes SmartHome-Modell über smartHome.datapoints.* (A-Reihe) ---
+  const pushSwitch = (id, opts) => {
+    if (!id) return;
+    const dev = {
+      id: opts.id,
+      type: 'switch',
+      room: opts.room,
+      function: opts.func,
+      alias: opts.alias,
+      icon: opts.icon,
+      ui: {
+        size: 'm',
+        showRoom: true,
+        showValue: true,
+        unit: '',
+        precision: 0,
+        highlightOnState: true,
+        colorProfile: 'primary',
+      },
+      behavior: {
+        readOnly: false,
+        favorite: false,
+      },
+      io: {
+        switch: {
+          readId: id,
+          writeId: id,
+        },
+      },
+    };
+    devices.push(dev);
+  };
 
-    const result = [];
-    for (const dev of devices) {
-      const copy = JSON.parse(JSON.stringify(dev));
-      if (copy.io && copy.io.switch && copy.io.switch.readId) {
+  const pushDimmer = (id, opts) => {
+    if (!id) return;
+    const dev = {
+      id: opts.id,
+      type: 'dimmer',
+      room: opts.room,
+      function: opts.func,
+      alias: opts.alias,
+      icon: opts.icon,
+      ui: {
+        size: 'm',
+        showRoom: true,
+        showValue: true,
+        unit: typeof opts.unit === 'string' ? opts.unit : '%',
+        precision: 0,
+        highlightOnState: true,
+        colorProfile: 'primary',
+      },
+      behavior: {
+        readOnly: false,
+        favorite: false,
+      },
+      io: {
+        level: {
+          readId: id,
+          writeId: id,
+          min: typeof opts.min === 'number' ? opts.min : 0,
+          max: typeof opts.max === 'number' ? opts.max : 100,
+        },
+      },
+    };
+    devices.push(dev);
+  };
+
+  const pushBlind = (positionId, upId, downId, stopId, opts) => {
+    if (!positionId && !upId && !downId && !stopId) return;
+    const dev = {
+      id: opts.id,
+      type: 'blind',
+      room: opts.room,
+      function: opts.func,
+      alias: opts.alias,
+      icon: opts.icon,
+      ui: {
+        size: 'm',
+        showRoom: true,
+        showValue: true,
+        unit: typeof opts.unit === 'string' ? opts.unit : '%',
+        precision: 0,
+        highlightOnState: false,
+        colorProfile: 'primary',
+      },
+      behavior: {
+        readOnly: false,
+        favorite: false,
+      },
+      io: {},
+    };
+
+    if (positionId) {
+      dev.io.level = {
+        readId: positionId,
+        writeId: positionId,
+        min: typeof opts.min === 'number' ? opts.min : 0,
+        max: typeof opts.max === 'number' ? opts.max : 100,
+      };
+    }
+
+    dev.io.cover = {
+      positionId: positionId || '',
+      upId: upId || '',
+      downId: downId || '',
+      stopId: stopId || '',
+    };
+
+    devices.push(dev);
+  };
+
+  const pushRtr = (currentId, setpointId, modeId, humidityId, opts) => {
+    if (!currentId && !setpointId && !modeId && !humidityId) return;
+    const dev = {
+      id: opts.id,
+      type: 'rtr',
+      room: opts.room,
+      function: opts.func,
+      alias: opts.alias,
+      icon: opts.icon,
+      ui: {
+        size: 'm',
+        showRoom: true,
+        showValue: true,
+        unit: typeof opts.unit === 'string' ? opts.unit : '°C',
+        precision: 1,
+        highlightOnState: true,
+        colorProfile: 'primary',
+      },
+      behavior: {
+        readOnly: false,
+        favorite: false,
+      },
+      io: {
+        climate: {
+          currentTempId: currentId || '',
+          setpointId: setpointId || '',
+          modeId: modeId || '',
+          humidityId: humidityId || '',
+          minSetpoint: typeof opts.minSetpoint === 'number' ? opts.minSetpoint : 15,
+          maxSetpoint: typeof opts.maxSetpoint === 'number' ? opts.maxSetpoint : 30,
+        },
+      },
+    };
+    devices.push(dev);
+  };
+
+  const pushSensor = (id, opts) => {
+    if (!id) return;
+    const dev = {
+      id: opts.id,
+      type: 'sensor',
+      room: opts.room,
+      function: opts.func,
+      alias: opts.alias,
+      icon: opts.icon,
+      ui: {
+        size: 'm',
+        showRoom: true,
+        showValue: true,
+        unit: typeof opts.unit === 'string' ? opts.unit : '',
+        precision: typeof opts.precision === 'number' ? opts.precision : 1,
+        highlightOnState: false,
+        colorProfile: 'secondary',
+      },
+      behavior: {
+        readOnly: true,
+        favorite: false,
+      },
+      io: {
+        sensor: {
+          readId: id,
+        },
+      },
+    };
+    devices.push(dev);
+  };
+
+  const pushScene = (id, opts) => {
+    if (!id) return;
+    const dev = {
+      id: opts.id,
+      type: 'scene',
+      room: opts.room,
+      function: opts.func,
+      alias: opts.alias,
+      icon: opts.icon,
+      ui: {
+        size: 'm',
+        showRoom: true,
+        showValue: true,
+        unit: '',
+        precision: 0,
+        highlightOnState: true,
+        colorProfile: 'accent',
+      },
+      behavior: {
+        readOnly: false,
+        favorite: false,
+      },
+      io: {
+        switch: {
+          readId: id,
+          writeId: id,
+        },
+      },
+    };
+    devices.push(dev);
+  };
+
+  // Schalter
+  pushSwitch(dps.heatPumpOn, {
+    id: 'heatPumpOn',
+    alias: 'Wärmepumpe',
+    room: 'Technik',
+    func: 'Heizung',
+    icon: 'HP',
+  });
+
+  pushSwitch(dps.wallboxLock, {
+    id: 'wallboxLock',
+    alias: 'Wallbox-Sperre',
+    room: 'Ladestation',
+    func: 'EV',
+    icon: 'EV',
+  });
+
+  // Dimmer-artige Werte (0–100 %)
+  pushDimmer(dps.gridLimit, {
+    id: 'gridLimit',
+    alias: 'Netzlimit',
+    room: 'Energie',
+    func: 'Netz',
+    icon: 'GL',
+    unit: '%',
+    min: 0,
+    max: 100,
+  });
+
+  pushDimmer(dps.pvCurtailment, {
+    id: 'pvCurtailment',
+    alias: 'PV-Abregelung',
+    room: 'Energie',
+    func: 'PV',
+    icon: 'PV',
+    unit: '%',
+    min: 0,
+    max: 100,
+  });
+
+  // Jalousie / Rollladen
+  pushBlind(
+    dps.blindPosition,
+    dps.blindUp,
+    dps.blindDown,
+    dps.blindStop,
+    {
+      id: 'blindMain',
+      alias: 'Jalousie',
+      room: 'Wohnen',
+      func: 'Beschattung',
+      icon: 'BL',
+      unit: '%',
+      min: 0,
+      max: 100,
+    }
+  );
+
+  // Raumtemperatur / RTR
+  pushRtr(
+    dps.roomTemp,
+    dps.rtrSetpoint,
+    dps.rtrMode,
+    dps.rtrHumidity,
+    {
+      id: 'rtrMain',
+      alias: 'Heizung Wohnen',
+      room: 'Wohnen',
+      func: 'Heizung',
+      icon: 'RT',
+      unit: '°C',
+      minSetpoint: 15,
+      maxSetpoint: 30,
+    }
+  );
+
+  // Sensor-/Info-Kacheln (Raumtemperatur & Luftfeuchte als reine Anzeige)
+  pushSensor(dps.roomTemp, {
+    id: 'sensorRoomTemp',
+    alias: 'Raumtemperatur Info',
+    room: 'Wohnen',
+    func: 'Klima',
+    icon: 'TS',
+    unit: '°C',
+    precision: 1,
+  });
+
+  pushSensor(dps.rtrHumidity, {
+    id: 'sensorRoomHumidity',
+    alias: 'Raumfeuchte',
+    room: 'Wohnen',
+    func: 'Klima',
+    icon: 'RH',
+    unit: '%',
+    precision: 0,
+  });
+
+  // Szenen (einfacher Gira-ähnlicher Szenen-Baustein)
+  pushScene(dps.scene1, {
+    id: 'scene1',
+    alias: 'Szene Wohlfühlen',
+    room: 'Wohnen',
+    func: 'Szene',
+    icon: 'S1',
+  });
+
+  pushScene(dps.scene2, {
+    id: 'scene2',
+    alias: 'Szene Alles aus',
+    room: 'Wohnen',
+    func: 'Szene',
+    icon: 'S2',
+  });
+
+  pushScene(dps.scene3, {
+    id: 'scene3',
+    alias: 'Szene 3',
+    room: 'Wohnen',
+    func: 'Szene',
+    icon: 'S3',
+  });
+
+  pushScene(dps.scene4, {
+    id: 'scene4',
+    alias: 'Szene 4',
+    room: 'Wohnen',
+    func: 'Szene',
+    icon: 'S4',
+  });
+
+  this.smartHomeDevices = devices;
+  return this.smartHomeDevices;
+}
+
+async getSmartHomeDevicesWithState() {
+  const devices = (this.smartHomeDevices && this.smartHomeDevices.length)
+    ? this.smartHomeDevices
+    : this.buildSmartHomeDevicesFromConfig();
+
+  const result = [];
+  for (const dev of devices) {
+    const copy = JSON.parse(JSON.stringify(dev));
+    copy.state = copy.state || {};
+
+    // Schalter-Zustand lesen
+    if (copy.io && copy.io.switch && copy.io.switch.readId) {
+      try {
+        const st = await this.getForeignStateAsync(copy.io.switch.readId);
+        copy.state.on = !!(st && st.val);
+      } catch (e) {
+        this.log.warn(`SmartHome state read error (switch) for ${copy.id}: ${e.message}`);
+        copy.state.on = false;
+        copy.state.error = true;
+      }
+    }
+
+    // Szenen: on -> active
+if (copy.type === 'scene' && typeof copy.state.on !== 'undefined') {
+  copy.state.active = !!copy.state.on;
+}
+
+// Level-Wert lesen (Dimmer / Jalousie / Prozentwerte)
+    if (copy.io && copy.io.level && copy.io.level.readId) {
+      try {
+        const st = await this.getForeignStateAsync(copy.io.level.readId);
+        let val = st && st.val;
+        if (typeof val === 'string') {
+          const num = parseFloat(val.replace(',', '.'));
+          if (!Number.isNaN(num)) {
+            val = num;
+          }
+        }
+        if (typeof val !== 'number' || Number.isNaN(val)) {
+          val = 0;
+        }
+        copy.state.level = val;
+
+        if (copy.type === 'dimmer') {
+          const min = typeof copy.io.level.min === 'number' ? copy.io.level.min : 0;
+          if (typeof copy.state.on === 'undefined') {
+            copy.state.on = val > min;
+          }
+        }
+
+        if (copy.type === 'blind') {
+          copy.state.position = val;
+        }
+      } catch (e) {
+        this.log.warn(`SmartHome state read error (level) for ${copy.id}: ${e.message}`);
+        if (copy.type === 'dimmer') {
+          copy.state.level = 0;
+        }
+        copy.state.error = true;
+      }
+    }
+
+    // Klima-Werte lesen (RTR)
+    if (copy.io && copy.io.climate) {
+      const cl = copy.io.climate;
+
+      // aktuelle Raumtemperatur
+      if (cl.currentTempId) {
         try {
-          const st = await this.getForeignStateAsync(copy.io.switch.readId);
-          copy.state = { on: !!(st && st.val) };
+          const st = await this.getForeignStateAsync(cl.currentTempId);
+          let val = st && st.val;
+          if (typeof val === 'string') {
+            const num = parseFloat(val.replace(',', '.'));
+            if (!Number.isNaN(num)) val = num;
+          }
+          if (typeof val === 'number' && !Number.isNaN(val)) {
+            copy.state.currentTemp = val;
+          }
         } catch (e) {
-          this.log.warn(`SmartHome state read error for ${copy.id}: ${e.message}`);
-          copy.state = { on: false, error: true };
+          this.log.warn(`SmartHome climate currentTemp error for ${copy.id}: ${e.message}`);
         }
       }
-      result.push(copy);
-    }
-    return result;
-  }
 
-  async onReady() {
+      // Solltemperatur
+      if (cl.setpointId) {
+        try {
+          const st = await this.getForeignStateAsync(cl.setpointId);
+          let val = st && st.val;
+          if (typeof val === 'string') {
+            const num = parseFloat(val.replace(',', '.'));
+            if (!Number.isNaN(num)) val = num;
+          }
+          if (typeof val === 'number' && !Number.isNaN(val)) {
+            copy.state.setpoint = val;
+          }
+        } catch (e) {
+          this.log.warn(`SmartHome climate setpoint error for ${copy.id}: ${e.message}`);
+        }
+      }
+
+      // Modus
+      if (cl.modeId) {
+        try {
+          const st = await this.getForeignStateAsync(cl.modeId);
+          if (st && typeof st.val !== 'undefined') {
+            copy.state.mode = st.val;
+          }
+        } catch (e) {
+          this.log.warn(`SmartHome climate mode error for ${copy.id}: ${e.message}`);
+        }
+      }
+
+      // Luftfeuchte
+      if (cl.humidityId) {
+        try {
+          const st = await this.getForeignStateAsync(cl.humidityId);
+          let val = st && st.val;
+          if (typeof val === 'string') {
+            const num = parseFloat(val.replace(',', '.'));
+            if (!Number.isNaN(num)) val = num;
+          }
+          if (typeof val === 'number' && !Number.isNaN(val)) {
+            copy.state.humidity = val;
+          }
+        } catch (e) {
+          this.log.warn(`SmartHome climate humidity error for ${copy.id}: ${e.message}`);
+        }
+      }
+    }
+
+    // Sensor-Werte lesen (read-only)
+    if (copy.io && copy.io.sensor && copy.io.sensor.readId) {
+      try {
+        const st = await this.getForeignStateAsync(copy.io.sensor.readId);
+        let val = st && st.val;
+        if (typeof val === 'string') {
+          const num = parseFloat(val.replace(',', '.'));
+          if (!Number.isNaN(num)) val = num;
+        }
+        if (typeof val === 'number' && !Number.isNaN(val)) {
+          copy.state.value = val;
+        } else if (typeof val !== 'undefined') {
+          copy.state.value = val;
+        }
+      } catch (e) {
+        this.log.warn(`SmartHome sensor state error for ${copy.id}: ${e.message}`);
+      }
+    }
+
+    result.push(copy);
+  }
+  return result;
+}
+
+async onReady() {
     try {
       // start web server
       await this.startServer();
@@ -282,32 +864,255 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
       }
     });
 
-    app.post('/api/smarthome/toggle', async (req, res) => {
+    
+app.post('/api/smarthome/toggle', async (req, res) => {
+  try {
+    const id = req.body && req.body.id;
+    if (!id) {
+      return res.status(400).json({ ok: false, error: 'missing id' });
+    }
+    const devices = (this.smartHomeDevices && this.smartHomeDevices.length)
+      ? this.smartHomeDevices
+      : this.buildSmartHomeDevicesFromConfig();
+    const dev = devices.find(d => d.id === id);
+    if (!dev || !dev.io) {
+      return res.status(404).json({ ok: false, error: 'device not found or not toggleable' });
+    }
+
+    // Dimmer: Level 0 <-> max toggeln
+    if (dev.type === 'dimmer' && dev.io.level && dev.io.level.readId) {
+      const levelCfg = dev.io.level;
+      const dpId = levelCfg.writeId || levelCfg.readId;
+      const st = await this.getForeignStateAsync(dpId);
+      let current = st && st.val;
+      if (typeof current === 'string') {
+        const num = parseFloat(current.replace(',', '.'));
+        if (!Number.isNaN(num)) {
+          current = num;
+        }
+      }
+      if (typeof current !== 'number' || Number.isNaN(current)) {
+        current = 0;
+      }
+      const min = typeof levelCfg.min === 'number' ? levelCfg.min : 0;
+      const max = typeof levelCfg.max === 'number' ? levelCfg.max : 100;
+      const next = current > min ? min : max;
+      await this.setForeignStateAsync(dpId, next);
+      return res.json({ ok: true, state: { level: next, on: next > min } });
+    }
+
+    // Default: Switch toggeln
+    if (dev.io.switch && dev.io.switch.readId) {
+      const dpId = dev.io.switch.writeId || dev.io.switch.readId;
+      const st = await this.getForeignStateAsync(dpId);
+      const current = !!(st && st.val);
+      const next = !current;
+      await this.setForeignStateAsync(dpId, next);
+      return res.json({ ok: true, state: { on: next } });
+    }
+
+    return res.status(404).json({ ok: false, error: 'device not toggleable' });
+  } catch (e) {
+    this.log.warn('SmartHome toggle API error: ' + e.message);
+    res.status(500).json({ ok: false, error: 'internal error' });
+  }
+});
+
+// Level-API für Dimmer (Slider)
+app.post('/api/smarthome/level', async (req, res) => {
+  try {
+    const id = req.body && req.body.id;
+    let level = req.body && req.body.level;
+    if (!id || (typeof level === 'undefined' || level === null)) {
+      return res.status(400).json({ ok: false, error: 'missing id or level' });
+    }
+
+    const devices = (this.smartHomeDevices && this.smartHomeDevices.length)
+      ? this.smartHomeDevices
+      : this.buildSmartHomeDevicesFromConfig();
+    const dev = devices.find(d => d.id === id);
+    if (!dev || dev.type !== 'dimmer' || !dev.io || !dev.io.level || !dev.io.level.readId) {
+      return res.status(404).json({ ok: false, error: 'device not found or not a dimmer' });
+    }
+
+    // level in Zahl umwandeln
+    if (typeof level === 'string') {
+      const num = parseFloat(level.replace(',', '.'));
+      if (!Number.isNaN(num)) {
+        level = num;
+      }
+    }
+    if (typeof level !== 'number' || Number.isNaN(level)) {
+      return res.status(400).json({ ok: false, error: 'invalid level' });
+    }
+
+    const levelCfg = dev.io.level;
+    const min = typeof levelCfg.min === 'number' ? levelCfg.min : 0;
+    const max = typeof levelCfg.max === 'number' ? levelCfg.max : 100;
+    let target = Math.max(min, Math.min(max, level));
+
+    const dpId = levelCfg.writeId || levelCfg.readId;
+    await this.setForeignStateAsync(dpId, target);
+    return res.json({ ok: true, state: { level: target, on: target > min } });
+  } catch (e) {
+    this.log.warn('SmartHome level API error: ' + e.message);
+    res.status(500).json({ ok: false, error: 'internal error' });
+  }
+});
+
+
+// Cover-API für Jalousie/Rollladen (Auf/Ab/Stop)
+app.post('/api/smarthome/cover', async (req, res) => {
+  try {
+    const id = req.body && req.body.id;
+    const action = req.body && req.body.action;
+    if (!id || !action) {
+      return res.status(400).json({ ok: false, error: 'missing id or action' });
+    }
+
+    const devices = (this.smartHomeDevices && this.smartHomeDevices.length)
+      ? this.smartHomeDevices
+      : this.buildSmartHomeDevicesFromConfig();
+    const dev = devices.find(d => d.id === id);
+    if (!dev || dev.type !== 'blind' || !dev.io || !dev.io.cover) {
+      return res.status(404).json({ ok: false, error: 'device not found or not a blind/cover' });
+    }
+
+    const cover = dev.io.cover || {};
+    let dpId;
+    if (action === 'up') {
+      dpId = cover.upId;
+    } else if (action === 'down') {
+      dpId = cover.downId;
+    } else if (action === 'stop') {
+      dpId = cover.stopId;
+    } else {
+      return res.status(400).json({ ok: false, error: 'invalid action' });
+    }
+
+    if (!dpId) {
+      return res.status(404).json({ ok: false, error: 'no datapoint for action' });
+    }
+
+    await this.setForeignStateAsync(dpId, true);
+    return res.json({ ok: true });
+  } catch (e) {
+    this.log.warn('SmartHome cover API error: ' + e.message);
+    res.status(500).json({ ok: false, error: 'internal error' });
+  }
+});// RTR-Setpoint-API (Solltemperatur einstellen)
+app.post('/api/smarthome/rtrSetpoint', async (req, res) => {
+  try {
+    const id = req.body && req.body.id;
+    let setpoint = req.body && req.body.setpoint;
+    if (!id || (typeof setpoint === 'undefined' || setpoint === null)) {
+      return res.status(400).json({ ok: false, error: 'missing id or setpoint' });
+    }
+
+    const devices = (this.smartHomeDevices && this.smartHomeDevices.length)
+      ? this.smartHomeDevices
+      : this.buildSmartHomeDevicesFromConfig();
+    const dev = devices.find(d => d.id === id);
+    if (!dev || dev.type !== 'rtr' || !dev.io || !dev.io.climate || !dev.io.climate.setpointId) {
+      return res.status(404).json({ ok: false, error: 'device not found or no setpoint' });
+    }
+
+    if (typeof setpoint === 'string') {
+      const num = parseFloat(setpoint.replace(',', '.'));
+      if (!Number.isNaN(num)) setpoint = num;
+    }
+    if (typeof setpoint !== 'number' || Number.isNaN(setpoint)) {
+      return res.status(400).json({ ok: false, error: 'invalid setpoint' });
+    }
+
+    const cl = dev.io.climate;
+    const min = typeof cl.minSetpoint === 'number' ? cl.minSetpoint : 15;
+    const max = typeof cl.maxSetpoint === 'number' ? cl.maxSetpoint : 30;
+    const target = Math.max(min, Math.min(max, setpoint));
+
+    await this.setForeignStateAsync(cl.setpointId, target);
+    return res.json({ ok: true, state: { setpoint: target } });
+  } catch (e) {
+    this.log.warn('SmartHome RTR setpoint API error: ' + e.message);
+    res.status(500).json({ ok: false, error: 'internal error' });
+  }
+});
+
+
+
+// --- SmartHomeConfig API (read-only for VIS config page) ---
+    app.get('/api/smarthome/config', (req, res) => {
       try {
-        const id = req.body && req.body.id;
-        if (!id) {
-          return res.status(400).json({ ok: false, error: 'missing id' });
-        }
-        const devices = (this.smartHomeDevices && this.smartHomeDevices.length)
-          ? this.smartHomeDevices
-          : this.buildSmartHomeDevicesFromConfig();
-        const dev = devices.find(d => d.id === id);
-        if (!dev || !dev.io || !dev.io.switch || !dev.io.switch.readId) {
-          return res.status(404).json({ ok: false, error: 'device not found or not a switch' });
-        }
-        const dpId = dev.io.switch.writeId || dev.io.switch.readId;
-        const st = await this.getForeignStateAsync(dpId);
-        const current = !!(st && st.val);
-        const next = !current;
-        await this.setForeignStateAsync(dpId, next);
-        res.json({ ok: true, state: { on: next } });
+        const cfg = this.getSmartHomeConfig ? this.getSmartHomeConfig() : (this.config && this.config.smartHomeConfig) || {};
+        res.json({ ok: true, config: cfg });
       } catch (e) {
-        this.log.warn('SmartHome toggle API error: ' + e.message);
+        this.log.warn('SmartHomeConfig API error: ' + e.message);
         res.status(500).json({ ok: false, error: 'internal error' });
       }
     });
 
-    // --- History page & API ---
+    // --- SmartHomeConfig Page (VIS-Konfig-Ansicht) ---
+    app.get(['/smarthome-config.html', '/smarthome-config'], (req, res) => {
+      try {
+        const file = require('path').join(__dirname, 'www', 'smarthome-config.html');
+        res.sendFile(file);
+      } catch (e) {
+        this.log.warn('SmartHomeConfig page error: ' + e.message);
+        res.status(500).send('SmartHomeConfig page error');
+      }
+    });
+
+// --- Logic (NexoLogic) API ---
+app.get('/api/logic/blocks', async (_req, res) => {
+  try {
+    const cfg = this.config || {};
+    const smCfg = cfg.smartHome || {};
+    const dps = smCfg.datapoints || {};
+    const blocks = [];
+
+    const addSceneBlock = (dpId, id, alias) => {
+      if (!dpId) return;
+      blocks.push({
+        id,
+        name: alias,
+        type: 'scene',
+        category: 'scene',
+        room: 'Wohnen',
+        function: 'Szene',
+        enabled: true,
+        source: {
+          kind: 'smarthome.scene',
+          smarthomeId: id,
+          datapointId: dpId,
+        },
+      });
+    };
+
+    addSceneBlock(dps.scene1, 'scene1', 'Szene Wohlfühlen');
+    addSceneBlock(dps.scene2, 'scene2', 'Szene Alles aus');
+    addSceneBlock(dps.scene3, 'scene3', 'Szene 3');
+    addSceneBlock(dps.scene4, 'scene4', 'Szene 4');
+
+    res.json({ ok: true, blocks });
+  } catch (e) {
+    this.log.warn('Logic blocks API error: ' + e.message);
+    res.status(500).json({ ok: false, error: 'internal error' });
+  }
+});
+
+// --- Logic (NexoLogic) Page ---
+app.get(['/logic.html','/logic'], (req, res) => {
+  try {
+    const file = require('path').join(__dirname, 'www', 'logic.html');
+    res.sendFile(file);
+  } catch (e) {
+    this.log.warn('Logic page error: ' + e.message);
+    res.status(500).send('Logic page error');
+  }
+});
+
+
+// --- History page & API ---
     app.get(['/history.html','/history'], (req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'history.html'));
     });

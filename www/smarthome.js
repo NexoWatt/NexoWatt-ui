@@ -1,5 +1,137 @@
 // NexoWatt SmartHome – A3: Switch-Kachel mit neuem Modell
 
+let nwAllDevices = [];
+const nwFilterState = {
+  room: null,
+  func: null,
+  favorite: null,
+};
+
+function nwGetFilteredDevices() {
+  if (!Array.isArray(nwAllDevices) || !nwAllDevices.length) return [];
+  return nwAllDevices.filter(dev => {
+    if (!dev) return false;
+    const roomMatch = !nwFilterState.room || (dev.room === nwFilterState.room);
+    const funcMatch = !nwFilterState.func || (dev.function === nwFilterState.func);
+    const favMatch = !nwFilterState.favorite || (dev.behavior && dev.behavior.favorite);
+    return roomMatch && funcMatch && favMatch;
+  });
+}
+
+function nwRenderRoomTabs(devices) {
+  const tabsContainer = document.getElementById('nw-tabs-rooms');
+  if (!tabsContainer) return;
+
+  tabsContainer.innerHTML = '';
+
+  if (!devices || !devices.length) return;
+
+  const rooms = Array.from(new Set(
+    devices
+      .map(d => d && d.room)
+      .filter(Boolean)
+  ));
+
+  const hasFavorites = devices.some(d => d && d.behavior && d.behavior.favorite);
+
+  const createTab = (label, active, onClick) => {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'nw-tab' + (active ? ' nw-tab--active' : '');
+    tab.textContent = label;
+    tab.addEventListener('click', onClick);
+    return tab;
+  };
+
+  // Favoriten-Tab nur anzeigen, wenn es mindestens ein Favorit-Device gibt
+  if (hasFavorites) {
+    tabsContainer.appendChild(
+      createTab('★ Favoriten', !!nwFilterState.favorite, () => {
+        // Toggle: Favoriten an/aus, Room zurücksetzen
+        nwFilterState.favorite = nwFilterState.favorite ? null : true;
+        if (nwFilterState.favorite) {
+          nwFilterState.room = null;
+        }
+        nwApplyFiltersAndRender();
+      })
+    );
+  }
+
+  // "Alle Räume" Tab
+  tabsContainer.appendChild(
+    createTab('Alle Räume', !nwFilterState.room && !nwFilterState.favorite, () => {
+      nwFilterState.room = null;
+      nwFilterState.favorite = null;
+      nwApplyFiltersAndRender();
+    })
+  );
+
+  rooms.forEach(roomName => {
+    tabsContainer.appendChild(
+      createTab(roomName, nwFilterState.room === roomName && !nwFilterState.favorite, () => {
+        nwFilterState.favorite = null;
+        nwFilterState.room = (nwFilterState.room === roomName) ? null : roomName;
+        nwApplyFiltersAndRender();
+      })
+    );
+  });
+}
+
+function nwRenderFilterChips(devices) {
+  const roomsContainer = document.getElementById('nw-filter-rooms');
+  const funcsContainer = document.getElementById('nw-filter-functions');
+  if (roomsContainer) {
+    roomsContainer.innerHTML = '';
+  }
+  if (!funcsContainer) return;
+
+  funcsContainer.innerHTML = '';
+
+  if (!devices || !devices.length) return;
+
+  const funcs = Array.from(new Set(
+    devices
+      .map(d => d && d.function)
+      .filter(Boolean)
+  ));
+
+  const createChip = (label, active, onClick) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'nw-filter-chip' + (active ? ' nw-filter-chip--active' : '');
+    chip.textContent = label;
+    chip.addEventListener('click', onClick);
+    return chip;
+  };
+
+  // Funktionen: "Alle" + einzelne Funktionen
+  funcsContainer.appendChild(
+    createChip('Alle', !nwFilterState.func, () => {
+      nwFilterState.func = null;
+      nwApplyFiltersAndRender();
+    })
+  );
+
+  funcs.forEach(fnName => {
+    funcsContainer.appendChild(
+      createChip(fnName, nwFilterState.func === fnName, () => {
+        nwFilterState.func = (nwFilterState.func === fnName) ? null : fnName;
+        nwApplyFiltersAndRender();
+      })
+    );
+  });
+}
+
+function nwApplyFiltersAndRender() {
+  const devices = nwGetFilteredDevices();
+  nwRenderRoomTabs(nwAllDevices);
+  nwRenderFilterChips(nwAllDevices);
+  nwRenderTiles(devices);
+}
+
+
+
+
 async function nwFetchDevices() {
   const res = await fetch('/api/smarthome/devices', { cache: 'no-store' });
   if (!res.ok) {
@@ -34,6 +166,56 @@ async function nwToggleDevice(id) {
   }
 }
 
+
+
+async function nwSetLevel(id, level) {
+  try {
+    const res = await fetch('/api/smarthome/level', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, level }),
+    });
+    if (!res.ok) {
+      console.error('SmartHome level request failed:', res.status, res.statusText);
+      return null;
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!data || !data.ok) {
+      console.error('SmartHome level failed (payload)', data);
+      return null;
+    }
+    return data.state || null;
+  } catch (e) {
+    console.error('SmartHome level error:', e);
+    return null;
+  }
+}
+
+
+
+async function nwCoverAction(id, action) {
+  try {
+    const res = await fetch('/api/smarthome/cover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, action }),
+    });
+    if (!res.ok) {
+      console.error('SmartHome cover request failed:', res.status, res.statusText);
+      return false;
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!data || !data.ok) {
+      console.error('SmartHome cover failed (payload)', data);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('SmartHome cover error:', e);
+    return false;
+  }
+}
+
 function nwShowEmptyState(show) {
   const empty = document.getElementById('nw-smarthome-empty');
   if (!empty) return;
@@ -59,6 +241,10 @@ function nwRenderTiles(devices) {
     const size = (dev.ui && dev.ui.size) || 'm';
     tile.classList.add('nw-tile--size-' + size);
     tile.classList.add('nw-tile--type-' + (dev.type || 'generic'));
+
+    if (dev.behavior && dev.behavior.favorite) {
+      tile.classList.add('nw-tile--favorite');
+    }
 
     const stateClass = nwGetStateClass(dev);
     if (stateClass) tile.classList.add(stateClass);
@@ -92,6 +278,7 @@ function nwRenderTiles(devices) {
     if (vinfo.unitText) middle.appendChild(unitSpan);
 
     let progress;
+    let slider;
     if (typeof vinfo.progressValue === 'number') {
       progress = document.createElement('div');
       progress.className = 'nw-tile__progress';
@@ -99,6 +286,40 @@ function nwRenderTiles(devices) {
       bar.className = 'nw-tile__progress-bar';
       bar.style.width = Math.max(0, Math.min(100, vinfo.progressValue)) + '%';
       progress.appendChild(bar);
+
+      // Dimmer-Slider nur für Dimmer-Geräte anzeigen
+      if (dev.type === 'dimmer') {
+        slider = document.createElement('input');
+        slider.type = 'range';
+        const lvlCfg = (dev.io && dev.io.level) || {};
+        const min = typeof lvlCfg.min === 'number' ? lvlCfg.min : 0;
+        const max = typeof lvlCfg.max === 'number' ? lvlCfg.max : 100;
+        slider.min = String(min);
+        slider.max = String(max);
+        slider.value = String(typeof dev.state === 'object' && dev.state && typeof dev.state.level === 'number'
+          ? dev.state.level
+          : vinfo.progressValue);
+        slider.className = 'nw-dimmer-slider';
+
+        // Tile-Klick beim Schieben des Sliders verhindern
+        const stop = (ev) => {
+          ev.stopPropagation();
+        };
+        slider.addEventListener('mousedown', stop);
+        slider.addEventListener('touchstart', stop);
+        slider.addEventListener('click', stop);
+
+        slider.addEventListener('change', async (ev) => {
+          const beh = dev.behavior || {};
+          if (beh.readOnly) return;
+          const raw = Number(ev.target.value);
+          if (!Number.isFinite(raw)) return;
+          const newState = await nwSetLevel(dev.id, raw);
+          if (!newState) return;
+          dev.state = Object.assign({}, dev.state || {}, newState);
+          await nwReloadDevices();
+        });
+      }
     }
 
     const bottom = document.createElement('div');
@@ -119,12 +340,56 @@ function nwRenderTiles(devices) {
     tile.appendChild(top);
     tile.appendChild(middle);
     if (progress) tile.appendChild(progress);
+    if (slider) tile.appendChild(slider);
+    if (dev.type === 'blind') {
+      const controls = document.createElement('div');
+      controls.className = 'nw-tile__controls';
+
+      const btnUp = document.createElement('button');
+      btnUp.type = 'button';
+      btnUp.className = 'nw-tile__control-btn nw-tile__control-btn--up';
+      btnUp.textContent = '▲';
+
+      const btnStop = document.createElement('button');
+      btnStop.type = 'button';
+      btnStop.className = 'nw-tile__control-btn nw-tile__control-btn--stop';
+      btnStop.textContent = '■';
+
+      const btnDown = document.createElement('button');
+      btnDown.type = 'button';
+      btnDown.className = 'nw-tile__control-btn nw-tile__control-btn--down';
+      btnDown.textContent = '▼';
+
+      const stopPropagation = (ev) => ev.stopPropagation();
+      btnUp.addEventListener('click', stopPropagation);
+      btnStop.addEventListener('click', stopPropagation);
+      btnDown.addEventListener('click', stopPropagation);
+
+      btnUp.addEventListener('click', async () => {
+        const ok = await nwCoverAction(dev.id, 'up');
+        if (!ok) return;
+      });
+      btnStop.addEventListener('click', async () => {
+        const ok = await nwCoverAction(dev.id, 'stop');
+        if (!ok) return;
+      });
+      btnDown.addEventListener('click', async () => {
+        const ok = await nwCoverAction(dev.id, 'down');
+        if (!ok) return;
+      });
+
+      controls.appendChild(btnUp);
+      controls.appendChild(btnStop);
+      controls.appendChild(btnDown);
+      tile.appendChild(controls);
+    }
     tile.appendChild(bottom);
 
     tile.addEventListener('click', async () => {
       const beh = dev.behavior || {};
       if (beh.readOnly) return;
-      if (dev.type !== 'switch') return;
+      // Switch, Dimmer und Szenen per Tile-Tap toggeln
+      if (dev.type !== 'switch' && dev.type !== 'dimmer' && dev.type !== 'scene') return;
       const newState = await nwToggleDevice(dev.id);
       if (!newState) return;
       dev.state = Object.assign({}, dev.state || {}, newState);
@@ -142,7 +407,8 @@ function nwGetStateClass(dev) {
     return st.on ? 'nw-tile--state-on' : 'nw-tile--state-off';
   }
   if (dev.type === 'scene') {
-    return st.active ? 'nw-tile--state-on' : 'nw-tile--state-off';
+    const active = (typeof st.active !== 'undefined') ? st.active : !!st.on;
+    return active ? 'nw-tile--state-on' : 'nw-tile--state-off';
   }
   if (dev.type === 'dimmer') {
     const lvl = st.level != null ? st.level : 0;
@@ -218,7 +484,8 @@ function nwGetValueAndProgress(dev) {
 async function nwReloadDevices() {
   try {
     const devices = await nwFetchDevices();
-    nwRenderTiles(devices);
+    nwAllDevices = devices || [];
+    nwApplyFiltersAndRender();
   } catch (e) {
     console.error('SmartHome reload error:', e);
   }

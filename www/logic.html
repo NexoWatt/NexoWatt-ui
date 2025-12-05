@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1" name="viewport"/>
+  <title>NexoWatt Logic</title>
+  <link href="/static/styles.css" rel="stylesheet"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/nexowatt-32.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0c0f12">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar__left">
+    <a href="/" class="topbar__brand-link">
+      <img alt="NexoWatt" src="/assets/icons/nexowatt-32.png" class="topbar__brand-icon"/>
+      <span class="topbar__brand-text">NexoWatt</span>
+    </a>
+  </div>
+  <h1>NexoLogic</h1>
+</header>
+
+<main class="content">
+  <div id="nw-logic-root">
+    <div class="nw-smarthome-header">
+      <div>
+        <div class="nw-smarthome-header__title">NexoLogic</div>
+        <div class="nw-smarthome-header__subtitle">
+          Basis-Ansicht für Logik-Blöcke (Szenen) – Vorbereitung für den Gira-ähnlichen Logikeditor.
+        </div>
+      </div>
+      <div style="font-size:0.7rem;color:#9ca3af;">
+        <a href="/" style="color:inherit;text-decoration:none;">Zurück zur Live-Ansicht</a>
+        &nbsp;·&nbsp;
+        <a href="/smarthome.html" style="color:inherit;text-decoration:none;">SmartHome</a>
+      </div>
+    </div>
+
+    <div id="nw-logic-grid" class="nw-tiles-grid"></div>
+    <div id="nw-logic-empty" style="display:none;font-size:0.8rem;color:#9ca3af;margin-top:12px;">
+      Keine Logik-Blöcke gefunden. Bitte mindestens eine Szene im Tab „SmartHome (vorbereitet)“ konfigurieren.
+    </div>
+  </div>
+</main>
+
+<script src="/static/logic.js"></script>
+</body>
+</html>

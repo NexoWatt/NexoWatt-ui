@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.15",
+    "version": "0.4.29",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
@@ -429,7 +429,18 @@
         "roomTemp": "",
         "wallboxLock": "",
         "gridLimit": "",
-        "pvCurtailment": ""
+        "pvCurtailment": "",
+        "blindPosition": "",
+        "blindUp": "",
+        "blindDown": "",
+        "blindStop": "",
+        "rtrSetpoint": "",
+        "rtrMode": "",
+        "rtrHumidity": "",
+        "scene1": "",
+        "scene2": "",
+        "scene3": "",
+        "scene4": ""
       }
     },
     "futureOptions": {
@@ -461,6 +472,21 @@
       "flowInvertEv": false,
       "flowGridShowNet": false,
       "dynamicTariff": false
+    },
+    "logic": {
+      "enabled": true,
+      "tags": [
+        "demo"
+      ],
+      "meta": {
+        "version": 1
+      }
+    },
+    "smartHomeConfig": {
+      "version": 1,
+      "rooms": [],
+      "functions": [],
+      "devices": []
     }
   },
   "instanceObjects": []

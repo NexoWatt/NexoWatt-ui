@@ -570,6 +570,51 @@
           "sm": 12,
           "md": 6
         },
+        "smartHome.datapoints.rtrSetpoint": {
+          "type": "objectId",
+          "label": "RTR Solltemperatur (°C)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.rtr.setpoint",
+          "help": "SmartHome-Datenpunkt für Solltemperatur des RTR",
+          "newLine": true,
+          "attr": "smartHome.datapoints.rtrSetpoint",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "smartHome.datapoints.rtrMode": {
+          "type": "objectId",
+          "label": "RTR Modus (Auto/Komfort/Nacht/...)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.rtr.mode",
+          "help": "Optional: Modus des Raumtemperaturreglers (String oder Zahl)",
+          "newLine": false,
+          "attr": "smartHome.datapoints.rtrMode",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "smartHome.datapoints.rtrHumidity": {
+          "type": "objectId",
+          "label": "Raumfeuchte (%)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.rtr.humidity",
+          "help": "Optional: Luftfeuchte im Raum in %",
+          "newLine": true,
+          "attr": "smartHome.datapoints.rtrHumidity",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
         "smartHome.datapoints.wallboxLock": {
           "type": "objectId",
           "label": "Wallbox verriegeln (bool)",
@@ -611,6 +656,126 @@
           "help": "SmartHome-Datenpunkt",
           "newLine": false,
           "attr": "smartHome.datapoints.pvCurtailment",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "smartHome.datapoints.blindPosition": {
+          "type": "objectId",
+          "label": "Jalousie – Position (0–100 %)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.blind.position",
+          "help": "SmartHome-Datenpunkt für Jalousie-Position (0 = offen, 100 = geschlossen)",
+          "newLine": true,
+          "attr": "smartHome.datapoints.blindPosition",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "smartHome.datapoints.blindUp": {
+          "type": "objectId",
+          "label": "Jalousie – Auf (bool)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.blind.up",
+          "help": "Fahrbefehl Auf (z.B. KNX Up)",
+          "newLine": false,
+          "attr": "smartHome.datapoints.blindUp",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "smartHome.datapoints.blindDown": {
+          "type": "objectId",
+          "label": "Jalousie – Ab (bool)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.blind.down",
+          "help": "Fahrbefehl Ab (z.B. KNX Down)",
+          "newLine": true,
+          "attr": "smartHome.datapoints.blindDown",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "smartHome.datapoints.blindStop": {
+          "type": "objectId",
+          "label": "Jalousie – Stop (bool)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.blind.stop",
+          "help": "Stop-Befehl (optional)",
+          "newLine": false,
+          "attr": "smartHome.datapoints.blindStop",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "smartHome.datapoints.scene1": {
+          "type": "objectId",
+          "label": "Szene 1 (z.B. Wohlfühlen)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.scene.wohnen.1",
+          "help": "Datenpunkt für Szene 1 (bool / Taster)",
+          "newLine": true,
+          "attr": "smartHome.datapoints.scene1",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "smartHome.datapoints.scene2": {
+          "type": "objectId",
+          "label": "Szene 2 (z.B. Alles aus)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.scene.wohnen.2",
+          "help": "Datenpunkt für Szene 2 (bool / Taster)",
+          "newLine": false,
+          "attr": "smartHome.datapoints.scene2",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "smartHome.datapoints.scene3": {
+          "type": "objectId",
+          "label": "Szene 3",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.scene.wohnen.3",
+          "help": "Optional: weitere Szene",
+          "newLine": true,
+          "attr": "smartHome.datapoints.scene3",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "smartHome.datapoints.scene4": {
+          "type": "objectId",
+          "label": "Szene 4",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.scene.wohnen.4",
+          "help": "Optional: weitere Szene",
+          "newLine": false,
+          "attr": "smartHome.datapoints.scene4",
           "xs": 12,
           "sm": 12,
           "md": 6
@@ -939,6 +1104,366 @@
           "max": 350,
           "tooltip": "Wird für die Füllung des Kreises im EVCS‑Popup verwendet (100% = hier eingetragene kW).",
           "newLine": true
+        }
+      }
+    },
+    "smarthome_config": {
+      "type": "panel",
+      "label": "SmartHome – Räume & Geräte (BETA)",
+      "title": "SmartHome-Konfiguration (Räume/Funktionen/Geräte)",
+      "items": {
+        "smartHomeConfig.rooms": {
+          "type": "table",
+          "label": "Räume",
+          "help": "Hier kannst du deine Räume definieren (z.B. Wohnen, Küche, Schlafen). Geräte verknüpfen später via roomId.",
+          "attr": "smartHomeConfig.rooms",
+          "items": {
+            "id": {
+              "type": "text",
+              "label": "ID",
+              "help": "Technische ID (z.B. living, kitchen). Wird von Geräten referenziert.",
+              "xs": 3,
+              "sm": 3,
+              "md": 2
+            },
+            "name": {
+              "type": "text",
+              "label": "Name",
+              "help": "Anzeigename des Raums (z.B. Wohnen).",
+              "xs": 5,
+              "sm": 5,
+              "md": 3
+            },
+            "floor": {
+              "type": "text",
+              "label": "Etage",
+              "help": "Optional: EG, OG, DG usw.",
+              "xs": 4,
+              "sm": 4,
+              "md": 2
+            },
+            "icon": {
+              "type": "text",
+              "label": "Icon-Key",
+              "help": "Icon-Bezeichner (z.B. room-living).",
+              "xs": 4,
+              "sm": 4,
+              "md": 3
+            },
+            "order": {
+              "type": "number",
+              "label": "Sortierung",
+              "help": "Sortierreihenfolge (kleiner = weiter oben).",
+              "xs": 3,
+              "sm": 3,
+              "md": 1
+            },
+            "enabled": {
+              "type": "checkbox",
+              "label": "Aktiv",
+              "xs": 3,
+              "sm": 3,
+              "md": 1
+            }
+          }
+        },
+        "smartHomeConfig.functions": {
+          "type": "table",
+          "label": "Funktionen",
+          "help": "Globale Funktionsgruppen (z.B. Licht, Beschattung, Heizung). Geräte verknüpfen später via functionId.",
+          "attr": "smartHomeConfig.functions",
+          "items": {
+            "id": {
+              "type": "text",
+              "label": "ID",
+              "help": "Technische ID (z.B. light, blind, heating).",
+              "xs": 3,
+              "sm": 3,
+              "md": 2
+            },
+            "name": {
+              "type": "text",
+              "label": "Name",
+              "help": "Anzeigename (z.B. Licht).",
+              "xs": 5,
+              "sm": 5,
+              "md": 3
+            },
+            "icon": {
+              "type": "text",
+              "label": "Icon-Key",
+              "help": "Icon-Bezeichner (z.B. func-light).",
+              "xs": 4,
+              "sm": 4,
+              "md": 3
+            },
+            "order": {
+              "type": "number",
+              "label": "Sortierung",
+              "help": "Sortierreihenfolge (kleiner = weiter oben).",
+              "xs": 3,
+              "sm": 3,
+              "md": 2
+            },
+            "enabled": {
+              "type": "checkbox",
+              "label": "Aktiv",
+              "xs": 3,
+              "sm": 3,
+              "md": 2
+            }
+          }
+        },
+        "smartHomeConfig.devices": {
+          "type": "table",
+          "label": "Geräte / Kacheln",
+          "help": "Zuordnung von Geräten/Kacheln zu Raum + Funktion. IO-Datenpunkte werden je nach Typ befüllt.",
+          "attr": "smartHomeConfig.devices",
+          "items": {
+            "id": {
+              "type": "text",
+              "label": "ID",
+              "help": "Eindeutige Geräte-ID (z.B. living_light_ceiling).",
+              "xs": 3,
+              "sm": 3,
+              "md": 2
+            },
+            "alias": {
+              "type": "text",
+              "label": "Alias",
+              "help": "Anzeigename der Kachel (z.B. Deckenlicht).",
+              "xs": 5,
+              "sm": 5,
+              "md": 3
+            },
+            "type": {
+              "type": "select",
+              "label": "Typ",
+              "help": "Kacheltyp (switch/dimmer/blind/rtr/sensor/scene).",
+              "options": [
+                {
+                  "label": "Schalter",
+                  "value": "switch"
+                },
+                {
+                  "label": "Dimmer",
+                  "value": "dimmer"
+                },
+                {
+                  "label": "Jalousie/Rollo",
+                  "value": "blind"
+                },
+                {
+                  "label": "RTR (Raumtemperatur)",
+                  "value": "rtr"
+                },
+                {
+                  "label": "Sensor/Info",
+                  "value": "sensor"
+                },
+                {
+                  "label": "Szene",
+                  "value": "scene"
+                }
+              ],
+              "xs": 4,
+              "sm": 4,
+              "md": 2
+            },
+            "roomId": {
+              "type": "text",
+              "label": "Raum-ID",
+              "help": "ID eines Raums aus der Tabelle „Räume“ (z.B. living).",
+              "xs": 4,
+              "sm": 4,
+              "md": 2
+            },
+            "functionId": {
+              "type": "text",
+              "label": "Funktions-ID",
+              "help": "ID aus „Funktionen“ (z.B. light, blind).",
+              "xs": 4,
+              "sm": 4,
+              "md": 2
+            },
+            "icon": {
+              "type": "text",
+              "label": "Icon-Key",
+              "help": "Icon-Bezeichner (z.B. light-ceiling).",
+              "xs": 4,
+              "sm": 4,
+              "md": 2
+            },
+            "size": {
+              "type": "select",
+              "label": "Größe",
+              "options": [
+                {
+                  "label": "S",
+                  "value": "s"
+                },
+                {
+                  "label": "M",
+                  "value": "m"
+                },
+                {
+                  "label": "L",
+                  "value": "l"
+                }
+              ],
+              "xs": 3,
+              "sm": 3,
+              "md": 2
+            },
+            "behavior.readOnly": {
+              "type": "checkbox",
+              "label": "Nur Anzeige",
+              "help": "Wenn aktiviert, ist die Kachel read-only.",
+              "xs": 3,
+              "sm": 3,
+              "md": 2
+            },
+            "io.switch.readId": {
+              "type": "objectId",
+              "label": "switch.readId",
+              "help": "Lesen/Schreiben für Schalter/Szene (bool).",
+              "types": [
+                "state"
+              ],
+              "button": true,
+              "xs": 6,
+              "sm": 6,
+              "md": 3
+            },
+            "io.level.readId": {
+              "type": "objectId",
+              "label": "level.readId",
+              "help": "Lesen für Dimmer/Blind-Level.",
+              "types": [
+                "state"
+              ],
+              "button": true,
+              "xs": 6,
+              "sm": 6,
+              "md": 3
+            },
+            "io.level.writeId": {
+              "type": "objectId",
+              "label": "level.writeId",
+              "help": "Schreiben für Dimmer/Blind-Level.",
+              "types": [
+                "state"
+              ],
+              "button": true,
+              "xs": 6,
+              "sm": 6,
+              "md": 3
+            },
+            "io.cover.upId": {
+              "type": "objectId",
+              "label": "cover.upId",
+              "help": "Auf-Befehl (bool/Taster) für Jalousie.",
+              "types": [
+                "state"
+              ],
+              "button": true,
+              "xs": 6,
+              "sm": 6,
+              "md": 3
+            },
+            "io.cover.downId": {
+              "type": "objectId",
+              "label": "cover.downId",
+              "help": "Ab-Befehl (bool/Taster) für Jalousie.",
+              "types": [
+                "state"
+              ],
+              "button": true,
+              "xs": 6,
+              "sm": 6,
+              "md": 3
+            },
+            "io.cover.stopId": {
+              "type": "objectId",
+              "label": "cover.stopId",
+              "help": "Stopp-Befehl (bool/Taster) für Jalousie.",
+              "types": [
+                "state"
+              ],
+              "button": true,
+              "xs": 6,
+              "sm": 6,
+              "md": 3
+            },
+            "io.climate.currentTempId": {
+              "type": "objectId",
+              "label": "climate.currentTempId",
+              "help": "Ist-Temperatur für RTR.",
+              "types": [
+                "state"
+              ],
+              "button": true,
+              "xs": 6,
+              "sm": 6,
+              "md": 3
+            },
+            "io.climate.setpointId": {
+              "type": "objectId",
+              "label": "climate.setpointId",
+              "help": "Soll-Temperatur für RTR.",
+              "types": [
+                "state"
+              ],
+              "button": true,
+              "xs": 6,
+              "sm": 6,
+              "md": 3
+            },
+            "io.climate.modeId": {
+              "type": "objectId",
+              "label": "climate.modeId",
+              "help": "Modus (Auto/Komfort/Nacht).",
+              "types": [
+                "state"
+              ],
+              "button": true,
+              "xs": 6,
+              "sm": 6,
+              "md": 3
+            },
+            "io.climate.humidityId": {
+              "type": "objectId",
+              "label": "climate.humidityId",
+              "help": "Raumfeuchte für RTR/Sensor.",
+              "types": [
+                "state"
+              ],
+              "button": true,
+              "xs": 6,
+              "sm": 6,
+              "md": 3
+            },
+            "io.sensor.readId": {
+              "type": "objectId",
+              "label": "sensor.readId",
+              "help": "Allgemeiner Sensorwert (z.B. Leistung, Temperatur).",
+              "types": [
+                "state"
+              ],
+              "button": true,
+              "xs": 6,
+              "sm": 6,
+              "md": 3
+            },
+            "behavior.favorite": {
+              "type": "checkbox",
+              "label": "Favorit",
+              "help": "Wenn aktiv, erscheint dieses Gerät im Favoriten-Tab der SmartHome-Ansicht.",
+              "xs": 3,
+              "sm": 3,
+              "md": 2
+            }
+          }
         }
       }
     }

@@ -1,3 +1,75 @@
+### 0.4.29 (2025-12-05)
+- Neu: Favoriten-Unterstützung für SmartHome-Geräte.
+- Admin: Checkbox „Favorit“ pro Gerät in der SmartHomeConfig („Geräte / Kacheln“).
+- VIS: Favoriten-Tab („★ Favoriten“) in der SmartHome-Ansicht zeigt nur als Favorit markierte Kacheln.
+- VIS: Favoriten-Kacheln sind optisch hervorgehoben (Rand/Glow).
+
+### 0.4.28 (2025-12-05)
+- Neu: Raum-Navigation als Tabs in der SmartHome-Ansicht (ähnlich Gira-Seiten).
+- UI: Tabs „Alle Räume“ + einzelne Räume oberhalb der SmartHome-Kacheln.
+- UI: Funktionsfilter bleiben als Chips (Licht, Beschattung, Heizung, Szenen, …) unterhalb der Tabs erhalten.
+- Technik: Tabs & Filter nutzen die room/function-Felder aus dem SmartHomeConfig-basierten Rendering.
+
+### 0.4.27 (2025-12-05)
+- Neu: Raum- und Funktionsfilter in der SmartHome-Ansicht.
+- UI: Filter-Chips oberhalb der Kacheln (Räume/Funktionen) zur schnellen Einschränkung der Anzeige.
+- Technik: Filter basieren auf den im SmartHome-Rendering gelieferten room/function-Feldern (SmartHomeConfig).
+
+### 0.4.26 (2025-12-05)
+- Neu: SmartHome-Rendering nutzt primär das SmartHomeConfig-Modell (rooms/functions/devices).
+- Fallback: Wenn keine SmartHomeConfig.devices definiert sind, wird weiterhin das alte SmartHome-Datenpunktschema (smartHome.datapoints.*) verwendet.
+- Ziel: Voll generische SmartHome-Kacheln, die über das Admin-Panel „SmartHome – Räume & Geräte (BETA)“ konfiguriert werden können.
+
+### 0.4.25 (2025-12-05)
+- Neu: Einfache SmartHome-Konfig-Seite als VIS-Ansicht (`/smarthome-config`).
+- Backend: Read-only API `/api/smarthome/config`, die das SmartHomeConfig-Modell liefert.
+- UI: Übersicht über Räume, Funktionen und Geräte/Kacheln im NexoWatt-Design (BETA, nur Anzeige).
+
+### 0.4.24 (2025-12-05)
+- Neu: Admin-Panel „SmartHome – Räume & Geräte (BETA)“ für das SmartHomeConfig-Modell.
+- Admin: Tabellen für Räume, Funktionen und Geräte/Kacheln inkl. IO-Datenpunkte (switch/level/cover/climate/sensor).
+- Hinweis: Die neue Config wird in späteren Schritten vom SmartHome-Rendering genutzt; aktuell bleibt das bestehende Modell aktiv.
+
+### 0.4.23 (2025-12-05)
+- Neu: SmartHomeConfig-Datenmodell (rooms/functions/devices) im Adapter-native Bereich vorbereitet.
+- Backend: Hilfsfunktion getSmartHomeConfig(), die das neue Modell strukturiert bereitstellt.
+- Hinweis: Das neue Modell wird in späteren Schritten für eine generische SmartHome-Config-Seite und das SmartHome-Rendering genutzt.
+
+### 0.4.22 (2025-12-05)
+- Neu: Erste Logik-Ansicht („NexoLogic“) als eigene Seite mit Übersicht über Szenen-Blöcke.
+- Backend: API `/api/logic/blocks`, die einfache Logik-Blöcke aus den SmartHome-Szenen generiert.
+- UI: Neue Seite `/logic` im NexoWatt-Design mit Kacheln für Logik-Blöcke (Basis für den späteren Logikeditor).
+
+### 0.4.21 (2025-12-05)
+- Neu: Szenen-Kacheln (Typ „scene“) mit frei belegbaren Datenpunkten (z.B. „Alles aus“, „Wohlfühlen“).
+- Backend: Szenen werden als eigene Geräte im SmartHome-Modell geführt und über die Toggle-API ausgelöst.
+- UI: Szenen-Kacheln erscheinen im NexoWatt-Layout und lassen sich per Tap auslösen (ähnlich Gira-Szenen).
+
+### 0.4.20 (2025-12-05)
+- Neu: Sensor-/Info-Kacheln (Typ „sensor“) für reine Werte wie Raumtemperatur und Luftfeuchte.
+- Backend: Sensor-Geräte lesen einen reinen Wert (state.value) aus einem Datenpunkt und stellen ihn im SmartHome-Modell bereit.
+- UI: Sensor-Kacheln zeigen den Wert mit Einheit im NexoWatt-Kachel-Layout (ohne Bedien-Buttons, read-only).
+
+### 0.4.19 (2025-12-05)
+- Neu: RTR-/Raumtemperatur-Kachel (Typ „rtr“) an das SmartHome-Modell angebunden.
+- Neu: Backend bildet aktuelle Temperatur, Sollwert und Modus ab und bietet eine Setpoint-API.
+- UI: RTR-Kachel zeigt Ist-/Soll-Temperatur im NexoWatt-Design mit +/- Buttons für die Sollwert-Verstellung.
+
+### 0.4.18 (2025-12-05)
+- Neu: Jalousie-/Rollladen-Kachel (Typ „blind“) an das SmartHome-Modell angebunden.
+- Neu: Backend bildet Jalousie-Position und Fahrbefehle (Auf/Ab/Stop) ab und stellt eine Cover-API bereit.
+- UI: Jalousie-Kachel zeigt Position in % (inkl. Balken) und bietet Auf/Ab/Stop-Buttons im NexoWatt-Design.
+
+### 0.4.17 (2025-12-05)
+- Neu: Level-API (/api/smarthome/level) für Dimmer; Kacheln besitzen nun einen interaktiven Slider.
+- Neu: Dimmer-Slider setzt Werte direkt auf den hinterlegten Datenpunkt (min/max aus SmartHome-Konfiguration).
+- UI: Dimmer-Kacheln zeigen weiterhin den aktuellen Wert und Balken, zusätzlich Slider-Bedienung im NexoWatt-Design.
+
+### 0.4.16 (2025-12-05)
+- Neu: Dimmer-Kachel an das neue SmartHome-Modell angebunden (z.B. Grid-Limit, PV-Abregelung).
+- Neu: Backend liefert Level-Werte für Dimmer-Geräte und unterstützt 0↔100%-Toggle per API.
+- Anpassung: SmartHome-Frontend berücksichtigt Dimmer-Zustände und Level-Anzeige im NexoWatt-Kachel-Layout.
+
 ### 0.4.15 (2025-12-05)
 - Neu: Erste SmartHome-Switch-Kachel im HomeKit-ähnlichen NexoWatt-Design.
 - Neu: Separate SmartHome-Seite (/smarthome.html) mit API-Endpunkten /api/smarthome/devices und /api/smarthome/toggle.
