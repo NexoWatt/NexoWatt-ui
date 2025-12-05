@@ -38,113 +38,19 @@ class NexoWattVis extends utils.Adapter {
   constructor(options) {
     super({
       ...options,
-      name: 'nexowatt-ui',
+      name: 'nexowatt-vis',
     });
 
     this.stateCache = {};
     this.sseClients = new Set();
-
-    this.smartHomeEnumKeyById = {};
-    this.smartHomeEnumIds = new Set();
+    this.smartHomeDevices = [];
 
     this.on('ready', this.onReady.bind(this));
     this.on('stateChange', this.onStateChange.bind(this));
     this.on('unload', this.onUnload.bind(this));
-    this.on('message', this.onMessage.bind(this));
   }
 
   
-
-  /**
-   * Handle messages from admin (jsonConfig sendTo).
-   * Used e.g. to open SmartHome config page with correct host/IP.
-   * @param {object} obj
-   */
-  onMessage(obj) {
-    if (!obj) {
-      return;
-    }
-    const command = obj.command;
-    const message = obj.message || {};
-
-    switch (command) {
-      case 'openSmartHomeConfig': {
-        try {
-          const origin = message.origin || message._origin || '';
-          const originIp = message.originIp || message._originIp || '';
-
-          // Determine protocol (http/https)
-          let protocol = 'http';
-          if (origin.startsWith('https://')) {
-            protocol = 'https';
-          } else if (origin.startsWith('http://')) {
-            protocol = 'http';
-          } else if (this.config && this.config.secure) {
-            protocol = 'https';
-          }
-
-          // Determine host (IP only, no port, no protocol)
-          let host = '';
-          if (typeof originIp === 'string' && originIp) {
-            let tmp = originIp.trim();
-            // Strip protocol if present, e.g. "http://192.168.10.184:8081"
-            const protoMatch = tmp.match(/^https?:\/\/(.+)$/);
-            if (protoMatch) {
-              tmp = protoMatch[1];
-            }
-            // IPv6 in brackets: "[2001:db8::1]:8081"
-            const ipv6Match = tmp.match(/^\[([^\]]+)\](?::\d+)?$/);
-            if (ipv6Match) {
-              host = ipv6Match[1];
-            } else {
-              // host[:port] -> host
-              host = tmp.split(':')[0];
-            }
-          } else if (origin) {
-            const m = origin.match(/^https?:\/\/([^/]+)/);
-            if (m) {
-              let tmp = m[1]; // host[:port]
-              const ipv6Match = tmp.match(/^\[([^\]]+)\](?::\d+)?$/);
-              if (ipv6Match) {
-                host = ipv6Match[1];
-              } else {
-                host = tmp.split(':')[0];
-              }
-            }
-          }
-          if (!host) {
-            host = '127.0.0.1';
-          }
-
-          // Use adapter port (same as dashboard / SmartHome page)
-          const port = (this.config && this.config.port) || 8188;
-
-          const url = `${protocol}://${host}:${port}/smarthome-config`;
-          this.log.debug(`openSmartHomeConfig -> ${url}`);
-
-          if (obj.callback) {
-            // Reply via sendTo so jsonConfig (type: sendTo, openUrl: true) can open the URL in Admin
-            this.sendTo(obj.from, obj.command, { openUrl: url, window: '_blank' }, obj.callback);
-          }
-        } catch (e) {
-          this.log.error(`Error in openSmartHomeConfig: ${e.message}`);
-          if (obj.callback) {
-            this.sendTo(obj.from, obj.command, { error: e.message }, obj.callback);
-          }
-        }
-        break;
-      }
-
-      default: {
-        // Unknown command; just answer if callback is requested
-        if (obj.callback) {
-          this.sendTo(obj.from, obj.command, {}, obj.callback);
-        }
-        break;
-      }
-    }
-  }
-
   async ensureInstallerStates() {
     const defs = {
       adminUrl:     { type: 'string', role: 'state', def: '' },
@@ -185,515 +91,6 @@ class NexoWattVis extends utils.Adapter {
       });
     }
   }
-
-  async ensureSmartHomeStates() {
-    // State to expose SmartHome structure built from enum.rooms / enum.functions
-    await this.setObjectNotExistsAsync('smartHome.structure', {
-      type: 'state',
-      common: {
-        name: 'SmartHome structure',
-        type: 'string',
-        role: 'json',
-        read: true,
-        write: false,
-        def: '{}'
-      },
-      native: {}
-    });
-  }
-
-  async buildSmartHomeStructureFromEnums() {
-    try {
-      // Read all room enums and function enums
-      const roomEnums = await this.getForeignObjectsAsync('enum.rooms.*', 'enum');
-      const functionEnums = await this.getForeignObjectsAsync('enum.functions.*', 'enum');
-
-      const rooms = {};
-      const roomByStateId = {};
-
-      const channelStateCache = {};
-
-      // Expand enum member (state/channel/device) to a list of concrete state IDs
-      const expandToStateIds = async (id) => {
-        try {
-          const obj = await this.getForeignObjectAsync(id);
-          if (!obj) return [];
-          if (obj.type === 'state') return [id];
-          if (obj.type === 'channel' || obj.type === 'device') {
-            if (channelStateCache[id]) return channelStateCache[id];
-            const states = await this.getForeignObjectsAsync(id + '.*', 'state');
-            const ids = Object.keys(states || {});
-            channelStateCache[id] = ids;
-            return ids;
-          }
-        } catch (e) {
-          this.log.debug && this.log.debug('SmartHome expandToStateIds error for ' + id + ': ' + e);
-        }
-        return [];
-      };
-
-      // Build base room objects and a mapping from stateId -> roomKey[]
-      for (const [enumId, obj] of Object.entries(roomEnums || {})) {
-        if (!obj || !obj.common) continue;
-
-        const roomKeyParts = enumId.split('.');
-        const roomKey = roomKeyParts[roomKeyParts.length - 1] || enumId;
-        const roomName = obj.common.name || roomKey;
-
-        if (!rooms[roomKey]) {
-          rooms[roomKey] = {
-            id: enumId,
-            name: roomName,
-            functions: {}
-          };
-        }
-
-        const members = Array.isArray(obj.common.members) ? obj.common.members : [];
-        for (const memberId of members) {
-          const stateIds = await expandToStateIds(memberId);
-          const effectiveIds = (stateIds && stateIds.length) ? stateIds : [memberId];
-
-          for (const stateId of effectiveIds) {
-            if (!roomByStateId[stateId]) {
-              roomByStateId[stateId] = [];
-            }
-            roomByStateId[stateId].push(roomKey);
-          }
-        }
-      }
-
-      // Assign function enums to rooms based on their members
-      for (const [enumId, obj] of Object.entries(functionEnums || {})) {
-        if (!obj || !obj.common) continue;
-
-        const funcKeyParts = enumId.split('.');
-        const funcKey = funcKeyParts[funcKeyParts.length - 1] || enumId;
-
-        // human readable function name (handles multi-lang objects and fallback mapping)
-        let funcName = obj.common.name || funcKey;
-        if (funcName && typeof funcName === 'object') {
-          funcName = funcName.de || funcName.en || Object.values(funcName)[0] || funcKey;
-        }
-        const funcFallbacks = {
-          lighting: 'Beleuchtung',
-          shading: 'Beschattung',
-          climate: 'Klima',
-          heating: 'Heizung',
-          security: 'Sicherheit'
-        };
-        if (!funcName || funcName === funcKey) {
-          if (funcFallbacks[funcKey]) funcName = funcFallbacks[funcKey];
-        }
-
-        const members = Array.isArray(obj.common.members) ? obj.common.members : [];
-        for (const memberId of members) {
-          const stateIds = await expandToStateIds(memberId);
-          const effectiveIds = (stateIds && stateIds.length) ? stateIds : [memberId];
-
-          for (const stateId of effectiveIds) {
-            const assignedRooms = roomByStateId[stateId] || roomByStateId[memberId] || ['_noRoom_'];
-
-            for (const roomKey of assignedRooms) {
-              if (!rooms[roomKey]) {
-                // If a state is in a function enum, but not in any room enum
-                rooms[roomKey] = {
-                  id: roomKey === '_noRoom_' ? null : 'enum.rooms.' + roomKey,
-                  name: roomKey === '_noRoom_' ? 'Ohne Raum' : roomKey,
-                  functions: {}
-                };
-              }
-
-              if (!rooms[roomKey].functions[funcKey]) {
-                rooms[roomKey].functions[funcKey] = [];
-              }
-
-              if (!rooms[roomKey].functionNames) {
-                rooms[roomKey].functionNames = {};
-              }
-              rooms[roomKey].functionNames[funcKey] = funcName;
-
-              rooms[roomKey].functions[funcKey].push({
-                id: stateId
-              });
-            }
-          }
-        }
-      }
-
-      // Collect all state IDs we need metadata for
-      const neededStateIds = new Set();
-      for (const room of Object.values(rooms)) {
-        for (const funcKey of Object.keys(room.functions)) {
-          for (const entry of room.functions[funcKey]) {
-            if (!entry) continue;
-            const ids = new Set();
-            if (entry.id) ids.add(entry.id);
-            if (entry.controlId) ids.add(entry.controlId);
-            if (entry.statusId) ids.add(entry.statusId);
-            if (entry.levelId) ids.add(entry.levelId);
-            if (entry.setpointId) ids.add(entry.setpointId);
-            if (entry.actualId) ids.add(entry.actualId);
-            for (const id of ids) {
-              neededStateIds.add(id);
-            }
-          }
-        }
-      }
-
-      // Load foreign state objects to get human readable name / role
-      const stateObjects = {};
-      for (const id of neededStateIds) {
-        try {
-          const obj = await this.getForeignObjectAsync(id);
-          if (obj) {
-            stateObjects[id] = obj;
-          }
-        } catch (e) {
-          // ignore missing objects
-          this.log.debug && this.log.debug('Could not read foreign object for SmartHome enum state ' + id + ': ' + e);
-        }
-      }
-
-      // Enrich entries with name / role and assign dynamic keys for VIS
-      const enumKeyById = {};
-      let enumIdx = 0;
-      for (const room of Object.values(rooms)) {
-        for (const funcKey of Object.keys(room.functions)) {
-          room.functions[funcKey] = room.functions[funcKey].map(entry => {
-            const obj = stateObjects[entry.id];
-            if (!enumKeyById[entry.id]) {
-              enumKeyById[entry.id] = 'smartEnum_' + (enumIdx++);
-            }
-            const common = obj && obj.common || {};
-
-            const base = {
-              id: entry.id,
-              key: enumKeyById[entry.id],
-              name: entry.label || (common && common.name ? common.name : entry.id),
-              role: common && common.role ? common.role : '',
-              type: common && common.type ? common.type : '',
-              write: !!(common && common.write),
-              min: common && (typeof common.min === 'number') ? common.min : null,
-              max: common && (typeof common.max === 'number') ? common.max : null,
-              unit: common && common.unit ? common.unit : ''
-            };
-
-            if (entry.controlId) base.controlId = entry.controlId;
-            if (entry.statusId) base.statusId = entry.statusId;
-            if (entry.levelId) base.levelId = entry.levelId;
-            if (entry.setpointId) base.setpointId = entry.setpointId;
-            if (entry.actualId) base.actualId = entry.actualId;
-            if (entry.invertDirection) base.invertDirection = true;
-            if (entry.type) base.deviceType = entry.type;
-
-            return base;
-          });
-         }
-      }
-
-      // store mapping for later state-change handling
-      this.smartHomeEnumKeyById = enumKeyById;
-      this.smartHomeEnumIds = new Set(Object.keys(enumKeyById));
-
-      // subscribe to all SmartHome enum states and push initial values
-      for (const [id, key] of Object.entries(enumKeyById)) {
-        try {
-          this.subscribeForeignStates(id);
-          const st = await this.getForeignStateAsync(id);
-          if (st && st.val !== undefined) {
-            this.updateValue(key, st.val, st.ts || Date.now());
-          }
-        } catch (e) {
-          this.log.debug && this.log.debug('Could not subscribe/read SmartHome enum state ' + id + ': ' + e);
-        }
-      }
-
-      // Finally, write JSON structure to state
-      const jsonRooms = JSON.stringify(rooms);
-      await this.setStateAsync('smartHome.structure', {
-        val: jsonRooms,
-        ack: true
-      });
-
-      // Also push structure into live state cache for VIS clients
-      try {
-        this.updateValue('smartHome.structure', jsonRooms, Date.now());
-      } catch (e) {
-        this.log.debug && this.log.debug('Could not push SmartHome structure to state cache: ' + e);
-      }
-
-      this.log.info('SmartHome structure from enums built with ' + Object.keys(rooms).length + ' rooms.');
-    } catch (err) {
-      this.log.error('Error while building SmartHome structure from enums: ' + err);
-    }
-  }
-
-  async buildSmartHomeStructureFromConfig() {
-    try {
-      const cfg = (this.config && this.config.smartHome) || {};
-      const roomsCfg = Array.isArray(cfg.rooms) ? cfg.rooms : [];
-      const devicesCfg = Array.isArray(cfg.devices) ? cfg.devices : [];
-
-      // Wenn nichts konfiguriert ist, auf alte Enum-Logik zurückfallen
-      if (!roomsCfg.length && !devicesCfg.length) {
-        this.log.info('SmartHome: keine Räume/Geräte in der Instanzkonfiguration gefunden, verwende Enums.');
-        return this.buildSmartHomeStructureFromEnums();
-      }
-
-      const rooms = {};
-      let autoRoomIdx = 0;
-
-      // Räume aus der Konfiguration übernehmen
-      for (const r of roomsCfg) {
-        if (!r) continue;
-        let key = '';
-        if (r.id && typeof r.id === 'string') {
-          key = r.id.trim();
-        }
-        if (!key && r.name) {
-          if (typeof r.name === 'string') {
-            key = r.name.trim();
-          } else if (typeof r.name === 'object') {
-            key = r.name.de || r.name.en || '';
-          }
-        }
-        if (!key) {
-          key = 'room_' + (autoRoomIdx++);
-        }
-        const name = r.name && r.name !== '' ? r.name : key;
-        const icon = r.icon || '';
-
-        if (!rooms[key]) {
-          rooms[key] = {
-            id: key,
-            name,
-            icon,
-            functions: {},
-            functionNames: {}
-          };
-        } else {
-          if (!rooms[key].name) rooms[key].name = name;
-          if (!rooms[key].icon && icon) rooms[key].icon = icon;
-        }
-      }
-
-      const funcNameFallbacks = {
-        switch: 'Schalten',
-        light: 'Beleuchtung',
-        dimmer: 'Beleuchtung',
-        sensor: 'Sensoren',
-        climate: 'Klima',
-        cover: 'Beschattung',
-        thermostat: 'Heizung',
-        window: 'Fenster',
-        status: 'Status',
-        generic: 'Funktion'
-      };
-
-      const ensureRoom = (roomIdRaw) => {
-        let key = (roomIdRaw && String(roomIdRaw).trim()) || '_noRoom_';
-        if (!rooms[key]) {
-          const name = key === '_noRoom_' ? 'Ohne Raum' : roomIdRaw;
-          rooms[key] = {
-            id: key === '_noRoom_' ? null : key,
-            name,
-            functions: {},
-            functionNames: {}
-          };
-        }
-        return rooms[key];
-      };
-
-      let usedDevices = 0;
-
-      // Geräte/Funktionen aus der Konfiguration übernehmen
-      for (let devIndex = 0; devIndex < devicesCfg.length; devIndex++) {
-        const dev = devicesCfg[devIndex];
-        if (!dev) continue;
-
-        // Für Thermostate den Sollwert-Datenpunkt bevorzugen,
-        // sonst wie bisher Level-/Schalt-Datenpunkte verwenden.
-        let id;
-        const devType = (dev.type || '').toLowerCase();
-        if (devType === 'thermostat' || devType === 'climate') {
-          id = dev.setpointId || dev.controlId || dev.levelId || dev.statusId || dev.actualId;
-        } else {
-          id = dev.levelId || dev.controlId || dev.statusId || dev.setpointId || dev.actualId;
-        }
-
-        if (!id) {
-          this.log.debug && this.log.debug('SmartHome-Konfiguration: Gerät ohne gültigen Datenpunkt übersprungen: ' + JSON.stringify(dev));
-          continue;
-        }
-
-        const room = ensureRoom(dev.roomId || '_noRoom_');
-        const funcKey = devType || 'generic';
-        const funcName = funcNameFallbacks[funcKey] || funcKey || 'Funktion';
-
-        if (!room.functions[funcKey]) {
-          room.functions[funcKey] = [];
-        }
-        if (!room.functionNames) {
-          room.functionNames = {};
-        }
-        if (!room.functionNames[funcKey]) {
-          room.functionNames[funcKey] = funcName;
-        }
-
-        const entry = {
-          id,
-          controlId: dev.controlId || '',
-          statusId: dev.statusId || '',
-          levelId: dev.levelId || '',
-          setpointId: dev.setpointId || '',
-          actualId: dev.actualId || '',
-          invertDirection: !!dev.invertDirection,
-          type: devType,
-          label: dev.label || '',
-          widgetIndex: devIndex
-        };
-
-        room.functions[funcKey].push(entry);
-        usedDevices++;
-      }
-
-
-      if (!Object.keys(rooms).length || !usedDevices) {
-        this.log.info('SmartHome-Konfiguration enthält keine nutzbaren Räume/Geräte. Leere Struktur geschrieben.');
-        const emptyJson = '{}';
-        await this.setStateAsync('smartHome.structure', { val: emptyJson, ack: true });
-        try {
-          this.updateValue('smartHome.structure', emptyJson, Date.now());
-        } catch (e) {
-          this.log.debug && this.log.debug('Could not push empty SmartHome structure to state cache: ' + e);
-        }
-        return;
-      }
-
-// Collect all state IDs we need metadata for
-      const neededStateIds = new Set();
-      for (const room of Object.values(rooms)) {
-        for (const funcKey of Object.keys(room.functions)) {
-          for (const entry of room.functions[funcKey]) {
-            if (entry && entry.id) {
-              neededStateIds.add(entry.id);
-            }
-          }
-        }
-      }
-
-      // Load foreign state objects to get human readable name / role
-      const stateObjects = {};
-      for (const id of neededStateIds) {
-        try {
-          const obj = await this.getForeignObjectAsync(id);
-          if (obj) {
-            stateObjects[id] = obj;
-          }
-        } catch (e) {
-          // ignore missing objects
-          this.log.debug && this.log.debug('Could not read foreign object for SmartHome enum state ' + id + ': ' + e);
-        }
-      }
-
-      // Enrich entries with name / role and assign dynamic keys for VIS
-      const enumKeyById = {};
-      let enumIdx = 0;
-      for (const room of Object.values(rooms)) {
-        for (const funcKey of Object.keys(room.functions)) {
-          room.functions[funcKey] = room.functions[funcKey].map(entry => {
-            // Haupt-Datenpunkt (id) immer mappen
-            const mainId = entry.id;
-            const obj = stateObjects[mainId];
-            if (!enumKeyById[mainId]) {
-              enumKeyById[mainId] = 'smartEnum_' + (enumIdx++);
-            }
-            const common = obj && obj.common || {};
-
-            const base = {
-              id: mainId,
-              key: enumKeyById[mainId],
-              name: entry.label || (common && common.name ? common.name : mainId),
-              role: common && common.role ? common.role : '',
-              type: common && common.type ? common.type : '',
-              write: !!(common && common.write),
-              min: common && (typeof common.min === 'number') ? common.min : null,
-              max: common && (typeof common.max === 'number') ? common.max : null,
-              unit: common && common.unit ? common.unit : ''
-            };
-
-            // zusätzliche Datenpunkte (Setpunkt, Istwert, Modus) mit eigenen Keys versehen,
-            // damit die VIS sie separat aus dem State-Cache lesen kann.
-            if (entry.setpointId) {
-              if (!enumKeyById[entry.setpointId]) {
-                enumKeyById[entry.setpointId] = 'smartEnum_' + (enumIdx++);
-              }
-              base.setpointId = entry.setpointId;
-              base.setpointKey = enumKeyById[entry.setpointId];
-            }
-            if (entry.actualId) {
-              if (!enumKeyById[entry.actualId]) {
-                enumKeyById[entry.actualId] = 'smartEnum_' + (enumIdx++);
-              }
-              base.actualId = entry.actualId;
-              base.actualKey = enumKeyById[entry.actualId];
-            }
-            if (entry.statusId) {
-              if (!enumKeyById[entry.statusId]) {
-                enumKeyById[entry.statusId] = 'smartEnum_' + (enumIdx++);
-              }
-              base.statusId = entry.statusId;
-              base.modeKey = enumKeyById[entry.statusId];
-            }
-            if (entry.controlId) base.controlId = entry.controlId;
-            if (entry.levelId) base.levelId = entry.levelId;
-            if (entry.type) base.deviceType = entry.type;
-
-            return base;
-          });
-         }
-      }
-
-
-      // store mapping for later state-change handling
-      this.smartHomeEnumKeyById = enumKeyById;
-      this.smartHomeEnumIds = new Set(Object.keys(enumKeyById));
-
-      // subscribe to all SmartHome enum states and push initial values
-      for (const [id, key] of Object.entries(enumKeyById)) {
-        try {
-          this.subscribeForeignStates(id);
-          const st = await this.getForeignStateAsync(id);
-          if (st && st.val !== undefined) {
-            this.updateValue(key, st.val, st.ts || Date.now());
-          }
-        } catch (e) {
-          this.log.debug && this.log.debug('Could not subscribe/read SmartHome enum state ' + id + ': ' + e);
-        }
-      }
-
-      // Finally, write JSON structure to state
-      const jsonRooms = JSON.stringify(rooms);
-      await this.setStateAsync('smartHome.structure', {
-        val: jsonRooms,
-        ack: true
-      });
-
-      // Also push structure into live state cache for VIS clients
-      try {
-        this.updateValue('smartHome.structure', jsonRooms, Date.now());
-      } catch (e) {
-        this.log.debug && this.log.debug('Could not push SmartHome structure to state cache: ' + e);
-      }
-
-      
-      this.log.info('SmartHome structure from config built with ' + Object.keys(rooms).length + ' rooms.');
-    } catch (err) {
-      this.log.error('Error while building SmartHome structure from config: ' + err);
-    }
-  }
-
-
 async syncInstallerConfigToStates() {
     const cfg = (this.config && this.config.installerConfig) || {};
     const toSet = {
@@ -725,6 +122,92 @@ async syncInstallerConfigToStates() {
     }
   }
 
+
+  buildSmartHomeDevicesFromConfig() {
+    const smCfg = (this.config && this.config.smartHome) || {};
+    const enabled = !!smCfg.enabled;
+    const dps = smCfg.datapoints || {};
+    const devices = [];
+
+    if (!enabled) {
+      this.smartHomeDevices = [];
+      return this.smartHomeDevices;
+    }
+
+    const pushSwitch = (id, opts) => {
+      if (!id) return;
+      const dev = {
+        id: opts.id,
+        type: 'switch',
+        room: opts.room,
+        function: opts.func,
+        alias: opts.alias,
+        icon: opts.icon,
+        ui: {
+          size: 'm',
+          showRoom: true,
+          showValue: true,
+          unit: '',
+          precision: 0,
+          highlightOnState: true,
+          colorProfile: 'primary',
+        },
+        behavior: {
+          readOnly: false,
+        },
+        io: {
+          switch: {
+            readId: id,
+            writeId: id,
+          },
+        },
+      };
+      devices.push(dev);
+    };
+
+    // vorhandene SmartHome-Datenpunkte als einfache Switch-Kacheln abbilden
+    pushSwitch(dps.heatPumpOn, {
+      id: 'heatPumpOn',
+      alias: 'Wärmepumpe',
+      room: 'Technik',
+      func: 'Heizung',
+      icon: 'HP',
+    });
+
+    pushSwitch(dps.wallboxLock, {
+      id: 'wallboxLock',
+      alias: 'Wallbox-Sperre',
+      room: 'Ladestation',
+      func: 'EV',
+      icon: 'EV',
+    });
+
+    this.smartHomeDevices = devices;
+    return this.smartHomeDevices;
+  }
+
+  async getSmartHomeDevicesWithState() {
+    const devices = (this.smartHomeDevices && this.smartHomeDevices.length)
+      ? this.smartHomeDevices
+      : this.buildSmartHomeDevicesFromConfig();
+
+    const result = [];
+    for (const dev of devices) {
+      const copy = JSON.parse(JSON.stringify(dev));
+      if (copy.io && copy.io.switch && copy.io.switch.readId) {
+        try {
+          const st = await this.getForeignStateAsync(copy.io.switch.readId);
+          copy.state = { on: !!(st && st.val) };
+        } catch (e) {
+          this.log.warn(`SmartHome state read error for ${copy.id}: ${e.message}`);
+          copy.state = { on: false, error: true };
+        }
+      }
+      result.push(copy);
+    }
+    return result;
+  }
+
   async onReady() {
     try {
       // start web server
@@ -736,23 +219,15 @@ async syncInstallerConfigToStates() {
       try { await this.delObjectAsync('installer.password'); } catch(_e) { /* ignore */ }
 
       await this.ensureSettingsStates();
-      await this.ensureSmartHomeStates();
       await this.syncInstallerConfigToStates();
 
       // write settings-config defaults
       await this.syncSettingsConfigToStates();
 
-      // build SmartHome structure on every start
-      // (VIS entscheidet separat, ob der SmartHome-Tab sichtbar ist)
-      try {
-        await this.buildSmartHomeStructureFromConfig();
-      } catch (e) {
-        this.log.error('Failed to build SmartHome structure from config: ' + e);
-      }
-
       // finally subscribe and read initial values
       await this.subscribeConfiguredStates();
 
+      this.buildSmartHomeDevicesFromConfig();
       this.log.info('NexoWatt VIS adapter ready.');
     } catch (e) {
       this.log.error(`onReady error: ${e.message}`);
@@ -767,11 +242,6 @@ async syncInstallerConfigToStates() {
     });
 
     app.use('/static', express.static(path.join(__dirname, 'www')));
-
-    // SmartHome Config Page
-    app.get('/smarthome-config', (_req, res) => {
-      res.sendFile(path.join(__dirname, 'www', 'smarthome-config.html'));
-    });
 
 // --- Static PWA assets ---
 app.get('/manifest.webmanifest', (_req, res) => {
@@ -793,153 +263,49 @@ app.get('/favicon.ico', (_req, res) => {
 app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
 
 
-    
-    // Simple ioBroker object search API for SmartHome config page
-
-    app.get('/api/iobroker/objects', async (req, res) => {
-      try {
-        let q = (req.query && req.query.q ? String(req.query.q) : '').trim();
-        const limitRaw = req.query && req.query.limit ? parseInt(req.query.limit, 10) || 1000 : 1000;
-        const limit = Math.max(1, Math.min(1000, limitRaw));
-
-        const qNormalized = q.toLowerCase();
-
-        // Alle States holen und im Adapter nach ID/Name filtern.
-        // So sind wir unabhängig davon, wie der Controller Wildcards interpretiert.
-        const objs = await this.getForeignObjectsAsync('*', 'state');
-        const list = [];
-
-        if (objs && typeof objs === 'object') {
-          for (const id of Object.keys(objs)) {
-            const obj = objs[id] || {};
-            const common = obj.common || {};
-            let name = common.name;
-            if (name && typeof name === 'object') {
-              name = name.de || name.en || name['en-US'] || Object.values(name)[0];
-            }
-            if (typeof name !== 'string') {
-              name = '';
-            }
-
-            const idLower = id.toLowerCase();
-            const nameLower = name.toLowerCase();
-
-            if (!qNormalized || idLower.includes(qNormalized) || nameLower.includes(qNormalized)) {
-              list.push({
-                id,
-                name,
-                role: common.role || '',
-                type: obj.type || ''
-              });
-              if (list.length >= limit) break;
-            }
-          }
-        }
-
-        res.json({ ok: true, objects: list });
-      } catch (e) {
-        this.log.error('Error in GET /api/iobroker/objects: ' + e);
-        res.status(500).json({ ok: false, error: 'Internal error' });
-      }
-    });
-
-    // SmartHome configuration API
-    app.get('/api/smarthome/config', (_req, res) => {
-      try {
-        const cfg = (this.config && this.config.smartHome) || {};
-        res.json({ ok: true, smartHome: cfg });
-      } catch (e) {
-        this.log.error('Error in GET /api/smarthome/config: ' + e);
-        res.status(500).json({ ok: false, error: 'Internal error' });
-      }
-    });
-
-    app.post('/api/smarthome/config', bodyParser, async (req, res) => {
-      try {
-        const body = req.body || {};
-        const newCfg = body.smartHome;
-        if (!newCfg || typeof newCfg !== 'object') {
-          return res.status(400).json({ ok: false, error: 'smartHome config missing or invalid' });
-        }
-
-        // Auto-map simple datapoints[] into devices[] if rooms/devices are still empty.
-        // This allows you to maintain a simple table in the SmartHome config page,
-        // while the backend builds the full rooms/devices structure for the VIS.
-        try {
-          if (Array.isArray(newCfg.datapoints)) {
-            const devices = [];
-            for (const dp of newCfg.datapoints) {
-              if (!dp || !dp.id) continue;
-              if (dp.enabled === false) continue;
-
-              const roomLabel = (dp.room && dp.room.toString().trim()) || '';
-              const roomId = roomLabel || '_noRoom_';
-
-              let devType = 'generic';
-              if (dp.widget && typeof dp.widget === 'string' && dp.widget.trim()) {
-                devType = dp.widget.trim();
-              } else if (dp.function && typeof dp.function === 'string' && dp.function.trim()) {
-                devType = dp.function.trim();
-              }
-
-              const isDimmer = devType === 'dimmer';
-              const isCover = devType === 'cover';
-
-              const controlId = isDimmer
-                ? (dp.switchId || dp.id || '')
-                : (dp.id || '');
-
-              const levelId = isDimmer
-                ? (dp.levelId || dp.id || '')
-                : (dp.levelId || '');
-
-              devices.push({
-                roomId,
-                type: devType,
-                controlId,
-                statusId: dp.statusId || '',
-                levelId,
-                setpointId: dp.setpointId || '',
-                actualId: dp.actualId || '',
-                invertDirection: !!dp.invertDirection,
-                label: dp.label || ''
-              });
-            }
-
-            // Always derive devices[] from datapoints[] so that changes in the
-            // SmartHome-Konfiguration im Admin direkt in der VIS-Struktur ankommen.
-            newCfg.devices = devices;
-          }
-        } catch (e) {
-          this.log.error('Error while normalizing SmartHome config: ' + e);
-        }
-
-        const objId = 'system.adapter.' + this.namespace;
-        const obj = await this.getForeignObjectAsync(objId);
-        if (!obj || typeof obj !== 'object') {
-          return res.status(500).json({ ok: false, error: 'Adapter object not found' });
-        }
-        if (!obj.native) obj.native = {};
-        obj.native.smartHome = newCfg;
-
-        await this.setForeignObjectAsync(objId, obj);
-
-        if (!this.config) this.config = {};
-        this.config.smartHome = newCfg;
-        if (typeof this.buildSmartHomeStructureFromConfig === 'function') {
-          await this.buildSmartHomeStructureFromConfig();
-        }
-
-        res.json({ ok: true });
-      } catch (e) {
-        this.log.error('Error in POST /api/smarthome/config: ' + e);
-        res.status(500).json({ ok: false, error: 'Internal error' });
-      }
-    });
-
-
     // JSON body parser
     app.use(bodyParser);
+
+
+    // --- SmartHome page & API (erste Switch-Kachel) ---
+    app.get(['/smarthome.html', '/smarthome'], (_req, res) => {
+      res.sendFile(path.join(__dirname, 'www', 'smarthome.html'));
+    });
+
+    app.get('/api/smarthome/devices', async (_req, res) => {
+      try {
+        const devices = await this.getSmartHomeDevicesWithState();
+        res.json({ ok: true, devices });
+      } catch (e) {
+        this.log.warn('SmartHome devices API error: ' + e.message);
+        res.status(500).json({ ok: false, error: 'internal error' });
+      }
+    });
+
+    app.post('/api/smarthome/toggle', async (req, res) => {
+      try {
+        const id = req.body && req.body.id;
+        if (!id) {
+          return res.status(400).json({ ok: false, error: 'missing id' });
+        }
+        const devices = (this.smartHomeDevices && this.smartHomeDevices.length)
+          ? this.smartHomeDevices
+          : this.buildSmartHomeDevicesFromConfig();
+        const dev = devices.find(d => d.id === id);
+        if (!dev || !dev.io || !dev.io.switch || !dev.io.switch.readId) {
+          return res.status(404).json({ ok: false, error: 'device not found or not a switch' });
+        }
+        const dpId = dev.io.switch.writeId || dev.io.switch.readId;
+        const st = await this.getForeignStateAsync(dpId);
+        const current = !!(st && st.val);
+        const next = !current;
+        await this.setForeignStateAsync(dpId, next);
+        res.json({ ok: true, state: { on: next } });
+      } catch (e) {
+        this.log.warn('SmartHome toggle API error: ' + e.message);
+        res.status(500).json({ ok: false, error: 'internal error' });
+      }
+    });
 
     // --- History page & API ---
     app.get(['/history.html','/history'], (req, res) => {
@@ -1019,8 +385,7 @@ app.get('/config', (req, res) => {
         settings: this.config.settings || {},
         installer: this.config.installer || {},
         adminUrl: this.config.adminUrl || null,
-        installerLocked: !!(this.config.installerPassword),
-        smartHome: this.config.smartHome || {}
+        installerLocked: !!(this.config.installerPassword)
       });
     });
 
@@ -1063,9 +428,7 @@ app.get('/config', (req, res) => {
         if (scope === 'installer') {
           if (!isInstallerAuthed(req)) return res.status(403).json({ ok: false, error: 'forbidden' });
           map = (this.config && this.config.installer) || {};
-        } else if (scope === 'smartHome') {
-          const sh = (this.config && this.config.smartHome && this.config.smartHome.datapoints) || {};
-          map = sh;
+        
         } else {
           map = (this.config && this.config.settings) || {};
         }
@@ -1079,20 +442,6 @@ app.get('/config', (req, res) => {
         res.json({ ok: true });
       } catch (e) {
         this.log.warn('set error: ' + e.message);
-        res.status(500).json({ ok: false, error: 'internal error' });
-      }
-    });
-
-    // generic SmartHome enum control endpoint (auto-generated entities)
-    app.post('/api/smartHome/command', async (req, res) => {
-      try {
-        const id = req.body && req.body.id;
-        const value = req.body && req.body.value;
-        if (!id) return res.status(400).json({ ok: false, error: 'missing id' });
-        await this.setForeignStateAsync(id, value);
-        res.json({ ok: true });
-      } catch (e) {
-        this.log.warn('smartHome command error: ' + e.message);
         res.status(500).json({ ok: false, error: 'internal error' });
       }
     });
@@ -1132,27 +481,8 @@ app.get('/config', (req, res) => {
     const dps = (this.config && this.config.datapoints) || {};
     const settings = (this.config && this.config.settings) || {};
     const installer = (this.config && this.config.installer) || {};
-
-    // Legacy SmartHome datapoint mapping (e.g. heatPumpOn, roomTemp, ...).
-    // In the new SmartHome config we primarily work with rooms/devices,
-    // so we only use this mapping if it is still in the old "object" format.
-    let smartHome = {};
-    try {
-      const shRaw = this.config && this.config.smartHome && this.config.smartHome.datapoints;
-      if (shRaw && typeof shRaw === 'object' && !Array.isArray(shRaw)) {
-        for (const [k, v] of Object.entries(shRaw)) {
-          if (typeof v === 'string' && v) {
-            smartHome[k] = v;
-          }
-        }
-      }
-    } catch (e) {
-      this.log.debug && this.log.debug('subscribeConfiguredStates: could not normalize smartHome.datapoints: ' + e);
-    }
-
-    const namespace = this.namespace + '.';
+        const namespace = this.namespace + '.';
     const settingsLocalKeys = ['notifyEnabled','email','dynamicTariff','storagePower','price','priority','tariffMode','evcsMaxPower'];
-
     const keys = [
       ...Object.keys(dps),
       // always include built-in local settings keys so UI keeps values on reload
@@ -1160,34 +490,14 @@ app.get('/config', (req, res) => {
       // include any mapped external settings and installer keys
       ...Object.keys(settings).map(k => 'settings.' + k),
       ...Object.keys(installer).map(k => 'installer.' + k),
-      // legacy SmartHome_* mapping if present
-      ...Object.keys(smartHome).map(k => 'smartHome_' + k),
     ];
 
     for (const key of keys) {
       let id;
-      if (key.startsWith('settings.')) {
-        id = settings[key.slice(9)];
-      } else if (key.startsWith('installer.')) {
-        id = installer[key.slice(10)];
-      } else if (key.startsWith('smartHome_')) {
-        id = smartHome[key.slice(10)];
-      } else {
-        id = dps[key];
-      }
-
-      // If the mapping exists but is not a string (e.g. boolean/config object), ignore it.
-      if (id && typeof id !== 'string') {
-        id = null;
-      }
-
-      // For local settings/installer keys without external mapping subscribe to own states.
-      if (!id && key.startsWith('settings.')) {
-        id = namespace + key;
-      } else if (!id && key.startsWith('installer.')) {
-        id = namespace + key;
-      }
-
+      if (key.startsWith('settings.')) id = settings[key.slice(9)];
+      else if (key.startsWith('installer.')) id = installer[key.slice(10)];
+      else id = dps[key];
+      if (!id && key.startsWith('settings.')) id = namespace + key;
       if (!id) continue;
 
       // subscribe
@@ -1224,13 +534,7 @@ app.get('/config', (req, res) => {
     for (const [k, dpId] of Object.entries(settings)) { if (dpId === id) return 'settings.' + k; }
     const installer = (this.config && this.config.installer) || {};
     for (const [k, dpId] of Object.entries(installer)) { if (dpId === id) return 'installer.' + k; }
-    const smartHome = (this.config && this.config.smartHome && this.config.smartHome.datapoints) || {};
-    for (const [k, dpId] of Object.entries(smartHome)) { if (dpId === id) return 'smartHome_' + k; }
-
-    // dynamic SmartHome enum datapoints (auto-generated structure)
-    const dyn = this.smartHomeEnumKeyById || {};
-    if (dyn[id]) return dyn[id];
-
+    
     // direct mapping for local states
     const prefS = this.namespace + '.settings.';
     const prefI = this.namespace + '.installer.';

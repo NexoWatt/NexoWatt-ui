@@ -1,7 +1,7 @@
 {
   "common": {
-    "name": "nexowatt-ui",
-    "version": "0.4.140",
+    "name": "nexowatt-vis",
+    "version": "0.4.15",
     "news": {
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
@@ -314,94 +314,6 @@
       "0.4.10": {
         "en": "Fix: bind and display Production → Total (kWh) and CO₂ savings, add ' t' unit for CO₂.",
         "de": "Fix: Bindung und Anzeige für Produktion → Gesamt (kWh) und CO₂‑Ersparnis; zusätzlich ' t' als Einheit für CO₂."
-      },
-      "0.4.17": {
-        "en": "UI tweaks (sticky header, white menu icon, spacing) and fixed production tile to use current PV power. Settings from history open settings page directly.",
-        "de": "UI-Optimierungen (fixierter Header, weißes Menü-Icon, Abstände) und Bugfix: Produktions-Kachel nutzt nun die aktuelle PV-Leistung. Einstellungen aus der Historie öffnen direkt die Einstellungsseite."
-      },
-      "0.4.18": {
-        "en": "Add Smart Home tab placeholder controlled by admin setting.",
-        "de": "Smart-Home-Tab-Vorbereitung, sichtbar bei aktivierter Smart-Home-Option im Admin."
-      },
-      "0.4.20": {
-        "en": "Prepared SmartHome tab: initial SmartVisu-like functions (heat pump, room temperature, wallbox lock, grid limit, PV curtailment) in NexoWatt design.",
-        "de": "SmartHome-Tab vorbereitet: erste SmartVisu-ähnliche Funktionen (Wärmepumpe, Raumtemperatur, Wallbox-Sperre, Netzlimit, PV-Abregelung) im NexoWatt-Design."
-      },
-      "0.4.21": {
-        "en": "Add SmartHome structure state built from enum.rooms / enum.functions as basis for auto-generated SmartHome page.",
-        "de": "SmartHome-Struktur-State aus enum.rooms / enum.functions hinzugefügt – Grundlage für automatisch erzeugte SmartHome-Seite."
-      },
-      "0.4.22": {
-        "en": "SmartHome: always builds enum.rooms / enum.functions structure into state 'smartHome.structure' on adapter start.",
-        "de": "SmartHome: Struktur aus enum.rooms / enum.functions wird beim Adapterstart immer in den State 'smartHome.structure' geschrieben."
-      },
-      "0.4.61": {
-        "en": "Reworked SmartHome tab: manual rooms & devices configuration.",
-        "de": "SmartHome-Reiter neu aufgebaut: manuelle Konfiguration von Räumen und Funktionen."
-      },
-      "0.4.63": {
-        "en": "SmartHome admin: tables for rooms and devices; preparation for manual structure.",
-        "de": "SmartHome Admin: Tabellen für Räume und Geräte, Vorbereitung für manuelle Struktur."
-      },
-      "0.4.66": {
-        "en": "SmartHome admin configuration: simplified table layout (shorter column titles, widget type selector with German labels).",
-        "de": "SmartHome-Admin: Tabellenlayout vereinfacht (kürzere Spaltentitel, Widget-Typ-Auswahl mit deutschen Bezeichnungen)."
-      },
-      "0.4.67": {
-        "en": "SmartHome admin: widen columns and extend widget types (switch, dimmer, jalousie, thermostat, window, status).",
-        "de": "SmartHome-Admin: Spalten verbreitert und Widget-Typen erweitert (Schalter, Dimmer, Jalousie, Thermostat, Fenster, Status)."
-      },
-      "0.4.68": {
-        "en": "SmartHome admin: enlarged columns, two-row layout per device and additional datapoints for thermostats (setpoint/actual).",
-        "de": "SmartHome-Admin: Spalten vergrößert, 2-Zeilen-Layout pro Gerät und zusätzliche Datenpunkte für Thermostate (Soll/Ist)."
-      },
-      "0.4.71": {
-        "en": "SmartHome admin: devices editor as array/panel (more space, extra thermostat datapoints). SmartHome VIS: HomeKit-like tiles per device in NexoWatt design.",
-        "de": "SmartHome-Admin: Geräte-Editor als Array/Panel (mehr Platz, zusätzliche Thermostat-Datenpunkte). SmartHome-VIS: HomeKit-ähnliche Kacheln pro Gerät im NexoWatt-Design."
-      },
-      "0.4.74": {
-        "en": "SmartHome: build structure from instance configuration (rooms/devices) instead of enums; keeps enums as fallback.",
-        "de": "SmartHome: Struktur wird aus der Instanzkonfiguration (Räume/Geräte) aufgebaut, Enums bleiben als Fallback."
-      },
-      "0.4.90": {
-        "en": "SmartHome: fixed config POST body parsing and map smartHome.datapoints[] into devices structure for VIS.",
-        "de": "SmartHome: POST-Parsing der Konfiguration korrigiert und smartHome.datapoints[] automatisch in die Geräte-Struktur der VIS überführt."
-      },
-      "0.4.91": {
-        "en": "SmartHome config: add object picker and + widget button; support optional switch datapoint for dimmer.",
-        "de": "SmartHome-Konfiguration: Objekt-Auswahl und +Widget-Button ergänzt; optionaler Schalt-Datenpunkt für Dimmer."
-      },
-      "0.4.99": {
-        "en": "SmartHome datapoint picker: increased object search limit to 1000 and added hint text. Minor UX polish.",
-        "de": "SmartHome-Datenpunkt-Picker: Suchlimit auf 1000 Objekte erhöht und Hinweistexte ergänzt. Kleine UX-Verbesserungen."
-      },
-      "0.4.100": {
-        "en": "SmartHome admin tab cleaned up: old datapoint table removed; SmartHome configuration is now managed entirely via the separate configuration page.",
-        "de": "SmartHome-Admin-Reiter aufgeräumt: alte Datenpunkt-Tabelle entfernt; die SmartHome-Konfiguration erfolgt jetzt vollständig über die separate Konfigurationsseite."
-      },
-      "0.4.111": {
-        "de": "SmartHome: RTR-Bedienkachel mit Ist-/Soll-Temperatur und Heizen/Kühlen-Modus in der VIS.",
-        "en": "SmartHome: thermostat (RTR) tile with current/set temperature and heat/cool mode in the VIS."
-      },
-      "0.4.112": {
-        "de": "Bugfix: SmartHome-THERMOSTAT (RTR) Kachel ohne Syntaxfehler, inkl. Ist/Soll und Heizen/Kühlen.",
-        "en": "Bugfix: SmartHome thermostat (RTR) tile without syntax errors, including current/set temp and heat/cool mode."
-      },
-      "0.4.113": {
-        "de": "SmartHome: RTR-Solltemperatur jetzt von 15–35 °C einstellbar; Werte in Kreisen mit getrenntem Zahlen-/Einheitenlayout.",
-        "en": "SmartHome: thermostat setpoint now adjustable from 15–35 °C; circle values show number and unit with improved layout."
-      },
-      "0.4.114": {
-        "de": "SmartHome: Gerätekacheln kompakter und responsive nebeneinander, Funktionsicons vergrößert.",
-        "en": "SmartHome: device tiles more compact and responsive in a grid, function icons enlarged."
-      },
-      "0.4.115": {
-        "de": "SmartHome: doppelte Gerätenamen in den Kacheln entfernt – Titel nur noch im Kopf der Kachel.",
-        "en": "SmartHome: removed duplicated device name inside tiles – title now only in tile header."
-      },
-      "0.4.116": {
-        "de": "SmartHome: Jede Widget-Konfiguration erzeugt jetzt eine eigene Kachel (auch bei identischen Datenpunkten).",
-        "en": "SmartHome: each widget configuration now renders as its own tile (even if data points are identical)."
       }
     },
     "title": "NexoWatt EMS UI",
@@ -424,8 +336,7 @@
     "loglevel": "info",
     "type": "visualization",
     "adminUI": {
-      "config": "json",
-      "tab": "html"
+      "config": "json"
     },
     "keywords": [
       "visualization",
@@ -462,9 +373,7 @@
         }
       }
     ],
-    "welcomeScreen": "adapter/nexowatt-vis/tab.html",
-    "messagebox": true,
-    "license": "GPL-3.0"
+    "welcomeScreen": "adapter/nexowatt-vis/tab.html"
   },
   "native": {
     "port": 8188,
@@ -521,9 +430,7 @@
         "wallboxLock": "",
         "gridLimit": "",
         "pvCurtailment": ""
-      },
-      "rooms": [],
-      "devices": []
+      }
     },
     "futureOptions": {
       "theme": "nexowatt-dark",

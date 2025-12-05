@@ -1,21 +1,7 @@
-### 0.4.110 – 2025-11-28
-- SmartHome VIS: Pfeiltasten (▲/▼) für Jalousien wurden optisch vergrößert (größere Schrift in `.smh-entity-toggle-inline`).
-- Sonst keine funktionalen Änderungen.
-
-
-### 0.4.109 (2025-11-28)
-- Fix: SmartHome erkennt Jalousien/Rollläden mit Typ *cover/blind* nun korrekt als `blind`.
-- Fix: ON/OFF-Icon bleibt für Dimmer, Jalousien bekommen wie vorgesehen die Auf/Ab-Pfeile.
-
-
-### 0.4.103 – 2025-11-27
-- Fix: SmartHome-Konfigbutton im Admin verwendet jetzt immer die Host-IP des Admin-Aufrufs (ohne Admin-Port) und öffnet `http(s)://<host>:<port>/smarthome-config`.
-- Fix: `subscribeConfiguredStates()` ignoriert ungültige Mappings (Boolean/Objekte) und verhindert den „pattern needs to be of type 'string'“-Fehler.
-
-### 0.4.100 – 2025-11-27
-- SmartHome-Admin-Reiter aufgeräumt: alte Datenpunkt-Tabelle entfernt.
-- Button „SmartHome-Einstellungen öffnen“ führt direkt auf die neue SmartHome-Konfigurationsseite.
-- Leerer-Zustand der SmartHome-Konfigurationsseite aktualisiert (Hinweis auf DP-Suche statt Admin-Tabelle).
+### 0.4.15 (2025-12-05)
+- Neu: Erste SmartHome-Switch-Kachel im HomeKit-ähnlichen NexoWatt-Design.
+- Neu: Separate SmartHome-Seite (/smarthome.html) mit API-Endpunkten /api/smarthome/devices und /api/smarthome/toggle.
+- Nutzung der bestehenden SmartHome-Datenpunkte (Wärmepumpe EIN/AUS, Wallbox-Sperre) als Demo-Geräte.
 
 ### 0.4.10 (2025-11-07)
 - Fix: Produktion → Gesamt (kWh) und CO₂‑Ersparnis werden korrekt aus den Admin-Datenpunkten gelesen.
@@ -44,7 +30,9 @@
 - /config liefert `installerLocked` abhängig von Session.
 
 ## 0.3.30 – 2025-11-01
-- ## 0.3.31 – 2025-11-01
+- Default-Passwort für Installer: **install2025!** (falls kein Wert gesetzt).
+
+## 0.3.31 – 2025-11-01
 - Fix: Syntaxfehler im Login-Endpoint behoben; /api/set prüft jetzt sauber die Session.
 
 ## 0.3.32 – 2025-11-01

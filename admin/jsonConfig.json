@@ -62,6 +62,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "placeholder": "z.B. 0_userdata.0.nexowatt.autarky",
           "help": "Autarkie in %. Falls leer, wird aus PV/Verbrauch geschätzt.",
           "newLine": false,
@@ -76,6 +77,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "placeholder": "z.B. 0_userdata.0.nexowatt.selfConsumption",
           "help": "Eigenverbrauch in %. Falls leer, wird geschätzt.",
           "newLine": false,
@@ -90,6 +92,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "placeholder": "z.B. fronius.0.powerflow.P_PV",
           "help": "Aktuelle PV-Leistung in W. Empfohlen: fenecon.0._sum.ProductionAcActivePower",
           "newLine": false,
@@ -104,6 +107,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "placeholder": "z.B. fronius.0.energy.total",
           "help": "Aktuelle PV-Leistung in W (optional).",
           "newLine": false,
@@ -118,6 +122,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "placeholder": "z.B. smartmeter.0.energy.total",
           "help": "Aktueller Hausverbrauch in W. Empfohlen: fenecon.0._sum.ConsumptionAcActivePower",
           "newLine": false,
@@ -132,6 +137,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "placeholder": "z.B. smartmeter.0.power.import",
           "help": "Positive Leistung Bezug. Alias: 0_userdata.0.nexowatt.grid.buy.power",
           "newLine": false,
@@ -146,6 +152,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "placeholder": "z.B. smartmeter.0.power.export",
           "help": "Positive Leistung Einspeisung. Alias: 0_userdata.0.nexowatt.grid.sell.power",
           "newLine": false,
@@ -160,6 +167,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "attr": "datapoints.storageChargePower",
           "xs": 12,
@@ -173,6 +181,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "attr": "datapoints.storageDischargePower",
           "xs": 12,
@@ -186,6 +195,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "attr": "datapoints.storageSoc",
           "datapoints.co2Savings": {
@@ -194,6 +204,7 @@
             "types": [
               "state"
             ],
+            "button": true,
             "newLine": false,
             "attr": "datapoints.co2Savings",
             "xs": 12,
@@ -207,6 +218,7 @@
             "types": [
               "state"
             ],
+            "button": true,
             "newLine": false,
             "attr": "datapoints.productionEnergyKwh",
             "xs": 12,
@@ -219,6 +231,7 @@
             "types": [
               "state"
             ],
+            "button": true,
             "newLine": false,
             "attr": "datapoints.consumptionEnergyKwh",
             "xs": 12,
@@ -231,6 +244,7 @@
             "types": [
               "state"
             ],
+            "button": true,
             "newLine": false,
             "attr": "datapoints.gridEnergyKwh",
             "xs": 12,
@@ -248,6 +262,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "attr": "datapoints.consumptionEvcs",
           "xs": 12,
@@ -261,6 +276,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "attr": "datapoints.consumptionOther",
           "xs": 12,
@@ -274,6 +290,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "placeholder": "z.B. evcc.0.wallbox.status",
           "help": "Wallbox Status",
           "newLine": false,
@@ -288,6 +305,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "attr": "datapoints.evcsLastChargeKwh",
           "xs": 12,
@@ -300,6 +318,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "placeholder": "z.B. smartmeter.0.grid.frequency",
           "help": "Netzfrequenz Hz",
           "newLine": false,
@@ -314,6 +333,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "placeholder": "z.B. smartmeter.0.grid.voltage",
           "help": "Netzspannung V",
           "newLine": false,
@@ -329,6 +349,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "placeholder": "z.B. 0_userdata.0.nexowatt.storage.capacity_kwh",
           "help": "Kapazität des Batteriespeichers in kWh (Zahl).",
@@ -343,6 +364,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "placeholder": "optional",
           "xs": 12,
@@ -356,6 +378,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "placeholder": "optional",
           "xs": 12,
@@ -428,6 +451,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "placeholder": "z.B. 0_userdata.0.nexowatt.price.current",
           "help": "Numerisch. Wenn in ct/kWh geliefert, wird automatisch in €/kWh umgerechnet.",
           "attr": "datapoints.priceCurrent",
@@ -441,6 +465,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "placeholder": "z.B. 0_userdata.0.nexowatt.price.average",
           "help": "Numerisch. Wenn in ct/kWh geliefert, wird automatisch in €/kWh umgerechnet.",
           "attr": "datapoints.priceAverage",
@@ -454,6 +479,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "attr": "datapoints.co2Savings",
           "xs": 12,
@@ -466,6 +492,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "attr": "datapoints.productionEnergyKwh",
           "xs": 12,
@@ -478,6 +505,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "attr": "datapoints.consumptionEnergyKwh",
           "xs": 12,
@@ -490,6 +518,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "attr": "datapoints.gridEnergyKwh",
           "xs": 12,
@@ -499,6 +528,96 @@
       },
       "label": "Datenpunkte",
       "title": "Datenpunkte"
+    },
+    "smarthome_vorbereitet": {
+      "type": "panel",
+      "items": {
+        "smartHome.enabled": {
+          "type": "checkbox",
+          "label": "SmartHome-Bereich aktivieren (Beta)",
+          "attr": "smartHome.enabled",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "smartHome.datapoints.heatPumpOn": {
+          "type": "objectId",
+          "label": "Wärmepumpe EIN/AUS (bool)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.*",
+          "help": "SmartHome-Datenpunkt",
+          "newLine": false,
+          "attr": "smartHome.datapoints.heatPumpOn",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "smartHome.datapoints.roomTemp": {
+          "type": "objectId",
+          "label": "Raumtemperatur (°C)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.*",
+          "help": "SmartHome-Datenpunkt",
+          "newLine": false,
+          "attr": "smartHome.datapoints.roomTemp",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "smartHome.datapoints.wallboxLock": {
+          "type": "objectId",
+          "label": "Wallbox verriegeln (bool)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.*",
+          "help": "SmartHome-Datenpunkt",
+          "newLine": false,
+          "attr": "smartHome.datapoints.wallboxLock",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "smartHome.datapoints.gridLimit": {
+          "type": "objectId",
+          "label": "Netzbezugslimit (W)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.*",
+          "help": "SmartHome-Datenpunkt",
+          "newLine": false,
+          "attr": "smartHome.datapoints.gridLimit",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "smartHome.datapoints.pvCurtailment": {
+          "type": "objectId",
+          "label": "PV-Abregelung (%)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "placeholder": "z.B. 0_userdata.0.nexowatt.smarthome.*",
+          "help": "SmartHome-Datenpunkt",
+          "newLine": false,
+          "attr": "smartHome.datapoints.pvCurtailment",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        }
+      },
+      "label": "SmartHome (vorbereitet)",
+      "title": "SmartHome (vorbereitet)"
     },
     "erweitert___zukunft": {
       "type": "panel",
@@ -696,6 +815,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "label": "PV / Produktion – Leistung (W)",
           "attr": "history.datapoints.pvPower",
@@ -708,6 +828,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "label": "Verbrauch / Gebäude – Leistung (W)",
           "attr": "history.datapoints.consumptionTotal",
@@ -720,6 +841,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "label": "Netz – Bezug (W)",
           "attr": "history.datapoints.gridBuyPower",
@@ -732,6 +854,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "label": "Netz – Einspeisung (W)",
           "attr": "history.datapoints.gridSellPower",
@@ -744,6 +867,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "label": "Batterie – Ladeleistung (W)",
           "attr": "history.datapoints.storageChargePower",
@@ -756,6 +880,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "label": "Batterie – Entladeleistung (W)",
           "attr": "history.datapoints.storageDischargePower",
@@ -768,6 +893,7 @@
           "types": [
             "state"
           ],
+          "button": true,
           "newLine": false,
           "label": "Batterie – SoC (%)",
           "attr": "history.datapoints.storageSoc",
@@ -813,35 +939,6 @@
           "max": 350,
           "tooltip": "Wird für die Füllung des Kreises im EVCS‑Popup verwendet (100% = hier eingetragene kW).",
           "newLine": true
-        }
-      }
-    },
-    "smarthome": {
-      "type": "panel",
-      "label": "SmartHome",
-      "title": "SmartHome",
-      "items": {
-        "smartHome.enabled": {
-          "type": "checkbox",
-          "label": "SmartHome-Bereich aktivieren",
-          "attr": "smartHome.enabled",
-          "xs": 12,
-          "sm": 12,
-          "md": 6
-        },
-        "smartHome.configLink": {
-          "type": "sendTo",
-          "label": {
-            "de": "SmartHome-Einstellungen öffnen",
-            "en": "Open SmartHome settings"
-          },
-          "sm": 12,
-          "variant": "contained",
-          "icon": "web",
-          "command": "openSmartHomeConfig",
-          "jsonData": "{\"origin\":\"${data._origin}\",\"originIp\":\"${data._originIp}\"}",
-          "openUrl": true,
-          "showProcess": true
         }
       }
     }

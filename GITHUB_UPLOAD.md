@@ -1,15 +1,15 @@
 # GitHub-Upload-Quickstart
 
-1) Neues GitHub-Repo **NexoWatt-UI** (oder dein Wunschname) erstellen.
-2) Lokal clonen und pushen:
+1) Neues GitHub-Repo **iobroker.nexowatt-vis** erstellen.
+2) Local clone und push:
 ```
 git init
 git add .
-git commit -m "NexoWatt VIS 0.4.18"
+git commit -m "NexoWatt VIS 0.0.2"
 git branch -M main
-git remote add origin https://github.com/USER/NexoWatt-UI.git
+git remote add origin https://github.com/USER/iobroker.nexowatt-vis.git
 git push -u origin main
-git tag v0.4.18
-git push origin v0.4.18
+git tag v0.0.2
+git push origin v0.0.2
 ```
-Danach kannst du in ioBroker direkt aus deinem GitHub installieren (z. B. über die URL `https://github.com/USER/NexoWatt-UI.git`).
+Danach kannst du in ioBroker direkt aus deinem GitHub installieren.

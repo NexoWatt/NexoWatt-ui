@@ -31,7 +31,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/icons/nexowatt-180.png">
     <link rel="apple-touch-icon" sizes="152x152" href="./assets/icons/nexowatt-152.png">
     <link rel="apple-touch-icon" sizes="120x120" href="./assets/icons/nexowatt-120.png">
-<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"></head>
+</head>
 <body>
 <header class="topbar"><div class="brand"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></div>
 <button aria-label="Menu" id="menuBtn">☰</button>
@@ -39,7 +39,6 @@
 <nav class="tabs">
 <button class="tab active" data-tab="live">LIVE</button>
 <button class="tab" id="historyTabBtn" data-tab="history">HISTORY</button>
-<button class="tab" id="smarthomeTabBtn" data-tab="smarthome" style="display:none">SMART HOME</button>
 </nav>
 <div class="status-dot" id="liveDot" title="Live Verbindung"></div>
 <div class="menu hidden" id="menuDropdown"><button class="menu-item" id="menuOpenSettings">Einstellungen</button></div></header>
@@ -211,8 +210,7 @@
 
 </section>
 </main>
-<script src="/static/app.js?v=0.4.51"></script>
-<!-- NexoWatt VIS SmartHome build 0.4.27 -->
+<script src="/static/app.js"></script>
 
 <section class="hidden settings-wrap" data-tab-content="settings">
   <section class="card">
@@ -249,24 +247,6 @@
 
   
 </section>
-</section>
-
-<section class="hidden smarthome-wrap" data-tab-content="smarthome">
-  
-
-  
-
-  <section class="card smh-card smh-rooms">
-    <div class="card-header"><span>Räume &amp; Funktionen</span></div>
-    <div class="card-body smh-rooms-body">
-      <div class="smh-room-tabs" id="smhRoomTabs"></div>
-      <div class="smh-room-content" id="smhRoomContent">
-        <p class="smh-placeholder-text">
-          Sobald du im SmartHome-Konfigurator Geräte hinterlegt hast, werden sie hier nach Räumen und Funktionen angezeigt.
-        </p>
-      </div>
-    </div>
-  </section>
 </section>
 
 <script>
