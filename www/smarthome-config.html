@@ -28,13 +28,20 @@
       <div>
         <div class="nw-smarthome-header__title">SmartHome-Konfiguration</div>
         <div class="nw-smarthome-header__subtitle">
-          Übersicht über Räume, Funktionen und Geräte aus dem SmartHomeConfig-Modell (BETA, read-only).
+          Bearbeiten von Räumen, Funktionen und Geräten aus dem SmartHomeConfig-Modell. Änderungen werden in der Adapter-Instanz gespeichert (BETA).
         </div>
       </div>
-      <div style="font-size:0.7rem;color:#9ca3af;">
-        <a href="/smarthome.html" style="color:inherit;text-decoration:none;">Zur SmartHome-Ansicht</a>
-        &nbsp;·&nbsp;
-        <a href="/logic.html" style="color:inherit;text-decoration:none;">NexoLogic</a>
+      <div class="nw-smarthome-header__right">
+        <div class="nw-smarthome-header__actions">
+          <button id="nw-config-save-btn" class="nw-config-btn nw-config-btn--primary" type="button">Speichern</button>
+          <button id="nw-config-reload-btn" class="nw-config-btn nw-config-btn--ghost" type="button">Neu laden</button>
+        </div>
+        <div class="nw-smarthome-header__links">
+          <a href="/smarthome.html">Zur SmartHome-Ansicht</a>
+          &nbsp;·&nbsp;
+          <a href="/logic.html">NexoLogic</a>
+        </div>
+        <div id="nw-config-status" class="nw-config-status"></div>
       </div>
     </div>
 

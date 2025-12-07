@@ -1040,13 +1040,113 @@ app.post('/api/smarthome/rtrSetpoint', async (req, res) => {
 
 
 
-// --- SmartHomeConfig API (read-only for VIS config page) ---
+// --- SmartHomeConfig API (VIS-Konfig & Editor) ---
     app.get('/api/smarthome/config', (req, res) => {
       try {
         const cfg = this.getSmartHomeConfig ? this.getSmartHomeConfig() : (this.config && this.config.smartHomeConfig) || {};
         res.json({ ok: true, config: cfg });
       } catch (e) {
         this.log.warn('SmartHomeConfig API error: ' + e.message);
+        res.status(500).json({ ok: false, error: 'internal error' });
+      }
+    });
+
+    app.post('/api/smarthome/config', async (req, res) => {
+      try {
+        const body = req.body || {};
+        const cfg = body.config;
+        if (!cfg || typeof cfg !== 'object') {
+          return res.status(400).json({ ok: false, error: 'invalid config payload' });
+        }
+
+        const out = {
+          version: typeof cfg.version === 'number' ? cfg.version : 1,
+          rooms: Array.isArray(cfg.rooms) ? cfg.rooms : [],
+          functions: Array.isArray(cfg.functions) ? cfg.functions : [],
+          devices: Array.isArray(cfg.devices) ? cfg.devices : [],
+        };
+
+        this.config = this.config || {};
+        this.config.smartHomeConfig = out;
+
+        let persisted = false;
+        try {
+          if (typeof this.getForeignObjectAsync === 'function' && typeof this.setForeignObjectAsync === 'function') {
+            const instId = 'system.adapter.' + this.namespace;
+              const instObj = await this.getForeignObjectAsync(instId);
+            if (instObj) {
+              instObj.native = instObj.native || {};
+              instObj.native.smartHomeConfig = out;
+              await this.setForeignObjectAsync(instId, instObj);
+              persisted = true;
+            } else {
+              this.log.warn('SmartHomeConfig save: instance object not found: ' + instId);
+            }
+          } else {
+            this.log.warn('SmartHomeConfig save: getForeignObjectAsync/setForeignObjectAsync not available');
+          }
+        } catch (e) {
+          this.log.warn('SmartHomeConfig save (persist) error: ' + e.message);
+        }
+
+        if (typeof this.buildSmartHomeDevicesFromConfig === 'function') {
+          try {
+            this.buildSmartHomeDevicesFromConfig();
+          } catch (e) {
+            this.log.warn('SmartHomeConfig save: rebuild devices failed: ' + e.message);
+          }
+        }
+
+        res.json({ ok: true, config: out, persisted });
+      } catch (e) {
+        this.log.warn('SmartHomeConfig save API error: ' + e.message);
+        res.status(500).json({ ok: false, error: 'internal error' });
+      }
+    });
+
+    app.get('/api/smarthome/dpsearch', async (req, res) => {
+      try {
+        const qRaw = (req.query && req.query.q) || '';
+        const q = (typeof qRaw === 'string' ? qRaw : String(qRaw || '')).trim();
+        const limitRaw = (req.query && req.query.limit) || '';
+        let limit = parseInt(limitRaw, 10);
+        if (!Number.isFinite(limit) || limit <= 0 || limit > 200) limit = 50;
+
+        if (!q) {
+          return res.json({ ok: true, results: [] });
+        }
+
+        if (typeof this.getForeignObjectsAsync !== 'function') {
+          this.log.warn('SmartHomeConfig dpsearch: getForeignObjectsAsync not available');
+          return res.json({ ok: false, error: 'datapoint search not supported' });
+        }
+
+        const all = await this.getForeignObjectsAsync('*', 'state');
+        const qLower = q.toLowerCase();
+        const results = [];
+
+        for (const id of Object.keys(all)) {
+          const obj = all[id];
+          if (!obj || !obj.common) continue;
+          const nameRaw = obj.common.name || '';
+          const name = typeof nameRaw === 'string' ? nameRaw : JSON.stringify(nameRaw);
+          const haystack = (id + ' ' + name).toLowerCase();
+          if (haystack.indexOf(qLower) === -1) continue;
+
+          results.push({
+            id,
+            name,
+            role: obj.common.role || '',
+            type: obj.common.type || '',
+            unit: obj.common.unit || '',
+          });
+
+          if (results.length >= limit) break;
+        }
+
+        res.json({ ok: true, results });
+      } catch (e) {
+        this.log.warn('SmartHomeConfig dpsearch error: ' + e.message);
         res.status(500).json({ ok: false, error: 'internal error' });
       }
     });
@@ -1065,33 +1165,86 @@ app.post('/api/smarthome/rtrSetpoint', async (req, res) => {
 // --- Logic (NexoLogic) API ---
 app.get('/api/logic/blocks', async (_req, res) => {
   try {
-    const cfg = this.config || {};
-    const smCfg = cfg.smartHome || {};
-    const dps = smCfg.datapoints || {};
     const blocks = [];
 
-    const addSceneBlock = (dpId, id, alias) => {
-      if (!dpId) return;
-      blocks.push({
-        id,
-        name: alias,
-        type: 'scene',
-        category: 'scene',
-        room: 'Wohnen',
-        function: 'Szene',
-        enabled: true,
-        source: {
-          kind: 'smarthome.scene',
-          smarthomeId: id,
-          datapointId: dpId,
-        },
-      });
-    };
+    // SmartHomeConfig-Szenen bevorzugt
+    if (typeof this.getSmartHomeConfig === 'function') {
+      const shc = this.getSmartHomeConfig();
+      const rooms = Array.isArray(shc && shc.rooms) ? shc.rooms : [];
+      const funcs = Array.isArray(shc && shc.functions) ? shc.functions : [];
+      const devices = Array.isArray(shc && shc.devices) ? shc.devices : [];
 
-    addSceneBlock(dps.scene1, 'scene1', 'Szene Wohlfühlen');
-    addSceneBlock(dps.scene2, 'scene2', 'Szene Alles aus');
-    addSceneBlock(dps.scene3, 'scene3', 'Szene 3');
-    addSceneBlock(dps.scene4, 'scene4', 'Szene 4');
+      const resolveRoomName = (roomId) => {
+        if (!roomId) return '';
+        const r = rooms.find(rm => rm && rm.id === roomId);
+        return (r && r.name) || roomId;
+      };
+
+      const resolveFunctionName = (fnId) => {
+        if (!fnId) return '';
+        const f = funcs.find(fn => fn && fn.id === fnId);
+        return (f && f.name) || fnId;
+      };
+
+      devices
+        .filter(dev => dev && dev.type === 'scene')
+        .forEach(cfgDev => {
+          const roomName = resolveRoomName(cfgDev.roomId);
+          const fnName = resolveFunctionName(cfgDev.functionId);
+          const behavior = cfgDev.behavior || {};
+          const ioCfg = cfgDev.io || {};
+          const sw = ioCfg.switch || {};
+          const dpId = sw.writeId || sw.readId || '';
+
+          blocks.push({
+            id: cfgDev.id,
+            name: cfgDev.alias || cfgDev.id,
+            type: 'scene',
+            category: 'Szene',
+            room: roomName || 'Szene',
+            function: fnName || 'Szene',
+            enabled: behavior.enabled !== false,
+            icon: cfgDev.icon || 'SC',
+            description: cfgDev.description || '',
+            source: {
+              kind: 'smarthome.scene',
+              smarthomeId: cfgDev.id,
+              datapointId: dpId || null,
+            },
+          });
+        });
+    }
+
+    // Fallback: Legacy-Szenen aus smartHome.datapoints.*, falls keine SmartHomeConfig-Szenen vorhanden
+    if (!blocks.length) {
+      const cfg = this.config || {};
+      const smCfg = cfg.smartHome || {};
+      const dps = smCfg.datapoints || {};
+
+      const addSceneBlock = (dpId, id, alias) => {
+        if (!dpId) return;
+        blocks.push({
+          id,
+          name: alias,
+          type: 'scene',
+          category: 'Szene',
+          room: 'Wohnen',
+          function: 'Szene',
+          enabled: true,
+          icon: 'SC',
+          source: {
+            kind: 'smarthome.scene',
+            smarthomeId: id,
+            datapointId: dpId,
+          },
+        });
+      };
+
+      addSceneBlock(dps.scene1, 'scene1', 'Szene Wohlfühlen');
+      addSceneBlock(dps.scene2, 'scene2', 'Szene Alles aus');
+      addSceneBlock(dps.scene3, 'scene3', 'Szene 3');
+      addSceneBlock(dps.scene4, 'scene4', 'Szene 4');
+    }
 
     res.json({ ok: true, blocks });
   } catch (e) {

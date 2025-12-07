@@ -34,7 +34,8 @@ function nwRenderLogicBlocks(blocks) {
 
   blocks.forEach(block => {
     const card = document.createElement('div');
-    card.className = 'nw-tile nw-tile--state-off nw-tile--readonly';
+    const isScene = block.type === 'scene' && block.source && block.source.smarthomeId;
+    card.className = 'nw-tile nw-tile--state-off' + (isScene ? '' : ' nw-tile--readonly');
 
     const header = document.createElement('div');
     header.className = 'nw-tile__header';
@@ -96,8 +97,30 @@ function nwRenderLogicBlocks(blocks) {
 
     card.appendChild(content);
 
+    if (isScene) {
+      card.addEventListener('click', () => {
+        nwTriggerScene(block);
+      });
+    }
+
     grid.appendChild(card);
   });
+}
+
+async function nwTriggerScene(block) {
+  if (!block || !block.source || !block.source.smarthomeId) return;
+  try {
+    const res = await fetch('/api/smarthome/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: block.source.smarthomeId }),
+    });
+    if (!res.ok) {
+      console.error('Scene trigger failed:', res.status, res.statusText);
+    }
+  } catch (e) {
+    console.error('Scene trigger error:', e);
+  }
 }
 
 async function nwInitLogic() {

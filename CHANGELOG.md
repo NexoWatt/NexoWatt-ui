@@ -1,13 +1,23 @@
+### 0.4.31 (2025-12-07)
+- SmartHome A6: RTR-Kachel mit Anzeige der Ist- und Solltemperatur und ±0,5 °C Setpoint-Bedienung in der VIS.
+- SmartHome A10: Erste Version des SmartHome-Config-Editors in der VIS mit Datenpunkt-Picker, der die SmartHomeConfig direkt in der Adapter-Instanz speichert.
+
+### 0.4.30 (2025-12-05)
+- Neu (B8): NexoLogic-Szenen direkt aus SmartHomeConfig-Geräten (Typ „scene“) generiert.
+- Backend: /api/logic/blocks liest SmartHomeConfig.rooms/functions/devices und erzeugt Logik-Blöcke für Szenen.
+- Backend: Fallback auf legacy smartHome.datapoints.*-Szenen, wenn keine SmartHomeConfig-Szenen konfiguriert sind.
+- VIS: Szenen-Kacheln in NexoLogic sind antippbar und lösen über /api/smarthome/toggle die zugehörige Szene aus.
+
 ### 0.4.29 (2025-12-05)
-- Neu: Favoriten-Unterstützung für SmartHome-Geräte.
+- Neu (B7): Favoriten-Unterstützung für SmartHome-Geräte.
 - Admin: Checkbox „Favorit“ pro Gerät in der SmartHomeConfig („Geräte / Kacheln“).
-- VIS: Favoriten-Tab („★ Favoriten“) in der SmartHome-Ansicht zeigt nur als Favorit markierte Kacheln.
-- VIS: Favoriten-Kacheln sind optisch hervorgehoben (Rand/Glow).
+- VIS: Favoriten-Tab („★ Favoriten“) in der SmartHome-Ansicht filtert auf als Favorit markierte Geräte.
+- VIS: Favoriten-Kacheln sind optisch hervorgehoben (Rahmen / Glow).
 
 ### 0.4.28 (2025-12-05)
-- Neu: Raum-Navigation als Tabs in der SmartHome-Ansicht (ähnlich Gira-Seiten).
-- UI: Tabs „Alle Räume“ + einzelne Räume oberhalb der SmartHome-Kacheln.
-- UI: Funktionsfilter bleiben als Chips (Licht, Beschattung, Heizung, Szenen, …) unterhalb der Tabs erhalten.
+- Neu (B6): Raum-Navigation als Tabs in der SmartHome-Ansicht (ähnlich Gira-Seiten).
+- VIS: Tabs „Alle Räume“ + einzelne Räume oberhalb der SmartHome-Kacheln.
+- VIS: Funktionsfilter bleiben als Chips (Licht, Beschattung, Heizung, Szenen, …) unterhalb der Tabs erhalten.
 - Technik: Tabs & Filter nutzen die room/function-Felder aus dem SmartHomeConfig-basierten Rendering.
 
 ### 0.4.27 (2025-12-05)

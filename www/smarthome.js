@@ -47,7 +47,7 @@ function nwRenderRoomTabs(devices) {
   if (hasFavorites) {
     tabsContainer.appendChild(
       createTab('★ Favoriten', !!nwFilterState.favorite, () => {
-        // Toggle: Favoriten an/aus, Room zurücksetzen
+        // Toggle: Favoriten an/aus, Raum-Filter zurücksetzen
         nwFilterState.favorite = nwFilterState.favorite ? null : true;
         if (nwFilterState.favorite) {
           nwFilterState.room = null;
@@ -190,6 +190,63 @@ async function nwSetLevel(id, level) {
     return null;
   }
 }
+
+async function nwSetRtrSetpoint(id, setpoint) {
+  try {
+    const res = await fetch('/api/smarthome/rtrSetpoint', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, setpoint }),
+    });
+    if (!res.ok) {
+      console.error('SmartHome RTR setpoint request failed:', res.status, res.statusText);
+      return null;
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!data || !data.ok) {
+      console.error('SmartHome RTR setpoint failed (payload)', data);
+      return null;
+    }
+    return data.state || null;
+  } catch (e) {
+    console.error('SmartHome RTR setpoint error:', e);
+    return null;
+  }
+}
+
+async function nwAdjustRtrSetpoint(dev, delta) {
+  if (!dev || dev.type !== 'rtr') return;
+  const io = dev.io || {};
+  const cl = io.climate || {};
+  if (!cl.setpointId) {
+    console.warn('RTR device has no setpointId:', dev.id);
+    return;
+  }
+
+  const st = dev.state || {};
+  let base;
+  if (typeof st.setpoint === 'number') {
+    base = st.setpoint;
+  } else if (typeof st.currentTemp === 'number') {
+    base = st.currentTemp;
+  } else {
+    const min0 = typeof cl.minSetpoint === 'number' ? cl.minSetpoint : 15;
+    const max0 = typeof cl.maxSetpoint === 'number' ? cl.maxSetpoint : 30;
+    base = (min0 + max0) / 2;
+  }
+
+  let target = base + delta;
+  const min = typeof cl.minSetpoint === 'number' ? cl.minSetpoint : 15;
+  const max = typeof cl.maxSetpoint === 'number' ? cl.maxSetpoint : 30;
+  if (target < min) target = min;
+  if (target > max) target = max;
+
+  const state = await nwSetRtrSetpoint(dev.id, target);
+  if (!state) return;
+  dev.state = Object.assign({}, dev.state || {}, state);
+  await nwReloadDevices();
+}
+
 
 
 
@@ -341,7 +398,8 @@ function nwRenderTiles(devices) {
     tile.appendChild(middle);
     if (progress) tile.appendChild(progress);
     if (slider) tile.appendChild(slider);
-    if (dev.type === 'blind') {
+    
+if (dev.type === 'blind') {
       const controls = document.createElement('div');
       controls.className = 'nw-tile__controls';
 
@@ -382,6 +440,62 @@ function nwRenderTiles(devices) {
       controls.appendChild(btnStop);
       controls.appendChild(btnDown);
       tile.appendChild(controls);
+    } else if (dev.type === 'rtr' && dev.io && dev.io.climate && dev.io.climate.setpointId) {
+      const cl = dev.io.climate;
+      const controls = document.createElement('div');
+      controls.className = 'nw-tile__controls nw-tile__controls--rtr';
+
+      const btnMinus = document.createElement('button');
+      btnMinus.type = 'button';
+      btnMinus.className = 'nw-tile__control-btn nw-tile__control-btn--rtr-minus';
+      btnMinus.textContent = '−';
+
+      const center = document.createElement('div');
+      center.className = 'nw-tile__rtr-center';
+
+      const spSpan = document.createElement('span');
+      spSpan.className = 'nw-tile__rtr-setpoint';
+
+      const st = dev.state || {};
+      const ui = dev.ui || {};
+      const min = typeof cl.minSetpoint === 'number' ? cl.minSetpoint : 15;
+      const max = typeof cl.maxSetpoint === 'number' ? cl.maxSetpoint : 30;
+
+      if (typeof st.setpoint === 'number') {
+        const prec = typeof ui.precision === 'number' ? ui.precision : 1;
+        spSpan.textContent = 'Soll ' + st.setpoint.toFixed(prec).replace('.', ',') + '°C';
+      } else {
+        spSpan.textContent = 'Soll ' + min + '–' + max + '°C';
+      }
+
+      center.appendChild(spSpan);
+
+      const btnPlus = document.createElement('button');
+      btnPlus.type = 'button';
+      btnPlus.className = 'nw-tile__control-btn nw-tile__control-btn--rtr-plus';
+      btnPlus.textContent = '+';
+
+      const stopPropagation2 = (ev) => ev.stopPropagation();
+      btnMinus.addEventListener('click', stopPropagation2);
+      btnPlus.addEventListener('click', stopPropagation2);
+
+      btnMinus.addEventListener('click', async () => {
+        const beh = dev.behavior || {};
+        if (beh.readOnly) return;
+        await nwAdjustRtrSetpoint(dev, -0.5);
+      });
+
+      btnPlus.addEventListener('click', async () => {
+        const beh = dev.behavior || {};
+        if (beh.readOnly) return;
+        await nwAdjustRtrSetpoint(dev, 0.5);
+      });
+
+      controls.appendChild(btnMinus);
+      controls.appendChild(center);
+      controls.appendChild(btnPlus);
+      tile.appendChild(controls);
+    }
     }
     tile.appendChild(bottom);
 
