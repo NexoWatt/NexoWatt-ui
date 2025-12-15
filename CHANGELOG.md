@@ -1,3 +1,6 @@
+## 0.4.40 (2025-12-15)
+- Fix: Menüpunkt „Einstellungen“ öffnet wieder die alte Einstellungsansicht (/?settings=1)
+
 ### 0.4.37 (2025-12-15)
 - FIX: Admin EVCS/SmartHome Tabellen: jsonConfig `table.items` als Array (für Admin GUI Kompatibilität)
 ## 0.4.39 (2025-12-15)
