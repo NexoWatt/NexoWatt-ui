@@ -1,3 +1,6 @@
+### 0.4.36 (2025-12-15)
+- Fix: Admin jsonConfig 'tabs' Schema kompatibel gemacht (schema.items.forEach)
+
 ### 0.4.35 (2025-12-15)
 - Schritt 3: EVCS Datenmodell pro Wallbox (States unter evcs.<n>.* inkl. Aggregat evcs.totalPowerW)
 - Admin: Wallbox-Tabelle erweitert um optionale DP-Mappings (Leistung, Energiezähler, Status, Freigabe, Modus)
@@ -107,6 +110,11 @@
 - Anzeige: CO₂‑Ersparnis zeigt nun ein ' t' für Tonnen an.
 
 # Changelog
+
+
+## 0.4.36 (2025-12-15)
+
+* Fix Admin jsonConfig tabs schema for newer Admin UI (schema.items.forEach)
 
 ## 0.0.1
 - Initial preview release.

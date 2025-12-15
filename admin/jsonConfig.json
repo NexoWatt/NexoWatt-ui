@@ -1,7 +1,7 @@
 {
   "type": "tabs",
-  "items": {
-    "allgemein": {
+  "items": [
+    {
       "type": "panel",
       "items": {
         "port": {
@@ -51,9 +51,10 @@
         }
       },
       "label": "Allgemein",
-      "title": "Allgemein"
+      "title": "Allgemein",
+      "name": "allgemein"
     },
-    "datenpunkte": {
+    {
       "type": "panel",
       "items": {
         "datapoints.autarky": {
@@ -527,9 +528,10 @@
         }
       },
       "label": "Datenpunkte",
-      "title": "Datenpunkte"
+      "title": "Datenpunkte",
+      "name": "datenpunkte"
     },
-    "smarthome_vorbereitet": {
+    {
       "type": "panel",
       "items": {
         "smartHome.enabled": {
@@ -782,9 +784,10 @@
         }
       },
       "label": "SmartHome (vorbereitet)",
-      "title": "SmartHome (vorbereitet)"
+      "title": "SmartHome (vorbereitet)",
+      "name": "smarthome_vorbereitet"
     },
-    "erweitert___zukunft": {
+    {
       "type": "panel",
       "items": {
         "futureOptions.theme": {
@@ -823,9 +826,10 @@
         }
       },
       "label": "Erweitert / Zukunft",
-      "title": "Erweitert / Zukunft"
+      "title": "Erweitert / Zukunft",
+      "name": "erweitert___zukunft"
     },
-    "installateur": {
+    {
       "type": "panel",
       "label": "Installateur",
       "title": "Installateur",
@@ -959,9 +963,10 @@
           "sm": 6,
           "md": 6
         }
-      }
+      },
+      "name": "installateur"
     },
-    "historie": {
+    {
       "type": "panel",
       "title": "Historie",
       "label": "Historie",
@@ -1066,9 +1071,10 @@
           "sm": 12,
           "md": 6
         }
-      }
+      },
+      "name": "historie"
     },
-    "evcs": {
+    {
       "type": "panel",
       "label": "EVCS",
       "items": {
@@ -1177,9 +1183,10 @@
             }
           }
         }
-      }
+      },
+      "name": "evcs"
     },
-    "smarthome_config": {
+    {
       "type": "panel",
       "label": "SmartHome – Räume & Geräte (BETA)",
       "title": "SmartHome-Konfiguration (Räume/Funktionen/Geräte)",
@@ -1537,7 +1544,8 @@
             }
           }
         }
-      }
+      },
+      "name": "smarthome_config"
     }
-  }
+  ]
 }
