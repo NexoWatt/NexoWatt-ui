@@ -1,3 +1,7 @@
+## 0.4.42 (2025-12-15)
+- Fix: Header-Menü Links als relative Pfade gesetzt (Einstellungen/EVCS/History), damit Navigation unter ioBroker Web korrekt funktioniert.
+- Einstellungen: Link zeigt auf index.html?settings=1 (öffnet die alte Einstellungsansicht inkl. Installer-Button).
+
 ## 0.4.41 (2025-12-15)
 - Schritt 2: Header-Menü: SmartHome & Logic aus dem Dropdown entfernt (nur noch über Admin/Einstellungen erreichbar)
 - SmartHome-Config: Buttons „SmartHome öffnen“ & „Logic öffnen“ ergänzt
@@ -309,4 +313,3 @@
 - VIS: Neue EVCS-Seite (/evcs.html) für mehrere Wallboxen.
 - Header-Menü: Navigation Live/History/SmartHome/Logic + EVCS (ab 2 Wallboxen sichtbar).
 - Live: EVCS-Menüpunkt wird über settingsConfig.evcsCount automatisch ein-/ausgeblendet.
-
