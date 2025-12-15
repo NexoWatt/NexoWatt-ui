@@ -246,6 +246,7 @@ async function bootstrap() {
     const cfgRes = await fetch('/config');
     const cfg = await cfgRes.json();
     units = cfg.units || units;
+    try{ const c = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1; const l=document.getElementById('menuEvcsLink'); if(l) l.classList.toggle('hidden', c < 2); }catch(_e){}
   } catch(e) {}
 
   const snap = await fetch('/api/state').then(r => r.json());

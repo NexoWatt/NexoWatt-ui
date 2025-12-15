@@ -550,3 +550,13 @@ function draw(){
       window.location.href = '/?settings=1';
     });
   })();
+
+
+// EVCS menu visibility
+(function(){
+  fetch('/config').then(r=>r.json()).then(cfg=>{
+    const c = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
+    const l = document.getElementById('menuEvcsLink');
+    if (l) l.classList.toggle('hidden', c < 2);
+  }).catch(()=>{});
+})();

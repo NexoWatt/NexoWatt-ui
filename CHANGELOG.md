@@ -294,3 +294,9 @@
 ## 0.4.7 - Batterie-Beladung im Energiefluss
 - Fix: Batterie-Beladung im Energiefluss wird auch angezeigt, wenn der Lade-DP **negativ** geliefert wird (Normalisierung auf Beträge).
 - Admin: Felder für **CO₂** und **Gesamt kWh** sind im Reiter *Datenpunkte* vorhanden.
+
+## 0.4.38 (2025-12-15)
+- VIS: Neue EVCS-Seite (/evcs.html) für mehrere Wallboxen.
+- Header-Menü: Navigation Live/History/SmartHome/Logic + EVCS (ab 2 Wallboxen sichtbar).
+- Live: EVCS-Menüpunkt wird über settingsConfig.evcsCount automatisch ein-/ausgeblendet.
+

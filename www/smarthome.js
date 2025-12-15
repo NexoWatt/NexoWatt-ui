@@ -617,3 +617,19 @@ async function nwReloadDevices() {
 document.addEventListener('DOMContentLoaded', () => {
   nwReloadDevices();
 });
+
+
+// Topbar menu + EVCS menu visibility
+(function(){
+  const btn=document.getElementById('menuBtn');
+  const dd=document.getElementById('menuDropdown');
+  if(btn && dd){
+    btn.addEventListener('click', (e)=>{ e.preventDefault(); dd.classList.toggle('hidden'); });
+    document.addEventListener('click', (e)=>{ if(!dd.contains(e.target) && e.target!==btn) dd.classList.add('hidden'); });
+  }
+  fetch('/config').then(r=>r.json()).then(cfg=>{
+    const c = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
+    const l=document.getElementById('menuEvcsLink');
+    if(l) l.classList.toggle('hidden', c < 2);
+  }).catch(()=>{});
+})();

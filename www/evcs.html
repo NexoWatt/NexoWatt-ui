@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>NexoWatt EVCS</title>
+  <link rel="icon" type="image/png" href="/static/apple-touch-icon.png"/>
+  <link href="/static/styles.css" rel="stylesheet"/>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <a href="/"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></a>
+  </div>
+  <button aria-label="Menu" id="menuBtn">☰</button>
+  <h1>EVCS</h1>
+  <div class="menu hidden" id="menuDropdown">
+    <a class="menu-item" href="/">Live</a>
+    <a class="menu-item" href="/history.html">History</a>
+    <a class="menu-item" href="/smarthome.html">SmartHome</a>
+    <a class="menu-item" href="/logic.html">Logic</a>
+    <a class="menu-item hidden" id="menuEvcsLink" href="/evcs.html">EVCS</a>
+    <a class="menu-item" href="/?settings=1">Einstellungen</a>
+  </div>
+</header>
+
+<main class="content" style="grid-template-columns: 1fr;">
+  <section class="card">
+    <div class="card-header">
+      <div class="legend-color"></div>
+      <span>Wallboxen</span>
+    </div>
+    <div id="evcsList" style="display:grid; gap:12px; padding:12px;"></div>
+  </section>
+</main>
+
+<script src="/static/evcs.js"></script>
+</body>
+</html>
