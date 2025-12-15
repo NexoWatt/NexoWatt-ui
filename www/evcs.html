@@ -1,6 +1,19 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+<script>
+/* NexoWatt: normalize base path so relative links work even if opened without trailing slash */
+(function () {
+  try {
+    var p = window.location.pathname || "";
+    if (p && !p.endsWith("/") && !p.endsWith(".html")) {
+      window.location.replace(p + "/" + window.location.search + window.location.hash);
+    }
+  } catch (e) {}
+})();
+</script>
+
+
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>NexoWatt EVCS</title>
@@ -15,10 +28,10 @@
   <button aria-label="Menu" id="menuBtn">☰</button>
   <h1>EVCS</h1>
   <div class="menu hidden" id="menuDropdown">
-    <a class="menu-item" href="index.html">Live</a>
+    <a class="menu-item" href="./">Live</a>
     <a class="menu-item" href="history.html">History</a>
 <a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a>
-    <a class="menu-item" href="index.html?settings=1">Einstellungen</a>
+    <a class="menu-item" href="./?settings=1">Einstellungen</a>
   </div>
 </header>
 

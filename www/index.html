@@ -33,7 +33,20 @@
     <link rel="apple-touch-icon" sizes="120x120" href="./assets/icons/nexowatt-120.png">
 </head>
 <body>
-<header class="topbar"><div class="brand"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></div>
+<header class="topbar">
+<script>
+/* NexoWatt: normalize base path so relative links work even if opened without trailing slash */
+(function () {
+  try {
+    var p = window.location.pathname || "";
+    if (p && !p.endsWith("/") && !p.endsWith(".html")) {
+      window.location.replace(p + "/" + window.location.search + window.location.hash);
+    }
+  } catch (e) {}
+})();
+</script>
+
+<div class="brand"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></div>
 <button aria-label="Menu" id="menuBtn">☰</button>
 <h1>NexoWatt EMS</h1>
 <nav class="tabs">
@@ -41,8 +54,8 @@
 <button class="tab" id="historyTabBtn" data-tab="history">HISTORY</button>
 </nav>
 <div class="status-dot" id="liveDot" title="Live Verbindung"></div>
-<div class="menu hidden" id="menuDropdown"><a class="menu-item" href="index.html">Live</a><a class="menu-item" href="history.html">History</a>
-<a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item" href="index.html?settings=1">Einstellungen</a></div></header>
+<div class="menu hidden" id="menuDropdown"><a class="menu-item" href="./">Live</a><a class="menu-item" href="history.html">History</a>
+<a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item" href="./?settings=1">Einstellungen</a></div></header>
 <main class="content">
 <section class="card energy-web">
 <div class="card-header">

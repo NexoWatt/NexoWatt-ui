@@ -1,3 +1,7 @@
+## 0.4.43 (2025-12-15)
+- Fix: Header-Menü „Einstellungen“ nutzt wieder die **alte** Einstellungsansicht über `./?settings=1` (inkl. Installer-Button).
+- Fix: Navigation robuster gemacht (Base-Path Normalisierung), damit Links auch funktionieren, wenn die VIS ohne abschließenden Slash geöffnet wird.
+
 ## 0.4.42 (2025-12-15)
 - Fix: Header-Menü Links als relative Pfade gesetzt (Einstellungen/EVCS/History), damit Navigation unter ioBroker Web korrekt funktioniert.
 - Einstellungen: Link zeigt auf index.html?settings=1 (öffnet die alte Einstellungsansicht inkl. Installer-Button).
