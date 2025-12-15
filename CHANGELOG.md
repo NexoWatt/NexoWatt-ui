@@ -1,3 +1,15 @@
+### 0.4.34 (2025-12-15)
+- Schritt 2: Mehrfach-Wallbox Grundlage erweitert: EVCS-Liste (Namen) via Admin-Config, Adapter leitet Liste + Count ab und liefert sie in /config.settingsConfig.
+- Adapter-State settings.evcsCount ergänzt (für VIS/Navigation ab >1 Wallbox).
+
+## 0.4.33 (2025-12-15)
+- EVCS: Admin-Config um "Anzahl Wallboxen" erweitert (settingsConfig.evcsCount)
+- EVCS: Adapter liest wallboxCount aus Config und loggt "Wallboxen konfiguriert: X"
+
+### 0.4.32 (2025-12-07)
+- SmartHome A7: Szene-Kacheln zeigen jetzt klar „Aktiv“/„Bereit“ im Wertbereich, basierend auf dem Szenenstatus (active/on).
+- SmartHome A7: Sensor-Kacheln verwenden einheitliche Anzeigeformatierung für Zahlenwerte und zeigen bei fehlendem Wert einen Platzhalter.
+
 ### 0.4.31 (2025-12-07)
 - SmartHome A6: RTR-Kachel mit Anzeige der Ist- und Solltemperatur und ±0,5 °C Setpoint-Bedienung in der VIS.
 - SmartHome A10: Erste Version des SmartHome-Config-Editors in der VIS mit Datenpunkt-Picker, der die SmartHomeConfig direkt in der Adapter-Instanz speichert.

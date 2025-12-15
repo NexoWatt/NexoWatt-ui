@@ -81,7 +81,9 @@ class NexoWattVis extends utils.Adapter {
       price:         { type:'number',  role:'value', def:0 },
       priority:      { type:'number',  role:'value', def:1 },
       tariffMode:    { type:'number',  role:'value', def:1 }
-    };
+      ,evcsMaxPower:  { type:'number',  role:'value.power', def:11000 }
+      ,evcsCount:     { type:'number',  role:'state', def:1 }
+};
     for (const [key, c] of Object.entries(defs)) {
       const id = `settings.${key}`;
       await this.setObjectNotExistsAsync(id, {
@@ -115,8 +117,27 @@ async syncInstallerConfigToStates() {
     const cfg = (this.config && this.config.settingsConfig) || {};
     const ratedKw = Number(cfg.evcsMaxPowerKw || 11); // default 11 kW
     const ratedW  = Math.round(ratedKw * 1000);
+    const evcsCount = Math.max(1, Math.min(20, Math.round(Number(cfg.evcsCount || 1))));
+    this.evcsCount = evcsCount;
+    this.log.info(`[NexoWatt VIS] Wallboxen konfiguriert: ${evcsCount}`);
+
+
+    // derive evcs list (names) from config; keep it stable and always at least evcsCount entries
+    const rawList = Array.isArray(cfg.evcsList) ? cfg.evcsList : [];
+    const evcsList = [];
+    for (let i = 0; i < evcsCount; i++) {
+      const row = rawList[i] || {};
+      const name = (row && typeof row.name === 'string' && row.name.trim()) ? row.name.trim() : `Wallbox ${i+1}`;
+      const note = (row && typeof row.note === 'string' && row.note.trim()) ? row.note.trim() : '';
+      evcsList.push({ index: i+1, name, note });
+    }
+    this.evcsList = evcsList;
+
+    // keep count available for the VIS immediately (without requiring foreign datapoints)
+    try { this.updateValue('settings.evcsCount', evcsCount, Date.now()); } catch(e) {}
     try {
       await this.setStateAsync('settings.evcsMaxPower', { val: ratedW, ack: true });
+      await this.setStateAsync('settings.evcsCount', { val: evcsCount, ack: true });
     } catch(e) {
       this.log.warn('syncSettingsConfigToStates: ' + e.message);
     }
@@ -1341,6 +1362,11 @@ app.get('/config', (req, res) => {
       res.json({
         units: this.config.units || { power: 'W', energy: 'kWh' },
         settings: this.config.settings || {},
+        settingsConfig: {
+          evcsCount: (this.config && this.config.settingsConfig && Number(this.config.settingsConfig.evcsCount)) || (this.evcsCount || 1),
+          evcsMaxPowerKw: (this.config && this.config.settingsConfig && Number(this.config.settingsConfig.evcsMaxPowerKw)) || 11,
+          evcsList: Array.isArray(this.evcsList) ? this.evcsList : []
+        },
         installer: this.config.installer || {},
         adminUrl: this.config.adminUrl || null,
         installerLocked: !!(this.config.installerPassword)

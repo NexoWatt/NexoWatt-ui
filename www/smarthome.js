@@ -556,44 +556,53 @@ function nwCreateBadge(dev) {
   return null;
 }
 
-function nwGetValueAndProgress(dev) {
-  const st = dev.state || {};
-  const ui = dev.ui || {};
-  let valueText = '';
-  let unitText = ui.unit || '';
-  let progressValue = null;
 
-  if (dev.type === 'switch') {
-    valueText = st.on ? 'Ein' : 'Aus';
-    unitText = '';
-  } else if (dev.type === 'dimmer') {
-    const lvl = st.level != null ? st.level : 0;
-    valueText = String(Math.round(lvl));
-    unitText = ui.unit || '%';
-    progressValue = lvl;
-  } else if (dev.type === 'blind') {
-    const pos = st.position != null ? st.position : 0;
-    valueText = String(Math.round(pos));
-    unitText = ui.unit || '%';
-    progressValue = pos;
-  } else if (dev.type === 'rtr') {
-    if (typeof st.currentTemp === 'number') {
-      const prec = typeof ui.precision === 'number' ? ui.precision : 1;
-      valueText = st.currentTemp.toFixed(prec);
-      unitText = ui.unit || '°C';
+  
+  function nwGetValueAndProgress(dev) {
+    const st = dev.state || {};
+    const ui = dev.ui || {};
+    let valueText = '';
+    let unitText = ui.unit || '';
+    let progressValue = null;
+
+    if (dev.type === 'switch') {
+      valueText = st.on ? 'Ein' : 'Aus';
+      unitText = '';
+    } else if (dev.type === 'scene') {
+      const active = (typeof st.active !== 'undefined') ? !!st.active : !!st.on;
+      valueText = active ? 'Aktiv' : 'Bereit';
+      unitText = '';
+    } else if (dev.type === 'dimmer') {
+      const lvl = st.level != null ? st.level : 0;
+      valueText = String(Math.round(lvl));
+      unitText = ui.unit || '%';
+      progressValue = lvl;
+    } else if (dev.type === 'blind') {
+      const pos = st.position != null ? st.position : 0;
+      valueText = String(Math.round(pos));
+      unitText = ui.unit || '%';
+      progressValue = pos;
+    } else if (dev.type === 'rtr') {
+      if (typeof st.currentTemp === 'number') {
+        const prec = typeof ui.precision === 'number' ? ui.precision : 1;
+        valueText = st.currentTemp.toFixed(prec);
+        unitText = ui.unit || '°C';
+      }
+    } else if (dev.type === 'sensor') {
+      if (typeof st.value === 'number') {
+        const prec = typeof ui.precision === 'number' ? ui.precision : 1;
+        valueText = st.value.toFixed(prec);
+      } else if (typeof st.value !== 'undefined') {
+        valueText = String(st.value);
+      } else {
+        valueText = '—';
+      }
+      unitText = ui.unit || '';
     }
-  } else if (dev.type === 'sensor') {
-    if (typeof st.value === 'number') {
-      const prec = typeof ui.precision === 'number' ? ui.precision : 1;
-      valueText = st.value.toFixed(prec);
-    } else if (typeof st.value !== 'undefined') {
-      valueText = String(st.value);
-    }
-    unitText = ui.unit || '';
+
+    return { valueText, unitText, progressValue };
   }
 
-  return { valueText, unitText, progressValue };
-}
 
 async function nwReloadDevices() {
   try {

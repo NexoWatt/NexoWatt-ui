@@ -1096,6 +1096,16 @@
           "tooltip": "Schieberegler 1…3 (z. B. 1=Netz-Min, 2=Min+PV, 3=PV). Leer lassen, wenn Adapter-eigenen Datenpunkt verwenden soll.",
           "newLine": false
         },
+        "settingsConfig.evcsCount": {
+          "type": "number",
+          "label": "Anzahl Wallboxen",
+          "min": 1,
+          "max": 20,
+          "step": 1,
+          "default": 1,
+          "sm": 12,
+          "md": 6
+        },
         "settingsConfig.evcsMaxPowerKw": {
           "type": "number",
           "label": "Maximale Ladeleistung (kW)",
@@ -1104,6 +1114,28 @@
           "max": 350,
           "tooltip": "Wird für die Füllung des Kreises im EVCS‑Popup verwendet (100% = hier eingetragene kW).",
           "newLine": true
+        },
+        "settingsConfig.evcsList": {
+          "type": "table",
+          "label": "Wallboxen",
+          "help": "Optional: Benenne deine Wallboxen. Wenn leer, werden automatisch 'Wallbox 1..N' verwendet. Die Anzahl steuert 'Anzahl Wallboxen' oben.",
+          "attr": "settingsConfig.evcsList",
+          "items": {
+            "name": {
+              "type": "text",
+              "label": "Name",
+              "xs": 6,
+              "sm": 6,
+              "md": 4
+            },
+            "note": {
+              "type": "text",
+              "label": "Notiz (optional)",
+              "xs": 6,
+              "sm": 6,
+              "md": 6
+            }
+          }
         }
       }
     },
