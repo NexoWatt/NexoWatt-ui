@@ -1126,62 +1126,76 @@
           "label": "Wallboxen",
           "help": "Optional: Benenne deine Wallboxen. Wenn leer, werden automatisch 'Wallbox 1..N' verwendet. Die Anzahl steuert 'Anzahl Wallboxen' oben.",
           "attr": "settingsConfig.evcsList",
-          "items": {
-            "name": {
+          "items": [
+            {
               "type": "text",
               "label": "Name",
               "xs": 6,
               "sm": 6,
-              "md": 4
+              "md": 4,
+              "attr": "name",
+              "title": "Name"
             },
-            "note": {
+            {
               "type": "text",
               "label": "Notiz (optional)",
               "xs": 6,
               "sm": 6,
-              "md": 6
+              "md": 6,
+              "attr": "note",
+              "title": "Notiz (optional)"
             },
-            "powerId": {
+            {
               "type": "text",
               "label": "Leistung-DP (W)",
               "xs": 12,
               "sm": 6,
               "md": 4,
-              "tooltip": "ioBroker State-ID der aktuellen Ladeleistung dieser Wallbox (W)."
+              "tooltip": "ioBroker State-ID der aktuellen Ladeleistung dieser Wallbox (W).",
+              "attr": "powerId",
+              "title": "Leistung-DP (W)"
             },
-            "energyTotalId": {
+            {
               "type": "text",
               "label": "Energie-Zähler-DP (kWh)",
               "xs": 12,
               "sm": 6,
               "md": 4,
-              "tooltip": "ioBroker State-ID des Energiezählers (kWh, kumuliert)."
+              "tooltip": "ioBroker State-ID des Energiezählers (kWh, kumuliert).",
+              "attr": "energyTotalId",
+              "title": "Energie-Zähler-DP (kWh)"
             },
-            "statusId": {
+            {
               "type": "text",
               "label": "Status-DP (optional)",
               "xs": 12,
               "sm": 6,
               "md": 4,
-              "tooltip": "Optional: ioBroker State-ID für Status (z.B. lädt/aktiv)."
+              "tooltip": "Optional: ioBroker State-ID für Status (z.B. lädt/aktiv).",
+              "attr": "statusId",
+              "title": "Status-DP (optional)"
             },
-            "activeId": {
+            {
               "type": "text",
               "label": "Freigabe-DP (optional)",
               "xs": 12,
               "sm": 6,
               "md": 4,
-              "tooltip": "Optional: Schreibbarer DP zum Sperren/Freigeben (bool)."
+              "tooltip": "Optional: Schreibbarer DP zum Sperren/Freigeben (bool).",
+              "attr": "activeId",
+              "title": "Freigabe-DP (optional)"
             },
-            "modeId": {
+            {
               "type": "text",
               "label": "Modus-DP (optional)",
               "xs": 12,
               "sm": 6,
               "md": 4,
-              "tooltip": "Optional: Schreibbarer DP für Modus/Limit (number)."
+              "tooltip": "Optional: Schreibbarer DP für Modus/Limit (number).",
+              "attr": "modeId",
+              "title": "Modus-DP (optional)"
             }
-          }
+          ]
         }
       },
       "name": "evcs"
@@ -1196,126 +1210,152 @@
           "label": "Räume",
           "help": "Hier kannst du deine Räume definieren (z.B. Wohnen, Küche, Schlafen). Geräte verknüpfen später via roomId.",
           "attr": "smartHomeConfig.rooms",
-          "items": {
-            "id": {
+          "items": [
+            {
               "type": "text",
               "label": "ID",
               "help": "Technische ID (z.B. living, kitchen). Wird von Geräten referenziert.",
               "xs": 3,
               "sm": 3,
-              "md": 2
+              "md": 2,
+              "attr": "id",
+              "title": "ID"
             },
-            "name": {
+            {
               "type": "text",
               "label": "Name",
               "help": "Anzeigename des Raums (z.B. Wohnen).",
               "xs": 5,
               "sm": 5,
-              "md": 3
+              "md": 3,
+              "attr": "name",
+              "title": "Name"
             },
-            "floor": {
+            {
               "type": "text",
               "label": "Etage",
               "help": "Optional: EG, OG, DG usw.",
               "xs": 4,
               "sm": 4,
-              "md": 2
+              "md": 2,
+              "attr": "floor",
+              "title": "Etage"
             },
-            "icon": {
+            {
               "type": "text",
               "label": "Icon-Key",
               "help": "Icon-Bezeichner (z.B. room-living).",
               "xs": 4,
               "sm": 4,
-              "md": 3
+              "md": 3,
+              "attr": "icon",
+              "title": "Icon-Key"
             },
-            "order": {
+            {
               "type": "number",
               "label": "Sortierung",
               "help": "Sortierreihenfolge (kleiner = weiter oben).",
               "xs": 3,
               "sm": 3,
-              "md": 1
+              "md": 1,
+              "attr": "order",
+              "title": "Sortierung"
             },
-            "enabled": {
+            {
               "type": "checkbox",
               "label": "Aktiv",
               "xs": 3,
               "sm": 3,
-              "md": 1
+              "md": 1,
+              "attr": "enabled",
+              "title": "Aktiv"
             }
-          }
+          ]
         },
         "smartHomeConfig.functions": {
           "type": "table",
           "label": "Funktionen",
           "help": "Globale Funktionsgruppen (z.B. Licht, Beschattung, Heizung). Geräte verknüpfen später via functionId.",
           "attr": "smartHomeConfig.functions",
-          "items": {
-            "id": {
+          "items": [
+            {
               "type": "text",
               "label": "ID",
               "help": "Technische ID (z.B. light, blind, heating).",
               "xs": 3,
               "sm": 3,
-              "md": 2
+              "md": 2,
+              "attr": "id",
+              "title": "ID"
             },
-            "name": {
+            {
               "type": "text",
               "label": "Name",
               "help": "Anzeigename (z.B. Licht).",
               "xs": 5,
               "sm": 5,
-              "md": 3
+              "md": 3,
+              "attr": "name",
+              "title": "Name"
             },
-            "icon": {
+            {
               "type": "text",
               "label": "Icon-Key",
               "help": "Icon-Bezeichner (z.B. func-light).",
               "xs": 4,
               "sm": 4,
-              "md": 3
+              "md": 3,
+              "attr": "icon",
+              "title": "Icon-Key"
             },
-            "order": {
+            {
               "type": "number",
               "label": "Sortierung",
               "help": "Sortierreihenfolge (kleiner = weiter oben).",
               "xs": 3,
               "sm": 3,
-              "md": 2
+              "md": 2,
+              "attr": "order",
+              "title": "Sortierung"
             },
-            "enabled": {
+            {
               "type": "checkbox",
               "label": "Aktiv",
               "xs": 3,
               "sm": 3,
-              "md": 2
+              "md": 2,
+              "attr": "enabled",
+              "title": "Aktiv"
             }
-          }
+          ]
         },
         "smartHomeConfig.devices": {
           "type": "table",
           "label": "Geräte / Kacheln",
           "help": "Zuordnung von Geräten/Kacheln zu Raum + Funktion. IO-Datenpunkte werden je nach Typ befüllt.",
           "attr": "smartHomeConfig.devices",
-          "items": {
-            "id": {
+          "items": [
+            {
               "type": "text",
               "label": "ID",
               "help": "Eindeutige Geräte-ID (z.B. living_light_ceiling).",
               "xs": 3,
               "sm": 3,
-              "md": 2
+              "md": 2,
+              "attr": "id",
+              "title": "ID"
             },
-            "alias": {
+            {
               "type": "text",
               "label": "Alias",
               "help": "Anzeigename der Kachel (z.B. Deckenlicht).",
               "xs": 5,
               "sm": 5,
-              "md": 3
+              "md": 3,
+              "attr": "alias",
+              "title": "Alias"
             },
-            "type": {
+            {
               "type": "select",
               "label": "Typ",
               "help": "Kacheltyp (switch/dimmer/blind/rtr/sensor/scene).",
@@ -1347,33 +1387,41 @@
               ],
               "xs": 4,
               "sm": 4,
-              "md": 2
+              "md": 2,
+              "attr": "type",
+              "title": "Typ"
             },
-            "roomId": {
+            {
               "type": "text",
               "label": "Raum-ID",
               "help": "ID eines Raums aus der Tabelle „Räume“ (z.B. living).",
               "xs": 4,
               "sm": 4,
-              "md": 2
+              "md": 2,
+              "attr": "roomId",
+              "title": "Raum-ID"
             },
-            "functionId": {
+            {
               "type": "text",
               "label": "Funktions-ID",
               "help": "ID aus „Funktionen“ (z.B. light, blind).",
               "xs": 4,
               "sm": 4,
-              "md": 2
+              "md": 2,
+              "attr": "functionId",
+              "title": "Funktions-ID"
             },
-            "icon": {
+            {
               "type": "text",
               "label": "Icon-Key",
               "help": "Icon-Bezeichner (z.B. light-ceiling).",
               "xs": 4,
               "sm": 4,
-              "md": 2
+              "md": 2,
+              "attr": "icon",
+              "title": "Icon-Key"
             },
-            "size": {
+            {
               "type": "select",
               "label": "Größe",
               "options": [
@@ -1392,17 +1440,21 @@
               ],
               "xs": 3,
               "sm": 3,
-              "md": 2
+              "md": 2,
+              "attr": "size",
+              "title": "Größe"
             },
-            "behavior.readOnly": {
+            {
               "type": "checkbox",
               "label": "Nur Anzeige",
               "help": "Wenn aktiviert, ist die Kachel read-only.",
               "xs": 3,
               "sm": 3,
-              "md": 2
+              "md": 2,
+              "attr": "behavior.readOnly",
+              "title": "Nur Anzeige"
             },
-            "io.switch.readId": {
+            {
               "type": "objectId",
               "label": "switch.readId",
               "help": "Lesen/Schreiben für Schalter/Szene (bool).",
@@ -1412,9 +1464,11 @@
               "button": true,
               "xs": 6,
               "sm": 6,
-              "md": 3
+              "md": 3,
+              "attr": "io.switch.readId",
+              "title": "switch.readId"
             },
-            "io.level.readId": {
+            {
               "type": "objectId",
               "label": "level.readId",
               "help": "Lesen für Dimmer/Blind-Level.",
@@ -1424,9 +1478,11 @@
               "button": true,
               "xs": 6,
               "sm": 6,
-              "md": 3
+              "md": 3,
+              "attr": "io.level.readId",
+              "title": "level.readId"
             },
-            "io.level.writeId": {
+            {
               "type": "objectId",
               "label": "level.writeId",
               "help": "Schreiben für Dimmer/Blind-Level.",
@@ -1436,9 +1492,11 @@
               "button": true,
               "xs": 6,
               "sm": 6,
-              "md": 3
+              "md": 3,
+              "attr": "io.level.writeId",
+              "title": "level.writeId"
             },
-            "io.cover.upId": {
+            {
               "type": "objectId",
               "label": "cover.upId",
               "help": "Auf-Befehl (bool/Taster) für Jalousie.",
@@ -1448,9 +1506,11 @@
               "button": true,
               "xs": 6,
               "sm": 6,
-              "md": 3
+              "md": 3,
+              "attr": "io.cover.upId",
+              "title": "cover.upId"
             },
-            "io.cover.downId": {
+            {
               "type": "objectId",
               "label": "cover.downId",
               "help": "Ab-Befehl (bool/Taster) für Jalousie.",
@@ -1460,9 +1520,11 @@
               "button": true,
               "xs": 6,
               "sm": 6,
-              "md": 3
+              "md": 3,
+              "attr": "io.cover.downId",
+              "title": "cover.downId"
             },
-            "io.cover.stopId": {
+            {
               "type": "objectId",
               "label": "cover.stopId",
               "help": "Stopp-Befehl (bool/Taster) für Jalousie.",
@@ -1472,9 +1534,11 @@
               "button": true,
               "xs": 6,
               "sm": 6,
-              "md": 3
+              "md": 3,
+              "attr": "io.cover.stopId",
+              "title": "cover.stopId"
             },
-            "io.climate.currentTempId": {
+            {
               "type": "objectId",
               "label": "climate.currentTempId",
               "help": "Ist-Temperatur für RTR.",
@@ -1484,9 +1548,11 @@
               "button": true,
               "xs": 6,
               "sm": 6,
-              "md": 3
+              "md": 3,
+              "attr": "io.climate.currentTempId",
+              "title": "climate.currentTempId"
             },
-            "io.climate.setpointId": {
+            {
               "type": "objectId",
               "label": "climate.setpointId",
               "help": "Soll-Temperatur für RTR.",
@@ -1496,9 +1562,11 @@
               "button": true,
               "xs": 6,
               "sm": 6,
-              "md": 3
+              "md": 3,
+              "attr": "io.climate.setpointId",
+              "title": "climate.setpointId"
             },
-            "io.climate.modeId": {
+            {
               "type": "objectId",
               "label": "climate.modeId",
               "help": "Modus (Auto/Komfort/Nacht).",
@@ -1508,9 +1576,11 @@
               "button": true,
               "xs": 6,
               "sm": 6,
-              "md": 3
+              "md": 3,
+              "attr": "io.climate.modeId",
+              "title": "climate.modeId"
             },
-            "io.climate.humidityId": {
+            {
               "type": "objectId",
               "label": "climate.humidityId",
               "help": "Raumfeuchte für RTR/Sensor.",
@@ -1520,9 +1590,11 @@
               "button": true,
               "xs": 6,
               "sm": 6,
-              "md": 3
+              "md": 3,
+              "attr": "io.climate.humidityId",
+              "title": "climate.humidityId"
             },
-            "io.sensor.readId": {
+            {
               "type": "objectId",
               "label": "sensor.readId",
               "help": "Allgemeiner Sensorwert (z.B. Leistung, Temperatur).",
@@ -1532,17 +1604,21 @@
               "button": true,
               "xs": 6,
               "sm": 6,
-              "md": 3
+              "md": 3,
+              "attr": "io.sensor.readId",
+              "title": "sensor.readId"
             },
-            "behavior.favorite": {
+            {
               "type": "checkbox",
               "label": "Favorit",
               "help": "Wenn aktiv, erscheint dieses Gerät im Favoriten-Tab der SmartHome-Ansicht.",
               "xs": 3,
               "sm": 3,
-              "md": 2
+              "md": 2,
+              "attr": "behavior.favorite",
+              "title": "Favorit"
             }
-          }
+          ]
         }
       },
       "name": "smarthome_config"
