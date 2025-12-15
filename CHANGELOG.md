@@ -1,5 +1,8 @@
 ### 0.4.37 (2025-12-15)
 - FIX: Admin EVCS/SmartHome Tabellen: jsonConfig `table.items` als Array (für Admin GUI Kompatibilität)
+## 0.4.39 (2025-12-15)
+- Fix: Einstellungen-Menü verlinkt wieder auf smarthome-config.html (Einstellungsseite)
+
 
 ## 0.4.36 (2025-12-15)
 - Fix: Admin jsonConfig 'tabs' Schema kompatibel gemacht (schema.items.forEach)
