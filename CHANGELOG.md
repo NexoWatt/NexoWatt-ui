@@ -1,3 +1,8 @@
+### 0.4.35 (2025-12-15)
+- Schritt 3: EVCS Datenmodell pro Wallbox (States unter evcs.<n>.* inkl. Aggregat evcs.totalPowerW)
+- Admin: Wallbox-Tabelle erweitert um optionale DP-Mappings (Leistung, Energiezähler, Status, Freigabe, Modus)
+- Fix: Korrigierte Trunkierungs-/"..."-Artefakte in main.js (subscribeConfiguredStates & /config)
+
 ### 0.4.34 (2025-12-15)
 - Schritt 2: Mehrfach-Wallbox Grundlage erweitert: EVCS-Liste (Namen) via Admin-Config, Adapter leitet Liste + Count ab und liefert sie in /config.settingsConfig.
 - Adapter-State settings.evcsCount ergänzt (für VIS/Navigation ab >1 Wallbox).

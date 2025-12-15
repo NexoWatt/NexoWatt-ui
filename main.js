@@ -129,9 +129,24 @@ async syncInstallerConfigToStates() {
       const row = rawList[i] || {};
       const name = (row && typeof row.name === 'string' && row.name.trim()) ? row.name.trim() : `Wallbox ${i+1}`;
       const note = (row && typeof row.note === 'string' && row.note.trim()) ? row.note.trim() : '';
-      evcsList.push({ index: i+1, name, note });
+      const powerId = (row && typeof row.powerId === 'string' && row.powerId.trim()) ? row.powerId.trim() : '';
+      const energyTotalId = (row && typeof row.energyTotalId === 'string' && row.energyTotalId.trim()) ? row.energyTotalId.trim() : '';
+      const statusId = (row && typeof row.statusId === 'string' && row.statusId.trim()) ? row.statusId.trim() : '';
+      const activeId = (row && typeof row.activeId === 'string' && row.activeId.trim()) ? row.activeId.trim() : '';
+      const modeId = (row && typeof row.modeId === 'string' && row.modeId.trim()) ? row.modeId.trim() : '';
+      evcsList.push({ index: i+1, name, note, powerId, energyTotalId, statusId, activeId, modeId });
     }
     this.evcsList = evcsList;
+
+    // build lookup for mapped EVCS datapoints -> internal cache keys
+    this.evcsIdToKey = {};
+    for (const wb of this.evcsList) {
+      if (wb.powerId) this.evcsIdToKey[wb.powerId] = `evcs.${wb.index}.powerW`;
+      if (wb.energyTotalId) this.evcsIdToKey[wb.energyTotalId] = `evcs.${wb.index}.energyTotalKwh`;
+      if (wb.statusId) this.evcsIdToKey[wb.statusId] = `evcs.${wb.index}.status`;
+      if (wb.activeId) this.evcsIdToKey[wb.activeId] = `evcs.${wb.index}.active`;
+      if (wb.modeId) this.evcsIdToKey[wb.modeId] = `evcs.${wb.index}.mode`;
+    }
 
     // keep count available for the VIS immediately (without requiring foreign datapoints)
     try { this.updateValue('settings.evcsCount', evcsCount, Date.now()); } catch(e) {}
@@ -140,6 +155,82 @@ async syncInstallerConfigToStates() {
       await this.setStateAsync('settings.evcsCount', { val: evcsCount, ack: true });
     } catch(e) {
       this.log.warn('syncSettingsConfigToStates: ' + e.message);
+    }
+  }
+
+  async ensureEvcsStates() {
+    const count = Number(this.evcsCount || 1) || 1;
+
+    await this.setObjectNotExistsAsync('evcs', {
+      type: 'channel',
+      common: { name: 'EVCS' },
+      native: {}
+    });
+
+    // aggregate
+    await this.setObjectNotExistsAsync('evcs.totalPowerW', {
+      type: 'state',
+      common: { name: 'EVCS Gesamtleistung', type: 'number', role: 'value.power', read: true, write: false, def: 0, unit: 'W' },
+      native: {}
+    });
+
+    for (let i = 1; i <= count; i++) {
+      await this.setObjectNotExistsAsync(`evcs.${i}`, {
+        type: 'channel',
+        common: { name: `Wallbox ${i}` },
+        native: {}
+      });
+
+      const defs = {
+        name:          { type: 'string', role: 'text', def: `Wallbox ${i}`, read: true, write: false },
+        note:          { type: 'string', role: 'text', def: '', read: true, write: false },
+        powerW:        { type: 'number', role: 'value.power', def: 0, read: true, write: false, unit: 'W' },
+        energyTotalKwh:{ type: 'number', role: 'value.energy', def: 0, read: true, write: false, unit: 'kWh' },
+        energyDayKwh:  { type: 'number', role: 'value.energy', def: 0, read: true, write: false, unit: 'kWh' },
+        status:        { type: 'string', role: 'state', def: '', read: true, write: false },
+        active:        { type: 'boolean', role: 'switch', def: false, read: true, write: false },
+        mode:          { type: 'number', role: 'value', def: 0, read: true, write: false }
+      };
+
+      for (const [k, c] of Object.entries(defs)) {
+        await this.setObjectNotExistsAsync(`evcs.${i}.${k}`, {
+          type: 'state',
+          common: { name: `evcs.${i}.${k}`, type: c.type, role: c.role, read: c.read, write: c.write, def: c.def, unit: c.unit },
+          native: {}
+        });
+      }
+    }
+
+    // write static names/notes from config into local states
+    try {
+      if (Array.isArray(this.evcsList)) {
+        for (const wb of this.evcsList) {
+          await this.setStateAsync(`evcs.${wb.index}.name`, wb.name, true);
+          await this.setStateAsync(`evcs.${wb.index}.note`, wb.note || '', true);
+        }
+      }
+    } catch (e) {
+      this.log.debug('ensureEvcsStates write meta failed: ' + e.message);
+    }
+  }
+
+  async subscribeEvcsMappedStates() {
+    if (!Array.isArray(this.evcsList)) return;
+
+    for (const wb of this.evcsList) {
+      const ids = [wb.powerId, wb.energyTotalId, wb.statusId, wb.activeId, wb.modeId].filter(Boolean);
+      for (const id of ids) {
+        try {
+          await this.subscribeForeignStatesAsync(id);
+          const st = await this.getForeignStateAsync(id);
+          if (st && st.val !== undefined && st.val !== null) {
+            const key = this.evcsIdToKey && this.evcsIdToKey[id];
+            if (key) this.updateValue(key, st.val, st.ts || Date.now());
+          }
+        } catch (e) {
+          this.log.debug(`EVCS subscribe/read failed (${id}): ${e.message}`);
+        }
+      }
     }
   }
 
@@ -826,6 +917,10 @@ async onReady() {
 
       // write settings-config defaults
       await this.syncSettingsConfigToStates();
+      // EVCS (multi wallbox) model states
+      await this.ensureEvcsStates();
+      await this.subscribeEvcsMappedStates();
+
 
       // finally subscribe and read initial values
       await this.subscribeConfiguredStates();
@@ -1466,7 +1561,7 @@ app.get('/config', (req, res) => {
     const settings = (this.config && this.config.settings) || {};
     const installer = (this.config && this.config.installer) || {};
         const namespace = this.namespace + '.';
-    const settingsLocalKeys = ['notifyEnabled','email','dynamicTariff','storagePower','price','priority','tariffMode','evcsMaxPower'];
+    const settingsLocalKeys = ['notifyEnabled','email','dynamicTariff','storagePower','price','priority','tariffMode','evcsMaxPower','evcsCount'];
     const keys = [
       ...Object.keys(dps),
       // always include built-in local settings keys so UI keeps values on reload
@@ -1506,12 +1601,14 @@ app.get('/config', (req, res) => {
       if (key) {
         this.updateValue(key, state.val, state.ts);
       }
+        if (key.startsWith('evcs.')) this.setStateAsync(key, state.val, true).catch(()=>{});
     } catch (e) {
       this.log.error(`onStateChange error: ${e.message}`);
     }
   }
 
   keyFromId(id) {
+    if (this.evcsIdToKey && id && this.evcsIdToKey[id]) return this.evcsIdToKey[id];
     const dps = (this.config && this.config.datapoints) || {};
     for (const [key, dpId] of Object.entries(dps)) { if (dpId === id) return key; }
     const settings = (this.config && this.config.settings) || {};
@@ -1522,15 +1619,34 @@ app.get('/config', (req, res) => {
     // direct mapping for local states
     const prefS = this.namespace + '.settings.';
     const prefI = this.namespace + '.installer.';
+    const prefE = this.namespace + '.evcs.';
     if (id && id.startsWith(prefS)) return 'settings.' + id.slice(prefS.length);
     if (id && id.startsWith(prefI)) return 'installer.' + id.slice(prefI.length);
     return null;
+    if (id && id.startsWith(prefE)) return 'evcs.' + id.slice(prefE.length);
   }
 
   updateValue(key, value, ts) {
     this.stateCache[key] = { value, ts };
 
     const payload = { [key]: this.stateCache[key] };
+
+    // derived EVCS aggregates
+    try {
+      if (/^evcs\.\d+\.powerW$/.test(key)) {
+        const count = Number(this.evcsCount || 1) || 1;
+        let sum = 0;
+        for (let i = 1; i <= count; i++) {
+          const v = this.stateCache[`evcs.${i}.powerW`]?.value;
+          sum += Number(v || 0) || 0;
+        }
+        this.stateCache['evcs.totalPowerW'] = { value: sum, ts };
+        payload['evcs.totalPowerW'] = this.stateCache['evcs.totalPowerW'];
+        // persist as adapter state for other consumers
+        this.setStateAsync('evcs.totalPowerW', sum, true).catch(()=>{});
+      }
+    } catch(_e) {}
+
     // push update to all SSE clients
     for (const client of Array.from(this.sseClients)) {
       try {

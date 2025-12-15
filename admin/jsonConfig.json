@@ -1134,6 +1134,46 @@
               "xs": 6,
               "sm": 6,
               "md": 6
+            },
+            "powerId": {
+              "type": "text",
+              "label": "Leistung-DP (W)",
+              "xs": 12,
+              "sm": 6,
+              "md": 4,
+              "tooltip": "ioBroker State-ID der aktuellen Ladeleistung dieser Wallbox (W)."
+            },
+            "energyTotalId": {
+              "type": "text",
+              "label": "Energie-Zähler-DP (kWh)",
+              "xs": 12,
+              "sm": 6,
+              "md": 4,
+              "tooltip": "ioBroker State-ID des Energiezählers (kWh, kumuliert)."
+            },
+            "statusId": {
+              "type": "text",
+              "label": "Status-DP (optional)",
+              "xs": 12,
+              "sm": 6,
+              "md": 4,
+              "tooltip": "Optional: ioBroker State-ID für Status (z.B. lädt/aktiv)."
+            },
+            "activeId": {
+              "type": "text",
+              "label": "Freigabe-DP (optional)",
+              "xs": 12,
+              "sm": 6,
+              "md": 4,
+              "tooltip": "Optional: Schreibbarer DP zum Sperren/Freigeben (bool)."
+            },
+            "modeId": {
+              "type": "text",
+              "label": "Modus-DP (optional)",
+              "xs": 12,
+              "sm": 6,
+              "md": 4,
+              "tooltip": "Optional: Schreibbarer DP für Modus/Limit (number)."
             }
           }
         }
