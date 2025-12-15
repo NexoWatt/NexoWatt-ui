@@ -34,18 +34,6 @@
 </head>
 <body>
 <header class="topbar">
-<script>/*nw_base_normalize*/
-(function(){
-  try {
-    var p = window.location.pathname || '';
-    // If opened as .../nexowatt-vis (no trailing slash and no .html), redirect to .../nexowatt-vis/index.html
-    if (!p.endsWith('/') && !/\.html?$/i.test(p)) {
-      window.location.replace(p + '/index.html' + (window.location.search||'') + (window.location.hash||''));
-    }
-  } catch(e) {}
-})();
-</script>
-
 <script>
 /* NexoWatt: normalize base path so relative links work even if opened without trailing slash */
 (function () {
@@ -66,7 +54,8 @@
 <button class="tab" id="historyTabBtn" data-tab="history">HISTORY</button>
 </nav>
 <div class="status-dot" id="liveDot" title="Live Verbindung"></div>
-<div class="menu hidden" id="menuDropdown"><a class="menu-item" href="index.html">Live</a><a class="menu-item" href="history.html">History</a><a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item" id="menuOpenSettings" href="index.html?settings=1">Einstellungen</a></div></header>
+<div class="menu hidden" id="menuDropdown"><a class="menu-item" href="./">Live</a><a class="menu-item" href="history.html">History</a>
+<a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item" href="./?settings=1">Einstellungen</a></div></header>
 <main class="content">
 <section class="card energy-web">
 <div class="card-header">

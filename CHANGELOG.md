@@ -1,11 +1,3 @@
-
-## 0.4.45 (2025-12-16)
-
-* Fix: robuste Navigation zur alten Einstellungsansicht (Einstellungen → index.html?settings=1) auch bei Aufruf ohne Slash (…/nexowatt-vis).
-
-## 0.4.44 (2025-12-15)
-- Fix: Navigation/Links im Header repariert (keine Platzhalter mehr), damit „Einstellungen“ wieder zuverlässig die alte Settings-Ansicht (mit Installer-Button) öffnet.
-- Fix: Absolute Pfade in app.js/history.js entfernt (Base-Path kompatibel mit ioBroker Web-Unterpfad).
 ## 0.4.43 (2025-12-15)
 - Fix: Header-Menü „Einstellungen“ nutzt wieder die **alte** Einstellungsansicht über `./?settings=1` (inkl. Installer-Button).
 - Fix: Navigation robuster gemacht (Base-Path Normalisierung), damit Links auch funktionieren, wenn die VIS ohne abschließenden Slash geöffnet wird.

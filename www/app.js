@@ -875,7 +875,7 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
 
   // open history page via header tab
   const hbtn = document.getElementById('historyTabBtn');
-  if (hbtn) hbtn.addEventListener('click', ()=>{ window.location.href = 'history.html'; });
+  if (hbtn) hbtn.addEventListener('click', ()=>{ window.location.href = '/history.html'; });
 
 
 // open settings automatically if '?settings=1' is present
