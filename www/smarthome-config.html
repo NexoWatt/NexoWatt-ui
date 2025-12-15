@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+<script>/*nw_base_normalize*/
+(function(){
+  try {
+    var p = window.location.pathname || '';
+    // If opened as .../nexowatt-vis (no trailing slash and no .html), redirect to .../nexowatt-vis/index.html
+    if (!p.endsWith('/') && !/\.html?$/i.test(p)) {
+      window.location.replace(p + '/index.html' + (window.location.search||'') + (window.location.hash||''));
+    }
+  } catch(e) {}
+})();
+</script>
+
   <meta charset="utf-8"/>
   <meta content="width=device-width, initial-scale=1" name="viewport"/>
   <title>NexoWatt SmartHome Konfiguration</title>

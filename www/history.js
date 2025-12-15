@@ -499,7 +499,7 @@ function draw(){
       });
     }
     const liveBtn = document.getElementById('liveTabBtn');
-    if (liveBtn) liveBtn.addEventListener('click', ()=>{ window.location.href = '/'; });
+    if (liveBtn) liveBtn.addEventListener('click', ()=>{ window.location.href = './'; });
     const histBtn = document.getElementById('historyTabBtn');
     if (histBtn) histBtn.addEventListener('click', ()=>{ /* already here */ });
     const openInstallerAdmin = document.getElementById('openInstallerAdmin');
@@ -547,7 +547,7 @@ function draw(){
     const settingsBtn = document.getElementById('menuOpenSettings');
     if (settingsBtn) settingsBtn.addEventListener('click', (e)=>{
       e.preventDefault();
-      window.location.href = '/?settings=1';
+      window.location.href = 'index.html?settings=1';
     });
   })();
 
