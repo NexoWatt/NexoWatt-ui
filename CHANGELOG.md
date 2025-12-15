@@ -1,3 +1,7 @@
+## 0.4.41 (2025-12-15)
+- Schritt 2: Header-Menü: SmartHome & Logic aus dem Dropdown entfernt (nur noch über Admin/Einstellungen erreichbar)
+- SmartHome-Config: Buttons „SmartHome öffnen“ & „Logic öffnen“ ergänzt
+
 ## 0.4.40 (2025-12-15)
 - Fix: Menüpunkt „Einstellungen“ öffnet wieder die alte Einstellungsansicht (/?settings=1)
 
