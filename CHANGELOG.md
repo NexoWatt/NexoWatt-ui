@@ -329,3 +329,6 @@
 ## 0.4.46
 - Added dedicated settings page (settings.html) with original settings functions and Installer button
 - Improved settings auto-open logic in app.js for settings.html and ?settings=1
+
+## 0.4.49 (2025-12-16)
+- EVCS: Admin „Wallboxen“-Tabelle aufgeräumt (DP-Auswahl als Objekt-Dialog, bessere Labels/Tooltips, Layout optimiert).

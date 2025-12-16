@@ -1123,8 +1123,8 @@
         },
         "settingsConfig.evcsList": {
           "type": "table",
-          "label": "Wallboxen",
-          "help": "Optional: Benenne deine Wallboxen. Wenn leer, werden automatisch 'Wallbox 1..N' verwendet. Die Anzahl steuert 'Anzahl Wallboxen' oben.",
+          "label": "Wallboxen (EVCS) – Zuordnung",
+          "help": "Lege pro Wallbox genau eine Zeile an. Die VIS nutzt die Einträge, um Kacheln automatisch zu erzeugen.\nHinweis: Wenn weniger Zeilen als „Anzahl Wallboxen“ vorhanden sind, werden fehlende Einträge automatisch mit Standardwerten ergänzt.\nDie Datenpunkte bitte über die Objekt-Auswahl auswählen (kein manuelles Tippen nötig).",
           "attr": "settingsConfig.evcsList",
           "items": [
             {
