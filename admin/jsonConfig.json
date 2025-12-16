@@ -1134,7 +1134,8 @@
               "sm": 6,
               "md": 4,
               "attr": "name",
-              "title": "Name"
+              "title": "Name",
+              "style": "min-width: 160px;"
             },
             {
               "type": "text",
@@ -1143,7 +1144,8 @@
               "sm": 6,
               "md": 6,
               "attr": "note",
-              "title": "Notiz (optional)"
+              "title": "Notiz (optional)",
+              "style": "min-width: 180px;"
             },
             {
               "type": "objectId",
@@ -1157,8 +1159,11 @@
               "types": [
                 "state"
               ],
-              "button": true,
-              "placeholder": "Objekt auswählen …"
+              "placeholder": "Objekt auswählen …",
+              "style": "min-width: 320px; font-family: monospace;",
+              "multiline": true,
+              "rows": 2,
+              "showName": true
             },
             {
               "type": "objectId",
@@ -1172,8 +1177,11 @@
               "types": [
                 "state"
               ],
-              "button": true,
-              "placeholder": "Objekt auswählen …"
+              "placeholder": "Objekt auswählen …",
+              "style": "min-width: 320px; font-family: monospace;",
+              "multiline": true,
+              "rows": 2,
+              "showName": true
             },
             {
               "type": "objectId",
@@ -1187,8 +1195,11 @@
               "types": [
                 "state"
               ],
-              "button": true,
-              "placeholder": "Objekt auswählen …"
+              "placeholder": "Objekt auswählen …",
+              "style": "min-width: 260px; font-family: monospace;",
+              "multiline": true,
+              "rows": 2,
+              "showName": true
             },
             {
               "type": "objectId",
@@ -1202,8 +1213,11 @@
               "types": [
                 "state"
               ],
-              "button": true,
-              "placeholder": "Objekt auswählen …"
+              "placeholder": "Objekt auswählen …",
+              "style": "min-width: 260px; font-family: monospace;",
+              "multiline": true,
+              "rows": 2,
+              "showName": true
             },
             {
               "type": "objectId",
@@ -1217,10 +1231,15 @@
               "types": [
                 "state"
               ],
-              "button": true,
-              "placeholder": "Objekt auswählen …"
+              "placeholder": "Objekt auswählen …",
+              "style": "min-width: 260px; font-family: monospace;",
+              "multiline": true,
+              "rows": 2,
+              "showName": true
             }
-          ]
+          ],
+          "style": "overflow-x: auto;",
+          "tableStyle": "min-width: 1450px;"
         }
       },
       "name": "evcs"

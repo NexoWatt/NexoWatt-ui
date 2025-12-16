@@ -1,4 +1,7 @@
 ## 0.4.50
+
+## 0.4.51
+- Admin (EVCS): EVCS-Zuordnungstabelle übersichtlicher (breitere Spalten, Mehrzeilen-Anzeige, Scrollbar), sodass ausgewählte Datenpunkte sichtbar sind.
 - (EVCS Admin) Datapoint-Zuordnung in der Wallboxen-Tabelle per Objekt-Auswahl ("...") statt manuelles Tippen.
 
 ## 0.4.48 (2025-12-16)
