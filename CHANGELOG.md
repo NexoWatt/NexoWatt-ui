@@ -1,3 +1,6 @@
+## 0.4.56 (2025-12-16)
+- Fix (EVCS): Route `/evcs.html` (und `/evcs`) ergänzt, damit die EVCS-Seite nicht mehr 404 liefert.
+
 ## 0.4.55 (2025-12-16)
 - Fix (EVCS): onStateChange schützt vor null-key (key && key.startsWith('evcs.')) und schreibt lokale evcs.* States stabil.
 - Chore: CHANGELOG-Bereiche für 0.4.54/0.4.53 bereinigt (keine gekürzten Artefakte).

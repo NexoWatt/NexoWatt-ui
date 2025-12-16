@@ -1392,7 +1392,13 @@ app.get(['/logic.html','/logic'], (req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'settings.html'));
     });
 
-    app.get('/api/history', async (req, res) => {
+    
+    // --- EVCS page ---
+    app.get(['/evcs', '/evcs.html'], (_req, res) => {
+      res.sendFile(path.join(__dirname, 'www', 'evcs.html'));
+    });
+
+app.get('/api/history', async (req, res) => {
       try {
         const hcfg = (this.config && this.config.history) || {};
         const inst = hcfg.instance || 'influxdb.0';
