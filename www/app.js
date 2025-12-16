@@ -242,9 +242,10 @@ function render() {
 }
 
 async function bootstrap() {
+  let cfg = {};
   try {
     const cfgRes = await fetch('/config');
-    const cfg = await cfgRes.json();
+    cfg = await cfgRes.json();
     units = cfg.units || units;
     try{ const c = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1; const l=document.getElementById('menuEvcsLink'); if(l) l.classList.toggle('hidden', c < 2); }catch(_e){}
   } catch(e) {}
@@ -264,6 +265,7 @@ async function bootstrap() {
   window.latestState = state;
   render();
 
+  try { if (typeof setupSettings === 'function') setupSettings(); } catch (e) {}
   function startEvents(){
   try{
     const es = new EventSource('/events');
@@ -409,20 +411,27 @@ async function loadConfig() {
 }
 
 function bindInputValue(el, stateKey) {
-  // set initial value from state cache
-  const st = (window.latestState || {});
-  const info = st[stateKey] || st['settings.'+el.dataset.key] || st['installer.'+el.dataset.key];
+  // Always refresh the input from the latest snapshot first
+  const st = window.latestState || {};
+  const info = st[stateKey] || st['settings.' + el.dataset.key] || st['installer.' + el.dataset.key];
   if (info && info.value !== undefined) {
     if (el.type === 'checkbox') el.checked = !!info.value;
     else el.value = info.value;
   }
-  el.addEventListener('change', async ()=>{
-    const scope = el.dataset.scope;
-    const key = el.dataset.key;
-    const payload = { scope, key, value: (el.type === 'checkbox') ? el.checked : (el.type === 'number' ? Number(el.value) : el.value) };
+
+  // Prevent duplicate listeners when setupSettings() is called multiple times
+  if (el.dataset.nwBound === '1') return;
+  el.dataset.nwBound = '1';
+
+  el.addEventListener('change', async () => {
+    const val = (el.type === 'checkbox') ? (el.checked ? 1 : 0) : el.value;
     try {
-      await fetch('/api/set', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-    } catch(e) { console.warn('set', e); }
+      await fetch('/api/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: stateKey, value: val })
+      });
+    } catch (e) { /* ignore */ }
   });
 }
 

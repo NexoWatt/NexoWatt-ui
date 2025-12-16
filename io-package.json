@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.47",
+    "version": "0.4.48",
     "news": {
+      "0.4.48": {
+        "de": "Fix: Einstellungsseite liest beim Laden die aktuellen Werte (zuletzt gespeicherte Eingaben) ein; doppelte Event-Listener werden verhindert.",
+        "en": "Fix: Settings page now loads current values (last saved inputs) on page load; prevents duplicate event listeners."
+      },
       "0.4.47": {
         "de": "Fix: /settings.html wieder direkt erreichbar (Route ergänzt). Settings-Seite nutzt /static/styles.css und wird beim Direktaufruf sichtbar (inkl. Installer-Button).",
         "en": "Fix: /settings.html reachable again (route added). Settings page uses /static/styles.css and shows on direct open (incl. installer button)."

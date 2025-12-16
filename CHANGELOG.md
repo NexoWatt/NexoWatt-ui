@@ -1,3 +1,7 @@
+## 0.4.48 (2025-12-16)
+- Fix: Einstellungsseite liest beim Laden die aktuellen Werte (zuletzt gespeicherte Eingaben) ein.
+- Fix: Doppelte Event-Listener beim mehrfachen Initialisieren der Settings-Bindings werden verhindert.
+
 ## 0.4.47 (2025-12-16)
 - Fix: /settings.html wieder direkt erreichbar (Server-Route ergänzt).
 - Fix: Settings-Seite nutzt /static/styles.css und wird beim Direktaufruf sichtbar (inkl. Installer-Button).
