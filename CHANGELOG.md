@@ -1,3 +1,7 @@
+## 0.4.47 (2025-12-16)
+- Fix: /settings.html wieder direkt erreichbar (Server-Route ergänzt).
+- Fix: Settings-Seite nutzt /static/styles.css und wird beim Direktaufruf sichtbar (inkl. Installer-Button).
+
 ## 0.4.43 (2025-12-15)
 - Fix: Header-Menü „Einstellungen“ nutzt wieder die **alte** Einstellungsansicht über `./?settings=1` (inkl. Installer-Button).
 - Fix: Navigation robuster gemacht (Base-Path Normalisierung), damit Links auch funktionieren, wenn die VIS ohne abschließenden Slash geöffnet wird.

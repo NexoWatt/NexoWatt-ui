@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>NexoWatt EMS – Einstellungen</title>
   <link rel="manifest" href="./manifest.webmanifest"/>
-  <link rel="stylesheet" href="./styles.css"/>
+  <link rel="stylesheet" href="/static/styles.css"/>
 </head>
 <body>
 <header class="topbar">
@@ -37,7 +37,7 @@
 
 <script src="/static/app.js"></script>
 
-<section class="hidden settings-wrap" data-tab-content="settings">
+<section class="settings-wrap" data-tab-content="settings">
   <section class="card">
     <div class="card-header"><span>Allgemeine Einstellungen</span></div>
     <div class="form">
@@ -57,11 +57,11 @@
         <input type="number" id="s_price" step="0.01" data-scope="settings" data-key="price">
       </label>
       <div class="row"><span>Priorität (Speicher ↔ Ladestation)</span>
-        <input type="range" min="0" max="100" id="s_priority" min="1" max="2" step="1" data-scope="settings" data-key="priority">
+        <input type="range" id="s_priority" min="1" max="2" step="1" data-scope="settings" data-key="priority">
       </div>
       <div class="row"><span>Modus Tarif</span>
-        <input type="range" min="0" max="1" id="s_tariffMode" min="1" max="2" step="1" data-scope="settings" data-key="tariffMode">
-        <small>0 = Manuell, 1 = Automatisch</small>
+        <input type="range" id="s_tariffMode" min="1" max="2" step="1" data-scope="settings" data-key="tariffMode">
+        <small>1 = Manuell, 2 = Automatisch</small>
       </div>
     
       <div class="row" style="margin-top:12px">

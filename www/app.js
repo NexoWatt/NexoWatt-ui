@@ -373,16 +373,30 @@ function initSettingsPanel(){
   }
 }
 
-window.addEventListener('DOMContentLoaded', ()=>{
+window.addEventListener('DOMContentLoaded', ()=> {
   bootstrap();
   initMenu();
   initSettingsPanel();
   initTabs();
-hideAllPanels();
+  hideAllPanels();
+
+  // If opened directly as standalone Settings page, show settings panel by default
+  try {
+    const p = (location && location.pathname) ? String(location.pathname) : '';
+    const isSettings = p.endsWith('/settings.html') || p.endsWith('settings.html');
+    if (isSettings) {
+      const live = document.querySelector('.content');
+      if (live) live.style.display = 'none';
+      const sec = document.querySelector('[data-tab-content="settings"]');
+      if (sec) sec.classList.remove('hidden');
+      try { setupSettings(); } catch(_e) {}
+    }
+  } catch(_e) {}
 });
 
 
-// --- Settings & Installer logic ---
+ // --- Settings & Installer logic ---
+
 function hideAllPanels(){ document.querySelectorAll('[data-tab-content]').forEach(el=> el.classList.add('hidden')); document.querySelector('.content').style.display='block'; }
 let SERVER_CFG = { adminUrl: null, installerLocked: false };
 

@@ -1386,6 +1386,12 @@ app.get(['/logic.html','/logic'], (req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'history.html'));
     });
 
+
+    // --- Settings page ---
+    app.get(['/settings.html','/settings'], (_req, res) => {
+      res.sendFile(path.join(__dirname, 'www', 'settings.html'));
+    });
+
     app.get('/api/history', async (req, res) => {
       try {
         const hcfg = (this.config && this.config.history) || {};
