@@ -1,3 +1,6 @@
+## 0.4.53
+- VIS (Header): EVCS-Tab im Header (LIVE/HISTORY/EVCS) wird automatisch eingeblendet, sobald in den Adapter-Einstellungen mindestens 2 Wallboxen konfiguriert sind (evcsCount >= 2).
+
 ## 0.4.52
 - Fix (Admin/EVCS): Admin-GUI-Crash verhindert (Style-Definitionen in EVCS-Tabelle als Objekt statt String).
 

@@ -100,7 +100,11 @@ async function bootstrap(){
     const c = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
     const l = document.getElementById('menuEvcsLink');
     if (l) l.classList.toggle('hidden', c < 2);
-  }catch(e){}
+      const t = document.getElementById('tabEvcs');
+    if (t) t.classList.toggle('hidden', c < 2);
+    const n = document.getElementById('nav-evcs');
+    if (n) n.classList.toggle('hidden', c < 2);
+}catch(e){}
 
   try{
     state = await fetch('/api/state').then(r=>r.json());
