@@ -1146,54 +1146,79 @@
               "title": "Notiz (optional)"
             },
             {
-              "type": "text",
+              "type": "objectId",
               "label": "Leistung-DP (W)",
               "xs": 12,
               "sm": 6,
               "md": 4,
               "tooltip": "ioBroker State-ID der aktuellen Ladeleistung dieser Wallbox (W).",
               "attr": "powerId",
-              "title": "Leistung-DP (W)"
+              "title": "Leistung-DP (W)",
+              "types": [
+                "state"
+              ],
+              "button": true,
+              "placeholder": "Objekt auswählen …"
             },
             {
-              "type": "text",
+              "type": "objectId",
               "label": "Energie-Zähler-DP (kWh)",
               "xs": 12,
               "sm": 6,
               "md": 4,
               "tooltip": "ioBroker State-ID des Energiezählers (kWh, kumuliert).",
               "attr": "energyTotalId",
-              "title": "Energie-Zähler-DP (kWh)"
+              "title": "Energie-Zähler-DP (kWh)",
+              "types": [
+                "state"
+              ],
+              "button": true,
+              "placeholder": "Objekt auswählen …"
             },
             {
-              "type": "text",
+              "type": "objectId",
               "label": "Status-DP (optional)",
               "xs": 12,
               "sm": 6,
               "md": 4,
               "tooltip": "Optional: ioBroker State-ID für Status (z.B. lädt/aktiv).",
               "attr": "statusId",
-              "title": "Status-DP (optional)"
+              "title": "Status-DP (optional)",
+              "types": [
+                "state"
+              ],
+              "button": true,
+              "placeholder": "Objekt auswählen …"
             },
             {
-              "type": "text",
+              "type": "objectId",
               "label": "Freigabe-DP (optional)",
               "xs": 12,
               "sm": 6,
               "md": 4,
               "tooltip": "Optional: Schreibbarer DP zum Sperren/Freigeben (bool).",
               "attr": "activeId",
-              "title": "Freigabe-DP (optional)"
+              "title": "Freigabe-DP (optional)",
+              "types": [
+                "state"
+              ],
+              "button": true,
+              "placeholder": "Objekt auswählen …"
             },
             {
-              "type": "text",
+              "type": "objectId",
               "label": "Modus-DP (optional)",
               "xs": 12,
               "sm": 6,
               "md": 4,
               "tooltip": "Optional: Schreibbarer DP für Modus/Limit (number).",
               "attr": "modeId",
-              "title": "Modus-DP (optional)"
+              "title": "Modus-DP (optional)",
+              "types": [
+                "state"
+              ],
+              "button": true,
+              "placeholder": "Objekt auswählen …"
             }
           ]
         }

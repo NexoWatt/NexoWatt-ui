@@ -1,3 +1,6 @@
+## 0.4.50
+- (EVCS Admin) Datapoint-Zuordnung in der Wallboxen-Tabelle per Objekt-Auswahl ("...") statt manuelles Tippen.
+
 ## 0.4.48 (2025-12-16)
 - Fix: Einstellungsseite liest beim Laden die aktuellen Werte (zuletzt gespeicherte Eingaben) ein.
 - Fix: Doppelte Event-Listener beim mehrfachen Initialisieren der Settings-Bindings werden verhindert.
