@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.51",
+    "version": "0.4.52",
     "news": {
       "0.4.48": {
         "de": "Fix: Einstellungsseite liest beim Laden die aktuellen Werte (zuletzt gespeicherte Eingaben) ein; doppelte Event-Listener werden verhindert.",
@@ -331,6 +331,10 @@
       "0.0.1": {
         "en": "Initial release: Responsive NexoWatt EMS dashboard",
         "de": "Erste Version: Responsives NexoWatt EMS Dashboard"
+      },
+      "0.4.52": {
+        "de": "Fix: Admin-GUI-Crash in EVCS-Tabelle behoben (Style-Definitionen als Objekt statt String).",
+        "en": "Fix: Prevented Admin GUI crash in EVCS table (style definitions as object instead of string)."
       }
     },
     "title": "NexoWatt EMS UI",

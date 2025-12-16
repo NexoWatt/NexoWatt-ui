@@ -1,3 +1,6 @@
+## 0.4.52
+- Fix (Admin/EVCS): Admin-GUI-Crash verhindert (Style-Definitionen in EVCS-Tabelle als Objekt statt String).
+
 ## 0.4.50
 
 ## 0.4.51
