@@ -1,3 +1,13 @@
+## 0.4.55 (2025-12-16)
+- Fix (EVCS): onStateChange schützt vor null-key (key && key.startsWith('evcs.')) und schreibt lokale evcs.* States stabil.
+- Chore: CHANGELOG-Bereiche für 0.4.54/0.4.53 bereinigt (keine gekürzten Artefakte).
+
+## 0.4.54 (2025-12-16)
+- EVCS Schritt 2: EVCS-Seite rendert Wallbox-Kacheln dynamisch aus settingsConfig.evcsList inkl. Steuerung (Aktiv/Modus) über /api/set (scope=evcs).
+- Energiefluss: EVCS-Verbrauch nutzt bevorzugt evcs.totalPowerW (Summe aller Wallboxen), Fallback auf consumptionEvcs.
+- Navigation: Klick auf EV-Knoten/EVCS-Kachel öffnet bei >=2 Wallboxen direkt die EVCS-Seite.
+- Fix: keyFromId() EVCS-Pfad-Mapping (nexowatt-vis.0.evcs.* -> evcs.*) korrigiert.
+
 ## 0.4.53
 - VIS (Header): EVCS-Tab im Header (LIVE/HISTORY/EVCS) wird automatisch eingeblendet, sobald in den Adapter-Einstellungen mindestens 2 Wallboxen konfiguriert sind (evcsCount >= 2).
 

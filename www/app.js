@@ -247,7 +247,14 @@ async function bootstrap() {
     const cfgRes = await fetch('/config');
     cfg = await cfgRes.json();
     units = cfg.units || units;
-    try{ const c = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1; const l=document.getElementById('menuEvcsLink'); if(l) l.classList.toggle('hidden', c < 2); const t=document.getElementById('tabEvcs'); if(t) t.classList.toggle('hidden', c < 2); }catch(_e){}
+    try{
+      const c = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
+      window.__nwEvcsCount = c;
+      const l = document.getElementById('menuEvcsLink');
+      if (l) l.classList.toggle('hidden', c < 2);
+      const t = document.getElementById('tabEvcs');
+      if (t) t.classList.toggle('hidden', c < 2);
+    }catch(_e){}
   } catch(e) {}
 
   const snap = await fetch('/api/state').then(r => r.json());
@@ -776,7 +783,7 @@ function updateEnergyWeb() {
   let buy = +(d('gridBuyPower') ?? 0);
   let sell = +(d('gridSellPower') ?? 0);
   let load = +(d('consumptionTotal') ?? 0);
-  let c2 = +(d('consumptionEvcs') ?? 0); // Wallbox
+  let c2 = +(d('evcs.totalPowerW') ?? d('consumptionEvcs') ?? 0); // Wallbox (sum)
   let batCharge = +(d('storageChargePower') ?? 0);
   let batDischarge = +(d('storageDischargePower') ?? 0);
   const batSingle = d('batteryPower'); // optional fallback
@@ -943,8 +950,12 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
   const toggle = qs('evcsActiveToggle');
   const slider = qs('evcsModeSlider');
 
-  if (card && modal){
-    card.addEventListener('click', ()=> modal.classList.remove('hidden'));
+  if (card){
+    card.addEventListener('click', ()=>{
+      const c = Number(window.__nwEvcsCount || 1) || 1;
+      if (c >= 2) { window.location.href = '/evcs.html'; return; }
+      if (modal) modal.classList.remove('hidden');
+    });
   }
   if (close){
     close.addEventListener('click', ()=> modal.classList.add('hidden'));
@@ -966,8 +977,8 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
 
   // Update values from state inside global render()
   window.__evcsApply = function(d, s){
-    const p = d('consumptionEvcs') ?? 0;
-    const st = d('evcsStatus') ?? '--';
+    const p = d('evcs.totalPowerW') ?? d('consumptionEvcs') ?? 0;
+    const st = d('evcs.1.status') ?? d('evcsStatus') ?? '--';
     const active = s['settings.evcsActive']?.value ?? false;
     const mode = s['settings.evcsMode']?.value ?? 1;
     const fmtP = (val)=> {
@@ -976,7 +987,8 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
       if (Math.abs(n) >= 1000) return (n/1000).toFixed(1) + ' kW';
       return n.toFixed(0) + ' ' + u;
     
-    const rated = s['settings.evcsMaxPower']?.value ?? 11000; // W
+    const ratedSingle = s['settings.evcsMaxPower']?.value ?? 11000; // W
+    const rated = ratedSingle * (Number(window.__nwEvcsCount || 1) || 1);
     const pct = Math.max(0, Math.min(1, rated>0 ? (Math.abs(p)/rated) : 0));
     const g = document.querySelector('.evcs-gauge');
     if (g) {
@@ -999,6 +1011,10 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
   if (n && modal){
     // mark clickable
     n.classList.add('clickable');
-    n.addEventListener('click', ()=> modal.classList.remove('hidden'));
+    n.addEventListener('click', ()=>{
+      const c = Number(window.__nwEvcsCount || 1) || 1;
+      if (c >= 2) { window.location.href = '/evcs.html'; return; }
+      modal.classList.remove('hidden');
+    });
   }
 })();

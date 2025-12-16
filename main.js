@@ -1509,6 +1509,22 @@ app.get('/config', (req, res) => {
         const key = req.body && req.body.key;
         const value = req.body && req.body.value;
         if (!scope || !key) return res.status(400).json({ ok: false, error: 'bad request' });
+        // EVCS setter: write directly to mapped foreign datapoints (per wallbox)
+        if (scope === 'evcs') {
+          const k = String(key || '');
+          const m = k.match(/^(?:evcs\.)?(\d+)\.(active|mode)$/);
+          if (!m) return res.status(400).json({ ok: false, error: 'bad request' });
+          const idx = Math.max(1, Math.round(Number(m[1] || 0)));
+          const prop = m[2];
+          const list = Array.isArray(this.evcsList) ? this.evcsList : [];
+          const wb = list.find(w => Number(w.index) === idx);
+          const id = prop === 'active' ? (wb && wb.activeId) : (wb && wb.modeId);
+          if (!id) return res.status(400).json({ ok: false, error: 'unmapped' });
+          const v = prop === 'active' ? !!value : Number(value);
+          await this.setForeignStateAsync(id, v);
+          return res.json({ ok: true });
+        }
+
         let map = {};
         if (scope === 'installer') {
           if (!isInstallerAuthed(req)) return res.status(403).json({ ok: false, error: 'forbidden' });
@@ -1607,7 +1623,7 @@ app.get('/config', (req, res) => {
       if (key) {
         this.updateValue(key, state.val, state.ts);
       }
-        if (key.startsWith('evcs.')) this.setStateAsync(key, state.val, true).catch(()=>{});
+        if (key && key.startsWith('evcs.')) this.setStateAsync(key, state.val, true).catch(()=>{});
     } catch (e) {
       this.log.error(`onStateChange error: ${e.message}`);
     }
@@ -1628,8 +1644,8 @@ app.get('/config', (req, res) => {
     const prefE = this.namespace + '.evcs.';
     if (id && id.startsWith(prefS)) return 'settings.' + id.slice(prefS.length);
     if (id && id.startsWith(prefI)) return 'installer.' + id.slice(prefI.length);
-    return null;
     if (id && id.startsWith(prefE)) return 'evcs.' + id.slice(prefE.length);
+    return null;
   }
 
   updateValue(key, value, ts) {

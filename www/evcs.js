@@ -32,6 +32,9 @@ function render(){
     const name = m.name || ('Wallbox ' + i);
     const note = m.note || '';
 
+    const canActive = !!m.activeId;
+    const canMode = !!m.modeId;
+
     const p = d(`evcs.${i}.powerW`);
     const day = d(`evcs.${i}.energyDayKwh`);
     const tot = d(`evcs.${i}.energyTotalKwh`);
@@ -59,11 +62,13 @@ function render(){
           <div style="display:flex; justify-content:space-between; gap:12px;">
             <span>Status</span><strong>${esc(st ?? '--')}</strong>
           </div>
-          <div style="display:flex; justify-content:space-between; gap:12px;">
-            <span>Aktiv</span><strong>${active == null ? '--' : (active ? 'Ja' : 'Nein')}</strong>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+            <span>Aktiv</span>
+            ${canActive ? `<label class="switch"><input type="checkbox" data-evcs-active="${i}" ${active ? 'checked' : ''}><span></span></label>` : `<strong>${active == null ? '--' : (active ? 'Ja' : 'Nein')}</strong>`}
           </div>
-          <div style="display:flex; justify-content:space-between; gap:12px;">
-            <span>Modus</span><strong>${mode == null ? '--' : esc(mode)}</strong>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+            <span>Modus</span>
+            ${canMode ? `<div style="display:flex; align-items:center; gap:10px;"><input type="range" min="1" max="3" step="1" data-evcs-mode="${i}" value="${mode == null || isNaN(Number(mode)) ? 1 : Number(mode)}" style="width:140px;"><strong style="min-width:28px; text-align:right;">${mode == null ? '--' : esc(mode)}</strong></div>` : `<strong>${mode == null ? '--' : esc(mode)}</strong>`}
           </div>
         </div>
       </div>
@@ -93,8 +98,50 @@ function initMenu(){
   }
 }
 
+function bindControls(){
+  const list = document.getElementById('evcsList');
+  if (!list) return;
+
+  const clampMode = (v)=> Math.max(1, Math.min(3, Math.round(Number(v)||1)));
+
+  // keep slider value clamped live
+  list.addEventListener('input', (e)=>{
+    const t = e.target;
+    if (t && t.matches('input[type="range"][data-evcs-mode]')){
+      t.value = String(clampMode(t.value));
+      const lbl = t.parentElement && t.parentElement.querySelector('strong');
+      if (lbl) lbl.textContent = String(t.value);
+    }
+  });
+
+  // send changes to adapter
+  list.addEventListener('change', async (e)=>{
+    const t = e.target;
+    if (!t) return;
+
+    if (t.matches('input[type="checkbox"][data-evcs-active]')){
+      const idx = Number(t.getAttribute('data-evcs-active'));
+      try{
+        await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'evcs', key: `${idx}.active`, value: !!t.checked})});
+      }catch(_e){}
+      return;
+    }
+
+    if (t.matches('input[type="range"][data-evcs-mode]')){
+      const idx = Number(t.getAttribute('data-evcs-mode'));
+      const v = clampMode(t.value);
+      t.value = String(v);
+      try{
+        await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'evcs', key: `${idx}.mode`, value: Number(v)})});
+      }catch(_e){}
+    }
+  });
+}
+
+
 async function bootstrap(){
   initMenu();
+  bindControls();
   try{
     cfg = await fetch('/config').then(r=>r.json());
     const c = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
