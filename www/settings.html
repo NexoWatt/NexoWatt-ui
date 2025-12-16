@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>NexoWatt EMS – Einstellungen</title>
+  <link rel="manifest" href="./manifest.webmanifest"/>
+  <link rel="stylesheet" href="./styles.css"/>
+</head>
+<body>
+<header class="topbar">
+<script>
+/* NexoWatt: normalize base path so relative links work even if opened without trailing slash */
+(function () {
+  try {
+    var p = window.location.pathname || "";
+    if (p && !p.endsWith("/") && !p.endsWith(".html")) {
+      window.location.replace(p + "/" + window.location.search + window.location.hash);
+    }
+  } catch (e) {}
+})();
+</script>
+
+<div class="brand"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></div>
+<button aria-label="Menu" id="menuBtn">☰</button>
+<h1>NexoWatt EMS</h1>
+<nav class="tabs">
+<button class="tab active" data-tab="live">LIVE</button>
+<button class="tab" id="historyTabBtn" data-tab="history">HISTORY</button>
+</nav>
+<div class="status-dot" id="liveDot" title="Live Verbindung"></div>
+<div class="menu hidden" id="menuDropdown"><a class="menu-item" href="./">Live</a><a class="menu-item" href="history.html">History</a>
+<a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item" href="settings.html">Einstellungen</a></div></header>
+<main class="content">
+  <!-- Inhalt bewusst leer: Einstellungen werden als eigener Bereich darunter gerendert -->
+</main>
+
+<script src="/static/app.js"></script>
+
+<section class="hidden settings-wrap" data-tab-content="settings">
+  <section class="card">
+    <div class="card-header"><span>Allgemeine Einstellungen</span></div>
+    <div class="form">
+      <label class="row"><span>Benachrichtigungen</span>
+        <input type="checkbox" id="s_notify" data-scope="settings" data-key="notifyEnabled">
+      </label>
+      <label class="row"><span>E-Mail</span>
+        <input type="email" id="s_email" data-scope="settings" data-key="email">
+      </label>
+      <label class="row"><span>Dynamischer Zeittarif</span>
+        <input type="checkbox" id="s_dyn" data-scope="settings" data-key="dynamicTariff">
+      </label>
+      <label class="row"><span>Speicher Leistung (W)</span>
+        <input type="number" id="s_storagePower" step="1" data-scope="settings" data-key="storagePower">
+      </label>
+      <label class="row"><span>Strompreis (€)</span>
+        <input type="number" id="s_price" step="0.01" data-scope="settings" data-key="price">
+      </label>
+      <div class="row"><span>Priorität (Speicher ↔ Ladestation)</span>
+        <input type="range" min="0" max="100" id="s_priority" min="1" max="2" step="1" data-scope="settings" data-key="priority">
+      </div>
+      <div class="row"><span>Modus Tarif</span>
+        <input type="range" min="0" max="1" id="s_tariffMode" min="1" max="2" step="1" data-scope="settings" data-key="tariffMode">
+        <small>0 = Manuell, 1 = Automatisch</small>
+      </div>
+    
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="openInstallerAdmin">Installer</button>
+      </div>
+    </div>
+  </section>
+
+  
+</section>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('./sw.js').catch(console.error);
+  });
+}
+</script>
+</body>
+</html>

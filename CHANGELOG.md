@@ -317,3 +317,7 @@
 - VIS: Neue EVCS-Seite (/evcs.html) für mehrere Wallboxen.
 - Header-Menü: Navigation Live/History/SmartHome/Logic + EVCS (ab 2 Wallboxen sichtbar).
 - Live: EVCS-Menüpunkt wird über settingsConfig.evcsCount automatisch ein-/ausgeblendet.
+
+## 0.4.46
+- Added dedicated settings page (settings.html) with original settings functions and Installer button
+- Improved settings auto-open logic in app.js for settings.html and ?settings=1

@@ -307,6 +307,8 @@ function initMenu(){
     document.querySelector('.content').style.display = 'none';
     const sec = document.querySelector('[data-tab-content="settings"]');
     if (sec) sec.classList.remove('hidden');
+      try{ if (typeof initSettingsPanel==='function') initSettingsPanel(); }catch(_e){}
+      try{ if (typeof setupSettings==='function') setupSettings(); }catch(_e){}
     // deactivate tab buttons
     document.querySelectorAll('.tabs .tab').forEach(b => b.classList.remove('active'));
     // initialize settings UI
@@ -892,11 +894,14 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
       if (content) content.style.display = 'none';
       const sec = document.querySelector('[data-tab-content="settings"]');
       if (sec) sec.classList.remove('hidden');
+      try{ if (typeof initSettingsPanel==='function') initSettingsPanel(); }catch(_e){}
+      try{ if (typeof setupSettings==='function') setupSettings(); }catch(_e){}
     } catch(e){}
   }
   try{
     const params = new URLSearchParams(window.location.search);
-    if (params.get('settings') === '1') {
+    const isSettingsPage = /settings\.html$/i.test(window.location.pathname || '');
+    if (isSettingsPage || params.get('settings') === '1') {
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', openSettings);
       } else {
