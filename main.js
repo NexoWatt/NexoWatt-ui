@@ -1414,7 +1414,7 @@ app.get(['/logic.html','/logic'], (req, res) => {
 
     
     // --- EVCS page ---
-    app.get(['/evcs', '/evcs.html'], (_req, res) => {
+    app.get(['/evcs', '/evcs.html', '/history/evcs', '/history/evcs.html'], (_req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'evcs.html'));
     });
 

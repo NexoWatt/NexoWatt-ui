@@ -1,3 +1,7 @@
+## 0.4.59 (2025-12-17)
+
+- Fix (EVCS): Route-Alias für `/history/evcs.html` (und `/history/evcs`) ergänzt, damit die EVCS-Seite auch aus der History-Navigation nicht mehr 404 liefert.
+
 ## 0.4.56 (2025-12-16)
 ## 0.4.58
 
