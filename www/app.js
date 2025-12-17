@@ -255,6 +255,13 @@ async function bootstrap() {
       const t = document.getElementById('tabEvcs');
       if (t) t.classList.toggle('hidden', c < 2);
     }catch(_e){}
+    try{
+      const shEnabled = !!(cfg && cfg.smartHome && cfg.smartHome.enabled);
+      const l2 = document.getElementById('menuSmartHomeLink');
+      if (l2) l2.classList.toggle('hidden', !shEnabled);
+      const t2 = document.getElementById('tabSmartHome');
+      if (t2) t2.classList.toggle('hidden', !shEnabled);
+    }catch(_e){}
   } catch(e) {}
 
   const snap = await fetch('/api/state').then(r => r.json());
@@ -529,6 +536,14 @@ function initTabs(){
     buttons.forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     const tab = btn.getAttribute('data-tab');
+
+    // On standalone pages (settings/history/evcs), the LIVE tab must navigate back to the live dashboard (index.html).
+    // Those pages do not contain the live dashboard content, so a pure tab switch would blank the page.
+    try{
+      const p = (window.location && window.location.pathname) ? String(window.location.pathname) : '';
+      const isIndex = (p === '/' || p.endsWith('/index.html') || p.endsWith('/index.htm'));
+      if (tab === 'live' && !isIndex) { window.location.href = './'; return; }
+    }catch(_e){}
 
     // Show/hide groups
     // main ".content" holds live top sections; other sections are siblings

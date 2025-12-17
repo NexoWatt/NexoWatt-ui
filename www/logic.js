@@ -145,5 +145,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const c = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
     const l=document.getElementById('menuEvcsLink');
     if(l) l.classList.toggle('hidden', c < 2);
-  }).catch(()=>{});
+  
+    try{
+      const shEnabled = !!(cfg && cfg.smartHome && cfg.smartHome.enabled);
+      const l2 = document.getElementById('menuSmartHomeLink');
+      if (l2) l2.classList.toggle('hidden', !shEnabled);
+    }catch(_e){}}).catch(()=>{});
 })();
