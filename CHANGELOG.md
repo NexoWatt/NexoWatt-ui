@@ -1,5 +1,16 @@
 ## 0.4.56 (2025-12-16)
+## 0.4.58
+
+- EVCS Bericht: Öffnet nun die statische Seite `/static/evcs-report.html` (Weiterleitung von `/evcs-report.html`), History-Button angepasst.
+
 - Fix (EVCS): Route `/evcs.html` (und `/evcs`) ergänzt, damit die EVCS-Seite nicht mehr 404 liefert.
+
+## 0.4.57 (2025-12-17)
+
+- EVCS: Historie um „E‑Mobilität / EVCS – Gesamtleistung (W)“ erweitert (Admin-Feld + /api/history + Chart).
+- EVCS: Neue Berichtseite `/evcs-report.html` inkl. `/api/evcs/report` für Tages‑kWh und Maximalleistung je Wallbox (PDF via Drucken).
+- EVCS: `energyDayKwh` wird aus `energyTotalKwh` pro Tag abgeleitet und in `evcs.<n>.energyDayKwh` persistiert.
+
 
 ## 0.4.55 (2025-12-16)
 - Fix (EVCS): onStateChange schützt vor null-key (key && key.startsWith('evcs.')) und schreibt lokale evcs.* States stabil.

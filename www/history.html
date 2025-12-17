@@ -20,7 +20,7 @@
     .lg{ display:flex; align-items:center; gap:6px; }
     .lg .sw{ width:12px; height:3px; background:#7aa; }
     .lg .sw.pv{ background:#f1c40f; } .lg .sw.load{ background:#9b59b6; }
-    .lg .sw.buy{ background:#e74c3c; } .lg .sw.sell{ background:#3498db; }
+    .lg .sw.buy{ background:#e74c3c; } .lg .sw.sell{ background:#3498db; } .lg .sw.evcs{ background:#ff6bd6; }
     .lg .sw.chg{ background:#27ae60; } .lg .sw.dchg{ background:#e67e22; }
     .lg .sw.soc{ background:#95a5a6; height:2px; border-bottom:2px dashed #95a5a6; }
     .toolbar{ display:flex; gap:8px; margin:8px 0 12px; align-items:center; flex-wrap:wrap; }
@@ -98,6 +98,7 @@
       <label>Von: <input type="datetime-local" id="from"></label>
       <label>Bis: <input type="datetime-local" id="to"></label>
       <button id="loadBtn">Laden</button>
+      <button id="evcsReportBtn" class="btn sm">EVCS PDF</button>
     </div>
     <canvas id="chart"></canvas>
     <div class="legend">
@@ -106,6 +107,7 @@
       <div class="lg"><div class="sw dchg"></div><span>Entladung</span></div>
       <div class="lg"><div class="sw sell"></div><span>Einspeisung</span></div>
       <div class="lg"><div class="sw buy"></div><span>Bezug</span></div>
+      <div class="lg"><div class="sw evcs"></div><span>E‑Mobilität</span></div>
       <div class="lg"><div class="sw load"></div><span>Verbrauch</span></div>
       <div class="lg"><div class="sw soc"></div><span>Ladezustand</span></div>
     </div>

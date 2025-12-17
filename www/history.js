@@ -19,8 +19,8 @@
     ctx.fillStyle='#0e1216'; ctx.fillRect(0,0,W,H);
 
     const buckets = bucketizeRange(start, end, chartMode);
-    const keys=['pv','chg','dchg','sell','buy','load'];
-    const colors={'pv':'#f1c40f','chg':'#27ae60','dchg':'#e67e22','sell':'#3498db','buy':'#e74c3c','load':'#9b59b6'};
+    const keys=['pv','chg','dchg','sell','buy','evcs','load'];
+    const colors={'pv':'#f1c40f','chg':'#27ae60','dchg':'#e67e22','sell':'#3498db','buy':'#e74c3c','evcs':'#ff6bd6','load':'#9b59b6'};
     const seriesAgg = {};
     keys.forEach(k=>{ seriesAgg[k] = aggregateEnergyKWh(series[k]?.values||[], buckets); });
 
@@ -85,7 +85,7 @@ function draw(){
     const x = t => L + (t-start)/(end-start)*(W-L-R);
 
     // compute min/max (kW) across power series using mapped signs
-    const keys=['pv','chg','dchg','sell','buy','load'];
+    const keys=['pv','chg','dchg','sell','buy','evcs','load'];
     let minKW=0, maxKW=0;
     keys.forEach(k=>{ const vals=(series[k]?.values)||[]; vals.forEach(p=>{ const v=mapKW(k, p[1]); if(v<minKW) minKW=v; if(v>maxKW) maxKW=v; }); });
     if (minKW===0 && maxKW===0) { maxKW = 1; }
@@ -107,6 +107,7 @@ function draw(){
       const val = Number(w)||0;
       switch(k){
         case 'load':   return -Math.abs(val)/1000;          // Verbrauch negativ unter 0
+        case 'evcs':   return -Math.abs(val)/1000;          // E‑Mobilität Verbrauch negativ
         case 'chg':    return - Math.abs(val)/1000;           // Beladung positiv
         case 'dchg':   return  Math.abs(val)/1000;          // Entladung negativ
         case 'sell':   return -Math.abs(val)/1000;          // Einspeisung negativ
@@ -141,6 +142,7 @@ function draw(){
     line('dchg','#e67e22');
     line('sell','#3498db');
     line('buy', '#e74c3c');
+    line('evcs','#ff6bd6');
     line('load','#9b59b6');
     line('soc', '#95a5a6', 'val', [6,6]);
 
@@ -244,6 +246,7 @@ function draw(){
     card('Entladung',  sumEnergyKWh(s.dchg.values).toFixed(1) + ' kWh');
     card('Einspeisung',sumEnergyKWh(s.sell.values).toFixed(1) + ' kWh');
     card('Bezug',      sumEnergyKWh(s.buy.values).toFixed(1) + ' kWh');
+    if (s.evcs) card('E‑Mobilität', sumEnergyKWh(s.evcs.values).toFixed(1) + ' kWh');
     card('Verbrauch',  sumEnergyKWh(s.load.values).toFixed(1) + ' kWh');
   }
 
@@ -255,8 +258,18 @@ function draw(){
   document.getElementById('to').value   = toLocal(now);
   document.getElementById('loadBtn').addEventListener('click', load);
 
-
-  // range buttons
+  const evcsReportBtn = document.getElementById('evcsReportBtn');
+  if (evcsReportBtn) {
+    evcsReportBtn.addEventListener('click', ()=>{
+      const fromEl = document.getElementById('from');
+      const toEl = document.getElementById('to');
+      const fromMs = fromEl && fromEl.value ? +new Date(fromEl.value) : (Date.now() - 7*24*3600*1000);
+      const toMs = toEl && toEl.value ? +new Date(toEl.value) : Date.now();
+      const url = `/static/evcs-report.html?from=${encodeURIComponent(fromMs)}&to=${encodeURIComponent(toMs)}`;
+      window.open(url, '_blank');
+    });
+  }
+// range buttons
   (function(){
     const btns = Array.from(document.querySelectorAll('.range-btn'));
     function setActive(mode){

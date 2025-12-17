@@ -1006,6 +1006,19 @@
           "sm": 12,
           "md": 6
         },
+        "history.dp.evcsPower": {
+          "type": "objectId",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "newLine": false,
+          "label": "E-Mobilität / EVCS – Gesamtleistung (W)",
+          "attr": "history.datapoints.evcsPower",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
         "history.dp.gridBuyPower": {
           "type": "objectId",
           "types": [

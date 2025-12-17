@@ -187,6 +187,8 @@ async syncInstallerConfigToStates() {
         powerW:        { type: 'number', role: 'value.power', def: 0, read: true, write: false, unit: 'W' },
         energyTotalKwh:{ type: 'number', role: 'value.energy', def: 0, read: true, write: false, unit: 'kWh' },
         energyDayKwh:  { type: 'number', role: 'value.energy', def: 0, read: true, write: false, unit: 'kWh' },
+                _dayBaseKwh:  { type: 'number', role: 'value', def: 0, read: true, write: false, unit: 'kWh' },
+        _dayBaseDate: { type: 'string', role: 'text', def: '', read: true, write: false },
         status:        { type: 'string', role: 'state', def: '', read: true, write: false },
         active:        { type: 'boolean', role: 'switch', def: false, read: true, write: false },
         mode:          { type: 'number', role: 'value', def: 0, read: true, write: false }
@@ -211,6 +213,23 @@ async syncInstallerConfigToStates() {
       }
     } catch (e) {
       this.log.debug('ensureEvcsStates write meta failed: ' + e.message);
+    }
+  }
+
+
+  async seedEvcsDayBaseCache() {
+    try {
+      const count = Number(this.evcsCount || 1) || 1;
+      for (let i = 1; i <= count; i++) {
+        const kBase = `evcs.${i}._dayBaseKwh`;
+        const kDate = `evcs.${i}._dayBaseDate`;
+        const stB = await this.getStateAsync(kBase).catch(()=>null);
+        const stD = await this.getStateAsync(kDate).catch(()=>null);
+        if (stB && stB.val !== undefined && stB.val !== null) this.stateCache[kBase] = { value: Number(stB.val) || 0, ts: stB.ts || Date.now() };
+        if (stD && stD.val !== undefined && stD.val !== null) this.stateCache[kDate] = { value: String(stD.val || ''), ts: stD.ts || Date.now() };
+      }
+    } catch (e) {
+      this.log.debug('seedEvcsDayBaseCache failed: ' + e.message);
     }
   }
 
@@ -919,6 +938,7 @@ async onReady() {
       await this.syncSettingsConfigToStates();
       // EVCS (multi wallbox) model states
       await this.ensureEvcsStates();
+      await this.seedEvcsDayBaseCache();
       await this.subscribeEvcsMappedStates();
 
 
@@ -1398,6 +1418,12 @@ app.get(['/logic.html','/logic'], (req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'evcs.html'));
     });
 
+    // --- EVCS report page ---
+    app.get(['/evcs-report.html','/evcs-report'], (req, res) => {
+      const qs = (req && req.url && req.url.includes('?')) ? req.url.slice(req.url.indexOf('?')) : '';
+      res.redirect('/static/evcs-report.html' + qs);
+    });
+
 app.get('/api/history', async (req, res) => {
       try {
         const hcfg = (this.config && this.config.history) || {};
@@ -1408,7 +1434,8 @@ app.get('/api/history', async (req, res) => {
         const dp = Object.assign({}, hcfg.datapoints || {}, hcfg.dp || {});
         const ids = {
           pv: dp.pvPower, load: dp.consumptionTotal, buy: dp.gridBuyPower, sell: dp.gridSellPower,
-          chg: dp.storageChargePower, dchg: dp.storageDischargePower, soc: dp.storageSoc
+          chg: dp.storageChargePower, dchg: dp.storageDischargePower, soc: dp.storageSoc,
+          evcs: dp.evcsPower
         };
         const ask = (id) => new Promise(resolve => {
           if (!id) return resolve({id, values:[]});
@@ -1443,13 +1470,145 @@ app.get('/api/history', async (req, res) => {
         out.chg  = await ask(ids.chg);
         out.dchg = await ask(ids.dchg);
         out.soc  = await ask(ids.soc);
+        out.evcs = await ask(ids.evcs);
         res.json({ ok:true, start, end, step: stepS, series: out });
       } catch (e) {
         res.json({ ok:false, error: String(e) });
       }
     });
 
-    // config for client
+    
+
+app.get('/api/evcs/report', async (req, res) => {
+  try {
+    const hcfg = (this.config && this.config.history) || {};
+    const inst = hcfg.instance || 'influxdb.0';
+    const fromQ = Number(req.query.from || (Date.now() - 7*24*3600*1000));
+    const toQ   = Number(req.query.to   || Date.now());
+
+    const d0 = new Date(fromQ); d0.setHours(0,0,0,0);
+    const d1 = new Date(toQ);   d1.setHours(23,59,59,999);
+    const start = +d0;
+    const end   = +d1;
+
+    const dayKeyOf = (ts) => {
+      const d = new Date(ts);
+      return String(d.getFullYear()) + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    };
+
+    const buckets = [];
+    for (let d = new Date(d0); +d <= +d1; d.setDate(d.getDate()+1)) {
+      const s = new Date(d); s.setHours(0,0,0,0);
+      const e = new Date(d); e.setHours(23,59,59,999);
+      buckets.push({ date: dayKeyOf(+s), start: +s, end: +e });
+    }
+
+    const evcs = Array.isArray(this.evcsList) ? this.evcsList : [];
+    const wallboxes = evcs.map(wb => ({ index: wb.index, name: wb.name || `Wallbox ${wb.index}`, note: wb.note || '' }));
+
+    const getHist = (id, startMs, endMs, aggregate = 'none', step = 0) => new Promise(resolve => {
+      if (!id) return resolve([]);
+      const options = { start: startMs, end: endMs, aggregate, addId: false, ignoreNull: true };
+      if (step && Number(step) > 0) options.step = Number(step);
+      try {
+        this.sendTo(inst, 'getHistory', { id, options }, (resu) => {
+          let outArr = [];
+          if (Array.isArray(resu)) outArr = resu;
+          else if (resu && Array.isArray(resu.result)) {
+            if (resu.result.length && Array.isArray(resu.result[0]?.data)) outArr = resu.result[0].data;
+            else outArr = resu.result;
+          } else if (resu && Array.isArray(resu.series) && resu.series[0]?.values) {
+            outArr = resu.series[0].values.map(v => ({ ts: v[0], val: v[1] }));
+          } else if (resu && Array.isArray(resu.data)) {
+            outArr = resu.data;
+          }
+          const norm = (outArr || [])
+            .map(p => Array.isArray(p) ? [p[0], Number(p[1])] : [p.ts || p.time || p.t || p[0], Number(p.val ?? p.value ?? p[1])])
+            .filter(r => r[0] != null && !Number.isNaN(r[1]))
+            .map(r => [Number(r[0]), Number(r[1])])
+            .sort((a,b)=>a[0]-b[0]);
+          resolve(norm);
+        });
+      } catch (e) {
+        resolve([]);
+      }
+    });
+
+    const days = buckets.map(b => ({ date: b.date, totalKwh: 0, wallboxes: {} }));
+    const dayIndex = {}; buckets.forEach((b, i) => { dayIndex[b.date] = i; });
+
+    for (const wb of evcs) {
+      const idx = wb.index;
+
+      // Power series (W): max power + fallback integration
+      const p = await getHist(wb.powerId, start, end, 'none');
+      const pAgg = buckets.map(_b => ({ kwh: 0, maxW: 0 }));
+      if (p && p.length >= 2) {
+        let bi = 0;
+        for (let j = 0; j < p.length - 1; j++) {
+          const t0 = +p[j][0], v0 = +p[j][1];
+          const t1 = +p[j+1][0], v1 = +p[j+1][1];
+          if (!(t1 > t0)) continue;
+          let segStart = t0;
+          while (segStart < t1) {
+            while (bi < buckets.length && !(segStart < buckets[bi].end)) bi++;
+            if (bi >= buckets.length) break;
+            const segEnd = Math.min(t1, buckets[bi].end);
+            const a = Math.max(segStart, buckets[bi].start);
+            const b = Math.min(segEnd, buckets[bi].end);
+            if (b > a) {
+              const vA = v0 + (v1 - v0) * ((a - t0) / (t1 - t0));
+              const vB = v0 + (v1 - v0) * ((b - t0) / (t1 - t0));
+              const dt = (b - a) / 1000;
+              const avgW = (Math.abs(vA) + Math.abs(vB)) / 2;
+              pAgg[bi].kwh += avgW * dt / 3600 / 1000;
+              pAgg[bi].maxW = Math.max(pAgg[bi].maxW, Math.abs(vA), Math.abs(vB));
+            }
+            segStart = segEnd;
+          }
+        }
+      }
+
+      // Energy total series (kWh): preferred for daily energy (max-min)
+      const e = await getHist(wb.energyTotalId, start, end, 'none');
+      const eAgg = {}; // date -> {min,max}
+      if (e && e.length) {
+        for (const pt of e) {
+          const t = +pt[0];
+          const v = +pt[1];
+          const dk = dayKeyOf(t);
+          if (!(dk in dayIndex)) continue;
+          if (!eAgg[dk]) eAgg[dk] = { min: v, max: v };
+          eAgg[dk].min = Math.min(eAgg[dk].min, v);
+          eAgg[dk].max = Math.max(eAgg[dk].max, v);
+        }
+      }
+
+      for (let i = 0; i < buckets.length; i++) {
+        const dk = buckets[i].date;
+        const maxKw = pAgg[i].maxW ? (pAgg[i].maxW / 1000) : 0;
+        let kwh = 0;
+
+        if (eAgg[dk] && isFinite(eAgg[dk].min) && isFinite(eAgg[dk].max)) {
+          kwh = Math.max(0, eAgg[dk].max - eAgg[dk].min);
+        } else {
+          kwh = Math.max(0, pAgg[i].kwh || 0);
+        }
+
+        days[i].wallboxes[idx] = { kwh: Math.round(kwh * 100) / 100, maxKw: Math.round(maxKw * 100) / 100 };
+        days[i].totalKwh += kwh;
+      }
+    }
+
+    days.forEach(d => { d.totalKwh = Math.round(d.totalKwh * 100) / 100; });
+
+    res.json({ ok: true, start, end, wallboxes, days });
+  } catch (e) {
+    res.json({ ok: false, error: String(e) });
+  }
+});
+
+// config for client
     
     // installer session data
     this._installerToken = this._installerToken || null;
@@ -1673,7 +1832,34 @@ app.get('/config', (req, res) => {
         // persist as adapter state for other consumers
         this.setStateAsync('evcs.totalPowerW', sum, true).catch(()=>{});
       }
-    } catch(_e) {}
+    
+
+      const mEnergy = key.match(/^evcs\.(\d+)\.energyTotalKwh$/);
+      if (mEnergy) {
+        const idx = Number(mEnergy[1]);
+        const total = Number(value) || 0;
+        const d = new Date(ts || Date.now());
+        const dayKey = String(d.getFullYear()) + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+        const baseK = `evcs.${idx}._dayBaseKwh`;
+        const baseD = `evcs.${idx}._dayBaseDate`;
+        let baseDate = this.stateCache[baseD]?.value;
+        let base = Number(this.stateCache[baseK]?.value);
+        if (!baseDate || baseDate !== dayKey || !Number.isFinite(base) || total < base) {
+          baseDate = dayKey;
+          base = total;
+          this.stateCache[baseD] = { value: baseDate, ts };
+          this.stateCache[baseK] = { value: base, ts };
+          payload[baseD] = this.stateCache[baseD];
+          payload[baseK] = this.stateCache[baseK];
+          this.setStateAsync(baseD, baseDate, true).catch(()=>{});
+          this.setStateAsync(baseK, base, true).catch(()=>{});
+        }
+        const dayKwh = Math.max(0, total - base);
+        this.stateCache[`evcs.${idx}.energyDayKwh`] = { value: dayKwh, ts };
+        payload[`evcs.${idx}.energyDayKwh`] = this.stateCache[`evcs.${idx}.energyDayKwh`];
+        this.setStateAsync(`evcs.${idx}.energyDayKwh`, dayKwh, true).catch(()=>{});
+      }
+} catch(_e) {}
 
     // push update to all SSE clients
     for (const client of Array.from(this.sseClients)) {

@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.56",
+    "version": "0.4.58",
     "news": {
+      "0.4.58": {
+        "de": "EVCS Bericht: Öffnet nun die statische Seite /static/evcs-report.html (Weiterleitung von /evcs-report.html), History-Button angepasst.",
+        "en": "EVCS report: Now opens the static page /static/evcs-report.html (redirect from /evcs-report.html), history button updated."
+      },
       "0.4.48": {
         "de": "Fix: Einstellungsseite liest beim Laden die aktuellen Werte (zuletzt gespeicherte Eingaben) ein; doppelte Event-Listener werden verhindert.",
         "en": "Fix: Settings page now loads current values (last saved inputs) on page load; prevents duplicate event listeners."
@@ -335,6 +339,10 @@
       "0.4.52": {
         "de": "Fix: Admin-GUI-Crash in EVCS-Tabelle behoben (Style-Definitionen als Objekt statt String).",
         "en": "Fix: Prevented Admin GUI crash in EVCS table (style definitions as object instead of string)."
+      },
+      "0.4.57": {
+        "en": "EVCS history series + report page",
+        "de": "EVCS Historie + Berichtseite"
       }
     },
     "title": "NexoWatt EMS UI",
