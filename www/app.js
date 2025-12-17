@@ -254,13 +254,12 @@ async function bootstrap() {
       if (l) l.classList.toggle('hidden', c < 2);
       const t = document.getElementById('tabEvcs');
       if (t) t.classList.toggle('hidden', c < 2);
-    }catch(_e){}
-    try{
-      const shEnabled = !!(cfg && cfg.smartHome && cfg.smartHome.enabled);
-      const l2 = document.getElementById('menuSmartHomeLink');
-      if (l2) l2.classList.toggle('hidden', !shEnabled);
-      const t2 = document.getElementById('tabSmartHome');
-      if (t2) t2.classList.toggle('hidden', !shEnabled);
+      const sh = !!(cfg.smartHome && cfg.smartHome.enabled);
+      window.__nwSmartHomeEnabled = sh;
+      const sl = document.getElementById('menuSmartHomeLink');
+      if (sl) sl.classList.toggle('hidden', !sh);
+      const st = document.getElementById('tabSmartHome');
+      if (st) st.classList.toggle('hidden', !sh);
     }catch(_e){}
   } catch(e) {}
 
@@ -536,14 +535,6 @@ function initTabs(){
     buttons.forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     const tab = btn.getAttribute('data-tab');
-
-    // On standalone pages (settings/history/evcs), the LIVE tab must navigate back to the live dashboard (index.html).
-    // Those pages do not contain the live dashboard content, so a pure tab switch would blank the page.
-    try{
-      const p = (window.location && window.location.pathname) ? String(window.location.pathname) : '';
-      const isIndex = (p === '/' || p.endsWith('/index.html') || p.endsWith('/index.htm'));
-      if (tab === 'live' && !isIndex) { window.location.href = './'; return; }
-    }catch(_e){}
 
     // Show/hide groups
     // main ".content" holds live top sections; other sections are siblings
@@ -923,6 +914,17 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
   // open history page via header tab
   const hbtn = document.getElementById('historyTabBtn');
   if (hbtn) hbtn.addEventListener('click', ()=>{ window.location.href = '/history.html'; });
+
+  // open live page via header tab when on a standalone page (e.g. settings)
+  const lbtn = document.querySelector('.tabs .tab[data-tab="live"]');
+  if (lbtn) lbtn.addEventListener('click', ()=>{
+    const p = (window.location && window.location.pathname) || '';
+    if (p.endsWith('/settings.html') || p.endsWith('settings.html')) window.location.href = '/';
+  });
+
+  // open SmartHome page via header tab
+  const shbtn = document.getElementById('tabSmartHome');
+  if (shbtn) shbtn.addEventListener('click', ()=>{ window.location.href = '/smarthome.html'; });
 
 
 // open settings automatically if '?settings=1' is present

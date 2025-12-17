@@ -1633,7 +1633,7 @@ app.get('/config', (req, res) => {
           evcsMaxPowerKw: (this.config && this.config.settingsConfig && Number(this.config.settingsConfig.evcsMaxPowerKw)) || 11,
           evcsList: Array.isArray(this.evcsList) ? this.evcsList : []
         },
-        smartHome: (this.config && this.config.smartHome) || {},
+        smartHome: this.config.smartHome || {},
         installer: this.config.installer || {},
         adminUrl: this.config.adminUrl || null,
         installerLocked: !!(this.config.installerPassword)

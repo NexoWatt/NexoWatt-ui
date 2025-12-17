@@ -165,14 +165,12 @@ async function bootstrap(){
     if (t) t.classList.toggle('hidden', c < 2);
     const n = document.getElementById('nav-evcs');
     if (n) n.classList.toggle('hidden', c < 2);
-
-    try{
-      const shEnabled = !!(cfg && cfg.smartHome && cfg.smartHome.enabled);
-      const l2 = document.getElementById('menuSmartHomeLink');
-      if (l2) l2.classList.toggle('hidden', !shEnabled);
-      const t2 = document.getElementById('tabSmartHome');
-      if (t2) t2.classList.toggle('hidden', !shEnabled);
-    }catch(_e){}}catch(e){}
+    const sh = !!(cfg.smartHome && cfg.smartHome.enabled);
+    const sl = document.getElementById('menuSmartHomeLink');
+    if (sl) sl.classList.toggle('hidden', !sh);
+    const st = document.getElementById('tabSmartHome');
+    if (st) st.classList.toggle('hidden', !sh);
+}catch(e){}
 
   try{
     state = await fetch('/api/state').then(r=>r.json());

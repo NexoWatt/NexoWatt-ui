@@ -1,10 +1,15 @@
+## 0.4.66 (2025-12-17)
+- Fix: History-Tooltip zeigt jetzt auch „E‑Mobilität“ (kW/kWh).
+- Fix: SmartHome-Tab und Menü-Link werden anhand `smartHome.enabled` aus `/config` ein-/ausgeblendet.
+
 ## 0.4.64 (2025-12-17)
 - (License) Replaced community license with proprietary NexoWatt-only license (NPL v1.0). Added NOTICE.
 
-## 0.4.65
-- Fix: LIVE-Navigation von settings/history zurück zur Live-Seite (keine leere Ansicht mehr).
-- Fix: SmartHome-Link/Tab wird bei aktivierter Option im Admin angezeigt.
-- Backend: /config liefert smartHome-Feature-Flag an die VIS.
+## 0.4.66 (2025-12-17)
+- Fix: History-Tooltip zeigt jetzt auch „E‑Mobilität“.
+- Fix: SmartHome-Tab/Menu-Link wird anhand `smartHome.enabled` aus /config eingeblendet.
+- Fix: „LIVE“-Tab auf settings.html navigiert wieder zur Live-Seite.
+
 ## 0.4.63 (2025-12-17)
 - Chore: Add NexoWatt Community License (NCL) v1.0 (source-available; commercial use requires a separate license).
 

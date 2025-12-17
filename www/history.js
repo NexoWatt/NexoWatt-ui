@@ -367,6 +367,7 @@ function draw(){
         const buy  = agg.buy?.[idx]?.kwh ?? 0;
         const sell = agg.sell?.[idx]?.kwh ?? 0;
         const load = agg.load?.[idx]?.kwh ?? 0;
+        const evcs = agg.evcs?.[idx]?.kwh ?? 0;
 
         let html = `<div style="margin-bottom:6px;opacity:.9">${header}</div>`;
         html += kv('Erzeugung', pv);
@@ -374,6 +375,7 @@ function draw(){
         html += kv('Entladung', dchg);
         html += kv('Bezug', buy);
         html += kv('Einspeisung', sell);
+        html += kv('E‑Mobilität', evcs);
         html += kv('Verbrauch', load);
         tip.innerHTML = html;
         tip.style.display = 'block';
@@ -421,6 +423,7 @@ function draw(){
       const buy = collect.buy?.[1] ?? 0;
       const sell = collect.sell?.[1] ?? 0;
       const load = collect.load?.[1] ?? 0;
+      const evcs = collect.evcs?.[1] ?? 0;
       const soc = collect.soc?.[1] ?? null;
 
       let html = `<div style="margin-bottom:6px;opacity:.9">${hh}</div>`;
@@ -429,6 +432,7 @@ function draw(){
       html += kv2('Entladung', (Math.abs(dchg)||0)/1000);
       html += kv2('Bezug', buy/1000);
       html += kv2('Einspeisung', sell/1000);
+      html += kv2('E‑Mobilität', (Math.abs(evcs)||0)/1000);
       html += kv2('Verbrauch', load/1000);
       if (soc!=null) html += `<div style="margin-top:6px;border-top:1px dashed #2a323b;padding-top:6px">SoC <b>${soc.toFixed(0)} %</b></div>`;
 
@@ -575,12 +579,10 @@ function draw(){
     if (t) t.classList.toggle('hidden', c < 2);
     const n = document.getElementById('nav-evcs');
     if (n) n.classList.toggle('hidden', c < 2);
-
-    try{
-      const shEnabled = !!(cfg && cfg.smartHome && cfg.smartHome.enabled);
-      const l2 = document.getElementById('menuSmartHomeLink');
-      if (l2) l2.classList.toggle('hidden', !shEnabled);
-      const t2 = document.getElementById('tabSmartHome');
-      if (t2) t2.classList.toggle('hidden', !shEnabled);
-    }catch(_e){}}).catch(()=>{});
+    const sh = !!(cfg.smartHome && cfg.smartHome.enabled);
+    const sl = document.getElementById('menuSmartHomeLink');
+    if (sl) sl.classList.toggle('hidden', !sh);
+    const st = document.getElementById('tabSmartHome');
+    if (st) st.classList.toggle('hidden', !sh);
+}).catch(()=>{});
 })();

@@ -145,10 +145,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const c = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
     const l=document.getElementById('menuEvcsLink');
     if(l) l.classList.toggle('hidden', c < 2);
-  
-    try{
-      const shEnabled = !!(cfg && cfg.smartHome && cfg.smartHome.enabled);
-      const l2 = document.getElementById('menuSmartHomeLink');
-      if (l2) l2.classList.toggle('hidden', !shEnabled);
-    }catch(_e){}}).catch(()=>{});
+    const sh = !!(cfg.smartHome && cfg.smartHome.enabled);
+    const sl = document.getElementById('menuSmartHomeLink');
+    if (sl) sl.classList.toggle('hidden', !sh);
+    const st = document.getElementById('tabSmartHome');
+    if (st) st.classList.toggle('hidden', !sh);
+  }).catch(()=>{});
 })();
