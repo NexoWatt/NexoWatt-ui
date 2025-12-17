@@ -107,6 +107,7 @@ async function nwReloadSmartHomeConfig() {
     functions: Array.isArray(cfg.functions) ? cfg.functions.map(f => Object.assign({}, f)) : [],
     devices: Array.isArray(cfg.devices) ? cfg.devices.map(d => Object.assign({}, d)) : [],
   };
+  nwNormalizeRoomFunctionOrder();
   nwShcState.originalJson = JSON.stringify(nwShcState.config);
   nwMarkDirty(false);
   nwRenderAll();
@@ -115,147 +116,351 @@ async function nwReloadSmartHomeConfig() {
 
 function nwRenderAll() {
   const cfg = nwShcState.config || { rooms: [], functions: [], devices: [] };
-  nwRenderRoomsReadOnly(cfg.rooms || []);
-  nwRenderFunctionsReadOnly(cfg.functions || []);
+  nwRenderRoomsEditor(cfg.rooms || []);
+  nwRenderFunctionsEditor(cfg.functions || []);
   nwRenderDevicesEditor(cfg.devices || [], cfg.rooms || [], cfg.functions || []);
 }
 
-/* --- Read-only Listen für Räume & Funktionen (wie zuvor) --- */
+/* --- Räume & Funktionen Editor (B7) --- */
 
-function nwRenderRoomsReadOnly(rooms) {
+function nwSanitizeId(raw) {
+  if (raw === null || typeof raw === 'undefined') return '';
+  let s = String(raw).trim().toLowerCase();
+  const map = { 'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'ß': 'ss' };
+  s = s.replace(/[äöüß]/g, ch => map[ch] || ch);
+  s = s.replace(/\s+/g, '-');
+  s = s.replace(/[^a-z0-9_-]/g, '');
+  s = s.replace(/-+/g, '-');
+  s = s.replace(/^[-_]+|[-_]+$/g, '');
+  return s;
+}
+
+function nwEnsureUniqueId(items, desiredId, skipItem) {
+  const list = Array.isArray(items) ? items : [];
+  const exists = (candidate) => list.some(it => it && it.id === candidate && it !== skipItem);
+
+  let base = nwSanitizeId(desiredId);
+  if (!base) base = 'id';
+  let out = base;
+
+  let n = 2;
+  while (!out || exists(out)) {
+    out = base + '-' + n;
+    n += 1;
+  }
+  return out;
+}
+
+function nwNormalizeRoomFunctionOrder() {
+  if (!nwShcState.config) return;
+
+  const normalize = (arr, labelFn) => {
+    const source = Array.isArray(arr) ? arr.slice() : [];
+    const withIdx = source.map((it, idx) => ({ it, idx }));
+    withIdx.sort((a, b) => {
+      const ao = (a.it && typeof a.it.order === 'number') ? a.it.order : 999999;
+      const bo = (b.it && typeof b.it.order === 'number') ? b.it.order : 999999;
+      if (ao !== bo) return ao - bo;
+      const al = labelFn(a.it) || '';
+      const bl = labelFn(b.it) || '';
+      if (al !== bl) return al.localeCompare(bl);
+      return a.idx - b.idx;
+    });
+
+    const out = withIdx.map(x => x.it);
+    out.forEach((it, i) => {
+      if (it) it.order = i + 1;
+    });
+    return out;
+  };
+
+  nwShcState.config.rooms = normalize(nwShcState.config.rooms, nwGetRoomLabel);
+  nwShcState.config.functions = normalize(nwShcState.config.functions, nwGetFunctionLabel);
+}
+
+function nwMoveItem(arr, index, dir) {
+  if (!Array.isArray(arr)) return;
+  const to = index + dir;
+  if (to < 0 || to >= arr.length) return;
+  const item = arr.splice(index, 1)[0];
+  arr.splice(to, 0, item);
+  arr.forEach((it, i) => {
+    if (it) it.order = i + 1;
+  });
+}
+
+function nwReplaceRoomIdInDevices(oldId, newId) {
+  if (!nwShcState.config || !Array.isArray(nwShcState.config.devices)) return;
+  nwShcState.config.devices.forEach(d => {
+    if (d && d.roomId === oldId) d.roomId = newId;
+  });
+}
+
+function nwReplaceFunctionIdInDevices(oldId, newId) {
+  if (!nwShcState.config || !Array.isArray(nwShcState.config.devices)) return;
+  nwShcState.config.devices.forEach(d => {
+    if (d && d.functionId === oldId) d.functionId = newId;
+  });
+}
+
+function nwAddRoom() {
+  if (!nwShcState.config) return;
+  const rooms = Array.isArray(nwShcState.config.rooms) ? nwShcState.config.rooms : [];
+  const desiredId = nwEnsureUniqueId(rooms, 'raum', null);
+  const room = { id: desiredId, name: 'Neuer Raum', order: rooms.length + 1 };
+  rooms.push(room);
+  nwShcState.config.rooms = rooms;
+  nwMarkDirty(true);
+  nwRenderAll();
+}
+
+function nwAddFunction() {
+  if (!nwShcState.config) return;
+  const funcs = Array.isArray(nwShcState.config.functions) ? nwShcState.config.functions : [];
+  const desiredId = nwEnsureUniqueId(funcs, 'funktion', null);
+  const fn = { id: desiredId, name: 'Neue Funktion', order: funcs.length + 1 };
+  funcs.push(fn);
+  nwShcState.config.functions = funcs;
+  nwMarkDirty(true);
+  nwRenderAll();
+}
+
+function nwRenderRoomsEditor(rooms) {
   const list = document.getElementById('nw-config-rooms');
   const empty = document.getElementById('nw-config-rooms-empty');
   if (!list || !empty) return;
 
+  if (!nwShcState.config) return;
+
+  const arr = Array.isArray(nwShcState.config.rooms) ? nwShcState.config.rooms : [];
+
   list.innerHTML = '';
 
-  if (!rooms || !rooms.length) {
+  if (!arr.length) {
     empty.style.display = 'block';
     return;
   }
   empty.style.display = 'none';
 
-  rooms
-    .slice()
-    .sort((a, b) => (a.order || 0) - (b.order || 0))
-    .forEach(room => {
-      const row = document.createElement('div');
-      row.className = 'nw-config-row';
+  arr.forEach((room, idx) => {
+    if (!room) return;
 
-      const primary = document.createElement('div');
-      primary.className = 'nw-config-row__primary';
-      primary.textContent = room.name || room.id || 'Raum';
+    const row = document.createElement('div');
+    row.className = 'nw-config-row';
 
-      const meta = document.createElement('div');
-      meta.className = 'nw-config-row__meta';
-      const parts = [];
-      if (room.id) parts.push('ID: ' + room.id);
-      if (typeof room.order === 'number') parts.push('Reihenfolge: ' + room.order);
-      if (room.icon) parts.push('Icon: ' + room.icon);
-      meta.textContent = parts.join(' · ');
+    const idInput = document.createElement('input');
+    idInput.type = 'text';
+    idInput.className = 'nw-config-input';
+    idInput.value = room.id || '';
+    idInput.placeholder = 'id (z.B. wohnzimmer)';
 
-      row.appendChild(primary);
-      row.appendChild(meta);
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'nw-config-input';
+    nameInput.value = room.name || '';
+    nameInput.placeholder = 'Name (z.B. Wohnzimmer)';
 
-      list.appendChild(row);
+    const actions = document.createElement('div');
+    actions.className = 'nw-config-row__actions';
+
+    const btnUp = document.createElement('button');
+    btnUp.type = 'button';
+    btnUp.className = 'nw-config-mini-btn';
+    btnUp.textContent = '↑';
+    btnUp.disabled = idx === 0;
+
+    const btnDown = document.createElement('button');
+    btnDown.type = 'button';
+    btnDown.className = 'nw-config-mini-btn';
+    btnDown.textContent = '↓';
+    btnDown.disabled = idx === arr.length - 1;
+
+    const btnDel = document.createElement('button');
+    btnDel.type = 'button';
+    btnDel.className = 'nw-config-mini-btn';
+    btnDel.textContent = '✕';
+
+    actions.appendChild(btnUp);
+    actions.appendChild(btnDown);
+    actions.appendChild(btnDel);
+
+    idInput.addEventListener('blur', () => {
+      const oldId = room.id || '';
+      const desired = nwSanitizeId(idInput.value);
+      if (!desired) {
+        idInput.value = oldId;
+        return;
+      }
+      const unique = nwEnsureUniqueId(arr, desired, room);
+      if (unique !== desired) {
+        nwSetStatus('Raum-ID existiert bereits. Bitte eine eindeutige ID vergeben.', 'error');
+        idInput.value = oldId;
+        return;
+      }
+      if (oldId !== desired) {
+        room.id = desired;
+        nwReplaceRoomIdInDevices(oldId, desired);
+        nwMarkDirty(true);
+        nwRenderAll();
+      }
     });
+
+    nameInput.addEventListener('input', () => {
+      room.name = nameInput.value;
+      nwMarkDirty(true);
+    });
+
+    btnUp.addEventListener('click', () => {
+      nwMoveItem(arr, idx, -1);
+      nwMarkDirty(true);
+      nwRenderAll();
+    });
+
+    btnDown.addEventListener('click', () => {
+      nwMoveItem(arr, idx, +1);
+      nwMarkDirty(true);
+      nwRenderAll();
+    });
+
+    btnDel.addEventListener('click', () => {
+      const label = (room.name || room.id || 'Raum');
+      if (!confirm('Raum „' + label + '“ löschen? Zugewiesene Geräte verlieren die Raumzuordnung.')) return;
+      const oldId = room.id;
+      arr.splice(idx, 1);
+      arr.forEach((it, i) => { if (it) it.order = i + 1; });
+      if (oldId) {
+        nwReplaceRoomIdInDevices(oldId, null);
+      }
+      nwMarkDirty(true);
+      nwRenderAll();
+    });
+
+    row.appendChild(idInput);
+    row.appendChild(nameInput);
+    row.appendChild(actions);
+
+    list.appendChild(row);
+  });
 }
 
-function nwRenderFunctionsReadOnly(functions) {
+function nwRenderFunctionsEditor(functions) {
   const list = document.getElementById('nw-config-functions');
   const empty = document.getElementById('nw-config-functions-empty');
   if (!list || !empty) return;
 
+  if (!nwShcState.config) return;
+
+  const arr = Array.isArray(nwShcState.config.functions) ? nwShcState.config.functions : [];
+
   list.innerHTML = '';
 
-  if (!functions || !functions.length) {
+  if (!arr.length) {
     empty.style.display = 'block';
     return;
   }
   empty.style.display = 'none';
 
-  functions
-    .slice()
-    .sort((a, b) => (a.order || 0) - (b.order || 0))
-    .forEach(fn => {
-      const row = document.createElement('div');
-      row.className = 'nw-config-row';
+  arr.forEach((fn, idx) => {
+    if (!fn) return;
 
-      const primary = document.createElement('div');
-      primary.className = 'nw-config-row__primary';
-      primary.textContent = fn.name || fn.id || 'Funktion';
+    const row = document.createElement('div');
+    row.className = 'nw-config-row';
 
-      const meta = document.createElement('div');
-      meta.className = 'nw-config-row__meta';
-      const parts = [];
-      if (fn.id) parts.push('ID: ' + fn.id);
-      if (typeof fn.order === 'number') parts.push('Reihenfolge: ' + fn.order);
-      if (fn.icon) parts.push('Icon: ' + fn.icon);
-      meta.textContent = parts.join(' · ');
+    const idInput = document.createElement('input');
+    idInput.type = 'text';
+    idInput.className = 'nw-config-input';
+    idInput.value = fn.id || '';
+    idInput.placeholder = 'id (z.B. licht)';
 
-      row.appendChild(primary);
-      row.appendChild(meta);
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'nw-config-input';
+    nameInput.value = fn.name || '';
+    nameInput.placeholder = 'Name (z.B. Licht)';
 
-      list.appendChild(row);
-    });
-}
+    const actions = document.createElement('div');
+    actions.className = 'nw-config-row__actions';
 
-/* --- Gerätekarten mit Editor-Feldern --- */
+    const btnUp = document.createElement('button');
+    btnUp.type = 'button';
+    btnUp.className = 'nw-config-mini-btn';
+    btnUp.textContent = '↑';
+    btnUp.disabled = idx === 0;
 
-function nwCreateFieldRow(labelText, controlElem) {
-  const row = document.createElement('div');
-  row.className = 'nw-config-card__row nw-config-field-row';
+    const btnDown = document.createElement('button');
+    btnDown.type = 'button';
+    btnDown.className = 'nw-config-mini-btn';
+    btnDown.textContent = '↓';
+    btnDown.disabled = idx === arr.length - 1;
 
-  const label = document.createElement('div');
-  label.className = 'nw-config-field-label';
-  label.textContent = labelText;
+    const btnDel = document.createElement('button');
+    btnDel.type = 'button';
+    btnDel.className = 'nw-config-mini-btn';
+    btnDel.textContent = '✕';
 
-  const ctlWrap = document.createElement('div');
-  ctlWrap.className = 'nw-config-field-control';
-  ctlWrap.appendChild(controlElem);
+    actions.appendChild(btnUp);
+    actions.appendChild(btnDown);
+    actions.appendChild(btnDel);
 
-  row.appendChild(label);
-  row.appendChild(ctlWrap);
-  return row;
-}
-
-function nwCreateDpInput(labelText, value, onChange) {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'nw-config-dp-input-wrapper';
-
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'nw-config-input nw-config-dp-input';
-  input.value = value || '';
-  input.addEventListener('change', () => {
-    onChange(input.value.trim());
-  });
-  input.addEventListener('input', () => {
-    nwMarkDirty(true);
-  });
-
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'nw-config-dp-button';
-  btn.textContent = '…';
-  btn.title = 'Datenpunkt auswählen';
-  btn.addEventListener('click', () => {
-    nwOpenDatapointDialog({
-      title: labelText,
-      initial: input.value,
-      onSelect: (id) => {
-        input.value = id || '';
-        onChange(input.value.trim());
+    idInput.addEventListener('blur', () => {
+      const oldId = fn.id || '';
+      const desired = nwSanitizeId(idInput.value);
+      if (!desired) {
+        idInput.value = oldId;
+        return;
+      }
+      const unique = nwEnsureUniqueId(arr, desired, fn);
+      if (unique !== desired) {
+        nwSetStatus('Funktions-ID existiert bereits. Bitte eine eindeutige ID vergeben.', 'error');
+        idInput.value = oldId;
+        return;
+      }
+      if (oldId !== desired) {
+        fn.id = desired;
+        nwReplaceFunctionIdInDevices(oldId, desired);
         nwMarkDirty(true);
-      },
+        nwRenderAll();
+      }
     });
+
+    nameInput.addEventListener('input', () => {
+      fn.name = nameInput.value;
+      nwMarkDirty(true);
+    });
+
+    btnUp.addEventListener('click', () => {
+      nwMoveItem(arr, idx, -1);
+      nwMarkDirty(true);
+      nwRenderAll();
+    });
+
+    btnDown.addEventListener('click', () => {
+      nwMoveItem(arr, idx, +1);
+      nwMarkDirty(true);
+      nwRenderAll();
+    });
+
+    btnDel.addEventListener('click', () => {
+      const label = (fn.name || fn.id || 'Funktion');
+      if (!confirm('Funktion „' + label + '“ löschen? Zugewiesene Geräte verlieren die Funktionszuordnung.')) return;
+      const oldId = fn.id;
+      arr.splice(idx, 1);
+      arr.forEach((it, i) => { if (it) it.order = i + 1; });
+      if (oldId) {
+        nwReplaceFunctionIdInDevices(oldId, null);
+      }
+      nwMarkDirty(true);
+      nwRenderAll();
+    });
+
+    row.appendChild(idInput);
+    row.appendChild(nameInput);
+    row.appendChild(actions);
+
+    list.appendChild(row);
   });
-
-  wrapper.appendChild(input);
-  wrapper.appendChild(btn);
-
-  return nwCreateFieldRow(labelText, wrapper);
 }
+
 
 function nwRenderDevicesEditor(devices, rooms, functions) {
   const grid = document.getElementById('nw-config-devices');
@@ -855,6 +1060,8 @@ function nwAttachToolbarHandlers() {
   const saveBtn = document.getElementById('nw-config-save-btn');
   const reloadBtn = document.getElementById('nw-config-reload-btn');
 
+  const addRoomBtn = document.getElementById('nw-config-add-room-btn');
+  const addFnBtn = document.getElementById('nw-config-add-function-btn');
   if (saveBtn) {
     saveBtn.addEventListener('click', () => {
       nwSaveSmartHomeConfig();
@@ -863,6 +1070,17 @@ function nwAttachToolbarHandlers() {
   if (reloadBtn) {
     reloadBtn.addEventListener('click', () => {
       nwReloadSmartHomeConfig();
+    });
+  }
+
+  if (addRoomBtn) {
+    addRoomBtn.addEventListener('click', () => {
+      nwAddRoom();
+    });
+  }
+  if (addFnBtn) {
+    addFnBtn.addEventListener('click', () => {
+      nwAddFunction();
     });
   }
 }

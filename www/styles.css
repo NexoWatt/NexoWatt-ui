@@ -859,6 +859,40 @@ body {
   margin-bottom: 0.5rem;
 }
 
+
+.nw-config-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.nw-config-section__head .nw-config-section__title {
+  margin-bottom: 0;
+}
+
+.nw-config-row__actions {
+  display: inline-flex;
+  gap: 4px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.nw-config-mini-btn {
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  padding: 1px 8px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  background: rgba(15, 23, 42, 0.9);
+  color: #e5e7eb;
+}
+
+.nw-config-mini-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .nw-config-empty {
   font-size: 0.8rem;
   color: #9ca3af;

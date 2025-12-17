@@ -1,14 +1,14 @@
+## 0.4.67 (2025-12-17)
+- SmartHome: VIS-Konfig – Räume & Funktionen können jetzt direkt in der SmartHome-Konfigseite angelegt, umbenannt, sortiert und gelöscht werden (B7).
+- SmartHome: Beim Ändern von Raum-/Funktions-IDs werden Geräte-Zuordnungen automatisch angepasst.
+
 ## 0.4.66 (2025-12-17)
 - Fix: History-Tooltip zeigt jetzt auch „E‑Mobilität“ (kW/kWh).
 - Fix: SmartHome-Tab und Menü-Link werden anhand `smartHome.enabled` aus `/config` ein-/ausgeblendet.
+- Fix: „LIVE“-Tab auf settings.html navigiert wieder zur Live-Seite.
 
 ## 0.4.64 (2025-12-17)
 - (License) Replaced community license with proprietary NexoWatt-only license (NPL v1.0). Added NOTICE.
-
-## 0.4.66 (2025-12-17)
-- Fix: History-Tooltip zeigt jetzt auch „E‑Mobilität“.
-- Fix: SmartHome-Tab/Menu-Link wird anhand `smartHome.enabled` aus /config eingeblendet.
-- Fix: „LIVE“-Tab auf settings.html navigiert wieder zur Live-Seite.
 
 ## 0.4.63 (2025-12-17)
 - Chore: Add NexoWatt Community License (NCL) v1.0 (source-available; commercial use requires a separate license).
@@ -41,7 +41,6 @@
 - EVCS: Historie um „E‑Mobilität / EVCS – Gesamtleistung (W)“ erweitert (Admin-Feld + /api/history + Chart).
 - EVCS: Neue Berichtseite `/evcs-report.html` inkl. `/api/evcs/report` für Tages‑kWh und Maximalleistung je Wallbox (PDF via Drucken).
 - EVCS: `energyDayKwh` wird aus `energyTotalKwh` pro Tag abgeleitet und in `evcs.<n>.energyDayKwh` persistiert.
-
 
 ## 0.4.55 (2025-12-16)
 - Fix (EVCS): onStateChange schützt vor null-key (key && key.startsWith('evcs.')) und schreibt lokale evcs.* States stabil.
@@ -92,7 +91,6 @@
 - FIX: Admin EVCS/SmartHome Tabellen: jsonConfig `table.items` als Array (für Admin GUI Kompatibilität)
 ## 0.4.39 (2025-12-15)
 - Fix: Einstellungen-Menü verlinkt wieder auf smarthome-config.html (Einstellungsseite)
-
 
 ## 0.4.36 (2025-12-15)
 - Fix: Admin jsonConfig 'tabs' Schema kompatibel gemacht (schema.items.forEach)
@@ -206,7 +204,6 @@
 - Anzeige: CO₂‑Ersparnis zeigt nun ein ' t' für Tonnen an.
 
 # Changelog
-
 
 ## 0.4.36 (2025-12-15)
 
@@ -343,39 +340,30 @@
 - Fix: Settings values persist in UI after reload (create & read local `settings.*` states on startup).
 - Change: Subscribe to built‑in settings states even without external mapping.
 
-
 ## 0.3.85
 - EVCS‑Popup: Leistungs‑Kreis füllt sich proportional zur eingestellten Maximalleistung.
 - Admin → EVCS: neues Feld **Maximale Ladeleistung (kW)**, Wert wird als `settings.evcsMaxPower` (W) in den States bereitgestellt.
 
-
 ## 0.3.86
 - Fix: **Eigenverbrauch** Karte wurde nicht aktualisiert, wenn `datapoints.selfConsumption` gemappt war. Frontend setzt jetzt zusätzlich `selfVerbrauchBar` / `selfVerbrauchValue`.
-
 
 ## 0.3.87
 - Fix: **Speicher System** – `Laden` / `Entladen` werden jetzt zusätzlich unter `storageLadenPower` / `storageEntladenPower` gesetzt.
 
-
 ## 0.3.88
 - Historie: **Live**‑Schalter hinzugefügt. Wenn aktiv, wird „Bis“ automatisch auf Jetzt gesetzt und der Chart alle 30 s neu geladen.
-
 
 ## 0.3.89
 - Historie wieder **wie vorher**: kein Live‑Modus & keine Events‑Verbindung auf history.html. Für Echtzeit weiterhin die **LIVE**‑Seite nutzen.
 
-
 ## 0.3.90
 - Fix: SyntaxError in **Historie** nach dem Zurückbauen behoben (verwaiste `})();` entfernt).
-
 
 ## 0.3.91
 - Historie: **Live‑Dot** ist wieder aktiv (SSE), ohne Live‑Schalter. Fehlerbehandlung beruhigt, automatischer Reconnect alle 5 s.
 
-
 ## 0.3.92
 - Historie: automatisches Nachladen reaktiviert. Liegt **Bis** in der Nähe der aktuellen Zeit, wird alle 30 s nachgeladen – ganz ohne Schalter (wie früher).
-
 
 ## 0.3.93
 - Service Worker verbessert: **neuer Cache-Name** und **Network‑First** für JS/HTML, damit Aktualisierungen (z. B. HISTORY) zuverlässig ankommen.
