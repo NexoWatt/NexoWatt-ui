@@ -1,3 +1,7 @@
+## 0.4.61 (2025-12-17)
+
+- EVCS: Betriebsmodus-Slider in der Wallbox-Kachel wie im Dialog (Labels Boost / Min+PV / PV + aktive Auswahl).
+
 ## 0.4.60 (2025-12-17)
 
 - Fix (EVCS): Header Tabs (LIVE/HISTORY/EVCS) rechts oben wie auf den anderen Seiten.

@@ -1237,3 +1237,11 @@ body {
   color: #9ca3af;
   font-size: 0.7rem;
 }
+
+
+/* EVCS: Betriebsmodus Slider (Boost / Min+PV / PV) */
+.nw-evcs-mode{display:flex;flex-direction:column;gap:4px;align-items:stretch;width:180px;}
+.nw-evcs-mode input[type="range"]{width:100%;}
+.nw-evcs-mode-labels{display:flex;justify-content:space-between;font-size:12px;line-height:1.2;}
+.nw-evcs-mode-labels span{opacity:.75;user-select:none;white-space:nowrap;}
+.nw-evcs-mode-labels span.active{opacity:1;font-weight:600;}

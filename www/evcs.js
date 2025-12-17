@@ -41,6 +41,7 @@ function render(){
     const st = d(`evcs.${i}.status`);
     const active = d(`evcs.${i}.active`);
     const mode = d(`evcs.${i}.mode`);
+    const modeVal = (mode == null || isNaN(Number(mode))) ? 1 : Math.max(1, Math.min(3, Math.round(Number(mode))));
 
     html += `
       <div class="card" style="margin:0">
@@ -68,7 +69,16 @@ function render(){
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
             <span>Modus</span>
-            ${canMode ? `<div style="display:flex; align-items:center; gap:10px;"><input type="range" min="1" max="3" step="1" data-evcs-mode="${i}" value="${mode == null || isNaN(Number(mode)) ? 1 : Number(mode)}" style="width:140px;"><strong style="min-width:28px; text-align:right;">${mode == null ? '--' : esc(mode)}</strong></div>` : `<strong>${mode == null ? '--' : esc(mode)}</strong>`}
+            ${canMode ? `
+              <div class="nw-evcs-mode">
+                <input type="range" min="1" max="3" step="1" data-evcs-mode="${i}" value="${modeVal}" aria-label="Betriebsmodus">
+                <div class="nw-evcs-mode-labels">
+                  <span data-mode="1" class="${modeVal === 1 ? 'active' : ''}">Boost</span>
+                  <span data-mode="2" class="${modeVal === 2 ? 'active' : ''}">Min+PV</span>
+                  <span data-mode="3" class="${modeVal === 3 ? 'active' : ''}">PV</span>
+                </div>
+              </div>
+            ` : `<strong>${mode == null ? '--' : esc(mode)}</strong>`}
           </div>
         </div>
       </div>
@@ -108,9 +118,13 @@ function bindControls(){
   list.addEventListener('input', (e)=>{
     const t = e.target;
     if (t && t.matches('input[type="range"][data-evcs-mode]')){
-      t.value = String(clampMode(t.value));
-      const lbl = t.parentElement && t.parentElement.querySelector('strong');
-      if (lbl) lbl.textContent = String(t.value);
+      const v = clampMode(t.value);
+      t.value = String(v);
+      const box = t.closest('.nw-evcs-mode');
+      if (box){
+        const spans = box.querySelectorAll('.nw-evcs-mode-labels span[data-mode]');
+        spans.forEach(s => s.classList.toggle('active', Number(s.getAttribute('data-mode')) === v));
+      }
     }
   });
 
