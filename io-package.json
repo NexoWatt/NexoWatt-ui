@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.62",
+    "version": "0.4.64",
     "news": {
       "0.4.58": {
         "de": "EVCS Bericht: Öffnet nun die statische Seite /static/evcs-report.html (Weiterleitung von /evcs-report.html), History-Button angepasst.",
@@ -402,7 +402,8 @@
         }
       }
     ],
-    "welcomeScreen": "adapter/nexowatt-vis/tab.html"
+    "welcomeScreen": "adapter/nexowatt-vis/tab.html",
+    "license": "UNLICENSED"
   },
   "native": {
     "port": 8188,

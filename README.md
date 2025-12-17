@@ -65,3 +65,13 @@ iobroker add nexowatt-vis
 ### Installer password
 - Default: **install2025!** (HttpOnly cookie-based session)
 - You can override it by setting `native.installerPassword` in adapter config.
+
+## License
+
+**Proprietary — NexoWatt only.**
+
+Copyright (c) 2025 NexoWatt. All rights reserved.
+
+This repository is publicly accessible, but it is **not open-source**.
+No permission is granted for third parties to use, copy, modify, distribute, or run the software.
+See `LICENSE` for the full terms.

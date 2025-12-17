@@ -1,3 +1,9 @@
+## 0.4.64 (2025-12-17)
+- (License) Replaced community license with proprietary NexoWatt-only license (NPL v1.0). Added NOTICE.
+
+## 0.4.63 (2025-12-17)
+- Chore: Add NexoWatt Community License (NCL) v1.0 (source-available; commercial use requires a separate license).
+
 ## 0.4.62 (2025-12-17)
 
 - Fix (EVCS): Leistungs-Ring im Ladestation-Dialog füllt sich wieder korrekt basierend auf aktueller Leistung vs. eingestellter Maximalleistung.
