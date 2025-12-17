@@ -958,6 +958,21 @@ body {
   gap: 2px;
 }
 
+.nw-config-card__header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nw-config-card__header-actions {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+
 .nw-config-card__title {
   font-size: 0.9rem;
   font-weight: 600;

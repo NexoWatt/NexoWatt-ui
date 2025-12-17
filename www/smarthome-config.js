@@ -108,6 +108,7 @@ async function nwReloadSmartHomeConfig() {
     devices: Array.isArray(cfg.devices) ? cfg.devices.map(d => Object.assign({}, d)) : [],
   };
   nwNormalizeRoomFunctionOrder();
+  nwNormalizeDeviceOrder();
   nwShcState.originalJson = JSON.stringify(nwShcState.config);
   nwMarkDirty(false);
   nwRenderAll();
@@ -462,6 +463,115 @@ function nwRenderFunctionsEditor(functions) {
 }
 
 
+
+
+/* --- Geräte/Kacheln Verwaltung (B8) --- */
+
+function nwNormalizeDeviceOrder() {
+  if (!nwShcState.config) return;
+  const arr = Array.isArray(nwShcState.config.devices) ? nwShcState.config.devices : [];
+  arr.forEach((d, i) => {
+    if (d) d.order = i + 1;
+  });
+}
+
+function nwEnsureUniqueDeviceId(devices, desiredId) {
+  const list = Array.isArray(devices) ? devices : [];
+  let base = (desiredId === null || typeof desiredId === 'undefined') ? '' : String(desiredId);
+  base = base.trim();
+  if (!base) base = 'geraet';
+  let out = base;
+  let n = 2;
+  while (list.some(d => d && d.id === out)) {
+    out = base + '-' + n;
+    n += 1;
+  }
+  return out;
+}
+
+function nwAddDevice() {
+  if (!nwShcState.config) return;
+  const devices = Array.isArray(nwShcState.config.devices) ? nwShcState.config.devices : [];
+  const rooms = Array.isArray(nwShcState.config.rooms) ? nwShcState.config.rooms : [];
+  const funcs = Array.isArray(nwShcState.config.functions) ? nwShcState.config.functions : [];
+
+  const id = nwEnsureUniqueDeviceId(devices, 'geraet');
+  const roomId = rooms.length ? (rooms[0] && rooms[0].id) : null;
+  const functionId = funcs.length ? (funcs[0] && funcs[0].id) : null;
+
+  const dev = {
+    id,
+    alias: 'Neues Gerät',
+    type: 'switch',
+    roomId: roomId || null,
+    functionId: functionId || null,
+    icon: '',
+    size: 'm',
+    behavior: { favorite: false, readOnly: false },
+    io: { switch: { readId: null, writeId: null } },
+  };
+
+  devices.push(dev);
+  nwShcState.config.devices = devices;
+  nwNormalizeDeviceOrder();
+  nwMarkDirty(true);
+  nwRenderAll();
+}
+
+function nwCreateFieldRow(labelText, controlElem) {
+  const row = document.createElement('div');
+  row.className = 'nw-config-card__row nw-config-field-row';
+
+  const label = document.createElement('div');
+  label.className = 'nw-config-field-label';
+  label.textContent = labelText;
+
+  const ctlWrap = document.createElement('div');
+  ctlWrap.className = 'nw-config-field-control';
+  ctlWrap.appendChild(controlElem);
+
+  row.appendChild(label);
+  row.appendChild(ctlWrap);
+  return row;
+}
+
+function nwCreateDpInput(labelText, value, onChange) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'nw-config-dp-input-wrapper';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'nw-config-input nw-config-dp-input';
+  input.value = value || '';
+  input.addEventListener('change', () => {
+    onChange(input.value.trim());
+  });
+  input.addEventListener('input', () => {
+    nwMarkDirty(true);
+  });
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'nw-config-dp-button';
+  btn.textContent = '…';
+  btn.title = 'Datenpunkt auswählen';
+  btn.addEventListener('click', () => {
+    nwOpenDatapointDialog({
+      title: labelText,
+      initial: input.value,
+      onSelect: (id) => {
+        input.value = id || '';
+        onChange(input.value.trim());
+        nwMarkDirty(true);
+      },
+    });
+  });
+
+  wrapper.appendChild(input);
+  wrapper.appendChild(btn);
+
+  return nwCreateFieldRow(labelText, wrapper);
+}
 function nwRenderDevicesEditor(devices, rooms, functions) {
   const grid = document.getElementById('nw-config-devices');
   const empty = document.getElementById('nw-config-devices-empty');
@@ -495,6 +605,81 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
     title.className = 'nw-config-card__title';
     title.textContent = dev.alias || dev.id || 'Gerät';
 
+    const headerTop = document.createElement('div');
+    headerTop.className = 'nw-config-card__header-top';
+
+    const actions = document.createElement('div');
+    actions.className = 'nw-config-card__header-actions';
+
+    const btnUp = document.createElement('button');
+    btnUp.type = 'button';
+    btnUp.className = 'nw-config-mini-btn';
+    btnUp.textContent = '↑';
+    btnUp.disabled = index === 0;
+
+    const btnDown = document.createElement('button');
+    btnDown.type = 'button';
+    btnDown.className = 'nw-config-mini-btn';
+    btnDown.textContent = '↓';
+    btnDown.disabled = index === devices.length - 1;
+
+    const btnDup = document.createElement('button');
+    btnDup.type = 'button';
+    btnDup.className = 'nw-config-mini-btn';
+    btnDup.textContent = '⧉';
+    btnDup.title = 'Duplizieren';
+
+    const btnDel = document.createElement('button');
+    btnDel.type = 'button';
+    btnDel.className = 'nw-config-mini-btn';
+    btnDel.textContent = '✕';
+    btnDel.title = 'Löschen';
+
+    btnUp.addEventListener('click', () => {
+      nwMoveItem(nwShcState.config.devices, index, -1);
+      nwNormalizeDeviceOrder();
+      nwMarkDirty(true);
+      nwRenderAll();
+    });
+
+    btnDown.addEventListener('click', () => {
+      nwMoveItem(nwShcState.config.devices, index, +1);
+      nwNormalizeDeviceOrder();
+      nwMarkDirty(true);
+      nwRenderAll();
+    });
+
+    btnDup.addEventListener('click', () => {
+      if (!nwShcState.config || !Array.isArray(nwShcState.config.devices)) return;
+      const src = nwShcState.config.devices[index];
+      const clone = JSON.parse(JSON.stringify(src || {}));
+      const baseId = (clone && clone.id) ? (String(clone.id) + '-copy') : 'geraet-copy';
+      clone.id = nwEnsureUniqueDeviceId(nwShcState.config.devices, baseId);
+      if (clone.alias) clone.alias = String(clone.alias) + ' (Kopie)';
+      nwShcState.config.devices.splice(index + 1, 0, clone);
+      nwNormalizeDeviceOrder();
+      nwMarkDirty(true);
+      nwRenderAll();
+    });
+
+    btnDel.addEventListener('click', () => {
+      const label = dev.alias || dev.id || 'Gerät';
+      if (!confirm('Gerät „' + label + '“ löschen?')) return;
+      if (!nwShcState.config || !Array.isArray(nwShcState.config.devices)) return;
+      nwShcState.config.devices.splice(index, 1);
+      nwNormalizeDeviceOrder();
+      nwMarkDirty(true);
+      nwRenderAll();
+    });
+
+    actions.appendChild(btnUp);
+    actions.appendChild(btnDown);
+    actions.appendChild(btnDup);
+    actions.appendChild(btnDel);
+
+    headerTop.appendChild(title);
+    headerTop.appendChild(actions);
+
     const subtitle = document.createElement('div');
     subtitle.className = 'nw-config-card__subtitle';
     const room = roomMap[dev.roomId];
@@ -504,7 +689,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
     const typeLabel = dev.type || 'Typ?';
     subtitle.textContent = roomLabel + ' · ' + fnLabel + ' · ' + typeLabel;
 
-    header.appendChild(title);
+    header.appendChild(headerTop);
     header.appendChild(subtitle);
     card.appendChild(header);
 
@@ -1062,6 +1247,7 @@ function nwAttachToolbarHandlers() {
 
   const addRoomBtn = document.getElementById('nw-config-add-room-btn');
   const addFnBtn = document.getElementById('nw-config-add-function-btn');
+  const addDeviceBtn = document.getElementById('nw-config-add-device-btn');
   if (saveBtn) {
     saveBtn.addEventListener('click', () => {
       nwSaveSmartHomeConfig();
@@ -1081,6 +1267,12 @@ function nwAttachToolbarHandlers() {
   if (addFnBtn) {
     addFnBtn.addEventListener('click', () => {
       nwAddFunction();
+    });
+  }
+
+  if (addDeviceBtn) {
+    addDeviceBtn.addEventListener('click', () => {
+      nwAddDevice();
     });
   }
 }

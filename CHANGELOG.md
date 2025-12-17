@@ -1,3 +1,7 @@
+## 0.4.68 (2025-12-17)
+- SmartHome: VIS-Konfig – Geräte/Kacheln können jetzt direkt auf der SmartHome-Konfigseite hinzugefügt, dupliziert, sortiert und gelöscht werden (B8).
+- Fix: SmartHome-Konfig – fehlende Helper-Funktionen (FieldRow/DP-Picker) wiederhergestellt.
+
 ## 0.4.67 (2025-12-17)
 - SmartHome: VIS-Konfig – Räume & Funktionen können jetzt direkt in der SmartHome-Konfigseite angelegt, umbenannt, sortiert und gelöscht werden (B7).
 - SmartHome: Beim Ändern von Raum-/Funktions-IDs werden Geräte-Zuordnungen automatisch angepasst.
