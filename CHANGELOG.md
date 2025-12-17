@@ -1,3 +1,11 @@
+
+
+## 0.4.69
+
+- SmartHomeConfig: Datenpunkt-Picker zeigt beim Öffnen direkt eine Liste (Browse-Modus), Live-Suche per Eingabe, Limit erhöht.
+- SmartHomeConfig: Geräte-Typen werden mit verständlichen Labels angezeigt (z. B. „Jalousie / Rollladen“ statt „blind“).
+- Backend: /api/smarthome/dpsearch liefert bei leerer Suche eine initiale Liste und nutzt einen Kurzzeit-Cache zur Performance.
+
 ## 0.4.68 (2025-12-17)
 - SmartHome: VIS-Konfig – Geräte/Kacheln können jetzt direkt auf der SmartHome-Konfigseite hinzugefügt, dupliziert, sortiert und gelöscht werden (B8).
 - Fix: SmartHome-Konfig – fehlende Helper-Funktionen (FieldRow/DP-Picker) wiederhergestellt.

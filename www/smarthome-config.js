@@ -18,6 +18,22 @@ function nwGetFunctionLabel(fn) {
   return fn.name || fn.id || '';
 }
 
+
+function nwGetTypeLabel(type) {
+  const t = (type || '').trim();
+  const map = {
+    switch: 'Schalter',
+    dimmer: 'Dimmer',
+    blind: 'Jalousie / Rollladen',
+    rtr: 'Heizung (RTR)',
+    sensor: 'Sensor',
+    scene: 'Szene',
+    logicStatus: 'Logic Status',
+  };
+  return map[t] || (t || 'Typ?');
+}
+
+
 function nwSetStatus(text, variant) {
   const el = document.getElementById('nw-config-status');
   if (!el) return;
@@ -686,7 +702,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
     const fn = fnMap[dev.functionId];
     const roomLabel = room ? nwGetRoomLabel(room) : (dev.roomId || 'Raum?');
     const fnLabel = fn ? nwGetFunctionLabel(fn) : (dev.functionId || 'Funktion?');
-    const typeLabel = dev.type || 'Typ?';
+    const typeLabel = nwGetTypeLabel(dev.type);
     subtitle.textContent = roomLabel + ' · ' + fnLabel + ' · ' + typeLabel;
 
     header.appendChild(headerTop);
@@ -717,12 +733,21 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
     // Typ
     const typeSelect = document.createElement('select');
     typeSelect.className = 'nw-config-select';
-    const typeOptions = ['', 'switch', 'dimmer', 'blind', 'rtr', 'sensor', 'scene', 'logicStatus'];
-    typeOptions.forEach(val => {
+    const typeOptions = [
+      { value: '', label: '(kein Typ)' },
+      { value: 'switch', label: 'Schalter' },
+      { value: 'dimmer', label: 'Dimmer' },
+      { value: 'blind', label: 'Jalousie / Rollladen' },
+      { value: 'rtr', label: 'Heizung (RTR)' },
+      { value: 'sensor', label: 'Sensor' },
+      { value: 'scene', label: 'Szene' },
+      { value: 'logicStatus', label: 'Logic Status' },
+    ];
+    typeOptions.forEach(optDef => {
       const opt = document.createElement('option');
-      opt.value = val;
-      opt.textContent = val || '(kein Typ)';
-      if (dev.type === val) opt.selected = true;
+      opt.value = optDef.value;
+      opt.textContent = optDef.label;
+      if ((dev.type || '') === optDef.value) opt.selected = true;
       typeSelect.appendChild(opt);
     });
     typeSelect.addEventListener('change', () => {
@@ -1122,6 +1147,15 @@ function nwEnsureDpDialog() {
     }
   });
 
+  // Live-Suche (wie im Admin): tippen = Ergebnisse aktualisieren
+  let dpTypingTimer = null;
+  input.addEventListener('input', () => {
+    if (dpTypingTimer) clearTimeout(dpTypingTimer);
+    dpTypingTimer = setTimeout(() => {
+      triggerSearch();
+    }, 200);
+  });
+
   backdrop.addEventListener('click', (ev) => {
     if (ev.target === backdrop) {
       nwCloseDatapointDialog();
@@ -1135,13 +1169,9 @@ async function nwRunDatapointSearch(term, state) {
   const { results } = state;
   results.innerHTML = '';
 
-  if (!term) {
-    const hint = document.createElement('div');
-    hint.className = 'nw-dp-result__meta';
-    hint.textContent = 'Bitte einen Suchbegriff eingeben.';
-    results.appendChild(hint);
-    return;
-  }
+  // Leerer Suchbegriff = Browse-Modus (zeigt eine initiale Liste)
+  term = (term || '').trim();
+
 
   const info = document.createElement('div');
   info.className = 'nw-dp-result__meta';
@@ -1149,7 +1179,7 @@ async function nwRunDatapointSearch(term, state) {
   results.appendChild(info);
 
   try {
-    const url = '/api/smarthome/dpsearch?q=' + encodeURIComponent(term) + '&limit=50';
+    const url = '/api/smarthome/dpsearch?q=' + encodeURIComponent(term) + '&limit=100';
     const res = await fetch(url);
     const data = await res.json().catch(() => ({}));
     results.innerHTML = '';
@@ -1219,15 +1249,8 @@ function nwOpenDatapointDialog(options) {
 
   state.backdrop.style.display = 'flex';
 
-  // Bei initialem Wert direkt suchen
-  if (state.input.value.trim()) {
-    nwRunDatapointSearch(state.input.value.trim(), state);
-  } else {
-    const hint = document.createElement('div');
-    hint.className = 'nw-dp-result__meta';
-    hint.textContent = 'Bitte einen Suchbegriff eingeben.';
-    state.results.appendChild(hint);
-  }
+  // Initiale Suche (leerer Suchbegriff = Browse-Modus)
+  nwRunDatapointSearch(state.input.value.trim(), state);
 
   state.input.focus();
   state.input.select();

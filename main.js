@@ -1240,44 +1240,95 @@ app.post('/api/smarthome/rtrSetpoint', async (req, res) => {
       }
     });
 
+    
     app.get('/api/smarthome/dpsearch', async (req, res) => {
       try {
         const qRaw = (req.query && req.query.q) || '';
         const q = (typeof qRaw === 'string' ? qRaw : String(qRaw || '')).trim();
+        const qLower = (q || '').toLowerCase();
+
         const limitRaw = (req.query && req.query.limit) || '';
         let limit = parseInt(limitRaw, 10);
-        if (!Number.isFinite(limit) || limit <= 0 || limit > 200) limit = 50;
-
-        if (!q) {
-          return res.json({ ok: true, results: [] });
-        }
+        if (!Number.isFinite(limit) || limit <= 0 || limit > 200) limit = 100;
 
         if (typeof this.getForeignObjectsAsync !== 'function') {
           this.log.warn('SmartHomeConfig dpsearch: getForeignObjectsAsync not available');
           return res.json({ ok: false, error: 'datapoint search not supported' });
         }
 
-        const all = await this.getForeignObjectsAsync('*', 'state');
-        const qLower = q.toLowerCase();
+        // Cache all state objects for a short period to avoid heavy DB reads while typing
+        const now = Date.now();
+        const ttlMs = 15000;
+        if (!this._nwDpCache || !this._nwDpCache.ts || (now - this._nwDpCache.ts) > ttlMs) {
+          const all = await this.getForeignObjectsAsync('*', 'state');
+          const items = [];
+
+          for (const id of Object.keys(all || {})) {
+            const obj = all[id];
+            if (!obj || !obj.common) continue;
+
+            const nameRaw = obj.common.name || '';
+            const name = typeof nameRaw === 'string' ? nameRaw : JSON.stringify(nameRaw);
+
+            items.push({
+              id,
+              name,
+              role: obj.common.role || '',
+              type: obj.common.type || '',
+              unit: obj.common.unit || '',
+              idLower: String(id).toLowerCase(),
+              nameLower: String(name).toLowerCase(),
+            });
+          }
+
+          // Stable, user-friendly order
+          items.sort((a, b) => a.idLower.localeCompare(b.idLower));
+          this._nwDpCache = { ts: now, items };
+        }
+
+        const items = (this._nwDpCache && this._nwDpCache.items) ? this._nwDpCache.items : [];
         const results = [];
+        const seen = new Set();
 
-        for (const id of Object.keys(all)) {
-          const obj = all[id];
-          if (!obj || !obj.common) continue;
-          const nameRaw = obj.common.name || '';
-          const name = typeof nameRaw === 'string' ? nameRaw : JSON.stringify(nameRaw);
-          const haystack = (id + ' ' + name).toLowerCase();
-          if (haystack.indexOf(qLower) === -1) continue;
-
+        function pushItem(it) {
+          if (!it || !it.id || seen.has(it.id)) return;
+          seen.add(it.id);
           results.push({
-            id,
-            name,
-            role: obj.common.role || '',
-            type: obj.common.type || '',
-            unit: obj.common.unit || '',
+            id: it.id,
+            name: it.name,
+            role: it.role,
+            type: it.type,
+            unit: it.unit,
           });
+        }
 
-          if (results.length >= limit) break;
+        if (!qLower) {
+          // Browse-Mode: zeige zuerst typische Admin-Bereiche
+          const preferredPrefixes = ['0_userdata.0.', 'alias.0.', 'javascript.0.'];
+          for (const pref of preferredPrefixes) {
+            for (const it of items) {
+              if (!it.idLower.startsWith(pref)) continue;
+              pushItem(it);
+              if (results.length >= limit) break;
+            }
+            if (results.length >= limit) break;
+          }
+
+          if (results.length < limit) {
+            for (const it of items) {
+              pushItem(it);
+              if (results.length >= limit) break;
+            }
+          }
+
+          return res.json({ ok: true, results });
+        }
+
+        for (const it of items) {
+          if (it.idLower.indexOf(qLower) !== -1 || it.nameLower.indexOf(qLower) !== -1) {
+            pushItem(it);
+            if (results.length >= limit) break;
+          }
         }
 
         res.json({ ok: true, results });
@@ -1287,7 +1338,7 @@ app.post('/api/smarthome/rtrSetpoint', async (req, res) => {
       }
     });
 
-    // --- SmartHomeConfig Page (VIS-Konfig-Ansicht) ---
+// --- SmartHomeConfig Page (VIS-Konfig-Ansicht) ---
     app.get(['/smarthome-config.html', '/smarthome-config'], (req, res) => {
       try {
         const file = require('path').join(__dirname, 'www', 'smarthome-config.html');
