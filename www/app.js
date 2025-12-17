@@ -981,26 +981,34 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
     const st = d('evcs.1.status') ?? d('evcsStatus') ?? '--';
     const active = s['settings.evcsActive']?.value ?? false;
     const mode = s['settings.evcsMode']?.value ?? 1;
+
     const fmtP = (val)=> {
       const u = (window.units && window.units.power) || 'W';
-      const n = Number(val)||0;
+      const n = Number(val) || 0;
       if (Math.abs(n) >= 1000) return (n/1000).toFixed(1) + ' kW';
       return n.toFixed(0) + ' ' + u;
-    
-    const ratedSingle = s['settings.evcsMaxPower']?.value ?? 11000; // W
+    };
+
+    // Ring fill based on current power vs configured max power
+    let ratedSingle = Number(s['settings.evcsMaxPower']?.value ?? 11000); // W
+    if (!isFinite(ratedSingle) || ratedSingle <= 0) ratedSingle = 11000;
+
     const rated = ratedSingle * (Number(window.__nwEvcsCount || 1) || 1);
-    const pct = Math.max(0, Math.min(1, rated>0 ? (Math.abs(p)/rated) : 0));
+    const pct = Math.max(0, Math.min(1, rated > 0 ? (Math.abs(Number(p) || 0) / rated) : 0));
+
     const g = document.querySelector('.evcs-gauge');
     if (g) {
-      const deg = (pct*100).toFixed(1) + '%';
+      const deg = (pct * 100).toFixed(1) + '%';
       g.style.background = 'radial-gradient(#0c0f12 60%, transparent 61%),' +
                            'conic-gradient(#6c5ce7 0% ' + deg + ', #2a2f35 ' + deg + ' 100%)';
-    }};
+    }
+
     const pb = qs('evcsPowerBig'); if (pb) pb.textContent = fmtP(p);
     const sm = qs('evcsStatusModal'); if (sm) sm.textContent = st;
     if (toggle != null) toggle.checked = !!active;
     if (slider != null) slider.value = String(Math.max(1, Math.min(3, Math.round(Number(mode)||1))));
   };
+
 })();
 
 
