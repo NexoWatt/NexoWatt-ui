@@ -101,9 +101,15 @@
   }
 
   async function loadAndPrint(){
-    await load();
-    // ensure DOM is painted before print dialog opens
-    await new Promise(r => requestAnimationFrame(()=>r()));
+    // Ensure data is fully loaded BEFORE opening the print dialog.
+    const ok = await load();
+    if(!ok) return;
+
+    // Give the browser a moment to paint the updated table before snapshotting for print.
+    await new Promise(r => requestAnimationFrame(r));
+    await new Promise(r => requestAnimationFrame(r));
+    await new Promise(r => setTimeout(r, 80));
+
     window.print();
   }
 
@@ -113,11 +119,6 @@
 
     if (reloadBtn) reloadBtn.addEventListener('click', load);
     if (printBtn) printBtn.addEventListener('click', loadAndPrint);
-
-    // Ctrl+P / browser print should still have fresh data
-    if (window && window.addEventListener){
-      window.addEventListener('beforeprint', () => { try{ load(); }catch(_){ } });
-    }
 
     load();
   }

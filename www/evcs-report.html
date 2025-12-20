@@ -16,6 +16,7 @@
     button:hover{ border-color:#3a4250; }
     .card{ background:#121418; border:1px solid #20262d; border-radius:14px; padding:12px; }
     table{ width:100%; border-collapse: collapse; }
+    #tbl, #tbl th, #tbl td{ color:#dfe7ee !important; }
     th, td{ border-bottom:1px solid #20262d; padding:8px 10px; text-align:right; white-space:nowrap;  color:inherit; }
     th:first-child, td:first-child{ text-align:left; }
     th{ position:sticky; top:54px; background:#121418; z-index:2; }
@@ -25,6 +26,7 @@
     @media print{
       header.topbar, .btn-row, .hint{ display:none !important; }
       body{ background:#fff; color:#000; }
+      #tbl, #tbl th, #tbl td{ color:#000 !important; }
       .card{ border:none; }
       th{ position:static; }
     }
