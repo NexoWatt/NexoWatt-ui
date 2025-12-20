@@ -1,23 +1,18 @@
 (function(){
+  function el(id){ return document.getElementById(id); }
+
   function q(name){
     const u = new URL(window.location.href);
-    const v = u.searchParams.get(name);
-    return v;
+    return u.searchParams.get(name);
   }
-  function fmtDate(iso){ return iso; }
+
+  function fmtDate(iso){ return iso || ''; }
+
   function fmtNum(n, d){
     const x = Number(n);
     if (!isFinite(x)) return '';
     return x.toFixed(d);
   }
-
-  const fromMs = Number(q('from') || (Date.now() - 7*24*3600*1000));
-  const toMs   = Number(q('to')   || Date.now());
-
-  const rangeMeta = document.getElementById('rangeMeta');
-  const errEl = document.getElementById('err');
-  const thead = document.getElementById('thead');
-  const tbody = document.getElementById('tbody');
 
   function toISODate(ms){
     const d = new Date(ms);
@@ -27,60 +22,109 @@
     return `${y}-${m}-${dd}`;
   }
 
-  function setMeta(){
-    rangeMeta.textContent = `${toISODate(fromMs)} – ${toISODate(toMs)}`;
-  }
-
   async function load(){
-    errEl.textContent = '';
-    tbody.innerHTML = '';
-    thead.innerHTML = '';
-    setMeta();
+    const rangeMeta = el('rangeMeta');
+    const errEl = el('err');
+    const thead = el('thead');
+    const tbody = el('tbody');
 
-    const url = `/api/evcs/report?from=${encodeURIComponent(fromMs)}&to=${encodeURIComponent(toMs)}`;
-    const res = await fetch(url).then(r=>r.json()).catch(()=>null);
-    if(!res || !res.ok){
-      errEl.textContent = 'Bericht konnte nicht geladen werden.';
-      return;
+    if (rangeMeta){
+      const fromMs = Number(q('from') || (Date.now() - 7*24*3600*1000));
+      const toMs   = Number(q('to')   || Date.now());
+      rangeMeta.textContent = `${toISODate(fromMs)} – ${toISODate(toMs)}`;
     }
 
-    const wbs = Array.isArray(res.wallboxes) ? res.wallboxes : [];
-    const days = Array.isArray(res.days) ? res.days : [];
+    if (!thead || !tbody){
+      if (errEl) errEl.textContent = 'EVCS Bericht: Tabelle konnte nicht initialisiert werden (thead/tbody fehlt).';
+      return false;
+    }
 
-    // Header: Date + Total + per wallbox (kWh / max kW)
-    let h = '<tr>';
-    h += '<th>Datum</th>';
-    h += '<th>Summe kWh</th>';
-    wbs.forEach(wb=>{
-      const name = (wb.name || `Wallbox ${wb.index}`).replace(/</g,'&lt;');
-      h += `<th>${name}<div class="subhead">kWh</div></th>`;
-      h += `<th>${name}<div class="subhead">max kW</div></th>`;
-    });
-    h += '</tr>';
-    thead.innerHTML = h;
+    if (errEl) errEl.textContent = '';
+    thead.innerHTML = '';
+    tbody.innerHTML = '<tr><td colspan="99" style="text-align:left;color:#9aa4ad;">Lade Daten…</td></tr>';
 
-    // Rows
-    days.forEach(d=>{
-      let r = '<tr>';
-      r += `<td>${fmtDate(d.date)}</td>`;
-      r += `<td>${fmtNum(d.totalKwh, 2)}</td>`;
-      wbs.forEach(wb=>{
-        const idx = String(wb.index);
-        const cell = (d.wallboxes && (d.wallboxes[idx] || d.wallboxes[wb.index])) || {};
-        r += `<td>${fmtNum(cell.kwh, 2)}</td>`;
-        r += `<td>${fmtNum(cell.maxKw, 2)}</td>`;
+    try{
+      const fromMs = Number(q('from') || (Date.now() - 7*24*3600*1000));
+      const toMs   = Number(q('to')   || Date.now());
+
+      const url = `/api/evcs/report?from=${encodeURIComponent(fromMs)}&to=${encodeURIComponent(toMs)}`;
+      const res = await fetch(url).then(r => r.json()).catch(() => null);
+
+      if (!res || !res.ok){
+        tbody.innerHTML = '';
+        if (errEl) errEl.textContent = 'Bericht konnte nicht geladen werden.';
+        return false;
+      }
+
+      const wbs = Array.isArray(res.wallboxes) ? res.wallboxes : [];
+      const days = Array.isArray(res.days) ? res.days : [];
+
+      // Header: Date + Total + per wallbox (kWh / max kW)
+      let h = '<tr>';
+      h += '<th>Datum</th>';
+      h += '<th>Summe kWh</th>';
+      wbs.forEach(wb => {
+        const name = (wb && (wb.name || `Wallbox ${wb.index}`) || 'Wallbox').replace(/</g,'&lt;');
+        h += `<th>${name}<div class="subhead">kWh</div></th>`;
+        h += `<th>${name}<div class="subhead">max kW</div></th>`;
       });
-      r += '</tr>';
-      tbody.insertAdjacentHTML('beforeend', r);
-    });
+      h += '</tr>';
+      thead.innerHTML = h;
 
-    if(days.length === 0){
-      tbody.innerHTML = '<tr><td colspan="99" style="text-align:left;color:#9aa4ad;">Keine Daten im Zeitraum.</td></tr>';
+      // Rows (set innerHTML once to avoid any insertAdjacentHTML quirks)
+      if (days.length === 0){
+        tbody.innerHTML = '<tr><td colspan="99" style="text-align:left;color:#9aa4ad;">Keine Daten im Zeitraum.</td></tr>';
+        return true;
+      }
+
+      let rowsHtml = '';
+      days.forEach(d => {
+        rowsHtml += '<tr>';
+        rowsHtml += `<td>${fmtDate(d && d.date)}</td>`;
+        rowsHtml += `<td>${fmtNum(d && d.totalKwh, 2)}</td>`;
+        wbs.forEach(wb => {
+          const idx = String(wb.index);
+          const cell = (d && d.wallboxes && (d.wallboxes[idx] || d.wallboxes[wb.index])) || {};
+          rowsHtml += `<td>${fmtNum(cell && cell.kwh, 2)}</td>`;
+          rowsHtml += `<td>${fmtNum(cell && cell.maxKw, 2)}</td>`;
+        });
+        rowsHtml += '</tr>';
+      });
+      tbody.innerHTML = rowsHtml;
+      return true;
+    }catch(e){
+      tbody.innerHTML = '';
+      if (errEl) errEl.textContent = 'EVCS Bericht: Unerwarteter Fehler beim Rendern.';
+      try{ console.error(e); }catch(_){}
+      return false;
     }
   }
 
-  document.getElementById('printBtn').addEventListener('click', ()=>window.print());
-  document.getElementById('reloadBtn').addEventListener('click', load);
+  async function loadAndPrint(){
+    await load();
+    // ensure DOM is painted before print dialog opens
+    await new Promise(r => requestAnimationFrame(()=>r()));
+    window.print();
+  }
 
-  load();
+  function init(){
+    const reloadBtn = el('reloadBtn');
+    const printBtn = el('printBtn');
+
+    if (reloadBtn) reloadBtn.addEventListener('click', load);
+    if (printBtn) printBtn.addEventListener('click', loadAndPrint);
+
+    // Ctrl+P / browser print should still have fresh data
+    if (window && window.addEventListener){
+      window.addEventListener('beforeprint', () => { try{ load(); }catch(_){ } });
+    }
+
+    load();
+  }
+
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();
