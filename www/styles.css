@@ -1294,3 +1294,27 @@ body {
 .nw-evcs-mode-labels{display:flex;justify-content:space-between;font-size:12px;line-height:1.2;}
 .nw-evcs-mode-labels span{opacity:.75;user-select:none;white-space:nowrap;}
 .nw-evcs-mode-labels span.active{opacity:1;font-weight:600;}
+
+
+/* --- NW: ensure label/value spacing in KPI cards + dialogs --- */
+.kpi .row.two > div,
+.kpi .row.one > div,
+.dialog .row.two > div,
+.dialog .row.one > div{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  align-items:flex-start;
+}
+
+/* --- NW: EVCS mode labels highlight --- */
+#evcsModeLabels span,
+.nw-evcs-mode-labels span{
+  opacity:.7;
+  transition:opacity .15s ease;
+}
+#evcsModeLabels span.active,
+.nw-evcs-mode-labels span.active{
+  opacity:1;
+  font-weight:700;
+}

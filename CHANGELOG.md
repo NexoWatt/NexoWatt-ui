@@ -1,3 +1,10 @@
+## 0.4.75
+
+- Fix EVCS modal: read per-wallbox mode/active (evcs.1.*) with robust mode scale mapping and prevent slider jumping.
+- Fix EVCS page: preserve falsy datapoint values and convert UI mode to raw mode based on detected scale.
+- UI: improve spacing between labels and values in KPI cards and dialogs.
+
+
 
 ## 0.4.74 (2025-12-20)
 

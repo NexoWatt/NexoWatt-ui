@@ -995,6 +995,75 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
   const toggle = qs('evcsActiveToggle');
   const slider = qs('evcsModeSlider');
 
+  // Detect whether per-wallbox datapoints are available (evcs.1.*) and remember mode scale (0-2 vs 1-3)
+  let hasPerBoxMode = false;
+  let hasPerBoxActive = false;
+  let lastModeScale = '';
+
+  // Prevent UI "jumping" while an update is still in-flight
+  let pendingModeUi = null;
+  let pendingModeUntil = 0;
+  let pendingActive = null;
+  let pendingActiveUntil = 0;
+
+  function clampUiMode(v){
+    const n = Number(v);
+    if (!isFinite(n)) return 1;
+    return Math.max(1, Math.min(3, Math.round(n)));
+  }
+
+  // Normalize raw mode values (0..2 or 1..3, also strings) to UI 1..3.
+  // For ambiguous raw values (1/2), we use correlation with settings mode if present, otherwise fallback to last observed scale.
+  function normalizeMode(raw, settingsMode){
+    const s = String(raw ?? '').trim();
+    if (s === '') return { ui: 1, scale: null };
+    const sl = s.toLowerCase();
+    if (sl.includes('boost')) return { ui: 1, scale: null };
+    if (sl.includes('min') && sl.includes('pv')) return { ui: 2, scale: null };
+    if (sl === 'pv' || (sl.includes('pv') && !sl.includes('min'))) return { ui: 3, scale: null };
+
+    const num = Number(raw);
+    if (isFinite(num)){
+      const r = Math.round(num);
+
+      // unambiguous detection
+      if (r === 0) return { ui: 1, scale: '0-2' };
+      if (r === 3) return { ui: 3, scale: '1-3' };
+
+      // ambiguous values (1/2): use correlation with settings mode if available
+      const sm = Number(settingsMode);
+      if (isFinite(sm)){
+        const sr = Math.round(sm);
+        if (r + 1 === sr) return { ui: clampUiMode(r + 1), scale: '0-2' };
+        if (r === sr) return { ui: clampUiMode(r), scale: '1-3' };
+      }
+
+      // fallback to last observed scale
+      if (lastModeScale === '0-2') return { ui: clampUiMode(r + 1), scale: '0-2' };
+      if (lastModeScale === '1-3') return { ui: clampUiMode(r), scale: '1-3' };
+
+      // default (safe): 1..3
+      return { ui: clampUiMode(r), scale: null };
+    }
+    return { ui: 1, scale: null };
+  }
+
+  function uiToRaw(ui){
+    const u = clampUiMode(ui);
+    if (lastModeScale === '0-2') return u - 1;
+    return u;
+  }
+
+  function applyModeUi(ui){
+    const u = clampUiMode(ui);
+    if (slider) slider.value = String(u);
+    const labels = qs('evcsModeLabels');
+    if (labels){
+      const spans = labels.querySelectorAll('span[data-mode]');
+      spans.forEach(sp => sp.classList.toggle('active', Number(sp.getAttribute('data-mode')) === u));
+    }
+  }
+
   if (card){
     card.addEventListener('click', ()=>{
       const c = Number(window.__nwEvcsCount || 1) || 1;
@@ -1003,20 +1072,44 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
     });
   }
   if (close){
-    close.addEventListener('click', ()=> modal.classList.add('hidden'));
-    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') modal.classList.add('hidden'); });
+    close.addEventListener('click', ()=> modal && modal.classList.add('hidden'));
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal) modal.classList.add('hidden'); });
   }
+
   if (toggle){
     toggle.addEventListener('change', async ()=>{
-      try{ await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'settings', key:'evcsActive', value: toggle.checked})}); }catch(e){}
+      const desired = !!toggle.checked;
+      pendingActive = desired;
+      pendingActiveUntil = Date.now() + 2500;
+
+      const scope = hasPerBoxActive ? 'evcs' : 'settings';
+      const key = hasPerBoxActive ? '1.active' : 'evcsActive';
+      try{
+        await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope, key, value: desired})});
+      }catch(e){}
     });
   }
+
   if (slider){
-    const clamp = (v)=> Math.max(1, Math.min(3, Math.round(Number(v)||1)));
-    slider.addEventListener('input', ()=> slider.value = clamp(slider.value));
+    slider.addEventListener('input', ()=>{
+      const u = clampUiMode(slider.value);
+      pendingModeUi = u;
+      pendingModeUntil = Date.now() + 2500;
+      applyModeUi(u);
+    });
     slider.addEventListener('change', async ()=>{
-      slider.value = clamp(slider.value);
-      try{ await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'settings', key:'evcsMode', value: Number(slider.value)})}); }catch(e){}
+      const u = clampUiMode(slider.value);
+      pendingModeUi = u;
+      pendingModeUntil = Date.now() + 2500;
+      applyModeUi(u);
+
+      const scope = hasPerBoxMode ? 'evcs' : 'settings';
+      const key = hasPerBoxMode ? '1.mode' : 'evcsMode';
+      const raw = hasPerBoxMode ? uiToRaw(u) : u;
+
+      try{
+        await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope, key, value: Number(raw)})});
+      }catch(e){}
     });
   }
 
@@ -1024,8 +1117,19 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
   window.__evcsApply = function(d, s){
     const p = d('evcs.totalPowerW') ?? d('consumptionEvcs') ?? 0;
     const st = d('evcs.1.status') ?? d('evcsStatus') ?? '--';
-    const active = s['settings.evcsActive']?.value ?? false;
-    const mode = s['settings.evcsMode']?.value ?? 1;
+
+    const settingsMode = (s && s['settings.evcsMode']) ? s['settings.evcsMode'].value : null;
+    const settingsActive = (s && s['settings.evcsActive']) ? s['settings.evcsActive'].value : null;
+
+    const evcsActive = d('evcs.1.active');
+    hasPerBoxActive = evcsActive != null;
+    const activeVal = (evcsActive != null) ? evcsActive : ((settingsActive != null) ? settingsActive : false);
+
+    const evcsMode = d('evcs.1.mode');
+    hasPerBoxMode = evcsMode != null;
+    const modeRaw = (evcsMode != null) ? evcsMode : ((settingsMode != null) ? settingsMode : 1);
+    const nm = normalizeMode(modeRaw, settingsMode);
+    if (nm.scale) lastModeScale = nm.scale;
 
     const fmtP = (val)=> {
       const u = (window.units && window.units.power) || 'W';
@@ -1035,7 +1139,7 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
     };
 
     // Ring fill based on current power vs configured max power
-    let ratedSingle = Number(s['settings.evcsMaxPower']?.value ?? 11000); // W
+    let ratedSingle = Number((s && s['settings.evcsMaxPower']) ? s['settings.evcsMaxPower'].value : 11000); // W
     if (!isFinite(ratedSingle) || ratedSingle <= 0) ratedSingle = 11000;
 
     const rated = ratedSingle * (Number(window.__nwEvcsCount || 1) || 1);
@@ -1050,8 +1154,33 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
 
     const pb = qs('evcsPowerBig'); if (pb) pb.textContent = fmtP(p);
     const sm = qs('evcsStatusModal'); if (sm) sm.textContent = st;
-    if (toggle != null) toggle.checked = !!active;
-    if (slider != null) slider.value = String(Math.max(1, Math.min(3, Math.round(Number(mode)||1))));
+
+    const now = Date.now();
+
+    if (toggle != null){
+      if (pendingActive !== null && now < pendingActiveUntil){
+        toggle.checked = !!pendingActive;
+        if (!!activeVal === !!pendingActive) pendingActive = null;
+      } else {
+        pendingActive = null;
+        toggle.checked = !!activeVal;
+      }
+    }
+
+    const uiFromState = nm.ui;
+    if (slider != null){
+      if (pendingModeUi !== null){
+        if (uiFromState === pendingModeUi){
+          pendingModeUi = null;
+        } else if (now < pendingModeUntil){
+          applyModeUi(pendingModeUi);
+          return;
+        } else {
+          pendingModeUi = null;
+        }
+      }
+      applyModeUi(uiFromState);
+    }
   };
 
 })();

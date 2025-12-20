@@ -3,7 +3,9 @@ let state = {};
 let cfg = null;
 
 function d(key){
-  try { return state && state[key] ? state[key].value : undefined; } catch(e){ return undefined; }
+  try {
+    return (state && Object.prototype.hasOwnProperty.call(state, key)) ? state[key].value : undefined;
+  } catch(e){ return undefined; }
 }
 function fmtW(w){
   if (w == null || isNaN(w)) return '--';
@@ -17,6 +19,34 @@ function fmtKwh(v){
 }
 function esc(s){
   return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+
+function clampUiMode(v){
+  const n = Number(v);
+  if (!isFinite(n)) return 1;
+  return Math.max(1, Math.min(3, Math.round(n)));
+}
+function normalizeMode(raw){
+  const s = String(raw ?? '').trim();
+  if (s === '') return { ui: 1, scale: null };
+  const sl = s.toLowerCase();
+  if (sl.includes('boost')) return { ui: 1, scale: null };
+  if (sl.includes('min') && sl.includes('pv')) return { ui: 2, scale: null };
+  if (sl === 'pv' || (sl.includes('pv') && !sl.includes('min'))) return { ui: 3, scale: null };
+  const num = Number(raw);
+  if (isFinite(num)){
+    const r = Math.round(num);
+    if (r >= 0 && r <= 2) return { ui: clampUiMode(r + 1), scale: '0-2' };
+    if (r >= 1 && r <= 3) return { ui: clampUiMode(r), scale: '1-3' };
+    return { ui: clampUiMode(r), scale: null };
+  }
+  return { ui: 1, scale: null };
+}
+function uiToRawMode(ui, scale){
+  const u = clampUiMode(ui);
+  if (scale === '0-2') return u - 1;
+  return u;
 }
 
 function render(){
@@ -41,7 +71,9 @@ function render(){
     const st = d(`evcs.${i}.status`);
     const active = d(`evcs.${i}.active`);
     const mode = d(`evcs.${i}.mode`);
-    const modeVal = (mode == null || isNaN(Number(mode))) ? 1 : Math.max(1, Math.min(3, Math.round(Number(mode))));
+    const nmMode = normalizeMode(mode);
+    const modeVal = nmMode.ui;
+    const modeScale = nmMode.scale || '';
 
     html += `
       <div class="card" style="margin:0">
@@ -71,7 +103,7 @@ function render(){
             <span>Modus</span>
             ${canMode ? `
               <div class="nw-evcs-mode">
-                <input type="range" min="1" max="3" step="1" data-evcs-mode="${i}" value="${modeVal}" aria-label="Betriebsmodus">
+                <input type="range" min="1" max="3" step="1" data-evcs-mode="${i}" data-scale="${modeScale}" value="${modeVal}" aria-label="Betriebsmodus">
                 <div class="nw-evcs-mode-labels">
                   <span data-mode="1" class="${modeVal === 1 ? 'active' : ''}">Boost</span>
                   <span data-mode="2" class="${modeVal === 2 ? 'active' : ''}">Min+PV</span>
@@ -145,8 +177,10 @@ function bindControls(){
       const idx = Number(t.getAttribute('data-evcs-mode'));
       const v = clampMode(t.value);
       t.value = String(v);
+      const scale = String(t.getAttribute('data-scale') || '');
+      const raw = uiToRawMode(v, scale);
       try{
-        await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'evcs', key: `${idx}.mode`, value: Number(v)})});
+        await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'evcs', key: `${idx}.mode`, value: Number(raw)})});
       }catch(_e){}
     }
   });
