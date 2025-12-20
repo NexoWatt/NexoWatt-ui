@@ -1,3 +1,8 @@
+## 0.4.77
+
+- Fix EVCS page mode slider: interpret raw values as 1..3 (Boost/Min+PV/PV) to prevent off-by-one jumps.
+
+
 ## 0.4.76
 
 - EVCS: Mode slider now always writes raw values 1/2/3 (Boost/Min+PV/PV) on EVCS page and EVCS modal.

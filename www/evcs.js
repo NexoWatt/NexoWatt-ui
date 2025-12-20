@@ -37,8 +37,9 @@ function normalizeMode(raw){
   const num = Number(raw);
   if (isFinite(num)){
     const r = Math.round(num);
-    if (r >= 0 && r <= 2) return { ui: clampUiMode(r + 1), scale: '0-2' };
+    // Prefer raw scale 1..3 (Boost/Min+PV/PV). Only fall back to legacy 0..2 if needed.
     if (r >= 1 && r <= 3) return { ui: clampUiMode(r), scale: '1-3' };
+    if (r >= 0 && r <= 2) return { ui: clampUiMode(r + 1), scale: '0-2' };
     return { ui: clampUiMode(r), scale: null };
   }
   return { ui: 1, scale: null };
