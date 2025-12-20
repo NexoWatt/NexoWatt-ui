@@ -1490,7 +1490,7 @@ app.get('/api/history', async (req, res) => {
         };
         const ask = (id) => new Promise(resolve => {
           if (!id) return resolve({id, values:[]});
-          const options = { start, end, aggregate: 'none', addId: false, ignoreNull: true };
+          const options = { start, end, step: stepS * 1000, aggregate: 'average', addId: false, ignoreNull: true };
           try {
             this.sendTo(inst, 'getHistory', { id, options }, (resu) => {
               let outArr = [];
