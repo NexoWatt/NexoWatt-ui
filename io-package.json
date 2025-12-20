@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.70",
+    "version": "0.4.71",
     "news": {
       "0.4.58": {
         "de": "EVCS Bericht: Öffnet nun die statische Seite /static/evcs-report.html (Weiterleitung von /evcs-report.html), History-Button angepasst.",
@@ -347,6 +347,10 @@
       "0.4.69": {
         "en": "SmartHomeConfig: improved datapoint picker (browse list without typing) and user-friendly device type labels.",
         "de": "SmartHomeConfig: Datenpunkt-Picker verbessert (Liste ohne Eingabe) und benutzerfreundliche Geräte-Typ-Labels."
+      },
+      "0.4.71": {
+        "en": "Fix: EVCS report values are visible in screen mode (single wallbox).",
+        "de": "Fix: EVCS-Berichtwerte sind im Bildschirmmodus sichtbar (einzelne Wallbox)."
       }
     },
     "title": "NexoWatt EMS UI",

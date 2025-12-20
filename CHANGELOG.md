@@ -1,4 +1,8 @@
 
+## 0.4.71 (2025-12-20)
+
+- Fix (EVCS Bericht): Tabellenwerte werden im Browser wieder sichtbar gerendert (td/th erben Textfarbe), auch bei nur 1 Wallbox.
+
 ## 0.4.70 (2025-12-20)
 
 - Fix: Einstellungen/Installer – Änderungen werden wieder korrekt per /api/set an die im Admin konfigurierten Datenpunkt-IDs geschrieben (scope/key korrekt übertragen).
