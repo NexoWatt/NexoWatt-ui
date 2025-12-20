@@ -1750,7 +1750,8 @@ app.get('/config', (req, res) => {
         } else {
           map = (this.config && this.config.settings) || {};
         }
-        const id = map[key];
+        const mapped = map[key];
+        const id = (typeof mapped === 'string' && mapped.trim()) ? mapped.trim() : '';
         if (id) {
           await this.setForeignStateAsync(id, value);
         } else {
@@ -1815,7 +1816,14 @@ app.get('/config', (req, res) => {
       if (key.startsWith('settings.')) id = settings[key.slice(9)];
       else if (key.startsWith('installer.')) id = installer[key.slice(10)];
       else id = dps[key];
+
+      // Only treat mapped entries as datapoint IDs if they are non-empty strings.
+      if (typeof id === 'string') id = id.trim();
+      else id = null;
+
+      // For settings.* keys, fall back to local adapter states so UI preferences remain usable even without external mappings.
       if (!id && key.startsWith('settings.')) id = namespace + key;
+
       if (!id) continue;
 
       // subscribe
@@ -1851,9 +1859,9 @@ app.get('/config', (req, res) => {
     const dps = (this.config && this.config.datapoints) || {};
     for (const [key, dpId] of Object.entries(dps)) { if (dpId === id) return key; }
     const settings = (this.config && this.config.settings) || {};
-    for (const [k, dpId] of Object.entries(settings)) { if (dpId === id) return 'settings.' + k; }
+    for (const [k, dpId] of Object.entries(settings)) { if (typeof dpId === 'string' && dpId === id) return 'settings.' + k; }
     const installer = (this.config && this.config.installer) || {};
-    for (const [k, dpId] of Object.entries(installer)) { if (dpId === id) return 'installer.' + k; }
+    for (const [k, dpId] of Object.entries(installer)) { if (typeof dpId === 'string' && dpId === id) return 'installer.' + k; }
     
     // direct mapping for local states
     const prefS = this.namespace + '.settings.';

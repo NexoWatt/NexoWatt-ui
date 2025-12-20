@@ -428,25 +428,53 @@ function bindInputValue(el, stateKey) {
   const st = window.latestState || {};
   const info = st[stateKey] || st['settings.' + el.dataset.key] || st['installer.' + el.dataset.key];
   if (info && info.value !== undefined) {
-    if (el.type === 'checkbox') el.checked = !!info.value;
-    else el.value = info.value;
+    const v = info.value;
+    if (el.type === 'checkbox') {
+      // Be robust against boolean/number/string representations
+      if (v === true) el.checked = true;
+      else if (v === false) el.checked = false;
+      else if (typeof v === 'number') el.checked = v !== 0;
+      else if (typeof v === 'string') {
+        const s = v.trim().toLowerCase();
+        el.checked = (s === '1' || s === 'true' || s === 'on' || s === 'yes' || s === 'ja');
+      } else {
+        el.checked = !!v;
+      }
+    } else {
+      el.value = v;
+    }
   }
+
+  // Derive API scope+key from stateKey ('settings.<key>' / 'installer.<key>' / 'evcs.<idx>.<prop>')
+  const sk = String(stateKey || '');
+  let scope = 'settings';
+  let key = sk;
+  if (sk.startsWith('settings.')) { scope = 'settings'; key = sk.slice(9); }
+  else if (sk.startsWith('installer.')) { scope = 'installer'; key = sk.slice(10); }
+  else if (sk.startsWith('evcs.')) { scope = 'evcs'; key = sk; }
 
   // Prevent duplicate listeners when setupSettings() is called multiple times
   if (el.dataset.nwBound === '1') return;
   el.dataset.nwBound = '1';
 
   el.addEventListener('change', async () => {
-    const val = (el.type === 'checkbox') ? (el.checked ? 1 : 0) : el.value;
+    let val;
+    if (el.type === 'checkbox') val = !!el.checked;
+    else if (el.type === 'number' || el.type === 'range') {
+      val = Number(el.value);
+      if (!Number.isFinite(val)) val = 0;
+    } else val = el.value;
+
     try {
       await fetch('/api/set', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: stateKey, value: val })
+        body: JSON.stringify({ scope, key, value: val })
       });
     } catch (e) { /* ignore */ }
   });
 }
+
 
 function setupSettings(){
   document.querySelectorAll('[data-scope="settings"]').forEach(el=> bindInputValue(el, 'settings.'+el.dataset.key));

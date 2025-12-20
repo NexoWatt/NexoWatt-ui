@@ -1,4 +1,8 @@
 
+## 0.4.70 (2025-12-20)
+
+- Fix: Einstellungen/Installer – Änderungen werden wieder korrekt per /api/set an die im Admin konfigurierten Datenpunkt-IDs geschrieben (scope/key korrekt übertragen).
+- Fix: Backend – config.settings/config.installer werden nur noch als Mapping genutzt, wenn ein gültiger String (Objekt-ID) hinterlegt ist (verhindert Fehler bei Checkbox/Boolean-Werten).
 
 ## 0.4.69
 
