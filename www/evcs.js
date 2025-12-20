@@ -44,8 +44,8 @@ function normalizeMode(raw){
   return { ui: 1, scale: null };
 }
 function uiToRawMode(ui, scale){
+  // EVCS expects raw mode 1..3 (Boost/Min+PV/PV)
   const u = clampUiMode(ui);
-  if (scale === '0-2') return u - 1;
   return u;
 }
 

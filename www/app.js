@@ -1050,7 +1050,7 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
 
   function uiToRaw(ui){
     const u = clampUiMode(ui);
-    if (lastModeScale === '0-2') return u - 1;
+    // EVCS expects raw mode 1..3 (Boost/Min+PV/PV)
     return u;
   }
 

@@ -1,3 +1,7 @@
+## 0.4.76
+
+- EVCS: Mode slider now always writes raw values 1/2/3 (Boost/Min+PV/PV) on EVCS page and EVCS modal.
+
 ## 0.4.75
 
 - Fix EVCS modal: read per-wallbox mode/active (evcs.1.*) with robust mode scale mapping and prevent slider jumping.
