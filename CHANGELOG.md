@@ -1,3 +1,10 @@
+## 0.4.82
+
+- Tweak (EVCS Report): improved table formatting (de-DE number format, fixed decimals).
+- Fix (EVCS Report): deterministic sorting (days by date, wallboxes by index).
+- Fix (EVCS Report): null/undefined values render as 0 and total kWh falls back to sum of wallboxes.
+- Tweak (Print/PDF): table header repeats across pages and rows avoid page breaks.
+
 ## 0.4.81
 
 - Fix (EVCS Report UI): Tabelle in Scroll-Container (.table-wrap) gelegt, Sticky-Header innerhalb des Containers (top:0) – dadurch wird die erste Tageszeile nicht mehr optisch überdeckt.

@@ -18,6 +18,7 @@
     table{ width:100%; border-collapse: collapse; }
     .table-wrap{ overflow:auto; max-height: calc(100vh - 240px); -webkit-overflow-scrolling: touch; }
 #tbl, #tbl th, #tbl td{ color:#dfe7ee !important; }
+    #tbl{ font-variant-numeric: tabular-nums; }
     th, td{ border-bottom:1px solid #20262d; padding:8px 10px; text-align:right; white-space:nowrap;  color:inherit; }
     th:first-child, td:first-child{ text-align:left; }
     th{ position:sticky; top:0; background:#121418; z-index:2; }
@@ -31,6 +32,10 @@
       .card{ border:none; }
             .table-wrap{ overflow:visible !important; max-height:none !important; }
       th{ position:static; }
+      thead{ display: table-header-group; }
+      tfoot{ display: table-footer-group; }
+      tr{ page-break-inside: avoid; }
+      td, th{ page-break-inside: avoid; }
     }
   </style>
 </head>

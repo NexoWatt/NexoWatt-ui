@@ -8,13 +8,26 @@
 
   function fmtDate(iso){ return iso || ''; }
 
-  function fmtNum(n, d){
-    const x = Number(n);
-    if (!isFinite(x)) return '';
-    return x.toFixed(d);
+  // Numeric formatting for UI + PDF (German locale, fixed decimals, tabular numbers in CSS).
+  const _nfCache = new Map();
+  function _getNf(d){
+    const key = String(d);
+    let nf = _nfCache.get(key);
+    if (!nf){
+      nf = new Intl.NumberFormat('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+      _nfCache.set(key, nf);
+    }
+    return nf;
   }
-
-  function toISODate(ms){
+  function fmtNum(n, d, { emptyZero = true } = {}){
+    if (n === null || n === undefined || n === '') {
+      return emptyZero ? _getNf(d).format(0) : '';
+    }
+    const x = Number(n);
+    if (!isFinite(x)) return emptyZero ? _getNf(d).format(0) : '';
+    return _getNf(d).format(x);
+  }
+function toISODate(ms){
     const d = new Date(ms);
     const y = d.getFullYear();
     const m = String(d.getMonth()+1).padStart(2,'0');
@@ -58,6 +71,27 @@
 
       const wbs = Array.isArray(res.wallboxes) ? res.wallboxes : [];
       const days = Array.isArray(res.days) ? res.days : [];
+
+      // Stable sorting: wallboxes by index, days by date (ascending)
+      wbs.sort((a,b) => (Number(a?.index) || 0) - (Number(b?.index) || 0));
+      days.sort((a,b) => String(a?.date || '').localeCompare(String(b?.date || '')));
+
+      // Null handling: ensure totals are present (fallback = sum of wallboxes kWh)
+      days.forEach(d => {
+        const total = Number(d && d.totalKwh);
+        if (!isFinite(total)){
+          let s = 0;
+          if (d && d.wallboxes){
+            wbs.forEach(wb => {
+              const idx = String(wb.index);
+              const cell = (d.wallboxes[idx] || d.wallboxes[wb.index]) || {};
+              const v = Number(cell && cell.kwh);
+              if (isFinite(v)) s += v;
+            });
+          }
+          d.totalKwh = s;
+        }
+      });
 
       // Header: Date + Total + per wallbox (kWh / max kW)
       let h = '<tr>';
