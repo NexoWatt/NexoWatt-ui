@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.77",
+    "version": "0.4.78",
     "news": {
       "0.4.58": {
         "de": "EVCS Bericht: Öffnet nun die statische Seite /static/evcs-report.html (Weiterleitung von /evcs-report.html), History-Button angepasst.",

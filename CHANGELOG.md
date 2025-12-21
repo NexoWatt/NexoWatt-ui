@@ -1,3 +1,8 @@
+## 0.4.78
+
+- Fix EVCS modal HTML (clean markup) and restore proper mode label spacing under the slider.
+- Fix EVCS modal mode mapping (prefer 0–2 scale when ambiguous) and stabilize slider by inferring scale from last raw value.
+
 ## 0.4.77
 
 - Fix EVCS page mode slider: interpret raw values as 1..3 (Boost/Min+PV/PV) to prevent off-by-one jumps.

@@ -998,7 +998,8 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
   // Detect whether per-wallbox datapoints are available (evcs.1.*) and remember mode scale (0-2 vs 1-3)
   let hasPerBoxMode = false;
   let hasPerBoxActive = false;
-  let lastModeScale = '';
+  let lastModeScale = ''; // '0-2' or '1-3'
+  let lastRawMode = null;
 
   // Prevent UI "jumping" while an update is still in-flight
   let pendingModeUi = null;
@@ -1012,45 +1013,45 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
     return Math.max(1, Math.min(3, Math.round(n)));
   }
 
-  // Normalize raw mode values (0..2 or 1..3, also strings) to UI 1..3.
-  // For ambiguous raw values (1/2), we use correlation with settings mode if present, otherwise fallback to last observed scale.
-  function normalizeMode(raw, settingsMode){
-    const s = String(raw ?? '').trim();
-    if (s === '') return { ui: 1, scale: null };
-    const sl = s.toLowerCase();
-    if (sl.includes('boost')) return { ui: 1, scale: null };
-    if (sl.includes('min') && sl.includes('pv')) return { ui: 2, scale: null };
-    if (sl === 'pv' || (sl.includes('pv') && !sl.includes('min'))) return { ui: 3, scale: null };
+  function detectScaleFromRaw(raw){
+    const n = Number(raw);
+    if (!isFinite(n)) return '';
+    const r = Math.round(n);
 
-    const num = Number(raw);
-    if (isFinite(num)){
-      const r = Math.round(num);
+    // definitive endpoints
+    if (r === 0) return '0-2';
+    if (r === 3) return '1-3';
 
-      // unambiguous detection
-      if (r === 0) return { ui: 1, scale: '0-2' };
-      if (r === 3) return { ui: 3, scale: '1-3' };
-
-      // ambiguous values (1/2): use correlation with settings mode if available
-      const sm = Number(settingsMode);
-      if (isFinite(sm)){
-        const sr = Math.round(sm);
-        if (r + 1 === sr) return { ui: clampUiMode(r + 1), scale: '0-2' };
-        if (r === sr) return { ui: clampUiMode(r), scale: '1-3' };
-      }
-
-      // fallback to last observed scale
-      if (lastModeScale === '0-2') return { ui: clampUiMode(r + 1), scale: '0-2' };
-      if (lastModeScale === '1-3') return { ui: clampUiMode(r), scale: '1-3' };
-
-      // default (safe): 1..3
-      return { ui: clampUiMode(r), scale: null };
+    // ambiguous 1/2: prefer last observed, otherwise default to 0-2 (most common in current setups)
+    if (r === 1 || r === 2){
+      return lastModeScale || '0-2';
     }
-    return { ui: 1, scale: null };
+
+    if (r >= 0 && r <= 2) return '0-2';
+    if (r >= 1 && r <= 3) return '1-3';
+    return '';
+  }
+
+  function rawToUi(raw){
+    const n = Number(raw);
+    if (!isFinite(n)) return 1;
+    const r = Math.round(n);
+    const scale = detectScaleFromRaw(r);
+    if (scale === '0-2') return clampUiMode(r + 1);
+    if (scale === '1-3') return clampUiMode(r);
+    return clampUiMode(r);
   }
 
   function uiToRaw(ui){
     const u = clampUiMode(ui);
-    // EVCS expects raw mode 1..3 (Boost/Min+PV/PV)
+
+    // If scale is still unknown but we already saw a raw value, infer from that.
+    if (!lastModeScale && lastRawMode != null){
+      const s = detectScaleFromRaw(lastRawMode);
+      if (s) lastModeScale = s;
+    }
+
+    if (lastModeScale === '0-2') return u - 1;
     return u;
   }
 
@@ -1071,6 +1072,7 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
       if (modal) modal.classList.remove('hidden');
     });
   }
+
   if (close){
     close.addEventListener('click', ()=> modal && modal.classList.add('hidden'));
     document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal) modal.classList.add('hidden'); });
@@ -1097,6 +1099,7 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
       pendingModeUntil = Date.now() + 2500;
       applyModeUi(u);
     });
+
     slider.addEventListener('change', async ()=>{
       const u = clampUiMode(slider.value);
       pendingModeUi = u;
@@ -1105,6 +1108,7 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
 
       const scope = hasPerBoxMode ? 'evcs' : 'settings';
       const key = hasPerBoxMode ? '1.mode' : 'evcsMode';
+
       const raw = hasPerBoxMode ? uiToRaw(u) : u;
 
       try{
@@ -1118,18 +1122,22 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
     const p = d('evcs.totalPowerW') ?? d('consumptionEvcs') ?? 0;
     const st = d('evcs.1.status') ?? d('evcsStatus') ?? '--';
 
-    const settingsMode = (s && s['settings.evcsMode']) ? s['settings.evcsMode'].value : null;
-    const settingsActive = (s && s['settings.evcsActive']) ? s['settings.evcsActive'].value : null;
-
     const evcsActive = d('evcs.1.active');
+    const settingsActive = s && s['settings.evcsActive'] ? s['settings.evcsActive'].value : null;
     hasPerBoxActive = evcsActive != null;
     const activeVal = (evcsActive != null) ? evcsActive : ((settingsActive != null) ? settingsActive : false);
 
     const evcsMode = d('evcs.1.mode');
+    const settingsMode = s && s['settings.evcsMode'] ? s['settings.evcsMode'].value : null;
     hasPerBoxMode = evcsMode != null;
+
     const modeRaw = (evcsMode != null) ? evcsMode : ((settingsMode != null) ? settingsMode : 1);
-    const nm = normalizeMode(modeRaw, settingsMode);
-    if (nm.scale) lastModeScale = nm.scale;
+    lastRawMode = modeRaw;
+
+    const scale = detectScaleFromRaw(modeRaw);
+    if (scale) lastModeScale = scale;
+
+    const uiFromState = rawToUi(modeRaw);
 
     const fmtP = (val)=> {
       const u = (window.units && window.units.power) || 'W';
@@ -1139,7 +1147,7 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
     };
 
     // Ring fill based on current power vs configured max power
-    let ratedSingle = Number((s && s['settings.evcsMaxPower']) ? s['settings.evcsMaxPower'].value : 11000); // W
+    let ratedSingle = Number(s && s['settings.evcsMaxPower'] ? s['settings.evcsMaxPower'].value : 11000); // W
     if (!isFinite(ratedSingle) || ratedSingle <= 0) ratedSingle = 11000;
 
     const rated = ratedSingle * (Number(window.__nwEvcsCount || 1) || 1);
@@ -1167,7 +1175,6 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
       }
     }
 
-    const uiFromState = nm.ui;
     if (slider != null){
       if (pendingModeUi !== null){
         if (uiFromState === pendingModeUi){

@@ -1318,3 +1318,14 @@ body {
   opacity:1;
   font-weight:700;
 }
+
+
+/* --- EVCS Modal: ensure slider labels are spaced and readable --- */
+#evcsModal .nw-evcs-mode{ width: 220px; }
+#evcsModal #evcsModeLabels{
+  display:flex;
+  justify-content:space-between;
+  width:100%;
+  margin-top: 6px;
+}
+#evcsModal #evcsModeLabels span{ white-space:nowrap; }
