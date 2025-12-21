@@ -1,5 +1,8 @@
 ## 0.4.82
 
+## 0.4.83 (2025-12-21)
+- EVCS Report: Summenzeile für Zeitraum ergänzt (Gesamt-kWh + kWh je Wallbox, Peak max kW je Wallbox) und im Druck/PDF stabil dargestellt.
+
 - Tweak (EVCS Report): improved table formatting (de-DE number format, fixed decimals).
 - Fix (EVCS Report): deterministic sorting (days by date, wallboxes by index).
 - Fix (EVCS Report): null/undefined values render as 0 and total kWh falls back to sum of wallboxes.
@@ -29,7 +32,6 @@
 
 - Fix EVCS page mode slider: interpret raw values as 1..3 (Boost/Min+PV/PV) to prevent off-by-one jumps.
 
-
 ## 0.4.76
 
 - EVCS: Mode slider now always writes raw values 1/2/3 (Boost/Min+PV/PV) on EVCS page and EVCS modal.
@@ -39,7 +41,6 @@
 - Fix EVCS modal: read per-wallbox mode/active (evcs.1.*) with robust mode scale mapping and prevent slider jumping.
 - Fix EVCS page: preserve falsy datapoint values and convert UI mode to raw mode based on detected scale.
 - UI: improve spacing between labels and values in KPI cards and dialogs.
-
 
 
 ## 0.4.74 (2025-12-20)

@@ -40,6 +40,7 @@ function toISODate(ms){
     const errEl = el('err');
     const thead = el('thead');
     const tbody = el('tbody');
+    const tfoot = el('tfoot');
 
     if (rangeMeta){
       const fromMs = Number(q('from') || (Date.now() - 7*24*3600*1000));
@@ -54,6 +55,7 @@ function toISODate(ms){
 
     if (errEl) errEl.textContent = '';
     thead.innerHTML = '';
+    if (tfoot) tfoot.innerHTML = '';
     tbody.innerHTML = '<tr><td colspan="99" style="text-align:left;color:#9aa4ad;">Lade Daten…</td></tr>';
 
     try{
@@ -107,6 +109,7 @@ function toISODate(ms){
 
       // Rows (set innerHTML once to avoid any insertAdjacentHTML quirks)
       if (days.length === 0){
+        if (tfoot) tfoot.innerHTML = '';
         tbody.innerHTML = '<tr><td colspan="99" style="text-align:left;color:#9aa4ad;">Keine Daten im Zeitraum.</td></tr>';
         return true;
       }
@@ -125,6 +128,22 @@ function toISODate(ms){
         rowsHtml += '</tr>';
       });
       tbody.innerHTML = rowsHtml;
+
+      // Footer (period sum row)
+      if (tfoot){
+        let f = '<tr class="total-row">';
+        f += '<th>Summe Zeitraum</th>';
+        f += `<th>${fmtNum(periodTotals.totalKwh, 2)}</th>`;
+        wbs.forEach(wb => {
+          const idx = String(wb.index);
+          const t = periodTotals.wallboxes[idx] || { kwh: 0, maxKw: 0 };
+          f += `<td>${fmtNum(t.kwh, 2)}</td>`;
+          f += `<td>${fmtNum(t.maxKw, 2)}</td>`;
+        });
+        f += '</tr>';
+        tfoot.innerHTML = f;
+      }
+
       return true;
     }catch(e){
       tbody.innerHTML = '';
