@@ -1137,7 +1137,7 @@
         "settingsConfig.evcsList": {
           "type": "table",
           "label": "Wallboxen (EVCS) – Zuordnung",
-          "help": "Lege pro Wallbox genau eine Zeile an. Die VIS nutzt die Einträge, um Kacheln automatisch zu erzeugen.\nHinweis: Wenn weniger Zeilen als „Anzahl Wallboxen“ vorhanden sind, werden fehlende Einträge automatisch mit Standardwerten ergänzt.\nDie Datenpunkte bitte über die Objekt-Auswahl auswählen (kein manuelles Tippen nötig).",
+          "help": "Lege pro Wallbox genau eine Zeile an. Die VIS nutzt die Einträge, um Kacheln automatisch zu erzeugen.\nHinweis: Wenn weniger Zeilen als „Anzahl Wallboxen“ vorhanden sind, werden fehlende Einträge automatisch mit Standardwerten ergänzt.\nDie Datenpunkte bitte über die Objekt-Auswahl auswählen (kein manuelles Tippen nötig).\nZusatz: RFID-DP (optional) für Karten-Anlernen/Whitelist. Optional Sperre-DP (bool) als Alternative zum Freigabe-DP.",
           "attr": "settingsConfig.evcsList",
           "items": [
             {
@@ -1257,6 +1257,48 @@
               "tooltip": "Optional: Schreibbarer DP für Modus/Limit (number).",
               "attr": "modeId",
               "title": "Modus-DP (optional)",
+              "types": [
+                "state"
+              ],
+              "placeholder": "Objekt auswählen …",
+              "style": {
+                "minWidth": "260px",
+                "fontFamily": "monospace"
+              },
+              "multiline": true,
+              "rows": 2,
+              "showName": true
+            },
+            {
+              "type": "objectId",
+              "label": "RFID-DP (optional)",
+              "xs": 12,
+              "sm": 6,
+              "md": 4,
+              "tooltip": "Optional: RFID-Leser DP (String/Zahl). Wird für Karten-Anlernen & Whitelist-Freigabe genutzt.",
+              "attr": "rfidReadId",
+              "title": "RFID-DP (optional)",
+              "types": [
+                "state"
+              ],
+              "placeholder": "Objekt auswählen …",
+              "style": {
+                "minWidth": "260px",
+                "fontFamily": "monospace"
+              },
+              "multiline": true,
+              "rows": 2,
+              "showName": true
+            },
+            {
+              "type": "objectId",
+              "label": "Sperre-DP (optional)",
+              "xs": 12,
+              "sm": 6,
+              "md": 4,
+              "tooltip": "Optional: Schreibbarer DP zum Sperren/Freigeben (bool). Falls vorhanden, kann später statt Freigabe-DP verwendet werden.",
+              "attr": "lockWriteId",
+              "title": "Sperre-DP (optional)",
               "types": [
                 "state"
               ],

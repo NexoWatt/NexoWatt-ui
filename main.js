@@ -45,7 +45,16 @@ class NexoWattVis extends utils.Adapter {
     this.sseClients = new Set();
     this.smartHomeDevices = [];
 
-    this.on('ready', this.onReady.bind(this));
+    
+
+    // EVCS session logger (RFID accounting)
+    this._evcsSessionMaxEntries = 2000;
+    this._evcsSessionsBuf = [];
+    this._evcsActiveSessions = {}; // idx -> session
+    this._evcsCharging = {}; // idx -> bool
+    this._evcsChargeStartW = 100; // hysteresis start threshold
+    this._evcsChargeStopW = 50;   // hysteresis stop threshold
+this.on('ready', this.onReady.bind(this));
     this.on('stateChange', this.onStateChange.bind(this));
     this.on('unload', this.onUnload.bind(this));
   }
@@ -134,9 +143,27 @@ async syncInstallerConfigToStates() {
       const statusId = (row && typeof row.statusId === 'string' && row.statusId.trim()) ? row.statusId.trim() : '';
       const activeId = (row && typeof row.activeId === 'string' && row.activeId.trim()) ? row.activeId.trim() : '';
       const modeId = (row && typeof row.modeId === 'string' && row.modeId.trim()) ? row.modeId.trim() : '';
-      evcsList.push({ index: i+1, name, note, powerId, energyTotalId, statusId, activeId, modeId });
+      // Optional: Sperre/Lock DP (bool). Alternative zu activeId (Freigabe).
+      const lockWriteId = (row && typeof row.lockWriteId === 'string' && row.lockWriteId.trim()) ? row.lockWriteId.trim() :
+        ((row && typeof row.lockId === 'string' && row.lockId.trim()) ? row.lockId.trim() :
+        ((row && typeof row.lock === 'string' && row.lock.trim()) ? row.lock.trim() : ''));
+      // Optional: RFID reader datapoint (used for learning/whitelist access control)
+      const rfidReadId = (row && typeof row.rfidReadId === 'string' && row.rfidReadId.trim()) ? row.rfidReadId.trim() :
+        ((row && typeof row.rfidId === 'string' && row.rfidId.trim()) ? row.rfidId.trim() :
+        ((row && typeof row.rfid === 'string' && row.rfid.trim()) ? row.rfid.trim() : ''));
+      evcsList.push({ index: i+1, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId });
     }
     this.evcsList = evcsList;
+
+    // quick lookup for RFID reader datapoints (used by learning backend + access control)
+    this.evcsRfidReadIds = new Set();
+    this.evcsRfidReadIdToIndex = {};
+    for (const wb of this.evcsList) {
+      if (wb && wb.rfidReadId) {
+        this.evcsRfidReadIds.add(wb.rfidReadId);
+        this.evcsRfidReadIdToIndex[wb.rfidReadId] = wb.index;
+      }
+    }
 
     // build lookup for mapped EVCS datapoints -> internal cache keys
     this.evcsIdToKey = {};
@@ -145,6 +172,8 @@ async syncInstallerConfigToStates() {
       if (wb.energyTotalId) this.evcsIdToKey[wb.energyTotalId] = `evcs.${wb.index}.energyTotalKwh`;
       if (wb.statusId) this.evcsIdToKey[wb.statusId] = `evcs.${wb.index}.status`;
       if (wb.activeId) this.evcsIdToKey[wb.activeId] = `evcs.${wb.index}.active`;
+      if (wb.lockWriteId) this.evcsIdToKey[wb.lockWriteId] = `evcs.${wb.index}.lock`;
+      if (wb.rfidReadId) this.evcsIdToKey[wb.rfidReadId] = `evcs.${wb.index}.rfidLast`;
       if (wb.modeId) this.evcsIdToKey[wb.modeId] = `evcs.${wb.index}.mode`;
     }
 
@@ -191,7 +220,15 @@ async syncInstallerConfigToStates() {
         _dayBaseDate: { type: 'string', role: 'text', def: '', read: true, write: false },
         status:        { type: 'string', role: 'state', def: '', read: true, write: false },
         active:        { type: 'boolean', role: 'switch', def: false, read: true, write: false },
-        mode:          { type: 'number', role: 'value', def: 0, read: true, write: false }
+        mode:          { type: 'number', role: 'value', def: 0, read: true, write: false },
+        // RFID / Ladepark (read-only visualization states; enforcement writes to configured foreign datapoints)
+        lock:          { type: 'boolean', role: 'state', def: false, read: true, write: false },
+        rfidLast:      { type: 'string', role: 'text', def: '', read: true, write: false },
+        rfidLastTs:    { type: 'number', role: 'value', def: 0, read: true, write: false, unit: 'ms' },
+        rfidAuthorized:{ type: 'boolean', role: 'indicator', def: false, read: true, write: false },
+        rfidUser:      { type: 'string', role: 'text', def: '', read: true, write: false },
+        rfidReason:    { type: 'string', role: 'text', def: '', read: true, write: false },
+        rfidEnforced:  { type: 'boolean', role: 'indicator', def: false, read: true, write: false }
       };
 
       for (const [k, c] of Object.entries(defs)) {
@@ -215,6 +252,381 @@ async syncInstallerConfigToStates() {
       this.log.debug('ensureEvcsStates write meta failed: ' + e.message);
     }
   }
+  async ensureRfidStates() {
+    // Base RFID states for EVCS access control (Whitelist + Learning)
+    await this.setObjectNotExistsAsync('evcs.rfid', {
+      type: 'channel',
+      common: { name: 'EVCS RFID' },
+      native: {}
+    });
+
+    await this.setObjectNotExistsAsync('evcs.rfid.learning', {
+      type: 'channel',
+      common: { name: 'EVCS RFID Learning' },
+      native: {}
+    });
+
+    const defs = {
+      'evcs.rfid.enabled': {
+        name: 'evcs.rfid.enabled',
+        type: 'boolean',
+        role: 'switch',
+        read: true,
+        write: true,
+        def: false
+      },
+      'evcs.rfid.whitelistJson': {
+        name: 'evcs.rfid.whitelistJson',
+        type: 'string',
+        role: 'json',
+        read: true,
+        write: true,
+        def: '[]'
+      },
+      'evcs.rfid.learning.active': {
+        name: 'evcs.rfid.learning.active',
+        type: 'boolean',
+        role: 'switch',
+        read: true,
+        write: true,
+        def: false
+      },
+      'evcs.rfid.learning.lastCaptured': {
+        name: 'evcs.rfid.learning.lastCaptured',
+        type: 'string',
+        role: 'text',
+        read: true,
+        write: false,
+        def: ''
+      },
+      'evcs.rfid.learning.lastCapturedTs': {
+        name: 'evcs.rfid.learning.lastCapturedTs',
+        type: 'number',
+        role: 'value.time',
+        read: true,
+        write: false,
+        def: 0,
+        unit: 'ms'
+      }
+    };
+
+    for (const [id, c] of Object.entries(defs)) {
+      await this.setObjectNotExistsAsync(id, {
+        type: 'state',
+        common: {
+          name: c.name,
+          type: c.type,
+          role: c.role,
+          read: c.read,
+          write: c.write,
+          def: c.def,
+          unit: c.unit
+        },
+        native: {}
+      });
+    }
+
+    // Seed defaults only if states are missing (do not overwrite existing values)
+    for (const [id, c] of Object.entries(defs)) {
+      const st = await this.getStateAsync(id).catch(() => null);
+      if (!st || st.val === undefined || st.val === null) {
+        await this.setStateAsync(id, c.def, true);
+      }
+    }
+    // Seed local cache snapshot for the VIS (so UI can read /api/state immediately)
+    try {
+      const keys = [
+        'evcs.rfid.enabled',
+        'evcs.rfid.whitelistJson',
+        'evcs.rfid.learning.active',
+        'evcs.rfid.learning.lastCaptured',
+        'evcs.rfid.learning.lastCapturedTs'
+      ];
+      for (const k of keys) {
+        const st0 = await this.getStateAsync(k).catch(() => null);
+        if (st0 && st0.val !== undefined && st0.val !== null) {
+          try { this.updateValue(k, st0.val, st0.ts || Date.now()); } catch(_e) {}
+        }
+      }
+    } catch(_e) {}
+
+  }
+
+  async ensureEvcsSessionsStates() {
+    // Session log for EVCS (RFID/person accounting)
+    await this.setObjectNotExistsAsync('evcs.sessions', {
+      type: 'channel',
+      common: { name: 'EVCS Sessions' },
+      native: {}
+    });
+
+    await this.setObjectNotExistsAsync('evcs.sessionsJson', {
+      type: 'state',
+      common: {
+        name: 'evcs.sessionsJson',
+        type: 'string',
+        role: 'json',
+        read: true,
+        write: true,
+        def: '[]'
+      },
+      native: {}
+    });
+
+    await this.setObjectNotExistsAsync('evcs.sessionsCount', {
+      type: 'state',
+      common: {
+        name: 'evcs.sessionsCount',
+        type: 'number',
+        role: 'value',
+        unit: 'entries',
+        read: true,
+        write: false,
+        def: 0
+      },
+      native: {}
+    });
+
+    await this.setObjectNotExistsAsync('evcs.sessionsLastTs', {
+      type: 'state',
+      common: {
+        name: 'evcs.sessionsLastTs',
+        type: 'number',
+        role: 'value.time',
+        unit: 'ms',
+        read: true,
+        write: false,
+        def: 0
+      },
+      native: {}
+    });
+  }
+
+  async loadEvcsSessionsCache() {
+    try {
+      const st = await this.getStateAsync('evcs.sessionsJson');
+      let arr = [];
+      if (st && typeof st.val === 'string' && st.val.trim()) {
+        try {
+          const parsed = JSON.parse(st.val);
+          if (Array.isArray(parsed)) arr = parsed;
+        } catch (_e) {
+          arr = [];
+        }
+      }
+      if (!Array.isArray(arr)) arr = [];
+      // keep only newest N entries
+      const max = Number(this._evcsSessionMaxEntries || 2000) || 2000;
+      if (arr.length > max) arr = arr.slice(arr.length - max);
+      this._evcsSessionsBuf = arr;
+
+      const now = Date.now();
+      this.setLocalStateWithCache('evcs.sessionsCount', this._evcsSessionsBuf.length, now);
+      this.setLocalStateWithCache('evcs.sessionsLastTs', now, now);
+      // do not rewrite sessionsJson on load unless it is invalid
+      if (!st || typeof st.val !== 'string') {
+        this.setLocalStateWithCache('evcs.sessionsJson', JSON.stringify(this._evcsSessionsBuf), now);
+      }
+    } catch (e) {
+      this.log.warn('loadEvcsSessionsCache: ' + e.message);
+    }
+  }
+
+  persistEvcsSessions(nowTs) {
+    const now = Number(nowTs) || Date.now();
+    try {
+      const json = JSON.stringify(this._evcsSessionsBuf || []);
+      this.setLocalStateWithCache('evcs.sessionsJson', json, now);
+      this.setLocalStateWithCache('evcs.sessionsCount', (this._evcsSessionsBuf || []).length, now);
+      this.setLocalStateWithCache('evcs.sessionsLastTs', now, now);
+    } catch (e) {
+      this.log.warn('persistEvcsSessions: ' + e.message);
+    }
+  }
+
+  appendEvcsSession(entry, nowTs) {
+    const now = Number(nowTs) || Date.now();
+    try {
+      if (!entry) return;
+      if (!this._evcsSessionsBuf) this._evcsSessionsBuf = [];
+      this._evcsSessionsBuf.push(entry);
+      const max = Number(this._evcsSessionMaxEntries || 2000) || 2000;
+      if (this._evcsSessionsBuf.length > max) {
+        this._evcsSessionsBuf.splice(0, this._evcsSessionsBuf.length - max);
+      }
+      this.persistEvcsSessions(now);
+    } catch (e) {
+      this.log.warn('appendEvcsSession: ' + e.message);
+    }
+  }
+
+  maybeUpdateEvcsSessionTracker(key, tsMs) {
+    try {
+      const m = key && key.match(/^evcs\.(\d+)\.(powerW|energyTotalKwh)$/);
+      if (!m) return;
+      const idx = Number(m[1]) || 0;
+      if (!idx) return;
+
+      const t = Number(tsMs) || Date.now();
+      const pRaw = this.stateCache[`evcs.${idx}.powerW`]?.value;
+      const pW = Math.abs(Number(pRaw) || 0);
+
+      const eRaw = this.stateCache[`evcs.${idx}.energyTotalKwh`]?.value;
+      const eKwh = Number(eRaw);
+      const eFinite = Number.isFinite(eKwh);
+
+      const prevCharging = !!(this._evcsCharging && this._evcsCharging[idx]);
+      const startW = Number(this._evcsChargeStartW || 100) || 100;
+      const stopW = Number(this._evcsChargeStopW || 50) || 50;
+      const chargingNow = prevCharging ? (pW >= stopW) : (pW >= startW);
+
+      if (!prevCharging && chargingNow) {
+        this._startEvcsSession(idx, t, pW, eFinite ? eKwh : null);
+      }
+
+      // Update while charging; also update one last time when stopping (to close integration window)
+      if (chargingNow || (prevCharging && !chargingNow)) {
+        this._updateEvcsSession(idx, t, pW, eFinite ? eKwh : null);
+      }
+
+      if (prevCharging && !chargingNow) {
+        this._stopEvcsSession(idx, t, pW, eFinite ? eKwh : null);
+      }
+
+      if (!this._evcsCharging) this._evcsCharging = {};
+      this._evcsCharging[idx] = chargingNow;
+    } catch (_e) {}
+  }
+
+  _startEvcsSession(idx, tsMs, pW, energyTotalKwh) {
+    try {
+      if (!this._evcsActiveSessions) this._evcsActiveSessions = {};
+      if (this._evcsActiveSessions[idx]) return; // already active
+
+      const wb = (this.evcsList || []).find(w => Number(w.index) === Number(idx));
+      const wbName = (wb && wb.name) ? String(wb.name) : (this.stateCache[`evcs.${idx}.name`]?.value ? String(this.stateCache[`evcs.${idx}.name`].value) : `Wallbox ${idx}`);
+
+      const rfid = this.normalizeRfidCode(this.stateCache[`evcs.${idx}.rfidLast`]?.value);
+      const user = this.stateCache[`evcs.${idx}.rfidUser`]?.value ? String(this.stateCache[`evcs.${idx}.rfidUser`].value) : '';
+      const authorized = !!this.stateCache[`evcs.${idx}.rfidAuthorized`]?.value;
+
+      const sess = {
+        idx,
+        wbName,
+        startTs: Number(tsMs) || Date.now(),
+        endTs: null,
+        // meter values if available
+        energyStartKwh: (Number.isFinite(Number(energyTotalKwh)) ? Number(energyTotalKwh) : null),
+        energyEndKwh: (Number.isFinite(Number(energyTotalKwh)) ? Number(energyTotalKwh) : null),
+        // integration fallback
+        accWh: 0,
+        lastPowerW: Number(pW) || 0,
+        lastPowerTs: Number(tsMs) || Date.now(),
+        maxW: Number(pW) || 0,
+        // RFID meta
+        rfid: rfid || '',
+        user: user || '',
+        authorized: authorized ? true : false,
+      };
+
+      this._evcsActiveSessions[idx] = sess;
+    } catch (_e) {}
+  }
+
+  _updateEvcsSession(idx, tsMs, pW, energyTotalKwh) {
+    try {
+      if (!this._evcsActiveSessions || !this._evcsActiveSessions[idx]) return;
+      const sess = this._evcsActiveSessions[idx];
+      const t = Number(tsMs) || Date.now();
+
+      // power integration (trapezoid)
+      const lastTs = Number(sess.lastPowerTs) || t;
+      const lastPW = Number(sess.lastPowerW) || 0;
+      if (t > lastTs) {
+        const dtH = (t - lastTs) / 3600000;
+        const pAvg = (Math.abs(lastPW) + Math.abs(Number(pW) || 0)) / 2;
+        const addWh = pAvg * dtH;
+        if (Number.isFinite(addWh) && addWh > 0) sess.accWh = (Number(sess.accWh) || 0) + addWh;
+      }
+
+      sess.lastPowerTs = t;
+      sess.lastPowerW = Number(pW) || 0;
+      sess.maxW = Math.max(Number(sess.maxW) || 0, Math.abs(Number(pW) || 0));
+
+      // meter energy if available
+      const e = Number(energyTotalKwh);
+      if (Number.isFinite(e)) {
+        if (sess.energyStartKwh === null || sess.energyStartKwh === undefined) sess.energyStartKwh = e;
+        sess.energyEndKwh = e;
+      }
+
+      // capture RFID meta if it arrives slightly later
+      const rfidNow = this.normalizeRfidCode(this.stateCache[`evcs.${idx}.rfidLast`]?.value);
+      const userNow = this.stateCache[`evcs.${idx}.rfidUser`]?.value ? String(this.stateCache[`evcs.${idx}.rfidUser`].value) : '';
+      const authNow = !!this.stateCache[`evcs.${idx}.rfidAuthorized`]?.value;
+
+      if ((!sess.rfid || sess.rfid === '') && rfidNow) sess.rfid = rfidNow;
+      if ((!sess.user || sess.user === '') && userNow) sess.user = userNow;
+      sess.authorized = authNow ? true : false;
+    } catch (_e) {}
+  }
+
+  _stopEvcsSession(idx, tsMs, pW, energyTotalKwh) {
+    try {
+      if (!this._evcsActiveSessions || !this._evcsActiveSessions[idx]) return;
+      const sess = this._evcsActiveSessions[idx];
+      const endTs = Number(tsMs) || Date.now();
+      sess.endTs = endTs;
+
+      // Finalize energy
+      let kwh = null;
+      const eStart = Number(sess.energyStartKwh);
+      const eEnd = Number.isFinite(Number(energyTotalKwh)) ? Number(energyTotalKwh) : Number(sess.energyEndKwh);
+      if (Number.isFinite(eStart) && Number.isFinite(eEnd)) {
+        const d = eEnd - eStart;
+        if (Number.isFinite(d) && d >= 0) kwh = d;
+      }
+      if (!Number.isFinite(kwh)) {
+        const wh = Number(sess.accWh) || 0;
+        if (Number.isFinite(wh) && wh >= 0) kwh = wh / 1000;
+      }
+      if (!Number.isFinite(kwh)) kwh = 0;
+
+      const durSec = Math.max(0, Math.round((endTs - (Number(sess.startTs) || endTs)) / 1000));
+      const maxKw = (Number(sess.maxW) || 0) / 1000;
+
+      // ignore tiny noise sessions
+      if (durSec < 20 && kwh < 0.01) {
+        delete this._evcsActiveSessions[idx];
+        return;
+      }
+
+      const entry = {
+        id: `wb${idx}-${Number(sess.startTs) || endTs}`,
+        wallboxIndex: idx,
+        wallboxName: sess.wbName || `Wallbox ${idx}`,
+        startTs: Number(sess.startTs) || endTs,
+        endTs,
+        durationSec: durSec,
+        rfid: sess.rfid || '',
+        user: sess.user || '',
+        authorized: sess.authorized ? true : false,
+        energyKwh: Math.round((Number(kwh) || 0) * 1000) / 1000,
+        maxKw: Math.round((Number(maxKw) || 0) * 100) / 100,
+        method: (Number.isFinite(Number(sess.energyStartKwh)) && Number.isFinite(Number(sess.energyEndKwh))) ? 'meter' : 'integrated',
+      };
+
+      this.appendEvcsSession(entry, endTs);
+      delete this._evcsActiveSessions[idx];
+    } catch (e) {
+      try { delete this._evcsActiveSessions[idx]; } catch(_e2) {}
+      this.log.warn('_stopEvcsSession: ' + e.message);
+    }
+  }
+
+
+
+
 
 
   async seedEvcsDayBaseCache() {
@@ -237,7 +649,7 @@ async syncInstallerConfigToStates() {
     if (!Array.isArray(this.evcsList)) return;
 
     for (const wb of this.evcsList) {
-      const ids = [wb.powerId, wb.energyTotalId, wb.statusId, wb.activeId, wb.modeId].filter(Boolean);
+      const ids = [wb.powerId, wb.energyTotalId, wb.statusId, wb.activeId, wb.modeId, wb.lockWriteId, wb.rfidReadId].filter(Boolean);
       for (const id of ids) {
         try {
           await this.subscribeForeignStatesAsync(id);
@@ -938,8 +1350,12 @@ async onReady() {
       await this.syncSettingsConfigToStates();
       // EVCS (multi wallbox) model states
       await this.ensureEvcsStates();
+      await this.ensureRfidStates();
+      await this.ensureEvcsSessionsStates();
+      await this.loadEvcsSessionsCache();
       await this.seedEvcsDayBaseCache();
       await this.subscribeEvcsMappedStates();
+      try { this.scheduleRfidPolicyApply('startup'); } catch(_e) {}
 
 
       // finally subscribe and read initial values
@@ -1918,6 +2334,144 @@ app.get('/api/evcs/report.csv', async (req, res) => {
   }
 });
 
+// ---- EVCS Sessions CSV helpers ----
+const nwPad2 = (n) => String(Number(n) || 0).padStart(2, '0');
+const nwDayKey = (tsMs) => {
+  const d = new Date(Number(tsMs) || 0);
+  return `${d.getFullYear()}-${nwPad2(d.getMonth() + 1)}-${nwPad2(d.getDate())}`;
+};
+const nwTimeHhMm = (tsMs) => {
+  const d = new Date(Number(tsMs) || 0);
+  return `${nwPad2(d.getHours())}:${nwPad2(d.getMinutes())}`;
+};
+const nwParseTsLoose = (raw, { endOfDay = false } = {}) => {
+  if (raw === null || raw === undefined || raw === '') return null;
+
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    return raw < 1e12 ? raw * 1000 : raw; // seconds -> ms
+  }
+
+  const s = String(raw).trim();
+  if (!s) return null;
+
+  if (/^\d+$/.test(s)) {
+    const n = Number(s);
+    if (!Number.isFinite(n)) return null;
+    return n < 1e12 ? n * 1000 : n;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [y, m, d] = s.split('-').map(v => Number(v));
+    const dt = new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+    if (endOfDay) dt.setHours(23, 59, 59, 999);
+    return dt.getTime();
+  }
+
+  const p = Date.parse(s);
+  if (!Number.isNaN(p)) return p;
+
+  return null;
+};
+
+const nwEvcsSessionsToCsv = (sessions) => {
+  const header = [
+    'Datum',
+    'Start',
+    'Ende',
+    'Dauer_min',
+    'Wallbox',
+    'RFID',
+    'Name',
+    'Freigegeben',
+    'Energie_kWh',
+    'Max_kW',
+    'Methode',
+  ];
+
+  const lines = [];
+  lines.push(header.map(nwCsvEscape).join(';'));
+
+  for (const s of sessions) {
+    const startTs = Number(s && s.startTs) || 0;
+    const endTs = Number(s && s.endTs) || 0;
+
+    const durSec = Number(s && s.durationSec);
+    const durMin = Number.isFinite(durSec) ? Math.round(durSec / 60)
+      : (startTs && endTs ? Math.round((endTs - startTs) / 60000) : 0);
+
+    const kwh = Number(s && s.energyKwh);
+    const maxKw = Number(s && s.maxKw);
+
+    const row = [
+      startTs ? nwDayKey(startTs) : '',
+      startTs ? nwTimeHhMm(startTs) : '',
+      endTs ? nwTimeHhMm(endTs) : '',
+      String(Number.isFinite(durMin) ? durMin : 0),
+      (s && (s.wallboxName || s.wbName)) ? String(s.wallboxName || s.wbName) : (s && s.wallboxIndex ? `Wallbox ${s.wallboxIndex}` : ''),
+      (s && s.rfid) ? String(s.rfid) : '',
+      (s && s.user) ? String(s.user) : '',
+      (s && s.authorized) ? 'JA' : 'NEIN',
+      nwFormatDe(Number.isFinite(kwh) ? kwh : 0),
+      nwFormatDe(Number.isFinite(maxKw) ? maxKw : 0),
+      (s && s.method) ? String(s.method) : '',
+    ];
+
+    lines.push(row.map(nwCsvEscape).join(';'));
+  }
+
+  return lines.join('\r\n');
+};
+
+app.get('/api/evcs/sessions.csv', async (req, res) => {
+  try {
+    const fromMs = nwParseTsLoose(req.query && req.query.from) ?? null;
+    const toMs = nwParseTsLoose(req.query && req.query.to, { endOfDay: true }) ?? null;
+
+    const from = Number.isFinite(Number(fromMs)) ? Number(fromMs) : 0;
+    const to = Number.isFinite(Number(toMs)) ? Number(toMs) : Date.now();
+
+    // Prefer in-memory ring buffer
+    let sessions = Array.isArray(this._evcsSessionsBuf) ? this._evcsSessionsBuf.slice() : [];
+
+    // Fallback: read persisted state
+    if (!sessions.length) {
+      try {
+        const st = await this.getStateAsync('evcs.sessionsJson');
+        if (st && typeof st.val === 'string' && st.val.trim()) {
+          const parsed = JSON.parse(st.val);
+          if (Array.isArray(parsed)) sessions = parsed;
+        }
+      } catch (_e) {}
+    }
+
+    sessions = (Array.isArray(sessions) ? sessions : [])
+      .filter(s => {
+        const st = Number(s && s.startTs);
+        if (!Number.isFinite(st)) return false;
+        if (st < from) return false;
+        if (st > to) return false;
+        // ignore still running sessions (optional)
+        const et = Number(s && s.endTs);
+        if (!Number.isFinite(et) || et <= 0) return false;
+        return true;
+      })
+      .sort((a, b) => (Number(a.startTs) || 0) - (Number(b.startTs) || 0));
+
+    const fromStr = sessions.length ? nwDayKey(Number(sessions[0].startTs) || from) : nwDayKey(from);
+    const toStr = sessions.length ? nwDayKey(Number(sessions[sessions.length - 1].startTs) || to) : nwDayKey(to);
+    const filename = `EVCS_Sessions_${fromStr}_${toStr}.csv`;
+
+    const csv = '\ufeff' + nwEvcsSessionsToCsv(sessions);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (e) {
+    res.status(500).send('csv_error');
+  }
+});
+
+
+
 app.get('/config', (req, res) => {
       res.json({
         units: this.config.units || { power: 'W', energy: 'kWh' },
@@ -1982,6 +2536,37 @@ app.get('/config', (req, res) => {
           if (!id) return res.status(400).json({ ok: false, error: 'unmapped' });
           const v = prop === 'active' ? !!value : Number(value);
           await this.setForeignStateAsync(id, v);
+          return res.json({ ok: true });
+        }
+
+        // RFID settings: write to adapter states under evcs.rfid.*
+        if (scope === 'rfid') {
+          const rawKey = String(key || '');
+          let suf = rawKey;
+          if (suf.startsWith('evcs.rfid.')) suf = suf.slice(10);
+          else if (suf.startsWith('rfid.')) suf = suf.slice(5);
+
+          // allow only a small, safe subset
+          const allowed = ['enabled', 'whitelistJson', 'learning.active'];
+          if (!allowed.includes(suf)) return res.status(400).json({ ok: false, error: 'bad request' });
+
+          let v = value;
+          if (suf === 'enabled' || suf === 'learning.active') {
+            v = !!value;
+          } else if (suf === 'whitelistJson') {
+            try {
+              const raw = (typeof value === 'string') ? value : JSON.stringify(value);
+              const parsed = raw ? JSON.parse(raw) : [];
+              if (!Array.isArray(parsed)) return res.status(400).json({ ok: false, error: 'invalid json' });
+              v = JSON.stringify(parsed);
+            } catch (e) {
+              return res.status(400).json({ ok: false, error: 'invalid json' });
+            }
+          }
+
+          await this.setStateAsync('evcs.rfid.' + suf, { val: v, ack: false });
+          try { this.updateValue('evcs.rfid.' + suf, v, Date.now()); } catch(_e) {}
+          try { this.scheduleRfidPolicyApply('rfid-settings'); } catch(_e2) {}
           return res.json({ ok: true });
         }
 
@@ -2091,7 +2676,19 @@ app.get('/config', (req, res) => {
       if (key) {
         this.updateValue(key, state.val, state.ts);
       }
-        if (key && key.startsWith('evcs.')) this.setStateAsync(key, state.val, true).catch(()=>{});
+      if (key && key.startsWith('evcs.')) this.setStateAsync(key, state.val, true).catch(()=>{});
+      try { this.maybeCaptureRfidLearning(id, state.val, state.ts); } catch(_e) {}
+
+      // RFID access control: whenever a wallbox RFID datapoint changes, apply policy
+      try {
+        const idx = this.evcsRfidReadIdToIndex && id && this.evcsRfidReadIdToIndex[id];
+        if (idx) {
+          const tsMs = Number(state.ts) || Date.now();
+          this.setStateAsync(`evcs.${idx}.rfidLastTs`, tsMs, true).catch(()=>{});
+          try { this.updateValue(`evcs.${idx}.rfidLastTs`, tsMs, tsMs); } catch(_e2) {}
+          this.scheduleRfidPolicyApply('rfid-scan', idx);
+        }
+      } catch(_e3) {}
     } catch (e) {
       this.log.error(`onStateChange error: ${e.message}`);
     }
@@ -2115,6 +2712,207 @@ app.get('/config', (req, res) => {
     if (id && id.startsWith(prefE)) return 'evcs.' + id.slice(prefE.length);
     return null;
   }
+
+  normalizeRfidCandidate(val) {
+    if (val === null || val === undefined) return '';
+    let s = '';
+    try { s = String(val).trim(); } catch (_e) { return ''; }
+    if (!s) return '';
+
+    // Try to extract the longest hex-like token (common RFID UID formats)
+    const hexMatches = s.match(/[0-9a-fA-F]{4,}/g);
+    if (hexMatches && hexMatches.length) {
+      const token = hexMatches.sort((a, b) => b.length - a.length)[0];
+      const out = String(token || '').toUpperCase();
+      if (out === '0' || out === '0000') return '';
+      return out;
+    }
+
+    // Fallback: compact and uppercase
+    s = s.replace(/\s+/g, '').toUpperCase();
+    if (!s || s === '0' || s === '0000' || s === 'UNKNOWN' || s === 'NONE') return '';
+    return s;
+  }
+
+  maybeCaptureRfidLearning(sourceId, rawVal, ts) {
+    // Capture ONLY while learning is active, and ONLY from configured RFID reader datapoints.
+    if (!sourceId || !this.evcsRfidReadIds || !this.evcsRfidReadIds.size) return;
+    if (!this.evcsRfidReadIds.has(sourceId)) return;
+
+    const active = !!(this.stateCache['evcs.rfid.learning.active'] && this.stateCache['evcs.rfid.learning.active'].value);
+    if (!active) return;
+
+    const code = this.normalizeRfidCandidate(rawVal);
+    if (!code) return;
+
+    const now = Number(ts) || Date.now();
+
+    // Persist and push live update
+    this.setStateAsync('evcs.rfid.learning.lastCaptured', code, true).catch(()=>{});
+    this.setStateAsync('evcs.rfid.learning.lastCapturedTs', now, true).catch(()=>{});
+
+    // Auto-stop after first successful capture (next-card semantics)
+    this.setStateAsync('evcs.rfid.learning.active', false, true).catch(()=>{});
+
+    // Ensure VIS UI updates immediately even if local states are not subscribed elsewhere
+    try { this.updateValue('evcs.rfid.learning.lastCaptured', code, now); } catch(_e) {}
+    try { this.updateValue('evcs.rfid.learning.lastCapturedTs', now, now); } catch(_e) {}
+    try { this.updateValue('evcs.rfid.learning.active', false, now); } catch(_e) {}
+
+    this.log.info(`[EVCS RFID] Karte erkannt: ${code} (Quelle: ${sourceId})`);
+  }
+
+
+  parseRfidWhitelist(jsonStr) {
+    // Returns map: { CODE: { name, comment } }
+    const out = {};
+    let arr = [];
+    try {
+      const raw = (typeof jsonStr === 'string') ? jsonStr : JSON.stringify(jsonStr || []);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) arr = parsed;
+    } catch (_e) {
+      arr = [];
+    }
+    for (const it of arr) {
+      const code = this.normalizeRfidCandidate(it && (it.rfid || it.code || it.uid || it.id || it.card));
+      if (!code) continue;
+      const name = (it && (it.name || it.user || it.person)) ? String(it.name || it.user || it.person).trim() : '';
+      const comment = (it && (it.comment || it.note)) ? String(it.comment || it.note).trim() : '';
+      out[code] = { name, comment };
+    }
+    return out;
+  }
+
+  refreshRfidWhitelistFromCache() {
+    const raw = this.stateCache['evcs.rfid.whitelistJson'] ? this.stateCache['evcs.rfid.whitelistJson'].value : '[]';
+    const s = (typeof raw === 'string') ? raw : JSON.stringify(raw || []);
+    if (this._rfidWhitelistJson === s && this._rfidWhitelistMap) return;
+    this._rfidWhitelistJson = s;
+    this._rfidWhitelistMap = this.parseRfidWhitelist(s);
+  }
+
+  isRfidEnabled() {
+    return !!(this.stateCache['evcs.rfid.enabled'] && this.stateCache['evcs.rfid.enabled'].value);
+  }
+
+  setLocalStateWithCache(id, val, ts) {
+    const t = Number(ts) || Date.now();
+    this.setStateAsync(id, val, true).catch(()=>{});
+    try { this.updateValue(id, val, t); } catch(_e) {}
+  }
+
+  scheduleRfidPolicyApply(reason, onlyIndex) {
+    // Coalesce bursts of RFID scans / UI writes
+    try {
+      this._rfidApplyReason = reason || this._rfidApplyReason || 'rfid';
+      if (onlyIndex) this._rfidApplyOnlyIndex = Number(onlyIndex) || this._rfidApplyOnlyIndex || null;
+      if (this._rfidApplyTimer) return;
+      this._rfidApplyTimer = setTimeout(() => {
+        this._rfidApplyTimer = null;
+        const idx = this._rfidApplyOnlyIndex;
+        this._rfidApplyOnlyIndex = null;
+        try {
+          if (idx) this.applyRfidPolicyForIndex(idx, this._rfidApplyReason);
+          else this.applyRfidPolicyAll(this._rfidApplyReason);
+        } catch (e) {
+          this.log.debug('RFID policy apply failed: ' + e.message);
+        }
+      }, 150);
+    } catch(_e) {}
+  }
+
+  applyRfidPolicyAll(reason) {
+    this.refreshRfidWhitelistFromCache();
+    const enabled = this.isRfidEnabled();
+    if (!Array.isArray(this.evcsList)) return;
+
+    for (const wb of this.evcsList) {
+      if (!wb || !wb.index) continue;
+      this.applyRfidPolicyForIndex(wb.index, reason, enabled);
+    }
+  }
+
+  applyRfidPolicyForIndex(index, reason, enabledOverride) {
+    const idx = Number(index) || 0;
+    if (!idx) return;
+
+    this.refreshRfidWhitelistFromCache();
+    const enabled = (enabledOverride !== undefined) ? !!enabledOverride : this.isRfidEnabled();
+    const wb = (Array.isArray(this.evcsList) ? this.evcsList.find(w => w && w.index === idx) : null);
+    if (!wb) return;
+
+    const now = Date.now();
+    if (!this._rfidEnforceCache) this._rfidEnforceCache = {};
+
+    // Determine latest RFID code seen
+    let code = '';
+    if (wb.rfidReadId) {
+      const raw = this.stateCache[`evcs.${idx}.rfidLast`] ? this.stateCache[`evcs.${idx}.rfidLast`].value : '';
+      code = this.normalizeRfidCandidate(raw);
+    }
+
+    let authorized = true;
+    let user = '';
+    let reasonCode = 'rfid_disabled';
+
+    if (!enabled) {
+      authorized = true;
+      reasonCode = 'rfid_disabled';
+    } else if (!wb.rfidReadId) {
+      authorized = true;
+      reasonCode = 'no_rfid_dp';
+    } else if (!code) {
+      authorized = false;
+      reasonCode = 'no_card';
+    } else if (this._rfidWhitelistMap && this._rfidWhitelistMap[code]) {
+      authorized = true;
+      user = this._rfidWhitelistMap[code].name || '';
+      reasonCode = 'whitelisted';
+    } else {
+      authorized = false;
+      reasonCode = 'not_whitelisted';
+    }
+
+    // Update local visualization states
+    this.setLocalStateWithCache(`evcs.${idx}.rfidAuthorized`, authorized, now);
+    this.setLocalStateWithCache(`evcs.${idx}.rfidUser`, user, now);
+    this.setLocalStateWithCache(`evcs.${idx}.rfidReason`, reasonCode, now);
+
+    // Enforce lock/unlock only if RFID is enabled and we have a control datapoint
+    let enforced = false;
+    const prev = this._rfidEnforceCache[idx] || {};
+
+    if (enabled && wb.rfidReadId) {
+      if (wb.lockWriteId) {
+        const want = !authorized; // Sperre: true=gesperrt (Default-Semantik)
+        enforced = true;
+        const cur = this.stateCache[`evcs.${idx}.lock`] ? !!this.stateCache[`evcs.${idx}.lock`].value : undefined;
+        if (prev.lockWanted !== want || (cur !== undefined && cur !== want)) {
+          this.setForeignStateAsync(wb.lockWriteId, want).catch(e => this.log.debug(`[EVCS RFID] lockWriteId failed: ${e.message}`));
+          prev.lockWanted = want;
+        }
+      } else if (wb.activeId) {
+        const want = !!authorized; // enable/disable charging (soft lock)
+        enforced = true;
+        const cur = this.stateCache[`evcs.${idx}.active`] ? !!this.stateCache[`evcs.${idx}.active`].value : undefined;
+        if (prev.activeWanted !== want || (cur !== undefined && cur !== want)) {
+          this.setForeignStateAsync(wb.activeId, want).catch(e => this.log.debug(`[EVCS RFID] activeId failed: ${e.message}`));
+          prev.activeWanted = want;
+        }
+      }
+    }
+
+    this.setLocalStateWithCache(`evcs.${idx}.rfidEnforced`, enforced, now);
+    prev.authorized = authorized;
+    prev.user = user;
+    prev.reason = reasonCode;
+    prev.lastCode = code;
+    prev.ts = now;
+    this._rfidEnforceCache[idx] = prev;
+  }
+
+
 
   updateValue(key, value, ts) {
     this.stateCache[key] = { value, ts };
@@ -2164,7 +2962,10 @@ app.get('/config', (req, res) => {
       }
 } catch(_e) {}
 
-    // push update to all SSE clients
+    // EVCS session logger (start/stop + energy/max + RFID)
+    try { this.maybeUpdateEvcsSessionTracker(key, ts); } catch(_e2) {}
+
+// push update to all SSE clients
     for (const client of Array.from(this.sseClients)) {
       try {
         client.res.write("data: " + JSON.stringify({ type: 'update', payload }) + "\n\n");

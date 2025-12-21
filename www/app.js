@@ -239,6 +239,11 @@ function render() {
   setText('evcsStatus', (d('evcsStatus') ?? '--'));
   setText('evcsLastChargeKwh', d('evcsLastChargeKwh') != null ? d('evcsLastChargeKwh').toFixed(2) + ' kWh' : '--');
   if (window.__evcsApply) window.__evcsApply(d, state);
+
+  // Settings: RFID learning UI state (if present)
+  try {
+    if (typeof window.__nwApplyRfidLearningUi === 'function') window.__nwApplyRfidLearningUi();
+  } catch (_e) {}
 }
 
 async function bootstrap() {
@@ -451,6 +456,8 @@ function bindInputValue(el, stateKey) {
   let key = sk;
   if (sk.startsWith('settings.')) { scope = 'settings'; key = sk.slice(9); }
   else if (sk.startsWith('installer.')) { scope = 'installer'; key = sk.slice(10); }
+  else if (sk.startsWith('evcs.rfid.')) { scope = 'rfid'; key = sk.slice(10); }
+  else if (sk.startsWith('rfid.')) { scope = 'rfid'; key = sk.slice(5); }
   else if (sk.startsWith('evcs.')) { scope = 'evcs'; key = sk; }
 
   // Prevent duplicate listeners when setupSettings() is called multiple times
@@ -474,11 +481,272 @@ function bindInputValue(el, stateKey) {
     } catch (e) { /* ignore */ }
   });
 }
-
-
 function setupSettings(){
   document.querySelectorAll('[data-scope="settings"]').forEach(el=> bindInputValue(el, 'settings.'+el.dataset.key));
+  document.querySelectorAll('[data-scope="rfid"]').forEach(el=> bindInputValue(el, 'evcs.rfid.'+el.dataset.key));
+  try { setupRfidWhitelistUi(); } catch (e) {}
+  try { setupRfidLearningUi(); } catch (e) {}
 }
+
+function setupRfidWhitelistUi(){
+  const rowsEl = document.getElementById('rfidWhitelistRows');
+  if (!rowsEl) return;
+  const msgEl = document.getElementById('rfidWhitelistMsg');
+  const btnAdd = document.getElementById('rfidAddRow');
+  const btnSave = document.getElementById('rfidSaveWhitelist');
+  const btnReload = document.getElementById('rfidReloadWhitelist');
+
+  function normRfid(v){ return String(v||'').trim().replace(/\s+/g,'').toUpperCase(); }
+  function safeText(v){ return String(v||'').trim(); }
+
+  function readWhitelistFromState(){
+    try {
+      const st = window.latestState || {};
+      const info = st['evcs.rfid.whitelistJson'];
+      const raw = (info && info.value !== undefined) ? String(info.value || '') : '';
+      const parsed = raw ? JSON.parse(raw) : [];
+      const arr = Array.isArray(parsed) ? parsed : [];
+      return arr.map(x => {
+        if (typeof x === 'string') return { rfid: normRfid(x), name: '', comment: '' };
+        const r = normRfid(x.rfid ?? x.id ?? x.uid ?? x.card ?? '');
+        const n = safeText(x.name ?? x.user ?? x.label ?? '');
+        const c = safeText(x.comment ?? x.note ?? '');
+        return { rfid: r, name: n, comment: c };
+      });
+    } catch (e) {
+      return [];
+    }
+  }
+
+  let list = readWhitelistFromState();
+
+  function setMsg(t){ if (msgEl) msgEl.textContent = t || ''; }
+
+  function render(){
+    rowsEl.innerHTML = '';
+    (list || []).forEach((it, idx) => {
+      const row = document.createElement('div');
+      row.className = 'rfid-whitelist-row';
+
+      const inRfid = document.createElement('input');
+      inRfid.type = 'text';
+      inRfid.placeholder = 'z.B. 04A1B2C3';
+      inRfid.value = it.rfid || '';
+      inRfid.addEventListener('input', () => { it.rfid = normRfid(inRfid.value); });
+
+      const inName = document.createElement('input');
+      inName.type = 'text';
+      inName.placeholder = 'Name / Person';
+      inName.value = it.name || '';
+      inName.addEventListener('input', () => { it.name = safeText(inName.value); });
+
+      const inComment = document.createElement('input');
+      inComment.type = 'text';
+      inComment.placeholder = 'Kommentar (optional)';
+      inComment.value = it.comment || '';
+      inComment.addEventListener('input', () => { it.comment = safeText(inComment.value); });
+
+      const del = document.createElement('button');
+      del.className = 'rfid-del';
+      del.type = 'button';
+      del.textContent = '✕';
+      del.title = 'Entfernen';
+      del.addEventListener('click', () => { list.splice(idx, 1); render(); });
+
+      row.appendChild(inRfid);
+      row.appendChild(inName);
+      row.appendChild(inComment);
+      row.appendChild(del);
+      rowsEl.appendChild(row);
+    });
+
+    setMsg((list && list.length ? (list.length + ' Einträge in der Whitelist') : 'Whitelist ist leer') );
+  }
+
+  async function save(){
+    const cleaned = [];
+    const seen = new Set();
+    for (const it of (list || [])) {
+      const r = normRfid(it.rfid);
+      if (!r) continue;
+      if (seen.has(r)) continue;
+      seen.add(r);
+      cleaned.push({ rfid: r, name: safeText(it.name), comment: safeText(it.comment) });
+    }
+    const json = JSON.stringify(cleaned);
+    try {
+      await fetch('/api/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'rfid', key: 'whitelistJson', value: json })
+      });
+      // update local snapshot so other UI reads consistent data
+      window.latestState = window.latestState || {};
+      window.latestState['evcs.rfid.whitelistJson'] = { value: json };
+      list = cleaned;
+      render();
+      setMsg('Whitelist gespeichert (' + cleaned.length + ' Einträge).');
+    } catch (e) {
+      setMsg('Fehler beim Speichern der Whitelist.');
+    }
+  }
+
+  async function reload(){
+    try {
+      const snap = await fetch('/api/state', { cache: 'no-store' }).then(r => r.json());
+      window.latestState = snap || {};
+      list = readWhitelistFromState();
+      render();
+      setMsg('Whitelist neu geladen.');
+    } catch (e) {
+      setMsg('Fehler beim Neuladen der Whitelist.');
+    }
+  }
+
+  if (btnAdd && btnAdd.dataset.nwBound !== '1') {
+    btnAdd.dataset.nwBound = '1';
+    btnAdd.addEventListener('click', () => {
+      list.push({ rfid: '', name: '', comment: '' });
+      render();
+      try {
+        const last = rowsEl.querySelector('.rfid-whitelist-row:last-child input');
+        if (last) last.focus();
+      } catch (e) {}
+    });
+  }
+  if (btnSave && btnSave.dataset.nwBound !== '1') {
+    btnSave.dataset.nwBound = '1';
+    btnSave.addEventListener('click', save);
+  }
+  if (btnReload && btnReload.dataset.nwBound !== '1') {
+    btnReload.dataset.nwBound = '1';
+    btnReload.addEventListener('click', reload);
+  }
+
+  // Expose minimal API for other UI parts (e.g., RFID learning) to reuse the same list + save.
+  window.__nwRfidWhitelist = window.__nwRfidWhitelist || {};
+  window.__nwRfidWhitelist.get = () => (list || []).slice();
+  window.__nwRfidWhitelist.addOrUpdate = (rfid, name, comment, { autoSave = true } = {}) => {
+    const r = normRfid(rfid);
+    if (!r) return false;
+    const n = safeText(name);
+    const c = safeText(comment);
+    let found = false;
+    for (const it of (list || [])) {
+      if (normRfid(it.rfid) === r) {
+        found = true;
+        if (n) it.name = n;
+        if (c) it.comment = c;
+        break;
+      }
+    }
+    if (!found) {
+      list.push({ rfid: r, name: n, comment: c });
+    }
+    render();
+    if (autoSave) {
+      save();
+    } else {
+      setMsg('Eintrag übernommen. Bitte Whitelist speichern.');
+    }
+    return true;
+  };
+  window.__nwRfidWhitelist.reload = () => reload();
+  window.__nwRfidWhitelist.save = () => save();
+
+  render();
+}
+
+function setupRfidLearningUi(){
+  const btnLearn = document.getElementById('rfidLearnBtn');
+  if (!btnLearn) return;
+  const lastText = document.getElementById('rfidLastCapturedText');
+  const inName = document.getElementById('rfidLearnName');
+  const inComment = document.getElementById('rfidLearnComment');
+  const btnAdd = document.getElementById('rfidLearnAdd');
+  const msgEl = document.getElementById('rfidLearnMsg');
+
+  function setMsg(t){ if (msgEl) msgEl.textContent = t || ''; }
+
+  async function setLearningActive(active){
+    try{
+      await fetch('/api/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'rfid', key: 'learning.active', value: !!active })
+      });
+      window.latestState = window.latestState || {};
+      window.latestState['evcs.rfid.learning.active'] = { value: !!active };
+    }catch(_e){}
+  }
+
+  function readStateVal(key){
+    const st = window.latestState || {};
+    return st[key] ? st[key].value : undefined;
+  }
+
+  function applyUi(){
+    const active = !!readStateVal('evcs.rfid.learning.active');
+    const last = readStateVal('evcs.rfid.learning.lastCaptured');
+    const ts = readStateVal('evcs.rfid.learning.lastCapturedTs');
+
+    if (btnLearn) btnLearn.textContent = active ? 'Warte auf Karte… (Stop)' : 'Karte anlernen';
+    if (lastText) {
+      const t = (last != null && String(last).trim()) ? String(last).trim() : '--';
+      lastText.textContent = t;
+      if (t !== '--' && ts) {
+        try{ lastText.title = new Date(Number(ts)).toLocaleString('de-DE'); }catch(_e){}
+      }
+    }
+    if (active) {
+      setMsg('Anlernen aktiv – halte eine RFID-Karte vor die Wallbox.');
+    } else {
+      // do not overwrite explicit messages unless empty
+      if (msgEl && !msgEl.textContent) setMsg('');
+    }
+  }
+
+  // Prevent duplicate listeners
+  if (btnLearn && btnLearn.dataset.nwBound !== '1') {
+    btnLearn.dataset.nwBound = '1';
+    btnLearn.addEventListener('click', async () => {
+      const active = !!readStateVal('evcs.rfid.learning.active');
+      setMsg('');
+      await setLearningActive(!active);
+      // UI will update via SSE/render, but also apply immediately
+      applyUi();
+    });
+  }
+
+  if (btnAdd && btnAdd.dataset.nwBound !== '1') {
+    btnAdd.dataset.nwBound = '1';
+    btnAdd.addEventListener('click', () => {
+      const last = readStateVal('evcs.rfid.learning.lastCaptured');
+      const rfid = String(last || '').trim();
+      if (!rfid) {
+        setMsg('Keine Karte erkannt. Bitte zuerst „Karte anlernen“ starten.');
+        return;
+      }
+      const api = window.__nwRfidWhitelist;
+      if (!api || typeof api.addOrUpdate !== 'function') {
+        setMsg('Whitelist-Editor nicht verfügbar. Seite neu laden.');
+        return;
+      }
+      const name = inName ? inName.value : '';
+      const comment = inComment ? inComment.value : '';
+      api.addOrUpdate(rfid, name, comment, { autoSave: true });
+      if (inName) inName.value = '';
+      if (inComment) inComment.value = '';
+      setMsg('Karte übernommen und gespeichert.');
+    });
+  }
+
+  // Make applyUi accessible for render() updates
+  window.__nwApplyRfidLearningUi = applyUi;
+
+  applyUi();
+}
+
 
 function setupInstaller(){
   const loginBox = document.getElementById('installerLoginBox');

@@ -17,6 +17,36 @@ function fmtKwh(v){
   if (v == null || isNaN(v)) return '--';
   return Number(v).toFixed(2) + ' kWh';
 }
+
+
+function rfidLabel(i){
+  const enabled = d('evcs.rfid.enabled');
+  const reason = d(`evcs.${i}.rfidReason`);
+  const user = d(`evcs.${i}.rfidUser`);
+  const last = d(`evcs.${i}.rfidLast`);
+  const enforced = d(`evcs.${i}.rfidEnforced`);
+  const authorized = d(`evcs.${i}.rfidAuthorized`);
+
+  const titleParts = [];
+  if (last) titleParts.push('RFID: ' + last);
+  if (enforced === false) titleParts.push('Hinweis: Keine Sperr-/Freigabe-DPs konfiguriert');
+
+  if (enabled === false) {
+    return { text: 'Aus', cls: 'off', title: titleParts.join(' • ') };
+  }
+
+  if (reason === 'no_rfid_dp') return { text: 'Kein RFID-DP', cls: 'warn', title: titleParts.join(' • ') };
+  if (reason === 'no_card') return { text: 'Warte auf Karte', cls: 'wait', title: titleParts.join(' • ') };
+  if (reason === 'whitelisted') return { text: 'Freigegeben' + (user ? (': ' + user) : ''), cls: 'ok', title: titleParts.join(' • ') };
+  if (reason === 'not_whitelisted') return { text: 'Gesperrt' + (user ? (': ' + user) : ''), cls: 'lock', title: titleParts.join(' • ') };
+  if (reason === 'rfid_disabled') return { text: 'Aus', cls: 'off', title: titleParts.join(' • ') };
+
+  if (authorized === true) return { text: 'Freigegeben' + (user ? (': ' + user) : ''), cls: 'ok', title: titleParts.join(' • ') };
+  if (authorized === false) return { text: 'Gesperrt', cls: 'lock', title: titleParts.join(' • ') };
+
+  if (enabled == null) return null;
+  return { text: '--', cls: 'muted', title: titleParts.join(' • ') };
+}
 function esc(s){
   return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
@@ -73,6 +103,7 @@ function render(){
     const active = d(`evcs.${i}.active`);
     const mode = d(`evcs.${i}.mode`);
     const modeVal = clampUiMode(mode);
+    const rfid = rfidLabel(i);
 html += `
       <div class="card" style="margin:0">
         <div class="card-header">
@@ -93,6 +124,9 @@ html += `
           <div style="display:flex; justify-content:space-between; gap:12px;">
             <span>Status</span><strong>${esc(st ?? '--')}</strong>
           </div>
+          ${rfid ? `<div style="display:flex; justify-content:space-between; gap:12px;">
+            <span>RFID</span><strong class="nw-evcs-rfid ${esc(rfid.cls)}" ${rfid.title ? `title="${esc(rfid.title)}"` : ''}>${esc(rfid.text)}</strong>
+          </div>` : ''}
           <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
             <span>Aktiv</span>
             ${canActive ? `<label class="switch"><input type="checkbox" data-evcs-active="${i}" ${active ? 'checked' : ''}><span></span></label>` : `<strong>${active == null ? '--' : (active ? 'Ja' : 'Nein')}</strong>`}

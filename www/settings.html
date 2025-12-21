@@ -71,6 +71,60 @@
       </div>
     </div>
   </section>
+  <section class="card">
+    <div class="card-header"><span>RFID / Ladepark</span></div>
+    <div class="form">
+      <label class="row"><span>RFID-Freigabe aktiv</span>
+        <input type="checkbox" id="rfid_enabled" data-scope="rfid" data-key="enabled">
+      </label>
+
+      <div class="rfid-whitelist">
+        <div class="rfid-whitelist-head">
+          <div>RFID</div>
+          <div>Name</div>
+          <div>Kommentar</div>
+          <div></div>
+        </div>
+        <div id="rfidWhitelistRows" class="rfid-whitelist-rows"></div>
+
+        <div class="rfid-whitelist-actions">
+          <button class="btn" id="rfidAddRow">+ Karte</button>
+          <div class="rfid-whitelist-actions-right">
+            <button class="btn" id="rfidReloadWhitelist">Neu laden</button>
+            <button class="btn" id="rfidSaveWhitelist">Whitelist speichern</button>
+          </div>
+        </div>
+
+        <small id="rfidWhitelistMsg" style="display:block;margin-top:8px;color:var(--muted)"></small>
+      </div>
+
+      <hr style="margin:14px 0;border:0;border-top:1px solid rgba(255,255,255,.08)"/>
+
+      <div class="rfid-learning">
+        <div class="row" style="align-items:center">
+          <span>Karte anlernen</span>
+          <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex:1 1 auto">
+            <button class="btn" id="rfidLearnBtn" type="button">Karte anlernen</button>
+          </div>
+        </div>
+
+        <div class="row" style="align-items:center">
+          <span>Letzte Karte</span>
+          <div style="flex:1 1 auto;display:flex;align-items:center;justify-content:flex-end">
+            <span id="rfidLastCapturedText" class="rfid-last">--</span>
+          </div>
+        </div>
+
+        <div class="rfid-learning-add">
+          <input type="text" id="rfidLearnName" placeholder="Name / Person" />
+          <input type="text" id="rfidLearnComment" placeholder="Kommentar (optional)" />
+          <button class="btn" id="rfidLearnAdd" type="button">In Whitelist übernehmen</button>
+        </div>
+        <small id="rfidLearnMsg" style="display:block;margin-top:8px;color:var(--muted)"></small>
+      </div>
+    </div>
+  </section>
+
 
   
 </section>

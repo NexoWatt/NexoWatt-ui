@@ -1,3 +1,38 @@
+## 0.4.96 (2025-12-21)
+
+## 0.4.97 (2025-12-21)
+- EVCS Report: Button "CSV Sessions (RFID)" hinzugefügt (Download von /api/evcs/sessions.csv mit aktuellem Zeitraum).
+- EVCS: Sessions CSV Export: neue Route /api/evcs/sessions.csv (Filter via from/to, Excel-kompatibles CSV mit BOM und ;).
+
+## 0.4.95 (2025-12-21)
+- EVCS: Session-Logger für RFID-Abrechnung (Start/Stop, Dauer, kWh, Peak kW, RFID/Name) mit Ringbuffer in evcs.sessionsJson.
+
+## 0.4.94 (2025-12-21)
+- EVCS: RFID-Status in der Wallbox-Kachel anzeigen (Gesperrt/Freigegeben, Nutzer), inkl. Tooltip mit RFID/Hint.
+
+## 0.4.93 (2025-12-21)
+- EVCS RFID: Freigabe-Logik (Whitelist) mit Sperre/Freigabe über lockWriteId bzw. activeId (Soft-Lock).
+- EVCS RFID: neue lokale Status-States je Wallbox (rfidLast, rfidAuthorized, rfidUser, rfidReason, rfidEnforced).
+
+## 0.4.92 (2025-12-21)
+- Admin (EVCS): evcsList um RFID-DP (rfidReadId) und Sperre-DP (lockWriteId) erweitert (pro Wallbox konfigurierbar).
+- Backend: evcsList liest lockWriteId ein und cached/abonniert optional den State (evcs.<n>.lock).
+## 0.4.91 (2025-12-21)
+- Feature (EVCS RFID): Anlernen-UI in den Einstellungen (Karte anlernen/Stop, letzte Karte anzeigen, in Whitelist übernehmen & speichern).
+- UI: Whitelist-Editor stellt API für Lern-UI bereit (addOrUpdate + auto-save).
+
+## 0.4.90 (2025-12-21)
+- Feature (EVCS RFID): Learning-Backend – erkennt die nächste RFID-Karte (aus konfigurierten rfidReadId-Datenpunkten), schreibt lastCaptured/lastCapturedTs und deaktiviert learning.active automatisch.
+- Backend: RFID /api/set aktualisiert den Live-State-Cache (SSE/\"/api/state\") sofort; ensureRfidStates initialisiert den Cache-Snapshot.
+- Vorbereitung: evcsList unterstützt optional rfidReadId (Alias rfidId/rfid).
+
+## 0.4.89 (2025-12-21)
+- Feature (EVCS RFID): Einstellungen – RFID-Freigabe Toggle + Whitelist-Editor (CRUD) inkl. Save/Reload.
+- Backend: /api/set unterstützt scope "rfid" (enabled, whitelistJson, learning.active).
+
+## 0.4.88 (2025-12-21)
+- Feature (EVCS RFID): Basis-States für Whitelist/Learning angelegt (evcs.rfid.*)
+
 ## 0.4.87 (2025-12-21)
 - Feature (EVCS Report): CSV/Excel Download-Button im Bericht hinzugefügt (neben Drucken/PDF), nutzt /api/evcs/report.csv mit dem gleichen Zeitraum.
 
