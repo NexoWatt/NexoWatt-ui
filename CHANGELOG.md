@@ -1,3 +1,9 @@
+## 0.4.80
+
+- Fix (EVCS Report): getHistory robust (timestamps: ISO/sec/ms/date-only), dynamic count by span/step, aggregation+step to avoid truncation.
+- Fix (EVCS Report): power uses average+max with adaptive step; daily peak kW derived from max-series scan.
+- Fix (EVCS Report): daily energy prefers internal energyDayKwh (max), fallback to energyTotal via daily max-min (min/max aggregates).
+
 ## 0.4.79
 
 - EVCS: enforce mode scale 1..3 everywhere (Boost=1, Min+PV=2, PV=3) and remove 0..2 conversion.

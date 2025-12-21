@@ -1534,8 +1534,41 @@ app.get('/api/evcs/report', async (req, res) => {
   try {
     const hcfg = (this.config && this.config.history) || {};
     const inst = hcfg.instance || 'influxdb.0';
-    const fromQ = Number(req.query.from || (Date.now() - 7*24*3600*1000));
-    const toQ   = Number(req.query.to   || Date.now());
+const parseTs = (raw, { endOfDay = false } = {}) => {
+  if (raw === null || raw === undefined || raw === '') return null;
+
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    return raw < 1e12 ? raw * 1000 : raw; // seconds -> ms
+  }
+
+  const s = String(raw).trim();
+  if (!s) return null;
+
+  if (/^\d+$/.test(s)) {
+    const n = Number(s);
+    if (!Number.isFinite(n)) return null;
+    return n < 1e12 ? n * 1000 : n;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [y, m, d] = s.split('-').map(n => Number(n));
+    const dt = new Date(y, m - 1, d, 0, 0, 0, 0);
+    if (endOfDay) dt.setHours(23, 59, 59, 999);
+    return dt.getTime();
+  }
+
+  const p = Date.parse(s);
+  if (!Number.isNaN(p)) return p;
+
+  return null;
+};
+
+const nowMs = Date.now();
+const defFrom = nowMs - 7*24*3600*1000;
+const defTo   = nowMs;
+
+const fromQ = parseTs((req.query.from !== undefined ? req.query.from : defFrom)) ?? defFrom;
+const toQ   = parseTs((req.query.to   !== undefined ? req.query.to   : defTo), { endOfDay: true }) ?? defTo;
 
     const d0 = new Date(fromQ); d0.setHours(0,0,0,0);
     const d1 = new Date(toQ);   d1.setHours(23,59,59,999);
@@ -1557,90 +1590,196 @@ app.get('/api/evcs/report', async (req, res) => {
     const evcs = Array.isArray(this.evcsList) ? this.evcsList : [];
     const wallboxes = evcs.map(wb => ({ index: wb.index, name: wb.name || `Wallbox ${wb.index}`, note: wb.note || '' }));
 
-    const getHist = (id, startMs, endMs, aggregate = 'none', step = 0) => new Promise(resolve => {
-      if (!id) return resolve([]);
-      const options = { start: startMs, end: endMs, aggregate, addId: false, ignoreNull: true };
-      if (step && Number(step) > 0) options.step = Number(step);
-      try {
-        this.sendTo(inst, 'getHistory', { id, options }, (resu) => {
-          let outArr = [];
-          if (Array.isArray(resu)) outArr = resu;
-          else if (resu && Array.isArray(resu.result)) {
-            if (resu.result.length && Array.isArray(resu.result[0]?.data)) outArr = resu.result[0].data;
-            else outArr = resu.result;
-          } else if (resu && Array.isArray(resu.series) && resu.series[0]?.values) {
-            outArr = resu.series[0].values.map(v => ({ ts: v[0], val: v[1] }));
-          } else if (resu && Array.isArray(resu.data)) {
-            outArr = resu.data;
-          }
-          const norm = (outArr || [])
-            .map(p => Array.isArray(p) ? [p[0], Number(p[1])] : [p.ts || p.time || p.t || p[0], Number(p.val ?? p.value ?? p[1])])
-            .filter(r => r[0] != null && !Number.isNaN(r[1]))
-            .map(r => [Number(r[0]), Number(r[1])])
-            .sort((a,b)=>a[0]-b[0]);
-          resolve(norm);
-        });
-      } catch (e) {
-        resolve([]);
-      }
-    });
+    const MAX_HISTORY_POINTS = 60000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-    const days = buckets.map(b => ({ date: b.date, totalKwh: 0, wallboxes: {} }));
+const calcCount = (startMs, endMs, stepMs) => {
+  const s = Number(startMs);
+  const e = Number(endMs);
+  if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) return 0;
+  const step = Math.max(1, Number(stepMs || 120000));
+  const span = e - s;
+  const c = Math.ceil(span / step) + 10;
+  return Math.min(MAX_HISTORY_POINTS, Math.max(50, c));
+};
+
+const chooseStepMs = (spanMs, baseStepMs) => {
+  const base = Math.max(1000, Number(baseStepMs || 120000));
+  const span = Math.max(0, Number(spanMs || 0));
+  const max = Math.max(100, MAX_HISTORY_POINTS - 10);
+  const needCount = Math.ceil(span / base) + 1;
+  if (needCount <= max) return base;
+  const neededStep = Math.ceil(span / max);
+  const rounded = Math.ceil(neededStep / 60000) * 60000; // round to minutes
+  return Math.max(base, rounded);
+};
+
+const normTsMs = (ts) => {
+  const p = parseTs(ts);
+  if (p != null) return p;
+  const n = Number(ts);
+  if (!Number.isFinite(n)) return null;
+  return n < 1e12 ? n * 1000 : n;
+};
+
+const getHist = (id, startMs, endMs, aggregate = 'none', step = 0) => new Promise(resolve => {
+  if (!id) return resolve([]);
+  const agg = aggregate || 'none';
+  const spanMs = Number(endMs) - Number(startMs);
+  const wantsStep = step && Number(step) > 0 && agg !== 'none';
+  const stepMs = wantsStep ? chooseStepMs(spanMs, Number(step)) : 0;
+
+  const options = {
+    start: startMs,
+    end: endMs,
+    aggregate: agg,
+    addId: false,
+    ignoreNull: true,
+    count: calcCount(startMs, endMs, wantsStep ? stepMs : 120000),
+    returnNewestEntries: true,
+    removeBorderValues: true,
+  };
+  if (wantsStep) options.step = stepMs;
+
+  try {
+    this.sendTo(inst, 'getHistory', { id, options }, (resu) => {
+      let outArr = [];
+      if (Array.isArray(resu)) outArr = resu;
+      else if (resu && Array.isArray(resu.result)) {
+        if (resu.result.length && Array.isArray(resu.result[0]?.data)) outArr = resu.result[0].data;
+        else outArr = resu.result;
+      } else if (resu && Array.isArray(resu.series) && resu.series[0]?.values) {
+        outArr = resu.series[0].values.map(v => ({ ts: v[0], val: v[1] }));
+      } else if (resu && Array.isArray(resu.data)) {
+        outArr = resu.data;
+      }
+
+      const norm = (outArr || [])
+        .map(p => {
+          const tRaw = Array.isArray(p) ? p[0] : (p.ts ?? p.time ?? p.t ?? p[0]);
+          const vRaw = Array.isArray(p) ? p[1] : (p.val ?? p.value ?? p[1]);
+          const t = normTsMs(tRaw);
+          const v = Number(vRaw);
+          if (t == null || Number.isNaN(v)) return null;
+          return [Number(t), v];
+        })
+        .filter(Boolean)
+        .sort((a,b)=>a[0]-b[0]);
+
+      resolve(norm);
+    });
+  } catch (e) {
+    resolve([]);
+  }
+});
+
+const days = buckets.map(b => ({ date: b.date, totalKwh: 0, wallboxes: {} }));
     const dayIndex = {}; buckets.forEach((b, i) => { dayIndex[b.date] = i; });
 
     for (const wb of evcs) {
       const idx = wb.index;
 
-      // Power series (W): max power + fallback integration
-      const p = await getHist(wb.powerId, start, end, 'none');
-      const pAgg = buckets.map(_b => ({ kwh: 0, maxW: 0 }));
-      if (p && p.length >= 2) {
-        let bi = 0;
-        for (let j = 0; j < p.length - 1; j++) {
-          const t0 = +p[j][0], v0 = +p[j][1];
-          const t1 = +p[j+1][0], v1 = +p[j+1][1];
-          if (!(t1 > t0)) continue;
-          let segStart = t0;
-          while (segStart < t1) {
-            while (bi < buckets.length && !(segStart < buckets[bi].end)) bi++;
-            if (bi >= buckets.length) break;
-            const segEnd = Math.min(t1, buckets[bi].end);
-            const a = Math.max(segStart, buckets[bi].start);
-            const b = Math.min(segEnd, buckets[bi].end);
-            if (b > a) {
-              const vA = v0 + (v1 - v0) * ((a - t0) / (t1 - t0));
-              const vB = v0 + (v1 - v0) * ((b - t0) / (t1 - t0));
-              const dt = (b - a) / 1000;
-              const avgW = (Math.abs(vA) + Math.abs(vB)) / 2;
-              pAgg[bi].kwh += avgW * dt / 3600 / 1000;
-              pAgg[bi].maxW = Math.max(pAgg[bi].maxW, Math.abs(vA), Math.abs(vB));
-            }
-            segStart = segEnd;
-          }
-        }
-      }
+            const baseReportStepMs = 120000;
+      const reportStepMs = chooseStepMs(end - start, baseReportStepMs);
 
-      // Energy total series (kWh): preferred for daily energy (max-min)
-      const e = await getHist(wb.energyTotalId, start, end, 'none');
-      const eAgg = {}; // date -> {min,max}
-      if (e && e.length) {
-        for (const pt of e) {
+      // Power series (W): use average for energy integration and max for daily peak
+      const pAvg = await getHist(wb.powerId, start, end, 'average', reportStepMs);
+      const pMax = await getHist(wb.powerId, start, end, 'max', reportStepMs);
+
+      const pAgg = buckets.map(_b => ({ kwh: 0, maxW: 0 }));
+
+      if (pAvg && pAvg.length) {
+        const stepS = reportStepMs / 1000;
+        for (const pt of pAvg) {
           const t = +pt[0];
           const v = +pt[1];
           const dk = dayKeyOf(t);
           if (!(dk in dayIndex)) continue;
-          if (!eAgg[dk]) eAgg[dk] = { min: v, max: v };
-          eAgg[dk].min = Math.min(eAgg[dk].min, v);
-          eAgg[dk].max = Math.max(eAgg[dk].max, v);
+          if (!isFinite(v)) continue;
+          pAgg[dayIndex[dk]].kwh += Math.abs(v) * stepS / 3600 / 1000;
         }
       }
 
-      for (let i = 0; i < buckets.length; i++) {
+      if (pMax && pMax.length) {
+        for (const pt of pMax) {
+          const t = +pt[0];
+          const v = +pt[1];
+          const dk = dayKeyOf(t);
+          if (!(dk in dayIndex)) continue;
+          if (!isFinite(v)) continue;
+          pAgg[dayIndex[dk]].maxW = Math.max(pAgg[dayIndex[dk]].maxW, Math.abs(v));
+        }
+      } else if (pAvg && pAvg.length) {
+        for (const pt of pAvg) {
+          const t = +pt[0];
+          const v = +pt[1];
+          const dk = dayKeyOf(t);
+          if (!(dk in dayIndex)) continue;
+          if (!isFinite(v)) continue;
+          pAgg[dayIndex[dk]].maxW = Math.max(pAgg[dayIndex[dk]].maxW, Math.abs(v));
+        }
+      }
+
+      // Energy per day (kWh): prefer internal energyDayKwh (max), fallback energyTotal (max-min)
+      const eDayMap = {};
+      try {
+        const eDayId = `${this.namespace}.evcs.${idx}.energyDayKwh`;
+        const eDaySeries = await getHist(eDayId, start, end, 'max', DAY_MS);
+        if (eDaySeries && eDaySeries.length) {
+          for (const pt of eDaySeries) {
+            const t = +pt[0];
+            const v = +pt[1];
+            const dk = dayKeyOf(t);
+            if (!(dk in dayIndex)) continue;
+            if (!isFinite(v)) continue;
+            eDayMap[dk] = (eDayMap[dk] === undefined) ? v : Math.max(eDayMap[dk], v);
+          }
+        }
+      } catch (e) {}
+
+      const eAgg = {}; // date -> {min,max}
+      if (wb.energyTotalId) {
+        const eMax = await getHist(wb.energyTotalId, start, end, 'max', DAY_MS);
+        const eMin = await getHist(wb.energyTotalId, start, end, 'min', DAY_MS);
+
+        const maxByDay = {};
+        const minByDay = {};
+
+        if (eMax && eMax.length) {
+          for (const pt of eMax) {
+            const t = +pt[0];
+            const v = +pt[1];
+            const dk = dayKeyOf(t);
+            if (!(dk in dayIndex)) continue;
+            if (!isFinite(v)) continue;
+            maxByDay[dk] = (maxByDay[dk] === undefined) ? v : Math.max(maxByDay[dk], v);
+          }
+        }
+        if (eMin && eMin.length) {
+          for (const pt of eMin) {
+            const t = +pt[0];
+            const v = +pt[1];
+            const dk = dayKeyOf(t);
+            if (!(dk in dayIndex)) continue;
+            if (!isFinite(v)) continue;
+            minByDay[dk] = (minByDay[dk] === undefined) ? v : Math.min(minByDay[dk], v);
+          }
+        }
+
+        for (const dk of Object.keys(maxByDay)) {
+          if (minByDay[dk] === undefined) continue;
+          eAgg[dk] = { min: minByDay[dk], max: maxByDay[dk] };
+        }
+      }
+
+for (let i = 0; i < buckets.length; i++) {
         const dk = buckets[i].date;
         const maxKw = pAgg[i].maxW ? (pAgg[i].maxW / 1000) : 0;
         let kwh = 0;
 
-        if (eAgg[dk] && isFinite(eAgg[dk].min) && isFinite(eAgg[dk].max)) {
+        if (eDayMap[dk] !== undefined && isFinite(eDayMap[dk])) {
+          kwh = Math.max(0, eDayMap[dk]);
+        } else if (eAgg[dk] && isFinite(eAgg[dk].min) && isFinite(eAgg[dk].max)) {
           kwh = Math.max(0, eAgg[dk].max - eAgg[dk].min);
         } else {
           kwh = Math.max(0, pAgg[i].kwh || 0);
