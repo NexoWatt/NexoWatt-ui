@@ -184,12 +184,30 @@ function toISODate(ms){
     window.print();
   }
 
+
+  function downloadCsv(){
+    const fromMs = Number(q('from') || (Date.now() - 7*24*3600*1000));
+    const toMs   = Number(q('to')   || Date.now());
+    const url = `/api/evcs/report.csv?from=${encodeURIComponent(fromMs)}&to=${encodeURIComponent(toMs)}`;
+
+    // Trigger a download without navigating away from the report page.
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
   function init(){
     const reloadBtn = el('reloadBtn');
     const printBtn = el('printBtn');
+    const csvBtn = el('csvBtn');
 
     if (reloadBtn) reloadBtn.addEventListener('click', load);
     if (printBtn) printBtn.addEventListener('click', loadAndPrint);
+    if (csvBtn) csvBtn.addEventListener('click', downloadCsv);
 
     load();
   }
