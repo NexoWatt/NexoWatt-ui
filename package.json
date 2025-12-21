@@ -1,9 +1,9 @@
 {
   "name": "iobroker.nexowatt-vis",
   "version": "0.4.80",
-  "description": "Responsive NexoWatt EMS visualization adapter (OpenEMS-like) for ioBroker.",
-  "author": "Visu Helper",
-  "license": "UNLICENSED",
+  "description": "Responsive NexoWatt EMS visualization adapter.",
+  "author": "NexoWatt",
+  "license": "Proprietary License (NPL) v1.0",
   "main": "main.js",
   "engines": {
     "node": ">=16"
@@ -21,7 +21,7 @@
     "adapter",
     "visualization",
     "NexoWatt",
-    "OpenEMS",
+    "Energie Management System",
     "EMS"
   ],
   "repository": {
