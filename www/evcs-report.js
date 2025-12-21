@@ -95,6 +95,24 @@ function toISODate(ms){
         }
       });
 
+      // Period totals (sum kWh + peak max kW per wallbox)
+      const periodTotals = { totalKwh: 0, wallboxes: {} };
+      wbs.forEach(wb => {
+        periodTotals.wallboxes[String(wb.index)] = { kwh: 0, maxKw: 0 };
+      });
+      days.forEach(d => {
+        const dayTotal = Number(d && d.totalKwh);
+        if (isFinite(dayTotal)) periodTotals.totalKwh += dayTotal;
+        wbs.forEach(wb => {
+          const idx = String(wb.index);
+          const cell = (d && d.wallboxes && (d.wallboxes[idx] || d.wallboxes[wb.index])) || {};
+          const kwh = Number(cell && cell.kwh);
+          if (isFinite(kwh)) periodTotals.wallboxes[idx].kwh += kwh;
+          const mx = Number(cell && cell.maxKw);
+          if (isFinite(mx)) periodTotals.wallboxes[idx].maxKw = Math.max(periodTotals.wallboxes[idx].maxKw || 0, mx);
+        });
+      });
+
       // Header: Date + Total + per wallbox (kWh / max kW)
       let h = '<tr>';
       h += '<th>Datum</th>';

@@ -1,3 +1,6 @@
+## 0.4.84 (2025-12-21)
+- Fix (EVCS Report): Render-Crash behoben (periodTotals korrekt berechnet), Summenzeile „Summe Zeitraum“ funktioniert wieder stabil.
+
 ## 0.4.82
 
 ## 0.4.83 (2025-12-21)
