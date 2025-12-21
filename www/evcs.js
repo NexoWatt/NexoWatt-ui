@@ -72,11 +72,8 @@ function render(){
     const st = d(`evcs.${i}.status`);
     const active = d(`evcs.${i}.active`);
     const mode = d(`evcs.${i}.mode`);
-    const nmMode = normalizeMode(mode);
-    const modeVal = nmMode.ui;
-    const modeScale = nmMode.scale || '';
-
-    html += `
+    const modeVal = clampUiMode(mode);
+html += `
       <div class="card" style="margin:0">
         <div class="card-header">
           <div class="legend-color"></div>
@@ -104,7 +101,7 @@ function render(){
             <span>Modus</span>
             ${canMode ? `
               <div class="nw-evcs-mode">
-                <input type="range" min="1" max="3" step="1" data-evcs-mode="${i}" data-scale="${modeScale}" value="${modeVal}" aria-label="Betriebsmodus">
+                <input type="range" min="1" max="3" step="1" data-evcs-mode="${i}" value="${modeVal}" aria-label="Betriebsmodus">
                 <div class="nw-evcs-mode-labels">
                   <span data-mode="1" class="${modeVal === 1 ? 'active' : ''}">Boost</span>
                   <span data-mode="2" class="${modeVal === 2 ? 'active' : ''}">Min+PV</span>
@@ -178,10 +175,8 @@ function bindControls(){
       const idx = Number(t.getAttribute('data-evcs-mode'));
       const v = clampMode(t.value);
       t.value = String(v);
-      const scale = String(t.getAttribute('data-scale') || '');
-      const raw = uiToRawMode(v, scale);
       try{
-        await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'evcs', key: `${idx}.mode`, value: Number(raw)})});
+        await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'evcs', key: `${idx}.mode`, value: Number(v)})});
       }catch(_e){}
     }
   });

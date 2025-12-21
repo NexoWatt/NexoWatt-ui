@@ -1,3 +1,8 @@
+## 0.4.79
+
+- EVCS: enforce mode scale 1..3 everywhere (Boost=1, Min+PV=2, PV=3) and remove 0..2 conversion.
+- EVCS: stabilize modal + page slider behavior and fix mode label layout under slider.
+
 ## 0.4.78
 
 - Fix EVCS modal HTML (clean markup) and restore proper mode label spacing under the slider.

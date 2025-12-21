@@ -1329,3 +1329,19 @@ body {
   margin-top: 6px;
 }
 #evcsModal #evcsModeLabels span{ white-space:nowrap; }
+
+
+/* --- NW: EVCS mode labels layout (avoid glued text in modal) --- */
+.mode-labels,
+.nw-evcs-mode-labels{
+  width: 100%;
+}
+.mode-labels span,
+.nw-evcs-mode-labels span{
+  flex: 1 1 0;
+  text-align: center;
+}
+.mode-labels span:first-child,
+.nw-evcs-mode-labels span:first-child{ text-align: left; }
+.mode-labels span:last-child,
+.nw-evcs-mode-labels span:last-child{ text-align: right; }

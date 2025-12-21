@@ -995,11 +995,9 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
   const toggle = qs('evcsActiveToggle');
   const slider = qs('evcsModeSlider');
 
-  // Detect whether per-wallbox datapoints are available (evcs.1.*) and remember mode scale (0-2 vs 1-3)
+  // Prefer per-wallbox datapoints (evcs.1.*) for single-EVCS modal, fallback to legacy settings.*
   let hasPerBoxMode = false;
   let hasPerBoxActive = false;
-  let lastModeScale = ''; // '0-2' or '1-3'
-  let lastRawMode = null;
 
   // Prevent UI "jumping" while an update is still in-flight
   let pendingModeUi = null;
@@ -1013,51 +1011,10 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
     return Math.max(1, Math.min(3, Math.round(n)));
   }
 
-  function detectScaleFromRaw(raw){
-    const n = Number(raw);
-    if (!isFinite(n)) return '';
-    const r = Math.round(n);
-
-    // definitive endpoints
-    if (r === 0) return '0-2';
-    if (r === 3) return '1-3';
-
-    // ambiguous 1/2: prefer last observed, otherwise default to 0-2 (most common in current setups)
-    if (r === 1 || r === 2){
-      return lastModeScale || '0-2';
-    }
-
-    if (r >= 0 && r <= 2) return '0-2';
-    if (r >= 1 && r <= 3) return '1-3';
-    return '';
-  }
-
-  function rawToUi(raw){
-    const n = Number(raw);
-    if (!isFinite(n)) return 1;
-    const r = Math.round(n);
-    const scale = detectScaleFromRaw(r);
-    if (scale === '0-2') return clampUiMode(r + 1);
-    if (scale === '1-3') return clampUiMode(r);
-    return clampUiMode(r);
-  }
-
-  function uiToRaw(ui){
-    const u = clampUiMode(ui);
-
-    // If scale is still unknown but we already saw a raw value, infer from that.
-    if (!lastModeScale && lastRawMode != null){
-      const s = detectScaleFromRaw(lastRawMode);
-      if (s) lastModeScale = s;
-    }
-
-    if (lastModeScale === '0-2') return u - 1;
-    return u;
-  }
-
   function applyModeUi(ui){
     const u = clampUiMode(ui);
     if (slider) slider.value = String(u);
+
     const labels = qs('evcsModeLabels');
     if (labels){
       const spans = labels.querySelectorAll('span[data-mode]');
@@ -1072,7 +1029,6 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
       if (modal) modal.classList.remove('hidden');
     });
   }
-
   if (close){
     close.addEventListener('click', ()=> modal && modal.classList.add('hidden'));
     document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal) modal.classList.add('hidden'); });
@@ -1099,7 +1055,6 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
       pendingModeUntil = Date.now() + 2500;
       applyModeUi(u);
     });
-
     slider.addEventListener('change', async ()=>{
       const u = clampUiMode(slider.value);
       pendingModeUi = u;
@@ -1109,10 +1064,9 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
       const scope = hasPerBoxMode ? 'evcs' : 'settings';
       const key = hasPerBoxMode ? '1.mode' : 'evcsMode';
 
-      const raw = hasPerBoxMode ? uiToRaw(u) : u;
-
+      // IMPORTANT: always write 1..3 (Boost=1, Min+PV=2, PV=3)
       try{
-        await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope, key, value: Number(raw)})});
+        await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope, key, value: Number(u)})});
       }catch(e){}
     });
   }
@@ -1130,14 +1084,8 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
     const evcsMode = d('evcs.1.mode');
     const settingsMode = s && s['settings.evcsMode'] ? s['settings.evcsMode'].value : null;
     hasPerBoxMode = evcsMode != null;
-
     const modeRaw = (evcsMode != null) ? evcsMode : ((settingsMode != null) ? settingsMode : 1);
-    lastRawMode = modeRaw;
-
-    const scale = detectScaleFromRaw(modeRaw);
-    if (scale) lastModeScale = scale;
-
-    const uiFromState = rawToUi(modeRaw);
+    const uiFromState = clampUiMode(modeRaw);
 
     const fmtP = (val)=> {
       const u = (window.units && window.units.power) || 'W';
