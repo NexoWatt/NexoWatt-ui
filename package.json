@@ -3,7 +3,7 @@
   "version": "0.4.79",
   "description": "Responsive NexoWatt EMS visualization adapter  for ioBroker.",
   "author": "NexoWatt",
-  "license": "UNLICENSED",
+  "license": "Proprietary License (NPL) v1.0",
   "main": "main.js",
   "engines": {
     "node": ">=16"
