@@ -172,6 +172,22 @@ function computeDerived() {
   }
 }
 
+
+function coerceNumber(v){
+  if (v === undefined || v === null) return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  const s = String(v).trim();
+  if (!s) return null;
+  // allow "19", "19.5", "19,5", "19 %"
+  const cleaned = s.replace(/%/g, '').replace(/\s+/g, '').replace(',', '.');
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+function clamp01(v, lo, hi){
+  if (v === null || v === undefined || !Number.isFinite(v)) return null;
+  return Math.max(lo, Math.min(hi, v));
+}
+
 function render() {
   const s = state;
 
@@ -206,16 +222,20 @@ function render() {
   const autarky = d('autarky') ?? derived.autarky;
   const selfc = d('selfConsumption') ?? derived.selfConsumption;
 
-  setWidth('autarkyBar', autarky || 0);
-  setText('autarkyValue', (autarky != null ? autarky.toFixed(0) : '--') + ' %');
+  const autarkyN = clamp01(coerceNumber(autarky), 0, 100);
+  const selfcN = clamp01(coerceNumber(selfc), 0, 100);
+  const socN = clamp01(coerceNumber(soc), 0, 100);
 
-  setWidth('selfConsumptionBar', selfc || 0);
-  setWidth('selfVerbrauchBar', selfc || 0);
-  setText('selfConsumptionValue', (selfc != null ? selfc.toFixed(0) : '--') + ' %');
-  setText('selfVerbrauchValue', (selfc != null ? selfc.toFixed(0) : '--') + ' %');
+  setWidth('autarkyBar', autarkyN ?? 0);
+  setText('autarkyValue', (autarkyN != null ? autarkyN.toFixed(0) : '--') + ' %');
 
-  setWidth('storageSocBar', soc || 0);
-  setText('storageSocValue', (soc != null ? soc.toFixed(0) : '--') + ' %');
+  setWidth('selfConsumptionBar', selfcN ?? 0);
+  setWidth('selfVerbrauchBar', selfcN ?? 0);
+  setText('selfConsumptionValue', (selfcN != null ? selfcN.toFixed(0) : '--') + ' %');
+  setText('selfVerbrauchValue', (selfcN != null ? selfcN.toFixed(0) : '--') + ' %');
+
+  setWidth('storageSocBar', socN ?? 0);
+  setText('storageSocValue', (socN != null ? socN.toFixed(0) : '--') + ' %');
 
   setText('storageChargePower', formatPower(charge ?? 0));
   setText('storageLadenPower', formatPower(charge ?? 0));

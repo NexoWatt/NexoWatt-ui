@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.97",
+    "version": "0.4.98",
     "news": {
       "0.4.91": {
         "de": "EVCS RFID: Anlernen-UI (Karte anlernen, letzte Karte anzeigen, in Whitelist übernehmen).",

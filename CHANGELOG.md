@@ -1,3 +1,6 @@
+## 0.4.98 (2025-12-22)
+- UI Fix: robustes Number-Casting für SoC/Autarkie/Eigenverbrauch (verhindert Render-Fehler wenn Werte als String kommen, z. B. "19 %").
+
 ## 0.4.96 (2025-12-21)
 
 ## 0.4.97 (2025-12-21)
