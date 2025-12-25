@@ -1361,6 +1361,16 @@ async onReady() {
       // finally subscribe and read initial values
       await this.subscribeConfiguredStates();
 
+      // Energy totals: if no kWh counters are mapped, derive totals from history/influxdb
+      try { await this.updateEnergyTotalsFromInflux('startup'); } catch (_e) {}
+      try {
+        if (this._nwEnergyTotalsTimer) clearInterval(this._nwEnergyTotalsTimer);
+        this._nwEnergyTotalsTimer = setInterval(() => {
+          this.updateEnergyTotalsFromInflux('timer').catch(() => {});
+        }, 60 * 60 * 1000);
+      } catch (_e2) {}
+
+
       this.buildSmartHomeDevicesFromConfig();
       this.log.info('NexoWatt VIS adapter ready.');
     } catch (e) {
@@ -2913,6 +2923,207 @@ app.get('/config', (req, res) => {
   }
 
 
+  // --- Energy totals fallback: derive kWh values from ioBroker history (InfluxDB) when no kWh counters are mapped ---
+  _nwTrimId(v) {
+    if (typeof v !== 'string') return '';
+    const s = v.trim();
+    return s ? s : '';
+  }
+
+  _nwGetHistoryInstance() {
+    const hcfg = (this.config && this.config.history) || {};
+    const inst = this._nwTrimId(hcfg.instance) || 'influxdb.0';
+    return inst;
+  }
+
+  _nwGetHistoryDpId(name) {
+    const hcfg = (this.config && this.config.history) || {};
+    const dp = Object.assign({}, hcfg.datapoints || {}, hcfg.dp || {});
+    const dps = (this.config && this.config.datapoints) || {};
+    return this._nwTrimId(dp[name]) || this._nwTrimId(dps[name]) || '';
+  }
+
+  _nwHasMappedDatapoint(key) {
+    const dps = (this.config && this.config.datapoints) || {};
+    return !!this._nwTrimId(dps[key]);
+  }
+
+  _nwNormTsMs(tRaw) {
+    if (tRaw == null) return null;
+    if (tRaw instanceof Date) return tRaw.getTime();
+    if (typeof tRaw === 'string') {
+      const p = Date.parse(tRaw);
+      if (!Number.isNaN(p)) return p;
+    }
+    const n = Number(tRaw);
+    if (!Number.isFinite(n)) return null;
+    return n < 1e12 ? n * 1000 : n;
+  }
+
+  _nwChooseStepMs(spanMs, targetPoints = 3000, minStepMs = 60 * 1000) {
+    const s = Math.max(1, Number(spanMs) || 1);
+    const t = Math.max(100, Number(targetPoints) || 3000);
+    const raw = Math.ceil(s / t);
+    const step = Math.max(Number(minStepMs) || 0, raw);
+    // round to nice-ish boundaries to reduce adapter/DB load patterns
+    const nice = [
+      60e3, 120e3, 300e3, 600e3, 900e3, 1800e3,
+      3600e3, 7200e3, 14400e3, 21600e3, 43200e3, 86400e3
+    ];
+    for (const n of nice) {
+      if (step <= n) return n;
+    }
+    // fall back: round to hours
+    const hour = 3600e3;
+    return Math.ceil(step / hour) * hour;
+  }
+
+  _nwNormalizeHistoryResult(resu) {
+    let arr = [];
+    if (!resu) return arr;
+
+    // influxdb adapter: { result: [ { data: [...] } ] } or { result: [...] }
+    if (resu && Array.isArray(resu.result)) {
+      if (resu.result.length && Array.isArray(resu.result[0]?.data)) arr = resu.result[0].data;
+      else arr = resu.result;
+    } else if (resu && Array.isArray(resu.series) && resu.series[0]?.values) {
+      arr = resu.series[0].values.map(v => ({ ts: v[0], val: v[1] }));
+    } else if (Array.isArray(resu)) {
+      arr = resu;
+    } else if (resu && Array.isArray(resu.data)) {
+      arr = resu.data;
+    }
+
+    const norm = (arr || []).map(p => {
+      const tRaw = Array.isArray(p) ? p[0] : (p.ts ?? p.time ?? p.t ?? p[0]);
+      const vRaw = Array.isArray(p) ? p[1] : (p.val ?? p.value ?? p[1]);
+      const ts = this._nwNormTsMs(tRaw);
+      const val = Number(vRaw);
+      if (ts == null || Number.isNaN(val)) return null;
+      return { ts, val };
+    }).filter(Boolean);
+
+    norm.sort((a, b) => a.ts - b.ts);
+    return norm;
+  }
+
+  _nwGetHistoryAvgSeries(id, startMs, endMs, stepMs) {
+    return new Promise(resolve => {
+      const inst = this._nwGetHistoryInstance();
+      const sid = this._nwTrimId(id);
+      if (!sid) return resolve([]);
+      const options = { start: startMs, end: endMs, step: stepMs, aggregate: 'average', addId: false, ignoreNull: true };
+      try {
+        this.sendTo(inst, 'getHistory', { id: sid, options }, (resu) => {
+          try { resolve(this._nwNormalizeHistoryResult(resu)); } catch (_e) { resolve([]); }
+        });
+      } catch (_e) {
+        resolve([]);
+      }
+    });
+  }
+
+  _nwIntegrateKwh(series, endMs, defaultStepMs, positiveOnly = true) {
+    if (!Array.isArray(series) || !series.length) return null;
+    let kwh = 0;
+    const end = Number(endMs) || Date.now();
+    const step = Math.max(1, Number(defaultStepMs) || 60 * 1000);
+    for (let i = 0; i < series.length; i++) {
+      const cur = series[i];
+      const nextTs = (i + 1 < series.length) ? series[i + 1].ts : end;
+      let dt = Number(nextTs) - Number(cur.ts);
+      if (!Number.isFinite(dt) || dt <= 0) dt = step;
+      // guard against accidental huge dt gaps (restarts/holes)
+      dt = Math.min(dt, step * 2);
+      let v = Number(cur.val);
+      if (!Number.isFinite(v)) continue;
+      if (positiveOnly) v = Math.max(0, v);
+      else v = Math.abs(v);
+      kwh += (v * dt) / 3600000; // W * ms -> Wh -> kWh
+    }
+    return kwh;
+  }
+
+  async updateEnergyTotalsFromInflux(reason = 'periodic') {
+    const now = Date.now();
+    const LOOKBACK_DAYS = 3650; // "Gesamt" = so weit wie Influx es hergibt (typisch Retention-basiert)
+    const startMs = now - LOOKBACK_DAYS * 24 * 3600 * 1000;
+    const spanMs = now - startMs;
+
+    // Only compute if the corresponding kWh datapoints are NOT mapped.
+    const tasks = [];
+
+    if (!this._nwHasMappedDatapoint('productionEnergyKwh')) {
+      const id = this._nwGetHistoryDpId('pvPower');
+      if (id) tasks.push((async () => {
+        const stepMs = this._nwChooseStepMs(spanMs, 3500, 5 * 60 * 1000);
+        const series = await this._nwGetHistoryAvgSeries(id, startMs, now, stepMs);
+        const kwh = this._nwIntegrateKwh(series, now, stepMs, true);
+        if (kwh != null) this.updateValue('productionEnergyKwh', kwh, now);
+      })());
+    }
+
+    if (!this._nwHasMappedDatapoint('consumptionEnergyKwh')) {
+      const id = this._nwGetHistoryDpId('consumptionTotal');
+      if (id) tasks.push((async () => {
+        const stepMs = this._nwChooseStepMs(spanMs, 3500, 5 * 60 * 1000);
+        const series = await this._nwGetHistoryAvgSeries(id, startMs, now, stepMs);
+        const kwh = this._nwIntegrateKwh(series, now, stepMs, true);
+        if (kwh != null) this.updateValue('consumptionEnergyKwh', kwh, now);
+      })());
+    }
+
+    if (!this._nwHasMappedDatapoint('gridEnergyKwh')) {
+      const id = this._nwGetHistoryDpId('gridBuyPower');
+      if (id) tasks.push((async () => {
+        const stepMs = this._nwChooseStepMs(spanMs, 3500, 5 * 60 * 1000);
+        const series = await this._nwGetHistoryAvgSeries(id, startMs, now, stepMs);
+        const kwh = this._nwIntegrateKwh(series, now, stepMs, true);
+        if (kwh != null) this.updateValue('gridEnergyKwh', kwh, now);
+      })());
+    }
+
+    // "Letzte Ladung" (EVCS): fallback from history if not mapped
+    if (!this._nwHasMappedDatapoint('evcsLastChargeKwh')) {
+      const evcsId = this._nwGetHistoryDpId('evcsPower');
+      if (evcsId) tasks.push((async () => {
+        const days = 14;
+        const start = now - days * 24 * 3600 * 1000;
+        const stepMs = 60 * 1000;
+        const series = await this._nwGetHistoryAvgSeries(evcsId, start, now, stepMs);
+
+        const thrW = 200; // ignore noise
+        let endIdx = -1;
+        for (let i = series.length - 1; i >= 0; i--) {
+          if ((Number(series[i].val) || 0) >= thrW) { endIdx = i; break; }
+        }
+        if (endIdx < 0) {
+          // No charge found in window -> leave as '--' (null)
+          return;
+        }
+
+        // walk backwards until we have a few consecutive points below threshold
+        let startIdx = endIdx;
+        let below = 0;
+        for (let i = endIdx; i >= 0; i--) {
+          const v = Number(series[i].val) || 0;
+          if (v < thrW) below++;
+          else below = 0;
+          if (below >= 3) { startIdx = Math.min(endIdx, i + 3); break; }
+          startIdx = i;
+        }
+
+        const seg = series.slice(startIdx, endIdx + 1);
+        const kwh = this._nwIntegrateKwh(seg, now, stepMs, true);
+        if (kwh != null) this.updateValue('evcsLastChargeKwh', kwh, now);
+      })());
+    }
+
+    try { await Promise.allSettled(tasks); } catch (_e) {}
+  }
+
+
+
 
   updateValue(key, value, ts) {
     this.stateCache[key] = { value, ts };
@@ -2978,6 +3189,7 @@ app.get('/config', (req, res) => {
 
   onUnload(callback) {
     try {
+      try { if (this._nwEnergyTotalsTimer) clearInterval(this._nwEnergyTotalsTimer); } catch (_e) {}
       if (this.server) this.server.close();
       callback();
     } catch (e) {
