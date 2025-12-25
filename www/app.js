@@ -246,7 +246,10 @@ function render() {
   setText('gridSellPowerCard', formatPower(sell ?? 0));
   setText('gridEnergyKwh', (d('gridEnergyKwh')!=null? Number(d('gridEnergyKwh')).toFixed(2)+' kWh':'--'));
   setText('productionEnergyKwh', (d('productionEnergyKwh')!=null? Number(d('productionEnergyKwh')).toFixed(2)+' kWh':'--'));
-  setText('co2Savings', (d('co2Savings')!=null? (isNaN(Number(d('co2Savings'))) ? String(d('co2Savings')) : Number(d('co2Savings')).toFixed(1)+' t'):'--'));
+  const pvEnergyKwh = coerceNumber(d('productionEnergyKwh'));
+  const co2FromPvT = pvEnergyKwh != null ? (pvEnergyKwh * 0.0004) : null; // 0.4 kg CO₂ / kWh -> t CO₂
+  const co2Dp = d('co2Savings');
+  setText('co2Savings', (co2Dp != null ? (isNaN(Number(co2Dp)) ? String(co2Dp) : Number(co2Dp).toFixed(1) + ' t') : (co2FromPvT != null ? co2FromPvT.toFixed(1) + ' t' : '--')));
 
 
   setText('productionTotal', formatPower(d('productionTotal') ?? pv ?? 0));
