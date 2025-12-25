@@ -1,3 +1,7 @@
+## 0.4.100 (2025-12-25)
+- Admin: Datenpunkte – kWh-/Zählerfelder und Kennzahlen standardmäßig ausgeblendet (im Admin „Expertenmodus“ sichtbar) und mit Hinweisen/Platzhaltern versehen.
+- Keine Änderungen an Umschalt-Reitern oder dynamischem Zeittarif.
+
 ## 0.4.99 (2025-12-25)
 - Admin: Datenpunkte – Leistungs-Datenpunkte (W) übersichtlicher angeordnet (Reihenfolge + bessere Platzhalter/Hilfetexte).
 - Keine Änderungen an Tabs/Umschaltreitern oder Dynamischem Zeittarif.
