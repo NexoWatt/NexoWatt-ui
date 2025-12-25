@@ -1,3 +1,7 @@
+## 0.4.99 (2025-12-25)
+- Admin: Datenpunkte – Leistungs-Datenpunkte (W) übersichtlicher angeordnet (Reihenfolge + bessere Platzhalter/Hilfetexte).
+- Keine Änderungen an Tabs/Umschaltreitern oder Dynamischem Zeittarif.
+
 ## 0.4.98 (2025-12-22)
 - UI Fix: robustes Number-Casting für SoC/Autarkie/Eigenverbrauch (verhindert Render-Fehler wenn Werte als String kommen, z. B. "19 %").
 
