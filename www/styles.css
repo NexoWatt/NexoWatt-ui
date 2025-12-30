@@ -1461,3 +1461,26 @@ body {
   min-width: 180px;
   text-align: right;
 }
+
+/* EVCS: EMS Hinweis-/Fehlerzeile (Konfiguration / Begrenzungen) */
+.nw-hint{
+  font-size:12px;
+  line-height:1.25;
+  margin-top:4px;
+  text-align:right;
+  max-width: 320px;
+  word-break: break-word;
+}
+.nw-hint.nw-hint-info{
+  color: var(--muted);
+  opacity: .9;
+}
+.nw-hint.nw-hint-warn{
+  color: #f9a825;
+  opacity: .95;
+}
+.nw-hint.nw-hint-err{
+  color: #ff6b6b;
+  opacity: 1;
+  font-weight: 700;
+}

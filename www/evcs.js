@@ -122,6 +122,40 @@ function fmtClock(ts){
   }catch(_e){ return ''; }
 }
 
+function reasonHint(reason, applyStatus){
+  const r = String(reason ?? '').trim().toUpperCase();
+  const a = String(applyStatus ?? '').trim().toLowerCase();
+
+  // Do not spam the UI for normal states
+  if (!r && !a) return null;
+  if (r === 'OK' || r === 'ALLOCATED' || r === 'UNLIMITED') return null;
+
+  // Apply-layer errors (DP write)
+  if (a === 'no_dp_registry') return { level: 'err', text: 'Steuerung nicht möglich: Datenpunkt-Registry nicht bereit.' };
+  if (a === 'write_failed') return { level: 'err', text: 'Steuerung fehlgeschlagen: Schreiben auf Setpoint nicht möglich.' };
+  if (a === 'control_disabled' && !r) return { level: 'warn', text: 'Steuerung deaktiviert.' };
+
+  // Canonical EMS reasons (German)
+  if (r === 'NO_SETPOINT') return { level: 'err', text: 'Steuerung nicht möglich: Setpoint (A oder W) fehlt.' };
+  if (r === 'OFFLINE') return { level: 'warn', text: 'Ladepunkt offline.' };
+  if (r === 'DISABLED') return { level: 'warn', text: 'Ladepunkt deaktiviert.' };
+  if (r === 'STALE_METER') return { level: 'warn', text: 'Messwerte zu alt (Failsafe).' };
+  if (r === 'PAUSED_BY_PEAK_SHAVING') return { level: 'warn', text: 'Lastspitzenkappung aktiv.' };
+
+  if (r === 'LIMITED_BY_GRID_IMPORT') return { level: 'info', text: 'Begrenzt durch Netzanschluss (Import-Limit).' };
+  if (r === 'LIMITED_BY_PHASE_CAP') return { level: 'info', text: 'Begrenzt durch Phasen-/Strom-Limit.' };
+  if (r === 'LIMITED_BY_BUDGET') return { level: 'info', text: 'Begrenzt durch Leistungsbudget.' };
+  if (r === 'NO_PV_SURPLUS') return { level: 'info', text: 'Kein PV-Überschuss verfügbar.' };
+  if (r === 'BELOW_MIN') return { level: 'info', text: 'Unter Mindestleistung – Ladepunkt pausiert.' };
+
+  if (r === 'BOOST_TIMEOUT') return { level: 'info', text: 'Boost beendet (Timeout).' };
+  if (r === 'BOOST_NOT_ALLOWED') return { level: 'warn', text: 'Boost für diesen Ladepunkt nicht erlaubt.' };
+
+  // Fallback
+  if (r) return { level: 'info', text: 'Status: ' + r };
+  return null;
+}
+
 
 function clampUiMode(v){
   const n = Number(v);
@@ -229,6 +263,9 @@ function render(){
     const emsBoostRemainingMin = d(`${cm}.boostRemainingMin`);
     const emsBoostUntil = d(`${cm}.boostUntil`);
     const emsBoostTimeoutMin = d(`${cm}.boostTimeoutMin`);
+    const emsReason = d(`${cm}.reason`);
+    const emsApplyStatus = d(`${cm}.applyStatus`);
+    const emsAllowBoost = d(`${cm}.allowBoost`);
 
     const stationSafe = emsStationKey ? safeIdPart(emsStationKey) : '';
     const stationRemainingW = stationSafe ? d(`chargingManagement.stations.${stationSafe}.remainingW`) : undefined;
@@ -247,6 +284,9 @@ function render(){
     const effTxt = String(emsEffectiveMode ?? '').trim();
     const effLower = effTxt.toLowerCase();
     const userLower = String(emsUserMode ?? 'auto').trim().toLowerCase();
+    const hint = reasonHint(emsReason, emsApplyStatus);
+    const allowBoost = (emsAllowBoost !== false);
+    const boostDisabled = (!allowBoost && userLower !== 'boost');
     const showEff = !!effTxt && ((userLower === 'auto' && effLower !== 'normal') || (userLower !== 'auto' && userLower !== effLower && !(userLower==='minpv' && effLower==='minpv')));
 
     const ct = String(emsChargerType ?? m.chargerType ?? '').toUpperCase();
@@ -290,12 +330,13 @@ html += `
                 <div class="nw-evcs-mode">
                   <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-4" role="group" aria-label="Lade-Modus">
                     <button type="button" class="${emsUiVal === 1 ? 'active' : ''}" data-ems-mode-btn="${i}" data-mode="auto">Auto</button>
-                    <button type="button" class="${emsUiVal === 2 ? 'active' : ''}" data-ems-mode-btn="${i}" data-mode="boost">Boost</button>
+                    <button type="button" class="${emsUiVal === 2 ? 'active' : ''}" data-ems-mode-btn="${i}" data-mode="boost" ${boostDisabled ? 'disabled title="Boost für diesen Ladepunkt nicht erlaubt"' : ''}>Boost</button>
                     <button type="button" class="${emsUiVal === 3 ? 'active' : ''}" data-ems-mode-btn="${i}" data-mode="minpv">Min+PV</button>
                     <button type="button" class="${emsUiVal === 4 ? 'active' : ''}" data-ems-mode-btn="${i}" data-mode="pv">PV</button>
                   </div>
                 </div>
                 ${showEff ? `<div class="muted" style="font-size:12px; opacity:.85">Effektiv: ${esc(effTxt)}</div>` : ''}
+                ${hint ? `<div class="nw-hint nw-hint-${hint.level}">${esc(hint.text)}</div>` : ''}
               </div>
             ` : (canMode ? `
               <div class="nw-evcs-mode">
