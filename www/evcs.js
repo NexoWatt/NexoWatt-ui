@@ -242,23 +242,21 @@ html += `
             ${hasEms ? `
               <div style="display:flex; flex-direction:column; align-items:flex-end; gap:2px;">
                 <div class="nw-evcs-mode">
-                  <input type="range" min="1" max="4" step="1" data-ems-mode="${i}" value="${emsUiVal}" aria-label="Lade-Modus">
-                  <div class="nw-evcs-mode-labels">
-                    <span data-mode="1" class="${emsUiVal === 1 ? 'active' : ''}">Auto</span>
-                    <span data-mode="2" class="${emsUiVal === 2 ? 'active' : ''}">Boost</span>
-                    <span data-mode="3" class="${emsUiVal === 3 ? 'active' : ''}">Min+PV</span>
-                    <span data-mode="4" class="${emsUiVal === 4 ? 'active' : ''}">PV</span>
+                  <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-4" role="group" aria-label="Lade-Modus">
+                    <button type="button" class="${emsUiVal === 1 ? 'active' : ''}" data-ems-mode-btn="${i}" data-mode="auto">Auto</button>
+                    <button type="button" class="${emsUiVal === 2 ? 'active' : ''}" data-ems-mode-btn="${i}" data-mode="boost">Boost</button>
+                    <button type="button" class="${emsUiVal === 3 ? 'active' : ''}" data-ems-mode-btn="${i}" data-mode="minpv">Min+PV</button>
+                    <button type="button" class="${emsUiVal === 4 ? 'active' : ''}" data-ems-mode-btn="${i}" data-mode="pv">PV</button>
                   </div>
                 </div>
                 ${showEff ? `<div class="muted" style="font-size:12px; opacity:.85">Effektiv: ${esc(effTxt)}</div>` : ''}
               </div>
             ` : (canMode ? `
               <div class="nw-evcs-mode">
-                <input type="range" min="1" max="3" step="1" data-evcs-mode="${i}" value="${modeVal}" aria-label="Betriebsmodus">
-                <div class="nw-evcs-mode-labels">
-                  <span data-mode="1" class="${modeVal === 1 ? 'active' : ''}">Boost</span>
-                  <span data-mode="2" class="${modeVal === 2 ? 'active' : ''}">Min+PV</span>
-                  <span data-mode="3" class="${modeVal === 3 ? 'active' : ''}">PV</span>
+                <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-3" role="group" aria-label="Betriebsmodus">
+                  <button type="button" class="${modeVal === 1 ? 'active' : ''}" data-evcs-mode-btn="${i}" data-mode="1">Boost</button>
+                  <button type="button" class="${modeVal === 2 ? 'active' : ''}" data-evcs-mode-btn="${i}" data-mode="2">Min+PV</button>
+                  <button type="button" class="${modeVal === 3 ? 'active' : ''}" data-evcs-mode-btn="${i}" data-mode="3">PV</button>
                 </div>
               </div>
             ` : `<strong>${mode == null ? '--' : esc(mode)}</strong>`)}
@@ -313,33 +311,8 @@ function bindControls(){
   if (!list) return;
 
   const clampMode = (v)=> Math.max(1, Math.min(3, Math.round(Number(v)||1)));
-  const clampEms  = (v)=> Math.max(1, Math.min(4, Math.round(Number(v)||1)));
 
-  // keep slider value clamped live
-  list.addEventListener('input', (e)=>{
-    const t = e.target;
-    if (t && t.matches('input[type="range"][data-evcs-mode]')){
-      const v = clampMode(t.value);
-      t.value = String(v);
-      const box = t.closest('.nw-evcs-mode');
-      if (box){
-        const spans = box.querySelectorAll('.nw-evcs-mode-labels span[data-mode]');
-        spans.forEach(s => s.classList.toggle('active', Number(s.getAttribute('data-mode')) === v));
-      }
-    }
-
-    if (t && t.matches('input[type="range"][data-ems-mode]')){
-      const v = clampEms(t.value);
-      t.value = String(v);
-      const box = t.closest('.nw-evcs-mode');
-      if (box){
-        const spans = box.querySelectorAll('.nw-evcs-mode-labels span[data-mode]');
-        spans.forEach(s => s.classList.toggle('active', Number(s.getAttribute('data-mode')) === v));
-      }
-    }
-  });
-
-  // send changes to adapter
+  // EVCS active toggle (legacy)
   list.addEventListener('change', async (e)=>{
     const t = e.target;
     if (!t) return;
@@ -349,30 +322,54 @@ function bindControls(){
       try{
         await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'evcs', key: `${idx}.active`, value: !!t.checked})});
       }catch(_e){}
+    }
+  });
+
+  // Mode buttons (EMS + legacy)
+  list.addEventListener('click', async (e)=>{
+    const target = e.target;
+    if (!target || !target.closest) return;
+
+    // EMS: per Ladepunkt runtime userMode (auto|boost|minpv|pv)
+    const emsBtn = target.closest('button[data-ems-mode-btn]');
+    if (emsBtn){
+      const idx = Number(emsBtn.getAttribute('data-ems-mode-btn'));
+      let mode = String(emsBtn.getAttribute('data-mode') || 'auto').trim().toLowerCase();
+      if (mode === 'min+pv') mode = 'minpv';
+      if (!['auto','boost','minpv','pv'].includes(mode)) mode = 'auto';
+
+      // Optimistic UI update (avoid flicker while SSE updates)
+      try{
+        const k = `chargingManagement.wallboxes.lp${idx}.userMode`;
+        state[k] = { value: mode, ts: Date.now() };
+        render();
+      }catch(_e){}
+
+      try{
+        await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'ems', key: `evcs.${idx}.userMode`, value: mode})});
+      }catch(_e){}
       return;
     }
 
-    if (t.matches('input[type="range"][data-evcs-mode]')){
-      const idx = Number(t.getAttribute('data-evcs-mode'));
-      const v = clampMode(t.value);
-      t.value = String(v);
+    // Legacy: EVCS mode datapoint (1..3)
+    const evcsBtn = target.closest('button[data-evcs-mode-btn]');
+    if (evcsBtn){
+      const idx = Number(evcsBtn.getAttribute('data-evcs-mode-btn'));
+      const v = clampMode(evcsBtn.getAttribute('data-mode'));
+
+      // Optimistic update
+      try{
+        const k = `evcs.${idx}.mode`;
+        state[k] = { value: v, ts: Date.now() };
+        render();
+      }catch(_e){}
+
       try{
         await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'evcs', key: `${idx}.mode`, value: Number(v)})});
       }catch(_e){}
     }
-
-    if (t.matches('input[type="range"][data-ems-mode]')){
-      const idx = Number(t.getAttribute('data-ems-mode'));
-      const v = clampEms(t.value);
-      t.value = String(v);
-      const mode = uiToEmsMode(v);
-      try{
-        await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'ems', key: `evcs.${idx}.userMode`, value: mode})});
-      }catch(_e){}
-    }
   });
 }
-
 
 async function bootstrap(){
   initMenu();

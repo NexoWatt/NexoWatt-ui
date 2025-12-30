@@ -1284,14 +1284,17 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
   const modal = qs('evcsModal');
   const close = qs('evcsClose');
   const toggle = qs('evcsActiveToggle');
-  const slider = qs('evcsModeSlider');
+  const buttons = qs('evcsModeButtons');
 
   // Prefer per-wallbox datapoints (evcs.1.*) for single-EVCS modal, fallback to legacy settings.*
   let hasPerBoxMode = false;
   let hasPerBoxActive = false;
 
+  // EMS present? (chargingManagement states exist)
+  let modalHasEms = false;
+
   // Prevent UI "jumping" while an update is still in-flight
-  let pendingModeUi = null;
+  let pendingMode = null;
   let pendingModeUntil = 0;
   let pendingActive = null;
   let pendingActiveUntil = 0;
@@ -1302,15 +1305,38 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
     return Math.max(1, Math.min(3, Math.round(n)));
   }
 
-  function applyModeUi(ui){
-    const u = clampUiMode(ui);
-    if (slider) slider.value = String(u);
+  function normalizeEmsMode(raw){
+    const s = String(raw ?? '').trim().toLowerCase();
+    if (s === 'min+pv') return 'minpv';
+    if (s === 'auto' || s === 'boost' || s === 'minpv' || s === 'pv') return s;
+    return 'auto';
+  }
 
-    const labels = qs('evcsModeLabels');
-    if (labels){
-      const spans = labels.querySelectorAll('span[data-mode]');
-      spans.forEach(sp => sp.classList.toggle('active', Number(sp.getAttribute('data-mode')) === u));
-    }
+  function legacyNumToMode(n){
+    const v = clampUiMode(n);
+    if (v === 2) return 'minpv';
+    if (v === 3) return 'pv';
+    return 'boost';
+  }
+
+  function modeToLegacyNum(mode){
+    const s = normalizeEmsMode(mode);
+    if (s === 'minpv') return 2;
+    if (s === 'pv') return 3;
+    return 1; // boost (auto -> boost fallback for legacy)
+  }
+
+  function ensureAutoVisibility(){
+    if (!buttons) return;
+    const autoBtn = buttons.querySelector('button[data-mode="auto"]');
+    if (autoBtn) autoBtn.classList.toggle('hidden', !modalHasEms);
+  }
+
+  function applyModeUi(mode){
+    if (!buttons) return;
+    const m = normalizeEmsMode(mode);
+    const btns = buttons.querySelectorAll('button[data-mode]');
+    btns.forEach(b => b.classList.toggle('active', String(b.getAttribute('data-mode')||'').toLowerCase() === m));
   }
 
   if (card){
@@ -1339,26 +1365,29 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
     });
   }
 
-  if (slider){
-    slider.addEventListener('input', ()=>{
-      const u = clampUiMode(slider.value);
-      pendingModeUi = u;
-      pendingModeUntil = Date.now() + 2500;
-      applyModeUi(u);
-    });
-    slider.addEventListener('change', async ()=>{
-      const u = clampUiMode(slider.value);
-      pendingModeUi = u;
-      pendingModeUntil = Date.now() + 2500;
-      applyModeUi(u);
+  if (buttons){
+    buttons.addEventListener('click', async (e)=>{
+      const b = e.target && e.target.closest ? e.target.closest('button[data-mode]') : null;
+      if (!b) return;
 
-      const scope = hasPerBoxMode ? 'evcs' : 'settings';
-      const key = hasPerBoxMode ? '1.mode' : 'evcsMode';
+      let desired = normalizeEmsMode(b.getAttribute('data-mode') || 'auto');
+      // Legacy UI: no "Auto" → map to Boost
+      if (!modalHasEms && desired === 'auto') desired = 'boost';
 
-      // IMPORTANT: always write 1..3 (Boost=1, Min+PV=2, PV=3)
+      pendingMode = desired;
+      pendingModeUntil = Date.now() + 2500;
+      applyModeUi(desired);
+
       try{
-        await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope, key, value: Number(u)})});
-      }catch(e){}
+        if (modalHasEms){
+          await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'ems', key:'evcs.1.userMode', value: desired})});
+        } else {
+          const u = modeToLegacyNum(desired);
+          const scope = hasPerBoxMode ? 'evcs' : 'settings';
+          const key = hasPerBoxMode ? '1.mode' : 'evcsMode';
+          await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope, key, value: Number(u)})});
+        }
+      }catch(_e){}
     });
   }
 
@@ -1367,16 +1396,27 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
     const p = d('evcs.totalPowerW') ?? d('consumptionEvcs') ?? 0;
     const st = d('evcs.1.status') ?? d('evcsStatus') ?? '--';
 
+    // EMS available?
+    modalHasEms = d('chargingManagement.wallboxCount') != null;
+    ensureAutoVisibility();
+
     const evcsActive = d('evcs.1.active');
     const settingsActive = s && s['settings.evcsActive'] ? s['settings.evcsActive'].value : null;
     hasPerBoxActive = evcsActive != null;
     const activeVal = (evcsActive != null) ? evcsActive : ((settingsActive != null) ? settingsActive : false);
 
-    const evcsMode = d('evcs.1.mode');
-    const settingsMode = s && s['settings.evcsMode'] ? s['settings.evcsMode'].value : null;
-    hasPerBoxMode = evcsMode != null;
-    const modeRaw = (evcsMode != null) ? evcsMode : ((settingsMode != null) ? settingsMode : 1);
-    const uiFromState = clampUiMode(modeRaw);
+    // Mode source: EMS userMode (preferred) or legacy EVCS mode
+    let modeStrFromState = 'boost';
+    if (modalHasEms){
+      modeStrFromState = normalizeEmsMode(d('chargingManagement.wallboxes.lp1.userMode') ?? 'auto');
+    } else {
+      const evcsMode = d('evcs.1.mode');
+      const settingsMode = s && s['settings.evcsMode'] ? s['settings.evcsMode'].value : null;
+      hasPerBoxMode = evcsMode != null;
+      const modeRaw = (evcsMode != null) ? evcsMode : ((settingsMode != null) ? settingsMode : 1);
+      const uiFromState = clampUiMode(modeRaw);
+      modeStrFromState = legacyNumToMode(uiFromState);
+    }
 
     const fmtP = (val)=> {
       const u = (window.units && window.units.power) || 'W';
@@ -1414,18 +1454,18 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
       }
     }
 
-    if (slider != null){
-      if (pendingModeUi !== null){
-        if (uiFromState === pendingModeUi){
-          pendingModeUi = null;
+    if (buttons != null){
+      if (pendingMode !== null){
+        if (modeStrFromState === pendingMode){
+          pendingMode = null;
         } else if (now < pendingModeUntil){
-          applyModeUi(pendingModeUi);
+          applyModeUi(pendingMode);
           return;
         } else {
-          pendingModeUi = null;
+          pendingMode = null;
         }
       }
-      applyModeUi(uiFromState);
+      applyModeUi(modeStrFromState);
     }
   };
 

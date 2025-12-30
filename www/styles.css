@@ -1296,6 +1296,55 @@ body {
 .nw-evcs-mode-labels span.active{opacity:1;font-weight:600;}
 
 
+
+
+/* EVCS: Betriebsmodus Buttons (kein Slider → verhindert UI-Jitter bei Live-Updates) */
+.nw-evcs-mode-buttons{
+  display:grid;
+  gap:6px;
+  width:100%;
+}
+.nw-evcs-mode-buttons-4{
+  grid-template-columns: repeat(2, 1fr);
+}
+.nw-evcs-mode-buttons-3{
+  grid-template-columns: repeat(3, 1fr);
+}
+.nw-evcs-mode-buttons button{
+  appearance:none;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  padding:6px 8px;
+  border-radius:10px;
+  font-size:12px;
+  line-height:1.1;
+  cursor:pointer;
+  user-select:none;
+  white-space:nowrap;
+  transition: border-color .15s ease, background-color .15s ease, opacity .15s ease;
+  opacity:.85;
+}
+.nw-evcs-mode-buttons button:hover{
+  border-color: rgba(255,255,255,.18);
+  opacity: 1;
+}
+.nw-evcs-mode-buttons button.active{
+  border-color: var(--nx-green);
+  background: rgba(167, 196, 0, .10);
+  opacity: 1;
+  font-weight: 700;
+}
+.nw-evcs-mode-buttons button.hidden{
+  display:none;
+}
+
+/* Modal: etwas größer (bessere Bedienbarkeit) */
+#evcsModal .nw-evcs-mode-buttons button{
+  padding:8px 10px;
+  font-size:13px;
+}
+
 /* --- NW: ensure label/value spacing in KPI cards + dialogs --- */
 .kpi .row.two > div,
 .kpi .row.one > div,
