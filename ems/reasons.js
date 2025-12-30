@@ -20,6 +20,9 @@ const ReasonCodes = Object.freeze({
 
     // Charging / allocation
     LIMITED_BY_BUDGET: 'LIMITED_BY_BUDGET',
+    // Hard grid safety caps (Gate A)
+    LIMITED_BY_GRID_IMPORT: 'LIMITED_BY_GRID_IMPORT',
+    LIMITED_BY_PHASE_CAP: 'LIMITED_BY_PHASE_CAP',
     NO_SETPOINT: 'NO_SETPOINT',
     UNLIMITED: 'UNLIMITED',
     NO_BUDGET: 'NO_BUDGET',

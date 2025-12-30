@@ -171,6 +171,18 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.usedW', 'Used (W)', 'number', 'value.power');
         await mk('chargingManagement.control.remainingW', 'Remaining (W)', 'number', 'value.power');
         await mk('chargingManagement.control.pausedByPeakShaving', 'Paused by peak shaving', 'boolean', 'indicator');
+
+        // Gate A: hard grid safety caps (transparency)
+        await mk('chargingManagement.control.gridImportLimitW', 'Grid import limit (W) configured', 'number', 'value.power');
+        await mk('chargingManagement.control.gridImportLimitW_effective', 'Grid import limit (W) effective', 'number', 'value.power');
+        await mk('chargingManagement.control.gridImportW', 'Grid power (W) (import + / export -)', 'number', 'value.power');
+        await mk('chargingManagement.control.gridBaseLoadW', 'Estimated base load (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.gridCapEvcsW', 'Grid-based EVCS cap (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.gridCapBinding', 'Grid cap binding', 'boolean', 'indicator');
+        await mk('chargingManagement.control.gridMaxPhaseA', 'Grid max phase current (A) configured', 'number', 'value.current');
+        await mk('chargingManagement.control.gridWorstPhaseA', 'Grid worst phase current (A)', 'number', 'value.current');
+        await mk('chargingManagement.control.gridPhaseCapEvcsW', 'Phase-based EVCS cap (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.phaseCapBinding', 'Phase cap binding', 'boolean', 'indicator');
         await this.adapter.setObjectNotExistsAsync('chargingManagement.debug', {
             type: 'channel',
             common: { name: 'Debug' },
@@ -419,6 +431,15 @@ class ChargingManagementModule extends BaseModule {
         }
         if (pvSurplusPowerId && this.dp) {
             await this.dp.upsert({ key: 'cm.pvSurplusW', objectId: pvSurplusPowerId, dataType: 'number', direction: 'in', unit: 'W' });
+        }
+
+        // Gate A: reuse PeakShaving meter phase currents (if configured) as optional hard safety caps.
+        // This allows phase protection even when PeakShaving module is disabled.
+        const psCfgForPhase = (this.adapter && this.adapter.config && this.adapter.config.peakShaving) ? this.adapter.config.peakShaving : {};
+        if (this.dp && psCfgForPhase) {
+            if (psCfgForPhase.l1CurrentId) await this.dp.upsert({ key: 'ps.l1A', objectId: String(psCfgForPhase.l1CurrentId).trim(), dataType: 'number', direction: 'in', unit: 'A' });
+            if (psCfgForPhase.l2CurrentId) await this.dp.upsert({ key: 'ps.l2A', objectId: String(psCfgForPhase.l2CurrentId).trim(), dataType: 'number', direction: 'in', unit: 'A' });
+            if (psCfgForPhase.l3CurrentId) await this.dp.upsert({ key: 'ps.l3A', objectId: String(psCfgForPhase.l3CurrentId).trim(), dataType: 'number', direction: 'in', unit: 'A' });
         }
 
         // Measurements and object mapping
@@ -1010,9 +1031,134 @@ if (components.length) {
             }
         }
 
+        // ---------------------------------------------------------------------
+        // Gate A: HARD GRID SAFETY CAPS (always top priority)
+        // - Grid import limit (Netzanschlussleistung) based on live meter (W)
+        // - Optional phase current limit (A) based on live meter (L1/L2/L3)
+        // These caps apply regardless of Boost/PV modes and regardless of the selected budget mode.
+        // ---------------------------------------------------------------------
+
+        // Config sources for the grid connection import limit (W):
+        // - installerConfig.gridConnectionPower (recommended)
+        // - PeakShaving.maxPowerW (if set)
+        const instLimitW = clamp(num(this.adapter?.config?.installerConfig?.gridConnectionPower, 0), 0, 1e12);
+        const psLimitW = clamp(num(this.adapter?.config?.peakShaving?.maxPowerW, 0), 0, 1e12);
+        const configuredLimits = [instLimitW, psLimitW].filter(v => typeof v === 'number' && Number.isFinite(v) && v > 0);
+        const gridImportLimitW = configuredLimits.length ? Math.min(...configuredLimits) : 0;
+
+        // Safety margin (W): reuse PeakShaving.safetyMarginW if present
+        const gridMarginW = clamp(num(this.adapter?.config?.peakShaving?.safetyMarginW, 0), 0, 1e12);
+        const gridImportLimitEffW = gridImportLimitW > 0 ? Math.max(0, gridImportLimitW - gridMarginW) : 0;
+
+        // Optional phase limit (A): reuse PeakShaving.maxPhaseA if present
+        const gridMaxPhaseA = clamp(num(this.adapter?.config?.peakShaving?.maxPhaseA, 0), 0, 20000);
+
+        // Read grid power (import + / export -) if needed for caps
+        const needGridSafetyCaps = gridImportLimitEffW > 0 || gridMaxPhaseA > 0;
+        if (needGridSafetyCaps) {
+            // Ensure we have a gridW reading even if PV logic is not active
+            if (typeof gridW !== 'number' || !Number.isFinite(gridW)) {
+                gridW = getFirstDpNumber(['cm.gridPowerW', 'grid.powerW', 'ps.gridPowerW']);
+            }
+        }
+
+        // Derive base load and EVCS cap from import limit
+        let gridBaseLoadW = null;
+        let gridCapEvcsW = null;
+        let gridCapBinding = false;
+        const budgetBeforeGridCaps = budgetW;
+
+        if (gridImportLimitEffW > 0 && typeof gridW === 'number' && Number.isFinite(gridW)) {
+            // baseLoad includes everything except EV charging (approx.)
+            gridBaseLoadW = gridW - (Number.isFinite(totalPowerW) ? totalPowerW : 0);
+            // Max EVCS total to keep grid import under limit: baseLoad + EVCS <= limit
+            gridCapEvcsW = clamp(gridImportLimitEffW - gridBaseLoadW, 0, 1e12);
+
+            // Apply cap (always)
+            const before = budgetW;
+            if (!Number.isFinite(budgetW)) {
+                budgetW = gridCapEvcsW;
+            } else {
+                budgetW = Math.min(budgetW, gridCapEvcsW);
+            }
+            gridCapBinding = (Number.isFinite(gridCapEvcsW) && (before !== budgetW));
+
+            if (!String(effectiveBudgetMode || '').includes('gridImport')) {
+                effectiveBudgetMode = `${effectiveBudgetMode}+gridImport`;
+            }
+        }
+
+        // Phase-based cap (conservative: assumes additional power may hit the worst phase)
+        let worstPhaseA = null;
+        let phaseCapEvcsW = null;
+        let phaseCapBinding = false;
+
+        if (gridMaxPhaseA > 0) {
+            const l1 = getFirstDpNumber(['ps.l1A']);
+            const l2 = getFirstDpNumber(['ps.l2A']);
+            const l3 = getFirstDpNumber(['ps.l3A']);
+            const phases = [l1, l2, l3].filter(v => typeof v === 'number' && Number.isFinite(v));
+            if (phases.length) {
+                worstPhaseA = Math.max(...phases);
+                const slackA = gridMaxPhaseA - worstPhaseA;
+                // Conservative conversion: 1-phase equivalent (230V)
+                const v = voltageV;
+                phaseCapEvcsW = clamp((Number.isFinite(totalPowerW) ? totalPowerW : 0) + (Number.isFinite(slackA) ? slackA : 0) * v, 0, 1e12);
+
+                const before = budgetW;
+                if (!Number.isFinite(budgetW)) {
+                    budgetW = phaseCapEvcsW;
+                } else {
+                    budgetW = Math.min(budgetW, phaseCapEvcsW);
+                }
+                phaseCapBinding = (Number.isFinite(phaseCapEvcsW) && (before !== budgetW));
+
+                if (!String(effectiveBudgetMode || '').includes('phaseCap')) {
+                    effectiveBudgetMode = `${effectiveBudgetMode}+phaseCap`;
+                }
+            } else {
+                // No phase readings while a phase limit is configured => treat as stale (handled by stale logic below)
+                worstPhaseA = null;
+            }
+        }
+
+        // Publish cap diagnostics (even when caps are not configured)
+        try {
+            await this.adapter.setStateAsync('chargingManagement.control.gridImportLimitW', gridImportLimitW || 0, true);
+            await this.adapter.setStateAsync('chargingManagement.control.gridImportLimitW_effective', gridImportLimitEffW || 0, true);
+            await this.adapter.setStateAsync('chargingManagement.control.gridImportW', (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : 0, true);
+            await this.adapter.setStateAsync('chargingManagement.control.gridBaseLoadW', (typeof gridBaseLoadW === 'number' && Number.isFinite(gridBaseLoadW)) ? gridBaseLoadW : 0, true);
+            await this.adapter.setStateAsync('chargingManagement.control.gridCapEvcsW', (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : 0, true);
+            await this.adapter.setStateAsync('chargingManagement.control.gridCapBinding', !!gridCapBinding, true);
+            await this.adapter.setStateAsync('chargingManagement.control.gridMaxPhaseA', gridMaxPhaseA || 0, true);
+            await this.adapter.setStateAsync('chargingManagement.control.gridWorstPhaseA', (typeof worstPhaseA === 'number' && Number.isFinite(worstPhaseA)) ? worstPhaseA : 0, true);
+            await this.adapter.setStateAsync('chargingManagement.control.gridPhaseCapEvcsW', (typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)) ? phaseCapEvcsW : 0, true);
+            await this.adapter.setStateAsync('chargingManagement.control.phaseCapBinding', !!phaseCapBinding, true);
+        } catch {
+            // ignore
+        }
+
+        // Extend debug payload
+        if (budgetDebug && typeof budgetDebug === 'object') {
+            budgetDebug.gridImportLimitW = gridImportLimitW || 0;
+            budgetDebug.gridImportLimitEffW = gridImportLimitEffW || 0;
+            budgetDebug.gridW = (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null;
+            budgetDebug.evcsActualW = (typeof totalPowerW === 'number' && Number.isFinite(totalPowerW)) ? totalPowerW : null;
+            budgetDebug.gridBaseLoadW = (typeof gridBaseLoadW === 'number' && Number.isFinite(gridBaseLoadW)) ? gridBaseLoadW : null;
+            budgetDebug.gridCapEvcsW = (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : null;
+            budgetDebug.gridCapBinding = !!gridCapBinding;
+            budgetDebug.gridMaxPhaseA = gridMaxPhaseA || 0;
+            budgetDebug.worstPhaseA = (typeof worstPhaseA === 'number' && Number.isFinite(worstPhaseA)) ? worstPhaseA : null;
+            budgetDebug.phaseCapEvcsW = (typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)) ? phaseCapEvcsW : null;
+            budgetDebug.phaseCapBinding = !!phaseCapBinding;
+            budgetDebug.budgetBeforeSafetyCapsW = Number.isFinite(budgetBeforeGridCaps) ? budgetBeforeGridCaps : null;
+            budgetDebug.budgetAfterSafetyCapsW = Number.isFinite(budgetW) ? budgetW : null;
+        }
+
         const peakActive = await this._getPeakShavingActive();
         const pausedByPeakShaving = pauseWhenPeakShavingActive && peakActive;
         let pauseFollowPeakBudget = false;
+        let pauseFollowGridCaps = false;
 
         // MU6.8: If metering/budget inputs are stale, enforce safe targets (0) to avoid overloading the grid connection.
         let staleMeter = false;
@@ -1032,6 +1178,22 @@ if (components.length) {
                     if (this.dp.isStale(k, staleTimeoutMs)) {
                         staleMeter = true;
                         break;
+                    }
+                }
+            }
+
+            // Gate A: If a phase limit is configured, phase current metering must be present and fresh.
+            if (!staleMeter && gridMaxPhaseA > 0) {
+                const phaseKeys = ['ps.l1A', 'ps.l2A', 'ps.l3A'];
+                const configuredPhaseKeys = phaseKeys.filter(k => !!this.dp.getEntry(k));
+                if (configuredPhaseKeys.length === 0) {
+                    staleMeter = true;
+                } else {
+                    for (const k of configuredPhaseKeys) {
+                        if (this.dp.isStale(k, staleTimeoutMs)) {
+                            staleMeter = true;
+                            break;
+                        }
                     }
                 }
             }
@@ -1251,6 +1413,19 @@ if (components.length) {
                     // Ensure control state reflects the effective mode (overrides earlier value)
                     await this.adapter.setStateAsync('chargingManagement.control.budgetMode', effectiveBudgetMode, true);
                     pauseFollowPeakBudget = true;
+                }
+
+                // Gate A: If PeakShaving is active but no dynamic budget is available (e.g. static mode),
+                // fall back to the already computed hard grid safety caps instead of ramping to 0.
+                if (!pauseFollowPeakBudget && (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW))) {
+                    const before = budgetW;
+                    if (!Number.isFinite(budgetW)) budgetW = gridCapEvcsW;
+                    else budgetW = Math.min(budgetW, gridCapEvcsW);
+
+                    // Keep effectiveBudgetMode as-is (it already includes +gridImport/+phaseCap when active)
+                    await this.adapter.setStateAsync('chargingManagement.control.budgetMode', effectiveBudgetMode, true);
+                    pauseFollowPeakBudget = true;
+                    pauseFollowGridCaps = true;
                 }
             }
 
@@ -1822,7 +1997,18 @@ if (components.length) {
             await this.adapter.setStateAsync('chargingManagement.debug.allocations', '[]', true);
         }
 
-        await this.adapter.setStateAsync('chargingManagement.control.status', pauseFollowPeakBudget ? 'paused_follow_peak_budget' : 'ok', true);
+        // Gate A: expose which top-level limiter is active
+        let finalStatus = 'ok';
+        if (pauseFollowPeakBudget) {
+            finalStatus = pauseFollowGridCaps ? 'peak_active_follow_grid_caps' : 'peak_active_follow_peak_budget';
+        } else if (gridCapBinding && phaseCapBinding) {
+            finalStatus = 'limited_grid_import_and_phase';
+        } else if (gridCapBinding) {
+            finalStatus = 'limited_grid_import';
+        } else if (phaseCapBinding) {
+            finalStatus = 'limited_phase_cap';
+        }
+        await this.adapter.setStateAsync('chargingManagement.control.status', finalStatus, true);
         await this.adapter.setStateAsync('chargingManagement.control.budgetW', Number.isFinite(budgetW) ? budgetW : 0, true);
         await this.adapter.setStateAsync('chargingManagement.control.usedW', Number.isFinite(budgetW) ? usedW : totalTargetPowerW, true);
         await this.adapter.setStateAsync('chargingManagement.control.remainingW', Number.isFinite(budgetW) ? remainingW : 0, true);
