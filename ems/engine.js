@@ -235,6 +235,13 @@ class EmsEngine {
       stopGraceSec: 30,
       sessionKeepSec: 300,
 
+      // Gate B: PV hysteresis / start-stop protection (for PV-only modes)
+      pvStartThresholdW: 800,
+      pvStopThresholdW: 200,
+      pvStartDelaySec: 10,
+      pvStopDelaySec: 30,
+      pvAbortImportW: 200,
+
       // Global stepping defaults (per wallbox overrides possible)
       stepA: 0.1,
       stepW: 25,
@@ -284,6 +291,21 @@ class EmsEngine {
 
       const thr_ = Number(userCm.activityThresholdW);
       if (Number.isFinite(thr_) && thr_ >= 0) chargingCfg.activityThresholdW = Math.round(thr_);
+
+      const pvStart_ = Number(userCm.pvStartThresholdW);
+      if (Number.isFinite(pvStart_) && pvStart_ >= 0) chargingCfg.pvStartThresholdW = Math.round(pvStart_);
+
+      const pvStop_ = Number(userCm.pvStopThresholdW);
+      if (Number.isFinite(pvStop_) && pvStop_ >= 0) chargingCfg.pvStopThresholdW = Math.round(pvStop_);
+
+      const pvStartDelay_ = Number(userCm.pvStartDelaySec);
+      if (Number.isFinite(pvStartDelay_) && pvStartDelay_ >= 0) chargingCfg.pvStartDelaySec = pvStartDelay_;
+
+      const pvStopDelay_ = Number(userCm.pvStopDelaySec);
+      if (Number.isFinite(pvStopDelay_) && pvStopDelay_ >= 0) chargingCfg.pvStopDelaySec = pvStopDelay_;
+
+      const pvAbortImport_ = Number(userCm.pvAbortImportW);
+      if (Number.isFinite(pvAbortImport_) && pvAbortImport_ >= 0) chargingCfg.pvAbortImportW = Math.round(pvAbortImport_);
 
       const sg_ = Number(userCm.stopGraceSec);
       if (Number.isFinite(sg_) && sg_ >= 0 && sg_ <= 3600) chargingCfg.stopGraceSec = sg_;

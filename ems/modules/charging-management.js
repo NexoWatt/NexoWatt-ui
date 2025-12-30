@@ -88,6 +88,10 @@ class ChargingManagementModule extends BaseModule {
         this._chargingLastActiveMs = new Map(); // safeKey -> ms of last detected activity
         this._chargingLastSeenMs = new Map(); // safeKey -> ms of last processing (cleanup)
         this._boostSinceMs = new Map(); // safeKey -> ms since epoch (boost start)
+        // Gate B: PV hysteresis state (global, for PV-only modes)
+        this._pvAvailable = false;
+        this._pvAboveSinceMs = 0;
+        this._pvBelowSinceMs = 0;
         this._restoredRuntime = new Set(); // safeKey -> restored persisted session/boost state
         this._lastCmdTargetW = new Map(); // safeKey -> last commanded target power (for ramp limiting)
         this._lastCmdTargetA = new Map(); // safeKey -> last commanded target current (for ramp limiting)
@@ -171,6 +175,11 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.usedW', 'Used (W)', 'number', 'value.power');
         await mk('chargingManagement.control.remainingW', 'Remaining (W)', 'number', 'value.power');
         await mk('chargingManagement.control.pausedByPeakShaving', 'Paused by peak shaving', 'boolean', 'indicator');
+
+        // Gate B: PV hysteresis diagnostics
+        await mk('chargingManagement.control.pvCapRawW', 'PV surplus raw cap (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvCapEffectiveW', 'PV cap effective (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvAvailable', 'PV available (hysteresis)', 'boolean', 'indicator');
 
         // Gate A: hard grid safety caps (transparency)
         await mk('chargingManagement.control.gridImportLimitW', 'Grid import limit (W) configured', 'number', 'value.power');
@@ -931,6 +940,11 @@ class ChargingManagementModule extends BaseModule {
         let pvSurplusW = null;
         let gridW = null;
 
+        // Gate B: PV hysteresis diagnostics (defaults)
+        let pvCapRawWState = 0;
+        let pvCapEffectiveWState = 0;
+        let pvAvailableState = false;
+
         if (needPvBudget) {
             pvSurplusW = getFirstDpNumber(['cm.pvSurplusW']);
             gridW = getFirstDpNumber(['cm.gridPowerW', 'grid.powerW', 'ps.gridPowerW']);
@@ -942,8 +956,77 @@ class ChargingManagementModule extends BaseModule {
                 }
             }
 
-            pvCapW = (typeof pvSurplusW === 'number' && Number.isFinite(pvSurplusW) && pvSurplusW > 0) ? pvSurplusW : 0;
+            const pvCapRawW = (typeof pvSurplusW === 'number' && Number.isFinite(pvSurplusW) && pvSurplusW > 0) ? pvSurplusW : 0;
+            pvCapW = pvCapRawW;
+
+            // -----------------------------------------------------------------
+            // Gate B: PV hysteresis / start-stop protection
+            // Prevent rapid start/stop when PV surplus is very low / fluctuating.
+            // For PV-only modes this is a START gate (no grid import intended).
+            // -----------------------------------------------------------------
+            const pvStartThresholdW = clamp(num(cfg.pvStartThresholdW, 800), 0, 1e12);
+            const pvStopThresholdW  = clamp(num(cfg.pvStopThresholdW, 200), 0, 1e12);
+            const pvStartDelayMs    = clamp(num(cfg.pvStartDelaySec, 10), 0, 3600) * 1000;
+            const pvStopDelayMs     = clamp(num(cfg.pvStopDelaySec, 30), 0, 3600) * 1000;
+            const pvAbortImportW    = clamp(num(cfg.pvAbortImportW, 200), 0, 1e12);
+
+            // Ensure stop threshold is not above start threshold (avoid inverted hysteresis)
+            const startW = pvStartThresholdW;
+            const stopW  = Math.min(pvStopThresholdW, (startW > 0 ? startW : pvStopThresholdW));
+
+            const gridImportW = (typeof gridW === 'number' && Number.isFinite(gridW)) ? Math.max(0, gridW) : 0;
+            const forcedBelow = (pvAbortImportW > 0 && gridImportW > pvAbortImportW);
+
+            const above = (!forcedBelow) && ((startW > 0) ? (pvCapRawW >= startW) : (pvCapRawW > 0));
+            const below = forcedBelow || (pvCapRawW <= stopW);
+
+            let pvAvail = !!this._pvAvailable;
+
+            if (above) {
+                if (!this._pvAboveSinceMs) this._pvAboveSinceMs = now;
+                this._pvBelowSinceMs = 0;
+                if (!pvAvail && (pvStartDelayMs <= 0 || (now - this._pvAboveSinceMs) >= pvStartDelayMs)) {
+                    pvAvail = true;
+                }
+            } else if (below) {
+                if (!this._pvBelowSinceMs) this._pvBelowSinceMs = now;
+                this._pvAboveSinceMs = 0;
+                if (pvAvail && (pvStopDelayMs <= 0 || (now - this._pvBelowSinceMs) >= pvStopDelayMs)) {
+                    pvAvail = false;
+                }
+            } else {
+                // Between thresholds: keep current state, reset timers to require stable crossing again
+                this._pvAboveSinceMs = 0;
+                this._pvBelowSinceMs = 0;
+            }
+
+            this._pvAvailable = pvAvail;
+            pvCapW = pvAvail ? pvCapRawW : 0;
+
+            pvCapRawWState = pvCapRawW;
+            pvCapEffectiveWState = (typeof pvCapW === 'number' && Number.isFinite(pvCapW)) ? pvCapW : 0;
+            pvAvailableState = pvAvail;
+
         }
+
+        if (!needPvBudget) {
+            this._pvAvailable = false;
+            this._pvAboveSinceMs = 0;
+            this._pvBelowSinceMs = 0;
+            pvCapRawWState = 0;
+            pvCapEffectiveWState = 0;
+            pvAvailableState = false;
+        }
+
+        // Publish PV diagnostics (even if PV budgeting is not active)
+        try {
+            await this.adapter.setStateAsync('chargingManagement.control.pvCapRawW', pvCapRawWState || 0, true);
+            await this.adapter.setStateAsync('chargingManagement.control.pvCapEffectiveW', pvCapEffectiveWState || 0, true);
+            await this.adapter.setStateAsync('chargingManagement.control.pvAvailable', !!pvAvailableState, true);
+        } catch {
+            // ignore
+        }
+
         if (budgetMode === 'engine') {
             /** @type {Array<{k:string, w:number}>} */
             const components = [];
@@ -996,7 +1079,10 @@ if (components.length) {
                 capTotalBudgetByPv,
                 anyPvLimitedActive,
                 anyGridAllowedActive,
+                pvCapRawW: (typeof pvCapRawWState === 'number' && Number.isFinite(pvCapRawWState)) ? pvCapRawWState : null,
                 pvCapW: (typeof pvCapW === 'number' && Number.isFinite(pvCapW)) ? pvCapW : null,
+                pvCapEffectiveW: (typeof pvCapEffectiveWState === 'number' && Number.isFinite(pvCapEffectiveWState)) ? pvCapEffectiveWState : null,
+                pvAvailable: !!pvAvailableState,
                 gridW: (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null,
                 pvSurplusW: (typeof pvSurplusW === 'number' && Number.isFinite(pvSurplusW)) ? pvSurplusW : null,
                 components,

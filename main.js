@@ -46,6 +46,9 @@ class NexoWattVis extends utils.Adapter {
 
     this.stateCache = {};
     this.sseClients = new Set();
+    // Batch SSE updates to prevent UI freezes on frequent state updates
+    this._ssePendingPayload = {};
+    this._sseFlushTimer = null;
     this.smartHomeDevices = [];
 
     // EMS engine (Sprint 2)
@@ -2553,6 +2556,13 @@ app.get('/config', (req, res) => {
           evcsList: Array.isArray(this.evcsList) ? this.evcsList : []
         },
         smartHome: this.config.smartHome || {},
+        ems: {
+          chargingEnabled: !!(this.config && this.config.enableChargingManagement),
+          peakShavingEnabled: !!(this.config && this.config.enablePeakShaving),
+          gridConstraintsEnabled: !!(this.config && this.config.enableGridConstraints),
+          storageEnabled: !!(this.config && this.config.enableStorageControl),
+          schedulerIntervalMs: (this.config && Number(this.config.schedulerIntervalMs)) || 1000
+        },
         installer: this.config.installer || {},
         adminUrl: this.config.adminUrl || null,
         installerLocked: !!(this.config.installerPassword)
@@ -3299,20 +3309,35 @@ app.get('/config', (req, res) => {
     // EVCS session logger (start/stop + energy/max + RFID)
     try { this.maybeUpdateEvcsSessionTracker(key, ts); } catch(_e2) {}
 
-// push update to all SSE clients
-    for (const client of Array.from(this.sseClients)) {
-      try {
-        client.res.write("data: " + JSON.stringify({ type: 'update', payload }) + "\n\n");
-      } catch (e) {
-        // remove broken clients
-        this.sseClients.delete(client);
+// push update to all SSE clients (batched to avoid UI freezes)
+    try {
+      if (!this._ssePendingPayload) this._ssePendingPayload = {};
+      Object.assign(this._ssePendingPayload, payload);
+
+      if (!this._sseFlushTimer) {
+        const batchMs = (this.config && Number(this.config.sseBatchMs)) || 120;
+        this._sseFlushTimer = setTimeout(() => {
+          const p = this._ssePendingPayload || {};
+          this._ssePendingPayload = {};
+          this._sseFlushTimer = null;
+          if (!p || !Object.keys(p).length) return;
+
+          for (const client of Array.from(this.sseClients)) {
+            try {
+              client.res.write("data: " + JSON.stringify({ type: 'update', payload: p }) + "\n\n");
+            } catch (_e) {
+              this.sseClients.delete(client);
+            }
+          }
+        }, Math.max(10, batchMs));
       }
-    }
+    } catch (_e) {}
   }
 
   onUnload(callback) {
     try {
       try { if (this._nwEnergyTotalsTimer) clearInterval(this._nwEnergyTotalsTimer); } catch (_e) {}
+      try { if (this._sseFlushTimer) clearTimeout(this._sseFlushTimer); } catch (_e) {}
       try { if (this.emsEngine && typeof this.emsEngine.stop === 'function') this.emsEngine.stop(); } catch (_e2) {}
       if (this.server) this.server.close();
       callback();

@@ -1,6 +1,18 @@
 
 let state = {};
 let cfg = null;
+let _renderScheduled = false;
+function scheduleRender(){
+  if (_renderScheduled) return;
+  _renderScheduled = true;
+  const cb = ()=>{
+    _renderScheduled = false;
+    try{ render(); }catch(_e){}
+  };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(cb);
+  else setTimeout(cb, 16);
+}
+
 
 function d(key){
   try {
@@ -171,7 +183,7 @@ function render(){
 
     // EMS states (runtime control) — prefer these on the EVCS page.
     const cm = `chargingManagement.wallboxes.lp${i}`;
-    const hasEms = d('chargingManagement.wallboxCount') != null;
+    const hasEms = (cfg && cfg.ems && cfg.ems.chargingEnabled) || d('chargingManagement.wallboxCount') != null;
     const emsUserMode = d(`${cm}.userMode`);
     const emsEffectiveMode = d(`${cm}.effectiveMode`);
     const emsChargerType = d(`${cm}.chargerType`);
@@ -352,7 +364,7 @@ function bindControls(){
       try{
         const k = `chargingManagement.wallboxes.lp${idx}.userMode`;
         state[k] = { value: mode, ts: Date.now() };
-        render();
+        scheduleRender();
       }catch(_e){}
 
       try{
@@ -371,7 +383,7 @@ function bindControls(){
       try{
         const k = `evcs.${idx}.mode`;
         state[k] = { value: v, ts: Date.now() };
-        render();
+        scheduleRender();
       }catch(_e){}
 
       try{
@@ -404,8 +416,7 @@ async function bootstrap(){
     state = await fetch('/api/state').then(r=>r.json());
   }catch(e){ state = {}; }
 
-  render();
-
+  scheduleRender();
   // live updates
   try{
     const es = new EventSource('/events');
@@ -414,7 +425,7 @@ async function bootstrap(){
         const msg = JSON.parse(ev.data);
         if (msg.type === 'init' && msg.payload) state = msg.payload;
         if (msg.type === 'update' && msg.payload) state = Object.assign({}, state, msg.payload);
-        render();
+        scheduleRender();
       }catch(e){}
     };
   }catch(e){}

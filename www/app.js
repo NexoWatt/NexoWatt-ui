@@ -76,6 +76,19 @@ function formatHours(h) {
 let state = {};
 let units = { power: 'W', energy: 'kWh' };
 
+let _renderScheduled = false;
+function scheduleRender(){
+  if (_renderScheduled) return;
+  _renderScheduled = true;
+  const cb = ()=>{
+    _renderScheduled = false;
+    try{ render(); }catch(_e){}
+  };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(cb);
+  else setTimeout(cb, 16);
+}
+
+
 function formatPower(v) {
   if (v === undefined || v === null || isNaN(v)) return '--';
   const n = Number(v);
@@ -304,7 +317,7 @@ async function bootstrap() {
   } catch(e){}
 
   window.latestState = state;
-  render();
+  scheduleRender();
 
   try { if (typeof setupSettings === 'function') setupSettings(); } catch (e) {}
   function startEvents(){
@@ -319,7 +332,7 @@ async function bootstrap() {
         const msg = JSON.parse(ev.data);
         if (msg.type === 'init' && msg.payload) { state = msg.payload; window.latestState = state; }
         else if (msg.type === 'update' && msg.payload) { Object.assign(state, msg.payload); window.latestState = state; }
-        render();
+        scheduleRender();
       } catch (e) { console.warn(e); }
     };
   } catch(e){ console.warn('events', e); setTimeout(startEvents, 3000); }
