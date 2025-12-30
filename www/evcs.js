@@ -51,6 +51,31 @@ function esc(s){
   return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
+// Keep ioBroker-safe id formatting in sync with EMS module (toSafeIdPart)
+function safeIdPart(input){
+  const s = String(input ?? '').trim();
+  if (!s) return '';
+  return s.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64);
+}
+
+function fmtMin(v){
+  const n = Number(v);
+  if (!isFinite(n)) return '--';
+  if (n <= 0) return '0 min';
+  return Math.round(n) + ' min';
+}
+
+function fmtClock(ts){
+  const n = Number(ts);
+  if (!isFinite(n) || n <= 0) return '';
+  try{
+    const d = new Date(n);
+    const hh = String(d.getHours()).padStart(2,'0');
+    const mm = String(d.getMinutes()).padStart(2,'0');
+    return `${hh}:${mm}`;
+  }catch(_e){ return ''; }
+}
+
 
 function clampUiMode(v){
   const n = Number(v);
@@ -80,6 +105,29 @@ function uiToRawMode(ui, scale){
   return u;
 }
 
+// EMS per-chargepoint mode mapping (runtime): auto | boost | minpv | pv
+function emsModeToUi(mode){
+  const s = String(mode ?? '').trim().toLowerCase();
+  if (s === 'boost') return 2;
+  if (s === 'minpv' || s === 'min+pv') return 3;
+  if (s === 'pv') return 4;
+  return 1; // auto
+}
+
+function uiToEmsMode(ui){
+  const n = Math.max(1, Math.min(4, Math.round(Number(ui)||1)));
+  if (n === 2) return 'boost';
+  if (n === 3) return 'minpv';
+  if (n === 4) return 'pv';
+  return 'auto';
+}
+
+function clampEmsUi(v){
+  const n = Number(v);
+  if (!isFinite(n)) return 1;
+  return Math.max(1, Math.min(4, Math.round(n)));
+}
+
 function render(){
   const list = document.getElementById('evcsList');
   if (!list) return;
@@ -87,14 +135,58 @@ function render(){
   const count = Number(cfg && cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
   const meta = (cfg && cfg.settingsConfig && Array.isArray(cfg.settingsConfig.evcsList)) ? cfg.settingsConfig.evcsList : [];
 
+  // Boost queue (global): show who currently has priority when multiple chargepoints are in boost.
+  const boostQueueRank = {};
+  try{
+    const count0 = Number(cfg && cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
+    const boostArr = [];
+    for (let i=1; i<=count0; i++){
+      const base = `chargingManagement.wallboxes.lp${i}`;
+      const eff = String(d(`${base}.effectiveMode`) ?? '').trim().toLowerCase();
+      const um  = String(d(`${base}.userMode`) ?? '').trim().toLowerCase();
+      const isBoost = (eff === 'boost') || (um === 'boost');
+      if (!isBoost) continue;
+      const charging = !!d(`${base}.charging`);
+      const since = Number(d(`${base}.chargingSince`) || 0);
+      boostArr.push({ i, charging, since: (isFinite(since) && since > 0) ? since : 0 });
+    }
+    boostArr.sort((a,b)=>{
+      if (!!a.charging !== !!b.charging) return (a.charging ? -1 : 1);
+      const as = (a.since && a.since > 0) ? a.since : Number.POSITIVE_INFINITY;
+      const bs = (b.since && b.since > 0) ? b.since : Number.POSITIVE_INFINITY;
+      if (as !== bs) return as - bs;
+      return a.i - b.i;
+    });
+    for (let k=0; k<boostArr.length; k++) boostQueueRank[boostArr[k].i] = k + 1;
+  }catch(_e){}
+
   let html = '';
   for (let i=1; i<=count; i++){
     const m = meta[i-1] || {};
-    const name = m.name || ('Wallbox ' + i);
+    const name = m.name || ('Ladepunkt ' + i);
     const note = m.note || '';
 
     const canActive = !!m.activeId;
     const canMode = !!m.modeId;
+
+    // EMS states (runtime control) — prefer these on the EVCS page.
+    const cm = `chargingManagement.wallboxes.lp${i}`;
+    const hasEms = d('chargingManagement.wallboxCount') != null;
+    const emsUserMode = d(`${cm}.userMode`);
+    const emsEffectiveMode = d(`${cm}.effectiveMode`);
+    const emsChargerType = d(`${cm}.chargerType`);
+    const emsCharging = d(`${cm}.charging`);
+    const emsTargetW = d(`${cm}.targetPowerW`);
+    const emsStationKey = d(`${cm}.stationKey`);
+    const emsStationMaxW = d(`${cm}.stationMaxPowerW`);
+    const emsBoostActive = d(`${cm}.boostActive`);
+    const emsBoostRemainingMin = d(`${cm}.boostRemainingMin`);
+    const emsBoostUntil = d(`${cm}.boostUntil`);
+    const emsBoostTimeoutMin = d(`${cm}.boostTimeoutMin`);
+
+    const stationSafe = emsStationKey ? safeIdPart(emsStationKey) : '';
+    const stationRemainingW = stationSafe ? d(`chargingManagement.stations.${stationSafe}.remainingW`) : undefined;
+    const stationCapW = stationSafe ? d(`chargingManagement.stations.${stationSafe}.maxPowerW`) : undefined;
 
     const p = d(`evcs.${i}.powerW`);
     const day = d(`evcs.${i}.energyDayKwh`);
@@ -103,18 +195,32 @@ function render(){
     const active = d(`evcs.${i}.active`);
     const mode = d(`evcs.${i}.mode`);
     const modeVal = clampUiMode(mode);
+
+    // EMS slider value (1..4): Auto | Boost | Min+PV | PV
+    const emsUiVal = clampEmsUi(emsModeToUi(emsUserMode ?? 'auto'));
+    const effTxt = String(emsEffectiveMode ?? '').trim();
+    const effLower = effTxt.toLowerCase();
+    const userLower = String(emsUserMode ?? 'auto').trim().toLowerCase();
+    const showEff = !!effTxt && ((userLower === 'auto' && effLower !== 'normal') || (userLower !== 'auto' && userLower !== effLower && !(userLower==='minpv' && effLower==='minpv')));
+
+    const ct = String(emsChargerType ?? m.chargerType ?? '').toUpperCase();
+    const ctBadge = (ct === 'DC' || ct === 'AC') ? ct : '';
+    const bq = boostQueueRank[i] || 0;
     const rfid = rfidLabel(i);
 html += `
       <div class="card" style="margin:0">
         <div class="card-header">
           <div class="legend-color"></div>
-          <span>${esc(name)}</span>
+          <span>${esc(name)}${ctBadge ? ` <span class="muted" style="font-size:12px; margin-left:8px; opacity:.85">${esc(ctBadge)}</span>` : ''}</span>
         </div>
         <div style="display:grid; gap:8px; padding:12px;">
           ${note ? `<div class="muted" style="opacity:.8">${esc(note)}</div>` : ''}
           <div style="display:flex; justify-content:space-between; gap:12px;">
             <span>Leistung</span><strong>${fmtW(p)}</strong>
           </div>
+          ${hasEms && emsTargetW != null ? `<div style="display:flex; justify-content:space-between; gap:12px;">
+            <span>Soll (EMS)</span><strong>${fmtW(emsTargetW)}</strong>
+          </div>` : ''}
           <div style="display:flex; justify-content:space-between; gap:12px;">
             <span>Heute</span><strong>${fmtKwh(day)}</strong>
           </div>
@@ -131,9 +237,22 @@ html += `
             <span>Aktiv</span>
             ${canActive ? `<label class="switch"><input type="checkbox" data-evcs-active="${i}" ${active ? 'checked' : ''}><span></span></label>` : `<strong>${active == null ? '--' : (active ? 'Ja' : 'Nein')}</strong>`}
           </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-            <span>Modus</span>
-            ${canMode ? `
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+            <span>${hasEms ? 'Lade‑Modus' : 'Modus'}</span>
+            ${hasEms ? `
+              <div style="display:flex; flex-direction:column; align-items:flex-end; gap:2px;">
+                <div class="nw-evcs-mode">
+                  <input type="range" min="1" max="4" step="1" data-ems-mode="${i}" value="${emsUiVal}" aria-label="Lade-Modus">
+                  <div class="nw-evcs-mode-labels">
+                    <span data-mode="1" class="${emsUiVal === 1 ? 'active' : ''}">Auto</span>
+                    <span data-mode="2" class="${emsUiVal === 2 ? 'active' : ''}">Boost</span>
+                    <span data-mode="3" class="${emsUiVal === 3 ? 'active' : ''}">Min+PV</span>
+                    <span data-mode="4" class="${emsUiVal === 4 ? 'active' : ''}">PV</span>
+                  </div>
+                </div>
+                ${showEff ? `<div class="muted" style="font-size:12px; opacity:.85">Effektiv: ${esc(effTxt)}</div>` : ''}
+              </div>
+            ` : (canMode ? `
               <div class="nw-evcs-mode">
                 <input type="range" min="1" max="3" step="1" data-evcs-mode="${i}" value="${modeVal}" aria-label="Betriebsmodus">
                 <div class="nw-evcs-mode-labels">
@@ -142,8 +261,25 @@ html += `
                   <span data-mode="3" class="${modeVal === 3 ? 'active' : ''}">PV</span>
                 </div>
               </div>
-            ` : `<strong>${mode == null ? '--' : esc(mode)}</strong>`}
+            ` : `<strong>${mode == null ? '--' : esc(mode)}</strong>`)}
           </div>
+
+          ${hasEms && (String(emsUserMode||'').toLowerCase()==='boost' || emsBoostActive===true) ? `
+            <div style="display:flex; justify-content:space-between; gap:12px;">
+              <span>Boost</span>
+              <strong title="Boost endet ${fmtClock(emsBoostUntil) ? ('um ' + fmtClock(emsBoostUntil)) : ''} • Timeout ${fmtMin(emsBoostTimeoutMin)}">
+                ${emsBoostActive ? `Aktiv (${fmtMin(emsBoostRemainingMin)})` : `Aktivierung wartet`}
+                ${bq ? ` <span class="muted" style="font-weight:600; opacity:.85">#${bq}</span>` : ''}
+              </strong>
+            </div>
+          ` : ''}
+
+          ${hasEms && emsStationKey ? `
+            <div style="display:flex; justify-content:space-between; gap:12px;">
+              <span>Station</span>
+              <strong title="Station-Limit: ${fmtW(emsStationMaxW || stationCapW)} • Verfügbar: ${fmtW(stationRemainingW)}">${esc(emsStationKey)}${stationCapW ? ` (${fmtW(stationCapW)})` : (emsStationMaxW ? ` (${fmtW(emsStationMaxW)})` : '')}</strong>
+            </div>
+          ` : ''}
         </div>
       </div>
     `;
@@ -177,12 +313,23 @@ function bindControls(){
   if (!list) return;
 
   const clampMode = (v)=> Math.max(1, Math.min(3, Math.round(Number(v)||1)));
+  const clampEms  = (v)=> Math.max(1, Math.min(4, Math.round(Number(v)||1)));
 
   // keep slider value clamped live
   list.addEventListener('input', (e)=>{
     const t = e.target;
     if (t && t.matches('input[type="range"][data-evcs-mode]')){
       const v = clampMode(t.value);
+      t.value = String(v);
+      const box = t.closest('.nw-evcs-mode');
+      if (box){
+        const spans = box.querySelectorAll('.nw-evcs-mode-labels span[data-mode]');
+        spans.forEach(s => s.classList.toggle('active', Number(s.getAttribute('data-mode')) === v));
+      }
+    }
+
+    if (t && t.matches('input[type="range"][data-ems-mode]')){
+      const v = clampEms(t.value);
       t.value = String(v);
       const box = t.closest('.nw-evcs-mode');
       if (box){
@@ -211,6 +358,16 @@ function bindControls(){
       t.value = String(v);
       try{
         await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'evcs', key: `${idx}.mode`, value: Number(v)})});
+      }catch(_e){}
+    }
+
+    if (t.matches('input[type="range"][data-ems-mode]')){
+      const idx = Number(t.getAttribute('data-ems-mode'));
+      const v = clampEms(t.value);
+      t.value = String(v);
+      const mode = uiToEmsMode(v);
+      try{
+        await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'ems', key: `evcs.${idx}.userMode`, value: mode})});
       }catch(_e){}
     }
   });

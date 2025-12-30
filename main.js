@@ -2598,13 +2598,25 @@ app.get('/config', (req, res) => {
         if (scope === 'ems') {
           const k = String(key || '');
           let safe = '';
-          const m1 = k.match(/^(?:evcs\.)?(\d+)\.(?:userMode|emsMode)$/);
-          if (m1) {
-            const idx = Math.max(1, Math.round(Number(m1[1] || 0)));
-            safe = `wb${idx}`;
+
+          // Supported keys (examples):
+          // - evcs.1.userMode
+          // - 1.userMode
+          // - lp1.userMode
+          // - chargingManagement.wallboxes.lp1.userMode
+          const mIdx = k.match(/^(?:evcs\.)?(\d+)\.(?:userMode|emsMode)$/);
+          if (mIdx) {
+            const idx = Math.max(1, Math.round(Number(mIdx[1] || 0)));
+            safe = `lp${idx}`;
           } else {
-            const m2 = k.match(/^chargingManagement\.(?:wallboxes\.)?([a-z0-9_]+)\.userMode$/i);
-            if (m2) safe = String(m2[1] || '').trim();
+            const mLp = k.match(/^lp(\d+)\.(?:userMode|emsMode)$/i);
+            if (mLp) {
+              const idx = Math.max(1, Math.round(Number(mLp[1] || 0)));
+              safe = `lp${idx}`;
+            } else {
+              const m2 = k.match(/^chargingManagement\.(?:wallboxes\.)?([a-z0-9_]+)\.userMode$/i);
+              if (m2) safe = String(m2[1] || '').trim();
+            }
           }
           if (!safe) return res.status(400).json({ ok: false, error: 'bad request' });
 
