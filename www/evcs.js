@@ -2,6 +2,40 @@
 let state = {};
 let cfg = null;
 let _renderScheduled = false;
+
+// UI reliability: keep optimistic user actions stable while SSE updates stream in.
+// Without this, the UI can momentarily snap back to the previous mode if the
+// backend state update arrives slightly later than a render cycle.
+const _pendingWrites = Object.create(null); // key -> { value: string, expires: number }
+
+function _setPendingWrite(key, value, ttlMs = 1500) {
+  try {
+    _pendingWrites[String(key)] = { value: String(value), expires: Date.now() + ttlMs };
+  } catch (_e) {}
+}
+
+function _mergeUpdatePayload(payload) {
+  // Merge payload into state, but do not overwrite pending optimistic values
+  // until either the backend confirms the same value or the pending entry expires.
+  const now = Date.now();
+  const merged = Object.assign({}, state);
+  for (const [k, v] of Object.entries(payload || {})) {
+    const pend = _pendingWrites[k];
+    if (pend && pend.expires > now) {
+      const incomingVal = (v && typeof v === 'object' && 'value' in v) ? String(v.value) : String(v);
+      if (incomingVal !== pend.value) {
+        // Ignore transient snap-back.
+        continue;
+      }
+      // Backend confirmed our optimistic value.
+      delete _pendingWrites[k];
+    } else if (pend && pend.expires <= now) {
+      delete _pendingWrites[k];
+    }
+    merged[k] = v;
+  }
+  state = merged;
+}
 function scheduleRender(){
   if (_renderScheduled) return;
   _renderScheduled = true;
@@ -338,21 +372,21 @@ function bindControls(){
   });
 
   // Mode buttons (EMS + legacy)
-  list.addEventListener('click', async (e)=>{
-    const target = e.target;
-    if (!target || !target.closest) return;
+  // Problem we solve here (Serienreife): Frequent SSE renders can replace the DOM
+  // between pointerdown and click, causing lost clicks. We therefore trigger the action
+  // on pointerdown (immediately) and suppress the follow-up click.
+  let _ignoreClickUntil = 0;
 
+  async function handleModeButton(btn){
+    if (!btn) return;
     // EMS: per Ladepunkt runtime userMode (auto|boost|minpv|pv)
-    const emsBtn = target.closest('button[data-ems-mode-btn]');
-    if (emsBtn){
-      const idx = Number(emsBtn.getAttribute('data-ems-mode-btn'));
-      let mode = String(emsBtn.getAttribute('data-mode') || 'auto').trim().toLowerCase();
+    if (btn.matches('button[data-ems-mode-btn]')){
+      const idx = Number(btn.getAttribute('data-ems-mode-btn'));
+      let mode = String(btn.getAttribute('data-mode') || 'auto').trim().toLowerCase();
       if (mode === 'min+pv') mode = 'minpv';
       if (!['auto','boost','minpv','pv'].includes(mode)) mode = 'auto';
 
       // UX: allow manual boost cancel by clicking the active Boost button again.
-      // This keeps the UI unchanged (no extra stop button), but prevents the operator
-      // from being "stuck" until the timeout elapses.
       try{
         let cur = String(d(`chargingManagement.wallboxes.lp${idx}.userMode`) ?? 'auto').trim().toLowerCase();
         if (cur === 'min+pv') cur = 'minpv';
@@ -360,36 +394,74 @@ function bindControls(){
         if (mode === 'boost' && cur === 'boost') mode = 'auto';
       }catch(_e){}
 
-      // Optimistic UI update (avoid flicker while SSE updates)
+      // Optimistic UI update + pending-write protection.
+      const k = `chargingManagement.wallboxes.lp${idx}.userMode`;
       try{
-        const k = `chargingManagement.wallboxes.lp${idx}.userMode`;
+        _setPendingWrite(k, mode);
         state[k] = { value: mode, ts: Date.now() };
         scheduleRender();
       }catch(_e){}
 
       try{
-        await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'ems', key: `evcs.${idx}.userMode`, value: mode})});
+        await fetch('/api/set', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({scope:'ems', key: `evcs.${idx}.userMode`, value: mode})
+        });
       }catch(_e){}
       return;
     }
 
     // Legacy: EVCS mode datapoint (1..3)
-    const evcsBtn = target.closest('button[data-evcs-mode-btn]');
-    if (evcsBtn){
-      const idx = Number(evcsBtn.getAttribute('data-evcs-mode-btn'));
-      const v = clampMode(evcsBtn.getAttribute('data-mode'));
-
-      // Optimistic update
+    if (btn.matches('button[data-evcs-mode-btn]')){
+      const idx = Number(btn.getAttribute('data-evcs-mode-btn'));
+      const v = clampMode(btn.getAttribute('data-mode'));
+      const k = `evcs.${idx}.mode`;
       try{
-        const k = `evcs.${idx}.mode`;
+        _setPendingWrite(k, v);
         state[k] = { value: v, ts: Date.now() };
         scheduleRender();
       }catch(_e){}
-
       try{
-        await fetch('/api/set', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'evcs', key: `${idx}.mode`, value: Number(v)})});
+        await fetch('/api/set', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({scope:'evcs', key: `${idx}.mode`, value: Number(v)})
+        });
       }catch(_e){}
     }
+  }
+
+  // Fast + reliable: pointerdown
+  list.addEventListener('pointerdown', (e)=>{
+    const target = e.target;
+    if (!target || !target.closest) return;
+    const btn = target.closest('button[data-ems-mode-btn],button[data-evcs-mode-btn]');
+    if (!btn) return;
+    _ignoreClickUntil = Date.now() + 450;
+    try{ e.preventDefault(); }catch(_e){}
+    handleModeButton(btn);
+  }, { passive: false });
+
+  // Keyboard support: Enter/Space
+  list.addEventListener('keydown', (e)=>{
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const target = e.target;
+    if (!target || !target.closest) return;
+    const btn = target.closest('button[data-ems-mode-btn],button[data-evcs-mode-btn]');
+    if (!btn) return;
+    try{ e.preventDefault(); }catch(_e){}
+    handleModeButton(btn);
+  });
+
+  // Fallback click handler (e.g. older browsers). Suppressed shortly after pointerdown.
+  list.addEventListener('click', (e)=>{
+    if (Date.now() < _ignoreClickUntil) return;
+    const target = e.target;
+    if (!target || !target.closest) return;
+    const btn = target.closest('button[data-ems-mode-btn],button[data-evcs-mode-btn]');
+    if (!btn) return;
+    handleModeButton(btn);
   });
 }
 
@@ -424,7 +496,7 @@ async function bootstrap(){
       try{
         const msg = JSON.parse(ev.data);
         if (msg.type === 'init' && msg.payload) state = msg.payload;
-        if (msg.type === 'update' && msg.payload) state = Object.assign({}, state, msg.payload);
+        if (msg.type === 'update' && msg.payload) _mergeUpdatePayload(msg.payload);
         scheduleRender();
       }catch(e){}
     };

@@ -1,4 +1,5 @@
-const CACHE_NAME = 'nexowatt-cache-v5';
+// Increment cache name on releases so browser updates JS/HTML reliably.
+const CACHE_NAME = 'nexowatt-cache-v6';
 const OFFLINE_URLS = [
   './',
   'index.html',
@@ -43,10 +44,4 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(caches.match(req).then(resp => resp || fetch(req)));
-});
-      return r;
-    }).catch(()=> caches.match(req)));
-  } else {
-    event.respondWith(caches.match(req).then(resp => resp || fetch(req)));
-  }
 });
