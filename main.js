@@ -7,6 +7,9 @@ const path = require('path');
 const bodyParser = express.json();
 const crypto = require('crypto');
 
+// Embedded EMS engine (Charging Management from nexowatt-multiuse)
+const { EmsEngine } = require('./ems/engine');
+
 function parseCookies(req) {
   const raw = req.headers.cookie || '';
   const out = {};
@@ -44,6 +47,9 @@ class NexoWattVis extends utils.Adapter {
     this.stateCache = {};
     this.sseClients = new Set();
     this.smartHomeDevices = [];
+
+    // EMS engine (Sprint 2)
+    this.emsEngine = null;
 
     
 
@@ -1380,6 +1386,9 @@ async onReady() {
       // finally subscribe and read initial values
       await this.subscribeConfiguredStates();
 
+      // EMS (Sprint 2): embedded Charging-Management engine
+      try { await this.initEmsEngine(); } catch (e) { this.log.warn('EMS init failed: ' + (e && e.message ? e.message : e)); }
+
       // Energy totals: if no kWh counters are mapped, derive totals from history/influxdb
       try { await this.updateEnergyTotalsFromInflux('startup'); } catch (_e) {}
       try {
@@ -1395,6 +1404,13 @@ async onReady() {
     } catch (e) {
       this.log.error(`onReady error: ${e.message}`);
     }
+  }
+
+
+  async initEmsEngine() {
+    if (this.emsEngine) return;
+    this.emsEngine = new EmsEngine(this);
+    await this.emsEngine.init();
   }
 
   async startServer() {
@@ -2552,6 +2568,33 @@ app.get('/config', (req, res) => {
         const key = req.body && req.body.key;
         const value = req.body && req.body.value;
         if (!scope || !key) return res.status(400).json({ ok: false, error: 'bad request' });
+        // EMS setter: per-wallbox mode override (auto|pv|minpv|boost)
+        if (scope === 'ems') {
+          const k = String(key || '');
+          let safe = '';
+          const m1 = k.match(/^(?:evcs\.)?(\d+)\.(?:userMode|emsMode)$/);
+          if (m1) {
+            const idx = Math.max(1, Math.round(Number(m1[1] || 0)));
+            safe = `wb${idx}`;
+          } else {
+            const m2 = k.match(/^chargingManagement\.(?:wallboxes\.)?([a-z0-9_]+)\.userMode$/i);
+            if (m2) safe = String(m2[1] || '').trim();
+          }
+          if (!safe) return res.status(400).json({ ok: false, error: 'bad request' });
+
+          let v = String(value === null || value === undefined ? 'auto' : value).trim().toLowerCase();
+          if (v === 'min+pv') v = 'minpv';
+          if (!['auto', 'pv', 'minpv', 'boost'].includes(v)) v = 'auto';
+
+          const id = `chargingManagement.wallboxes.${safe}.userMode`;
+          try {
+            await this.setStateAsync(id, v, false);
+            return res.json({ ok: true });
+          } catch (e) {
+            return res.status(409).json({ ok: false, error: 'not_ready' });
+          }
+        }
+
         // EVCS setter: write directly to mapped foreign datapoints (per wallbox)
         if (scope === 'evcs') {
           const k = String(key || '');
@@ -2700,6 +2743,12 @@ app.get('/config', (req, res) => {
 
   onStateChange(id, state) {
     if (!state) return;
+    // Feed EMS datapoint cache (for embedded charging engine)
+    try {
+      if (this.emsEngine && this.emsEngine.dp && typeof this.emsEngine.dp.handleStateChange === 'function') {
+        this.emsEngine.dp.handleStateChange(id, state);
+      }
+    } catch (_e) {}
     try {
       const key = this.keyFromId(id);
       if (key) {
@@ -2736,9 +2785,11 @@ app.get('/config', (req, res) => {
     const prefS = this.namespace + '.settings.';
     const prefI = this.namespace + '.installer.';
     const prefE = this.namespace + '.evcs.';
+    const prefCM = this.namespace + '.chargingManagement.';
     if (id && id.startsWith(prefS)) return 'settings.' + id.slice(prefS.length);
     if (id && id.startsWith(prefI)) return 'installer.' + id.slice(prefI.length);
     if (id && id.startsWith(prefE)) return 'evcs.' + id.slice(prefE.length);
+    if (id && id.startsWith(prefCM)) return 'chargingManagement.' + id.slice(prefCM.length);
     return null;
   }
 
@@ -3209,6 +3260,7 @@ app.get('/config', (req, res) => {
   onUnload(callback) {
     try {
       try { if (this._nwEnergyTotalsTimer) clearInterval(this._nwEnergyTotalsTimer); } catch (_e) {}
+      try { if (this.emsEngine && typeof this.emsEngine.stop === 'function') this.emsEngine.stop(); } catch (_e2) {}
       if (this.server) this.server.close();
       callback();
     } catch (e) {

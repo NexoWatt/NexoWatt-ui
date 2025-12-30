@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-vis",
-  "version": "0.4.103",
+  "version": "0.4.104",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "Proprietary License (NPL) v1.0",
@@ -38,6 +38,7 @@
     "main.js",
     "io-package.json",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "ems/**/*"
   ]
 }

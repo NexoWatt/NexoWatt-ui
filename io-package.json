@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.103",
+    "version": "0.4.104",
     "news": {
       "0.4.91": {
         "de": "EVCS RFID: Anlernen-UI (Karte anlernen, letzte Karte anzeigen, in Whitelist übernehmen).",
@@ -355,12 +355,16 @@
       "0.4.71": {
         "en": "Fix: EVCS report values are visible in screen mode (single wallbox).",
         "de": "Fix: EVCS-Berichtwerte sind im Bildschirmmodus sichtbar (einzelne Wallbox)."
+      },
+      "0.4.104": {
+        "de": "Sprint 2: Charging-Management (Multiuse) im VIS-Adapter integriert. Pro Wallbox runtime Modus (auto|pv|minpv|boost) via chargingManagement.wallboxes.*.userMode + /api/set (scope=ems).",
+        "en": "Sprint 2: Embedded charging management (from Multiuse) inside VIS adapter. Per-wallbox runtime mode (auto|pv|minpv|boost) via chargingManagement.wallboxes.*.userMode + /api/set (scope=ems)."
       }
     },
-    "title": "NexoWatt EMS FIS",
+    "title": "NexoWatt VIS",
     "titleLang": {
-      "en": "NexoWatt EMS UI",
-      "de": "NexoWatt EMS UI"
+      "en": "NexoWatt VIS",
+      "de": "NexoWatt VIS"
     },
     "desc": {
       "en": "OpenEMS-like responsive dashboard with NexoWatt colors (green/black). All datapoints can be linked in adapter settings.",
