@@ -2627,6 +2627,21 @@ app.get('/config', (req, res) => {
           const id = `chargingManagement.wallboxes.${safe}.userMode`;
           try {
             await this.setStateAsync(id, v, false);
+
+            // UX/Serienreife: allow manual boost cancel.
+            // If the operator switches away from boost, clear the boost runtime indicators
+            // immediately (do not wait for the next scheduler tick), so the UI can switch
+            // modes reliably and the user doesn't feel "stuck".
+            if (v !== 'boost') {
+              try {
+                await this.setStateAsync(`chargingManagement.wallboxes.${safe}.boostActive`, false, true);
+                await this.setStateAsync(`chargingManagement.wallboxes.${safe}.boostSince`, 0, true);
+                await this.setStateAsync(`chargingManagement.wallboxes.${safe}.boostUntil`, 0, true);
+                await this.setStateAsync(`chargingManagement.wallboxes.${safe}.boostRemainingMin`, 0, true);
+              } catch (_e2) {
+                // ignore
+              }
+            }
             return res.json({ ok: true });
           } catch (e) {
             return res.status(409).json({ ok: false, error: 'not_ready' });

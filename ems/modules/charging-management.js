@@ -88,13 +88,35 @@ class ChargingManagementModule extends BaseModule {
         this._chargingLastActiveMs = new Map(); // safeKey -> ms of last detected activity
         this._chargingLastSeenMs = new Map(); // safeKey -> ms of last processing (cleanup)
         this._boostSinceMs = new Map(); // safeKey -> ms since epoch (boost start)
+        this._restoredRuntime = new Set(); // safeKey -> restored persisted session/boost state
         this._lastCmdTargetW = new Map(); // safeKey -> last commanded target power (for ramp limiting)
         this._lastCmdTargetA = new Map(); // safeKey -> last commanded target current (for ramp limiting)
         this._lastDiagLogMs = 0; // MU6.2: rate limit diagnostics log
     }
 
     _isEnabled() {
-        return !!this.adapter.config.enableChargingManagement;
+        // Backwards compatible default: older configs may not have the new flag stored yet.
+        // If the flag is missing, enable the module when at least one chargepoint
+        // is configured (EVCS table). This ensures runtime control states exist and
+        // the UI doesn't fall back to legacy mode unexpectedly.
+        const v = this.adapter && this.adapter.config ? this.adapter.config.enableChargingManagement : undefined;
+        if (typeof v === 'boolean') return v;
+
+        try {
+            const cnt = Number(this.adapter && this.adapter.config && this.adapter.config.settingsConfig && this.adapter.config.settingsConfig.evcsCount);
+            if (Number.isFinite(cnt) && cnt > 0) return true;
+        } catch {
+            // ignore
+        }
+
+        try {
+            const list = (this.adapter && Array.isArray(this.adapter.evcsList)) ? this.adapter.evcsList : [];
+            if (list && list.length) return true;
+        } catch {
+            // ignore
+        }
+
+        return false;
     }
 
     async init() {
@@ -417,6 +439,26 @@ class ChargingManagementModule extends BaseModule {
 
             const safe = toSafeIdPart(key);
             const ch = await this._ensureWallboxChannel(key);
+
+            // Serienreife/Robustheit: restore persisted runtime timers after adapter restart.
+            // This keeps Boost timeouts + "first-started" charging order stable across restarts.
+            if (!this._restoredRuntime.has(safe)) {
+                try {
+                    const cs = await this.adapter.getStateAsync(`${ch}.chargingSince`);
+                    const csVal = cs ? Number(cs.val) : 0;
+                    if (Number.isFinite(csVal) && csVal > 0) this._chargingSinceMs.set(safe, csVal);
+                } catch {
+                    // ignore
+                }
+                try {
+                    const bs = await this.adapter.getStateAsync(`${ch}.boostSince`);
+                    const bsVal = bs ? Number(bs.val) : 0;
+                    if (Number.isFinite(bsVal) && bsVal > 0) this._boostSinceMs.set(safe, bsVal);
+                } catch {
+                    // ignore
+                }
+                this._restoredRuntime.add(safe);
+            }
 
             // Runtime mode override (writable state, used by VIS)
             // If the runtime state is empty, initialize it ONCE from config default (userModeDefault).

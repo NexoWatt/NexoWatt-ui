@@ -112,7 +112,28 @@ class ModuleManager {
         this.modules.push({
             key: 'chargingManagement',
             instance: new ChargingManagementModule(this.adapter, this.dp),
-            enabledFn: () => !!this.adapter.config.enableChargingManagement,
+            enabledFn: () => {
+                // Backwards compatible default:
+                // Older installations may not have the new EMS config persisted yet.
+                // If the flag is missing (undefined/null), we enable the module so the
+                // runtime control states exist and the EVCS page can operate consistently.
+                // If the user explicitly disables it in Admin, we respect that.
+                const v = this.adapter && this.adapter.config ? this.adapter.config.enableChargingManagement : undefined;
+                if (typeof v === 'boolean') return v;
+
+                // Safe-ish default for upgrades: enable if there is at least one configured
+                // chargepoint entry (EVCS list/table). Even without mapped setpoints, the
+                // module will simply not write anything, but it will expose states.
+                try {
+                    const cnt = Number(this.adapter && this.adapter.config && this.adapter.config.settingsConfig && this.adapter.config.settingsConfig.evcsCount);
+                    if (Number.isFinite(cnt) && cnt > 0) return true;
+                    const list = (this.adapter && Array.isArray(this.adapter.evcsList)) ? this.adapter.evcsList : [];
+                    if (list && list.length) return true;
+                } catch {
+                    // ignore
+                }
+                return false;
+            },
         });
 
         // Multi use (future)

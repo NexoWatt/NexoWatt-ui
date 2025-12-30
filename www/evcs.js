@@ -338,6 +338,16 @@ function bindControls(){
       if (mode === 'min+pv') mode = 'minpv';
       if (!['auto','boost','minpv','pv'].includes(mode)) mode = 'auto';
 
+      // UX: allow manual boost cancel by clicking the active Boost button again.
+      // This keeps the UI unchanged (no extra stop button), but prevents the operator
+      // from being "stuck" until the timeout elapses.
+      try{
+        let cur = String(d(`chargingManagement.wallboxes.lp${idx}.userMode`) ?? 'auto').trim().toLowerCase();
+        if (cur === 'min+pv') cur = 'minpv';
+        if (!['auto','boost','minpv','pv'].includes(cur)) cur = 'auto';
+        if (mode === 'boost' && cur === 'boost') mode = 'auto';
+      }catch(_e){}
+
       // Optimistic UI update (avoid flicker while SSE updates)
       try{
         const k = `chargingManagement.wallboxes.lp${idx}.userMode`;

@@ -1374,6 +1374,16 @@ render = function(){ _renderOld(); try{ updateEnergyWeb(); }catch(e){ console.wa
       // Legacy UI: no "Auto" → map to Boost
       if (!modalHasEms && desired === 'auto') desired = 'boost';
 
+      // UX: allow manual boost cancel by clicking the active Boost button again
+      // (instead of waiting for the timeout).
+      if (modalHasEms) {
+        try {
+          const curBtn = buttons.querySelector('button[data-mode].active');
+          const cur = curBtn ? normalizeEmsMode(curBtn.getAttribute('data-mode') || 'auto') : 'auto';
+          if (desired === 'boost' && cur === 'boost') desired = 'auto';
+        } catch(_e) {}
+      }
+
       pendingMode = desired;
       pendingModeUntil = Date.now() + 2500;
       applyModeUi(desired);
