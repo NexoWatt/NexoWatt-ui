@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.117",
+    "version": "0.4.118",
     "news": {
+      "0.4.118": {
+        "de": "Gate E: Speicher‑Multiuse (SoC‑Zonen für LSK/Eigenverbrauch/Notstrom, optionale Eigenverbrauchs‑Entladung, LSK Lade/Entlade‑Limits, optionales Reserve‑Netzladen).",
+        "en": "Gate E: Storage multiuse (SoC zones for peak shaving/self‑consumption/backup, optional self‑consumption discharge, LSK charge/discharge limits, optional reserve grid‑charge)."
+      },
       "0.4.109": {
         "de": "Sprint 3.2: EVCS-Seite steuert jetzt den EMS-Ladepunktmodus (Auto/Boost/Min+PV/PV) je Ladepunkt inkl. Boost-Timer/Prio-Anzeige. Design unverändert.",
         "en": "Sprint 3.2: EVCS page now controls per chargepoint EMS mode (Auto/Boost/Min+PV/PV) incl. boost timer/priority, same UI design."

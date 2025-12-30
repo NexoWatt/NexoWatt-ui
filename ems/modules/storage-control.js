@@ -7,9 +7,16 @@ const { BaseModule } = require('./base');
  *
  * Ziele:
  * - Lastspitzenkappung über den Speicher (Entladen bei Überlast)
- * - Eigenverbrauchsoptimierung (PV-Überschuss laden, wenn verfügbar)
- * - Notstrom-Reserve (Entladen unter Mindest-SoC verhindern)
+ * - Eigenverbrauchsoptimierung (PV-Überschuss laden; optional Entladen zur Reduktion des Netzbezugs)
+ * - Notstrom-Reserve (Entladen unter Mindest-SoC verhindern; optional Reserve über PV/Netz wieder auffüllen)
  * - Zusammenarbeit mit Tarif/VIS (manuelle Speicherleistung aus VIS berücksichtigen)
+ *
+ * Gate E (Serienreife): Multiuse-Speicherstrategie
+ * - getrennte SoC-Bereiche/Schwellen für:
+ *   - Notstrom (Reserve)
+ *   - Eigenverbrauch (Entladen optional)
+ *   - LSK (Lastspitzenkappung / Peak-Shaving)
+ * - LSK: separate Limits für Be-/Entladung (maxChargeW/maxDischargeW) möglich
  *
  * Hinweis:
  * - In dieser Stufe wird aktiv nur im Modus "Sollleistung (W)" geschrieben (st.targetPowerW).
@@ -103,12 +110,38 @@ class SpeicherRegelungModule extends BaseModule {
             await this._setIfChanged('speicher.regelung.socAlterMs', typeof socAge === 'number' ? Math.round(socAge) : null);
         }
 
-        // Reserve-Logik (Notstrom)
+        // ------------------------------------------------------------
+        // Gate E: Multiuse-Speicherstrategie (SoC-Zonen)
+        // ------------------------------------------------------------
+        // Notstrom-Reserve: harte Untergrenze für Entladen
         const reserveEnabled = cfg.reserveEnabled !== false;
         const reserveMin = clamp(num(cfg.reserveMinSocPct, 10), 0, 100);
+        const reserveTarget = clamp(num(cfg.reserveTargetSocPct, reserveMin), 0, 100);
+
         const reserveActive = reserveEnabled && (typeof soc === 'number') && (soc <= reserveMin);
+        const reserveChargeWanted = reserveEnabled && (typeof soc === 'number') && (soc < reserveTarget);
+
         await this._setIfChanged('speicher.regelung.reserveAktiv', !!reserveActive);
         await this._setIfChanged('speicher.regelung.reserveMinSocPct', reserveMin);
+        await this._setIfChanged('speicher.regelung.reserveZielSocPct', reserveTarget);
+
+        // LSK (Peak-Shaving über Speicher)
+        const lskEnabledCfg = cfg.lskEnabled !== false; // Default: an (damit bestehende Installationen unverändert bleiben)
+        const lskMinSoc = clamp(num(cfg.lskMinSocPct, reserveMin), 0, 100);
+        const lskMaxSoc = clamp(num(cfg.lskMaxSocPct, 100), 0, 100);
+
+        // Eigenverbrauch (Entladen optional)
+        const selfDischargeEnabled = cfg.selfDischargeEnabled === true;
+        const selfMinSoc = clamp(num(cfg.selfMinSocPct, reserveMin), 0, 100);
+        const selfMaxSoc = clamp(num(cfg.selfMaxSocPct, 100), 0, 100);
+        const selfTargetGridW = Math.max(0, num(cfg.selfTargetGridImportW, 0));
+        const selfImportThresholdW = Math.max(0, num(cfg.selfImportThresholdW, 200));
+
+        await this._setIfChanged('speicher.regelung.lskMinSocPct', lskMinSoc);
+        await this._setIfChanged('speicher.regelung.lskMaxSocPct', lskMaxSoc);
+        await this._setIfChanged('speicher.regelung.selfMinSocPct', selfMinSoc);
+        await this._setIfChanged('speicher.regelung.selfMaxSocPct', selfMaxSoc);
+        await this._setIfChanged('speicher.regelung.selfEntladenAktiviert', !!selfDischargeEnabled);
 
         // Grenzen / Glättung
         const maxChargeW = Math.max(0, num(cfg.maxChargeW, 5000));     // Laden: negativ
@@ -116,13 +149,28 @@ class SpeicherRegelungModule extends BaseModule {
         const stepW = Math.max(0, num(cfg.stepW, 50));
         const maxDelta = Math.max(0, num(cfg.maxDeltaWPerTick, 500));
 
+        // Policy-spezifische Limits (0 => global)
+        const lskMaxChargeW_cfg = Math.max(0, num(cfg.lskMaxChargeW, 0));
+        const lskMaxDischargeW_cfg = Math.max(0, num(cfg.lskMaxDischargeW, 0));
+        const selfMaxChargeW_cfg = Math.max(0, num(cfg.selfMaxChargeW, 0));
+        const selfMaxDischargeW_cfg = Math.max(0, num(cfg.selfMaxDischargeW, 0));
+        const reserveGridChargeW = Math.max(0, num(cfg.reserveGridChargeW, 0));
+
+        const lskMaxDischargeEff = Math.min(maxDischargeW, (lskMaxDischargeW_cfg > 0 ? lskMaxDischargeW_cfg : maxDischargeW));
+        const lskMaxChargeEff = Math.min(maxChargeW, (lskMaxChargeW_cfg > 0 ? lskMaxChargeW_cfg : maxChargeW));
+        const selfMaxDischargeEff = Math.min(maxDischargeW, (selfMaxDischargeW_cfg > 0 ? selfMaxDischargeW_cfg : maxDischargeW));
+        const selfMaxChargeEff = Math.min(maxChargeW, (selfMaxChargeW_cfg > 0 ? selfMaxChargeW_cfg : maxChargeW));
+
         // 1) Lastspitzenkappung: wenn Peak-Shaving aktiv und Grenzwert überschritten → Entladen
         const peakEnabled = !!this.adapter.config.enablePeakShaving;
         let targetW = 0;
         let reason = 'Aus';
         let source = 'aus';
 
-        if (peakEnabled) {
+        let hardDischargeMinSoc = reserveMin; // wird je Quelle ggf. angehoben
+        let hardChargeMaxSoc = 100;
+
+        if (peakEnabled && lskEnabledCfg) {
             const psLimitW = await this._readOwnNumber('peakShaving.control.limitW');
             const psOverW = await this._readOwnNumber('peakShaving.control.overW');
             const psReqRedW = await this._readOwnNumber('peakShaving.control.requiredReductionW');
@@ -132,14 +180,21 @@ class SpeicherRegelungModule extends BaseModule {
                 : ((typeof psOverW === 'number' && psOverW > 0) ? psOverW : 0);
 
             if (needW > 0 && (typeof psLimitW !== 'number' || psLimitW > 0)) {
+                // LSK-SoC-Fenster
+                const socOk = (typeof soc !== 'number') ? true : (soc > lskMinSoc);
                 if (reserveActive) {
                     targetW = 0;
-                    reason = 'Lastspitzenkappung nötig, aber Reserve aktiv';
+                    reason = 'LSK nötig, aber Notstrom-Reserve aktiv';
+                    source = 'lastspitze';
+                } else if (!socOk) {
+                    targetW = 0;
+                    reason = `LSK nötig, aber SoC <= LSK-Min (${lskMinSoc}%)`;
                     source = 'lastspitze';
                 } else {
-                    targetW = clamp(needW, 0, maxDischargeW);
-                    reason = `Lastspitzenkappung: entladen (${Math.round(needW)} W benötigt)`;
+                    targetW = clamp(needW, 0, lskMaxDischargeEff);
+                    reason = `LSK: entladen (${Math.round(needW)} W benötigt)`;
                     source = 'lastspitze';
+                    hardDischargeMinSoc = Math.max(hardDischargeMinSoc, lskMinSoc);
                 }
             }
         }
@@ -149,14 +204,25 @@ class SpeicherRegelungModule extends BaseModule {
         if (targetW === 0) {
             const assistW = await this._readOwnNumber('chargingManagement.control.storageAssistW');
             if (typeof assistW === 'number' && assistW > 0) {
+                // EVCS-Unterstützung ist "komfort" – wenn Reserve wieder aufgefüllt werden soll, blockieren wir das.
+                const socOk = (typeof soc !== 'number') ? true : (soc > Math.max(reserveMin, selfMinSoc));
                 if (reserveActive) {
                     targetW = 0;
-                    reason = 'EVCS-Unterstützung nötig, aber Reserve aktiv';
+                    reason = 'EVCS-Unterstützung nötig, aber Notstrom-Reserve aktiv';
+                    source = 'evcs';
+                } else if (reserveChargeWanted) {
+                    targetW = 0;
+                    reason = 'EVCS-Unterstützung blockiert (Reserve soll aufgefüllt werden)';
+                    source = 'evcs';
+                } else if (!socOk) {
+                    targetW = 0;
+                    reason = 'EVCS-Unterstützung blockiert (SoC unter Minimum)';
                     source = 'evcs';
                 } else {
                     targetW = clamp(assistW, 0, maxDischargeW);
                     reason = `EVCS-Unterstützung: entladen (${Math.round(assistW)} W angefordert)`;
                     source = 'evcs';
+                    hardDischargeMinSoc = Math.max(hardDischargeMinSoc, Math.max(reserveMin, selfMinSoc));
                 }
             }
         }
@@ -196,6 +262,16 @@ class SpeicherRegelungModule extends BaseModule {
                         reason = 'Tarif: Sollleistung aus VIS';
                         source = 'tarif';
                     }
+
+                    // SoC-Max: Laden blockieren (z.B. wenn der Installateur einen Max-SoC setzt)
+                    // Für Tarif verwenden wir den "größten" Max-SoC (Self/LSK), damit es nicht unerwartet stoppt.
+                    const maxSocForCharge = clamp(Math.max(selfMaxSoc, lskMaxSoc, reserveTarget), 0, 100);
+                    if (w < 0 && (typeof soc === 'number') && soc >= maxSocForCharge) {
+                        w = 0;
+                        reason = 'Tarif: Laden blockiert (SoC-Max erreicht)';
+                        source = 'tarif';
+                    }
+
                     targetW = w;
                 } else if (t.modus === 2) {
                     // Automatik wird später ergänzt
@@ -206,7 +282,21 @@ class SpeicherRegelungModule extends BaseModule {
             }
         }
 
-        // 3) Eigenverbrauch: PV-Überschuss laden (wenn keine Lastspitze/Tarif aktiv)
+        // 3) Eigenverbrauch: Entladen zur Netzbezug-Reduktion (optional)
+        if (targetW === 0 && selfDischargeEnabled) {
+            const importW = Math.max(0, gridW);
+            const desiredDischarge = Math.max(0, importW - selfTargetGridW);
+
+            const socOk = (typeof soc !== 'number') ? true : (soc > selfMinSoc);
+            if (!reserveActive && !reserveChargeWanted && socOk && importW >= selfImportThresholdW && desiredDischarge > 0) {
+                targetW = clamp(desiredDischarge, 0, selfMaxDischargeEff);
+                reason = `Eigenverbrauch: entladen (${Math.round(targetW)} W)`;
+                source = 'eigenverbrauch';
+                hardDischargeMinSoc = Math.max(hardDischargeMinSoc, selfMinSoc);
+            }
+        }
+
+        // 4) Eigenverbrauch: PV-Überschuss laden (wenn keine Lastspitze/Tarif/EV-Entladung aktiv)
         if (targetW === 0 && cfg.pvEnabled !== false) {
             // Zero-Export (Nulleinspeisung): bei Export möglichst früh (Schwellwert) in den Speicher laden.
             // Hinweis: Extra-Bias nur, wenn Netzladen erlaubt ist (sonst würde der Bias u.U. Netzenergie in den Speicher ziehen).
@@ -217,12 +307,43 @@ class SpeicherRegelungModule extends BaseModule {
 
             const thrBase = Math.max(0, num(cfg.pvExportThresholdW, 200));
             const thr = zeEnabled ? Math.min(thrBase, zeDeadband) : thrBase;
-            const canCharge = (typeof soc !== 'number') ? true : (soc < 100);
-            if (exportW >= thr && canCharge) {
+
+            // Max-SoC für Laden: größter Bereich (Self/LSK/Reserve-Ziel)
+            const maxSocForCharge = clamp(Math.max(selfMaxSoc, lskMaxSoc, reserveTarget), 0, 100);
+            hardChargeMaxSoc = maxSocForCharge;
+
+            const canChargeBySoc = (typeof soc !== 'number') ? true : (soc < maxSocForCharge);
+
+            // Bereichsabhängiges Lade-Limit (Self vs LSK)
+            let chargeLimitW = maxChargeW;
+            if (typeof soc === 'number') {
+                if (soc < selfMaxSoc) {
+                    chargeLimitW = selfMaxChargeEff;
+                } else if (soc < lskMaxSoc) {
+                    chargeLimitW = lskMaxChargeEff;
+                } else {
+                    chargeLimitW = 0;
+                }
+            }
+
+            if (exportW >= thr && canChargeBySoc && chargeLimitW > 0) {
                 const extraBias = (zeEnabled && gridChargeAllowed) ? zeBias : 0;
-                targetW = -clamp(exportW + extraBias, 0, maxChargeW);
+                targetW = -clamp(exportW + extraBias, 0, chargeLimitW);
                 reason = zeEnabled ? 'Nulleinspeisung: Export in Speicher umleiten' : 'Eigenverbrauch: PV-Überschuss laden';
                 source = 'pv';
+            }
+        }
+
+        // 5) Notstrom: Reserve ggf. über Netz wieder auffüllen (optional)
+        // Hinweis: Standardmäßig AUS (reserveGridChargeW = 0). Aktivieren nur, wenn gewünscht.
+        if (targetW === 0 && reserveChargeWanted && reserveGridChargeW > 0 && gridChargeAllowed) {
+            // Nur laden, wenn SoC unter Reserve-Ziel
+            const canChargeBySoc = (typeof soc !== 'number') ? true : (soc < reserveTarget);
+            if (canChargeBySoc) {
+                targetW = -clamp(reserveGridChargeW, 0, maxChargeW);
+                reason = 'Notstrom: Reserve über Netz laden';
+                source = 'reserve';
+                hardChargeMaxSoc = Math.max(hardChargeMaxSoc, reserveTarget);
             }
         }
 
@@ -243,11 +364,25 @@ class SpeicherRegelungModule extends BaseModule {
             }
         }
 
-        // Reserve blockiert Entladen auch nach Rundung/Rampe
-        if (reserveActive && targetW > 0) {
-            targetW = 0;
-            reason = 'Entladen blockiert (Reserve aktiv)';
-            source = 'reserve';
+        // Harte SoC-Grenzen auch nach Rundung/Rampe erzwingen (wichtig gegen "Rampen-Nachlauf")
+        if (targetW > 0) {
+            // Entladen: Notstrom-Reserve immer hart
+            if (reserveActive) {
+                targetW = 0;
+                reason = 'Entladen blockiert (Notstrom-Reserve aktiv)';
+                source = 'reserve';
+            } else if ((typeof soc === 'number') && (soc <= hardDischargeMinSoc)) {
+                targetW = 0;
+                reason = `Entladen blockiert (SoC <= ${hardDischargeMinSoc}%)`;
+                source = 'reserve';
+            }
+        } else if (targetW < 0) {
+            // Laden: Max-SoC respektieren
+            if ((typeof soc === 'number') && (soc >= hardChargeMaxSoc)) {
+                targetW = 0;
+                reason = `Laden blockiert (SoC >= ${hardChargeMaxSoc}%)`;
+                source = 'pv';
+            }
         }
 
         await this._applyTargetW(targetW, reason, source);
@@ -271,8 +406,25 @@ class SpeicherRegelungModule extends BaseModule {
             maxDeltaWPerTick: storage.maxDeltaWPerTick,
             reserveEnabled: storage.reserveEnabled,
             reserveMinSocPct: storage.reserveMinSocPct,
+            reserveTargetSocPct: storage.reserveTargetSocPct,
+            reserveGridChargeW: storage.reserveGridChargeW,
             pvEnabled: storage.pvEnabled,
             pvExportThresholdW: storage.pvExportThresholdW,
+
+            // Gate E
+            lskEnabled: storage.lskEnabled,
+            lskMinSocPct: storage.lskMinSocPct,
+            lskMaxSocPct: storage.lskMaxSocPct,
+            lskMaxChargeW: storage.lskMaxChargeW,
+            lskMaxDischargeW: storage.lskMaxDischargeW,
+
+            selfDischargeEnabled: storage.selfDischargeEnabled,
+            selfMinSocPct: storage.selfMinSocPct,
+            selfMaxSocPct: storage.selfMaxSocPct,
+            selfTargetGridImportW: storage.selfTargetGridImportW,
+            selfImportThresholdW: storage.selfImportThresholdW,
+            selfMaxChargeW: storage.selfMaxChargeW,
+            selfMaxDischargeW: storage.selfMaxDischargeW,
         };
     }
 
@@ -363,11 +515,19 @@ class SpeicherRegelungModule extends BaseModule {
 
         await mk('speicher.regelung.netzLeistungW', 'Netzleistung (W)', 'number', 'value.power');
         await mk('speicher.regelung.netzAlterMs', 'Netzleistung Alter (ms)', 'number', 'value.interval');
+        await mk('speicher.regelung.netzLadenErlaubt', 'Netzladen erlaubt', 'boolean', 'indicator', true);
         await mk('speicher.regelung.socPct', 'SoC (%)', 'number', 'value.battery');
         await mk('speicher.regelung.socAlterMs', 'SoC Alter (ms)', 'number', 'value.interval');
 
         await mk('speicher.regelung.reserveAktiv', 'Reserve aktiv', 'boolean', 'indicator', false);
         await mk('speicher.regelung.reserveMinSocPct', 'Mindest-SoC (%)', 'number', 'value', 0);
+        await mk('speicher.regelung.reserveZielSocPct', 'Reserve Ziel-SoC (%)', 'number', 'value', 0);
+
+        await mk('speicher.regelung.lskMinSocPct', 'LSK Min-SoC (%)', 'number', 'value', 0);
+        await mk('speicher.regelung.lskMaxSocPct', 'LSK Max-SoC (%)', 'number', 'value', 0);
+        await mk('speicher.regelung.selfMinSocPct', 'Eigenverbrauch Min-SoC (%)', 'number', 'value', 0);
+        await mk('speicher.regelung.selfMaxSocPct', 'Eigenverbrauch Max-SoC (%)', 'number', 'value', 0);
+        await mk('speicher.regelung.selfEntladenAktiviert', 'Eigenverbrauch-Entladen aktiviert', 'boolean', 'indicator', false);
 
         await mk('speicher.regelung.maxChargeW', 'Max Ladeleistung (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.maxDischargeW', 'Max Entladeleistung (W)', 'number', 'value.power', 0);
