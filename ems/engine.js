@@ -73,6 +73,9 @@ class EmsEngine {
     const adapter = this.adapter;
     const cfg = adapter.config || {};
 
+    // Installer overrides for embedded Charging-Management (Admin-UI: chargingManagement.*)
+    const userCm = (cfg.chargingManagement && typeof cfg.chargingManagement === 'object') ? cfg.chargingManagement : {};
+
     // --- Budget defaults: use configured EVCS max power ---
     const settingsCfg = cfg.settingsConfig || {};
     const ratedKw = Number(settingsCfg.evcsMaxPowerKw || 11);
@@ -238,6 +241,70 @@ class EmsEngine {
       // per wallbox list
       wallboxes,
     };
+
+
+    // Apply selected overrides from Admin-UI (keep safe defaults if empty)
+    try {
+      const modeOverride = (typeof userCm.mode === 'string') ? userCm.mode.trim() : '';
+      if (['off', 'pvSurplus', 'mixed'].includes(modeOverride)) chargingCfg.mode = modeOverride;
+
+      if (typeof userCm.pvSurplusOnly === 'boolean') chargingCfg.pvSurplusOnly = userCm.pvSurplusOnly;
+
+      const bm = (typeof userCm.totalBudgetMode === 'string') ? userCm.totalBudgetMode.trim() : '';
+      if (bm) chargingCfg.totalBudgetMode = bm;
+
+      const staticW = Number(userCm.staticMaxChargingPowerW);
+      if (Number.isFinite(staticW) && staticW > 0) chargingCfg.staticMaxChargingPowerW = Math.round(staticW);
+
+      const budgetId = (typeof userCm.budgetPowerId === 'string') ? userCm.budgetPowerId.trim() : '';
+      if (budgetId) chargingCfg.budgetPowerId = budgetId;
+
+      const gridId = (typeof userCm.gridPowerId === 'string') ? userCm.gridPowerId.trim() : '';
+      if (gridId) chargingCfg.gridPowerId = gridId;
+
+      const pvId = (typeof userCm.pvSurplusPowerId === 'string') ? userCm.pvSurplusPowerId.trim() : '';
+      if (pvId) chargingCfg.pvSurplusPowerId = pvId;
+
+      const voltageV_ = Number(userCm.voltageV);
+      if (Number.isFinite(voltageV_) && voltageV_ >= 50 && voltageV_ <= 1000) chargingCfg.voltageV = Math.round(voltageV_);
+
+      const phases_ = Number(userCm.defaultPhases);
+      if (Number.isFinite(phases_) && (phases_ === 1 || phases_ === 3)) chargingCfg.defaultPhases = phases_;
+
+      const stale_ = Number(userCm.staleTimeoutSec);
+      if (Number.isFinite(stale_) && stale_ >= 1 && stale_ <= 3600) chargingCfg.staleTimeoutSec = stale_;
+
+      const thr_ = Number(userCm.activityThresholdW);
+      if (Number.isFinite(thr_) && thr_ >= 0) chargingCfg.activityThresholdW = Math.round(thr_);
+
+      const sg_ = Number(userCm.stopGraceSec);
+      if (Number.isFinite(sg_) && sg_ >= 0 && sg_ <= 3600) chargingCfg.stopGraceSec = sg_;
+
+      const keep_ = Number(userCm.sessionKeepSec);
+      if (Number.isFinite(keep_) && keep_ >= 0 && keep_ <= 86400) chargingCfg.sessionKeepSec = keep_;
+
+      const stepA_ = Number(userCm.stepA);
+      if (Number.isFinite(stepA_) && stepA_ >= 0) chargingCfg.stepA = stepA_;
+
+      const stepW_ = Number(userCm.stepW);
+      if (Number.isFinite(stepW_) && stepW_ >= 0) chargingCfg.stepW = stepW_;
+
+      const dW_ = Number(userCm.maxDeltaWPerTick);
+      if (Number.isFinite(dW_) && dW_ >= 0) chargingCfg.maxDeltaWPerTick = dW_;
+
+      const dA_ = Number(userCm.maxDeltaAPerTick);
+      if (Number.isFinite(dA_) && dA_ >= 0) chargingCfg.maxDeltaAPerTick = dA_;
+
+      const acMin_ = Number(userCm.acMinPower3pW);
+      if (Number.isFinite(acMin_) && acMin_ >= 0) chargingCfg.acMinPower3pW = acMin_;
+
+      if (typeof userCm.pauseWhenPeakShavingActive === 'boolean') chargingCfg.pauseWhenPeakShavingActive = userCm.pauseWhenPeakShavingActive;
+      const pb_ = (typeof userCm.pauseBehavior === 'string') ? userCm.pauseBehavior.trim() : '';
+      if (pb_) chargingCfg.pauseBehavior = pb_;
+
+      const stationMode_ = (typeof userCm.stationAllocationMode === 'string') ? userCm.stationAllocationMode.trim() : '';
+      if (stationMode_) chargingCfg.stationAllocationMode = stationMode_;
+    } catch (_e) {}
 
     return { anyControl, chargingCfg, stationGroups, stationGroupMap };
   }

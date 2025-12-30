@@ -1004,7 +1004,7 @@
       "items": {
         "emsInfo": {
           "type": "header",
-          "text": "EMS‑Module (Multiuse) im VIS‑Adapter. Hier kannst du die Betriebsarten (z. B. Lastspitzenkappung) aktivieren und die relevanten Datenpunkte zuordnen.",
+          "text": "EMS‑Module im VIS‑Adapter (Multiuse‑Engine). Hier aktivierst du die Module (Charging / Peak Shaving / Netz‑Constraints / Speicher) und stellst den Scheduler‑Takt ein. Details pro Modul findest du in den jeweiligen EMS‑Tabs.",
           "xs": 12,
           "sm": 12,
           "md": 12
@@ -1041,91 +1041,6 @@
           "sm": 6,
           "md": 6,
           "help": "Begrenzt Netzbezug (Import) und kann das Ladebudget automatisch reduzieren."
-        },
-        "peakShaving.mode": {
-          "type": "select",
-          "label": "Peak‑Shaving Modus",
-          "attr": "peakShaving.mode",
-          "xs": 12,
-          "sm": 6,
-          "md": 6,
-          "options": [
-            {
-              "label": "static (fester Grenzwert)",
-              "value": "static"
-            },
-            {
-              "label": "dynamic (Grenzwert aus Datenpunkt)",
-              "value": "dynamic"
-            }
-          ],
-          "default": "static"
-        },
-        "peakShaving.gridPointPowerId": {
-          "type": "objectId",
-          "label": "Netzleistung (W) – Import + / Export −",
-          "types": [
-            "state"
-          ],
-          "button": true,
-          "attr": "peakShaving.gridPointPowerId",
-          "xs": 12,
-          "sm": 12,
-          "md": 12,
-          "placeholder": "z.B. smartmeter.0.power.grid (Import + / Export -)",
-          "help": "Ideal: NETTO‑Wert (Import positiv, Export negativ). Alternativ kann der Adapter einen internen Netto‑Wert aus „Netz – Bezug“ und „Netz – Einspeisung“ ableiten (ems.gridPowerW)."
-        },
-        "peakShaving.maxPowerW": {
-          "type": "number",
-          "label": "Max. Import (W) – statischer Grenzwert",
-          "min": 0,
-          "max": 10000000,
-          "step": 100,
-          "default": 0,
-          "attr": "peakShaving.maxPowerW",
-          "xs": 12,
-          "sm": 6,
-          "md": 6,
-          "help": "0 = keine Begrenzung (im static‑Modus)."
-        },
-        "peakShaving.reserveW": {
-          "type": "number",
-          "label": "Reserve (W) (optional)",
-          "min": 0,
-          "max": 1000000,
-          "step": 50,
-          "default": 0,
-          "attr": "peakShaving.reserveW",
-          "xs": 12,
-          "sm": 6,
-          "md": 6,
-          "expert": true
-        },
-        "peakShaving.smoothingSeconds": {
-          "type": "number",
-          "label": "Glättung (s) (optional)",
-          "min": 1,
-          "max": 600,
-          "step": 1,
-          "default": 10,
-          "attr": "peakShaving.smoothingSeconds",
-          "xs": 12,
-          "sm": 6,
-          "md": 6,
-          "expert": true
-        },
-        "peakShaving.hysteresisW": {
-          "type": "number",
-          "label": "Hysterese (W) (optional)",
-          "min": 0,
-          "max": 1000000,
-          "step": 50,
-          "default": 500,
-          "attr": "peakShaving.hysteresisW",
-          "xs": 12,
-          "sm": 6,
-          "md": 6,
-          "expert": true
         },
         "enableGridConstraints": {
           "type": "checkbox",
@@ -1224,6 +1139,1292 @@
           "xs": 12,
           "sm": 6,
           "md": 6,
+          "expert": true
+        }
+      }
+    },
+    {
+      "type": "panel",
+      "label": "EMS – Charging",
+      "title": "EMS – Charging (Ladepunkte / Budgets)",
+      "name": "ems_charging",
+      "items": {
+        "cmInfo": {
+          "type": "header",
+          "text": "Hier stellst du die globale Charging‑Logik ein (Budget‑Modus, PV‑Quelle, Verhalten bei Peak‑Shaving, Stationen‑Fairness). Pro Ladepunkt steuerst du den Modus zur Laufzeit über chargingManagement.wallboxes.*.userMode.",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "chargingManagement.mode": {
+          "type": "select",
+          "label": "Charging‑Modus",
+          "attr": "chargingManagement.mode",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "options": [
+            {
+              "label": "off (keine Regelung)",
+              "value": "off"
+            },
+            {
+              "label": "pvSurplus (nur Überschuss)",
+              "value": "pvSurplus"
+            },
+            {
+              "label": "mixed (Standard)",
+              "value": "mixed"
+            }
+          ],
+          "default": "mixed",
+          "help": "Hinweis: Für die Praxis nutzt du meist 'mixed' + pro Ladepunkt userMode (auto/pv/minpv/boost)."
+        },
+        "chargingManagement.totalBudgetMode": {
+          "type": "select",
+          "label": "Gesamt‑Budget Modus",
+          "attr": "chargingManagement.totalBudgetMode",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "options": [
+            {
+              "label": "engine (empfohlen)",
+              "value": "engine"
+            },
+            {
+              "label": "unlimited",
+              "value": "unlimited"
+            },
+            {
+              "label": "static",
+              "value": "static"
+            },
+            {
+              "label": "fromDatapoint (VIS/Script)",
+              "value": "fromDatapoint"
+            },
+            {
+              "label": "fromPeakShaving",
+              "value": "fromPeakShaving"
+            }
+          ],
+          "default": "engine",
+          "help": "engine = kombiniert static + PeakShaving + optional Datapoint‑Budget. Für VIS‑Schalter eignet sich fromDatapoint."
+        },
+        "chargingManagement.staticMaxChargingPowerW": {
+          "type": "number",
+          "label": "Static Max Charging Power (W)",
+          "attr": "chargingManagement.staticMaxChargingPowerW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 11000,
+          "min": 0,
+          "max": 10000000,
+          "step": 50,
+          "help": "Nur relevant bei Budget‑Modus engine/static. 0 = kein Limit."
+        },
+        "chargingManagement.budgetPowerId": {
+          "type": "objectId",
+          "label": "Budget‑DP (W) (optional)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "chargingManagement.budgetPowerId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "help": "Wenn Budget‑Modus fromDatapoint oder engine: dieser Datenpunkt begrenzt das Gesamt‑Ladebudget."
+        },
+        "chargingManagement.gridPowerId": {
+          "type": "objectId",
+          "label": "Netzleistung‑DP (W) (optional)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "chargingManagement.gridPowerId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "help": "Optional: Netto‑Netzleistung (Import + / Export −). Wird für PV‑Überschuss‑Logik benötigt, wenn du keinen PV‑Surplus‑DP nutzt.",
+          "expert": true
+        },
+        "chargingManagement.pvSurplusPowerId": {
+          "type": "objectId",
+          "label": "PV‑Überschuss‑DP (W) (optional)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "chargingManagement.pvSurplusPowerId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "help": "Optional: echter Überschuss‑Datenpunkt. Wenn leer, wird aus Netzleistung abgeleitet (sofern vorhanden).",
+          "expert": true
+        },
+        "chargingManagement.stationAllocationMode": {
+          "type": "select",
+          "label": "Stations‑Verteilung (DC‑Stationen)",
+          "attr": "chargingManagement.stationAllocationMode",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "options": [
+            {
+              "label": "sequential (wie bisher)",
+              "value": "sequential"
+            },
+            {
+              "label": "roundRobin (fair, ohne Boost‑Connector)",
+              "value": "roundRobin"
+            }
+          ],
+          "default": "sequential",
+          "help": "Bei Stationsgruppen: roundRobin rotiert die Reihenfolge der nicht‑Boost‑Connectors pro Tick, damit niemand dauerhaft verhungert.",
+          "expert": true
+        },
+        "chargingManagement.pauseWhenPeakShavingActive": {
+          "type": "checkbox",
+          "label": "Bei Peak‑Shaving pausieren",
+          "attr": "chargingManagement.pauseWhenPeakShavingActive",
+          "default": true,
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "help": "Wenn Peak‑Shaving aktiv ist, kann Charging automatisch pausiert werden.",
+          "expert": true
+        },
+        "chargingManagement.pauseBehavior": {
+          "type": "select",
+          "label": "Pause‑Verhalten",
+          "attr": "chargingManagement.pauseBehavior",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "options": [
+            {
+              "label": "rampDownToZero (sicher)",
+              "value": "rampDownToZero"
+            },
+            {
+              "label": "followPeakBudget",
+              "value": "followPeakBudget"
+            }
+          ],
+          "default": "rampDownToZero",
+          "help": "rampDownToZero = Setpoints auf 0. followPeakBudget = Budget folgt Peak‑Budget (wenn verfügbar).",
+          "expert": true
+        },
+        "chargingManagement.staleTimeoutSec": {
+          "type": "number",
+          "label": "Stale Timeout (s)",
+          "attr": "chargingManagement.staleTimeoutSec",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 15,
+          "min": 1,
+          "max": 3600,
+          "step": 1,
+          "expert": true
+        },
+        "chargingManagement.activityThresholdW": {
+          "type": "number",
+          "label": "Activity Threshold (W)",
+          "attr": "chargingManagement.activityThresholdW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 200,
+          "min": 0,
+          "max": 1000000,
+          "step": 10,
+          "expert": true
+        },
+        "chargingManagement.stopGraceSec": {
+          "type": "number",
+          "label": "Stop Grace (s)",
+          "attr": "chargingManagement.stopGraceSec",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 30,
+          "min": 0,
+          "max": 3600,
+          "step": 1,
+          "expert": true
+        },
+        "chargingManagement.sessionKeepSec": {
+          "type": "number",
+          "label": "Session Keep (s)",
+          "attr": "chargingManagement.sessionKeepSec",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 300,
+          "min": 0,
+          "max": 86400,
+          "step": 10,
+          "expert": true
+        },
+        "chargingManagement.stepA": {
+          "type": "number",
+          "label": "Step A",
+          "attr": "chargingManagement.stepA",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 0.1,
+          "min": 0,
+          "max": 100,
+          "step": 0.1,
+          "expert": true
+        },
+        "chargingManagement.stepW": {
+          "type": "number",
+          "label": "Step W",
+          "attr": "chargingManagement.stepW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 25,
+          "min": 0,
+          "max": 100000,
+          "step": 1,
+          "expert": true
+        },
+        "chargingManagement.maxDeltaAPerTick": {
+          "type": "number",
+          "label": "Max ΔA/Tick",
+          "attr": "chargingManagement.maxDeltaAPerTick",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 0,
+          "min": 0,
+          "max": 1000,
+          "step": 0.1,
+          "expert": true
+        },
+        "chargingManagement.maxDeltaWPerTick": {
+          "type": "number",
+          "label": "Max ΔW/Tick",
+          "attr": "chargingManagement.maxDeltaWPerTick",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 0,
+          "min": 0,
+          "max": 1000000,
+          "step": 10,
+          "expert": true
+        },
+        "chargingManagement.acMinPower3pW": {
+          "type": "number",
+          "label": "AC Min Power 3‑ph (W)",
+          "attr": "chargingManagement.acMinPower3pW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 4200,
+          "min": 0,
+          "max": 100000,
+          "step": 50,
+          "expert": true
+        },
+        "chargingManagement.voltageV": {
+          "type": "number",
+          "label": "Spannung Default (V)",
+          "attr": "chargingManagement.voltageV",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 230,
+          "min": 50,
+          "max": 1000,
+          "step": 1,
+          "expert": true
+        },
+        "chargingManagement.defaultPhases": {
+          "type": "select",
+          "label": "Default Phasen",
+          "attr": "chargingManagement.defaultPhases",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "options": [
+            {
+              "label": "1",
+              "value": 1
+            },
+            {
+              "label": "3",
+              "value": 3
+            }
+          ],
+          "default": 3,
+          "expert": true
+        }
+      }
+    },
+    {
+      "type": "panel",
+      "label": "EMS – Peak Shaving",
+      "title": "EMS – Peak Shaving (Lastspitzenkappung)",
+      "name": "ems_peak",
+      "items": {
+        "psInfo": {
+          "type": "header",
+          "text": "Peak‑Shaving begrenzt den Netzbezug (Import). Optional kann es das Ladebudget automatisch reduzieren. Aktivierung erfolgt im EMS‑Tab.",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "peakShaving.mode": {
+          "type": "select",
+          "label": "Modus",
+          "attr": "peakShaving.mode",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "options": [
+            {
+              "label": "static (fester Grenzwert)",
+              "value": "static"
+            },
+            {
+              "label": "dynamic (Grenzwert aus Datenpunkt)",
+              "value": "dynamic"
+            }
+          ],
+          "default": "static"
+        },
+        "peakShaving.gridPointPowerId": {
+          "type": "objectId",
+          "label": "Netzleistung (W) – Import + / Export −",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "peakShaving.gridPointPowerId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "help": "Netto‑Wert: Import positiv, Export negativ. Pflicht für Peak‑Shaving."
+        },
+        "peakShaving.allowedPowerId": {
+          "type": "objectId",
+          "label": "Erlaubte Import‑Leistung DP (W) (dynamic)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "peakShaving.allowedPowerId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "help": "Nur im dynamic‑Modus: Externer DP, der den erlaubten Import‑Grenzwert liefert.",
+          "expert": true
+        },
+        "peakShaving.maxPowerW": {
+          "type": "number",
+          "label": "Max. Import (W)",
+          "attr": "peakShaving.maxPowerW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 0,
+          "min": 0,
+          "max": 10000000,
+          "step": 100,
+          "help": "static‑Modus: Grenzwert. 0 = keine Begrenzung."
+        },
+        "peakShaving.reserveW": {
+          "type": "number",
+          "label": "Reserve (W)",
+          "attr": "peakShaving.reserveW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 0,
+          "min": 0,
+          "max": 1000000,
+          "step": 50,
+          "expert": true
+        },
+        "peakShaving.safetyMarginW": {
+          "type": "number",
+          "label": "Safety‑Margin (W)",
+          "attr": "peakShaving.safetyMarginW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 0,
+          "min": 0,
+          "max": 1000000,
+          "step": 50,
+          "expert": true
+        },
+        "peakShaving.smoothingSeconds": {
+          "type": "number",
+          "label": "Glättung (s)",
+          "attr": "peakShaving.smoothingSeconds",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 10,
+          "min": 1,
+          "max": 600,
+          "step": 1,
+          "expert": true
+        },
+        "peakShaving.useAverage": {
+          "type": "checkbox",
+          "label": "Average/Glättung nutzen",
+          "attr": "peakShaving.useAverage",
+          "default": true,
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "expert": true
+        },
+        "peakShaving.hysteresisW": {
+          "type": "number",
+          "label": "Hysterese (W)",
+          "attr": "peakShaving.hysteresisW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 500,
+          "min": 0,
+          "max": 1000000,
+          "step": 50,
+          "expert": true
+        },
+        "peakShaving.activateDelaySeconds": {
+          "type": "number",
+          "label": "Aktivierungs‑Delay (s)",
+          "attr": "peakShaving.activateDelaySeconds",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 2,
+          "min": 0,
+          "max": 3600,
+          "step": 1,
+          "expert": true
+        },
+        "peakShaving.releaseDelaySeconds": {
+          "type": "number",
+          "label": "Release‑Delay (s)",
+          "attr": "peakShaving.releaseDelaySeconds",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 5,
+          "min": 0,
+          "max": 3600,
+          "step": 1,
+          "expert": true
+        },
+        "peakShaving.baseLoadPowerId": {
+          "type": "objectId",
+          "label": "Basislast DP (W) (optional)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "peakShaving.baseLoadPowerId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "help": "Optional: Haus‑Basislast (für Diagnose/Logik).",
+          "expert": true
+        },
+        "peakShaving.pvPowerId": {
+          "type": "objectId",
+          "label": "PV‑Leistung DP (W) (optional)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "peakShaving.pvPowerId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "help": "Optional: PV‑Istleistung (für Diagnose/Logik).",
+          "expert": true
+        },
+        "peakShaving.batteryPowerId": {
+          "type": "objectId",
+          "label": "Batterie‑Leistung DP (W) (optional)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "peakShaving.batteryPowerId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "help": "Optional: Speicher‑Istleistung (für Diagnose/Logik).",
+          "expert": true
+        }
+      }
+    },
+    {
+      "type": "panel",
+      "label": "EMS – Netz‑Constraints",
+      "title": "EMS – Netz‑Constraints (RLM / Nulleinspeisung)",
+      "name": "ems_grid",
+      "items": {
+        "gcInfo": {
+          "type": "header",
+          "text": "Grid‑Constraints: RLM (15‑min Demand) und Nulleinspeisung (PV‑Curtail). Aktivierung erfolgt im EMS‑Tab.",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "gridConstraints.gridPowerId": {
+          "type": "objectId",
+          "label": "Netzleistung‑DP (W) (optional)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "gridConstraints.gridPowerId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "help": "Optional: Wenn leer, wird peakShaving.gridPointPowerId genutzt (falls gesetzt).",
+          "expert": true
+        },
+        "gridConstraints.staleTimeoutSec": {
+          "type": "number",
+          "label": "Stale Timeout (s)",
+          "attr": "gridConstraints.staleTimeoutSec",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 15,
+          "min": 1,
+          "max": 3600,
+          "step": 1,
+          "expert": true
+        },
+        "gcRlmHeader": {
+          "type": "header",
+          "text": "RLM (15‑min Durchschnitt)",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "gridConstraints.rlmEnabled": {
+          "type": "checkbox",
+          "label": "RLM aktiv",
+          "attr": "gridConstraints.rlmEnabled",
+          "default": false,
+          "xs": 12,
+          "sm": 6,
+          "md": 6
+        },
+        "gridConstraints.rlmLimitW": {
+          "type": "number",
+          "label": "RLM Limit (W)",
+          "attr": "gridConstraints.rlmLimitW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 0,
+          "min": 0,
+          "max": 10000000,
+          "step": 100,
+          "help": "0 = aus. Setzt den 15‑min Durchschnitts‑Grenzwert."
+        },
+        "gridConstraints.rlmSafetyMarginW": {
+          "type": "number",
+          "label": "Safety‑Margin (W)",
+          "attr": "gridConstraints.rlmSafetyMarginW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 0,
+          "min": 0,
+          "max": 1000000,
+          "step": 50,
+          "expert": true
+        },
+        "gridConstraints.rlmAligned": {
+          "type": "checkbox",
+          "label": "RLM an Viertelstunden ausrichten",
+          "attr": "gridConstraints.rlmAligned",
+          "default": true,
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "expert": true
+        },
+        "gcZeroHeader": {
+          "type": "header",
+          "text": "Nulleinspeisung (Zero Export)",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "gridConstraints.zeroExportEnabled": {
+          "type": "checkbox",
+          "label": "Nulleinspeisung aktiv",
+          "attr": "gridConstraints.zeroExportEnabled",
+          "default": false,
+          "xs": 12,
+          "sm": 6,
+          "md": 6
+        },
+        "gridConstraints.zeroExportBiasW": {
+          "type": "number",
+          "label": "Import‑Bias (W)",
+          "attr": "gridConstraints.zeroExportBiasW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 80,
+          "min": 0,
+          "max": 10000,
+          "step": 10,
+          "help": "Ziel ist leicht positiver Import (verhindert Export‑Flattern).",
+          "expert": true
+        },
+        "gridConstraints.zeroExportDeadbandW": {
+          "type": "number",
+          "label": "Deadband (W)",
+          "attr": "gridConstraints.zeroExportDeadbandW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 50,
+          "min": 0,
+          "max": 5000,
+          "step": 10,
+          "expert": true
+        },
+        "gcPvHeader": {
+          "type": "header",
+          "text": "PV‑Curtail (Wechselrichter‑Limit)",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "gridConstraints.pvCurtailMode": {
+          "type": "select",
+          "label": "Curtail‑Modus",
+          "attr": "gridConstraints.pvCurtailMode",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "options": [
+            {
+              "label": "auto",
+              "value": "auto"
+            },
+            {
+              "label": "off",
+              "value": "off"
+            },
+            {
+              "label": "feedInLimitW (Einspeiselimit)",
+              "value": "feedInLimitW"
+            },
+            {
+              "label": "pvLimitW (PV Limit W)",
+              "value": "pvLimitW"
+            },
+            {
+              "label": "pvLimitPct (PV Limit %)",
+              "value": "pvLimitPct"
+            }
+          ],
+          "default": "auto",
+          "expert": true
+        },
+        "gridConstraints.pvFeedInLimitWId": {
+          "type": "objectId",
+          "label": "Einspeise‑Limit‑DP (W) (write)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "gridConstraints.pvFeedInLimitWId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "expert": true
+        },
+        "gridConstraints.pvLimitWId": {
+          "type": "objectId",
+          "label": "PV‑Limit‑DP (W) (write)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "gridConstraints.pvLimitWId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "expert": true
+        },
+        "gridConstraints.pvLimitPctId": {
+          "type": "objectId",
+          "label": "PV‑Limit‑DP (%) (write)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "gridConstraints.pvLimitPctId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "expert": true
+        },
+        "gridConstraints.pvRatedPowerWId": {
+          "type": "objectId",
+          "label": "PV Nennleistung‑DP (W) (read)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "gridConstraints.pvRatedPowerWId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "expert": true
+        },
+        "gridConstraints.pvCurtailFastTripExportW": {
+          "type": "number",
+          "label": "Fast‑Trip Export (W)",
+          "attr": "gridConstraints.pvCurtailFastTripExportW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 500,
+          "min": 0,
+          "max": 1000000,
+          "step": 50,
+          "expert": true
+        },
+        "gridConstraints.pvCurtailMaxDeltaWPerTick": {
+          "type": "number",
+          "label": "Max ΔW/Tick (Curtail)",
+          "attr": "gridConstraints.pvCurtailMaxDeltaWPerTick",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 8000,
+          "min": 0,
+          "max": 1000000,
+          "step": 50,
+          "expert": true
+        },
+        "gridConstraints.pvCurtailMaxDeltaPctPerTick": {
+          "type": "number",
+          "label": "Max Δ%/Tick (Curtail)",
+          "attr": "gridConstraints.pvCurtailMaxDeltaPctPerTick",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 10,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "expert": true
+        }
+      }
+    },
+    {
+      "type": "panel",
+      "label": "EMS – Speicher",
+      "title": "EMS – Speicher (Mapping & Regelung)",
+      "name": "ems_storage",
+      "items": {
+        "stInfo": {
+          "type": "header",
+          "text": "Speicher‑Mapping (Datenpunkte) und Regelung. Aktivierung erfolgt im EMS‑Tab. In dieser Stufe wird primär Sollleistung (W) geschrieben.",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "storage.controlMode": {
+          "type": "select",
+          "label": "Steuerungsart",
+          "attr": "storage.controlMode",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "options": [
+            {
+              "label": "targetPower (Sollleistung W)",
+              "value": "targetPower"
+            }
+          ],
+          "default": "targetPower",
+          "expert": true
+        },
+        "storage.staleTimeoutSec": {
+          "type": "number",
+          "label": "Stale Timeout (s)",
+          "attr": "storage.staleTimeoutSec",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 15,
+          "min": 1,
+          "max": 3600,
+          "step": 1,
+          "expert": true
+        },
+        "stMapHeader": {
+          "type": "header",
+          "text": "Datenpunkt‑Zuordnung",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "storage.datapoints.socObjectId": {
+          "type": "objectId",
+          "label": "SoC‑DP (%)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "storage.datapoints.socObjectId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "help": "Speicher Ladezustand in %."
+        },
+        "storage.datapoints.socScale": {
+          "type": "number",
+          "label": "SoC Scale",
+          "attr": "storage.datapoints.socScale",
+          "xs": 12,
+          "sm": 6,
+          "md": 4,
+          "default": 1,
+          "min": 0,
+          "max": 100,
+          "step": 0.01,
+          "expert": true
+        },
+        "storage.datapoints.batteryPowerObjectId": {
+          "type": "objectId",
+          "label": "Ist‑Leistung‑DP (W) (optional)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "storage.datapoints.batteryPowerObjectId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "expert": true
+        },
+        "storage.datapoints.batteryPowerScale": {
+          "type": "number",
+          "label": "Ist‑Leistung Scale",
+          "attr": "storage.datapoints.batteryPowerScale",
+          "xs": 12,
+          "sm": 6,
+          "md": 4,
+          "default": 1,
+          "min": 0,
+          "max": 1000,
+          "step": 0.01,
+          "expert": true
+        },
+        "storage.datapoints.batteryPowerInvert": {
+          "type": "checkbox",
+          "label": "Ist‑Leistung invert",
+          "attr": "storage.datapoints.batteryPowerInvert",
+          "default": false,
+          "xs": 12,
+          "sm": 6,
+          "md": 4,
+          "expert": true
+        },
+        "storage.datapoints.targetPowerObjectId": {
+          "type": "objectId",
+          "label": "Soll‑Leistung‑DP (W) (write)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "storage.datapoints.targetPowerObjectId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "help": "Sollleistung‑Datenpunkt (write)."
+        },
+        "storage.datapoints.targetPowerScale": {
+          "type": "number",
+          "label": "Soll‑Leistung Scale",
+          "attr": "storage.datapoints.targetPowerScale",
+          "xs": 12,
+          "sm": 6,
+          "md": 4,
+          "default": 1,
+          "min": 0,
+          "max": 1000,
+          "step": 0.01,
+          "expert": true
+        },
+        "storage.datapoints.targetPowerInvert": {
+          "type": "checkbox",
+          "label": "Soll‑Leistung invert",
+          "attr": "storage.datapoints.targetPowerInvert",
+          "default": false,
+          "xs": 12,
+          "sm": 6,
+          "md": 4,
+          "expert": true
+        },
+        "storage.datapoints.maxChargeObjectId": {
+          "type": "objectId",
+          "label": "Max‑Ladeleistung‑DP (optional)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "storage.datapoints.maxChargeObjectId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "expert": true
+        },
+        "storage.datapoints.maxDischargeObjectId": {
+          "type": "objectId",
+          "label": "Max‑Entladeleistung‑DP (optional)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "storage.datapoints.maxDischargeObjectId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "expert": true
+        },
+        "storage.datapoints.chargeEnableObjectId": {
+          "type": "objectId",
+          "label": "Laden erlaubt‑DP (optional)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "storage.datapoints.chargeEnableObjectId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "expert": true
+        },
+        "storage.datapoints.dischargeEnableObjectId": {
+          "type": "objectId",
+          "label": "Entladen erlaubt‑DP (optional)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "storage.datapoints.dischargeEnableObjectId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "expert": true
+        },
+        "storage.datapoints.reserveSocObjectId": {
+          "type": "objectId",
+          "label": "Reserve‑SoC‑DP (optional)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "storage.datapoints.reserveSocObjectId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "Objekt auswählen …",
+          "style": {
+            "minWidth": "320px",
+            "fontFamily": "monospace"
+          },
+          "multiline": true,
+          "rows": 2,
+          "showName": true,
+          "expert": true
+        },
+        "stCtrlHeader": {
+          "type": "header",
+          "text": "Regelung / Grenzen",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "storage.maxChargeW": {
+          "type": "number",
+          "label": "Max Charge (W)",
+          "attr": "storage.maxChargeW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 5000,
+          "min": 0,
+          "max": 1000000,
+          "step": 50,
+          "expert": true
+        },
+        "storage.maxDischargeW": {
+          "type": "number",
+          "label": "Max Discharge (W)",
+          "attr": "storage.maxDischargeW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 5000,
+          "min": 0,
+          "max": 1000000,
+          "step": 50,
+          "expert": true
+        },
+        "storage.stepW": {
+          "type": "number",
+          "label": "Step (W)",
+          "attr": "storage.stepW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 50,
+          "min": 0,
+          "max": 10000,
+          "step": 1,
+          "expert": true
+        },
+        "storage.maxDeltaWPerTick": {
+          "type": "number",
+          "label": "Max ΔW/Tick",
+          "attr": "storage.maxDeltaWPerTick",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 500,
+          "min": 0,
+          "max": 100000,
+          "step": 10,
+          "expert": true
+        },
+        "storage.reserveEnabled": {
+          "type": "checkbox",
+          "label": "Reserve aktiv (Notstrom)",
+          "attr": "storage.reserveEnabled",
+          "default": true,
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "expert": true
+        },
+        "storage.reserveMinSocPct": {
+          "type": "number",
+          "label": "Reserve Min SoC (%)",
+          "attr": "storage.reserveMinSocPct",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 10,
+          "min": 0,
+          "max": 100,
+          "step": 0.1,
+          "expert": true
+        },
+        "storage.pvEnabled": {
+          "type": "checkbox",
+          "label": "PV‑Überschuss‑Laden aktiv",
+          "attr": "storage.pvEnabled",
+          "default": true,
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "expert": true
+        },
+        "storage.pvExportThresholdW": {
+          "type": "number",
+          "label": "PV‑Schwelle Export (W)",
+          "attr": "storage.pvExportThresholdW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 200,
+          "min": 0,
+          "max": 100000,
+          "step": 10,
           "expert": true
         }
       }

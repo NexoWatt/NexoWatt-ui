@@ -82,6 +82,8 @@ class ChargingManagementModule extends BaseModule {
     constructor(adapter, dpRegistry) {
         super(adapter, dpRegistry);
         this._known = new Set(); // wallbox channels created
+        this._knownStations = new Set(); // station channels created
+        this._stationRoundRobinOffset = new Map(); // stationKey -> next offset for round-robin fairness
         this._chargingSinceMs = new Map(); // safeKey -> ms since epoch
         this._chargingLastActiveMs = new Map(); // safeKey -> ms of last detected activity
         this._chargingLastSeenMs = new Map(); // safeKey -> ms of last processing (cleanup)
@@ -115,6 +117,12 @@ class ChargingManagementModule extends BaseModule {
             native: {},
         });
 
+        await this.adapter.setObjectNotExistsAsync('chargingManagement.stations', {
+            type: 'channel',
+            common: { name: 'Stations' },
+            native: {},
+        });
+
         const mk = async (id, name, type, role) => {
             await this.adapter.setObjectNotExistsAsync(id, {
                 type: 'state',
@@ -124,6 +132,7 @@ class ChargingManagementModule extends BaseModule {
         };
 
         await mk('chargingManagement.wallboxCount', 'Ladepunkt count', 'number', 'value');
+        await mk('chargingManagement.stationCount', 'Station count', 'number', 'value');
         await mk('chargingManagement.summary.totalPowerW', 'Total power (W)', 'number', 'value.power');
         await mk('chargingManagement.summary.totalCurrentA', 'Total current (A)', 'number', 'value.current');
         await mk('chargingManagement.summary.onlineWallboxes', 'Online Ladepunkte', 'number', 'value');
@@ -236,6 +245,49 @@ class ChargingManagementModule extends BaseModule {
         return ch;
     }
 
+
+    async _ensureStationChannel(stationKey) {
+        const safe = toSafeIdPart(stationKey);
+        const ch = `chargingManagement.stations.${safe}`;
+        if (this._knownStations.has(ch)) return ch;
+
+        await this.adapter.setObjectNotExistsAsync('chargingManagement.stations', {
+            type: 'channel',
+            common: { name: 'Stations' },
+            native: {},
+        });
+
+        await this.adapter.setObjectNotExistsAsync(ch, {
+            type: 'channel',
+            common: { name: safe || String(stationKey || '') || 'station' },
+            native: {},
+        });
+
+        const mk = async (id, name, type, role) => {
+            await this.adapter.setObjectNotExistsAsync(`${ch}.${id}`, {
+                type: 'state',
+                common: { name, type, role, read: true, write: false },
+                native: {},
+            });
+        };
+
+        await mk('stationKey', 'Station key', 'string', 'text');
+        await mk('name', 'Name', 'string', 'text');
+        await mk('maxPowerW', 'Max power (W)', 'number', 'value.power');
+        await mk('remainingW', 'Remaining (W)', 'number', 'value.power');
+        await mk('usedW', 'Used (W)', 'number', 'value.power');
+        await mk('targetSumW', 'Target sum (W)', 'number', 'value.power');
+        await mk('connectorCount', 'Connector count', 'number', 'value');
+        await mk('boostConnectors', 'Boost connectors', 'number', 'value');
+        await mk('pvLimitedConnectors', 'PV-limited connectors', 'number', 'value');
+        await mk('connectors', 'Connectors (safe keys)', 'string', 'text');
+        await mk('lastUpdate', 'Last update', 'number', 'value.time');
+
+        this._knownStations.add(ch);
+        return ch;
+    }
+
+
     async _getPeakShavingActive() {
         try {
             const st = await this.adapter.getStateAsync('peakShaving.control.active');
@@ -271,10 +323,14 @@ class ChargingManagementModule extends BaseModule {
         const stationGroups = Array.isArray(cfg.stationGroups) ? cfg.stationGroups : [];
         /** @type {Map<string, number>} */
         const stationCapByKey = new Map();
+        /** @type {Map<string, string>} */
+        const stationNameByKey = new Map();
         for (const g of stationGroups) {
             if (!g) continue;
             const sk = String(g.stationKey || '').trim();
             if (!sk) continue;
+            const sName = (typeof g.name === 'string' && g.name.trim()) ? g.name.trim() : '';
+            if (sName) stationNameByKey.set(sk, sName);
 
             // Allow config in W (maxPowerW) or kW (maxPowerKw)
             let capW = null;
@@ -961,7 +1017,45 @@ if (components.length) {
                 });
             }
 
-            await this.adapter.setStateAsync('chargingManagement.summary.totalTargetPowerW', totalTargetPowerW, true);
+    
+        // ---- Stations (DC multi-connector) diagnostics ----
+        try {
+            const stationKeys = Array.from(stationCapW.keys());
+            await this.adapter.setStateAsync('chargingManagement.stationCount', stationKeys.length, true);
+
+            for (const sk of stationKeys) {
+                const ch = await this._ensureStationChannel(sk);
+                const cap = stationCapW.get(sk);
+                const rem = stationRemainingW.get(sk);
+                const used = (typeof cap === 'number' && Number.isFinite(cap) && typeof rem === 'number' && Number.isFinite(rem))
+                    ? Math.max(0, cap - rem)
+                    : 0;
+
+                const name = stationNameByKey.get(sk) || '';
+                const targetSum = stationTargetSumW.get(sk) || 0;
+                const cnt = stationConnectorCount.get(sk) || 0;
+                const bc = stationBoostCount.get(sk) || 0;
+                const pvc = stationPvLimitedCount.get(sk) || 0;
+                const connsSet = stationConnectors.get(sk);
+                const conns = connsSet ? Array.from(connsSet).filter(s => s).join(',') : '';
+
+                await this.adapter.setStateAsync(`${ch}.stationKey`, sk, true);
+                await this.adapter.setStateAsync(`${ch}.name`, name, true);
+                await this.adapter.setStateAsync(`${ch}.maxPowerW`, (typeof cap === 'number' && Number.isFinite(cap)) ? cap : 0, true);
+                await this.adapter.setStateAsync(`${ch}.remainingW`, (typeof rem === 'number' && Number.isFinite(rem)) ? rem : 0, true);
+                await this.adapter.setStateAsync(`${ch}.usedW`, used, true);
+                await this.adapter.setStateAsync(`${ch}.targetSumW`, targetSum, true);
+                await this.adapter.setStateAsync(`${ch}.connectorCount`, cnt, true);
+                await this.adapter.setStateAsync(`${ch}.boostConnectors`, bc, true);
+                await this.adapter.setStateAsync(`${ch}.pvLimitedConnectors`, pvc, true);
+                await this.adapter.setStateAsync(`${ch}.connectors`, conns, true);
+                await this.adapter.setStateAsync(`${ch}.lastUpdate`, Date.now(), true);
+            }
+        } catch {
+            // ignore
+        }
+
+        await this.adapter.setStateAsync('chargingManagement.summary.totalTargetPowerW', totalTargetPowerW, true);
             await this.adapter.setStateAsync('chargingManagement.summary.totalTargetCurrentA', totalTargetCurrentA, true);
             await this.adapter.setStateAsync('chargingManagement.summary.lastUpdate', Date.now(), true);
 
@@ -1171,6 +1265,49 @@ if (components.length) {
                 return ask.localeCompare(bsk);
             });
 
+
+        // MU3.1.1 (Sprint 3.1): Optional round-robin fairness within station groups.
+        // This keeps overall prioritization, but rotates the order of NON-boost connectors inside the same station
+        // so that one connector does not always take the full station cap first.
+        const stationAllocMode = String(cfg.stationAllocationMode || 'sequential').trim().toLowerCase();
+        if (stationAllocMode === 'roundrobin' || stationAllocMode === 'round_robin' || stationAllocMode === 'rr') {
+            /** @type {Map<string, number[]>} */
+            const idxByStation = new Map();
+            for (let i = 0; i < sorted.length; i++) {
+                const w = sorted[i];
+                const sk = String(w.stationKey || '').trim();
+                if (!sk) continue;
+                // Only for real station groups (cap > 0)
+                const cap = w.stationMaxPowerW;
+                if (typeof cap !== 'number' || !Number.isFinite(cap) || cap <= 0) continue;
+                // Keep boost connectors at the top: rotate only non-boost connectors.
+                if (String(w.effectiveMode || '') === 'boost') continue;
+
+                const arr = idxByStation.get(sk) || [];
+                arr.push(i);
+                idxByStation.set(sk, arr);
+            }
+
+            for (const [sk, positions] of idxByStation.entries()) {
+                const n = positions.length;
+                if (n <= 1) continue;
+
+                const prev = this._stationRoundRobinOffset.get(sk);
+                const offset = (typeof prev === 'number' && Number.isFinite(prev) ? prev : 0) % n;
+
+                if (offset > 0) {
+                    const elems = positions.map(pos => sorted[pos]);
+                    const rotated = elems.slice(offset).concat(elems.slice(0, offset));
+                    for (let j = 0; j < n; j++) {
+                        sorted[positions[j]] = rotated[j];
+                    }
+                }
+
+                this._stationRoundRobinOffset.set(sk, (offset + 1) % n);
+            }
+        }
+
+
         // MU3.1: expose allocation order for transparency
         for (let i = 0; i < sorted.length; i++) {
             const w = sorted[i];
@@ -1190,6 +1327,33 @@ if (components.length) {
             const prev = stationRemainingW.get(sk);
             stationRemainingW.set(sk, (typeof prev === 'number' && Number.isFinite(prev)) ? Math.min(prev, cap) : cap);
         }
+
+        // Ensure all configured station groups exist in the map (even if currently no connector is online)
+        for (const [sk, cap] of stationCapByKey.entries()) {
+            const prev = stationRemainingW.get(sk);
+            if (typeof prev !== 'number' || !Number.isFinite(prev)) {
+                stationRemainingW.set(sk, cap);
+            }
+        }
+
+        // Copy initial station caps for diagnostics (stationCapW remains constant within this tick)
+        /** @type {Map<string, number>} */
+        const stationCapW = new Map();
+        for (const [sk, cap] of stationRemainingW.entries()) {
+            if (typeof cap === 'number' && Number.isFinite(cap) && cap > 0) stationCapW.set(sk, cap);
+        }
+
+        // Station diagnostics accumulators
+        /** @type {Map<string, number>} */
+        const stationTargetSumW = new Map();
+        /** @type {Map<string, number>} */
+        const stationConnectorCount = new Map();
+        /** @type {Map<string, number>} */
+        const stationBoostCount = new Map();
+        /** @type {Map<string, number>} */
+        const stationPvLimitedCount = new Map();
+        /** @type {Map<string, Set<string>>} */
+        const stationConnectors = new Map();
 
         const debugAlloc = [];
         // MU4.1: publish budget engine inputs for transparency in debug output
@@ -1219,6 +1383,18 @@ if (components.length) {
             const isPvOnly = effMode === 'pv';
             const isMinPv = effMode === 'minpv';
             const isBoost = effMode === 'boost';
+
+            // Station diagnostics: count active connectors per station (only if station group has a cap)
+            const _sk = (w.stationKey && stationCapW && stationCapW.has(w.stationKey)) ? String(w.stationKey) : '';
+            if (_sk) {
+                stationConnectorCount.set(_sk, (stationConnectorCount.get(_sk) || 0) + 1);
+                if (isBoost) stationBoostCount.set(_sk, (stationBoostCount.get(_sk) || 0) + 1);
+                if (isPvOnly || isMinPv) stationPvLimitedCount.set(_sk, (stationPvLimitedCount.get(_sk) || 0) + 1);
+                const set = stationConnectors.get(_sk) || new Set();
+                set.add(String(w.safe || ''));
+                stationConnectors.set(_sk, set);
+            }
+
 
             let targetW = 0;
             let targetA = 0;
@@ -1368,6 +1544,11 @@ if (components.length) {
                 } else {
                     cmdA = 0;
                 }
+            }
+
+            // Station diagnostics: sum commanded power per station
+            if (_sk) {
+                stationTargetSumW.set(_sk, (stationTargetSumW.get(_sk) || 0) + cmdW);
             }
 
             // Apply total budget accounting (use commanded power)
