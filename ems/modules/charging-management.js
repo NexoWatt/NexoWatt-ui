@@ -87,6 +87,7 @@ class ChargingManagementModule extends BaseModule {
         this._chargingSinceMs = new Map(); // safeKey -> ms since epoch
         this._chargingLastActiveMs = new Map(); // safeKey -> ms of last detected activity
         this._chargingLastSeenMs = new Map(); // safeKey -> ms of last processing (cleanup)
+        this._boostSinceMs = new Map(); // safeKey -> ms since epoch (boost start)
         this._lastCmdTargetW = new Map(); // safeKey -> last commanded target power (for ramp limiting)
         this._lastCmdTargetA = new Map(); // safeKey -> last commanded target current (for ramp limiting)
         this._lastDiagLogMs = 0; // MU6.2: rate limit diagnostics log
@@ -224,6 +225,11 @@ class ChargingManagementModule extends BaseModule {
         await mk('connectorNo', 'Connector no.', 'number', 'value');
         await mk('stationMaxPowerW', 'Station max power (W)', 'number', 'value.power');
         await mk('allowBoost', 'Boost allowed', 'boolean', 'indicator');
+        await mk('boostActive', 'Boost active', 'boolean', 'indicator');
+        await mk('boostSince', 'Boost since (ms)', 'number', 'value.time');
+        await mk('boostUntil', 'Boost until (ms)', 'number', 'value.time');
+        await mk('boostRemainingMin', 'Boost remaining (min)', 'number', 'value');
+        await mk('boostTimeoutMin', 'Boost timeout (min) (effective)', 'number', 'value');
         await mk('phases', 'Phases', 'number', 'value');
         await mk('minPowerW', 'Min power (W)', 'number', 'value.power');
         await mk('maxPowerW', 'Max power (W)', 'number', 'value.power');
@@ -359,6 +365,10 @@ class ChargingManagementModule extends BaseModule {
         const stopGraceMs = stopGraceSec * 1000;
         const sessionKeepMs = Math.max(sessionKeepSec, stopGraceSec) * 1000;
         const sessionCleanupStaleMs = Math.max(sessionKeepMs * 2, 30 * 60 * 1000); // avoid memory leaks for removed wallboxes
+
+        // Boost timeouts (minutes). Default: DC=60 (1h), AC=300 (5h). Set to 0 to disable auto-timeout.
+        const boostTimeoutMinAc = clamp(num(cfg.boostTimeoutMinAc, 300), 0, 1000000);
+        const boostTimeoutMinDc = clamp(num(cfg.boostTimeoutMinDc, 60), 0, 1000000);
         // Budget selection
         const budgetMode = String(cfg.totalBudgetMode || 'unlimited'); // unlimited | static | fromPeakShaving | fromDatapoint
         const staticBudgetW = clamp(num(cfg.staticMaxChargingPowerW, 0), 0, 1e12);
@@ -436,6 +446,9 @@ class ChargingManagementModule extends BaseModule {
             const stationKey = String(wb.stationKey || '').trim();
             const connectorNo = clamp(num(wb.connectorNo, 0), 0, 9999);
             const allowBoost = wb.allowBoost !== false;
+
+            // Optional per-wallbox boost timeout override (minutes). 0/empty = use global default by chargerType
+            const boostTimeoutMinOverride = clamp(num(wb.boostTimeoutMin, null), 0, 1000000);
 
             const stationMaxPowerW = (stationKey && stationCapByKey.has(stationKey))
                 ? stationCapByKey.get(stationKey)
@@ -657,6 +670,7 @@ class ChargingManagementModule extends BaseModule {
                 connectorNo,
                 stationMaxPowerW,
                 allowBoost,
+                boostTimeoutMinOverride,
                 priority,
                 chargerType,
                 controlBasis,
@@ -744,7 +758,68 @@ class ChargingManagementModule extends BaseModule {
 
         for (const w of wbList) {
             let override = normalizeWallboxModeOverride(w.userMode);
-            if (override === 'boost' && w.allowBoost === false) override = 'auto';
+            const boostNotAllowed = (override === 'boost' && w.allowBoost === false);
+            if (boostNotAllowed) {
+                override = 'auto';
+                // If boost is disabled for this chargepoint, reset runtime mode to avoid confusing UI
+                try {
+                    await this.adapter.setStateAsync(`${w.ch}.userMode`, 'auto', true);
+                } catch {
+                    // ignore
+                }
+            }
+
+            // Effective boost timeout (minutes): per-wallbox override > global by charger type
+            const typeDefaultMin = (String(w.chargerType || '').toUpperCase() === 'DC') ? boostTimeoutMinDc : boostTimeoutMinAc;
+            const effBoostTimeoutMin = (Number.isFinite(Number(w.boostTimeoutMinOverride)) && Number(w.boostTimeoutMinOverride) > 0)
+                ? Number(w.boostTimeoutMinOverride)
+                : typeDefaultMin;
+
+            // Boost runtime timer: starts when the chargepoint is actually charging in boost mode
+            let boostSince = this._boostSinceMs.get(w.safe) || 0;
+            let boostUntil = 0;
+            let boostRemainingMin = 0;
+            let boostTimedOut = false;
+
+            if (override === 'boost') {
+                const timeoutMs = (effBoostTimeoutMin > 0) ? Math.round(effBoostTimeoutMin * 60 * 1000) : 0;
+
+                if ((!boostSince || !Number.isFinite(boostSince)) && w.charging) {
+                    boostSince = now;
+                }
+
+                if (timeoutMs > 0 && boostSince && Number.isFinite(boostSince)) {
+                    boostUntil = boostSince + timeoutMs;
+                    boostRemainingMin = Math.max(0, Math.ceil((boostUntil - now) / 60000));
+
+                    if (now >= boostUntil) {
+                        boostTimedOut = true;
+                        override = 'auto';
+                        this._boostSinceMs.delete(w.safe);
+                        boostSince = 0;
+                        boostUntil = 0;
+                        boostRemainingMin = 0;
+
+                        // Switch off boost in runtime state (so VIS toggles back)
+                        try {
+                            await this.adapter.setStateAsync(`${w.ch}.userMode`, 'auto', true);
+                        } catch {
+                            // ignore
+                        }
+                    } else {
+                        this._boostSinceMs.set(w.safe, boostSince);
+                    }
+                } else {
+                    // No timeout configured (0) or not started yet
+                    if (boostSince && Number.isFinite(boostSince)) this._boostSinceMs.set(w.safe, boostSince);
+                }
+            } else {
+                // Not in boost: clear timer state
+                this._boostSinceMs.delete(w.safe);
+                boostSince = 0;
+            }
+
+            // Determine effective per-wallbox mode (after possible timeout/not-allowed handling)
             let eff = 'normal';
 
             if (override === 'boost') {
@@ -760,15 +835,23 @@ class ChargingManagementModule extends BaseModule {
             }
 
             w.effectiveMode = eff;
+            w._boostTimedOut = boostTimedOut;
+            w._boostNotAllowed = boostNotAllowed;
+            w._boostTimeoutMinEffective = effBoostTimeoutMin;
 
             if (w.enabled && w.online) {
                 if (eff === 'pv' || eff === 'minpv') anyPvLimitedActive = true;
                 if (eff === 'boost' || eff === 'minpv' || eff === 'normal') anyGridAllowedActive = true;
             }
 
-            // Expose effective mode for VIS/debugging
+            // Expose effective mode + boost runtime details for VIS/debugging
             try {
                 await this.adapter.setStateAsync(`${w.ch}.effectiveMode`, eff, true);
+                await this.adapter.setStateAsync(`${w.ch}.boostTimeoutMin`, Number.isFinite(effBoostTimeoutMin) ? effBoostTimeoutMin : 0, true);
+                await this.adapter.setStateAsync(`${w.ch}.boostActive`, eff === 'boost', true);
+                await this.adapter.setStateAsync(`${w.ch}.boostSince`, boostSince || 0, true);
+                await this.adapter.setStateAsync(`${w.ch}.boostUntil`, boostUntil || 0, true);
+                await this.adapter.setStateAsync(`${w.ch}.boostRemainingMin`, boostRemainingMin || 0, true);
             } catch {
                 // ignore
             }
@@ -1075,6 +1158,7 @@ if (components.length) {
                     this._chargingSinceMs.delete(safeKey);
                     this._lastCmdTargetW.delete(safeKey);
                     this._lastCmdTargetA.delete(safeKey);
+                    this._boostSinceMs.delete(safeKey);
                 }
             }
 
@@ -1101,6 +1185,7 @@ if (components.length) {
                     this._chargingSinceMs.delete(safeKey);
                     this._lastCmdTargetW.delete(safeKey);
                     this._lastCmdTargetA.delete(safeKey);
+                    this._boostSinceMs.delete(safeKey);
                 }
             }
 
@@ -1709,6 +1794,7 @@ if (components.length) {
                     this._chargingSinceMs.delete(safeKey);
                     this._lastCmdTargetW.delete(safeKey);
                     this._lastCmdTargetA.delete(safeKey);
+                    this._boostSinceMs.delete(safeKey);
                 }
             }
 

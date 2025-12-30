@@ -28,6 +28,10 @@ const ReasonCodes = Object.freeze({
     NO_PV_SURPLUS: 'NO_PV_SURPLUS',
     PAUSED_BY_PEAK_SHAVING: 'PAUSED_BY_PEAK_SHAVING',
 
+    // Boost
+    BOOST_TIMEOUT: 'BOOST_TIMEOUT',
+    BOOST_NOT_ALLOWED: 'BOOST_NOT_ALLOWED',
+
     // Availability / state
     DISABLED: 'DISABLED',
     OFFLINE: 'OFFLINE',
@@ -49,6 +53,9 @@ function normalizeReason(input) {
     // Common historical lower/underscore forms
     if (up === 'STALE_METER' || up === 'STALE-METER' || up === 'STALEMETER') return ReasonCodes.STALE_METER;
     if (up === 'PAUSED_BY_PEAK_SHAVING' || up === 'PAUSED-BY-PEAK-SHAVING') return ReasonCodes.PAUSED_BY_PEAK_SHAVING;
+
+    if (up === 'BOOST_TIMEOUT' || up === 'BOOST-TIMEOUT' || up === 'BOOSTEXPIRED' || up === 'BOOST_EXPIRED') return ReasonCodes.BOOST_TIMEOUT;
+    if (up === 'BOOST_NOT_ALLOWED' || up === 'BOOST-NOT-ALLOWED' || up === 'BOOSTNOTALLOWED') return ReasonCodes.BOOST_NOT_ALLOWED;
 
     // PeakShaving legacy
     if (up === 'OK') return ReasonCodes.OK;

@@ -166,6 +166,8 @@ class EmsEngine {
       const stationKey = (typeof wb.stationKey === 'string' && wb.stationKey.trim()) ? wb.stationKey.trim() : '';
       const connectorNo = (Number.isFinite(Number(wb.connectorNo)) && Number(wb.connectorNo) > 0) ? Math.round(Number(wb.connectorNo)) : 0;
       const allowBoost = (wb.allowBoost !== false);
+      const boostTimeoutMin = (Number.isFinite(Number(wb.boostTimeoutMin)) && Number(wb.boostTimeoutMin) > 0) ? Number(wb.boostTimeoutMin) : 0;
+
 
       wallboxes.push({
         key,
@@ -181,6 +183,8 @@ class EmsEngine {
         ...(stationKey ? { stationKey } : {}),
         ...(connectorNo > 0 ? { connectorNo } : {}),
         ...(allowBoost === false ? { allowBoost: false } : { allowBoost: true }),
+        ...(boostTimeoutMin > 0 ? { boostTimeoutMin } : {}),
+
 
         // limits
         ...(minA > 0 ? { minA } : {}),
@@ -234,6 +238,10 @@ class EmsEngine {
       // Global stepping defaults (per wallbox overrides possible)
       stepA: 0.1,
       stepW: 25,
+
+      // Boost timeouts (minutes). Defaults: AC=300 (5h), DC=60 (1h). 0 = no auto-timeout.
+      boostTimeoutMinAc: 300,
+      boostTimeoutMinDc: 60,
 
       // Station groups (optional)
       ...(stationGroups.length ? { stationGroups } : {}),
@@ -304,6 +312,12 @@ class EmsEngine {
 
       const stationMode_ = (typeof userCm.stationAllocationMode === 'string') ? userCm.stationAllocationMode.trim() : '';
       if (stationMode_) chargingCfg.stationAllocationMode = stationMode_;
+
+      const btAc_ = Number(userCm.boostTimeoutMinAc);
+      if (Number.isFinite(btAc_) && btAc_ >= 0) chargingCfg.boostTimeoutMinAc = btAc_;
+
+      const btDc_ = Number(userCm.boostTimeoutMinDc);
+      if (Number.isFinite(btDc_) && btDc_ >= 0) chargingCfg.boostTimeoutMinDc = btDc_;
     } catch (_e) {}
 
     return { anyControl, chargingCfg, stationGroups, stationGroupMap };

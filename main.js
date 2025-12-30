@@ -174,6 +174,8 @@ async syncInstallerConfigToStates() {
         ? Math.max(0, Math.round(Number(row.connectorNo)))
         : 0;
       const allowBoost = (row && row.allowBoost !== undefined && row.allowBoost !== null) ? !!row.allowBoost : true;
+      // Optional: per-chargepoint boost timeout override (minutes). 0/empty = use global defaults (AC/DC).
+      const boostTimeoutMin = (row && row.boostTimeoutMin !== undefined && row.boostTimeoutMin !== null && String(row.boostTimeoutMin).trim() !== '' && Number.isFinite(Number(row.boostTimeoutMin))) ? Number(row.boostTimeoutMin) : 0;
       // Optional: Sperre/Lock DP (bool). Alternative zu activeId (Freigabe).
       const lockWriteId = (row && typeof row.lockWriteId === 'string' && row.lockWriteId.trim()) ? row.lockWriteId.trim() :
         ((row && typeof row.lockId === 'string' && row.lockId.trim()) ? row.lockId.trim() :
@@ -182,7 +184,7 @@ async syncInstallerConfigToStates() {
       const rfidReadId = (row && typeof row.rfidReadId === 'string' && row.rfidReadId.trim()) ? row.rfidReadId.trim() :
         ((row && typeof row.rfidId === 'string' && row.rfidId.trim()) ? row.rfidId.trim() :
         ((row && typeof row.rfid === 'string' && row.rfid.trim()) ? row.rfid.trim() : ''));
-      evcsList.push({ index: i+1, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost });
+      evcsList.push({ index: i+1, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin });
     }
     this.evcsList = evcsList;
     // Stationsgruppen (für DC-Stationen mit mehreren Ladepunkten)

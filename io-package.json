@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.107",
+    "version": "0.4.108",
     "news": {
       "0.4.91": {
         "de": "EVCS RFID: Anlernen-UI (Karte anlernen, letzte Karte anzeigen, in Whitelist übernehmen).",
@@ -369,6 +369,10 @@
           "Sprint 2.2: Stationsgruppen (gemeinsame Leistung) + Boost-Erlaubnis je Ladepunkt",
           "Sprint 3: EMS/Peak-Shaving Einstellungen in der Admin-UI + ModuleManager im VIS aktiviert"
         ]
+      },
+      "0.4.108": {
+        "de": "EMS: Boost-Priorität pro Ladepunkt inkl. Auto-Timeout (DC 60min / AC 300min) + Debug-States boostSince/boostUntil.",
+        "en": "EMS: Per-chargepoint boost priority with auto-timeout (DC 60m / AC 300m) + boost runtime debug states."
       }
     },
     "title": "NexoWatt VIS",

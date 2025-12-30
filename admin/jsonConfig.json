@@ -1311,6 +1311,34 @@
           "help": "Bei Stationsgruppen: roundRobin rotiert die Reihenfolge der nicht‑Boost‑Connectors pro Tick, damit niemand dauerhaft verhungert.",
           "expert": true
         },
+        "chargingManagement.boostTimeoutMinDc": {
+          "type": "number",
+          "label": "Boost Timeout DC (min)",
+          "attr": "chargingManagement.boostTimeoutMinDc",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 60,
+          "min": 0,
+          "max": 1000000,
+          "step": 1,
+          "help": "Maximale Boost‑Dauer für DC‑Ladepunkte. 0 = kein Auto‑Timeout.",
+          "expert": true
+        },
+        "chargingManagement.boostTimeoutMinAc": {
+          "type": "number",
+          "label": "Boost Timeout AC (min)",
+          "attr": "chargingManagement.boostTimeoutMinAc",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 300,
+          "min": 0,
+          "max": 1000000,
+          "step": 1,
+          "help": "Maximale Boost‑Dauer für AC‑Ladepunkte. 0 = kein Auto‑Timeout.",
+          "expert": true
+        },
         "chargingManagement.pauseWhenPeakShavingActive": {
           "type": "checkbox",
           "label": "Bei Peak‑Shaving pausieren",
@@ -3097,13 +3125,29 @@
               },
               "tooltip": "Wenn deaktiviert, wird der Runtime‑Modus „boost“ für diesen Ladepunkt ignoriert.",
               "expert": true
+            },
+            {
+              "type": "number",
+              "label": "Boost Timeout (min)",
+              "attr": "boostTimeoutMin",
+              "xs": 12,
+              "sm": 6,
+              "md": 2,
+              "min": 0,
+              "max": 1000000,
+              "step": 1,
+              "style": {
+                "minWidth": "170px"
+              },
+              "tooltip": "Optional: überschreibt den AC/DC Default für die Boost‑Maxdauer. 0/leer = globaler Default.",
+              "expert": true
             }
           ],
           "style": {
             "width": "100%"
           },
           "tableStyle": {
-            "minWidth": "1750px"
+            "minWidth": "1880px"
           }
         },
         "settingsConfig.stationGroups": {
