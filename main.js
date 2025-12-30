@@ -721,6 +721,105 @@ async syncInstallerConfigToStates() {
 
 
   /**
+   * Subscribe + prime embedded EMS runtime states so the web UI can work without
+   * requiring any additional "Modus-DP" mappings per Ladepunkt.
+   *
+   * Background:
+   * - The EVCS page renders EMS mode buttons when `ems.chargingEnabled` is true
+   *   OR when `chargingManagement.wallboxCount` is present in the /api/state cache.
+   * - On upgrades, missing config flags and missing subscriptions could lead to
+   *   legacy fallbacks (3-button mode) or "flattering" UI.
+   */
+  async subscribeEmsUiStates() {
+    try {
+      const cfg = this.config || {};
+      const ns = this.namespace;
+      const count = (Number(this.evcsCount) || (cfg && cfg.settingsConfig && Number(cfg.settingsConfig.evcsCount)) || 1);
+      const evcsCount = (Number.isFinite(count) && count > 0) ? Math.round(count) : 1;
+
+      // Subscribe to all local EMS states (wildcards are supported by ioBroker).
+      // This keeps the state cache in sync and prevents UI mode buttons from jumping.
+      try { await this.subscribeForeignStatesAsync(`${ns}.chargingManagement.*`); } catch (_e) {}
+      try { await this.subscribeForeignStatesAsync(`${ns}.chargingManagement.wallboxes.*`); } catch (_e) {}
+      try { await this.subscribeForeignStatesAsync(`${ns}.chargingManagement.stations.*`); } catch (_e) {}
+      try { await this.subscribeForeignStatesAsync(`${ns}.ems.*`); } catch (_e) {}
+
+      const prime = async (key) => {
+        try {
+          const st = await this.getStateAsync(key);
+          if (!st || st.val === undefined) return;
+          this.updateValue(key, st.val, st.ts || Date.now());
+        } catch (_e) {
+          // ignore
+        }
+      };
+
+      // Prime global summary/control states used by the UI.
+      await prime('chargingManagement.wallboxCount');
+      await prime('chargingManagement.stationCount');
+      await prime('chargingManagement.summary.totalPowerW');
+      await prime('chargingManagement.summary.totalTargetPowerW');
+      await prime('chargingManagement.summary.onlineWallboxes');
+      await prime('chargingManagement.control.active');
+      await prime('chargingManagement.control.mode');
+      await prime('chargingManagement.control.status');
+      await prime('chargingManagement.control.budgetW');
+      await prime('chargingManagement.control.remainingW');
+      await prime('chargingManagement.control.usedW');
+      await prime('chargingManagement.control.pvAvailable');
+
+      // Prime per-Ladepunkt runtime states (mode + boost info + station meta)
+      for (let i = 1; i <= evcsCount; i++) {
+        const base = `chargingManagement.wallboxes.lp${i}`;
+        await prime(`${base}.userMode`);
+        await prime(`${base}.effectiveMode`);
+        await prime(`${base}.chargerType`);
+        await prime(`${base}.online`);
+        await prime(`${base}.charging`);
+        await prime(`${base}.chargingSince`);
+        await prime(`${base}.targetPowerW`);
+        await prime(`${base}.targetCurrentA`);
+        await prime(`${base}.stationKey`);
+        await prime(`${base}.stationMaxPowerW`);
+        await prime(`${base}.allowBoost`);
+        await prime(`${base}.boostActive`);
+        await prime(`${base}.boostUntil`);
+        await prime(`${base}.boostRemainingMin`);
+        await prime(`${base}.boostTimeoutMin`);
+      }
+
+      // Prime station states (max/remaining) if station keys are known in config.
+      const toSafe = (s) => {
+        try {
+          return String(s || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9_\-]/g, '_')
+            .replace(/_+/g, '_')
+            .replace(/^_+|_+$/g, '');
+        } catch (_e) {
+          return '';
+        }
+      };
+      try {
+        const sg = (cfg && cfg.settingsConfig && Array.isArray(cfg.settingsConfig.stationGroups)) ? cfg.settingsConfig.stationGroups : [];
+        for (const g of sg) {
+          if (!g) continue;
+          const sk = (typeof g.stationKey === 'string') ? g.stationKey.trim() : '';
+          if (!sk) continue;
+          const safe = toSafe(sk);
+          if (!safe) continue;
+          await prime(`chargingManagement.stations.${safe}.maxPowerW`);
+          await prime(`chargingManagement.stations.${safe}.remainingW`);
+        }
+      } catch (_e) {}
+    } catch (_eOuter) {
+      // never fail adapter startup due to UI convenience
+    }
+  }
+
+
+  /**
  * Returns the SmartHomeConfig structure from adapter config.
  * This is the future generic model for rooms, functions and devices.
  *
@@ -1418,6 +1517,10 @@ async onReady() {
       // EMS (Sprint 2): embedded Charging-Management engine
       try { await this.initEmsEngine(); } catch (e) { this.log.warn('EMS init failed: ' + (e && e.message ? e.message : e)); }
 
+      // Prime + subscribe EMS runtime states for the UI (EVCS page mode buttons, boost status, etc.).
+      // Without this, the UI might fall back to legacy or show default values after reload.
+      try { await this.subscribeEmsUiStates(); } catch (e) { this.log.debug('EMS UI state subscribe failed: ' + (e && e.message ? e.message : e)); }
+
       // Energy totals: if no kWh counters are mapped, derive totals from history/influxdb
       try { await this.updateEnergyTotalsFromInflux('startup'); } catch (_e) {}
       try {
@@ -1440,6 +1543,80 @@ async onReady() {
     if (this.emsEngine) return;
     this.emsEngine = new EmsEngine(this);
     await this.emsEngine.init();
+  }
+
+
+  /**
+   * Subscribe to internal EMS runtime states (chargingManagement.* and ems.*)
+   * and prime the stateCache so the web UI can render stable values immediately.
+   *
+   * This fixes the multi-ladepunkt "mode buttons only appear if mode DP is mapped" issue,
+   * because the EVCS UI can reliably use the embedded EMS userMode states.
+   */
+  async subscribeEmsUiStates() {
+    const cfg = this.config || {};
+
+    // Respect explicit disable (installer choice)
+    const enabledFlag = cfg.enableChargingManagement;
+    if (typeof enabledFlag === 'boolean' && enabledFlag === false) {
+      return;
+    }
+
+    const count = (Number(this.evcsCount) || Number(cfg?.settingsConfig?.evcsCount) || 1);
+    const evcsCount = (Number.isFinite(count) && count > 0) ? Math.round(count) : 1;
+
+    // Subscribe to ALL internal EMS states (wildcards). This is efficient and ensures
+    // state changes propagate to the SSE/stateCache.
+    try { await this.subscribeForeignStatesAsync(`${this.namespace}.chargingManagement.*`); } catch (_e) {}
+    try { await this.subscribeForeignStatesAsync(`${this.namespace}.ems.*`); } catch (_e2) {}
+
+    // Prime a minimal subset that the UI uses on first render.
+    const primeKey = async (key) => {
+      if (!key) return;
+      try {
+        const st = await this.getStateAsync(key);
+        if (st && st.val !== undefined) {
+          this.updateValue(key, st.val, st.ts || Date.now());
+        }
+      } catch (_e) {
+        // ignore
+      }
+    };
+
+    // Global summary/control
+    await primeKey('chargingManagement.wallboxCount');
+    await primeKey('chargingManagement.stationCount');
+    await primeKey('chargingManagement.summary.totalPowerW');
+    await primeKey('chargingManagement.summary.onlineWallboxes');
+    await primeKey('chargingManagement.summary.totalTargetPowerW');
+    await primeKey('chargingManagement.control.active');
+    await primeKey('chargingManagement.control.status');
+    await primeKey('chargingManagement.control.mode');
+    await primeKey('chargingManagement.control.budgetW');
+    await primeKey('chargingManagement.control.remainingW');
+
+    // Per Ladepunkt runtime states used on the EVCS page
+    for (let i = 1; i <= evcsCount; i++) {
+      const base = `chargingManagement.wallboxes.lp${i}`;
+      await primeKey(`${base}.userMode`);
+      await primeKey(`${base}.effectiveMode`);
+      await primeKey(`${base}.chargerType`);
+      await primeKey(`${base}.charging`);
+      await primeKey(`${base}.chargingSince`);
+      await primeKey(`${base}.targetPowerW`);
+      await primeKey(`${base}.targetCurrentA`);
+      await primeKey(`${base}.stationKey`);
+      await primeKey(`${base}.stationMaxPowerW`);
+      await primeKey(`${base}.allowBoost`);
+      await primeKey(`${base}.boostActive`);
+      await primeKey(`${base}.boostRemainingMin`);
+      await primeKey(`${base}.boostUntil`);
+      await primeKey(`${base}.boostTimeoutMin`);
+      await primeKey(`${base}.connectorNo`);
+    }
+
+    // Stations: subscribe wildcard; values will stream in once computed.
+    try { await this.subscribeForeignStatesAsync(`${this.namespace}.chargingManagement.stations.*`); } catch (_e3) {}
   }
 
   async startServer() {
@@ -2547,25 +2724,50 @@ app.get('/api/evcs/sessions.csv', async (req, res) => {
 
 
 app.get('/config', (req, res) => {
+      // UI flags: treat missing (undefined) EMS module flags as sensible defaults.
+      // This avoids "legacy" fallbacks in the EVCS UI on upgrades where config flags
+      // were not persisted yet.
+      const cfg = this.config || {};
+
+      const inferChargingEnabled = () => {
+        const v = cfg.enableChargingManagement;
+        if (typeof v === 'boolean') return v;
+
+        // Upgrade/default behaviour: if the user did not explicitly disable charging,
+        // we expose the EMS runtime controls. The embedded module itself will still
+        // write setpoints only when controllable datapoints are mapped.
+        try {
+          const cnt = Number(cfg && cfg.settingsConfig && cfg.settingsConfig.evcsCount);
+          if (Number.isFinite(cnt) && cnt > 0) return true;
+          const list = Array.isArray(this.evcsList) ? this.evcsList : [];
+          if (list && list.length) return true;
+        } catch (_e) {
+          // ignore
+        }
+        return false;
+      };
+
+      const boolOr = (val, def) => (typeof val === 'boolean' ? val : !!def);
+
       res.json({
-        units: this.config.units || { power: 'W', energy: 'kWh' },
-        settings: this.config.settings || {},
+        units: cfg.units || { power: 'W', energy: 'kWh' },
+        settings: cfg.settings || {},
         settingsConfig: {
-          evcsCount: (this.config && this.config.settingsConfig && Number(this.config.settingsConfig.evcsCount)) || (this.evcsCount || 1),
-          evcsMaxPowerKw: (this.config && this.config.settingsConfig && Number(this.config.settingsConfig.evcsMaxPowerKw)) || 11,
+          evcsCount: (cfg && cfg.settingsConfig && Number(cfg.settingsConfig.evcsCount)) || (this.evcsCount || 1),
+          evcsMaxPowerKw: (cfg && cfg.settingsConfig && Number(cfg.settingsConfig.evcsMaxPowerKw)) || 11,
           evcsList: Array.isArray(this.evcsList) ? this.evcsList : []
         },
-        smartHome: this.config.smartHome || {},
+        smartHome: cfg.smartHome || {},
         ems: {
-          chargingEnabled: !!(this.config && this.config.enableChargingManagement),
-          peakShavingEnabled: !!(this.config && this.config.enablePeakShaving),
-          gridConstraintsEnabled: !!(this.config && this.config.enableGridConstraints),
-          storageEnabled: !!(this.config && this.config.enableStorageControl),
-          schedulerIntervalMs: (this.config && Number(this.config.schedulerIntervalMs)) || 1000
+          chargingEnabled: inferChargingEnabled(),
+          peakShavingEnabled: boolOr(cfg.enablePeakShaving, false),
+          gridConstraintsEnabled: boolOr(cfg.enableGridConstraints, false),
+          storageEnabled: boolOr(cfg.enableStorageControl, false),
+          schedulerIntervalMs: (cfg && Number(cfg.schedulerIntervalMs)) || 1000
         },
-        installer: this.config.installer || {},
-        adminUrl: this.config.adminUrl || null,
-        installerLocked: !!(this.config.installerPassword)
+        installer: cfg.installer || {},
+        adminUrl: cfg.adminUrl || null,
+        installerLocked: !!(cfg.installerPassword)
       });
     });
 

@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.113",
+    "version": "0.4.114",
     "news": {
       "0.4.109": {
         "de": "Sprint 3.2: EVCS-Seite steuert jetzt den EMS-Ladepunktmodus (Auto/Boost/Min+PV/PV) je Ladepunkt inkl. Boost-Timer/Prio-Anzeige. Design unverändert.",
@@ -381,6 +381,10 @@
       "0.4.113": {
         "de": "Gate B: Fix UI-Freeze bei Ladepunkt-Modi (SSE/Render-Debounce + Update-Batching). Zusätzlich PV-Hysterese (Start/Stop-Schwellen + Delays + Abort bei Netzbezug) für PV-Modi.",
         "en": "Gate B: Fix UI freeze on chargepoint mode switching (SSE/render debounce + update batching). Adds PV hysteresis (start/stop thresholds + delays + abort on grid import) for PV modes."
+      },
+      "0.4.114": {
+        "de": "Gate B Fix: EVCS-Modus-Buttons nutzen standardmäßig den EMS Runtime-Mode (chargingManagement.wallboxes.*.userMode) – keine manuelle Modus-DP-Zuordnung pro Ladepunkt nötig. Zusätzlich werden EMS Runtime-States beim Start abonniert/primed, damit die Buttons nach Reload stabil bleiben.",
+        "en": "Gate B Fix: EVCS mode buttons default to EMS runtime mode (chargingManagement.wallboxes.*.userMode) – no manual per-chargepoint mode datapoint mapping required. Also subscribes/primes EMS runtime states on startup so buttons remain stable after reload."
       }
     },
     "title": "NexoWatt VIS",
