@@ -115,7 +115,7 @@ class SpeicherRegelungModule extends BaseModule {
         // ------------------------------------------------------------
         // Notstrom-Reserve: harte Untergrenze für Entladen
         const reserveEnabled = cfg.reserveEnabled !== false;
-        const reserveMin = clamp(num(cfg.reserveMinSocPct, 10), 0, 100);
+        const reserveMin = clamp(num(cfg.reserveMinSocPct, 20), 0, 100);
         const reserveTarget = clamp(num(cfg.reserveTargetSocPct, reserveMin), 0, 100);
 
         const reserveActive = reserveEnabled && (typeof soc === 'number') && (soc <= reserveMin);
@@ -170,7 +170,7 @@ class SpeicherRegelungModule extends BaseModule {
         let hardDischargeMinSoc = reserveMin; // wird je Quelle ggf. angehoben
         let hardChargeMaxSoc = 100;
 
-        if (peakEnabled && lskEnabledCfg) {
+        if (peakEnabled && lskEnabledCfg && (cfg.lskDischargeEnabled !== false)) {
             const psLimitW = await this._readOwnNumber('peakShaving.control.limitW');
             const psOverW = await this._readOwnNumber('peakShaving.control.overW');
             const psReqRedW = await this._readOwnNumber('peakShaving.control.requiredReductionW');
@@ -265,7 +265,8 @@ class SpeicherRegelungModule extends BaseModule {
 
                     // SoC-Max: Laden blockieren (z.B. wenn der Installateur einen Max-SoC setzt)
                     // Für Tarif verwenden wir den "größten" Max-SoC (Self/LSK), damit es nicht unerwartet stoppt.
-                    const maxSocForCharge = clamp(Math.max(selfMaxSoc, lskMaxSoc, reserveTarget), 0, 100);
+                    const lskMaxSocForCharge = (cfg.lskChargeEnabled !== false) ? lskMaxSoc : selfMaxSoc;
+        const maxSocForCharge = clamp(Math.max(selfMaxSoc, lskMaxSocForCharge, reserveTarget), 0, 100);
                     if (w < 0 && (typeof soc === 'number') && soc >= maxSocForCharge) {
                         w = 0;
                         reason = 'Tarif: Laden blockiert (SoC-Max erreicht)';
@@ -309,7 +310,8 @@ class SpeicherRegelungModule extends BaseModule {
             const thr = zeEnabled ? Math.min(thrBase, zeDeadband) : thrBase;
 
             // Max-SoC für Laden: größter Bereich (Self/LSK/Reserve-Ziel)
-            const maxSocForCharge = clamp(Math.max(selfMaxSoc, lskMaxSoc, reserveTarget), 0, 100);
+            const lskMaxSocForCharge = (cfg.lskChargeEnabled !== false) ? lskMaxSoc : selfMaxSoc;
+        const maxSocForCharge = clamp(Math.max(selfMaxSoc, lskMaxSocForCharge, reserveTarget), 0, 100);
             hardChargeMaxSoc = maxSocForCharge;
 
             const canChargeBySoc = (typeof soc !== 'number') ? true : (soc < maxSocForCharge);
@@ -413,6 +415,8 @@ class SpeicherRegelungModule extends BaseModule {
 
             // Gate E
             lskEnabled: storage.lskEnabled,
+            lskDischargeEnabled: storage.lskDischargeEnabled,
+            lskChargeEnabled: storage.lskChargeEnabled,
             lskMinSocPct: storage.lskMinSocPct,
             lskMaxSocPct: storage.lskMaxSocPct,
             lskMaxChargeW: storage.lskMaxChargeW,

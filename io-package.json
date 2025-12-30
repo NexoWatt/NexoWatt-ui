@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.118",
+    "version": "0.4.119",
     "news": {
+      "0.4.119": {
+        "de": "Serienreife‑Gate: Stabilisierung/Feinschliff, Admin‑Aufräumen (SmartHome‑Tabs ausgeblendet) und saubere Defaults für Speicher‑Strategie. Neu: LSK‑Laden/Entladen separat aktivierbar.",
+        "en": "Release gate: stability/polish, admin cleanup (SmartHome tabs hidden) and cleaner defaults for storage strategy. New: LSK charge/discharge separately toggleable."
+      },
       "0.4.118": {
         "de": "Gate E: Speicher‑Multiuse (SoC‑Zonen für LSK/Eigenverbrauch/Notstrom, optionale Eigenverbrauchs‑Entladung, LSK Lade/Entlade‑Limits, optionales Reserve‑Netzladen).",
         "en": "Gate E: Storage multiuse (SoC zones for peak shaving/self‑consumption/backup, optional self‑consumption discharge, LSK charge/discharge limits, optional reserve grid‑charge)."

@@ -84,6 +84,7 @@ class ChargingManagementModule extends BaseModule {
         this._known = new Set(); // wallbox channels created
         this._knownStations = new Set(); // station channels created
         this._stationRoundRobinOffset = new Map(); // stationKey -> next offset for round-robin fairness
+        this._stationRoundRobinLastRotateMs = new Map(); // stationKey -> ms of last rotation (avoid per-tick flapping)
         this._chargingSinceMs = new Map(); // safeKey -> ms since epoch
         this._chargingLastActiveMs = new Map(); // safeKey -> ms of last detected activity
         this._chargingLastSeenMs = new Map(); // safeKey -> ms of last processing (cleanup)
@@ -1764,12 +1765,23 @@ if (components.length) {
                 idxByStation.set(sk, arr);
             }
 
+            const rrIntervalMs = 10 * 1000; // rotate at most every 10s (serienreif, weniger UI-Flattern)
             for (const [sk, positions] of idxByStation.entries()) {
                 const n = positions.length;
                 if (n <= 1) continue;
 
                 const prev = this._stationRoundRobinOffset.get(sk);
-                const offset = (typeof prev === 'number' && Number.isFinite(prev) ? prev : 0) % n;
+                let offset = (typeof prev === 'number' && Number.isFinite(prev) ? prev : 0) % n;
+
+                const lastRot = this._stationRoundRobinLastRotateMs.get(sk);
+                if (typeof lastRot !== 'number' || !Number.isFinite(lastRot) || lastRot <= 0) {
+                    // first seen -> keep offset, start timer
+                    this._stationRoundRobinLastRotateMs.set(sk, now);
+                } else if ((now - lastRot) >= rrIntervalMs) {
+                    offset = (offset + 1) % n;
+                    this._stationRoundRobinOffset.set(sk, offset);
+                    this._stationRoundRobinLastRotateMs.set(sk, now);
+                }
 
                 if (offset > 0) {
                     const elems = positions.map(pos => sorted[pos]);
@@ -1778,9 +1790,7 @@ if (components.length) {
                         sorted[positions[j]] = rotated[j];
                     }
                 }
-
-                this._stationRoundRobinOffset.set(sk, (offset + 1) % n);
-            }
+}
         }
 
 
