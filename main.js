@@ -151,7 +151,10 @@ async syncInstallerConfigToStates() {
       const energyTotalId = (row && typeof row.energyTotalId === 'string' && row.energyTotalId.trim()) ? row.energyTotalId.trim() : '';
       const statusId = (row && typeof row.statusId === 'string' && row.statusId.trim()) ? row.statusId.trim() : '';
       const activeId = (row && typeof row.activeId === 'string' && row.activeId.trim()) ? row.activeId.trim() : '';
-      const modeId = (row && typeof row.modeId === 'string' && row.modeId.trim()) ? row.modeId.trim() : '';
+      const modeIdRaw = (row && typeof row.modeId === 'string' && row.modeId.trim()) ? row.modeId.trim() : '';
+      // Interner Standard: pro Ladepunkt existiert immer ein eigener Modus-State.
+      // Damit muss im Admin keine Modus-DP-Zuordnung gepflegt werden.
+      const modeId = modeIdRaw || `${this.namespace}.evcs.${i + 1}.mode`;
       // EMS control datapoints (optional, per wallbox)
       const setCurrentAId = (row && typeof row.setCurrentAId === 'string' && row.setCurrentAId.trim()) ? row.setCurrentAId.trim() : '';
       const setPowerWId = (row && typeof row.setPowerWId === 'string' && row.setPowerWId.trim()) ? row.setPowerWId.trim() : '';
@@ -274,7 +277,9 @@ async syncInstallerConfigToStates() {
         _dayBaseDate: { type: 'string', role: 'text', def: '', read: true, write: false },
         status:        { type: 'string', role: 'state', def: '', read: true, write: false },
         active:        { type: 'boolean', role: 'switch', def: false, read: true, write: false },
-        mode:          { type: 'number', role: 'value', def: 0, read: true, write: false },
+        // Modus ist bewusst writeable: die VIS kann je Ladepunkt den Betriebsmodus setzen (internes EMS).
+        // 0=Auto, 1=Boost, 2=Min+PV, 3=PV
+        mode:          { type: 'number', role: 'value', def: 0, read: true, write: true },
         // RFID / Ladepark (read-only visualization states; enforcement writes to configured foreign datapoints)
         lock:          { type: 'boolean', role: 'state', def: false, read: true, write: false },
         rfidLast:      { type: 'string', role: 'text', def: '', read: true, write: false },
@@ -291,6 +296,25 @@ async syncInstallerConfigToStates() {
           common: { name: `evcs.${i}.${k}`, type: c.type, role: c.role, read: c.read, write: c.write, def: c.def, unit: c.unit },
           native: {}
         });
+      }
+
+      // ensure mode enum + writeable (also for existing installations via extendObject)
+      try {
+        await this.extendObjectAsync(`evcs.${i}.mode`, {
+          common: {
+            role: 'value',
+            read: true,
+            write: true,
+            states: {
+              0: 'Auto',
+              1: 'Boost',
+              2: 'Min+PV',
+              3: 'PV'
+            }
+          }
+        });
+      } catch (e) {
+        // ignore
       }
     }
 
@@ -3019,6 +3043,30 @@ app.get('/config', (req, res) => {
       if (key) {
         this.updateValue(key, state.val, state.ts);
       }
+
+      // Sync: EVCS numerischer Modus (evcs.<i>.mode) <-> EMS User-Mode (chargingManagement.wallboxes.lp<i>.userMode)
+      try {
+        if (key) {
+          // 1) Wenn ein externer oder interner Modus-DP geschrieben wird (ack=false), übersetze in userMode.
+          const m = key.match(/^evcs\.(\d+)\.mode$/);
+          if (m && state && state.ack === false) {
+            const idx = Number(m[1]);
+            const mv = Number(state.val);
+            const userMode = (mv === 1) ? 'boost' : (mv === 2) ? 'minpv' : (mv === 3) ? 'pv' : 'auto';
+            this.setStateAsync(`chargingManagement.wallboxes.lp${idx}.userMode`, userMode, false).catch(()=>{});
+          }
+
+          // 2) Wenn userMode geändert wird, spiegle in evcs.<i>.mode (ack=true), damit UI/Kompatibilität stimmt.
+          const um = key.match(/^chargingManagement\.wallboxes\.lp(\d+)\.userMode$/);
+          if (um) {
+            const idx = Number(um[1]);
+            const v = String(state.val ?? '').toLowerCase();
+            const numMode = (v === 'boost') ? 1 : (v === 'minpv') ? 2 : (v === 'pv') ? 3 : 0;
+            this.setStateAsync(`evcs.${idx}.mode`, numMode, true).catch(()=>{});
+          }
+        }
+      } catch (_e) {}
+
       if (key && key.startsWith('evcs.')) this.setStateAsync(key, state.val, true).catch(()=>{});
       try { this.maybeCaptureRfidLearning(id, state.val, state.ts); } catch(_e) {}
 

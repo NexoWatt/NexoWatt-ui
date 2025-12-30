@@ -815,6 +815,7 @@
       },
       "label": "SmartHome (vorbereitet)",
       "title": "SmartHome (vorbereitet)",
+      "hidden": "true",
       "name": "smarthome_vorbereitet"
     },
     {
@@ -1338,6 +1339,78 @@
           "step": 1,
           "help": "Maximale Boost‑Dauer für AC‑Ladepunkte. 0 = kein Auto‑Timeout.",
           "expert": true
+        },
+
+        "chargingManagement.storageAssistHeader": {
+          "type": "header",
+          "text": "Gate C – Speicher-Unterstützung für Laden",
+          "expert": true
+        },
+        "chargingManagement.storageAssistEnabled": {
+          "type": "checkbox",
+          "label": "Speicher-Unterstützung aktivieren",
+          "attr": "chargingManagement.storageAssistEnabled",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": false,
+          "help": "Wenn aktiv, kann das EMS bei hohem Speicher-SoC zusätzliche Ladeleistung über Batterie-Entladung bereitstellen, ohne das Netz-Import-Limit zu überlasten (Gate C). Voraussetzung: Speicher-SoC und Speicher-Sollleistung-DP sind im Tab EMS – Speicher gemappt."
+        },
+        "chargingManagement.storageAssistApply": {
+          "type": "select",
+          "label": "Anwendung",
+          "attr": "chargingManagement.storageAssistApply",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "options": [
+            {
+              "label": "nur Boost",
+              "value": "boostOnly"
+            },
+            {
+              "label": "Boost und Auto",
+              "value": "boostAndAuto"
+            }
+          ],
+          "default": "boostOnly",
+          "help": "Definiert, in welchen Betriebsmodi Speicher-Unterstützung aktiv sein darf."
+        },
+        "chargingManagement.storageAssistStartSocPct": {
+          "type": "number",
+          "label": "Start-SoC (%)",
+          "attr": "chargingManagement.storageAssistStartSocPct",
+          "xs": 12,
+          "sm": 4,
+          "md": 4,
+          "min": 0,
+          "max": 100,
+          "default": 60,
+          "help": "Ab diesem SoC beginnt die Speicher-Unterstützung (Hysterese-Start)."
+        },
+        "chargingManagement.storageAssistStopSocPct": {
+          "type": "number",
+          "label": "Stop-SoC (%)",
+          "attr": "chargingManagement.storageAssistStopSocPct",
+          "xs": 12,
+          "sm": 4,
+          "md": 4,
+          "min": 0,
+          "max": 100,
+          "default": 40,
+          "help": "Unterhalb dieses SoC endet die Speicher-Unterstützung (Hysterese-Stop)."
+        },
+        "chargingManagement.storageAssistMaxDischargeW": {
+          "type": "number",
+          "label": "Max. Entladeleistung (W)",
+          "attr": "chargingManagement.storageAssistMaxDischargeW",
+          "xs": 12,
+          "sm": 4,
+          "md": 4,
+          "min": 0,
+          "max": 1000000,
+          "default": 0,
+          "help": "0 = automatisch (Storage.maxDischargeW). Sonst maximale Entladeleistung, die zur Ladepark-Unterstützung genutzt werden darf."
         },
         "chargingManagement.pauseWhenPeakShavingActive": {
           "type": "checkbox",
@@ -3708,6 +3781,7 @@
           ]
         }
       },
+      "hidden": "true",
       "name": "smarthome_config"
     }
   ]

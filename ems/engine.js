@@ -250,6 +250,16 @@ class EmsEngine {
       boostTimeoutMinAc: 300,
       boostTimeoutMinDc: 60,
 
+      // Gate C: Speicher-Unterstützung für Ladepark (optional)
+      // Wenn aktiv und der SoC hoch genug ist, kann das EMS per Batterie-Entladung zusätzliche Ladeleistung bereitstellen,
+      // ohne den Netzanschluss (Import-Limit) zu überlasten.
+      storageAssistEnabled: false,
+      storageAssistApply: 'boostOnly', // 'boostOnly' | 'boostAndAuto'
+      storageAssistStartSocPct: 60,
+      storageAssistStopSocPct: 40,
+      // 0 = automatisch (Storage.maxDischargeW), sonst fester Wert
+      storageAssistMaxDischargeW: 0,
+
       // Station groups (optional)
       ...(stationGroups.length ? { stationGroups } : {}),
 
@@ -340,6 +350,20 @@ class EmsEngine {
 
       const btDc_ = Number(userCm.boostTimeoutMinDc);
       if (Number.isFinite(btDc_) && btDc_ >= 0) chargingCfg.boostTimeoutMinDc = btDc_;
+
+      // Gate C: Speicher-Unterstützung
+      if (typeof userCm.storageAssistEnabled === 'boolean') chargingCfg.storageAssistEnabled = userCm.storageAssistEnabled;
+      const saApply_ = (typeof userCm.storageAssistApply === 'string') ? userCm.storageAssistApply.trim() : '';
+      if (['boostOnly', 'boostAndAuto'].includes(saApply_)) chargingCfg.storageAssistApply = saApply_;
+
+      const saStart_ = Number(userCm.storageAssistStartSocPct);
+      if (Number.isFinite(saStart_) && saStart_ >= 0 && saStart_ <= 100) chargingCfg.storageAssistStartSocPct = saStart_;
+
+      const saStop_ = Number(userCm.storageAssistStopSocPct);
+      if (Number.isFinite(saStop_) && saStop_ >= 0 && saStop_ <= 100) chargingCfg.storageAssistStopSocPct = saStop_;
+
+      const saMax_ = Number(userCm.storageAssistMaxDischargeW);
+      if (Number.isFinite(saMax_) && saMax_ >= 0) chargingCfg.storageAssistMaxDischargeW = saMax_;
     } catch (_e) {}
 
     return { anyControl, chargingCfg, stationGroups, stationGroupMap };
@@ -360,7 +384,11 @@ class EmsEngine {
     const userWantsCharging = (adapter.config.enableChargingManagement !== false);
 
     // Inject config for embedded modules
-    adapter.config.enableChargingManagement = !!anyControl && !!userWantsCharging;
+    // Wichtig: Charging-Management bleibt grundsätzlich aktiviert (wenn der Installateur es nicht explizit deaktiviert),
+    // damit die EMS-States und die EVCS-UI (Modus-Buttons) immer verfügbar sind – auch wenn noch nicht alle Setpoints
+    // gemappt sind. Ohne Setpoints werden keine Sollwerte geschrieben (failsafe).
+    adapter.config.enableChargingManagement = !!userWantsCharging;
+    adapter.config._chargingHasAnySetpoint = !!anyControl;
     adapter.config.chargingManagement = chargingCfg;
 
     // If PeakShaving is enabled but no gridPointPowerId is set, default to internal derived net grid power

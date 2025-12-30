@@ -92,6 +92,8 @@ class ChargingManagementModule extends BaseModule {
         this._pvAvailable = false;
         this._pvAboveSinceMs = 0;
         this._pvBelowSinceMs = 0;
+        // Gate C: Speicher-Unterstützung (Hysterese)
+        this._storageAssistActive = false;
         this._restoredRuntime = new Set(); // safeKey -> restored persisted session/boost state
         this._lastCmdTargetW = new Map(); // safeKey -> last commanded target power (for ramp limiting)
         this._lastCmdTargetA = new Map(); // safeKey -> last commanded target current (for ramp limiting)
@@ -192,6 +194,11 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.gridWorstPhaseA', 'Grid worst phase current (A)', 'number', 'value.current');
         await mk('chargingManagement.control.gridPhaseCapEvcsW', 'Phase-based EVCS cap (W)', 'number', 'value.power');
         await mk('chargingManagement.control.phaseCapBinding', 'Phase cap binding', 'boolean', 'indicator');
+
+        // Gate C: Speicher-Unterstützung (Transparenz)
+        await mk('chargingManagement.control.storageAssistActive', 'Storage assist active', 'boolean', 'indicator');
+        await mk('chargingManagement.control.storageAssistW', 'Storage assist (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.storageAssistSoCPct', 'Storage SoC (%)', 'number', 'value.percent');
         await this.adapter.setObjectNotExistsAsync('chargingManagement.debug', {
             type: 'channel',
             common: { name: 'Debug' },
@@ -827,6 +834,7 @@ class ChargingManagementModule extends BaseModule {
         // - boost: like normal, but preferred in allocation order
         let anyGridAllowedActive = false;
         let anyPvLimitedActive = false;
+        let anyBoostActive = false;
 
         for (const w of wbList) {
             let override = normalizeWallboxModeOverride(w.userMode);
@@ -914,6 +922,7 @@ class ChargingManagementModule extends BaseModule {
             if (w.enabled && w.online) {
                 if (eff === 'pv' || eff === 'minpv') anyPvLimitedActive = true;
                 if (eff === 'boost' || eff === 'minpv' || eff === 'normal') anyGridAllowedActive = true;
+                if (eff === 'boost') anyBoostActive = true;
             }
 
             // Expose effective mode + boost runtime details for VIS/debugging
@@ -985,6 +994,8 @@ class ChargingManagementModule extends BaseModule {
             if (above) {
                 if (!this._pvAboveSinceMs) this._pvAboveSinceMs = now;
                 this._pvBelowSinceMs = 0;
+        // Gate C: Speicher-Unterstützung (Hysterese)
+        this._storageAssistActive = false;
                 if (!pvAvail && (pvStartDelayMs <= 0 || (now - this._pvAboveSinceMs) >= pvStartDelayMs)) {
                     pvAvail = true;
                 }
@@ -998,6 +1009,8 @@ class ChargingManagementModule extends BaseModule {
                 // Between thresholds: keep current state, reset timers to require stable crossing again
                 this._pvAboveSinceMs = 0;
                 this._pvBelowSinceMs = 0;
+        // Gate C: Speicher-Unterstützung (Hysterese)
+        this._storageAssistActive = false;
             }
 
             this._pvAvailable = pvAvail;
@@ -1013,6 +1026,8 @@ class ChargingManagementModule extends BaseModule {
             this._pvAvailable = false;
             this._pvAboveSinceMs = 0;
             this._pvBelowSinceMs = 0;
+        // Gate C: Speicher-Unterstützung (Hysterese)
+        this._storageAssistActive = false;
             pvCapRawWState = 0;
             pvCapEffectiveWState = 0;
             pvAvailableState = false;
@@ -1246,6 +1261,69 @@ if (components.length) {
         let pauseFollowPeakBudget = false;
         let pauseFollowGridCaps = false;
 
+        // Gate C: Speicher-Unterstützung (optional)
+        // Ziel: Bei hohem Speicher-SoC kann zusätzliche Ladeleistung durch Batterie-Entladung bereitgestellt werden,
+        // ohne den Netzanschluss (Import-Limit) zu überlasten. Die Entladung wird über das Storage-Control-Modul umgesetzt.
+        let storageSoC = getFirstDpNumber(['st.socPct']);
+        let storageAssistW = 0;
+        let storageAssistActive = false;
+
+        try {
+            const saEnabled = cfg.storageAssistEnabled === true;
+            const saApply = (typeof cfg.storageAssistApply === 'string') ? cfg.storageAssistApply : 'boostOnly';
+            const startSoc = clamp(num(cfg.storageAssistStartSocPct, 60), 0, 100);
+            const stopSoc = clamp(num(cfg.storageAssistStopSocPct, 40), 0, 100);
+
+            const maxW_cfg = num(cfg.storageAssistMaxDischargeW, 0);
+            const maxW_storage = num(this.adapter && this.adapter.config && this.adapter.config.storage && this.adapter.config.storage.maxDischargeW, 0);
+            const maxW = (Number.isFinite(maxW_cfg) && maxW_cfg > 0) ? maxW_cfg : (Number.isFinite(maxW_storage) ? maxW_storage : 0);
+
+            const allowByMode = (saApply === 'boostAndAuto') ? true : !!anyBoostActive;
+
+            if (saEnabled && allowByMode && anyGridAllowedActive && !pausedByPeakShaving && maxW > 0 && Number.isFinite(storageSoC)) {
+                // Hysterese: Start/Stop-Schwellen vermeiden Flattern
+                if (this._storageAssistActive) {
+                    if (storageSoC <= stopSoc) this._storageAssistActive = false;
+                } else {
+                    if (storageSoC >= startSoc) this._storageAssistActive = true;
+                }
+            } else {
+                this._storageAssistActive = false;
+            }
+
+            storageAssistActive = !!this._storageAssistActive;
+
+            // Nur sinnvoll, wenn das Budget aktuell durch Netz/Phase gedeckelt ist
+            if (storageAssistActive && (gridCapBinding || phaseCapBinding) && maxW > 0) {
+                const desiredExtra = Number.isFinite(budgetBeforeGridCaps) ? Math.max(0, budgetBeforeGridCaps - budgetW) : maxW;
+                storageAssistW = clamp(Math.min(maxW, desiredExtra), 0, maxW);
+
+                // Budget anheben: zusätzliche Leistung wird aus dem Speicher bereitgestellt (Storage-Control setzt Entladung)
+                if (storageAssistW > 0 && Number.isFinite(budgetW)) {
+                    budgetW = budgetW + storageAssistW;
+                    if (!String(effectiveBudgetMode || '').includes('storageAssist')) {
+                        effectiveBudgetMode = `${effectiveBudgetMode}+storageAssist`;
+                    }
+                }
+            }
+
+        } catch (_e) {
+            // ignore
+            this._storageAssistActive = false;
+            storageAssistW = 0;
+            storageAssistActive = false;
+        }
+
+        // Publish diagnostics for UI
+        try {
+            await this.adapter.setStateAsync('chargingManagement.control.storageAssistSoCPct', Number.isFinite(storageSoC) ? storageSoC : 0, true);
+            await this.adapter.setStateAsync('chargingManagement.control.storageAssistActive', !!storageAssistActive, true);
+            await this.adapter.setStateAsync('chargingManagement.control.storageAssistW', Number.isFinite(storageAssistW) ? storageAssistW : 0, true);
+        } catch {
+            // ignore
+        }
+
+
         // MU6.8: If metering/budget inputs are stale, enforce safe targets (0) to avoid overloading the grid connection.
         let staleMeter = false;
         let staleBudget = false;
@@ -1311,6 +1389,11 @@ if (components.length) {
             await this.adapter.setStateAsync('chargingManagement.control.budgetW', 0, true);
             await this.adapter.setStateAsync('chargingManagement.control.usedW', 0, true);
             await this.adapter.setStateAsync('chargingManagement.control.remainingW', 0, true);
+
+            // Gate C: Speicher-Unterstützung in Failsafe immer deaktivieren
+            this._storageAssistActive = false;
+            await this.adapter.setStateAsync('chargingManagement.control.storageAssistActive', false, true);
+            await this.adapter.setStateAsync('chargingManagement.control.storageAssistW', 0, true);
 
             await this.adapter.setStateAsync('chargingManagement.debug.sortedOrder', wbList.map(w => w.safe).join(','), true);
 
@@ -1527,6 +1610,11 @@ if (components.length) {
                 await this.adapter.setStateAsync('chargingManagement.control.budgetW', 0, true);
                 await this.adapter.setStateAsync('chargingManagement.control.usedW', 0, true);
                 await this.adapter.setStateAsync('chargingManagement.control.remainingW', 0, true);
+
+            // Gate C: Speicher-Unterstützung in Failsafe immer deaktivieren
+            this._storageAssistActive = false;
+            await this.adapter.setStateAsync('chargingManagement.control.storageAssistActive', false, true);
+            await this.adapter.setStateAsync('chargingManagement.control.storageAssistW', 0, true);
 
                 await this.adapter.setStateAsync('chargingManagement.debug.sortedOrder', wbList.map(w => w.safe).join(','), true);
 

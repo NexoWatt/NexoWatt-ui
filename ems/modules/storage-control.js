@@ -144,6 +144,23 @@ class SpeicherRegelungModule extends BaseModule {
             }
         }
 
+        // 2) Gate C: Ladepark-Unterstützung (EVCS Boost/Auto) via Speicher-Entladung,
+        // sofern keine Lastspitzenkappung aktiv ist.
+        if (targetW === 0) {
+            const assistW = await this._readOwnNumber('chargingManagement.control.storageAssistW');
+            if (typeof assistW === 'number' && assistW > 0) {
+                if (reserveActive) {
+                    targetW = 0;
+                    reason = 'EVCS-Unterstützung nötig, aber Reserve aktiv';
+                    source = 'evcs';
+                } else {
+                    targetW = clamp(assistW, 0, maxDischargeW);
+                    reason = `EVCS-Unterstützung: entladen (${Math.round(assistW)} W angefordert)`;
+                    source = 'evcs';
+                }
+            }
+        }
+
         // 2) Tarif/VIS (manuell), wenn keine Lastspitze aktiv
         if (targetW === 0) {
             const t = this._readTarifVis(staleMs);
