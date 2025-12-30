@@ -1119,7 +1119,7 @@
     },
     {
       "type": "panel",
-      "label": "EVCS",
+      "label": "Wallboxen",
       "items": {
         "datapoints.consumptionEvcs": {
           "type": "objectId",
@@ -1167,7 +1167,7 @@
         "settingsConfig.evcsList": {
           "type": "table",
           "label": "Wallboxen (EVCS) – Zuordnung",
-          "help": "Lege pro Wallbox genau eine Zeile an. Die VIS nutzt die Einträge, um Kacheln automatisch zu erzeugen.\nHinweis: Wenn weniger Zeilen als „Anzahl Wallboxen“ vorhanden sind, werden fehlende Einträge automatisch mit Standardwerten ergänzt.\nDie Datenpunkte bitte über die Objekt-Auswahl auswählen (kein manuelles Tippen nötig).\nZusatz: RFID-DP (optional) für Karten-Anlernen/Whitelist. Optional Sperre-DP (bool) als Alternative zum Freigabe-DP.",
+          "help": "Zentrale Wallbox‑Tabelle (herstellerunabhängig). In der Standardansicht werden nur die wichtigsten EMS‑Datenpunkte gezeigt. Weitere Monitoring/RFID/Expert‑Felder erscheinen im Admin‑Expertenmodus.",
           "attr": "settingsConfig.evcsList",
           "items": [
             {
@@ -1175,12 +1175,105 @@
               "label": "Name",
               "xs": 6,
               "sm": 6,
-              "md": 4,
+              "md": 3,
               "attr": "name",
               "title": "Name",
               "style": {
                 "minWidth": "160px"
               }
+            },
+            {
+              "type": "objectId",
+              "label": "Ist‑Leistung‑DP (W)",
+              "xs": 12,
+              "sm": 6,
+              "md": 3,
+              "attr": "powerId",
+              "title": "Ist‑Leistung‑DP (W)",
+              "types": [
+                "state"
+              ],
+              "placeholder": "Objekt auswählen …",
+              "style": {
+                "minWidth": "340px",
+                "fontFamily": "monospace"
+              },
+              "multiline": true,
+              "rows": 2,
+              "showName": true,
+              "tooltip": "State-ID der aktuellen Ladeleistung dieser Wallbox (W)."
+            },
+            {
+              "type": "objectId",
+              "label": "Sollstrom‑DP (A)",
+              "xs": 12,
+              "sm": 6,
+              "md": 3,
+              "attr": "setCurrentAId",
+              "title": "Sollstrom‑DP (A)",
+              "types": [
+                "state"
+              ],
+              "placeholder": "Objekt auswählen …",
+              "style": {
+                "minWidth": "340px",
+                "fontFamily": "monospace"
+              },
+              "multiline": true,
+              "rows": 2,
+              "showName": true,
+              "tooltip": "State-ID für den Sollstrom (Ampere). Falls vorhanden, nutzt die EMS‑Logik diesen bevorzugt bei AC‑Wallboxen."
+            },
+            {
+              "type": "objectId",
+              "label": "Sollleistung‑DP (W)",
+              "xs": 12,
+              "sm": 6,
+              "md": 3,
+              "attr": "setPowerWId",
+              "title": "Sollleistung‑DP (W)",
+              "types": [
+                "state"
+              ],
+              "placeholder": "Objekt auswählen …",
+              "style": {
+                "minWidth": "340px",
+                "fontFamily": "monospace"
+              },
+              "multiline": true,
+              "rows": 2,
+              "showName": true,
+              "tooltip": "State-ID für die Sollleistung (Watt). Falls vorhanden, nutzt die EMS‑Logik diesen bevorzugt bei DC‑Ladern oder wenn A‑Setpoint fehlt."
+            },
+            {
+              "type": "select",
+              "label": "EMS‑Modus",
+              "attr": "userMode",
+              "xs": 12,
+              "sm": 6,
+              "md": 2,
+              "options": [
+                {
+                  "label": "Auto",
+                  "value": "auto"
+                },
+                {
+                  "label": "PV‑Überschuss",
+                  "value": "pv"
+                },
+                {
+                  "label": "Min+PV",
+                  "value": "minpv"
+                },
+                {
+                  "label": "Boost",
+                  "value": "boost"
+                }
+              ],
+              "style": {
+                "minWidth": "170px"
+              },
+              "tooltip": "Pro Wallbox: Auto / PV‑Überschuss / Min+PV / Boost."
             },
             {
               "type": "text",
@@ -1192,38 +1285,17 @@
               "title": "Notiz (optional)",
               "style": {
                 "minWidth": "180px"
-              }
-            },
-            {
-              "type": "objectId",
-              "label": "Leistung-DP (W)",
-              "xs": 12,
-              "sm": 6,
-              "md": 4,
-              "tooltip": "ioBroker State-ID der aktuellen Ladeleistung dieser Wallbox (W).",
-              "attr": "powerId",
-              "title": "Leistung-DP (W)",
-              "types": [
-                "state"
-              ],
-              "placeholder": "Objekt auswählen …",
-              "style": {
-                "minWidth": "320px",
-                "fontFamily": "monospace"
               },
-              "multiline": true,
-              "rows": 2,
-              "showName": true
+              "expert": true
             },
             {
               "type": "objectId",
-              "label": "Energie-Zähler-DP (kWh)",
+              "label": "Energie‑Zähler‑DP (kWh)",
               "xs": 12,
               "sm": 6,
               "md": 4,
-              "tooltip": "ioBroker State-ID des Energiezählers (kWh, kumuliert).",
               "attr": "energyTotalId",
-              "title": "Energie-Zähler-DP (kWh)",
+              "title": "Energie‑Zähler‑DP (kWh)",
               "types": [
                 "state"
               ],
@@ -1234,17 +1306,18 @@
               },
               "multiline": true,
               "rows": 2,
-              "showName": true
+              "showName": true,
+              "tooltip": "State-ID des Energiezählers dieser Wallbox (kWh).",
+              "expert": true
             },
             {
               "type": "objectId",
-              "label": "Status-DP (optional)",
+              "label": "Status‑DP (optional)",
               "xs": 12,
               "sm": 6,
               "md": 4,
-              "tooltip": "Optional: ioBroker State-ID für Status (z.B. lädt/aktiv).",
               "attr": "statusId",
-              "title": "Status-DP (optional)",
+              "title": "Status‑DP (optional)",
               "types": [
                 "state"
               ],
@@ -1255,17 +1328,18 @@
               },
               "multiline": true,
               "rows": 2,
-              "showName": true
+              "showName": true,
+              "tooltip": "Optional: Status-State (string/number) der Wallbox.",
+              "expert": true
             },
             {
               "type": "objectId",
-              "label": "Freigabe-DP (optional)",
+              "label": "Freigabe‑DP (optional)",
               "xs": 12,
               "sm": 6,
               "md": 4,
-              "tooltip": "Optional: Schreibbarer DP zum Sperren/Freigeben (bool).",
               "attr": "activeId",
-              "title": "Freigabe-DP (optional)",
+              "title": "Freigabe‑DP (optional)",
               "types": [
                 "state"
               ],
@@ -1276,17 +1350,18 @@
               },
               "multiline": true,
               "rows": 2,
-              "showName": true
+              "showName": true,
+              "tooltip": "Optional: Freigabe/Enable-State (bool).",
+              "expert": true
             },
             {
               "type": "objectId",
-              "label": "Modus-DP (optional)",
+              "label": "Modus‑DP (optional)",
               "xs": 12,
               "sm": 6,
               "md": 4,
-              "tooltip": "Optional: Schreibbarer DP für Modus/Limit (number).",
               "attr": "modeId",
-              "title": "Modus-DP (optional)",
+              "title": "Modus‑DP (optional)",
               "types": [
                 "state"
               ],
@@ -1297,17 +1372,18 @@
               },
               "multiline": true,
               "rows": 2,
-              "showName": true
+              "showName": true,
+              "tooltip": "Optional: Modus-State (z. B. PV/Normal) des Herstellers.",
+              "expert": true
             },
             {
               "type": "objectId",
-              "label": "RFID-DP (optional)",
+              "label": "RFID‑DP (optional)",
               "xs": 12,
               "sm": 6,
               "md": 4,
-              "tooltip": "Optional: RFID-Leser DP (String/Zahl). Wird für Karten-Anlernen & Whitelist-Freigabe genutzt.",
               "attr": "rfidReadId",
-              "title": "RFID-DP (optional)",
+              "title": "RFID‑DP (optional)",
               "types": [
                 "state"
               ],
@@ -1318,17 +1394,18 @@
               },
               "multiline": true,
               "rows": 2,
-              "showName": true
+              "showName": true,
+              "tooltip": "Optional: RFID Reader State-ID (für Whitelist/Lernen).",
+              "expert": true
             },
             {
               "type": "objectId",
-              "label": "Sperre-DP (optional)",
+              "label": "Sperre‑DP (optional)",
               "xs": 12,
               "sm": 6,
               "md": 4,
-              "tooltip": "Optional: Schreibbarer DP zum Sperren/Freigeben (bool). Falls vorhanden, kann später statt Freigabe-DP verwendet werden.",
               "attr": "lockWriteId",
-              "title": "Sperre-DP (optional)",
+              "title": "Sperre‑DP (optional)",
               "types": [
                 "state"
               ],
@@ -1339,14 +1416,215 @@
               },
               "multiline": true,
               "rows": 2,
-              "showName": true
+              "showName": true,
+              "tooltip": "Optional: Lock/Sperre State-ID (write).",
+              "expert": true
+            },
+            {
+              "type": "objectId",
+              "label": "Online‑DP (optional)",
+              "xs": 12,
+              "sm": 6,
+              "md": 4,
+              "attr": "onlineId",
+              "title": "Online‑DP (optional)",
+              "types": [
+                "state"
+              ],
+              "placeholder": "Objekt auswählen …",
+              "style": {
+                "minWidth": "260px",
+                "fontFamily": "monospace"
+              },
+              "multiline": true,
+              "rows": 2,
+              "showName": true,
+              "tooltip": "Optional: true/false ob Wallbox online/verbunden ist.",
+              "expert": true
+            },
+            {
+              "type": "objectId",
+              "label": "Enable‑Write‑DP (optional)",
+              "xs": 12,
+              "sm": 6,
+              "md": 4,
+              "attr": "enableWriteId",
+              "title": "Enable‑Write‑DP (optional)",
+              "types": [
+                "state"
+              ],
+              "placeholder": "Objekt auswählen …",
+              "style": {
+                "minWidth": "260px",
+                "fontFamily": "monospace"
+              },
+              "multiline": true,
+              "rows": 2,
+              "showName": true,
+              "tooltip": "Optional: State-ID um die Wallbox zu aktivieren/deaktivieren (write).",
+              "expert": true
+            },
+            {
+              "type": "select",
+              "label": "Typ",
+              "attr": "chargerType",
+              "xs": 12,
+              "sm": 6,
+              "md": 2,
+              "options": [
+                {
+                  "label": "AC",
+                  "value": "ac"
+                },
+                {
+                  "label": "DC",
+                  "value": "dc"
+                }
+              ],
+              "style": {
+                "minWidth": "120px"
+              },
+              "tooltip": "Für Umrechnung/Regelung: AC (Strom‑geführt) oder DC (Watt‑geführt).",
+              "expert": true
+            },
+            {
+              "type": "number",
+              "label": "Phasen",
+              "attr": "phases",
+              "xs": 12,
+              "sm": 6,
+              "md": 2,
+              "style": {
+                "minWidth": "110px"
+              },
+              "min": 1,
+              "max": 3,
+              "tooltip": "1..3 (AC). Standard: 3.",
+              "expert": true
+            },
+            {
+              "type": "number",
+              "label": "Spannung (V)",
+              "attr": "voltageV",
+              "xs": 12,
+              "sm": 6,
+              "md": 2,
+              "style": {
+                "minWidth": "140px"
+              },
+              "min": 0,
+              "max": 1000,
+              "tooltip": "Für A↔W Umrechnung (AC). Typisch 230 oder 400.",
+              "expert": true
+            },
+            {
+              "type": "select",
+              "label": "Regelbasis",
+              "attr": "controlPreference",
+              "xs": 12,
+              "sm": 6,
+              "md": 3,
+              "options": [
+                {
+                  "label": "Auto",
+                  "value": "auto"
+                },
+                {
+                  "label": "A bevorzugen",
+                  "value": "currentA"
+                },
+                {
+                  "label": "W bevorzugen",
+                  "value": "powerW"
+                }
+              ],
+              "style": {
+                "minWidth": "160px"
+              },
+              "tooltip": "Optional: erzwingt ob in A oder W geschrieben wird, wenn beide Setpoints existieren.",
+              "expert": true
+            },
+            {
+              "type": "number",
+              "label": "Min A",
+              "attr": "minCurrentA",
+              "xs": 12,
+              "sm": 6,
+              "md": 2,
+              "style": {
+                "minWidth": "110px"
+              },
+              "min": 0,
+              "max": 80,
+              "tooltip": "Minimaler Strom pro Phase.",
+              "expert": true
+            },
+            {
+              "type": "number",
+              "label": "Max A",
+              "attr": "maxCurrentA",
+              "xs": 12,
+              "sm": 6,
+              "md": 2,
+              "style": {
+                "minWidth": "110px"
+              },
+              "min": 0,
+              "max": 200,
+              "tooltip": "Maximaler Strom pro Phase.",
+              "expert": true
+            },
+            {
+              "type": "number",
+              "label": "Max W",
+              "attr": "maxPowerW",
+              "xs": 12,
+              "sm": 6,
+              "md": 2,
+              "style": {
+                "minWidth": "130px"
+              },
+              "min": 0,
+              "max": 1000000,
+              "tooltip": "Maximale Ladeleistung (W).",
+              "expert": true
+            },
+            {
+              "type": "number",
+              "label": "Step A",
+              "attr": "stepA",
+              "xs": 12,
+              "sm": 6,
+              "md": 2,
+              "style": {
+                "minWidth": "110px"
+              },
+              "min": 0,
+              "max": 10,
+              "tooltip": "Strom‑Schrittweite für Sollwert (A).",
+              "expert": true
+            },
+            {
+              "type": "number",
+              "label": "Step W",
+              "attr": "stepW",
+              "xs": 12,
+              "sm": 6,
+              "md": 2,
+              "style": {
+                "minWidth": "110px"
+              },
+              "min": 0,
+              "max": 10000,
+              "tooltip": "Leistungs‑Schrittweite für Sollwert (W).",
+              "expert": true
             }
           ],
           "style": {
-            "overflowX": "auto"
+            "width": "100%"
           },
           "tableStyle": {
-            "minWidth": "1450px"
+            "minWidth": "1750px"
           }
         }
       },

@@ -143,6 +143,25 @@ async syncInstallerConfigToStates() {
       const statusId = (row && typeof row.statusId === 'string' && row.statusId.trim()) ? row.statusId.trim() : '';
       const activeId = (row && typeof row.activeId === 'string' && row.activeId.trim()) ? row.activeId.trim() : '';
       const modeId = (row && typeof row.modeId === 'string' && row.modeId.trim()) ? row.modeId.trim() : '';
+      // EMS control datapoints (optional, per wallbox)
+      const setCurrentAId = (row && typeof row.setCurrentAId === 'string' && row.setCurrentAId.trim()) ? row.setCurrentAId.trim() : '';
+      const setPowerWId = (row && typeof row.setPowerWId === 'string' && row.setPowerWId.trim()) ? row.setPowerWId.trim() : '';
+      const onlineId = (row && typeof row.onlineId === 'string' && row.onlineId.trim()) ? row.onlineId.trim() : '';
+      const enableWriteId = (row && typeof row.enableWriteId === 'string' && row.enableWriteId.trim()) ? row.enableWriteId.trim() : '';
+      // Meta / conversion (optional)
+      const chargerType = (row && typeof row.chargerType === 'string' && row.chargerType.trim()) ? row.chargerType.trim() : 'ac';
+      const phases = (row && row.phases !== undefined && row.phases !== null && String(row.phases).trim() !== '' && Number.isFinite(Number(row.phases))) ? Math.max(1, Math.min(3, Math.round(Number(row.phases)))) : 3;
+      const voltageV = (row && row.voltageV !== undefined && row.voltageV !== null && String(row.voltageV).trim() !== '' && Number.isFinite(Number(row.voltageV))) ? Math.round(Number(row.voltageV)) : 230;
+      const controlPreference = (row && typeof row.controlPreference === 'string' && row.controlPreference.trim()) ? row.controlPreference.trim() : 'auto';
+      const minCurrentA = (row && row.minCurrentA !== undefined && row.minCurrentA !== null && String(row.minCurrentA).trim() !== '' && Number.isFinite(Number(row.minCurrentA))) ? Number(row.minCurrentA) : 0;
+      const maxCurrentA = (row && row.maxCurrentA !== undefined && row.maxCurrentA !== null && String(row.maxCurrentA).trim() !== '' && Number.isFinite(Number(row.maxCurrentA))) ? Number(row.maxCurrentA) : 0;
+      const maxPowerW = (row && row.maxPowerW !== undefined && row.maxPowerW !== null && String(row.maxPowerW).trim() !== '' && Number.isFinite(Number(row.maxPowerW))) ? Number(row.maxPowerW) : 0;
+      const stepA = (row && row.stepA !== undefined && row.stepA !== null && String(row.stepA).trim() !== '' && Number.isFinite(Number(row.stepA))) ? Number(row.stepA) : 0;
+      const stepW = (row && row.stepW !== undefined && row.stepW !== null && String(row.stepW).trim() !== '' && Number.isFinite(Number(row.stepW))) ? Number(row.stepW) : 0;
+      let userMode = (row && typeof row.userMode === 'string' && row.userMode.trim()) ? row.userMode.trim() : 'auto';
+      userMode = String(userMode).toLowerCase();
+      if (userMode === 'min+pv') userMode = 'minpv';
+      if (!['auto','pv','minpv','boost'].includes(userMode)) userMode = 'auto';
       // Optional: Sperre/Lock DP (bool). Alternative zu activeId (Freigabe).
       const lockWriteId = (row && typeof row.lockWriteId === 'string' && row.lockWriteId.trim()) ? row.lockWriteId.trim() :
         ((row && typeof row.lockId === 'string' && row.lockId.trim()) ? row.lockId.trim() :
@@ -151,7 +170,7 @@ async syncInstallerConfigToStates() {
       const rfidReadId = (row && typeof row.rfidReadId === 'string' && row.rfidReadId.trim()) ? row.rfidReadId.trim() :
         ((row && typeof row.rfidId === 'string' && row.rfidId.trim()) ? row.rfidId.trim() :
         ((row && typeof row.rfid === 'string' && row.rfid.trim()) ? row.rfid.trim() : ''));
-      evcsList.push({ index: i+1, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId });
+      evcsList.push({ index: i+1, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode });
     }
     this.evcsList = evcsList;
 

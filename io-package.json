@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.102",
+    "version": "0.4.103",
     "news": {
       "0.4.91": {
         "de": "EVCS RFID: Anlernen-UI (Karte anlernen, letzte Karte anzeigen, in Whitelist übernehmen).",
@@ -357,7 +357,7 @@
         "de": "Fix: EVCS-Berichtwerte sind im Bildschirmmodus sichtbar (einzelne Wallbox)."
       }
     },
-    "title": "NexoWatt EMS UI",
+    "title": "NexoWatt EMS FIS",
     "titleLang": {
       "en": "NexoWatt EMS UI",
       "de": "NexoWatt EMS UI"
