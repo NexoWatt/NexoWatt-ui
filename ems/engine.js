@@ -1,15 +1,27 @@
 'use strict';
 
 const { DatapointRegistry } = require('./datapoints');
-const { ChargingManagementModule } = require('./modules/charging-management');
+const { ModuleManager } = require('./module-manager');
+
+function clampNumber(n, min, max, fallback) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return fallback;
+  return Math.min(max, Math.max(min, v));
+}
 
 /**
  * Embedded EMS engine wrapper for nexowatt-vis.
  *
- * Goal for Sprint 2:
- * - Run ChargingManagementModule (from nexowatt-multiuse) INSIDE the VIS adapter
- * - Use the VIS "Wallboxen" table for wallbox mapping (Istleistung + Setpoints A/W + meta)
- * - Keep it manufacturer-independent and allow mixed A/W control
+ * Sprint 2.x:
+ * - ChargingManagementModule (from nexowatt-multiuse) runs INSIDE the VIS adapter
+ * - Per Ladepunkt runtime mode: auto|pv|minpv|boost via chargingManagement.wallboxes.*.userMode
+ *
+ * Sprint 2.2:
+ * - Stationsgruppen (gemeinsame Leistungsgrenze) + Ladepunkt-/Connector-Begriff
+ *
+ * Sprint 3:
+ * - Weitere Multiuse-Module (z.B. Peak Shaving) via ModuleManager
+ * - Konfiguration in Admin-UI (jsonConfig) über enablePeakShaving / peakShaving.*
  */
 class EmsEngine {
   /**
@@ -18,9 +30,40 @@ class EmsEngine {
   constructor(adapter) {
     this.adapter = adapter;
     this.dp = null;
-    this.charging = null;
+    this.mm = null;
     this._timer = null;
     this._intervalMs = 1000;
+
+    // derived/internal state ids
+    this._gridPowerId = '';
+  }
+
+  /**
+   * Ensure small internal helper states (derived values) exist.
+   */
+  async _ensureInternalStates() {
+    const a = this.adapter;
+    await a.setObjectNotExistsAsync('ems', {
+      type: 'channel',
+      common: { name: 'EMS (intern)' },
+      native: {},
+    });
+
+    await a.setObjectNotExistsAsync('ems.gridPowerW', {
+      type: 'state',
+      common: {
+        name: 'Netzleistung (W) (intern, Import + / Export -)',
+        type: 'number',
+        role: 'value.power',
+        read: true,
+        write: false,
+        unit: 'W',
+        def: 0,
+      },
+      native: {},
+    });
+
+    this._gridPowerId = `${a.namespace}.ems.gridPowerW`;
   }
 
   /**
@@ -30,32 +73,57 @@ class EmsEngine {
     const adapter = this.adapter;
     const cfg = adapter.config || {};
 
-    // --- Budget defaults (fast MVP): use configured EVCS max power ---
+    // --- Budget defaults: use configured EVCS max power ---
     const settingsCfg = cfg.settingsConfig || {};
     const ratedKw = Number(settingsCfg.evcsMaxPowerKw || 11);
     const ratedW = Math.round((Number.isFinite(ratedKw) ? ratedKw : 11) * 1000);
 
-    // --- PV surplus source (fast MVP): prefer export power mapping ---
+    // --- PV surplus source: prefer export power mapping ---
     const dps = cfg.datapoints || {};
-    const pvSurplusPowerId = (typeof dps.gridSellPower === 'string' ? dps.gridSellPower.trim() : '') || '';
+    const gridBuyPowerId = (typeof dps.gridBuyPower === 'string' ? dps.gridBuyPower.trim() : '') || '';
+    const gridSellPowerId = (typeof dps.gridSellPower === 'string' ? dps.gridSellPower.trim() : '') || '';
+    const pvSurplusPowerId = gridSellPowerId;
+
+    // Default net grid power:
+    // 1) If buy/sell are mapped, use internal derived state ems.gridPowerW
+    // 2) Else (optional) fall back to PeakShaving gridPointPowerId if set in config
+    const peakGridPowerId = (cfg.peakShaving && typeof cfg.peakShaving.gridPointPowerId === 'string') ? cfg.peakShaving.gridPointPowerId.trim() : '';
+    const defaultGridPowerId = (gridBuyPowerId || gridSellPowerId) ? this._gridPowerId : (peakGridPowerId || '');
 
     // --- Wallboxes from already normalized evcsList (created in syncSettingsConfigToStates) ---
     const list = Array.isArray(adapter.evcsList) ? adapter.evcsList : [];
 
+    // --- Stationsgruppen (settingsConfig.stationGroups table) ---
+    const sgRaw = Array.isArray(settingsCfg.stationGroups) ? settingsCfg.stationGroups : [];
+    const stationGroups = [];
+    const stationGroupMap = {};
+    for (const g of sgRaw) {
+      if (!g) continue;
+      const stationKey = (typeof g.stationKey === 'string' && g.stationKey.trim()) ? g.stationKey.trim() : '';
+      if (!stationKey) continue;
+      const name = (typeof g.name === 'string' && g.name.trim()) ? g.name.trim() : '';
+      const maxPowerKw = (g.maxPowerKw !== undefined && g.maxPowerKw !== null && String(g.maxPowerKw).trim() !== '' && Number.isFinite(Number(g.maxPowerKw))) ? Number(g.maxPowerKw) : 0;
+      const maxPowerW = Math.max(0, Math.round(maxPowerKw * 1000));
+      stationGroups.push({ stationKey, name, maxPowerKw, maxPowerW });
+      stationGroupMap[stationKey] = { stationKey, name, maxPowerKw, maxPowerW };
+    }
+
     const wallboxes = [];
+
+    // Global electrical default for W<->A conversion inside the embedded module.
+    let globalVoltageV = 230;
+
     for (const wb of list) {
       if (!wb) continue;
       const idx = Number(wb.index);
       if (!Number.isFinite(idx) || idx <= 0) continue;
 
-      const key = `wb${idx}`; // stable key independent from name
+      // Stable key independent from name (treat each entry as a charge point / connector)
+      const key = `lp${idx}`;
 
       const actualPowerWId = (wb.powerId || '').trim();
       const setCurrentAId = (wb.setCurrentAId || '').trim();
       const setPowerWId = (wb.setPowerWId || '').trim();
-
-      // If no setpoints are mapped, the wallbox can still be monitored but cannot be controlled.
-      // We'll still include it, but the module will mark it as NO_SETPOINT.
 
       // Online detection: prefer explicit online dp (bool), otherwise statusId
       const statusId = ((wb.onlineId || '').trim()) || ((wb.statusId || '').trim()) || '';
@@ -69,6 +137,8 @@ class EmsEngine {
 
       const phases = (Number(wb.phases) === 1) ? 1 : 3;
       const voltageV = (Number.isFinite(Number(wb.voltageV)) && Number(wb.voltageV) > 0) ? Math.round(Number(wb.voltageV)) : 230;
+      if (!Number.isFinite(Number(globalVoltageV)) || Number(globalVoltageV) <= 0) globalVoltageV = 230;
+      if (globalVoltageV === 230 && voltageV !== 230) globalVoltageV = voltageV;
 
       const controlPreference = String(wb.controlPreference || 'auto').trim().toLowerCase();
       // multiuse expects controlBasis: auto|currentA|powerW|none
@@ -89,6 +159,11 @@ class EmsEngine {
       if (userModeDefault === 'min+pv') userModeDefault = 'minpv';
       if (!['auto', 'pv', 'minpv', 'boost'].includes(userModeDefault)) userModeDefault = 'auto';
 
+      // Stationsgruppe/Connector Meta (optional)
+      const stationKey = (typeof wb.stationKey === 'string' && wb.stationKey.trim()) ? wb.stationKey.trim() : '';
+      const connectorNo = (Number.isFinite(Number(wb.connectorNo)) && Number(wb.connectorNo) > 0) ? Math.round(Number(wb.connectorNo)) : 0;
+      const allowBoost = (wb.allowBoost !== false);
+
       wallboxes.push({
         key,
         name: wb.name || key,
@@ -99,8 +174,10 @@ class EmsEngine {
         controlBasis,
         phases,
 
-        // per-wallbox meta
-        // Note: voltageV is global in multiuse cfg; we set it globally below.
+        // Stationsmeta
+        ...(stationKey ? { stationKey } : {}),
+        ...(connectorNo > 0 ? { connectorNo } : {}),
+        ...(allowBoost === false ? { allowBoost: false } : { allowBoost: true }),
 
         // limits
         ...(minA > 0 ? { minA } : {}),
@@ -128,18 +205,21 @@ class EmsEngine {
       // Keep consistent with multiuse module
       mode: anyControl ? 'mixed' : 'off',
 
-      // PV-only is handled per-wallbox via runtime mode (pv/minpv). Keep global default off for MVP.
+      // PV-only is handled per-wallbox via runtime mode (pv/minpv). Keep global default off.
       pvSurplusOnly: false,
 
-      // Budget: use engine (currently only static used; later we can add tariff/peak/datapoint)
+      // Budget: engine (static+tariff+peak+external; implemented in module)
       totalBudgetMode: 'engine',
       staticMaxChargingPowerW: ratedW,
 
       // PV surplus input (optional)
       ...(pvSurplusPowerId ? { pvSurplusPowerId } : {}),
 
+      // Provide a default NET grid power id (derived from buy/sell) so minpv/pv logic can work out-of-the-box
+      ...(defaultGridPowerId ? { gridPowerId: defaultGridPowerId } : {}),
+
       // Global electrical defaults
-      voltageV,
+      voltageV: globalVoltageV,
       defaultPhases: 3,
 
       // Stability defaults (anti-flutter, safe)
@@ -152,35 +232,71 @@ class EmsEngine {
       stepA: 0.1,
       stepW: 25,
 
+      // Station groups (optional)
+      ...(stationGroups.length ? { stationGroups } : {}),
+
       // per wallbox list
       wallboxes,
     };
 
-    return { anyControl, chargingCfg };
+    return { anyControl, chargingCfg, stationGroups, stationGroupMap };
   }
 
   async init() {
     const adapter = this.adapter;
 
-    // Configure scheduler interval (future: make configurable via Admin)
-    this._intervalMs = 1000;
+    await this._ensureInternalStates();
+
+    // Scheduler interval from config (Admin UI / jsonConfig)
+    const cfgInterval = adapter.config && adapter.config.schedulerIntervalMs;
+    this._intervalMs = clampNumber(cfgInterval, 250, 10000, 1000);
 
     const { anyControl, chargingCfg } = this._buildChargingConfig();
 
-    // Inject config for the embedded multiuse module
-    adapter.config.enableChargingManagement = !!anyControl;
+    // Respect Admin toggle (default true if undefined)
+    const userWantsCharging = (adapter.config.enableChargingManagement !== false);
+
+    // Inject config for embedded modules
+    adapter.config.enableChargingManagement = !!anyControl && !!userWantsCharging;
     adapter.config.chargingManagement = chargingCfg;
+
+    // If PeakShaving is enabled but no gridPointPowerId is set, default to internal derived net grid power
+    if (adapter.config.enablePeakShaving) {
+      adapter.config.peakShaving = adapter.config.peakShaving || {};
+      const gp = typeof adapter.config.peakShaving.gridPointPowerId === 'string' ? adapter.config.peakShaving.gridPointPowerId.trim() : '';
+      if (!gp && this._gridPowerId) {
+        adapter.config.peakShaving.gridPointPowerId = this._gridPowerId;
+      }
+    }
 
     // Datapoint registry (multiuse)
     this.dp = new DatapointRegistry(adapter, []);
     await this.dp.init();
 
-    // Charging module
-    this.charging = new ChargingManagementModule(adapter, this.dp);
-    await this.charging.init();
+    // Register VIS datapoints needed for derived net grid power
+    const dps = (adapter.config && adapter.config.datapoints) ? adapter.config.datapoints : {};
+    const gridBuyId = (typeof dps.gridBuyPower === 'string') ? dps.gridBuyPower.trim() : '';
+    const gridSellId = (typeof dps.gridSellPower === 'string') ? dps.gridSellPower.trim() : '';
 
-    // Subscribe to our own chargingManagement.* states so VIS /api/state sees them
+    if (gridBuyId) await this.dp.upsert({ key: 'vis.gridBuyW', objectId: gridBuyId, dataType: 'number', direction: 'in', unit: 'W' });
+    if (gridSellId) await this.dp.upsert({ key: 'vis.gridSellW', objectId: gridSellId, dataType: 'number', direction: 'in', unit: 'W' });
+
+    // Map internal net grid power to generic key used by modules as fallback
+    if (this._gridPowerId) {
+      await this.dp.upsert({ key: 'grid.powerW', objectId: this._gridPowerId, dataType: 'number', direction: 'in', unit: 'W' });
+      await this.dp.upsert({ key: 'ems.gridPowerW', objectId: this._gridPowerId, dataType: 'number', direction: 'in', unit: 'W' });
+    }
+
+    // Module manager (PeakShaving / Charging / Tarif / optional Storage etc.)
+    this.mm = new ModuleManager(adapter, this.dp);
+    await this.mm.init();
+
+    // Subscribe to our own states for convenience (Admin/VIS)
+    try { adapter.subscribeStates('ems.*'); } catch (_e) {}
     try { adapter.subscribeStates('chargingManagement.*'); } catch (_e) {}
+    try { adapter.subscribeStates('peakShaving.*'); } catch (_e) {}
+    try { adapter.subscribeStates('tarif.*'); } catch (_e) {}
+    try { adapter.subscribeStates('speicher.*'); } catch (_e) {}
 
     // Start scheduler
     if (this._timer) clearInterval(this._timer);
@@ -190,15 +306,33 @@ class EmsEngine {
       });
     }, this._intervalMs);
 
-    adapter.log.info(`[EMS] Charging management embedded: ${anyControl ? 'ENABLED' : 'DISABLED'} (interval ${this._intervalMs}ms)`);
+    adapter.log.info(`[EMS] Embedded engine started (interval ${this._intervalMs}ms) — CM=${adapter.config.enableChargingManagement ? 'ON' : 'OFF'} PS=${adapter.config.enablePeakShaving ? 'ON' : 'OFF'}`);
   }
 
   async tick() {
-    if (!this.adapter) return;
-    if (!this.dp || !this.charging) return;
+    if (!this.adapter || !this.dp || !this.mm) return;
 
-    // In Sprint 2, config changes require adapter restart. We keep tick minimal.
-    await this.charging.tick();
+    // Derived net grid power (Import + / Export -) from separate buy/sell channels
+    try {
+      const buyW = this.dp.getNumber('vis.gridBuyW', 0) || 0;
+      const sellW = this.dp.getNumber('vis.gridSellW', 0) || 0;
+      const netW = Math.round(Number(buyW) - Number(sellW));
+      if (this._gridPowerId) {
+        try {
+          await this.adapter.setStateAsync('ems.gridPowerW', { val: netW, ack: true });
+        } catch (_e) {}
+        // Update dp cache explicitly (own states might not be subscribed)
+        try {
+          if (typeof this.dp.handleStateChange === 'function') {
+            this.dp.handleStateChange(this._gridPowerId, { val: netW, ack: true, ts: Date.now() });
+          }
+        } catch (_e2) {}
+      }
+    } catch (_e) {
+      // ignore
+    }
+
+    await this.mm.tick();
   }
 
   stop() {

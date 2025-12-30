@@ -134,7 +134,7 @@ async syncInstallerConfigToStates() {
     const ratedW  = Math.round(ratedKw * 1000);
     const evcsCount = Math.max(1, Math.min(20, Math.round(Number(cfg.evcsCount || 1))));
     this.evcsCount = evcsCount;
-    this.log.info(`[NexoWatt VIS] Wallboxen konfiguriert: ${evcsCount}`);
+    this.log.info(`[NexoWatt VIS] Ladepunkte konfiguriert: ${evcsCount}`);
 
 
     // derive evcs list (names) from config; keep it stable and always at least evcsCount entries
@@ -142,7 +142,7 @@ async syncInstallerConfigToStates() {
     const evcsList = [];
     for (let i = 0; i < evcsCount; i++) {
       const row = rawList[i] || {};
-      const name = (row && typeof row.name === 'string' && row.name.trim()) ? row.name.trim() : `Wallbox ${i+1}`;
+      const name = (row && typeof row.name === 'string' && row.name.trim()) ? row.name.trim() : `Ladepunkt ${i+1}`;
       const note = (row && typeof row.note === 'string' && row.note.trim()) ? row.note.trim() : '';
       const powerId = (row && typeof row.powerId === 'string' && row.powerId.trim()) ? row.powerId.trim() : '';
       const energyTotalId = (row && typeof row.energyTotalId === 'string' && row.energyTotalId.trim()) ? row.energyTotalId.trim() : '';
@@ -168,6 +168,12 @@ async syncInstallerConfigToStates() {
       userMode = String(userMode).toLowerCase();
       if (userMode === 'min+pv') userMode = 'minpv';
       if (!['auto','pv','minpv','boost'].includes(userMode)) userMode = 'auto';
+      // Stationsgruppen / Ladepunkt-Metadaten (Sprint 2.2)
+      const stationKey = (row && typeof row.stationKey === 'string' && row.stationKey.trim()) ? row.stationKey.trim() : '';
+      const connectorNo = (row && row.connectorNo !== undefined && row.connectorNo !== null && String(row.connectorNo).trim() !== '' && Number.isFinite(Number(row.connectorNo)))
+        ? Math.max(0, Math.round(Number(row.connectorNo)))
+        : 0;
+      const allowBoost = (row && row.allowBoost !== undefined && row.allowBoost !== null) ? !!row.allowBoost : true;
       // Optional: Sperre/Lock DP (bool). Alternative zu activeId (Freigabe).
       const lockWriteId = (row && typeof row.lockWriteId === 'string' && row.lockWriteId.trim()) ? row.lockWriteId.trim() :
         ((row && typeof row.lockId === 'string' && row.lockId.trim()) ? row.lockId.trim() :
@@ -176,9 +182,27 @@ async syncInstallerConfigToStates() {
       const rfidReadId = (row && typeof row.rfidReadId === 'string' && row.rfidReadId.trim()) ? row.rfidReadId.trim() :
         ((row && typeof row.rfidId === 'string' && row.rfidId.trim()) ? row.rfidId.trim() :
         ((row && typeof row.rfid === 'string' && row.rfid.trim()) ? row.rfid.trim() : ''));
-      evcsList.push({ index: i+1, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode });
+      evcsList.push({ index: i+1, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost });
     }
     this.evcsList = evcsList;
+    // Stationsgruppen (für DC-Stationen mit mehreren Ladepunkten)
+    const sgRaw = Array.isArray(cfg.stationGroups) ? cfg.stationGroups : [];
+    const stationGroups = [];
+    const stationGroupMap = {};
+    for (const g of sgRaw) {
+      if (!g) continue;
+      const stationKey = (typeof g.stationKey === 'string' && g.stationKey.trim()) ? g.stationKey.trim() : '';
+      if (!stationKey) continue;
+      const name = (typeof g.name === 'string' && g.name.trim()) ? g.name.trim() : '';
+      const maxPowerKw = (g.maxPowerKw !== undefined && g.maxPowerKw !== null && String(g.maxPowerKw).trim() !== '' && Number.isFinite(Number(g.maxPowerKw))) ? Number(g.maxPowerKw) : 0;
+      const maxPowerW = Math.max(0, Math.round(maxPowerKw * 1000));
+      stationGroups.push({ stationKey, name, maxPowerKw, maxPowerW });
+      stationGroupMap[stationKey] = { stationKey, name, maxPowerKw, maxPowerW };
+    }
+    this.stationGroups = stationGroups;
+    this.stationGroupMap = stationGroupMap;
+
+
 
     // quick lookup for RFID reader datapoints (used by learning backend + access control)
     this.evcsRfidReadIds = new Set();
@@ -231,12 +255,12 @@ async syncInstallerConfigToStates() {
     for (let i = 1; i <= count; i++) {
       await this.setObjectNotExistsAsync(`evcs.${i}`, {
         type: 'channel',
-        common: { name: `Wallbox ${i}` },
+        common: { name: `Ladepunkt ${i}` },
         native: {}
       });
 
       const defs = {
-        name:          { type: 'string', role: 'text', def: `Wallbox ${i}`, read: true, write: false },
+        name:          { type: 'string', role: 'text', def: `Ladepunkt ${i}`, read: true, write: false },
         note:          { type: 'string', role: 'text', def: '', read: true, write: false },
         powerW:        { type: 'number', role: 'value.power', def: 0, read: true, write: false, unit: 'W' },
         energyTotalKwh:{ type: 'number', role: 'value.energy', def: 0, read: true, write: false, unit: 'kWh' },
@@ -529,7 +553,7 @@ async syncInstallerConfigToStates() {
       if (this._evcsActiveSessions[idx]) return; // already active
 
       const wb = (this.evcsList || []).find(w => Number(w.index) === Number(idx));
-      const wbName = (wb && wb.name) ? String(wb.name) : (this.stateCache[`evcs.${idx}.name`]?.value ? String(this.stateCache[`evcs.${idx}.name`].value) : `Wallbox ${idx}`);
+      const wbName = (wb && wb.name) ? String(wb.name) : (this.stateCache[`evcs.${idx}.name`]?.value ? String(this.stateCache[`evcs.${idx}.name`].value) : `Ladepunkt ${idx}`);
 
       const rfid = this.normalizeRfidCode(this.stateCache[`evcs.${idx}.rfidLast`]?.value);
       const user = this.stateCache[`evcs.${idx}.rfidUser`]?.value ? String(this.stateCache[`evcs.${idx}.rfidUser`].value) : '';
@@ -629,7 +653,7 @@ async syncInstallerConfigToStates() {
       const entry = {
         id: `wb${idx}-${Number(sess.startTs) || endTs}`,
         wallboxIndex: idx,
-        wallboxName: sess.wbName || `Wallbox ${idx}`,
+        wallboxName: sess.wbName || `Ladepunkt ${idx}`,
         startTs: Number(sess.startTs) || endTs,
         endTs,
         durationSec: durSec,
@@ -1081,7 +1105,7 @@ buildSmartHomeDevicesFromConfig() {
 
   pushSwitch(dps.wallboxLock, {
     id: 'wallboxLock',
-    alias: 'Wallbox-Sperre',
+    alias: 'Ladepunkt-Sperre',
     room: 'Ladestation',
     func: 'EV',
     icon: 'EV',
@@ -2054,7 +2078,7 @@ const nwBuildEvcsReport = async (query = {}) => {
   }
 
   const evcs = Array.isArray(this.evcsList) ? this.evcsList : [];
-  const wallboxes = evcs.map(wb => ({ index: wb.index, name: wb.name || `Wallbox ${wb.index}`, note: wb.note || '' }));
+  const wallboxes = evcs.map(wb => ({ index: wb.index, name: wb.name || `Ladepunkt ${wb.index}`, note: wb.note || '' }));
 
   // ---- history helpers ----
   const MAX_HISTORY_POINTS = 60000;
@@ -2274,9 +2298,9 @@ app.get('/api/evcs/report', async (req, res) => {
 
 // ---- EVCS CSV helpers ----
 const nwWbLabel = (wb) => {
-  if (!wb) return 'Wallbox';
+  if (!wb) return 'Ladepunkt';
   if (wb.name && String(wb.name).trim()) return String(wb.name).trim();
-  return `Wallbox ${wb.index}`;
+  return `Ladepunkt ${wb.index}`;
 };
 
 const nwCsvEscape = (v) => {
@@ -2424,7 +2448,7 @@ const nwEvcsSessionsToCsv = (sessions) => {
     'Start',
     'Ende',
     'Dauer_min',
-    'Wallbox',
+    'Ladepunkt',
     'RFID',
     'Name',
     'Freigegeben',
@@ -2452,7 +2476,7 @@ const nwEvcsSessionsToCsv = (sessions) => {
       startTs ? nwTimeHhMm(startTs) : '',
       endTs ? nwTimeHhMm(endTs) : '',
       String(Number.isFinite(durMin) ? durMin : 0),
-      (s && (s.wallboxName || s.wbName)) ? String(s.wallboxName || s.wbName) : (s && s.wallboxIndex ? `Wallbox ${s.wallboxIndex}` : ''),
+      (s && (s.wallboxName || s.wbName)) ? String(s.wallboxName || s.wbName) : (s && s.wallboxIndex ? `Ladepunkt ${s.wallboxIndex}` : ''),
       (s && s.rfid) ? String(s.rfid) : '',
       (s && s.user) ? String(s.user) : '',
       (s && s.authorized) ? 'JA' : 'NEIN',

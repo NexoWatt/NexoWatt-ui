@@ -123,10 +123,10 @@ class ChargingManagementModule extends BaseModule {
             });
         };
 
-        await mk('chargingManagement.wallboxCount', 'Wallbox count', 'number', 'value');
+        await mk('chargingManagement.wallboxCount', 'Ladepunkt count', 'number', 'value');
         await mk('chargingManagement.summary.totalPowerW', 'Total power (W)', 'number', 'value.power');
         await mk('chargingManagement.summary.totalCurrentA', 'Total current (A)', 'number', 'value.current');
-        await mk('chargingManagement.summary.onlineWallboxes', 'Online wallboxes', 'number', 'value');
+        await mk('chargingManagement.summary.onlineWallboxes', 'Online Ladepunkte', 'number', 'value');
         await mk('chargingManagement.summary.totalTargetPowerW', 'Total target power (W)', 'number', 'value.power');
         await mk('chargingManagement.summary.totalTargetCurrentA', 'Total target current (A)', 'number', 'value.current');
         await mk('chargingManagement.summary.lastUpdate', 'Last update', 'number', 'value.time');
@@ -157,7 +157,7 @@ class ChargingManagementModule extends BaseModule {
 
         await this.adapter.setObjectNotExistsAsync('chargingManagement.wallboxes', {
             type: 'channel',
-            common: { name: 'Wallboxes' },
+            common: { name: 'Ladepunkte' },
             native: {},
         });
 
@@ -211,6 +211,10 @@ class ChargingManagementModule extends BaseModule {
         await mk('priority', 'Priority', 'number', 'value');
         await mk('chargerType', 'Charger type', 'string', 'text');
         await mk('controlBasis', 'Control basis', 'string', 'text');
+        await mk('stationKey', 'Station key', 'string', 'text');
+        await mk('connectorNo', 'Connector no.', 'number', 'value');
+        await mk('stationMaxPowerW', 'Station max power (W)', 'number', 'value.power');
+        await mk('allowBoost', 'Boost allowed', 'boolean', 'indicator');
         await mk('phases', 'Phases', 'number', 'value');
         await mk('minPowerW', 'Min power (W)', 'number', 'value.power');
         await mk('maxPowerW', 'Max power (W)', 'number', 'value.power');
@@ -262,6 +266,30 @@ class ChargingManagementModule extends BaseModule {
         const cfg = this.adapter.config.chargingManagement || {};
         const mode = String(cfg.mode || 'off'); // off | pvSurplus | mixed (future)
         const wallboxes = Array.isArray(cfg.wallboxes) ? cfg.wallboxes : [];
+
+        // Stationsgruppen (optional): gemeinsame Leistungsgrenze pro Station (z. B. DC‑Station mit mehreren Ladepunkten)
+        const stationGroups = Array.isArray(cfg.stationGroups) ? cfg.stationGroups : [];
+        /** @type {Map<string, number>} */
+        const stationCapByKey = new Map();
+        for (const g of stationGroups) {
+            if (!g) continue;
+            const sk = String(g.stationKey || '').trim();
+            if (!sk) continue;
+
+            // Allow config in W (maxPowerW) or kW (maxPowerKw)
+            let capW = null;
+            if (g.maxPowerW !== undefined && g.maxPowerW !== null && String(g.maxPowerW).trim() !== '' && Number.isFinite(Number(g.maxPowerW))) {
+                capW = Number(g.maxPowerW);
+            } else if (g.maxPowerKw !== undefined && g.maxPowerKw !== null && String(g.maxPowerKw).trim() !== '' && Number.isFinite(Number(g.maxPowerKw))) {
+                capW = Number(g.maxPowerKw) * 1000;
+            }
+            capW = clamp(num(capW, null), 0, 1e12);
+
+            if (!Number.isFinite(capW) || capW <= 0) continue;
+
+            const prev = stationCapByKey.get(sk);
+            stationCapByKey.set(sk, (typeof prev === 'number' && Number.isFinite(prev)) ? Math.min(prev, capW) : capW);
+        }
 
         const voltageV = clamp(num(cfg.voltageV, 230), 50, 400);
         const defaultPhases = Number(cfg.defaultPhases || 3) === 1 ? 1 : 3;
@@ -347,6 +375,15 @@ class ChargingManagementModule extends BaseModule {
             }
 
             const enabled = wb.enabled !== false;
+
+            // Ladepunkt-Metadaten (Stationsgruppe / Connector)
+            const stationKey = String(wb.stationKey || '').trim();
+            const connectorNo = clamp(num(wb.connectorNo, 0), 0, 9999);
+            const allowBoost = wb.allowBoost !== false;
+
+            const stationMaxPowerW = (stationKey && stationCapByKey.has(stationKey))
+                ? stationCapByKey.get(stationKey)
+                : clamp(num(wb.stationMaxPowerW, null), 0, 1e12);
             const priority = clamp(num(wb.priority, 999), 1, 999);
             const chargerType = normalizeChargerType(wb.chargerType);
             const controlBasisCfg = normalizeControlBasis(wb.controlBasis);
@@ -532,6 +569,10 @@ class ChargingManagementModule extends BaseModule {
             await this.adapter.setStateAsync(`${ch}.priority`, priority, true);
             await this.adapter.setStateAsync(`${ch}.chargerType`, chargerType, true);
             await this.adapter.setStateAsync(`${ch}.controlBasis`, controlBasis, true);
+            await this.adapter.setStateAsync(`${ch}.stationKey`, stationKey || '', true);
+            await this.adapter.setStateAsync(`${ch}.connectorNo`, connectorNo || 0, true);
+            await this.adapter.setStateAsync(`${ch}.stationMaxPowerW`, (typeof stationMaxPowerW === 'number' && Number.isFinite(stationMaxPowerW)) ? stationMaxPowerW : 0, true);
+            await this.adapter.setStateAsync(`${ch}.allowBoost`, !!allowBoost, true);
             await this.adapter.setStateAsync(`${ch}.phases`, phases, true);
             await this.adapter.setStateAsync(`${ch}.minPowerW`, minPW, true);
             await this.adapter.setStateAsync(`${ch}.maxPowerW`, maxPW, true);
@@ -556,6 +597,10 @@ class ChargingManagementModule extends BaseModule {
                 chargingSinceMs: chargingSinceForState,
                 actualPowerW: pWNum,
                 userMode,
+                stationKey,
+                connectorNo,
+                stationMaxPowerW,
+                allowBoost,
                 priority,
                 chargerType,
                 controlBasis,
@@ -642,7 +687,8 @@ class ChargingManagementModule extends BaseModule {
         let anyPvLimitedActive = false;
 
         for (const w of wbList) {
-            const override = normalizeWallboxModeOverride(w.userMode);
+            let override = normalizeWallboxModeOverride(w.userMode);
+            if (override === 'boost' && w.allowBoost === false) override = 'auto';
             let eff = 'normal';
 
             if (override === 'boost') {
@@ -902,6 +948,10 @@ if (components.length) {
                     priority: w.priority,
                     controlBasis: w.controlBasis,
                     chargerType: w.chargerType,
+                stationKey: w.stationKey || '',
+                connectorNo: w.connectorNo || 0,
+                stationMaxPowerW: (typeof w.stationMaxPowerW === 'number' && Number.isFinite(w.stationMaxPowerW)) ? w.stationMaxPowerW : null,
+                stationRemainingW: (w.stationKey && stationRemainingW && stationRemainingW.has(w.stationKey)) ? stationRemainingW.get(w.stationKey) : null,
                     targetW,
                     targetA,
                     applied,
@@ -1128,6 +1178,19 @@ if (components.length) {
         }
         await this.adapter.setStateAsync('chargingManagement.debug.sortedOrder', sorted.map(w => w.safe).join(','), true);
 
+
+        // Stationsbudgets (gemeinsame Leistungsgrenzen je Station)
+        /** @type {Map<string, number>} */
+        const stationRemainingW = new Map();
+        for (const w of sorted) {
+            const sk = String(w.stationKey || '').trim();
+            const cap = w.stationMaxPowerW;
+            if (!sk) continue;
+            if (typeof cap !== 'number' || !Number.isFinite(cap) || cap <= 0) continue;
+            const prev = stationRemainingW.get(sk);
+            stationRemainingW.set(sk, (typeof prev === 'number' && Number.isFinite(prev)) ? Math.min(prev, cap) : cap);
+        }
+
         const debugAlloc = [];
         // MU4.1: publish budget engine inputs for transparency in debug output
         try {
@@ -1164,7 +1227,15 @@ if (components.length) {
             // Budget view for this wallbox
             const totalAvailW = Number.isFinite(remainingW) ? Math.max(0, remainingW) : Number.POSITIVE_INFINITY;
             const pvAvailW = Number.isFinite(pvRemainingW) ? Math.max(0, pvRemainingW) : Number.POSITIVE_INFINITY;
-            const availW = isPvOnly ? Math.min(totalAvailW, pvAvailW) : totalAvailW;
+
+            // Stationsgruppe (gemeinsame Leistungsgrenze pro Station)
+            const stationAvailW = (w.stationKey && stationRemainingW && stationRemainingW.has(w.stationKey))
+                ? Math.max(0, stationRemainingW.get(w.stationKey))
+                : Number.POSITIVE_INFINITY;
+
+            const availW = isPvOnly
+                ? Math.min(totalAvailW, pvAvailW, stationAvailW)
+                : Math.min(totalAvailW, stationAvailW);
 
             // Raw target calculation
             if (w.controlBasis === 'none') {
@@ -1173,7 +1244,7 @@ if (components.length) {
                 targetA = 0;
             } else if (isMinPv) {
                 // min+pv: keep min from total budget (grid allowed), extra only from PV budget
-                const maxTotal = Math.min(totalAvailW, w.maxPW);
+                const maxTotal = Math.min(totalAvailW, stationAvailW, w.maxPW);
                 const minBase = (w.minPW > 0) ? w.minPW : 0;
 
                 if (!Number.isFinite(maxTotal) || maxTotal <= 0) {
@@ -1303,6 +1374,14 @@ if (components.length) {
             if (Number.isFinite(remainingW)) {
                 remainingW = Math.max(0, remainingW - cmdW);
                 usedW += cmdW;
+            }
+
+            // Apply station cap accounting (shared between connectors of same station)
+            if (w.stationKey && stationRemainingW && stationRemainingW.has(w.stationKey)) {
+                const prev = stationRemainingW.get(w.stationKey);
+                if (typeof prev === 'number' && Number.isFinite(prev)) {
+                    stationRemainingW.set(w.stationKey, Math.max(0, prev - cmdW));
+                }
             }
 
             // Apply PV budget accounting (shared pool)

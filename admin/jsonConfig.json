@@ -998,6 +998,238 @@
     },
     {
       "type": "panel",
+      "label": "EMS",
+      "title": "EMS",
+      "name": "ems",
+      "items": {
+        "emsInfo": {
+          "type": "header",
+          "text": "EMS‑Module (Multiuse) im VIS‑Adapter. Hier kannst du die Betriebsarten (z. B. Lastspitzenkappung) aktivieren und die relevanten Datenpunkte zuordnen.",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "schedulerIntervalMs": {
+          "type": "number",
+          "label": "Scheduler‑Intervall (ms)",
+          "min": 250,
+          "max": 10000,
+          "step": 50,
+          "default": 1000,
+          "attr": "schedulerIntervalMs",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "help": "Takt der EMS‑Regelung. Typisch 1000 ms."
+        },
+        "enableChargingManagement": {
+          "type": "checkbox",
+          "label": "Charging‑Management aktiv",
+          "default": true,
+          "attr": "enableChargingManagement",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "help": "Wenn aktiv, schreibt der Adapter Setpoints (A/W) für die konfigurierten Ladepunkte. Deaktivieren = keine Setpoints."
+        },
+        "enablePeakShaving": {
+          "type": "checkbox",
+          "label": "Lastspitzenkappung (Peak Shaving) aktiv",
+          "default": false,
+          "attr": "enablePeakShaving",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "help": "Begrenzt Netzbezug (Import) und kann das Ladebudget automatisch reduzieren."
+        },
+        "peakShaving.mode": {
+          "type": "select",
+          "label": "Peak‑Shaving Modus",
+          "attr": "peakShaving.mode",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "options": [
+            {
+              "label": "static (fester Grenzwert)",
+              "value": "static"
+            },
+            {
+              "label": "dynamic (Grenzwert aus Datenpunkt)",
+              "value": "dynamic"
+            }
+          ],
+          "default": "static"
+        },
+        "peakShaving.gridPointPowerId": {
+          "type": "objectId",
+          "label": "Netzleistung (W) – Import + / Export −",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "attr": "peakShaving.gridPointPowerId",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "placeholder": "z.B. smartmeter.0.power.grid (Import + / Export -)",
+          "help": "Ideal: NETTO‑Wert (Import positiv, Export negativ). Alternativ kann der Adapter einen internen Netto‑Wert aus „Netz – Bezug“ und „Netz – Einspeisung“ ableiten (ems.gridPowerW)."
+        },
+        "peakShaving.maxPowerW": {
+          "type": "number",
+          "label": "Max. Import (W) – statischer Grenzwert",
+          "min": 0,
+          "max": 10000000,
+          "step": 100,
+          "default": 0,
+          "attr": "peakShaving.maxPowerW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "help": "0 = keine Begrenzung (im static‑Modus)."
+        },
+        "peakShaving.reserveW": {
+          "type": "number",
+          "label": "Reserve (W) (optional)",
+          "min": 0,
+          "max": 1000000,
+          "step": 50,
+          "default": 0,
+          "attr": "peakShaving.reserveW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "expert": true
+        },
+        "peakShaving.smoothingSeconds": {
+          "type": "number",
+          "label": "Glättung (s) (optional)",
+          "min": 1,
+          "max": 600,
+          "step": 1,
+          "default": 10,
+          "attr": "peakShaving.smoothingSeconds",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "expert": true
+        },
+        "peakShaving.hysteresisW": {
+          "type": "number",
+          "label": "Hysterese (W) (optional)",
+          "min": 0,
+          "max": 1000000,
+          "step": 50,
+          "default": 500,
+          "attr": "peakShaving.hysteresisW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "expert": true
+        },
+        "enableGridConstraints": {
+          "type": "checkbox",
+          "label": "Grid‑Constraints aktiv (optional)",
+          "default": false,
+          "attr": "enableGridConstraints",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "expert": true
+        },
+        "enableStorageControl": {
+          "type": "checkbox",
+          "label": "Speicher‑Regelung aktiv (optional)",
+          "default": false,
+          "attr": "enableStorageControl",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "expert": true
+        },
+        "diagnostics.enabled": {
+          "type": "checkbox",
+          "label": "Diagnose aktiv",
+          "default": false,
+          "attr": "diagnostics.enabled",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "expert": true
+        },
+        "diagnostics.writeStates": {
+          "type": "checkbox",
+          "label": "Diagnose‑States schreiben",
+          "default": true,
+          "attr": "diagnostics.writeStates",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "expert": true
+        },
+        "diagnostics.logLevel": {
+          "type": "select",
+          "label": "Diagnose Log‑Level",
+          "attr": "diagnostics.logLevel",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "options": [
+            {
+              "label": "debug",
+              "value": "debug"
+            },
+            {
+              "label": "info",
+              "value": "info"
+            }
+          ],
+          "default": "debug",
+          "expert": true
+        },
+        "diagnostics.logIntervalSec": {
+          "type": "number",
+          "label": "Diagnose Log‑Intervall (s)",
+          "min": 0,
+          "max": 3600,
+          "step": 1,
+          "default": 10,
+          "attr": "diagnostics.logIntervalSec",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "expert": true
+        },
+        "diagnostics.stateIntervalSec": {
+          "type": "number",
+          "label": "Diagnose State‑Intervall (s)",
+          "min": 0,
+          "max": 3600,
+          "step": 1,
+          "default": 10,
+          "attr": "diagnostics.stateIntervalSec",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "expert": true
+        },
+        "diagnostics.maxJsonLen": {
+          "type": "number",
+          "label": "Diagnose max JSON Länge",
+          "min": 1000,
+          "max": 200000,
+          "step": 1000,
+          "default": 20000,
+          "attr": "diagnostics.maxJsonLen",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "expert": true
+        }
+      }
+    },
+    {
+      "type": "panel",
       "title": "Historie",
       "label": "Historie",
       "items": {
@@ -1119,7 +1351,7 @@
     },
     {
       "type": "panel",
-      "label": "Wallboxen",
+      "label": "Ladepunkte",
       "items": {
         "datapoints.consumptionEvcs": {
           "type": "objectId",
@@ -1147,7 +1379,7 @@
         },
         "settingsConfig.evcsCount": {
           "type": "number",
-          "label": "Anzahl Wallboxen",
+          "label": "Anzahl Ladepunkte",
           "min": 1,
           "max": 20,
           "step": 1,
@@ -1166,8 +1398,8 @@
         },
         "settingsConfig.evcsList": {
           "type": "table",
-          "label": "Wallboxen (EVCS) – Zuordnung",
-          "help": "Zentrale Wallbox‑Tabelle (herstellerunabhängig). In der Standardansicht werden nur die wichtigsten EMS‑Datenpunkte gezeigt. Weitere Monitoring/RFID/Expert‑Felder erscheinen im Admin‑Expertenmodus.",
+          "label": "Ladepunkte (EVCS) – Zuordnung",
+          "help": "Zentrale Ladepunkt‑Tabelle (herstellerunabhängig). Jeder Eintrag entspricht einem Ladepunkt/Connector. In der Standardansicht werden nur die wichtigsten EMS‑Datenpunkte gezeigt. Weitere Monitoring/RFID/Expert‑Felder erscheinen im Admin‑Expertenmodus.",
           "attr": "settingsConfig.evcsList",
           "items": [
             {
@@ -1201,7 +1433,7 @@
               "multiline": true,
               "rows": 2,
               "showName": true,
-              "tooltip": "State-ID der aktuellen Ladeleistung dieser Wallbox (W)."
+              "tooltip": "State-ID der aktuellen Ladeleistung dieses Ladepunkts (W)."
             },
             {
               "type": "objectId",
@@ -1273,7 +1505,7 @@
               "style": {
                 "minWidth": "170px"
               },
-              "tooltip": "Pro Wallbox: Auto / PV‑Überschuss / Min+PV / Boost."
+              "tooltip": "Pro Ladepunkt: Auto / PV‑Überschuss / Min+PV / Boost."
             },
             {
               "type": "text",
@@ -1307,7 +1539,7 @@
               "multiline": true,
               "rows": 2,
               "showName": true,
-              "tooltip": "State-ID des Energiezählers dieser Wallbox (kWh).",
+              "tooltip": "State-ID des Energiezählers dieses Ladepunkts (kWh).",
               "expert": true
             },
             {
@@ -1618,6 +1850,52 @@
               "max": 10000,
               "tooltip": "Leistungs‑Schrittweite für Sollwert (W).",
               "expert": true
+            },
+            {
+              "type": "text",
+              "label": "Station‑Key (optional)",
+              "attr": "stationKey",
+              "xs": 6,
+              "sm": 6,
+              "md": 3,
+              "title": "Station‑Key",
+              "style": {
+                "minWidth": "160px",
+                "fontFamily": "monospace"
+              },
+              "tooltip": "Gleicher Station‑Key = Stationsgruppe (gemeinsame Leistungsgrenze).",
+              "expert": true
+            },
+            {
+              "type": "number",
+              "label": "Connector‑Nr. (optional)",
+              "attr": "connectorNo",
+              "xs": 6,
+              "sm": 6,
+              "md": 2,
+              "min": 0,
+              "max": 64,
+              "step": 1,
+              "title": "Connector‑Nr.",
+              "style": {
+                "minWidth": "140px"
+              },
+              "tooltip": "Optional: Nummer des Ladepunkts/Connectors innerhalb der Station (nur Dokumentation).",
+              "expert": true
+            },
+            {
+              "type": "checkbox",
+              "label": "Boost erlaubt",
+              "attr": "allowBoost",
+              "xs": 6,
+              "sm": 6,
+              "md": 2,
+              "default": true,
+              "style": {
+                "minWidth": "140px"
+              },
+              "tooltip": "Wenn deaktiviert, wird der Runtime‑Modus „boost“ für diesen Ladepunkt ignoriert.",
+              "expert": true
             }
           ],
           "style": {
@@ -1626,6 +1904,71 @@
           "tableStyle": {
             "minWidth": "1750px"
           }
+        },
+        "settingsConfig.stationGroups": {
+          "type": "table",
+          "label": "Stationsgruppen (gemeinsame Leistung)",
+          "help": "Optional für DC‑Ladestationen mit mehreren Ladepunkten/Connectors: Ladepunkte mit gleichem Station‑Key teilen sich eine gemeinsame Leistungsgrenze.",
+          "attr": "settingsConfig.stationGroups",
+          "newLine": true,
+          "items": [
+            {
+              "type": "text",
+              "label": "Station‑Key",
+              "attr": "stationKey",
+              "xs": 6,
+              "sm": 6,
+              "md": 3,
+              "title": "Station‑Key",
+              "style": {
+                "minWidth": "180px",
+                "fontFamily": "monospace"
+              },
+              "tooltip": "Eindeutiger Schlüssel der Station/Gruppe (muss mit Ladepunkte→Station‑Key übereinstimmen)."
+            },
+            {
+              "type": "text",
+              "label": "Name (optional)",
+              "attr": "name",
+              "xs": 6,
+              "sm": 6,
+              "md": 4,
+              "title": "Name",
+              "style": {
+                "minWidth": "220px"
+              },
+              "tooltip": "Freier Anzeigename (nur Dokumentation)."
+            },
+            {
+              "type": "number",
+              "label": "Max. Station‑Leistung (kW)",
+              "attr": "maxPowerKw",
+              "xs": 6,
+              "sm": 6,
+              "md": 3,
+              "min": 0,
+              "max": 10000,
+              "step": 0.1,
+              "title": "Max. Leistung (kW)",
+              "style": {
+                "minWidth": "210px"
+              },
+              "tooltip": "Gesamt‑Leistungsgrenze dieser Station (Summe aller zugeordneten Ladepunkte)."
+            },
+            {
+              "type": "text",
+              "label": "Notiz (optional)",
+              "attr": "note",
+              "xs": 6,
+              "sm": 6,
+              "md": 6,
+              "title": "Notiz",
+              "style": {
+                "minWidth": "220px"
+              },
+              "expert": true
+            }
+          ]
         }
       },
       "name": "evcs"

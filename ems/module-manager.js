@@ -103,7 +103,7 @@ class ModuleManager {
         this.modules.push({
             key: 'speicherRegelung',
             instance: new SpeicherRegelungModule(this.adapter, this.dp),
-            enabledFn: () => true,
+            enabledFn: () => !!this.adapter.config.enableStorageControl,
         });
 
 

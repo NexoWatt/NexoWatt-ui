@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.104",
+    "version": "0.4.106",
     "news": {
       "0.4.91": {
         "de": "EVCS RFID: Anlernen-UI (Karte anlernen, letzte Karte anzeigen, in Whitelist übernehmen).",
@@ -359,6 +359,16 @@
       "0.4.104": {
         "de": "Sprint 2: Charging-Management (Multiuse) im VIS-Adapter integriert. Pro Wallbox runtime Modus (auto|pv|minpv|boost) via chargingManagement.wallboxes.*.userMode + /api/set (scope=ems).",
         "en": "Sprint 2: Embedded charging management (from Multiuse) inside VIS adapter. Per-wallbox runtime mode (auto|pv|minpv|boost) via chargingManagement.wallboxes.*.userMode + /api/set (scope=ems)."
+      },
+      "0.4.106": {
+        "en": [
+          "Sprint 2.2: Station groups (shared power limit) + per charge point Boost permission",
+          "Sprint 3: EMS/Peak Shaving config in Admin UI + multiuse ModuleManager enabled in VIS"
+        ],
+        "de": [
+          "Sprint 2.2: Stationsgruppen (gemeinsame Leistung) + Boost-Erlaubnis je Ladepunkt",
+          "Sprint 3: EMS/Peak-Shaving Einstellungen in der Admin-UI + ModuleManager im VIS aktiviert"
+        ]
       }
     },
     "title": "NexoWatt VIS",
