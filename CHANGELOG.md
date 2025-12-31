@@ -1,3 +1,6 @@
+## 0.4.125
+- Admin Feinschliff: Netzanschlussleistung als zentraler Anlagenparameter in EMS verschoben; §14a zeigt nur noch Hinweis.
+
 ## 0.4.124
 - Admin: §14a tab cleanup (remove unused legacy installer fields)
 

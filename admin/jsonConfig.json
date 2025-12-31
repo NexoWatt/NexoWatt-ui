@@ -888,19 +888,10 @@
       "items": {
         "installerInfo": {
           "type": "header",
-          "text": "§14a‑Einstellungen und zentrale Anlagenparameter. Die Netzanschlussleistung wird u. a. für EMS‑Sicherheitskappen (Gate A) genutzt. Ladepunkte (EVCS) werden im §14a‑Fall automatisch berücksichtigt; zusätzliche Verbraucher kannst du unten eintragen.",
+          "text": "§14a‑Einstellungen (EnWG) – steuerbare Verbrauchseinrichtungen. Ladepunkte (EVCS) werden im §14a‑Fall automatisch berücksichtigt; zusätzliche Verbraucher kannst du unten eintragen. Zentrale Anlagenparameter (z. B. Netzanschlussleistung / Gate‑A‑Sicherheitskappe) stellst du im Reiter „EMS“ ein.",
           "xs": 12,
           "sm": 12,
-          "md": 6
-        },
-        "installerConfig.gridConnectionPower": {
-          "type": "number",
-          "label": "Leistung Netzanschluss (W)",
-          "min": 0,
-          "attr": "installerConfig.gridConnectionPower",
-          "xs": 12,
-          "sm": 6,
-          "md": 6
+          "md": 12
         },
         "para14aHeader": {
           "type": "header",
@@ -981,7 +972,7 @@
         "installerConfig.para14aConsumers": {
           "type": "table",
           "label": "§14a Verbraucher (zusätzlich zu Ladepunkten)",
-          "help": "Hier trägst du zusätzliche steuerbare Verbraucher ein, die im §14a‑Fall gedrosselt werden sollen (z. B. Wärmepumpe, Heizstab, Klimagerät). Für die Rücknahme der Drosselung kann die 'Netzanschlussleistung' als Normalwert genutzt werden.",
+          "help": "Hier trägst du zusätzliche steuerbare Verbraucher ein, die im §14a‑Fall gedrosselt werden sollen (z. B. Wärmepumpe, Heizstab, Klimagerät). Ladepunkte (EVCS) werden automatisch berücksichtigt. Die zentrale Netzanschlussleistung wird im Reiter „EMS“ konfiguriert.",
           "attr": "installerConfig.para14aConsumers",
           "hidden": "!data.installerConfig || !data.installerConfig.para14a",
           "items": [
@@ -1138,6 +1129,23 @@
           "xs": 12,
           "sm": 12,
           "md": 12
+        },
+        "plantParamsHeader": {
+          "type": "header",
+          "text": "Zentrale Anlagenparameter (wirken auf alle EMS‑Module). Die Netzanschlussleistung wird als harte Sicherheitskappe (Gate A) genutzt, z. B. zur Begrenzung des Ladebudgets.",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "installerConfig.gridConnectionPower": {
+          "type": "number",
+          "label": "Netzanschlussleistung (W)",
+          "min": 0,
+          "attr": "installerConfig.gridConnectionPower",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "help": "Zentrales Limit am Netzanschlusspunkt. Wird u. a. für Gate‑A‑Sicherheitskappen im Charging‑Management genutzt."
         },
         "schedulerIntervalMs": {
           "type": "number",

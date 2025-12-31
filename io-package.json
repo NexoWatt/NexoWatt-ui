@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.124",
+    "version": "0.4.125",
     "news": {
+      "0.4.125": {
+        "de": "Feinschliff Admin: Netzanschlussleistung als zentraler Anlagenparameter in den EMS‑Reiter verschoben; §14a zeigt nur noch Hinweis. Doppelte Eingabestellen reduziert.",
+        "en": "Admin polish: moved grid connection power to EMS as a central plant parameter; §14a shows a hint only. Reduced duplicate configuration."
+      },
       "0.4.123": {
         "de": "§14a EnWG: Admin‑UI um §14a‑Konfiguration erweitert (Modus Direkt/EMS, optionales Aktiv‑Signal, optionale EMS‑Sollwert‑DP, Verbraucher‑Tabelle). EMS: interner Pmin,14a/GZF‑Mindestwert und EVCS‑Caps werden angewendet.",
         "en": "§14a EnWG: extended Admin UI (direct/EMS mode, optional activation signal, optional EMS setpoint DP, consumer table). EMS: applies internal Pmin,14a/GZF minimum and EVCS caps."
