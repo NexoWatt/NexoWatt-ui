@@ -1,3 +1,6 @@
+## 0.4.124
+- Admin: §14a tab cleanup (remove unused legacy installer fields)
+
 ## 0.4.123
 
 - §14a EnWG: Admin‑UI erweitert (Modus Direkt/EMS, optionales Aktiv‑Signal, optionale EMS‑Sollwert‑DP, Verbraucher‑Tabelle).

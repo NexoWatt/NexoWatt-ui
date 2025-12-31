@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.123",
+    "version": "0.4.124",
     "news": {
       "0.4.123": {
         "de": "§14a EnWG: Admin‑UI um §14a‑Konfiguration erweitert (Modus Direkt/EMS, optionales Aktiv‑Signal, optionale EMS‑Sollwert‑DP, Verbraucher‑Tabelle). EMS: interner Pmin,14a/GZF‑Mindestwert und EVCS‑Caps werden angewendet.",
@@ -405,6 +405,10 @@
       "0.4.117": {
         "de": "RC: Admin aufgeräumt (SmartHome-Tabs ausgeblendet), EVCS zeigt jetzt EMS-Hinweise/Fehler (z.B. NO_SETPOINT) direkt im Ladepunkt-Card; Boost-Button wird bei allowBoost=false gesperrt. SW-Cache v7.",
         "en": "RC: Admin cleaned up (SmartHome tabs hidden), EVCS now shows EMS hints/errors (e.g. NO_SETPOINT) in the chargepoint card; Boost button disabled when allowBoost=false. SW cache v7."
+      },
+      "0.4.124": {
+        "de": "Admin: §14a‑Tab aufgeräumt (Legacy‑Installer Felder entfernt, nur noch Netzanschlussleistung + §14a‑Konfiguration). Keine funktionalen Änderungen an EMS/§14a‑Logik.",
+        "en": "Admin: cleaned up §14a tab (removed legacy installer fields; keep grid connection power + §14a configuration). No functional changes to EMS/§14a logic."
       }
     },
     "title": "NexoWatt VIS",
