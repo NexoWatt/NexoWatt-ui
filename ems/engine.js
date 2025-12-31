@@ -85,13 +85,15 @@ class EmsEngine {
     const dps = cfg.datapoints || {};
     const gridBuyPowerId = (typeof dps.gridBuyPower === 'string' ? dps.gridBuyPower.trim() : '') || '';
     const gridSellPowerId = (typeof dps.gridSellPower === 'string' ? dps.gridSellPower.trim() : '') || '';
+    // Optional: direct net grid power (NVP) in W (Import + / Export -)
+    const gridPointPowerId = (typeof dps.gridPointPower === 'string' ? dps.gridPointPower.trim() : '') || '';
     const pvSurplusPowerId = gridSellPowerId;
 
     // Default net grid power:
-    // 1) If buy/sell are mapped, use internal derived state ems.gridPowerW
+    // 1) If buy/sell or NVP are mapped, use internal normalized state ems.gridPowerW
     // 2) Else (optional) fall back to PeakShaving gridPointPowerId if set in config
     const peakGridPowerId = (cfg.peakShaving && typeof cfg.peakShaving.gridPointPowerId === 'string') ? cfg.peakShaving.gridPointPowerId.trim() : '';
-    const defaultGridPowerId = (gridBuyPowerId || gridSellPowerId) ? this._gridPowerId : (peakGridPowerId || '');
+    const defaultGridPowerId = (gridBuyPowerId || gridSellPowerId || gridPointPowerId) ? this._gridPowerId : (peakGridPowerId || '');
 
     // --- Wallboxes from already normalized evcsList (created in syncSettingsConfigToStates) ---
     const list = Array.isArray(adapter.evcsList) ? adapter.evcsList : [];
@@ -409,8 +411,33 @@ class EmsEngine {
     const gridBuyId = (typeof dps.gridBuyPower === 'string') ? dps.gridBuyPower.trim() : '';
     const gridSellId = (typeof dps.gridSellPower === 'string') ? dps.gridSellPower.trim() : '';
 
+    const gridNetId = (typeof dps.gridPointPower === 'string') ? dps.gridPointPower.trim() : '';
+
+    // Bridge: reuse VIS datapoints for EMS modules to avoid double mapping in Admin UI
+    try {
+      const socId = (typeof dps.storageSoc === 'string') ? dps.storageSoc.trim() : '';
+      if (socId) {
+        adapter.config.storage = adapter.config.storage || {};
+        adapter.config.storage.datapoints = adapter.config.storage.datapoints || {};
+        const cur = (typeof adapter.config.storage.datapoints.socObjectId === 'string') ? adapter.config.storage.datapoints.socObjectId.trim() : '';
+        if (!cur) adapter.config.storage.datapoints.socObjectId = socId;
+      }
+
+      const batPowerId = (typeof dps.batteryPower === 'string') ? dps.batteryPower.trim() : '';
+      if (batPowerId) {
+        adapter.config.storage = adapter.config.storage || {};
+        adapter.config.storage.datapoints = adapter.config.storage.datapoints || {};
+        const curBP = (typeof adapter.config.storage.datapoints.batteryPowerObjectId === 'string') ? adapter.config.storage.datapoints.batteryPowerObjectId.trim() : '';
+        if (!curBP) adapter.config.storage.datapoints.batteryPowerObjectId = batPowerId;
+      }
+    } catch (_e) {
+      // ignore
+    }
+
     if (gridBuyId) await this.dp.upsert({ key: 'vis.gridBuyW', objectId: gridBuyId, dataType: 'number', direction: 'in', unit: 'W' });
     if (gridSellId) await this.dp.upsert({ key: 'vis.gridSellW', objectId: gridSellId, dataType: 'number', direction: 'in', unit: 'W' });
+
+    if (gridNetId) await this.dp.upsert({ key: 'vis.gridNetW', objectId: gridNetId, dataType: 'number', direction: 'in', unit: 'W' });
 
     // Map internal net grid power to generic key used by modules as fallback
     if (this._gridPowerId) {
@@ -443,19 +470,46 @@ class EmsEngine {
   async tick() {
     if (!this.adapter || !this.dp || !this.mm) return;
 
-    // Derived net grid power (Import + / Export -) from separate buy/sell channels
+    // Derived / normalized net grid power (Import + / Export -)
+    // Source priority:
+    // 1) Direct NVP datapoint (datapoints.gridPointPower)
+    // 2) Derived from buy/sell (datapoints.gridBuyPower / datapoints.gridSellPower)
+    // Sign correction: settings.flowInvertGrid (VIS) is applied to EMS as well.
     try {
-      const buyW = this.dp.getNumber('vis.gridBuyW', 0) || 0;
-      const sellW = this.dp.getNumber('vis.gridSellW', 0) || 0;
-      const netW = Math.round(Number(buyW) - Number(sellW));
-      if (this._gridPowerId) {
+      const invGrid = !!(this.adapter && this.adapter.config && this.adapter.config.settings && this.adapter.config.settings.flowInvertGrid);
+
+      let netW = this.dp.getNumber('vis.gridNetW', null);
+
+      if (typeof netW === 'number') {
+        // In net-mode invert means sign flip
+        if (invGrid) netW = -netW;
+      } else {
+        const buyW = this.dp.getNumber('vis.gridBuyW', null);
+        const sellW = this.dp.getNumber('vis.gridSellW', null);
+
+        // Only compute if at least one source exists (avoid generating a fake fresh 0W)
+        if (typeof buyW === 'number' || typeof sellW === 'number') {
+          let b = (typeof buyW === 'number') ? buyW : 0;
+          let s = (typeof sellW === 'number') ? sellW : 0;
+          if (invGrid) {
+            const t = b; b = s; s = t; // swap semantics (Bezug/Einspeisung)
+          }
+          netW = Number(b) - Number(s);
+        } else {
+          netW = null;
+        }
+      }
+
+      if (typeof netW === 'number' && this._gridPowerId) {
+        const netRounded = Math.round(Number(netW));
         try {
-          await this.adapter.setStateAsync('ems.gridPowerW', { val: netW, ack: true });
+          await this.adapter.setStateAsync('ems.gridPowerW', { val: netRounded, ack: true });
         } catch (_e) {}
+
         // Update dp cache explicitly (own states might not be subscribed)
         try {
           if (typeof this.dp.handleStateChange === 'function') {
-            this.dp.handleStateChange(this._gridPowerId, { val: netW, ack: true, ts: Date.now() });
+            this.dp.handleStateChange(this._gridPowerId, { val: netRounded, ack: true, ts: Date.now() });
           }
         } catch (_e2) {}
       }

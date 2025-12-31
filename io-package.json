@@ -475,6 +475,7 @@
       "consumptionTotal": "fenecon.0._sum.ConsumptionAcActivePower",
       "gridBuyPower": "0_userdata.0.nexowatt.grid.buy.power",
       "gridSellPower": "0_userdata.0.nexowatt.grid.sell.power",
+      "gridPointPower": "",
       "storageChargePower": "0_userdata.0.nexowatt.battery.charge.power",
       "storageDischargePower": "0_userdata.0.nexowatt.battery.discharge.power",
       "storageSoc": "fenecon.0._sum.EssSoc",

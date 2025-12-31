@@ -117,6 +117,28 @@
           "sm": 12,
           "md": 6
         },
+        "ui.emsGridSourceInfo": {
+          "type": "header",
+          "text": "EMS‑Hinweis: Für Peak‑Shaving/Charging/Speicher nutzt das EMS die Netzpunktleistung (NVP) als Netto‑Signal (Import + / Export −). Empfehlung: Entweder hier einen Netto‑Datenpunkt setzen oder Bezug/Einspeisung getrennt mappen. Doppelte Zuordnungen in den EMS‑Reitern sind i. d. R. nicht nötig.",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "datapoints.gridPointPower": {
+          "type": "objectId",
+          "label": "Netzpunkt (NVP) – Nettoleistung (W) (Import + / Export −) (optional)",
+          "types": [
+            "state"
+          ],
+          "button": true,
+          "placeholder": "z.B. smartmeter.0.power.net",
+          "help": "Optionaler Netto‑Datenpunkt am Netzanschlusspunkt. Wenn gesetzt, verwendet das EMS bevorzugt diesen Wert. Wenn leer, wird die Netto‑Leistung aus „Netz – Bezug“ und „Netz – Einspeisung“ berechnet.",
+          "newLine": false,
+          "attr": "datapoints.gridPointPower",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
         "datapoints.storageChargePower": {
           "type": "objectId",
           "label": "Batterie – Ladeleistung (W)",
@@ -229,59 +251,6 @@
           "button": true,
           "newLine": false,
           "attr": "datapoints.storageSoc",
-          "datapoints.co2Savings": {
-            "type": "objectId",
-            "label": "CO₂ – Ersparnis",
-            "types": [
-              "state"
-            ],
-            "button": true,
-            "newLine": false,
-            "attr": "datapoints.co2Savings",
-            "xs": 12,
-            "sm": 12,
-            "md": 6,
-            "help": "CO₂-Ersparnis (z. B. kg oder g). Wird in der Produktion-Kachel angezeigt."
-          },
-          "datapoints.productionEnergyKwh": {
-            "type": "objectId",
-            "label": "Produktion – Energie gesamt (kWh)",
-            "types": [
-              "state"
-            ],
-            "button": true,
-            "newLine": false,
-            "attr": "datapoints.productionEnergyKwh",
-            "xs": 12,
-            "sm": 12,
-            "md": 6
-          },
-          "datapoints.consumptionEnergyKwh": {
-            "type": "objectId",
-            "label": "Verbrauch – Energie gesamt (kWh)",
-            "types": [
-              "state"
-            ],
-            "button": true,
-            "newLine": false,
-            "attr": "datapoints.consumptionEnergyKwh",
-            "xs": 12,
-            "sm": 12,
-            "md": 6
-          },
-          "datapoints.gridEnergyKwh": {
-            "type": "objectId",
-            "label": "Netz – Energie gesamt (kWh)",
-            "types": [
-              "state"
-            ],
-            "button": true,
-            "newLine": false,
-            "attr": "datapoints.gridEnergyKwh",
-            "xs": 12,
-            "sm": 12,
-            "md": 6
-          },
           "xs": 12,
           "sm": 12,
           "help": "State of Charge in %. Empfohlen: fenecon.0._sum.EssSoc",
@@ -1005,7 +974,7 @@
       "items": {
         "emsInfo": {
           "type": "header",
-          "text": "EMS‑Module im VIS‑Adapter (Multiuse‑Engine). Hier aktivierst du die Module (Charging / Peak Shaving / Netz‑Constraints / Speicher) und stellst den Scheduler‑Takt ein. Details pro Modul findest du in den jeweiligen EMS‑Tabs.",
+          "text": "EMS‑Module im VIS‑Adapter (Multiuse‑Engine). Hier aktivierst du die Module (Charging / Peak‑Shaving / Netz‑Constraints / Speicher) und stellst den Scheduler‑Takt ein. Sobald du ein Modul aktivierst, wird der jeweilige EMS‑Reiter sichtbar und dort konfiguriert.",
           "xs": 12,
           "sm": 12,
           "md": 12
@@ -1661,7 +1630,8 @@
           "default": 3,
           "expert": true
         }
-      }
+      },
+      "hidden": "data.enableChargingManagement === false"
     },
     {
       "type": "panel",
@@ -1671,7 +1641,7 @@
       "items": {
         "psInfo": {
           "type": "header",
-          "text": "Peak‑Shaving begrenzt den Netzbezug (Import). Optional kann es das Ladebudget automatisch reduzieren. Aktivierung erfolgt im EMS‑Tab.",
+          "text": "Peak‑Shaving begrenzt den Netzbezug (Import). Die Netzpunktleistung (NVP) kommt standardmäßig aus „Datenpunkte“ (Netto oder aus Bezug/Einspeisung). Aktivierung erfolgt im EMS‑Tab; der Reiter erscheint dann automatisch.",
           "xs": 12,
           "sm": 12,
           "md": 12
@@ -1714,7 +1684,8 @@
           "multiline": true,
           "rows": 2,
           "showName": true,
-          "help": "Netto‑Wert: Import positiv, Export negativ. Pflicht für Peak‑Shaving."
+          "help": "Optionaler Override. Standard: Das EMS nutzt die Netzpunktleistung (NVP) aus „Datenpunkte“ (Netto oder aus Bezug/Einspeisung abgeleitet) und stellt sie intern als ems.gridPowerW bereit.",
+          "expert": true
         },
         "peakShaving.allowedPowerId": {
           "type": "objectId",
@@ -1905,7 +1876,8 @@
           "help": "Optional: Speicher‑Istleistung (für Diagnose/Logik).",
           "expert": true
         }
-      }
+      },
+      "hidden": "!data.enablePeakShaving"
     },
     {
       "type": "panel",
@@ -1939,7 +1911,7 @@
           "multiline": true,
           "rows": 2,
           "showName": true,
-          "help": "Optional: Wenn leer, wird peakShaving.gridPointPowerId genutzt (falls gesetzt).",
+          "help": "Optionaler Override. Standard: Das EMS nutzt die Netzpunktleistung (NVP) aus „Datenpunkte“ und stellt sie intern als grid.powerW/ems.gridPowerW bereit.",
           "expert": true
         },
         "gridConstraints.staleTimeoutSec": {
@@ -2212,7 +2184,8 @@
           "step": 1,
           "expert": true
         }
-      }
+      },
+      "hidden": "!data.enableGridConstraints"
     },
     {
       "type": "panel",
@@ -2282,7 +2255,8 @@
           "multiline": true,
           "rows": 2,
           "showName": true,
-          "help": "Speicher Ladezustand in %."
+          "help": "Optionaler Override. Wenn leer, nutzt der Adapter automatisch „Datenpunkte → Batterie – SoC (%)“. Nur setzen, wenn du für die EMS‑Speicherlogik einen anderen SoC‑Datenpunkt verwenden willst.",
+          "expert": true
         },
         "storage.datapoints.socScale": {
           "type": "number",
@@ -2837,7 +2811,8 @@
           "help": "0 = AUS. Wenn >0 und „Netzladen erlaubt“, lädt der Speicher bis zum Reserve‑Ziel‑SoC mit dieser Leistung aus dem Netz.",
           "expert": true
         }
-      }
+      },
+      "hidden": "!data.enableStorageControl"
     },
     {
       "type": "panel",
