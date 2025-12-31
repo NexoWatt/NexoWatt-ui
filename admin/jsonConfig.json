@@ -74,6 +74,40 @@
           "sm": 12,
           "md": 6
         },
+        "ui.licenseHeader": {
+          "type": "header",
+          "text": "Lizenz",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "license.key": {
+          "type": "text",
+          "label": "Lizenzschlüssel",
+          "help": "Pflicht im Auslieferungsbetrieb. Unterstützt Base64 (empfohlen) oder JSON. Ohne gültige Lizenz startet der Adapter im gesperrten Modus.",
+          "attr": "license.key",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "multiline": true,
+          "rows": 4,
+          "style": {
+            "fontFamily": "monospace"
+          }
+        },
+        "license.filePath": {
+          "type": "text",
+          "label": "Lizenzdatei Pfad (optional)",
+          "help": "Alternative zur Eingabe des Lizenzschlüssels. Wenn license.key leer ist, wird diese Datei gelesen. Standard: /opt/nexowatt/license.json",
+          "default": "/opt/nexowatt/license.json",
+          "attr": "license.filePath",
+          "xs": 12,
+          "sm": 12,
+          "md": 12,
+          "style": {
+            "fontFamily": "monospace"
+          }
+        },
         "units.power": {
           "type": "select",
           "label": "Leistungseinheit",

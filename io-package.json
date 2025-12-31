@@ -540,6 +540,11 @@
       "installerUsers": "admin,installer",
       "installerGroups": "system.group.administrator"
     },
+    "license": {
+      "required": true,
+      "key": "",
+      "filePath": "/opt/nexowatt/license.json"
+    },
     "installerConfig": {},
     "history": {
       "instance": "influxdb.0",
