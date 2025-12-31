@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.119",
+    "version": "0.4.120",
     "news": {
       "0.4.119": {
         "de": "Serienreife‑Gate: Stabilisierung/Feinschliff, Admin‑Aufräumen (SmartHome‑Tabs ausgeblendet) und saubere Defaults für Speicher‑Strategie. Neu: LSK‑Laden/Entladen separat aktivierbar.",
@@ -397,6 +397,10 @@
       "0.4.117": {
         "de": "RC: Admin aufgeräumt (SmartHome-Tabs ausgeblendet), EVCS zeigt jetzt EMS-Hinweise/Fehler (z.B. NO_SETPOINT) direkt im Ladepunkt-Card; Boost-Button wird bei allowBoost=false gesperrt. SW-Cache v7.",
         "en": "RC: Admin cleaned up (SmartHome tabs hidden), EVCS now shows EMS hints/errors (e.g. NO_SETPOINT) in the chargepoint card; Boost button disabled when allowBoost=false. SW cache v7."
+      },
+      "0.4.120": {
+        "de": "Hotfix: Lizenzfelder im Admin, LOCKED-Mode bei fehlender Lizenz (Adapter bleibt erreichbar).",
+        "en": "Hotfix: License fields in admin, locked mode when license missing (adapter remains reachable)."
       }
     },
     "title": "NexoWatt VIS",
