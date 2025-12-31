@@ -29,7 +29,8 @@ async function applyLoadSetpoint(ctx, consumer, target) {
     const hasSetW = !!(setWKey && dp && dp.getEntry && dp.getEntry(setWKey));
     const hasEnable = !!(enableKey && dp && dp.getEntry && dp.getEntry(enableKey));
 
-    if (!hasSetW) {
+    // Support either a numeric power limit DP, an enable DP, or both.
+    if (!hasSetW && !hasEnable) {
         return { applied: false, status: 'no_setpoint_dp', writes: { setW: null, enable: null } };
     }
 
@@ -38,7 +39,9 @@ async function applyLoadSetpoint(ctx, consumer, target) {
     /** @type {true|false|null} */
     let wroteEnable = null;
 
-    wroteW = await dp.writeNumber(setWKey, Math.round(targetW > 0 ? targetW : 0), false);
+    if (hasSetW) {
+        wroteW = await dp.writeNumber(setWKey, Math.round(targetW > 0 ? targetW : 0), false);
+    }
 
     if (enableKey) {
         if (!hasEnable) wroteEnable = false;

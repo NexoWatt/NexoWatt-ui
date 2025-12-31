@@ -196,6 +196,12 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.gridPhaseCapEvcsW', 'Phase-based EVCS cap (W)', 'number', 'value.power');
         await mk('chargingManagement.control.phaseCapBinding', 'Phase cap binding', 'boolean', 'indicator');
 
+        // Gate A2: §14a EnWG (optional)
+        await mk('chargingManagement.control.para14aActive', '§14a active', 'boolean', 'indicator');
+        await mk('chargingManagement.control.para14aMode', '§14a mode', 'string', 'text');
+        await mk('chargingManagement.control.para14aCapEvcsW', '§14a EVCS cap (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.para14aBinding', '§14a binding', 'boolean', 'indicator');
+
         // Gate C: Speicher-Unterstützung (Transparenz)
         await mk('chargingManagement.control.storageAssistActive', 'Storage assist active', 'boolean', 'indicator');
         await mk('chargingManagement.control.storageAssistW', 'Storage assist (W)', 'number', 'value.power');
@@ -375,6 +381,17 @@ class ChargingManagementModule extends BaseModule {
         const cfg = this.adapter.config.chargingManagement || {};
         const mode = String(cfg.mode || 'off'); // off | pvSurplus | mixed (future)
         const wallboxes = Array.isArray(cfg.wallboxes) ? cfg.wallboxes : [];
+
+        // -----------------------------------------------------------------
+        // §14a EnWG snapshot (provided by Para14aModule)
+        // -----------------------------------------------------------------
+        const p14a = (this.adapter && this.adapter._para14a && typeof this.adapter._para14a === 'object') ? this.adapter._para14a : null;
+        const para14aActive = !!(p14a && p14a.active);
+        const para14aMode = para14aActive ? String(p14a.mode || '') : '';
+        const para14aCapsBySafe = (para14aActive && p14a && p14a.evcsCapsBySafe && typeof p14a.evcsCapsBySafe === 'object') ? p14a.evcsCapsBySafe : {};
+        const para14aTotalCapW = (para14aActive && p14a && typeof p14a.evcsTotalCapW === 'number' && Number.isFinite(p14a.evcsTotalCapW) && p14a.evcsTotalCapW > 0)
+            ? p14a.evcsTotalCapW
+            : null;
 
         // Stationsgruppen (optional): gemeinsame Leistungsgrenze pro Station (z. B. DC‑Station mit mehreren Ladepunkten)
         const stationGroups = Array.isArray(cfg.stationGroups) ? cfg.stationGroups : [];
@@ -706,6 +723,20 @@ class ChargingManagementModule extends BaseModule {
                 }
 
                 // Note: if maxPW < minPW after enforcement, this wallbox cannot be started.
+            }
+
+            // -------------------------------------------------------------
+            // §14a EnWG per-wallbox cap (if active)
+            // Apply after min/max derivation so we can safely clamp.
+            // -------------------------------------------------------------
+            if (para14aActive) {
+                const capW = (para14aCapsBySafe && typeof para14aCapsBySafe[safe] === 'number' && Number.isFinite(para14aCapsBySafe[safe]))
+                    ? Number(para14aCapsBySafe[safe])
+                    : null;
+                if (typeof capW === 'number' && Number.isFinite(capW) && capW > 0) {
+                    maxPW = Math.min(maxPW, capW);
+                    if (maxPW < minPW) minPW = maxPW;
+                }
             }
 
             if (typeof pW === 'number') totalPowerW += pW;
@@ -1224,6 +1255,25 @@ if (components.length) {
             }
         }
 
+        // ---------------------------------------------------------------------
+        // Gate A2: §14a EnWG cap (optional, provided by Para14aModule)
+        // If active, cap the EVCS budget in addition to other safety caps.
+        // ---------------------------------------------------------------------
+        let para14aBinding = false;
+        if (para14aActive && typeof para14aTotalCapW === 'number' && Number.isFinite(para14aTotalCapW) && para14aTotalCapW > 0) {
+            const before = budgetW;
+            if (!Number.isFinite(budgetW)) {
+                budgetW = para14aTotalCapW;
+            } else {
+                budgetW = Math.min(budgetW, para14aTotalCapW);
+            }
+            para14aBinding = (before !== budgetW);
+
+            if (!String(effectiveBudgetMode || '').includes('14a')) {
+                effectiveBudgetMode = `${effectiveBudgetMode}+14a`;
+            }
+        }
+
         // Publish cap diagnostics (even when caps are not configured)
         try {
             await this.adapter.setStateAsync('chargingManagement.control.gridImportLimitW', gridImportLimitW || 0, true);
@@ -1236,6 +1286,12 @@ if (components.length) {
             await this.adapter.setStateAsync('chargingManagement.control.gridWorstPhaseA', (typeof worstPhaseA === 'number' && Number.isFinite(worstPhaseA)) ? worstPhaseA : 0, true);
             await this.adapter.setStateAsync('chargingManagement.control.gridPhaseCapEvcsW', (typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)) ? phaseCapEvcsW : 0, true);
             await this.adapter.setStateAsync('chargingManagement.control.phaseCapBinding', !!phaseCapBinding, true);
+
+            // §14a transparency
+            await this.adapter.setStateAsync('chargingManagement.control.para14aActive', !!para14aActive, true);
+            await this.adapter.setStateAsync('chargingManagement.control.para14aMode', para14aMode || '', true);
+            await this.adapter.setStateAsync('chargingManagement.control.para14aCapEvcsW', (typeof para14aTotalCapW === 'number' && Number.isFinite(para14aTotalCapW)) ? para14aTotalCapW : 0, true);
+            await this.adapter.setStateAsync('chargingManagement.control.para14aBinding', !!para14aBinding, true);
         } catch {
             // ignore
         }
@@ -1253,6 +1309,10 @@ if (components.length) {
             budgetDebug.worstPhaseA = (typeof worstPhaseA === 'number' && Number.isFinite(worstPhaseA)) ? worstPhaseA : null;
             budgetDebug.phaseCapEvcsW = (typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)) ? phaseCapEvcsW : null;
             budgetDebug.phaseCapBinding = !!phaseCapBinding;
+            budgetDebug.para14aActive = !!para14aActive;
+            budgetDebug.para14aMode = para14aMode || '';
+            budgetDebug.para14aCapEvcsW = (typeof para14aTotalCapW === 'number' && Number.isFinite(para14aTotalCapW)) ? para14aTotalCapW : null;
+            budgetDebug.para14aBinding = !!para14aBinding;
             budgetDebug.budgetBeforeSafetyCapsW = Number.isFinite(budgetBeforeGridCaps) ? budgetBeforeGridCaps : null;
             budgetDebug.budgetAfterSafetyCapsW = Number.isFinite(budgetW) ? budgetW : null;
         }

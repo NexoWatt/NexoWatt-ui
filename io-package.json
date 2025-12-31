@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.122",
+    "version": "0.4.123",
     "news": {
+      "0.4.123": {
+        "de": "§14a EnWG: Admin‑UI um §14a‑Konfiguration erweitert (Modus Direkt/EMS, optionales Aktiv‑Signal, optionale EMS‑Sollwert‑DP, Verbraucher‑Tabelle). EMS: interner Pmin,14a/GZF‑Mindestwert und EVCS‑Caps werden angewendet.",
+        "en": "§14a EnWG: extended Admin UI (direct/EMS mode, optional activation signal, optional EMS setpoint DP, consumer table). EMS: applies internal Pmin,14a/GZF minimum and EVCS caps."
+      },
       "0.4.122": {
         "de": "Rollback: Lizenzpflicht entfernt (Adapter startet wieder ohne Lizenz). Admin-Aufräumen + ioBroker-Login/Write-Schutz bleiben aktiv.",
         "en": "Rollback: removed mandatory licensing (adapter starts without a license again). Admin cleanup + ioBroker login/write protection remain enabled."

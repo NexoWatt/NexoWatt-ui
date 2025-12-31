@@ -883,12 +883,12 @@
     },
     {
       "type": "panel",
-      "label": "Installateur",
-      "title": "Installateur",
+      "label": "§14a",
+      "title": "§14a",
       "items": {
         "installerInfo": {
           "type": "header",
-          "text": "Einstellungen nur für Installateure – werden in die Datenpunkte unter nexowatt-vis.0.installer.* geschrieben.",
+          "text": "Installateur- und §14a‑Einstellungen. Geräte-/Anlagenparameter werden in die Datenpunkte unter nexowatt-vis.0.installer.* geschrieben.",
           "xs": 12,
           "sm": 12,
           "md": 6
@@ -902,13 +902,183 @@
           "sm": 6,
           "md": 6
         },
+        "para14aHeader": {
+          "type": "header",
+          "text": "§14a EnWG – Steuerbare Verbrauchseinrichtungen (z. B. Wallbox, Wärmepumpe, Klimagerät). Aktiviert die interne §14a‑Logik. Ladepunkte (EVCS) werden automatisch berücksichtigt; zusätzliche Verbraucher können unten eingetragen werden.",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
         "installerConfig.para14a": {
           "type": "checkbox",
-          "label": "§14a aktiv",
+          "label": "§14a‑Logik aktivieren",
           "attr": "installerConfig.para14a",
           "xs": 12,
           "sm": 6,
           "md": 6
+        },
+        "installerConfig.para14aMode": {
+          "type": "select",
+          "label": "§14a Modus",
+          "options": [
+            { "label": "Direktansteuerung (4,2 kW je Verbraucher)", "value": "direct" },
+            { "label": "Steuerung mittels EMS (Pmin,14a / GZF)", "value": "ems" }
+          ],
+          "default": "direct",
+          "attr": "installerConfig.para14aMode",
+          "hidden": "!data.installerConfig || !data.installerConfig.para14a",
+          "xs": 12,
+          "sm": 6,
+          "md": 6
+        },
+        "installerConfig.para14aMinPerDeviceW": {
+          "type": "number",
+          "label": "Mindestleistung je Verbraucher (W)",
+          "min": 0,
+          "default": 4200,
+          "attr": "installerConfig.para14aMinPerDeviceW",
+          "hidden": "!data.installerConfig || !data.installerConfig.para14a",
+          "xs": 12,
+          "sm": 6,
+          "md": 6
+        },
+        "installerConfig.para14aActiveId": {
+          "type": "objectId",
+          "label": "§14a Aktiv‑Signal (optional)",
+          "types": ["state"],
+          "button": true,
+          "placeholder": "Objekt auswählen … (0/1 oder true/false)",
+          "help": "Optional: Wenn gesetzt, wird §14a nur dann wirksam, wenn dieser Datenpunkt aktiv ist. Wenn leer, gilt '§14a‑Logik aktivieren' als immer aktiv.",
+          "attr": "installerConfig.para14aActiveId",
+          "hidden": "!data.installerConfig || !data.installerConfig.para14a",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "installerConfig.para14aEmsSetpointWId": {
+          "type": "objectId",
+          "label": "EMS‑Sollwert (W) vom Netzbetreiber (optional)",
+          "types": ["state"],
+          "button": true,
+          "placeholder": "Objekt auswählen … (W)",
+          "help": "Optional: Gesamt‑Sollwert (W) für alle §14a‑Verbraucher (Steuerung mittels EMS). Wenn leer, nutzt der Adapter den internen Mindestwert (Pmin,14a).",
+          "attr": "installerConfig.para14aEmsSetpointWId",
+          "hidden": "!data.installerConfig || !data.installerConfig.para14a || data.installerConfig.para14aMode !== 'ems'",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "installerConfig.para14aConsumers": {
+          "type": "table",
+          "label": "§14a Verbraucher (zusätzlich zu Ladepunkten)",
+          "help": "Hier trägst du zusätzliche steuerbare Verbraucher ein, die im §14a‑Fall gedrosselt werden sollen (z. B. Wärmepumpe, Heizstab, Klimagerät). Für die Rücknahme der Drosselung kann die 'Netzanschlussleistung' als Normalwert genutzt werden.",
+          "attr": "installerConfig.para14aConsumers",
+          "hidden": "!data.installerConfig || !data.installerConfig.para14a",
+          "items": [
+            {
+              "type": "checkbox",
+              "label": "Aktiv",
+              "attr": "enabled",
+              "title": "Aktiv",
+              "xs": 3,
+              "sm": 2,
+              "md": 1
+            },
+            {
+              "type": "select",
+              "label": "Typ",
+              "attr": "type",
+              "title": "Typ",
+              "xs": 9,
+              "sm": 4,
+              "md": 2,
+              "options": [
+                { "label": "Wärmepumpe", "value": "heatPump" },
+                { "label": "Heizstab", "value": "heatingRod" },
+                { "label": "Klimagerät", "value": "airCondition" },
+                { "label": "Speicher (optional)", "value": "storage" },
+                { "label": "Sonstiges", "value": "custom" }
+              ]
+            },
+            {
+              "type": "text",
+              "label": "Name",
+              "attr": "name",
+              "title": "Name",
+              "xs": 12,
+              "sm": 6,
+              "md": 3,
+              "style": { "minWidth": "160px" }
+            },
+            {
+              "type": "number",
+              "label": "Netzanschlussleistung (W)",
+              "attr": "installedPowerW",
+              "title": "Netzanschlussleistung (W)",
+              "xs": 12,
+              "sm": 6,
+              "md": 2,
+              "min": 0,
+              "tooltip": "Für EMS‑Formel: Summe je Kategorie. Wird außerdem als Normalwert zur Aufhebung der Drosselung genutzt."
+            },
+            {
+              "type": "select",
+              "label": "Ansteuerung",
+              "attr": "controlType",
+              "title": "Ansteuerung",
+              "xs": 12,
+              "sm": 6,
+              "md": 2,
+              "options": [
+                { "label": "Leistungslimit (W)", "value": "limitW" },
+                { "label": "Sperren (Ein/Aus)", "value": "onOff" }
+              ]
+            },
+            {
+              "type": "objectId",
+              "label": "Sollwert‑DP (W)",
+              "attr": "setPowerWId",
+              "title": "Sollwert‑DP (W)",
+              "types": ["state"],
+              "showName": true,
+              "xs": 12,
+              "sm": 12,
+              "md": 4,
+              "placeholder": "Objekt auswählen …",
+              "style": { "minWidth": "340px", "fontFamily": "monospace" },
+              "multiline": true,
+              "rows": 2,
+              "tooltip": "Datenpunkt, auf den das Leistungs‑Limit (W) geschrieben wird."
+            },
+            {
+              "type": "objectId",
+              "label": "Enable‑DP (optional)",
+              "attr": "enableId",
+              "title": "Enable‑DP (optional)",
+              "types": ["state"],
+              "showName": true,
+              "xs": 12,
+              "sm": 12,
+              "md": 4,
+              "placeholder": "Objekt auswählen …",
+              "style": { "minWidth": "340px", "fontFamily": "monospace" },
+              "multiline": true,
+              "rows": 2,
+              "tooltip": "Optionaler Enable/Sperr‑Datenpunkt. Bei 'Sperren (Ein/Aus)' wird dieser verwendet."
+            },
+            {
+              "type": "number",
+              "label": "Priorität",
+              "attr": "priority",
+              "title": "Priorität",
+              "xs": 6,
+              "sm": 4,
+              "md": 2,
+              "min": 1,
+              "max": 999,
+              "tooltip": "Kleinere Zahl = höhere Priorität (wird u. a. für die EMS‑Verteilung genutzt)."
+            }
+          ]
         },
         "installerConfig.chargepoints": {
           "type": "number",

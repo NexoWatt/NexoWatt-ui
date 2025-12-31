@@ -7,6 +7,7 @@ const { PeakShavingModule } = require('./modules/peak-shaving');
 const { TarifVisModule } = require('./modules/tarif-vis');
 const { ChargingManagementModule } = require('./modules/charging-management');
 const { MultiUseModule } = require('./modules/multi-use');
+const { Para14aModule } = require('./modules/para14a');
 
 class ModuleManager {
     /**
@@ -93,7 +94,15 @@ class ModuleManager {
             enabledFn: () => !!this.adapter.config.enablePeakShaving,
         });
 
-                // Tarif (VIS) – stellt Ladepark-Deckel bereit
+        // §14a EnWG (steuerbare Verbrauchseinrichtungen)
+        // Runs BEFORE Charging-Management so it can provide caps via adapter._para14a.
+        this.modules.push({
+            key: 'para14a',
+            instance: new Para14aModule(this.adapter, this.dp),
+            enabledFn: () => !!(this.adapter?.config?.installerConfig?.para14a),
+        });
+
+        // Tarif (VIS) – stellt Ladepark-Deckel bereit
         this.modules.push({
             key: 'tarifVis',
             instance: new TarifVisModule(this.adapter, this.dp),
@@ -105,10 +114,7 @@ class ModuleManager {
             instance: new SpeicherRegelungModule(this.adapter, this.dp),
             enabledFn: () => !!this.adapter.config.enableStorageControl,
         });
-
-
-
-// Charging management
+        // Charging management
         this.modules.push({
             key: 'chargingManagement',
             instance: new ChargingManagementModule(this.adapter, this.dp),

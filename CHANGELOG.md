@@ -1,3 +1,8 @@
+## 0.4.123
+
+- §14a EnWG: Admin‑UI erweitert (Modus Direkt/EMS, optionales Aktiv‑Signal, optionale EMS‑Sollwert‑DP, Verbraucher‑Tabelle).
+- EMS: Pmin,14a/GZF‑Berechnung (inkl. Faktor für WP/Klima > 11kW) und EVCS‑Caps in Charging‑Management.
+
 ## 0.4.122
 
 - Rollback: Lizenzpflicht entfernt (Adapter startet ohne Lizenz).
