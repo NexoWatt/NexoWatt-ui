@@ -80,6 +80,13 @@ this.on('ready', this.onReady.bind(this));
 
   // --- Licensing ---------------------------------------------------------
   async ensureLicenseStates() {
+    // Create a dedicated channel so the states are visible in ioBroker Objects tree
+    await this.setObjectNotExistsAsync('license', {
+      type: 'channel',
+      common: { name: 'Lizenz' },
+      native: {}
+    });
+
     const defs = {
       required: { type: 'boolean', role: 'state', def: true },
       valid:    { type: 'boolean', role: 'state', def: false },
@@ -125,11 +132,85 @@ this.on('ready', this.onReady.bind(this));
     return loadLicenseFromFile(filePath);
   }
 
+  async getIobrokerUuid() {
+    // ioBroker usually stores an installation UUID under system.meta.uuid.
+    // Depending on installation/version this may be a state or a meta-object.
+    try {
+      const st = await this.getForeignStateAsync('system.meta.uuid');
+      if (st && typeof st.val === 'string' && st.val.trim()) return st.val.trim();
+    } catch (_e) {
+      // ignore
+    }
+    try {
+      const obj = await this.getForeignObjectAsync('system.meta.uuid');
+      if (obj) {
+        const candidates = [
+          obj.native && obj.native.uuid,
+          obj.common && obj.common.uuid,
+          obj.native && obj.native.value,
+          obj.common && obj.common.value,
+          obj.native && obj.native.id,
+          obj.common && obj.common.id,
+        ];
+        for (const c of candidates) {
+          if (typeof c === 'string' && c.trim()) return c.trim();
+        }
+      }
+    } catch (_e2) {
+      // ignore
+    }
+    try {
+      const obj = await this.getForeignObjectAsync('system.config');
+      if (obj) {
+        const candidates = [
+          obj.native && obj.native.uuid,
+          obj.common && obj.common.uuid,
+          obj.native && obj.native.systemUuid,
+          obj.common && obj.common.systemUuid,
+        ];
+        for (const c of candidates) {
+          if (typeof c === 'string' && c.trim()) return c.trim();
+        }
+      }
+    } catch (_e3) {
+      // ignore
+    }
+    return '';
+  }
+
+  async resolveLicenseDeviceId() {
+    const cfg = (this.config && this.config.license) || {};
+    const src = String(cfg.deviceIdSource || 'auto').trim().toLowerCase();
+
+    const tryIob = async () => {
+      const uuid = await this.getIobrokerUuid();
+      if (uuid) return `iobroker-uuid:${uuid}`;
+      return '';
+    };
+
+    if (src === 'iobrokeruuid' || src === 'iobroker-uuid' || src === 'uuid') {
+      const id = await tryIob();
+      if (id) return id;
+      this.log.warn('[LICENSE] Device-ID Quelle ioBroker UUID gewählt, aber system.meta.uuid nicht gefunden. Fallback auf machine-id/MAC.');
+      return getDeviceId();
+    }
+
+    if (src === 'machineid' || src === 'machine-id' || src === 'machine') {
+      return getDeviceId();
+    }
+
+    // auto (default): ioBroker UUID first, then machine-id
+    const autoId = await tryIob();
+    if (autoId) return autoId;
+    return getDeviceId();
+  }
+
   async checkLicense(reason = 'startup') {
     const required = this.isLicenseRequired();
     this._licenseRequired = required;
 
-    const deviceId = getDeviceId();
+    const deviceId = await this.resolveLicenseDeviceId();
+    this._licenseDeviceId = deviceId;
     const licenseObj = await this.loadLicenseObject();
     const status = validateLicense({
       licenseObj,
@@ -176,7 +257,8 @@ this.on('ready', this.onReady.bind(this));
   }
 
   getLicenseStatusForApi() {
-    const s = this._licenseStatus || { valid: false, status: 'missing', reason: 'missing', product: 'nexowatt-vis', deviceId: getDeviceId() };
+    const deviceId = String(this._licenseDeviceId || '') || getDeviceId();
+    const s = this._licenseStatus || { valid: false, status: 'missing', reason: 'missing', product: 'nexowatt-vis', deviceId };
     return {
       ok: true,
       required: !!this._licenseRequired,
@@ -184,7 +266,7 @@ this.on('ready', this.onReady.bind(this));
       status: String(s.status || ''),
       reason: String(s.reason || ''),
       product: String(s.product || 'nexowatt-vis'),
-      deviceId: String(s.deviceId || getDeviceId()),
+      deviceId: String(s.deviceId || deviceId),
       serial: String(s.serial || ''),
       issuedTo: String(s.issuedTo || ''),
       issuedAt: String(s.issuedAt || ''),

@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.120",
+    "version": "0.4.121",
     "news": {
+      "0.4.121": {
+        "de": "Lizenz: Device-ID Quelle konfigurierbar (Auto/ioBroker UUID/machine-id) und License-States als eigener Channel sichtbar.",
+        "en": "License: configurable device-id source (auto/ioBroker UUID/machine-id) and license states visible as dedicated channel."
+      },
       "0.4.119": {
         "de": "Serienreife‑Gate: Stabilisierung/Feinschliff, Admin‑Aufräumen (SmartHome‑Tabs ausgeblendet) und saubere Defaults für Speicher‑Strategie. Neu: LSK‑Laden/Entladen separat aktivierbar.",
         "en": "Release gate: stability/polish, admin cleanup (SmartHome tabs hidden) and cleaner defaults for storage strategy. New: LSK charge/discharge separately toggleable."

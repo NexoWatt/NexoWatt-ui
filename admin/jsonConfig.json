@@ -108,6 +108,21 @@
             "fontFamily": "monospace"
           }
         },
+        "license.deviceIdSource": {
+          "type": "select",
+          "label": "Device-ID Quelle",
+          "help": "Welche Gerätekennung für die Offline-Lizenzbindung verwendet wird. Empfehlung für eure Hardware: ioBroker UUID (system.meta.uuid). Bei Images/Cloning sicherstellen, dass die UUID pro Gerät einzigartig ist. Standard: Auto (ioBroker UUID, sonst machine-id).",
+          "default": "auto",
+          "options": [
+            { "label": "Auto (ioBroker UUID, sonst machine-id/MAC)", "value": "auto" },
+            { "label": "ioBroker UUID (system.meta.uuid)", "value": "iobrokerUuid" },
+            { "label": "Linux machine-id (/etc/machine-id)", "value": "machineId" }
+          ],
+          "attr": "license.deviceIdSource",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
         "units.power": {
           "type": "select",
           "label": "Leistungseinheit",
