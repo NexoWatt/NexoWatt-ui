@@ -7,18 +7,6 @@ const path = require('path');
 const bodyParser = express.json();
 const crypto = require('crypto');
 
-// Offline license verification (device-bound, signed license)
-const {
-  getDeviceId,
-  parseLicenseInput,
-  loadLicenseFromFile,
-  validateLicense,
-} = require('./lib/license');
-
-// Public key for verifying license signatures (Ed25519)
-// IMPORTANT: Keep the corresponding private key secret (do NOT ship it on customer hardware).
-const LICENSE_PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA+bJ30AmCy2z4Agyf2ScdJ6DKZF6EPbHJOzkZeqg5FqY=\n-----END PUBLIC KEY-----\n`;
-
 // Embedded EMS engine (Charging Management from nexowatt-multiuse)
 const { EmsEngine } = require('./ems/engine');
 
@@ -60,10 +48,6 @@ class NexoWattVis extends utils.Adapter {
     // EMS engine (Sprint 2)
     this.emsEngine = null;
 
-    // License status (device-bound). If invalid/missing the adapter will run in locked mode.
-    this._licenseStatus = null;
-    this._licenseRequired = true;
-
     
 
     // EVCS session logger (RFID accounting)
@@ -76,203 +60,6 @@ class NexoWattVis extends utils.Adapter {
 this.on('ready', this.onReady.bind(this));
     this.on('stateChange', this.onStateChange.bind(this));
     this.on('unload', this.onUnload.bind(this));
-  }
-
-  // --- Licensing ---------------------------------------------------------
-  async ensureLicenseStates() {
-    // Create a dedicated channel so the states are visible in ioBroker Objects tree
-    await this.setObjectNotExistsAsync('license', {
-      type: 'channel',
-      common: { name: 'Lizenz' },
-      native: {}
-    });
-
-    const defs = {
-      required: { type: 'boolean', role: 'state', def: true },
-      valid:    { type: 'boolean', role: 'state', def: false },
-      status:   { type: 'string',  role: 'text',  def: 'missing' },
-      reason:   { type: 'string',  role: 'text',  def: 'missing' },
-      deviceId: { type: 'string',  role: 'text',  def: '' },
-      product:  { type: 'string',  role: 'text',  def: 'nexowatt-vis' },
-      serial:   { type: 'string',  role: 'text',  def: '' },
-      issuedTo: { type: 'string',  role: 'text',  def: '' },
-      issuedAt: { type: 'string',  role: 'text',  def: '' },
-      expiresAt:{ type: 'string',  role: 'text',  def: '' },
-      lastCheck:{ type: 'number',  role: 'value.time', def: 0 },
-    };
-    for (const [key, c] of Object.entries(defs)) {
-      const id = `license.${key}`;
-      await this.setObjectNotExistsAsync(id, {
-        type: 'state',
-        common: { name: id, type: c.type, role: c.role, read: true, write: false, def: c.def },
-        native: {},
-      });
-    }
-  }
-
-  isLicenseRequired() {
-    const cfg = (this.config && this.config.license) || {};
-    // Production default: license is required.
-    // Allow bypass only via env var for development/test environments.
-    const envBypass = String(process.env.NEXOWATT_DEV_LICENSE_BYPASS || '').trim();
-    if (envBypass === '1' || envBypass.toLowerCase() === 'true') return false;
-    if (cfg && cfg.required === false) return false; // optional fallback for internal builds
-    return true;
-  }
-
-  async loadLicenseObject() {
-    const cfg = (this.config && this.config.license) || {};
-    const key = (cfg && typeof cfg.key === 'string') ? cfg.key.trim() : '';
-    if (key) {
-      return parseLicenseInput(key);
-    }
-    const filePath = (cfg && typeof cfg.filePath === 'string' && cfg.filePath.trim())
-      ? cfg.filePath.trim()
-      : '/opt/nexowatt/license.json';
-    return loadLicenseFromFile(filePath);
-  }
-
-  async getIobrokerUuid() {
-    // ioBroker usually stores an installation UUID under system.meta.uuid.
-    // Depending on installation/version this may be a state or a meta-object.
-    try {
-      const st = await this.getForeignStateAsync('system.meta.uuid');
-      if (st && typeof st.val === 'string' && st.val.trim()) return st.val.trim();
-    } catch (_e) {
-      // ignore
-    }
-    try {
-      const obj = await this.getForeignObjectAsync('system.meta.uuid');
-      if (obj) {
-        const candidates = [
-          obj.native && obj.native.uuid,
-          obj.common && obj.common.uuid,
-          obj.native && obj.native.value,
-          obj.common && obj.common.value,
-          obj.native && obj.native.id,
-          obj.common && obj.common.id,
-        ];
-        for (const c of candidates) {
-          if (typeof c === 'string' && c.trim()) return c.trim();
-        }
-      }
-    } catch (_e2) {
-      // ignore
-    }
-    try {
-      const obj = await this.getForeignObjectAsync('system.config');
-      if (obj) {
-        const candidates = [
-          obj.native && obj.native.uuid,
-          obj.common && obj.common.uuid,
-          obj.native && obj.native.systemUuid,
-          obj.common && obj.common.systemUuid,
-        ];
-        for (const c of candidates) {
-          if (typeof c === 'string' && c.trim()) return c.trim();
-        }
-      }
-    } catch (_e3) {
-      // ignore
-    }
-    return '';
-  }
-
-  async resolveLicenseDeviceId() {
-    const cfg = (this.config && this.config.license) || {};
-    const src = String(cfg.deviceIdSource || 'auto').trim().toLowerCase();
-
-    const tryIob = async () => {
-      const uuid = await this.getIobrokerUuid();
-      if (uuid) return `iobroker-uuid:${uuid}`;
-      return '';
-    };
-
-    if (src === 'iobrokeruuid' || src === 'iobroker-uuid' || src === 'uuid') {
-      const id = await tryIob();
-      if (id) return id;
-      this.log.warn('[LICENSE] Device-ID Quelle ioBroker UUID gewählt, aber system.meta.uuid nicht gefunden. Fallback auf machine-id/MAC.');
-      return getDeviceId();
-    }
-
-    if (src === 'machineid' || src === 'machine-id' || src === 'machine') {
-      return getDeviceId();
-    }
-
-    // auto (default): ioBroker UUID first, then machine-id
-    const autoId = await tryIob();
-    if (autoId) return autoId;
-    return getDeviceId();
-  }
-
-  async checkLicense(reason = 'startup') {
-    const required = this.isLicenseRequired();
-    this._licenseRequired = required;
-
-    const deviceId = await this.resolveLicenseDeviceId();
-    this._licenseDeviceId = deviceId;
-    const licenseObj = await this.loadLicenseObject();
-    const status = validateLicense({
-      licenseObj,
-      deviceId,
-      publicKeyPem: LICENSE_PUBLIC_KEY_PEM,
-      expectedProduct: 'nexowatt-vis',
-    });
-
-    // If license is not required (dev bypass), treat as valid but keep meta for diagnostics.
-    if (!required) {
-      status.valid = true;
-      status.status = 'valid';
-      status.reason = 'dev_bypass';
-    }
-
-    this._licenseStatus = status;
-
-    // publish states (read-only)
-    try {
-      await this.setStateAsync('license.required', { val: !!required, ack: true });
-      await this.setStateAsync('license.valid',    { val: !!status.valid, ack: true });
-      await this.setStateAsync('license.status',   { val: String(status.status || ''), ack: true });
-      await this.setStateAsync('license.reason',   { val: String(status.reason || ''), ack: true });
-      await this.setStateAsync('license.deviceId', { val: String(deviceId || ''), ack: true });
-      await this.setStateAsync('license.product',  { val: String(status.product || 'nexowatt-vis'), ack: true });
-      await this.setStateAsync('license.serial',   { val: String(status.serial || ''), ack: true });
-      await this.setStateAsync('license.issuedTo', { val: String(status.issuedTo || ''), ack: true });
-      await this.setStateAsync('license.issuedAt', { val: String(status.issuedAt || ''), ack: true });
-      await this.setStateAsync('license.expiresAt',{ val: String(status.expiresAt || ''), ack: true });
-      await this.setStateAsync('license.lastCheck',{ val: Number(status.lastCheck || Date.now()), ack: true });
-    } catch (e) {
-      this.log.debug('license state publish failed: ' + (e && e.message ? e.message : e));
-    }
-
-    if (required && !status.valid) {
-      this.log.error(`[LICENSE] Keine gültige Lizenz gefunden (${status.reason}). Adapter bleibt gesperrt. (${reason})`);
-      this.log.error(`[LICENSE] Device-ID: ${deviceId}`);
-      this.log.error(`[LICENSE] Bitte Lizenz in den Adapter-Einstellungen hinterlegen (Allgemein → Lizenzschlüssel) oder Datei /opt/nexowatt/license.json bereitstellen.`);
-    } else {
-      this.log.info(`[LICENSE] Lizenzstatus: ${status.valid ? 'OK' : 'nicht erforderlich'} (${status.reason}).`);
-    }
-
-    return status;
-  }
-
-  getLicenseStatusForApi() {
-    const deviceId = String(this._licenseDeviceId || '') || getDeviceId();
-    const s = this._licenseStatus || { valid: false, status: 'missing', reason: 'missing', product: 'nexowatt-vis', deviceId };
-    return {
-      ok: true,
-      required: !!this._licenseRequired,
-      valid: !!s.valid,
-      status: String(s.status || ''),
-      reason: String(s.reason || ''),
-      product: String(s.product || 'nexowatt-vis'),
-      deviceId: String(s.deviceId || deviceId),
-      serial: String(s.serial || ''),
-      issuedTo: String(s.issuedTo || ''),
-      issuedAt: String(s.issuedAt || ''),
-      expiresAt: String(s.expiresAt || ''),
-      lastCheck: Number(s.lastCheck || Date.now()),
-    };
   }
 
   
@@ -1719,18 +1506,8 @@ if (copy.type === 'scene' && typeof copy.state.on !== 'undefined') {
 
 async onReady() {
     try {
-      // License check (device-bound). If invalid/missing the adapter will run in locked mode.
-      await this.ensureLicenseStates();
-      await this.checkLicense('startup');
-
-      // start web server (serves activation page when locked)
+      // start web server
       await this.startServer();
-
-      // Hard lock: without a valid license we do not start VIS/EMS functionality.
-      if (this._licenseRequired && !(this._licenseStatus && this._licenseStatus.valid)) {
-        this.log.error('[LICENSE] Adapter-Funktionen sind deaktiviert, bis eine gültige Lizenz hinterlegt ist.');
-        return;
-      }
 
       // create states first, then write config defaults
       await this.ensureInstallerStates();
@@ -1862,99 +1639,6 @@ async onReady() {
 
   async startServer() {
     const app = express();
-
-    // License status endpoint is always available (even in locked mode)
-    app.get('/api/license/status', (_req, res) => {
-      res.json(this.getLicenseStatusForApi());
-    });
-
-    const locked = (this._licenseRequired && !(this._licenseStatus && this._licenseStatus.valid));
-    if (locked) {
-      // Locked mode: show activation page and block all other API calls.
-      const html = (() => {
-        const s = this.getLicenseStatusForApi();
-        const reasonMap = {
-          missing: 'Keine Lizenz gefunden',
-          product_mismatch: 'Lizenz passt nicht zum Produkt',
-          device_mismatch: 'Lizenz passt nicht zur Hardware (Device-ID)',
-          missing_signature: 'Lizenz-Signatur fehlt',
-          invalid_signature: 'Lizenz-Signatur ungültig',
-          not_yet_valid: 'Lizenz ist noch nicht gültig',
-          expired: 'Lizenz ist abgelaufen',
-        };
-        const reasonText = reasonMap[s.reason] || String(s.reason || 'unbekannt');
-        return `<!doctype html>
-<html lang="de">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NexoWatt – Lizenz erforderlich</title>
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#0b0f14;color:#e6eef8}
-    .wrap{max-width:880px;margin:0 auto;padding:28px}
-    .card{background:#121a24;border:1px solid #1f2a3a;border-radius:14px;padding:22px}
-    h1{margin:0 0 10px 0;font-size:22px}
-    p{line-height:1.5}
-    code{display:block;background:#0b0f14;border:1px solid #1f2a3a;padding:10px;border-radius:10px;word-break:break-all}
-    .muted{opacity:.85}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    @media (max-width:800px){.row{grid-template-columns:1fr}}
-    .badge{display:inline-block;padding:4px 10px;border-radius:999px;background:#1f2a3a;border:1px solid #2b3a52;font-size:12px}
-    a{color:#7db7ff}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="card">
-      <div class="badge">Adapter gesperrt</div>
-      <h1>Lizenz erforderlich</h1>
-      <p>Auf diesem System wurde keine gültige NexoWatt‑Lizenz gefunden. Die VIS-/EMS‑Funktionen sind deaktiviert, bis eine gültige Lizenz hinterlegt ist.</p>
-
-      <div class="row">
-        <div>
-          <p class="muted"><strong>Status</strong><br/>${String(s.status || '')} – ${reasonText}</p>
-          <p class="muted"><strong>Produkt</strong><br/>${String(s.product || '')}</p>
-        </div>
-        <div>
-          <p class="muted"><strong>Device‑ID (für Lizenzanforderung)</strong></p>
-          <code>${String(s.deviceId || '')}</code>
-        </div>
-      </div>
-
-      <p class="muted"><strong>So aktivierst du die Lizenz</strong></p>
-      <ol>
-        <li>ioBroker Admin öffnen → Adapter → <em>nexowatt-vis</em> → Instanz → <em>Allgemein</em>.</li>
-        <li>Unter <em>Lizenz</em> den <strong>Lizenzschlüssel</strong> einfügen (Base64 oder JSON) <em>oder</em> eine Lizenzdatei unter <code>/opt/nexowatt/license.json</code> bereitstellen.</li>
-        <li>Speichern und Instanz neu starten.</li>
-      </ol>
-      <p class="muted">Status-API: <a href="/api/license/status">/api/license/status</a></p>
-    </div>
-  </div>
-</body>
-</html>`;
-      })();
-
-      // Block all other API calls
-      app.use('/api', (req, res, next) => {
-        if (req.path === '/license/status') return next();
-        res.status(402).json({ ok: false, error: 'license_required' });
-      });
-
-      // Serve the activation page for all GET requests
-      app.get('*', (_req, res) => {
-        res.status(402).type('text/html').send(html);
-      });
-
-      const bind = (this.config && this.config.bind) || '0.0.0.0';
-      const port = (this.config && this.config.port) || 8188;
-      await new Promise((resolve) => {
-        this.server = app.listen(port, bind, () => {
-          this.log.info(`Dashboard (LOCKED) available at http://${bind}:${port}`);
-          resolve();
-        });
-      });
-      return;
-    }
 
     app.get('/', (_req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'index.html'));

@@ -1,3 +1,8 @@
+## 0.4.122
+
+- Rollback: Lizenzpflicht entfernt (Adapter startet ohne Lizenz).
+- Admin-Aufräumen + ioBroker-Login/Write-Schutz unverändert.
+
 ## 0.4.117 (2025-12-30)
 - RC: Admin aufgeräumt – SmartHome-Tabs (vorbereitet + Räume/Geräte) sind jetzt standardmäßig ausgeblendet, damit Installateure nicht verwirrt werden.
 - EVCS: Pro Ladepunkt werden EMS-Hinweise/Fehler direkt angezeigt (z.B. „Setpoint fehlt“, „offline“, „Budget/Netzlimit“, „Lastspitzenkappung aktiv“).
@@ -212,3 +217,4 @@
 - VIS: Neue EVCS-Seite (/evcs.html) für mehrere Wallboxen.
 - Header-Menü: Navigation Live/History/SmartHome/Logic + EVCS (ab 2 Wallboxen sichtbar).
 - Live: EVCS-Menüpunkt wird über settingsConfig.evcsCount automatisch ein-/ausgeblendet.
+

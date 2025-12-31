@@ -1,11 +1,11 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.121",
+    "version": "0.4.122",
     "news": {
-      "0.4.121": {
-        "de": "Lizenz: Device-ID Quelle konfigurierbar (Auto/ioBroker UUID/machine-id) und License-States als eigener Channel sichtbar.",
-        "en": "License: configurable device-id source (auto/ioBroker UUID/machine-id) and license states visible as dedicated channel."
+      "0.4.122": {
+        "de": "Rollback: Lizenzpflicht entfernt (Adapter startet wieder ohne Lizenz). Admin-Aufräumen + ioBroker-Login/Write-Schutz bleiben aktiv.",
+        "en": "Rollback: removed mandatory licensing (adapter starts without a license again). Admin cleanup + ioBroker login/write protection remain enabled."
       },
       "0.4.119": {
         "de": "Serienreife‑Gate: Stabilisierung/Feinschliff, Admin‑Aufräumen (SmartHome‑Tabs ausgeblendet) und saubere Defaults für Speicher‑Strategie. Neu: LSK‑Laden/Entladen separat aktivierbar.",
@@ -401,10 +401,6 @@
       "0.4.117": {
         "de": "RC: Admin aufgeräumt (SmartHome-Tabs ausgeblendet), EVCS zeigt jetzt EMS-Hinweise/Fehler (z.B. NO_SETPOINT) direkt im Ladepunkt-Card; Boost-Button wird bei allowBoost=false gesperrt. SW-Cache v7.",
         "en": "RC: Admin cleaned up (SmartHome tabs hidden), EVCS now shows EMS hints/errors (e.g. NO_SETPOINT) in the chargepoint card; Boost button disabled when allowBoost=false. SW cache v7."
-      },
-      "0.4.120": {
-        "de": "Hotfix: Lizenzfelder im Admin, LOCKED-Mode bei fehlender Lizenz (Adapter bleibt erreichbar).",
-        "en": "Hotfix: License fields in admin, locked mode when license missing (adapter remains reachable)."
       }
     },
     "title": "NexoWatt VIS",
@@ -547,11 +543,6 @@
       "sessionTtlMin": 120,
       "installerUsers": "admin,installer",
       "installerGroups": "system.group.administrator"
-    },
-    "license": {
-      "required": true,
-      "key": "",
-      "filePath": "/opt/nexowatt/license.json"
     },
     "installerConfig": {},
     "history": {
