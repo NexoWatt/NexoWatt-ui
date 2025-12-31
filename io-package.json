@@ -533,7 +533,13 @@
       "enableAnimations": true,
       "showGridVoltage": false
     },
-    "installerPassword": "",
+    "auth": {
+      "enabled": true,
+      "protectWrites": true,
+      "sessionTtlMin": 120,
+      "installerUsers": "admin,installer",
+      "installerGroups": "system.group.administrator"
+    },
     "installerConfig": {},
     "history": {
       "instance": "influxdb.0",

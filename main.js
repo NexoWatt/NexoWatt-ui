@@ -27,13 +27,7 @@ function parseCookies(req) {
 function createToken() {
   return crypto.randomBytes(24).toString('base64url');
 }
-function getInstallerPassword(ctx) {
-  try {
-    const cfg = ctx && ctx.config;
-    const pw = (cfg && cfg.installerPassword) || 'install2025!'; // default
-    return pw;
-  } catch (_) { return 'install2025!'; }
-}
+
 
 
 
@@ -1676,6 +1670,195 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
     app.use(bodyParser);
 
 
+    // --- Auth (ioBroker user login) ---
+    // Ziel: Keine festen/Default Installer-Passwörter im Adapter.
+    // Zugriff auf schreibende Endpunkte (Setpoints/Settings/RFID/SmartHome) nur nach Login.
+    const authCfg = (this.config && this.config.auth) || {};
+    const authEnabled = (authCfg.enabled !== false); // default: enabled
+    const protectWrites = (authCfg.protectWrites !== false); // default: enabled
+    const sessionTtlMinRaw = Number(authCfg.sessionTtlMin);
+    const sessionTtlMin = Number.isFinite(sessionTtlMinRaw) ? sessionTtlMinRaw : 120;
+    const sessionTtlMs = Math.max(5, Math.min(24 * 60, Math.round(sessionTtlMin))) * 60 * 1000;
+
+    const installerUsers = new Set(
+      String(authCfg.installerUsers || '')
+        .split(',')
+        .map(s => String(s || '').trim())
+        .filter(Boolean)
+    );
+    if (!installerUsers.size) {
+      installerUsers.add('admin');
+      installerUsers.add('installer');
+    }
+
+    const installerGroups = String(authCfg.installerGroups || 'system.group.administrator')
+      .split(',')
+      .map(s => String(s || '').trim())
+      .filter(Boolean);
+
+    const COOKIE_NAME = 'nw_session';
+    const LEGACY_COOKIE_NAME = 'installer_session';
+    this._authSessions = this._authSessions || new Map();
+
+    const pruneSessions = () => {
+      const now = Date.now();
+      try {
+        for (const [t, s] of this._authSessions.entries()) {
+          if (!s || !s.exp || s.exp <= now) this._authSessions.delete(t);
+        }
+      } catch (_e) {
+        // ignore
+      }
+    };
+
+    const getSession = (req) => {
+      if (!authEnabled) return { user: null, isInstaller: true, exp: Date.now() + sessionTtlMs, _bypass: true };
+      pruneSessions();
+      const cookies = parseCookies(req);
+      const token = cookies[COOKIE_NAME] || cookies[LEGACY_COOKIE_NAME] || '';
+      if (!token) return null;
+      const s = this._authSessions.get(token);
+      if (!s) return null;
+      if (!s.exp || s.exp <= Date.now()) {
+        this._authSessions.delete(token);
+        return null;
+      }
+      return s;
+    };
+
+    const setSessionCookie = (res, token, ttlMs) => {
+      const maxAge = Math.max(1, Math.floor(ttlMs / 1000));
+      const base = `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
+      // Backward compatibility: keep legacy cookie name in parallel for older frontends
+      const legacy = `${LEGACY_COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
+      res.setHeader('Set-Cookie', [base, legacy]);
+    };
+
+    const clearSessionCookie = (res) => {
+      res.setHeader('Set-Cookie', [
+        `${COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`,
+        `${LEGACY_COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`,
+      ]);
+    };
+
+    const requireAuth = (req, res, next) => {
+      if (!authEnabled || !protectWrites) return next();
+      const s = getSession(req);
+      if (!s) return res.status(401).json({ ok: false, error: 'unauthorized' });
+      req.nwSession = s;
+      next();
+    };
+
+    const requireInstaller = (req, res, next) => {
+      if (!authEnabled || !protectWrites) return next();
+      const s = getSession(req);
+      if (!s) return res.status(401).json({ ok: false, error: 'unauthorized' });
+      if (!s.isInstaller) return res.status(403).json({ ok: false, error: 'forbidden' });
+      req.nwSession = s;
+      next();
+    };
+
+    const checkPasswordAsync = (user, pass) => new Promise((resolve) => {
+      try {
+        this.checkPassword(String(user || '').trim(), String(pass || ''), (ok) => resolve(!!ok));
+      } catch (_e) {
+        resolve(false);
+      }
+    });
+
+    const isUserInGroup = async (user, groupId) => {
+      try {
+        const gid = String(groupId || '').trim();
+        if (!gid) return false;
+        const obj = await this.getForeignObjectAsync(gid);
+        const members = obj && obj.common && Array.isArray(obj.common.members) ? obj.common.members : [];
+        const u = 'system.user.' + String(user || '').trim();
+        return members.includes(u);
+      } catch (_e) {
+        return false;
+      }
+    };
+
+    const computeIsInstaller = async (user) => {
+      const u = String(user || '').trim();
+      if (!u) return false;
+      if (installerUsers.has(u)) return true;
+      // administrators are always allowed
+      for (const gid of installerGroups) {
+        // ignore empty
+        if (!gid) continue;
+        // a user can be member of multiple groups; first match wins
+        if (await isUserInGroup(u, gid)) return true;
+      }
+      return false;
+    };
+
+    // Auth status (used by UI)
+    app.get('/api/auth/status', (req, res) => {
+      const s = getSession(req);
+      res.json({
+        ok: true,
+        enabled: !!authEnabled,
+        authed: !!s,
+        user: (s && s.user) ? String(s.user) : null,
+        isInstaller: !!(s && s.isInstaller),
+        protectWrites: !!protectWrites,
+      });
+    });
+
+    const doAuthLogin = async (req, res) => {
+      try {
+        if (!authEnabled) return res.json({ ok: true, enabled: false, authed: true, user: null, isInstaller: true });
+
+        const user = String((req.body && (req.body.user || req.body.username)) || '').trim();
+        const password = String((req.body && req.body.password) || '');
+        if (!user || !password) return res.status(400).json({ ok: false, error: 'missing_credentials' });
+
+        const ok = await checkPasswordAsync(user, password);
+        if (!ok) return res.status(401).json({ ok: false, error: 'unauthorized' });
+
+        const isInstaller = await computeIsInstaller(user);
+        const token = createToken();
+        this._authSessions.set(token, { user, isInstaller, exp: Date.now() + sessionTtlMs });
+        setSessionCookie(res, token, sessionTtlMs);
+        res.json({ ok: true, enabled: true, authed: true, user, isInstaller });
+      } catch (e) {
+        this.log.warn('auth login error: ' + (e && e.message ? e.message : e));
+        res.status(500).json({ ok: false, error: 'internal_error' });
+      }
+    };
+
+    // Login via ioBroker user/password
+    app.post('/api/auth/login', doAuthLogin);
+
+    // Logout
+    app.post('/api/auth/logout', (req, res) => {
+      try {
+        const cookies = parseCookies(req);
+        const token = cookies[COOKIE_NAME] || cookies[LEGACY_COOKIE_NAME] || '';
+        if (token) this._authSessions.delete(token);
+      } catch (_e) {
+        // ignore
+      }
+      clearSessionCookie(res);
+      res.json({ ok: true });
+    });
+
+    // Backwards compatible endpoints (older UI)
+    app.post('/api/installer/login', doAuthLogin);
+    app.post('/api/installer/logout', (req, res) => {
+      try {
+        const cookies = parseCookies(req);
+        const token = cookies[COOKIE_NAME] || cookies[LEGACY_COOKIE_NAME] || '';
+        if (token) this._authSessions.delete(token);
+      } catch (_e) {
+        // ignore
+      }
+      clearSessionCookie(res);
+      res.json({ ok: true });
+    });
+
+
     // --- SmartHome page & API (erste Switch-Kachel) ---
     app.get(['/smarthome.html', '/smarthome'], (_req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'smarthome.html'));
@@ -1692,7 +1875,7 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
     });
 
     
-app.post('/api/smarthome/toggle', async (req, res) => {
+app.post('/api/smarthome/toggle', requireAuth, async (req, res) => {
   try {
     const id = req.body && req.body.id;
     if (!id) {
@@ -1746,7 +1929,7 @@ app.post('/api/smarthome/toggle', async (req, res) => {
 });
 
 // Level-API für Dimmer (Slider)
-app.post('/api/smarthome/level', async (req, res) => {
+app.post('/api/smarthome/level', requireAuth, async (req, res) => {
   try {
     const id = req.body && req.body.id;
     let level = req.body && req.body.level;
@@ -1789,7 +1972,7 @@ app.post('/api/smarthome/level', async (req, res) => {
 
 
 // Cover-API für Jalousie/Rollladen (Auf/Ab/Stop)
-app.post('/api/smarthome/cover', async (req, res) => {
+app.post('/api/smarthome/cover', requireAuth, async (req, res) => {
   try {
     const id = req.body && req.body.id;
     const action = req.body && req.body.action;
@@ -1828,7 +2011,7 @@ app.post('/api/smarthome/cover', async (req, res) => {
     res.status(500).json({ ok: false, error: 'internal error' });
   }
 });// RTR-Setpoint-API (Solltemperatur einstellen)
-app.post('/api/smarthome/rtrSetpoint', async (req, res) => {
+app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
   try {
     const id = req.body && req.body.id;
     let setpoint = req.body && req.body.setpoint;
@@ -1878,7 +2061,7 @@ app.post('/api/smarthome/rtrSetpoint', async (req, res) => {
       }
     });
 
-    app.post('/api/smarthome/config', async (req, res) => {
+    app.post('/api/smarthome/config', requireInstaller, async (req, res) => {
       try {
         const body = req.body || {};
         const cfg = body.config;
@@ -2773,6 +2956,7 @@ app.get('/config', (req, res) => {
 
       const boolOr = (val, def) => (typeof val === 'boolean' ? val : !!def);
 
+      const sess = getSession(req);
       res.json({
         units: cfg.units || { power: 'W', energy: 'kWh' },
         settings: cfg.settings || {},
@@ -2791,7 +2975,17 @@ app.get('/config', (req, res) => {
         },
         installer: cfg.installer || {},
         adminUrl: cfg.adminUrl || null,
-        installerLocked: !!(cfg.installerPassword)
+        auth: {
+          enabled: !!authEnabled,
+          authed: !!sess,
+          user: (sess && sess.user) ? String(sess.user) : null,
+          isInstaller: !!(sess && sess.isInstaller),
+          protectWrites: !!protectWrites,
+        },
+        // UI compatibility flag: old frontends used "installerLocked".
+        // New behaviour: installer-level features are locked until the user logs in
+        // with an ioBroker account that has installer rights.
+        installerLocked: (authEnabled && protectWrites) ? !(sess && sess.isInstaller) : false
       });
     });
 
@@ -2800,36 +2994,19 @@ app.get('/config', (req, res) => {
       res.json(this.stateCache);
     });
 
-    // login for installer
-    
-    app.post('/api/installer/login', (req, res) => {
-      const pw = getInstallerPassword(this);
-      const provided = (req.body && req.body.password) || '';
-      if (!pw || provided === pw) {
-        this._installerToken = createToken();
-        this._installerTokenExp = Date.now() + 2*60*60*1000; // 2h
-        res.setHeader('Set-Cookie', `installer_session=${encodeURIComponent(this._installerToken)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=7200`);
-        return res.json({ ok: true });
-      } else {
-        return res.status(401).json({ ok: false, error: 'Unauthorized' });
-      }
-    });
-// logout for installer
-    app.post('/api/installer/logout', (_req, res) => {
-      this._installerToken = null;
-      this._installerTokenExp = 0;
-      res.setHeader('Set-Cookie', 'installer_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
-      res.json({ ok: true });
-    });
-
-
     // generic setter for settings/installer datapoints
-    app.post('/api/set', async (req, res) => {
+    app.post('/api/set', requireAuth, async (req, res) => {
       try {
         const scope = req.body && req.body.scope;
         const key = req.body && req.body.key;
         const value = req.body && req.body.value;
         if (!scope || !key) return res.status(400).json({ ok: false, error: 'bad request' });
+
+        // Installer-only scopes (protect RFID whitelist + installer settings)
+        if ((scope === 'installer' || scope === 'rfid') && authEnabled && protectWrites) {
+          const s = req.nwSession;
+          if (!s || !s.isInstaller) return res.status(403).json({ ok: false, error: 'forbidden' });
+        }
         // EMS setter: per-wallbox mode override (auto|pv|minpv|boost)
         if (scope === 'ems') {
           const k = String(key || '');
@@ -2933,9 +3110,7 @@ app.get('/config', (req, res) => {
 
         let map = {};
         if (scope === 'installer') {
-          if (!isInstallerAuthed(req)) return res.status(403).json({ ok: false, error: 'forbidden' });
           map = (this.config && this.config.installer) || {};
-        
         } else {
           map = (this.config && this.config.settings) || {};
         }

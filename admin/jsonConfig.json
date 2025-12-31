@@ -22,6 +22,58 @@
           "sm": 12,
           "md": 6
         },
+        "auth.enabled": {
+          "type": "checkbox",
+          "label": "Login erforderlich für Änderungen",
+          "help": "Wenn aktiv, werden schreibende Endpunkte (z.B. EVCS/EMS Steuerung, RFID, SmartHome) erst nach Login mit einem ioBroker Benutzer erlaubt.",
+          "default": true,
+          "attr": "auth.enabled",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "auth.protectWrites": {
+          "type": "checkbox",
+          "label": "Schreibzugriffe schützen",
+          "help": "Empfohlen. Deaktivieren nur für Entwicklung/Test.",
+          "default": true,
+          "attr": "auth.protectWrites",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "auth.installerUsers": {
+          "type": "text",
+          "label": "Installer-Benutzer (Komma-Liste)",
+          "help": "Diese ioBroker Benutzer erhalten Installer-Rechte (z.B. RFID/SmartHome-Config). Beispiel: admin,installer",
+          "default": "admin,installer",
+          "attr": "auth.installerUsers",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "auth.installerGroups": {
+          "type": "text",
+          "label": "Installer-Gruppen (Komma-Liste)",
+          "help": "Optional. ioBroker Gruppen-IDs, deren Mitglieder Installer-Rechte erhalten. Default: system.group.administrator",
+          "default": "system.group.administrator",
+          "attr": "auth.installerGroups",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
+        "auth.sessionTtlMin": {
+          "type": "number",
+          "label": "Session-Timeout (Min)",
+          "help": "Gültigkeitsdauer einer Login-Session.",
+          "min": 5,
+          "max": 1440,
+          "default": 120,
+          "attr": "auth.sessionTtlMin",
+          "xs": 12,
+          "sm": 12,
+          "md": 6
+        },
         "units.power": {
           "type": "select",
           "label": "Leistungseinheit",
