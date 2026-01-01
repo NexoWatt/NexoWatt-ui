@@ -519,15 +519,7 @@ function draw(){
     if (liveBtn) liveBtn.addEventListener('click', ()=>{ window.location.href = '/'; });
     const histBtn = document.getElementById('historyTabBtn');
     if (histBtn) histBtn.addEventListener('click', ()=>{ /* already here */ });
-    const openInstallerAdmin = document.getElementById('openInstallerAdmin');
-    if (openInstallerAdmin) {
-      openInstallerAdmin.addEventListener('click', ()=>{
-        // same behavior: forward to ioBroker Admin (host:8081) – try to derive host dynamically
-        const host = window.location.hostname;
-        const proto = window.location.protocol;
-        window.top.location.href = proto + '//' + host + ':8081/';
-      });
-    }
+    // Installateur-/Admin-Zugriff wird im Endkunden-Dashboard nicht angeboten.
   })();
 
 

@@ -216,7 +216,9 @@ class NexoWattVis extends utils.Adapter {
           name: String(r.name || '').trim(),
           socId: String(r.socId || '').trim(),
           chargePowerId: String(r.chargePowerId || '').trim(),
+          invertChargeSign: !!r.invertChargeSign,
           dischargePowerId: String(r.dischargePowerId || '').trim(),
+          invertDischargeSign: !!r.invertDischargeSign,
           setChargePowerId: String(r.setChargePowerId || '').trim(),
           setDischargePowerId: String(r.setDischargePowerId || '').trim(),
           capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : null,
@@ -302,6 +304,8 @@ class NexoWattVis extends utils.Adapter {
         const socId = String(row.socId || '').trim();
         const chgId = String(row.chargePowerId || '').trim();
         const dchgId = String(row.dischargePowerId || '').trim();
+        const invChg = !!row.invertChargeSign;
+        const invDchg = !!row.invertDischargeSign;
         const cap = Number(row.capacityKWh);
         const w = Number.isFinite(cap) && cap > 0 ? cap : 1;
 
@@ -319,12 +323,27 @@ class NexoWattVis extends utils.Adapter {
         if (chgId) {
           const st = await this.getForeignStateAsync(chgId).catch(() => null);
           const v = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
-          if (Number.isFinite(v)) { totalCharge += v; status.chargePowerW = v; anyOk = true; }
+          if (Number.isFinite(v)) {
+            let vv = invChg ? -v : v;
+            // In der Farm interpretieren wir Ladeleistung als positive Größe.
+            // Negative Werte (z.B. signed power DP) werden hier als 0 behandelt.
+            if (vv < 0) vv = 0;
+            totalCharge += vv;
+            status.chargePowerW = vv;
+            anyOk = true;
+          }
         }
         if (dchgId) {
           const st = await this.getForeignStateAsync(dchgId).catch(() => null);
           const v = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
-          if (Number.isFinite(v)) { totalDischarge += v; status.dischargePowerW = v; anyOk = true; }
+          if (Number.isFinite(v)) {
+            let vv = invDchg ? -v : v;
+            // In der Farm interpretieren wir Entladeleistung als positive Größe.
+            if (vv < 0) vv = 0;
+            totalDischarge += vv;
+            status.dischargePowerW = vv;
+            anyOk = true;
+          }
         }
         status.online = !!anyOk;
         statusRows.push(status);
@@ -375,6 +394,8 @@ class NexoWattVis extends utils.Adapter {
         socId: String(r.socId || '').trim(),
         setChargePowerId: String(r.setChargePowerId || '').trim(),
         setDischargePowerId: String(r.setDischargePowerId || '').trim(),
+        invertChargeSign: !!r.invertChargeSign,
+        invertDischargeSign: !!r.invertDischargeSign,
         capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : null,
         group: String(r.group || '').trim(),
       }))
@@ -558,11 +579,17 @@ class NexoWattVis extends utils.Adapter {
       const chargeW = (direction === 'charge') ? alloc : 0;
       const dischargeW = (direction === 'discharge') ? alloc : 0;
 
+      // Hersteller-/Adapterabhängige Vorzeichen-Konventionen:
+      // - Standard: Sollwerte werden als positive Leistung geschrieben.
+      // - Bei Bedarf kann pro Speicher das Vorzeichen für Laden/Entladen invertiert werden.
+      const outChargeW = s.invertChargeSign ? -chargeW : chargeW;
+      const outDischargeW = s.invertDischargeSign ? -dischargeW : dischargeW;
+
       const r = { name: s.name || '', chargeW, dischargeW, ok: true, writes: {} };
 
       // Write charge setpoint
       if (s.setChargePowerId) {
-        const wr = await this._sfWriteIfChanged(s.setChargePowerId, chargeW);
+        const wr = await this._sfWriteIfChanged(s.setChargePowerId, outChargeW);
         r.writes.charge = wr;
         if (!wr.ok) r.ok = false;
         if (direction === 'charge' && wr.ok) anyOkRelevant = true;
@@ -570,7 +597,7 @@ class NexoWattVis extends utils.Adapter {
       }
       // Write discharge setpoint
       if (s.setDischargePowerId) {
-        const wr = await this._sfWriteIfChanged(s.setDischargePowerId, dischargeW);
+        const wr = await this._sfWriteIfChanged(s.setDischargePowerId, outDischargeW);
         r.writes.discharge = wr;
         if (!wr.ok) r.ok = false;
         if (direction === 'discharge' && wr.ok) anyOkRelevant = true;

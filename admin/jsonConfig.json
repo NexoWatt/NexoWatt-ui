@@ -2993,7 +2993,7 @@
             "width": "100%"
           },
           "tableStyle": {
-            "minWidth": "1900px"
+            "minWidth": "2300px"
           },
           "items": [
             {
@@ -3043,6 +3043,19 @@
               }
             },
             {
+              "type": "checkbox",
+              "label": "Vorzeichen Laden invertieren",
+              "attr": "invertChargeSign",
+              "default": false,
+              "xs": 12,
+              "sm": 6,
+              "md": 2,
+              "style": {
+                "minWidth": "200px"
+              },
+              "tooltip": "Aktivieren, wenn der Hersteller beim Laden ein negatives Vorzeichen liefert bzw. erwartet. Gilt für Ladeleistung und Soll-Laden." 
+            },
+            {
               "type": "objectId",
               "label": "Entladeleistung‑DP (W)",
               "attr": "dischargePowerId",
@@ -3052,6 +3065,19 @@
               "style": {
                 "minWidth": "260px"
               }
+            },
+            {
+              "type": "checkbox",
+              "label": "Vorzeichen Entladen invertieren",
+              "attr": "invertDischargeSign",
+              "default": false,
+              "xs": 12,
+              "sm": 6,
+              "md": 2,
+              "style": {
+                "minWidth": "220px"
+              },
+              "tooltip": "Aktivieren, wenn der Hersteller beim Entladen ein negatives Vorzeichen liefert bzw. erwartet. Gilt für Entladeleistung und Soll-Entladen."
             },
             {
               "type": "objectId",

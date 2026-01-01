@@ -1,5 +1,5 @@
 /* NexoWatt Auth Helper
- * - Login gegen ioBroker Benutzer (Adapter checkPassword)
+ * - Login gegen Benutzerkonto (Adapter checkPassword)
  * - Session Cookie: nw_session (HttpOnly, SameSite=Lax)
  * - UI: zeigt Login-Dialog, wenn schreibende Requests 401/403 liefern
  */
@@ -68,7 +68,7 @@
     const rowUser = document.createElement('div');
     rowUser.className = 'row';
     const labUser = document.createElement('label');
-    labUser.textContent = 'ioBroker Benutzer';
+    labUser.textContent = 'Benutzer';
     userEl = document.createElement('input');
     userEl.type = 'text';
     userEl.autocomplete = 'username';
@@ -275,7 +275,7 @@
       btn.textContent = state.authed ? 'Abmelden' : 'Anmelden';
       btn.addEventListener('click', () => {
         if (state.authed) logout();
-        else showOverlay('Bitte mit ioBroker Benutzer anmelden.');
+        else showOverlay('Bitte anmelden.');
       });
 
       box.appendChild(user);

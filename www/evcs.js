@@ -97,7 +97,7 @@ function esc(s){
   return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
-// Keep ioBroker-safe id formatting in sync with EMS module (toSafeIdPart)
+// Keep adapter-safe id formatting in sync with EMS module (toSafeIdPart)
 function safeIdPart(input){
   const s = String(input ?? '').trim();
   if (!s) return '';

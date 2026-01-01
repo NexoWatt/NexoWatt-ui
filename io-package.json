@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.5.4",
+    "version": "0.5.5",
     "news": {
+      "0.5.5": {
+        "de": "Speicherfarm: Vorzeichen-Invertierung je Speicher (Laden/Entladen) für Mess- und Sollwert-DPs. VIS: keine ioBroker-Erwähnungen mehr und kein Installer/Admin-Link im Endkunden-UI. Service-Worker Cache-Version erhöht.",
+        "en": "Storage farm: per-storage sign inversion (charge/discharge) for measurement and setpoint DPs. UI: removed any ioBroker mentions and installer/admin link from end-user dashboard. Service worker cache version bumped."
+      },
       "0.5.2": {
         "en": "Admin: added EMS – Storage farm tab with storage table and datapoint mapping. Adapter: sync admin farm config to storageFarm.* states, derived totals timer uses configured interval, unload cleanup.",
         "de": "Admin: neuer Reiter „EMS – Speicherfarm“ inkl. Tabelle zur Speicher‑Zuordnung. Adapter: Admin‑Konfig wird nach storageFarm.* gespiegelt, Summenbildung nutzt konfiguriertes Intervall, Cleanup beim Unload."

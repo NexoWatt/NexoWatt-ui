@@ -385,18 +385,6 @@ function initMenu(){
 
 
 function initSettingsPanel(){
-  // Button inside settings to open ioBroker Admin (auto host:8081)
-  const openInstallerAdmin = document.getElementById('openInstallerAdmin');
-  if (openInstallerAdmin && !openInstallerAdmin.dataset.bound) {
-    openInstallerAdmin.dataset.bound='1';
-    openInstallerAdmin.addEventListener('click', (e)=>{
-      e.preventDefault();
-      const proto = (location.protocol === 'https:') ? 'https:' : 'http:';
-      const host  = location.hostname || 'localhost';
-      const url   = proto + '//' + host + ':8081/';
-      window.open(url, '_blank');
-    });
-  }
   // Force sliders to emit only 1 or 2
   const p = document.getElementById('s_priority');
   const t = document.getElementById('s_tariffMode');
@@ -539,7 +527,7 @@ function setupSettings(){
 // --- Speicherfarm (VIS read-only) ---
 //
 // WICHTIG: Die Konfiguration der Speicherfarm (Speicher hinzufügen, DP-Zuordnung, Gruppen)
-// erfolgt ausschließlich im ioBroker-Admin (Adapterinstanz → EMS → „EMS – Speicherfarm“).
+// erfolgt ausschließlich im Installateur-/Admin-Bereich.
 // In der VIS zeigen wir nur Status/Übersicht für Endverbraucher an.
 
 function parseJsonSafe(raw, fallback){
