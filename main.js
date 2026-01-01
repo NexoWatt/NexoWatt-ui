@@ -105,6 +105,172 @@ this.on('ready', this.onReady.bind(this));
       });
     }
   }
+
+  // Speicherfarm (mehrere Speichersysteme als Pool/Gruppe)
+  async ensureStorageFarmStates() {
+    await this.setObjectNotExistsAsync('storageFarm', {
+      type: 'channel',
+      common: { name: 'Speicherfarm' },
+      native: {},
+    });
+
+    const defs = {
+      enabled: { type: 'boolean', role: 'switch', def: false, name: 'Speicherfarm aktiv (VIS UI)' },
+      mode: { type: 'string', role: 'text', def: 'pool', name: 'Modus: pool | groups' },
+      configJson: { type: 'string', role: 'json', def: '[]', name: 'Speicherfarm Konfiguration (JSON, Liste)' },
+      groupsJson: { type: 'string', role: 'json', def: '[]', name: 'Gruppenkonfiguration (optional)' },
+      totalSoc: { type: 'number', role: 'value', def: 0, name: 'Gesamt SoC (%) (abgeleitet)' },
+      totalChargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt Ladeleistung (W) (abgeleitet)' },
+      totalDischargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt Entladeleistung (W) (abgeleitet)' },
+      storagesOnline: { type: 'number', role: 'value', def: 0, name: 'Online Speicher (abgeleitet)' },
+      storagesTotal: { type: 'number', role: 'value', def: 0, name: 'Konfigurierte Speicher' },
+    };
+
+    for (const [key, c] of Object.entries(defs)) {
+      await this.setObjectNotExistsAsync(`storageFarm.${key}`, {
+        type: 'state',
+        common: {
+          name: c.name,
+          type: c.type,
+          role: c.role,
+          read: true,
+          write: (key === 'totalSoc' || key === 'totalChargePowerW' || key === 'totalDischargePowerW' || key === 'storagesOnline' || key === 'storagesTotal') ? false : true,
+          def: c.def,
+          ...(key.endsWith('PowerW') ? { unit: 'W' } : {}),
+        },
+        native: {},
+      });
+    }
+  }
+
+  /**
+   * Ensure that the storageFarm.* states exist with sane defaults.
+   *
+   * Important: setObjectNotExistsAsync() only creates objects, not state values.
+   * The VIS frontend reads from /api/state (stateCache). If the states have never
+   * been written, the UI will show empty values (especially after restart).
+   */
+  async syncStorageFarmDefaultsToStates() {
+    const defaults = {
+      enabled: false,
+      mode: 'pool',
+      configJson: '[]',
+      groupsJson: '[]',
+      totalSoc: 0,
+      totalChargePowerW: 0,
+      totalDischargePowerW: 0,
+      storagesOnline: 0,
+      storagesTotal: 0,
+    };
+
+    for (const [k, defVal] of Object.entries(defaults)) {
+      const id = `storageFarm.${k}`;
+      try {
+        const st = await this.getStateAsync(id);
+        const missing = !st || typeof st.val === 'undefined' || st.val === null;
+        const emptyJson = (k === 'configJson' || k === 'groupsJson') && (!st || st.val === '' || st.val === 'null');
+        if (missing || emptyJson) {
+          await this.setStateAsync(id, { val: defVal, ack: true });
+        }
+      } catch (_e) {
+        try { await this.setStateAsync(id, { val: defVal, ack: true }); } catch (_e2) {}
+      }
+    }
+  }
+
+  async updateStorageFarmDerived(reason = 'timer') {
+    try {
+      // Only compute if feature is enabled in Admin (EMS) AND at least one storage is configured.
+      const cfg = this.config || {};
+      const enabledInAdmin = !!cfg.enableStorageFarm;
+      if (!enabledInAdmin) return;
+
+      const stCfg = await this.getStateAsync('storageFarm.configJson');
+      const raw = (stCfg && typeof stCfg.val === 'string') ? stCfg.val : '[]';
+      let list = [];
+      try { list = raw ? JSON.parse(raw) : []; } catch (_e) { list = []; }
+      if (!Array.isArray(list)) list = [];
+
+      // If the farm is not enabled in the VIS UI, do not poll foreign datapoints.
+      // Still expose how many storages are configured so the UI can show meaningful feedback.
+      let enabledInUi = false;
+      try {
+        const stEn = await this.getStateAsync('storageFarm.enabled');
+        enabledInUi = !!(stEn && (stEn.val === true || stEn.val === 1 || String(stEn.val).toLowerCase() === 'true'));
+      } catch (_e0) {}
+
+      if (!enabledInUi) {
+        await this.setStateAsync('storageFarm.totalSoc', { val: 0, ack: true });
+        await this.setStateAsync('storageFarm.totalChargePowerW', { val: 0, ack: true });
+        await this.setStateAsync('storageFarm.totalDischargePowerW', { val: 0, ack: true });
+        await this.setStateAsync('storageFarm.storagesOnline', { val: 0, ack: true });
+        await this.setStateAsync('storageFarm.storagesTotal', { val: list.length, ack: true });
+        try {
+          this.updateValue('storageFarm.totalSoc', 0, Date.now());
+          this.updateValue('storageFarm.totalChargePowerW', 0, Date.now());
+          this.updateValue('storageFarm.totalDischargePowerW', 0, Date.now());
+          this.updateValue('storageFarm.storagesOnline', 0, Date.now());
+          this.updateValue('storageFarm.storagesTotal', list.length, Date.now());
+        } catch (_e1) {}
+        return;
+      }
+
+      let totalCharge = 0;
+      let totalDischarge = 0;
+      let online = 0;
+      let socWeighted = 0;
+      let socWeight = 0;
+
+      for (const row of list) {
+        if (!row || typeof row !== 'object') continue;
+        const socId = String(row.socId || '').trim();
+        const chgId = String(row.chargePowerId || '').trim();
+        const dchgId = String(row.dischargePowerId || '').trim();
+        const cap = Number(row.capacityKWh);
+        const w = Number.isFinite(cap) && cap > 0 ? cap : 1;
+
+        let anyOk = false;
+        if (socId) {
+          const st = await this.getForeignStateAsync(socId).catch(() => null);
+          const soc = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
+          if (Number.isFinite(soc)) {
+            socWeighted += soc * w;
+            socWeight += w;
+            anyOk = true;
+          }
+        }
+        if (chgId) {
+          const st = await this.getForeignStateAsync(chgId).catch(() => null);
+          const v = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
+          if (Number.isFinite(v)) { totalCharge += v; anyOk = true; }
+        }
+        if (dchgId) {
+          const st = await this.getForeignStateAsync(dchgId).catch(() => null);
+          const v = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
+          if (Number.isFinite(v)) { totalDischarge += v; anyOk = true; }
+        }
+        if (anyOk) online++;
+      }
+
+      const totalSoc = socWeight > 0 ? (socWeighted / socWeight) : 0;
+      await this.setStateAsync('storageFarm.totalSoc', { val: Math.round(totalSoc * 10) / 10, ack: true });
+      await this.setStateAsync('storageFarm.totalChargePowerW', { val: Math.round(totalCharge), ack: true });
+      await this.setStateAsync('storageFarm.totalDischargePowerW', { val: Math.round(totalDischarge), ack: true });
+      await this.setStateAsync('storageFarm.storagesOnline', { val: online, ack: true });
+      await this.setStateAsync('storageFarm.storagesTotal', { val: list.length, ack: true });
+
+      // keep stateCache fresh for the UI
+      try {
+        this.updateValue('storageFarm.totalSoc', Math.round(totalSoc * 10) / 10, Date.now());
+        this.updateValue('storageFarm.totalChargePowerW', Math.round(totalCharge), Date.now());
+        this.updateValue('storageFarm.totalDischargePowerW', Math.round(totalDischarge), Date.now());
+        this.updateValue('storageFarm.storagesOnline', online, Date.now());
+        this.updateValue('storageFarm.storagesTotal', list.length, Date.now());
+      } catch (_e2) {}
+    } catch (e) {
+      this.log.debug('storageFarm derive failed (' + reason + '): ' + (e && e.message ? e.message : e));
+    }
+  }
 async syncInstallerConfigToStates() {
     const cfg = (this.config && this.config.installerConfig) || {};
     const toSet = {
@@ -1515,6 +1681,8 @@ async onReady() {
       try { await this.delObjectAsync('installer.password'); } catch(_e) { /* ignore */ }
 
       await this.ensureSettingsStates();
+      await this.ensureStorageFarmStates();
+      await this.syncStorageFarmDefaultsToStates();
       await this.syncInstallerConfigToStates();
 
       // write settings-config defaults
@@ -1531,6 +1699,15 @@ async onReady() {
 
       // finally subscribe and read initial values
       await this.subscribeConfiguredStates();
+
+      // Speicherfarm: abgeleitete Summenwerte (SoC/Leistung) regelmäßig aktualisieren
+      try {
+        await this.updateStorageFarmDerived('startup');
+        if (this._nwStorageFarmTimer) clearInterval(this._nwStorageFarmTimer);
+        this._nwStorageFarmTimer = setInterval(() => {
+          this.updateStorageFarmDerived('timer').catch(() => {});
+        }, 2000);
+      } catch (_eSF) {}
 
       // EMS (Sprint 2): embedded Charging-Management engine
       try { await this.initEmsEngine(); } catch (e) { this.log.warn('EMS init failed: ' + (e && e.message ? e.message : e)); }
@@ -1670,31 +1847,19 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
     app.use(bodyParser);
 
 
-    // --- Auth (ioBroker user login) ---
-    // Ziel: Keine festen/Default Installer-Passwörter im Adapter.
-    // Zugriff auf schreibende Endpunkte (Setpoints/Settings/RFID/SmartHome) nur nach Login.
+    // --- Auth ---
+    // Hinweis (VIS Gate F / Versionstand 5):
+    // Der separate Login-/Anmeldebereich (Admin/Installer) wurde bewusst entfernt.
+    // Der VIS-Adapter läuft ausschließlich lokal im ioBroker-Netz und die Rechteverwaltung
+    // erfolgt über ioBroker (Admin) bzw. über den Installer-Reiter im UI.
+    // Daher werden schreibende Endpunkte nicht zusätzlich durch ein VIS-eigenes Login geschützt.
     const authCfg = (this.config && this.config.auth) || {};
-    const authEnabled = (authCfg.enabled !== false); // default: enabled
-    const protectWrites = (authCfg.protectWrites !== false); // default: enabled
-    const sessionTtlMinRaw = Number(authCfg.sessionTtlMin);
-    const sessionTtlMin = Number.isFinite(sessionTtlMinRaw) ? sessionTtlMinRaw : 120;
-    const sessionTtlMs = Math.max(5, Math.min(24 * 60, Math.round(sessionTtlMin))) * 60 * 1000;
+    const authEnabled = false;
+    const protectWrites = false;
+    const sessionTtlMs = 2 * 60 * 60 * 1000;
 
-    const installerUsers = new Set(
-      String(authCfg.installerUsers || '')
-        .split(',')
-        .map(s => String(s || '').trim())
-        .filter(Boolean)
-    );
-    if (!installerUsers.size) {
-      installerUsers.add('admin');
-      installerUsers.add('installer');
-    }
-
-    const installerGroups = String(authCfg.installerGroups || 'system.group.administrator')
-      .split(',')
-      .map(s => String(s || '').trim())
-      .filter(Boolean);
+    const installerUsers = new Set(['admin', 'installer']);
+    const installerGroups = ['system.group.administrator'];
 
     const COOKIE_NAME = 'nw_session';
     const LEGACY_COOKIE_NAME = 'installer_session';
@@ -2971,6 +3136,7 @@ app.get('/config', (req, res) => {
           peakShavingEnabled: boolOr(cfg.enablePeakShaving, false),
           gridConstraintsEnabled: boolOr(cfg.enableGridConstraints, false),
           storageEnabled: boolOr(cfg.enableStorageControl, false),
+          storageFarmEnabled: boolOr(cfg.enableStorageFarm, false),
           schedulerIntervalMs: (cfg && Number(cfg.schedulerIntervalMs)) || 1000
         },
         installer: cfg.installer || {},
@@ -3108,6 +3274,36 @@ app.get('/config', (req, res) => {
           return res.json({ ok: true });
         }
 
+        // Speicherfarm settings: write to adapter states under storageFarm.*
+        if (scope === 'storageFarm') {
+          const rawKey = String(key || '').trim();
+          const allowed = ['enabled', 'mode', 'configJson', 'groupsJson'];
+          if (!allowed.includes(rawKey)) return res.status(400).json({ ok: false, error: 'bad request' });
+
+          let v = value;
+          if (rawKey === 'enabled') v = !!value;
+          if (rawKey === 'mode') {
+            const m = String(value || 'pool').trim().toLowerCase();
+            v = (m === 'groups') ? 'groups' : 'pool';
+          }
+          if (rawKey === 'configJson' || rawKey === 'groupsJson') {
+            try {
+              const s = (typeof value === 'string') ? value : JSON.stringify(value);
+              // validate JSON
+              const parsed = s ? JSON.parse(s) : [];
+              v = JSON.stringify(parsed);
+            } catch (_e) {
+              return res.status(400).json({ ok: false, error: 'invalid json' });
+            }
+          }
+
+          await this.setStateAsync('storageFarm.' + rawKey, { val: v, ack: false });
+          try { this.updateValue('storageFarm.' + rawKey, v, Date.now()); } catch (_e) {}
+          // Update derived totals quickly after config changes
+          try { this.updateStorageFarmDerived('config-change').catch(() => {}); } catch (_e2) {}
+          return res.json({ ok: true });
+        }
+
         let map = {};
         if (scope === 'installer') {
           map = (this.config && this.config.installer) || {};
@@ -3166,10 +3362,12 @@ app.get('/config', (req, res) => {
     const installer = (this.config && this.config.installer) || {};
         const namespace = this.namespace + '.';
     const settingsLocalKeys = ['notifyEnabled','email','dynamicTariff','storagePower','price','priority','tariffMode','evcsMaxPower','evcsCount'];
+    const storageFarmLocalKeys = ['enabled','mode','configJson','groupsJson','totalSoc','totalChargePowerW','totalDischargePowerW','storagesOnline','storagesTotal'];
     const keys = [
       ...Object.keys(dps),
       // always include built-in local settings keys so UI keeps values on reload
       ...settingsLocalKeys.map(k => 'settings.' + k),
+      ...storageFarmLocalKeys.map(k => 'storageFarm.' + k),
       // include any mapped external settings and installer keys
       ...Object.keys(settings).map(k => 'settings.' + k),
       ...Object.keys(installer).map(k => 'installer.' + k),
@@ -3185,8 +3383,10 @@ app.get('/config', (req, res) => {
       if (typeof id === 'string') id = id.trim();
       else id = null;
 
-      // For settings.* keys, fall back to local adapter states so UI preferences remain usable even without external mappings.
-      if (!id && key.startsWith('settings.')) id = namespace + key;
+      // For settings.* and storageFarm.* keys, fall back to local adapter states so UI preferences remain usable
+      // even without external mappings. Without this, the Speicherfarm UI would not see persisted values after
+      // a reload/restart because /api/state is built from the stateCache.
+      if (!id && (key.startsWith('settings.') || key.startsWith('storageFarm.'))) id = namespace + key;
 
       if (!id) continue;
 

@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.4.125",
+    "version": "0.5.1",
     "news": {
+      "0.5.1": {
+        "de": "Hotfix Speicherfarm: storageFarm.*-States werden jetzt zuverlässig als lokale Adapter-States abonniert und mit Defaults initialisiert (UI zeigt nach Neustart wieder Werte). Service-Worker Cache-Version erhöht.",
+        "en": "Storage farm hotfix: storageFarm.* states are now subscribed as local adapter states and initialized with defaults (UI keeps values after restart). Service worker cache version bumped."
+      },
       "0.4.125": {
         "de": "Feinschliff Admin: Netzanschlussleistung als zentraler Anlagenparameter in den EMS‑Reiter verschoben; §14a zeigt nur noch Hinweis. Doppelte Eingabestellen reduziert.",
         "en": "Admin polish: moved grid connection power to EMS as a central plant parameter; §14a shows a hint only. Reduced duplicate configuration."

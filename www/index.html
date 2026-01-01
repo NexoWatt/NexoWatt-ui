@@ -54,10 +54,11 @@
 <button class="tab" id="historyTabBtn" data-tab="history">HISTORY</button>
 <button id="tabEvcs" class="tab hidden" onclick="window.location.href='evcs.html'">EVCS</button>
 <button id="tabSmartHome" class="tab hidden" data-tab="smarthome">SMARTHOME</button>
+<button id="tabStorageFarm" class="tab hidden" data-tab="storagefarm">SPEICHERFARM</button>
 </nav>
 <div class="status-dot" id="liveDot" title="Live Verbindung"></div>
 <div class="menu hidden" id="menuDropdown"><a class="menu-item" href="./">Live</a><a class="menu-item" href="history.html">History</a>
-<a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item hidden" id="menuSmartHomeLink" href="smarthome.html">SmartHome</a><a class="menu-item" href="settings.html">Einstellungen</a></div></header>
+<a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item hidden" id="menuSmartHomeLink" href="smarthome.html">SmartHome</a><a class="menu-item hidden" id="menuStorageFarmLink" href="#" onclick="document.querySelector('#tabStorageFarm')?.click();return false;">Speicherfarm</a><a class="menu-item" href="settings.html">Einstellungen</a></div></header>
 <main class="content">
 <section class="card energy-web">
 <div class="card-header">
@@ -243,7 +244,6 @@
 
 </section>
 </main>
-<script src="/static/auth.js"></script>
 <script src="/static/app.js"></script>
 
 <section class="hidden settings-wrap" data-tab-content="settings">
@@ -281,6 +281,54 @@
 
   
 </section>
+</section>
+
+<!-- Speicherfarm (nur sichtbar, wenn im Admin unter EMS aktiviert) -->
+<section class="hidden" data-tab-content="storagefarm">
+  <section class="card">
+    <div class="card-header"><span>Speicherfarm</span></div>
+    <div class="form">
+      <div class="row" style="align-items:center">
+        <span>Status</span>
+        <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex:1 1 auto">
+          <label class="switch" title="Speicherfarm im VIS aktivieren (UI)" style="margin:0">
+            <input type="checkbox" id="sf_enabled" data-scope="storageFarm" data-key="enabled">
+            <span></span>
+          </label>
+          <select id="sf_mode" data-scope="storageFarm" data-key="mode" style="min-width:160px">
+            <option value="pool">Pool (wie ein großer Speicher)</option>
+            <option value="groups">Gruppen (SOC/Teilbereiche)</option>
+          </select>
+          <button class="btn" id="sf_reload" type="button">Neu laden</button>
+          <button class="btn" id="sf_save" type="button">Speichern</button>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px;gap:10px;flex-wrap:wrap">
+        <small id="sf_summary" style="color:var(--muted)">--</small>
+      </div>
+
+      <div class="sf-table" style="margin-top:12px">
+        <div class="rfid-whitelist-head" style="grid-template-columns: 1.2fr 1.6fr 1.6fr 1.6fr 1.6fr 1fr 0.6fr;">
+          <div>Name</div>
+          <div>SoC‑DP</div>
+          <div>Ladeleistung‑DP (W)</div>
+          <div>Entladeleistung‑DP (W)</div>
+          <div>Soll‑Lade‑Limit‑DP</div>
+          <div>Kapazität (kWh)</div>
+          <div></div>
+        </div>
+        <div id="sf_rows" class="rfid-whitelist-rows"></div>
+        <div class="rfid-whitelist-actions" style="margin-top:10px">
+          <button class="btn" id="sf_add" type="button">+ Speicher</button>
+          <div class="rfid-whitelist-actions-right">
+            <button class="btn" id="sf_export" type="button">Export JSON</button>
+          </div>
+        </div>
+        <small id="sf_msg" style="display:block;margin-top:8px;color:var(--muted)"></small>
+      </div>
+    </div>
+  </section>
 </section>
 
 <script>

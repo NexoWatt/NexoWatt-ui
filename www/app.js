@@ -301,6 +301,13 @@ async function bootstrap() {
       if (sl) sl.classList.toggle('hidden', !sh);
       const st = document.getElementById('tabSmartHome');
       if (st) st.classList.toggle('hidden', !sh);
+
+      // Speicherfarm Tab/Link
+      const sf = !!(cfg.ems && cfg.ems.storageFarmEnabled);
+      const sft = document.getElementById('tabStorageFarm');
+      if (sft) sft.classList.toggle('hidden', !sf);
+      const sfl = document.getElementById('menuStorageFarmLink');
+      if (sfl) sfl.classList.toggle('hidden', !sf);
     }catch(_e){}
   } catch(e) {}
 
@@ -433,6 +440,7 @@ window.addEventListener('DOMContentLoaded', ()=> {
   bootstrap();
   initMenu();
   initSettingsPanel();
+  try { initStorageFarmPanel(); } catch(_e) {}
   initTabs();
   hideAllPanels();
 
@@ -494,6 +502,7 @@ function bindInputValue(el, stateKey) {
   else if (sk.startsWith('installer.')) { scope = 'installer'; key = sk.slice(10); }
   else if (sk.startsWith('evcs.rfid.')) { scope = 'rfid'; key = sk.slice(10); }
   else if (sk.startsWith('rfid.')) { scope = 'rfid'; key = sk.slice(5); }
+  else if (sk.startsWith('storageFarm.')) { scope = 'storageFarm'; key = sk.slice(12); }
   else if (sk.startsWith('evcs.')) { scope = 'evcs'; key = sk; }
 
   // Prevent duplicate listeners when setupSettings() is called multiple times
@@ -522,6 +531,188 @@ function setupSettings(){
   document.querySelectorAll('[data-scope="rfid"]').forEach(el=> bindInputValue(el, 'evcs.rfid.'+el.dataset.key));
   try { setupRfidWhitelistUi(); } catch (e) {}
   try { setupRfidLearningUi(); } catch (e) {}
+}
+
+// --- Speicherfarm UI ---
+function parseJsonSafe(raw, fallback){
+  try{
+    if (raw === null || raw === undefined) return fallback;
+    const s = typeof raw === 'string' ? raw : JSON.stringify(raw);
+    return s ? JSON.parse(s) : fallback;
+  } catch(_e){ return fallback; }
+}
+
+function storageFarmGetConfig(){
+  const st = window.latestState || {};
+  const raw = st['storageFarm.configJson'] && st['storageFarm.configJson'].value;
+  const list = parseJsonSafe(raw, []);
+  return Array.isArray(list) ? list : [];
+}
+
+function storageFarmRenderRows(list){
+  const wrap = document.getElementById('sf_rows');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+
+  const addRow = (row, idx)=>{
+    const r = document.createElement('div');
+    r.className = 'rfid-whitelist-row';
+    r.style.gridTemplateColumns = '1.2fr 1.6fr 1.6fr 1.6fr 1.6fr 1fr 0.6fr';
+
+    const mk = (val, placeholder)=>{
+      const i = document.createElement('input');
+      i.type = 'text';
+      i.placeholder = placeholder || '';
+      i.value = (val === undefined || val === null) ? '' : String(val);
+      return i;
+    };
+
+    const name = mk(row && row.name, 'z.B. Speicher 1');
+    const socId = mk(row && row.socId, 'DP-ID (SoC %)');
+    const chgId = mk(row && row.chargePowerId, 'DP-ID (W)');
+    const dchgId = mk(row && row.dischargePowerId, 'DP-ID (W)');
+    const setChg = mk(row && row.setChargeLimitId, 'DP-ID (W)');
+    const cap = document.createElement('input');
+    cap.type = 'number';
+    cap.step = '0.1';
+    cap.placeholder = 'kWh';
+    cap.value = (row && row.capacityKWh !== undefined && row.capacityKWh !== null && row.capacityKWh !== '') ? String(row.capacityKWh) : '';
+
+    const delWrap = document.createElement('div');
+    delWrap.style.display='flex';
+    delWrap.style.justifyContent='flex-end';
+    const del = document.createElement('button');
+    del.type='button';
+    del.className='btn secondary';
+    del.textContent='✕';
+    del.title='Entfernen';
+    del.addEventListener('click', ()=>{
+      const cur = storageFarmCollectRows();
+      cur.splice(idx, 1);
+      storageFarmRenderRows(cur);
+    });
+    delWrap.appendChild(del);
+
+    // mark inputs for collection
+    name.dataset.sf = 'name';
+    socId.dataset.sf = 'socId';
+    chgId.dataset.sf = 'chargePowerId';
+    dchgId.dataset.sf = 'dischargePowerId';
+    setChg.dataset.sf = 'setChargeLimitId';
+    cap.dataset.sf = 'capacityKWh';
+
+    r.appendChild(name);
+    r.appendChild(socId);
+    r.appendChild(chgId);
+    r.appendChild(dchgId);
+    r.appendChild(setChg);
+    r.appendChild(cap);
+    r.appendChild(delWrap);
+    wrap.appendChild(r);
+  };
+
+  list.forEach((row, idx)=> addRow(row || {}, idx));
+}
+
+function storageFarmCollectRows(){
+  const wrap = document.getElementById('sf_rows');
+  if (!wrap) return [];
+  const rows = [];
+  wrap.querySelectorAll('.rfid-whitelist-row').forEach(r=>{
+    const obj = {};
+    r.querySelectorAll('input').forEach(inp=>{
+      const k = inp.dataset.sf;
+      if (!k) return;
+      if (k === 'capacityKWh') {
+        const v = Number(inp.value);
+        if (inp.value === '' || !Number.isFinite(v)) return;
+        obj[k] = v;
+      } else {
+        const v = String(inp.value || '').trim();
+        if (v) obj[k] = v;
+      }
+    });
+    if (Object.keys(obj).length) rows.push(obj);
+  });
+  return rows;
+}
+
+function storageFarmUpdateSummary(){
+  const sum = document.getElementById('sf_summary');
+  if (!sum) return;
+  const st = window.latestState || {};
+  const soc = st['storageFarm.totalSoc'] && st['storageFarm.totalSoc'].value;
+  const chg = st['storageFarm.totalChargePowerW'] && st['storageFarm.totalChargePowerW'].value;
+  const dchg = st['storageFarm.totalDischargePowerW'] && st['storageFarm.totalDischargePowerW'].value;
+  const on = st['storageFarm.storagesOnline'] && st['storageFarm.storagesOnline'].value;
+  const tot = st['storageFarm.storagesTotal'] && st['storageFarm.storagesTotal'].value;
+  sum.textContent = `SoC Ø: ${soc!==undefined?soc:'--'} % | Laden: ${chg!==undefined?formatPower(chg):'--'} | Entladen: ${dchg!==undefined?formatPower(dchg):'--'} | Online: ${on!==undefined?on:'--'}/${tot!==undefined?tot:'--'}`;
+}
+
+function initStorageFarmPanel(){
+  const enabled = document.getElementById('sf_enabled');
+  const mode = document.getElementById('sf_mode');
+  const btnReload = document.getElementById('sf_reload');
+  const btnSave = document.getElementById('sf_save');
+  const btnAdd = document.getElementById('sf_add');
+  const btnExport = document.getElementById('sf_export');
+  const msg = document.getElementById('sf_msg');
+
+  if (enabled) bindInputValue(enabled, 'storageFarm.enabled');
+  if (mode) bindInputValue(mode, 'storageFarm.mode');
+
+  const reload = ()=>{
+    const list = storageFarmGetConfig();
+    storageFarmRenderRows(list);
+    storageFarmUpdateSummary();
+    if (msg) msg.textContent = '';
+  };
+
+  if (btnReload && !btnReload.dataset.bound){
+    btnReload.dataset.bound='1';
+    btnReload.addEventListener('click', (e)=>{ e.preventDefault(); reload(); });
+  }
+  if (btnAdd && !btnAdd.dataset.bound){
+    btnAdd.dataset.bound='1';
+    btnAdd.addEventListener('click', (e)=>{
+      e.preventDefault();
+      const cur = storageFarmCollectRows();
+      cur.push({ name: `Speicher ${cur.length+1}` });
+      storageFarmRenderRows(cur);
+    });
+  }
+  if (btnExport && !btnExport.dataset.bound){
+    btnExport.dataset.bound='1';
+    btnExport.addEventListener('click', (e)=>{
+      e.preventDefault();
+      const cur = storageFarmCollectRows();
+      const txt = JSON.stringify(cur, null, 2);
+      try { navigator.clipboard && navigator.clipboard.writeText(txt); } catch(_e) {}
+      if (msg) msg.textContent = 'JSON in die Zwischenablage kopiert (falls erlaubt).';
+      try { alert(txt); } catch(_e2) {}
+    });
+  }
+  if (btnSave && !btnSave.dataset.bound){
+    btnSave.dataset.bound='1';
+    btnSave.addEventListener('click', async (e)=>{
+      e.preventDefault();
+      const cur = storageFarmCollectRows();
+      const payload = JSON.stringify(cur);
+      try {
+        await fetch('/api/set', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope: 'storageFarm', key: 'configJson', value: payload })
+        });
+        if (msg) msg.textContent = 'Gespeichert.';
+      } catch(_e){
+        if (msg) msg.textContent = 'Speichern fehlgeschlagen.';
+      }
+    });
+  }
+
+  // Initial render
+  reload();
 }
 
 function setupRfidWhitelistUi(){
@@ -862,6 +1053,7 @@ function initTabs(){
     history: document.querySelector('[data-tab-content="history"]'),
     settings: document.querySelector('[data-tab-content="settings"]'),
     smarthome: document.querySelector('[data-tab-content="smarthome"]'),
+    storagefarm: document.querySelector('[data-tab-content="storagefarm"]'),
   };
   buttons.forEach(btn => btn.addEventListener('click', () => {
     buttons.forEach(b=>b.classList.remove('active'));
@@ -871,7 +1063,7 @@ function initTabs(){
     // Show/hide groups
     // main ".content" holds live top sections; other sections are siblings
     document.querySelector('.content').style.display = (tab==='live') ? 'grid' : 'none';
-    for (const k of ['history','settings','smarthome']) {
+    for (const k of ['history','settings','smarthome','storagefarm']) {
       const el = sections[k];
       if (el) el.classList.toggle('hidden', tab !== k);
     }
@@ -1106,6 +1298,8 @@ render = function(){
     setText('pvPowerBig', (pv===undefined?'--':formatPower(pv)));
     setText('consumptionTotalBig', (load===undefined?'--':formatPower(load)));
   } catch(e) { console.warn(e); }
+
+  try { storageFarmUpdateSummary(); } catch(_e) {}
 }
 
 // SIDE-VALUES
