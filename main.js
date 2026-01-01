@@ -115,7 +115,7 @@ this.on('ready', this.onReady.bind(this));
     });
 
     const defs = {
-      enabled: { type: 'boolean', role: 'switch', def: false, name: 'Speicherfarm aktiv (VIS UI)' },
+      enabled: { type: 'boolean', role: 'switch', def: false, name: 'Speicherfarm aktiv (Admin)' },
       mode: { type: 'string', role: 'text', def: 'pool', name: 'Modus: pool | groups' },
       configJson: { type: 'string', role: 'json', def: '[]', name: 'Speicherfarm Konfiguration (JSON, Liste)' },
       groupsJson: { type: 'string', role: 'json', def: '[]', name: 'Gruppenkonfiguration (optional)' },
@@ -124,6 +124,7 @@ this.on('ready', this.onReady.bind(this));
       totalDischargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt Entladeleistung (W) (abgeleitet)' },
       storagesOnline: { type: 'number', role: 'value', def: 0, name: 'Online Speicher (abgeleitet)' },
       storagesTotal: { type: 'number', role: 'value', def: 0, name: 'Konfigurierte Speicher' },
+      storagesStatusJson: { type: 'string', role: 'json', def: '[]', name: 'Speicher-Status (JSON, abgeleitet)' },
     };
 
     for (const [key, c] of Object.entries(defs)) {
@@ -134,7 +135,7 @@ this.on('ready', this.onReady.bind(this));
           type: c.type,
           role: c.role,
           read: true,
-          write: (key === 'totalSoc' || key === 'totalChargePowerW' || key === 'totalDischargePowerW' || key === 'storagesOnline' || key === 'storagesTotal') ? false : true,
+          write: false,
           def: c.def,
           ...(key.endsWith('PowerW') ? { unit: 'W' } : {}),
         },
@@ -161,6 +162,7 @@ this.on('ready', this.onReady.bind(this));
       totalDischargePowerW: 0,
       storagesOnline: 0,
       storagesTotal: 0,
+      storagesStatusJson: '[]',
     };
 
     for (const [k, defVal] of Object.entries(defaults)) {
@@ -274,12 +276,25 @@ this.on('ready', this.onReady.bind(this));
       let totalCharge = 0;
       let totalDischarge = 0;
       let online = 0;
+      let configured = 0;
       let socWeighted = 0;
       let socWeight = 0;
+      const statusRows = [];
 
       for (const row of list) {
         if (!row || typeof row !== 'object') continue;
         if (row.enabled === false) continue;
+        configured++;
+
+        const status = {
+          name: String(row.name || '').trim() || `Speicher ${configured}`,
+          group: String(row.group || '').trim(),
+          soc: null,
+          chargePowerW: null,
+          dischargePowerW: null,
+          online: false,
+        };
+
         const socId = String(row.socId || '').trim();
         const chgId = String(row.chargePowerId || '').trim();
         const dchgId = String(row.dischargePowerId || '').trim();
@@ -291,6 +306,7 @@ this.on('ready', this.onReady.bind(this));
           const st = await this.getForeignStateAsync(socId).catch(() => null);
           const soc = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
           if (Number.isFinite(soc)) {
+            status.soc = soc;
             socWeighted += soc * w;
             socWeight += w;
             anyOk = true;
@@ -299,13 +315,15 @@ this.on('ready', this.onReady.bind(this));
         if (chgId) {
           const st = await this.getForeignStateAsync(chgId).catch(() => null);
           const v = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
-          if (Number.isFinite(v)) { totalCharge += v; anyOk = true; }
+          if (Number.isFinite(v)) { totalCharge += v; status.chargePowerW = v; anyOk = true; }
         }
         if (dchgId) {
           const st = await this.getForeignStateAsync(dchgId).catch(() => null);
           const v = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
-          if (Number.isFinite(v)) { totalDischarge += v; anyOk = true; }
+          if (Number.isFinite(v)) { totalDischarge += v; status.dischargePowerW = v; anyOk = true; }
         }
+        status.online = !!anyOk;
+        statusRows.push(status);
         if (anyOk) online++;
       }
 
@@ -314,7 +332,8 @@ this.on('ready', this.onReady.bind(this));
       await this.setStateAsync('storageFarm.totalChargePowerW', { val: Math.round(totalCharge), ack: true });
       await this.setStateAsync('storageFarm.totalDischargePowerW', { val: Math.round(totalDischarge), ack: true });
       await this.setStateAsync('storageFarm.storagesOnline', { val: online, ack: true });
-      await this.setStateAsync('storageFarm.storagesTotal', { val: list.length, ack: true });
+      await this.setStateAsync('storageFarm.storagesTotal', { val: configured, ack: true });
+      await this.setStateAsync('storageFarm.storagesStatusJson', { val: JSON.stringify(statusRows), ack: true });
 
       // keep stateCache fresh for the UI
       try {
@@ -322,7 +341,8 @@ this.on('ready', this.onReady.bind(this));
         this.updateValue('storageFarm.totalChargePowerW', Math.round(totalCharge), Date.now());
         this.updateValue('storageFarm.totalDischargePowerW', Math.round(totalDischarge), Date.now());
         this.updateValue('storageFarm.storagesOnline', online, Date.now());
-        this.updateValue('storageFarm.storagesTotal', list.length, Date.now());
+        this.updateValue('storageFarm.storagesTotal', configured, Date.now());
+        this.updateValue('storageFarm.storagesStatusJson', JSON.stringify(statusRows), Date.now());
       } catch (_e2) {}
     } catch (e) {
       this.log.debug('storageFarm derive failed (' + reason + '): ' + (e && e.message ? e.message : e));
@@ -3341,35 +3361,13 @@ app.get('/config', (req, res) => {
           return res.json({ ok: true });
         }
 
-        // Speicherfarm settings: write to adapter states under storageFarm.*
+
+        // Speicherfarm: Konfiguration ist Installateur-/Admin-Sache (ioBroker Admin / jsonConfig).
+        // Im VIS-Frontend ist die Speicherfarm bewusst read-only, damit Endkunden keine DP-Zuordnung verändern können.
         if (scope === 'storageFarm') {
-          const rawKey = String(key || '').trim();
-          const allowed = ['enabled', 'mode', 'configJson', 'groupsJson'];
-          if (!allowed.includes(rawKey)) return res.status(400).json({ ok: false, error: 'bad request' });
-
-          let v = value;
-          if (rawKey === 'enabled') v = !!value;
-          if (rawKey === 'mode') {
-            const m = String(value || 'pool').trim().toLowerCase();
-            v = (m === 'groups') ? 'groups' : 'pool';
-          }
-          if (rawKey === 'configJson' || rawKey === 'groupsJson') {
-            try {
-              const s = (typeof value === 'string') ? value : JSON.stringify(value);
-              // validate JSON
-              const parsed = s ? JSON.parse(s) : [];
-              v = JSON.stringify(parsed);
-            } catch (_e) {
-              return res.status(400).json({ ok: false, error: 'invalid json' });
-            }
-          }
-
-          await this.setStateAsync('storageFarm.' + rawKey, { val: v, ack: false });
-          try { this.updateValue('storageFarm.' + rawKey, v, Date.now()); } catch (_e) {}
-          // Update derived totals quickly after config changes
-          try { this.updateStorageFarmDerived('config-change').catch(() => {}); } catch (_e2) {}
-          return res.json({ ok: true });
+          return res.status(403).json({ ok: false, error: 'forbidden' });
         }
+
 
         let map = {};
         if (scope === 'installer') {
@@ -3429,7 +3427,7 @@ app.get('/config', (req, res) => {
     const installer = (this.config && this.config.installer) || {};
         const namespace = this.namespace + '.';
     const settingsLocalKeys = ['notifyEnabled','email','dynamicTariff','storagePower','price','priority','tariffMode','evcsMaxPower','evcsCount'];
-    const storageFarmLocalKeys = ['enabled','mode','configJson','groupsJson','totalSoc','totalChargePowerW','totalDischargePowerW','storagesOnline','storagesTotal'];
+    const storageFarmLocalKeys = ['enabled','mode','configJson','groupsJson','totalSoc','totalChargePowerW','totalDischargePowerW','storagesOnline','storagesTotal','storagesStatusJson'];
     const keys = [
       ...Object.keys(dps),
       // always include built-in local settings keys so UI keeps values on reload

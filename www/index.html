@@ -288,19 +288,12 @@
   <section class="card">
     <div class="card-header"><span>Speicherfarm</span></div>
     <div class="form">
+
       <div class="row" style="align-items:center">
-        <span>Status</span>
+        <span>Übersicht</span>
         <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex:1 1 auto">
-          <label class="switch" title="Speicherfarm im VIS aktivieren (UI)" style="margin:0">
-            <input type="checkbox" id="sf_enabled" data-scope="storageFarm" data-key="enabled">
-            <span></span>
-          </label>
-          <select id="sf_mode" data-scope="storageFarm" data-key="mode" style="min-width:160px">
-            <option value="pool">Pool (wie ein großer Speicher)</option>
-            <option value="groups">Gruppen (SOC/Teilbereiche)</option>
-          </select>
+          <small id="sf_mode_label" style="color:var(--muted)">Modus: --</small>
           <button class="btn" id="sf_reload" type="button">Neu laden</button>
-          <button class="btn" id="sf_save" type="button">Speichern</button>
         </div>
       </div>
 
@@ -308,25 +301,25 @@
         <small id="sf_summary" style="color:var(--muted)">--</small>
       </div>
 
+      <div class="row" style="margin-top:6px">
+        <small style="color:var(--muted)">
+          Konfiguration (Speicher hinzufügen, Datenpunkt‑Zuordnung, Gruppen) nur durch Installateur im ioBroker‑Admin:
+          Adapterinstanz → EMS → „EMS – Speicherfarm“.
+        </small>
+      </div>
+
       <div class="sf-table" style="margin-top:12px">
-        <div class="rfid-whitelist-head" style="grid-template-columns: 1.2fr 1.6fr 1.6fr 1.6fr 1.6fr 1fr 0.6fr;">
-          <div>Name</div>
-          <div>SoC‑DP</div>
-          <div>Ladeleistung‑DP (W)</div>
-          <div>Entladeleistung‑DP (W)</div>
-          <div>Soll‑Lade‑Limit‑DP</div>
-          <div>Kapazität (kWh)</div>
-          <div></div>
+        <div class="rfid-whitelist-head" style="grid-template-columns: 1.6fr 1fr 1fr 1fr 0.8fr;">
+          <div>Speicher</div>
+          <div>SoC (%)</div>
+          <div>Laden</div>
+          <div>Entladen</div>
+          <div>Status</div>
         </div>
-        <div id="sf_rows" class="rfid-whitelist-rows"></div>
-        <div class="rfid-whitelist-actions" style="margin-top:10px">
-          <button class="btn" id="sf_add" type="button">+ Speicher</button>
-          <div class="rfid-whitelist-actions-right">
-            <button class="btn" id="sf_export" type="button">Export JSON</button>
-          </div>
-        </div>
+        <div id="sf_status_rows" class="rfid-whitelist-rows"></div>
         <small id="sf_msg" style="display:block;margin-top:8px;color:var(--muted)"></small>
       </div>
+
     </div>
   </section>
 </section>

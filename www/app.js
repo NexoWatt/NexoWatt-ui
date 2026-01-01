@@ -280,6 +280,9 @@ function render() {
   try {
     if (typeof window.__nwApplyRfidLearningUi === 'function') window.__nwApplyRfidLearningUi();
   } catch (_e) {}
+
+  // Speicherfarm Übersicht (read-only, Endnutzer)
+  try { if (typeof storageFarmApply === 'function') storageFarmApply(); } catch (_e) {}
 }
 
 async function bootstrap() {
@@ -533,7 +536,12 @@ function setupSettings(){
   try { setupRfidLearningUi(); } catch (e) {}
 }
 
-// --- Speicherfarm UI ---
+// --- Speicherfarm (VIS read-only) ---
+//
+// WICHTIG: Die Konfiguration der Speicherfarm (Speicher hinzufügen, DP-Zuordnung, Gruppen)
+// erfolgt ausschließlich im ioBroker-Admin (Adapterinstanz → EMS → „EMS – Speicherfarm“).
+// In der VIS zeigen wir nur Status/Übersicht für Endverbraucher an.
+
 function parseJsonSafe(raw, fallback){
   try{
     if (raw === null || raw === undefined) return fallback;
@@ -542,99 +550,19 @@ function parseJsonSafe(raw, fallback){
   } catch(_e){ return fallback; }
 }
 
-function storageFarmGetConfig(){
+function storageFarmGetStatusList(){
   const st = window.latestState || {};
-  const raw = st['storageFarm.configJson'] && st['storageFarm.configJson'].value;
+  const raw = st['storageFarm.storagesStatusJson'] && st['storageFarm.storagesStatusJson'].value;
   const list = parseJsonSafe(raw, []);
   return Array.isArray(list) ? list : [];
 }
 
-function storageFarmRenderRows(list){
-  const wrap = document.getElementById('sf_rows');
-  if (!wrap) return;
-  wrap.innerHTML = '';
-
-  const addRow = (row, idx)=>{
-    const r = document.createElement('div');
-    r.className = 'rfid-whitelist-row';
-    r.style.gridTemplateColumns = '1.2fr 1.6fr 1.6fr 1.6fr 1.6fr 1fr 0.6fr';
-
-    const mk = (val, placeholder)=>{
-      const i = document.createElement('input');
-      i.type = 'text';
-      i.placeholder = placeholder || '';
-      i.value = (val === undefined || val === null) ? '' : String(val);
-      return i;
-    };
-
-    const name = mk(row && row.name, 'z.B. Speicher 1');
-    const socId = mk(row && row.socId, 'DP-ID (SoC %)');
-    const chgId = mk(row && row.chargePowerId, 'DP-ID (W)');
-    const dchgId = mk(row && row.dischargePowerId, 'DP-ID (W)');
-    const setChg = mk(row && row.setChargeLimitId, 'DP-ID (W)');
-    const cap = document.createElement('input');
-    cap.type = 'number';
-    cap.step = '0.1';
-    cap.placeholder = 'kWh';
-    cap.value = (row && row.capacityKWh !== undefined && row.capacityKWh !== null && row.capacityKWh !== '') ? String(row.capacityKWh) : '';
-
-    const delWrap = document.createElement('div');
-    delWrap.style.display='flex';
-    delWrap.style.justifyContent='flex-end';
-    const del = document.createElement('button');
-    del.type='button';
-    del.className='btn secondary';
-    del.textContent='✕';
-    del.title='Entfernen';
-    del.addEventListener('click', ()=>{
-      const cur = storageFarmCollectRows();
-      cur.splice(idx, 1);
-      storageFarmRenderRows(cur);
-    });
-    delWrap.appendChild(del);
-
-    // mark inputs for collection
-    name.dataset.sf = 'name';
-    socId.dataset.sf = 'socId';
-    chgId.dataset.sf = 'chargePowerId';
-    dchgId.dataset.sf = 'dischargePowerId';
-    setChg.dataset.sf = 'setChargeLimitId';
-    cap.dataset.sf = 'capacityKWh';
-
-    r.appendChild(name);
-    r.appendChild(socId);
-    r.appendChild(chgId);
-    r.appendChild(dchgId);
-    r.appendChild(setChg);
-    r.appendChild(cap);
-    r.appendChild(delWrap);
-    wrap.appendChild(r);
-  };
-
-  list.forEach((row, idx)=> addRow(row || {}, idx));
-}
-
-function storageFarmCollectRows(){
-  const wrap = document.getElementById('sf_rows');
-  if (!wrap) return [];
-  const rows = [];
-  wrap.querySelectorAll('.rfid-whitelist-row').forEach(r=>{
-    const obj = {};
-    r.querySelectorAll('input').forEach(inp=>{
-      const k = inp.dataset.sf;
-      if (!k) return;
-      if (k === 'capacityKWh') {
-        const v = Number(inp.value);
-        if (inp.value === '' || !Number.isFinite(v)) return;
-        obj[k] = v;
-      } else {
-        const v = String(inp.value || '').trim();
-        if (v) obj[k] = v;
-      }
-    });
-    if (Object.keys(obj).length) rows.push(obj);
-  });
-  return rows;
+function storageFarmUpdateModeLabel(){
+  const el = document.getElementById('sf_mode_label');
+  if (!el) return;
+  const st = window.latestState || {};
+  const mode = st['storageFarm.mode'] && st['storageFarm.mode'].value;
+  el.textContent = 'Modus: ' + (String(mode||'pool').toLowerCase() === 'groups' ? 'Gruppen' : 'Pool');
 }
 
 function storageFarmUpdateSummary(){
@@ -649,71 +577,66 @@ function storageFarmUpdateSummary(){
   sum.textContent = `SoC Ø: ${soc!==undefined?soc:'--'} % | Laden: ${chg!==undefined?formatPower(chg):'--'} | Entladen: ${dchg!==undefined?formatPower(dchg):'--'} | Online: ${on!==undefined?on:'--'}/${tot!==undefined?tot:'--'}`;
 }
 
-function initStorageFarmPanel(){
-  const enabled = document.getElementById('sf_enabled');
-  const mode = document.getElementById('sf_mode');
-  const btnReload = document.getElementById('sf_reload');
-  const btnSave = document.getElementById('sf_save');
-  const btnAdd = document.getElementById('sf_add');
-  const btnExport = document.getElementById('sf_export');
+function storageFarmRenderStatusRows(list){
+  const wrap = document.getElementById('sf_status_rows');
   const msg = document.getElementById('sf_msg');
+  if (!wrap) return;
 
-  if (enabled) bindInputValue(enabled, 'storageFarm.enabled');
-  if (mode) bindInputValue(mode, 'storageFarm.mode');
+  wrap.innerHTML = '';
 
-  const reload = ()=>{
-    const list = storageFarmGetConfig();
-    storageFarmRenderRows(list);
-    storageFarmUpdateSummary();
-    if (msg) msg.textContent = '';
+  if (!Array.isArray(list) || list.length === 0){
+    if (msg) msg.textContent = 'Keine Speicher konfiguriert. (Installateur: Admin → EMS → „EMS – Speicherfarm“)';
+    return;
+  }
+  if (msg) msg.textContent = '';
+
+  const mkCell = (txt) => {
+    const d = document.createElement('div');
+    d.className = 'sf-cell';
+    d.textContent = (txt === undefined || txt === null || txt === '') ? '--' : String(txt);
+    return d;
   };
 
+  list.forEach((row) => {
+    const r = document.createElement('div');
+    r.className = 'rfid-whitelist-row';
+    r.style.gridTemplateColumns = '1.6fr 1fr 1fr 1fr 0.8fr';
+
+    const name = (row && row.name) ? String(row.name) : 'Speicher';
+    const soc = (row && row.soc !== undefined && row.soc !== null && !isNaN(Number(row.soc))) ? (Number(row.soc).toFixed(1)) : '--';
+    const chg = (row && row.chargePowerW !== undefined && row.chargePowerW !== null && !isNaN(Number(row.chargePowerW))) ? formatPower(Number(row.chargePowerW)) : '--';
+    const dchg = (row && row.dischargePowerW !== undefined && row.dischargePowerW !== null && !isNaN(Number(row.dischargePowerW))) ? formatPower(Number(row.dischargePowerW)) : '--';
+    const online = (row && row.online) ? 'Online' : 'Offline';
+
+    r.appendChild(mkCell(name));
+    r.appendChild(mkCell(soc));
+    r.appendChild(mkCell(chg));
+    r.appendChild(mkCell(dchg));
+    r.appendChild(mkCell(online));
+    wrap.appendChild(r);
+  });
+}
+
+function storageFarmApply(){
+  try { storageFarmUpdateModeLabel(); } catch(_e) {}
+  try { storageFarmUpdateSummary(); } catch(_e) {}
+  try {
+    const list = storageFarmGetStatusList();
+    storageFarmRenderStatusRows(list);
+  } catch(_e) {}
+}
+
+function initStorageFarmPanel(){
+  const btnReload = document.getElementById('sf_reload');
   if (btnReload && !btnReload.dataset.bound){
     btnReload.dataset.bound='1';
-    btnReload.addEventListener('click', (e)=>{ e.preventDefault(); reload(); });
+    btnReload.addEventListener('click', (e)=>{ e.preventDefault(); storageFarmApply(); });
   }
-  if (btnAdd && !btnAdd.dataset.bound){
-    btnAdd.dataset.bound='1';
-    btnAdd.addEventListener('click', (e)=>{
-      e.preventDefault();
-      const cur = storageFarmCollectRows();
-      cur.push({ name: `Speicher ${cur.length+1}` });
-      storageFarmRenderRows(cur);
-    });
-  }
-  if (btnExport && !btnExport.dataset.bound){
-    btnExport.dataset.bound='1';
-    btnExport.addEventListener('click', (e)=>{
-      e.preventDefault();
-      const cur = storageFarmCollectRows();
-      const txt = JSON.stringify(cur, null, 2);
-      try { navigator.clipboard && navigator.clipboard.writeText(txt); } catch(_e) {}
-      if (msg) msg.textContent = 'JSON in die Zwischenablage kopiert (falls erlaubt).';
-      try { alert(txt); } catch(_e2) {}
-    });
-  }
-  if (btnSave && !btnSave.dataset.bound){
-    btnSave.dataset.bound='1';
-    btnSave.addEventListener('click', async (e)=>{
-      e.preventDefault();
-      const cur = storageFarmCollectRows();
-      const payload = JSON.stringify(cur);
-      try {
-        await fetch('/api/set', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scope: 'storageFarm', key: 'configJson', value: payload })
-        });
-        if (msg) msg.textContent = 'Gespeichert.';
-      } catch(_e){
-        if (msg) msg.textContent = 'Speichern fehlgeschlagen.';
-      }
-    });
-  }
-
   // Initial render
-  reload();
+  storageFarmApply();
 }
+
+
 
 function setupRfidWhitelistUi(){
   const rowsEl = document.getElementById('rfidWhitelistRows');

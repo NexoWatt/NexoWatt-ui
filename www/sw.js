@@ -1,5 +1,5 @@
 // Increment cache name on releases so browser updates JS/HTML reliably.
-const CACHE_NAME = 'nexowatt-cache-v8';
+const CACHE_NAME = 'nexowatt-cache-v9';
 const OFFLINE_URLS = [
   './',
   'index.html',

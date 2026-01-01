@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.5.2",
+    "version": "0.5.3",
     "news": {
       "0.5.2": {
         "en": "Admin: added EMS – Storage farm tab with storage table and datapoint mapping. Adapter: sync admin farm config to storageFarm.* states, derived totals timer uses configured interval, unload cleanup.",
@@ -421,6 +421,10 @@
       "0.4.124": {
         "de": "Admin: §14a‑Tab aufgeräumt (Legacy‑Installer Felder entfernt, nur noch Netzanschlussleistung + §14a‑Konfiguration). Keine funktionalen Änderungen an EMS/§14a‑Logik.",
         "en": "Admin: cleaned up §14a tab (removed legacy installer fields; keep grid connection power + §14a configuration). No functional changes to EMS/§14a logic."
+      },
+      "0.5.3": {
+        "en": "Storage farm: configuration moved to ioBroker Admin only (VIS read-only overview). Backend blocks /api/set scope storageFarm. Added derived storagesStatusJson without DP IDs. Service worker cache bumped.",
+        "de": "Speicherfarm: Konfiguration ausschließlich im ioBroker‑Admin (VIS nur Übersicht/Status). Backend blockiert /api/set für storageFarm. Neuer abgeleiteter Status storagesStatusJson ohne DP‑IDs. Service‑Worker Cache erhöht."
       }
     },
     "title": "NexoWatt VIS",
