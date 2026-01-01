@@ -1,3 +1,9 @@
+## 0.5.2 (Versionstand 5 – Speicherfarm Admin-UI)
+- Admin: neuer Tab „EMS – Speicherfarm“ (nur sichtbar bei aktivierter Speicherfarm) inkl. Tabelle zur Zuordnung der Speicher-Datenpunkte (ähnlich Ladepunkte).
+- Adapter: Admin-Konfiguration wird beim Start nach storageFarm.* gespiegelt (mode/configJson/groupsJson), damit VIS/UI und Summenbildung konsistent sind.
+- Timer: Farm-Intervall über storageFarm.schedulerIntervalMs (läuft nur wenn Speicherfarm aktiv).
+- Cleanup: Speicherfarm-Timer wird onUnload sauber beendet.
+
 ## 0.5.1 (Versionstand 5 – Hotfix)
 - Fix Speicherfarm: storageFarm.* lokale States werden nun zuverlässig abonniert (namespace.storageFarm.*) und mit Defaults initialisiert. Dadurch bleiben Werte/Tabellen nach Reload/Restart sichtbar.
 - PWA: Service-Worker Cache-Version auf v8 erhöht, damit Clients das Update sicher laden.
@@ -236,4 +242,3 @@
 - VIS: Neue EVCS-Seite (/evcs.html) für mehrere Wallboxen.
 - Header-Menü: Navigation Live/History/SmartHome/Logic + EVCS (ab 2 Wallboxen sichtbar).
 - Live: EVCS-Menüpunkt wird über settingsConfig.evcsCount automatisch ein-/ausgeblendet.
-

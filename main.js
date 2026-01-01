@@ -178,6 +178,85 @@ this.on('ready', this.onReady.bind(this));
     }
   }
 
+
+  /**
+   * Synchronisiert die Speicherfarm-Konfiguration aus dem Admin (jsonConfig) in Runtime-States unter storageFarm.*.
+   * Hintergrund: Das VIS-Frontend liest über /api/state aus dem stateCache. Ohne diese Spiegelung wären die
+   * Werte nach Reload/Restart ggf. leer oder nicht konsistent.
+   */
+  async syncStorageFarmConfigFromAdmin() {
+    try {
+      const cfg = this.config || {};
+      const enabled = !!cfg.enableStorageFarm;
+
+      // Master-Enable aus Admin in State spiegeln (damit UI + Runtime konsistent bleiben)
+      try {
+        await this.setStateAsync('storageFarm.enabled', { val: enabled, ack: true });
+        try { this.updateValue('storageFarm.enabled', enabled, Date.now()); } catch (_e0) {}
+      } catch (_e1) {}
+
+      if (!enabled) return;
+
+      const adminSf = (cfg.storageFarm && typeof cfg.storageFarm === 'object') ? cfg.storageFarm : {};
+      const modeRaw = String(adminSf.mode || 'pool').toLowerCase().trim();
+      const mode = (modeRaw === 'groups') ? 'groups' : 'pool';
+
+      // Tabellenzeilen aus Admin
+      const rows = Array.isArray(adminSf.storages) ? adminSf.storages : [];
+      const normalized = rows
+        .filter(r => r && typeof r === 'object')
+        .map(r => ({
+          enabled: !(r.enabled === false),
+          name: String(r.name || '').trim(),
+          socId: String(r.socId || '').trim(),
+          chargePowerId: String(r.chargePowerId || '').trim(),
+          dischargePowerId: String(r.dischargePowerId || '').trim(),
+          setChargePowerId: String(r.setChargePowerId || '').trim(),
+          setDischargePowerId: String(r.setDischargePowerId || '').trim(),
+          capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : null,
+          group: String(r.group || '').trim(),
+        }));
+
+      // Nur überschreiben, wenn Admin etwas geliefert hat ODER wenn State noch leer ist (Migration/First Run)
+      let shouldWriteList = normalized.length > 0;
+      if (!shouldWriteList) {
+        try {
+          const st = await this.getStateAsync('storageFarm.configJson');
+          const v = st && typeof st.val === 'string' ? st.val : '';
+          shouldWriteList = !v || v === '[]' || v === 'null';
+        } catch (_e2) {
+          shouldWriteList = true;
+        }
+      }
+
+      if (shouldWriteList) {
+        const json = JSON.stringify(normalized);
+        await this.setStateAsync('storageFarm.configJson', { val: json, ack: true });
+        try { this.updateValue('storageFarm.configJson', json, Date.now()); } catch (_e3) {}
+      }
+
+      await this.setStateAsync('storageFarm.mode', { val: mode, ack: true });
+      try { this.updateValue('storageFarm.mode', mode, Date.now()); } catch (_e4) {}
+
+      const groups = Array.isArray(adminSf.groups) ? adminSf.groups : [];
+      const groupsNorm = groups
+        .filter(g => g && typeof g === 'object' && g.enabled !== false)
+        .map(g => ({
+          enabled: !(g.enabled === false),
+          name: String(g.name || '').trim(),
+          socMin: (g.socMin !== undefined && g.socMin !== null && g.socMin !== '') ? Number(g.socMin) : null,
+          socMax: (g.socMax !== undefined && g.socMax !== null && g.socMax !== '') ? Number(g.socMax) : null,
+          priority: (g.priority !== undefined && g.priority !== null && g.priority !== '') ? Number(g.priority) : null,
+        }));
+
+      const gjson = JSON.stringify(groupsNorm);
+      await this.setStateAsync('storageFarm.groupsJson', { val: gjson, ack: true });
+      try { this.updateValue('storageFarm.groupsJson', gjson, Date.now()); } catch (_e5) {}
+    } catch (e) {
+      this.log.debug('storageFarm admin sync failed: ' + (e && e.message ? e.message : e));
+    }
+  }
+
   async updateStorageFarmDerived(reason = 'timer') {
     try {
       // Only compute if feature is enabled in Admin (EMS) AND at least one storage is configured.
@@ -191,29 +270,6 @@ this.on('ready', this.onReady.bind(this));
       try { list = raw ? JSON.parse(raw) : []; } catch (_e) { list = []; }
       if (!Array.isArray(list)) list = [];
 
-      // If the farm is not enabled in the VIS UI, do not poll foreign datapoints.
-      // Still expose how many storages are configured so the UI can show meaningful feedback.
-      let enabledInUi = false;
-      try {
-        const stEn = await this.getStateAsync('storageFarm.enabled');
-        enabledInUi = !!(stEn && (stEn.val === true || stEn.val === 1 || String(stEn.val).toLowerCase() === 'true'));
-      } catch (_e0) {}
-
-      if (!enabledInUi) {
-        await this.setStateAsync('storageFarm.totalSoc', { val: 0, ack: true });
-        await this.setStateAsync('storageFarm.totalChargePowerW', { val: 0, ack: true });
-        await this.setStateAsync('storageFarm.totalDischargePowerW', { val: 0, ack: true });
-        await this.setStateAsync('storageFarm.storagesOnline', { val: 0, ack: true });
-        await this.setStateAsync('storageFarm.storagesTotal', { val: list.length, ack: true });
-        try {
-          this.updateValue('storageFarm.totalSoc', 0, Date.now());
-          this.updateValue('storageFarm.totalChargePowerW', 0, Date.now());
-          this.updateValue('storageFarm.totalDischargePowerW', 0, Date.now());
-          this.updateValue('storageFarm.storagesOnline', 0, Date.now());
-          this.updateValue('storageFarm.storagesTotal', list.length, Date.now());
-        } catch (_e1) {}
-        return;
-      }
 
       let totalCharge = 0;
       let totalDischarge = 0;
@@ -223,6 +279,7 @@ this.on('ready', this.onReady.bind(this));
 
       for (const row of list) {
         if (!row || typeof row !== 'object') continue;
+        if (row.enabled === false) continue;
         const socId = String(row.socId || '').trim();
         const chgId = String(row.chargePowerId || '').trim();
         const dchgId = String(row.dischargePowerId || '').trim();
@@ -1683,6 +1740,7 @@ async onReady() {
       await this.ensureSettingsStates();
       await this.ensureStorageFarmStates();
       await this.syncStorageFarmDefaultsToStates();
+      await this.syncStorageFarmConfigFromAdmin();
       await this.syncInstallerConfigToStates();
 
       // write settings-config defaults
@@ -1702,12 +1760,21 @@ async onReady() {
 
       // Speicherfarm: abgeleitete Summenwerte (SoC/Leistung) regelmäßig aktualisieren
       try {
-        await this.updateStorageFarmDerived('startup');
-        if (this._nwStorageFarmTimer) clearInterval(this._nwStorageFarmTimer);
-        this._nwStorageFarmTimer = setInterval(() => {
-          this.updateStorageFarmDerived('timer').catch(() => {});
-        }, 2000);
+        const sfEnabled = !!(this.config && this.config.enableStorageFarm);
+        const sfCfg = (this.config && this.config.storageFarm) || {};
+        const intervalRaw = Number(sfCfg.schedulerIntervalMs);
+        const interval = Number.isFinite(intervalRaw) ? Math.max(250, Math.min(60000, Math.round(intervalRaw))) : 2000;
+
+        if (this._nwStorageFarmTimer) { try { clearInterval(this._nwStorageFarmTimer); } catch (_e) {} this._nwStorageFarmTimer = null; }
+
+        if (sfEnabled) {
+          await this.updateStorageFarmDerived('startup');
+          this._nwStorageFarmTimer = setInterval(() => {
+            this.updateStorageFarmDerived('timer').catch(() => {});
+          }, interval);
+        }
       } catch (_eSF) {}
+
 
       // EMS (Sprint 2): embedded Charging-Management engine
       try { await this.initEmsEngine(); } catch (e) { this.log.warn('EMS init failed: ' + (e && e.message ? e.message : e)); }

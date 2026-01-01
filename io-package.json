@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.5.1",
+    "version": "0.5.2",
     "news": {
+      "0.5.2": {
+        "en": "Admin: added EMS – Storage farm tab with storage table and datapoint mapping. Adapter: sync admin farm config to storageFarm.* states, derived totals timer uses configured interval, unload cleanup.",
+        "de": "Admin: neuer Reiter „EMS – Speicherfarm“ inkl. Tabelle zur Speicher‑Zuordnung. Adapter: Admin‑Konfig wird nach storageFarm.* gespiegelt, Summenbildung nutzt konfiguriertes Intervall, Cleanup beim Unload."
+      },
       "0.5.1": {
         "de": "Hotfix Speicherfarm: storageFarm.*-States werden jetzt zuverlässig als lokale Adapter-States abonniert und mit Defaults initialisiert (UI zeigt nach Neustart wieder Werte). Service-Worker Cache-Version erhöht.",
         "en": "Storage farm hotfix: storageFarm.* states are now subscribed as local adapter states and initialized with defaults (UI keeps values after restart). Service worker cache version bumped."
