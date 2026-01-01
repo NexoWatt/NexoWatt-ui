@@ -427,6 +427,31 @@ function initSettingsPanel(){
   }
 }
 
+
+
+function applyInitialTabFromUrl(){
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    const tab = String(params.get('tab') || '').trim().toLowerCase();
+    if (!tab) return;
+
+    let tries = 0;
+    const maxTries = 20;
+    const tryActivate = () => {
+      tries++;
+      const btn = document.querySelector(`.tabs .tab[data-tab="${tab}"]`);
+      if (btn && !btn.classList.contains('hidden')) {
+        try { btn.click(); } catch (_e) {}
+        return;
+      }
+      if (tries < maxTries) {
+        setTimeout(tryActivate, 200);
+      }
+    };
+    tryActivate();
+  } catch (_e) {}
+}
+
 window.addEventListener('DOMContentLoaded', ()=> {
   bootstrap();
   initMenu();
@@ -434,6 +459,7 @@ window.addEventListener('DOMContentLoaded', ()=> {
   try { initStorageFarmPanel(); } catch(_e) {}
   initTabs();
   hideAllPanels();
+  applyInitialTabFromUrl();
 
   // If opened directly as standalone Settings page, show settings panel by default
   try {

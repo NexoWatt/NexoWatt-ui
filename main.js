@@ -394,6 +394,7 @@ class NexoWattVis extends utils.Adapter {
         socId: String(r.socId || '').trim(),
         setChargePowerId: String(r.setChargePowerId || '').trim(),
         setDischargePowerId: String(r.setDischargePowerId || '').trim(),
+        setSignedPowerId: String(r.setSignedPowerId || '').trim(),
         invertChargeSign: !!r.invertChargeSign,
         invertDischargeSign: !!r.invertDischargeSign,
         capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : null,
@@ -504,9 +505,11 @@ class NexoWattVis extends utils.Adapter {
 
     // Build eligible storages for direction (only those with mapped setpoint dp)
     const canUse = (s) => {
-      if (direction === 'charge') return !!s.setChargePowerId;
-      if (direction === 'discharge') return !!s.setDischargePowerId;
-      return !!(s.setChargePowerId || s.setDischargePowerId);
+      // A storage can be controlled either via separate setpoints (Soll Laden / Soll Entladen)
+      // or via a single signed setpoint (setSignedPowerId).
+      if (direction === 'charge') return !!(s.setSignedPowerId || s.setChargePowerId);
+      if (direction === 'discharge') return !!(s.setSignedPowerId || s.setDischargePowerId);
+      return !!(s.setSignedPowerId || s.setChargePowerId || s.setDischargePowerId);
     };
 
     const eligible = storages.filter(canUse);
@@ -580,28 +583,47 @@ class NexoWattVis extends utils.Adapter {
       const dischargeW = (direction === 'discharge') ? alloc : 0;
 
       // Hersteller-/Adapterabhängige Vorzeichen-Konventionen:
-      // - Standard: Sollwerte werden als positive Leistung geschrieben.
-      // - Bei Bedarf kann pro Speicher das Vorzeichen für Laden/Entladen invertiert werden.
+      // - Standard (separate Soll-Laden/Soll-Entladen): positive Werte.
+      // - Pro Speicher kann das Vorzeichen für Laden/Entladen invertiert werden.
+      // - Optional: Ein einzelner Signed-Sollwert (setSignedPowerId) kann beide Richtungen steuern.
       const outChargeW = s.invertChargeSign ? -chargeW : chargeW;
       const outDischargeW = s.invertDischargeSign ? -dischargeW : dischargeW;
 
+      // Signed mapping (falls genutzt): Default = Entladen positiv, Laden negativ.
+      // Über invertChargeSign / invertDischargeSign kann pro Richtung gedreht werden.
+      let outSignedW = 0;
+      if (s.setSignedPowerId) {
+        if (direction === 'charge') outSignedW = -Math.abs(chargeW);
+        else if (direction === 'discharge') outSignedW = +Math.abs(dischargeW);
+        else outSignedW = 0;
+        if (direction === 'charge' && s.invertChargeSign) outSignedW = -outSignedW;
+        if (direction === 'discharge' && s.invertDischargeSign) outSignedW = -outSignedW;
+      }
+
       const r = { name: s.name || '', chargeW, dischargeW, ok: true, writes: {} };
 
-      // Write charge setpoint
-      if (s.setChargePowerId) {
-        const wr = await this._sfWriteIfChanged(s.setChargePowerId, outChargeW);
-        r.writes.charge = wr;
+      if (s.setSignedPowerId) {
+        const wr = await this._sfWriteIfChanged(s.setSignedPowerId, outSignedW);
+        r.writes.signed = wr;
         if (!wr.ok) r.ok = false;
-        if (direction === 'charge' && wr.ok) anyOkRelevant = true;
-        if (direction === 'idle' && wr.ok) anyOkRelevant = true;
-      }
-      // Write discharge setpoint
-      if (s.setDischargePowerId) {
-        const wr = await this._sfWriteIfChanged(s.setDischargePowerId, outDischargeW);
-        r.writes.discharge = wr;
-        if (!wr.ok) r.ok = false;
-        if (direction === 'discharge' && wr.ok) anyOkRelevant = true;
-        if (direction === 'idle' && wr.ok) anyOkRelevant = true;
+        if (wr.ok) anyOkRelevant = true;
+      } else {
+        // Write charge setpoint
+        if (s.setChargePowerId) {
+          const wr = await this._sfWriteIfChanged(s.setChargePowerId, outChargeW);
+          r.writes.charge = wr;
+          if (!wr.ok) r.ok = false;
+          if (direction === 'charge' && wr.ok) anyOkRelevant = true;
+          if (direction === 'idle' && wr.ok) anyOkRelevant = true;
+        }
+        // Write discharge setpoint
+        if (s.setDischargePowerId) {
+          const wr = await this._sfWriteIfChanged(s.setDischargePowerId, outDischargeW);
+          r.writes.discharge = wr;
+          if (!wr.ok) r.ok = false;
+          if (direction === 'discharge' && wr.ok) anyOkRelevant = true;
+          if (direction === 'idle' && wr.ok) anyOkRelevant = true;
+        }
       }
 
       results.push(r);
@@ -2885,10 +2907,19 @@ app.get('/api/history', async (req, res) => {
           evcs: dp.evcsPower
         };
         const ask = (id) => new Promise(resolve => {
-          if (!id) return resolve({id, values:[]});
+          if (!id) return resolve({ id, values: [] });
           const options = { start, end, step: stepS * 1000, aggregate: 'average', addId: false, ignoreNull: true };
+          let done = false;
+          const timer = setTimeout(() => {
+            if (done) return;
+            done = true;
+            resolve({ id, values: [] });
+          }, 8000);
           try {
             this.sendTo(inst, 'getHistory', { id, options }, (resu) => {
+              if (done) return;
+              done = true;
+              clearTimeout(timer);
               let outArr = [];
               if (Array.isArray(resu)) outArr = resu;
               else if (resu && Array.isArray(resu.result)) {
@@ -2902,22 +2933,32 @@ app.get('/api/history', async (req, res) => {
               } else if (resu && Array.isArray(resu.data)) {
                 outArr = resu.data;
               }
-              const norm = (outArr || []).map(p => Array.isArray(p) ? [p[0], Number(p[1])] : [p.ts || p.time || p.t || p[0], Number(p.val ?? p.value ?? p[1])]).filter(r => r[0]!=null && !Number.isNaN(r[1]));
+              const norm = (outArr || [])
+                .map(p => Array.isArray(p) ? [p[0], Number(p[1])] : [p.ts || p.time || p.t || p[0], Number(p.val ?? p.value ?? p[1])])
+                .filter(r => r[0] != null && !Number.isNaN(r[1]));
               resolve({ id, values: norm });
             });
           } catch (e) {
-            resolve({ id, values: [] });
+            if (!done) {
+              done = true;
+              clearTimeout(timer);
+              resolve({ id, values: [] });
+            }
           }
         });
-        const out = {};
-        out.pv   = await ask(ids.pv);
-        out.load = await ask(ids.load);
-        out.buy  = await ask(ids.buy);
-        out.sell = await ask(ids.sell);
-        out.chg  = await ask(ids.chg);
-        out.dchg = await ask(ids.dchg);
-        out.soc  = await ask(ids.soc);
-        out.evcs = await ask(ids.evcs);
+
+        const [pv, load, buy, sell, chg, dchg, soc, evcs] = await Promise.all([
+          ask(ids.pv),
+          ask(ids.load),
+          ask(ids.buy),
+          ask(ids.sell),
+          ask(ids.chg),
+          ask(ids.dchg),
+          ask(ids.soc),
+          ask(ids.evcs)
+        ]);
+
+        const out = { pv, load, buy, sell, chg, dchg, soc, evcs };
         res.json({ ok:true, start, end, step: stepS, series: out });
       } catch (e) {
         res.json({ ok:false, error: String(e) });

@@ -2988,7 +2988,7 @@
           "type": "table",
           "label": "Speicher in der Farm – Datenpunkt‑Zuordnung",
           "attr": "storageFarm.storages",
-          "help": "Je Zeile ein Speichersystem. Für \"Pool\" reichen SoC + Lade-/Entladeleistung. Sollwert‑DPs werden für spätere Verteilungslogik verwendet.",
+          "help": "Je Zeile ein Speichersystem. Für \"Pool\" reichen SoC + Lade-/Entladeleistung. Sollwert‑DPs werden für die Pool-/Gruppen‑Verteilung genutzt. Je Speicher entweder getrennte Soll‑DPs (Laden/Entladen) oder ein einzelner Signed‑Sollwert‑DP.",
           "style": {
             "width": "100%"
           },
@@ -3102,6 +3102,19 @@
                 "minWidth": "260px"
               },
               "expert": true
+            },
+            {
+              "type": "objectId",
+              "label": "Soll Leistung (W) – Signed DP",
+              "attr": "setSignedPowerId",
+              "xs": 12,
+              "sm": 6,
+              "md": 3,
+              "style": {
+                "minWidth": "260px"
+              },
+              "expert": true,
+              "tooltip": "Optional: Ein einzelner Sollwert-DP steuert Laden/Entladen über das Vorzeichen. Default: Entladen positiv, Laden negativ. Vorzeichen pro Richtung per Checkbox invertierbar."
             },
             {
               "type": "number",

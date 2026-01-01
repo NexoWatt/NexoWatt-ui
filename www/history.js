@@ -510,15 +510,17 @@ function draw(){
     const menuBtn = document.getElementById('menuBtn');
     const menu = document.getElementById('menuDropdown');
     if (menuBtn && menu) {
-      menuBtn.addEventListener('click', ()=> menu.classList.toggle('hidden'));
-      document.addEventListener('click', (e)=>{
-        if (!menu.contains(e.target) && e.target !== menuBtn) menu.classList.add('hidden');
-      });
+      const close = ()=> menu.classList.add('hidden');
+      const toggle = ()=> menu.classList.toggle('hidden');
+      menuBtn.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); toggle(); });
+      menu.addEventListener('click', (e)=> e.stopPropagation());
+      document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') close(); });
+      document.addEventListener('click', ()=> close());
     }
     const liveBtn = document.getElementById('liveTabBtn');
-    if (liveBtn) liveBtn.addEventListener('click', ()=>{ window.location.href = '/'; });
+    if (liveBtn) liveBtn.addEventListener('click', (e)=>{ /* fallback */ if(!liveBtn.getAttribute('onclick')) { e.preventDefault(); window.location.href = './'; } });
     const histBtn = document.getElementById('historyTabBtn');
-    if (histBtn) histBtn.addEventListener('click', ()=>{ /* already here */ });
+    if (histBtn) histBtn.addEventListener('click', (e)=>{ /* already here */ });
     // Installateur-/Admin-Zugriff wird im Endkunden-Dashboard nicht angeboten.
   })();
 
@@ -576,5 +578,12 @@ function draw(){
     if (sl) sl.classList.toggle('hidden', !sh);
     const st = document.getElementById('tabSmartHome');
     if (st) st.classList.toggle('hidden', !sh);
+
+    // Speicherfarm Tab/Link (nur wenn im Admin aktiviert)
+    const sf = !!(cfg.ems && cfg.ems.storageFarmEnabled);
+    const sft = document.getElementById('tabStorageFarm');
+    if (sft) sft.classList.toggle('hidden', !sf);
+    const sfl = document.getElementById('menuStorageFarmLink');
+    if (sfl) sfl.classList.toggle('hidden', !sf);
 }).catch(()=>{});
 })();
