@@ -585,14 +585,15 @@ function storageFarmRenderStatusRows(list){
   wrap.innerHTML = '';
 
   if (!Array.isArray(list) || list.length === 0){
-    if (msg) msg.textContent = 'Keine Speicher konfiguriert. (Installateur: Admin → EMS → „EMS – Speicherfarm“)';
+    if (msg) msg.textContent = 'Keine Speicher konfiguriert.';
     return;
   }
   if (msg) msg.textContent = '';
 
-  const mkCell = (txt) => {
+  const mkCell = (txt, label) => {
     const d = document.createElement('div');
     d.className = 'sf-cell';
+    if (label) d.setAttribute('data-label', String(label));
     d.textContent = (txt === undefined || txt === null || txt === '') ? '--' : String(txt);
     return d;
   };
@@ -608,11 +609,16 @@ function storageFarmRenderStatusRows(list){
     const dchg = (row && row.dischargePowerW !== undefined && row.dischargePowerW !== null && !isNaN(Number(row.dischargePowerW))) ? formatPower(Number(row.dischargePowerW)) : '--';
     const online = (row && row.online) ? 'Online' : 'Offline';
 
-    r.appendChild(mkCell(name));
-    r.appendChild(mkCell(soc));
-    r.appendChild(mkCell(chg));
-    r.appendChild(mkCell(dchg));
-    r.appendChild(mkCell(online));
+    r.appendChild(mkCell(name, 'Speicher'));
+    
+    r.appendChild(mkCell(soc, 'SoC (%)'));
+    
+    r.appendChild(mkCell(chg, 'Laden'));
+    
+    r.appendChild(mkCell(dchg, 'Entladen'));
+    
+    r.appendChild(mkCell(online, 'Status'));
+    
     wrap.appendChild(r);
   });
 }

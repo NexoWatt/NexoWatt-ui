@@ -57,7 +57,11 @@ class NexoWattVis extends utils.Adapter {
     this._evcsCharging = {}; // idx -> bool
     this._evcsChargeStartW = 100; // hysteresis start threshold
     this._evcsChargeStopW = 50;   // hysteresis stop threshold
-this.on('ready', this.onReady.bind(this));
+
+    // Storagefarm: remember last commanded setpoints to reduce write spam
+    this._sfLastSetpoints = new Map(); // objectId -> last numeric value
+
+    this.on('ready', this.onReady.bind(this));
     this.on('stateChange', this.onStateChange.bind(this));
     this.on('unload', this.onUnload.bind(this));
   }
@@ -348,7 +352,246 @@ this.on('ready', this.onReady.bind(this));
       this.log.debug('storageFarm derive failed (' + reason + '): ' + (e && e.message ? e.message : e));
     }
   }
-async syncInstallerConfigToStates() {
+
+
+  // ---------------------------------------------------------------------------
+  // StorageFarm: Sollwert-Verteilung (Pool/Gruppen)
+  // ---------------------------------------------------------------------------
+
+  _sfGetNormalizedFarmConfig() {
+    const cfg = this.config || {};
+    const enabled = !!cfg.enableStorageFarm;
+    const sf = (cfg.storageFarm && typeof cfg.storageFarm === 'object') ? cfg.storageFarm : {};
+    const modeRaw = String(sf.mode || 'pool').toLowerCase().trim();
+    const mode = (modeRaw === 'groups') ? 'groups' : 'pool';
+    const storagesIn = Array.isArray(sf.storages) ? sf.storages : [];
+    const groupsIn = Array.isArray(sf.groups) ? sf.groups : [];
+
+    const storages = storagesIn
+      .filter(r => r && typeof r === 'object')
+      .map(r => ({
+        enabled: !(r.enabled === false),
+        name: String(r.name || '').trim(),
+        socId: String(r.socId || '').trim(),
+        setChargePowerId: String(r.setChargePowerId || '').trim(),
+        setDischargePowerId: String(r.setDischargePowerId || '').trim(),
+        capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : null,
+        group: String(r.group || '').trim(),
+      }))
+      .filter(r => r.enabled);
+
+    const groups = groupsIn
+      .filter(g => g && typeof g === 'object' && g.enabled !== false)
+      .map(g => ({
+        enabled: !(g.enabled === false),
+        name: String(g.name || '').trim(),
+        socMin: (g.socMin !== undefined && g.socMin !== null && g.socMin !== '') ? Number(g.socMin) : null,
+        socMax: (g.socMax !== undefined && g.socMax !== null && g.socMax !== '') ? Number(g.socMax) : null,
+        priority: (g.priority !== undefined && g.priority !== null && g.priority !== '') ? Number(g.priority) : 0,
+      }))
+      .filter(g => g.enabled && g.name);
+
+    return { enabled, mode, storages, groups };
+  }
+
+  async _sfWriteIfChanged(objectId, value) {
+    const id = String(objectId || '').trim();
+    if (!id) return { ok: false, written: false, reason: 'missing_id' };
+    const v = Number.isFinite(Number(value)) ? Math.round(Number(value)) : 0;
+    const prev = this._sfLastSetpoints ? this._sfLastSetpoints.get(id) : undefined;
+    if (prev === v) return { ok: true, written: false };
+    try {
+      await this.setForeignStateAsync(id, v);
+      if (this._sfLastSetpoints) this._sfLastSetpoints.set(id, v);
+      return { ok: true, written: true };
+    } catch (e) {
+      return { ok: false, written: false, error: e && e.message ? e.message : String(e) };
+    }
+  }
+
+  async applyStorageFarmTargetW(targetW, meta = {}) {
+    const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
+    const sf = this._sfGetNormalizedFarmConfig();
+    if (!sf.enabled) return { applied: false, reason: 'disabled' };
+    if (!sf.storages || sf.storages.length === 0) return { applied: false, reason: 'no_storages' };
+
+    const direction = (w < 0) ? 'charge' : ((w > 0) ? 'discharge' : 'idle');
+    const absW = Math.abs(w);
+
+    // Determine SoC values from derived status (preferred)
+    let status = [];
+    try {
+      const st = await this.getStateAsync('storageFarm.storagesStatusJson').catch(() => null);
+      const raw = (st && typeof st.val === 'string') ? st.val : '[]';
+      const parsed = raw ? JSON.parse(raw) : [];
+      status = Array.isArray(parsed) ? parsed : [];
+    } catch (_e) { status = []; }
+
+    // Attach SoC to storage rows (index-based; derived list is built from enabled rows in same order)
+    const storages = sf.storages.map((s, i) => {
+      const soc = status[i] && Number.isFinite(Number(status[i].soc)) ? Number(status[i].soc) : null;
+      return { ...s, soc };
+    });
+
+    // Helper: weighted allocation with rounding to ensure sum == total
+    const allocateWeighted = (total, items, dir) => {
+      const list = (items || []).slice();
+      if (total <= 0 || list.length === 0) return new Map();
+
+      const weights = list.map(it => {
+        const cap = (Number.isFinite(it.capacityKWh) && it.capacityKWh > 0) ? it.capacityKWh : 1;
+        const soc = Number.isFinite(it.soc) ? it.soc : null;
+        let base = 1;
+        if (typeof soc === 'number') {
+          if (dir === 'charge') base = Math.max(0, 100 - soc);
+          else if (dir === 'discharge') base = Math.max(0, soc);
+          else base = 1;
+          // Avoid hard zeros for mid-range SoC
+          if (base <= 0.0001) base = 0;
+        }
+        return base * cap;
+      });
+
+      let sumW = weights.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
+      if (!(sumW > 0)) {
+        // fallback: equal weights
+        for (let i = 0; i < weights.length; i++) weights[i] = 1;
+        sumW = weights.length;
+      }
+
+      const alloc = new Array(list.length).fill(0);
+      let used = 0;
+      for (let i = 0; i < list.length; i++) {
+        const a = Math.floor(total * (weights[i] / sumW));
+        alloc[i] = Number.isFinite(a) ? a : 0;
+        used += alloc[i];
+      }
+      let rem = Math.max(0, total - used);
+      // distribute remainder to highest weights
+      const order = [...alloc.keys()].sort((i, j) => (weights[j] || 0) - (weights[i] || 0));
+      let oi = 0;
+      while (rem > 0 && order.length > 0) {
+        alloc[order[oi]] += 1;
+        rem -= 1;
+        oi = (oi + 1) % order.length;
+      }
+
+      const map = new Map();
+      for (let i = 0; i < list.length; i++) map.set(list[i], alloc[i]);
+      return map;
+    };
+
+    // Build eligible storages for direction (only those with mapped setpoint dp)
+    const canUse = (s) => {
+      if (direction === 'charge') return !!s.setChargePowerId;
+      if (direction === 'discharge') return !!s.setDischargePowerId;
+      return !!(s.setChargePowerId || s.setDischargePowerId);
+    };
+
+    const eligible = storages.filter(canUse);
+    if (eligible.length === 0) return { applied: false, reason: 'no_setpoint_dps' };
+
+    // Allocation map: storage -> watts for active direction
+    let allocMap = new Map();
+
+    if (direction === 'idle') {
+      allocMap = new Map();
+    } else if (sf.mode === 'groups' && sf.groups && sf.groups.length > 0) {
+      // Group allocation: distribute to groups proportionally, then within group weighted
+      const groups = [...sf.groups].sort((a, b) => (b.priority || 0) - (a.priority || 0));
+      const groupBuckets = new Map();
+      for (const g of groups) groupBuckets.set(g.name, []);
+
+      for (const s of eligible) {
+        const gname = s.group && groupBuckets.has(s.group) ? s.group : null;
+        if (!gname) continue;
+        const g = groups.find(x => x.name === gname) || null;
+        if (g && Number.isFinite(s.soc)) {
+          if (typeof g.socMin === 'number' && s.soc < g.socMin) continue;
+          if (typeof g.socMax === 'number' && s.soc > g.socMax) continue;
+        }
+        groupBuckets.get(gname).push(s);
+      }
+
+      // Remove empty groups
+      const activeGroups = groups.filter(g => (groupBuckets.get(g.name) || []).length > 0);
+      if (activeGroups.length === 0) {
+        allocMap = allocateWeighted(absW, eligible, direction);
+      } else {
+        const gWeights = activeGroups.map(g => {
+          const items = groupBuckets.get(g.name) || [];
+          return items.reduce((sum, s) => sum + ((Number.isFinite(s.capacityKWh) && s.capacityKWh > 0) ? s.capacityKWh : 1), 0);
+        });
+        let gSum = gWeights.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
+        if (!(gSum > 0)) { gSum = activeGroups.length; for (let i=0;i<gWeights.length;i++) gWeights[i]=1; }
+
+        // First pass: floor allocations
+        const gAlloc = new Array(activeGroups.length).fill(0);
+        let used = 0;
+        for (let i=0;i<activeGroups.length;i++) {
+          const a = Math.floor(absW * (gWeights[i] / gSum));
+          gAlloc[i] = Number.isFinite(a) ? a : 0;
+          used += gAlloc[i];
+        }
+        let rem = Math.max(0, absW - used);
+        const order = [...gAlloc.keys()].sort((i,j)=> (gWeights[j]||0)-(gWeights[i]||0));
+        let oi=0;
+        while (rem>0 && order.length>0){ gAlloc[order[oi]] += 1; rem -= 1; oi=(oi+1)%order.length; }
+
+        // Within each group: weighted allocation
+        for (let i=0;i<activeGroups.length;i++) {
+          const g = activeGroups[i];
+          const items = groupBuckets.get(g.name) || [];
+          const m = allocateWeighted(gAlloc[i], items, direction);
+          for (const [s, a] of m.entries()) allocMap.set(s, (allocMap.get(s) || 0) + a);
+        }
+      }
+    } else {
+      allocMap = allocateWeighted(absW, eligible, direction);
+    }
+
+    // Apply writes: always zero the opposite direction to avoid stale values
+    let anyOkRelevant = false;
+    const results = [];
+    for (const s of storages) {
+      const alloc = (direction === 'idle') ? 0 : (allocMap.get(s) || 0);
+      const chargeW = (direction === 'charge') ? alloc : 0;
+      const dischargeW = (direction === 'discharge') ? alloc : 0;
+
+      const r = { name: s.name || '', chargeW, dischargeW, ok: true, writes: {} };
+
+      // Write charge setpoint
+      if (s.setChargePowerId) {
+        const wr = await this._sfWriteIfChanged(s.setChargePowerId, chargeW);
+        r.writes.charge = wr;
+        if (!wr.ok) r.ok = false;
+        if (direction === 'charge' && wr.ok) anyOkRelevant = true;
+        if (direction === 'idle' && wr.ok) anyOkRelevant = true;
+      }
+      // Write discharge setpoint
+      if (s.setDischargePowerId) {
+        const wr = await this._sfWriteIfChanged(s.setDischargePowerId, dischargeW);
+        r.writes.discharge = wr;
+        if (!wr.ok) r.ok = false;
+        if (direction === 'discharge' && wr.ok) anyOkRelevant = true;
+        if (direction === 'idle' && wr.ok) anyOkRelevant = true;
+      }
+
+      results.push(r);
+    }
+
+    // Log only on debug to avoid noise
+    try {
+      if (this.log && typeof this.log.debug === 'function') {
+        const src = meta && meta.source ? String(meta.source) : '';
+        this.log.debug(`[storageFarm] apply targetW=${w} dir=${direction} storages=${storages.length} src=${src}`);
+      }
+    } catch (_eLog) {}
+
+    return { applied: !!anyOkRelevant, direction, targetW: w, results };
+  }
+
+  async syncInstallerConfigToStates() {
     const cfg = (this.config && this.config.installerConfig) || {};
     const toSet = {
       adminUrl: cfg.adminUrl || '',

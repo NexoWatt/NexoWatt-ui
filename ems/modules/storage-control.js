@@ -62,7 +62,15 @@ class SpeicherRegelungModule extends BaseModule {
         }
 
         const hasTarget = this.dp ? !!this.dp.getEntry('st.targetPowerW') : false;
-        if (!hasTarget) {
+
+        // Speicherfarm: wenn aktiv und Setpoint-DPs pro Speicher vorhanden sind,
+        // erlauben wir die Regelung auch ohne klassische Sollleistungs-Zuordnung (st.targetPowerW).
+        const farmCfg = (this.adapter && this.adapter.config && this.adapter.config.storageFarm) ? this.adapter.config.storageFarm : {};
+        const farmEnabled = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
+        const farmRows = Array.isArray(farmCfg.storages) ? farmCfg.storages : [];
+        const hasFarmSetpoints = farmEnabled && farmRows.some(r => r && r.enabled !== false && (String(r.setChargePowerId||'').trim() || String(r.setDischargePowerId||'').trim()));
+
+        if (!hasTarget && !hasFarmSetpoints) {
             await this._applyTargetW(0, 'Sollleistung-Datenpunkt fehlt (Zuordnung)', 'aus');
             return;
         }
@@ -452,12 +460,28 @@ class SpeicherRegelungModule extends BaseModule {
         const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
 
         // schreiben (Sollleistung)
+        // Wenn Speicherfarm aktiv ist und Setpoint-DPs konfiguriert sind, verteilen wir den Sollwert
+        // auf mehrere Speicher (Pool/Gruppen) und schreiben NICHT mehr auf den Single-Storage-DP.
         let writeResult = null;
-        if (this.dp && this.dp.getEntry('st.targetPowerW')) {
-            try {
-                writeResult = await this.dp.writeNumber('st.targetPowerW', w, false);
-            } catch (e) {
-                writeResult = false;
+        let farmApplied = false;
+
+        try {
+            if (this.adapter && typeof this.adapter.applyStorageFarmTargetW === 'function') {
+                const res = await this.adapter.applyStorageFarmTargetW(w, { source, reason });
+                farmApplied = !!(res && res.applied);
+                if (farmApplied) writeResult = true;
+            }
+        } catch (_eFarm) {
+            farmApplied = false;
+        }
+
+        if (!farmApplied) {
+            if (this.dp && this.dp.getEntry('st.targetPowerW')) {
+                try {
+                    writeResult = await this.dp.writeNumber('st.targetPowerW', w, false);
+                } catch (e) {
+                    writeResult = false;
+                }
             }
         }
 
@@ -465,7 +489,7 @@ class SpeicherRegelungModule extends BaseModule {
         await this._setIfChanged('speicher.regelung.sollW', w);
         await this._setIfChanged('speicher.regelung.quelle', String(source || ''));
         await this._setIfChanged('speicher.regelung.grund', String(reason || ''));
-        await this._setIfChanged('speicher.regelung.schreibStatus', (writeResult === null) ? 'unverändert' : (writeResult === true ? 'geschrieben' : 'nicht möglich'));
+        await this._setIfChanged('speicher.regelung.schreibStatus', farmApplied ? 'farm' : ((writeResult === null) ? 'unverändert' : (writeResult === true ? 'geschrieben' : 'nicht möglich')));
 
         this._lastTargetW = w;
         this._lastReason = String(reason || '');

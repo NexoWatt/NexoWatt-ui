@@ -1498,3 +1498,30 @@ body {
   opacity: 1;
   font-weight: 700;
 }
+
+
+/* --- Responsive tweaks (mobile) --- */
+/* Storagefarm table: show field labels inside cells on small screens */
+.sf-cell[data-label]::before{ content: ''; display:none; }
+@media (max-width: 680px){
+  .content{ padding: 10px; }
+  .topbar{ padding: 8px 10px; }
+  .topbar h1{ font-size: 14px; max-width: 42vw; overflow:hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tabs{ display:none; }
+  /* use hamburger menu for navigation on mobile */
+  .menu{ top: 44px; }
+  /* generic row layout */
+  .form .row{ flex-wrap: wrap; }
+  .form .row > span{ flex: 1 1 100%; }
+  /* Storagefarm status rows become stacked cards */
+  .sf-table .rfid-whitelist-head{ display:none; }
+  .sf-table .rfid-whitelist-row{ grid-template-columns: 1fr !important; gap: 6px; padding: 6px 0; }
+  .sf-cell[data-label]::before{
+    content: attr(data-label) ': ';
+    display:inline;
+    color: var(--muted);
+    margin-right: 8px;
+    flex: 0 0 auto;
+  }
+  .sf-cell{ justify-content: space-between; }
+}
