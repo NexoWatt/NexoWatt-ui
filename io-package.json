@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.5.6",
+    "version": "0.5.7",
     "news": {
       "0.5.5": {
         "de": "Speicherfarm: Vorzeichen-Invertierung je Speicher (Laden/Entladen) für Mess- und Sollwert-DPs. VIS: keine ioBroker-Erwähnungen mehr und kein Installer/Admin-Link im Endkunden-UI. Service-Worker Cache-Version erhöht.",

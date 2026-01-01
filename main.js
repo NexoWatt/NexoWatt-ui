@@ -2039,8 +2039,125 @@ if (copy.type === 'scene' && typeof copy.state.on !== 'undefined') {
   return result;
 }
 
+async migrateNativeConfig() {
+    try {
+      if (typeof this.getForeignObjectAsync !== 'function' || typeof this.setForeignObjectAsync !== 'function') {
+        return;
+      }
+      const instId = 'system.adapter.' + this.namespace;
+      const instObj = await this.getForeignObjectAsync(instId);
+      if (!instObj) return;
+
+      instObj.native = instObj.native || {};
+      const nat = instObj.native;
+
+      let changed = false;
+
+      const ensureObject = (key) => {
+        const v = nat[key];
+        if (!v || typeof v !== 'object' || Array.isArray(v)) {
+          nat[key] = {};
+          changed = true;
+        }
+      };
+
+      const setNumber = (path, def) => {
+        const parts = String(path).split('.');
+        if (!parts.length) return;
+        let cur = nat;
+        for (let i = 0; i < parts.length - 1; i++) {
+          const p = parts[i];
+          if (!cur[p] || typeof cur[p] !== 'object' || Array.isArray(cur[p])) {
+            cur[p] = {};
+            changed = true;
+          }
+          cur = cur[p];
+        }
+        const last = parts[parts.length - 1];
+        const raw = cur[last];
+
+        // Normalize to number (JSONConfig number fields behave poorly with "" / strings in some Admin versions)
+        let n;
+        if (raw === '' || raw === null || raw === undefined) {
+          n = Number(def);
+        } else if (typeof raw === 'number') {
+          n = raw;
+        } else {
+          n = Number(raw);
+          if (!Number.isFinite(n)) n = Number(def);
+        }
+
+        if (!Number.isFinite(n)) n = Number(def);
+
+        // Only write if different type/value to avoid unnecessary object writes
+        if (cur[last] !== n) {
+          cur[last] = n;
+          changed = true;
+        }
+      };
+
+      const setBoolean = (path, def) => {
+        const parts = String(path).split('.');
+        let cur = nat;
+        for (let i = 0; i < parts.length - 1; i++) {
+          const p = parts[i];
+          if (!cur[p] || typeof cur[p] !== 'object' || Array.isArray(cur[p])) {
+            cur[p] = {};
+            changed = true;
+          }
+          cur = cur[p];
+        }
+        const last = parts[parts.length - 1];
+        const raw = cur[last];
+        const b = (raw === undefined || raw === null) ? !!def : !!raw;
+        if (cur[last] !== b) {
+          cur[last] = b;
+          changed = true;
+        }
+      };
+
+      // Ensure sub-objects exist (avoid "null" breaking JSONConfig bindings)
+      ensureObject('peakShaving');
+      ensureObject('storageFarm');
+      ensureObject('storage');
+
+      // Peak Shaving (EMS – Peak Shaving)
+      setNumber('peakShaving.maxPowerW', 0);
+      setNumber('peakShaving.reserveW', 0);
+      setNumber('peakShaving.safetyMarginW', 0);
+      setNumber('peakShaving.smoothingSeconds', 10);
+      setNumber('peakShaving.hysteresisW', 500);
+      setNumber('peakShaving.activateDelaySeconds', 2);
+      setNumber('peakShaving.releaseDelaySeconds', 5);
+
+      // Farm update interval
+      setNumber('storageFarm.schedulerIntervalMs', 2000);
+
+      // Global scheduler tick
+      setNumber('schedulerIntervalMs', 1000);
+
+      // Storage reserve defaults (avoid NaN/blank blocking Admin save)
+      setBoolean('storage.reserveEnabled', false);
+      setNumber('storage.reserveMinSocPct', 20);
+      setNumber('storage.reserveTargetSocPct', 40);
+      setNumber('storage.reserveGridChargeW', 0);
+
+      if (changed) {
+        await this.setForeignObjectAsync(instId, instObj);
+
+        // Keep in-memory config consistent for this runtime (Admin save UX fix + runtime safety)
+        this.config = instObj.native;
+        this.log.info('Config migration applied (normalized numeric/boolean native values).');
+      }
+    } catch (e) {
+      this.log.warn('Config migration failed: ' + (e && e.message ? e.message : e));
+    }
+}
+
+
 async onReady() {
     try {
+      await this.migrateNativeConfig();
       // start web server
       await this.startServer();
 
