@@ -104,6 +104,7 @@ class SpeicherRegelungModule extends BaseModule {
     async tick() {
         const enabled = !!this.adapter.config.enableStorageControl;
         const cfg = this._getCfg();
+        const psCfg = this.adapter.config.peakShaving || {};
 
         // Diagnose: aktiv
         await this._setIfChanged('speicher.regelung.aktiv', enabled);
@@ -192,6 +193,9 @@ class SpeicherRegelungModule extends BaseModule {
         // zu ReferenceErrors kommen, wenn am Ende targetW/reason/source verwendet werden.
         // 0 W bedeutet: keine Be-/Entladeleistung vorgeben.
         let targetW = 0;
+        // Harte SoC-Grenzen (werden durch verschiedene Strategien gesetzt/verschärft)
+        let hardDischargeMinSoc = 0;
+        let hardChargeMaxSoc = 100;
         let reason = 'Keine Aktion';
         let source = 'idle';
 
@@ -669,7 +673,7 @@ if (targetW === 0 && selfDischargeEnabled) {
             (typeof soc === 'number') && (soc < lskMaxSoc)
         ) {
             if (!(typeof psLimitW === 'number' && psLimitW > 0)) {
-                reason = 'LSK: kein Peak-Grenzwert konfiguriert (Max Import > 0 setzen)';
+                reason = 'LSK: kein Grenzwert konfiguriert (Netzanschlussleistung im EMS setzen)';
                 source = 'lastspitze_refill';
             } else if (!(typeof psHeadroomEffW === 'number' && psHeadroomEffW > 0)) {
                 reason = `LSK: kein Headroom frei (${Math.round(importW)} / ${Math.round(psLimitW)} W)`;
