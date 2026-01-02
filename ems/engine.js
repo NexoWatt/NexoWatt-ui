@@ -36,6 +36,12 @@ class EmsEngine {
 
     // derived/internal state ids
     this._gridPowerId = '';
+    this._gridPowerRawId = '';
+
+    /** @type {number|null} */
+    this._gridPowerAvgW = null;
+    /** @type {number} */
+    this._gridPowerLastTs = 0;
   }
 
   /**
@@ -49,10 +55,27 @@ class EmsEngine {
       native: {},
     });
 
+    // Raw net grid power (Import + / Export -)
+    await a.setObjectNotExistsAsync('ems.gridPowerRawW', {
+      type: 'state',
+      common: {
+        name: 'Netzleistung (W) (intern, roh, Import + / Export -)',
+        type: 'number',
+        role: 'value.power',
+        read: true,
+        write: false,
+        unit: 'W',
+        def: 0,
+      },
+      native: {},
+    });
+
+    // Filtered/averaged net grid power (Import + / Export -)
+    // This value is intentionally used by other EMS modules to avoid unstable control due to short spikes.
     await a.setObjectNotExistsAsync('ems.gridPowerW', {
       type: 'state',
       common: {
-        name: 'Netzleistung (W) (intern, Import + / Export -)',
+        name: 'Netzleistung (W) (intern, geglättet, Import + / Export -)',
         type: 'number',
         role: 'value.power',
         read: true,
@@ -64,6 +87,7 @@ class EmsEngine {
     });
 
     this._gridPowerId = `${a.namespace}.ems.gridPowerW`;
+    this._gridPowerRawId = `${a.namespace}.ems.gridPowerRawW`;
   }
 
   /**
@@ -439,10 +463,16 @@ class EmsEngine {
 
     if (gridNetId) await this.dp.upsert({ key: 'vis.gridNetW', objectId: gridNetId, dataType: 'number', direction: 'in', unit: 'W' });
 
-    // Map internal net grid power to generic key used by modules as fallback
+    // Map internal net grid power to generic keys used by modules as fallback
+    // grid.powerW is intentionally the *filtered* value for stable regulation.
+    // grid.powerRawW provides the raw signal for safety clamping and debugging.
     if (this._gridPowerId) {
       await this.dp.upsert({ key: 'grid.powerW', objectId: this._gridPowerId, dataType: 'number', direction: 'in', unit: 'W' });
       await this.dp.upsert({ key: 'ems.gridPowerW', objectId: this._gridPowerId, dataType: 'number', direction: 'in', unit: 'W' });
+    }
+    if (this._gridPowerRawId) {
+      await this.dp.upsert({ key: 'grid.powerRawW', objectId: this._gridPowerRawId, dataType: 'number', direction: 'in', unit: 'W' });
+      await this.dp.upsert({ key: 'ems.gridPowerRawW', objectId: this._gridPowerRawId, dataType: 'number', direction: 'in', unit: 'W' });
     }
 
     // Module manager (PeakShaving / Charging / Tarif / optional Storage etc.)
@@ -500,16 +530,42 @@ class EmsEngine {
         }
       }
 
-      if (typeof netW === 'number' && this._gridPowerId) {
-        const netRounded = Math.round(Number(netW));
+      if (typeof netW === 'number' && this._gridPowerId && this._gridPowerRawId) {
+        const nowTs = Date.now();
+        const netRawRounded = Math.round(Number(netW));
+
+        // 1) Publish raw net power (diagnostics / safety clamp)
         try {
-          await this.adapter.setStateAsync('ems.gridPowerW', { val: netRounded, ack: true });
+          await this.adapter.setStateAsync('ems.gridPowerRawW', { val: netRawRounded, ack: true });
+        } catch (_e) {}
+
+        // 2) Filtered/averaged net power for stable regulation
+        const psCfg = (this.adapter && this.adapter.config && this.adapter.config.peakShaving) ? this.adapter.config.peakShaving : {};
+        const useAvg = (psCfg.useAverage !== false); // default true
+        const tauSec = useAvg ? clampNumber(psCfg.smoothingSeconds, 1, 600, 10) : 0;
+        const dtSec = (this._gridPowerLastTs > 0) ? Math.max(0.05, Math.min(10, (nowTs - this._gridPowerLastTs) / 1000)) : (this._intervalMs / 1000);
+        this._gridPowerLastTs = nowTs;
+
+        if (!Number.isFinite(Number(this._gridPowerAvgW))) {
+          this._gridPowerAvgW = netRawRounded;
+        } else if (!useAvg || tauSec <= 0) {
+          this._gridPowerAvgW = netRawRounded;
+        } else {
+          const alpha = dtSec / (tauSec + dtSec);
+          this._gridPowerAvgW = Number(this._gridPowerAvgW) + alpha * (netRawRounded - Number(this._gridPowerAvgW));
+        }
+
+        const netAvgRounded = Math.round(Number(this._gridPowerAvgW));
+
+        try {
+          await this.adapter.setStateAsync('ems.gridPowerW', { val: netAvgRounded, ack: true });
         } catch (_e) {}
 
         // Update dp cache explicitly (own states might not be subscribed)
         try {
           if (typeof this.dp.handleStateChange === 'function') {
-            this.dp.handleStateChange(this._gridPowerId, { val: netRounded, ack: true, ts: Date.now() });
+            this.dp.handleStateChange(this._gridPowerRawId, { val: netRawRounded, ack: true, ts: nowTs });
+            this.dp.handleStateChange(this._gridPowerId, { val: netAvgRounded, ack: true, ts: nowTs });
           }
         } catch (_e2) {}
       }

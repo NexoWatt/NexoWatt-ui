@@ -38,6 +38,9 @@ class SpeicherRegelungModule extends BaseModule {
         this._lskRefillHeadroomFilteredW = null;
         /** @type {number} */
         this._lskRefillLastTs = 0;
+
+        /** @type {number|null} */
+        this._lskRefillHoldW = null;
     }
 
     async init() {
@@ -85,9 +88,28 @@ class SpeicherRegelungModule extends BaseModule {
         const now = Date.now();
         const staleMs = Math.max(1, Math.round(num(cfg.staleTimeoutSec, 15) * 1000));
 
+        // grid.powerW is expected to be the *filtered* NVP (Import + / Export -)
+        // grid.powerRawW is the raw signal (if available). If not, fall back to ps.gridPowerW.
         let gridW = this.dp ? this.dp.getNumberFresh('grid.powerW', staleMs, null) : null;
-        if (typeof gridW !== 'number' && this.dp) gridW = this.dp.getNumberFresh('ps.gridPowerW', staleMs, null);
-        const gridAge = this.dp ? (this.dp.getEntry('grid.powerW') ? this.dp.getAgeMs('grid.powerW') : this.dp.getAgeMs('ps.gridPowerW')) : null;
+        let gridRawW = this.dp ? this.dp.getNumberFresh('grid.powerRawW', staleMs, null) : null;
+
+        if (typeof gridRawW !== 'number' && this.dp) {
+            // raw fallback (manufacturer datapoint from Peak-Shaving config)
+            gridRawW = this.dp.getNumberFresh('ps.gridPowerW', staleMs, null);
+        }
+
+        if (typeof gridW !== 'number') {
+            // If we don't have the internal filtered NVP, try Peak-Shaving effective power (avg) as fallback.
+            const eff = await this._readOwnNumber('peakShaving.control.effectivePowerW');
+            if (typeof eff === 'number') gridW = eff;
+        }
+
+        if (typeof gridW !== 'number' && typeof gridRawW === 'number') {
+            // last-resort: use raw if no filtered signal exists
+            gridW = gridRawW;
+        }
+
+        const gridAge = this.dp ? (this.dp.getEntry('grid.powerW') ? this.dp.getAgeMs('grid.powerW') : (this.dp.getEntry('ps.gridPowerW') ? this.dp.getAgeMs('ps.gridPowerW') : null)) : null;
 
         // SoC für Reserve
         const soc = this.dp ? this.dp.getNumberFresh('st.socPct', staleMs, null) : null;
@@ -101,7 +123,8 @@ class SpeicherRegelungModule extends BaseModule {
             await this._setIfChanged('speicher.regelung.netzLadenErlaubt', null);
             return;
         }
-        await this._setIfChanged('speicher.regelung.netzLeistungW', Math.round(gridW));
+        // Show RAW if available (closer to meter), otherwise show filtered.
+        await this._setIfChanged('speicher.regelung.netzLeistungW', Math.round((typeof gridRawW === 'number') ? gridRawW : gridW));
         await this._setIfChanged('speicher.regelung.netzAlterMs', typeof gridAge === 'number' ? Math.round(gridAge) : null);
 
 
@@ -114,8 +137,9 @@ class SpeicherRegelungModule extends BaseModule {
         }
         await this._setIfChanged('speicher.regelung.netzLadenErlaubt', !!gridChargeAllowed);
 
-        const exportW = Math.max(0, -gridW); // negative Netzleistung = Einspeisung
-        const importW = Math.max(0, gridW);  // positive Netzleistung = Bezug
+        const exportW = Math.max(0, -gridW); // negative Netzleistung = Einspeisung (geglättet)
+        const importW = Math.max(0, gridW);  // positive Netzleistung = Bezug (geglättet)
+        const importRawW = Math.max(0, (typeof gridRawW === 'number') ? gridRawW : gridW);
 
         // Peak-Shaving Kontexte (Limit/Headroom) – wird für LSK-Entladung und für "Reserve wieder auffüllen" genutzt.
         const peakEnabled = !!this.adapter.config.enablePeakShaving;
@@ -128,6 +152,7 @@ class SpeicherRegelungModule extends BaseModule {
             psOverW = await this._readOwnNumber('peakShaving.control.overW');
             psReqRedW = await this._readOwnNumber('peakShaving.control.requiredReductionW');
             if (typeof psLimitW === 'number' && psLimitW > 0) {
+                // NOTE: psHeadroomW is based on the filtered import signal for stable control.
                 psHeadroomW = Math.max(0, psLimitW - importW);
             }
         }
@@ -137,24 +162,30 @@ class SpeicherRegelungModule extends BaseModule {
 // - Strategie: "Attack fast, release slow": Headroom sinkt sofort, steigt nur geglättet.
 //   Damit reagiert die Regelung schnell auf steigenden Netzbezug (Sicherheit),
 //   fährt aber bei freiem Headroom ruhiger hoch (Stabilität).
+// LSK-Refill Headroom-Filter:
+// - Für stabile Regelung nutzen wir die *Durchschnittsdifferenz* (Headroom aus geglätteter Netzleistung).
+// - Für Sicherheit clampen wir später zusätzlich mit dem RAW-Headroom (Import-Spikes => sofort weniger laden).
+// - Zusätzliche Glättung hier ist absichtlich *symmetrisch* (EMA), um Setpoint-Flattern weiter zu reduzieren.
 let psHeadroomFilteredW = null;
+let psHeadroomRawW = null;
 if (typeof psHeadroomW === 'number') {
+    if (typeof psLimitW === 'number' && psLimitW > 0) {
+        psHeadroomRawW = Math.max(0, psLimitW - importRawW);
+    }
+
     const intervalMs = (this.adapter.config && Number(this.adapter.config.schedulerIntervalMs)) || 1000;
     const dtSec = (this._lskRefillLastTs > 0) ? Math.max(0.05, Math.min(10, (now - this._lskRefillLastTs) / 1000)) : (intervalMs / 1000);
     const psCfg = (this.adapter.config && this.adapter.config.peakShaving) ? this.adapter.config.peakShaving : {};
-    const tauUp = clamp(num(psCfg.smoothingSeconds, 10), 1, 600); // reuse Peak-Shaving Glättung
-    const alphaUp = dtSec / (tauUp + dtSec);
+    const tau = clamp(num(psCfg.smoothingSeconds, 10), 1, 600); // reuse Peak-Shaving Glättung
+    const alpha = dtSec / (tau + dtSec);
 
     if (typeof this._lskRefillHeadroomFilteredW !== 'number') {
         this._lskRefillHeadroomFilteredW = psHeadroomW;
     } else {
         const prev = this._lskRefillHeadroomFilteredW;
-        if (psHeadroomW < prev) {
-            this._lskRefillHeadroomFilteredW = psHeadroomW; // fast down
-        } else {
-            this._lskRefillHeadroomFilteredW = prev + alphaUp * (psHeadroomW - prev); // slow up
-        }
+        this._lskRefillHeadroomFilteredW = prev + alpha * (psHeadroomW - prev);
     }
+
     this._lskRefillLastTs = now;
     psHeadroomFilteredW = this._lskRefillHeadroomFilteredW;
 
@@ -163,6 +194,7 @@ if (typeof psHeadroomW === 'number') {
 } else {
     this._lskRefillHeadroomFilteredW = null;
     this._lskRefillLastTs = now;
+    psHeadroomRawW = null;
     await this._setIfChanged('speicher.regelung.lskHeadroomW', null);
     await this._setIfChanged('speicher.regelung.lskHeadroomFilteredW', null);
 }
@@ -418,7 +450,13 @@ if (typeof psHeadroomW === 'number') {
             }
         }
 
-        const psHeadroomEffW = (typeof psHeadroomFilteredW === 'number') ? psHeadroomFilteredW : psHeadroomW;
+        // Effective headroom for refill:
+        // - Use filtered (average) headroom for stable setpoints
+        // - Clamp with RAW headroom for safety (Import spikes)
+        let psHeadroomEffW = (typeof psHeadroomFilteredW === 'number') ? psHeadroomFilteredW : psHeadroomW;
+        if (typeof psHeadroomEffW === 'number' && typeof psHeadroomRawW === 'number') {
+            psHeadroomEffW = Math.min(psHeadroomEffW, psHeadroomRawW);
+        }
 
         // 6) Peak-Shaving: Reserve für nächste Lastspitze aus dem Netz nachladen (Headroom)
         // Ziel: Falls der Speicher für LSK entladen hat (oder generell unter LSK-Max liegt),
@@ -434,7 +472,31 @@ if (typeof psHeadroomW === 'number') {
         ) {
             const canChargeBySoc = (typeof soc !== 'number') ? false : (soc < lskMaxSoc);
             if (canChargeBySoc) {
-                const wantW = Math.min(psHeadroomEffW, lskMaxChargeEff);
+                let wantW = Math.min(psHeadroomEffW, lskMaxChargeEff);
+
+                // Optional: reduce "flutter" by holding small upward adjustments.
+                // We intentionally allow fast decreases (safety), but require a minimal delta to increase.
+                const psCfg = (this.adapter.config && this.adapter.config.peakShaving) ? this.adapter.config.peakShaving : {};
+                const deadbandW = clamp(num(psCfg.hysteresisW, 500), 0, 5000);
+                if (stepW > 0) wantW = Math.round(wantW / stepW) * stepW;
+
+                if (typeof this._lskRefillHoldW === 'number') {
+                    const last = this._lskRefillHoldW;
+                    if (wantW < last) {
+                        // decrease immediately
+                        this._lskRefillHoldW = wantW;
+                    } else if (deadbandW > 0 && (wantW - last) < deadbandW) {
+                        // hold
+                        wantW = last;
+                    } else {
+                        this._lskRefillHoldW = wantW;
+                    }
+                } else {
+                    this._lskRefillHoldW = wantW;
+                }
+
+                wantW = (typeof this._lskRefillHoldW === 'number') ? this._lskRefillHoldW : wantW;
+
                 if (wantW > 0) {
                     targetW = -wantW;
                     reason = `LSK: Reserve über Netz nachladen (${Math.round(psHeadroomEffW)} W frei)`;

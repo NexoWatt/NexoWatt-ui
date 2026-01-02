@@ -113,10 +113,14 @@ class GridConstraintsModule extends BaseModule {
         const cfg = this._cfg();
         const dp = this.dp;
 
-        // Grid power: prefer explicit mapping; fallback to PeakShaving mapping
+        // Grid power mapping:
+        // - Do NOT override the global `grid.powerW` key here.
+        //   `grid.powerW` is intentionally bound to the internal filtered NVP (ems.gridPowerW) to stabilize *all* EMS logics.
+        // - Instead, register a module-local fallback key.
+        //   The module will use `grid.powerW` first (filtered), and fall back to `gc.gridPowerW` if needed.
         const gridPowerId = String(cfg.gridPowerId || this.adapter.config.peakShaving?.gridPointPowerId || '').trim();
         if (gridPowerId) {
-            await dp.upsert({ key: 'grid.powerW', objectId: gridPowerId, dataType: 'number', direction: 'in', unit: 'W' });
+            await dp.upsert({ key: 'gc.gridPowerW', objectId: gridPowerId, dataType: 'number', direction: 'in', unit: 'W' });
         }
 
         // PV/WR curtail controls
@@ -147,7 +151,35 @@ class GridConstraintsModule extends BaseModule {
     _isStaleGrid(cfg) {
         const staleTimeoutSec = this._num(cfg.staleTimeoutSec, 15);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
-        return this.dp?.isStale('grid.powerW', staleMs);
+
+        const dp = this.dp;
+        if (!dp) return true;
+
+        const staleFiltered = dp.isStale('grid.powerW', staleMs);
+        const staleFallback = dp.isStale('gc.gridPowerW', staleMs);
+
+        // stale only if both are stale
+        return !!(staleFiltered && staleFallback);
+    }
+
+    _getGridW(cfg) {
+        const staleTimeoutSec = this._num(cfg.staleTimeoutSec, 15);
+        const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
+
+        const dp = this.dp;
+        if (!dp) return null;
+
+        // Prefer filtered global NVP
+        let gridW = dp.getNumberFresh('grid.powerW', staleMs, null);
+        if (typeof gridW !== 'number') {
+            // Fallback to module-local mapping
+            gridW = dp.getNumberFresh('gc.gridPowerW', staleMs, null);
+        }
+        if (typeof gridW !== 'number') {
+            // Fallback to Peak-Shaving mapping (raw)
+            gridW = dp.getNumberFresh('ps.gridPowerW', staleMs, null);
+        }
+        return (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null;
     }
 
     async _tickRlm(nowMs, gridW, cfg) {
@@ -388,19 +420,19 @@ class GridConstraintsModule extends BaseModule {
 
         // grid power
         const gridStale = this._isStaleGrid(cfg);
-        const gridW = this.dp ? this.dp.getNumber('grid.powerW', NaN) : NaN;
+        const gridW = this._getGridW(cfg);
 
         let status = 'ok';
         let reason = ReasonCodes.OK || 'OK';
 
-        if (gridStale || !Number.isFinite(gridW)) {
+        if (gridStale || !(typeof gridW === 'number' && Number.isFinite(gridW))) {
             status = 'stale_meter';
             reason = ReasonCodes.STALE_METER || 'STALE_METER';
         }
 
         // RLM tick (works only with valid/stable grid)
         let rlm = { enabled: false, capNowW: null };
-        if (!gridStale && Number.isFinite(gridW)) {
+        if (!gridStale && (typeof gridW === 'number' && Number.isFinite(gridW))) {
             rlm = await this._tickRlm(nowMs, gridW, cfg);
         } else {
             // still update disabled/limit states
@@ -408,7 +440,7 @@ class GridConstraintsModule extends BaseModule {
         }
 
         // Zero export tick (may work even if grid stale via failsafe)
-        const ze = await this._tickZeroExport(nowMs, Number.isFinite(gridW) ? gridW : 0, cfg, gridStale);
+        const ze = await this._tickZeroExport(nowMs, (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : 0, cfg, gridStale);
 
         // Compute final "max import" cap: min(connectionLimit, rlmCapNow)
         const connectionLimitW = this._num(this.adapter.config.peakShaving?.maxPowerW, 0);
