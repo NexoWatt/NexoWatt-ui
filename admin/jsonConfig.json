@@ -1886,18 +1886,12 @@
           "expert": true,
           "expertMode": true
         },
-        "peakShaving.maxPowerW": {
-          "type": "number",
-          "label": "Max. Import (W)",
-          "attr": "peakShaving.maxPowerW",
+        "psLimitInfo": {
+          "type": "staticText",
+          "text": "Grenzwert (Netzanschlussleistung) wird zentral unter \"EMS\" gepflegt und von Peak‑Shaving automatisch verwendet. Optional kann im dynamic‑Modus ein externer DP (\"Erlaubte Import‑Leistung\") den Grenzwert zusätzlich reduzieren.",
           "xs": 12,
-          "sm": 6,
-          "md": 6,
-          "default": 0,
-          "min": 0,
-          "max": 10000000,
-          "step": 100,
-          "help": "static‑Modus: Grenzwert. 0 = keine Begrenzung."
+          "sm": 12,
+          "md": 12
         },
         "peakShaving.reserveW": {
           "type": "number",
@@ -1910,6 +1904,7 @@
           "min": 0,
           "max": 1000000,
           "step": 50,
+          "help": "Vorbeugende Reserve: Peak‑Shaving beginnt bereits bei (Netzanschlussleistung − Reserve), um Lastsprünge abzufangen.",
           "expert": true,
           "expertMode": true
         },

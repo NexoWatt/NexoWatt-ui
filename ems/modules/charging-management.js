@@ -1172,12 +1172,13 @@ if (components.length) {
         // ---------------------------------------------------------------------
 
         // Config sources for the grid connection import limit (W):
-        // - installerConfig.gridConnectionPower (recommended)
-        // - PeakShaving.maxPowerW (if set)
+        // - installerConfig.gridConnectionPower (single source of truth)
+        // - legacy fallback: PeakShaving.maxPowerW (only if EMS limit is not configured)
         const instLimitW = clamp(num(this.adapter?.config?.installerConfig?.gridConnectionPower, 0), 0, 1e12);
         const psLimitW = clamp(num(this.adapter?.config?.peakShaving?.maxPowerW, 0), 0, 1e12);
-        const configuredLimits = [instLimitW, psLimitW].filter(v => typeof v === 'number' && Number.isFinite(v) && v > 0);
-        const gridImportLimitW = configuredLimits.length ? Math.min(...configuredLimits) : 0;
+        const gridImportLimitW = (typeof instLimitW === 'number' && Number.isFinite(instLimitW) && instLimitW > 0)
+            ? instLimitW
+            : ((typeof psLimitW === 'number' && Number.isFinite(psLimitW) && psLimitW > 0) ? psLimitW : 0);
 
         // Safety margin (W): reuse PeakShaving.safetyMarginW if present
         const gridMarginW = clamp(num(this.adapter?.config?.peakShaving?.safetyMarginW, 0), 0, 1e12);

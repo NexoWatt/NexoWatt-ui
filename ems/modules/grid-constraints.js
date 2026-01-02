@@ -443,7 +443,13 @@ class GridConstraintsModule extends BaseModule {
         const ze = await this._tickZeroExport(nowMs, (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : 0, cfg, gridStale);
 
         // Compute final "max import" cap: min(connectionLimit, rlmCapNow)
-        const connectionLimitW = this._num(this.adapter.config.peakShaving?.maxPowerW, 0);
+        // Prefer central plant parameter "Netzanschlussleistung" (installerConfig.gridConnectionPower).
+        // Fallback to legacy peakShaving.maxPowerW for backwards compatibility.
+        const instLimitW = this._num(this.adapter.config.installerConfig?.gridConnectionPower, 0);
+        const legacyLimitW = this._num(this.adapter.config.peakShaving?.maxPowerW, 0);
+        const connectionLimitW = (typeof instLimitW === 'number' && Number.isFinite(instLimitW) && instLimitW > 0)
+            ? instLimitW
+            : legacyLimitW;
         let maxImportFinal = 0;
 
         if (connectionLimitW > 0) {

@@ -149,7 +149,12 @@ class PeakShavingModule extends BaseModule {
         const smoothingSeconds = clamp(num(cfg.smoothingSeconds, 10), 1, 600);
         const useAverage = cfg.useAverage !== false; // default true
 
-        const maxPowerW = num(cfg.maxPowerW, 0);
+        // Peak-Shaving limit source:
+        // Prefer central plant parameter "Netzanschlussleistung" (installerConfig.gridConnectionPower).
+        // Fallback to legacy peakShaving.maxPowerW for backwards compatibility.
+        const instLimitW = clamp(num(this.adapter?.config?.installerConfig?.gridConnectionPower, 0), 0, 1e12);
+        const legacyLimitW = num(cfg.maxPowerW, 0);
+        const plantLimitW = (typeof instLimitW === 'number' && instLimitW > 0) ? instLimitW : legacyLimitW;
         const hysteresisW = clamp(num(cfg.hysteresisW, 500), 0, 1e9);
         const activateDelayS = clamp(num(cfg.activateDelaySeconds, 2), 0, 3600);
         const releaseDelayS = clamp(num(cfg.releaseDelaySeconds, 5), 0, 3600);
@@ -186,7 +191,7 @@ class PeakShavingModule extends BaseModule {
         // MU6.7: stale meter failsafe (protect against missing/old grid measurements)
         const staleTimeoutSec = clamp(num(cfg.staleTimeoutSec, 15), 1, 3600);
         const staleMaxAgeMs = staleTimeoutSec * 1000;
-        const wantsPowerLimit = typeof maxPowerW === 'number' && maxPowerW > 0;
+        const wantsPowerLimit = typeof plantLimitW === 'number' && plantLimitW > 0;
         const wantsPhaseLimit = (phaseMode === 'info' || phaseMode === 'enforce') && typeof maxPhaseA === 'number' && maxPhaseA > 0;
         let staleMeter = false;
         const staleKeys = [];
@@ -254,13 +259,14 @@ class PeakShavingModule extends BaseModule {
 
         if (mode === 'dynamic') {
             allowedPowerW = this.dp.getNumber('ps.allowedPowerW', null);
-            const baseMax = (typeof maxPowerW === 'number' && maxPowerW > 0) ? maxPowerW : Number.POSITIVE_INFINITY;
+            // Central plant limit is a hard cap (if configured). If not configured, allow dynamic DP only.
+            const baseMax = (typeof plantLimitW === 'number' && plantLimitW > 0) ? plantLimitW : Number.POSITIVE_INFINITY;
             const allowed = (typeof allowedPowerW === 'number' && allowedPowerW > 0) ? allowedPowerW : Number.POSITIVE_INFINITY;
             limitW = Math.min(baseMax, allowed) - Math.max(0, reserveW);
             if (!Number.isFinite(limitW)) limitW = 0;
         } else {
             // static: fester Grenzwert, aber Reserve ebenfalls abziehen (Reserve ist keine dynamic-only Funktion)
-            const base = (typeof maxPowerW === 'number' && maxPowerW > 0) ? maxPowerW : 0;
+            const base = (typeof plantLimitW === 'number' && plantLimitW > 0) ? plantLimitW : 0;
             limitW = Math.max(0, base - Math.max(0, reserveW));
         }
 
