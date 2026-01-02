@@ -451,11 +451,19 @@ if (typeof soc === 'number') {
 
         // 3) Eigenverbrauch: Entladen zur Netzbezug-Reduktion (optional)
         if (targetW === 0 && selfDischargeEnabled) {
-            const importW = Math.max(0, gridW);
-            const desiredDischarge = Math.max(0, importW - selfTargetGridW);
+            // Für Eigenverbrauch-Entladung bewusst den ROH-Wert (NVP) verwenden, um Verzögerungen durch Glättung zu vermeiden.
+            // Das verhindert systematische Rest-Bezüge (z.B. 200–400 W), wenn grid.powerW geglättet ist.
+            const importW = Math.max(0, (typeof gridRawW === 'number') ? gridRawW : gridW);
+
+            // Hysterese/Deadband: Wir lassen bewusst einen kleinen Restbezug (z.B. 10–50 W) stehen, um Flattern/Überregeln zu vermeiden.
+            // Start/Stop-Schwelle wird relativ zum Zielwert interpretiert.
+            const startThresholdW = Math.max(0, selfTargetGridW + selfImportThresholdW);
+
+            // Ziel: Import auf (Target + Threshold) drücken (nicht auf 0 "jagen").
+            const desiredDischarge = Math.max(0, importW - startThresholdW);
 
             const socOk = (typeof soc !== 'number') ? true : (soc > selfMinSoc);
-            if (!reserveActive && !reserveChargeWanted && socOk && importW >= selfImportThresholdW && desiredDischarge > 0) {
+            if (!reserveActive && !reserveChargeWanted && socOk && importW >= startThresholdW && desiredDischarge > 0) {
                 targetW = clamp(desiredDischarge, 0, selfMaxDischargeEff);
                 reason = `Eigenverbrauch: entladen (${Math.round(targetW)} W)`;
                 source = 'eigenverbrauch';

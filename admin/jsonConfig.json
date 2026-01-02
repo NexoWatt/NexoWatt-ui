@@ -1147,7 +1147,8 @@
           "xs": 12,
           "sm": 6,
           "md": 6,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "enableStorageControl": {
           "type": "checkbox",
@@ -1157,7 +1158,8 @@
           "xs": 12,
           "sm": 6,
           "md": 6,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "enableStorageFarm": {
           "type": "checkbox",
@@ -1168,7 +1170,8 @@
           "sm": 6,
           "md": 6,
           "help": "Aktiviert die Speicherfarm-Funktion (mehrere Speichersysteme als Pool oder gruppiert). Nach dem Speichern erscheint der Admin-Reiter „EMS – Speicherfarm“ sowie im VIS-Frontend der Reiter „Speicherfarm“.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "diagnostics.enabled": {
           "type": "checkbox",
@@ -1178,7 +1181,8 @@
           "xs": 12,
           "sm": 6,
           "md": 6,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "diagnostics.writeStates": {
           "type": "checkbox",
@@ -1188,7 +1192,8 @@
           "xs": 12,
           "sm": 6,
           "md": 6,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "diagnostics.logLevel": {
           "type": "select",
@@ -1208,7 +1213,8 @@
             }
           ],
           "default": "debug",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "diagnostics.logIntervalSec": {
           "type": "number",
@@ -1221,7 +1227,8 @@
           "xs": 12,
           "sm": 6,
           "md": 6,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "diagnostics.stateIntervalSec": {
           "type": "number",
@@ -1234,7 +1241,8 @@
           "xs": 12,
           "sm": 6,
           "md": 6,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "diagnostics.maxJsonLen": {
           "type": "number",
@@ -1247,7 +1255,8 @@
           "xs": 12,
           "sm": 6,
           "md": 6,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         }
       }
     },
@@ -1319,7 +1328,8 @@
           ],
           "default": "engine",
           "help": "engine = kombiniert static + PeakShaving + optional Datapoint‑Budget. Für VIS‑Schalter eignet sich fromDatapoint.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.staticMaxChargingPowerW": {
           "type": "number",
@@ -1354,7 +1364,8 @@
           "rows": 2,
           "showName": true,
           "help": "Wenn Budget‑Modus fromDatapoint oder engine: dieser Datenpunkt begrenzt das Gesamt‑Ladebudget.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.gridPowerId": {
           "type": "objectId",
@@ -1376,7 +1387,8 @@
           "rows": 2,
           "showName": true,
           "help": "Optional: Netto‑Netzleistung (Import + / Export −). Wird für PV‑Überschuss‑Logik benötigt, wenn du keinen PV‑Surplus‑DP nutzt.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.pvSurplusPowerId": {
           "type": "objectId",
@@ -1398,7 +1410,8 @@
           "rows": 2,
           "showName": true,
           "help": "Optional: echter Überschuss‑Datenpunkt. Wenn leer, wird aus Netzleistung abgeleitet (sofern vorhanden).",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.stationAllocationMode": {
           "type": "select",
@@ -1419,7 +1432,8 @@
           ],
           "default": "sequential",
           "help": "Bei Stationsgruppen: roundRobin rotiert die Reihenfolge der nicht‑Boost‑Connectors pro Tick, damit niemand dauerhaft verhungert.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.boostTimeoutMinDc": {
           "type": "number",
@@ -1433,7 +1447,8 @@
           "max": 1000000,
           "step": 1,
           "help": "Maximale Boost‑Dauer für DC‑Ladepunkte. 0 = kein Auto‑Timeout.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.boostTimeoutMinAc": {
           "type": "number",
@@ -1447,12 +1462,14 @@
           "max": 1000000,
           "step": 1,
           "help": "Maximale Boost‑Dauer für AC‑Ladepunkte. 0 = kein Auto‑Timeout.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.storageAssistHeader": {
           "type": "header",
           "text": "Gate C – Speicher-Unterstützung für Laden",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.storageAssistEnabled": {
           "type": "checkbox",
@@ -1529,7 +1546,8 @@
           "sm": 6,
           "md": 6,
           "help": "Wenn Peak‑Shaving aktiv ist, kann Charging automatisch pausiert werden.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.pauseBehavior": {
           "type": "select",
@@ -1550,7 +1568,8 @@
           ],
           "default": "rampDownToZero",
           "help": "rampDownToZero = Setpoints auf 0. followPeakBudget = Budget folgt Peak‑Budget (wenn verfügbar).",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.staleTimeoutSec": {
           "type": "number",
@@ -1563,7 +1582,8 @@
           "min": 1,
           "max": 3600,
           "step": 1,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.activityThresholdW": {
           "type": "number",
@@ -1576,7 +1596,8 @@
           "min": 0,
           "max": 1000000,
           "step": 10,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.stopGraceSec": {
           "type": "number",
@@ -1589,7 +1610,8 @@
           "min": 0,
           "max": 3600,
           "step": 1,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.sessionKeepSec": {
           "type": "number",
@@ -1602,7 +1624,8 @@
           "min": 0,
           "max": 86400,
           "step": 10,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.pvStartThresholdW": {
           "type": "number",
@@ -1616,7 +1639,8 @@
           "max": 1000000,
           "step": 50,
           "help": "PV‑Modi starten erst, wenn PV‑Überschuss ≥ Start‑Schwelle (Anti‑Flattern). 0 = jede positive PV.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.pvStopThresholdW": {
           "type": "number",
@@ -1630,7 +1654,8 @@
           "max": 1000000,
           "step": 50,
           "help": "PV‑Modi werden gestoppt, wenn PV‑Überschuss ≤ Stop‑Schwelle (Hysterese).",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.pvStartDelaySec": {
           "type": "number",
@@ -1643,7 +1668,8 @@
           "min": 0,
           "max": 3600,
           "step": 1,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.pvStopDelaySec": {
           "type": "number",
@@ -1656,7 +1682,8 @@
           "min": 0,
           "max": 3600,
           "step": 1,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.pvAbortImportW": {
           "type": "number",
@@ -1670,7 +1697,8 @@
           "max": 1000000,
           "step": 50,
           "help": "Wenn Netzbezug > Abort‑Schwelle während PV‑Modi: PV wird als nicht verfügbar behandelt (Sicherheits‑Stop).",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.stepA": {
           "type": "number",
@@ -1683,7 +1711,8 @@
           "min": 0,
           "max": 100,
           "step": 0.1,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.stepW": {
           "type": "number",
@@ -1696,7 +1725,8 @@
           "min": 0,
           "max": 100000,
           "step": 1,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.maxDeltaAPerTick": {
           "type": "number",
@@ -1709,7 +1739,8 @@
           "min": 0,
           "max": 1000,
           "step": 0.1,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.maxDeltaWPerTick": {
           "type": "number",
@@ -1722,7 +1753,8 @@
           "min": 0,
           "max": 1000000,
           "step": 10,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.acMinPower3pW": {
           "type": "number",
@@ -1735,7 +1767,8 @@
           "min": 0,
           "max": 100000,
           "step": 50,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.voltageV": {
           "type": "number",
@@ -1748,7 +1781,8 @@
           "min": 50,
           "max": 1000,
           "step": 1,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "chargingManagement.defaultPhases": {
           "type": "select",
@@ -1768,7 +1802,8 @@
             }
           ],
           "default": 3,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         }
       },
       "hidden": "data.enableChargingManagement === false"
@@ -1825,7 +1860,8 @@
           "rows": 2,
           "showName": true,
           "help": "Optionaler Override. Standard: Das EMS nutzt die Netzpunktleistung (NVP) aus „Datenpunkte“ (Netto oder aus Bezug/Einspeisung abgeleitet) und stellt sie intern als ems.gridPowerW bereit.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "peakShaving.allowedPowerId": {
           "type": "objectId",
@@ -1847,7 +1883,8 @@
           "rows": 2,
           "showName": true,
           "help": "Nur im dynamic‑Modus: Externer DP, der den erlaubten Import‑Grenzwert liefert.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "peakShaving.maxPowerW": {
           "type": "number",
@@ -1873,7 +1910,8 @@
           "min": 0,
           "max": 1000000,
           "step": 50,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "peakShaving.safetyMarginW": {
           "type": "number",
@@ -1886,7 +1924,8 @@
           "min": 0,
           "max": 1000000,
           "step": 50,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "peakShaving.smoothingSeconds": {
           "type": "number",
@@ -1899,7 +1938,8 @@
           "min": 1,
           "max": 600,
           "step": 1,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "peakShaving.useAverage": {
           "type": "checkbox",
@@ -1909,7 +1949,8 @@
           "xs": 12,
           "sm": 6,
           "md": 6,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "peakShaving.hysteresisW": {
           "type": "number",
@@ -1922,7 +1963,8 @@
           "min": 0,
           "max": 1000000,
           "step": 50,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "peakShaving.activateDelaySeconds": {
           "type": "number",
@@ -1935,7 +1977,8 @@
           "min": 0,
           "max": 3600,
           "step": 1,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "peakShaving.releaseDelaySeconds": {
           "type": "number",
@@ -1948,7 +1991,8 @@
           "min": 0,
           "max": 3600,
           "step": 1,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "peakShaving.baseLoadPowerId": {
           "type": "objectId",
@@ -1970,7 +2014,8 @@
           "rows": 2,
           "showName": true,
           "help": "Optional: Haus‑Basislast (für Diagnose/Logik).",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "peakShaving.pvPowerId": {
           "type": "objectId",
@@ -1992,7 +2037,8 @@
           "rows": 2,
           "showName": true,
           "help": "Optional: PV‑Istleistung (für Diagnose/Logik).",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "peakShaving.batteryPowerId": {
           "type": "objectId",
@@ -2014,7 +2060,8 @@
           "rows": 2,
           "showName": true,
           "help": "Optional: Speicher‑Istleistung (für Diagnose/Logik).",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         }
       },
       "hidden": "!data.enablePeakShaving"
@@ -2052,7 +2099,8 @@
           "rows": 2,
           "showName": true,
           "help": "Optionaler Override. Standard: Das EMS nutzt die Netzpunktleistung (NVP) aus „Datenpunkte“ und stellt sie intern als grid.powerW/ems.gridPowerW bereit.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "gridConstraints.staleTimeoutSec": {
           "type": "number",
@@ -2065,7 +2113,8 @@
           "min": 1,
           "max": 3600,
           "step": 1,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "gcRlmHeader": {
           "type": "header",
@@ -2107,7 +2156,8 @@
           "min": 0,
           "max": 1000000,
           "step": 50,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "gridConstraints.rlmAligned": {
           "type": "checkbox",
@@ -2117,7 +2167,8 @@
           "xs": 12,
           "sm": 6,
           "md": 6,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "gcZeroHeader": {
           "type": "header",
@@ -2147,7 +2198,8 @@
           "max": 10000,
           "step": 10,
           "help": "Ziel ist leicht positiver Import (verhindert Export‑Flattern).",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "gridConstraints.zeroExportDeadbandW": {
           "type": "number",
@@ -2160,7 +2212,8 @@
           "min": 0,
           "max": 5000,
           "step": 10,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "gcPvHeader": {
           "type": "header",
@@ -2199,7 +2252,8 @@
             }
           ],
           "default": "auto",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "gridConstraints.pvFeedInLimitWId": {
           "type": "objectId",
@@ -2220,7 +2274,8 @@
           "multiline": true,
           "rows": 2,
           "showName": true,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "gridConstraints.pvLimitWId": {
           "type": "objectId",
@@ -2241,7 +2296,8 @@
           "multiline": true,
           "rows": 2,
           "showName": true,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "gridConstraints.pvLimitPctId": {
           "type": "objectId",
@@ -2262,7 +2318,8 @@
           "multiline": true,
           "rows": 2,
           "showName": true,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "gridConstraints.pvRatedPowerWId": {
           "type": "objectId",
@@ -2283,7 +2340,8 @@
           "multiline": true,
           "rows": 2,
           "showName": true,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "gridConstraints.pvCurtailFastTripExportW": {
           "type": "number",
@@ -2296,7 +2354,8 @@
           "min": 0,
           "max": 1000000,
           "step": 50,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "gridConstraints.pvCurtailMaxDeltaWPerTick": {
           "type": "number",
@@ -2309,7 +2368,8 @@
           "min": 0,
           "max": 1000000,
           "step": 50,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "gridConstraints.pvCurtailMaxDeltaPctPerTick": {
           "type": "number",
@@ -2322,7 +2382,8 @@
           "min": 0,
           "max": 100,
           "step": 1,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         }
       },
       "hidden": "!data.enableGridConstraints"
@@ -2354,7 +2415,8 @@
             }
           ],
           "default": "targetPower",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.staleTimeoutSec": {
           "type": "number",
@@ -2367,7 +2429,8 @@
           "min": 1,
           "max": 3600,
           "step": 1,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "stMapHeader": {
           "type": "header",
@@ -2396,7 +2459,8 @@
           "rows": 2,
           "showName": true,
           "help": "Optionaler Override. Wenn leer, nutzt der Adapter automatisch „Datenpunkte → Batterie – SoC (%)“. Nur setzen, wenn du für die EMS‑Speicherlogik einen anderen SoC‑Datenpunkt verwenden willst.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.datapoints.socScale": {
           "type": "number",
@@ -2409,7 +2473,8 @@
           "min": 0,
           "max": 100,
           "step": 0.01,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.datapoints.batteryPowerObjectId": {
           "type": "objectId",
@@ -2430,7 +2495,8 @@
           "multiline": true,
           "rows": 2,
           "showName": true,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.datapoints.batteryPowerScale": {
           "type": "number",
@@ -2443,7 +2509,8 @@
           "min": 0,
           "max": 1000,
           "step": 0.01,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.datapoints.batteryPowerInvert": {
           "type": "checkbox",
@@ -2453,7 +2520,8 @@
           "xs": 12,
           "sm": 6,
           "md": 4,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.datapoints.targetPowerObjectId": {
           "type": "objectId",
@@ -2487,7 +2555,8 @@
           "min": 0,
           "max": 1000,
           "step": 0.01,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.datapoints.targetPowerInvert": {
           "type": "checkbox",
@@ -2497,7 +2566,8 @@
           "xs": 12,
           "sm": 6,
           "md": 4,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.datapoints.maxChargeObjectId": {
           "type": "objectId",
@@ -2518,7 +2588,8 @@
           "multiline": true,
           "rows": 2,
           "showName": true,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.datapoints.maxDischargeObjectId": {
           "type": "objectId",
@@ -2539,7 +2610,8 @@
           "multiline": true,
           "rows": 2,
           "showName": true,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.datapoints.chargeEnableObjectId": {
           "type": "objectId",
@@ -2560,7 +2632,8 @@
           "multiline": true,
           "rows": 2,
           "showName": true,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.datapoints.dischargeEnableObjectId": {
           "type": "objectId",
@@ -2581,7 +2654,8 @@
           "multiline": true,
           "rows": 2,
           "showName": true,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.datapoints.reserveSocObjectId": {
           "type": "objectId",
@@ -2602,7 +2676,8 @@
           "multiline": true,
           "rows": 2,
           "showName": true,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "stCtrlHeader": {
           "type": "header",
@@ -2622,7 +2697,8 @@
           "min": 0,
           "max": 1000000,
           "step": 50,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.maxDischargeW": {
           "type": "number",
@@ -2635,7 +2711,8 @@
           "min": 0,
           "max": 1000000,
           "step": 50,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.stepW": {
           "type": "number",
@@ -2648,7 +2725,8 @@
           "min": 0,
           "max": 10000,
           "step": 1,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.maxDeltaWPerTick": {
           "type": "number",
@@ -2661,7 +2739,8 @@
           "min": 0,
           "max": 100000,
           "step": 10,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.reserveEnabled": {
           "type": "checkbox",
@@ -2671,7 +2750,8 @@
           "xs": 12,
           "sm": 6,
           "md": 6,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.reserveMinSocPct": {
           "type": "number",
@@ -2684,7 +2764,8 @@
           "min": 0,
           "max": 100,
           "step": 0.1,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.pvEnabled": {
           "type": "checkbox",
@@ -2694,7 +2775,8 @@
           "xs": 12,
           "sm": 6,
           "md": 6,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.pvExportThresholdW": {
           "type": "number",
@@ -2707,7 +2789,8 @@
           "min": 0,
           "max": 100000,
           "step": 10,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "stMultiuseHeader": {
           "type": "header",
@@ -2715,7 +2798,8 @@
           "xs": 12,
           "sm": 12,
           "md": 12,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "stLskHeader": {
           "type": "header",
@@ -2723,7 +2807,8 @@
           "xs": 12,
           "sm": 12,
           "md": 12,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.lskEnabled": {
           "type": "checkbox",
@@ -2734,7 +2819,8 @@
           "sm": 6,
           "md": 6,
           "help": "Wenn aktiv, kann der Speicher die Lastspitzenkappung unterstützen (Entladen bei Grenzwert‑Überschreitung).",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.lskDischargeEnabled": {
           "type": "checkbox",
@@ -2768,7 +2854,8 @@
           "max": 100,
           "step": 0.1,
           "help": "Unterhalb dieses SoC wird für LSK nicht mehr entladen (Notstrom‑Reserve bleibt geschützt).",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.lskMaxSocPct": {
           "type": "number",
@@ -2782,7 +2869,8 @@
           "max": 100,
           "step": 0.1,
           "help": "Oberhalb dieses SoC wird nicht weiter geladen (gilt u. a. für PV‑Überschuss‑Laden im LSK‑Bereich).",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.lskMaxDischargeW": {
           "type": "number",
@@ -2796,7 +2884,8 @@
           "max": 1000000,
           "step": 50,
           "help": "0 = global „Max Discharge (W)“. Damit begrenzt du die Entladeleistung, die LSK nutzen darf.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.lskMaxChargeW": {
           "type": "number",
@@ -2810,7 +2899,8 @@
           "max": 1000000,
           "step": 50,
           "help": "0 = global „Max Charge (W)“. Gilt für PV‑Überschuss‑Laden oberhalb des Eigenverbrauch‑Max‑SoC (bis LSK Max SoC).",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.lskRefillAvgSeconds": {
           "type": "number",
@@ -2824,7 +2914,8 @@
           "max": 1800,
           "step": 1,
           "help": "Zeitfenster für den gleitenden Mittelwert der NVP-Importleistung zur stabilen LSK-Reserve-Nachladung. Größer = ruhiger, aber träger.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.lskRefillDeadbandW": {
           "type": "number",
@@ -2838,16 +2929,17 @@
           "max": 100000,
           "step": 10,
           "help": "Änderungen kleiner als dieser Wert werden beim LSK-Reserve-Nachladen gehalten (Anti-Flattern).",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
-
         "stSelfHeader": {
           "type": "header",
           "text": "Eigenverbrauchs‑Optimierung über Speicher",
           "xs": 12,
           "sm": 12,
           "md": 12,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.selfDischargeEnabled": {
           "type": "checkbox",
@@ -2858,7 +2950,8 @@
           "sm": 6,
           "md": 6,
           "help": "Wenn aktiv, entlädt der Speicher, um den Netzbezug bis zum Zielwert zu reduzieren (innerhalb SoC‑Grenzen).",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.selfMinSocPct": {
           "type": "number",
@@ -2872,7 +2965,8 @@
           "max": 100,
           "step": 0.1,
           "help": "Unterhalb dieses SoC wird für Eigenverbrauch nicht mehr entladen.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.selfMaxSocPct": {
           "type": "number",
@@ -2886,7 +2980,8 @@
           "max": 100,
           "step": 0.1,
           "help": "Bis zu diesem SoC wird bei PV‑Überschuss geladen. Wenn LSK Max SoC höher ist, kann darüber hinaus im LSK‑Bereich weiter geladen werden.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.selfTargetGridImportW": {
           "type": "number",
@@ -2900,7 +2995,8 @@
           "max": 1000000,
           "step": 10,
           "help": "Eigenverbrauch‑Entladung versucht den Netzbezug auf diesen Zielwert zu regeln (typisch: 0 W).",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.selfImportThresholdW": {
           "type": "number",
@@ -2914,7 +3010,8 @@
           "max": 1000000,
           "step": 10,
           "help": "Erst wenn der Netzbezug oberhalb dieser Schwelle liegt, wird Eigenverbrauch‑Entladung aktiv (gegen Flattern).",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.selfMaxDischargeW": {
           "type": "number",
@@ -2928,7 +3025,8 @@
           "max": 1000000,
           "step": 50,
           "help": "0 = global „Max Discharge (W)“. Damit begrenzt du die Entladeleistung, die Eigenverbrauch nutzen darf.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.selfMaxChargeW": {
           "type": "number",
@@ -2942,7 +3040,8 @@
           "max": 1000000,
           "step": 50,
           "help": "0 = global „Max Charge (W)“. Damit begrenzt du die Ladeleistung im Eigenverbrauchs‑Bereich.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "stBackupHeader": {
           "type": "header",
@@ -2950,7 +3049,8 @@
           "xs": 12,
           "sm": 12,
           "md": 12,
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.reserveTargetSocPct": {
           "type": "number",
@@ -2964,7 +3064,8 @@
           "max": 100,
           "step": 0.1,
           "help": "Unterhalb dieses SoC wird die Reserve als „auffüllen“ betrachtet. PV‑Überschuss wird bevorzugt zum Laden genutzt; Netzladen optional (siehe unten).",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         },
         "storage.reserveGridChargeW": {
           "type": "number",
@@ -2978,7 +3079,8 @@
           "max": 1000000,
           "step": 50,
           "help": "0 = AUS. Wenn >0 und „Netzladen erlaubt“, lädt der Speicher bis zum Reserve‑Ziel‑SoC mit dieser Leistung aus dem Netz.",
-          "expert": true
+          "expert": true,
+          "expertMode": true
         }
       },
       "hidden": "!data.enableStorageControl"
@@ -3132,7 +3234,8 @@
               "style": {
                 "minWidth": "260px"
               },
-              "expert": true
+              "expert": true,
+              "expertMode": true
             },
             {
               "type": "objectId",
@@ -3144,7 +3247,8 @@
               "style": {
                 "minWidth": "260px"
               },
-              "expert": true
+              "expert": true,
+              "expertMode": true
             },
             {
               "type": "objectId",
@@ -3157,7 +3261,8 @@
                 "minWidth": "260px"
               },
               "expert": true,
-              "tooltip": "Optional: Ein einzelner Sollwert-DP steuert Laden/Entladen über das Vorzeichen. Default: Entladen positiv, Laden negativ. Vorzeichen pro Richtung per Checkbox invertierbar."
+              "tooltip": "Optional: Ein einzelner Sollwert-DP steuert Laden/Entladen über das Vorzeichen. Default: Entladen positiv, Laden negativ. Vorzeichen pro Richtung per Checkbox invertierbar.",
+              "expertMode": true
             },
             {
               "type": "number",
@@ -3173,7 +3278,8 @@
                 "minWidth": "160px"
               },
               "tooltip": "Optional für gewichteten Gesamt‑SoC.",
-              "expert": true
+              "expert": true,
+              "expertMode": true
             },
             {
               "type": "text",
@@ -3186,7 +3292,8 @@
                 "minWidth": "140px"
               },
               "tooltip": "Optional (nur Gruppenmodus): Name der Gruppe.",
-              "expert": true
+              "expert": true,
+              "expertMode": true
             }
           ]
         },
@@ -3268,10 +3375,12 @@
                 "minWidth": "140px"
               },
               "tooltip": "Optional: höhere Priorität wird bevorzugt.",
-              "expert": true
+              "expert": true,
+              "expertMode": true
             }
           ],
-          "expert": true
+          "expert": true,
+          "expertMode": true
         }
       }
     },
