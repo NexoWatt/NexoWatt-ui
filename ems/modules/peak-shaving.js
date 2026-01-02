@@ -1,7 +1,7 @@
 'use strict';
 
 const { BaseModule } = require('./base');
-const { ReasonCodes } = require('../reasons');
+const { ReasonCodes, reasonToGerman } = require('../reasons');
 
 class SlidingWindow {
     constructor(maxSeconds) {
@@ -115,7 +115,8 @@ class PeakShavingModule extends BaseModule {
 
         await mk('peakShaving.control.active', 'Active', 'boolean', 'indicator');
         await mk('peakShaving.control.status', 'Status', 'string', 'text');
-        await mk('peakShaving.control.reason', 'Reason', 'string', 'text');
+        await mk('peakShaving.control.reason', 'Reason (Code)', 'string', 'text');
+        await mk('peakShaving.control.reasonText', 'Grund', 'string', 'text');
         await mk('peakShaving.control.limitW', 'Effective limit (W)', 'number', 'value.power');
         await mk('peakShaving.control.effectivePowerW', 'Effective power (W)', 'number', 'value.power');
         await mk('peakShaving.control.overW', 'Over limit (W)', 'number', 'value.power');
@@ -446,6 +447,7 @@ class PeakShavingModule extends BaseModule {
         await this.adapter.setStateAsync('peakShaving.control.active', active, true);
         await this.adapter.setStateAsync('peakShaving.control.status', status, true);
         await this.adapter.setStateAsync('peakShaving.control.reason', reason, true);
+        await this.adapter.setStateAsync('peakShaving.control.reasonText', reasonToGerman(reason), true);
         await this.adapter.setStateAsync('peakShaving.control.limitW', limitW || 0, true);
         await this.adapter.setStateAsync('peakShaving.control.effectivePowerW', typeof effPower === 'number' ? effPower : 0, true);
         await this.adapter.setStateAsync('peakShaving.control.overW', powerViolation ? overW : 0, true);
@@ -478,7 +480,7 @@ class PeakShavingModule extends BaseModule {
             const lvl = (diagCfg.logLevel === 'info' || diagCfg.logLevel === 'debug') ? diagCfg.logLevel : 'debug';
             const fn = (this.adapter && this.adapter.log && typeof this.adapter.log[lvl] === 'function') ? this.adapter.log[lvl] : this.adapter.log.debug;
             try {
-                fn.call(this.adapter.log, `[PS] mode=${mode} active=${active} status=${status} reason=${reason} stale=${staleMeter ? 1 : 0} fastTrip=${fastTripViolation ? 1 : 0} margin=${Math.round(Number(safetyMarginW || 0))}W lim=${Math.round(Number(limitW || 0))}W raw=${Math.round(Number(gridPowerRaw || 0))}W avg=${Math.round(Number(avgPower || 0))}W trip=${Math.round(Number(tripPower || 0))}W eff=${Math.round(Number(effPower || 0))}W over=${Math.round(Number(overW || 0))}W availCtl=${Math.round(Number(availableForControlledW || 0))}W reqRed=${Math.round(Number(requiredReductionW || 0))}W`);
+                fn.call(this.adapter.log, `[Lastspitzenkappung] Modus=${mode} aktiv=${active} status=${status} Grund=${reason} (${reasonToGerman(reason)}) MesswertAlt=${staleMeter ? 1 : 0} FastTrip=${fastTripViolation ? 1 : 0} Safety=${Math.round(Number(safetyMarginW || 0))}W Limit=${Math.round(Number(limitW || 0))}W Roh=${Math.round(Number(gridPowerRaw || 0))}W MW=${Math.round(Number(avgPower || 0))}W Trip=${Math.round(Number(tripPower || 0))}W Eff=${Math.round(Number(effPower || 0))}W Über=${Math.round(Number(overW || 0))}W VerfCtl=${Math.round(Number(availableForControlledW || 0))}W BedarfRed=${Math.round(Number(requiredReductionW || 0))}W`);
             } catch {
                 // ignore
             }

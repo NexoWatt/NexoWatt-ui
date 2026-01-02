@@ -84,4 +84,38 @@ function normalizeReason(input) {
     return up;
 }
 
-module.exports = { ReasonCodes, normalizeReason };
+const ReasonTextDe = Object.freeze({
+    [ReasonCodes.OK]: 'OK',
+    [ReasonCodes.UNKNOWN]: 'Unbekannt',
+    [ReasonCodes.STALE_METER]: 'Messwert veraltet',
+    [ReasonCodes.SAFETY_OVERLOAD]: 'Sicherheitsabschaltung (Überlast)',
+    [ReasonCodes.LIMIT_POWER]: 'Leistungsbegrenzung',
+    [ReasonCodes.LIMIT_PHASE]: 'Phasenbegrenzung',
+    [ReasonCodes.LIMIT_POWER_AND_PHASE]: 'Leistungs- und Phasenbegrenzung',
+    [ReasonCodes.LIMITED_BY_BUDGET]: 'Begrenzt durch Budget',
+    [ReasonCodes.LIMITED_BY_GRID_IMPORT]: 'Begrenzt durch Netzimport-Limit',
+    [ReasonCodes.LIMITED_BY_PHASE_CAP]: 'Begrenzt durch Phasenlimit',
+    [ReasonCodes.NO_SETPOINT]: 'Kein Sollwert verfügbar',
+    [ReasonCodes.UNLIMITED]: 'Unbegrenzt',
+    [ReasonCodes.NO_BUDGET]: 'Kein Budget',
+    [ReasonCodes.ALLOCATED]: 'Zugewiesen',
+    [ReasonCodes.BELOW_MIN]: 'Unter Mindestleistung',
+    [ReasonCodes.NO_PV_SURPLUS]: 'Kein PV-Überschuss',
+    [ReasonCodes.PAUSED_BY_PEAK_SHAVING]: 'Pausiert durch Lastspitzenkappung',
+    [ReasonCodes.BOOST_TIMEOUT]: 'Boost abgelaufen',
+    [ReasonCodes.BOOST_NOT_ALLOWED]: 'Boost nicht erlaubt',
+    [ReasonCodes.DISABLED]: 'Deaktiviert',
+    [ReasonCodes.OFFLINE]: 'Offline',
+    [ReasonCodes.SKIPPED]: 'Übersprungen',
+});
+
+/**
+ * Human-readable German explanation for a reason code (for logs/UI).
+ * Keeps canonical codes intact (code remains the source of truth).
+ */
+function reasonToGerman(code) {
+    const c = normalizeReason(code);
+    return ReasonTextDe[c] || c;
+}
+
+module.exports = { ReasonCodes, normalizeReason, reasonToGerman, ReasonTextDe };

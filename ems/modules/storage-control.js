@@ -336,32 +336,61 @@ if (typeof soc === 'number') {
         const selfMaxChargeEff = Math.min(maxChargeW, (selfMaxChargeW_cfg > 0 ? selfMaxChargeW_cfg : maxChargeW));
 
         // 1) Lastspitzenkappung: wenn Peak-Shaving aktiv und Grenzwert überschritten → Entladen
-        let targetW = 0;
-        let reason = 'Aus';
-        let source = 'aus';
-
-        let hardDischargeMinSoc = reserveMin; // wird je Quelle ggf. angehoben
-        let hardChargeMaxSoc = 100;
-
+        //    Wichtig: Diese Logik darf den Netzanschluss NICHT überlasten. Daher wird hier nicht "absolut" auf
+        //    (Import - Limit) gesetzt (das führt zu einem Fixpunkt), sondern als Delta/Integrator auf die bestehende
+        //    Sollleistung aufaddiert. Dadurch erreicht der Speicher das Ziel (Import <= Limit) zuverlässig.
         if (peakEnabled && lskEnabledCfg && (cfg.lskDischargeEnabled !== false)) {
-            // fallback: wenn requiredReductionW fehlt, über overW gehen
-            const needW = (typeof psReqRedW === 'number' && psReqRedW > 0) ? psReqRedW
-                : ((typeof psOverW === 'number' && psOverW > 0) ? psOverW : 0);
+            const limitW = (typeof psLimitW === 'number' && psLimitW > 0) ? psLimitW : null;
 
-            if (needW > 0 && (typeof psLimitW !== 'number' || psLimitW > 0)) {
-                // LSK-SoC-Fenster
+            // Für die Schutzfunktion immer den Rohwert am Netzanschlusspunkt verwenden (keine Mittelwert-Schönung).
+            const nvpRawW = (typeof gridRawW === 'number') ? gridRawW : gridW;
+            const importNowW = Math.max(0, typeof nvpRawW === 'number' ? nvpRawW : 0);
+
+            const lastWasLsk = (this._lastSource === 'lastspitze');
+            const hasLimit = (typeof limitW === 'number');
+
+            if (hasLimit && (importNowW > limitW || lastWasLsk)) {
+                // SoC-Fenster für LSK
                 const socOk = (typeof soc !== 'number') ? true : (soc > lskMinSoc);
+
                 if (reserveActive) {
                     targetW = 0;
-                    reason = 'LSK nötig, aber Notstrom-Reserve aktiv';
+                    reason = 'Lastspitzenkappung: nötig, aber Notstrom-Reserve aktiv';
                     source = 'lastspitze';
                 } else if (!socOk) {
                     targetW = 0;
-                    reason = `LSK nötig, aber SoC <= LSK-Min (${lskMinSoc}%)`;
+                    reason = `Lastspitzenkappung: nötig, aber SoC <= LSK-Min (${lskMinSoc}%)`;
                     source = 'lastspitze';
                 } else {
-                    targetW = clamp(needW, 0, lskMaxDischargeEff);
-                    reason = `LSK: entladen (${Math.round(needW)} W benötigt)`;
+                    // Regelfehler bezogen auf Netzimport: Ziel ist importNowW <= limitW
+                    const errW = importNowW - limitW;
+
+                    // Delta-Regelung: Korrektur auf bestehende Sollleistung aufaddieren.
+                    // Damit vermeiden wir das "Halbierungs"-Problem (Fixpunkt bei (L+T)/2).
+                    const curSetW = (lastWasLsk && typeof this._lastTargetW === 'number') ? Math.max(0, this._lastTargetW) : 0;
+
+                    // Release-Hysterese (unter dem Limit) aus Peak-Shaving nutzen, um Flattern zu vermeiden.
+                    const relHystW = Math.max(0, num(psCfg.hysteresisW, 200));
+                    let nextSetW = curSetW;
+
+                    if (errW > 0) {
+                        // Sofort hochregeln (Safety): jedes Watt über Limit muss weg.
+                        nextSetW = curSetW + errW;
+                    } else if (errW < -relHystW) {
+                        // Unter Limit: langsam/gedämpft zurücknehmen.
+                        nextSetW = curSetW + errW; // errW negativ => reduziert Entladen
+                    } // sonst halten (Anti-Flattern)
+
+                    nextSetW = clamp(nextSetW, 0, lskMaxDischargeEff);
+
+                    // Fast-Trip/Peak-Shaving kann zusätzliche Überlast melden (gefiltert/Trip).
+                    // Damit die LSK-Reaktion nicht "zu klein" bleibt, erzwingen wir mindestens diesen Bedarf.
+                    const needW = (typeof psReqRedW === 'number' && psReqRedW > 0) ? psReqRedW
+                        : ((typeof psOverW === 'number' && psOverW > 0) ? psOverW : 0);
+                    if (needW > 0 && nextSetW < needW) nextSetW = clamp(needW, 0, lskMaxDischargeEff);
+
+                    targetW = nextSetW;
+                    reason = `Lastspitzenkappung: entladen (Import ${Math.round(importNowW)} W > Limit ${Math.round(limitW)} W)`;
                     source = 'lastspitze';
                     hardDischargeMinSoc = Math.max(hardDischargeMinSoc, lskMinSoc);
                 }
@@ -663,6 +692,14 @@ if (typeof this._lastTargetW === 'number') {
             reason = `${reason} (PV‑Rampe)`;
         }
         // d >= 0 => weniger laden / Richtung 0 -> bewusst ohne Rampe (schnell reagieren)
+    } else if (source === 'lastspitze' && targetW > 0) {
+        // Lastspitzenkappung: "Attack" schnell, "Release" gedämpft.
+        // Erhöhung der Entladeleistung (d > 0) darf ohne Rampe passieren, damit der Netzanschluss nicht überlastet wird.
+        // Reduktion (d < 0) wird hingegen durch maxDelta begrenzt (Anti-Flattern).
+        if (maxDelta > 0 && d < 0 && Math.abs(d) > maxDelta) {
+            targetW = this._lastTargetW - maxDelta;
+            reason = `${reason} (Rampe)`;
+        }
     } else {
         // Standard: symmetrische Rampe
         if (maxDelta > 0 && Math.abs(d) > maxDelta) {
