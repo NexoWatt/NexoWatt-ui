@@ -85,7 +85,8 @@
           "attr": "datapoints.pvPower",
           "xs": 12,
           "sm": 12,
-          "md": 6
+          "md": 6,
+          "expert": true
         },
         "datapoints.gridBuyPower": {
           "type": "objectId",
@@ -137,7 +138,8 @@
           "attr": "datapoints.gridPointPower",
           "xs": 12,
           "sm": 12,
-          "md": 6
+          "md": 6,
+          "expert": true
         },
         "datapoints.storageChargePower": {
           "type": "objectId",
@@ -212,7 +214,8 @@
           "sm": 12,
           "help": "Optional: zusätzlicher Verbraucher-Leistungswert in W (falls genutzt).",
           "md": 6,
-          "placeholder": "z.B. consumer.0.power"
+          "placeholder": "z.B. consumer.0.power",
+          "expert": true
         },
         "datapoints.consumer1Power": {
           "type": "objectId",
@@ -599,7 +602,8 @@
           "attr": "smartHome.datapoints.rtrMode",
           "xs": 12,
           "sm": 12,
-          "md": 6
+          "md": 6,
+          "expert": true
         },
         "smartHome.datapoints.rtrHumidity": {
           "type": "objectId",
@@ -614,7 +618,8 @@
           "attr": "smartHome.datapoints.rtrHumidity",
           "xs": 12,
           "sm": 12,
-          "md": 6
+          "md": 6,
+          "expert": true
         },
         "smartHome.datapoints.wallboxLock": {
           "type": "objectId",
@@ -719,7 +724,8 @@
           "attr": "smartHome.datapoints.blindStop",
           "xs": 12,
           "sm": 12,
-          "md": 6
+          "md": 6,
+          "expert": true
         },
         "smartHome.datapoints.scene1": {
           "type": "objectId",
@@ -764,7 +770,8 @@
           "attr": "smartHome.datapoints.scene3",
           "xs": 12,
           "sm": 12,
-          "md": 6
+          "md": 6,
+          "expert": true
         },
         "smartHome.datapoints.scene4": {
           "type": "objectId",
@@ -779,7 +786,8 @@
           "attr": "smartHome.datapoints.scene4",
           "xs": 12,
           "sm": 12,
-          "md": 6
+          "md": 6,
+          "expert": true
         }
       },
       "label": "SmartHome (vorbereitet)",
@@ -900,7 +908,8 @@
           "hidden": "!data.installerConfig || !data.installerConfig.para14a",
           "xs": 12,
           "sm": 12,
-          "md": 12
+          "md": 12,
+          "expert": true
         },
         "installerConfig.para14aEmsSetpointWId": {
           "type": "objectId",
@@ -915,7 +924,8 @@
           "hidden": "!data.installerConfig || !data.installerConfig.para14a || data.installerConfig.para14aMode !== 'ems'",
           "xs": 12,
           "sm": 12,
-          "md": 12
+          "md": 12,
+          "expert": true
         },
         "installerConfig.para14aConsumers": {
           "type": "table",
@@ -1046,7 +1056,8 @@
               },
               "multiline": true,
               "rows": 2,
-              "tooltip": "Optionaler Enable/Sperr‑Datenpunkt. Bei 'Sperren (Ein/Aus)' wird dieser verwendet."
+              "tooltip": "Optionaler Enable/Sperr‑Datenpunkt. Bei 'Sperren (Ein/Aus)' wird dieser verwendet.",
+              "expert": true
             },
             {
               "type": "number",
@@ -1156,7 +1167,8 @@
           "xs": 12,
           "sm": 6,
           "md": 6,
-          "help": "Aktiviert die Speicherfarm-Funktion (mehrere Speichersysteme als Pool oder gruppiert). Nach dem Speichern erscheint der Admin-Reiter „EMS – Speicherfarm“ sowie im VIS-Frontend der Reiter „Speicherfarm“."
+          "help": "Aktiviert die Speicherfarm-Funktion (mehrere Speichersysteme als Pool oder gruppiert). Nach dem Speichern erscheint der Admin-Reiter „EMS – Speicherfarm“ sowie im VIS-Frontend der Reiter „Speicherfarm“.",
+          "expert": true
         },
         "diagnostics.enabled": {
           "type": "checkbox",
@@ -1306,7 +1318,8 @@
             }
           ],
           "default": "engine",
-          "help": "engine = kombiniert static + PeakShaving + optional Datapoint‑Budget. Für VIS‑Schalter eignet sich fromDatapoint."
+          "help": "engine = kombiniert static + PeakShaving + optional Datapoint‑Budget. Für VIS‑Schalter eignet sich fromDatapoint.",
+          "expert": true
         },
         "chargingManagement.staticMaxChargingPowerW": {
           "type": "number",
@@ -1340,7 +1353,8 @@
           "multiline": true,
           "rows": 2,
           "showName": true,
-          "help": "Wenn Budget‑Modus fromDatapoint oder engine: dieser Datenpunkt begrenzt das Gesamt‑Ladebudget."
+          "help": "Wenn Budget‑Modus fromDatapoint oder engine: dieser Datenpunkt begrenzt das Gesamt‑Ladebudget.",
+          "expert": true
         },
         "chargingManagement.gridPowerId": {
           "type": "objectId",
@@ -2653,7 +2667,7 @@
           "type": "checkbox",
           "label": "Reserve aktiv (Notstrom)",
           "attr": "storage.reserveEnabled",
-          "default": true,
+          "default": false,
           "xs": 12,
           "sm": 6,
           "md": 6,
@@ -3053,7 +3067,7 @@
               "style": {
                 "minWidth": "200px"
               },
-              "tooltip": "Aktivieren, wenn der Hersteller beim Laden ein negatives Vorzeichen liefert bzw. erwartet. Gilt für Ladeleistung und Soll-Laden." 
+              "tooltip": "Aktivieren, wenn der Hersteller beim Laden ein negatives Vorzeichen liefert bzw. erwartet. Gilt für Ladeleistung und Soll-Laden."
             },
             {
               "type": "objectId",
@@ -3129,7 +3143,8 @@
               "style": {
                 "minWidth": "160px"
               },
-              "tooltip": "Optional für gewichteten Gesamt‑SoC."
+              "tooltip": "Optional für gewichteten Gesamt‑SoC.",
+              "expert": true
             },
             {
               "type": "text",
@@ -3141,7 +3156,8 @@
               "style": {
                 "minWidth": "140px"
               },
-              "tooltip": "Optional (nur Gruppenmodus): Name der Gruppe."
+              "tooltip": "Optional (nur Gruppenmodus): Name der Gruppe.",
+              "expert": true
             }
           ]
         },
@@ -3222,9 +3238,11 @@
               "style": {
                 "minWidth": "140px"
               },
-              "tooltip": "Optional: höhere Priorität wird bevorzugt."
+              "tooltip": "Optional: höhere Priorität wird bevorzugt.",
+              "expert": true
             }
-          ]
+          ],
+          "expert": true
         }
       }
     },
@@ -3958,7 +3976,8 @@
               "style": {
                 "minWidth": "220px"
               },
-              "tooltip": "Freier Anzeigename (nur Dokumentation)."
+              "tooltip": "Freier Anzeigename (nur Dokumentation).",
+              "expert": true
             },
             {
               "type": "number",
@@ -3989,7 +4008,8 @@
               },
               "expert": true
             }
-          ]
+          ],
+          "expert": true
         }
       },
       "name": "evcs"
@@ -4033,7 +4053,8 @@
               "sm": 4,
               "md": 2,
               "attr": "floor",
-              "title": "Etage"
+              "title": "Etage",
+              "expert": true
             },
             {
               "type": "text",

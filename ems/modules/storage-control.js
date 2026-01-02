@@ -138,7 +138,7 @@ class SpeicherRegelungModule extends BaseModule {
         // Gate E: Multiuse-Speicherstrategie (SoC-Zonen)
         // ------------------------------------------------------------
         // Notstrom-Reserve: harte Untergrenze für Entladen
-        const reserveEnabled = cfg.reserveEnabled !== false;
+        const reserveEnabled = !!cfg.reserveEnabled;
         const reserveMin = clamp(num(cfg.reserveMinSocPct, 20), 0, 100);
         const reserveTarget = clamp(num(cfg.reserveTargetSocPct, reserveMin), 0, 100);
 
@@ -384,7 +384,6 @@ class SpeicherRegelungModule extends BaseModule {
             peakEnabled &&
             lskEnabledCfg &&
             (cfg.lskChargeEnabled !== false) &&
-            gridChargeAllowed &&
             (typeof psHeadroomW === 'number' && psHeadroomW > 0) &&
             (gridW >= 0)
         ) {
@@ -397,6 +396,26 @@ class SpeicherRegelungModule extends BaseModule {
                     source = 'lastspitze_refill';
                     hardChargeMaxSoc = Math.max(hardChargeMaxSoc, lskMaxSoc);
                 }
+            }
+        }
+
+        
+        // 6b) Diagnose: LSK-Refill gewünscht, aber kein Grenzwert/Headroom vorhanden
+        // Damit ist im Betrieb sofort sichtbar, warum kein Netzladen erfolgt.
+        if (
+            targetW === 0 &&
+            peakEnabled &&
+            lskEnabledCfg &&
+            (cfg.lskChargeEnabled !== false) &&
+            (gridW >= 0) &&
+            (typeof soc === 'number') && (soc < lskMaxSoc)
+        ) {
+            if (!(typeof psLimitW === 'number' && psLimitW > 0)) {
+                reason = 'LSK: kein Peak-Grenzwert konfiguriert (Max Import > 0 setzen)';
+                source = 'lastspitze_refill';
+            } else if (!(typeof psHeadroomW === 'number' && psHeadroomW > 0)) {
+                reason = `LSK: kein Headroom frei (${Math.round(importW)} / ${Math.round(psLimitW)} W)`;
+                source = 'lastspitze_refill';
             }
         }
 

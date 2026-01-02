@@ -2139,7 +2139,7 @@ async migrateNativeConfig() {
       // Storage reserve defaults (avoid NaN/blank blocking Admin save)
       setBoolean('storage.reserveEnabled', false);
       setNumber('storage.reserveMinSocPct', 20);
-      setNumber('storage.reserveTargetSocPct', 40);
+      setNumber('storage.reserveTargetSocPct', 25);
       setNumber('storage.reserveGridChargeW', 0);
 
       if (changed) {
