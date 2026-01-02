@@ -188,6 +188,13 @@ class SpeicherRegelungModule extends BaseModule {
         }
         await this._setIfChanged('speicher.regelung.netzLadenErlaubt', !!gridChargeAllowed);
 
+        // Default-Zielwert (W): Ohne Initialisierung kann es – je nach aktivierten Teil-Logiken –
+        // zu ReferenceErrors kommen, wenn am Ende targetW/reason/source verwendet werden.
+        // 0 W bedeutet: keine Be-/Entladeleistung vorgeben.
+        let targetW = 0;
+        let reason = 'Keine Aktion';
+        let source = 'idle';
+
         const exportW = Math.max(0, -gridW); // negative Netzleistung = Einspeisung (geglättet)
         const importW = Math.max(0, gridW);  // positive Netzleistung = Bezug (geglättet)
         const nvpRawW = (typeof gridRawW === 'number') ? gridRawW : gridW; // Import + / Export -

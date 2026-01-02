@@ -190,7 +190,7 @@ class ModuleManager {
                 ok = false;
                 errMsg = String((e && e.message) ? e.message : e);
                 errors.push(`${key}: ${errMsg}`);
-                this.adapter.log.warn(`Module '${key}' tick error: ${errMsg}`);
+                this.adapter.log.warn(`Modul '${key}': Fehler im Regel-Tick: ${errMsg}`);
             }
             const ms = Date.now() - t1;
             results.push({ key, enabled: true, ok, ms, ...(ok ? {} : { error: errMsg }) });
