@@ -32,6 +32,12 @@ class SpeicherRegelungModule extends BaseModule {
         this._lastReason = '';
         /** @type {string} */
         this._lastSource = '';
+
+
+        /** @type {number|null} */
+        this._lskRefillHeadroomFilteredW = null;
+        /** @type {number} */
+        this._lskRefillLastTs = 0;
     }
 
     async init() {
@@ -125,6 +131,41 @@ class SpeicherRegelungModule extends BaseModule {
                 psHeadroomW = Math.max(0, psLimitW - importW);
             }
         }
+
+// LSK-Refill Headroom-Filter:
+// - Schwankungen im Netzbezug führen sonst zu stark springenden Sollwerten.
+// - Strategie: "Attack fast, release slow": Headroom sinkt sofort, steigt nur geglättet.
+//   Damit reagiert die Regelung schnell auf steigenden Netzbezug (Sicherheit),
+//   fährt aber bei freiem Headroom ruhiger hoch (Stabilität).
+let psHeadroomFilteredW = null;
+if (typeof psHeadroomW === 'number') {
+    const intervalMs = (this.adapter.config && Number(this.adapter.config.schedulerIntervalMs)) || 1000;
+    const dtSec = (this._lskRefillLastTs > 0) ? Math.max(0.05, Math.min(10, (now - this._lskRefillLastTs) / 1000)) : (intervalMs / 1000);
+    const psCfg = (this.adapter.config && this.adapter.config.peakShaving) ? this.adapter.config.peakShaving : {};
+    const tauUp = clamp(num(psCfg.smoothingSeconds, 10), 1, 600); // reuse Peak-Shaving Glättung
+    const alphaUp = dtSec / (tauUp + dtSec);
+
+    if (typeof this._lskRefillHeadroomFilteredW !== 'number') {
+        this._lskRefillHeadroomFilteredW = psHeadroomW;
+    } else {
+        const prev = this._lskRefillHeadroomFilteredW;
+        if (psHeadroomW < prev) {
+            this._lskRefillHeadroomFilteredW = psHeadroomW; // fast down
+        } else {
+            this._lskRefillHeadroomFilteredW = prev + alphaUp * (psHeadroomW - prev); // slow up
+        }
+    }
+    this._lskRefillLastTs = now;
+    psHeadroomFilteredW = this._lskRefillHeadroomFilteredW;
+
+    await this._setIfChanged('speicher.regelung.lskHeadroomW', Math.round(psHeadroomW));
+    await this._setIfChanged('speicher.regelung.lskHeadroomFilteredW', Math.round(psHeadroomFilteredW));
+} else {
+    this._lskRefillHeadroomFilteredW = null;
+    this._lskRefillLastTs = now;
+    await this._setIfChanged('speicher.regelung.lskHeadroomW', null);
+    await this._setIfChanged('speicher.regelung.lskHeadroomFilteredW', null);
+}
 
         if (typeof soc === 'number') {
             await this._setIfChanged('speicher.regelung.socPct', Math.round(soc * 10) / 10);
@@ -363,7 +404,9 @@ class SpeicherRegelungModule extends BaseModule {
             const canChargeBySoc = (typeof soc !== 'number') ? true : (soc < reserveTarget);
             if (canChargeBySoc) {
                 let wantW = clamp(reserveGridChargeW, 0, maxChargeW);
-                if (typeof psHeadroomW === 'number') {
+                if (typeof psHeadroomFilteredW === 'number') {
+                    wantW = Math.min(wantW, psHeadroomFilteredW);
+                } else if (typeof psHeadroomW === 'number') {
                     wantW = Math.min(wantW, psHeadroomW);
                 }
                 if (wantW > 0) {
@@ -375,6 +418,8 @@ class SpeicherRegelungModule extends BaseModule {
             }
         }
 
+        const psHeadroomEffW = (typeof psHeadroomFilteredW === 'number') ? psHeadroomFilteredW : psHeadroomW;
+
         // 6) Peak-Shaving: Reserve für nächste Lastspitze aus dem Netz nachladen (Headroom)
         // Ziel: Falls der Speicher für LSK entladen hat (oder generell unter LSK-Max liegt),
         // darf er die "übrige" Leistung bis zum Peak-Limit zum Nachladen nutzen.
@@ -384,15 +429,15 @@ class SpeicherRegelungModule extends BaseModule {
             peakEnabled &&
             lskEnabledCfg &&
             (cfg.lskChargeEnabled !== false) &&
-            (typeof psHeadroomW === 'number' && psHeadroomW > 0) &&
+            (typeof psHeadroomEffW === 'number' && psHeadroomEffW > 0) &&
             (gridW >= 0)
         ) {
             const canChargeBySoc = (typeof soc !== 'number') ? false : (soc < lskMaxSoc);
             if (canChargeBySoc) {
-                const wantW = Math.min(psHeadroomW, lskMaxChargeEff);
+                const wantW = Math.min(psHeadroomEffW, lskMaxChargeEff);
                 if (wantW > 0) {
                     targetW = -wantW;
-                    reason = `LSK: Reserve über Netz nachladen (${Math.round(psHeadroomW)} W frei)`;
+                    reason = `LSK: Reserve über Netz nachladen (${Math.round(psHeadroomEffW)} W frei)`;
                     source = 'lastspitze_refill';
                     hardChargeMaxSoc = Math.max(hardChargeMaxSoc, lskMaxSoc);
                 }
@@ -413,7 +458,7 @@ class SpeicherRegelungModule extends BaseModule {
             if (!(typeof psLimitW === 'number' && psLimitW > 0)) {
                 reason = 'LSK: kein Peak-Grenzwert konfiguriert (Max Import > 0 setzen)';
                 source = 'lastspitze_refill';
-            } else if (!(typeof psHeadroomW === 'number' && psHeadroomW > 0)) {
+            } else if (!(typeof psHeadroomEffW === 'number' && psHeadroomEffW > 0)) {
                 reason = `LSK: kein Headroom frei (${Math.round(importW)} / ${Math.round(psLimitW)} W)`;
                 source = 'lastspitze_refill';
             }
@@ -606,6 +651,9 @@ class SpeicherRegelungModule extends BaseModule {
         await mk('speicher.regelung.netzLeistungW', 'Netzleistung (W)', 'number', 'value.power');
         await mk('speicher.regelung.netzAlterMs', 'Netzleistung Alter (ms)', 'number', 'value.interval');
         await mk('speicher.regelung.netzLadenErlaubt', 'Netzladen erlaubt', 'boolean', 'indicator', true);
+
+        await mk('speicher.regelung.lskHeadroomW', 'LSK Headroom (W)', 'number', 'value.power');
+        await mk('speicher.regelung.lskHeadroomFilteredW', 'LSK Headroom gefiltert (W)', 'number', 'value.power');
         await mk('speicher.regelung.socPct', 'SoC (%)', 'number', 'value.battery');
         await mk('speicher.regelung.socAlterMs', 'SoC Alter (ms)', 'number', 'value.interval');
 
