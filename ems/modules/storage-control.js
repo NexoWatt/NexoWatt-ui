@@ -50,6 +50,43 @@ class RollingWindow {
 
 
 /**
+ * Hysterese-Schalter: "eins" erst oberhalb onAbove, "aus" erst unterhalb offBelow.
+ * Dazwischen bleibt der vorherige Zustand (prev) erhalten.
+ *
+ * @param {boolean|null|undefined} prev
+ * @param {number} x
+ * @param {number} offBelow
+ * @param {number} onAbove
+ * @returns {boolean}
+ */
+function hystAbove(prev, x, offBelow, onAbove) {
+    const p = (prev === true);
+    if (!Number.isFinite(x)) return p;
+    if (x <= offBelow) return false;
+    if (x >= onAbove) return true;
+    return p;
+}
+
+/**
+ * Hysterese-Schalter: "eins" erst unterhalb onBelow, "aus" erst oberhalb offAbove.
+ * Dazwischen bleibt der vorherige Zustand (prev) erhalten.
+ *
+ * @param {boolean|null|undefined} prev
+ * @param {number} x
+ * @param {number} onBelow
+ * @param {number} offAbove
+ * @returns {boolean}
+ */
+function hystBelow(prev, x, onBelow, offAbove) {
+    const p = (prev === true);
+    if (!Number.isFinite(x)) return p;
+    if (x <= onBelow) return true;
+    if (x >= offAbove) return false;
+    return p;
+}
+
+
+/**
  * Speicher-Regelung (Schritt 2)
  *
  * Ziele:
@@ -103,6 +140,24 @@ class SpeicherRegelungModule extends BaseModule {
         /** @type {RollingWindow} */
         this._lskRefillImportWin = new RollingWindow(120);
 
+        // --- SoC-Hysterese gegen Flattern an Grenzwerten ---
+        // Default: 0.5 %-Punkte. Ziel: Sobald ein Grenzwert erreicht ist,
+        // soll die Regelung sauber bei 0 W „stehen bleiben“ (Ruhephase) und
+        // nicht wegen Messrauschen/Quantisierung oder kleiner Gegenregelungen
+        // sofort wieder in Laden/Entladen kippen.
+        /** @type {number} */
+        this._socHystPct = 0.5;
+
+        // Letzte „Enable“-Zustände (Hysterese-Memory)
+        /** @type {boolean|null} */
+        this._socSelfDischargeEnabled = null;
+        /** @type {boolean|null} */
+        this._socLskDischargeEnabled = null;
+        /** @type {boolean|null} */
+        this._socLskRefillEnabled = null;
+        /** @type {boolean|null} */
+        this._socReserveRefillEnabled = null;
+
     }
 
     async init() {
@@ -116,6 +171,10 @@ class SpeicherRegelungModule extends BaseModule {
         const enabled = !!this.adapter.config.enableStorageControl;
         const cfg = this._getCfg();
         const psCfg = this.adapter.config.peakShaving || {};
+
+        // SoC-Hysterese optional aus Konfig lesen (falls später im Admin ergänzt).
+        // Default bleibt 0.5 %-Punkte.
+        this._socHystPct = Math.max(0, num(cfg.socHystPct, this._socHystPct));
 
         // Diagnose: aktiv
         await this._setIfChanged('speicher.regelung.aktiv', enabled);
@@ -314,7 +373,16 @@ if (typeof soc === 'number') {
         const reserveTarget = clamp(num(cfg.reserveTargetSocPct, reserveMin), 0, 100);
 
         const reserveActive = reserveEnabled && (typeof soc === 'number') && (soc <= reserveMin);
-        const reserveChargeWanted = reserveEnabled && (typeof soc === 'number') && (soc < reserveTarget);
+
+        // Reserve-Aufladung mit SoC-Hysterese, damit bei Erreichen des Ziel-SoC
+        // nicht permanent nachgeregelt wird.
+        if (reserveEnabled && (typeof soc === 'number')) {
+            const onBelow = Math.max(0, reserveTarget - this._socHystPct);
+            this._socReserveRefillEnabled = hystBelow(this._socReserveRefillEnabled, soc, onBelow, reserveTarget);
+        } else {
+            this._socReserveRefillEnabled = false;
+        }
+        const reserveChargeWanted = reserveEnabled && (typeof soc === 'number') && !!this._socReserveRefillEnabled;
 
         await this._setIfChanged('speicher.regelung.reserveAktiv', !!reserveActive);
         await this._setIfChanged('speicher.regelung.reserveMinSocPct', reserveMin);
@@ -372,8 +440,17 @@ if (typeof soc === 'number') {
             const hasLimit = (typeof limitW === 'number');
 
             if (hasLimit && (importNowW > limitW || lastWasLsk)) {
-                // SoC-Fenster für LSK
-                const socOk = (typeof soc !== 'number') ? true : (soc > lskMinSoc);
+                // SoC-Fenster für LSK (mit Hysterese gegen Flattern)
+                let socOk = true;
+                if (typeof soc === 'number') {
+                    this._socLskDischargeEnabled = hystAbove(
+                        this._socLskDischargeEnabled,
+                        soc,
+                        lskMinSoc,
+                        lskMinSoc + this._socHystPct,
+                    );
+                    socOk = this._socLskDischargeEnabled;
+                }
 
                 if (reserveActive) {
                     targetW = 0;
@@ -542,7 +619,19 @@ if (targetW === 0 && selfDischargeEnabled) {
     // Nur Entladen in diesem Block (kein Laden). Negative Werte sind hier nicht sinnvoll.
     nextSetW = clamp(nextSetW, 0, selfMaxDischargeEff);
 
-    const socOk = (typeof soc !== 'number') ? true : (soc > selfMinSoc);
+    // SoC-Hysterese: verhindert Flattern um die Untergrenze und sorgt für eine
+    // echte Ruhephase (0 W), sobald die SoC-Grenze erreicht ist.
+    let socOk = true;
+    if (typeof soc === 'number') {
+        this._socSelfDischargeEnabled = hystAbove(
+            this._socSelfDischargeEnabled,
+            soc,
+            selfMinSoc,
+            selfMinSoc + this._socHystPct,
+        );
+        socOk = this._socSelfDischargeEnabled;
+    }
+
     const allow = (!reserveActive && !reserveChargeWanted && socOk);
 
     // Aktivierung: Nur wenn Import oberhalb der Schwelle liegt ODER wir bereits aktiv waren
@@ -602,7 +691,8 @@ if (targetW === 0 && selfDischargeEnabled) {
         // Wichtig: Bei aktivem Peak-Shaving wird die Netzladung (sofern möglich) innerhalb des Peak-Limits gehalten.
         if (targetW === 0 && reserveChargeWanted && reserveGridChargeW > 0 && gridChargeAllowed) {
             // Nur laden, wenn SoC unter Reserve-Ziel
-            const canChargeBySoc = (typeof soc !== 'number') ? true : (soc < reserveTarget);
+            // Reserve-Aufladung: SoC-Grenze bereits im Vorfeld mit Hysterese bewertet.
+            const canChargeBySoc = (typeof soc === 'number') ? (this._socReserveRefillEnabled === true) : false;
             if (canChargeBySoc) {
                 let wantW = clamp(reserveGridChargeW, 0, maxChargeW);
                 if (typeof psHeadroomFilteredW === 'number') {
@@ -639,7 +729,14 @@ if (targetW === 0 && selfDischargeEnabled) {
             (typeof psHeadroomEffW === 'number' && psHeadroomEffW > 0) &&
             (gridW >= 0)
         ) {
-            const canChargeBySoc = (typeof soc !== 'number') ? false : (soc < lskMaxSoc);
+            // SoC-Hysterese: Refill erst wieder starten, wenn der SoC merklich
+            // unterhalb der Grenze liegt (sonst pendelt es um den Grenzwert).
+            let canChargeBySoc = false;
+            if (typeof soc === 'number') {
+                const onBelow = Math.max(0, lskMaxSoc - this._socHystPct);
+                this._socLskRefillEnabled = hystBelow(this._socLskRefillEnabled, soc, onBelow, lskMaxSoc);
+                canChargeBySoc = !!this._socLskRefillEnabled;
+            }
             if (canChargeBySoc) {
                 let wantW = Math.min(psHeadroomEffW, lskMaxChargeEff);
 
@@ -703,7 +800,7 @@ if (targetW === 0 && selfDischargeEnabled) {
             lskEnabledCfg &&
             (cfg.lskChargeEnabled !== false) &&
             (gridW >= 0) &&
-            (typeof soc === 'number') && (soc < lskMaxSoc)
+            (typeof soc === 'number') && (this._socLskRefillEnabled === true)
         ) {
             if (!(typeof psLimitW === 'number' && psLimitW > 0)) {
                 reason = 'LSK: kein Grenzwert konfiguriert (Netzanschlussleistung im EMS setzen)';
