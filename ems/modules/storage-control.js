@@ -2,6 +2,53 @@
 
 const { BaseModule } = require('./base');
 
+
+class RollingWindow {
+    constructor(maxSeconds) {
+        this.maxSeconds = Math.max(1, Number(maxSeconds) || 120);
+        /** @type {Array<{t:number, v:number}>} */
+        this.samples = [];
+        this.sum = 0;
+    }
+
+    setMaxSeconds(maxSeconds) {
+        const s = Math.max(1, Number(maxSeconds) || 120);
+        if (s !== this.maxSeconds) {
+            this.maxSeconds = s;
+            // force purge to new horizon
+            this._purge(Date.now());
+        }
+    }
+
+    _purge(nowMs) {
+        const cutoff = nowMs - this.maxSeconds * 1000;
+        while (this.samples.length && this.samples[0].t < cutoff) {
+            const s = this.samples.shift();
+            this.sum -= s.v;
+        }
+        if (this.samples.length === 0) this.sum = 0;
+    }
+
+    push(v, nowMs) {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return;
+        const t = Number(nowMs) || Date.now();
+        this.samples.push({ t, v: n });
+        this.sum += n;
+        this._purge(t);
+    }
+
+    mean() {
+        if (!this.samples.length) return null;
+        return this.sum / this.samples.length;
+    }
+
+    count() {
+        return this.samples.length;
+    }
+}
+
+
 /**
  * Speicher-Regelung (Schritt 2)
  *
@@ -41,6 +88,10 @@ class SpeicherRegelungModule extends BaseModule {
 
         /** @type {number|null} */
         this._lskRefillHoldW = null;
+
+        /** @type {RollingWindow} */
+        this._lskRefillImportWin = new RollingWindow(120);
+
     }
 
     async init() {
@@ -157,49 +208,72 @@ class SpeicherRegelungModule extends BaseModule {
             }
         }
 
-// LSK-Refill Headroom-Filter:
+// LSK-Refill Headroom-Filter (langes Mittelwertfenster + Update-Schwelle):
 // - Schwankungen im Netzbezug führen sonst zu stark springenden Sollwerten.
-// - Strategie: "Attack fast, release slow": Headroom sinkt sofort, steigt nur geglättet.
-//   Damit reagiert die Regelung schnell auf steigenden Netzbezug (Sicherheit),
-//   fährt aber bei freiem Headroom ruhiger hoch (Stabilität).
-// LSK-Refill Headroom-Filter:
-// - Für stabile Regelung nutzen wir die *Durchschnittsdifferenz* (Headroom aus geglätteter Netzleistung).
+// - Ansatz: gleitender Mittelwert am NVP (Import) über ein längeres Zeitfenster (Default 120 s)
+//   und erst bei Änderungen >= lskRefillDeadbandW (Default 500 W) den Wert "nachziehen".
 // - Für Sicherheit clampen wir später zusätzlich mit dem RAW-Headroom (Import-Spikes => sofort weniger laden).
-// - Zusätzliche Glättung hier ist absichtlich *symmetrisch* (EMA), um Setpoint-Flattern weiter zu reduzieren.
 let psHeadroomFilteredW = null;
 let psHeadroomRawW = null;
 if (typeof psHeadroomW === 'number') {
     if (typeof psLimitW === 'number' && psLimitW > 0) {
-        psHeadroomRawW = Math.max(0, psLimitW - importRawW);
+        // RAW headroom based on RAW import (Import + / Export -) -> Import only
+        psHeadroomRawW = Math.max(0, psLimitW - Math.max(0, importRawW));
     }
 
-    const intervalMs = (this.adapter.config && Number(this.adapter.config.schedulerIntervalMs)) || 1000;
-    const dtSec = (this._lskRefillLastTs > 0) ? Math.max(0.05, Math.min(10, (now - this._lskRefillLastTs) / 1000)) : (intervalMs / 1000);
-    const psCfg = (this.adapter.config && this.adapter.config.peakShaving) ? this.adapter.config.peakShaving : {};
-    const tau = clamp(num(psCfg.smoothingSeconds, 10), 1, 600); // reuse Peak-Shaving Glättung
-    const alpha = dtSec / (tau + dtSec);
+    const avgSec = clamp(num(cfg.lskRefillAvgSeconds, 120), 5, 1800);
+    const updateDeltaW = clamp(num(cfg.lskRefillDeadbandW, 500), 0, 1000000);
 
-    if (typeof this._lskRefillHeadroomFilteredW !== 'number') {
-        this._lskRefillHeadroomFilteredW = psHeadroomW;
+    // Rolling mean of import (NVP) for stable headroom calculation.
+    // We intentionally use RAW import here (Import only) to avoid double-filter artefacts.
+    if (this._lskRefillImportWin) {
+        this._lskRefillImportWin.setMaxSeconds(avgSec);
+        const importSampleW = Math.max(0, (typeof importRawW === 'number') ? importRawW : ((typeof importW === 'number') ? importW : 0));
+        this._lskRefillImportWin.push(importSampleW, now);
+        const importAvgW = this._lskRefillImportWin.mean();
+        const headroomAvgW = (typeof psLimitW === 'number' && psLimitW > 0 && typeof importAvgW === 'number')
+            ? Math.max(0, psLimitW - importAvgW)
+            : psHeadroomW;
+
+        if (typeof this._lskRefillHeadroomFilteredW !== 'number') {
+            this._lskRefillHeadroomFilteredW = headroomAvgW;
+        } else {
+            const prev = this._lskRefillHeadroomFilteredW;
+            if (headroomAvgW < prev) {
+                // decrease immediately (safety)
+                this._lskRefillHeadroomFilteredW = headroomAvgW;
+            } else if (updateDeltaW > 0 && (headroomAvgW - prev) < updateDeltaW) {
+                // hold (no update for small upward changes)
+                this._lskRefillHeadroomFilteredW = prev;
+            } else {
+                this._lskRefillHeadroomFilteredW = headroomAvgW;
+            }
+        }
+
+        psHeadroomFilteredW = this._lskRefillHeadroomFilteredW;
     } else {
-        const prev = this._lskRefillHeadroomFilteredW;
-        this._lskRefillHeadroomFilteredW = prev + alpha * (psHeadroomW - prev);
+        // fallback (should not happen)
+        psHeadroomFilteredW = psHeadroomW;
+        this._lskRefillHeadroomFilteredW = psHeadroomFilteredW;
     }
 
     this._lskRefillLastTs = now;
-    psHeadroomFilteredW = this._lskRefillHeadroomFilteredW;
 
     await this._setIfChanged('speicher.regelung.lskHeadroomW', Math.round(psHeadroomW));
     await this._setIfChanged('speicher.regelung.lskHeadroomFilteredW', Math.round(psHeadroomFilteredW));
 } else {
     this._lskRefillHeadroomFilteredW = null;
     this._lskRefillLastTs = now;
+    if (this._lskRefillImportWin) {
+        this._lskRefillImportWin.samples = [];
+        this._lskRefillImportWin.sum = 0;
+    }
     psHeadroomRawW = null;
     await this._setIfChanged('speicher.regelung.lskHeadroomW', null);
     await this._setIfChanged('speicher.regelung.lskHeadroomFilteredW', null);
 }
 
-        if (typeof soc === 'number') {
+if (typeof soc === 'number') {
             await this._setIfChanged('speicher.regelung.socPct', Math.round(soc * 10) / 10);
             await this._setIfChanged('speicher.regelung.socAlterMs', typeof socAge === 'number' ? Math.round(socAge) : null);
         } else {
@@ -477,7 +551,7 @@ if (typeof psHeadroomW === 'number') {
                 // Optional: reduce "flutter" by holding small upward adjustments.
                 // We intentionally allow fast decreases (safety), but require a minimal delta to increase.
                 const psCfg = (this.adapter.config && this.adapter.config.peakShaving) ? this.adapter.config.peakShaving : {};
-                const deadbandW = clamp(num(psCfg.hysteresisW, 500), 0, 5000);
+                const deadbandW = clamp(num(cfg.lskRefillDeadbandW, num(psCfg.hysteresisW, 500)), 0, 5000);
                 if (stepW > 0) wantW = Math.round(wantW / stepW) * stepW;
 
                 if (typeof this._lskRefillHoldW === 'number') {
@@ -598,6 +672,10 @@ if (typeof psHeadroomW === 'number') {
             lskMaxSocPct: storage.lskMaxSocPct,
             lskMaxChargeW: storage.lskMaxChargeW,
             lskMaxDischargeW: storage.lskMaxDischargeW,
+            lskRefillAvgSeconds: storage.lskRefillAvgSeconds,
+            lskRefillDeadbandW: storage.lskRefillDeadbandW,
+
+
 
             selfDischargeEnabled: storage.selfDischargeEnabled,
             selfMinSocPct: storage.selfMinSocPct,

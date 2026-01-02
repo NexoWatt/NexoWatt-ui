@@ -2812,6 +2812,35 @@
           "help": "0 = global „Max Charge (W)“. Gilt für PV‑Überschuss‑Laden oberhalb des Eigenverbrauch‑Max‑SoC (bis LSK Max SoC).",
           "expert": true
         },
+        "storage.lskRefillAvgSeconds": {
+          "type": "number",
+          "label": "LSK Mittelwert-Fenster (s)",
+          "attr": "storage.lskRefillAvgSeconds",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 120,
+          "min": 5,
+          "max": 1800,
+          "step": 1,
+          "help": "Zeitfenster für den gleitenden Mittelwert der NVP-Importleistung zur stabilen LSK-Reserve-Nachladung. Größer = ruhiger, aber träger.",
+          "expert": true
+        },
+        "storage.lskRefillDeadbandW": {
+          "type": "number",
+          "label": "LSK Update-Schwelle (W)",
+          "attr": "storage.lskRefillDeadbandW",
+          "xs": 12,
+          "sm": 6,
+          "md": 6,
+          "default": 500,
+          "min": 0,
+          "max": 100000,
+          "step": 10,
+          "help": "Änderungen kleiner als dieser Wert werden beim LSK-Reserve-Nachladen gehalten (Anti-Flattern).",
+          "expert": true
+        },
+
         "stSelfHeader": {
           "type": "header",
           "text": "Eigenverbrauchs‑Optimierung über Speicher",
