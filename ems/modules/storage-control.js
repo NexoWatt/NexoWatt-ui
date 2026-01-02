@@ -190,7 +190,9 @@ class SpeicherRegelungModule extends BaseModule {
 
         const exportW = Math.max(0, -gridW); // negative Netzleistung = Einspeisung (geglättet)
         const importW = Math.max(0, gridW);  // positive Netzleistung = Bezug (geglättet)
-        const importRawW = Math.max(0, (typeof gridRawW === 'number') ? gridRawW : gridW);
+        const nvpRawW = (typeof gridRawW === 'number') ? gridRawW : gridW; // Import + / Export -
+        const importRawW = Math.max(0, nvpRawW);
+        const exportRawW = Math.max(0, -nvpRawW);
 
         // Peak-Shaving Kontexte (Limit/Headroom) – wird für LSK-Entladung und für "Reserve wieder auffüllen" genutzt.
         const peakEnabled = !!this.adapter.config.enablePeakShaving;
@@ -319,6 +321,7 @@ if (typeof soc === 'number') {
         const maxDischargeW = Math.max(0, num(cfg.maxDischargeW, 5000)); // Entladen: positiv
         const stepW = Math.max(0, num(cfg.stepW, 50));
         const maxDelta = Math.max(0, num(cfg.maxDeltaWPerTick, 500));
+        const pvMaxDeltaCfg = Math.max(0, num(cfg.pvMaxDeltaWPerTick, 1500)); // 0 => nutzt globale Rampe
 
         // Policy-spezifische Limits (0 => global)
         const lskMaxChargeW_cfg = Math.max(0, num(cfg.lskMaxChargeW, 0));
@@ -532,9 +535,9 @@ if (targetW === 0 && selfDischargeEnabled) {
                 }
             }
 
-            if (exportW >= thr && canChargeBySoc && chargeLimitW > 0) {
+            if (exportRawW >= thr && canChargeBySoc && chargeLimitW > 0) {
                 const extraBias = (zeEnabled && gridChargeAllowed) ? zeBias : 0;
-                targetW = -clamp(exportW + extraBias, 0, chargeLimitW);
+                targetW = -clamp(exportRawW + extraBias, 0, chargeLimitW);
                 reason = zeEnabled ? 'Nulleinspeisung: Export in Speicher umleiten' : 'Eigenverbrauch: PV-Überschuss laden';
                 source = 'pv';
             }
@@ -646,14 +649,28 @@ if (targetW === 0 && selfDischargeEnabled) {
             targetW = Math.round(targetW / stepW) * stepW;
         }
 
-        // Rampenbegrenzung
-        if (maxDelta > 0 && typeof this._lastTargetW === 'number') {
-            const d = targetW - this._lastTargetW;
-            if (Math.abs(d) > maxDelta) {
-                targetW = this._lastTargetW + Math.sign(d) * maxDelta;
-                reason = `${reason} (Rampenbegrenzung)`;
-            }
+// Rampenbegrenzung
+if (typeof this._lastTargetW === 'number') {
+    const d = targetW - this._lastTargetW;
+
+    // PV-Überschuss-Laden: schneller hochfahren (mehr Laden), aber schnell zurücknehmen (sicher gegen Netzbezug)
+    if (source === 'pv' && targetW < 0) {
+        const pvMaxDelta = (pvMaxDeltaCfg > 0) ? pvMaxDeltaCfg : maxDelta;
+
+        if (pvMaxDelta > 0 && d < 0 && Math.abs(d) > pvMaxDelta) {
+            // d < 0 => stärker laden (mehr negativ) -> begrenzen
+            targetW = this._lastTargetW - pvMaxDelta;
+            reason = `${reason} (PV‑Rampe)`;
         }
+        // d >= 0 => weniger laden / Richtung 0 -> bewusst ohne Rampe (schnell reagieren)
+    } else {
+        // Standard: symmetrische Rampe
+        if (maxDelta > 0 && Math.abs(d) > maxDelta) {
+            targetW = this._lastTargetW + Math.sign(d) * maxDelta;
+            reason = `${reason} (Rampenbegrenzung)`;
+        }
+    }
+}
 
         // Harte SoC-Grenzen auch nach Rundung/Rampe erzwingen (wichtig gegen "Rampen-Nachlauf")
         if (targetW > 0) {
@@ -695,6 +712,7 @@ if (targetW === 0 && selfDischargeEnabled) {
             maxDischargeW: storage.maxDischargeW,
             stepW: storage.stepW,
             maxDeltaWPerTick: storage.maxDeltaWPerTick,
+            pvMaxDeltaWPerTick: storage.pvMaxDeltaWPerTick,
             reserveEnabled: storage.reserveEnabled,
             reserveMinSocPct: storage.reserveMinSocPct,
             reserveTargetSocPct: storage.reserveTargetSocPct,

@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.5.14",
+    "version": "0.5.15",
     "news": {
       "0.5.8": {
         "de": "VIS: Header wieder vollständig responsiv und auf allen Seiten fixiert (CSS-Kaskade bereinigt). Peak-Shaving: Reserve wirkt jetzt auch im static-Modus. Speicher-Regelung: LSK-Reserve kann innerhalb des Peak-Limits aus dem Netz nachladen (Headroom), Notstrom-Netzladen wird ebenfalls am Peak-Limit ausgerichtet. Service-Worker Cache-Version erhöht.",
