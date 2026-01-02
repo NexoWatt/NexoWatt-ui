@@ -80,6 +80,17 @@ class SpeicherRegelungModule extends BaseModule {
         /** @type {string} */
         this._lastSource = '';
 
+        // --- Anti-Oszillation / Anti-PingPong (Charge <-> Discharge) ---
+        // Hintergrund: Wenn mehrere Logiken (LSK/Peak, Eigenverbrauch, PV-Überschuss, Reserve)
+        // sehr schnell auf wechselnde NVP-Werte reagieren, kann der Sollwert (Charge/Discharge)
+        // in kurzen Abständen das Vorzeichen wechseln. Das sieht als „Springen“ aus und erzeugt
+        // unnötige Zyklen/Stress.
+        // Strategie: Vorzeichenwechsel nur über „0“ und optional mit kurzer Sperrzeit.
+        this._signLockUntilMs = 0;
+
+        // Zeitpunkt, wann zuletzt Peak/LSK aktiv entladen hat (für „Refill“/Nachladen-Delay)
+        this._lastPeakActiveMs = 0;
+
 
         /** @type {number|null} */
         this._lskRefillHeadroomFilteredW = null;
@@ -404,6 +415,9 @@ if (typeof soc === 'number') {
                     reason = `Lastspitzenkappung: entladen (Import ${Math.round(importNowW)} W > Limit ${Math.round(limitW)} W)`;
                     source = 'lastspitze';
                     hardDischargeMinSoc = Math.max(hardDischargeMinSoc, lskMinSoc);
+
+                    // Merken: Peak war aktiv (für Refill/Anti-PingPong)
+                    this._lastPeakActiveMs = now;
                 }
             }
         }
@@ -632,6 +646,25 @@ if (targetW === 0 && selfDischargeEnabled) {
                 // Optional: reduce "flutter" by holding small upward adjustments.
                 // We intentionally allow fast decreases (safety), but require a minimal delta to increase.
                 const psCfg = (this.adapter.config && this.adapter.config.peakShaving) ? this.adapter.config.peakShaving : {};
+                const psReleaseDelaySec = Math.max(0, num(psCfg.releaseDelaySec, 0));
+                const psReleaseDelayMs = psReleaseDelaySec * 1000;
+                const hysteresisW = Math.max(0, num(psCfg.hysteresisW, 0));
+                // Refill nie bis exakt ans Limit fahren (sonst PingPong/Flattern): wir lassen eine Margin frei.
+                // Margin: mindestens Hysterese oder Ramp-Step.
+                const refillMarginW = Math.max(hysteresisW, stepW, 100);
+                const refillDelayActive = (psReleaseDelayMs > 0) && (this._lastPeakActiveMs > 0) && ((now - this._lastPeakActiveMs) < psReleaseDelayMs);
+
+                // Effektives Headroom für Refill (mit Margin). Mit Margin wird verhindert, dass das
+                // Nachladen die Netzanschlussgrenze "ausreizt" und dadurch direkt wieder eine LSK-
+                // Entladung getriggert wird (Ping-Pong).
+                const headroomForRefillW = Math.max(0, psHeadroomEffW - refillMarginW);
+                wantW = Math.min(headroomForRefillW, lskMaxChargeEff);
+
+                if (refillDelayActive) {
+                    // Direkt nach einem Peak nicht sofort wieder nachladen, sonst pendelt die Regelung.
+                    wantW = 0;
+                    this._lskRefillHoldW = null;
+                }
                 const deadbandW = clamp(num(cfg.lskRefillDeadbandW, num(psCfg.hysteresisW, 500)), 0, 5000);
                 if (stepW > 0) wantW = Math.round(wantW / stepW) * stepW;
 
@@ -687,6 +720,62 @@ if (targetW === 0 && selfDischargeEnabled) {
         // Schrittweite
         if (stepW > 0) {
             targetW = Math.round(targetW / stepW) * stepW;
+        }
+
+        // Anti-PingPong (Laden <-> Entladen) / Anti-Flattern um 0
+        // Ziel: Kleine Schwingungen und harte Richtungswechsel vermeiden, ohne die
+        // Lastspitzenkappung (Sicherheitsfunktion) zu blockieren.
+        {
+            const psHystW = Math.max(0, num(psCfg.hysteresisW, 0));
+            const zeroBandW = Math.max(psHystW, stepW, 100);
+
+            // Optional: Expert-Parameter. Wenn nicht gesetzt, Default 5s.
+            const cfgHoldSec = Math.max(0, num(cfg.modeHoldSec, 0));
+            const baseHoldMs = cfgHoldSec > 0 ? (cfgHoldSec * 1000) : 5000;
+            const relHoldMs = Math.max(0, num(psCfg.releaseDelaySec, 0)) * 1000;
+            const holdMs = Math.max(2000, Math.min(15000, Math.max(baseHoldMs, relHoldMs)));
+
+            const emergencyDischarge = (source === 'lastspitze') && (targetW > 0);
+
+            if (emergencyDischarge) {
+                // Sicherheitsfall: Lock aufheben, damit wir garantiert entladen können.
+                this._signLockUntilMs = 0;
+                this._signLockReason = '';
+            } else {
+                // Kleine Zielwerte um 0 => 0 (Anti-Flattern)
+                if (Math.abs(targetW) < zeroBandW) {
+                    targetW = 0;
+                }
+
+                // Wenn gerade eine Sperrzeit aktiv ist: Zielwert auf 0 zwingen
+                if (this._signLockUntilMs && (now < this._signLockUntilMs)) {
+                    if (targetW !== 0) {
+                        targetW = 0;
+                        if (!reason) {
+                            reason = this._signLockReason || 'Anti-PingPong aktiv (Sperrzeit)';
+                        }
+                        if (!source) {
+                            source = 'idle';
+                        }
+                    }
+                } else {
+                    // Neue Richtungsumkehr erkennen
+                    const prevW = (typeof this._lastTargetW === 'number') ? this._lastTargetW : 0;
+                    const signFlip = (prevW !== 0) && (targetW !== 0)
+                        && (Math.sign(prevW) !== Math.sign(targetW))
+                        && (Math.abs(prevW) >= zeroBandW) && (Math.abs(targetW) >= zeroBandW);
+
+                    if (signFlip) {
+                        this._signLockUntilMs = now + holdMs;
+                        this._signLockReason = 'Anti-PingPong: Richtungswechsel -> erst auf 0 gehen';
+                        targetW = 0;
+                        reason = this._signLockReason;
+                        source = 'idle';
+                    } else {
+                        this._signLockReason = '';
+                    }
+                }
+            }
         }
 
 // Rampenbegrenzung

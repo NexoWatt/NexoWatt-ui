@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-  "version": "0.5.19",
+  "version": "0.5.20",
     "news": {
+      "0.5.20": {
+        "de": "Speicher-Regelung: Anti-PingPong/Anti-Flattern zwischen Laden und Entladen (Sperrzeit bei Richtungswechsel, Neutralband um 0). LSK-Reserve-Nachladen: Refill mit Sicherheits-Margin unterhalb des Peak-Limits und optionaler Wartezeit nach Peak (Release-Delay) zur Vermeidung von Auf-/Zu-Pendeln.",
+        "en": "Storage control: anti-pingpong/anti-chatter between charge and discharge (direction-change lockout, neutral band around 0). LSK reserve refill: refill uses a safety margin below the peak limit and an optional wait time after a peak (release delay) to avoid oscillation."
+      },
       "0.5.8": {
         "de": "VIS: Header wieder vollständig responsiv und auf allen Seiten fixiert (CSS-Kaskade bereinigt). Peak-Shaving: Reserve wirkt jetzt auch im static-Modus. Speicher-Regelung: LSK-Reserve kann innerhalb des Peak-Limits aus dem Netz nachladen (Headroom), Notstrom-Netzladen wird ebenfalls am Peak-Limit ausgerichtet. Service-Worker Cache-Version erhöht.",
         "en": "UI: Header is responsive again and fixed across all pages (CSS cascade cleaned up). Peak shaving: reserve now also applies in static mode. Storage control: LSK reserve can recharge from grid within the peak limit (headroom); backup grid-charge is also capped by peak limit. Service worker cache version bumped."
