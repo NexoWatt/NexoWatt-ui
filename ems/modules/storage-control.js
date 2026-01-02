@@ -448,30 +448,60 @@ if (typeof soc === 'number') {
                 }
             }
         }
+// 3) Eigenverbrauch: Entladen zur Netzbezug-Reduktion (optional)
+if (targetW === 0 && selfDischargeEnabled) {
+    // Wichtig: Bei Eigenverbrauchs-Entladung regeln wir auf den NVP.
+    // Dafür verwenden wir bewusst den ROH-Wert (NVP) ohne Glättung, um Verzögerungen zu vermeiden.
+    //
+    // Kritischer Punkt (Bug-Fix): Eine reine "Sollleistung = aktueller Import"-Logik konvergiert
+    // mathematisch auf ~50% der Last (Fixpunkt), statt den Import wirklich gegen 0 zu drücken.
+    // Lösung: Integrations-/Inkrement-Regelung (PI-light): Sollwert wird um den aktuellen Fehler angepasst.
 
-        // 3) Eigenverbrauch: Entladen zur Netzbezug-Reduktion (optional)
-        if (targetW === 0 && selfDischargeEnabled) {
-            // Für Eigenverbrauch-Entladung bewusst den ROH-Wert (NVP) verwenden, um Verzögerungen durch Glättung zu vermeiden.
-            // Das verhindert systematische Rest-Bezüge (z.B. 200–400 W), wenn grid.powerW geglättet ist.
-            const importW = Math.max(0, (typeof gridRawW === 'number') ? gridRawW : gridW);
+    const nvpRawW = (typeof gridRawW === 'number') ? gridRawW : gridW; // Import + / Export -
+    const desiredNvpW = selfTargetGridW; // typischerweise 0 W Import
+    const deadbandW = Math.max(0, selfImportThresholdW); // Start-/Stop-Schwelle gegen Flattern
 
-            // Hysterese/Deadband: Wir lassen bewusst einen kleinen Restbezug (z.B. 10–50 W) stehen, um Flattern/Überregeln zu vermeiden.
-            // Start/Stop-Schwelle wird relativ zum Zielwert interpretiert.
-            const startThresholdW = Math.max(0, selfTargetGridW + selfImportThresholdW);
+    // Eigenverbrauch hat einen eigenen "Integrator": nur fortsetzen, wenn wir in der letzten Runde
+    // auch aus Eigenverbrauch geregelt haben. Sonst bei 0 starten, damit LSK/Tarif nicht "nachhängt".
+    const lastWasSelf = (this._lastSource === 'eigenverbrauch');
+    const curSetW = (lastWasSelf && typeof this._lastTargetW === 'number' && this._lastTargetW > 0)
+        ? this._lastTargetW
+        : 0;
 
-            // Ziel: Import auf (Target + Threshold) drücken (nicht auf 0 "jagen").
-            const desiredDischarge = Math.max(0, importW - startThresholdW);
+    // Fehler: positiver Fehler => zu viel Import => mehr entladen.
+    // negativer Fehler => Export/zu wenig Import => Entladung reduzieren.
+    const errW = (typeof nvpRawW === 'number') ? (nvpRawW - desiredNvpW) : 0;
 
-            const socOk = (typeof soc !== 'number') ? true : (soc > selfMinSoc);
-            if (!reserveActive && !reserveChargeWanted && socOk && importW >= startThresholdW && desiredDischarge > 0) {
-                targetW = clamp(desiredDischarge, 0, selfMaxDischargeEff);
-                reason = `Eigenverbrauch: entladen (${Math.round(targetW)} W)`;
-                source = 'eigenverbrauch';
-                hardDischargeMinSoc = Math.max(hardDischargeMinSoc, selfMinSoc);
-            }
-        }
+    let nextSetW = curSetW;
+    if (errW > deadbandW) {
+        nextSetW = curSetW + errW;
+    } else if (errW < -deadbandW) {
+        nextSetW = curSetW + errW; // reduziert (errW ist negativ)
+    } else {
+        // innerhalb Deadband -> halten
+        nextSetW = curSetW;
+    }
 
-        // 4) Eigenverbrauch: PV-Überschuss laden (wenn keine Lastspitze/Tarif/EV-Entladung aktiv)
+    // Nur Entladen in diesem Block (kein Laden). Negative Werte sind hier nicht sinnvoll.
+    nextSetW = clamp(nextSetW, 0, selfMaxDischargeEff);
+
+    const socOk = (typeof soc !== 'number') ? true : (soc > selfMinSoc);
+    const allow = (!reserveActive && !reserveChargeWanted && socOk);
+
+    // Aktivierung: Nur wenn Import oberhalb der Schwelle liegt ODER wir bereits aktiv waren
+    // (Integrator hält den Sollwert dann stabil und passt ihn nach oben/unten an).
+    const importNowW = Math.max(0, (typeof nvpRawW === 'number') ? nvpRawW : 0);
+    const startCond = (importNowW >= deadbandW) || lastWasSelf;
+
+    if (allow && startCond && nextSetW > 0) {
+        targetW = nextSetW;
+        reason = `Eigenverbrauch: entladen (${Math.round(targetW)} W)`;
+        source = 'eigenverbrauch';
+        hardDischargeMinSoc = Math.max(hardDischargeMinSoc, selfMinSoc);
+    }
+}
+
+// 4) Eigenverbrauch: PV-Überschuss laden (wenn keine Lastspitze/Tarif/EV-Entladung aktiv)
         if (targetW === 0 && cfg.pvEnabled !== false) {
             // Zero-Export (Nulleinspeisung): bei Export möglichst früh (Schwellwert) in den Speicher laden.
             // Hinweis: Extra-Bias nur, wenn Netzladen erlaubt ist (sonst würde der Bias u.U. Netzenergie in den Speicher ziehen).
