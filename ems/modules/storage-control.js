@@ -109,6 +109,22 @@ class SpeicherRegelungModule extends BaseModule {
         await this._setIfChanged('speicher.regelung.netzLadenErlaubt', !!gridChargeAllowed);
 
         const exportW = Math.max(0, -gridW); // negative Netzleistung = Einspeisung
+        const importW = Math.max(0, gridW);  // positive Netzleistung = Bezug
+
+        // Peak-Shaving Kontexte (Limit/Headroom) – wird für LSK-Entladung und für "Reserve wieder auffüllen" genutzt.
+        const peakEnabled = !!this.adapter.config.enablePeakShaving;
+        let psLimitW = null;
+        let psOverW = null;
+        let psReqRedW = null;
+        let psHeadroomW = null; // freie Leistung bis zum Peak-Shaving-Limit (nur Import)
+        if (peakEnabled) {
+            psLimitW = await this._readOwnNumber('peakShaving.control.limitW');
+            psOverW = await this._readOwnNumber('peakShaving.control.overW');
+            psReqRedW = await this._readOwnNumber('peakShaving.control.requiredReductionW');
+            if (typeof psLimitW === 'number' && psLimitW > 0) {
+                psHeadroomW = Math.max(0, psLimitW - importW);
+            }
+        }
 
         if (typeof soc === 'number') {
             await this._setIfChanged('speicher.regelung.socPct', Math.round(soc * 10) / 10);
@@ -170,7 +186,6 @@ class SpeicherRegelungModule extends BaseModule {
         const selfMaxChargeEff = Math.min(maxChargeW, (selfMaxChargeW_cfg > 0 ? selfMaxChargeW_cfg : maxChargeW));
 
         // 1) Lastspitzenkappung: wenn Peak-Shaving aktiv und Grenzwert überschritten → Entladen
-        const peakEnabled = !!this.adapter.config.enablePeakShaving;
         let targetW = 0;
         let reason = 'Aus';
         let source = 'aus';
@@ -179,10 +194,6 @@ class SpeicherRegelungModule extends BaseModule {
         let hardChargeMaxSoc = 100;
 
         if (peakEnabled && lskEnabledCfg && (cfg.lskDischargeEnabled !== false)) {
-            const psLimitW = await this._readOwnNumber('peakShaving.control.limitW');
-            const psOverW = await this._readOwnNumber('peakShaving.control.overW');
-            const psReqRedW = await this._readOwnNumber('peakShaving.control.requiredReductionW');
-
             // fallback: wenn requiredReductionW fehlt, über overW gehen
             const needW = (typeof psReqRedW === 'number' && psReqRedW > 0) ? psReqRedW
                 : ((typeof psOverW === 'number' && psOverW > 0) ? psOverW : 0);
@@ -346,14 +357,46 @@ class SpeicherRegelungModule extends BaseModule {
 
         // 5) Notstrom: Reserve ggf. über Netz wieder auffüllen (optional)
         // Hinweis: Standardmäßig AUS (reserveGridChargeW = 0). Aktivieren nur, wenn gewünscht.
+        // Wichtig: Bei aktivem Peak-Shaving wird die Netzladung (sofern möglich) innerhalb des Peak-Limits gehalten.
         if (targetW === 0 && reserveChargeWanted && reserveGridChargeW > 0 && gridChargeAllowed) {
             // Nur laden, wenn SoC unter Reserve-Ziel
             const canChargeBySoc = (typeof soc !== 'number') ? true : (soc < reserveTarget);
             if (canChargeBySoc) {
-                targetW = -clamp(reserveGridChargeW, 0, maxChargeW);
-                reason = 'Notstrom: Reserve über Netz laden';
-                source = 'reserve';
-                hardChargeMaxSoc = Math.max(hardChargeMaxSoc, reserveTarget);
+                let wantW = clamp(reserveGridChargeW, 0, maxChargeW);
+                if (typeof psHeadroomW === 'number') {
+                    wantW = Math.min(wantW, psHeadroomW);
+                }
+                if (wantW > 0) {
+                    targetW = -wantW;
+                    reason = 'Notstrom: Reserve über Netz laden';
+                    source = 'reserve';
+                    hardChargeMaxSoc = Math.max(hardChargeMaxSoc, reserveTarget);
+                }
+            }
+        }
+
+        // 6) Peak-Shaving: Reserve für nächste Lastspitze aus dem Netz nachladen (Headroom)
+        // Ziel: Falls der Speicher für LSK entladen hat (oder generell unter LSK-Max liegt),
+        // darf er die "übrige" Leistung bis zum Peak-Limit zum Nachladen nutzen.
+        // Dadurch bleibt der Speicher für kommende Peaks verfügbar, ohne die Peak-Grenze zu reißen.
+        if (
+            targetW === 0 &&
+            peakEnabled &&
+            lskEnabledCfg &&
+            (cfg.lskChargeEnabled !== false) &&
+            gridChargeAllowed &&
+            (typeof psHeadroomW === 'number' && psHeadroomW > 0) &&
+            (gridW >= 0)
+        ) {
+            const canChargeBySoc = (typeof soc !== 'number') ? false : (soc < lskMaxSoc);
+            if (canChargeBySoc) {
+                const wantW = Math.min(psHeadroomW, lskMaxChargeEff);
+                if (wantW > 0) {
+                    targetW = -wantW;
+                    reason = `LSK: Reserve über Netz nachladen (${Math.round(psHeadroomW)} W frei)`;
+                    source = 'lastspitze_refill';
+                    hardChargeMaxSoc = Math.max(hardChargeMaxSoc, lskMaxSoc);
+                }
             }
         }
 

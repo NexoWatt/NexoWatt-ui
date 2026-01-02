@@ -259,7 +259,9 @@ class PeakShavingModule extends BaseModule {
             limitW = Math.min(baseMax, allowed) - Math.max(0, reserveW);
             if (!Number.isFinite(limitW)) limitW = 0;
         } else {
-            limitW = (typeof maxPowerW === 'number' && maxPowerW > 0) ? maxPowerW : 0;
+            // static: fester Grenzwert, aber Reserve ebenfalls abziehen (Reserve ist keine dynamic-only Funktion)
+            const base = (typeof maxPowerW === 'number' && maxPowerW > 0) ? maxPowerW : 0;
+            limitW = Math.max(0, base - Math.max(0, reserveW));
         }
 
         // GridConstraints (RLM): zusätzliche dynamische Obergrenze für den Netzbezug
