@@ -93,15 +93,31 @@ class TarifVisModule extends BaseModule {
     }
 
     _getVisPriceCurrentId() {
-        const cfg = (this.adapter && this.adapter.config && this.adapter.config.vis) ? this.adapter.config.vis : null;
-        const id = (cfg && typeof cfg.priceCurrentId === 'string') ? cfg.priceCurrentId.trim() : '';
-        return id || '';
+        // WICHTIG: Die Tarif-Datenpunkte werden im Admin unter "Datenpunkte" gepflegt.
+        // Dort heißen sie: datapoints.priceCurrent / datapoints.priceAverage.
+        // Einige ältere (interne) Builds nutzten vis.priceCurrentId / vis.priceAverageId.
+        // Wir unterstützen beides, damit Upgrades ohne Neu-Konfiguration funktionieren.
+        const cfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
+
+        const dp = cfg.datapoints || {};
+        const idPrimary = (typeof dp.priceCurrent === 'string') ? dp.priceCurrent.trim() : '';
+        if (idPrimary) return idPrimary;
+
+        const vis = cfg.vis || {};
+        const idLegacy = (typeof vis.priceCurrentId === 'string') ? vis.priceCurrentId.trim() : '';
+        return idLegacy || '';
     }
 
     _getVisPriceAverageId() {
-        const cfg = (this.adapter && this.adapter.config && this.adapter.config.vis) ? this.adapter.config.vis : null;
-        const id = (cfg && typeof cfg.priceAverageId === 'string') ? cfg.priceAverageId.trim() : '';
-        return id || '';
+        const cfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
+
+        const dp = cfg.datapoints || {};
+        const idPrimary = (typeof dp.priceAverage === 'string') ? dp.priceAverage.trim() : '';
+        if (idPrimary) return idPrimary;
+
+        const vis = cfg.vis || {};
+        const idLegacy = (typeof vis.priceAverageId === 'string') ? vis.priceAverageId.trim() : '';
+        return idLegacy || '';
     }
 
     _num(v, fallback = null) {
@@ -199,7 +215,10 @@ class TarifVisModule extends BaseModule {
         // VIS-Einstellungen sind nicht hochfrequent
         const staleTimeoutMs = 3600 * 1000;
         // Provider-Preise (dynamischer Tarif) sollten regelmäßig aktualisiert werden
-        const providerStaleTimeoutMs = 15 * 60 * 1000;
+			// Tarif-Werte (aktueller Preis / Durchschnitt) ändern sich i. d. R. stündlich oder täglich.
+			// Ein zu kurzes Freshness-Timeout würde die Werte fälschlich als "stale" werten und die Tarif-Logik deaktivieren.
+			// Daher großzügig: erst nach 36h ohne Update als ungültig behandeln.
+			const providerStaleTimeoutMs = 36 * 60 * 60 * 1000;
 
         try {
             // --- VIS Settings ---
@@ -238,6 +257,19 @@ class TarifVisModule extends BaseModule {
 			const preisVisOk = (typeof preisGrenzeVis === 'number' && Number.isFinite(preisGrenzeVis));
 			const preisAktuellOk = (typeof preisAktuell === 'number' && Number.isFinite(preisAktuell));
 			const preisDurchschnittOk = (typeof preisDurchschnitt === 'number' && Number.isFinite(preisDurchschnitt));
+
+			// Debug-Hilfe: Wenn Tarif aktiv ist, aber Provider-Preise fehlen, ist fast immer
+			// entweder der Datenpunkt nicht gemappt (Admin → Datenpunkte → Tarif) oder der
+			// Provider-Adapter liefert (noch) keine Werte.
+			if (aktivEff && (!preisAktuellOk || !preisDurchschnittOk)) {
+				const eCur = (this.dp && typeof this.dp.getEntry === 'function') ? this.dp.getEntry('tarif.preisAktuellEurProKwh') : null;
+				const eAvg = (this.dp && typeof this.dp.getEntry === 'function') ? this.dp.getEntry('tarif.preisDurchschnittEurProKwh') : null;
+				const idCur = eCur && typeof eCur.objectId === 'string' ? eCur.objectId : '';
+				const idAvg = eAvg && typeof eAvg.objectId === 'string' ? eAvg.objectId : '';
+				const ageCurMs = (this.dp && typeof this.dp.getAgeMs === 'function') ? this.dp.getAgeMs('tarif.preisAktuellEurProKwh') : null;
+				const ageAvgMs = (this.dp && typeof this.dp.getAgeMs === 'function') ? this.dp.getAgeMs('tarif.preisDurchschnittEurProKwh') : null;
+				this._debugThrottle(`Tarif: Provider-Preise fehlen/ungültig → aktuell=${preisAktuellOk ? preisAktuell : 'null'} (DP='${idCur}', Alter=${ageCurMs}ms) | Ø=${preisDurchschnittOk ? preisDurchschnitt : 'null'} (DP='${idAvg}', Alter=${ageAvgMs}ms). Prüfe die Zuordnung unter "Datenpunkte → Tarif" und ob die States Werte liefern.`);
+			}
 
             // Referenzpreis (Preisgrenze) – wirksam
             let preisRef = null;
