@@ -1,3 +1,10 @@
+## 0.5.32 (2026-01-03)
+- Phase 3.3: Diagnose & Validierung
+  - Installer: Datenpunkt-Validierung (Existenz + Freshness) mit Badge pro Zuordnung (`/api/object/validate`).
+  - Status: Ladepunkte-Diagnose im EMS App-Center (`/api/ems/charging/diagnostics`).
+  - Lademanagement: Freshness-Checks pro Ladepunkt (Messwert/Status) + sicheres Failover bei stale Daten (Reason `STALE_METER`).
+  - VIS Cache: Service-Worker Cache-Bump (verlässliche UI-Updates).
+
 ## 0.5.31 (2026-01-03)
 - Phase 3.2: Lademanagement + UI/Installer-UX
   - Ladepunkte: stabile Sortierung + Up/Down-Reihenfolge im App-Center (wird auch im Algorithmus als Tie‑Break genutzt).

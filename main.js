@@ -3282,6 +3282,254 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
       }
     });
 
+
+    // --- Object validation (Phase 3.3) ---
+    // Used by the Installer UI to quickly verify datapoint existence + freshness.
+    app.post('/api/object/validate', requireInstaller, async (req, res) => {
+      try {
+        const now = Date.now();
+        const body = (req && req.body && typeof req.body === 'object') ? req.body : {};
+        const rawIds = Array.isArray(body.ids) ? body.ids : [];
+        const maxAgeMs = (body.maxAgeMs !== undefined && body.maxAgeMs !== null && Number.isFinite(Number(body.maxAgeMs)))
+          ? Math.max(0, Math.round(Number(body.maxAgeMs)))
+          : 15000;
+
+        /** @type {string[]} */
+        const ids = [];
+        const seen = new Set();
+        for (const raw of rawIds) {
+          const id = (raw === null || raw === undefined) ? '' : String(raw).trim();
+          if (!id) continue;
+          if (seen.has(id)) continue;
+          seen.add(id);
+          ids.push(id);
+          if (ids.length >= 2000) break; // hard cap (safety)
+        }
+
+        /** @type {Record<string, any>} */
+        const results = {};
+
+        for (const id of ids) {
+          /** @type {any} */
+          const info = {
+            id,
+            exists: false,
+            common: null,
+            statePresent: false,
+            state: null,
+            ageMs: null,
+            stale: false,
+          };
+
+          try {
+            const obj = await this.getForeignObjectAsync(id);
+            if (obj && obj.common) {
+              info.exists = true;
+              const nameRaw = obj.common.name;
+              const name = (typeof nameRaw === 'string') ? nameRaw : (nameRaw ? JSON.stringify(nameRaw) : '');
+              info.common = {
+                type: obj.common.type || '',
+                role: obj.common.role || '',
+                read: !!obj.common.read,
+                write: !!obj.common.write,
+                unit: obj.common.unit || '',
+                name,
+              };
+            }
+          } catch (_e) {
+            // ignore
+          }
+
+          try {
+            const st = await this.getForeignStateAsync(id);
+            if (st && st.ts) {
+              info.statePresent = true;
+              info.state = { val: st.val, ts: st.ts, lc: st.lc, ack: st.ack };
+              const age = now - Number(st.ts || 0);
+              info.ageMs = Number.isFinite(age) ? Math.max(0, Math.round(age)) : null;
+              info.stale = (maxAgeMs > 0 && info.ageMs !== null) ? (info.ageMs > maxAgeMs) : false;
+            }
+          } catch (_e) {
+            // ignore
+          }
+
+          results[id] = info;
+        }
+
+        res.json({ ok: true, ts: now, maxAgeMs, results });
+      } catch (e) {
+        this.log.warn('Object validate API error: ' + e.message);
+        res.status(500).json({ ok: false, error: 'internal error' });
+      }
+    });
+
+    // --- Charging diagnostics (Phase 3.3) ---
+    // Provides a compact per-ladepunkt overview (mapping + freshness + runtime decisions).
+    app.get('/api/ems/charging/diagnostics', requireInstaller, async (req, res) => {
+      try {
+        const now = Date.now();
+        const q = (req && req.query && typeof req.query === 'object') ? req.query : {};
+        const maxAgeMs = (q.maxAgeMs !== undefined && q.maxAgeMs !== null && Number.isFinite(Number(q.maxAgeMs)))
+          ? Math.max(0, Math.round(Number(q.maxAgeMs)))
+          : null;
+
+        const cmCfg = (this.config && this.config.chargingManagement && typeof this.config.chargingManagement === 'object')
+          ? this.config.chargingManagement
+          : {};
+        const staleTimeoutSec = (cmCfg.staleTimeoutSec !== undefined && cmCfg.staleTimeoutSec !== null && Number.isFinite(Number(cmCfg.staleTimeoutSec)))
+          ? Math.max(1, Math.round(Number(cmCfg.staleTimeoutSec)))
+          : 15;
+        const staleMs = staleTimeoutSec * 1000;
+        const effMaxAgeMs = (maxAgeMs !== null) ? maxAgeMs : staleMs;
+
+        const evcsList = Array.isArray(this.evcsList) ? this.evcsList : [];
+
+        /** @type {Record<string, any>} */
+        const mappingChecks = {};
+        const addId = (id) => {
+          const s = (id === null || id === undefined) ? '' : String(id).trim();
+          if (!s) return;
+          mappingChecks[s] = null;
+        };
+
+        for (const wb of evcsList) {
+          if (!wb) continue;
+          addId(wb.powerId);
+          addId(wb.energyTotalId);
+          addId(wb.statusId);
+          addId(wb.activeId);
+          addId(wb.setCurrentAId);
+          addId(wb.setPowerWId);
+          addId(wb.enableWriteId);
+          addId(wb.onlineId);
+        }
+
+        // Resolve existence + freshness
+        for (const id of Object.keys(mappingChecks)) {
+          /** @type {any} */
+          const info = { id, exists: false, common: null, statePresent: false, state: null, ageMs: null, stale: false };
+          try {
+            const obj = await this.getForeignObjectAsync(id);
+            if (obj && obj.common) {
+              info.exists = true;
+              const nameRaw = obj.common.name;
+              const name = (typeof nameRaw === 'string') ? nameRaw : (nameRaw ? JSON.stringify(nameRaw) : '');
+              info.common = {
+                type: obj.common.type || '',
+                role: obj.common.role || '',
+                read: !!obj.common.read,
+                write: !!obj.common.write,
+                unit: obj.common.unit || '',
+                name,
+              };
+            }
+          } catch (_e) {}
+          try {
+            const st = await this.getForeignStateAsync(id);
+            if (st && st.ts) {
+              info.statePresent = true;
+              info.state = { val: st.val, ts: st.ts, lc: st.lc, ack: st.ack };
+              const age = now - Number(st.ts || 0);
+              info.ageMs = Number.isFinite(age) ? Math.max(0, Math.round(age)) : null;
+              info.stale = (effMaxAgeMs > 0 && info.ageMs !== null) ? (info.ageMs > effMaxAgeMs) : false;
+            }
+          } catch (_e) {}
+          mappingChecks[id] = info;
+        }
+
+        const getOwn = async (id) => {
+          try {
+            const s = await this.getStateAsync(id);
+            return s ? s.val : null;
+          } catch {
+            return null;
+          }
+        };
+
+        /** @type {any[]} */
+        const list = [];
+        for (const wb of evcsList) {
+          if (!wb) continue;
+          const idx = Number(wb.index);
+          if (!Number.isFinite(idx) || idx <= 0) continue;
+
+          const safe = `lp${idx}`;
+          const base = `chargingManagement.wallboxes.${safe}`;
+
+          const item = {
+            index: idx,
+            safe,
+            name: (typeof wb.name === 'string' && wb.name.trim()) ? wb.name.trim() : `Ladepunkt ${idx}`,
+            enabledCfg: wb.enabled !== false,
+            priorityCfg: (wb.priority !== undefined && wb.priority !== null) ? Number(wb.priority) : 999,
+            chargerType: (typeof wb.chargerType === 'string') ? wb.chargerType : '',
+            stationKey: (typeof wb.stationKey === 'string') ? wb.stationKey : '',
+            connectorNo: (wb.connectorNo !== undefined && wb.connectorNo !== null) ? Number(wb.connectorNo) : 0,
+            mapping: {
+              powerId: wb.powerId || '',
+              energyTotalId: wb.energyTotalId || '',
+              statusId: wb.statusId || '',
+              activeId: wb.activeId || '',
+              setCurrentAId: wb.setCurrentAId || '',
+              setPowerWId: wb.setPowerWId || '',
+              enableWriteId: wb.enableWriteId || '',
+              onlineId: wb.onlineId || '',
+              checks: {},
+            },
+            runtime: {
+              enabled: await getOwn(`${base}.enabled`),
+              online: await getOwn(`${base}.online`),
+              mappingOk: await getOwn(`${base}.mappingOk`),
+              hasSetpoint: await getOwn(`${base}.hasSetpoint`),
+              mappingIssues: await getOwn(`${base}.mappingIssues`),
+              meterStale: await getOwn(`${base}.meterStale`),
+              meterAgeMs: await getOwn(`${base}.meterAgeMs`),
+              statusStale: await getOwn(`${base}.statusStale`),
+              statusAgeMs: await getOwn(`${base}.statusAgeMs`),
+              actualPowerW: await getOwn(`${base}.actualPowerW`),
+              targetPowerW: await getOwn(`${base}.targetPowerW`),
+              targetCurrentA: await getOwn(`${base}.targetCurrentA`),
+              reason: await getOwn(`${base}.reason`),
+              applied: await getOwn(`${base}.applied`),
+              applyStatus: await getOwn(`${base}.applyStatus`),
+              effectiveMode: await getOwn(`${base}.effectiveMode`),
+              userMode: await getOwn(`${base}.userMode`),
+              boostActive: await getOwn(`${base}.boostActive`),
+              boostRemainingMin: await getOwn(`${base}.boostRemainingMin`),
+            },
+          };
+
+          // attach per-id checks (existence + freshness)
+          const mkCheck = (id) => (id && mappingChecks[id]) ? mappingChecks[id] : null;
+          item.mapping.checks = {
+            powerId: mkCheck(item.mapping.powerId),
+            energyTotalId: mkCheck(item.mapping.energyTotalId),
+            statusId: mkCheck(item.mapping.statusId),
+            activeId: mkCheck(item.mapping.activeId),
+            setCurrentAId: mkCheck(item.mapping.setCurrentAId),
+            setPowerWId: mkCheck(item.mapping.setPowerWId),
+            enableWriteId: mkCheck(item.mapping.enableWriteId),
+            onlineId: mkCheck(item.mapping.onlineId),
+          };
+
+          list.push(item);
+        }
+
+        list.sort((a, b) => (a.index || 0) - (b.index || 0));
+
+        res.json({
+          ok: true,
+          ts: now,
+          maxAgeMs: effMaxAgeMs,
+          staleTimeoutSec,
+          list,
+        });
+      } catch (e) {
+        this.log.warn('Charging diagnostics API error: ' + e.message);
+        res.status(500).json({ ok: false, error: 'internal error' });
+      }
+    });
+
     // --- Datenpunkt-Objekt-Browser (Tree) ---
     app.get('/api/object/tree', requireInstaller, async (req, res) => {
       try {

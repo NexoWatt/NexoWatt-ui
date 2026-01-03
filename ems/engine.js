@@ -25,7 +25,7 @@ function clampNumber(n, min, max, fallback) {
  */
 class EmsEngine {
   /**
-   * @param {import('@iobroker/adapter-core').AdapterInstance} adapter
+   * @param {any} adapter
    */
   constructor(adapter) {
     this.adapter = adapter;

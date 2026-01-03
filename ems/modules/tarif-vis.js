@@ -12,7 +12,7 @@ const { BaseModule } = require('./base');
  */
 class TarifVisModule extends BaseModule {
     /**
-     * @param {import('@iobroker/adapter-core').AdapterInstance} adapter
+     * @param {any} adapter
      * @param {*} dpRegistry
      */
     constructor(adapter, dpRegistry) {

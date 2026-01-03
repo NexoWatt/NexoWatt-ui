@@ -2,7 +2,7 @@
 
 class BaseModule {
     /**
-     * @param {import('@iobroker/adapter-core').AdapterInstance} adapter
+     * @param {any} adapter
      * @param {*} dpRegistry
      */
     constructor(adapter, dpRegistry) {

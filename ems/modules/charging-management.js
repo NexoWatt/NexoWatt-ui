@@ -305,6 +305,15 @@ class ChargingManagementModule extends BaseModule {
         await mk('applyWrites', 'Apply writes (json)', 'string', 'text');
         await mk('reason', 'Reason', 'string', 'text');
 
+        // Diagnostics
+        await mk('mappingOk', 'Mapping OK', 'boolean', 'indicator');
+        await mk('hasSetpoint', 'Has setpoint', 'boolean', 'indicator');
+        await mk('mappingIssues', 'Mapping issues (json)', 'string', 'text');
+        await mk('meterAgeMs', 'Meter age (ms)', 'number', 'value');
+        await mk('meterStale', 'Meter stale', 'boolean', 'indicator');
+        await mk('statusAgeMs', 'Status age (ms)', 'number', 'value');
+        await mk('statusStale', 'Status stale', 'boolean', 'indicator');
+
         this._known.add(ch);
         return ch;
     }
@@ -610,6 +619,49 @@ class ChargingManagementModule extends BaseModule {
                 }
             }
 
+
+            // Diagnostics: freshness + mapping completeness
+            const hasSetpoint = !!(setCurrentAId || setPowerWId);
+            const mappingIssues = [];
+            if (!hasSetpoint) mappingIssues.push('no_setpoint');
+            if (!actualPowerWId) mappingIssues.push('no_power_meter');
+            if (!statusId) mappingIssues.push('no_status_dp');
+
+            let meterAgeMs = 0;
+            let meterStale = false;
+            if (actualPowerWId && this.dp && typeof this.dp.getAgeMs === 'function') {
+                const age = this.dp.getAgeMs(`cm.wb.${safe}.pW`);
+                meterAgeMs = (Number.isFinite(age) && age >= 0) ? Math.round(age) : 0;
+                meterStale = !(Number.isFinite(age)) ? true : (age > staleTimeoutMs);
+            }
+
+            let statusAgeMs = 0;
+            let statusStale = false;
+            if (statusId && this.dp && typeof this.dp.getAgeMs === 'function') {
+                const age = this.dp.getAgeMs(`cm.wb.${safe}.st`);
+                statusAgeMs = (Number.isFinite(age) && age >= 0) ? Math.round(age) : 0;
+                statusStale = !(Number.isFinite(age)) ? true : (age > staleTimeoutMs);
+            }
+
+            const staleAny = !!(meterStale || statusStale);
+
+            // Safety: if critical inputs are stale, treat device as offline for control decisions.
+            if (statusId && statusStale) online = false;
+            if (actualPowerWId && meterStale) online = false;
+
+            // Publish diagnostics (UI)
+            try {
+                await this.adapter.setStateAsync(`${ch}.mappingOk`, hasSetpoint, true);
+                await this.adapter.setStateAsync(`${ch}.hasSetpoint`, hasSetpoint, true);
+                await this.adapter.setStateAsync(`${ch}.mappingIssues`, JSON.stringify(mappingIssues), true);
+                await this.adapter.setStateAsync(`${ch}.meterAgeMs`, meterAgeMs, true);
+                await this.adapter.setStateAsync(`${ch}.meterStale`, !!meterStale, true);
+                await this.adapter.setStateAsync(`${ch}.statusAgeMs`, statusAgeMs, true);
+                await this.adapter.setStateAsync(`${ch}.statusStale`, !!statusStale, true);
+            } catch {
+                // ignore
+            }
+
             // Charging detection (used for arrival-based stepwise allocation)
             const pWNum = (typeof pW === 'number' && Number.isFinite(pW)) ? pW : 0;
             const pWAbs = Math.abs(pWNum);
@@ -776,6 +828,13 @@ class ChargingManagementModule extends BaseModule {
                 name: String(wb.name || key),
                 enabled,
                 online,
+                staleAny,
+                meterStale,
+                meterAgeMs,
+                statusStale,
+                statusAgeMs,
+                hasSetpoint,
+                mappingIssues,
                 charging: isCharging,
                 chargingSinceMs: chargingSinceForState,
                 actualPowerW: pWNum,
@@ -1492,7 +1551,7 @@ if (components.length) {
 
                     await this.adapter.setStateAsync(`${w.ch}.reason`, reason, true);
                 } else {
-                    await this.adapter.setStateAsync(`${w.ch}.reason`, availabilityReason(!!w.enabled, !!w.online), true);
+                    await this.adapter.setStateAsync(`${w.ch}.reason`, (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.enabled, !!w.online)), true);
                 }
 
                 await this.adapter.setStateAsync(`${w.ch}.targetCurrentA`, 0, true);
@@ -1528,7 +1587,7 @@ if (components.length) {
                     applied,
                     applyStatus,
                     applyWrites,
-                    reason: (w.enabled && w.online) ? reason : availabilityReason(!!w.enabled, !!w.online),
+                    reason: (w.enabled && w.online) ? reason : (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.enabled, !!w.online)),
                 });
             }
 
@@ -1713,7 +1772,7 @@ if (components.length) {
 
                         await this.adapter.setStateAsync(`${w.ch}.reason`, reason, true);
                     } else {
-                        await this.adapter.setStateAsync(`${w.ch}.reason`, availabilityReason(!!w.enabled, !!w.online), true);
+                        await this.adapter.setStateAsync(`${w.ch}.reason`, (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.enabled, !!w.online)), true);
                     }
 
                     await this.adapter.setStateAsync(`${w.ch}.targetCurrentA`, 0, true);
@@ -1741,7 +1800,7 @@ if (components.length) {
                         targetA,
                         applied,
                         status: applyStatus,
-                        reason: (w.enabled && w.online) ? reason : availabilityReason(!!w.enabled, !!w.online),
+                        reason: (w.enabled && w.online) ? reason : (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.enabled, !!w.online)),
                     });
 
                     // totals stay 0
@@ -2211,7 +2270,7 @@ if (components.length) {
             await this.adapter.setStateAsync(`${w.ch}.applied`, false, true);
             await this.adapter.setStateAsync(`${w.ch}.applyStatus`, 'skipped', true);
             await this.adapter.setStateAsync(`${w.ch}.applyWrites`, '', true);
-            await this.adapter.setStateAsync(`${w.ch}.reason`, availabilityReason(!!w.enabled, !!w.online), true);
+            await this.adapter.setStateAsync(`${w.ch}.reason`, (w.staleAny ? ReasonCodes.STALE_METER : availabilityReason(!!w.enabled, !!w.online)), true);
         }
 
         // MU6.1: diagnostics logging (compact, decision-leading)

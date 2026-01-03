@@ -6,6 +6,7 @@
     status: document.getElementById('nw-emsapps-status'),
     save: document.getElementById('nw-emsapps-save'),
     reload: document.getElementById('nw-emsapps-reload'),
+    validate: document.getElementById('nw-emsapps-validate'),
 
     appsList: document.getElementById('appsList'),
     appsEmpty: document.getElementById('appsEmpty'),
@@ -33,6 +34,8 @@
 
     // Status
     emsStatus: document.getElementById('emsStatus'),
+    chargingDiag: document.getElementById('chargingDiag'),
+    refreshChargingDiag: document.getElementById('refreshChargingDiag'),
 
     // Modal
     dpModal: document.getElementById('dpModal'),
@@ -104,6 +107,113 @@
       const err = (data && data.error) ? data.error : ('HTTP ' + res.status);
       throw new Error(err);
     }
+
+  // --- Datapoint validation (Phase 3.3) ---
+  let _validateTimer = null;
+
+  function _fmtAge(ageMs) {
+    const n = Number(ageMs);
+    if (!Number.isFinite(n) || n < 0) return '';
+    if (n < 1000) return `${Math.round(n)}ms`;
+    const s = n / 1000;
+    if (s < 60) return `${Math.round(s)}s`;
+    const m = s / 60;
+    if (m < 60) return `${Math.round(m)}min`;
+    const h = m / 60;
+    return `${Math.round(h)}h`;
+  }
+
+  function _setBadge(inputId, kind, text) {
+    const el = document.getElementById('val_' + inputId);
+    if (!el) return;
+    el.classList.remove('nw-config-badge--ok', 'nw-config-badge--warn', 'nw-config-badge--error', 'nw-config-badge--idle');
+    el.classList.add('nw-config-badge', 'nw-config-badge--' + (kind || 'idle'));
+    el.textContent = text || '—';
+  }
+
+  function scheduleValidation(delayMs) {
+    const d = (typeof delayMs === 'number' && Number.isFinite(delayMs)) ? delayMs : 600;
+    if (_validateTimer) clearTimeout(_validateTimer);
+    _validateTimer = setTimeout(() => { runValidation(false).catch(() => {}); }, d);
+  }
+
+  async function runValidation(showStatusMessage) {
+    const inputs = Array.from(document.querySelectorAll('input[data-dp-input="1"]'));
+    const ids = [];
+    const seen = new Set();
+
+    for (const inp of inputs) {
+      const v = String(inp.value || '').trim();
+      if (!v) continue;
+      if (seen.has(v)) continue;
+      seen.add(v);
+      ids.push(v);
+    }
+
+    // Quick UI reset for empty inputs
+    for (const inp of inputs) {
+      const v = String(inp.value || '').trim();
+      if (!v) _setBadge(inp.id, 'idle', 'nicht gesetzt');
+    }
+
+    if (!ids.length) {
+      if (showStatusMessage) setStatus('Validierung: keine Datenpunkte gesetzt.', 'ok');
+      return;
+    }
+
+    if (showStatusMessage) setStatus('Validierung läuft…', '');
+    const maxAgeMs = 15000;
+
+    const data = await fetchJson('/api/object/validate', {
+      method: 'POST',
+      body: JSON.stringify({ ids, maxAgeMs }),
+    });
+
+    if (!data || data.ok !== true || !data.results) {
+      if (showStatusMessage) setStatus('Validierung: keine Antwort.', 'error');
+      return;
+    }
+
+    // Apply per-input badge
+    for (const inp of inputs) {
+      const idVal = String(inp.value || '').trim();
+      if (!idVal) continue;
+
+      const info = data.results[idVal];
+      if (!info || info.exists !== true) {
+        _setBadge(inp.id, 'error', 'nicht gefunden');
+        continue;
+      }
+
+      // Basic capability hints (heuristic by input-id)
+      const expectWrite = /setCurrentAId|setPowerWId|enableWriteId|lockWriteId/i.test(inp.id);
+      const expectRead = /powerId|energyTotalId|statusId|activeId|onlineId|rfidReadId|budgetPowerId|gridPowerId|pvSurplusPowerId|peakGridPointPowerId/i.test(inp.id);
+
+      if (expectWrite && info.common && info.common.write === false) {
+        _setBadge(inp.id, 'warn', 'read-only');
+        continue;
+      }
+      if (expectRead && info.common && info.common.read === false) {
+        _setBadge(inp.id, 'warn', 'write-only');
+        continue;
+      }
+
+      if (info.statePresent !== true) {
+        _setBadge(inp.id, 'warn', 'keine Daten');
+        continue;
+      }
+
+      if (info.stale === true) {
+        _setBadge(inp.id, 'warn', 'alt (' + _fmtAge(info.ageMs) + ')');
+        continue;
+      }
+
+      _setBadge(inp.id, 'ok', 'OK');
+    }
+
+    if (showStatusMessage) setStatus('Validierung: abgeschlossen.', 'ok');
+  }
+
     return data;
   }
 
@@ -297,10 +407,17 @@
       btn.textContent = 'Auswählen…';
       btn.addEventListener('click', () => openDpModal(input.id));
 
-      input.addEventListener('change', () => setter(field.key, input.value.trim()));
+      input.dataset.dpInput = '1';
+      input.addEventListener('change', () => { setter(field.key, input.value.trim()); scheduleValidation(200); });
 
       right.appendChild(input);
       right.appendChild(btn);
+
+      const badge = document.createElement('span');
+      badge.className = 'nw-config-badge nw-config-badge--idle';
+      badge.id = 'val_' + input.id;
+      badge.textContent = '—';
+      right.appendChild(badge);
 
       row.appendChild(left);
       row.appendChild(right);
@@ -413,7 +530,8 @@
       input.id = id;
       input.value = valueOrEmpty(value);
       input.placeholder = 'State-ID…';
-      input.addEventListener('change', () => onChange(String(input.value || '').trim()));
+      input.dataset.dpInput = '1';
+      input.addEventListener('change', () => { onChange(String(input.value || '').trim()); scheduleValidation(200); });
 
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -904,6 +1022,7 @@
     setStatus('Lade Konfiguration…');
     const data = await fetchJson('/api/installer/config');
     applyConfigToUI(data.config || {});
+    scheduleValidation(300);
     setStatus('Konfiguration geladen.', 'ok');
   }
 
@@ -997,6 +1116,7 @@
     // immediate status refresh when entering the tab
     if (_activeTab === 'status') {
       refreshEmsStatus().catch(() => {});
+      refreshChargingDiag().catch(() => {});
     }
   }
 
@@ -1084,6 +1204,118 @@
     }
   }
 
+
+  function _asBool(v) {
+    if (typeof v === 'boolean') return v;
+    if (typeof v === 'number') return v !== 0;
+    if (typeof v === 'string') return (v.trim().toLowerCase() === 'true' || v.trim() === '1');
+    return false;
+  }
+
+  function _asNum(v, fallback) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : (fallback !== undefined ? fallback : 0);
+  }
+
+  function renderChargingDiag(payload) {
+    if (!els.chargingDiag) return;
+    els.chargingDiag.innerHTML = '';
+
+    const mkItem = (titleText, subtitleText, rightHtml, statusKind) => {
+      const row = document.createElement('div');
+      row.className = 'nw-config-row';
+
+      const left = document.createElement('div');
+      left.className = 'nw-config-row__primary';
+
+      const title = document.createElement('div');
+      title.style.fontWeight = '600';
+      title.textContent = titleText;
+
+      const sub = document.createElement('div');
+      sub.style.fontSize = '0.75rem';
+      sub.style.opacity = '0.85';
+      sub.textContent = subtitleText || '';
+
+      left.appendChild(title);
+      if (subtitleText) left.appendChild(sub);
+
+      const right = document.createElement('div');
+      right.className = 'nw-config-row__status';
+      right.style.textAlign = 'right';
+      if (statusKind === 'ok') right.style.color = '#6ee7b7';
+      if (statusKind === 'warn') right.style.color = '#fde68a';
+      if (statusKind === 'error') right.style.color = '#fca5a5';
+      right.innerHTML = rightHtml || '';
+
+      row.appendChild(left);
+      row.appendChild(right);
+      return row;
+    };
+
+    if (!payload || payload.ok !== true) {
+      els.chargingDiag.appendChild(mkItem('Ladepunkte', 'Keine Daten', '—', 'warn'));
+      return;
+    }
+
+    const list = Array.isArray(payload.list) ? payload.list : [];
+    if (!list.length) {
+      els.chargingDiag.appendChild(mkItem('Ladepunkte', 'Keine Ladepunkte konfiguriert.', '—', 'warn'));
+      return;
+    }
+
+    for (const it of list) {
+      const rt = it.runtime || {};
+      const enabled = _asBool(rt.enabled);
+      const online = _asBool(rt.online);
+      const mappingOk = _asBool(rt.mappingOk);
+      const meterStale = _asBool(rt.meterStale);
+      const statusStale = _asBool(rt.statusStale);
+
+      const actualW = Math.round(_asNum(rt.actualPowerW, 0));
+      const targetW = Math.round(_asNum(rt.targetPowerW, 0));
+      const targetA = _asNum(rt.targetCurrentA, 0);
+      const reason = (rt.reason !== null && rt.reason !== undefined) ? String(rt.reason) : '';
+      const applyStatus = (rt.applyStatus !== null && rt.applyStatus !== undefined) ? String(rt.applyStatus) : '';
+      const effMode = (rt.effectiveMode !== null && rt.effectiveMode !== undefined) ? String(rt.effectiveMode) : '';
+      const userMode = (rt.userMode !== null && rt.userMode !== undefined) ? String(rt.userMode) : '';
+
+      let kind = 'ok';
+      if (!mappingOk) kind = 'error';
+      else if (meterStale || statusStale) kind = 'warn';
+      else if (!enabled || !online) kind = 'warn';
+
+      const name = it && it.name ? String(it.name) : `Ladepunkt ${it.index}`;
+      const title = `${name} (lp${it.index})`;
+
+      const flags = [];
+      flags.push(enabled ? 'EN' : 'DIS');
+      flags.push(online ? 'ON' : 'OFF');
+      if (meterStale) flags.push('METER:ALT');
+      if (statusStale) flags.push('STATUS:ALT');
+      if (effMode) flags.push(`MODE:${effMode}`);
+      if (userMode && userMode !== 'auto') flags.push(`USER:${userMode}`);
+
+      const subtitle = flags.join(' · ');
+
+      const right = `
+        <div style="font-weight:600;">Ist ${actualW} W → Ziel ${targetW} W</div>
+        <div style="font-size:0.75rem;opacity:.85;">A=${Number.isFinite(targetA) ? targetA.toFixed(2) : '0.00'} · ${applyStatus || '—'} · ${reason || '—'}</div>
+      `;
+
+      els.chargingDiag.appendChild(mkItem(title, subtitle, right, kind));
+    }
+  }
+
+  async function refreshChargingDiag() {
+    if (_activeTab !== 'status') return;
+    if (!els.chargingDiag) return;
+    const data = await fetchJson('/api/ems/charging/diagnostics');
+    renderChargingDiag(data || {});
+  }
+
+
+
   async function refreshEmsStatus() {
     if (_activeTab !== 'status') return;
     const data = await fetchJson('/api/ems/status');
@@ -1098,6 +1330,7 @@
     _statusTimer = setInterval(() => {
       if (_activeTab !== 'status') return;
       refreshEmsStatus().catch(() => {});
+      refreshChargingDiag().catch(() => {});
     }, 2000);
   }
 
@@ -1323,6 +1556,12 @@
     if (id) openDpModal(id);
   });
 
+  // Mark standalone datapoint inputs for validation
+  if (els.peakGridPointPowerId) {
+    els.peakGridPointPowerId.dataset.dpInput = '1';
+    els.peakGridPointPowerId.addEventListener('change', () => scheduleValidation(200));
+  }
+
   // EVCS top-level inputs
   if (els.evcsCount) {
     els.evcsCount.addEventListener('change', () => {
@@ -1358,6 +1597,19 @@
       loadConfig().catch(e => setStatus('Laden fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
     });
   }
+
+  if (els.validate) {
+    els.validate.addEventListener('click', () => {
+      runValidation(true).catch(e => setStatus('Validierung fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
+    });
+  }
+
+  if (els.refreshChargingDiag) {
+    els.refreshChargingDiag.addEventListener('click', () => {
+      refreshChargingDiag().catch(() => {});
+    });
+  }
+
 
   // Modal
   if (els.dpClose) els.dpClose.addEventListener('click', closeDpModal);

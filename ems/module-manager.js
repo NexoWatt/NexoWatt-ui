@@ -11,7 +11,7 @@ const { Para14aModule } = require('./modules/para14a');
 
 class ModuleManager {
     /**
-     * @param {import('@iobroker/adapter-core').AdapterInstance} adapter
+     * @param {any} adapter
      * @param {*} dpRegistry
      */
     constructor(adapter, dpRegistry) {

@@ -12,7 +12,7 @@
  */
 class DatapointRegistry {
     /**
-     * @param {import('@iobroker/adapter-core').AdapterInstance} adapter
+     * @param {any} adapter
      * @param {Array<any>} entries
      */
     constructor(adapter, entries) {

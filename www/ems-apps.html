@@ -36,6 +36,7 @@
       <div class="nw-smarthome-header__actions">
         <button id="nw-emsapps-save" class="nw-config-btn nw-config-btn--primary" type="button">Speichern &amp; EMS neu starten</button>
         <button id="nw-emsapps-reload" class="nw-config-btn nw-config-btn--ghost" type="button">Neu laden</button>
+        <button id="nw-emsapps-validate" class="nw-config-btn nw-config-btn--ghost" type="button">Validierung prüfen</button>
         <a class="nw-config-btn nw-config-btn--ghost" href="/">VIS öffnen</a>
       </div>
       <div id="nw-emsapps-status" class="nw-config-status"></div>
@@ -148,6 +149,7 @@
               <div class="nw-config-dp-input-wrapper">
                 <input id="peakGridPointPowerId" class="nw-config-input nw-config-dp-input" type="text" placeholder="z.B. smartmeter.0.power"/>
                 <button class="nw-config-dp-button" type="button" data-browse="peakGridPointPowerId">Auswählen…</button>
+                <span id="val_peakGridPointPowerId" class="nw-config-badge nw-config-badge--idle">—</span>
               </div>
             </div>
           </div>
@@ -229,6 +231,19 @@
         Live-Status der internen Regel-Module (Tick-Zeiten, Fehler). Wird automatisch aktualisiert.
       </div>
       <div id="emsStatus" class="nw-config-list"></div>
+    </section>
+
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">Ladepunkte – Diagnose</h2>
+        <div class="nw-config-row__actions">
+          <button id="refreshChargingDiag" type="button" class="nw-config-btn nw-config-btn--ghost">Aktualisieren</button>
+        </div>
+      </div>
+      <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
+        Mapping/Freshness (Messwerte), Sollwerte, Gründe und Schreib-Status pro Ladepunkt.
+      </div>
+      <div id="chargingDiag" class="nw-config-list"></div>
     </section>
   </div>
 
