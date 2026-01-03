@@ -1,3 +1,11 @@
+## 0.5.29 (2026-01-03)
+- Phase 2: EMS App-Center
+  - App-Center: Installieren/Aktivieren von EMS-Apps (State `emsApps`) mit Rückwärtskompatibilität zu `enable*` Flags.
+  - App-Center UI: Tabs (Apps / Zuordnung / Ladepunkte / Status) + Live-Diagnose.
+  - Ladepunkte/Stationsgruppen: Grund-Konfiguration im App-Center (`settingsConfig.evcsCount`, `settingsConfig.evcsList`, `settingsConfig.stationGroups`) inkl. Datenpunkt-Auswahl über Objektbrowser.
+  - API: `/api/installer/config` erweitert (u.a. `emsApps`, `settingsConfig`, `gridConstraints`, `diagnostics`) und übernimmt Änderungen direkt in die Runtime.
+  - Neu: `/api/ems/status` (Tick/Module/Fehler) für Installateur-Statusansicht.
+
 ## 0.5.28 (2026-01-03)
 - Installer (Beta): neue EMS-App-/Installer-Seite unter `/ems-apps.html`.
   - Apps als Module: Aktivieren/Deaktivieren der Kern-Logiken (Peak-Shaving, Speicherregelung, Lademanagement, Grid-Constraints, §14a).

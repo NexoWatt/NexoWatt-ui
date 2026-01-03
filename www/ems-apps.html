@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta content="width=device-width, initial-scale=1" name="viewport"/>
-  <title>NexoWatt EMS Apps (Installer)</title>
+  <title>NexoWatt EMS – App-Center (Installer)</title>
   <link href="/static/styles.css" rel="stylesheet"/>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/nexowatt-32.png">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -19,13 +19,13 @@
       <img alt="NexoWatt" src="/static/nexowatt-logo.png"/>
     </a>
   </div>
-  <h1>EMS Apps (Installer)</h1>
+  <h1>EMS App-Center (Installer)</h1>
 </header>
 
 <main class="content">
   <div class="nw-smarthome-header">
     <div>
-      <div class="nw-smarthome-header__title">EMS Apps &amp; Konfiguration</div>
+      <div class="nw-smarthome-header__title">EMS Apps &amp; Konfiguration (App-Center)</div>
       <div class="nw-smarthome-header__subtitle">
         Ziel: Jede Logik als „App“ (Modul) aktivieren, konfigurieren und über Datenpunkte anbinden.
         <br/>
@@ -42,6 +42,17 @@
     </div>
   </div>
 
+  <div class="nw-smarthome-tabs">
+    <div class="nw-tabs" id="nw-ems-tabs">
+      <button type="button" class="nw-tab nw-tab--active" data-tab="apps">Apps</button>
+      <button type="button" class="nw-tab" data-tab="mapping">Zuordnung</button>
+      <button type="button" class="nw-tab" data-tab="evcs">Ladepunkte</button>
+      <button type="button" class="nw-tab" data-tab="status">Status</button>
+    </div>
+  </div>
+
+  <div id="nw-tabpanel-apps" data-tabpanel="apps">
+
   <section class="nw-config-section">
     <div class="nw-config-section__head">
       <h2 class="nw-config-section__title">Apps (Kernlogiken)</h2>
@@ -49,6 +60,10 @@
     <div class="nw-config-list" id="appsList"></div>
     <div class="nw-config-empty" id="appsEmpty" style="display:none;">Keine Apps verfügbar.</div>
   </section>
+
+  </div>
+
+  <div id="nw-tabpanel-mapping" data-tabpanel="mapping" style="display:none;">
 
   <section class="nw-config-section">
     <div class="nw-config-section__head">
@@ -143,6 +158,71 @@
       </div>
     </div>
   </section>
+
+  </div>
+
+  <div id="nw-tabpanel-evcs" data-tabpanel="evcs" style="display:none;">
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">Ladepunkte (Wallbox/EVCS)</h2>
+      </div>
+      <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
+        Konfiguration der Ladepunkte (herstellerunabhängig): Anzeigen/Zuordnung und (optional) Stellgrößen...
+      </div>
+
+      <div class="nw-config-list">
+        <div class="nw-config-item">
+          <div class="nw-config-item__left">
+            <div class="nw-config-item__title">Anzahl Ladepunkte</div>
+            <div class="nw-config-item__subtitle">1–20. Änderungen werden nach dem Speichern in die Runtime übernommen.</div>
+          </div>
+          <div class="nw-config-item__right">
+            <input id="evcsCount" class="nw-config-input" type="number" min="1" max="20" step="1" placeholder="1"/>
+          </div>
+        </div>
+
+        <div class="nw-config-item">
+          <div class="nw-config-item__left">
+            <div class="nw-config-item__title">Nennleistung pro Ladepunkt (kW)</div>
+            <div class="nw-config-item__subtitle">Wird u.a. für Budget-Berechnungen genutzt (Standard: 11 kW).</div>
+          </div>
+          <div class="nw-config-item__right">
+            <input id="evcsMaxPowerKw" class="nw-config-input" type="number" min="0" step="0.1" placeholder="11"/>
+          </div>
+        </div>
+      </div>
+
+      <div class="nw-config-section__head" style="margin-top:14px;">
+        <h3 class="nw-config-section__title" style="font-size:0.95rem;">Ladepunkt-Liste</h3>
+      </div>
+      <div id="evcsList" class="nw-config-grid"></div>
+    </section>
+
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">Stationsgruppen (optional)</h2>
+      </div>
+      <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
+        Für Stationen mit mehreren Connectors (z.B. DC-Ladegeräte) kann eine gemeinsame Leistungsgrenze definiert werden.
+      </div>
+      <div id="stationGroups" class="nw-config-list"></div>
+      <div style="margin-top:10px;">
+        <button id="addStationGroup" type="button" class="nw-config-btn nw-config-btn--ghost">+ Gruppe hinzufügen</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="nw-tabpanel-status" data-tabpanel="status" style="display:none;">
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">Status &amp; Diagnose</h2>
+      </div>
+      <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
+        Live-Status der internen Regel-Module (Tick-Zeiten, Fehler). Wird automatisch aktualisiert.
+      </div>
+      <div id="emsStatus" class="nw-config-list"></div>
+    </section>
+  </div>
 
   <!-- DP Browser Modal -->
   <div id="dpModal" class="modal hidden">

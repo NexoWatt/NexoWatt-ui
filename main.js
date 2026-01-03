@@ -3007,6 +3007,105 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
       return target;
     };
 
+    // --- EMS App-Center (Phase 2) ---
+    // We treat each EMS capability as an installable "App" for this site/instance.
+    // The runtime remains backward compatible by mapping App states to existing enable* flags.
+    const _nwAppCatalog = [
+      { id: 'charging', label: 'Lademanagement', desc: 'PV-Überschussladen, Budget, Ladepunkte/Connectors', enableFlag: 'enableChargingManagement', mandatory: false },
+      { id: 'peak', label: 'Peak-Shaving', desc: 'Lastspitzenkappung / Import-Limit', enableFlag: 'enablePeakShaving', mandatory: false },
+      { id: 'storage', label: 'Speicherregelung', desc: 'Eigenverbrauch / Speicher-Setpoints (herstellerunabhängig)', enableFlag: 'enableStorageControl', mandatory: false },
+      { id: 'grid', label: 'Grid-Constraints', desc: 'Netzrestriktionen (z.B. RLM/0-Einspeisung/Import-Limits)', enableFlag: 'enableGridConstraints', mandatory: false },
+      // tariff is a shared helper module (provider + budget). Keep it always present.
+      { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', enableFlag: null, mandatory: true },
+      { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls aktiviert)', enableFlag: null, mandatory: false },
+      { id: 'multiuse', label: 'MultiUse', desc: 'Weitere interne Logik-Bausteine', enableFlag: 'enableMultiUse', mandatory: false },
+    ];
+
+    const _nwNormalizeEmsApps = (nativeObj) => {
+      const n = nativeObj && typeof nativeObj === 'object' ? nativeObj : {};
+      const stored = (n.emsApps && typeof n.emsApps === 'object') ? n.emsApps : {};
+      const appsStored = (stored.apps && typeof stored.apps === 'object') ? stored.apps : {};
+
+      const out = {
+        schemaVersion: 1,
+        apps: {},
+      };
+
+      for (const a of _nwAppCatalog) {
+        const s = (appsStored && appsStored[a.id] && typeof appsStored[a.id] === 'object') ? appsStored[a.id] : {};
+
+        // Defaults: if no stored state exists, derive from legacy enable flags.
+        let installed = (typeof s.installed === 'boolean') ? s.installed : undefined;
+        let enabled = (typeof s.enabled === 'boolean') ? s.enabled : undefined;
+
+        // Installed defaults:
+        // - mandatory apps: always installed
+        // - charging: installed by default because it provides runtime states used by the VIS (EVCS UI)
+        // - others: derive from legacy enable flags
+        if (installed === undefined) {
+          if (a.mandatory) installed = true;
+          else if (a.id === 'charging') installed = true;
+          else if (a.enableFlag && typeof n[a.enableFlag] === 'boolean') installed = !!n[a.enableFlag];
+          else installed = false;
+        }
+
+        // Enabled defaults:
+        // - mandatory apps: enabled
+        // - derive from legacy enable flags if present
+        // - otherwise: disabled by default
+        if (enabled === undefined) {
+          if (a.mandatory) enabled = true;
+          else if (a.enableFlag && typeof n[a.enableFlag] === 'boolean') enabled = !!n[a.enableFlag];
+          else enabled = false;
+        }
+
+        // Mandatory apps cannot be uninstalled/disabled
+        if (a.mandatory) {
+          installed = true;
+          enabled = true;
+        }
+
+        out.apps[a.id] = {
+          installed: !!installed,
+          enabled: !!enabled,
+          // app-specific config is currently stored in existing native keys
+        };
+      }
+
+      // Preserve optional meta fields
+      if (stored.groups && typeof stored.groups === 'object') out.groups = stored.groups;
+      if (stored.meta && typeof stored.meta === 'object') out.meta = stored.meta;
+
+      return out;
+    };
+
+    const _nwApplyEmsAppsToLegacyFlags = (nativeObj) => {
+      const n = nativeObj && typeof nativeObj === 'object' ? nativeObj : {};
+      const emsApps = _nwNormalizeEmsApps(n);
+
+      // Map app enabled-state to legacy enable flags so the existing EMS runtime works unchanged.
+      for (const a of _nwAppCatalog) {
+        if (!a.enableFlag) continue;
+        const st = emsApps.apps && emsApps.apps[a.id] ? emsApps.apps[a.id] : null;
+        const enabled = !!(st && st.installed && st.enabled);
+        n[a.enableFlag] = enabled;
+      }
+
+      // §14a is controlled via installerConfig.para14a
+      try {
+        const p = emsApps.apps && emsApps.apps.para14a ? emsApps.apps.para14a : null;
+        const active = !!(p && p.installed && p.enabled);
+        n.installerConfig = (n.installerConfig && typeof n.installerConfig === 'object') ? n.installerConfig : {};
+        n.installerConfig.para14a = active;
+      } catch (_e) {
+        // ignore
+      }
+
+      // Persist normalized emsApps object back into native so UI stays consistent.
+      n.emsApps = _nwNormalizeEmsApps(n);
+      return n;
+    };
+
     const _nwPickInstallerConfig = (nativeObj) => {
       const n = nativeObj && typeof nativeObj === 'object' ? nativeObj : {};
       return {
@@ -3020,6 +3119,9 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
         enableGridConstraints: (typeof n.enableGridConstraints === 'boolean') ? n.enableGridConstraints : undefined,
         enableMultiUse: (typeof n.enableMultiUse === 'boolean') ? n.enableMultiUse : undefined,
 
+        // Phase 2: App-Center state (install/enable)
+        emsApps: _nwNormalizeEmsApps(n),
+
         // Scheduler
         schedulerIntervalMs: (typeof n.schedulerIntervalMs === 'number') ? n.schedulerIntervalMs : undefined,
 
@@ -3030,8 +3132,12 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
         datapoints: (n.datapoints && typeof n.datapoints === 'object') ? n.datapoints : {},
         vis: (n.vis && typeof n.vis === 'object') ? n.vis : {},
 
+        // VIS/EVCS configuration (for installer page)
+        settingsConfig: (n.settingsConfig && typeof n.settingsConfig === 'object') ? n.settingsConfig : {},
+
         // Module configs
         peakShaving: (n.peakShaving && typeof n.peakShaving === 'object') ? n.peakShaving : {},
+        gridConstraints: (n.gridConstraints && typeof n.gridConstraints === 'object') ? n.gridConstraints : {},
         storage: (n.storage && typeof n.storage === 'object') ? n.storage : {},
         chargingManagement: (n.chargingManagement && typeof n.chargingManagement === 'object') ? n.chargingManagement : {},
       };
@@ -3079,8 +3185,23 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
         }
 
         const allowedRoot = new Set([
+          // Legacy enable flags (kept for backwards compatibility)
           'enableChargingManagement','enablePeakShaving','enableStorageControl','enableGridConstraints','enableMultiUse',
-          'schedulerIntervalMs','installerConfig','datapoints','vis','peakShaving','storage','chargingManagement'
+
+          // Phase 2: App Center state
+          'emsApps',
+
+          // Scheduler + base mapping
+          'schedulerIntervalMs','installerConfig','datapoints','vis',
+
+          // App/module configs
+          'peakShaving','gridConstraints','storage','chargingManagement',
+
+          // VIS configuration that is required to configure chargepoints/stations in the installer page
+          'settingsConfig',
+
+          // Optional diagnostics settings
+          'diagnostics',
         ]);
 
         // Build sanitized patch
@@ -3098,11 +3219,21 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
         }
         instObj.native = instObj.native || {};
         instObj.native = _nwDeepMerge(instObj.native, safePatch);
+        // Normalize App-Center config and map App toggles to legacy enable* flags
+        instObj.native = _nwApplyEmsAppsToLegacyFlags(instObj.native);
         await this.setForeignObjectAsync(instId, instObj);
 
         // Apply to runtime config (best-effort)
         this.config = this.config || {};
         this.config = _nwDeepMerge(this.config, safePatch);
+        try { this.config = _nwApplyEmsAppsToLegacyFlags(this.config); } catch (_e) {}
+
+        // Apply updated VIS/EVCS configuration to runtime (best-effort)
+        try { await this.syncInstallerConfigToStates(); } catch (_e) {}
+        try { await this.syncSettingsConfigToStates(); } catch (_e) {}
+        try { await this.ensureEvcsStates(); } catch (_e) {}
+        try { await this.ensureRfidStates(); } catch (_e) {}
+        try { await this.subscribeEvcsMappedStates(); } catch (_e) {}
 
         // Re-subscribe to mapped states so the VIS immediately sees fresh values
         try {
@@ -3118,6 +3249,30 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
         res.json({ ok: true, config: _nwPickInstallerConfig(instObj.native), restarted: !!restartEms });
       } catch (e) {
         this.log.warn('Installer config save API error: ' + e.message);
+        res.status(500).json({ ok: false, error: 'internal error' });
+      }
+    });
+
+    // --- EMS Status (Phase 2) ---
+    app.get('/api/ems/status', requireInstaller, async (req, res) => {
+      try {
+        const engine = this.emsEngine;
+        const running = !!(engine && engine._timer);
+        const intervalMs = engine && typeof engine._intervalMs === 'number' ? engine._intervalMs : null;
+
+        const mm = engine && engine.mm ? engine.mm : null;
+        const lastTickDiag = mm && mm.lastTickDiag ? mm.lastTickDiag : null;
+
+        res.json({
+          ok: true,
+          engine: {
+            running,
+            intervalMs,
+          },
+          lastTickDiag,
+        });
+      } catch (e) {
+        this.log.warn('EMS status API error: ' + e.message);
         res.status(500).json({ ok: false, error: 'internal error' });
       }
     });

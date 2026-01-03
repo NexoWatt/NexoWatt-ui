@@ -24,6 +24,17 @@ class ModuleManager {
         this._lastDiagLogMs = 0;
         this._lastDiagWriteMs = 0;
         this._tickCount = 0;
+
+        // Last tick diagnostics (always captured, even if diagnostics are disabled)
+        /**
+         * @type {{
+         *   ts: number,
+         *   totalMs: number,
+         *   results: Array<{key: string, enabled: boolean, ok: boolean, ms: number, error?: string}>,
+         *   errors: Array<string>
+         * }|null}
+         */
+        this.lastTickDiag = null;
     }
 
     _getDiagCfg() {
@@ -197,6 +208,18 @@ class ModuleManager {
         }
 
         const totalMs = Date.now() - t0;
+
+        // Persist last results for UI/Installer APIs
+        try {
+            this.lastTickDiag = {
+                ts: now,
+                totalMs,
+                results,
+                errors,
+            };
+        } catch (_e) {
+            // ignore
+        }
 
         if (!diag.enabled) return;
 
