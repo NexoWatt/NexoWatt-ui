@@ -684,6 +684,11 @@ class NexoWattVis extends utils.Adapter {
       // Interner Standard: pro Ladepunkt existiert immer ein eigener Modus-State.
       // Damit muss im Admin keine Modus-DP-Zuordnung gepflegt werden.
       const modeId = modeIdRaw || `${this.namespace}.evcs.${i + 1}.mode`;
+      // Aktivierung & Priorität (für EMS-Lademanagement)
+      const enabled = (row && typeof row.enabled === 'boolean') ? !!row.enabled : true;
+      const priorityRaw = (row && row.priority !== undefined && row.priority !== null && String(row.priority).trim() !== '' && Number.isFinite(Number(row.priority))) ? Math.round(Number(row.priority)) : 999;
+      const priority = Math.max(1, Math.min(999, priorityRaw));
+
       // EMS control datapoints (optional, per wallbox)
       const setCurrentAId = (row && typeof row.setCurrentAId === 'string' && row.setCurrentAId.trim()) ? row.setCurrentAId.trim() : '';
       const setPowerWId = (row && typeof row.setPowerWId === 'string' && row.setPowerWId.trim()) ? row.setPowerWId.trim() : '';
@@ -719,7 +724,7 @@ class NexoWattVis extends utils.Adapter {
       const rfidReadId = (row && typeof row.rfidReadId === 'string' && row.rfidReadId.trim()) ? row.rfidReadId.trim() :
         ((row && typeof row.rfidId === 'string' && row.rfidId.trim()) ? row.rfidId.trim() :
         ((row && typeof row.rfid === 'string' && row.rfid.trim()) ? row.rfid.trim() : ''));
-      evcsList.push({ index: i+1, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin });
+      evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalId, statusId, activeId, modeId, lockWriteId, rfidReadId, setCurrentAId, setPowerWId, onlineId, enableWriteId, chargerType, phases, voltageV, controlPreference, minCurrentA, maxCurrentA, maxPowerW, stepA, stepW, userMode, stationKey, connectorNo, allowBoost, boostTimeoutMin });
     }
     this.evcsList = evcsList;
     // Stationsgruppen (für DC-Stationen mit mehreren Ladepunkten)

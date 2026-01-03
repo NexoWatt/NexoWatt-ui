@@ -194,12 +194,18 @@ class EmsEngine {
       const allowBoost = (wb.allowBoost !== false);
       const boostTimeoutMin = (Number.isFinite(Number(wb.boostTimeoutMin)) && Number(wb.boostTimeoutMin) > 0) ? Number(wb.boostTimeoutMin) : 0;
 
+      // Aktivierung & Priorität (Installateur-Konfiguration)
+      const enabled = (wb && typeof wb.enabled === 'boolean') ? !!wb.enabled : true;
+      const prioRaw = Number(wb && wb.priority !== undefined ? wb.priority : NaN);
+      const priority = (Number.isFinite(prioRaw) ? Math.max(1, Math.min(999, Math.round(prioRaw))) : 999);
+
+
 
       wallboxes.push({
         key,
         name: wb.name || key,
-        enabled: true,
-        priority: 999,
+        enabled,
+        priority,
 
         chargerType,
         controlBasis,
@@ -232,7 +238,7 @@ class EmsEngine {
     }
 
     // enableChargingManagement only if at least one controllable wallbox exists
-    const anyControl = wallboxes.some(w => (w.setCurrentAId || w.setPowerWId));
+    const anyControl = wallboxes.some(w => (w && w.enabled !== false) && (w.setCurrentAId || w.setPowerWId));
 
     const chargingCfg = {
       // Keep consistent with multiuse module

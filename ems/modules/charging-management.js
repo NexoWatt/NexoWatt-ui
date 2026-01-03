@@ -302,6 +302,7 @@ class ChargingManagementModule extends BaseModule {
         await mk('targetPowerW', 'Target power (W)', 'number', 'value.power');
         await mk('applied', 'Applied', 'boolean', 'indicator');
         await mk('applyStatus', 'Apply status', 'string', 'text');
+        await mk('applyWrites', 'Apply writes (json)', 'string', 'text');
         await mk('reason', 'Reason', 'string', 'text');
 
         this._known.add(ch);
@@ -1026,8 +1027,6 @@ class ChargingManagementModule extends BaseModule {
             if (above) {
                 if (!this._pvAboveSinceMs) this._pvAboveSinceMs = now;
                 this._pvBelowSinceMs = 0;
-        // Gate C: Speicher-Unterstützung (Hysterese)
-        this._storageAssistActive = false;
                 if (!pvAvail && (pvStartDelayMs <= 0 || (now - this._pvAboveSinceMs) >= pvStartDelayMs)) {
                     pvAvail = true;
                 }
@@ -1041,8 +1040,6 @@ class ChargingManagementModule extends BaseModule {
                 // Between thresholds: keep current state, reset timers to require stable crossing again
                 this._pvAboveSinceMs = 0;
                 this._pvBelowSinceMs = 0;
-        // Gate C: Speicher-Unterstützung (Hysterese)
-        this._storageAssistActive = false;
             }
 
             this._pvAvailable = pvAvail;
@@ -1058,8 +1055,6 @@ class ChargingManagementModule extends BaseModule {
             this._pvAvailable = false;
             this._pvAboveSinceMs = 0;
             this._pvBelowSinceMs = 0;
-        // Gate C: Speicher-Unterstützung (Hysterese)
-        this._storageAssistActive = false;
             pvCapRawWState = 0;
             pvCapEffectiveWState = 0;
             pvAvailableState = false;
@@ -1990,7 +1985,7 @@ if (components.length) {
             } else if (availW <= 0) {
                 targetW = 0;
                 // Distinguish PV constraint from total budget constraint
-                reason = (isPvOnly && pvAvailW <= 0 && totalAvailW > 0) ? (ReasonCodes.NO_PV_SURPLUS || ReasonCodes.NO_BUDGET) : ReasonCodes.NO_BUDGET;
+                reason = (isPvOnly && pvAvailW <= 0 && totalAvailW > 0) ? (ReasonCodes.NO_PV_SURPLUS) : ReasonCodes.NO_BUDGET;
             } else if (availW >= w.minPW || w.minPW === 0) {
                 targetW = Math.min(availW, w.maxPW);
                 reason = ReasonCodes.ALLOCATED;
@@ -2000,7 +1995,7 @@ if (components.length) {
                 }
             } else {
                 targetW = 0;
-                reason = isPvOnly ? (ReasonCodes.NO_PV_SURPLUS || ReasonCodes.BELOW_MIN) : ReasonCodes.BELOW_MIN;
+                reason = isPvOnly ? (ReasonCodes.NO_PV_SURPLUS) : ReasonCodes.BELOW_MIN;
             }
 
             // Convert to A for AC current-based control
@@ -2164,6 +2159,15 @@ if (components.length) {
             await this.adapter.setStateAsync(`${w.ch}.targetPowerW`, cmdW, true);
             await this.adapter.setStateAsync(`${w.ch}.applied`, applied, true);
             await this.adapter.setStateAsync(`${w.ch}.applyStatus`, applyStatus, true);
+            if (applyWrites) {
+                try {
+                    await this.adapter.setStateAsync(`${w.ch}.applyWrites`, JSON.stringify(applyWrites), true);
+                } catch {
+                    await this.adapter.setStateAsync(`${w.ch}.applyWrites`, '', true);
+                }
+            } else {
+                await this.adapter.setStateAsync(`${w.ch}.applyWrites`, '', true);
+            }
             await this.adapter.setStateAsync(`${w.ch}.reason`, reason, true);
 
             debugAlloc.push({
@@ -2199,6 +2203,7 @@ if (components.length) {
             await this.adapter.setStateAsync(`${w.ch}.targetPowerW`, 0, true);
             await this.adapter.setStateAsync(`${w.ch}.applied`, false, true);
             await this.adapter.setStateAsync(`${w.ch}.applyStatus`, 'skipped', true);
+            await this.adapter.setStateAsync(`${w.ch}.applyWrites`, '', true);
             await this.adapter.setStateAsync(`${w.ch}.reason`, availabilityReason(!!w.enabled, !!w.online), true);
         }
 

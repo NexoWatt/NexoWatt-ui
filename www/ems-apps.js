@@ -443,6 +443,183 @@
       });
       body.appendChild(mkRow('Name', nameInput));
 
+      // Aktivierung/Regelung (Installateur)
+      const enabledInp = document.createElement('input');
+      enabledInp.type = 'checkbox';
+      enabledInp.checked = (rowCfg && rowCfg.enabled !== false);
+      enabledInp.addEventListener('change', () => _updateEvcsField(i, 'enabled', !!enabledInp.checked));
+      body.appendChild(mkRow('Aktiv (Regelung)', enabledInp));
+
+      // Priorität (1 = höchste)
+      const prioInput = document.createElement('input');
+      prioInput.className = 'nw-config-input';
+      prioInput.type = 'number';
+      prioInput.min = '1';
+      prioInput.max = '999';
+      prioInput.step = '1';
+      {
+        const raw = (rowCfg && rowCfg.priority !== undefined && rowCfg.priority !== null && String(rowCfg.priority).trim() !== '' && Number.isFinite(Number(rowCfg.priority)))
+          ? Math.round(Number(rowCfg.priority))
+          : 999;
+        const clamped = _clampInt(raw, 1, 999, 999);
+        prioInput.value = String(clamped);
+      }
+      prioInput.addEventListener('change', () => _updateEvcsField(i, 'priority', _clampInt(prioInput.value, 1, 999, 999)));
+      body.appendChild(mkRow('Priorität (1..999)', prioInput));
+
+      // Standard-Modus (Default für EMS-UserMode; kann später in der VIS pro Ladepunkt umgestellt werden)
+      const modeSel = document.createElement('select');
+      modeSel.className = 'nw-config-input';
+      modeSel.innerHTML = '<option value="auto">auto</option><option value="pv">pv</option><option value="minpv">minpv</option><option value="boost">boost</option>';
+      {
+        const um = String((rowCfg && rowCfg.userMode) ? rowCfg.userMode : 'auto').toLowerCase();
+        modeSel.value = (um === 'pv' || um === 'minpv' || um === 'boost') ? um : 'auto';
+      }
+      modeSel.addEventListener('change', () => _updateEvcsField(i, 'userMode', String(modeSel.value)));
+      body.appendChild(mkRow('Standard-Modus', modeSel));
+
+      // Erweitert (optional, aber hilfreich für stabile Regelung)
+      const details = document.createElement('details');
+      details.style.marginTop = '8px';
+      const summary = document.createElement('summary');
+      summary.textContent = 'Erweitert';
+      summary.style.cursor = 'pointer';
+      summary.style.userSelect = 'none';
+      details.appendChild(summary);
+
+      const adv = document.createElement('div');
+      adv.style.marginTop = '10px';
+      adv.style.display = 'grid';
+      adv.style.gap = '10px';
+
+      // Steuerpräferenz: auto/currentA/powerW/none
+      const ctrlSel = document.createElement('select');
+      ctrlSel.className = 'nw-config-input';
+      ctrlSel.innerHTML = '<option value="auto">auto</option><option value="currentA">currentA</option><option value="powerW">powerW</option><option value="none">none</option>';
+      {
+        const cp = String((rowCfg && rowCfg.controlPreference) ? rowCfg.controlPreference : 'auto').trim().toLowerCase();
+        ctrlSel.value = (cp === 'currenta' || cp === 'current') ? 'currentA'
+          : (cp === 'powerw' || cp === 'power') ? 'powerW'
+          : (cp === 'none' || cp === 'off') ? 'none'
+          : 'auto';
+      }
+      ctrlSel.addEventListener('change', () => _updateEvcsField(i, 'controlPreference', String(ctrlSel.value)));
+      adv.appendChild(mkRow('Steuerung', ctrlSel));
+
+      // Phasen
+      const phasesSel = document.createElement('select');
+      phasesSel.className = 'nw-config-input';
+      phasesSel.innerHTML = '<option value="1">1</option><option value="3">3</option>';
+      {
+        const p = Number(rowCfg && rowCfg.phases);
+        phasesSel.value = (p === 1) ? '1' : '3';
+      }
+      phasesSel.addEventListener('change', () => _updateEvcsField(i, 'phases', _clampInt(phasesSel.value, 1, 3, 3)));
+      adv.appendChild(mkRow('Phasen', phasesSel));
+
+      // Spannung
+      const vInput = document.createElement('input');
+      vInput.className = 'nw-config-input';
+      vInput.type = 'number';
+      vInput.min = '1';
+      vInput.step = '1';
+      vInput.value = String((rowCfg && Number(rowCfg.voltageV) > 0 && Number.isFinite(Number(rowCfg.voltageV))) ? Math.round(Number(rowCfg.voltageV)) : 230);
+      vInput.addEventListener('change', () => {
+        const v = Number(vInput.value);
+        _updateEvcsField(i, 'voltageV', (Number.isFinite(v) && v > 0) ? Math.round(v) : 230);
+      });
+      adv.appendChild(mkRow('Spannung (V)', vInput));
+
+      // Grenzen / Schritte
+      const minAInput = document.createElement('input');
+      minAInput.className = 'nw-config-input';
+      minAInput.type = 'number';
+      minAInput.min = '0';
+      minAInput.step = '0.1';
+      minAInput.placeholder = '0 = Standard';
+      minAInput.value = (rowCfg && Number(rowCfg.minCurrentA) > 0 && Number.isFinite(Number(rowCfg.minCurrentA))) ? String(Number(rowCfg.minCurrentA)) : '';
+      minAInput.addEventListener('change', () => {
+        const v = Number(minAInput.value);
+        _updateEvcsField(i, 'minCurrentA', (Number.isFinite(v) && v > 0) ? v : 0);
+      });
+      adv.appendChild(mkRow('Min Strom (A)', minAInput));
+
+      const maxAInput = document.createElement('input');
+      maxAInput.className = 'nw-config-input';
+      maxAInput.type = 'number';
+      maxAInput.min = '0';
+      maxAInput.step = '0.1';
+      maxAInput.placeholder = '0 = Standard';
+      maxAInput.value = (rowCfg && Number(rowCfg.maxCurrentA) > 0 && Number.isFinite(Number(rowCfg.maxCurrentA))) ? String(Number(rowCfg.maxCurrentA)) : '';
+      maxAInput.addEventListener('change', () => {
+        const v = Number(maxAInput.value);
+        _updateEvcsField(i, 'maxCurrentA', (Number.isFinite(v) && v > 0) ? v : 0);
+      });
+      adv.appendChild(mkRow('Max Strom (A)', maxAInput));
+
+      const maxWInput = document.createElement('input');
+      maxWInput.className = 'nw-config-input';
+      maxWInput.type = 'number';
+      maxWInput.min = '0';
+      maxWInput.step = '1';
+      maxWInput.placeholder = '0 = Standard';
+      maxWInput.value = (rowCfg && Number(rowCfg.maxPowerW) > 0 && Number.isFinite(Number(rowCfg.maxPowerW))) ? String(Math.round(Number(rowCfg.maxPowerW))) : '';
+      maxWInput.addEventListener('change', () => {
+        const v = Number(maxWInput.value);
+        _updateEvcsField(i, 'maxPowerW', (Number.isFinite(v) && v > 0) ? Math.round(v) : 0);
+      });
+      adv.appendChild(mkRow('Max Leistung (W)', maxWInput));
+
+      const stepAInput = document.createElement('input');
+      stepAInput.className = 'nw-config-input';
+      stepAInput.type = 'number';
+      stepAInput.min = '0';
+      stepAInput.step = '0.1';
+      stepAInput.placeholder = '0 = Standard';
+      stepAInput.value = (rowCfg && Number(rowCfg.stepA) > 0 && Number.isFinite(Number(rowCfg.stepA))) ? String(Number(rowCfg.stepA)) : '';
+      stepAInput.addEventListener('change', () => {
+        const v = Number(stepAInput.value);
+        _updateEvcsField(i, 'stepA', (Number.isFinite(v) && v > 0) ? v : 0);
+      });
+      adv.appendChild(mkRow('Step Strom (A)', stepAInput));
+
+      const stepWInput = document.createElement('input');
+      stepWInput.className = 'nw-config-input';
+      stepWInput.type = 'number';
+      stepWInput.min = '0';
+      stepWInput.step = '1';
+      stepWInput.placeholder = '0 = Standard';
+      stepWInput.value = (rowCfg && Number(rowCfg.stepW) > 0 && Number.isFinite(Number(rowCfg.stepW))) ? String(Math.round(Number(rowCfg.stepW))) : '';
+      stepWInput.addEventListener('change', () => {
+        const v = Number(stepWInput.value);
+        _updateEvcsField(i, 'stepW', (Number.isFinite(v) && v > 0) ? Math.round(v) : 0);
+      });
+      adv.appendChild(mkRow('Step Leistung (W)', stepWInput));
+
+      // Boost
+      const allowBoostInp = document.createElement('input');
+      allowBoostInp.type = 'checkbox';
+      allowBoostInp.checked = (rowCfg && rowCfg.allowBoost !== false);
+      allowBoostInp.addEventListener('change', () => _updateEvcsField(i, 'allowBoost', !!allowBoostInp.checked));
+      adv.appendChild(mkRow('Boost erlauben', allowBoostInp));
+
+      const boostTInput = document.createElement('input');
+      boostTInput.className = 'nw-config-input';
+      boostTInput.type = 'number';
+      boostTInput.min = '0';
+      boostTInput.step = '1';
+      boostTInput.placeholder = '0 = Standard';
+      boostTInput.value = (rowCfg && Number(rowCfg.boostTimeoutMin) > 0 && Number.isFinite(Number(rowCfg.boostTimeoutMin))) ? String(Math.round(Number(rowCfg.boostTimeoutMin))) : '';
+      boostTInput.addEventListener('change', () => {
+        const v = Number(boostTInput.value);
+        _updateEvcsField(i, 'boostTimeoutMin', (Number.isFinite(v) && v > 0) ? Math.round(v) : 0);
+      });
+      adv.appendChild(mkRow('Boost Timeout (min)', boostTInput));
+
+      details.appendChild(adv);
+      body.appendChild(details);
+
+
       // Station / Connector
       const stationKeyInput = document.createElement('input');
       stationKeyInput.className = 'nw-config-input';

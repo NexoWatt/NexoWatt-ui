@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-  "version": "0.5.29",
+    "version": "0.5.30",
     "news": {
       "0.5.22": {
         "de": "Speicher-Regelung: Eigenverbrauch nutzt den geglätteten NVP (ems.gridPowerW) und einen skalierten Regler (weniger Schwingen). PV-Überschuss-Laden nutzt ebenfalls den geglätteten Export. Lastspitzenkappung (LSK): Entlade-Rampe wird jetzt auch beim Attack durch Max ΔW/Tick begrenzt (reduziert Sollwertsprünge/Stress, Reserve puffert schnelle Spitzen).",
@@ -450,7 +450,11 @@
         "de": "Speicherfarm: Endkunden-VIS bereinigt (keine Installer-Hinweise), Status-Tabelle responsiv (Mobile/Card-Layout) und Topbar mobil optimiert. Backend: erste Sollwert-Verteilung (Pool/Gruppen) – schreibt auf pro Speicher konfigurierten Soll-Laden/Soll-Entladen-DPs, Fallback auf Single-Storage bleibt erhalten.",
         "en": "Storage farm: end-user VIS cleaned (no installer hints), responsive status table (mobile/card layout) and mobile-optimized topbar. Backend: first setpoint distribution (pool/groups) – writes per-storage charge/discharge setpoint DPs, with safe fallback to single-storage mapping."
       },
-      "0.5.10": "LSK-Refill Headroom-Glättung: weniger Sollwert-Flattern bei Netz-Nachladen; zusätzliche Diagnose-States."
+      "0.5.10": "LSK-Refill Headroom-Glättung: weniger Sollwert-Flattern bei Netz-Nachladen; zusätzliche Diagnose-States.",
+      "0.5.30": {
+        "de": "Phase 3.1: Ladepunkt-Installer erweitert (Aktiv/Prio/Standard-Modus + Erweitert: Steuerung, Phasen/Spannung, Limits/Steps, Boost). EMS-Lademanagement: Apply-Writes als State verfügbar; Bereinigung PV-Hysterese/Reason-Codes.",
+        "en": "Phase 3.1: charge point installer extended (enable/priority/default mode + advanced control/limits/steps/boost). EMS charging management: apply-writes available as a state; PV hysteresis/ reason-code cleanup."
+      }
     },
     "title": "NexoWatt VIS",
     "titleLang": {
