@@ -1,3 +1,9 @@
+## 0.5.23 (Hotfix – Dynamischer Tarif: Dezimal-Komma)
+
+- Fix Dynamischer Tarif (VIS): Zahlenwerte aus VIS-Inputs werden jetzt robust auch mit deutschem Dezimal-Komma (z.B. „0,40“) geparst.
+  - Betroffen: v.a. manueller Strompreis (Schwellwert), sowie generell numerische Tarif-Einstellungen.
+  - Dadurch greift „Laden bei günstig / Entladen bei teuer“ zuverlässig.
+
 ## 0.5.16 (Versionstand 5 – Peak‑Shaving Grenzwert zentral)
 
 - Admin: Peak‑Shaving „Max. Import (W)“ entfernt. Grenzwert wird zentral aus „EMS → Netzanschlussleistung“ übernommen.

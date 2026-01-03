@@ -105,6 +105,35 @@ class TarifVisModule extends BaseModule {
     }
 
     _num(v, fallback = null) {
+        // VIS-Felder (z.B. Strompreis) können je nach Browser/Locale als String
+        // mit deutschem Dezimaltrennzeichen kommen: "0,40".
+        // Number('0,40') => NaN, daher normalisieren wir robust.
+        if (v === null || v === undefined) return fallback;
+
+        if (typeof v === 'string') {
+            let s = v.trim();
+            if (s === '') return fallback;
+
+            // Entferne Leerzeichen
+            s = s.replace(/\s+/g, '');
+
+            // Fälle wie "1.234,56" -> "1234.56" (Tausenderpunkt entfernen, Komma -> Punkt)
+            if (s.includes(',') && s.includes('.')) {
+                // Heuristik: letztes Vorkommen entscheidet über Dezimaltrennzeichen
+                const lastComma = s.lastIndexOf(',');
+                const lastDot = s.lastIndexOf('.');
+                if (lastComma > lastDot) {
+                    s = s.replace(/\./g, '').replace(',', '.');
+                }
+            } else if (s.includes(',') && !s.includes('.')) {
+                // Standard-DE: "0,40" -> "0.40"
+                s = s.replace(',', '.');
+            }
+
+            const nStr = Number(s);
+            if (Number.isFinite(nStr)) return nStr;
+        }
+
         const n = Number(v);
         return Number.isFinite(n) ? n : fallback;
     }
