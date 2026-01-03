@@ -554,7 +554,7 @@ if (typeof soc === 'number') {
 					} else {
 						let chargeW = Math.min(Math.abs(want), maxChargeW);
 						// Bei aktivem Peak-Shaving: Netzanschluss nicht überfahren
-						if (psEnabled && isFinite(psLimitW) && psLimitW > 0) {
+                    if (peakEnabled && isFinite(psLimitW) && psLimitW > 0) {
 							const importNowW = Math.max(0, num(gridRawW, 0));
 							const headroomW = Math.max(0, psLimitW - importNowW);
 							chargeW = Math.min(chargeW, headroomW);

@@ -50,21 +50,25 @@
         <input type="email" id="s_email" data-scope="settings" data-key="email">
       </label>
       <label class="row"><span>Dynamischer Zeittarif</span>
-        <input type="checkbox" id="s_dyn" data-scope="settings" data-key="dynamicTariff">
+        <input type="checkbox" id="s_dyn_toggle" data-scope="settings" data-key="dynamicTariff">
       </label>
-      <label class="row"><span>Speicher Leistung (W)</span>
-        <input type="number" id="s_storagePower" step="1" data-scope="settings" data-key="storagePower">
-      </label>
-      <label class="row"><span>Strompreis (€)</span>
-        <input type="number" id="s_price" step="0.01" data-scope="settings" data-key="price">
-      </label>
-      <div class="row"><span>Priorität (Tarif): <b id="s_priority_label">Auto</b></span>
-        <input type="range" id="s_priority" min="1" max="3" step="1" data-scope="settings" data-key="priority">
-        <small>1 = Speicher, 2 = Auto, 3 = Ladestation</small>
-      </div>
-      <div class="row"><span>Modus Tarif</span>
-        <input type="range" id="s_tariffMode" min="1" max="2" step="1" data-scope="settings" data-key="tariffMode">
-        <small>1 = Manuell, 2 = Automatisch</small>
+
+      <!-- Diese Einstellungen sollen nur sichtbar sein, wenn der Dynamische Tarif aktiviert ist -->
+      <div id="dyn_settings_block">
+        <label class="row"><span>Speicher Leistung (W)</span>
+          <input type="number" id="s_storagePower" step="1" data-scope="settings" data-key="storagePower">
+        </label>
+        <label class="row"><span>Strompreis (€)</span>
+          <input type="number" id="s_price" step="0.01" data-scope="settings" data-key="price">
+        </label>
+        <div class="row"><span>Priorität (Tarif): <b id="s_priority_label">Auto</b></span>
+          <input type="range" id="s_priority" min="1" max="3" step="1" data-scope="settings" data-key="priority">
+          <small>1 = Speicher, 2 = Auto, 3 = Ladestation</small>
+        </div>
+        <div class="row"><span>Modus Tarif: <b id="s_tariffMode_label">Manuell</b></span>
+          <input type="range" id="s_tariffMode" min="1" max="2" step="1" data-scope="settings" data-key="tariffMode">
+          <small>1 = Manuell, 2 = Automatisch</small>
+        </div>
       </div>
     
       <!-- Installateur-/Admin-Konfiguration erfolgt außerhalb des Endkunden-Dashboards -->

@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-  "version": "0.5.25",
+  "version": "0.5.26",
     "news": {
       "0.5.22": {
         "de": "Speicher-Regelung: Eigenverbrauch nutzt den geglätteten NVP (ems.gridPowerW) und einen skalierten Regler (weniger Schwingen). PV-Überschuss-Laden nutzt ebenfalls den geglätteten Export. Lastspitzenkappung (LSK): Entlade-Rampe wird jetzt auch beim Attack durch Max ΔW/Tick begrenzt (reduziert Sollwertsprünge/Stress, Reserve puffert schnelle Spitzen).",

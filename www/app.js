@@ -330,6 +330,9 @@ async function bootstrap() {
   scheduleRender();
 
   try { if (typeof setupSettings === 'function') setupSettings(); } catch (e) {}
+  // Settings-UI muss nach dem Hydrate der Inputs erneut aktualisiert werden
+  // (Labels/Sichtbarkeit reagieren nicht automatisch auf programmatic value changes)
+  try { if (typeof initSettingsPanel === 'function') initSettingsPanel(); } catch (e) {}
   function startEvents(){
   try{
     const es = new EventSource('/events');
@@ -387,6 +390,9 @@ function initMenu(){
 
 
 function initSettingsPanel(){
+  // Wichtig: diese Funktion wird an mehreren Stellen aufgerufen
+  // (Menü, initial, ggf. nach State-Updates). Sie muss daher idempotent sein.
+
   // Force sliders to emit only discrete values.
   // - Tarif-Modus: 1..2 (Manuell/Automatisch)
   // - Priorität: 1..3 (Speicher/Auto/Ladestation)
@@ -395,6 +401,9 @@ function initSettingsPanel(){
 
   const prLabel = document.getElementById('s_priority_label');
   const tmLabel = document.getElementById('s_tariffMode_label');
+
+  const dynToggle = document.getElementById('s_dyn_toggle');
+  const dynBlock = document.getElementById('dyn_settings_block');
 
   const updatePriorityLabel = ()=>{
     if (!p || !prLabel) return;
@@ -405,6 +414,10 @@ function initSettingsPanel(){
     if (!t || !tmLabel) return;
     const v = Number(t.value || 1);
     tmLabel.textContent = (v === 2) ? 'Automatisch' : 'Manuell';
+  };
+  const updateDynVisibility = ()=>{
+    if (!dynToggle || !dynBlock) return;
+    dynBlock.hidden = !dynToggle.checked;
   };
 
   const normalizePriorityValue = ()=>{
@@ -440,6 +453,15 @@ function initSettingsPanel(){
     updateTariffModeLabel();
   };
 
+  // UI-Update immer ausführen (falls Werte programmgesteuert gesetzt wurden)
+  updatePriorityLabel();
+  updateTariffModeLabel();
+  updateDynVisibility();
+
+  // Listener nur einmal binden
+  if (window.__nwSettingsPanelInit) return;
+  window.__nwSettingsPanelInit = true;
+
   if (p) {
     p.min = 1; p.max = 3; p.step = 1;
     normalizePriorityValue();
@@ -451,9 +473,9 @@ function initSettingsPanel(){
     t.addEventListener('input', snapTariffMode);
     t.addEventListener('change', snapTariffMode);
   }
-
-  updatePriorityLabel();
-  updateTariffModeLabel();
+  if (dynToggle) {
+    dynToggle.addEventListener('change', updateDynVisibility);
+  }
 
   const LS_KEY = 'nexowatt.settings';
   let opts;
@@ -1431,6 +1453,17 @@ function updateEnergyWeb() {
   if (tariffOn) {
     setT('priceCurrent', formatPricePerKwh(priceNow));
     setT('priceAverage', formatPricePerKwh(priceAvg));
+  }
+
+  // Statusmeldung direkt in der Energiefluss-Kachel (VIS)
+  // z.B. "Tarif günstig: Speicher lädt" / "Tarif teuer: Speicher entlädt"
+  const statusEl = document.getElementById('emsStatusText');
+  if (statusEl) {
+    const msg = (s['tarif.statusText'] && s['tarif.statusText'].value !== undefined && s['tarif.statusText'].value !== null)
+      ? String(s['tarif.statusText'].value)
+      : '';
+    statusEl.textContent = msg;
+    statusEl.classList.toggle('hidden', !msg);
   }
 
 }

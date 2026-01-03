@@ -3856,11 +3856,14 @@ app.get('/config', (req, res) => {
         const namespace = this.namespace + '.';
     const settingsLocalKeys = ['notifyEnabled','email','dynamicTariff','storagePower','price','priority','tariffMode','evcsMaxPower','evcsCount'];
     const storageFarmLocalKeys = ['enabled','mode','configJson','groupsJson','totalSoc','totalChargePowerW','totalDischargePowerW','storagesOnline','storagesTotal','storagesStatusJson'];
+    // Weitere lokale States, die in der VIS angezeigt werden sollen (ohne Admin-Mapping)
+    const localUiKeys = ['tarif.statusText','tarif.state'];
     const keys = [
       ...Object.keys(dps),
       // always include built-in local settings keys so UI keeps values on reload
       ...settingsLocalKeys.map(k => 'settings.' + k),
       ...storageFarmLocalKeys.map(k => 'storageFarm.' + k),
+      ...localUiKeys,
       // include any mapped external settings and installer keys
       ...Object.keys(settings).map(k => 'settings.' + k),
       ...Object.keys(installer).map(k => 'installer.' + k),
@@ -3967,10 +3970,12 @@ app.get('/config', (req, res) => {
     const prefI = this.namespace + '.installer.';
     const prefE = this.namespace + '.evcs.';
     const prefCM = this.namespace + '.chargingManagement.';
+    const prefT = this.namespace + '.tarif.';
     if (id && id.startsWith(prefS)) return 'settings.' + id.slice(prefS.length);
     if (id && id.startsWith(prefI)) return 'installer.' + id.slice(prefI.length);
     if (id && id.startsWith(prefE)) return 'evcs.' + id.slice(prefE.length);
     if (id && id.startsWith(prefCM)) return 'chargingManagement.' + id.slice(prefCM.length);
+    if (id && id.startsWith(prefT)) return 'tarif.' + id.slice(prefT.length);
     return null;
   }
 

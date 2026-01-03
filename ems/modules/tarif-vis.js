@@ -20,6 +20,9 @@ class TarifVisModule extends BaseModule {
 
         /** @type {number} */
         this._lastLimitW = NaN;
+
+        /** @type {boolean} */
+        this._warnedManualPriceMissing = false;
     }
 
     async init() {
@@ -52,6 +55,7 @@ class TarifVisModule extends BaseModule {
         await mk('tarif.state', 'Tarif Zustand (günstig/neutral/teuer)', 'string', 'text');
         await mk('tarif.speicherSollW', 'Tarif Sollleistung Speicher (W, berechnet)', 'number', 'value.power');
         await mk('tarif.netzLadenErlaubt', 'Netzladung erlaubt (Tarif-Logik)', 'boolean', 'indicator');
+        await mk('tarif.statusText', 'Tarif Status (VIS)', 'string', 'text');
         // VIS-Settings als Datenpunkte registrieren (nur wenn dp-Registry vorhanden ist)
         if (this.dp && typeof this.dp.upsert === 'function') {
             const visInst = this._getVisInstance();
@@ -212,13 +216,15 @@ class TarifVisModule extends BaseModule {
     }
 
     async tick() {
-        // VIS-Einstellungen sind nicht hochfrequent
-        const staleTimeoutMs = 3600 * 1000;
-        // Provider-Preise (dynamischer Tarif) sollten regelmäßig aktualisiert werden
-			// Tarif-Werte (aktueller Preis / Durchschnitt) ändern sich i. d. R. stündlich oder täglich.
-			// Ein zu kurzes Freshness-Timeout würde die Werte fälschlich als "stale" werten und die Tarif-Logik deaktivieren.
-			// Daher großzügig: erst nach 36h ohne Update als ungültig behandeln.
-			const providerStaleTimeoutMs = 36 * 60 * 60 * 1000;
+        // VIS-Einstellungen sind Konfigurationswerte und müssen dauerhaft gültig bleiben.
+        // Wenn diese nach kurzer Zeit als "stale" gelten, fällt die Logik auf Fallbacks zurück
+        // (z.B. Manual-Preis = null) und die Tarifsteuerung wirkt "inaktiv".
+        const staleTimeoutMs = 365 * 24 * 60 * 60 * 1000; // 1 Jahr
+        // Provider-Preise (dynamischer Tarif) sollten regelmäßig aktualisiert werden.
+        // Tarif-Werte (aktueller Preis / Durchschnitt) ändern sich i. d. R. stündlich oder täglich.
+        // Ein zu kurzes Freshness-Timeout würde die Werte fälschlich als "stale" werten und die Tarif-Logik deaktivieren.
+        // Daher großzügig: erst nach 36h ohne Update als ungültig behandeln.
+        const providerStaleTimeoutMs = 36 * 60 * 60 * 1000;
 
         try {
             // --- VIS Settings ---
@@ -230,7 +236,7 @@ class TarifVisModule extends BaseModule {
             const modusRaw = this.dp ? this.dp.getNumberFresh('vis.settings.tariffMode', staleTimeoutMs, null) : null;
             const modusInt = (typeof modusRaw === 'number' && Number.isFinite(modusRaw)) ? Math.round(modusRaw) : 1;
 
-			const preisGrenzeVisRaw = this.dp ? this.dp.getNumberFresh('vis.settings.price', staleTimeoutMs, null) : null;
+            const preisGrenzeVisRaw = this.dp ? this.dp.getNumberFresh('vis.settings.price', staleTimeoutMs, null) : null;
             const priorRaw = this.dp ? this.dp.getNumberFresh('vis.settings.priority', staleTimeoutMs, null) : null;
             const storageW = this.dp ? this.dp.getNumberFresh('vis.settings.storagePower', staleTimeoutMs, null) : null;
             const evcsMaxW = this.dp ? this.dp.getNumberFresh('vis.settings.evcsMaxPower', staleTimeoutMs, null) : null;
@@ -240,7 +246,20 @@ class TarifVisModule extends BaseModule {
             const baseW = Math.max(0, Math.abs(this._num(evcsMaxW, 0)));
 
 			// --- Preise (Provider + VIS) ---
-			const preisGrenzeVis = this._normalizePriceEurPerKwh(preisGrenzeVisRaw, null);
+                const preisGrenzeVis = this._normalizePriceEurPerKwh(preisGrenzeVisRaw, null);
+
+                // Debug/Transparenz: im Manuellen Modus muss der VIS-Strompreis vorhanden sein.
+                // (Sonst fällt die Logik auf Durchschnitt/Fallbacks zurück.)
+                if (aktivEff && modusInt === 1) {
+                    const missing = (preisGrenzeVis === null || preisGrenzeVis === undefined || !Number.isFinite(preisGrenzeVis));
+                    if (missing && !this._warnedManualPriceMissing) {
+                        this._warnedManualPriceMissing = true;
+                        this.adapter.log.warn(`[TarifVis] Modus=Manuell, aber VIS-Strompreis fehlt/ungültig (vis.settings.price). Bitte in der VIS unter Einstellungen setzen.`);
+                    } else if (!missing && this._warnedManualPriceMissing) {
+                        this._warnedManualPriceMissing = false;
+                        this.adapter.log.info(`[TarifVis] VIS-Strompreis im Modus=Manuell ist wieder gültig: ${preisGrenzeVis} €/kWh`);
+                    }
+                }
 
 			let preisAktuell = null;
 			if (this.dp && typeof this.dp.getEntry === 'function' && this.dp.getEntry('tarif.preisAktuellEurProKwh')) {
@@ -346,11 +365,42 @@ class TarifVisModule extends BaseModule {
 
             await this._setIfChanged('tarif.preisAktuellEurProKwh', preisAktuellOk ? preisAktuell : null);
             await this._setIfChanged('tarif.preisDurchschnittEurProKwh', preisDurchschnittOk ? preisDurchschnitt : null);
-            await this._setIfChanged('tarif.preisGrenzeEurProKwh', (preisRef !== null && preisRef !== undefined && Number.isFinite(preisRef)) ? preisRef : null);
+            // preisRef = wirksame Referenz (Manuell oder Durchschnitt)
+            // preisGrenze = obere Schwelle ("teuer" ab ...) = preisRef + delta
+            await this._setIfChanged('tarif.preisGrenzeEurProKwh', (preisGrenze !== null && preisGrenze !== undefined && Number.isFinite(preisGrenze)) ? preisGrenze : null);
             await this._setIfChanged('tarif.preisRefEurProKwh', (preisRef !== null && preisRef !== undefined && Number.isFinite(preisRef)) ? preisRef : null);
             await this._setIfChanged('tarif.state', tarifState);
             await this._setIfChanged('tarif.speicherSollW', speicherSollW);
             await this._setIfChanged('tarif.netzLadenErlaubt', gridChargeAllowed);
+
+            // Kurz-Status für die VIS (Live-Ansicht)
+            // Ziel: Kunde sieht sofort, ob Tarif gerade Laden/Entladen triggert.
+            let statusText = '';
+            if (aktivEff) {
+              const priceCurTxt = (priceCurOk && Number.isFinite(priceCur)) ? `${priceCur.toFixed(3)} €/kWh` : '—';
+              if (tarifState === 'guenstig') {
+                if (prioritaet === 1) statusText = `Tarif günstig (${priceCurTxt}): Speicher lädt`;
+                else if (prioritaet === 3) statusText = `Tarif günstig (${priceCurTxt}): Ladepark freigegeben`;
+                else statusText = `Tarif günstig (${priceCurTxt}): Auto (Speicher + Ladepark)`;
+              } else if (tarifState === 'teuer') {
+                if (prioritaet === 1) statusText = `Tarif teuer (${priceCurTxt}): Speicher entlädt (bis NVP=0)`;
+                else if (prioritaet === 3) statusText = `Tarif teuer (${priceCurTxt}): Ladepark begrenzt`;
+                else statusText = `Tarif teuer (${priceCurTxt}): Auto (Speicher + Ladepark)`;
+              } else if (tarifState === 'neutral') {
+                statusText = `Tarif neutral (${priceCurTxt})`;
+              } else {
+                statusText = `Tarif: ${tarifState}`;
+              }
+
+              // Wenn keine konkrete Aktion stattfindet, lieber neutral ausgeben (keine Verwirrung)
+              if (tarifState === 'guenstig' && prioritaet === 1 && (!Number.isFinite(speicherSollW) || speicherSollW >= 0)) {
+                statusText = `Tarif günstig (${priceCurTxt}): keine Speicher-Ladung`;
+              }
+              if (tarifState === 'teuer' && prioritaet === 1 && (!Number.isFinite(speicherSollW) || speicherSollW <= 0)) {
+                statusText = `Tarif teuer (${priceCurTxt}): keine Speicher-Entladung`;
+              }
+            }
+            await this._setIfChanged('tarif.statusText', statusText);
             await this._setIfChanged('tarif.ladeparkLimitW', limitW);
 
             // Für andere Module (synchron) bereithalten
