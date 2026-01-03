@@ -180,7 +180,27 @@ class DatapointRegistry {
         const e = this.getEntry(key);
         if (!e) return fallback;
         const raw = this.getRaw(key);
-        const n = Number(raw);
+        let n;
+        if (typeof raw === 'number') {
+            n = raw;
+        } else if (typeof raw === 'string') {
+            let s = raw.trim();
+            // Support German decimal comma and common thousands separators.
+            // - '0,40' => 0.40
+            // - '31,5' => 31.5
+            // - '1.234,56' => 1234.56
+            // - '1,234.56' => 1234.56
+            if (s.includes(',')) {
+                // German/European format: '.' are thousands separators, ',' is decimal separator
+                s = s.replace(/\./g, '').replace(/,/g, '.');
+            } else {
+                // English format: ',' may be thousands separator
+                s = s.replace(/,/g, '');
+            }
+            n = Number(s);
+        } else {
+            n = Number(raw);
+        }
         if (!Number.isFinite(n)) return fallback;
 
         let v = n;

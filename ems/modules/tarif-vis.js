@@ -138,6 +138,23 @@ class TarifVisModule extends BaseModule {
         return Number.isFinite(n) ? n : fallback;
     }
 
+	_normalizePriceEurPerKwh(v, fallback = null) {
+		// Normalizes either €/kWh or ct/kWh into €/kWh.
+		// Heuristic: values with |v| > 2 are interpreted as ct/kWh (common sources: 31.5, 40, ...).
+		let n = (typeof v === 'number') ? v : this._num(v, fallback);
+		if (!Number.isFinite(n)) return fallback;
+
+		// Auto-convert ct/kWh -> €/kWh
+		const abs = Math.abs(n);
+		if (abs > 2 && abs <= 500) {
+			n = n / 100;
+		}
+
+		// Plausibility (allow small negative prices)
+		if (!Number.isFinite(n) || n < -2 || n > 2) return fallback;
+		return n;
+	}
+
     _clamp(n, min, max) {
         if (!Number.isFinite(n)) return n;
         if (Number.isFinite(min)) n = Math.max(min, n);
@@ -194,7 +211,7 @@ class TarifVisModule extends BaseModule {
             const modusRaw = this.dp ? this.dp.getNumberFresh('vis.settings.tariffMode', staleTimeoutMs, null) : null;
             const modusInt = (typeof modusRaw === 'number' && Number.isFinite(modusRaw)) ? Math.round(modusRaw) : 1;
 
-            const preisGrenzeVis = this.dp ? this.dp.getNumberFresh('vis.settings.price', staleTimeoutMs, null) : null;
+			const preisGrenzeVisRaw = this.dp ? this.dp.getNumberFresh('vis.settings.price', staleTimeoutMs, null) : null;
             const priorRaw = this.dp ? this.dp.getNumberFresh('vis.settings.priority', staleTimeoutMs, null) : null;
             const storageW = this.dp ? this.dp.getNumberFresh('vis.settings.storagePower', staleTimeoutMs, null) : null;
             const evcsMaxW = this.dp ? this.dp.getNumberFresh('vis.settings.evcsMaxPower', staleTimeoutMs, null) : null;
@@ -203,20 +220,24 @@ class TarifVisModule extends BaseModule {
             const storagePowerAbsW = Math.max(0, Math.abs(this._num(storageW, 0)));
             const baseW = Math.max(0, Math.abs(this._num(evcsMaxW, 0)));
 
-            // --- Provider Preise ---
-            let preisAktuell = null;
-            if (this.dp && typeof this.dp.getEntry === 'function' && this.dp.getEntry('tarif.preisAktuellEurProKwh')) {
-                preisAktuell = this.dp.getNumberFresh('tarif.preisAktuellEurProKwh', providerStaleTimeoutMs, null);
-            }
-            let preisDurchschnitt = null;
-            if (this.dp && typeof this.dp.getEntry === 'function' && this.dp.getEntry('tarif.preisDurchschnittEurProKwh')) {
-                preisDurchschnitt = this.dp.getNumberFresh('tarif.preisDurchschnittEurProKwh', providerStaleTimeoutMs, null);
-            }
+			// --- Preise (Provider + VIS) ---
+			const preisGrenzeVis = this._normalizePriceEurPerKwh(preisGrenzeVisRaw, null);
 
-            // Plausibilität: Preis in €/kWh
-            const preisVisOk = (typeof preisGrenzeVis === 'number' && Number.isFinite(preisGrenzeVis)) ? (preisGrenzeVis >= 0 && preisGrenzeVis <= 2.0) : false;
-            const preisAktuellOk = (typeof preisAktuell === 'number' && Number.isFinite(preisAktuell)) ? (preisAktuell >= 0 && preisAktuell <= 2.0) : false;
-            const preisDurchschnittOk = (typeof preisDurchschnitt === 'number' && Number.isFinite(preisDurchschnitt)) ? (preisDurchschnitt >= 0 && preisDurchschnitt <= 2.0) : false;
+			let preisAktuell = null;
+			if (this.dp && typeof this.dp.getEntry === 'function' && this.dp.getEntry('tarif.preisAktuellEurProKwh')) {
+				const raw = this.dp.getNumberFresh('tarif.preisAktuellEurProKwh', providerStaleTimeoutMs, null);
+				preisAktuell = this._normalizePriceEurPerKwh(raw, null);
+			}
+
+			let preisDurchschnitt = null;
+			if (this.dp && typeof this.dp.getEntry === 'function' && this.dp.getEntry('tarif.preisDurchschnittEurProKwh')) {
+				const raw = this.dp.getNumberFresh('tarif.preisDurchschnittEurProKwh', providerStaleTimeoutMs, null);
+				preisDurchschnitt = this._normalizePriceEurPerKwh(raw, null);
+			}
+
+			const preisVisOk = (typeof preisGrenzeVis === 'number' && Number.isFinite(preisGrenzeVis));
+			const preisAktuellOk = (typeof preisAktuell === 'number' && Number.isFinite(preisAktuell));
+			const preisDurchschnittOk = (typeof preisDurchschnitt === 'number' && Number.isFinite(preisDurchschnitt));
 
             // Referenzpreis (Preisgrenze) – wirksam
             let preisRef = null;
