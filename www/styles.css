@@ -239,7 +239,7 @@ body {
 .topbar .brand img{ height:clamp(26px, 3.2vw, 38px); display:block; filter: drop-shadow(0 0 0 rgba(0,0,0,0)); }
 
 
-/* Donut visual tune (OpenEMS style) */
+/* Donut visual tune (reference style) */
 .donut{ transform: rotate(-90deg); }
 .donut .track{ fill:none; stroke:#28313a; stroke-width:12; opacity:.5; stroke-linecap:round; }
 .donut .soc-track{ fill:none; stroke:#28313a; stroke-width:10; opacity:.55; }

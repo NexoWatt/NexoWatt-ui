@@ -1,4 +1,6 @@
 ## 0.5.23 (Hotfix – Dynamischer Tarif: Dezimal-Komma)
+## 0.5.27 (2026-01-03)
+- Phase 1: Stabilisierung (Tarif-Modul Fixes, Entfernen externer Referenzen, kleinere Robustheits-Updates)
 
 - Fix Dynamischer Tarif (VIS): Zahlenwerte aus VIS-Inputs werden jetzt robust auch mit deutschem Dezimal-Komma (z.B. „0,40“) geparst.
   - Betroffen: v.a. manueller Strompreis (Schwellwert), sowie generell numerische Tarif-Einstellungen.

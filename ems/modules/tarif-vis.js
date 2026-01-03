@@ -23,6 +23,9 @@ class TarifVisModule extends BaseModule {
 
         /** @type {boolean} */
         this._warnedManualPriceMissing = false;
+
+        /** @type {number} */
+        this._lastDebugMs = 0;
     }
 
     async init() {
@@ -214,6 +217,24 @@ class TarifVisModule extends BaseModule {
         if (r > 3) return 2;
         return r;
     }
+    /**
+     * Debug-Ausgabe mit Drosselung, um Log-Spam zu vermeiden.
+     * @param {string} msg
+     * @param {number} [intervalMs]
+     */
+    _debugThrottle(msg, intervalMs = 60000) {
+        const now = Date.now();
+        const intMs = (Number.isFinite(Number(intervalMs)) && Number(intervalMs) >= 0) ? Number(intervalMs) : 60000;
+        if (this._lastDebugMs && intMs > 0 && (now - this._lastDebugMs) < intMs) return;
+        this._lastDebugMs = now;
+        try {
+            this.adapter.log.debug(`[TarifVis] ${String(msg || '')}`);
+        } catch {
+            // ignore
+        }
+    }
+
+
 
     async tick() {
         // VIS-Einstellungen sind Konfigurationswerte und müssen dauerhaft gültig bleiben.
@@ -257,6 +278,9 @@ class TarifVisModule extends BaseModule {
                         this.adapter.log.warn(`[TarifVis] Modus=Manuell, aber VIS-Strompreis fehlt/ungültig (vis.settings.price). Bitte in der VIS unter Einstellungen setzen.`);
                     } else if (!missing && this._warnedManualPriceMissing) {
                         this._warnedManualPriceMissing = false;
+
+        /** @type {number} */
+        this._lastDebugMs = 0;
                         this.adapter.log.info(`[TarifVis] VIS-Strompreis im Modus=Manuell ist wieder gültig: ${preisGrenzeVis} €/kWh`);
                     }
                 }
@@ -302,6 +326,7 @@ class TarifVisModule extends BaseModule {
 
             // --- Tarifzustand (mit Hysterese) ---
             const delta = 0.03;
+            const preisGrenze = (typeof preisRef === 'number' && Number.isFinite(preisRef)) ? (preisRef + delta) : null;
             let tarifState = 'aus'; // aus | unbekannt | neutral | guenstig | teuer
 
             if (!aktivEff) {
@@ -377,7 +402,7 @@ class TarifVisModule extends BaseModule {
             // Ziel: Kunde sieht sofort, ob Tarif gerade Laden/Entladen triggert.
             let statusText = '';
             if (aktivEff) {
-              const priceCurTxt = (priceCurOk && Number.isFinite(priceCur)) ? `${priceCur.toFixed(3)} €/kWh` : '—';
+              const priceCurTxt = (preisAktuellOk && Number.isFinite(preisAktuell)) ? `${preisAktuell.toFixed(3)} €/kWh` : '—';
               if (tarifState === 'guenstig') {
                 if (prioritaet === 1) statusText = `Tarif günstig (${priceCurTxt}): Speicher lädt`;
                 else if (prioritaet === 3) statusText = `Tarif günstig (${priceCurTxt}): Ladepark freigegeben`;

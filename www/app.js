@@ -1,5 +1,5 @@
 
-// --- Precise donut placement (anchor angles like OpenEMS) ---
+// --- Precise donut placement (anchor angles like a reference UI) ---
 function arcLenFromDeg(r, deg){ return 2 * Math.PI * r * (deg/360); }
 function setArcAtAngle(selector, r, angleDeg, arcDeg){
   const C = 2 * Math.PI * r;
