@@ -14,6 +14,7 @@
     schedulerIntervalMs: document.getElementById('schedulerIntervalMs'),
 
     dpTable: document.getElementById('dpTable'),
+    dpTariffs: document.getElementById('dpTariffs'),
     storageTable: document.getElementById('storageTable'),
 
     peakGridPointPowerId: document.getElementById('peakGridPointPowerId'),
@@ -56,15 +57,18 @@
     { id: 'multiuse', label: 'MultiUse', desc: 'Weitere interne Logik-Bausteine', mandatory: false }
   ];
 
-  // Base datapoints that are most commonly needed for VIS + EMS
-  const BASE_DP_FIELDS = [
-    { key: 'gridBuyPower', label: 'Netz Bezug (W)', placeholder: '... (Import)' },
-    { key: 'gridSellPower', label: 'Netz Einspeisung (W)', placeholder: '... (Export)' },
+  // Datapoints grouped by logic (displayed as tiles/cards in the UI)
+  const ENERGY_DP_FIELDS = [
+    { key: 'gridBuyPower', label: 'Netz Bezug (W)', placeholder: '… (Import)' },
+    { key: 'gridSellPower', label: 'Netz Einspeisung (W)', placeholder: '… (Export)' },
     { key: 'gridPointPower', label: 'Netz Gesamt (W) (Import+ / Export-)', placeholder: 'optional – direktes NVP' },
     { key: 'pvPower', label: 'PV Leistung (W)', placeholder: '' },
     { key: 'consumptionTotal', label: 'Verbrauch Gesamt (W)', placeholder: '' },
     { key: 'batteryPower', label: 'Batterie Leistung (W)', placeholder: '' },
-    { key: 'storageSoc', label: 'Speicher SoC (%)', placeholder: '' },
+    { key: 'storageSoc', label: 'Speicher SoC (%)', placeholder: '' }
+  ];
+
+  const TARIFF_DP_FIELDS = [
     { key: 'priceCurrent', label: 'Tarif Preis aktuell (€/kWh)', placeholder: 'Provider-State (optional)' },
     { key: 'priceAverage', label: 'Tarif Preis Durchschnitt (€/kWh)', placeholder: 'Provider-State (optional)' }
   ];
@@ -137,31 +141,26 @@
     for (const app of APP_CATALOG) {
       const st = getSt(app.id);
 
-      const wrapper = document.createElement('div');
-      wrapper.className = 'nw-config-item';
+      const card = document.createElement('div');
+      card.className = 'nw-config-card';
+      card.setAttribute('data-app', app.id);
 
-      const left = document.createElement('div');
-      left.className = 'nw-config-item__left';
+      const header = document.createElement('div');
+      header.className = 'nw-config-card__header';
+
+      const top = document.createElement('div');
+      top.className = 'nw-config-card__header-top';
 
       const title = document.createElement('div');
-      title.className = 'nw-config-item__title';
+      title.className = 'nw-config-card__title';
       title.textContent = app.label;
 
-      const sub = document.createElement('div');
-      sub.className = 'nw-config-item__subtitle';
-      sub.textContent = app.desc;
-
-      left.appendChild(title);
-      left.appendChild(sub);
-
-      const right = document.createElement('div');
-      right.className = 'nw-config-item__right';
-      right.style.display = 'flex';
-      right.style.alignItems = 'center';
-      right.style.gap = '12px';
+      const actions = document.createElement('div');
+      actions.className = 'nw-config-card__header-actions';
 
       const mkToggle = (id, label, checked, disabled) => {
         const wrap = document.createElement('label');
+        wrap.className = 'nw-app-toggle';
         wrap.style.display = 'inline-flex';
         wrap.style.alignItems = 'center';
         wrap.style.gap = '6px';
@@ -191,23 +190,47 @@
       // Behaviour: if app is uninstalled, force enabled=false
       tInstalled.inp.addEventListener('change', () => {
         const installed = !!tInstalled.inp.checked;
-        const enabledInp = document.getElementById(idEnabled);
-        if (!enabledInp) return;
         if (!installed) {
-          enabledInp.checked = false;
-          enabledInp.disabled = true;
+          tEnabled.inp.checked = false;
+          tEnabled.inp.disabled = true;
         } else {
-          enabledInp.disabled = false;
+          tEnabled.inp.disabled = false;
         }
       });
 
-      right.appendChild(tInstalled.wrap);
-      right.appendChild(tEnabled.wrap);
+      actions.appendChild(tInstalled.wrap);
+      actions.appendChild(tEnabled.wrap);
 
-      wrapper.appendChild(left);
-      wrapper.appendChild(right);
+      top.appendChild(title);
+      top.appendChild(actions);
+      header.appendChild(top);
 
-      els.appsList.appendChild(wrapper);
+      const subtitle = document.createElement('div');
+      subtitle.className = 'nw-config-card__subtitle';
+      subtitle.textContent = app.mandatory ? (app.desc + ' (Basis)') : app.desc;
+      header.appendChild(subtitle);
+
+      const body = document.createElement('div');
+      body.className = 'nw-config-card__body';
+
+      // Optional quick hints
+      if (app.id === 'charging') {
+        const row = document.createElement('div');
+        row.className = 'nw-config-card__row';
+        row.textContent = 'Konfiguration: Reiter „Ladepunkte“. Datenpunkte: pro Ladepunkt.';
+        body.appendChild(row);
+      }
+      if (app.id === 'peak') {
+        const row = document.createElement('div');
+        row.className = 'nw-config-card__row';
+        row.textContent = 'Grenzwert: „Allgemein“ + optionaler Netzleistungs-Datenpunkt.';
+        body.appendChild(row);
+      }
+
+      card.appendChild(header);
+      card.appendChild(body);
+
+      els.appsList.appendChild(card);
     }
 
     els.appsEmpty.style.display = APP_CATALOG.length ? 'none' : 'block';
@@ -389,7 +412,7 @@
       input.type = 'text';
       input.id = id;
       input.value = valueOrEmpty(value);
-      input.placeholder = 'ioBroker State-ID…';
+      input.placeholder = 'State-ID…';
       input.addEventListener('change', () => onChange(String(input.value || '').trim()));
 
       const btn = document.createElement('button');
@@ -419,7 +442,52 @@
       title.className = 'nw-config-card__title';
       title.textContent = `Ladepunkt ${i}`;
 
+      const actions = document.createElement('div');
+      actions.className = 'nw-config-card__header-actions';
+
+      const btnUp = document.createElement('button');
+      btnUp.type = 'button';
+      btnUp.className = 'nw-config-mini-btn';
+      btnUp.textContent = '↑';
+      btnUp.title = 'Eine Position nach oben';
+      btnUp.disabled = (i <= 1);
+      btnUp.addEventListener('click', () => {
+        const sc2 = _ensureSettingsConfig();
+        const list2 = _ensureEvcsList(count);
+        const a = i - 1;
+        const b = i - 2;
+        if (b < 0) return;
+        const tmp = list2[a];
+        list2[a] = list2[b];
+        list2[b] = tmp;
+        sc2.evcsList = list2;
+        buildEvcsUI();
+      });
+
+      const btnDown = document.createElement('button');
+      btnDown.type = 'button';
+      btnDown.className = 'nw-config-mini-btn';
+      btnDown.textContent = '↓';
+      btnDown.title = 'Eine Position nach unten';
+      btnDown.disabled = (i >= count);
+      btnDown.addEventListener('click', () => {
+        const sc2 = _ensureSettingsConfig();
+        const list2 = _ensureEvcsList(count);
+        const a = i - 1;
+        const b = i;
+        if (b >= list2.length) return;
+        const tmp = list2[a];
+        list2[a] = list2[b];
+        list2[b] = tmp;
+        sc2.evcsList = list2;
+        buildEvcsUI();
+      });
+
+      actions.appendChild(btnUp);
+      actions.appendChild(btnDown);
+
       top.appendChild(title);
+      top.appendChild(actions);
       header.appendChild(top);
 
       const subtitle = document.createElement('div');
@@ -791,18 +859,33 @@
     els.gridConnectionPower.value = numOrEmpty(currentConfig.installerConfig && currentConfig.installerConfig.gridConnectionPower);
     els.schedulerIntervalMs.value = numOrEmpty(currentConfig.schedulerIntervalMs);
 
-    // Datapoints
+    // Datapoints (grouped per logic)
     const dps = currentConfig.datapoints || {};
-    buildDpTable(
-      els.dpTable,
-      BASE_DP_FIELDS,
-      (key) => dps[key],
-      (key, val) => {
-        currentConfig.datapoints = currentConfig.datapoints || {};
-        currentConfig.datapoints[key] = val;
-      },
-      { idPrefix: 'dp_' }
-    );
+    if (els.dpTable) {
+      buildDpTable(
+        els.dpTable,
+        ENERGY_DP_FIELDS,
+        (key) => dps[key],
+        (key, val) => {
+          currentConfig.datapoints = currentConfig.datapoints || {};
+          currentConfig.datapoints[key] = val;
+        },
+        { idPrefix: 'dp_' }
+      );
+    }
+
+    if (els.dpTariffs) {
+      buildDpTable(
+        els.dpTariffs,
+        TARIFF_DP_FIELDS,
+        (key) => dps[key],
+        (key, val) => {
+          currentConfig.datapoints = currentConfig.datapoints || {};
+          currentConfig.datapoints[key] = val;
+        },
+        { idPrefix: 'dp_' }
+      );
+    }
 
     // Peak expert
     els.peakGridPointPowerId.value = valueOrEmpty(currentConfig.peakShaving && currentConfig.peakShaving.gridPointPowerId);
@@ -1023,16 +1106,22 @@
   function openDpModal(targetInputId) {
     dpTargetInputId = targetInputId;
     treePrefix = '';
-    els.dpSearch.value = '';
-    els.dpResults.innerHTML = '';
-    els.dpTree.innerHTML = '';
-    els.dpBreadcrumb.textContent = '';
-    els.dpModal.classList.remove('hidden');
+    if (els.dpSearch) els.dpSearch.value = '';
+    if (els.dpResults) els.dpResults.innerHTML = '';
+    if (els.dpTree) els.dpTree.innerHTML = '';
+    if (els.dpBreadcrumb) els.dpBreadcrumb.innerHTML = '';
+    if (els.dpModal) {
+      els.dpModal.setAttribute('aria-hidden', 'false');
+      els.dpModal.classList.remove('hidden');
+    }
     refreshTree().catch(() => {});
   }
 
   function closeDpModal() {
-    els.dpModal.classList.add('hidden');
+    if (els.dpModal) {
+      els.dpModal.setAttribute('aria-hidden', 'true');
+      els.dpModal.classList.add('hidden');
+    }
     dpTargetInputId = null;
   }
 
@@ -1045,67 +1134,126 @@
     closeDpModal();
   }
 
+  function renderBreadcrumb() {
+    if (!els.dpBreadcrumb) return;
+    els.dpBreadcrumb.innerHTML = '';
+
+    const parts = (treePrefix || '').split('.').filter(Boolean);
+
+    const mkCrumb = (label, prefix, clickable) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'nw-dp-crumb' + (clickable ? '' : ' nw-dp-crumb--active');
+      b.textContent = label;
+      if (!clickable) {
+        b.disabled = true;
+        return b;
+      }
+      b.addEventListener('click', () => {
+        treePrefix = prefix;
+        refreshTree().catch(() => {});
+      });
+      return b;
+    };
+
+    const sep = () => {
+      const s = document.createElement('span');
+      s.className = 'nw-dp-sep';
+      s.textContent = '›';
+      return s;
+    };
+
+    // Start
+    els.dpBreadcrumb.appendChild(mkCrumb('Start', '', parts.length > 0));
+
+    // Segments
+    let acc = '';
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      acc = acc ? (acc + '.' + p) : p;
+      els.dpBreadcrumb.appendChild(sep());
+      els.dpBreadcrumb.appendChild(mkCrumb(p, acc, i < parts.length - 1));
+    }
+  }
+
+  function mkDpResultRow(primary, meta, onClick) {
+    const row = document.createElement('div');
+    row.className = 'nw-dp-result';
+    const id = document.createElement('div');
+    id.className = 'nw-dp-result__id';
+    id.textContent = primary;
+    const m = document.createElement('div');
+    m.className = 'nw-dp-result__meta';
+    m.textContent = meta || '';
+    row.appendChild(id);
+    row.appendChild(m);
+    if (typeof onClick === 'function') {
+      row.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      });
+    }
+    return row;
+  }
+
   async function refreshTree() {
-    const data = await fetchJson('/api/iobroker/tree?prefix=' + encodeURIComponent(treePrefix || ''));
+    const data = await fetchJson('/api/object/tree?prefix=' + encodeURIComponent(treePrefix || ''));
     const children = Array.isArray(data.children) ? data.children : [];
 
-    els.dpBreadcrumb.textContent = treePrefix ? ('Prefix: ' + treePrefix) : 'Prefix: (root)';
-    els.dpTree.innerHTML = '';
+    renderBreadcrumb();
+    if (els.dpTree) els.dpTree.innerHTML = '';
+    if (els.dpUpBtn) els.dpUpBtn.disabled = !treePrefix;
+    if (els.dpRootBtn) els.dpRootBtn.disabled = !treePrefix;
+
+    // Back entry (one level up)
+    if (treePrefix && els.dpTree) {
+      els.dpTree.appendChild(mkDpResultRow('..', 'Eine Ebene zurück', () => {
+        upOne();
+        refreshTree().catch(() => {});
+      }));
+    }
 
     if (!children.length) {
-      const empty = document.createElement('div');
-      empty.className = 'nw-config-empty';
-      empty.textContent = 'Keine Einträge.';
-      els.dpTree.appendChild(empty);
+      if (els.dpTree) {
+        const empty = document.createElement('div');
+        empty.className = 'nw-config-empty';
+        empty.textContent = 'Keine Einträge.';
+        els.dpTree.appendChild(empty);
+      }
       return;
     }
 
     for (const ch of children) {
-      const row = document.createElement('div');
-      row.className = 'nw-config-item';
-
-      const left = document.createElement('div');
-      left.className = 'nw-config-item__left';
-
-      const title = document.createElement('div');
-      title.className = 'nw-config-item__title';
-      title.textContent = (ch.hasChildren ? '📁 ' : '📄 ') + (ch.label || ch.id);
-
-      const sub = document.createElement('div');
-      sub.className = 'nw-config-item__subtitle';
-      sub.textContent = ch.id + (ch.name ? (' — ' + ch.name) : '');
-
-      left.appendChild(title);
-      left.appendChild(sub);
-
-      const right = document.createElement('div');
-      right.className = 'nw-config-item__right';
-      right.style.display = 'flex';
-      right.style.gap = '8px';
-      right.style.alignItems = 'center';
-
-      if (ch.hasChildren) {
-        const btnOpen = document.createElement('button');
-        btnOpen.type = 'button';
-        btnOpen.className = 'nw-config-btn nw-config-btn--ghost';
-        btnOpen.textContent = 'Öffnen';
-        btnOpen.onclick = () => { treePrefix = ch.id; refreshTree().catch(() => {}); };
-        right.appendChild(btnOpen);
+      // Folder-like entry
+      if (ch && ch.hasChildren) {
+        const meta = ch.name ? ('Ordner • ' + ch.name) : 'Ordner';
+        if (els.dpTree) {
+          els.dpTree.appendChild(mkDpResultRow(String(ch.id || ch.label || ''), meta, () => {
+            treePrefix = String(ch.id || '');
+            refreshTree().catch(() => {});
+          }));
+        }
+        continue;
       }
 
-      if (ch.isState) {
-        const btnSel = document.createElement('button');
-        btnSel.type = 'button';
-        btnSel.className = 'nw-config-btn nw-config-btn--primary';
-        btnSel.textContent = 'Wählen';
-        btnSel.onclick = () => setDpTargetValue(ch.id);
-        right.appendChild(btnSel);
+      // State-like entry
+      if (ch && ch.isState) {
+        const metaBits = [];
+        if (ch.name) metaBits.push(String(ch.name));
+        if (ch.role) metaBits.push(String(ch.role));
+        if (ch.unit) metaBits.push(String(ch.unit));
+        const meta = metaBits.join(' • ');
+        if (els.dpTree) {
+          els.dpTree.appendChild(mkDpResultRow(String(ch.id || ''), meta, () => setDpTargetValue(String(ch.id || ''))));
+        }
+        continue;
       }
 
-      row.appendChild(left);
-      row.appendChild(right);
-
-      els.dpTree.appendChild(row);
+      // Fallback
+      if (els.dpTree) {
+        els.dpTree.appendChild(mkDpResultRow(String(ch && (ch.id || ch.label) || ''), '', null));
+      }
     }
   }
 
@@ -1129,38 +1277,12 @@
     }
 
     for (const r of results) {
-      const row = document.createElement('div');
-      row.className = 'nw-config-item';
-
-      const left = document.createElement('div');
-      left.className = 'nw-config-item__left';
-
-      const title = document.createElement('div');
-      title.className = 'nw-config-item__title';
-      title.textContent = r.id;
-
-      const sub = document.createElement('div');
-      sub.className = 'nw-config-item__subtitle';
-      sub.textContent = (r.name || '') + (r.role ? (' — ' + r.role) : '');
-
-      left.appendChild(title);
-      left.appendChild(sub);
-
-      const right = document.createElement('div');
-      right.className = 'nw-config-item__right';
-
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'nw-config-btn nw-config-btn--primary';
-      btn.textContent = 'Wählen';
-      btn.onclick = () => setDpTargetValue(r.id);
-
-      right.appendChild(btn);
-
-      row.appendChild(left);
-      row.appendChild(right);
-
-      els.dpResults.appendChild(row);
+      const metaBits = [];
+      if (r.name) metaBits.push(String(r.name));
+      if (r.role) metaBits.push(String(r.role));
+      if (r.unit) metaBits.push(String(r.unit));
+      const meta = metaBits.join(' • ');
+      els.dpResults.appendChild(mkDpResultRow(String(r.id || ''), meta, () => setDpTargetValue(String(r.id || ''))));
     }
   }
 

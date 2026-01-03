@@ -57,7 +57,7 @@
     <div class="nw-config-section__head">
       <h2 class="nw-config-section__title">Apps (Kernlogiken)</h2>
     </div>
-    <div class="nw-config-list" id="appsList"></div>
+    <div class="nw-config-grid" id="appsList"></div>
     <div class="nw-config-empty" id="appsEmpty" style="display:none;">Keine Apps verfügbar.</div>
   </section>
 
@@ -67,101 +67,109 @@
 
   <section class="nw-config-section">
     <div class="nw-config-section__head">
-      <h2 class="nw-config-section__title">Anlagenparameter</h2>
-    </div>
-
-    <div class="nw-config-list">
-      <div class="nw-config-item">
-        <div class="nw-config-item__left">
-          <div class="nw-config-item__title">Netzanschlussleistung (W)</div>
-          <div class="nw-config-item__subtitle">Zentraler Grenzwert für Import-Limit (Peak-Shaving, Grid-Constraints, Lademanagement).</div>
-        </div>
-        <div class="nw-config-item__right">
-          <input id="gridConnectionPower" class="nw-config-input" type="number" min="0" step="1" placeholder="z.B. 25000"/>
-        </div>
-      </div>
-
-      <div class="nw-config-item">
-        <div class="nw-config-item__left">
-          <div class="nw-config-item__title">Scheduler-Intervall (ms)</div>
-          <div class="nw-config-item__subtitle">Tick-Intervall der EMS-Engine. Standard: 1000 ms.</div>
-        </div>
-        <div class="nw-config-item__right">
-          <input id="schedulerIntervalMs" class="nw-config-input" type="number" min="250" step="50" placeholder="1000"/>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="nw-config-section">
-    <div class="nw-config-section__head">
-      <h2 class="nw-config-section__title">VIS-Datenpunkte (Basis)</h2>
+      <h2 class="nw-config-section__title">Zuordnung &amp; Einstellungen</h2>
     </div>
     <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
-      Diese Zuordnung wird u.a. für Energiefluss, Tarife, PV-Überschuss und interne Netzleistungs-Berechnung verwendet.
-    </div>
-    <div id="dpTable" class="nw-config-list"></div>
-  </section>
-
-  <section class="nw-config-section">
-    <div class="nw-config-section__head">
-      <h2 class="nw-config-section__title">Speicher-Mapping (herstellerunabhängig)</h2>
-    </div>
-    <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
-      Minimal notwendig ist mindestens der SoC. Je nach Steuerungsart werden weitere Datenpunkte benötigt.
-    </div>
-    <div class="nw-config-list" id="storageTable"></div>
-  </section>
-
-  <section class="nw-config-section">
-    <div class="nw-config-section__head">
-      <h2 class="nw-config-section__title">Expertenbereich</h2>
-    </div>
-    <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
-      Diese Felder sind optional. Sie helfen beim Debugging oder bei Spezialfällen.
+      Jede App hat ihre eigenen Datenpunkte. Ordne sie hier sauber zu, damit die Regelungen stabil und nachvollziehbar arbeiten.
     </div>
 
-    <div class="nw-config-list">
-      <div class="nw-config-item">
-        <div class="nw-config-item__left">
-          <div class="nw-config-item__title">Peak-Shaving: Netzleistung Datenpunkt (optional)</div>
-          <div class="nw-config-item__subtitle">Wenn leer, verwendet Peak-Shaving automatisch die interne Netzleistung <code>ems.gridPowerW</code>.</div>
+    <div class="nw-config-grid" id="mappingGrid">
+
+      <div class="nw-config-card" data-card="general">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Allgemein</div>
+          <div class="nw-config-card__subtitle">Systemweite Grenzwerte &amp; Tick-Intervall</div>
         </div>
-        <div class="nw-config-item__right" style="display:flex;gap:8px;align-items:center;">
-          <input id="peakGridPointPowerId" class="nw-config-input" type="text" placeholder="z.B. smartmeter.0.power"/>
-          <button class="nw-config-btn nw-config-btn--ghost" type="button" data-browse="peakGridPointPowerId">Auswählen…</button>
+        <div class="nw-config-card__body">
+          <div class="nw-config-field-row">
+            <div class="nw-config-field-label">Netzanschlussleistung (W)</div>
+            <div class="nw-config-field-control">
+              <input id="gridConnectionPower" class="nw-config-input" type="number" min="0" step="1" placeholder="z.B. 25000"/>
+            </div>
+          </div>
+          <div class="nw-config-field-row">
+            <div class="nw-config-field-label">Scheduler-Intervall (ms)</div>
+            <div class="nw-config-field-control">
+              <input id="schedulerIntervalMs" class="nw-config-input" type="number" min="250" step="50" placeholder="1000"/>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="nw-config-item">
-        <div class="nw-config-item__left">
-          <div class="nw-config-item__title">Speicher Steuerungsart</div>
-          <div class="nw-config-item__subtitle">targetPower (Sollleistung) | limits (Max. Lade/Entlade) | enableFlags (Laden/Entladen erlaubt)</div>
+      <div class="nw-config-card" data-card="energy">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Energiefluss</div>
+          <div class="nw-config-card__subtitle">Basis für PV, Netz, Verbrauch, Speicher &amp; Flow-Monitor</div>
         </div>
-        <div class="nw-config-item__right">
-          <select id="storageControlMode" class="nw-config-input">
-            <option value="targetPower">targetPower</option>
-            <option value="limits">limits</option>
-            <option value="enableFlags">enableFlags</option>
-          </select>
+        <div class="nw-config-card__body">
+          <div id="dpTable" class="nw-config-list"></div>
         </div>
       </div>
 
-      <div class="nw-config-item">
-        <div class="nw-config-item__left">
-          <div class="nw-config-item__title">Raw JSON Patch (optional)</div>
-          <div class="nw-config-item__subtitle">Für schnelle Tests: JSON-Patch (wird beim Speichern zusätzlich gemerged). Ungültiges JSON wird ignoriert.</div>
+      <div class="nw-config-card" data-card="tariff">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Tarife</div>
+          <div class="nw-config-card__subtitle">Preis-Signale für dynamische Tarife / Ladefreigabe</div>
         </div>
-        <div class="nw-config-item__right" style="width:100%;">
+        <div class="nw-config-card__body">
+          <div id="dpTariffs" class="nw-config-list"></div>
+        </div>
+      </div>
+
+      <div class="nw-config-card" data-card="storage">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Speicher</div>
+          <div class="nw-config-card__subtitle">Herstellerunabhängige Zuordnung + Steuerungsart</div>
+        </div>
+        <div class="nw-config-card__body">
+          <div class="nw-config-field-row">
+            <div class="nw-config-field-label">Steuerungsart</div>
+            <div class="nw-config-field-control">
+              <select id="storageControlMode" class="nw-config-input">
+                <option value="targetPower">targetPower</option>
+                <option value="limits">limits</option>
+                <option value="enableFlags">enableFlags</option>
+              </select>
+            </div>
+          </div>
+          <div id="storageTable" class="nw-config-list" style="margin-top:6px;"></div>
+        </div>
+      </div>
+
+      <div class="nw-config-card" data-card="peak">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Peak-Shaving</div>
+          <div class="nw-config-card__subtitle">Optionaler Netzleistungs-Datenpunkt (sonst interne Berechnung)</div>
+        </div>
+        <div class="nw-config-card__body">
+          <div class="nw-config-field-row">
+            <div class="nw-config-field-label">Netzleistung Datenpunkt</div>
+            <div class="nw-config-field-control">
+              <div class="nw-config-dp-input-wrapper">
+                <input id="peakGridPointPowerId" class="nw-config-input nw-config-dp-input" type="text" placeholder="z.B. smartmeter.0.power"/>
+                <button class="nw-config-dp-button" type="button" data-browse="peakGridPointPowerId">Auswählen…</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="nw-config-card" data-card="expert">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Experte</div>
+          <div class="nw-config-card__subtitle">Optional: JSON-Patch (wird beim Speichern zusätzlich gemerged)</div>
+        </div>
+        <div class="nw-config-card__body">
           <textarea id="rawPatch" class="nw-config-input" rows="6" style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;" placeholder='{"peakShaving":{"maxImportW":12345}}'></textarea>
         </div>
       </div>
+
     </div>
   </section>
 
   </div>
 
-  <div id="nw-tabpanel-evcs" data-tabpanel="evcs" style="display:none;">
+<div id="nw-tabpanel-evcs" data-tabpanel="evcs" style="display:none;">
     <section class="nw-config-section">
       <div class="nw-config-section__head">
         <h2 class="nw-config-section__title">Ladepunkte (Wallbox/EVCS)</h2>
@@ -224,39 +232,42 @@
     </section>
   </div>
 
-  <!-- DP Browser Modal -->
-  <div id="dpModal" class="modal hidden">
-    <div class="dialog" style="max-width:860px;">
-      <div class="dialog-header">
-        <div class="title">Datenpunkt auswählen</div>
-        <button id="dpClose" class="btn small" aria-label="Schließen">×</button>
+  <!-- Datenpunkt-Auswahl (Dialog) -->
+  <div id="dpModal" class="nw-dp-dialog-backdrop hidden" aria-hidden="true">
+    <div class="nw-dp-dialog" role="dialog" aria-modal="true" aria-label="Datenpunkt auswählen" style="width:min(980px,92vw);">
+      <div class="nw-dp-dialog__header">
+        <div class="nw-dp-dialog__title">Datenpunkt auswählen</div>
+        <button id="dpClose" class="nw-dp-dialog__close" type="button" aria-label="Schließen">Schließen</button>
       </div>
 
-      <div class="row" style="gap:10px;display:flex;flex-wrap:wrap;align-items:center;">
-        <input id="dpSearch" class="nw-config-input" type="text" placeholder="Suchen (ID oder Name)…" style="flex:1;min-width:240px;"/>
-        <button id="dpSearchBtn" class="nw-config-btn nw-config-btn--primary" type="button">Suchen</button>
-        <button id="dpRootBtn" class="nw-config-btn nw-config-btn--ghost" type="button">Root</button>
-        <button id="dpUpBtn" class="nw-config-btn nw-config-btn--ghost" type="button">↑</button>
-      </div>
-
-      <div class="nw-config-section__subtitle" id="dpBreadcrumb" style="margin-top:10px;opacity:.8;"></div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;">
-        <div>
-          <div style="opacity:.85;margin-bottom:6px;">Browse (Objektbaum)</div>
-          <div id="dpTree" class="nw-config-list" style="max-height:340px;overflow:auto;"></div>
+      <div class="nw-dp-dialog__body">
+        <div class="nw-dp-dialog__search" style="flex-wrap:wrap;">
+          <input id="dpSearch" class="nw-config-input" type="text" placeholder="Suchen (ID oder Name)…" />
+          <button id="dpSearchBtn" class="nw-config-btn nw-config-btn--primary" type="button">Suchen</button>
+          <button id="dpRootBtn" class="nw-config-btn nw-config-btn--ghost" type="button">Start</button>
+          <button id="dpUpBtn" class="nw-config-btn nw-config-btn--ghost" type="button">Zurück</button>
         </div>
-        <div>
-          <div style="opacity:.85;margin-bottom:6px;">Search (Treffer)</div>
-          <div id="dpResults" class="nw-config-list" style="max-height:340px;overflow:auto;"></div>
-        </div>
-      </div>
 
-      <div class="hint" style="margin-top:12px;opacity:.75;font-size:12px;">
-        Tipp: Für große Systeme ist „Browse“ oft schneller. „Search“ nutzt eine Cache-Liste (limitierbar, aber ohne harte Systemgrenze).
+        <div id="dpBreadcrumb" class="nw-dp-breadcrumb"></div>
+
+        <div class="nw-dp-dialog__columns">
+          <div class="nw-dp-dialog__col">
+            <div class="nw-dp-col-title">Ordner</div>
+            <div id="dpTree" class="nw-dp-dialog__results"></div>
+          </div>
+          <div class="nw-dp-dialog__col">
+            <div class="nw-dp-col-title">Suchtreffer</div>
+            <div id="dpResults" class="nw-dp-dialog__results"></div>
+          </div>
+        </div>
+
+        <div class="nw-config-empty" style="margin-top:6px;">
+          Tipp: Ordner-Navigation ist bei sehr großen Systemen oft schneller. Suche nutzt eine Cache-Liste (limitierbar, aber ohne harte Systemgrenze).
+        </div>
       </div>
     </div>
   </div>
+
 </main>
 
 <script src="/static/ems-apps.js"></script>

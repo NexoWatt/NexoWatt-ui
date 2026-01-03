@@ -1295,7 +1295,7 @@ class NexoWattVis extends utils.Adapter {
       const count = (Number(this.evcsCount) || (cfg && cfg.settingsConfig && Number(cfg.settingsConfig.evcsCount)) || 1);
       const evcsCount = (Number.isFinite(count) && count > 0) ? Math.round(count) : 1;
 
-      // Subscribe to all local EMS states (wildcards are supported by ioBroker).
+      // Subscribe to all local EMS states (wildcards are supported by the runtime).
       // This keeps the state cache in sync and prevents UI mode buttons from jumping.
       try { await this.subscribeForeignStatesAsync(`${ns}.chargingManagement.*`); } catch (_e) {}
       try { await this.subscribeForeignStatesAsync(`${ns}.chargingManagement.wallboxes.*`); } catch (_e) {}
@@ -2351,8 +2351,8 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
     // --- Auth ---
     // Hinweis (VIS Gate F / Versionstand 5):
     // Der separate Login-/Anmeldebereich (Admin/Installer) wurde bewusst entfernt.
-    // Der VIS-Adapter läuft ausschließlich lokal im ioBroker-Netz und die Rechteverwaltung
-    // erfolgt über ioBroker (Admin) bzw. über den Installer-Reiter im UI.
+    // Der VIS-Adapter läuft ausschließlich lokal; die Rechteverwaltung erfolgt über Admin
+    // bzw. über den Installer-Reiter im UI.
     // Daher werden schreibende Endpunkte nicht zusätzlich durch ein VIS-eigenes Login geschützt.
     const authCfg = (this.config && this.config.auth) || {};
     const authEnabled = false;
@@ -2494,7 +2494,7 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
       }
     };
 
-    // Login via ioBroker user/password
+    // Login via user/password
     app.post('/api/auth/login', doAuthLogin);
 
     // Logout
@@ -2781,7 +2781,7 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
     });
 
     
-    app.get('/api/smarthome/dpsearch', async (req, res) => {
+    app.get('/api/smarthome/dpsearch', requireInstaller, async (req, res) => {
       try {
         const qRaw = (req.query && req.query.q) || '';
         const q = (typeof qRaw === 'string' ? qRaw : String(qRaw || '')).trim();
@@ -3282,8 +3282,8 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
       }
     });
 
-    // --- ioBroker Objekt-Browser (Tree) ---
-    app.get('/api/iobroker/tree', async (req, res) => {
+    // --- Datenpunkt-Objekt-Browser (Tree) ---
+    app.get('/api/object/tree', requireInstaller, async (req, res) => {
       try {
         const prefixRaw = (req.query && req.query.prefix) || '';
         const prefix = (typeof prefixRaw === 'string' ? prefixRaw : String(prefixRaw || '')).trim();
@@ -3367,7 +3367,7 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
 
         res.json({ ok: true, prefix, children: out });
       } catch (e) {
-        try { this.log.warn('iobroker tree API error: ' + (e && e.message ? e.message : e)); } catch (_e2) {}
+        try { this.log.warn('object tree API error: ' + (e && e.message ? e.message : e)); } catch (_e2) {}
         res.status(500).json({ ok: false, error: 'internal error' });
       }
     });
@@ -4175,7 +4175,7 @@ app.get('/config', (req, res) => {
         },
         // UI compatibility flag: old frontends used "installerLocked".
         // New behaviour: installer-level features are locked until the user logs in
-        // with an ioBroker account that has installer rights.
+        // with an account that has installer rights.
         installerLocked: (authEnabled && protectWrites) ? !(sess && sess.isInstaller) : false
       });
     });
@@ -4300,7 +4300,7 @@ app.get('/config', (req, res) => {
         }
 
 
-        // Speicherfarm: Konfiguration ist Installateur-/Admin-Sache (ioBroker Admin / jsonConfig).
+        // Speicherfarm: Konfiguration ist Installateur-/Admin-Sache (Admin / jsonConfig).
         // Im VIS-Frontend ist die Speicherfarm bewusst read-only, damit Endkunden keine DP-Zuordnung verändern können.
         if (scope === 'storageFarm') {
           return res.status(403).json({ ok: false, error: 'forbidden' });
@@ -4689,7 +4689,7 @@ app.get('/config', (req, res) => {
   }
 
 
-  // --- Energy totals fallback: derive kWh values from ioBroker history (InfluxDB) when no kWh counters are mapped ---
+  // --- Energy totals fallback: derive kWh values from history (InfluxDB) when no kWh counters are mapped ---
   _nwTrimId(v) {
     if (typeof v !== 'string') return '';
     const s = v.trim();

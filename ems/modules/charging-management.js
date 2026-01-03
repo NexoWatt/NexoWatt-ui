@@ -489,7 +489,8 @@ class ChargingManagementModule extends BaseModule {
         await this.adapter.setStateAsync('chargingManagement.debug.lastRun', now, true);
         await this.adapter.setStateAsync('chargingManagement.debug.sortedOrder', '', true);
         await this.adapter.setStateAsync('chargingManagement.debug.allocations', '[]', true);
-        for (const wb of wallboxes) {
+        for (let wbIndex = 0; wbIndex < wallboxes.length; wbIndex++) {
+            const wb = wallboxes[wbIndex];
             const key = String(wb.key || '').trim();
             if (!key) continue;
 
@@ -770,6 +771,7 @@ class ChargingManagementModule extends BaseModule {
             wbList.push({
                 key,
                 safe,
+                orderIndex: wbIndex,
                 ch,
                 name: String(wb.name || key),
                 enabled,
@@ -830,7 +832,7 @@ class ChargingManagementModule extends BaseModule {
 
         
         /**
-         * MU6.8: ioBroker state staleness helper (uses state.ts / state.lc).
+         * MU6.8: state staleness helper (uses state.ts / state.lc).
          * @param {string} id
          * @param {number} maxAgeMs
          * @returns {Promise<boolean>}
@@ -1425,7 +1427,7 @@ if (components.length) {
             }
         }
 
-        // Peak-shaving-derived budget is an ioBroker state; check ts/lc (if used)
+        // Peak-shaving-derived budget is a dynamic state; check ts/lc (if used)
         if (!staleMeter && !staleBudget && (budgetMode === 'fromPeakShaving' || budgetMode === 'engine')) {
             const psBudgetStale = await isStateStale('peakShaving.dynamic.availableForControlledW', staleTimeoutMs);
             // Only treat as relevant if peak shaving is active or the user explicitly uses fromPeakShaving.
@@ -1792,6 +1794,11 @@ if (components.length) {
                 const ap = Number.isFinite(a.priority) ? a.priority : 9999;
                 const bp = Number.isFinite(b.priority) ? b.priority : 9999;
                 if (ap !== bp) return ap - bp;
+
+                // If everything is equal, keep the configured list order stable (installer can reorder in UI)
+                const ao = Number.isFinite(a.orderIndex) ? a.orderIndex : 0;
+                const bo = Number.isFinite(b.orderIndex) ? b.orderIndex : 0;
+                if (ao !== bo) return ao - bo;
 
                 const ask = String(a.safe || '');
                 const bsk = String(b.safe || '');

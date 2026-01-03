@@ -1,3 +1,11 @@
+## 0.5.31 (2026-01-03)
+- Phase 3.2: Lademanagement + UI/Installer-UX
+  - Ladepunkte: stabile Sortierung + Up/Down-Reihenfolge im App-Center (wird auch im Algorithmus als Tie‑Break genutzt).
+  - Zuordnung: Apps und Datenpunkt‑Zuordnung als Kacheln im NexoWatt Design.
+  - Datenpunkt-Browser: NexoWatt Dialog, Breadcrumb, „Zurück“ + Root, keine Emoji-Icons.
+  - API: Objektbaum-Endpunkt auf `/api/object/tree` vereinheitlicht.
+  - Code: Branding-Aufräumen (keine Plattform-Nennung in Code-Kommentaren).
+
 ## 0.5.29 (2026-01-03)
 - Phase 2: EMS App-Center
   - App-Center: Installieren/Aktivieren von EMS-Apps (State `emsApps`) mit Rückwärtskompatibilität zu `enable*` Flags.
@@ -10,7 +18,7 @@
 - Installer (Beta): neue EMS-App-/Installer-Seite unter `/ems-apps.html`.
   - Apps als Module: Aktivieren/Deaktivieren der Kern-Logiken (Peak-Shaving, Speicherregelung, Lademanagement, Grid-Constraints, §14a).
   - Zentrale Anlagenparameter (z.B. Netzanschlussleistung) + Basis-Datenpunkt-Zuordnung.
-- API: `/api/installer/config` (lesen/schreiben + optional EMS-Neustart) und `/api/iobroker/tree` (Objektbaum) für komfortable Datenpunkt-Auswahl.
+- API: `/api/installer/config` (lesen/schreiben + optional EMS-Neustart) und `/api/object/tree` (Objektbaum) für komfortable Datenpunkt-Auswahl.
 - Admin-Tab: Auswahlseite „VIS öffnen“ / „EMS Apps öffnen“.
 - Fix: Tarif-Modul – unbeabsichtigter Debug-Reset im Tick entfernt.
 

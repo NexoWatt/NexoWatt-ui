@@ -78,7 +78,7 @@ class DatapointRegistry {
         this.byKey.set(key, normalized);
         this.keyByObjectId.set(objectId, key);
 
-        // Subscribe (idempotent; ioBroker tolerates multiple subscribe calls)
+        // Subscribe (idempotent; the runtime tolerates multiple subscribe calls)
         try {
             await this.adapter.subscribeForeignStatesAsync(objectId);
         } catch (e) {
@@ -97,7 +97,7 @@ class DatapointRegistry {
     /**
      * Feed cache from adapter stateChange.
      * @param {string} id
-     * @param {ioBroker.State | null | undefined} state
+     * @param {any | null | undefined} state
      */
     handleStateChange(id, state) {
         if (!id) return;
