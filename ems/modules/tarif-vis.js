@@ -47,6 +47,10 @@ class TarifVisModule extends BaseModule {
         await mk('tarif.ladeparkLimitW', 'Ladepark Limit (W, berechnet)', 'number', 'value.power');
         await mk('tarif.preisGrenzeEurProKwh', 'Tarif Preisgrenze (€/kWh, VIS)', 'number', 'value');
         await mk('tarif.preisAktuellEurProKwh', 'Tarif Preis aktuell (€/kWh, Provider)', 'number', 'value');
+        await mk('tarif.preisDurchschnittEurProKwh', 'Tarif Preis Durchschnitt (€/kWh, Provider)', 'number', 'value');
+        await mk('tarif.preisRefEurProKwh', 'Tarif Referenzpreis (€/kWh, wirksam)', 'number', 'value');
+        await mk('tarif.state', 'Tarif Zustand (günstig/neutral/teuer)', 'string', 'text');
+        await mk('tarif.speicherSollW', 'Tarif Sollleistung Speicher (W, berechnet)', 'number', 'value.power');
         await mk('tarif.netzLadenErlaubt', 'Netzladung erlaubt (Tarif-Logik)', 'boolean', 'indicator');
         // VIS-Settings als Datenpunkte registrieren (nur wenn dp-Registry vorhanden ist)
         if (this.dp && typeof this.dp.upsert === 'function') {
@@ -64,6 +68,12 @@ class TarifVisModule extends BaseModule {
             const priceCurrentId = this._getVisPriceCurrentId();
             if (priceCurrentId) {
                 await this.dp.upsert({ key: 'tarif.preisAktuellEurProKwh', objectId: priceCurrentId });
+            }
+
+            // Optional: Durchschnittspreis (für Automatik)
+            const priceAverageId = this._getVisPriceAverageId();
+            if (priceAverageId) {
+                await this.dp.upsert({ key: 'tarif.preisDurchschnittEurProKwh', objectId: priceAverageId });
             }
 
             // Ausgabe für das Ladepark-Management (Tarif-Deckel)
@@ -88,6 +98,12 @@ class TarifVisModule extends BaseModule {
         return id || '';
     }
 
+    _getVisPriceAverageId() {
+        const cfg = (this.adapter && this.adapter.config && this.adapter.config.vis) ? this.adapter.config.vis : null;
+        const id = (cfg && typeof cfg.priceAverageId === 'string') ? cfg.priceAverageId.trim() : '';
+        return id || '';
+    }
+
     _num(v, fallback = null) {
         const n = Number(v);
         return Number.isFinite(n) ? n : fallback;
@@ -102,116 +118,177 @@ class TarifVisModule extends BaseModule {
 
     /**
      * Priorität normalisieren:
-     * - 0..1 wird als Anteil "Ladepark" interpretiert
-     * - 0..100 wird auf 0..1 skaliert
+     *
+     * Neue VIS-Logik (Slider, diskret):
+     *   1 = Speicher
+     *   2 = Auto (Speicher + Ladestation)
+     *   3 = Ladestation
+     *
+     * Legacy-Unterstützung:
+     *   0..100 (alt) wird auf 1..3 gemappt:
+     *     >= 67  => Speicher
+     *     <= 33  => Ladestation
+     *     sonst  => Auto
      */
     _normPrioritaet(p) {
-        const n = this._num(p, 0.5);
-        if (!Number.isFinite(n)) return 0.5;
-        if (n >= 0 && n <= 1) return n;
-        if (n >= 0 && n <= 100) return this._clamp(n / 100, 0, 1);
-        return this._clamp(n, 0, 1);
+        const n = this._num(p, 2);
+        if (!Number.isFinite(n)) return 2;
+        if (n === 1 || n === 2 || n === 3) return n;
+
+        // Legacy: 0..100
+        if (n >= 0 && n <= 100) {
+            if (n >= 67) return 1;
+            if (n <= 33) return 3;
+            return 2;
+        }
+
+        // Fallback: runden & clamp
+        const r = Math.round(n);
+        if (r < 1) return 2;
+        if (r > 3) return 2;
+        return r;
     }
 
-        async tick() {
-        // Default: kein Tarif-Deckel aktiv
-        let limitW = 0;
+    async tick() {
+        // VIS-Einstellungen sind nicht hochfrequent
+        const staleTimeoutMs = 3600 * 1000;
+        // Provider-Preise (dynamischer Tarif) sollten regelmäßig aktualisiert werden
+        const providerStaleTimeoutMs = 15 * 60 * 1000;
 
-        // Default: Netzladung erlaubt (wenn Tarif nicht aktiv/invalid)
-        let gridChargeAllowed = true;
+        try {
+            // --- VIS Settings ---
+            const aktiv = this.dp ? this.dp.getBoolean('vis.settings.dynamicTariff', false) : false;
+            const aktivAge = this.dp ? this.dp.getAgeMs('vis.settings.dynamicTariff') : null;
+            const aktivFresh = (aktivAge === null || aktivAge === undefined) ? true : (aktivAge <= staleTimeoutMs);
+            const aktivEff = !!(aktivFresh && aktiv);
 
-        // Preise: Grenze aus VIS + (optional) aktueller Preis aus Provider-Mapping
-        let priceLimit = null;
-        let priceCurrent = null;
+            const modusRaw = this.dp ? this.dp.getNumberFresh('vis.settings.tariffMode', staleTimeoutMs, null) : null;
+            const modusInt = (typeof modusRaw === 'number' && Number.isFinite(modusRaw)) ? Math.round(modusRaw) : 1;
 
-        // VIS Werte lesen (über dp-Registry Cache)
-        const staleTimeoutSec = 3600; // VIS-Einstellungen sind nicht hochfrequent
-        const staleTimeoutMs = staleTimeoutSec * 1000;
+            const preisGrenzeVis = this.dp ? this.dp.getNumberFresh('vis.settings.price', staleTimeoutMs, null) : null;
+            const priorRaw = this.dp ? this.dp.getNumberFresh('vis.settings.priority', staleTimeoutMs, null) : null;
+            const storageW = this.dp ? this.dp.getNumberFresh('vis.settings.storagePower', staleTimeoutMs, null) : null;
+            const evcsMaxW = this.dp ? this.dp.getNumberFresh('vis.settings.evcsMaxPower', staleTimeoutMs, null) : null;
 
-        // Provider-Preise (optional) sind üblicherweise häufiger als VIS-Einstellungen
-        const providerStaleTimeoutSec = 15 * 60;
-        const providerStaleTimeoutMs = providerStaleTimeoutSec * 1000;
+            const prioritaet = this._normPrioritaet(priorRaw);
+            const storagePowerAbsW = Math.max(0, Math.abs(this._num(storageW, 0)));
+            const baseW = Math.max(0, Math.abs(this._num(evcsMaxW, 0)));
 
-        const aktiv = this.dp ? this.dp.getBoolean('vis.settings.dynamicTariff', false) : false;
-        const aktivAge = this.dp ? this.dp.getAgeMs('vis.settings.dynamicTariff') : null;
-        const aktivFresh = (aktivAge === null || aktivAge === undefined) ? true : (aktivAge <= staleTimeoutMs);
+            // --- Provider Preise ---
+            let preisAktuell = null;
+            if (this.dp && typeof this.dp.getEntry === 'function' && this.dp.getEntry('tarif.preisAktuellEurProKwh')) {
+                preisAktuell = this.dp.getNumberFresh('tarif.preisAktuellEurProKwh', providerStaleTimeoutMs, null);
+            }
+            let preisDurchschnitt = null;
+            if (this.dp && typeof this.dp.getEntry === 'function' && this.dp.getEntry('tarif.preisDurchschnittEurProKwh')) {
+                preisDurchschnitt = this.dp.getNumberFresh('tarif.preisDurchschnittEurProKwh', providerStaleTimeoutMs, null);
+            }
 
-        const modus = this.dp ? this.dp.getNumberFresh('vis.settings.tariffMode', staleTimeoutMs, null) : null;
-        const preisGrenzeVis = this.dp ? this.dp.getNumberFresh('vis.settings.price', staleTimeoutMs, null) : null;
-        const prior = this.dp ? this.dp.getNumberFresh('vis.settings.priority', staleTimeoutMs, null) : null;
-        const storageW = this.dp ? this.dp.getNumberFresh('vis.settings.storagePower', staleTimeoutMs, null) : null;
-        const evcsMaxW = this.dp ? this.dp.getNumberFresh('vis.settings.evcsMaxPower', staleTimeoutMs, null) : null;
+            // Plausibilität: Preis in €/kWh
+            const preisVisOk = (typeof preisGrenzeVis === 'number' && Number.isFinite(preisGrenzeVis)) ? (preisGrenzeVis >= 0 && preisGrenzeVis <= 2.0) : false;
+            const preisAktuellOk = (typeof preisAktuell === 'number' && Number.isFinite(preisAktuell)) ? (preisAktuell >= 0 && preisAktuell <= 2.0) : false;
+            const preisDurchschnittOk = (typeof preisDurchschnitt === 'number' && Number.isFinite(preisDurchschnitt)) ? (preisDurchschnitt >= 0 && preisDurchschnitt <= 2.0) : false;
 
-        // Optional: aktueller Preis aus Provider (nur wenn im Global-DP-Mapping hinterlegt)
-        if (this.dp && typeof this.dp.getEntry === 'function' && this.dp.getEntry('tarif.preisAktuellEurProKwh')) {
-            priceCurrent = this.dp.getNumberFresh('tarif.preisAktuellEurProKwh', providerStaleTimeoutMs, null);
-        }
-
-        // Plausibilität: Preis in €/kWh
-        const hasPreisGrenze = (typeof preisGrenzeVis === 'number' && Number.isFinite(preisGrenzeVis));
-        const preisGrenzePlausibel = hasPreisGrenze ? (preisGrenzeVis >= 0 && preisGrenzeVis <= 2.0) : true;
-
-        const modusInt = (typeof modus === 'number' && Number.isFinite(modus)) ? Math.round(modus) : null;
-
-        // In manuellem Modus setzen wir (ohne Provider-Mapping) den aktuellen Preis = Grenze (keine Auto-Sperre)
-        if (modusInt === 1 && hasPreisGrenze) {
-            priceCurrent = preisGrenzeVis;
-        }
-
-        const preisAktuellOk = (typeof priceCurrent === 'number' && Number.isFinite(priceCurrent)) ? (priceCurrent >= 0 && priceCurrent <= 2.0) : false;
-        if (hasPreisGrenze && preisGrenzePlausibel) {
-            priceLimit = preisGrenzeVis;
-        }
-
-        // Netzladung erlaubt nur, wenn Tarif aktiv + Preisgrenze gesetzt + aktueller Preis <= Grenze
-        if (aktivFresh && aktiv && hasPreisGrenze && preisGrenzePlausibel) {
-            if (modusInt === 1) {
-                // Manuell: keine automatische Sperre
-                gridChargeAllowed = true;
+            // Referenzpreis (Preisgrenze) – wirksam
+            let preisRef = null;
+            if (modusInt === 2) {
+                // Automatisch: Durchschnittspreis (Fallback: VIS)
+                preisRef = preisDurchschnittOk ? preisDurchschnitt : (preisVisOk ? preisGrenzeVis : null);
             } else {
-                // Automatik: ohne aktuellen Preis => konservativ sperren
-                gridChargeAllowed = preisAktuellOk ? (priceCurrent <= priceLimit) : false;
+                // Manuell: VIS Preis (Fallback: Durchschnitt)
+                preisRef = preisVisOk ? preisGrenzeVis : (preisDurchschnittOk ? preisDurchschnitt : null);
             }
-        } else {
-            gridChargeAllowed = true;
-        }
 
-        // Diagnose schreiben (nur wenn Werte vorhanden)
-        await this._setIfChanged('tarif.aktiv', aktivFresh ? !!aktiv : false);
-        if (typeof modus === 'number') await this._setIfChanged('tarif.modus', modus);
-        if (typeof preisGrenzeVis === 'number') await this._setIfChanged('tarif.preisEurProKwh', preisGrenzeVis);
-        if (typeof prior === 'number') await this._setIfChanged('tarif.prioritaet', prior);
-        if (typeof storageW === 'number') await this._setIfChanged('tarif.speicherLeistungW', storageW);
-        if (typeof evcsMaxW === 'number') await this._setIfChanged('tarif.ladeparkMaxW', evcsMaxW);
+            // --- Tarifzustand (mit Hysterese) ---
+            const delta = 0.03;
+            let tarifState = 'aus'; // aus | unbekannt | neutral | guenstig | teuer
 
-        await this._setIfChanged('tarif.preisGrenzeEurProKwh', (hasPreisGrenze && preisGrenzePlausibel) ? priceLimit : null);
-        await this._setIfChanged('tarif.preisAktuellEurProKwh', preisAktuellOk ? priceCurrent : null);
-        await this._setIfChanged('tarif.netzLadenErlaubt', !!gridChargeAllowed);
-
-        if (aktivFresh && aktiv && preisGrenzePlausibel) {
-            // Basis-Limit: aus VIS evcsMaxPower, sonst kein Tarif-Deckel
-            const baseW = (typeof evcsMaxW === 'number' && evcsMaxW > 0) ? evcsMaxW : 0;
-
-            if (baseW > 0) {
-                // Wenn der Speicher laut VIS laden soll (negativ), reservieren wir Leistung
-                // und reduzieren den Ladepark-Anteil entsprechend der Priorität.
-                const pEv = this._normPrioritaet(prior); // Anteil Ladepark
-                const pStorage = 1 - pEv;
-
-                const sW = (typeof storageW === 'number') ? storageW : 0;
-                const reserveW = Math.max(0, -sW); // nur bei Laden (negativ)
-
-                const reductionW = reserveW * pStorage;
-                limitW = Math.max(0, Math.round(baseW - reductionW));
+            if (!aktivEff) {
+                tarifState = 'aus';
+                this._tarifLastState = 'neutral';
+            } else if (!preisAktuellOk || (preisRef === null || preisRef === undefined || !Number.isFinite(preisRef))) {
+                tarifState = 'unbekannt';
+                this._tarifLastState = 'neutral';
+            } else {
+                const prev = this._tarifLastState || 'neutral';
+                let next = 'neutral';
+                if (prev === 'guenstig') {
+                    next = (preisAktuell >= (preisRef + delta)) ? 'neutral' : 'guenstig';
+                } else if (prev === 'teuer') {
+                    next = (preisAktuell <= (preisRef - delta)) ? 'neutral' : 'teuer';
+                } else {
+                    if (preisAktuell <= (preisRef - delta)) next = 'guenstig';
+                    else if (preisAktuell >= (preisRef + delta)) next = 'teuer';
+                    else next = 'neutral';
+                }
+                this._tarifLastState = next;
+                tarifState = next;
             }
-        }
 
-        // Modus aktuell nur für Diagnose; Logik nutzt die VIS-Werte direkt.
-        if (typeof modus === 'number') {
-            // placeholder: keine Aktion
-        }
+            // --- Priorität ---
+            // 1 = Speicher | 2 = Auto | 3 = Ladestation
+            const allowStorageCheap = (prioritaet === 1 || prioritaet === 2);
+            const allowEvcsCheap = (prioritaet === 2 || prioritaet === 3);
 
-        await this._setIfChanged('tarif.ladeparkLimitW', limitW);
+            // Sollleistung Speicher: negativ = Laden, positiv = Entladen
+            let speicherSollW = 0;
+            if (aktivEff && storagePowerAbsW > 0) {
+                if (tarifState === 'guenstig' && allowStorageCheap) speicherSollW = -storagePowerAbsW;
+                else if (tarifState === 'teuer') speicherSollW = storagePowerAbsW;
+            }
+
+            // Netzladen für Ladestationen:
+            // - null wenn Tarif aus (Charging-Management nutzt Default)
+            // - true nur wenn günstig + Priorität erlaubt
+            // - sonst false
+            let gridChargeAllowed = null;
+            if (aktivEff) {
+                gridChargeAllowed = (tarifState === 'guenstig' && allowEvcsCheap) ? true : false;
+            }
+
+            // Ladepark-Limit: Standard = baseW; Reservierung wenn Speicher im Tarif-Fenster lädt
+            let limitW = baseW;
+            if (aktivEff && tarifState === 'guenstig' && speicherSollW < 0 && baseW > 0) {
+                const reserveW = Math.max(0, -speicherSollW);
+                const storageShare = (prioritaet === 1) ? 1.0 : (prioritaet === 3) ? 0.0 : 0.5;
+                limitW = Math.max(0, Math.round(baseW - (reserveW * storageShare)));
+            }
+
+            // --- Diagnose/Transparenz ---
+            await this._setIfChanged('tarif.aktiv', aktivEff);
+            await this._setIfChanged('tarif.modus', modusInt);
+            await this._setIfChanged('tarif.preisEurProKwh', preisVisOk ? preisGrenzeVis : null);
+            await this._setIfChanged('tarif.prioritaet', prioritaet);
+            await this._setIfChanged('tarif.speicherLeistungW', this._num(storageW, 0));
+            await this._setIfChanged('tarif.ladeparkMaxW', this._num(evcsMaxW, 0));
+
+            await this._setIfChanged('tarif.preisAktuellEurProKwh', preisAktuellOk ? preisAktuell : null);
+            await this._setIfChanged('tarif.preisDurchschnittEurProKwh', preisDurchschnittOk ? preisDurchschnitt : null);
+            await this._setIfChanged('tarif.preisGrenzeEurProKwh', (preisRef !== null && preisRef !== undefined && Number.isFinite(preisRef)) ? preisRef : null);
+            await this._setIfChanged('tarif.preisRefEurProKwh', (preisRef !== null && preisRef !== undefined && Number.isFinite(preisRef)) ? preisRef : null);
+            await this._setIfChanged('tarif.state', tarifState);
+            await this._setIfChanged('tarif.speicherSollW', speicherSollW);
+            await this._setIfChanged('tarif.netzLadenErlaubt', gridChargeAllowed);
+            await this._setIfChanged('tarif.ladeparkLimitW', limitW);
+
+            // Für andere Module (synchron) bereithalten
+            this.adapter._tarifVis = {
+                aktiv: aktivEff,
+                modus: modusInt,
+                prioritaet,
+                state: tarifState,
+                deltaEur: delta,
+                preisAktuell: preisAktuellOk ? preisAktuell : null,
+                preisDurchschnitt: preisDurchschnittOk ? preisDurchschnitt : null,
+                preisRef: (preisRef !== null && preisRef !== undefined && Number.isFinite(preisRef)) ? preisRef : null,
+                speicherSollW,
+                gridChargeAllowed,
+                ladeparkLimitW: limitW,
+            };
+        } catch (e) {
+            const msg = (e && e.message) ? e.message : String(e);
+            this.adapter.log.warn(`[TarifVis] Fehler in tick(): ${msg}`);
+        }
     }
 
     async _setIfChanged(id, val) {

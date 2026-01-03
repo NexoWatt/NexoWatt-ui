@@ -527,63 +527,73 @@ if (typeof soc === 'number') {
             }
         }
 
-        // 2) Tarif/VIS (manuell), wenn keine Lastspitze aktiv
-        if (targetW === 0) {
-            const t = this._readTarifVis(staleMs);
-            if (t.aktiv) {
-                if (t.modus === 1 && typeof t.storageW === 'number') {
-                    // VIS liefert Sollleistung in W: negativ = Laden, positiv = Entladen
-                    let w = t.storageW;
+		// 2) Tarif (dynamischer Zeittarif)
+		// - Steuerung kommt aus dem TarifVis-Modul (adapter._tarifVis)
+		// - Entladen bei "teuer" nur bis NVP = 0 W (kein Export durch Tarif)
+		let tarifState = null;
+		if (targetW === 0) {
+			const tv = (this.adapter && this.adapter._tarifVis) ? this.adapter._tarifVis : null;
+			const tvAktiv = !!(tv && tv.aktiv);
+			tarifState = (tvAktiv && typeof tv.state === 'string') ? tv.state : null;
 
-                    // Wenn Netzladen gesperrt ist (Tarif-Logik), dann nur PV-Überschuss (Einspeisung) zum Laden nutzen
-                    if (w < 0 && !gridChargeAllowed) {
-                        const zeCfg = (this.adapter.config && this.adapter.config.enableGridConstraints) ? (this.adapter.config.gridConstraints || {}) : {};
-                        const zeEnabled = !!((this.adapter.config && this.adapter.config.enableGridConstraints) && zeCfg.zeroExportEnabled);
-                        const zeDeadband = Math.max(0, num(zeCfg.zeroExportDeadbandW, 50));
-                        const thrBase = Math.max(0, num(cfg.pvExportThresholdW, 200));
-                        const thr = zeEnabled ? Math.min(thrBase, zeDeadband) : thrBase;
-                        const pvCapW = (exportW >= thr) ? exportW : 0;
-                        const cappedW = -Math.min(Math.abs(w), pvCapW);
+			if (tvAktiv) {
+				const want = num(tv.speicherSollW, 0); // negativ = Laden, positiv = Entladen
 
-                        if (cappedW === 0) {
-                            reason = 'Tarif: Netzladen gesperrt';
-                        } else {
-                            reason = 'Tarif: Netzladen gesperrt, nur PV-Überschuss';
-                        }
-                        source = 'tarif';
-                        w = cappedW;
-                    }
-                    // Reserve blockiert Entladen
-                    if (reserveActive && w > 0) {
-                        w = 0;
-                        reason = 'Tarif: Entladen blockiert (Reserve aktiv)';
-                        source = 'tarif';
-                    } else {
-                        reason = 'Tarif: Sollleistung aus VIS';
-                        source = 'tarif';
-                    }
+				// Reserve blockiert Entladen
+				if (reserveActive && want > 0) {
+					targetW = 0;
+					reason = 'Tarif: Entladen blockiert (Reserve aktiv)';
+					source = 'tarif';
+				} else if (want < 0) {
+					// Laden (Tarif günstig)
+					// PV-Überschuss wird später separat geregelt; hier geht es um Netzladen.
+					if (typeof soc === 'number' && soc >= hardChargeMaxSoc) {
+						targetW = 0;
+						reason = 'Tarif: Laden blockiert (SoC-Max erreicht)';
+						source = 'tarif';
+					} else {
+						let chargeW = Math.min(Math.abs(want), maxChargeW);
+						// Bei aktivem Peak-Shaving: Netzanschluss nicht überfahren
+						if (psEnabled && isFinite(psLimitW) && psLimitW > 0) {
+							const importNowW = Math.max(0, num(gridRawW, 0));
+							const headroomW = Math.max(0, psLimitW - importNowW);
+							chargeW = Math.min(chargeW, headroomW);
+						}
+						// Nicht gegen Einspeisung "anladen" – PV-Überschuss wird unten behandelt
+						if (num(gridRawW, 0) < 0) {
+							chargeW = 0;
+						}
 
-                    // SoC-Max: Laden blockieren (z.B. wenn der Installateur einen Max-SoC setzt)
-                    // Für Tarif verwenden wir den "größten" Max-SoC (Self/LSK), damit es nicht unerwartet stoppt.
-                    const lskMaxSocForCharge = (cfg.lskChargeEnabled !== false) ? lskMaxSoc : selfMaxSoc;
-        const maxSocForCharge = clamp(Math.max(selfMaxSoc, lskMaxSocForCharge, reserveTarget), 0, 100);
-                    if (w < 0 && (typeof soc === 'number') && soc >= maxSocForCharge) {
-                        w = 0;
-                        reason = 'Tarif: Laden blockiert (SoC-Max erreicht)';
-                        source = 'tarif';
-                    }
-
-                    targetW = w;
-                } else if (t.modus === 2) {
-                    // Automatik wird später ergänzt
-                    reason = 'Tarif: Automatik noch nicht umgesetzt';
-                    source = 'tarif';
-                    targetW = 0;
-                }
-            }
-        }
+						targetW = -Math.max(0, chargeW);
+						reason = (targetW === 0) ? 'Tarif: günstig – Netzladen nicht möglich' : 'Tarif: günstig – Netzladen';
+						source = 'tarif';
+					}
+				} else if (want > 0) {
+					// Entladen (Tarif teuer): nur bis 0 W Netzbezug
+					if (typeof soc === 'number' && soc < selfMinSoc) {
+						targetW = 0;
+						reason = 'Tarif: Entladen blockiert (SoC-Min erreicht)';
+						source = 'tarif';
+					} else {
+						const importNowW = Math.max(0, num(gridRawW, 0));
+						const dischargeW = Math.min(want, maxDischargeW, importNowW);
+						targetW = Math.max(0, dischargeW);
+						reason = (targetW === 0) ? 'Tarif: teuer – kein Netzbezug' : 'Tarif: teuer – Entladen bis NVP=0W';
+						source = 'tarif';
+					}
+				}
+			}
+		}
 // 3) Eigenverbrauch: Entladen zur Netzbezug-Reduktion (optional)
 if (targetW === 0 && selfDischargeEnabled) {
+    // Wenn der dynamische Tarif im "günstig"-Fenster ist, soll der Speicher nicht
+    // durch Eigenverbrauchs-Entladung geleert werden (Reserve halten / günstigen Netzstrom nutzen).
+    if (tarifState === 'guenstig') {
+        if (reason === 'Idle') {
+            reason = 'Tarif: günstig – Eigenverbrauchs-Entladung gesperrt';
+            source = 'tarif';
+        }
+    } else {
     // Wichtig: Bei Eigenverbrauchs-Entladung regeln wir auf den NVP.
     // Dafür verwenden wir bewusst den ROH-Wert (NVP) ohne Glättung, um Verzögerungen zu vermeiden.
     //
@@ -653,6 +663,7 @@ if (targetW === 0 && selfDischargeEnabled) {
         reason = `Eigenverbrauch: entladen (${Math.round(targetW)} W)`;
         source = 'eigenverbrauch';
         hardDischargeMinSoc = Math.max(hardDischargeMinSoc, selfMinSoc);
+    }
     }
 }
 

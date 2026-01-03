@@ -378,22 +378,82 @@ function initMenu(){
     // deactivate tab buttons
     document.querySelectorAll('.tabs .tab').forEach(b => b.classList.remove('active'));
     // initialize settings UI
-    initSettingsPanel();
+    // - First bind & load values
+    // - Then normalize slider ranges + labels
     setupSettings();
+    initSettingsPanel();
   });
   }
 
 
 function initSettingsPanel(){
-  // Force sliders to emit only 1 or 2
+  // Force sliders to emit only discrete values.
+  // - Tarif-Modus: 1..2 (Manuell/Automatisch)
+  // - Priorität: 1..3 (Speicher/Auto/Ladestation)
   const p = document.getElementById('s_priority');
   const t = document.getElementById('s_tariffMode');
-  [p,t].forEach(el => {
-    if (!el) return;
-    el.min = 1; el.max = 2; el.step = 1;
-    el.addEventListener('input', ()=>{ if (el.value < 1.5) el.value = 1; else el.value = 2; });
-    el.addEventListener('change', ()=>{ if (el.value < 1.5) el.value = 1; else el.value = 2; });
-  });
+
+  const prLabel = document.getElementById('s_priority_label');
+  const tmLabel = document.getElementById('s_tariffMode_label');
+
+  const updatePriorityLabel = ()=>{
+    if (!p || !prLabel) return;
+    const v = Number(p.value || 2);
+    prLabel.textContent = (v === 1) ? 'Speicher' : (v === 3) ? 'Ladestation' : 'Auto';
+  };
+  const updateTariffModeLabel = ()=>{
+    if (!t || !tmLabel) return;
+    const v = Number(t.value || 1);
+    tmLabel.textContent = (v === 2) ? 'Automatisch' : 'Manuell';
+  };
+
+  const normalizePriorityValue = ()=>{
+    if (!p) return;
+    let v = Number(p.value);
+    if (!Number.isFinite(v)) v = 2;
+    // Legacy: früher 0..100 (Slider-Mitte ~50). Wir mappen grob:
+    //   >= 67 => Speicher, <= 33 => Ladestation, sonst => Auto.
+    if (v > 3) {
+      if (v >= 67) v = 1;
+      else if (v <= 33) v = 3;
+      else v = 2;
+    }
+    if (v < 1) v = 2;
+    if (v > 3) v = 2;
+    p.value = String(v);
+  };
+  const snapPriority = ()=>{
+    if (!p) return;
+    let v = Number(p.value);
+    if (!Number.isFinite(v)) v = 2;
+    if (v < 1.5) v = 1;
+    else if (v < 2.5) v = 2;
+    else v = 3;
+    p.value = String(v);
+    updatePriorityLabel();
+  };
+  const snapTariffMode = ()=>{
+    if (!t) return;
+    let v = Number(t.value);
+    if (!Number.isFinite(v)) v = 1;
+    t.value = String(v < 1.5 ? 1 : 2);
+    updateTariffModeLabel();
+  };
+
+  if (p) {
+    p.min = 1; p.max = 3; p.step = 1;
+    normalizePriorityValue();
+    p.addEventListener('input', snapPriority);
+    p.addEventListener('change', snapPriority);
+  }
+  if (t) {
+    t.min = 1; t.max = 2; t.step = 1;
+    t.addEventListener('input', snapTariffMode);
+    t.addEventListener('change', snapTariffMode);
+  }
+
+  updatePriorityLabel();
+  updateTariffModeLabel();
 
   const LS_KEY = 'nexowatt.settings';
   let opts;
