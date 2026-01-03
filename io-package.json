@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.5.27",
+    "version": "0.5.28",
     "news": {
       "0.5.22": {
         "de": "Speicher-Regelung: Eigenverbrauch nutzt den geglätteten NVP (ems.gridPowerW) und einen skalierten Regler (weniger Schwingen). PV-Überschuss-Laden nutzt ebenfalls den geglätteten Export. Lastspitzenkappung (LSK): Entlade-Rampe wird jetzt auch beim Attack durch Max ΔW/Tick begrenzt (reduziert Sollwertsprünge/Stress, Reserve puffert schnelle Spitzen).",
@@ -458,8 +458,8 @@
       "de": "NexoWatt VIS"
     },
     "desc": {
-      "en": "responsive responsive dashboard with NexoWatt colors (green/black). All datapoints can be linked in adapter settings.",
-      "de": "responsives responsives Dashboard in NexoWatt-Farben (grün/schwarz). Alle Datenpunkte sind in den Adaptereinstellungen verknüpfbar."
+      "en": "responsive dashboard with NexoWatt colors (green/black). All datapoints can be linked in adapter settings.",
+      "de": "responsives Dashboard in NexoWatt-Farben (grün/schwarz). Alle Datenpunkte sind in den Adaptereinstellungen verknüpfbar."
     },
     "authors": [
       "Visu Helper"

@@ -23,9 +23,6 @@ class TarifVisModule extends BaseModule {
 
         /** @type {boolean} */
         this._warnedManualPriceMissing = false;
-
-        /** @type {number} */
-        this._lastDebugMs = 0;
     }
 
     async init() {
@@ -278,9 +275,6 @@ class TarifVisModule extends BaseModule {
                         this.adapter.log.warn(`[TarifVis] Modus=Manuell, aber VIS-Strompreis fehlt/ungültig (vis.settings.price). Bitte in der VIS unter Einstellungen setzen.`);
                     } else if (!missing && this._warnedManualPriceMissing) {
                         this._warnedManualPriceMissing = false;
-
-        /** @type {number} */
-        this._lastDebugMs = 0;
                         this.adapter.log.info(`[TarifVis] VIS-Strompreis im Modus=Manuell ist wieder gültig: ${preisGrenzeVis} €/kWh`);
                     }
                 }

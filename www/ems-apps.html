@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1" name="viewport"/>
+  <title>NexoWatt EMS Apps (Installer)</title>
+  <link href="/static/styles.css" rel="stylesheet"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/nexowatt-32.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0c0f12">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <a href="/" style="display:inline-flex;align-items:center;text-decoration:none;">
+      <img alt="NexoWatt" src="/static/nexowatt-logo.png"/>
+    </a>
+  </div>
+  <h1>EMS Apps (Installer)</h1>
+</header>
+
+<main class="content">
+  <div class="nw-smarthome-header">
+    <div>
+      <div class="nw-smarthome-header__title">EMS Apps &amp; Konfiguration</div>
+      <div class="nw-smarthome-header__subtitle">
+        Ziel: Jede Logik als „App“ (Modul) aktivieren, konfigurieren und über Datenpunkte anbinden.
+        <br/>
+        Hinweis: Diese Seite ist für Installateur-/Admin-Setup gedacht.
+      </div>
+    </div>
+    <div class="nw-smarthome-header__right">
+      <div class="nw-smarthome-header__actions">
+        <button id="nw-emsapps-save" class="nw-config-btn nw-config-btn--primary" type="button">Speichern &amp; EMS neu starten</button>
+        <button id="nw-emsapps-reload" class="nw-config-btn nw-config-btn--ghost" type="button">Neu laden</button>
+        <a class="nw-config-btn nw-config-btn--ghost" href="/">VIS öffnen</a>
+      </div>
+      <div id="nw-emsapps-status" class="nw-config-status"></div>
+    </div>
+  </div>
+
+  <section class="nw-config-section">
+    <div class="nw-config-section__head">
+      <h2 class="nw-config-section__title">Apps (Kernlogiken)</h2>
+    </div>
+    <div class="nw-config-list" id="appsList"></div>
+    <div class="nw-config-empty" id="appsEmpty" style="display:none;">Keine Apps verfügbar.</div>
+  </section>
+
+  <section class="nw-config-section">
+    <div class="nw-config-section__head">
+      <h2 class="nw-config-section__title">Anlagenparameter</h2>
+    </div>
+
+    <div class="nw-config-list">
+      <div class="nw-config-item">
+        <div class="nw-config-item__left">
+          <div class="nw-config-item__title">Netzanschlussleistung (W)</div>
+          <div class="nw-config-item__subtitle">Zentraler Grenzwert für Import-Limit (Peak-Shaving, Grid-Constraints, Lademanagement).</div>
+        </div>
+        <div class="nw-config-item__right">
+          <input id="gridConnectionPower" class="nw-config-input" type="number" min="0" step="1" placeholder="z.B. 25000"/>
+        </div>
+      </div>
+
+      <div class="nw-config-item">
+        <div class="nw-config-item__left">
+          <div class="nw-config-item__title">Scheduler-Intervall (ms)</div>
+          <div class="nw-config-item__subtitle">Tick-Intervall der EMS-Engine. Standard: 1000 ms.</div>
+        </div>
+        <div class="nw-config-item__right">
+          <input id="schedulerIntervalMs" class="nw-config-input" type="number" min="250" step="50" placeholder="1000"/>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="nw-config-section">
+    <div class="nw-config-section__head">
+      <h2 class="nw-config-section__title">VIS-Datenpunkte (Basis)</h2>
+    </div>
+    <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
+      Diese Zuordnung wird u.a. für Energiefluss, Tarife, PV-Überschuss und interne Netzleistungs-Berechnung verwendet.
+    </div>
+    <div id="dpTable" class="nw-config-list"></div>
+  </section>
+
+  <section class="nw-config-section">
+    <div class="nw-config-section__head">
+      <h2 class="nw-config-section__title">Speicher-Mapping (herstellerunabhängig)</h2>
+    </div>
+    <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
+      Minimal notwendig ist mindestens der SoC. Je nach Steuerungsart werden weitere Datenpunkte benötigt.
+    </div>
+    <div class="nw-config-list" id="storageTable"></div>
+  </section>
+
+  <section class="nw-config-section">
+    <div class="nw-config-section__head">
+      <h2 class="nw-config-section__title">Expertenbereich</h2>
+    </div>
+    <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
+      Diese Felder sind optional. Sie helfen beim Debugging oder bei Spezialfällen.
+    </div>
+
+    <div class="nw-config-list">
+      <div class="nw-config-item">
+        <div class="nw-config-item__left">
+          <div class="nw-config-item__title">Peak-Shaving: Netzleistung Datenpunkt (optional)</div>
+          <div class="nw-config-item__subtitle">Wenn leer, verwendet Peak-Shaving automatisch die interne Netzleistung <code>ems.gridPowerW</code>.</div>
+        </div>
+        <div class="nw-config-item__right" style="display:flex;gap:8px;align-items:center;">
+          <input id="peakGridPointPowerId" class="nw-config-input" type="text" placeholder="z.B. smartmeter.0.power"/>
+          <button class="nw-config-btn nw-config-btn--ghost" type="button" data-browse="peakGridPointPowerId">Auswählen…</button>
+        </div>
+      </div>
+
+      <div class="nw-config-item">
+        <div class="nw-config-item__left">
+          <div class="nw-config-item__title">Speicher Steuerungsart</div>
+          <div class="nw-config-item__subtitle">targetPower (Sollleistung) | limits (Max. Lade/Entlade) | enableFlags (Laden/Entladen erlaubt)</div>
+        </div>
+        <div class="nw-config-item__right">
+          <select id="storageControlMode" class="nw-config-input">
+            <option value="targetPower">targetPower</option>
+            <option value="limits">limits</option>
+            <option value="enableFlags">enableFlags</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="nw-config-item">
+        <div class="nw-config-item__left">
+          <div class="nw-config-item__title">Raw JSON Patch (optional)</div>
+          <div class="nw-config-item__subtitle">Für schnelle Tests: JSON-Patch (wird beim Speichern zusätzlich gemerged). Ungültiges JSON wird ignoriert.</div>
+        </div>
+        <div class="nw-config-item__right" style="width:100%;">
+          <textarea id="rawPatch" class="nw-config-input" rows="6" style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;" placeholder='{"peakShaving":{"maxImportW":12345}}'></textarea>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DP Browser Modal -->
+  <div id="dpModal" class="modal hidden">
+    <div class="dialog" style="max-width:860px;">
+      <div class="dialog-header">
+        <div class="title">Datenpunkt auswählen</div>
+        <button id="dpClose" class="btn small" aria-label="Schließen">×</button>
+      </div>
+
+      <div class="row" style="gap:10px;display:flex;flex-wrap:wrap;align-items:center;">
+        <input id="dpSearch" class="nw-config-input" type="text" placeholder="Suchen (ID oder Name)…" style="flex:1;min-width:240px;"/>
+        <button id="dpSearchBtn" class="nw-config-btn nw-config-btn--primary" type="button">Suchen</button>
+        <button id="dpRootBtn" class="nw-config-btn nw-config-btn--ghost" type="button">Root</button>
+        <button id="dpUpBtn" class="nw-config-btn nw-config-btn--ghost" type="button">↑</button>
+      </div>
+
+      <div class="nw-config-section__subtitle" id="dpBreadcrumb" style="margin-top:10px;opacity:.8;"></div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;">
+        <div>
+          <div style="opacity:.85;margin-bottom:6px;">Browse (Objektbaum)</div>
+          <div id="dpTree" class="nw-config-list" style="max-height:340px;overflow:auto;"></div>
+        </div>
+        <div>
+          <div style="opacity:.85;margin-bottom:6px;">Search (Treffer)</div>
+          <div id="dpResults" class="nw-config-list" style="max-height:340px;overflow:auto;"></div>
+        </div>
+      </div>
+
+      <div class="hint" style="margin-top:12px;opacity:.75;font-size:12px;">
+        Tipp: Für große Systeme ist „Browse“ oft schneller. „Search“ nutzt eine Cache-Liste (limitierbar, aber ohne harte Systemgrenze).
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="/static/ems-apps.js"></script>
+</body>
+</html>

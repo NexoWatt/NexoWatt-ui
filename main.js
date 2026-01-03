@@ -2784,7 +2784,8 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
 
         const limitRaw = (req.query && req.query.limit) || '';
         let limit = parseInt(limitRaw, 10);
-        if (!Number.isFinite(limit) || limit <= 0 || limit > 200) limit = 100;
+        if (!Number.isFinite(limit) || limit <= 0) limit = 200;
+        if (limit > 5000) limit = 5000;
 
         if (typeof this.getForeignObjectsAsync !== 'function') {
           this.log.warn('SmartHomeConfig dpsearch: getForeignObjectsAsync not available');
@@ -2792,36 +2793,150 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
         }
 
         // Cache all state objects for a short period to avoid heavy DB reads while typing
+
+
         const now = Date.now();
+
+
         const ttlMs = 15000;
+
+
         if (!this._nwDpCache || !this._nwDpCache.ts || (now - this._nwDpCache.ts) > ttlMs) {
+
+
           const all = await this.getForeignObjectsAsync('*', 'state');
+
+
           const items = [];
 
+
+
           for (const id of Object.keys(all || {})) {
+
+
             const obj = all[id];
+
+
             if (!obj || !obj.common) continue;
 
+
+
             const nameRaw = obj.common.name || '';
+
+
             const name = typeof nameRaw === 'string' ? nameRaw : JSON.stringify(nameRaw);
 
+
+
             items.push({
+
+
               id,
+
+
               name,
+
+
               role: obj.common.role || '',
+
+
               type: obj.common.type || '',
+
+
               unit: obj.common.unit || '',
+
+
               idLower: String(id).toLowerCase(),
+
+
               nameLower: String(name).toLowerCase(),
+
+
             });
+
+
           }
 
+
+
           // Stable, user-friendly order
+
+
           items.sort((a, b) => a.idLower.localeCompare(b.idLower));
-          this._nwDpCache = { ts: now, items };
+
+
+
+          // Build byId map (plain object) for fast lookup
+
+
+          const byId = {};
+
+
+          for (const it of items) {
+
+
+            if (!it || !it.id) continue;
+
+
+            byId[it.id] = it;
+
+
+          }
+
+
+
+          // Build a lightweight trie for folder-like browsing (dot-separated IDs)
+
+
+          const makeNode = () => ({ children: Object.create(null), item: null });
+
+
+          const root = makeNode();
+
+
+          for (const it of items) {
+
+
+            const sid = String(it.id || '');
+
+
+            if (!sid) continue;
+
+
+            const parts = sid.split('.').filter(Boolean);
+
+
+            let node = root;
+
+
+            for (const seg of parts) {
+
+
+              if (!node.children[seg]) node.children[seg] = makeNode();
+
+
+              node = node.children[seg];
+
+
+            }
+
+
+            node.item = it;
+
+
+          }
+
+
+
+          this._nwDpCache = { ts: now, items, byId, trie: root };
+
+
         }
 
+
+
         const items = (this._nwDpCache && this._nwDpCache.items) ? this._nwDpCache.items : [];
+
         const results = [];
         const seen = new Set();
 
@@ -2870,6 +2985,241 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
       } catch (e) {
         this.log.warn('SmartHomeConfig dpsearch error: ' + e.message);
         res.status(500).json({ ok: false, error: 'internal error' });
+      }
+    });
+
+
+
+    // --- Installer / EMS Apps API ---
+    // Diese API dient dazu, die Konfiguration (native) auch direkt über die Installer-Webseite
+    // zu pflegen. Änderungen werden in system.adapter.<namespace>.native persistiert.
+
+    const _nwDeepMerge = (target, patch) => {
+      if (!patch || typeof patch !== 'object') return target;
+      if (!target || typeof target !== 'object') target = {};
+      for (const [k, v] of Object.entries(patch)) {
+        if (v && typeof v === 'object' && !Array.isArray(v)) {
+          target[k] = _nwDeepMerge(target[k], v);
+        } else {
+          target[k] = v;
+        }
+      }
+      return target;
+    };
+
+    const _nwPickInstallerConfig = (nativeObj) => {
+      const n = nativeObj && typeof nativeObj === 'object' ? nativeObj : {};
+      return {
+        version: (typeof n.version === 'string' ? n.version : undefined),
+        port: (typeof n.port === 'number' ? n.port : undefined),
+
+        // Apps (Module)
+        enableChargingManagement: (typeof n.enableChargingManagement === 'boolean') ? n.enableChargingManagement : undefined,
+        enablePeakShaving: (typeof n.enablePeakShaving === 'boolean') ? n.enablePeakShaving : undefined,
+        enableStorageControl: (typeof n.enableStorageControl === 'boolean') ? n.enableStorageControl : undefined,
+        enableGridConstraints: (typeof n.enableGridConstraints === 'boolean') ? n.enableGridConstraints : undefined,
+        enableMultiUse: (typeof n.enableMultiUse === 'boolean') ? n.enableMultiUse : undefined,
+
+        // Scheduler
+        schedulerIntervalMs: (typeof n.schedulerIntervalMs === 'number') ? n.schedulerIntervalMs : undefined,
+
+        // Plant-level
+        installerConfig: (n.installerConfig && typeof n.installerConfig === 'object') ? n.installerConfig : {},
+
+        // Mapping
+        datapoints: (n.datapoints && typeof n.datapoints === 'object') ? n.datapoints : {},
+        vis: (n.vis && typeof n.vis === 'object') ? n.vis : {},
+
+        // Module configs
+        peakShaving: (n.peakShaving && typeof n.peakShaving === 'object') ? n.peakShaving : {},
+        storage: (n.storage && typeof n.storage === 'object') ? n.storage : {},
+        chargingManagement: (n.chargingManagement && typeof n.chargingManagement === 'object') ? n.chargingManagement : {},
+      };
+    };
+
+    const _nwRestartEms = async () => {
+      try {
+        if (this.emsEngine && typeof this.emsEngine.stop === 'function') {
+          this.emsEngine.stop();
+        }
+      } catch (_e) {}
+
+      try {
+        if (this.emsEngine && typeof this.emsEngine.init === 'function') {
+          await this.emsEngine.init();
+        }
+      } catch (e) {
+        try { this.log.warn('EMS restart failed: ' + (e && e.message ? e.message : e)); } catch (_e2) {}
+      }
+    };
+
+    app.get('/api/installer/config', requireInstaller, async (_req, res) => {
+      try {
+        if (typeof this.getForeignObjectAsync !== 'function') {
+          return res.status(500).json({ ok: false, error: 'getForeignObjectAsync not available' });
+        }
+        const instId = 'system.adapter.' + this.namespace;
+        const instObj = await this.getForeignObjectAsync(instId);
+        const nativeObj = (instObj && instObj.native) ? instObj.native : (this.config || {});
+        res.json({ ok: true, config: _nwPickInstallerConfig(nativeObj) });
+      } catch (e) {
+        this.log.warn('Installer config API error: ' + e.message);
+        res.status(500).json({ ok: false, error: 'internal error' });
+      }
+    });
+
+    app.post('/api/installer/config', requireInstaller, async (req, res) => {
+      try {
+        const body = req.body || {};
+        const patch = body.patch && typeof body.patch === 'object' ? body.patch : {};
+        const restartEms = body.restartEms !== false; // default true
+
+        if (typeof this.getForeignObjectAsync !== 'function' || typeof this.setForeignObjectAsync !== 'function') {
+          return res.status(500).json({ ok: false, error: 'getForeignObjectAsync/setForeignObjectAsync not available' });
+        }
+
+        const allowedRoot = new Set([
+          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableGridConstraints','enableMultiUse',
+          'schedulerIntervalMs','installerConfig','datapoints','vis','peakShaving','storage','chargingManagement'
+        ]);
+
+        // Build sanitized patch
+        const safePatch = {};
+        for (const [k, v] of Object.entries(patch)) {
+          if (!allowedRoot.has(k)) continue;
+          safePatch[k] = v;
+        }
+
+        // Persist
+        const instId = 'system.adapter.' + this.namespace;
+        const instObj = await this.getForeignObjectAsync(instId);
+        if (!instObj) {
+          return res.status(404).json({ ok: false, error: 'instance object not found: ' + instId });
+        }
+        instObj.native = instObj.native || {};
+        instObj.native = _nwDeepMerge(instObj.native, safePatch);
+        await this.setForeignObjectAsync(instId, instObj);
+
+        // Apply to runtime config (best-effort)
+        this.config = this.config || {};
+        this.config = _nwDeepMerge(this.config, safePatch);
+
+        // Re-subscribe to mapped states so the VIS immediately sees fresh values
+        try {
+          if (typeof this.subscribeConfiguredStates === 'function') {
+            await this.subscribeConfiguredStates();
+          }
+        } catch (_e) {}
+
+        if (restartEms) {
+          await _nwRestartEms();
+        }
+
+        res.json({ ok: true, config: _nwPickInstallerConfig(instObj.native), restarted: !!restartEms });
+      } catch (e) {
+        this.log.warn('Installer config save API error: ' + e.message);
+        res.status(500).json({ ok: false, error: 'internal error' });
+      }
+    });
+
+    // --- ioBroker Objekt-Browser (Tree) ---
+    app.get('/api/iobroker/tree', async (req, res) => {
+      try {
+        const prefixRaw = (req.query && req.query.prefix) || '';
+        const prefix = (typeof prefixRaw === 'string' ? prefixRaw : String(prefixRaw || '')).trim();
+
+        if (typeof this.getForeignObjectsAsync !== 'function') {
+          return res.status(500).json({ ok: false, error: 'getForeignObjectsAsync not available' });
+        }
+
+        // Build/refresh cache if needed
+        const now = Date.now();
+        const ttlMs = 30000;
+        if (!this._nwDpCache || !this._nwDpCache.ts || (now - this._nwDpCache.ts) > ttlMs || !this._nwDpCache.trie) {
+          const all = await this.getForeignObjectsAsync('*', 'state');
+          const items = [];
+          for (const id of Object.keys(all || {})) {
+            const obj = all[id];
+            if (!obj || !obj.common) continue;
+            const nameRaw = obj.common.name || '';
+            const name = (typeof nameRaw === 'string') ? nameRaw : JSON.stringify(nameRaw);
+            items.push({
+              id,
+              name,
+              role: obj.common.role || '',
+              type: obj.common.type || '',
+              unit: obj.common.unit || '',
+              idLower: String(id).toLowerCase(),
+              nameLower: String(name).toLowerCase(),
+            });
+          }
+          items.sort((a, b) => a.idLower.localeCompare(b.idLower));
+          const byId = {};
+          for (const it of items) {
+            if (it && it.id) byId[it.id] = it;
+          }
+          const makeNode = () => ({ children: Object.create(null), item: null });
+          const root = makeNode();
+          for (const it of items) {
+            const sid = String(it.id || '');
+            if (!sid) continue;
+            const parts = sid.split('.').filter(Boolean);
+            let node = root;
+            for (const seg of parts) {
+              if (!node.children[seg]) node.children[seg] = makeNode();
+              node = node.children[seg];
+            }
+            node.item = it;
+          }
+          this._nwDpCache = { ts: now, items, byId, trie: root };
+        }
+
+        const cache = this._nwDpCache;
+        const trie = cache && cache.trie ? cache.trie : null;
+        if (!trie) return res.json({ ok: true, prefix, children: [] });
+
+        const parts = prefix ? prefix.split('.').filter(Boolean) : [];
+        let node = trie;
+        for (const seg of parts) {
+          if (!node.children || !node.children[seg]) { node = null; break; }
+          node = node.children[seg];
+        }
+        if (!node) return res.json({ ok: true, prefix, children: [] });
+
+        const out = [];
+        const keys = Object.keys(node.children || {});
+        keys.sort((a, b) => a.localeCompare(b));
+        for (const seg of keys) {
+          const child = node.children[seg];
+          const id = prefix ? (prefix + '.' + seg) : seg;
+          const it = child && child.item ? child.item : (cache && cache.byId ? cache.byId[id] : null);
+          out.push({
+            id,
+            label: seg,
+            hasChildren: !!(child && child.children && Object.keys(child.children).length),
+            isState: !!it,
+            name: it ? it.name : '',
+            role: it ? it.role : '',
+            type: it ? it.type : '',
+            unit: it ? it.unit : '',
+          });
+        }
+
+        res.json({ ok: true, prefix, children: out });
+      } catch (e) {
+        try { this.log.warn('iobroker tree API error: ' + (e && e.message ? e.message : e)); } catch (_e2) {}
+        res.status(500).json({ ok: false, error: 'internal error' });
+      }
+    });
+
+// --- EMS Apps / Installer Page ---
+    app.get(['/ems-apps.html', '/ems-apps'], (req, res) => {
+      try {
+        const file = require('path').join(__dirname, 'www', 'ems-apps.html');
+        res.sendFile(file);
+      } catch (e) {
+        this.log.warn('EMS Apps page error: ' + e.message);
+        res.status(500).send('EMS Apps page error');
       }
     });
 

@@ -1,3 +1,11 @@
+## 0.5.28 (2026-01-03)
+- Installer (Beta): neue EMS-App-/Installer-Seite unter `/ems-apps.html`.
+  - Apps als Module: Aktivieren/Deaktivieren der Kern-Logiken (Peak-Shaving, Speicherregelung, Lademanagement, Grid-Constraints, §14a).
+  - Zentrale Anlagenparameter (z.B. Netzanschlussleistung) + Basis-Datenpunkt-Zuordnung.
+- API: `/api/installer/config` (lesen/schreiben + optional EMS-Neustart) und `/api/iobroker/tree` (Objektbaum) für komfortable Datenpunkt-Auswahl.
+- Admin-Tab: Auswahlseite „VIS öffnen“ / „EMS Apps öffnen“.
+- Fix: Tarif-Modul – unbeabsichtigter Debug-Reset im Tick entfernt.
+
 ## 0.5.23 (Hotfix – Dynamischer Tarif: Dezimal-Komma)
 ## 0.5.27 (2026-01-03)
 - Phase 1: Stabilisierung (Tarif-Modul Fixes, Entfernen externer Referenzen, kleinere Robustheits-Updates)
