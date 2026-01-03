@@ -591,7 +591,11 @@ if (targetW === 0 && selfDischargeEnabled) {
     // mathematisch auf ~50% der Last (Fixpunkt), statt den Import wirklich gegen 0 zu drücken.
     // Lösung: Integrations-/Inkrement-Regelung (PI-light): Sollwert wird um den aktuellen Fehler angepasst.
 
-    const nvpRawW = (typeof gridRawW === 'number') ? gridRawW : gridW; // Import + / Export -
+    // Für eine stabile Eigenverbrauchs-Regelung nutzen wir den geglätteten NVP (ems.gridPowerW).
+    // Der RAW-Wert bleibt weiterhin verfügbar (z. B. für Diagnose / harte Kappungen), soll aber
+    // hier nicht jedes kurze Rauschen sofort in Sollwert-Sprünge übersetzen.
+    const nvpCtrlW = (typeof gridW === 'number') ? gridW : gridRawW;        // geglättet
+    const nvpRawW = (typeof gridRawW === 'number') ? gridRawW : nvpCtrlW;   // roh (Fallback)
     const desiredNvpW = selfTargetGridW; // typischerweise 0 W Import
     const deadbandW = Math.max(0, selfImportThresholdW); // Start-/Stop-Schwelle gegen Flattern
 
@@ -604,17 +608,22 @@ if (targetW === 0 && selfDischargeEnabled) {
 
     // Fehler: positiver Fehler => zu viel Import => mehr entladen.
     // negativer Fehler => Export/zu wenig Import => Entladung reduzieren.
-    const errW = (typeof nvpRawW === 'number') ? (nvpRawW - desiredNvpW) : 0;
+    const errW = (typeof nvpCtrlW === 'number') ? (nvpCtrlW - desiredNvpW) : 0;
 
-    let nextSetW = curSetW;
+    // PI-light: Inkrement-Regelung mit bewusst reduzierter Verstärkung.
+    // Ziel: Sollwert darf schnell genug reagieren, soll aber nicht "nervös" 500..1500 W springen.
+    // Verstärkung wird an die Glättung (Peak-Shaving/EMS) gekoppelt.
+    const tauS = Math.max(1, num(psCfg.smoothingSeconds, 10));
+    const kI = clamp(1 / tauS, 0.05, 1); // 0.05..1 (bei tau=20s => 0.05)
+
+    let errAdjW = 0;
     if (errW > deadbandW) {
-        nextSetW = curSetW + errW;
+        errAdjW = errW - deadbandW;
     } else if (errW < -deadbandW) {
-        nextSetW = curSetW + errW; // reduziert (errW ist negativ)
-    } else {
-        // innerhalb Deadband -> halten
-        nextSetW = curSetW;
+        errAdjW = errW + deadbandW;
     }
+
+    let nextSetW = curSetW + (errAdjW * kI);
 
     // Nur Entladen in diesem Block (kein Laden). Negative Werte sind hier nicht sinnvoll.
     nextSetW = clamp(nextSetW, 0, selfMaxDischargeEff);
@@ -636,7 +645,7 @@ if (targetW === 0 && selfDischargeEnabled) {
 
     // Aktivierung: Nur wenn Import oberhalb der Schwelle liegt ODER wir bereits aktiv waren
     // (Integrator hält den Sollwert dann stabil und passt ihn nach oben/unten an).
-    const importNowW = Math.max(0, (typeof nvpRawW === 'number') ? nvpRawW : 0);
+    const importNowW = Math.max(0, (typeof nvpCtrlW === 'number') ? nvpCtrlW : 0);
     const startCond = (importNowW >= deadbandW) || lastWasSelf;
 
     if (allow && startCond && nextSetW > 0) {
@@ -679,8 +688,11 @@ if (targetW === 0 && selfDischargeEnabled) {
             }
 
             if (exportRawW >= thr && canChargeBySoc && chargeLimitW > 0) {
+                // Für die eigentliche Sollwert-Berechnung nutzen wir den geglätteten Export,
+                // damit die Ladeleistung bei wolkigem Himmel nicht "zittert".
+                const exportCtrlW = (typeof exportW === 'number') ? exportW : exportRawW;
                 const extraBias = (zeEnabled && gridChargeAllowed) ? zeBias : 0;
-                targetW = -clamp(exportRawW + extraBias, 0, chargeLimitW);
+                targetW = -clamp(exportCtrlW + extraBias, 0, chargeLimitW);
                 reason = zeEnabled ? 'Nulleinspeisung: Export in Speicher umleiten' : 'Eigenverbrauch: PV-Überschuss laden';
                 source = 'pv';
             }
@@ -890,13 +902,13 @@ if (typeof this._lastTargetW === 'number') {
         }
         // d >= 0 => weniger laden / Richtung 0 -> bewusst ohne Rampe (schnell reagieren)
     } else if (source === 'lastspitze' && targetW > 0) {
-        // Lastspitzenkappung: "Attack" schnell, "Release" gedämpft.
-        // Erhöhung der Entladeleistung (d > 0) darf ohne Rampe passieren, damit der Netzanschluss nicht überlastet wird.
-        // Reduktion (d < 0) wird hingegen durch maxDelta begrenzt (Anti-Flattern).
-        if (maxDelta > 0 && d < 0 && Math.abs(d) > maxDelta) {
-            targetW = this._lastTargetW - maxDelta;
-            reason = `${reason} (Rampe)`;
-        }
+	        // Lastspitzenkappung: Sollwertsprünge begrenzen, damit der Speicher nicht "nervös" regelt.
+	        // Hinweis: Für schnellere Reaktion -> "Max ΔW/Tick" erhöhen bzw. im Peak‑Shaving eine Reserve (W) setzen,
+	        // damit Lastspitzen innerhalb der Reserve abgefangen werden können.
+	        if (maxDelta > 0 && Math.abs(d) > maxDelta) {
+	            targetW = this._lastTargetW + Math.sign(d) * maxDelta;
+	            reason = `${reason} (LSK‑Rampe)`;
+	        }
     } else {
         // Standard: symmetrische Rampe
         if (maxDelta > 0 && Math.abs(d) > maxDelta) {
