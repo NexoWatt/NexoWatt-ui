@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.5.88",
+    "version": "0.5.89",
     "news": {
+      "0.5.89": {
+        "en": "UI: Energy-flow monitor now always renders power in kW (no Watt display). Includes PWA cache bump.",
+        "de": "UI: Energiefluss-Monitor zeigt Leistungswerte jetzt immer in kW (keine Watt-Anzeige mehr). Inkl. PWA-Cache-Bump."
+      },
       "0.5.88": {
         "en": "Admin: Advanced configuration tabs are hidden by default (Datapoints/§14a/EMS*/History/Charge points). Added toggle in General: \"Show advanced tabs\". Safety gate: content stays blocked even if a hidden tab is opened directly.",
         "de": "Admin: Erweiterte Konfigurations-Reiter sind jetzt standardmäßig ausgeblendet (Datenpunkte/§14a/EMS*/Historie/Ladepunkte). Neuer Schalter in Allgemein: „Erweiterte Reiter anzeigen“. Safety-Gate: Inhalte bleiben auch bei Direktaufruf verborgen."

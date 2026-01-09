@@ -127,6 +127,14 @@ function formatPowerSigned(v){
   return sign + abs.toFixed(0) + ' W';
 }
 
+function formatFlowPower(v, decimals){
+  // Energy-flow monitor: always show power values in kW (input is expected in W)
+  if (v === undefined || v === null || isNaN(v)) return '--';
+  const n = Number(v);
+  const d = (decimals === undefined || decimals === null || isNaN(decimals)) ? 2 : Number(decimals);
+  return (n / 1000).toFixed(d) + ' kW';
+}
+
 function formatNum(v, suffix='') {
 
   if (v === undefined || v === null || isNaN(v)) return '--';
@@ -343,7 +351,7 @@ function initEnergyWebExtras(flowSlots){
 
     // value above
     const valEl = _svgEl('text', { id: valId, class: 'val', y: -(rNode + 8), 'text-anchor': 'middle' });
-    valEl.textContent = '0 W';
+    valEl.textContent = '0.00 kW';
     g.appendChild(valEl);
 
     // label below
@@ -431,7 +439,7 @@ const placeSpecialProducer = (item, x, y, role, rNode) => {
 
   // value above
   const valEl = _svgEl('text', { id: valId, class: 'val', y: -(rNode + 8), 'text-anchor': 'middle' });
-  valEl.textContent = '0 W';
+  valEl.textContent = '0.00 kW';
   g.appendChild(valEl);
 
   // label below
@@ -621,7 +629,7 @@ function updateEnergyWebExtras(d){
     for (const it of flowExtras.producers) {
       const val = Number(d(it.stateKey)) || 0;
       const abs = Math.abs(val);
-      setText(it.valId, formatPower(Math.round(abs), true));
+      setText(it.valId, formatFlowPower(Math.round(abs)));
       show(it.lineId, abs);
       // Erzeugung soll optisch immer "zum Gebäude" laufen (keine Richtungsumschaltung).
       // Das verhindert Flackern durch Vorzeichen-Schwankungen um 0W oder uneinheitliche Vorzeichenkonventionen.
@@ -651,7 +659,7 @@ if (flowExtras && Array.isArray(flowExtras.special)) {
   for (const it of flowExtras.special) {
     const val = sumSpecialPower(it.role, it.devices);
     const abs = Math.abs(val);
-    setText(it.valId, formatPower(Math.round(abs), true));
+    setText(it.valId, formatFlowPower(Math.round(abs)));
     show(it.lineId, abs);
     // BHKW/Generator: Erzeugung immer zum Gebäude (keine Richtungsumschaltung)
     setRev(it.lineId, false);
@@ -665,7 +673,7 @@ if (flowExtras && Array.isArray(flowExtras.special)) {
       const val = Number(d(it.stateKey)) || 0;
       const abs = Math.abs(val);
       consumersSum += abs;
-      setText(it.valId, formatPower(Math.round(abs), true));
+      setText(it.valId, formatFlowPower(Math.round(abs)));
       show(it.lineId, abs);
       setRev(it.lineId, val < 0);
       setNodeActive(it.nodeId, abs > 1);
@@ -3382,21 +3390,20 @@ function updateEnergyWeb() {
   // ---------- Ausgabe ----------
   const T = (id, t) => { const el=document.getElementById(id); if (el) el.textContent=t; };
   const signed = (num, negIsMinus=false)=>{
-    if (num===0) return '0 W';
-    const u = (window.units && window.units.power) || 'W';
     const n = Number(num)||0;
-    const s = negIsMinus ? '-' : '+';
-    if (Math.abs(n) >= 1000) return (negIsMinus?'-':'+') + (Math.abs(n)/1000).toFixed(1) + ' kW';
-    return (negIsMinus?'-':'+') + Math.abs(n).toFixed(0) + ' ' + u;
+    if (n===0) return '0.00 kW';
+    const abs = Math.abs(n);
+    const prefix = negIsMinus ? '-' : (n<0 ? '-' : '+');
+    return prefix + (abs/1000).toFixed(2) + ' kW';
   };
 
-  T('pvVal', formatPower(pvValNum));
+  T('pvVal', formatFlowPower(pvValNum));
   // grid text: +Bezug, -Einspeisung
-  T('gridVal', gridShowVal ? (gridSellMode ? ('-'+formatPower(gridShowVal)) : formatPower(gridShowVal)) : '0 W');
+  T('gridVal', gridShowVal ? (gridSellMode ? ('-'+formatFlowPower(gridShowVal)) : formatFlowPower(gridShowVal)) : '0.00 kW');
   // EV & Batterie Texte
-  T('c2Val', formatPower(Math.max(0, Math.abs(c2))));
-  T('restVal', batShowVal ? (batRev ? ('-'+formatPower(batShowVal)) : formatPower(batShowVal)) : '0 W');
-  T('centerPower', formatPower(Math.max(0, loadDisplay)));
+  T('c2Val', formatFlowPower(Math.max(0, Math.abs(c2))));
+  T('restVal', batShowVal ? (batRev ? ('-'+formatFlowPower(batShowVal)) : formatFlowPower(batShowVal)) : '0.00 kW');
+  T('centerPower', formatFlowPower(Math.max(0, loadDisplay)));
   if (soc===undefined || isNaN(Number(soc))) { T('batterySocIn','-- %'); } else { T('batterySocIn', Number(soc).toFixed(0)+' %'); }
 
   // Sichtbarkeit
