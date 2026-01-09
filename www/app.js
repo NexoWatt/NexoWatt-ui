@@ -3195,10 +3195,13 @@ function updateRelayUi(){
 
   if (!installed || !enabled || visible.length === 0){
     card.classList.add('hidden');
+    // defensive: inline display can override .hidden without !important
+    card.style.display = 'none';
     return;
   }
 
   card.classList.remove('hidden');
+  card.style.display = '';
 
   const onCount = visible.filter(r => r.on).length;
   setText('relayOnCount', String(onCount));
@@ -3229,10 +3232,13 @@ function updateThresholdUi(){
 
   if (!installed || !enabled || configured.length === 0){
     card.classList.add('hidden');
+    // defensive: inline display can override .hidden without !important
+    card.style.display = 'none';
     return;
   }
 
   card.classList.remove('hidden');
+  card.style.display = '';
 
   const activeCount = configured.filter(r => r.active).length;
   setText('thrActiveCount', String(activeCount));
@@ -3265,10 +3271,13 @@ function updateBhkwUi(){
   // Nur anzeigen, wenn App installiert + aktiv + mind. ein Gerät konfiguriert ist
   if (!installed || !enabled || visible.length === 0){
     card.classList.add('hidden');
+    // defensive: inline display can override .hidden without !important
+    card.style.display = 'none';
     return;
   }
 
   card.classList.remove('hidden');
+  card.style.display = '';
 
   // Running count from live states
   const st = window.latestState || {};
@@ -3311,10 +3320,13 @@ function updateGeneratorUi(){
   // Nur anzeigen, wenn App installiert + aktiv + mind. ein Gerät konfiguriert ist
   if (!installed || !enabled || visible.length === 0){
     card.classList.add('hidden');
+    // defensive: inline display can override .hidden without !important
+    card.style.display = 'none';
     return;
   }
 
   card.classList.remove('hidden');
+  card.style.display = '';
 
   const st = window.latestState || {};
   const sv = (k) => (st && st[k] && st[k].value !== undefined) ? st[k].value : undefined;

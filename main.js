@@ -5069,6 +5069,38 @@ app.get('/api/history', async (req, res) => {
           soc: this._nwGetHistoryDpId('storageSoc'),
           evcs: this._nwGetHistoryDpId('evcsPower')
         };
+
+        // Optional series (Energiefluss: Verbraucher/Erzeuger)
+        // NOTE: We only include configured slots so the frontend can hide them when not set up.
+        const dps = (this.config && this.config.datapoints) || {};
+        const vis = (this.config && this.config.vis) || {};
+        const fs = (vis && vis.flowSlots && typeof vis.flowSlots === 'object') ? vis.flowSlots : {};
+
+        const extraConsumerReq = [];
+        const extraProducerReq = [];
+
+        const MAX_CONSUMERS = 10;
+        const MAX_PRODUCERS = 5;
+
+        for (let i = 1; i <= MAX_CONSUMERS; i++) {
+          const dpKey = `consumer${i}Power`;
+          const mapped = String(dps[dpKey] || '').trim();
+          if (!mapped) continue;
+          const slotCfg = (Array.isArray(fs.consumers) && fs.consumers[i - 1]) ? fs.consumers[i - 1] : null;
+          const name = (slotCfg && slotCfg.name) ? String(slotCfg.name) : `Verbraucher ${i}`;
+          const id = `${this.namespace}.historie.consumers.c${i}.powerW`;
+          extraConsumerReq.push({ idx: i, name, id });
+        }
+
+        for (let i = 1; i <= MAX_PRODUCERS; i++) {
+          const dpKey = `producer${i}Power`;
+          const mapped = String(dps[dpKey] || '').trim();
+          if (!mapped) continue;
+          const slotCfg = (Array.isArray(fs.producers) && fs.producers[i - 1]) ? fs.producers[i - 1] : null;
+          const name = (slotCfg && slotCfg.name) ? String(slotCfg.name) : `Erzeuger ${i}`;
+          const id = `${this.namespace}.historie.producers.p${i}.powerW`;
+          extraProducerReq.push({ idx: i, name, id });
+        }
         const ask = (id) => new Promise(resolve => {
           if (!id) return resolve({ id, values: [] });
           const options = { start, end, step: stepS * 1000, aggregate: 'average', addId: false, ignoreNull: true };
@@ -5121,8 +5153,19 @@ app.get('/api/history', async (req, res) => {
           ask(ids.evcs)
         ]);
 
+        const [extraConsumers, extraProducers] = await Promise.all([
+          Promise.all(extraConsumerReq.map(async (c) => {
+            const r = await ask(c.id);
+            return { idx: c.idx, name: c.name, id: r.id, values: r.values };
+          })),
+          Promise.all(extraProducerReq.map(async (p) => {
+            const r = await ask(p.id);
+            return { idx: p.idx, name: p.name, id: r.id, values: r.values };
+          }))
+        ]);
+
         const out = { pv, load, buy, sell, chg, dchg, soc, evcs };
-        res.json({ ok:true, start, end, step: stepS, series: out });
+        res.json({ ok:true, start, end, step: stepS, series: out, extras: { consumers: extraConsumers, producers: extraProducers } });
       } catch (e) {
         res.json({ ok:false, error: String(e) });
       }

@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.5.90",
+    "version": "0.5.91",
     "news": {
+      "0.5.91": {
+        "en": "UI: History now shows optional Energiefluss consumers/producers when configured (with dynamic legend + energy cards). History 'Load' button is styled (white text). Live quick-control tiles hide more reliably when an app is uninstalled/disabled. Removed unused admin/nexowatt-logo.png. Includes PWA cache bump.",
+        "de": "UI: Historie zeigt jetzt optionale Energiefluss-Verbraucher/Erzeuger, sobald sie konfiguriert sind (dynamische Legende + Energiekacheln). Historie-Button „Laden“ ist jetzt korrekt gestylt (weiße Schrift). Schnellsteuerungs-Kacheln in LIVE werden zuverlässiger ausgeblendet, wenn eine App nicht installiert/deaktiviert ist. Unbenutztes admin/nexowatt-logo.png entfernt. Inkl. PWA-Cache-Bump."
+      },
       "0.5.90": {
         "en": "UI: Live quick-control tiles are now hidden when the corresponding App-Center app is disabled (inactive or uninstalled). Relay tile counters/status fixed. Includes PWA cache bump.",
         "de": "UI: Schnellsteuerungs-Kacheln in LIVE werden jetzt ausgeblendet, wenn die zugehörige App im App‑Center deaktiviert ist (inaktiv oder nicht installiert). Relais-Kachel Zähler/Status korrigiert. Inkl. PWA-Cache-Bump."

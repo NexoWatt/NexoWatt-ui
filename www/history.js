@@ -11,9 +11,88 @@
 
   
   let barState = null;
+
+  // --- Optional Energiefluss series (Verbraucher/Erzeuger) ---
+  function getExtras(){
+    const ex = (data && data.extras && typeof data.extras === 'object') ? data.extras : null;
+    return {
+      consumers: Array.isArray(ex && ex.consumers) ? ex.consumers : [],
+      producers: Array.isArray(ex && ex.producers) ? ex.producers : []
+    };
+  }
+
+  function buildSeriesAll(){
+    const base = (data && data.series && typeof data.series === 'object') ? data.series : {};
+    const ex = getExtras();
+    const out = Object.assign({}, base);
+    // attach extras as distinct keys (c1..c10, p1..p5)
+    ex.consumers.forEach((c)=>{
+      const key = 'c' + String(c && c.idx || '');
+      if (!key || key==='c') return;
+      out[key] = { id: c.id, name: c.name, kind: 'consumer', values: Array.isArray(c.values) ? c.values : [] };
+    });
+    ex.producers.forEach((p)=>{
+      const key = 'p' + String(p && p.idx || '');
+      if (!key || key==='p') return;
+      out[key] = { id: p.id, name: p.name, kind: 'producer', values: Array.isArray(p.values) ? p.values : [] };
+    });
+    return out;
+  }
+
+  const EXTRA_COLORS = {
+    // 10 Verbraucher
+    consumer: ['#22d3ee','#38bdf8','#60a5fa','#818cf8','#a78bfa','#c4b5fd','#f0abfc','#f472b6','#fb7185','#fdba74'],
+    // 5 Erzeuger
+    producer: ['#a3e635','#84cc16','#22c55e','#10b981','#14b8a6']
+  };
+
+  function colorForExtra(kind, idx){
+    const list = EXTRA_COLORS[kind] || [];
+    const i = Math.max(0, Math.min(list.length-1, (Number(idx)||1)-1));
+    return list[i] || '#cbd3db';
+  }
+
+  function updateLegend(){
+    const legend = document.querySelector('.legend');
+    if (!legend) return;
+    // remove old extra legend items
+    Array.from(legend.querySelectorAll('.lg-extra')).forEach(el=>{ try{ el.remove(); }catch(_e){} });
+
+    // Only show extras in line mode to avoid confusion with bar view.
+    if (chartMode !== 'day') return;
+
+    const ex = getExtras();
+
+    function addItem(label, color){
+      const el = document.createElement('div');
+      el.className = 'lg lg-extra';
+      const sw = document.createElement('div');
+      sw.className = 'sw';
+      sw.style.background = color;
+      const sp = document.createElement('span');
+      sp.textContent = label;
+      el.appendChild(sw);
+      el.appendChild(sp);
+      legend.appendChild(el);
+    }
+
+    ex.producers.forEach(p=>{
+      const idx = Number(p && p.idx) || 0;
+      if (!idx) return;
+      const name = (p && p.name) ? String(p.name) : `Erzeuger ${idx}`;
+      addItem(name, colorForExtra('producer', idx));
+    });
+    ex.consumers.forEach(c=>{
+      const idx = Number(c && c.idx) || 0;
+      if (!idx) return;
+      const name = (c && c.name) ? String(c.name) : `Verbraucher ${idx}`;
+      addItem(name, colorForExtra('consumer', idx));
+    });
+  }
   
   function drawBars(){
-    const {series, start, end} = data;
+      const {start, end} = data;
+      const series = buildSeriesAll();
     const W=canvas.width, H=canvas.height, L=50, R=40, T=10, B=42;
     ctx.clearRect(0,0,W,H);
     ctx.fillStyle='#0e1216'; ctx.fillRect(0,0,W,H);
@@ -68,7 +147,8 @@
 function draw(){
     if(!data){ ctx.clearRect(0,0,canvas.width,canvas.height); return; }
     if(chartMode!=='day'){ return drawBars(); }
-    const {series, start, end} = data;
+    const {start, end} = data;
+    const series = buildSeriesAll();
     const W=canvas.width, H=canvas.height, L=50, R=40, T=10, B=42;
     ctx.clearRect(0,0,W,H);
     ctx.fillStyle='#0e1216'; ctx.fillRect(0,0,W,H);
@@ -85,7 +165,11 @@ function draw(){
     const x = t => L + (t-start)/(end-start)*(W-L-R);
 
     // compute min/max (kW) across power series using mapped signs
-    const keys=['pv','chg','dchg','sell','buy','evcs','load'];
+    const ex = getExtras();
+    const keysBase=['pv','chg','dchg','sell','buy','evcs','load'];
+    const keysExtraProd = ex.producers.map(p=> 'p' + String(p && p.idx || '')).filter(k=>k && k!=='p' && series[k]);
+    const keysExtraCons = ex.consumers.map(c=> 'c' + String(c && c.idx || '')).filter(k=>k && k!=='c' && series[k]);
+    const keys = keysBase.concat(keysExtraProd, keysExtraCons);
     let minKW=0, maxKW=0;
     keys.forEach(k=>{ const vals=(series[k]?.values)||[]; vals.forEach(p=>{ const v=mapKW(k, p[1]); if(v<minKW) minKW=v; if(v>maxKW) maxKW=v; }); });
     if (minKW===0 && maxKW===0) { maxKW = 1; }
@@ -105,6 +189,9 @@ function draw(){
     function mapKW(k, w){
       // w in Watts -> return kW with desired sign
       const val = Number(w)||0;
+      // dynamic Energiefluss series
+      if (String(k||'').startsWith('c')) return -Math.abs(val)/1000; // Verbraucher
+      if (String(k||'').startsWith('p')) return  Math.abs(val)/1000; // Erzeuger
       switch(k){
         case 'load':   return -Math.abs(val)/1000;          // Verbrauch negativ unter 0
         case 'evcs':   return -Math.abs(val)/1000;          // E‑Mobilität Verbrauch negativ
@@ -117,12 +204,13 @@ function draw(){
     }
 
     // helpers
-    function line(k, color, accessor='val', dash){
+    function line(k, color, accessor='val', dash, width){
       const vals = (series[k] && series[k].values) || [];
       if(!vals.length) return;
       ctx.save(); ctx.beginPath();
       if (dash) ctx.setLineDash(dash);
-      ctx.lineWidth = 2; ctx.strokeStyle = color;
+      ctx.lineWidth = Number.isFinite(Number(width)) ? Number(width) : 2;
+      ctx.strokeStyle = color;
       if (k==='soc'){
         let idx=0; let last=null;
         xs.forEach((ts,i)=>{
@@ -144,6 +232,21 @@ function draw(){
     line('buy', '#e74c3c');
     line('evcs','#ff6bd6');
     line('load','#9b59b6');
+
+    // Extras (Energiefluss-Monitor): Erzeuger/Verbraucher
+    ex.producers.forEach(p=>{
+      const idx = Number(p && p.idx) || 0;
+      if (!idx) return;
+      const key = 'p' + idx;
+      line(key, colorForExtra('producer', idx), 'val', [4,4], 1.6);
+    });
+    ex.consumers.forEach(c=>{
+      const idx = Number(c && c.idx) || 0;
+      if (!idx) return;
+      const key = 'c' + idx;
+      line(key, colorForExtra('consumer', idx), 'val', [4,4], 1.6);
+    });
+
     line('soc', '#95a5a6', 'val', [6,6]);
 
     // axes labels
@@ -234,6 +337,9 @@ function draw(){
     const res = await fetch(url).then(r=>r.json()).catch(()=>null);
     if(!res || !res.ok){ alert('History kann nicht geladen werden'); return; }
     data = res;
+    // Backward compatible default (older backends won't include extras)
+    if (!data.extras) data.extras = { consumers: [], producers: [] };
+    updateLegend();
     draw();
     // cards
     const stepSec = res.step; // legacy info
@@ -248,6 +354,22 @@ function draw(){
     card('Bezug',      sumEnergyKWh(s.buy.values).toFixed(1) + ' kWh');
     if (s.evcs) card('E‑Mobilität', sumEnergyKWh(s.evcs.values).toFixed(1) + ' kWh');
     card('Verbrauch',  sumEnergyKWh(s.load.values).toFixed(1) + ' kWh');
+
+    // Extras (optional): Verbraucher/Erzeuger aus Energiefluss
+    const ex = (res.extras && typeof res.extras === 'object') ? res.extras : { consumers: [], producers: [] };
+    (Array.isArray(ex.producers) ? ex.producers : []).forEach(p=>{
+      const idx = Number(p && p.idx) || 0;
+      const name = (p && p.name) ? String(p.name) : (idx ? `Erzeuger ${idx}` : 'Erzeuger');
+      const kwh = sumEnergyKWh(Array.isArray(p.values) ? p.values : []);
+      // Show if configured (backend filters configured slots). Even if empty, show 0.0 for visibility.
+      card(`Erzeuger: ${name}`, kwh.toFixed(1) + ' kWh');
+    });
+    (Array.isArray(ex.consumers) ? ex.consumers : []).forEach(c=>{
+      const idx = Number(c && c.idx) || 0;
+      const name = (c && c.name) ? String(c.name) : (idx ? `Verbraucher ${idx}` : 'Verbraucher');
+      const kwh = sumEnergyKWh(Array.isArray(c.values) ? c.values : []);
+      card(`Verbraucher: ${name}`, kwh.toFixed(1) + ' kWh');
+    });
   }
 
   // init date inputs (today)
@@ -341,7 +463,8 @@ function draw(){
       const x = cx - rect.left;
       const y = cy - rect.top;
 
-      const {series, start, end} = data;
+      const {start, end} = data;
+      const series = buildSeriesAll();
       const W=canvas.width, H=canvas.height, L=50, R=40, T=10, B=42;
 
       // --- BAR TOOLTIP (week/month/year) ---
@@ -434,6 +557,34 @@ function draw(){
       html += kv2('Einspeisung', sell/1000);
       html += kv2('E‑Mobilität', (Math.abs(evcs)||0)/1000);
       html += kv2('Verbrauch', load/1000);
+
+      // Optional: Energiefluss Verbraucher/Erzeuger (nur anzeigen wenn vorhanden)
+      const ex = getExtras();
+      const extraLines = [];
+      (Array.isArray(ex.producers) ? ex.producers : []).forEach(p=>{
+        const idx = Number(p && p.idx) || 0;
+        if (!idx) return;
+        const key = 'p' + idx;
+        const raw = collect[key]?.[1];
+        if (raw==null) return;
+        const kw = (Math.abs(raw)||0) / 1000;
+        if (kw < 0.001) return;
+        extraLines.push({ label: (p && p.name) ? String(p.name) : `Erzeuger ${idx}`, kw });
+      });
+      (Array.isArray(ex.consumers) ? ex.consumers : []).forEach(c=>{
+        const idx = Number(c && c.idx) || 0;
+        if (!idx) return;
+        const key = 'c' + idx;
+        const raw = collect[key]?.[1];
+        if (raw==null) return;
+        const kw = (Math.abs(raw)||0) / 1000;
+        if (kw < 0.001) return;
+        extraLines.push({ label: (c && c.name) ? String(c.name) : `Verbraucher ${idx}`, kw });
+      });
+      if (extraLines.length){
+        html += `<div style="margin-top:6px;border-top:1px dashed #2a323b;padding-top:6px;opacity:.9">Energiefluss</div>`;
+        extraLines.forEach(it=>{ html += kv2(it.label, it.kw); });
+      }
       if (soc!=null) html += `<div style="margin-top:6px;border-top:1px dashed #2a323b;padding-top:6px">SoC <b>${soc.toFixed(0)} %</b></div>`;
 
       tip.innerHTML = html;
