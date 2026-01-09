@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.5.89",
+    "version": "0.5.90",
     "news": {
+      "0.5.90": {
+        "en": "UI: Live quick-control tiles are now hidden when the corresponding App-Center app is disabled (inactive or uninstalled). Relay tile counters/status fixed. Includes PWA cache bump.",
+        "de": "UI: Schnellsteuerungs-Kacheln in LIVE werden jetzt ausgeblendet, wenn die zugehörige App im App‑Center deaktiviert ist (inaktiv oder nicht installiert). Relais-Kachel Zähler/Status korrigiert. Inkl. PWA-Cache-Bump."
+      },
       "0.5.89": {
         "en": "UI: Energy-flow monitor now always renders power in kW (no Watt display). Includes PWA cache bump.",
         "de": "UI: Energiefluss-Monitor zeigt Leistungswerte jetzt immer in kW (keine Watt-Anzeige mehr). Inkl. PWA-Cache-Bump."

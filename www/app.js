@@ -3175,57 +3175,71 @@ function initGeneratorModal() {
 
 
 function updateRelayUi(){
-const cfg = window.__nwCfg || {};
-const apps = window.__nwEmsApps || { apps: {} };
-const app = (apps.apps && apps.apps.relay) ? apps.apps.relay : { installed:false, enabled:false };
-const installed = (app.installed === true);
-const enabled = (typeof app.enabled === 'boolean') ? app.enabled : !!(cfg.ems && cfg.ems.relayEnabled);
+  const cfg = window.__nwCfg || {};
+  const apps = window.__nwEmsApps || { apps: {} };
 
-const card = document.getElementById('relayCard');
-if (!card) return;
+  // Prefer App-Center flags (installed + enabled). Fallback: legacy cfg.ems.* flags.
+  const hasAppObj = !!(apps && apps.apps && apps.apps.relay && typeof apps.apps.relay === 'object');
+  const app = hasAppObj ? apps.apps.relay : {};
+  const legacyEnabled = !!(cfg && cfg.ems && cfg.ems.relayEnabled);
 
-// Nur anzeigen, wenn App installiert + mind. ein Relais konfiguriert ist
-const relays = Array.isArray(window.__nwRelayControls) ? window.__nwRelayControls : [];
-const visible = relays.filter(r => r && r.configured);
+  const installed = hasAppObj ? (app.installed === true) : legacyEnabled;
+  const enabled = hasAppObj ? (app.enabled === true) : legacyEnabled;
 
-if (!installed || visible.length === 0){
-  card.classList.add('hidden');
-  return;
+  const card = document.getElementById('relayCard');
+  if (!card) return;
+
+  // Nur anzeigen, wenn App installiert + aktiv + mind. ein Relais konfiguriert ist
+  const relays = Array.isArray(window.__nwRelayControls) ? window.__nwRelayControls : [];
+  const visible = relays.filter(r => r && r.configured);
+
+  if (!installed || !enabled || visible.length === 0){
+    card.classList.add('hidden');
+    return;
+  }
+
+  card.classList.remove('hidden');
+
+  const onCount = visible.filter(r => r.on).length;
+  setText('relayOnCount', String(onCount));
+  setText('relayCount', String(visible.length));
+  setText('relayStatusShort', enabled ? 'aktiv' : 'aus');
 }
 
-card.classList.remove('hidden');
-
-const onCount = enabled ? visible.filter(r => r.on).length : 0;
-setText('relayOnCount', String(onCount));
-setText('relayTotalCount', String(visible.length));
-}
 
 
 function updateThresholdUi(){
-const cfg = window.__nwCfg || {};
-const apps = window.__nwEmsApps || { apps: {} };
-const app = (apps.apps && apps.apps.threshold) ? apps.apps.threshold : { installed:false, enabled:false };
-const installed = (app.installed === true);
-const enabled = (typeof app.enabled === 'boolean') ? app.enabled : !!(cfg.ems && cfg.ems.thresholdEnabled);
+  const cfg = window.__nwCfg || {};
+  const apps = window.__nwEmsApps || { apps: {} };
 
-const card = document.getElementById('thresholdCard');
-if (!card) return;
+  // Prefer App-Center flags (installed + enabled). Fallback: legacy cfg.ems.* flags.
+  const hasAppObj = !!(apps && apps.apps && apps.apps.threshold && typeof apps.apps.threshold === 'object');
+  const app = hasAppObj ? apps.apps.threshold : {};
+  const legacyEnabled = !!(cfg && cfg.ems && cfg.ems.thresholdEnabled);
 
-// Nur anzeigen, wenn App installiert + mind. eine Regel konfiguriert ist
-const rules = Array.isArray(window.__nwThresholdRules) ? window.__nwThresholdRules : [];
-const configured = rules.filter(r => r && r.configured);
+  const installed = hasAppObj ? (app.installed === true) : legacyEnabled;
+  const enabled = hasAppObj ? (app.enabled === true) : legacyEnabled;
 
-if (!installed || configured.length === 0){
-  card.classList.add('hidden');
-  return;
+  const card = document.getElementById('thresholdCard');
+  if (!card) return;
+
+  // Nur anzeigen, wenn App installiert + aktiv + mind. eine Regel konfiguriert ist
+  const rules = Array.isArray(window.__nwThresholdRules) ? window.__nwThresholdRules : [];
+  const configured = rules.filter(r => r && r.configured);
+
+  if (!installed || !enabled || configured.length === 0){
+    card.classList.add('hidden');
+    return;
+  }
+
+  card.classList.remove('hidden');
+
+  const activeCount = configured.filter(r => r.active).length;
+  setText('thrActiveCount', String(activeCount));
+  setText('thrRuleCount', String(configured.length));
+  setText('thrStatusShort', enabled ? 'aktiv' : 'aus');
 }
 
-card.classList.remove('hidden');
-
-const activeCount = enabled ? configured.filter(r => r.active).length : 0;
-setText('thrActiveCount', String(activeCount));
-setText('thrRuleCount', String(configured.length));
-}
 
 
 
@@ -3233,9 +3247,14 @@ setText('thrRuleCount', String(configured.length));
 function updateBhkwUi(){
   const cfg = window.__nwCfg || {};
   const apps = window.__nwEmsApps || { apps: {} };
-  const app = (apps.apps && apps.apps.bhkw) ? apps.apps.bhkw : { installed:false, enabled:false };
-  const installed = (app.installed === true);
-  const enabled = (typeof app.enabled === 'boolean') ? app.enabled : !!(cfg.ems && cfg.ems.bhkwEnabled);
+
+  // Prefer App-Center flags (installed + enabled). Fallback: legacy cfg.ems.* flags.
+  const hasAppObj = !!(apps && apps.apps && apps.apps.bhkw && typeof apps.apps.bhkw === 'object');
+  const app = hasAppObj ? apps.apps.bhkw : {};
+  const legacyEnabled = !!(cfg && cfg.ems && cfg.ems.bhkwEnabled);
+
+  const installed = hasAppObj ? (app.installed === true) : legacyEnabled;
+  const enabled = hasAppObj ? (app.enabled === true) : legacyEnabled;
 
   const card = document.getElementById('bhkwCard');
   if (!card) return;
@@ -3243,7 +3262,8 @@ function updateBhkwUi(){
   const devs = Array.isArray(window.__nwBhkwDevices) ? window.__nwBhkwDevices : [];
   const visible = devs.filter(d => d && d.configured && d.showInLive !== false && d.enabled !== false);
 
-  if (!installed || visible.length === 0){
+  // Nur anzeigen, wenn App installiert + aktiv + mind. ein Gerät konfiguriert ist
+  if (!installed || !enabled || visible.length === 0){
     card.classList.add('hidden');
     return;
   }
@@ -3251,14 +3271,15 @@ function updateBhkwUi(){
   card.classList.remove('hidden');
 
   // Running count from live states
+  const st = window.latestState || {};
+  const sv = (k) => (st && st[k] && st[k].value !== undefined) ? st[k].value : undefined;
+
   let runCount = 0;
-  if (enabled){
-    for (const d of visible){
-      const idx = Number(d.idx);
-      if (!idx) continue;
-      const st = v(`bhkw.devices.b${idx}.running`);
-      if (st === true) runCount++;
-    }
+  for (const d of visible){
+    const idx = Number(d.idx);
+    if (!idx) continue;
+    const r = sv(`bhkw.devices.b${idx}.running`);
+    if (r === true) runCount++;
   }
 
   setText('bhkwRunningCount', String(runCount));
@@ -3268,12 +3289,18 @@ function updateBhkwUi(){
 
 
 
+
 function updateGeneratorUi(){
   const cfg = window.__nwCfg || {};
   const apps = window.__nwEmsApps || { apps: {} };
-  const app = (apps.apps && apps.apps.generator) ? apps.apps.generator : { installed:false, enabled:false };
-  const installed = (app.installed === true);
-  const enabled = (typeof app.enabled === 'boolean') ? app.enabled : !!(cfg.ems && cfg.ems.generatorEnabled);
+
+  // Prefer App-Center flags (installed + enabled). Fallback: legacy cfg.ems.* flags.
+  const hasAppObj = !!(apps && apps.apps && apps.apps.generator && typeof apps.apps.generator === 'object');
+  const app = hasAppObj ? apps.apps.generator : {};
+  const legacyEnabled = !!(cfg && cfg.ems && cfg.ems.generatorEnabled);
+
+  const installed = hasAppObj ? (app.installed === true) : legacyEnabled;
+  const enabled = hasAppObj ? (app.enabled === true) : legacyEnabled;
 
   const card = document.getElementById('generatorCard');
   if (!card) return;
@@ -3281,27 +3308,30 @@ function updateGeneratorUi(){
   const devs = Array.isArray(window.__nwGeneratorDevices) ? window.__nwGeneratorDevices : [];
   const visible = devs.filter(d => d && d.configured && d.showInLive !== false && d.enabled !== false);
 
-  if (!installed || visible.length === 0){
+  // Nur anzeigen, wenn App installiert + aktiv + mind. ein Gerät konfiguriert ist
+  if (!installed || !enabled || visible.length === 0){
     card.classList.add('hidden');
     return;
   }
 
   card.classList.remove('hidden');
 
+  const st = window.latestState || {};
+  const sv = (k) => (st && st[k] && st[k].value !== undefined) ? st[k].value : undefined;
+
   let runCount = 0;
-  if (enabled){
-    for (const d of visible){
-      const idx = Number(d.idx);
-      if (!idx) continue;
-      const st = v(`generator.devices.g${idx}.running`);
-      if (st === true) runCount++;
-    }
+  for (const d of visible){
+    const idx = Number(d.idx);
+    if (!idx) continue;
+    const r = sv(`generator.devices.g${idx}.running`);
+    if (r === true) runCount++;
   }
 
   setText('generatorRunningCount', String(runCount));
   setText('generatorCount', String(visible.length));
   setText('generatorStatusShort', enabled ? 'aktiv' : 'aus');
 }
+
 
 
 

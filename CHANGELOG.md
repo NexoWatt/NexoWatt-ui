@@ -1,3 +1,8 @@
+## 0.5.90 (UI)
+- LIVE: Schnellsteuerungs-Kacheln (Schwellwerte/Relais/BHKW/Generator) werden automatisch ausgeblendet, wenn die entsprechende App im App‑Center deaktiviert ist (nicht installiert oder „Aktiv: Aus“).
+- LIVE: Relais-Kachel – Zähler/Status-Anzeige korrigiert.
+- PWA: Cache-Version erhöht.
+
 ## 0.5.89 (UI)
 - UI: Energiefluss-Monitor zeigt Leistungswerte jetzt immer in kW (statt Watt) – inkl. optionaler Verbraucher/Erzeuger.
 - PWA: Cache-Version erhöht.
