@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1" name="viewport"/>
+  <title>NexoWatt SmartHome Konfiguration</title>
+  <link href="/static/styles.css" rel="stylesheet"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/nexowatt-32.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0c0f12">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <a href="/" style="display:inline-flex;align-items:center;text-decoration:none;">
+      <img alt="NexoWatt" src="/static/nexowatt-logo.png"/>
+    </a>
+  </div>
+  <h1>SmartHome Konfiguration</h1>
+</header>
+
+<main class="content">
+  <div id="nw-smarthome-config-root">
+    <div class="nw-smarthome-header">
+      <div>
+        <div class="nw-smarthome-header__title">SmartHome-Konfiguration</div>
+        <div class="nw-smarthome-header__subtitle">
+          Bearbeiten von Räumen, Funktionen und Geräten aus dem SmartHomeConfig-Modell. Änderungen werden in der Adapter-Instanz gespeichert (BETA).
+        </div>
+      </div>
+      <div class="nw-smarthome-header__right">
+        <div class="nw-smarthome-header__actions">
+          <button id="nw-config-save-btn" class="nw-config-btn nw-config-btn--primary" type="button">Speichern</button>
+          <button id="nw-config-reload-btn" class="nw-config-btn nw-config-btn--ghost" type="button">Neu laden</button>
+          <a class="nw-config-btn nw-config-btn--ghost" href="/smarthome.html">SmartHome öffnen</a>
+          <a class="nw-config-btn nw-config-btn--ghost" href="/logic.html">Logic öffnen</a>
+
+        </div>
+<div id="nw-config-status" class="nw-config-status"></div>
+      </div>
+    </div>
+
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">Räume</h2>
+        <button id="nw-config-add-room-btn" class="nw-config-btn nw-config-btn--ghost" type="button">+ Raum</button>
+      </div>
+      <div id="nw-config-rooms" class="nw-config-list"></div>
+      <div id="nw-config-rooms-empty" class="nw-config-empty" style="display:none;">
+        Keine Räume definiert. Nutze <strong>„+ Raum”</strong>, um einen Raum anzulegen.</div>
+    </section>
+
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">Funktionen</h2>
+        <button id="nw-config-add-function-btn" class="nw-config-btn nw-config-btn--ghost" type="button">+ Funktion</button>
+      </div>
+      <div id="nw-config-functions" class="nw-config-list"></div>
+      <div id="nw-config-functions-empty" class="nw-config-empty" style="display:none;">
+        Keine Funktionen definiert. Nutze <strong>„+ Funktion”</strong>, um eine Funktion anzulegen.</div>
+    </section>
+
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">Geräte / Kacheln</h2>
+        <button id="nw-config-add-device-btn" class="nw-config-btn nw-config-btn--ghost" type="button">+ Gerät</button>
+      </div>
+      <div id="nw-config-devices" class="nw-config-grid"></div>
+      <div id="nw-config-devices-empty" class="nw-config-empty" style="display:none;">
+        Keine Geräte/Kacheln definiert. Nutze <strong>„+ Gerät”</strong>, um eine Kachel anzulegen.</div>
+    </section>
+  </div>
+</main>
+
+<script src="/static/smarthome-config.js"></script>
+</body>
+</html>

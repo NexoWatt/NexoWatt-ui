@@ -1,0 +1,762 @@
+{
+  "common": {
+    "name": "nexowatt-vis",
+    "version": "0.5.87",
+    "news": {
+      "0.5.86": {
+        "en": "Hotfix: App-Center Storagefarm (MultiUse storage) is now fully usable and EMS App state normalization/legacy enable-flag mapping has been fixed (peak/storagefarm IDs). Includes PWA cache bump.",
+        "de": "Hotfix: App-Center Speicherfarm (MultiUse Speicher) ist jetzt vollständig nutzbar und die EMS-App-State-Normalisierung/Legacy-Enable-Flag-Zuordnung wurde korrigiert (IDs peak/storagefarm). Inkl. PWA-Cache-Bump."
+      },
+      "0.5.84": {
+        "en": "Hotfix: Generation flow direction in Energiefluss is now fixed (PV/Producers/BHKW/Generator always flow towards the building; no more direction flipping due to sign jitter).",
+        "de": "Hotfix: Erzeugungs-Flussrichtung im Energiefluss ist jetzt fest (PV/Erzeuger/BHKW/Generator laufen immer zum Gebäude; kein Richtungswechsel mehr durch Vorzeichen-Jitter)."
+      },
+      "0.5.83": {
+        "en": "Hotfix: App-Center BHKW/Generator option checkboxes fixed (no overlaps; checkbox styling now correctly applied to the input). Minor layout polish for the compact options row.",
+        "de": "Hotfix: App-Center BHKW/Generator Options-Checkboxes korrigiert (keine Überlappungen mehr; Checkbox-Styling jetzt korrekt am Input). Kleine Layout-Politur für die kompakte Optionen-Zeile."
+      },
+      "0.5.82": {
+        "en": "Hotfix: OCPP auto-mapping now prefers meterValues.Power_Active_Import for power (W) and meterValues.Energy_Active_Import_Register for energy (kWh). lastTransactionConsumption is strongly de-prioritized.",
+        "de": "Hotfix: OCPP Auto-Zuordnung bevorzugt jetzt meterValues.Power_Active_Import für Leistung (W) und meterValues.Energy_Active_Import_Register für Energie (kWh). lastTransactionConsumption wird stark abgewertet."
+      },
+      "0.5.81": {
+        "en": "Hotfix: Energy-flow BHKW/Generator nodes are now placed on the lower-left outer ring for a clean circular layout and use the battery-green styling. App-Center BHKW/Generator configuration cards now use the full available width (no empty grid columns) and field hints are rendered below the inputs (no more squeezed/overlapping layout).",
+        "de": "Hotfix: Energiefluss BHKW/Generator werden jetzt auf dem unteren linken Außenring platziert (sauberer Kreis) und in Speicher-Grün dargestellt. App-Center BHKW/Generator Konfiguration nutzt jetzt die volle Breite (keine leeren Grid-Spalten) und Feld-Hinweise stehen unter den Eingaben (kein gequetschtes/überlappendes Layout mehr)."
+      },
+      "0.5.80": {
+        "en": "Hotfix: OCPP auto-discovery now supports the default ioBroker OCPP adapter path layout (ocpp.<inst>.<chargePointId>.<connectorNo>...). Added heuristics to ignore connector 0 (Main) when numbered connectors exist, while propagating station-level online/availability IDs. Minor scoring improvements for Import power/energy.",
+        "de": "Hotfix: OCPP Auto-Erkennung unterstützt jetzt das Standard-Pfadlayout des ioBroker OCPP-Adapters (ocpp.<inst>.<chargePointId>.<connectorNo>...). Heuristik: Connector 0 (Main) wird ignoriert, wenn nummerierte Connectoren existieren, während Online/Availability-IDs aus Main an die Ports vererbt werden. Zusätzlich leichte Scoring-Verbesserung (Import-Leistung/Energie bevorzugen)."
+      },
+      "0.5.78": {
+        "en": "Phase Epic 1 / Punkt 2: App-Center EVCS tab now supports OCPP auto-discovery (detect chargepoints/connectors from ioBroker OCPP states and prefill datapoint mappings). Added /api/ocpp/discover endpoint. PWA cache version bumped.",
+        "de": "Phase Epic 1 / Punkt 2: App-Center → Ladepunkte unterstützt jetzt OCPP Auto-Erkennung (Chargepoints/Connectoren aus ioBroker-OCPP-States erkennen und Datenpunkt-Zuordnungen automatisch vorbelegen). Neuer Endpoint /api/ocpp/discover. PWA-Cache-Version erhöht."
+      },
+      "0.5.77": {
+        "en": "Hotfix: Energy-flow monitor now supports BHKW/Generator nodes (lower-left between grid and battery; visible only when configured with power datapoint). PWA cache version bumped.",
+        "de": "Hotfix: Energiefluss-Monitor unterstützt jetzt BHKW/Generator (links unten zwischen Netz und Batterie; nur sichtbar bei konfiguriertem Leistungs-Datenpunkt). PWA-Cache-Version erhöht."
+      },
+      "0.5.71": {
+        "en": "Hotfix 6.2.4: Energy-flow producers reduced to max 5 (VIS + /config); History & Settings visual refresh; bumped PWA cache version.",
+        "de": "Hotfix 6.2.4: Energiefluss-Erzeuger auf max. 5 reduziert (VIS + /config); History & Settings optisch angepasst; PWA-Cache-Version erhöht."
+      },
+      "0.5.61": {
+        "en": "Phase 6.0.1: EVCS page redesigned for up to 50 chargepoints (tile overview + per-chargepoint tooltip dialog); fixed time-target charging time picker stability; increased EVCS count limit to 50 (App-Center + Admin config).",
+        "de": "Phase 6.0.1: EVCS-Seite für bis zu 50 Ladepunkte überarbeitet (Kachel-Übersicht + Tooltip-Dialog pro Ladepunkt); Zeit-Ziel-Laden: Uhrzeit-Picker stabilisiert; EVCS-Limit auf 50 erhöht (App-Center + Admin-Konfiguration)."
+      },
+      "0.5.52": {
+        "en": "Phase 5.1: Settings installer button now opens the Admin UI on port 8081 (dynamic host); bumped PWA cache version.",
+        "de": "Phase 5.1: Installer-Button in den Einstellungen öffnet jetzt die Admin-Oberfläche auf Port 8081 (dynamischer Host); PWA-Cache-Version erhöht."
+      },
+      "0.5.45": {
+        "en": "Phase 4.4: Thermal control extended with setpoint devices (heat pump/HVAC), profiles (heating/cooling), boost override + manual-hold for quick controls; flow quick control now supports a Boost action.",
+        "de": "Phase 4.4: Thermische Steuerung erweitert um Setpoint-Geräte (Wärmepumpe/Klima), Profile (Heizen/Kühlen), Boost-Override + Manuell-Hold für Schnellsteuerung; Schnellsteuerung unterstützt jetzt Boost."
+      },
+      "0.5.41": {
+        "en": "Phase 4.0: EMS core stabilization (tick mutex, centralized caps/budgets snapshot, deterministic limit propagation to charge management).",
+        "de": "Phase 4.0: EMS-Core stabilisiert (Tick-Mutex gegen Überlappung, zentraler Snapshot für Caps/Budgets, deterministische Limit-Weitergabe ins Lademanagement)."
+      },
+      "0.5.34": {
+        "en": "Phase 3.5: App-Center: show mapping cards only for installed apps; added Live tile datapoint mapping (kWh/CO2/status); fixed App-Center validation scope; refined dynamic tariff gating (neutral/unknown do not block grid).",
+        "de": "Phase 3.5: App-Center: Zuordnungskacheln nur bei installierten Apps anzeigen; neue Live-Kachel-Datenpunkte (kWh/CO₂/Status); Validierung im App-Center korrigiert; dynamische Tarife: Netzladung wird bei neutral/unbekannt nicht blockiert."
+      },
+      "0.5.33": {
+        "en": "Phase 3.4: Station group hard caps (load-balancing) + station diagnostics + more specific reason codes (grid/phase/station/user limits).",
+        "de": "Phase 3.4: Harte Stationsgruppen-Limits (Load-Balancing) + Stations-Diagnose + spezifischere Reason-Codes (Netz/Phase/Station/User-Limits)."
+      },
+      "0.5.32": {
+        "en": "Phase 3.3: Datapoint validation in EMS App Center; per charge point diagnostics; stale detection per charge point (safe failover).",
+        "de": "Phase 3.3: Datenpunkt-Validierung im EMS App-Center; Diagnose pro Ladepunkt; Stale-Detection je Ladepunkt (sicheres Failover)."
+      },
+      "0.5.30": {
+        "de": "Phase 3.1: Ladepunkt-Installer erweitert (Aktiv/Prio/Standard-Modus + Erweitert: Steuerung, Phasen/Spannung, Limits/Steps, Boost). EMS-Lademanagement: Apply-Writes als State verfügbar; Bereinigung PV-Hysterese/Reason-Codes.",
+        "en": "Phase 3.1: charge point installer extended (enable/priority/default mode + advanced control/limits/steps/boost). EMS charging management: apply-writes available as a state; PV hysteresis/ reason-code cleanup."
+      },
+      "0.5.22": {
+        "de": "Speicher-Regelung: Eigenverbrauch nutzt den geglätteten NVP (ems.gridPowerW) und einen skalierten Regler (weniger Schwingen). PV-Überschuss-Laden nutzt ebenfalls den geglätteten Export. Lastspitzenkappung (LSK): Entlade-Rampe wird jetzt auch beim Attack durch Max ΔW/Tick begrenzt (reduziert Sollwertsprünge/Stress, Reserve puffert schnelle Spitzen).",
+        "en": "Storage control: self-consumption uses averaged NVP (ems.gridPowerW) with a scaled controller (less oscillation). PV surplus charging also uses averaged export. Peak shaving (LSK): discharge ramp is now also limited on attack by Max ΔW/tick (reduces setpoint jumps/stress; reserve buffers fast spikes)."
+      },
+      "0.5.21": {
+        "de": "Speicher-Regelung: SoC-Hysterese an Grenzwerten (verhindert Flattern; nach Erreichen einer SoC-Grenze bleibt die Vorgabe stabil bei 0 W / Ruhephase). LSK/ Eigenverbrauch/ Reserve nutzen die Hysterese konsistent.",
+        "en": "Storage control: SoC hysteresis around limits (prevents flapping; once a SoC limit is reached the setpoint remains stable at 0 W / idle). LSK/ self-consumption/ reserve now use consistent hysteresis."
+      },
+      "0.5.20": {
+        "de": "Speicher-Regelung: Anti-PingPong/Anti-Flattern zwischen Laden und Entladen (Sperrzeit bei Richtungswechsel, Neutralband um 0). LSK-Reserve-Nachladen: Refill mit Sicherheits-Margin unterhalb des Peak-Limits und optionaler Wartezeit nach Peak (Release-Delay) zur Vermeidung von Auf-/Zu-Pendeln.",
+        "en": "Storage control: anti-pingpong/anti-chatter between charge and discharge (direction-change lockout, neutral band around 0). LSK reserve refill: refill uses a safety margin below the peak limit and an optional wait time after a peak (release delay) to avoid oscillation."
+      },
+      "0.5.10": "LSK-Refill Headroom-Glättung: weniger Sollwert-Flattern bei Netz-Nachladen; zusätzliche Diagnose-States.",
+      "0.5.8": {
+        "de": "VIS: Header wieder vollständig responsiv und auf allen Seiten fixiert (CSS-Kaskade bereinigt). Peak-Shaving: Reserve wirkt jetzt auch im static-Modus. Speicher-Regelung: LSK-Reserve kann innerhalb des Peak-Limits aus dem Netz nachladen (Headroom), Notstrom-Netzladen wird ebenfalls am Peak-Limit ausgerichtet. Service-Worker Cache-Version erhöht.",
+        "en": "UI: Header is responsive again and fixed across all pages (CSS cascade cleaned up). Peak shaving: reserve now also applies in static mode. Storage control: LSK reserve can recharge from grid within the peak limit (headroom); backup grid-charge is also capped by peak limit. Service worker cache version bumped."
+      },
+      "0.5.5": {
+        "de": "Speicherfarm: Vorzeichen-Invertierung je Speicher (Laden/Entladen) für Mess- und Sollwert-DPs. VIS: keine ioBroker-Erwähnungen mehr und kein Installer/Admin-Link im Endkunden-UI. Service-Worker Cache-Version erhöht.",
+        "en": "Storage farm: per-storage sign inversion (charge/discharge) for measurement and setpoint DPs. UI: removed any ioBroker mentions and installer/admin link from end-user dashboard. Service worker cache version bumped."
+      },
+      "0.5.4": {
+        "de": "Speicherfarm: Endkunden-VIS bereinigt (keine Installer-Hinweise), Status-Tabelle responsiv (Mobile/Card-Layout) und Topbar mobil optimiert. Backend: erste Sollwert-Verteilung (Pool/Gruppen) – schreibt auf pro Speicher konfigurierten Soll-Laden/Soll-Entladen-DPs, Fallback auf Single-Storage bleibt erhalten.",
+        "en": "Storage farm: end-user VIS cleaned (no installer hints), responsive status table (mobile/card layout) and mobile-optimized topbar. Backend: first setpoint distribution (pool/groups) – writes per-storage charge/discharge setpoint DPs, with safe fallback to single-storage mapping."
+      },
+      "0.5.3": {
+        "en": "Storage farm: configuration moved to ioBroker Admin only (VIS read-only overview). Backend blocks /api/set scope storageFarm. Added derived storagesStatusJson without DP IDs. Service worker cache bumped.",
+        "de": "Speicherfarm: Konfiguration ausschließlich im ioBroker‑Admin (VIS nur Übersicht/Status). Backend blockiert /api/set für storageFarm. Neuer abgeleiteter Status storagesStatusJson ohne DP‑IDs. Service‑Worker Cache erhöht."
+      },
+      "0.5.2": {
+        "en": "Admin: added EMS – Storage farm tab with storage table and datapoint mapping. Adapter: sync admin farm config to storageFarm.* states, derived totals timer uses configured interval, unload cleanup.",
+        "de": "Admin: neuer Reiter „EMS – Speicherfarm“ inkl. Tabelle zur Speicher‑Zuordnung. Adapter: Admin‑Konfig wird nach storageFarm.* gespiegelt, Summenbildung nutzt konfiguriertes Intervall, Cleanup beim Unload."
+      },
+      "0.5.1": {
+        "de": "Hotfix Speicherfarm: storageFarm.*-States werden jetzt zuverlässig als lokale Adapter-States abonniert und mit Defaults initialisiert (UI zeigt nach Neustart wieder Werte). Service-Worker Cache-Version erhöht.",
+        "en": "Storage farm hotfix: storageFarm.* states are now subscribed as local adapter states and initialized with defaults (UI keeps values after restart). Service worker cache version bumped."
+      },
+      "0.4.125": {
+        "de": "Feinschliff Admin: Netzanschlussleistung als zentraler Anlagenparameter in den EMS‑Reiter verschoben; §14a zeigt nur noch Hinweis. Doppelte Eingabestellen reduziert.",
+        "en": "Admin polish: moved grid connection power to EMS as a central plant parameter; §14a shows a hint only. Reduced duplicate configuration."
+      },
+      "0.4.124": {
+        "de": "Admin: §14a‑Tab aufgeräumt (Legacy‑Installer Felder entfernt, nur noch Netzanschlussleistung + §14a‑Konfiguration). Keine funktionalen Änderungen an EMS/§14a‑Logik.",
+        "en": "Admin: cleaned up §14a tab (removed legacy installer fields; keep grid connection power + §14a configuration). No functional changes to EMS/§14a logic."
+      },
+      "0.4.123": {
+        "de": "§14a EnWG: Admin‑UI um §14a‑Konfiguration erweitert (Modus Direkt/EMS, optionales Aktiv‑Signal, optionale EMS‑Sollwert‑DP, Verbraucher‑Tabelle). EMS: interner Pmin,14a/GZF‑Mindestwert und EVCS‑Caps werden angewendet.",
+        "en": "§14a EnWG: extended Admin UI (direct/EMS mode, optional activation signal, optional EMS setpoint DP, consumer table). EMS: applies internal Pmin,14a/GZF minimum and EVCS caps."
+      },
+      "0.4.122": {
+        "de": "Rollback: Lizenzpflicht entfernt (Adapter startet wieder ohne Lizenz). Admin-Aufräumen + ioBroker-Login/Write-Schutz bleiben aktiv.",
+        "en": "Rollback: removed mandatory licensing (adapter starts without a license again). Admin cleanup + ioBroker login/write protection remain enabled."
+      },
+      "0.4.119": {
+        "de": "Serienreife‑Gate: Stabilisierung/Feinschliff, Admin‑Aufräumen (SmartHome‑Tabs ausgeblendet) und saubere Defaults für Speicher‑Strategie. Neu: LSK‑Laden/Entladen separat aktivierbar.",
+        "en": "Release gate: stability/polish, admin cleanup (SmartHome tabs hidden) and cleaner defaults for storage strategy. New: LSK charge/discharge separately toggleable."
+      },
+      "0.4.118": {
+        "de": "Gate E: Speicher‑Multiuse (SoC‑Zonen für LSK/Eigenverbrauch/Notstrom, optionale Eigenverbrauchs‑Entladung, LSK Lade/Entlade‑Limits, optionales Reserve‑Netzladen).",
+        "en": "Gate E: Storage multiuse (SoC zones for peak shaving/self‑consumption/backup, optional self‑consumption discharge, LSK charge/discharge limits, optional reserve grid‑charge)."
+      },
+      "0.4.117": {
+        "de": "RC: Admin aufgeräumt (SmartHome-Tabs ausgeblendet), EVCS zeigt jetzt EMS-Hinweise/Fehler (z.B. NO_SETPOINT) direkt im Ladepunkt-Card; Boost-Button wird bei allowBoost=false gesperrt. SW-Cache v7.",
+        "en": "RC: Admin cleaned up (SmartHome tabs hidden), EVCS now shows EMS hints/errors (e.g. NO_SETPOINT) in the chargepoint card; Boost button disabled when allowBoost=false. SW cache v7."
+      },
+      "0.4.114": {
+        "de": "Gate B Fix: EVCS-Modus-Buttons nutzen standardmäßig den EMS Runtime-Mode (chargingManagement.wallboxes.*.userMode) – keine manuelle Modus-DP-Zuordnung pro Ladepunkt nötig. Zusätzlich werden EMS Runtime-States beim Start abonniert/primed, damit die Buttons nach Reload stabil bleiben.",
+        "en": "Gate B Fix: EVCS mode buttons default to EMS runtime mode (chargingManagement.wallboxes.*.userMode) – no manual per-chargepoint mode datapoint mapping required. Also subscribes/primes EMS runtime states on startup so buttons remain stable after reload."
+      },
+      "0.4.113": {
+        "de": "Gate B: Fix UI-Freeze bei Ladepunkt-Modi (SSE/Render-Debounce + Update-Batching). Zusätzlich PV-Hysterese (Start/Stop-Schwellen + Delays + Abort bei Netzbezug) für PV-Modi.",
+        "en": "Gate B: Fix UI freeze on chargepoint mode switching (SSE/render debounce + update batching). Adds PV hysteresis (start/stop thresholds + delays + abort on grid import) for PV modes."
+      },
+      "0.4.109": {
+        "de": "Sprint 3.2: EVCS-Seite steuert jetzt den EMS-Ladepunktmodus (Auto/Boost/Min+PV/PV) je Ladepunkt inkl. Boost-Timer/Prio-Anzeige. Design unverändert.",
+        "en": "Sprint 3.2: EVCS page now controls per chargepoint EMS mode (Auto/Boost/Min+PV/PV) incl. boost timer/priority, same UI design."
+      },
+      "0.4.108": {
+        "de": "EMS: Boost-Priorität pro Ladepunkt inkl. Auto-Timeout (DC 60min / AC 300min) + Debug-States boostSince/boostUntil.",
+        "en": "EMS: Per-chargepoint boost priority with auto-timeout (DC 60m / AC 300m) + boost runtime debug states."
+      },
+      "0.4.106": {
+        "en": [
+          "Sprint 2.2: Station groups (shared power limit) + per charge point Boost permission",
+          "Sprint 3: EMS/Peak Shaving config in Admin UI + multiuse ModuleManager enabled in VIS"
+        ],
+        "de": [
+          "Sprint 2.2: Stationsgruppen (gemeinsame Leistung) + Boost-Erlaubnis je Ladepunkt",
+          "Sprint 3: EMS/Peak-Shaving Einstellungen in der Admin-UI + ModuleManager im VIS aktiviert"
+        ]
+      },
+      "0.4.104": {
+        "de": "Sprint 2: Charging-Management (Multiuse) im VIS-Adapter integriert. Pro Wallbox runtime Modus (auto|pv|minpv|boost) via chargingManagement.wallboxes.*.userMode + /api/set (scope=ems).",
+        "en": "Sprint 2: Embedded charging management (from Multiuse) inside VIS adapter. Per-wallbox runtime mode (auto|pv|minpv|boost) via chargingManagement.wallboxes.*.userMode + /api/set (scope=ems)."
+      },
+      "0.4.91": {
+        "de": "EVCS RFID: Anlernen-UI (Karte anlernen, letzte Karte anzeigen, in Whitelist übernehmen).",
+        "en": "EVCS RFID: Learning UI (start learning, show last card, add to whitelist)."
+      },
+      "0.4.71": {
+        "en": "Fix: EVCS report values are visible in screen mode (single wallbox).",
+        "de": "Fix: EVCS-Berichtwerte sind im Bildschirmmodus sichtbar (einzelne Wallbox)."
+      },
+      "0.4.69": {
+        "en": "SmartHomeConfig: improved datapoint picker (browse list without typing) and user-friendly device type labels.",
+        "de": "SmartHomeConfig: Datenpunkt-Picker verbessert (Liste ohne Eingabe) und benutzerfreundliche Geräte-Typ-Labels."
+      },
+      "0.4.58": {
+        "de": "EVCS Bericht: Öffnet nun die statische Seite /static/evcs-report.html (Weiterleitung von /evcs-report.html), History-Button angepasst.",
+        "en": "EVCS report: Now opens the static page /static/evcs-report.html (redirect from /evcs-report.html), history button updated."
+      },
+      "0.4.57": {
+        "en": "EVCS history series + report page",
+        "de": "EVCS Historie + Berichtseite"
+      },
+      "0.4.52": {
+        "de": "Fix: Admin-GUI-Crash in EVCS-Tabelle behoben (Style-Definitionen als Objekt statt String).",
+        "en": "Fix: Prevented Admin GUI crash in EVCS table (style definitions as object instead of string)."
+      },
+      "0.4.48": {
+        "de": "Fix: Einstellungsseite liest beim Laden die aktuellen Werte (zuletzt gespeicherte Eingaben) ein; doppelte Event-Listener werden verhindert.",
+        "en": "Fix: Settings page now loads current values (last saved inputs) on page load; prevents duplicate event listeners."
+      },
+      "0.4.47": {
+        "de": "Fix: /settings.html wieder direkt erreichbar (Route ergänzt). Settings-Seite nutzt /static/styles.css und wird beim Direktaufruf sichtbar (inkl. Installer-Button).",
+        "en": "Fix: /settings.html reachable again (route added). Settings page uses /static/styles.css and shows on direct open (incl. installer button)."
+      },
+      "0.4.34": "(2025-12-15) Schritt 2: EVCS-Liste (Mehrfach-Wallbox) in Config + API bereitgestellt.",
+      "0.4.32": {
+        "de": "SmartHome A7: Sensor-Kacheln mit sauberer Wert-/Einheitsanzeige und Szenen-Kacheln mit Aktiv/Bereit-Anzeige im HomeKit-Style.",
+        "en": "SmartHome A7: Sensor tiles with clean value/unit display and scene tiles with active/ready labels in HomeKit-style UI."
+      },
+      "0.4.31": {
+        "de": "SmartHome A6/A10: RTR-Kachel mit Solltemperatur-Bedienung (±0,5 °C) und SmartHome-Config-Editor mit Datenpunkt-Auswahl in der VIS.",
+        "en": "SmartHome A6/A10: RTR tile with setpoint control (±0.5 °C) and SmartHome config editor with datapoint selection in the VIS."
+      },
+      "0.4.10": {
+        "en": "Fix: bind and display Production → Total (kWh) and CO₂ savings, add ' t' unit for CO₂.",
+        "de": "Fix: Bindung und Anzeige für Produktion → Gesamt (kWh) und CO₂‑Ersparnis; zusätzlich ' t' als Einheit für CO₂."
+      },
+      "0.3.100": {
+        "en": "History: SoC line (right % axis). Live: Service Worker fetch fixed (Network‑First for JS/HTML; No‑Store for API/Events). All else same as 0.3.96 look.",
+        "de": "Historie: SoC‑Linie (rechte %-Achse). Live: Service‑Worker Fetch korrigiert (Network‑First für JS/HTML; No‑Store für API/Events). Optik wie 0.3.96."
+      },
+      "0.3.99": {
+        "en": "History visual: back to per-point look — force 1‑min step, disable step-lines, show small point markers, use LTTB sampling.",
+        "de": "Historie-Ansicht: wieder mit einzelnen Datenpunkten — 1‑Min‑Auflösung erzwungen, keine Stufenlinien, Punkte sichtbar, LTTB-Sampling."
+      },
+      "0.3.96": {
+        "en": "History re‑revert + robust auto‑advance: exactly like v0.3.84 renderer, but auto updates every 15s when 'To' ≈ now; SSE status dot restored.",
+        "de": "Historie wie v0.3.84 (Renderer), plus robuster Auto‑Weiterlauf (alle 15 s, wenn „Bis“ ≈ Jetzt) und wieder grüner Status‑Punkt (SSE)."
+      },
+      "0.3.95": {
+        "en": "History reverted 1:1 to v0.3.84 behaviour (renderer & range logic). Uses new SW cache v3 to avoid stale files.",
+        "de": "Historie 1:1 auf Stand v0.3.84 zurückgesetzt (Renderer & Zeitbereich). Nutzt neuen SW‑Cache v3, damit keine alten Dateien hängen bleiben."
+      },
+      "0.3.93": {
+        "en": "Service Worker cache updated (v3) and network-first for JS/HTML to prevent stale pages. Fixes issues where HISTORY didn't reflect latest code.",
+        "de": "Service‑Worker Cache aktualisiert (v3) und Network‑First für JS/HTML. Verhindert veraltete Seiten – HISTORY lädt jetzt sicher den neuesten Code."
+      },
+      "0.3.92": {
+        "en": "History auto-advance restored: if 'To' is close to now, the chart auto-updates every 30s (no visible toggle).",
+        "de": "Historie läuft wieder automatisch weiter: Wenn „Bis“ nahe „Jetzt“ liegt, aktualisiert der Chart alle 30 s (ohne sichtbaren Schalter)."
+      },
+      "0.3.91": {
+        "en": "History: live status dot (SSE) restored; no Live toggle. Errors are suppressed and auto-reconnect is slower to avoid console spam.",
+        "de": "Historie: Live‑Statuspunkt (SSE) wieder aktiv; kein Live‑Schalter. Fehler werden abgefangen, Reconnect mit weniger Konsole‑Spam."
+      },
+      "0.3.90": {
+        "en": "Fix history.html SyntaxError after revert (extra IIFE brace removed).",
+        "de": "Fix SyntaxError in history.html nach Revert (überflüssige geschlossene Klammer entfernt)."
+      },
+      "0.3.89": {
+        "en": "Revert History page to previous behavior: removed Live toggle and SSE connection. History is static again; use LIVE tab for realtime.",
+        "de": "Historie wieder wie zuvor: Live‑Schalter und SSE entfernt. Historie ist wieder statisch; Realtime wie gewohnt über LIVE."
+      },
+      "0.3.88": {
+        "en": "History: added Live toggle. When enabled, the chart auto-updates every 30s and keeps the end time at now.",
+        "de": "Historie: neuer Live‑Schalter. Aktiviert hält den Chart das Ende auf „Jetzt“ und lädt alle 30 s automatisch nach."
+      },
+      "0.3.87": {
+        "en": "Fix: Storage card now shows charge/discharge even with German element IDs.",
+        "de": "Fix: Speicher‑Karte zeigt Laden/Entladen nun auch mit deutschen Element‑IDs."
+      },
+      "0.3.86": {
+        "en": "Fix: Self-consumption card not updating when mapped — support German element IDs (selfVerbrauch*).",
+        "de": "Fix: Eigenverbrauch wurde nicht angezeigt — deutsche Element‑IDs (selfVerbrauch*) werden jetzt mit gesetzt."
+      },
+      "0.3.85": {
+        "en": "EVCS modal: power ring now fills proportional to rated kW. Admin → EVCS: new field “Max charging power (kW)”.",
+        "de": "EVCS‑Popup: Kreis füllt sich proportional zur Max‑Leistung. Admin → EVCS: neues Feld „Maximale Ladeleistung (kW)“."
+      },
+      "0.3.84": {
+        "en": "Fix: settings values persist in UI after reload; states are created and read on startup.\nImproved: always include local settings states in /api/state.",
+        "de": "Fix: Einstellungen bleiben nach Reload in der VIS sichtbar; States werden beim Start erstellt und ausgelesen.\nVerbesserung: Lokale Settings-States sind immer in /api/state enthalten."
+      },
+      "0.3.71": {
+        "en": "Color tweak: load (Verbrauch) set to purple.",
+        "de": "Farb-Update: Verbrauch (load) auf Lila gesetzt."
+      },
+      "0.3.70": {
+        "en": "History colors: buy=red, pv=yellow, charge=green, discharge unchanged, feed-in=blue.",
+        "de": "Historie-Farben: Bezug=Rot, PV=Gelb, Beladung=Grün, Entladung unverändert, Einspeisung=Blau."
+      },
+      "0.3.69": {
+        "en": "Fix: unify zero baseline variable to single 'y0' (no duplicate decls).",
+        "de": "Fix: Null-Basisvariable zu einmaligem 'y0' vereinheitlicht (keine doppelten Deklarationen)."
+      },
+      "0.3.68": {
+        "en": "Fix: removed duplicate 'y0' const in history.js to avoid SyntaxError.",
+        "de": "Fix: doppelte 'y0'-Konstante in history.js entfernt (SyntaxError behoben)."
+      },
+      "0.3.67": {
+        "en": "History: SoC anchored at zero line; enforced sign conventions (load/buy/charge positive, discharge/sell negative).",
+        "de": "Historie: SoC an der 0‑Linie verankert; Vorzeichen-Logik erzwungen (Verbrauch/Bezug/Beladung positiv, Entladung/Einspeisung negativ)."
+      },
+      "0.3.66": {
+        "en": "Fix: duplicate yPow declaration removed. Zero baseline highlighted.",
+        "de": "Fix: doppelte yPow-Definition entfernt. Null-Linie hervorgehoben."
+      },
+      "0.3.65": {
+        "en": "History: legend overlap fixed; raw-sample query; negative power below zero; auto y-scale; energy from timestamps.",
+        "de": "Historie: Legenden-Überlappung behoben; Rohwert-Abfrage; negative Leistungen unter 0; automatische Y-Skalierung; Energie via Zeitstempel."
+      },
+      "0.3.35": {
+        "en": "Fix: add missing closing brace to end of initMenu() in app.js; resolves 'Unexpected end of input'.",
+        "de": "Fix: fehlende schließende Klammer am Ende von initMenu() in app.js ergänzt; behebt 'Unexpected end of input'."
+      },
+      "0.3.34": {
+        "en": "Fix: removed leftover token code in app.js (invalid 'let null=null' and invalid assignment).",
+        "de": "Fix: verbliebenen Token-Code in app.js entfernt (ungültiges 'let null=null' und fehlerhafte Zuweisung)."
+      },
+      "0.3.33": {
+        "en": "Fix: removed stray top-level 'await' in www/app.js (line ~275) that caused SyntaxError in browsers.",
+        "de": "Fix: überflüssiges Top-Level-`await` in www/app.js (~Zeile 275) entfernt (Browser-SyntaxError)."
+      },
+      "0.3.32": {
+        "en": "Fix: remove duplicated else/closing braces in main.js login route causing SyntaxError around line 131.",
+        "de": "Fix: doppelte else-/Schlussklammern in main.js Login-Route entfernt (SyntaxError um Zeile 131)."
+      },
+      "0.3.31": {
+        "en": "Fix: stabilize cookie-based login route and guard; remove stray partial insertion causing SyntaxError in main.js; default password 'install2025!'.",
+        "de": "Fix: Cookie-Login/Guard bereinigt; fehlerhafte Teil-Einfügung in main.js behoben (SyntaxError); Standard-Passwort 'install2025!'."
+      },
+      "0.3.30": {
+        "en": "Default installer password = 'install2025!' if none configured; lock active by default.",
+        "de": "Standard-Installer-Passwort = 'install2025!' falls nicht konfiguriert; Bereich standardmäßig gesperrt."
+      },
+      "0.3.29": {
+        "en": "Feature: Cookie-based installer session (HttpOnly); client no longer handles tokens; /config reflects lock state; guard /api/set by cookie session.",
+        "de": "Feature: Cookie-basierte Installer-Session (HttpOnly); kein Token mehr im Client; /config meldet Lock-Status; /api/set durch Session geschützt."
+      },
+      "0.3.28": {
+        "en": "Fix: donut render used undefined chg2/dchg2; replaced with charge/discharge and removed duplicate vars.",
+        "de": "Fix: Donut-Render nutzte undefinierte chg2/dchg2; auf charge/discharge umgestellt und Dubletten entfernt."
+      },
+      "0.3.27": {
+        "en": "Fix: Remove extra closing braces in app.js (line ~418); add hidden username field to password form to satisfy browser accessibility hint.",
+        "de": "Fix: Überzählige schließende Klammern in app.js (ca. Zeile 418) entfernt; verstecktes Username-Feld im Passwort-Formular ergänzt (Browser-Hinweis)."
+      },
+      "0.3.26": {
+        "en": "Fix: Installer login form wrapped in <form>, cancel button closes panel; removed stray top-level await causing crash; keep settings hidden unless token present.",
+        "de": "Fix: Installer-Login in ein <form> verpackt, Abbrechen-Button schließt den Installer; doppelten Top‑Level-Block mit await entfernt (Crash behoben); Einstellungen bleiben gesperrt ohne Token."
+      },
+      "0.3.25": {
+        "de": "Semver-Fix (3-stellig), Installer-Login/Token und Syntax-Fixes enthalten.",
+        "en": "Semver fix (three-part); contains installer login/token and syntax fixes."
+      },
+      "0.3.24.2": {
+        "de": "Installer-Login in <form> verlegt, Submit-Handler mit preventDefault; Syntax-Guards verbessert.",
+        "en": "Installer login uses a form with submit handler; improved syntax guards."
+      },
+      "0.3.24.1": {
+        "de": "Syntaxfehler behoben: initInstallerPanel() wiederhergestellt; keine losen Klammern/Zeilen.",
+        "en": "Fixed syntax error: restored initInstallerPanel(); removed stray lines."
+      },
+      "0.3.24": {
+        "de": "Installer-Schutz gehärtet: kein prompt(); Formular bleibt gesperrt bis erfolgreichem Login; Panel-Init abgesichert.",
+        "en": "Hardened installer lock: removed prompt(); form stays locked until successful login; guarded panel init."
+      },
+      "0.3.23": {
+        "de": "Installer (Login+Token) ergänzt, /api/set mit Tokenpflicht; Donut-Render chg/dchg fix.",
+        "en": "Added installer (login+token), token-protected /api/set; donut render chg/dchg fix."
+      },
+      "0.3.12": {
+        "en": "Bigger brand logo and improved energy flow monitor proportions (responsive).",
+        "de": "Größeres Logo links oben und bessere Proportionen des Energiefluss-Monitors (responsiv)."
+      },
+      "0.3.11": {
+        "en": "Fix: Installer panel hidden on LIVE; console warning fixed (chg undefined); menu uses hideAllPanels; 'NexoWatt Admin' label; responsive grids.",
+        "de": "Fix: Installateur-Panel auf LIVE verborgen; Konsolen-Warnung (chg undefined) behoben; Menü ruft hideAllPanels; Button heißt 'NexoWatt Admin'; responsive Grids."
+      },
+      "0.3.10": {
+        "en": "Fix: JS syntax error (extra '}') prevented menu & live status. Now resolved.",
+        "de": "Fix: JS-Syntaxfehler (extra '}') blockierte Menü & Live-Status. Behoben."
+      },
+      "0.3.9": {
+        "en": "SSE auto-reconnect + DOMContentLoaded init (submenu + live green).",
+        "de": "SSE Auto-Reconnect + DOMContentLoaded-Init (Untermenü + Live grün)."
+      },
+      "0.3.8": {
+        "en": "Fix submenu + live status: DOMContentLoaded init and auto-reconnecting SSE.",
+        "de": "Untermenü + Live-Status gefixt: Initialisierung nach DOM-Load und automatische SSE-Reconnects."
+      },
+      "0.3.7": {
+        "en": "Menu reliability improvements (submenu toggle hardened).",
+        "de": "Untermenü zuverlässig: Toggle/Schließen robuster (StopPropagation + ESC)."
+      },
+      "0.3.6": {
+        "en": "Menu cleanup (removed About), Settings page without Installer button, pre-login before Installer view, improved Installer layout.",
+        "de": "Menü bereinigt (Über entfernt), Einstellungen ohne Installateur-Button, Login vor Installateur-Seite, bessere Installateur-Proportionen."
+      },
+      "0.3.5": {
+        "en": "Added Settings and password-protected Installer pages with ioBroker state bindings and admin link.",
+        "de": "Neue Seiten: Einstellungen und passwortgeschützte Installateur-Ansicht inkl. ioBroker-State-Zuordnungen und Admin-Link."
+      },
+      "0.3.4": {
+        "en": "Removed settings cards (SoC badge & refresh interval) and About panel from both main & settings view.",
+        "de": "Einstellungs-Karten (SoC-Badge & Aktualisierungsintervall) und Über-Panel aus Haupt- und Einstellungsansicht entfernt."
+      },
+      "0.3.3": {
+        "en": "Fix: LIVE tab switches back to main page (initTabs on startup).",
+        "de": "Fix: LIVE-Tab wechselt wieder zur Hauptseite (initTabs beim Start)."
+      },
+      "0.0.32": {
+        "en": "Add hamburger submenu with Settings; add settings panel with SoC badge toggle; minor styles",
+        "de": "Untermenü (Hamburger) mit 'Einstellungen' hinzugefügt; Einstellungsseite inkl. SoC-Badge-Schalter; kleinere Styles"
+      },
+      "0.0.30": {
+        "en": "Battery circle enlarged and inner layout tuned. Energy monitor respects existing datapoint settings.",
+        "de": "Batteriekreis vergrößert und Innenlayout angepasst. Energiemonitor berücksichtigt die bestehenden Datenpunkte."
+      },
+      "0.0.29": {
+        "en": "Icons moved above text inside circles; circles enlarged; labels and values placed inside; battery SoC shown inside battery only.",
+        "de": "Icons über die Texte in den Kreisen; Kreise vergrößert; Namen & Leistungen in den Kreisen; Batterie-SoC nur in der Batterie."
+      },
+      "0.0.28": {
+        "en": "Node labels and power moved inside circles; battery SoC shown inside battery; icons faded for readability.",
+        "de": "Namen und Leistungen in die Kreise verschoben; Batterie-SoC in der Batterie angezeigt; Icons leicht ausgeblendet."
+      },
+      "0.0.27": {
+        "en": "Removed extra battery texts; moved Full/Empty time next to battery power value.",
+        "de": "Zusatztexte (SoC/Laden/Entladen) entfernt; Voll/Leer-Zeit neben Batterie-Leistung angeordnet."
+      },
+      "0.0.26": {
+        "en": "Top-left brand icon updated to the provided NexoWatt logo (PNG).",
+        "de": "Brand-Icon oben links auf das bereitgestellte NexoWatt-Logo (PNG) aktualisiert."
+      },
+      "0.0.25": {
+        "en": "Top-left brand set to NexoWatt logo; battery labels added (SoC, charge, discharge) aligned towards the battery.",
+        "de": "Logo oben links auf NexoWatt gesetzt; Batterie-Beschriftungen (SoC, Laden, Entladen) entlang zur Batterie hinzugefügt."
+      },
+      "0.0.24": {
+        "en": "Energy flow arranged: Load center; PV top; Grid left; Wallbox right; Battery bottom. Header logo updated.",
+        "de": "Energiefluss angeordnet: Verbrauch Mitte; PV oben; Netz links; Wallbox rechts; Batterie unten. Header-Logo aktualisiert."
+      },
+      "0.0.23": {
+        "en": "Restore Energy Flow Monitor to v0.18 implementation; keep topbar tweaks.",
+        "de": "Energieflussmonitor wieder wie in v0.18 hergestellt; Topbar-Anpassungen beibehalten."
+      },
+      "0.0.22": {
+        "en": "Energy flow monitor fixed to always render PV/Grid/Load; graph box made smaller.",
+        "de": "Energiefluss-Monitor repariert (PV/Netz/Verbrauch werden immer gezeichnet); Graph-Box deutlich verkleinert."
+      },
+      "0.0.21": {
+        "en": "Energy graph visible again and smaller; initial render on load; center readouts restored.",
+        "de": "Energiefluss-Graph wieder sichtbar und kleiner; initiale Darstellung beim Laden; Mittelwerte wiederhergestellt."
+      },
+      "0.0.20": {
+        "en": "New dynamic Energy Graph: PV, Grid, Load always present; up to 7 extra nodes; optional cascade; topbar tweaks.",
+        "de": "Neuer dynamischer Energie-Graph: PV, Netz, Verbrauch immer sichtbar; bis zu 7 zusätzliche Knoten; optionale Kaskade; Topbar-Anpassungen."
+      },
+      "0.0.19": {
+        "en": "Increase donut graph size and layout width",
+        "de": "Donut-Graph vergrößert und Layout-Breite erhöht"
+      },
+      "0.0.18": {
+        "de": "Neuer Energiefluss als Netz-Graph mit animierten Richtungs-Linien, responsive. Optionale Verbraucher 1/2 in Admin.",
+        "en": "New energy web graph with animated directional lines, responsive. Optional consumers in admin."
+      },
+      "0.0.17": {
+        "de": "Donut an Vorlage ausgerichtet (Anker-Winkel), Icons am Ring, neues Logo oben links.",
+        "en": "Donut aligned to reference (anchor angles), icons hug ring, new brand logo top-left."
+      },
+      "0.0.16": {
+        "de": "Header: NexoWatt-Logo links eingefügt. Donut visuell verfeinert (Farben/Strich).",
+        "en": "Header brand logo added left. Donut refined (colors/strokes)."
+      },
+      "0.0.15": {
+        "de": "Energymonitor jetzt responsiv (Größe + Icon-Abstände skalieren).",
+        "en": "Energy monitor responsive."
+      },
+      "0.0.14": {
+        "de": "SVG-Icons dichter am Ring. Anordnung: PV oben, Netz links, Speicher unten, Verbrauch rechts.",
+        "en": "SVG icons tighter to ring. Layout: PV top, Grid left, Storage bottom, Load right."
+      },
+      "0.0.13": {
+        "de": "Donut: SVG-Icons, Segmente pro Quadrant bündig am Ring, Anteil am Gesamtfluss.",
+        "en": "Donut: SVG icons, quadrant-aligned segments hugging ring, share-of-total."
+      },
+      "0.0.12": {
+        "de": "Donut mit SVG-Icons und Segmentlängen als Anteil am Gesamtfluss.",
+        "en": "Donut uses SVG icons and segment lengths as share of total flow."
+      },
+      "0.0.11": {
+        "de": "Neuer Energymonitor 1:1 rund (schwarzer Hintergrund), Netz rot.",
+        "en": "New round energy monitor (dark), grid in red."
+      },
+      "0.0.10": {
+        "de": "Runder Energiemonitor mit Icons + SoC-Ring und Lade-/Entladezeit. Neuer Datenpunkt: Speicher Kapazität (kWh).",
+        "en": "Round energy monitor with icons + SoC ring and charge/discharge time. New datapoint: storage capacity (kWh)."
+      },
+      "0.0.9": {
+        "de": "PV-Kreis entfernt, Energiefluss-Monitor hinzugefügt; Oberfläche auf Deutsch.",
+        "en": "Removed PV ring, added energy-flow monitor; UI translated to German."
+      },
+      "0.0.8": {
+        "de": "Eingabefelder auf 'objectId' umgestellt (statt 'id'); Tabs-Struktur korrigiert.",
+        "en": "Switched inputs to 'objectId' (instead of 'id'); fixed tabs structure."
+      },
+      "0.0.7": {
+        "de": "Schema-Fix: Root 'tabs.items' jetzt als Objekt statt Array → Admin-Suche für IDs aktiv.",
+        "en": "Schema fix: root 'tabs.items' changed to object instead of array so Admin ID search works."
+      },
+      "0.0.6": {
+        "de": "Fix: jsonConfig mit explizitem 'attr' je Feld; ID-Suchdialog sollte erscheinen.",
+        "en": "Fix: jsonConfig explicit 'attr' for each field; ID search dialog should appear."
+      },
+      "0.0.5": {
+        "de": "Datenpunkte jetzt als auswählbare Objekt-IDs mit Suchdialog.",
+        "en": "Datapoints are now selectable object IDs with search dialog."
+      },
+      "0.0.4": {
+        "de": "Fix: jsonConfig validiert wieder; Tabs zeigen Titel & Label.",
+        "en": "Fix: jsonConfig validates again; tabs show title & label."
+      },
+      "0.0.3": {
+        "de": "Fix: Tab-Titel in den Instanzeinstellungen (title→label).",
+        "en": "Fix: Tab titles in instance settings (title→label)."
+      },
+      "0.0.2": {
+        "de": "Logos hinzugefügt, Standard-Datenpunkte vorbelegt, GitHub-Readme aktualisiert.",
+        "en": "Added logos, default datapoints prefilled, updated GitHub readme."
+      },
+      "0.0.1": {
+        "en": "Initial release: Responsive NexoWatt EMS dashboard",
+        "de": "Erste Version: Responsives NexoWatt EMS Dashboard"
+      },
+      "0.5.35": {
+        "en": "Phase 3.6: Station-first charging point configuration and budget/gates transparency in EMS App-Center status.",
+        "de": "Phase 3.6: Stationsbasierte Ladepunkt-Konfiguration und Budget/Gates-Transparenz im EMS App‑Center (Status)."
+      },
+      "0.5.42": {
+        "en": "Phase 4.1: §14a hardened (deterministic in-process snapshot), per-connector §14a binding is reflected in diagnostics/reasons, cache bump.",
+        "de": "Phase 4.1: §14a gehärtet (deterministischer In-Process Snapshot), §14a pro Ladepunkt wird in Diagnose/Reason-Codes sichtbar, Cache-Bump."
+      },
+      "0.5.47": {
+        "en": "VIS: EVCS end-customer control extended with 'Regelung' (enable/disable EMS automation) in dashboard modal + multi-chargepoint page. Backend: new per-chargepoint state userEnabled, config-enabled indicator, and safe stop behavior when regulation is off.",
+        "de": "VIS: EVCS-Endkundensteuerung erweitert: 'Regelung' (Automatik an/aus) im Dashboard‑Modal und auf der Multi‑Ladepunkte‑Seite. Backend: neuer Ladepunkt‑State userEnabled + cfgEnabled und sicheres Stop‑Verhalten bei deaktivierter Regelung."
+      },
+      "0.5.48": {
+        "de": "Phase 4.7: Endkunden-Bedienung für Tarife/Peak/§14a (Optimierung-Panel + Modalfenster). Peak-Shaving kann per Schalter deaktiviert werden; §14a-Status wird angezeigt. Robustere Default-Settings-Seeding & Bool-Handling (null => fallback).",
+        "en": "Phase 4.7: End-customer controls for tariffs/peak/§14a (optimization panel + modal). Peak shaving can be toggled; §14a status displayed. More robust default settings seeding & bool null handling."
+      },
+      "0.5.49": {
+        "en": "Phase 4.8: Added §14a configuration tab in the EMS App Center (mode, min-per-device, optional signals + consumer list). Peak-Shaving is now protected: no end-customer toggle in VIS and writes via /api/set are blocked.",
+        "de": "Phase 4.8: Neuer §14a-Tab im EMS App-Center (Modus, Mindestleistung, optionale Signale + Verbraucher-Liste). Peak-Shaving ist jetzt geschützt: kein Endkunden-Schalter in der VIS und Writes via /api/set werden blockiert."
+      },
+      "0.5.50": {
+        "en": "Phase 4.9: Energyflow layout + admin tab rename + installer link in settings",
+        "de": "Phase 4.9: Energiefluss-Layout + Admin-Tab umbenannt + Installer-Link in Einstellungen"
+      },
+      "en": {
+        "0.5.55": "Phase 5.4: Threshold control app (rules: when X>Y then set/switch Z), incl. live quick control and installer configuration.",
+        "0.5.64": {
+          "title": "Hotfix UI",
+          "content": "Live view KPI & quick-control tiles consolidated (layout/design), HTML structure fixed."
+        }
+      },
+      "de": {
+        "0.5.55": "Phase 5.4: Schwellwertsteuerung als App (Regeln: wenn X>Y dann setze/schalte Z), inkl. Live-Schnellsteuerung und Installateur-Konfiguration.",
+        "0.5.64": {
+          "title": "Hotfix UI",
+          "content": "KPI- und Schnellsteuerungs-Kacheln im Live-View konsolidiert (Layout/Design), HTML-Struktur korrigiert."
+        }
+      },
+      "0.5.58": {
+        "en": "Phase 5.7: StorageFarm added to EMS App Center (installer) including pool/groups configuration, plus improved aggregated SoC/flows usage for multi-storage control.",
+        "de": "Phase 5.7: Speicherfarm im EMS App-Center (Installer) ergänzt inkl. Pool/Gruppen-Konfiguration, sowie verbesserte Nutzung des aggregierten SoC/Flüsse für Multi-Speicher-Regelung."
+      },
+      "0.5.62": {
+        "en": "Phase 6.1: Added BHKW control app (SoC-based start/stop) incl. VIS quick control card + modal; App-Center mapping/parameters; added /api/bhkw/snapshot; bumped PWA cache version.",
+        "de": "Phase 6.1: BHKW-Steuerung als App (SoC-geführt Start/Stop) inkl. VIS-Kachel + Schnellsteuerung; App‑Center Zuordnung/Parameter; /api/bhkw/snapshot ergänzt; PWA-Cache-Version erhöht."
+      },
+      "0.5.67": {
+        "en": "Hotfix: Live quick tiles depend on installed apps; energy flow monitor modernized + responsive; App-Center status fallback for grid power; extended icon choices for extra consumers.",
+        "de": "Hotfix: Live‑Funktionskacheln nur bei installierten Apps; Energiefluss‑Monitor modernisiert & responsiv; App‑Center Status mit Fallback für Netzleistung; erweiterte Icon‑Auswahl für Zusatzverbraucher."
+      },
+      "0.5.72": {
+        "en": "Hotfix: energyflow layout + UI robustness improvements",
+        "de": "Hotfix: Energiefluss-Layout + UI/Robustheit Verbesserungen"
+      },
+      "0.5.73": {
+        "en": "Hotfix: App-Center save stability (no adapter restart), fixed JSONConfig schema, added missing settings states, improved consumer layout",
+        "de": "Hotfix: App‑Center Save stabil (kein Adapter-Restart), JSONConfig Schema korrigiert, fehlende Settings‑States ergänzt, Verbraucher-Layout verbessert"
+      }
+    },
+    "title": "NexoWatt VIS",
+    "titleLang": {
+      "en": "NexoWatt VIS",
+      "de": "NexoWatt VIS"
+    },
+    "desc": {
+      "en": "responsive dashboard with NexoWatt colors (green/black). All datapoints can be linked in adapter settings.",
+      "de": "responsives Dashboard in NexoWatt-Farben (grün/schwarz). Alle Datenpunkte sind in den Adaptereinstellungen verknüpfbar."
+    },
+    "authors": [
+      "Visu Helper"
+    ],
+    "platform": "Javascript/Node.js",
+    "mode": "daemon",
+    "compact": true,
+    "materialize": false,
+    "enabled": true,
+    "loglevel": "info",
+    "type": "visualization",
+    "adminUI": {
+      "config": "json"
+    },
+    "keywords": [
+      "visualization",
+      "ems",
+      "nexowatt",
+      "dashboard"
+    ],
+    "connectionType": "local",
+    "dataSource": "poll",
+    "icon": "admin.png",
+    "logo": "admin_logo_.ico",
+    "adminTab": {
+      "name": {
+        "de": "NexoWatt EMS",
+        "en": "NexoWatt EMS"
+      },
+      "fa-icon": "bolt",
+      "order": 50
+    },
+    "welcomeScreenPro": [
+      {
+        "link": "/adapter/nexowatt-vis/tab.html",
+        "name": "Energiefluss",
+        "desc": {
+          "de": "Direkt zur NexoWatt VIS (aktuelle ioBroker-IP + VIS-Port).",
+          "en": "Go to NexoWatt VIS (current ioBroker IP + VIS port)."
+        },
+        "img": "admin.png",
+        "color": "#00c853",
+        "order": 10,
+        "localLinks": {
+          "_default": "/adapter/nexowatt-vis/tab.html"
+        }
+      }
+    ],
+    "welcomeScreen": "adapter/nexowatt-vis/tab.html",
+    "license": "UNLICENSED"
+  },
+  "native": {
+    "port": 8188,
+    "bind": "0.0.0.0",
+    "publicPath": "/",
+    "units": {
+      "power": "W",
+      "energy": "kWh"
+    },
+    "datapoints": {
+      "autarky": "fenecon.0._sum.Autarchy",
+      "selfConsumption": "fenecon.0._sum.SelfConsumption",
+      "pvPower": "fenecon.0._sum.ProductionAcActivePower",
+      "productionTotal": "0_userdata.0.nexowatt.pv.energy_total",
+      "consumptionTotal": "fenecon.0._sum.ConsumptionAcActivePower",
+      "gridBuyPower": "0_userdata.0.nexowatt.grid.buy.power",
+      "gridSellPower": "0_userdata.0.nexowatt.grid.sell.power",
+      "gridPointPower": "",
+      "storageChargePower": "0_userdata.0.nexowatt.battery.charge.power",
+      "storageDischargePower": "0_userdata.0.nexowatt.battery.discharge.power",
+      "storageSoc": "fenecon.0._sum.EssSoc",
+      "consumptionEvcs": "0_userdata.0.nexowatt.evcs.power",
+      "consumptionOther": "0_userdata.0.nexowatt.house.other.power",
+      "evcsStatus": "",
+      "evcsLastChargeKwh": "",
+      "gridFrequency": "fenecon.0._sum.GridFrequency",
+      "gridVoltage": "0_userdata.0.nexowatt.grid.voltage",
+      "gridBuyEnergy": "0_userdata.0.nexowatt.grid.buy.energy_total",
+      "gridSellEnergy": "0_userdata.0.nexowatt.grid.sell.energy_total",
+      "batteryPower": "0_userdata.0.nexowatt.battery.power",
+      "batterySOC": "0_userdata.0.nexowatt.battery.soc",
+      "batteryEnergyTotal": "0_userdata.0.nexowatt.battery.energy_total",
+      "housePower": "0_userdata.0.nexowatt.house.power",
+      "houseTemp": "0_userdata.0.nexowatt.house.temperature",
+      "inverterTemp": "0_userdata.0.nexowatt.inverter.temperature",
+      "storageCapacityKwh": "",
+      "consumer1Power": "",
+      "consumer2Power": "",
+      "priceCurrent": "",
+      "priceAverage": ""
+    },
+    "sections": {
+      "tabs": [
+        "live",
+        "history",
+        "settings",
+        "smarthome"
+      ]
+    },
+    "smartHome": {
+      "enabled": false,
+      "datapoints": {
+        "heatPumpOn": "",
+        "roomTemp": "",
+        "wallboxLock": "",
+        "gridLimit": "",
+        "pvCurtailment": "",
+        "blindPosition": "",
+        "blindUp": "",
+        "blindDown": "",
+        "blindStop": "",
+        "rtrSetpoint": "",
+        "rtrMode": "",
+        "rtrHumidity": "",
+        "scene1": "",
+        "scene2": "",
+        "scene3": "",
+        "scene4": ""
+      }
+    },
+    "futureOptions": {
+      "theme": "nexowatt-dark",
+      "enableAnimations": true,
+      "showGridVoltage": false
+    },
+    "auth": {
+      "enabled": true,
+      "protectWrites": true,
+      "sessionTtlMin": 120,
+      "installerUsers": "admin,installer",
+      "installerGroups": "system.group.administrator"
+    },
+    "installerConfig": {},
+    "history": {
+      "instance": "influxdb.0",
+      "datapoints": {
+        "pvPower": "fenecon.0._sum.ProductionAcActivePower",
+        "consumptionTotal": "fenecon.0._sum.ConsumptionAcActivePower",
+        "gridBuyPower": "0_userdata.0.nexowatt.grid.buy.power",
+        "gridSellPower": "0_userdata.0.nexowatt.grid.sell.power",
+        "storageChargePower": "0_userdata.0.nexowatt.battery.charge.power",
+        "storageDischargePower": "0_userdata.0.nexowatt.battery.discharge.power",
+        "storageSoc": "fenecon.0._sum.EssSoc"
+      }
+    },
+    "settings": {
+      "evcsActive": "",
+      "evcsMode": "",
+      "flowSubtractEvFromBuilding": true,
+      "flowInvertBattery": false,
+      "flowInvertGrid": false,
+      "flowInvertPv": false,
+      "flowInvertEv": false,
+      "flowGridShowNet": false,
+      "dynamicTariff": false
+    },
+    "logic": {
+      "enabled": true,
+      "tags": [
+        "demo"
+      ],
+      "meta": {
+        "version": 1
+      }
+    },
+    "smartHomeConfig": {
+      "version": 1,
+      "rooms": [],
+      "functions": [],
+      "devices": []
+    }
+  },
+  "instanceObjects": []
+}

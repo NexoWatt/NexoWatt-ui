@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<script>
+/* NexoWatt: normalize base path so relative links work even if opened without trailing slash */
+(function () {
+  try {
+    var p = window.location.pathname || "";
+    if (p && !p.endsWith("/") && !p.endsWith(".html")) {
+      window.location.replace(p + "/" + window.location.search + window.location.hash);
+    }
+  } catch (e) {}
+})();
+</script>
+
+
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1" name="viewport"/>
+  <title>NexoWatt SmartHome</title>
+  <link href="/static/styles.css" rel="stylesheet"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/nexowatt-32.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0c0f12">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
+</head>
+<body>
+<header class="topbar"><div class="brand"><a href="/"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></a></div><button aria-label="Menu" id="menuBtn">☰</button><h1>SmartHome</h1><div class="menu hidden" id="menuDropdown"><a class="menu-item" href="./">Live</a><a class="menu-item" href="history.html">History</a>
+<a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item" href="settings.html">Einstellungen</a></div></header>
+
+<main class="content">
+  <div id="nw-smarthome-root">
+    <div class="nw-smarthome-header">
+      <div>
+        <div class="nw-smarthome-header__title">SmartHome</div>
+        <div class="nw-smarthome-header__subtitle">
+          Erste Switch-Kacheln im NexoWatt-Design (Demo · A3)
+        </div>
+      </div>
+      <div style="font-size:0.7rem;color:#9ca3af;">
+        <a href="/" style="color:inherit;text-decoration:none;">Zurück zur Live-Ansicht</a>
+      </div>
+    </div>
+
+    <div class="nw-smarthome-tabs">
+      <div id="nw-tabs-rooms" class="nw-tabs nw-tabs--rooms"></div>
+    </div>
+
+    <div class="nw-smarthome-filters">
+      <div class="nw-filter-row">
+        <span class="nw-filter-label">Räume:</span>
+        <div id="nw-filter-rooms" class="nw-filter-chips"></div>
+      </div>
+      <div class="nw-filter-row">
+        <span class="nw-filter-label">Funktionen:</span>
+        <div id="nw-filter-functions" class="nw-filter-chips"></div>
+      </div>
+    </div>
+
+    <div id="nw-tiles-grid" class="nw-tiles-grid"></div>
+    <div id="nw-smarthome-empty" style="display:none;font-size:0.8rem;color:#9ca3af;margin-top:12px;">
+      Keine SmartHome-Geräte konfiguriert. Bitte in der Admin-Config unter „SmartHome (vorbereitet)“
+      mindestens einen Datenpunkt (z.&nbsp;B. Wärmepumpe EIN/AUS) setzen.
+    </div>
+  </div>
+</main>
+
+<script src="/static/smarthome.js"></script>
+</body>
+</html>

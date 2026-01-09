@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<link rel="icon" type="image/png" href="./assets/icons/nexowatt-32.png" sizes="32x32">
+<link rel="icon" type="image/png" href="./assets/icons/nexowatt-192.png" sizes="192x192">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#0c0f12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
+
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>NexoWatt – Historie</title>
+  <link rel="stylesheet" href="/static/styles.css"/>
+  <style>
+    .hist-wrap{ max-width: 1200px; margin: 0 auto; padding: 12px; }
+
+    /* chart container */
+    #chart{
+      width: 100%;
+      height: 420px;
+      background: rgba(2, 6, 23, 0.62);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 18px;
+      margin-bottom: 18px;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+    }
+    .legend{ display:flex; flex-wrap:wrap; gap:16px; margin:12px 0 12px; color:#c8d1d9; position:relative; z-index:2; }
+    .lg{ display:flex; align-items:center; gap:6px; }
+    .lg .sw{ width:12px; height:3px; background:#7aa; }
+    .lg .sw.pv{ background:#f1c40f; } .lg .sw.load{ background:#9b59b6; }
+    .lg .sw.buy{ background:#e74c3c; } .lg .sw.sell{ background:#3498db; } .lg .sw.evcs{ background:#ff6bd6; }
+    .lg .sw.chg{ background:#27ae60; } .lg .sw.dchg{ background:#e67e22; }
+    .lg .sw.soc{ background:#95a5a6; height:2px; border-bottom:2px dashed #95a5a6; }
+    .toolbar{ display:flex; gap:10px; margin:10px 0 12px; align-items:center; flex-wrap:wrap; }
+    .toolbar .range{ display:flex; gap:8px; flex-wrap:wrap; }
+
+    /* Buttons in History shall match the new chip/button look */
+    .hist-wrap .btn{
+      background: rgba(2, 6, 23, 0.55);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      color: #e5e7eb;
+      border-radius: 999px;
+      padding: 6px 10px;
+      cursor: pointer;
+      transition: transform .06s ease, border-color .15s ease, background .15s ease;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.25);
+    }
+    .hist-wrap .btn:hover{ border-color: rgba(16, 185, 129, 0.45); }
+    .hist-wrap .btn:active{ transform: translateY(1px); }
+    .hist-wrap .btn.sm{ padding: 5px 10px; font-size: 12px; }
+    .hist-wrap .btn.active{
+      background: rgba(16, 185, 129, 0.14);
+      border-color: rgba(16, 185, 129, 0.55);
+      color: #eafff6;
+    }
+
+    #loadBtn{
+      background: rgba(16, 185, 129, 0.16);
+      border-color: rgba(16, 185, 129, 0.55);
+      font-weight: 700;
+    }
+
+    .toolbar input{
+      background: rgba(2, 6, 23, 0.55);
+      color: #e5e7eb;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 12px;
+      padding: 6px 10px;
+    }
+    .toolbar input:focus{
+      outline: none;
+      border-color: rgba(16, 185, 129, 0.55);
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.16);
+    }
+
+    .cards{ display:grid; grid-template-columns: repeat(4,minmax(180px,1fr)); gap:10px; margin-top:10px; position:relative; z-index:1; }
+    .cards .card{
+      background: linear-gradient(135deg, #111827, #020617);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 18px;
+      padding: 12px;
+      color: #e5e7eb;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+    }
+    .cards small{ color:#9aa4ad; display:block; }
+    /* Topbar Styling kommt zentral aus styles.css (fixiert/responsiv). */
+  
+    /* responsive tweaks for history */
+    @media (max-width: 1024px){
+      #chart{ height: 360px; }
+      .cards{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+    @media (max-width: 640px){
+      #chart{ height: 280px; }
+      .cards{ grid-template-columns: 1fr; }
+      .toolbar{ flex-wrap: wrap; }
+    }
+
+  </style>
+<!-- NexoWatt PWA / Icons -->
+    <link rel="icon" type="image/png" sizes="16x16" href="./assets/icons/nexowatt-16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/icons/nexowatt-32.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="./assets/icons/nexowatt-48.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="./assets/icons/nexowatt-192.png">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <meta name="theme-color" content="#0c0f12">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
+<link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,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">
+<!-- NexoWatt iOS Icons -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="./assets/icons/nexowatt-180.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="./assets/icons/nexowatt-152.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="./assets/icons/nexowatt-120.png">
+</head>
+<body>
+  <header class="topbar">
+<script>
+/* NexoWatt: normalize base path so relative links work even if opened without trailing slash */
+(function () {
+  try {
+    var p = window.location.pathname || "";
+    if (p && !p.endsWith("/") && !p.endsWith(".html")) {
+      window.location.replace(p + "/" + window.location.search + window.location.hash);
+    }
+  } catch (e) {}
+})();
+</script>
+
+<div class="brand"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></div>
+<button aria-label="Menu" id="menuBtn">☰</button>
+<h1>NexoWatt EMS</h1>
+<nav class="tabs">
+<button class="tab" id="liveTabBtn" data-tab="live" onclick="window.location.href='./'">LIVE</button>
+<button class="tab active" id="historyTabBtn" data-tab="history" onclick="window.location.href='history.html'">HISTORY</button>
+<button id="tabStorageFarm" class="tab hidden" onclick="window.location.href='./?tab=storagefarm'">SPEICHERFARM</button>
+<button id="tabEvcs" class="tab hidden" onclick="window.location.href='evcs.html'">EVCS</button>
+<button id="tabSmartHome" class="tab hidden" onclick="window.location.href='smarthome.html'">SMARTHOME</button>
+</nav>
+<div class="status-dot" id="liveDot" title="Live Verbindung"></div>
+<div class="menu hidden" id="menuDropdown"><a class="menu-item" href="./">Live</a><a class="menu-item" href="history.html">History</a>
+<a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item hidden" id="menuSmartHomeLink" href="smarthome.html">SmartHome</a><a class="menu-item hidden" id="menuStorageFarmLink" href="./?tab=storagefarm">Speicherfarm</a><a class="menu-item" href="settings.html">Einstellungen</a></div></header>
+  <div class="hist-wrap">
+    <div class="toolbar">
+      <div class="range">
+        <button class="btn sm range-btn active" data-range="day">Tag</button>
+        <button class="btn sm range-btn" data-range="week">Woche</button>
+        <button class="btn sm range-btn" data-range="month">Monat</button>
+        <button class="btn sm range-btn" data-range="year">Jahr</button>
+      </div>
+      <label>Von: <input type="datetime-local" id="from"></label>
+      <label>Bis: <input type="datetime-local" id="to"></label>
+      <button id="loadBtn">Laden</button>
+      <button id="evcsReportBtn" class="btn sm">EVCS PDF</button>
+    </div>
+    <canvas id="chart"></canvas>
+    <div class="legend">
+      <div class="lg"><div class="sw pv"></div><span>Erzeugung</span></div>
+      <div class="lg"><div class="sw chg"></div><span>Beladung</span></div>
+      <div class="lg"><div class="sw dchg"></div><span>Entladung</span></div>
+      <div class="lg"><div class="sw sell"></div><span>Einspeisung</span></div>
+      <div class="lg"><div class="sw buy"></div><span>Bezug</span></div>
+      <div class="lg"><div class="sw evcs"></div><span>E‑Mobilität</span></div>
+      <div class="lg"><div class="sw load"></div><span>Verbrauch</span></div>
+      <div class="lg"><div class="sw soc"></div><span>Ladezustand</span></div>
+    </div>
+    <div class="cards" id="cards"></div>
+  </div>
+<script src="/static/history.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+        navigator.serviceWorker.register('./sw.js').catch(console.error);
+    });
+}
+</script>
+</body>
+</html>

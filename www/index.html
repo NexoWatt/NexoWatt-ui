@@ -1,0 +1,864 @@
+
+<!DOCTYPE html>
+
+<html lang="de">
+
+<link rel="icon" type="image/png" href="./assets/icons/nexowatt-32.png" sizes="32x32">
+<link rel="icon" type="image/png" href="./assets/icons/nexowatt-192.png" sizes="192x192">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#0c0f12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>NexoWatt EMS UI</title>
+<link href="/static/styles.css" rel="stylesheet"/>
+<!-- NexoWatt PWA / Icons -->
+    <link rel="icon" type="image/png" sizes="16x16" href="./assets/icons/nexowatt-16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/icons/nexowatt-32.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="./assets/icons/nexowatt-48.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="./assets/icons/nexowatt-192.png">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <meta name="theme-color" content="#0c0f12">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
+<link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,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">
+<!-- NexoWatt iOS Icons -->
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="./assets/icons/nexowatt-180.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="./assets/icons/nexowatt-152.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="./assets/icons/nexowatt-120.png">
+</head>
+<body>
+<header class="topbar">
+<script>
+/* NexoWatt: normalize base path so relative links work even if opened without trailing slash */
+(function () {
+  try {
+    var p = window.location.pathname || "";
+    if (p && !p.endsWith("/") && !p.endsWith(".html")) {
+      window.location.replace(p + "/" + window.location.search + window.location.hash);
+    }
+  } catch (e) {}
+})();
+</script>
+
+<div class="brand"><img alt="NexoWatt" src="./static/nexowatt-logo.png"/></div>
+<button aria-label="Menu" id="menuBtn">☰</button>
+<h1>NexoWatt EMS</h1>
+<nav class="tabs">
+<button class="tab active" data-tab="live">LIVE</button>
+<button class="tab" id="historyTabBtn" data-tab="history">HISTORY</button>
+<button id="tabEvcs" class="tab hidden" onclick="window.location.href='evcs.html'">EVCS</button>
+<button id="tabSmartHome" class="tab hidden" data-tab="smarthome">SMARTHOME</button>
+<button id="tabStorageFarm" class="tab hidden" data-tab="storagefarm">SPEICHERFARM</button>
+</nav>
+<div class="status-dot" id="liveDot" title="Live Verbindung"></div>
+<div class="menu hidden" id="menuDropdown"><a class="menu-item" href="./">Live</a><a class="menu-item" href="history.html">History</a>
+<a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item hidden" id="menuSmartHomeLink" href="smarthome.html">SmartHome</a><a class="menu-item hidden" id="menuStorageFarmLink" href="#" onclick="document.querySelector('#tabStorageFarm')?.click();return false;">Speicherfarm</a><a class="menu-item" href="settings.html">Einstellungen</a></div></header>
+<main class="content">
+<section class="card energy-web">
+<div class="card-header">
+<div class="legend-color"></div>
+<span>Energiefluss</span>
+</div>
+<div class="web-wrap">
+<svg id="energyWebSvg" class="web" preserveaspectratio="xMidYMid meet" viewbox="-80 0 760 600">
+<defs>
+  <filter height="140%" id="soft" width="140%" x="-20%" y="-20%">
+    <fegaussianblur in="SourceGraphic" stddeviation="0.2"></fegaussianblur>
+  </filter>
+
+  <!-- Modern gradients (match NexoWatt card design) -->
+  <radialGradient id="gradBase" cx="30%" cy="30%" r="75%">
+    <stop offset="0%" stop-color="#1a222c" stop-opacity="0.85"></stop>
+    <stop offset="55%" stop-color="#0e1216" stop-opacity="0.96"></stop>
+    <stop offset="100%" stop-color="#06080a" stop-opacity="0.98"></stop>
+  </radialGradient>
+
+  <radialGradient id="gradBlue" cx="30%" cy="30%" r="75%">
+    <stop offset="0%" stop-color="#3498db" stop-opacity="0.18"></stop>
+    <stop offset="55%" stop-color="#0e1216" stop-opacity="0.96"></stop>
+    <stop offset="100%" stop-color="#06080a" stop-opacity="0.98"></stop>
+  </radialGradient>
+
+  <radialGradient id="gradYellow" cx="30%" cy="30%" r="75%">
+    <stop offset="0%" stop-color="#f1c40f" stop-opacity="0.16"></stop>
+    <stop offset="55%" stop-color="#0e1216" stop-opacity="0.96"></stop>
+    <stop offset="100%" stop-color="#06080a" stop-opacity="0.98"></stop>
+  </radialGradient>
+
+  <radialGradient id="gradRed" cx="30%" cy="30%" r="75%">
+    <stop offset="0%" stop-color="#e74c3c" stop-opacity="0.16"></stop>
+    <stop offset="55%" stop-color="#0e1216" stop-opacity="0.96"></stop>
+    <stop offset="100%" stop-color="#06080a" stop-opacity="0.98"></stop>
+  </radialGradient>
+
+  <radialGradient id="gradGreen" cx="30%" cy="30%" r="75%">
+    <stop offset="0%" stop-color="#2ecc71" stop-opacity="0.16"></stop>
+    <stop offset="55%" stop-color="#0e1216" stop-opacity="0.96"></stop>
+    <stop offset="100%" stop-color="#06080a" stop-opacity="0.98"></stop>
+  </radialGradient>
+
+  <radialGradient id="gradBg" cx="50%" cy="45%" r="65%">
+    <stop offset="0%" stop-color="#1f3a56" stop-opacity="0.18"></stop>
+    <stop offset="55%" stop-color="#0b0f13" stop-opacity="0.06"></stop>
+    <stop offset="100%" stop-color="#000000" stop-opacity="0"></stop>
+  </radialGradient>
+</defs>
+<ellipse class="bg-glow" cx="300" cy="300" rx="340" ry="230"></ellipse>
+<!-- lines -->
+<line class="flow grid" id="lineGrid" x1="160" x2="300" y1="300" y2="300"></line>
+<line class="flow pv" id="linePV" x1="300" x2="300" y1="160" y2="300"></line>
+<line class="flow consumer" id="lineC1" style="opacity:0" x1="300" x2="300" y1="300" y2="300"></line>
+<line class="flow consumer" id="lineC2" x1="300" x2="440" y1="300" y2="300"></line>
+<line class="flow consumer" id="lineRest" x1="300" x2="300" y1="300" y2="460"></line>
+<!-- extra lines (optionale Verbraucher/Erzeuger) -->
+<g id="flowExtraLines"></g>
+<!-- nodes -->
+<g class="hub">
+<circle class="hub-dot" cx="300" cy="300" r="10"></circle>
+<circle class="hub-dot center" cx="300" cy="300" r="4"></circle>
+</g>
+<!-- Grid node (left) -->
+<g class="node grid" transform="translate(160,300)">
+<circle class="ring grid" r="44"></circle>
+<g class="ico" transform="translate(0,0)">
+  <image href="/static/icons/grid.png" x="-14" y="-14" width="28" height="28" />
+</g>
+<text class="val" id="gridVal" text-anchor="middle" y="-48">--</text>
+<text class="lbl" text-anchor="middle" y="28">Netz</text>
+</g>
+<!-- PV node (top) -->
+<g class="node pv" transform="translate(300,160)">
+<circle class="ring pv" r="44"></circle>
+<g class="ico" transform="translate(0,0)">
+  <image href="/static/icons/solar.png" x="-14" y="-14" width="28" height="28" />
+</g>
+<text class="val" id="pvVal" text-anchor="middle" y="-48">--</text>
+<text class="lbl" text-anchor="middle" y="28">PV</text>
+</g>
+<!-- Wallbox right -->
+<g class="node consumer charger" id="nodeEvcs" transform="translate(440,300)">
+<circle class="ring charger" r="44"></circle>
+<g class="ico" transform="translate(0,0)">
+  <image href="/static/icons/ev.png" x="-14" y="-14" width="28" height="28" />
+</g>
+<text class="val" id="c2Val" text-anchor="middle" y="58">--</text>
+<text class="lbl" text-anchor="middle" y="28">Ladestation</text>
+</g>
+<!-- Batterie bottom -->
+<g class="node consumer battery" transform="translate(300,460)">
+<circle class="ring battery" r="44"></circle>
+<g class="ico" transform="translate(0,0)">
+  <image href="/static/icons/battery.png" x="-14" y="-14" width="28" height="28" />
+</g>
+<text class="minor" id="batterySocIn" text-anchor="middle" y="-14">-- %</text>
+<text class="minor" id="batteryTime" text-anchor="middle" x="300" y="480"></text>
+<text class="val" id="restVal" text-anchor="middle" y="58">--</text>
+<text class="lbl" text-anchor="middle" y="28">Batterie</text>
+</g>
+<!-- center node -->
+<g class="node center" transform="translate(300,300)">
+<circle class="ring center" r="44"></circle>
+<g class="ico" transform="translate(0,0)">
+  <image href="/static/icons/building.png" x="-14" y="-14" width="28" height="28" />
+</g>
+<text class="minor" id="centerPower" text-anchor="middle" y="-14">0 W</text>
+<text class="lbl" text-anchor="middle" y="28">Gebäude</text>
+</g>
+<!-- battery labels along vertical line -->
+<!-- extra nodes (optionale Verbraucher/Erzeuger) -->
+<g id="flowExtraNodes"></g>
+</svg>
+
+<div class="ems-status hidden" id="emsStatusText"></div>
+</div>
+</section>
+<section class="card">
+  <div class="card-header">
+    <div class="legend-color"></div>
+    <span>Status</span>
+  </div>
+
+  <div class="nw-tiles-grid" id="liveStatusTiles" style="padding:12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+
+    <div class="nw-tile nw-tile--size-m nw-tile--type-sensor" style="cursor:default">
+      <div class="nw-tile__top">
+        <div class="nw-tile__icon-circle">🏠</div>
+        <div style="flex:1; margin-left:8px; min-width:0;">
+          <div class="nw-tile__alias">Autarkie</div>
+          <div class="nw-tile__room">Anteil Eigenversorgung</div>
+        </div>
+        <div class="nw-tile__badge">KPI</div>
+      </div>
+      <div class="nw-tile__middle">
+        <div class="nw-tile__value" id="autarkyValue">-- %</div>
+        <div class="nw-tile__unit">Live</div>
+      </div>
+      <div class="nw-tile__progress"><div id="autarkyBar" class="nw-tile__progress-bar"></div></div>
+      <div class="nw-tile__bottom">
+        <span class="muted">0–100%</span>
+        <span class="muted"></span>
+      </div>
+    </div>
+
+    <div class="nw-tile nw-tile--size-m nw-tile--type-sensor" style="cursor:default">
+      <div class="nw-tile__top">
+        <div class="nw-tile__icon-circle">↻</div>
+        <div style="flex:1; margin-left:8px; min-width:0;">
+          <div class="nw-tile__alias">Eigenverbrauch</div>
+          <div class="nw-tile__room">PV direkt genutzt</div>
+        </div>
+        <div class="nw-tile__badge">KPI</div>
+      </div>
+      <div class="nw-tile__middle">
+        <div class="nw-tile__value" id="selfVerbrauchValue">-- %</div>
+        <div class="nw-tile__unit">Live</div>
+      </div>
+      <div class="nw-tile__progress"><div id="selfVerbrauchBar" class="nw-tile__progress-bar"></div></div>
+      <div class="nw-tile__bottom">
+        <span class="muted">0–100%</span>
+        <span class="muted"></span>
+      </div>
+    </div>
+
+    <div class="nw-tile nw-tile--size-m nw-tile--type-sensor" style="cursor:default">
+      <div class="nw-tile__top">
+        <div class="nw-tile__icon-circle"><img src="/static/icons/battery.png" alt=""></div>
+        <div style="flex:1; margin-left:8px; min-width:0;">
+          <div class="nw-tile__alias">Speicher</div>
+          <div class="nw-tile__room">Systemstatus</div>
+        </div>
+        <div class="nw-tile__badge">KPI</div>
+      </div>
+      <div class="nw-tile__middle">
+        <div class="nw-tile__value" id="storageSocValue">-- %</div>
+        <div class="nw-tile__unit">SoC</div>
+      </div>
+      <div class="nw-tile__progress"><div id="storageSocBar" class="nw-tile__progress-bar"></div></div>
+      <div class="nw-tile__bottom">
+        <span>Laden <b id="storageLadenPower">--</b></span>
+        <span>Entladen <b id="storageEntladenPower">--</b></span>
+      </div>
+    </div>
+
+    <div class="nw-tile nw-tile--size-m nw-tile--type-sensor" style="cursor:default">
+      <div class="nw-tile__top">
+        <div class="nw-tile__icon-circle"><img src="/static/icons/grid.png" alt=""></div>
+        <div style="flex:1; margin-left:8px; min-width:0;">
+          <div class="nw-tile__alias">Netz</div>
+          <div class="nw-tile__room">Bezug &amp; Einspeisung</div>
+        </div>
+        <div class="nw-tile__badge">KPI</div>
+      </div>
+      <div class="nw-tile__middle" style="justify-content:space-between; gap:12px;">
+        <div style="display:flex; flex-direction:column; min-width:0;">
+          <div class="nw-tile__value" id="gridBuyPowerCard" style="font-size:1.0rem;">--</div>
+          <div class="nw-tile__unit">Bezug</div>
+        </div>
+        <div style="display:flex; flex-direction:column; text-align:right; min-width:0;">
+          <div class="nw-tile__value" id="gridSellPowerCard" style="font-size:1.0rem;">--</div>
+          <div class="nw-tile__unit">Einspeisung</div>
+        </div>
+      </div>
+      <div class="nw-tile__bottom">
+        <span>Gesamt</span>
+        <span id="gridEnergyKwh">--</span>
+      </div>
+    </div>
+
+    <div class="nw-tile nw-tile--size-m nw-tile--type-sensor" style="cursor:default">
+      <div class="nw-tile__top">
+        <div class="nw-tile__icon-circle"><img src="/static/icons/solar.png" alt=""></div>
+        <div style="flex:1; margin-left:8px; min-width:0;">
+          <div class="nw-tile__alias">Produktion</div>
+          <div class="nw-tile__room">PV &amp; CO₂</div>
+        </div>
+        <div class="nw-tile__badge">KPI</div>
+      </div>
+      <div class="nw-tile__middle" style="justify-content:space-between; gap:12px;">
+        <div style="display:flex; flex-direction:column; min-width:0;">
+          <div class="nw-tile__value" id="productionTotal" style="font-size:1.0rem;">--</div>
+          <div class="nw-tile__unit">PV</div>
+        </div>
+        <div style="display:flex; flex-direction:column; text-align:right; min-width:0;">
+          <div class="nw-tile__value" id="co2Savings" style="font-size:1.0rem;">--</div>
+          <div class="nw-tile__unit">CO₂</div>
+        </div>
+      </div>
+      <div class="nw-tile__bottom">
+        <span>Gesamt</span>
+        <span id="productionEnergyKwh">--</span>
+      </div>
+    </div>
+
+    <div class="nw-tile nw-tile--size-m nw-tile--type-sensor" style="cursor:default">
+      <div class="nw-tile__top">
+        <div class="nw-tile__icon-circle"><img src="/static/icons/building.png" alt=""></div>
+        <div style="flex:1; margin-left:8px; min-width:0;">
+          <div class="nw-tile__alias">Verbrauch</div>
+          <div class="nw-tile__room">EVCS &amp; Gebäude</div>
+        </div>
+        <div class="nw-tile__badge">KPI</div>
+      </div>
+      <div class="nw-tile__middle" style="justify-content:space-between; gap:12px;">
+        <div style="display:flex; flex-direction:column; min-width:0;">
+          <div class="nw-tile__value" id="consumptionEvcs" style="font-size:1.0rem;">--</div>
+          <div class="nw-tile__unit">EVCS</div>
+        </div>
+        <div style="display:flex; flex-direction:column; text-align:right; min-width:0;">
+          <div class="nw-tile__value" id="consumptionBuilding" style="font-size:1.0rem;">--</div>
+          <div class="nw-tile__unit">Gebäude</div>
+        </div>
+      </div>
+      <div class="nw-tile__bottom">
+        <span>Gesamt</span>
+        <span id="consumptionEnergyKwh">--</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- Schnellsteuerung (Live) – im gleichen Design wie die EVCS-Kacheln -->
+<section class="card">
+  <div class="card-header">
+    <div class="legend-color"></div>
+    <span>Schnellsteuerung</span>
+  </div>
+
+  <div class="nw-tiles-grid" id="liveQuickTiles" style="padding:12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+
+    <div class="nw-tile nw-tile--size-m nw-tile--type-scene" id="tariffCard" tabindex="0" role="button" aria-label="Optimierung öffnen">
+      <div class="nw-tile__top">
+        <div class="nw-tile__icon-circle">⚙</div>
+        <div style="flex:1; margin-left:8px; min-width:0;">
+          <div class="nw-tile__alias">Optimierung</div>
+          <div class="nw-tile__room">Tarif &amp; Schutz</div>
+        </div>
+        <div class="nw-tile__badge nw-tile__badge--accent">EMS</div>
+      </div>
+      <div class="nw-tile__middle">
+        <div class="nw-tile__value" id="priceCurrent">--</div>
+        <div class="nw-tile__unit">Preis</div>
+      </div>
+      <div class="nw-tile__bottom">
+        <div>Ø <span id="priceAverage">--</span></div>
+        <div>Peak <span id="peakShort">--</span> • §14a <span id="para14aShort">--</span></div>
+      </div>
+    </div>
+
+    <div class="nw-tile nw-tile--size-m nw-tile--type-scene" id="evcsCard" tabindex="0" role="button" aria-label="Ladepunkte öffnen">
+      <div class="nw-tile__top">
+        <div class="nw-tile__icon-circle">EV</div>
+        <div style="flex:1; margin-left:8px; min-width:0;">
+          <div class="nw-tile__alias">Ladestation</div>
+          <div class="nw-tile__room">Übersicht &amp; Schnellsteuerung</div>
+        </div>
+        <div class="nw-tile__badge nw-tile__badge--accent">EVCS</div>
+      </div>
+      <div class="nw-tile__middle">
+        <div class="nw-tile__value" id="evcsStatus">--</div>
+        <div class="nw-tile__unit">Status</div>
+      </div>
+      <div class="nw-tile__bottom">
+        <div>Letzte <span id="evcsLastChargeKwh">--</span></div>
+        <div></div>
+      </div>
+    </div>
+
+    <div class="nw-tile nw-tile--size-m nw-tile--type-scene hidden" id="thresholdCard" tabindex="0" role="button" aria-label="Schwellwertsteuerung öffnen">
+      <div class="nw-tile__top">
+        <div class="nw-tile__icon-circle">⇵</div>
+        <div style="flex:1; margin-left:8px; min-width:0;">
+          <div class="nw-tile__alias">Schwellwerte</div>
+          <div class="nw-tile__room">Automatik-Regeln</div>
+        </div>
+        <div class="nw-tile__badge">APP</div>
+      </div>
+      <div class="nw-tile__middle">
+        <div class="nw-tile__value"><span id="thrActiveCount">--</span></div>
+        <div class="nw-tile__unit">aktiv</div>
+      </div>
+      <div class="nw-tile__bottom">
+        <div>Regeln <span id="thrRuleCount">--</span></div>
+        <div><span id="thrStatusShort">--</span></div>
+      </div>
+    </div>
+
+    <div class="nw-tile nw-tile--size-m nw-tile--type-scene hidden" id="relayCard" tabindex="0" role="button" aria-label="Relaissteuerung öffnen">
+      <div class="nw-tile__top">
+        <div class="nw-tile__icon-circle">⏻</div>
+        <div style="flex:1; margin-left:8px; min-width:0;">
+          <div class="nw-tile__alias">Relais</div>
+          <div class="nw-tile__room">Ausgänge</div>
+        </div>
+        <div class="nw-tile__badge">APP</div>
+      </div>
+      <div class="nw-tile__middle">
+        <div class="nw-tile__value"><span id="relayOnCount">--</span></div>
+        <div class="nw-tile__unit">ein</div>
+      </div>
+      <div class="nw-tile__bottom">
+        <div>Ausgänge <span id="relayCount">--</span></div>
+        <div><span id="relayStatusShort">--</span></div>
+      </div>
+    </div>
+
+    <div class="nw-tile nw-tile--size-m nw-tile--type-scene hidden" id="bhkwCard" tabindex="0" role="button" aria-label="BHKW öffnen">
+      <div class="nw-tile__top">
+        <div class="nw-tile__icon-circle">🔥</div>
+        <div style="flex:1; margin-left:8px; min-width:0;">
+          <div class="nw-tile__alias">BHKW</div>
+          <div class="nw-tile__room">BHKW</div>
+        </div>
+        <div class="nw-tile__badge">APP</div>
+      </div>
+      <div class="nw-tile__middle">
+        <div class="nw-tile__value"><span id="bhkwRunningCount">--</span></div>
+        <div class="nw-tile__unit">läuft</div>
+      </div>
+      <div class="nw-tile__bottom">
+        <div>Geräte <span id="bhkwCount">--</span></div>
+        <div><span id="bhkwStatusShort">--</span></div>
+      </div>
+    </div>
+
+
+
+    <div class="nw-tile nw-tile--size-m nw-tile--type-scene hidden" id="generatorCard" tabindex="0" role="button" aria-label="Generator öffnen">
+      <div class="nw-tile__top">
+        <div class="nw-tile__icon-circle">⚡</div>
+        <div style="flex:1; margin-left:8px; min-width:0;">
+          <div class="nw-tile__alias">Generator</div>
+          <div class="nw-tile__room">Notstrom</div>
+        </div>
+        <div class="nw-tile__badge">APP</div>
+      </div>
+      <div class="nw-tile__middle">
+        <div class="nw-tile__value"><span id="generatorRunningCount">--</span></div>
+        <div class="nw-tile__unit">läuft</div>
+      </div>
+      <div class="nw-tile__bottom">
+        <div>Geräte <span id="generatorCount">--</span></div>
+        <div><span id="generatorStatusShort">--</span></div>
+      </div>
+    </div>  </div>
+</section>
+
+<div id="thresholdModal" class="modal hidden">
+  <div class="dialog">
+    <div class="dialog-header">
+      <div class="title">Schwellwertsteuerung</div>
+      <button id="thrClose" class="btn small" aria-label="Schließen">×</button>
+    </div>
+
+    <div id="thrList"></div>
+
+    <div class="row" style="margin-top:12px;">
+      <small id="thrHint" style="opacity:0.85;">—</small>
+    </div>
+  </div>
+</div>
+
+
+<div id="relayModal" class="modal hidden">
+  <div class="dialog">
+    <div class="dialog-header">
+      <div class="title">Relaissteuerung</div>
+      <button id="relayClose" class="btn small" aria-label="Schließen">×</button>
+    </div>
+
+    <div id="relayList"></div>
+
+    <div class="row" style="margin-top:12px;">
+      <small id="relayHint" style="opacity:0.85;">—</small>
+    </div>
+  </div>
+</div>
+
+
+<div id="bhkwModal" class="modal hidden">
+  <div class="dialog">
+    <div class="dialog-header">
+      <div class="title">BHKW</div>
+      <button id="bhkwClose" class="btn small" aria-label="Schließen">×</button>
+    </div>
+
+    <div id="bhkwList"></div>
+
+    <div class="row" style="margin-top:12px;">
+      <small id="bhkwHint" style="opacity:0.85;">—</small>
+    </div>
+  </div>
+</div>
+
+<div id="generatorModal" class="modal hidden">
+  <div class="dialog">
+    <div class="dialog-header">
+      <div class="title">Generator</div>
+      <button id="generatorClose" class="btn small" aria-label="Schließen">×</button>
+    </div>
+
+    <div id="generatorList"></div>
+
+    <div class="row" style="margin-top:12px;">
+      <small id="generatorHint" style="opacity:0.85;">—</small>
+    </div>
+  </div>
+</div>
+
+
+
+<div id="emsModal" class="modal hidden">
+  <div class="dialog">
+    <div class="dialog-header">
+      <div class="title">Optimierung</div>
+      <button id="emsClose" class="btn small" aria-label="Schließen">×</button>
+    </div>
+
+    <div class="row two" style="align-items:center;">
+      <div>
+        <small>Tarif-Optimierung</small>
+        <b id="emsTariffStatus">—</b>
+        <small id="emsTariffHint" style="display:block; opacity:0.85; margin-top:4px;">—</small>
+      </div>
+      <div style="text-align:right">
+        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="emsTariffToggle" title="Tarif-Optimierung aktivieren/deaktivieren"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+        <input type="checkbox" class="nw-toggle-hidden" id="emsTariffToggle">
+      </div>
+    </div>
+
+    <div class="row two" style="margin-top:10px;">
+      <div><small>Preis aktuell</small><b id="emsPriceCurrent">--</b></div>
+      <div><small>Preis Ø</small><b id="emsPriceAvg">--</b></div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <small>Priorität</small>
+      <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-3" id="emsTariffPriorityButtons" role="group" aria-label="Tarif Priorität">
+        <button type="button" data-prio="1">Speicher</button>
+        <button type="button" data-prio="2">Auto</button>
+        <button type="button" data-prio="3">EVCS</button>
+      </div>
+      <small style="display:block; opacity:0.85; margin-top:6px;">Legt fest, welches System bei günstigen Zeiten bevorzugt wird.</small>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <small>Modus</small>
+      <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2" id="emsTariffModeButtons" role="group" aria-label="Tarif Modus">
+        <button type="button" data-mode="1">Manuell</button>
+        <button type="button" data-mode="2">Automatik</button>
+      </div>
+    </div>
+
+    <hr style="border:0; border-top:1px solid rgba(255,255,255,0.08); margin:14px 0;"/>
+
+    <div class="row two" id="emsPeakRow" style="align-items:center;">
+      <div>
+        <small>Lastspitzenkappung</small>
+        <b id="emsPeakStatus">—</b>
+        <small id="emsPeakHint" style="display:block; opacity:0.85; margin-top:4px;">—</small>
+      </div>
+      <div style="text-align:right">
+        <small style="opacity:0.75;">Geschützt</small>
+        <small style="display:block; opacity:0.6; margin-top:2px;">Installateur</small>
+      </div>
+    </div>
+
+    <div class="row two" id="emsPeakNumbers" style="margin-top:10px;">
+      <div><small>Limit</small><b id="emsPeakLimit">--</b></div>
+      <div><small>Über</small><b id="emsPeakOver">--</b></div>
+    </div>
+
+    <hr style="border:0; border-top:1px solid rgba(255,255,255,0.08); margin:14px 0;"/>
+
+    <div class="row" id="ems14aRow">
+      <small>Netzsteuerung (§14a)</small>
+      <div class="row two" style="margin-top:8px;">
+        <div><small>Status</small><b id="ems14aStatus">--</b></div>
+        <div><small>EVCS Cap</small><b id="ems14aCap">--</b></div>
+      </div>
+      <small id="ems14aHint" style="display:block; opacity:0.85; margin-top:6px;">—</small>
+    </div>
+
+    <div class="row" style="margin-top:14px;">
+      <button type="button" class="btn" id="emsModalOpenSettings">Einstellungen öffnen</button>
+    </div>
+  </div>
+</div>
+
+<div id="evcsModal" class="modal hidden">
+  <div class="dialog">
+    <div class="dialog-header">
+      <div class="title">Ladestation</div>
+      <button id="evcsClose" class="btn small" aria-label="Schließen">×</button>
+    </div>
+
+    <div class="evcs-gauge">
+      <div class="gauge-value" id="evcsPowerBig">--</div>
+    </div>
+
+    <div class="row two">
+      <div>
+        <small>Status</small>
+        <b id="evcsStatusModal">--</b>
+      </div>
+      <div>
+        <small>Ladestation</small>
+        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="evcsActiveToggle" title="Ladestation aktivieren/deaktivieren"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+        <input type="checkbox" class="nw-toggle-hidden" id="evcsActiveToggle">
+      </div>
+    </div>
+
+
+    
+
+    <div class="row two" id="evcsSocRow" style="margin-top:10px; display:none;">
+      <div>
+        <small>Fahrzeug SoC</small>
+        <b id="evcsVehicleSoc">--</b>
+      </div>
+      <div></div>
+    </div>
+<div class="row two" id="evcsRegRow" style="margin-top:12px; align-items:center; display:none;">
+      <div>
+        <small>Regelung</small>
+        <b id="evcsRegStatus">—</b>
+        <small id="evcsRegHint" style="display:block; opacity:0.85; margin-top:4px;">—</small>
+      </div>
+      <div style="text-align:right">
+        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="evcsRegToggle" title="Automatik aktivieren/deaktivieren"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+        <input type="checkbox" class="nw-toggle-hidden" id="evcsRegToggle">
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="nw-evcs-mode">
+        <small>Modus</small>
+        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-4" id="evcsModeButtons" role="group" aria-label="Modus">
+          <button type="button" data-mode="auto">Auto</button>
+          <button type="button" data-mode="boost">Boost</button>
+          <button type="button" data-mode="minpv">Min+PV</button>
+          <button type="button" data-mode="pv">PV</button>
+        </div>
+      </div>
+
+      <div class="row two" id="evcsGoalRow" style="margin-top:12px; align-items:center; display:none;">
+        <div>
+          <small>Ziel‑Laden</small>
+          <b id="evcsGoalStatus">—</b>
+          <small id="evcsGoalHint" style="display:block; opacity:.85; margin-top:4px;">—</small>
+        </div>
+        <div style="text-align:right">
+          <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="evcsGoalToggle" title="Zeit‑Ziel Laden aktivieren/deaktivieren">
+            <button type="button" data-value="false">Aus</button>
+            <button type="button" data-value="true">An</button>
+          </div>
+          <input type="checkbox" class="nw-toggle-hidden" id="evcsGoalToggle">
+        </div>
+      </div>
+
+      <div class="row two" id="evcsGoalCfgRow" style="margin-top:10px; display:none;">
+        <div>
+          <small>Ziel SoC (%)</small>
+          <input class="nw-input" id="evcsGoalSoc" type="number" min="0" max="100" step="1" value="">
+        </div>
+        <div>
+          <small>Fertig um</small>
+          <input class="nw-input" id="evcsGoalTime" type="time" value="">
+        </div>
+      </div>
+
+      <div class="row two" id="evcsGoalCfgRow2" style="margin-top:10px; display:none;">
+        <div>
+          <small>Akkukapazität (kWh)</small>
+          <input class="nw-input" id="evcsGoalKwh" type="number" min="0" max="2000" step="0.1" value="" placeholder="auto">
+        </div>
+        <div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Energiefluss: Schnellsteuerung für optionale Verbraucher/Erzeuger -->
+<div id="flowQcModal" class="modal hidden">
+  <div class="dialog">
+    <div class="dialog-header">
+      <div>
+        <div class="title" id="flowQcTitle">Schnellsteuerung</div>
+        <div style="font-size:0.8rem;opacity:0.8" id="flowQcSubtitle"></div>
+      </div>
+      <button id="flowQcClose" class="btn small" aria-label="Schließen">×</button>
+    </div>
+
+    <div class="evcs-gauge">
+      <div class="gauge-value" id="flowQcPower">--</div>
+    
+
+    <!-- Betriebsmodus & Regelung (nur für thermische Verbraucher, wenn vorhanden) -->
+    <div class="row" id="flowQcRegWrap" style="display:none;margin-top:12px;">
+      <div class="row two" style="align-items:center">
+        <div>
+          <small>Regelung</small>
+          <div style="font-weight:600" id="flowQcRegStatus">—</div>
+          <small id="flowQcRegHint" style="display:block;opacity:0.85;margin-top:4px;">—</small>
+        </div>
+        <div style="text-align:right">
+          <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="flowQcRegEnable" title="Regelung aktivieren/deaktivieren"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+        <input type="checkbox" class="nw-toggle-hidden" id="flowQcRegEnable">
+        </div>
+      </div>
+    </div>
+
+    <div class="row" id="flowQcModeWrap" style="display:none;margin-top:12px;">
+      <div>
+        <small>Betriebsmodus</small>
+      </div>
+      <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-4" id="flowQcModeButtons" style="margin-top:8px;">
+        <button type="button" data-mode="pvAuto">Auto (PV)</button>
+        <button type="button" data-mode="manual">Manuell</button>
+        <button type="button" data-mode="off">Aus</button>
+        <button type="button" data-mode="inherit">System</button>
+      </div>
+      <small id="flowQcModeHint" style="display:block;opacity:0.85;margin-top:6px;">—</small>
+    </div>
+
+</div>
+
+    <div class="row" id="flowQcSwitchWrap" style="display:none;">
+      <div class="row two" style="align-items:center">
+        <div>
+          <small>Ein/Aus</small>
+          <b id="flowQcSwitchStatus">--</b>
+        </div>
+        <div style="text-align:right">
+          <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="flowQcSwitch" title="Ein/Aus"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+        <input type="checkbox" class="nw-toggle-hidden" id="flowQcSwitch">
+        </div>
+      </div>
+    </div>
+
+    <div class="row" id="flowQcSetpointWrap" style="display:none;">
+      <div>
+        <small><span id="flowQcSetpointLabel">Sollwert</span> (<span id="flowQcSetpointUnit">W</span>)</small>
+      </div>
+      <input type="range" id="flowQcSetpointRange" style="width:100%;display:none;margin-top:6px;"/>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+        <input type="number" id="flowQcSetpointValue" class="input" style="flex:1 1 auto;min-width:120px;" placeholder="Wert…"/>
+        <button type="button" class="btn" id="flowQcSetpointApply">Übernehmen</button>
+      </div>
+    </div>
+
+    <div class="row" id="flowQcBoostWrap" style="display:none;margin-top:12px;">
+      <div class="row two" style="align-items:center">
+        <div>
+          <small>Boost</small>
+          <div style="font-weight:600" id="flowQcBoostStatus">—</div>
+        </div>
+        <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end;align-items:center;">
+          <button type="button" class="btn" id="flowQcBoostBtn">Boost starten</button>
+          <button type="button" class="btn" id="flowQcBoostStopBtn" style="display:none;">Boost stoppen</button>
+        </div>
+      </div>
+      <small id="flowQcBoostHint" style="display:block;opacity:0.85;margin-top:6px"></small>
+    </div>
+
+    <small id="flowQcMsg" style="display:block;margin-top:10px;opacity:0.85"></small>
+  </div>
+</div>
+
+</section>
+</main>
+<script src="/static/app.js"></script>
+
+<section class="hidden settings-wrap" data-tab-content="settings">
+  <section class="card">
+    <div class="card-header"><span>Allgemeine Einstellungen</span></div>
+    <div class="form">
+      <label class="row"><span>Benachrichtigungen</span>
+        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_notify"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+        <input type="checkbox" class="nw-toggle-hidden" id="s_notify" data-scope="settings" data-key="notifyEnabled">
+      </label>
+      <label class="row"><span>E-Mail</span>
+        <input type="email" id="s_email" data-scope="settings" data-key="email">
+      </label>
+      <label class="row"><span>Dynamischer Zeittarif</span>
+        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_dyn"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+        <input type="checkbox" class="nw-toggle-hidden" id="s_dyn" data-scope="settings" data-key="dynamicTariff">
+      </label>
+      <div class="row" style="align-items:center;">
+        <span>Lastspitzenkappung</span>
+        <small style="opacity:.8; text-align:right; flex:1 1 auto;">Nur Installateur (Netzschutz)</small>
+      </div>
+<label class="row"><span>Speicher Leistung (W)</span>
+        <input type="number" id="s_storagePower" step="1" data-scope="settings" data-key="storagePower">
+      </label>
+      <label class="row"><span>Strompreis (€)</span>
+        <input type="number" id="s_price" step="0.01" data-scope="settings" data-key="price">
+      </label>
+      <div class="row"><span>Priorität (Tarif): <b id="s_priority_label">Auto</b></span>
+        <input type="range" id="s_priority" min="1" max="3" step="1" data-scope="settings" data-key="priority">
+        <small>1 = Speicher, 2 = Auto, 3 = Ladestation</small>
+      </div>
+      <div class="row"><span>Modus Tarif</span>
+        <input type="range" id="s_tariffMode" min="1" max="2" step="1" data-scope="settings" data-key="tariffMode">
+        <small>1 = Manuell, 2 = Automatisch</small>
+      </div>
+    
+      <!-- Hinweis: Installateur-/Admin-Konfiguration erfolgt außerhalb des Endkunden-Dashboards -->
+    </div>
+  </section>
+
+  
+</section>
+</section>
+
+<!-- Speicherfarm (nur sichtbar, wenn im Admin unter EMS aktiviert) -->
+<section class="hidden" data-tab-content="storagefarm">
+  <section class="card">
+    <div class="card-header"><span>Speicherfarm</span></div>
+    <div class="form">
+
+      <div class="row" style="align-items:center">
+        <span>Übersicht</span>
+        <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex:1 1 auto">
+          <small id="sf_mode_label" style="color:var(--muted)">Modus: --</small>
+          <button class="btn" id="sf_reload" type="button">Neu laden</button>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px;gap:10px;flex-wrap:wrap">
+        <small id="sf_summary" style="color:var(--muted)">--</small>
+      </div>
+
+
+      <div class="sf-table" style="margin-top:12px">
+        <div class="rfid-whitelist-head" style="grid-template-columns: 1.6fr 1fr 1fr 1fr 0.8fr;">
+          <div>Speicher</div>
+          <div>SoC (%)</div>
+          <div>Laden</div>
+          <div>Entladen</div>
+          <div>Status</div>
+        </div>
+        <div id="sf_status_rows" class="rfid-whitelist-rows"></div>
+        <small id="sf_msg" style="display:block;margin-top:8px;color:var(--muted)"></small>
+      </div>
+
+    </div>
+  </section>
+</section>
+
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+        navigator.serviceWorker.register('./sw.js').catch(console.error);
+    });
+}
+</script>
+</body>
+</html>

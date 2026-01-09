@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>NexoWatt EMS – Einstellungen</title>
+  <link rel="manifest" href="./manifest.webmanifest"/>
+  <link rel="stylesheet" href="/static/styles.css"/>
+</head>
+<body>
+<header class="topbar">
+<script>
+/* NexoWatt: normalize base path so relative links work even if opened without trailing slash */
+(function () {
+  try {
+    var p = window.location.pathname || "";
+    if (p && !p.endsWith("/") && !p.endsWith(".html")) {
+      window.location.replace(p + "/" + window.location.search + window.location.hash);
+    }
+  } catch (e) {}
+})();
+</script>
+
+<div class="brand"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></div>
+<button aria-label="Menu" id="menuBtn">☰</button>
+<h1>NexoWatt EMS</h1>
+<nav class="tabs">
+<button class="tab active" data-tab="live">LIVE</button>
+<button class="tab" id="historyTabBtn" data-tab="history">HISTORY</button>
+<button id="tabEvcs" class="tab hidden" onclick="window.location.href='evcs.html'">EVCS</button>
+<button id="tabSmartHome" class="tab hidden" data-tab="smarthome">SMARTHOME</button>
+</nav>
+<div class="status-dot" id="liveDot" title="Live Verbindung"></div>
+<div class="menu hidden" id="menuDropdown"><a class="menu-item" href="./">Live</a><a class="menu-item" href="history.html">History</a>
+<a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item hidden" id="menuSmartHomeLink" href="smarthome.html">SmartHome</a><a class="menu-item" href="settings.html">Einstellungen</a></div></header>
+<main class="content">
+  <!-- Inhalt bewusst leer: Einstellungen werden als eigener Bereich darunter gerendert -->
+</main>
+
+<script src="/static/app.js"></script>
+
+<section class="settings-wrap" data-tab-content="settings">
+  <section class="card">
+    <div class="card-header"><span>Allgemeine Einstellungen</span></div>
+    <div class="row" style="align-items:center; margin-top:10px;">
+      <span>Installateur</span>
+      <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex:1 1 auto">
+        <a class="btn" id="openInstallerBtn" href="#">Admin öffnen</a>
+      </div>
+    </div>
+
+    <div class="form">
+      <label class="row"><span>Benachrichtigungen</span>
+        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_notify"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+        <input type="checkbox" class="nw-toggle-hidden" id="s_notify" data-scope="settings" data-key="notifyEnabled">
+      </label>
+      <label class="row"><span>E-Mail</span>
+        <input type="email" id="s_email" data-scope="settings" data-key="email">
+      </label>
+      <label class="row"><span>Dynamischer Zeittarif</span>
+        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_dyn_toggle"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+        <input type="checkbox" class="nw-toggle-hidden" id="s_dyn_toggle" data-scope="settings" data-key="dynamicTariff">
+      </label>
+      <div class="row" style="align-items:center;">
+        <span>Lastspitzenkappung</span>
+        <small style="opacity:.8; text-align:right; flex:1 1 auto;">Nur Installateur (Netzschutz)</small>
+      </div>
+
+      <!-- Diese Einstellungen sollen nur sichtbar sein, wenn der Dynamische Tarif aktiviert ist -->
+      <div id="dyn_settings_block">
+        <label class="row"><span>Speicher Leistung (W)</span>
+          <input type="number" id="s_storagePower" step="1" data-scope="settings" data-key="storagePower">
+        </label>
+        <label class="row"><span>Strompreis (€)</span>
+          <input type="number" id="s_price" step="0.01" data-scope="settings" data-key="price">
+        </label>
+        <div class="row"><span>Priorität (Tarif): <b id="s_priority_label">Auto</b></span>
+          <input type="range" id="s_priority" min="1" max="3" step="1" data-scope="settings" data-key="priority">
+          <small>1 = Speicher, 2 = Auto, 3 = Ladestation</small>
+        </div>
+        <div class="row"><span>Modus Tarif: <b id="s_tariffMode_label">Manuell</b></span>
+          <input type="range" id="s_tariffMode" min="1" max="2" step="1" data-scope="settings" data-key="tariffMode">
+          <small>1 = Manuell, 2 = Automatisch</small>
+        </div>
+      </div>
+    
+      <!-- Installateur-/Admin-Konfiguration erfolgt außerhalb des Endkunden-Dashboards -->
+    </div>
+  </section>
+  <section class="card">
+    <div class="card-header"><span>RFID / Ladepark</span></div>
+    <div class="form">
+      <label class="row"><span>RFID-Freigabe aktiv</span>
+        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="rfid_enabled"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+        <input type="checkbox" class="nw-toggle-hidden" id="rfid_enabled" data-scope="rfid" data-key="enabled">
+      </label>
+
+      <div class="rfid-whitelist">
+        <div class="rfid-whitelist-head">
+          <div>RFID</div>
+          <div>Name</div>
+          <div>Kommentar</div>
+          <div></div>
+        </div>
+        <div id="rfidWhitelistRows" class="rfid-whitelist-rows"></div>
+
+        <div class="rfid-whitelist-actions">
+          <button class="btn" id="rfidAddRow">+ Karte</button>
+          <div class="rfid-whitelist-actions-right">
+            <button class="btn" id="rfidReloadWhitelist">Neu laden</button>
+            <button class="btn" id="rfidSaveWhitelist">Whitelist speichern</button>
+          </div>
+        </div>
+
+        <small id="rfidWhitelistMsg" style="display:block;margin-top:8px;color:var(--muted)"></small>
+      </div>
+
+      <hr style="margin:14px 0;border:0;border-top:1px solid rgba(255,255,255,.08)"/>
+
+      <div class="rfid-learning">
+        <div class="row" style="align-items:center">
+          <span>Karte anlernen</span>
+          <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex:1 1 auto">
+            <button class="btn" id="rfidLearnBtn" type="button">Karte anlernen</button>
+          </div>
+        </div>
+
+        <div class="row" style="align-items:center">
+          <span>Letzte Karte</span>
+          <div style="flex:1 1 auto;display:flex;align-items:center;justify-content:flex-end">
+            <span id="rfidLastCapturedText" class="rfid-last">--</span>
+          </div>
+        </div>
+
+        <div class="rfid-learning-add">
+          <input type="text" id="rfidLearnName" placeholder="Name / Person" />
+          <input type="text" id="rfidLearnComment" placeholder="Kommentar (optional)" />
+          <button class="btn" id="rfidLearnAdd" type="button">In Whitelist übernehmen</button>
+        </div>
+        <small id="rfidLearnMsg" style="display:block;margin-top:8px;color:var(--muted)"></small>
+      </div>
+    </div>
+  </section>
+
+
+  
+</section>
+
+<script>
+// Installer/Admin shortcut: always open the local Admin UI on port 8081.
+// Uses the current host (dynamic DNS / reverse proxy hostnames) and replaces only the port.
+(function () {
+  try {
+    var btn = document.getElementById('openInstallerBtn');
+    if (!btn) return;
+
+    var proto = window.location.protocol || 'http:';
+    var host = window.location.hostname;
+    if (!host) {
+      var h = (window.location.host || '').split(':');
+      host = h && h[0] ? h[0] : 'localhost';
+    }
+
+    var adminUrl = proto + '//' + host + ':8081/';
+    btn.setAttribute('href', adminUrl);
+    btn.setAttribute('target', '_blank');
+    btn.setAttribute('rel', 'noopener');
+
+    // Ensure click always opens a new tab (even if some browsers ignore target on dynamically set href).
+    btn.addEventListener('click', function (e) {
+      try { e.preventDefault(); } catch (_e) {}
+      try { window.open(adminUrl, '_blank', 'noopener'); } catch (_e2) { window.location.href = adminUrl; }
+    });
+  } catch (_e) {}
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('./sw.js').catch(console.error);
+  });
+}
+</script>
+</body>
+</html>
