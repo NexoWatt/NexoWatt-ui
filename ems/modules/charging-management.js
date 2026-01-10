@@ -781,8 +781,10 @@ class ChargingManagementModule extends BaseModule {
             if (this.dp) {
                 if (actualPowerWId) await this.dp.upsert({ key: `cm.wb.${safe}.pW`, objectId: actualPowerWId, dataType: 'number', direction: 'in', unit: 'W' });
                 if (actualCurrentAId) await this.dp.upsert({ key: `cm.wb.${safe}.iA`, objectId: actualCurrentAId, dataType: 'number', direction: 'in', unit: 'A' });
-                if (setCurrentAId) await this.dp.upsert({ key: `cm.wb.${safe}.setA`, objectId: setCurrentAId, dataType: 'number', direction: 'out', unit: 'A', deadband: 0.1 });
-                if (setPowerWId) await this.dp.upsert({ key: `cm.wb.${safe}.setW`, objectId: setPowerWId, dataType: 'number', direction: 'out', unit: 'W', deadband: 25 });
+                // Some EVCS/OCPP stacks expire control setpoints after ~60s unless refreshed.
+                // Periodically re-apply the setpoint even if unchanged to prevent charge stop/start loops.
+                if (setCurrentAId) await this.dp.upsert({ key: `cm.wb.${safe}.setA`, objectId: setCurrentAId, dataType: 'number', direction: 'out', unit: 'A', deadband: 0.1, maxWriteIntervalMs: 45000 });
+                if (setPowerWId) await this.dp.upsert({ key: `cm.wb.${safe}.setW`, objectId: setPowerWId, dataType: 'number', direction: 'out', unit: 'W', deadband: 25, maxWriteIntervalMs: 45000 });
                 if (enableId) await this.dp.upsert({ key: `cm.wb.${safe}.en`, objectId: enableId, dataType: 'boolean', direction: 'out' });
                 if (statusId) await this.dp.upsert({ key: `cm.wb.${safe}.st`, objectId: statusId, dataType: 'mixed', direction: 'in' });
 
@@ -960,18 +962,12 @@ class ChargingManagementModule extends BaseModule {
 
                 if (maxPW < minPW) minPW = maxPW;
 
-                if (phases === 3 && acMinPower3pW > 0) {
-                    // Practical AC 3-phase minimum: avoid 3p chargers dropping below ~4.2kW.
+                // For AC, enforce a practical 3-phase minimum only when we can command *power* directly.
+                // When controlling by current (A), the wallbox already has a physical minimum current (typically 6 A).
+                // Enforcing a power minimum here would lead to fractional currents (e.g. 6.1 A) which some chargers
+                // or adapters do not accept and can cause start/stop behaviour.
+                if (controlBasis === 'powerW' && phases === 3 && acMinPower3pW > 0) {
                     minPW = Math.max(minPW, acMinPower3pW);
-                }
-
-                // Quantize min power to 0.1A steps for current-based control (avoid unreachable minPW)
-                if (controlBasis === 'currentA' && vFactor > 0 && minPW > 0) {
-                    const minAFromMinPW = Math.ceil((minPW / vFactor) * 10) / 10;
-                    if (Number.isFinite(minAFromMinPW) && minAFromMinPW > 0) {
-                        minA = Math.max(minA, minAFromMinPW);
-                        minPW = minAFromMinPW * vFactor;
-                    }
                 }
 
                 // Note: if maxPW < minPW after enforcement, this wallbox cannot be started.
@@ -1082,7 +1078,11 @@ class ChargingManagementModule extends BaseModule {
             // Stable mapping from wallbox to EVCS index (independent from safe key)
             const evcsIndex = (wb && wb.evcsIndex !== undefined && wb.evcsIndex !== null) ? Number(wb.evcsIndex) : NaN;
 
+            // Goal-Charging (Zielladen) is only supported in AUTO mode.
             if (goalEnabled) {
+                if (userMode !== 'auto') {
+                    goalStatus = 'auto_only';
+                } else
                 if (!Number.isFinite(evcsIndex) || evcsIndex <= 0) {
                     goalStatus = 'no_index';
                 } else {
@@ -2854,7 +2854,8 @@ if (components.length) {
                     goalShortfallNow = Math.max(0, Math.round(w.goalDesiredW - cmdW));
                     if (w.goalOverdue) {
                         goalStatusNow = 'overdue';
-                    } else if (goalShortfallNow > 50) {
+                    // Allow some measurement/rounding deviation (e.g. 200–300 W) before flagging "Unterversorgung".
+                    } else if (goalShortfallNow > 300) {
                         goalStatusNow = 'shortfall';
                     } else {
                         goalStatusNow = 'active';

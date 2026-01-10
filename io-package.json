@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.5.96",
+  "version": "0.5.97",
     "news": {
       "0.5.96": {
         "en": "EMS: EVCS enable/active datapoint is no longer auto-toggled based on target power/current (setpoint=0 now means 'waiting', not 'disabled'). Charging-Management: user mode 'Min+PV' always keeps the technical minimum charging power active (even when tariff policy would otherwise force PV-only); additional power beyond the minimum still uses PV surplus.",

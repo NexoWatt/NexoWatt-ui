@@ -3985,9 +3985,12 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
     }
 
     // EMS: Ziel-Laden (Depot-/Deadline-Laden)
-    if (goalRow != null) goalRow.style.display = hasEms ? '' : 'none';
+    // Zielladen is only available in AUTO mode.
+    const modeOnUi = (pendingMode !== null && now < pendingModeUntil) ? pendingMode : modeStrFromState;
+    const goalAllowed = !!hasEms && (modeOnUi === 'auto');
+    if (goalRow != null) goalRow.style.display = goalAllowed ? '' : 'none';
 
-    if (!hasEms){
+    if (!goalAllowed){
       if (goalCfgRow != null) goalCfgRow.style.display = 'none';
       if (goalCfgRow2 != null) goalCfgRow2.style.display = 'none';
       if (goalStatus != null) goalStatus.textContent = '—';

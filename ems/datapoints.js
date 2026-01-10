@@ -62,6 +62,9 @@ class DatapointRegistry {
             offset: (entry.offset !== undefined ? Number(entry.offset) : prev?.offset),
             invert: (entry.invert !== undefined ? !!entry.invert : prev?.invert),
             deadband: (entry.deadband !== undefined ? Number(entry.deadband) : prev?.deadband),
+            // If set (>0), a duplicate write (within deadband) is forced after this time.
+            // Useful for devices/adapters that expect periodic refresh (e.g. some EVCS/OCPP stacks).
+            maxWriteIntervalMs: (entry.maxWriteIntervalMs !== undefined ? Number(entry.maxWriteIntervalMs) : prev?.maxWriteIntervalMs),
             min: (entry.min !== undefined ? Number(entry.min) : prev?.min),
             max: (entry.max !== undefined ? Number(entry.max) : prev?.max),
             note: entry.note || prev?.note || '',
@@ -70,6 +73,7 @@ class DatapointRegistry {
         if (!Number.isFinite(normalized.scale)) normalized.scale = 1;
         if (!Number.isFinite(normalized.offset)) normalized.offset = 0;
         if (!Number.isFinite(normalized.deadband)) normalized.deadband = 0;
+        if (!Number.isFinite(normalized.maxWriteIntervalMs) || normalized.maxWriteIntervalMs < 0) normalized.maxWriteIntervalMs = 0;
 
         // min/max: keep undefined if invalid
         if (!Number.isFinite(normalized.min)) normalized.min = undefined;
@@ -258,8 +262,12 @@ class DatapointRegistry {
         // deadband in physical space against last written value
         const last = this.lastWriteByObjectId.get(e.objectId);
         if (last && Number.isFinite(last.val) && e.deadband > 0 && Math.abs(v - last.val) < e.deadband) {
-            // No write needed (idempotent)
-            return null;
+            // No write needed (idempotent) unless a periodic refresh is configured.
+            const maxAge = Number(e.maxWriteIntervalMs);
+            const ageOk = Number.isFinite(maxAge) && maxAge > 0 && Number.isFinite(last.ts) && (Date.now() - last.ts) >= maxAge;
+            if (!ageOk) {
+                return null;
+            }
         }
 
         try {
