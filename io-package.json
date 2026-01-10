@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.5.91",
+    "version": "0.5.92",
     "news": {
+      "0.5.92": {
+        "en": "UI: Fixed EVCS single-wallbox modal (goal charge toggle/inputs now write correctly). Config hot-reload now keeps EVCS count correct so single vs multi-wallbox UI switches reliably. EVCS tooltip/modal is now fully responsive on small screens. Includes PWA cache bump.",
+        "de": "UI: EVCS Einzelladepunkt-Dialog korrigiert (Ziel-Laden-Schalter & Zielwerte schreiben wieder korrekt). Config-Hot-Reload hält die EVCS-Anzahl jetzt korrekt, damit der Wechsel zwischen Single-Dialog und Multi-EVCS-Seite zuverlässig funktioniert. EVCS Tooltip/Popup ist jetzt responsiv auf kleinen Screens. Inkl. PWA-Cache-Bump."
+      },
       "0.5.91": {
         "en": "UI: History now shows optional Energiefluss consumers/producers when configured (with dynamic legend + energy cards). History 'Load' button is styled (white text). Live quick-control tiles hide more reliably when an app is uninstalled/disabled. Removed unused admin/nexowatt-logo.png. Includes PWA cache bump.",
         "de": "UI: Historie zeigt jetzt optionale Energiefluss-Verbraucher/Erzeuger, sobald sie konfiguriert sind (dynamische Legende + Energiekacheln). Historie-Button „Laden“ ist jetzt korrekt gestylt (weiße Schrift). Schnellsteuerungs-Kacheln in LIVE werden zuverlässiger ausgeblendet, wenn eine App nicht installiert/deaktiviert ist. Unbenutztes admin/nexowatt-logo.png entfernt. Inkl. PWA-Cache-Bump."

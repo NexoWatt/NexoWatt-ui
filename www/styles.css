@@ -441,7 +441,11 @@ body {
   .form input[type="checkbox"]{ transform: scale(1.3); align-self:flex-start; }
   .form input[type="range"]{ width:100%; }
   .form .row .btn, .form .row button{ width:100%; }
-  .dialog{ min-width: 0; width: 92vw; }
+  .dialog{ min-width: 0; width: 92vw; max-height: 92vh; overflow-y: auto; padding: 12px; }
+  .dialog .row{ grid-template-columns: 1fr; }
+  .dialog .row.two{ grid-template-columns: 1fr; }
+  .dialog .row.one{ grid-template-columns: 1fr; }
+  .dialog .nw-toggle{ width: 100%; margin-left: 0; }
 }
 
 .web .ring.grid{stroke:#e74c3c}
@@ -469,7 +473,10 @@ body {
   border:1px solid rgba(255,255,255,.08);
   border-radius:12px;
   min-width:420px;
+  width: min(720px, 92vw);
   max-width:92vw;
+  max-height:92vh;
+  overflow-y:auto;
   padding:16px;
 }
 .dialog-header{
@@ -502,6 +509,11 @@ body {
   font-size:28px;
   font-weight:700;
   color:#ff6bd6;
+}
+
+@media (max-width: 480px){
+  .evcs-gauge{ width: 150px; height: 150px; }
+  .evcs-gauge .gauge-value{ font-size: 24px; }
 }
 /* --- END FIX --- */
 

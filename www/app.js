@@ -903,16 +903,25 @@ const applyConfigSnapshot = (nextCfg) => {
   // Dynamic menu/tab visibility
   try {
     const emsCfg = (cfg && cfg.ems) ? cfg.ems : {};
-    const evcsCount = emsCfg.evcsCount || 0;
+
+    // EVCS count lives in settingsConfig in /config (not in cfg.ems).
+    // Keep __nwEvcsCount stable so the UI can reliably switch between
+    // single-wallbox modal and multi-wallbox page.
+    const evcsCountRaw = (cfg && cfg.settingsConfig && cfg.settingsConfig.evcsCount !== undefined && cfg.settingsConfig.evcsCount !== null)
+      ? Number(cfg.settingsConfig.evcsCount)
+      : Number(window.__nwEvcsCount);
+    const evcsCount = Math.max(0, Math.round(Number.isFinite(evcsCountRaw) ? evcsCountRaw : 0));
     window.__nwEvcsCount = evcsCount;
 
-    const hasEVCS = evcsCount > 0;
+    // EVCS page/tab is only relevant for multiple Ladepunkte.
+    const showEvcsPage = evcsCount >= 2;
     const menuEvcsLink = document.getElementById('menuEvcsLink');
     const tabEvcs = document.getElementById('tabEvcs');
-    if (menuEvcsLink) menuEvcsLink.classList.toggle('hidden', !hasEVCS);
-    if (tabEvcs) tabEvcs.classList.toggle('hidden', !hasEVCS);
+    if (menuEvcsLink) menuEvcsLink.classList.toggle('hidden', !showEvcsPage);
+    if (tabEvcs) tabEvcs.classList.toggle('hidden', !showEvcsPage);
 
-    window.__nwSmartHomeEnabled = !!emsCfg.smartHomeEnabled;
+    // SmartHome enabled flag is part of cfg.smartHome
+    window.__nwSmartHomeEnabled = !!(cfg && cfg.smartHome && cfg.smartHome.enabled);
     const menuSmartHomeLink = document.getElementById('menuSmartHomeLink');
     const tabSmartHome = document.getElementById('tabSmartHome');
     if (menuSmartHomeLink) menuSmartHomeLink.classList.toggle('hidden', !window.__nwSmartHomeEnabled);
@@ -3578,6 +3587,24 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
   const goalKwh = qs('evcsGoalKwh');
   const goalStatus = qs('evcsGoalStatus');
   const goalHint = qs('evcsGoalHint');
+
+  // Unified /api/set helper for the EVCS modal (single wallbox)
+  const apiSet = async (scope, key, value) => {
+    const r = await fetch('/api/set', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scope, key, value })
+    });
+    if (!r || !r.ok) {
+      let txt = '';
+      try { txt = await r.text(); } catch (_e) {}
+      const err = new Error('api_set_failed');
+      err.status = r ? r.status : 0;
+      err.body = txt;
+      throw err;
+    }
+    return true;
+  };
 
   // Keep native pickers stable: lock UI refresh briefly on interaction.
   // (Functions are declared further below; function declarations are hoisted.)
