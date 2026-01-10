@@ -493,7 +493,20 @@ class ChargingManagementModule extends BaseModule {
         if (!this._isEnabled()) return;
 
         const cfg = this.adapter.config.chargingManagement || {};
-        const mode = String(cfg.mode || 'off'); // off | pvSurplus | mixed (future)
+
+        // NOTE:
+        // "off" is not intended to be a user-facing operating mode. On/Off is handled
+        // via the App-Center toggle (adapter.config.enableChargingManagement).
+        // If we still get "off" here while at least one setpoint is mapped, fall back
+        // to "mixed" so Boost/Auto behave as expected.
+        let mode = String(cfg.mode || 'off'); // pvSurplus | mixed
+        try {
+            const hasAnySetpoint = !!(this.adapter && this.adapter.config && this.adapter.config._chargingHasAnySetpoint);
+            const cmEnabled = (this.adapter && this.adapter.config && this.adapter.config.enableChargingManagement !== false);
+            if (mode === 'off' && cmEnabled && hasAnySetpoint) {
+                mode = 'mixed';
+            }
+        } catch (_e) {}
         const wallboxes = Array.isArray(cfg.wallboxes) ? cfg.wallboxes : [];
 
         // Ziel‑Laden: "standard" = gleichmäßige Ø‑Leistung, "smart" = nutzt Tarif‑Freigaben (wenn vorhanden)

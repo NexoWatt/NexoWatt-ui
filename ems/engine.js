@@ -397,7 +397,12 @@ class EmsEngine {
     // Apply selected overrides from Admin-UI (keep safe defaults if empty)
     try {
       const modeOverride = (typeof userCm.mode === 'string') ? userCm.mode.trim() : '';
-      if (['off', 'pvSurplus', 'mixed'].includes(modeOverride)) chargingCfg.mode = modeOverride;
+      // IMPORTANT:
+      // "off" is not a configuration variant but a runtime enable/disable.
+      // The App-Center already provides the on/off switch (enableChargingManagement).
+      // Allowing "off" here caused real-world confusion where Boost/Auto did not react
+      // although the app was "Aktiv".
+      if (['pvSurplus', 'mixed'].includes(modeOverride)) chargingCfg.mode = modeOverride;
 
       if (typeof userCm.pvSurplusOnly === 'boolean') chargingCfg.pvSurplusOnly = userCm.pvSurplusOnly;
 

@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.5.94",
+    "version": "0.5.95",
     "news": {
+      "0.5.95": {
+        "en": "EMS: Fixed a regression where Charging-Management could end up in 'off' due to legacy/override config even though the app was enabled. This restores EVCS setpoint writes (e.g., Boost now correctly ramps to the configured station max power). Maintenance: added safe cleanup for orphaned dynamic objects (e.g., unmapped Historie consumers/producers, removed EVCS/wallbox/station channels).",
+        "de": "EMS: Regression behoben, bei der das Lademanagement trotz aktivierter App durch Legacy/Override-Config auf 'off' fallen konnte. Damit funktionieren EVCS-Sollwert-Schreibzugriffe wieder (z.B. Boost regelt jetzt korrekt auf die konfigurierte Stations-Maximalleistung). Wartung: sichere Bereinigung verwaister dynamischer Objekte (z.B. nicht mehr gemappte Historie-Verbraucher/Erzeuger sowie entfernte EVCS/WB/Stations-Channels)."
+      },
       "0.5.94": {
         "en": "EMS: Storage maxChargeW/maxDischargeW are now optional clamps (0 = unlimited; no more default 5 kW cap). EVCS Boost now overrides tariff grid-charge lock and ignores tariff budget cap (Boost = explicit charge-now; hard caps like grid/§14a still apply). §14a: if no activation signal is configured, default is now INACTIVE; expert fallback 'assume active without signal' added.",
         "de": "EMS: Speicher maxChargeW/maxDischargeW sind jetzt optionale Software-Clamps (0 = unbegrenzt; kein Default-5-kW-Limit mehr). EVCS-Boost überschreibt jetzt die Tarif-Netzladen-Sperre und ignoriert das Tarif-Budget (Boost = bewusst „jetzt laden“; harte Limits wie Netz/§14a bleiben aktiv). §14a: Wenn kein Aktiv-Signal konfiguriert ist, ist §14a jetzt standardmäßig INAKTIV; Experten-Fallback „ohne Signal als aktiv behandeln“ ergänzt."

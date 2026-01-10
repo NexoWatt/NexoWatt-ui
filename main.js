@@ -2679,6 +2679,105 @@ async migrateNativeConfig() {
 }
 
 
+  /**
+   * Remove stale/orphaned objects that were created dynamically in older configurations
+   * (e.g. Verbraucher/Erzeuger history channels that are no longer mapped).
+   *
+   * Important safety rules:
+   * - We ONLY delete objects inside this adapter namespace.
+   * - We only delete well-known dynamic branches where the desired existence is
+   *   unambiguously derived from the current config.
+   */
+  async cleanupOrphanedObjects() {
+    try {
+      // Keep in sync with ems/modules/charging-management.js (toSafeIdPart)
+      const toSafeIdPart = (input) => {
+        const s = String(input || '').trim();
+        if (!s) return '';
+        return s.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64);
+      };
+
+      const dps = (this.config && this.config.datapoints) || {};
+
+      const delRec = async (id) => {
+        try {
+          // recursive removes child states/channels
+          await this.delObjectAsync(id, { recursive: true });
+        } catch (_e) {
+          // ignore
+        }
+      };
+
+      // 1) Historie optional series (Energiefluss: Verbraucher/Erzeuger)
+      const MAX_CONSUMERS = 10;
+      const MAX_PRODUCERS = 5;
+
+      for (let i = 1; i <= MAX_CONSUMERS; i++) {
+        const dpKey = `consumer${i}Power`;
+        const mapped = String(dps[dpKey] || '').trim();
+        if (!mapped) {
+          await delRec(`historie.consumers.c${i}`);
+        }
+      }
+
+      for (let i = 1; i <= MAX_PRODUCERS; i++) {
+        const dpKey = `producer${i}Power`;
+        const mapped = String(dps[dpKey] || '').trim();
+        if (!mapped) {
+          await delRec(`historie.producers.p${i}`);
+        }
+      }
+
+      // 2) EVCS + Charging-Management dynamic channels beyond configured count
+      // (Typical source of "leftover" objects after reducing the number of Ladepunkte)
+      const evcsCount = Number(this.evcsCount || 0);
+      if (Number.isFinite(evcsCount) && evcsCount >= 0) {
+        // Be conservative: only clean a reasonable upper range.
+        const MAX_EVCSSLOTS = 10;
+        for (let i = evcsCount + 1; i <= MAX_EVCSSLOTS; i++) {
+          await delRec(`evcs.${i}`);
+          await delRec(`chargingManagement.wallboxes.lp${i}`);
+        }
+      }
+
+      // 3) Charging-Management station groups: remove channels that are not part of the current config
+      try {
+        const cm = (this.config && this.config.chargingManagement) || {};
+        const wallboxes = Array.isArray(cm.wallboxes) ? cm.wallboxes : [];
+        const keep = new Set();
+        for (const wb of wallboxes) {
+          if (!wb) continue;
+          const k = String(wb.stationKey || '').trim();
+          const safe = toSafeIdPart(k);
+          if (safe) keep.add(safe);
+        }
+        // Always cleanup child station channels. If no station keys are configured anymore,
+        // this removes ALL previously created station group channels.
+        const view = await this.getObjectViewAsync('system', 'channel', {
+          startkey: `${this.namespace}.chargingManagement.stations.`,
+          endkey: `${this.namespace}.chargingManagement.stations.\u9999`
+        }).catch(() => null);
+
+        const rows = (view && view.rows) ? view.rows : [];
+        for (const r of rows) {
+          const fullId = r && r.id ? String(r.id) : '';
+          if (!fullId.startsWith(`${this.namespace}.chargingManagement.stations.`)) continue;
+          const short = fullId.slice(this.namespace.length + 1); // remove '<namespace>.'
+          const parts = short.split('.');
+          const stationKey = parts.length >= 3 ? parts[2] : '';
+          if (!stationKey) continue;
+          if (keep.size === 0 || !keep.has(stationKey)) {
+            await delRec(short);
+          }
+        }
+      } catch (_eStations) {}
+
+    } catch (e) {
+      this.log.debug('cleanupOrphanedObjects failed: ' + (e && e.message ? e.message : e));
+    }
+  }
+
+
 async onReady() {
     try {
       await this.migrateNativeConfig();
@@ -2761,6 +2860,10 @@ async onReady() {
       // Prime + subscribe EMS runtime states for the UI (EVCS page mode buttons, boost status, etc.).
       // Without this, the UI might fall back to legacy or show default values after reload.
       try { await this.subscribeEmsUiStates(); } catch (e) { this.log.debug('EMS UI state subscribe failed: ' + (e && e.message ? e.message : e)); }
+
+      // Cleanup: remove stale/orphaned dynamic objects no longer configured.
+      // This keeps the Objects tree tidy when mappings/counts are reduced.
+      try { await this.cleanupOrphanedObjects(); } catch (_e) {}
 
       // Energy totals: if no kWh counters are mapped, derive totals from history/influxdb
       try { await this.updateEnergyTotalsFromInflux('startup'); } catch (_e) {}
