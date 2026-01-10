@@ -42,6 +42,12 @@ async function applyEvcsSetpoint(ctx, consumer, target) {
     const targetA = Number(target && target.targetA);
     const targetW = Number(target && target.targetW);
 
+    // Optional override: when provided, we explicitly write the enable datapoint.
+    // If not provided, we treat enable as user/installer-controlled and do NOT toggle it
+    // automatically based on the power/current setpoint. This is important for PV/PV+min modes
+    // where setpoint=0 should mean "waiting" (not "disabled").
+    const enableOverride = (target && typeof target.enable === 'boolean') ? target.enable : null;
+
     // Validate datapoints early to provide clear status
     const hasSetA = !!(setAKey && dp && dp.getEntry && dp.getEntry(setAKey));
     const hasSetW = !!(setWKey && dp && dp.getEntry && dp.getEntry(setWKey));
@@ -82,13 +88,17 @@ async function applyEvcsSetpoint(ctx, consumer, target) {
         else if (hasSetA) wroteA = await dp.writeNumber(setAKey, (targetA > 0 ? targetA : 0), false);
     }
 
-    // Enable/disable in tandem with target
+    // Enable handling:
+    // - Only write enableKey when an explicit override is provided.
+    // - Otherwise, keep enable untouched (user/installer decides), and use setpoint=0 as "pause".
     if (enableKey) {
         if (!hasEnable) {
             wroteEnable = false;
+        } else if (enableOverride !== null) {
+            wroteEnable = await dp.writeBoolean(enableKey, enableOverride, false);
         } else {
-            const enable = (targetW > 0) || (targetA > 0);
-            wroteEnable = await dp.writeBoolean(enableKey, enable, false);
+            // do not write
+            wroteEnable = null;
         }
     }
 

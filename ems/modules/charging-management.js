@@ -1420,8 +1420,11 @@ class ChargingManagementModule extends BaseModule {
             } else if (override === 'pv') {
                 eff = 'pv';
             } else if (override === 'minpv') {
-                // Tariff gating is treated as strict: when grid charging is blocked, minpv behaves like pv.
-                eff = forcePvForW ? 'pv' : 'minpv';
+                // "Min+PV" is an explicit user mode:
+                // - always keep the minimum charging power active (even if PV=0)
+                // - additional power beyond the technical minimum is still limited by PV surplus
+                // Therefore we do NOT force it to pure PV mode, even when tariff policy blocks grid-charging.
+                eff = 'minpv';
             } else {
                 // auto: follow global defaults
                 eff = (forcePvForW || pvSurplusOnlyCfg) ? 'pv' : 'normal';
@@ -2941,7 +2944,11 @@ if (components.length) {
                         setWKey: w.setWKey || '',
                         enableKey: w.enableKey || '',
                     };
-                    const res = await applySetpoint({ adapter: this.adapter, dp: this.dp }, consumer, { targetW: 0, targetA: 0, basis: w.controlBasis });
+                    const res = await applySetpoint(
+                        { adapter: this.adapter, dp: this.dp },
+                        consumer,
+                        { targetW: 0, targetA: 0, basis: w.controlBasis, enable: false },
+                    );
                     applied = !!res?.applied;
                     applyStatus = String(res?.status || (applied ? 'applied' : 'write_failed'));
                     applyWrites = res?.writes || null;
