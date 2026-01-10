@@ -621,8 +621,12 @@ if (typeof soc === 'number') {
         await this._setIfChanged('speicher.regelung.selfEntladenAktiviert', !!selfDischargeEnabled);
 
         // Grenzen / Glättung
-        const maxChargeW = Math.max(0, num(cfg.maxChargeW, 5000));     // Laden: negativ
-        const maxDischargeW = Math.max(0, num(cfg.maxDischargeW, 5000)); // Entladen: positiv
+        // maxChargeW/maxDischargeW sind *optionale* Software-Clamps.
+        // 0 => unbegrenzt (kein Clamp). Viele Speicher regeln/limitieren intern ohnehin.
+        const maxChargeLimitW_cfg = Math.max(0, num(cfg.maxChargeW, 0));        // Laden: negativ (Betrag)
+        const maxDischargeLimitW_cfg = Math.max(0, num(cfg.maxDischargeW, 0));  // Entladen: positiv
+        const maxChargeW = (maxChargeLimitW_cfg > 0) ? maxChargeLimitW_cfg : Number.POSITIVE_INFINITY;
+        const maxDischargeW = (maxDischargeLimitW_cfg > 0) ? maxDischargeLimitW_cfg : Number.POSITIVE_INFINITY;
         const stepW = Math.max(0, num(cfg.stepW, 50));
         const maxDelta = Math.max(0, num(cfg.maxDeltaWPerTick, 500));
         const pvMaxDeltaCfg = Math.max(0, num(cfg.pvMaxDeltaWPerTick, 1500)); // 0 => nutzt globale Rampe
@@ -1375,8 +1379,9 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await this._applyTargetW(targetW, reason, source);
 
         // Diagnose: Grenzen
-        await this._setIfChanged('speicher.regelung.maxChargeW', Math.round(maxChargeW));
-        await this._setIfChanged('speicher.regelung.maxDischargeW', Math.round(maxDischargeW));
+        // (0 = unbegrenzt)
+        await this._setIfChanged('speicher.regelung.maxChargeW', (maxChargeLimitW_cfg > 0) ? Math.round(maxChargeLimitW_cfg) : 0);
+        await this._setIfChanged('speicher.regelung.maxDischargeW', (maxDischargeLimitW_cfg > 0) ? Math.round(maxDischargeLimitW_cfg) : 0);
         await this._setIfChanged('speicher.regelung.stepW', Math.round(stepW));
         await this._setIfChanged('speicher.regelung.maxDeltaWPerTick', Math.round(maxDelta));
         await this._setIfChanged('speicher.regelung.pvSchwelleW', Math.round(Math.max(0, num(cfg.pvExportThresholdW, 200))));

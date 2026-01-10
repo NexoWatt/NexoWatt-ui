@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.5.93",
+    "version": "0.5.94",
     "news": {
+      "0.5.94": {
+        "en": "EMS: Storage maxChargeW/maxDischargeW are now optional clamps (0 = unlimited; no more default 5 kW cap). EVCS Boost now overrides tariff grid-charge lock and ignores tariff budget cap (Boost = explicit charge-now; hard caps like grid/§14a still apply). §14a: if no activation signal is configured, default is now INACTIVE; expert fallback 'assume active without signal' added.",
+        "de": "EMS: Speicher maxChargeW/maxDischargeW sind jetzt optionale Software-Clamps (0 = unbegrenzt; kein Default-5-kW-Limit mehr). EVCS-Boost überschreibt jetzt die Tarif-Netzladen-Sperre und ignoriert das Tarif-Budget (Boost = bewusst „jetzt laden“; harte Limits wie Netz/§14a bleiben aktiv). §14a: Wenn kein Aktiv-Signal konfiguriert ist, ist §14a jetzt standardmäßig INAKTIV; Experten-Fallback „ohne Signal als aktiv behandeln“ ergänzt."
+      },
       "0.5.93": {
         "en": "EMS: Fixed tariff storage discharge power handling. The VIS \"storage power\" setting now limits tariff charging only; tariff discharge regulates at the grid connection point (NVP) and is no longer capped by that user value (only technical maxDischargeW applies).",
         "de": "EMS: Tarif-Speicherentladung korrigiert. Die in der VIS gesetzte „Speicher-Leistung“ begrenzt jetzt nur noch das Tarif-Laden (Netzladen im günstigen Fenster). Die Tarif-Entladung regelt am Netzverknüpfungspunkt (NVP) und wird nicht mehr durch diesen Nutzerwert gedeckelt (nur maxDischargeW wirkt)."

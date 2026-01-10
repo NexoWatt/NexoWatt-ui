@@ -255,8 +255,11 @@ class Para14aModule extends BaseModule {
             return { active: !!raw, source: 'dp' };
         }
 
-        // No activation DP configured -> treat "para14a" as always-on (simplest rollout)
-        return { active: true, source: 'config' };
+        // No activation DP configured.
+        // Default: assume inactive (no limitation) because we cannot know if the Netzbetreiber
+        // is currently limiting. Optional fallback can force always-on behaviour.
+        const assumeActive = !!cfg.para14aAssumeActiveWithoutSignal;
+        return { active: assumeActive, source: assumeActive ? 'config' : 'no_signal' };
     }
 
     _computeDistribution({ mode, minPerDeviceW, evcsCount, hasWP, hasKlima, pSumWP, pSumKlima, externalTotalSetpointW }) {

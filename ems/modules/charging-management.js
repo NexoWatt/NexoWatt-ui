@@ -1359,7 +1359,7 @@ class ChargingManagementModule extends BaseModule {
             let boostRemainingMin = 0;
             let boostTimedOut = false;
 
-            if (override === 'boost' && !forcePvForW) {
+            if (override === 'boost') {
                 const timeoutMs = (effBoostTimeoutMin > 0) ? Math.round(effBoostTimeoutMin * 60 * 1000) : 0;
 
                 if ((!boostSince || !Number.isFinite(boostSince)) && w.charging) {
@@ -1401,8 +1401,9 @@ class ChargingManagementModule extends BaseModule {
             let eff = 'normal';
 
             if (override === 'boost') {
-                // Tariff gating is treated as strict: if grid charging is blocked, boost falls back to PV-only.
-                eff = forcePvForW ? 'pv' : 'boost';
+                // "Boost" is an explicit user command: always behave as grid-allowed fast charging.
+                // (Hard limits like §14a / Grid caps / Phase caps still apply later in the pipeline.)
+                eff = 'boost';
             } else if (override === 'pv') {
                 eff = 'pv';
             } else if (override === 'minpv') {
@@ -1563,7 +1564,10 @@ class ChargingManagementModule extends BaseModule {
             })();
 
             const tariff = (typeof coreTariffW === 'number') ? coreTariffW : getFirstDpNumber(['cm.tariffBudgetW', 'cm.tariffLimitW']);
-            if (typeof tariff === 'number' && Number.isFinite(tariff) && tariff > 0) components.push({ k: 'tariff', w: tariff });
+            // Boost: user explicitly requests full charging -> ignore tariff budget cap.
+            if (!anyBoostActive && typeof tariff === 'number' && Number.isFinite(tariff) && tariff > 0) {
+                components.push({ k: 'tariff', w: tariff });
+            }
 
             // PV-surplus cap (legacy / compatibility): only used to cap the *total* budget when required.
             if (capTotalBudgetByPv && typeof pvCapW === 'number' && Number.isFinite(pvCapW)) {
