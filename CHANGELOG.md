@@ -1,3 +1,7 @@
+## 0.5.93 (EMS)
+- EMS: Tarif-Speicherentladung korrigiert: Die in der VIS eingestellte Speicher-Leistung begrenzt nur noch das Tarif-Laden (Netzladen im günstigen Fenster). Die Entladung regelt am Netzverknüpfungspunkt (NVP) und wird nicht mehr durch diesen Nutzerwert gedeckelt (nur maxDischargeW wirkt).
+- UI: Tarif-Statusmeldungen vereinfacht ("bis NVP≈0" entfernt).
+
 ## 0.5.90 (UI)
 - LIVE: Schnellsteuerungs-Kacheln (Schwellwerte/Relais/BHKW/Generator) werden automatisch ausgeblendet, wenn die entsprechende App im App‑Center deaktiviert ist (nicht installiert oder „Aktiv: Aus“).
 - LIVE: Relais-Kachel – Zähler/Status-Anzeige korrigiert.

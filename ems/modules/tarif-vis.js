@@ -602,7 +602,7 @@ class TarifVisModule extends BaseModule {
             if (aktivEff && storagePowerAbsW > 0) {
                 // gewünschtes Verhalten:
                 // - günstig  : (optional) Speicher laden
-                // - neutral/teuer/unbekannt: Speicher entladen (bis NVP≈0)
+                // - neutral/teuer/unbekannt: Speicher entladen (NVP-Regelung)
                 if (tarifState === 'guenstig' && allowStorageCheap) {
                     speicherSollW = -storagePowerAbsW;
                 } else if (tarifState === 'neutral' || tarifState === 'teuer' || tarifState === 'unbekannt') {
@@ -707,19 +707,19 @@ if (aktivEff) {
     }
   } else if (tarifState === 'teuer') {
     if (prioritaet === 1) {
-      statusText = storageDischarging ? `${base}: Speicher entlädt (bis NVP≈0)` : `${base}: keine Speicher-Entladung`;
+      statusText = storageDischarging ? `${base}: Speicher entlädt` : `${base}: keine Speicher-Entladung`;
     } else if (prioritaet === 3) {
       statusText = `${base}: EVCS Netzladen gesperrt (PV möglich)`;
     } else {
       const parts = [];
-      if (storageDischarging) parts.push('Speicher entlädt (bis NVP≈0)');
+      if (storageDischarging) parts.push('Speicher entlädt');
       parts.push('EVCS Netzladen gesperrt (PV möglich)');
       statusText = `${base}: ${parts.join(' + ')}`;
     }
   } else {
     // neutral / unbekannt / sonstiges
     statusText = storageDischarging
-      ? `${base}: Speicher entlädt (bis NVP≈0)`
+      ? `${base}: Speicher entlädt`
       : `${base}: normal`;
   }
 }

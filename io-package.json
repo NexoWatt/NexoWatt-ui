@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.5.92",
+    "version": "0.5.93",
     "news": {
+      "0.5.93": {
+        "en": "EMS: Fixed tariff storage discharge power handling. The VIS \"storage power\" setting now limits tariff charging only; tariff discharge regulates at the grid connection point (NVP) and is no longer capped by that user value (only technical maxDischargeW applies).",
+        "de": "EMS: Tarif-Speicherentladung korrigiert. Die in der VIS gesetzte „Speicher-Leistung“ begrenzt jetzt nur noch das Tarif-Laden (Netzladen im günstigen Fenster). Die Tarif-Entladung regelt am Netzverknüpfungspunkt (NVP) und wird nicht mehr durch diesen Nutzerwert gedeckelt (nur maxDischargeW wirkt)."
+      },
       "0.5.92": {
         "en": "UI: Fixed EVCS single-wallbox modal (goal charge toggle/inputs now write correctly). Config hot-reload now keeps EVCS count correct so single vs multi-wallbox UI switches reliably. EVCS tooltip/modal is now fully responsive on small screens. Includes PWA cache bump.",
         "de": "UI: EVCS Einzelladepunkt-Dialog korrigiert (Ziel-Laden-Schalter & Zielwerte schreiben wieder korrekt). Config-Hot-Reload hält die EVCS-Anzahl jetzt korrekt, damit der Wechsel zwischen Single-Dialog und Multi-EVCS-Seite zuverlässig funktioniert. EVCS Tooltip/Popup ist jetzt responsiv auf kleinen Screens. Inkl. PWA-Cache-Bump."

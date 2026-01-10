@@ -849,8 +849,14 @@ if (typeof soc === 'number') {
 							nextSetW = Math.min(nextSetW, maxByDemandW);
 						}
 
-						// Tarif-Wunsch (want) wirkt als Maximalwert (Leistungsdeckel)
-						const maxEffW = Math.min(maxDischargeW, Math.max(0, want));
+						// WICHTIG (Tarif-Logik / Bugfix):
+						// Die vom Endkunden in der VIS eingetragene "Speicher-Leistung" (tv.speicherSollW)
+						// soll im Tarif-Fenster ausschliesslich die Beladeleistung (Netzladen im guenstigen Fenster)
+						// begrenzen. Fuer die Entladung wird am Netzverknuepfungspunkt (NVP) geregelt,
+						// damit der Netzbezug gegen ~0 (bzw. targetImportW) faehrt.
+						//
+						// Technische Limits bleiben natuerlich aktiv (maxDischargeW + Demand-Clamp oben).
+						const maxEffW = maxDischargeW;
 						nextSetW = clamp(nextSetW, 0, maxEffW);
 
 						targetW = nextSetW;
