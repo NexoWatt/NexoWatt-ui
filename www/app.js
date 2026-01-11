@@ -370,7 +370,9 @@ function initEnergyWebExtras(flowSlots){
         g.style.cursor = 'pointer';
         g.addEventListener('click', (ev) => {
           ev.stopPropagation();
-          openFlowQc(kind, idx);
+          const openKind = (kind === 'producers' || kind === 'producer') ? 'producer' : 'consumer';
+      const openIdx = (item && item.idx != null) ? Number(item.idx) : (idx + 1);
+      openFlowQc(openKind, openIdx);
         });
       }
     } catch(_e) {}
@@ -4689,7 +4691,7 @@ const setBoost = async (enable) => {
   };
 
   const open = (kind, idx) => {
-    const k = (kind === 'producer') ? 'producer' : 'consumer';
+    const k = (kind === 'producer' || kind === 'producers') ? 'producer' : 'consumer';
     const meta = getSlotMeta(k, idx);
     if (!meta) return;
     const qc = (meta && meta.qc) ? meta.qc : null;
