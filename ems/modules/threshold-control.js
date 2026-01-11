@@ -211,7 +211,28 @@ class ThresholdControlModule extends BaseModule {
             await mk(`threshold.user.r${i}.enabled`, 'Regel aktiv (User)', 'boolean', 'switch.enable', undefined, true, true);
             await mk(`threshold.user.r${i}.threshold`, 'Schwellwert (User)', 'number', 'level', undefined, true, 0);
 
+            await this.adapter.setObjectNotExistsAsync(`threshold.user.r${i}.mode`, {
+                type: 'state',
+                common: {
+                    name: 'Modus (User)',
+                    type: 'number',
+                    role: 'value',
+                    read: true,
+                    write: true,
+                    min: 0,
+                    max: 2,
+                    states: { 0: 'Aus', 1: 'Auto', 2: 'An' },
+                },
+                native: {},
+            });
+
+
             await ensureDefault(`threshold.user.r${i}.enabled`, true);
+
+            const enState = await this.adapter.getStateAsync(`threshold.user.r${i}.enabled`);
+            const enVal = (enState && enState.val !== null && enState.val !== undefined) ? !!enState.val : true;
+            await ensureDefault(`threshold.user.r${i}.mode`, enVal ? 1 : 0);
+
 
             const rr = this._getRule(i);
             if (rr && rr.threshold !== null && rr.threshold !== undefined) {
@@ -246,6 +267,7 @@ class ThresholdControlModule extends BaseModule {
                 for (let i = 1; i <= 10; i++) {
                     await this.dp.upsert({ key: `thr.user.r${i}.enabled`, objectId: `${ns}.threshold.user.r${i}.enabled`, dataType: 'boolean', direction: 'in' });
                     await this.dp.upsert({ key: `thr.user.r${i}.threshold`, objectId: `${ns}.threshold.user.r${i}.threshold`, dataType: 'number', direction: 'in' });
+                    await this.dp.upsert({ key: `thr.user.r${i}.mode`, objectId: `${ns}.threshold.user.r${i}.mode`, dataType: 'number', direction: 'in' });
                 }
             }
         } catch (_e) {
@@ -298,7 +320,16 @@ class ThresholdControlModule extends BaseModule {
             }
 
             // User overrides (optional)
-            const userEnabled = (this.dp && r.userCanToggle) ? this.dp.getBoolean(`thr.user.r${idx}.enabled`, true) : true;
+            let userEnabled = (this.dp && r.userCanToggle) ? this.dp.getBoolean(`thr.user.r${idx}.enabled`, true) : true;
+            // User-Modus (0=Aus, 1=Auto, 2=An). Falls nicht vorhanden: Fallback auf enabled.
+            let userMode = 1;
+            if (this.dp && r.userCanToggle) {
+                const mv = this.dp.getNumber(`thr.user.r${idx}.mode`, NaN);
+                if (Number.isFinite(mv)) userMode = Math.max(0, Math.min(2, Math.round(mv)));
+                else userMode = userEnabled ? 1 : 0;
+            }
+            const isManual = (userMode === 0 || userMode === 2);
+
 
             let thrEff = Number(r.threshold);
             if (this.dp && r.userCanSetThreshold) {
@@ -307,7 +338,7 @@ class ThresholdControlModule extends BaseModule {
             }
             await this._setStateIfChanged(`threshold.rules.r${idx}.thresholdEff`, thrEff);
 
-            const effEnabled = !!(r.enabled && userEnabled);
+            const effEnabled = !!(r.enabled && (isManual ? true : userEnabled));
             await this._setStateIfChanged(`threshold.rules.r${idx}.effectiveEnabled`, effEnabled);
 
             if (!effEnabled) {
@@ -325,55 +356,63 @@ class ThresholdControlModule extends BaseModule {
             await this._setStateIfChanged(`threshold.rules.r${idx}.input`, input);
 
             if (typeof input !== 'number') {
-                await this._setStateIfChanged(`threshold.rules.r${idx}.status`, 'stale');
-                continue;
+                if (!isManual) {
+                    await this._setStateIfChanged(`threshold.rules.r${idx}.status`, 'stale');
+                    continue;
+                }
+                // Manuell: keine Eingangsprüfung erforderlich
             }
-
-            // Hysteresis thresholds
-            const hyst = Math.max(0, Number(r.hysteresis || 0));
-            let onThr = thrEff;
-            let offThr = thrEff;
-
-            if (r.compare === 'above') offThr = thrEff - hyst;
-            else offThr = thrEff + hyst;
 
             // State memory
             const mem = this._hyst.get(id) || { active: false, lastOnMs: 0, lastOffMs: 0, lastChangeMs: 0 };
             let want = mem.active;
-
-            if (!mem.active) {
-                // OFF -> ON
-                if (r.compare === 'above') {
-                    if (input >= onThr) want = true;
-                } else {
-                    if (input <= onThr) want = true;
-                }
-            } else {
-                // ON -> OFF
-                if (r.compare === 'above') {
-                    if (input <= offThr) want = false;
-                } else {
-                    if (input >= offThr) want = false;
-                }
-            }
-
-            // minOn/minOff constraints (anti-flatter)
-            const minOnMs = Math.max(0, Math.round(Number(r.minOnSec || 0) * 1000));
-            const minOffMs = Math.max(0, Math.round(Number(r.minOffSec || 0) * 1000));
-
             let status = mem.active ? 'active' : 'inactive';
 
-            if (!mem.active && want) {
-                // pending ON?
-                if (minOffMs > 0 && mem.lastOffMs > 0 && (now - mem.lastOffMs) < minOffMs) {
-                    want = false;
-                    status = 'pending_on';
+            if (isManual) {
+                // Manuelle Übersteuerung: sofortiges An/Aus
+                want = (userMode === 2);
+                status = want ? 'manual_on' : 'manual_off';
+            } else {
+                // Hysteresis thresholds
+                const hyst = Math.max(0, Number(r.hysteresis || 0));
+                let onThr = thrEff;
+                let offThr = thrEff;
+
+                if (r.compare === 'above') offThr = thrEff - hyst;
+                else offThr = thrEff + hyst;
+
+                if (!mem.active) {
+                    // OFF -> ON
+                    if (r.compare === 'above') {
+                        if (input >= onThr) want = true;
+                    } else {
+                        if (input <= onThr) want = true;
+                    }
+                } else {
+                    // ON -> OFF
+                    if (r.compare === 'above') {
+                        if (input <= offThr) want = false;
+                    } else {
+                        if (input >= offThr) want = false;
+                    }
                 }
-            } else if (mem.active && !want) {
-                // pending OFF?
-                if (minOnMs > 0 && mem.lastOnMs > 0 && (now - mem.lastOnMs) < minOnMs) {
-                    want = true;
-                    status = 'pending_off';
+
+                // minOn/minOff constraints (anti-flatter)
+                const minOnMs = Math.max(0, Math.round(Number(r.minOnSec || 0) * 1000));
+                const minOffMs = Math.max(0, Math.round(Number(r.minOffSec || 0) * 1000));
+
+                if (!mem.active && want) {
+                    // pending ON?
+                    if (minOffMs > 0 && mem.lastOffMs > 0 && (now - mem.lastOffMs) < minOffMs) {
+                        want = false;
+                        status = 'pending_on';
+                    }
+                } else if (mem.active && !want) {
+                    // pending OFF?
+                    if (minOnMs > 0 && mem.lastOnMs > 0 && (now - mem.lastOnMs) < minOnMs) {
+                        want = true;
+                        status = 'pending_off';
+                    }
                 }
             }
 

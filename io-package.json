@@ -1,8 +1,20 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.5.99",
+    "version": "0.6.0",
     "news": {
+      "0.6.0": {
+        "en": [
+          "Live/Quick tiles now follow App-Center 'installed' flag (not 'enabled').",
+          "Threshold control end-customer UI: rule on/off uses VIS buttons (no checkbox).",
+          "Threshold /api/set: added support for rX.mode with synced rX.enabled for compatibility."
+        ],
+        "de": [
+          "Live-/Schnellsteuerungs-Kacheln folgen jetzt dem App-Center-Flag 'Installiert' (nicht 'Aktiv').",
+          "Schwellwertsteuerung (Endkunde): Regel ein/aus jetzt mit VIS-Buttons (kein Haken).",
+          "Schwellwert /api/set: Unterstützung für rX.mode (mit Sync zu rX.enabled zur Kompatibilität)."
+        ]
+      },
       "0.5.99": {
         "en": "Live/Schnellsteuerung: app tiles (BHKW/Generator/Thresholds/Relays) are now shown when the app is enabled even if nothing is configured yet (counts stay at 0). EVCS tile status now falls back to evcs.1.status for single-wallbox setups.",
         "de": "Live/Schnellsteuerung: App-Kacheln (BHKW/Generator/Schwellwerte/Relais) werden nun angezeigt, sobald die App aktiviert ist – auch wenn noch nichts konfiguriert ist (Zähler bleiben bei 0). EVCS-Kachel zeigt den Status jetzt im Single-Wallbox-Setup per Fallback auf evcs.1.status."

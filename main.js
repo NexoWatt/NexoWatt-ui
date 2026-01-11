@@ -6495,16 +6495,19 @@ settingsConfig: {
         }
 
 
-        // Schwellwertsteuerung – optionale Endkunden-Overrides (Enable/Schwellwert)
+        // Schwellwertsteuerung – optionale Endkunden-Overrides (Enable/Modus/Schwellwert)
         // Keys:
         // - r1.enabled
+        // - r1.mode
         // - r1.threshold
         if (scope === 'threshold') {
           const cfg = this.config || {};
-          if (!cfg.enableThresholdControl) return res.status(409).json({ ok: false, error: 'not_ready' });
+          const thrApp = (cfg.emsApps && cfg.emsApps.apps) ? cfg.emsApps.apps.threshold : null;
+          const thrInstalled = !!(thrApp ? thrApp.installed : cfg.enableThresholdControl);
+          if (!thrInstalled) return res.status(409).json({ ok: false, error: 'not_ready' });
 
           const k = String(key || '').trim();
-          const m = k.match(/^r(\d+)\.(enabled|threshold)$/i);
+          const m = k.match(/^r(\d+)\.(enabled|threshold|mode)$/i);
           if (!m) return res.status(400).json({ ok: false, error: 'bad request' });
 
           const idx = Math.max(1, Math.min(10, Math.round(Number(m[1] || 0)) || 0));
@@ -6523,7 +6526,7 @@ settingsConfig: {
           const userCanToggle = (rule && typeof rule.userCanToggle === 'boolean') ? !!rule.userCanToggle : true;
           const userCanSetThreshold = (rule && typeof rule.userCanSetThreshold === 'boolean') ? !!rule.userCanSetThreshold : true;
 
-          if (prop === 'enabled' && !userCanToggle) return res.status(403).json({ ok: false, error: 'forbidden' });
+          if ((prop === 'enabled' || prop === 'mode') && !userCanToggle) return res.status(403).json({ ok: false, error: 'forbidden' });
           if (prop === 'threshold' && !userCanSetThreshold) return res.status(403).json({ ok: false, error: 'forbidden' });
 
           // Best effort: ensure objects exist (robust against partial upgrades)
@@ -6532,12 +6535,39 @@ settingsConfig: {
             await this.setObjectNotExistsAsync(`threshold.user.r${idx}`, { type: 'channel', common: { name: `Regel ${idx}` }, native: {} });
             await this.setObjectNotExistsAsync(`threshold.user.r${idx}.enabled`, { type: 'state', common: { name: 'Regel aktiv (User)', type: 'boolean', role: 'switch.enable', read: true, write: true, def: true }, native: {} });
             await this.setObjectNotExistsAsync(`threshold.user.r${idx}.threshold`, { type: 'state', common: { name: 'Schwellwert (User)', type: 'number', role: 'level', read: true, write: true, def: 0 }, native: {} });
+            await this.setObjectNotExistsAsync(`threshold.user.r${idx}.mode`, { type: 'state', common: { name: 'Modus (User)', type: 'number', role: 'value', read: true, write: true, def: 1, min: 0, max: 2, states: { 0: 'Aus', 1: 'Auto', 2: 'An' } }, native: {} });
           } catch (_e) {}
+
+
+          if (prop === 'mode') {
+            const mv = Number(value);
+            if (!Number.isFinite(mv)) return res.status(400).json({ ok: false, error: 'bad request' });
+            const mode = Math.max(0, Math.min(2, Math.round(mv)));
+
+            await this.setStateAsync(`threshold.user.r${idx}.mode`, { val: mode, ack: false });
+            try { this.updateValue(`threshold.user.r${idx}.mode`, mode, Date.now()); } catch(_e) {}
+
+            const en = (mode !== 0);
+            await this.setStateAsync(`threshold.user.r${idx}.enabled`, { val: en, ack: false });
+            try { this.updateValue(`threshold.user.r${idx}.enabled`, en, Date.now()); } catch(_e) {}
+
+            return res.json({ ok: true });
+          }
 
           if (prop === 'enabled') {
             const b = !!value;
             await this.setStateAsync(`threshold.user.r${idx}.enabled`, { val: b, ack: false });
             try { this.updateValue(`threshold.user.r${idx}.enabled`, b, Date.now()); } catch(_e) {}
+
+            // Sync mode (Kompatibilität): enabled=false -> Aus (0), enabled=true -> Auto (1) (manual_on bleibt erhalten)
+            try {
+              const stMode = await this.getStateAsync(`threshold.user.r${idx}.mode`);
+              const curMode = (stMode && stMode.val !== null && stMode.val !== undefined) ? Number(stMode.val) : NaN;
+              const newMode = b ? ((Number.isFinite(curMode) && Math.round(curMode) === 2) ? 2 : 1) : 0;
+              await this.setStateAsync(`threshold.user.r${idx}.mode`, { val: newMode, ack: false });
+              try { this.updateValue(`threshold.user.r${idx}.mode`, newMode, Date.now()); } catch(_e) {}
+            } catch(_e) {}
+
             return res.json({ ok: true });
           }
 

@@ -2316,8 +2316,10 @@ function initThresholdModal() {
         throw new Error((j && j.error) ? j.error : ('HTTP ' + resp.status));
       }
       setHint('Gespeichert.', false);
+      return true;
     } catch (e) {
       setHint('Schreiben fehlgeschlagen: ' + (e && e.message ? e.message : 'unbekannt'), true);
+      return false;
     }
   };
 
@@ -2366,7 +2368,29 @@ function initThresholdModal() {
       badge.style.opacity = '0.9';
       const active = !!v(`threshold.rules.r${idx}.active`);
       const status = String(v(`threshold.rules.r${idx}.status`) || '').trim();
-      badge.textContent = active ? 'AKTIV' : (status || 'INAKTIV');
+      const prettyStatus = (raw) => {
+        const t = String(raw || '').trim().toLowerCase();
+        if (!t) return '';
+        const map = {
+          inactive: 'INAKTIV',
+          active: 'AKTIV',
+          pending_on: 'WARTET (EIN)',
+          pending_off: 'WARTET (AUS)',
+          stale: 'STALE',
+          disabled: 'AUS',
+          unconfigured: 'NICHT KONFIGURIERT',
+          write_fail: 'SCHREIBFEHLER',
+          manual_on: 'MANUELL AN',
+          manual_off: 'MANUELL AUS',
+        };
+        return map[t] || String(raw);
+      };
+
+      if (status && String(status).toLowerCase().startsWith('manual_')) {
+        badge.textContent = prettyStatus(status);
+      } else {
+        badge.textContent = active ? 'AKTIV' : (prettyStatus(status) || 'INAKTIV');
+      }
 
       head.appendChild(name);
       head.appendChild(badge);
@@ -2401,22 +2425,56 @@ function initThresholdModal() {
       ctl.style.display = 'flex';
       ctl.style.flexDirection = 'column';
       ctl.style.gap = '8px';
+      // Regel ein/aus (Buttons) – fallback auf enabled, falls mode-State noch fehlt
+      const modeState = v(`threshold.user.r${idx}.mode`);
+      const enabledState = v(`threshold.user.r${idx}.enabled`);
+      let curMode = Number.isFinite(Number(modeState))
+        ? Math.round(Number(modeState))
+        : ((enabledState === undefined || enabledState === null) ? 1 : (enabledState ? 1 : 0));
+      curMode = Math.max(0, Math.min(2, curMode));
+      let curModeUi = (curMode === 0) ? 0 : 1;
 
       if (r.userCanToggle) {
-        const lbl = document.createElement('label');
-        lbl.style.display = 'inline-flex';
-        lbl.style.alignItems = 'center';
-        lbl.style.gap = '8px';
-        lbl.style.fontSize = '0.9rem';
+        const box = document.createElement('div');
+        const l = document.createElement('div');
+        l.style.fontSize = '0.78rem';
+        l.style.opacity = '0.85';
+        l.textContent = 'Regel ein/aus';
 
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = !!(v(`threshold.user.r${idx}.enabled`) ?? true);
-        cb.addEventListener('change', () => apiSet(`r${idx}.enabled`, !!cb.checked));
+        const btnWrap = document.createElement('div');
+        btnWrap.className = 'nw-evcs-mode-buttons';
+        btnWrap.style.width = '100%';
 
-        lbl.appendChild(cb);
-        lbl.appendChild(document.createTextNode('Regel ein/aus'));
-        ctl.appendChild(lbl);
+        const setActive = (uiVal) => {
+          curModeUi = uiVal;
+          Array.from(btnWrap.querySelectorAll('button')).forEach((b) => {
+            b.classList.toggle('active', Number(b.dataset.mode) === curModeUi);
+          });
+        };
+
+        const mkBtn = (label, uiVal, sendMode) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.textContent = label;
+          b.dataset.mode = String(uiVal);
+          if (curModeUi === uiVal) b.classList.add('active');
+          b.addEventListener('click', async () => {
+            if (curModeUi === uiVal) return;
+            const ok = await apiSet(`r${idx}.mode`, sendMode);
+            if (ok) {
+              setActive(uiVal);
+              renderModal();
+            }
+          });
+          return b;
+        };
+
+        btnWrap.appendChild(mkBtn('Aus', 0, 0));
+        btnWrap.appendChild(mkBtn('An', 1, 1));
+
+        box.appendChild(l);
+        box.appendChild(btnWrap);
+        ctl.appendChild(box);
       } else {
         ctl.appendChild(mkKpi('Regel ein/aus', 'gesperrt'));
       }
@@ -2439,7 +2497,7 @@ function initThresholdModal() {
             setHint('Ungültiger Schwellwert.', true);
             return;
           }
-          apiSet(`r${idx}.threshold`, n);
+          (async () => { const ok = await apiSet(`r${idx}.threshold`, n); if (ok) renderModal(); })();
         });
         box.appendChild(l);
         box.appendChild(inp);
@@ -3204,7 +3262,7 @@ function updateRelayUi(){
   const relays = Array.isArray(window.__nwRelayControls) ? window.__nwRelayControls : [];
   const visible = relays.filter(r => r && r.configured);
 
-  if (!installed || !enabled){
+  if (!installed) {
     card.classList.add('hidden');
     // defensive: inline display can override .hidden without !important
     card.style.display = 'none';
@@ -3217,7 +3275,7 @@ function updateRelayUi(){
   const onCount = visible.filter(r => r.on).length;
   setText('relayOnCount', String(onCount));
   setText('relayCount', String(visible.length));
-  setText('relayStatusShort', visible.length ? 'aktiv' : 'bereit');
+  setText('relayStatusShort', enabled ? (visible.length ? 'aktiv' : 'bereit') : 'aus');
 }
 
 
@@ -3241,7 +3299,7 @@ function updateThresholdUi(){
   const rules = Array.isArray(window.__nwThresholdRules) ? window.__nwThresholdRules : [];
   const configured = rules.filter(r => r && r.configured);
 
-  if (!installed || !enabled){
+  if (!installed) {
     card.classList.add('hidden');
     // defensive: inline display can override .hidden without !important
     card.style.display = 'none';
@@ -3254,7 +3312,7 @@ function updateThresholdUi(){
   const activeCount = configured.filter(r => r.active).length;
   setText('thrActiveCount', String(activeCount));
   setText('thrRuleCount', String(configured.length));
-  setText('thrStatusShort', configured.length ? 'aktiv' : 'bereit');
+  setText('thrStatusShort', enabled ? (configured.length ? 'aktiv' : 'bereit') : 'aus');
 }
 
 
@@ -3280,7 +3338,7 @@ function updateBhkwUi(){
   const visible = devs.filter(d => d && d.showInLive !== false && d.enabled !== false);
 
   // Nur anzeigen, wenn App installiert + aktiv + mind. ein Gerät konfiguriert ist
-  if (!installed || !enabled){
+  if (!installed) {
     card.classList.add('hidden');
     // defensive: inline display can override .hidden without !important
     card.style.display = 'none';
@@ -3304,7 +3362,7 @@ function updateBhkwUi(){
 
   setText('bhkwRunningCount', String(runCount));
   setText('bhkwCount', String(visible.length));
-  setText('bhkwStatusShort', visible.length ? 'aktiv' : 'bereit');
+  setText('bhkwStatusShort', enabled ? (visible.length ? 'aktiv' : 'bereit') : 'aus');
 }
 
 
@@ -3329,7 +3387,7 @@ function updateGeneratorUi(){
   const visible = devs.filter(d => d && d.showInLive !== false && d.enabled !== false);
 
   // Nur anzeigen, wenn App installiert + aktiv + mind. ein Gerät konfiguriert ist
-  if (!installed || !enabled){
+  if (!installed) {
     card.classList.add('hidden');
     // defensive: inline display can override .hidden without !important
     card.style.display = 'none';
@@ -3352,7 +3410,7 @@ function updateGeneratorUi(){
 
   setText('generatorRunningCount', String(runCount));
   setText('generatorCount', String(visible.length));
-  setText('generatorStatusShort', visible.length ? 'aktiv' : 'bereit');
+  setText('generatorStatusShort', enabled ? (visible.length ? 'aktiv' : 'bereit') : 'aus');
 }
 
 
