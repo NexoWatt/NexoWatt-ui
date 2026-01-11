@@ -811,7 +811,9 @@ function render() {
   setText('consumptionEnergyKwh', (d('consumptionEnergyKwh')!=null? Number(d('consumptionEnergyKwh')).toFixed(2)+' kWh':'--'));
   setText('consumptionBuilding', formatPower(d('consumptionTotal') ?? 0));
 
-  setText('evcsStatus', (d('evcsStatus') ?? '--'));
+  // EVCS status: prefer per-connector status (single wallbox) and fall back to legacy dp
+  const evcsSt = d('evcsStatus') ?? d('evcs.1.status') ?? d('chargingManagement.wallboxes.lp1.status') ?? '--';
+  setText('evcsStatus', evcsSt);
   const lastChargeN = coerceNumber(d('evcsLastChargeKwh'));
   setText('evcsLastChargeKwh', lastChargeN != null ? lastChargeN.toFixed(2) + ' kWh' : '--');
   if (window.__evcsApply) window.__evcsApply(d, state);
@@ -3202,7 +3204,7 @@ function updateRelayUi(){
   const relays = Array.isArray(window.__nwRelayControls) ? window.__nwRelayControls : [];
   const visible = relays.filter(r => r && r.configured);
 
-  if (!installed || !enabled || visible.length === 0){
+  if (!installed || !enabled){
     card.classList.add('hidden');
     // defensive: inline display can override .hidden without !important
     card.style.display = 'none';
@@ -3215,7 +3217,7 @@ function updateRelayUi(){
   const onCount = visible.filter(r => r.on).length;
   setText('relayOnCount', String(onCount));
   setText('relayCount', String(visible.length));
-  setText('relayStatusShort', enabled ? 'aktiv' : 'aus');
+  setText('relayStatusShort', visible.length ? 'aktiv' : 'bereit');
 }
 
 
@@ -3239,7 +3241,7 @@ function updateThresholdUi(){
   const rules = Array.isArray(window.__nwThresholdRules) ? window.__nwThresholdRules : [];
   const configured = rules.filter(r => r && r.configured);
 
-  if (!installed || !enabled || configured.length === 0){
+  if (!installed || !enabled){
     card.classList.add('hidden');
     // defensive: inline display can override .hidden without !important
     card.style.display = 'none';
@@ -3252,7 +3254,7 @@ function updateThresholdUi(){
   const activeCount = configured.filter(r => r.active).length;
   setText('thrActiveCount', String(activeCount));
   setText('thrRuleCount', String(configured.length));
-  setText('thrStatusShort', enabled ? 'aktiv' : 'aus');
+  setText('thrStatusShort', configured.length ? 'aktiv' : 'bereit');
 }
 
 
@@ -3275,10 +3277,10 @@ function updateBhkwUi(){
   if (!card) return;
 
   const devs = Array.isArray(window.__nwBhkwDevices) ? window.__nwBhkwDevices : [];
-  const visible = devs.filter(d => d && d.configured && d.showInLive !== false && d.enabled !== false);
+  const visible = devs.filter(d => d && d.showInLive !== false && d.enabled !== false);
 
   // Nur anzeigen, wenn App installiert + aktiv + mind. ein Gerät konfiguriert ist
-  if (!installed || !enabled || visible.length === 0){
+  if (!installed || !enabled){
     card.classList.add('hidden');
     // defensive: inline display can override .hidden without !important
     card.style.display = 'none';
@@ -3302,7 +3304,7 @@ function updateBhkwUi(){
 
   setText('bhkwRunningCount', String(runCount));
   setText('bhkwCount', String(visible.length));
-  setText('bhkwStatusShort', enabled ? 'aktiv' : 'aus');
+  setText('bhkwStatusShort', visible.length ? 'aktiv' : 'bereit');
 }
 
 
@@ -3324,10 +3326,10 @@ function updateGeneratorUi(){
   if (!card) return;
 
   const devs = Array.isArray(window.__nwGeneratorDevices) ? window.__nwGeneratorDevices : [];
-  const visible = devs.filter(d => d && d.configured && d.showInLive !== false && d.enabled !== false);
+  const visible = devs.filter(d => d && d.showInLive !== false && d.enabled !== false);
 
   // Nur anzeigen, wenn App installiert + aktiv + mind. ein Gerät konfiguriert ist
-  if (!installed || !enabled || visible.length === 0){
+  if (!installed || !enabled){
     card.classList.add('hidden');
     // defensive: inline display can override .hidden without !important
     card.style.display = 'none';
@@ -3350,7 +3352,7 @@ function updateGeneratorUi(){
 
   setText('generatorRunningCount', String(runCount));
   setText('generatorCount', String(visible.length));
-  setText('generatorStatusShort', enabled ? 'aktiv' : 'aus');
+  setText('generatorStatusShort', visible.length ? 'aktiv' : 'bereit');
 }
 
 

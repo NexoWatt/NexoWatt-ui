@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-  "version": "0.5.98",
+    "version": "0.5.99",
     "news": {
+      "0.5.99": {
+        "en": "Live/Schnellsteuerung: app tiles (BHKW/Generator/Thresholds/Relays) are now shown when the app is enabled even if nothing is configured yet (counts stay at 0). EVCS tile status now falls back to evcs.1.status for single-wallbox setups.",
+        "de": "Live/Schnellsteuerung: App-Kacheln (BHKW/Generator/Schwellwerte/Relais) werden nun angezeigt, sobald die App aktiviert ist – auch wenn noch nichts konfiguriert ist (Zähler bleiben bei 0). EVCS-Kachel zeigt den Status jetzt im Single-Wallbox-Setup per Fallback auf evcs.1.status."
+      },
       "0.5.98": {
         "en": "Tariff: Manual mode now uses a finer hysteresis band by default and resets the hysteresis state when mode/reference changes. This prevents 'Tariff expensive' from sticking after changing settings, and enables storage grid-charging when the current price is below the manual threshold.",
         "de": "Tarif: Manuell nutzt jetzt standardmäßig eine feinere Hysterese-Bandbreite und setzt den Hysterese-Zustand bei Modus/Referenz-Änderungen zurück. Dadurch bleibt „Tarif teuer“ nicht mehr nach Einstellungsänderungen hängen und der Speicher kann bei Preis < Schwelle im günstigen Fenster aus dem Netz laden."
