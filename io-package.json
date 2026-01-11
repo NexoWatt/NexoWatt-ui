@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-vis",
-  "version": "0.5.97",
+  "version": "0.5.98",
     "news": {
+      "0.5.98": {
+        "en": "Tariff: Manual mode now uses a finer hysteresis band by default and resets the hysteresis state when mode/reference changes. This prevents 'Tariff expensive' from sticking after changing settings, and enables storage grid-charging when the current price is below the manual threshold.",
+        "de": "Tarif: Manuell nutzt jetzt standardmäßig eine feinere Hysterese-Bandbreite und setzt den Hysterese-Zustand bei Modus/Referenz-Änderungen zurück. Dadurch bleibt „Tarif teuer“ nicht mehr nach Einstellungsänderungen hängen und der Speicher kann bei Preis < Schwelle im günstigen Fenster aus dem Netz laden."
+      },
+      "0.5.97": {
+        "en": "EVCS: Goal/target charging can only be enabled in Auto mode. Added periodic keepalive writes to prevent single wallbox sessions from restarting. Min+PV keeps the technical minimum charging power active when tariff is OFF.",
+        "de": "EVCS: Ziel-/Zeitladen ist nur noch im Auto-Modus aktivierbar. Periodische Keepalive-Schreibzugriffe verhindern Session-Resets bei einzelnen Wallboxen. Min+PV hält die technische Mindestladeleistung aktiv, wenn der Tarif AUS ist."
+      },
       "0.5.96": {
         "en": "EMS: EVCS enable/active datapoint is no longer auto-toggled based on target power/current (setpoint=0 now means 'waiting', not 'disabled'). Charging-Management: user mode 'Min+PV' always keeps the technical minimum charging power active (even when tariff policy would otherwise force PV-only); additional power beyond the minimum still uses PV surplus.",
         "de": "EMS: EVCS Enable/Aktiv-Datenpunkt wird nicht mehr automatisch anhand des Sollwerts geschaltet (Sollwert=0 bedeutet jetzt 'Warten' statt 'Aus'). Lademanagement: User-Modus 'Min+PV' hält immer die technische Mindestladeleistung aktiv (auch wenn die Tarif-Policy sonst PV-only erzwingen würde); zusätzliche Leistung über Minimum nutzt weiterhin PV-Überschuss."

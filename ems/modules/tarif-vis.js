@@ -474,6 +474,13 @@ class TarifVisModule extends BaseModule {
             const cfgTariff = (this.adapter && this.adapter.config && this.adapter.config.tariff) ? this.adapter.config.tariff : {};
             const autoBandEur = this._clamp(this._num(cfgTariff.autoBandEur, 0.03), 0, 1);
             const horizonHours = this._clamp(this._num(cfgTariff.horizonHours, 36), 6, 72);
+            // Hysterese-Bandbreite um den Referenzpreis für neutral/teuer/guenstig
+            // NOTE:
+            // - In "Manuell" erwarten Anwender meist eine deutlich feinere Schwelle.
+            // - In "Automatisch" (Forecast) darf das Band gröber sein, um Flattern zu vermeiden.
+            // Beide Werte sind optional per Adapter-Config überschreibbar.
+            const deltaAutoEur = this._clamp(this._num(cfgTariff.deltaEur, 0.02), 0, 1);
+            const deltaManualEur = this._clamp(this._num(cfgTariff.manualDeltaEur, 0.005), 0, 1);
             const nowMs = Date.now();
             const horizonEndMs = nowMs + horizonHours * 60 * 60 * 1000;
 
@@ -544,7 +551,30 @@ class TarifVisModule extends BaseModule {
             }
 
             // --- Tarifzustand (mit Hysterese) ---
-            const delta = 0.02; // Band um Referenzpreis (Ø) für neutral/teuer
+            // In Manuell ist das Band kleiner (feinere Schwelle). In Auto darf es größer sein.
+            const delta = (modusInt === 1) ? deltaManualEur : deltaAutoEur;
+
+            // IMPORTANT: Hysterese "merkt" sich den letzten Zustand (teuer/neutral/guenstig).
+            // Wenn der Benutzer den Modus oder den Referenzpreis ändert, soll die Einstufung
+            // sofort neu bewertet werden – sonst bleibt z.B. "teuer" aktiv bis zur Gegenschwelle.
+            const lastModus = this._tarifLastModusInt;
+            const lastRef = this._tarifLastPreisRef;
+            const lastAktiv = this._tarifLastAktivEff;
+            const lastDelta = this._tarifLastDeltaEur;
+            const refChanged = (typeof lastRef === 'number' && Number.isFinite(lastRef) && typeof preisRef === 'number' && Number.isFinite(preisRef))
+                ? (Math.abs(preisRef - lastRef) > 0.0005)
+                : (lastRef !== preisRef);
+            const modeChanged = (typeof lastModus === 'number') ? (lastModus !== modusInt) : false;
+            const aktivChanged = (typeof lastAktiv === 'boolean') ? (lastAktiv !== aktivEff) : false;
+            const deltaChanged = (typeof lastDelta === 'number' && Number.isFinite(lastDelta)) ? (Math.abs(delta - lastDelta) > 0.0005) : false;
+            if (modeChanged || aktivChanged || refChanged || deltaChanged) {
+                this._tarifLastState = 'neutral';
+            }
+            this._tarifLastModusInt = modusInt;
+            this._tarifLastPreisRef = (typeof preisRef === 'number' && Number.isFinite(preisRef)) ? preisRef : preisRef;
+            this._tarifLastAktivEff = aktivEff;
+            this._tarifLastDeltaEur = delta;
+
             const preisGrenze = (typeof preisRef === 'number' && Number.isFinite(preisRef)) ? (preisRef + delta) : null;
             let tarifState = 'aus'; // aus | unbekannt | neutral | guenstig | teuer
 
