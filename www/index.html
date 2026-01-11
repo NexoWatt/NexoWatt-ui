@@ -696,79 +696,85 @@
       <button id="flowQcClose" class="btn small" aria-label="Schließen">×</button>
     </div>
 
-    <div class="evcs-gauge">
-      <div class="gauge-value" id="flowQcPower">--</div>
-    
-
-    <!-- Betriebsmodus & Regelung (nur für thermische Verbraucher, wenn vorhanden) -->
-    <div class="row" id="flowQcRegWrap" style="display:none;margin-top:12px;">
-      <div class="row two" style="align-items:center">
-        <div>
-          <small>Regelung</small>
-          <div style="font-weight:600" id="flowQcRegStatus">—</div>
-          <small id="flowQcRegHint" style="display:block;opacity:0.85;margin-top:4px;">—</small>
+    <div class="dialog-body">
+      <div class="flow-qc-grid">
+        <div class="flow-qc-gauge">
+          <div class="evcs-gauge">
+            <div class="gauge-value" id="flowQcPower">--</div>
+          </div>
         </div>
-        <div style="text-align:right">
-          <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="flowQcRegEnable" title="Regelung aktivieren/deaktivieren"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
-        <input type="checkbox" class="nw-toggle-hidden" id="flowQcRegEnable">
+
+        <div class="flow-qc-controls">
+          <!-- Betriebsmodus & Regelung (nur für thermische Verbraucher, wenn vorhanden) -->
+          <div class="flow-qc-section" id="flowQcRegWrap" style="display:none;">
+            <div class="row two" style="align-items:center">
+              <div>
+                <small>Regelung</small>
+                <div style="font-weight:600" id="flowQcRegStatus">—</div>
+                <small id="flowQcRegHint" style="display:block;opacity:0.85;margin-top:4px;">—</small>
+              </div>
+              <div style="text-align:right">
+                <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="flowQcRegEnable" title="Regelung aktivieren/deaktivieren"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+                <input type="checkbox" class="nw-toggle-hidden" id="flowQcRegEnable">
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-qc-section" id="flowQcModeWrap" style="display:none;">
+            <div>
+              <small>Betriebsmodus</small>
+            </div>
+            <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-4" id="flowQcModeButtons" style="margin-top:8px;">
+              <button type="button" data-mode="pvAuto">Auto (PV)</button>
+              <button type="button" data-mode="manual">Manuell</button>
+              <button type="button" data-mode="off">Aus</button>
+              <button type="button" data-mode="inherit">System</button>
+            </div>
+            <small id="flowQcModeHint" style="display:block;opacity:0.85;margin-top:6px;">—</small>
+          </div>
+
+          <div class="flow-qc-section" id="flowQcSwitchWrap" style="display:none;">
+            <div class="row two" style="align-items:center">
+              <div>
+                <small>Ein/Aus</small>
+                <b id="flowQcSwitchStatus">--</b>
+              </div>
+              <div style="text-align:right">
+                <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="flowQcSwitch" title="Ein/Aus"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+                <input type="checkbox" class="nw-toggle-hidden" id="flowQcSwitch">
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-qc-section" id="flowQcSetpointWrap" style="display:none;">
+            <div>
+              <small><span id="flowQcSetpointLabel">Sollwert</span> (<span id="flowQcSetpointUnit">W</span>)</small>
+            </div>
+            <input type="range" id="flowQcSetpointRange" style="width:100%;display:none;margin-top:6px;"/>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+              <input type="number" id="flowQcSetpointValue" class="input" style="flex:1 1 auto;min-width:120px;" placeholder="Wert…"/>
+              <button type="button" class="btn" id="flowQcSetpointApply">Übernehmen</button>
+            </div>
+          </div>
+
+          <div class="flow-qc-section" id="flowQcBoostWrap" style="display:none;">
+            <div class="row two" style="align-items:center">
+              <div>
+                <small>Boost</small>
+                <div style="font-weight:600" id="flowQcBoostStatus">—</div>
+              </div>
+              <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end;align-items:center;">
+                <button type="button" class="btn" id="flowQcBoostBtn">Boost starten</button>
+                <button type="button" class="btn" id="flowQcBoostStopBtn" style="display:none;">Boost stoppen</button>
+              </div>
+            </div>
+            <small id="flowQcBoostHint" style="display:block;opacity:0.85;margin-top:6px"></small>
+          </div>
+
+          <small id="flowQcMsg" style="display:block;margin-top:10px;opacity:0.85"></small>
         </div>
       </div>
     </div>
-
-    <div class="row" id="flowQcModeWrap" style="display:none;margin-top:12px;">
-      <div>
-        <small>Betriebsmodus</small>
-      </div>
-      <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-4" id="flowQcModeButtons" style="margin-top:8px;">
-        <button type="button" data-mode="pvAuto">Auto (PV)</button>
-        <button type="button" data-mode="manual">Manuell</button>
-        <button type="button" data-mode="off">Aus</button>
-        <button type="button" data-mode="inherit">System</button>
-      </div>
-      <small id="flowQcModeHint" style="display:block;opacity:0.85;margin-top:6px;">—</small>
-    </div>
-
-</div>
-
-    <div class="row" id="flowQcSwitchWrap" style="display:none;">
-      <div class="row two" style="align-items:center">
-        <div>
-          <small>Ein/Aus</small>
-          <b id="flowQcSwitchStatus">--</b>
-        </div>
-        <div style="text-align:right">
-          <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="flowQcSwitch" title="Ein/Aus"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
-        <input type="checkbox" class="nw-toggle-hidden" id="flowQcSwitch">
-        </div>
-      </div>
-    </div>
-
-    <div class="row" id="flowQcSetpointWrap" style="display:none;">
-      <div>
-        <small><span id="flowQcSetpointLabel">Sollwert</span> (<span id="flowQcSetpointUnit">W</span>)</small>
-      </div>
-      <input type="range" id="flowQcSetpointRange" style="width:100%;display:none;margin-top:6px;"/>
-      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
-        <input type="number" id="flowQcSetpointValue" class="input" style="flex:1 1 auto;min-width:120px;" placeholder="Wert…"/>
-        <button type="button" class="btn" id="flowQcSetpointApply">Übernehmen</button>
-      </div>
-    </div>
-
-    <div class="row" id="flowQcBoostWrap" style="display:none;margin-top:12px;">
-      <div class="row two" style="align-items:center">
-        <div>
-          <small>Boost</small>
-          <div style="font-weight:600" id="flowQcBoostStatus">—</div>
-        </div>
-        <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end;align-items:center;">
-          <button type="button" class="btn" id="flowQcBoostBtn">Boost starten</button>
-          <button type="button" class="btn" id="flowQcBoostStopBtn" style="display:none;">Boost stoppen</button>
-        </div>
-      </div>
-      <small id="flowQcBoostHint" style="display:block;opacity:0.85;margin-top:6px"></small>
-    </div>
-
-    <small id="flowQcMsg" style="display:block;margin-top:10px;opacity:0.85"></small>
   </div>
 </div>
 

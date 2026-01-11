@@ -2071,3 +2071,39 @@ body{ padding-top: var(--topbar-h); }
 }
 
 .web .node{filter:drop-shadow(0 10px 22px rgba(0,0,0,.45));}
+
+/* =============================
+   Energiefluss – Quick Control
+   ============================= */
+
+.flow-qc-grid{
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.flow-qc-gauge{
+  display: flex;
+  justify-content: center;
+}
+
+.flow-qc-controls{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.flow-qc-section{
+  display: block;
+}
+
+@media (max-width: 720px){
+  .flow-qc-grid{
+    grid-template-columns: 1fr;
+  }
+  .flow-qc-gauge{
+    order: -1;
+  }
+}

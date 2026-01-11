@@ -1,8 +1,18 @@
 {
   "common": {
     "name": "nexowatt-vis",
-  "version": "0.6.3",
+  "version": "0.6.4",
     "news": {
+      "0.6.4": {
+        "en": [
+          "Fix Thermik table rendering",
+          "Improve Energyflow Quick-Control layout (responsive)"
+        ],
+        "de": [
+          "Fix: Thermik-Tabelle wieder sichtbar",
+          "Energiefluss Quick-Control übersichtlich & responsiv"
+        ]
+      },
       "0.6.0": {
         "en": [
           "Live/Quick tiles now follow App-Center 'installed' flag (not 'enabled').",

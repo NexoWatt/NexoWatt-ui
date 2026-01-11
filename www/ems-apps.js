@@ -110,6 +110,7 @@
     dpResults: document.getElementById('dpResults')
     ,
     // Thermal control
+    thermalHoldMinutes: document.getElementById('thermalHoldMinutes'),
     thermalDevices: document.getElementById('thermalDevices'),
     bhkwDevices: document.getElementById('bhkwDevices'),
     generatorDevices: document.getElementById('generatorDevices'),

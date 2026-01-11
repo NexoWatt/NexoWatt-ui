@@ -513,6 +513,13 @@
       <div class="nw-card">
         <div class="nw-card__title">Thermische Geräte</div>
         <div class="nw-card__subtitle">Aktiviere PV‑Auto je Slot und setze Leistungs-/Hysterese‑Parameter. Slots ohne Steuer‑Datenpunkte werden automatisch als "nicht steuerbar" markiert.</div>
+        <div class="nw-config-field-row" style="margin:12px 0 10px 0;">
+          <div class="nw-config-field-label">Manuell‑Hold (Schnellsteuerung)</div>
+          <div class="nw-config-field-control">
+            <input id="thermalHoldMinutes" class="nw-config-input" type="number" min="0" step="1" style="max-width:120px;" />
+            <div class="nw-config-field-hint">Minuten – wenn in der VIS per Schnellsteuerung ein Sollwert/Switch gesetzt wird, pausiert PV‑Auto für diese Zeit (damit die Automatik nicht sofort überschreibt).</div>
+          </div>
+        </div>
         <div id="thermalDevices"></div>
       </div>
 
