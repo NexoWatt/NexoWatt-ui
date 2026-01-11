@@ -3531,6 +3531,7 @@ function _ensureThermalConsumerTiles(){
 
     tile.innerHTML = `
       <div class="nw-tile-h">
+        <div class="nw-tile__icon-circle" id="thermalConsumerIcon${idx}">♨</div>
         <div>
           <div class="nw-tile-title" id="thermalConsumerTitle${idx}">Verbraucher ${idx}</div>
           <div class="nw-tile-sub" id="thermalConsumerSub${idx}">Thermik</div>

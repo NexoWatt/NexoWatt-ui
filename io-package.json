@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.6",
+    "version": "0.6.7",
     "news": {
+      "0.6.7": {
+        "en": [
+          "Schnellsteuerung: Thermik-Kachel zeigt jetzt ein passendes Icon (wie andere Kacheln)."
+        ],
+        "de": [
+          "Schnellsteuerung: Thermik-Kachel zeigt jetzt ein passendes Icon (wie andere Kacheln)."
+        ]
+      },
       "0.6.5": {
         "en": [
           "Thermik App-Center: use consistent dark input/select styling",
