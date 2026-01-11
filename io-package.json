@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.0",
+    "version": "0.6.1",
     "news": {
       "0.6.0": {
         "en": [
@@ -636,6 +636,10 @@
       "0.5.73": {
         "en": "Hotfix: App-Center save stability (no adapter restart), fixed JSONConfig schema, added missing settings states, improved consumer layout",
         "de": "Hotfix: App‑Center Save stabil (kein Adapter-Restart), JSONConfig Schema korrigiert, fehlende Settings‑States ergänzt, Verbraucher-Layout verbessert"
+      },
+      "0.6.1": {
+        "en": "VIS: relay control uses Aus/An buttons; Threshold-Control: end-customer can optionally adjust MinOn/MinOff via VIS; Added user permission flags for MinOn/MinOff.",
+        "de": "VIS: Relaissteuerung nutzt Aus/An-Buttons; Schwellwertsteuerung: Endkunde kann optional MinOn/MinOff in der VIS anpassen; Neue Rechte-Flags für MinOn/MinOff."
       }
     },
     "title": "NexoWatt VIS",

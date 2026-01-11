@@ -6012,8 +6012,10 @@ settingsConfig: {
               const enabled = (typeof r.enabled === 'boolean') ? !!r.enabled : false;
               const userCanToggle = (typeof r.userCanToggle === 'boolean') ? !!r.userCanToggle : true;
               const userCanSetThreshold = (typeof r.userCanSetThreshold === 'boolean') ? !!r.userCanSetThreshold : true;
+              const userCanSetMinOnSec = (typeof r.userCanSetMinOnSec === 'boolean') ? !!r.userCanSetMinOnSec : userCanSetThreshold;
+              const userCanSetMinOffSec = (typeof r.userCanSetMinOffSec === 'boolean') ? !!r.userCanSetMinOffSec : userCanSetThreshold;
               const configured = !!(String(r.inputId || r.inputObjectId || '').trim() && String(r.outputId || r.outputObjectId || '').trim());
-              out.push({ idx, name, enabled, configured, userCanToggle, userCanSetThreshold });
+              out.push({ idx, name, enabled, configured, userCanToggle, userCanSetThreshold, userCanSetMinOnSec, userCanSetMinOffSec });
             }
             out.sort((a, b) => a.idx - b.idx);
             return out;
@@ -6507,7 +6509,7 @@ settingsConfig: {
           if (!thrInstalled) return res.status(409).json({ ok: false, error: 'not_ready' });
 
           const k = String(key || '').trim();
-          const m = k.match(/^r(\d+)\.(enabled|threshold|mode)$/i);
+          const m = k.match(/^r(\d+)\.(enabled|threshold|mode|minOnSec|minOffSec)$/i);
           if (!m) return res.status(400).json({ ok: false, error: 'bad request' });
 
           const idx = Math.max(1, Math.min(10, Math.round(Number(m[1] || 0)) || 0));
@@ -6525,9 +6527,13 @@ settingsConfig: {
 
           const userCanToggle = (rule && typeof rule.userCanToggle === 'boolean') ? !!rule.userCanToggle : true;
           const userCanSetThreshold = (rule && typeof rule.userCanSetThreshold === 'boolean') ? !!rule.userCanSetThreshold : true;
+          const userCanSetMinOnSec = (rule && typeof rule.userCanSetMinOnSec === 'boolean') ? !!rule.userCanSetMinOnSec : userCanSetThreshold;
+          const userCanSetMinOffSec = (rule && typeof rule.userCanSetMinOffSec === 'boolean') ? !!rule.userCanSetMinOffSec : userCanSetThreshold;
 
           if ((prop === 'enabled' || prop === 'mode') && !userCanToggle) return res.status(403).json({ ok: false, error: 'forbidden' });
           if (prop === 'threshold' && !userCanSetThreshold) return res.status(403).json({ ok: false, error: 'forbidden' });
+          if (prop === 'minonsec' && !userCanSetMinOnSec) return res.status(403).json({ ok: false, error: 'forbidden' });
+          if (prop === 'minoffsec' && !userCanSetMinOffSec) return res.status(403).json({ ok: false, error: 'forbidden' });
 
           // Best effort: ensure objects exist (robust against partial upgrades)
           try {
@@ -6535,6 +6541,8 @@ settingsConfig: {
             await this.setObjectNotExistsAsync(`threshold.user.r${idx}`, { type: 'channel', common: { name: `Regel ${idx}` }, native: {} });
             await this.setObjectNotExistsAsync(`threshold.user.r${idx}.enabled`, { type: 'state', common: { name: 'Regel aktiv (User)', type: 'boolean', role: 'switch.enable', read: true, write: true, def: true }, native: {} });
             await this.setObjectNotExistsAsync(`threshold.user.r${idx}.threshold`, { type: 'state', common: { name: 'Schwellwert (User)', type: 'number', role: 'level', read: true, write: true, def: 0 }, native: {} });
+            await this.setObjectNotExistsAsync(`threshold.user.r${idx}.minOnSec`, { type: 'state', common: { name: 'MinOn (User)', type: 'number', role: 'value', unit: 's', read: true, write: true, def: 0 }, native: {} });
+            await this.setObjectNotExistsAsync(`threshold.user.r${idx}.minOffSec`, { type: 'state', common: { name: 'MinOff (User)', type: 'number', role: 'value', unit: 's', read: true, write: true, def: 0 }, native: {} });
             await this.setObjectNotExistsAsync(`threshold.user.r${idx}.mode`, { type: 'state', common: { name: 'Modus (User)', type: 'number', role: 'value', read: true, write: true, def: 1, min: 0, max: 2, states: { 0: 'Aus', 1: 'Auto', 2: 'An' } }, native: {} });
           } catch (_e) {}
 
@@ -6568,6 +6576,24 @@ settingsConfig: {
               try { this.updateValue(`threshold.user.r${idx}.mode`, newMode, Date.now()); } catch(_e) {}
             } catch(_e) {}
 
+            return res.json({ ok: true });
+          }
+
+          if (prop === 'minonsec') {
+            const n = Number(value);
+            if (!Number.isFinite(n)) return res.status(400).json({ ok: false, error: 'bad request' });
+            const v = Math.max(0, Math.min(86400, Math.round(n)));
+            await this.setStateAsync(`threshold.user.r${idx}.minOnSec`, { val: v, ack: false });
+            try { this.updateValue(`threshold.user.r${idx}.minOnSec`, v, Date.now()); } catch(_e) {}
+            return res.json({ ok: true });
+          }
+
+          if (prop === 'minoffsec') {
+            const n = Number(value);
+            if (!Number.isFinite(n)) return res.status(400).json({ ok: false, error: 'bad request' });
+            const v = Math.max(0, Math.min(86400, Math.round(n)));
+            await this.setStateAsync(`threshold.user.r${idx}.minOffSec`, { val: v, ack: false });
+            try { this.updateValue(`threshold.user.r${idx}.minOffSec`, v, Date.now()); } catch(_e) {}
             return res.json({ ok: true });
           }
 

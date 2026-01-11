@@ -137,7 +137,7 @@
     { id: 'peak', label: 'Peak-Shaving', desc: 'Lastspitzenkappung / Import-Limit', mandatory: false },
     { id: 'storage', label: 'Speicherregelung', desc: 'Eigenverbrauch / Speicher-Setpoints (herstellerunabhängig)', mandatory: false },
     { id: 'storagefarm', label: 'Speicherfarm', desc: 'Mehrere Speichersysteme als Pool/Gruppen', mandatory: false },
-    { id: 'thermal', label: 'Wärmepumpe & Klima', desc: 'PV-Überschuss-Steuerung (Setpoint, On/Off oder SG-Ready) mit Schnellsteuerung', mandatory: false },
+    { id: 'thermal', label: 'Thermik & Power-to-Heat', desc: 'PV-Überschuss-Steuerung für Wärmepumpe/Klima/Heizstab (Setpoint, On/Off oder SG-Ready) inkl. Schnellsteuerung', mandatory: false },
     { id: 'bhkw', label: 'BHKW', desc: 'BHKW-Steuerung (Start/Stop, SoC-geführt) mit Schnellsteuerung', mandatory: false },
     { id: 'generator', label: 'Generator', desc: 'Generator-Steuerung (Notstrom/Netzparallelbetrieb, SoC-geführt) mit Schnellsteuerung', mandatory: false },
     { id: 'threshold', label: 'Schwellwertsteuerung', desc: 'Regeln (Wenn X > Y dann Schalten/Setzen) – optional mit Endkunden-Anpassung', mandatory: false },
@@ -1106,7 +1106,7 @@
     if (!a.installed) {
       const msg = document.createElement('div');
       msg.className = 'nw-help';
-      msg.textContent = 'Die App „Wärmepumpe & Klima“ ist nicht installiert. Bitte unter „Apps“ installieren, dann hier konfigurieren.';
+      msg.textContent = 'Die App „Thermik & Power-to-Heat“ ist nicht installiert. Bitte unter „Apps“ installieren, dann hier konfigurieren.';
       els.thermalDevices.appendChild(msg);
       return;
     }
@@ -1995,6 +1995,8 @@
         maxAgeMs: (Number.isFinite(Number(r0.maxAgeMs))) ? Math.max(500, Math.round(Number(r0.maxAgeMs))) : 5000,
         userCanToggle: (typeof r0.userCanToggle === 'boolean') ? !!r0.userCanToggle : true,
         userCanSetThreshold: (typeof r0.userCanSetThreshold === 'boolean') ? !!r0.userCanSetThreshold : true,
+        userCanSetMinOnSec: (typeof r0.userCanSetMinOnSec === 'boolean') ? !!r0.userCanSetMinOnSec : ((typeof r0.userCanSetThreshold === 'boolean') ? !!r0.userCanSetThreshold : true),
+        userCanSetMinOffSec: (typeof r0.userCanSetMinOffSec === 'boolean') ? !!r0.userCanSetMinOffSec : ((typeof r0.userCanSetThreshold === 'boolean') ? !!r0.userCanSetThreshold : true),
       });
     }
 
@@ -2310,6 +2312,8 @@
 
       grid.appendChild(mkChk('Endkunde darf Regel ein/aus', `thr_rule_${idx}_userCanToggle`, r.userCanToggle !== false, (b) => updateRule(idx, { userCanToggle: !!b })));
       grid.appendChild(mkChk('Endkunde darf Schwellwert ändern', `thr_rule_${idx}_userCanSetThreshold`, r.userCanSetThreshold !== false, (b) => updateRule(idx, { userCanSetThreshold: !!b })));
+      grid.appendChild(mkChk('Endkunde darf MinOn ändern', `thr_rule_${idx}_userCanSetMinOnSec`, r.userCanSetMinOnSec !== false, (b) => updateRule(idx, { userCanSetMinOnSec: !!b })));
+      grid.appendChild(mkChk('Endkunde darf MinOff ändern', `thr_rule_${idx}_userCanSetMinOffSec`, r.userCanSetMinOffSec !== false, (b) => updateRule(idx, { userCanSetMinOffSec: !!b })));
 
       item.appendChild(head);
       item.appendChild(grid);
@@ -2328,7 +2332,7 @@
           return;
         }
         const t2 = _ensureThresholdCfg();
-        t2.rules.push({ idx: next, enabled: true, name: `Regel ${next}`, compare: 'above', threshold: 0, hysteresis: 0, minOnSec: 0, minOffSec: 0, outputType: 'boolean', onValue: true, offValue: false, maxAgeMs: 5000, userCanToggle: true, userCanSetThreshold: true, inputId: '', outputId: '' });
+        t2.rules.push({ idx: next, enabled: true, name: `Regel ${next}`, compare: 'above', threshold: 0, hysteresis: 0, minOnSec: 0, minOffSec: 0, outputType: 'boolean', onValue: true, offValue: false, maxAgeMs: 5000, userCanToggle: true, userCanSetThreshold: true, userCanSetMinOnSec: true, userCanSetMinOffSec: true, inputId: '', outputId: '' });
         buildThresholdUI();
         scheduleValidation(200);
       };

@@ -2506,6 +2506,68 @@ function initThresholdModal() {
         ctl.appendChild(mkKpi('Schwellwert', 'gesperrt'));
       }
 
+      // Optional timing parameters: allow Endkunde to adjust MinOn/MinOff (if enabled in App-Center)
+      const canMinOn = (typeof r.userCanSetMinOnSec === 'boolean') ? r.userCanSetMinOnSec : !!r.userCanSetThreshold;
+      const canMinOff = (typeof r.userCanSetMinOffSec === 'boolean') ? r.userCanSetMinOffSec : !!r.userCanSetThreshold;
+
+      if (canMinOn) {
+        const box = document.createElement('div');
+        const l = document.createElement('div');
+        l.style.fontSize = '0.78rem';
+        l.style.opacity = '0.85';
+        l.textContent = 'MinOn (s)';
+        const inp = document.createElement('input');
+        inp.type = 'number';
+        inp.min = '0';
+        inp.step = '1';
+        inp.className = 'input';
+        inp.style.width = '100%';
+        const current = v(`threshold.user.r${idx}.minOnSec`);
+        inp.value = (current === undefined || current === null) ? '' : String(current);
+        inp.addEventListener('change', () => {
+          const n = Number(inp.value);
+          if (!Number.isFinite(n) || n < 0) {
+            setHint('Ungültiger MinOn-Wert.', true);
+            return;
+          }
+          (async () => { const ok = await apiSet(`r${idx}.minOnSec`, Math.floor(n)); if (ok) renderModal(); })();
+        });
+        box.appendChild(l);
+        box.appendChild(inp);
+        ctl.appendChild(box);
+      } else {
+        ctl.appendChild(mkKpi('MinOn', 'gesperrt'));
+      }
+
+      if (canMinOff) {
+        const box = document.createElement('div');
+        const l = document.createElement('div');
+        l.style.fontSize = '0.78rem';
+        l.style.opacity = '0.85';
+        l.textContent = 'MinOff (s)';
+        const inp = document.createElement('input');
+        inp.type = 'number';
+        inp.min = '0';
+        inp.step = '1';
+        inp.className = 'input';
+        inp.style.width = '100%';
+        const current = v(`threshold.user.r${idx}.minOffSec`);
+        inp.value = (current === undefined || current === null) ? '' : String(current);
+        inp.addEventListener('change', () => {
+          const n = Number(inp.value);
+          if (!Number.isFinite(n) || n < 0) {
+            setHint('Ungültiger MinOff-Wert.', true);
+            return;
+          }
+          (async () => { const ok = await apiSet(`r${idx}.minOffSec`, Math.floor(n)); if (ok) renderModal(); })();
+        });
+        box.appendChild(l);
+        box.appendChild(inp);
+        ctl.appendChild(box);
+      } else {
+        ctl.appendChild(mkKpi('MinOff', 'gesperrt'));
+      }
+
       body.appendChild(ctl);
 
       row.appendChild(head);
@@ -2676,24 +2738,38 @@ function initRelayModal() {
 
       if (r.type === 'boolean') {
         const can = !!r.userCanToggle;
-        const lbl = document.createElement('label');
-        lbl.style.display = 'inline-flex';
-        lbl.style.alignItems = 'center';
-        lbl.style.gap = '8px';
-        lbl.style.fontSize = '0.9rem';
 
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = !!r.val;
-        cb.disabled = !can;
-        cb.addEventListener('change', async () => {
-          const ok = await apiSet(idx, 'switch', !!cb.checked);
-          if (ok) setTimeout(() => { try { renderModal(); } catch(_e) {} }, 200);
-        });
+        // Use the same button style as other VIS controls (Aus/An) instead of a checkbox
+        const btnWrap = document.createElement('div');
+        btnWrap.className = 'nw-evcs-mode-buttons';
+        btnWrap.style.alignSelf = 'flex-start';
 
-        lbl.appendChild(cb);
-        lbl.appendChild(document.createTextNode(can ? 'schalten' : 'gesperrt'));
-        ctl.appendChild(lbl);
+        const curBool = !!r.val;
+        const mkBtn = (label, val) => {
+          const b = document.createElement('button');
+          b.className = 'nw-evcs-mode-btn' + ((curBool === val) ? ' nw-active' : '');
+          b.textContent = label;
+          b.disabled = !can;
+          b.addEventListener('click', async () => {
+            if (!can) return;
+            if ((!!r.val) === val) return;
+            const ok = await apiSet(idx, 'switch', val);
+            if (ok) setTimeout(() => { try { renderModal(); } catch(_e) {} }, 200);
+          });
+          return b;
+        };
+
+        btnWrap.appendChild(mkBtn('Aus', false));
+        btnWrap.appendChild(mkBtn('An', true));
+        ctl.appendChild(btnWrap);
+
+        if (!can) {
+          const lock = document.createElement('div');
+          lock.style.fontSize = '0.78rem';
+          lock.style.opacity = '0.75';
+          lock.textContent = 'gesperrt';
+          ctl.appendChild(lock);
+        }
       } else {
         const can = !!r.userCanSetValue;
         const box = document.createElement('div');

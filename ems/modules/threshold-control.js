@@ -120,6 +120,8 @@ class ThresholdControlModule extends BaseModule {
 
             const userCanToggle = (typeof r.userCanToggle === 'boolean') ? !!r.userCanToggle : true;
             const userCanSetThreshold = (typeof r.userCanSetThreshold === 'boolean') ? !!r.userCanSetThreshold : true;
+            const userCanSetMinOnSec = (typeof r.userCanSetMinOnSec === 'boolean') ? !!r.userCanSetMinOnSec : userCanSetThreshold;
+            const userCanSetMinOffSec = (typeof r.userCanSetMinOffSec === 'boolean') ? !!r.userCanSetMinOffSec : userCanSetThreshold;
 
             out.push({
                 idx,
@@ -139,6 +141,8 @@ class ThresholdControlModule extends BaseModule {
                 maxAgeMs,
                 userCanToggle,
                 userCanSetThreshold,
+                userCanSetMinOnSec,
+                userCanSetMinOffSec,
             });
         }
 
@@ -210,6 +214,8 @@ class ThresholdControlModule extends BaseModule {
 
             await mk(`threshold.user.r${i}.enabled`, 'Regel aktiv (User)', 'boolean', 'switch.enable', undefined, true, true);
             await mk(`threshold.user.r${i}.threshold`, 'Schwellwert (User)', 'number', 'level', undefined, true, 0);
+            await mk(`threshold.user.r${i}.minOnSec`, 'MinOn (User)', 'number', 'value', 's', true, true, 0);
+            await mk(`threshold.user.r${i}.minOffSec`, 'MinOff (User)', 'number', 'value', 's', true, true, 0);
 
             await this.adapter.setObjectNotExistsAsync(`threshold.user.r${i}.mode`, {
                 type: 'state',
@@ -240,6 +246,8 @@ class ThresholdControlModule extends BaseModule {
             } else {
                 await ensureDefault(`threshold.user.r${i}.threshold`, 0);
             }
+            await ensureDefault(`threshold.user.r${i}.minOnSec`, (rr && rr.minOnSec !== undefined && rr.minOnSec !== null) ? Number(rr.minOnSec) : 0);
+            await ensureDefault(`threshold.user.r${i}.minOffSec`, (rr && rr.minOffSec !== undefined && rr.minOffSec !== null) ? Number(rr.minOffSec) : 0);
         }
 
         // Diagnostics per rule
@@ -268,6 +276,8 @@ class ThresholdControlModule extends BaseModule {
                     await this.dp.upsert({ key: `thr.user.r${i}.enabled`, objectId: `${ns}.threshold.user.r${i}.enabled`, dataType: 'boolean', direction: 'in' });
                     await this.dp.upsert({ key: `thr.user.r${i}.threshold`, objectId: `${ns}.threshold.user.r${i}.threshold`, dataType: 'number', direction: 'in' });
                     await this.dp.upsert({ key: `thr.user.r${i}.mode`, objectId: `${ns}.threshold.user.r${i}.mode`, dataType: 'number', direction: 'in' });
+                    await this.dp.upsert({ key: `thr.user.r${i}.minOnSec`, objectId: `${ns}.threshold.user.r${i}.minOnSec`, dataType: 'number', direction: 'in' });
+                    await this.dp.upsert({ key: `thr.user.r${i}.minOffSec`, objectId: `${ns}.threshold.user.r${i}.minOffSec`, dataType: 'number', direction: 'in' });
                 }
             }
         } catch (_e) {
@@ -398,8 +408,18 @@ class ThresholdControlModule extends BaseModule {
                 }
 
                 // minOn/minOff constraints (anti-flatter)
-                const minOnMs = Math.max(0, Math.round(Number(r.minOnSec || 0) * 1000));
-                const minOffMs = Math.max(0, Math.round(Number(r.minOffSec || 0) * 1000));
+                // Optional: these parameters can be Endkunden-tunable via VIS (if enabled per rule)
+                const canUserMinOn = (typeof r.userCanSetMinOnSec === 'boolean') ? !!r.userCanSetMinOnSec : !!r.userCanSetThreshold;
+                const canUserMinOff = (typeof r.userCanSetMinOffSec === 'boolean') ? !!r.userCanSetMinOffSec : !!r.userCanSetThreshold;
+
+                const userMinOnSec = canUserMinOn ? this.dp.getNumberFresh(`thr.user.r${idx}.minOnSec`, 7 * 24 * 3600 * 1000, null) : null;
+                const userMinOffSec = canUserMinOff ? this.dp.getNumberFresh(`thr.user.r${idx}.minOffSec`, 7 * 24 * 3600 * 1000, null) : null;
+
+                const effMinOnSec = (userMinOnSec !== null && userMinOnSec !== undefined && Number.isFinite(userMinOnSec)) ? userMinOnSec : Number(r.minOnSec || 0);
+                const effMinOffSec = (userMinOffSec !== null && userMinOffSec !== undefined && Number.isFinite(userMinOffSec)) ? userMinOffSec : Number(r.minOffSec || 0);
+
+                const minOnMs = Math.max(0, Math.round(effMinOnSec * 1000));
+                const minOffMs = Math.max(0, Math.round(effMinOffSec * 1000));
 
                 if (!mem.active && want) {
                     // pending ON?
