@@ -3491,6 +3491,145 @@ function updateGeneratorUi(){
 
 
 
+// ---- Thermik / Verbraucher Quick-Tiles (dynamisch je Slot) ----
+const _thermalConsTiles = new Map();
+
+function _ensureThermalConsumerTiles(){
+  const grid = document.getElementById('liveQuickTiles');
+  if (!grid) return;
+
+  // Wir erstellen feste Platzhalter für bis zu 8 Verbraucher-Slots.
+  for (let idx = 1; idx <= 8; idx++) {
+    const id = `thermalConsumerCard${idx}`;
+    if (document.getElementById(id)) continue;
+
+    const tile = document.createElement('div');
+    tile.id = id;
+    tile.className = 'nw-tile nw-tile--size-m nw-tile--type-scene';
+    tile.setAttribute('role', 'button');
+    tile.setAttribute('tabindex', '0');
+    tile.style.display = 'none'; // wird in updateThermalConsumerUi() gesetzt
+
+    tile.innerHTML = `
+      <div class="nw-tile-h">
+        <div>
+          <div class="nw-tile-title" id="thermalConsumerTitle${idx}">Verbraucher ${idx}</div>
+          <div class="nw-tile-sub" id="thermalConsumerSub${idx}">Thermik</div>
+        </div>
+        <div class="nw-badge nw-badge--app" id="thermalConsumerBadge${idx}">APP</div>
+      </div>
+      <div class="nw-tile-kpi">
+        <div class="nw-kpi-val" id="thermalConsumerPower${idx}">0 W</div>
+        <div class="nw-kpi-label" id="thermalConsumerMode${idx}">—</div>
+      </div>
+      <div class="nw-tile-meta">
+        <span class="nw-meta" id="thermalConsumerMetaL${idx}">—</span>
+        <span class="nw-meta" id="thermalConsumerMetaM${idx}">Slot ${idx}</span>
+        <span class="nw-meta nw-meta-right" id="thermalConsumerMetaR${idx}">—</span>
+      </div>
+    `;
+
+    const open = () => {
+      // Re-use der bestehenden Flow-QuickControl (Modal)
+      try { openFlowQc('consumers', idx); } catch (e) { console.warn('openFlowQc failed', e); }
+    };
+    tile.addEventListener('click', open);
+    tile.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        open();
+      }
+    });
+
+    grid.appendChild(tile);
+
+    _thermalConsTiles.set(idx, {
+      tile,
+      title: document.getElementById(`thermalConsumerTitle${idx}`),
+      sub: document.getElementById(`thermalConsumerSub${idx}`),
+      power: document.getElementById(`thermalConsumerPower${idx}`),
+      mode: document.getElementById(`thermalConsumerMode${idx}`),
+      metaL: document.getElementById(`thermalConsumerMetaL${idx}`),
+      metaM: document.getElementById(`thermalConsumerMetaM${idx}`),
+      metaR: document.getElementById(`thermalConsumerMetaR${idx}`),
+    });
+  }
+}
+
+function _labelThermalMode(mode){
+  const m = String(mode || '').trim();
+  if (!m) return '—';
+  if (m === 'inherit') return 'Auto';
+  if (m === 'pvAuto') return 'PV‑Auto';
+  if (m === 'sgReady' || m === 'sgready') return 'SG‑Ready';
+  if (m === 'manual') return 'Manuell';
+  if (m === 'off') return 'Aus';
+  return m;
+}
+
+function updateThermalConsumerUi(){
+  _ensureThermalConsumerTiles();
+
+  const apps = (window.__nwEmsApps && window.__nwEmsApps.apps) ? window.__nwEmsApps.apps : {};
+  const thermApp = apps.thermal || {};
+  const appActive = (thermApp.installed === true && thermApp.enabled === true);
+
+  const slots = (flowSlotsCfg && Array.isArray(flowSlotsCfg.consumers)) ? flowSlotsCfg.consumers : [];
+  const thermalCfg = (window.__nwEmsApps && window.__nwEmsApps.thermal) ? window.__nwEmsApps.thermal : {};
+  const devices = Array.isArray(thermalCfg.devices) ? thermalCfg.devices : [];
+
+  const st = window.latestState || {};
+  const sv = (k) => (st && st[k] && st[k].value !== undefined) ? st[k].value : undefined;
+
+  for (let idx = 1; idx <= 8; idx++) {
+    const refs = _thermalConsTiles.get(idx);
+    if (!refs) continue;
+
+    const slot = slots[idx - 1];
+    const qcEnabled = !!(slot && slot.qc && slot.qc.enabled);
+
+    const show = appActive && qcEnabled;
+    refs.tile.style.display = show ? '' : 'none';
+    if (!show) continue;
+
+    const dev = devices[idx - 1] || {};
+    const name = (dev && dev.name) ? String(dev.name) : (slot && slot.name ? String(slot.name) : `Verbraucher ${idx}`);
+
+    // Titel/Sub
+    if (refs.title) refs.title.textContent = name;
+    if (refs.sub) refs.sub.textContent = 'Thermik';
+
+    // Leistung (W)
+    const pKey = (slot && slot.stateKey) ? String(slot.stateKey) : `consumer${idx}Power`;
+    const pW = Number(sv(pKey) ?? 0);
+    if (refs.power) refs.power.textContent = formatPower(pW);
+
+    // Modus (User Override, default: PV-Auto)
+    const userMode = sv(`th.user.c${idx}.mode`);
+    const effMode = (!userMode || userMode === 'inherit') ? 'pvAuto' : userMode;
+    if (refs.mode) refs.mode.textContent = _labelThermalMode(effMode);
+
+    // Meta: capability + slot + aktiv/aus
+    let cap = '—';
+    if (slot && slot.qc){
+      if (slot.qc.hasSgReady) cap = 'SG‑Ready';
+      else if (slot.qc.hasSetpoint) cap = 'Setpoint';
+      else if (slot.qc.hasSwitch) cap = 'Schalten';
+    }
+    if (refs.metaL) refs.metaL.textContent = cap;
+    if (refs.metaM) refs.metaM.textContent = `Slot ${idx}`;
+
+    const userReg = sv(`th.user.c${idx}.regEnabled`);
+    const regEnabled = (typeof userReg === 'boolean') ? userReg : true;
+    const cfgEnabled = (typeof dev.enabled === 'boolean') ? dev.enabled : true;
+    const isActive = cfgEnabled && regEnabled;
+
+    if (refs.metaR) refs.metaR.textContent = isActive ? 'aktiv' : 'aus';
+  }
+}
+
+
+
 
 
 // ---- Energy Web update ----
@@ -3617,6 +3756,7 @@ function updateEnergyWeb() {
   try { updateRelayUi(); } catch(_e) {}
   try { updateBhkwUi(); } catch(_e) {}
   try { updateGeneratorUi(); } catch(_e) {}
+  try { updateThermalConsumerUi(); } catch(_e) {}
 
   // Statusmeldung direkt in der Energiefluss-Kachel (VIS)
   // z.B. "Tarif günstig: Speicher lädt" / "Tarif teuer: Speicher entlädt"

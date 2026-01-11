@@ -1094,283 +1094,305 @@
   }
 
   function buildThermalUI() {
-    if (!els.thermalDevices) return;
-    const t = _ensureThermalCfg();
+  // Thermik (Wärmepumpe/Heizung/Klima): PV-Überschuss intelligent nutzen.
+  const cfg = config.thermal || (config.thermal = { devices: [], manualHoldMinutes: 20 });
+  const apps = config.apps || (config.apps = {});
+  const app = apps.thermal || (apps.thermal = { installed: false, enabled: false });
 
-    // Visibility hint: app installed?
-    const apps = (currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps) ? currentConfig.emsApps.apps : {};
-    const a = apps && apps.thermal ? apps.thermal : { installed: false, enabled: false };
+  // Keep app.enabled in sync with App-Center toggle
+  cfg.enabled = !!app.enabled;
 
-    els.thermalDevices.innerHTML = '';
-
-    if (!a.installed) {
-      const msg = document.createElement('div');
-      msg.className = 'nw-help';
-      msg.textContent = 'Die App „Thermik & Power-to-Heat“ ist nicht installiert. Bitte unter „Apps“ installieren, dann hier konfigurieren.';
-      els.thermalDevices.appendChild(msg);
-      return;
-    }
-
-    const fs = _ensureFlowSlots();
-    const consumers = Array.isArray(fs.consumers) ? fs.consumers : [];
-
-    // Global manual-hold configuration
-    {
-      const row = document.createElement('div');
-      row.className = 'nw-config-item';
-      const left = document.createElement('div');
-      left.className = 'nw-config-item__left';
-      const title = document.createElement('div');
-      title.className = 'nw-config-item__title';
-      title.textContent = 'Manuell‑Hold (Schnellsteuerung)';
-      const sub = document.createElement('div');
-      sub.className = 'nw-config-item__subtitle';
-      sub.textContent = 'Wenn per Schnellsteuerung ein Sollwert/Switch gesetzt wird, hält die Automatik für X Minuten an (damit PV‑Auto nicht sofort überschreibt).';
-      left.appendChild(title);
-      left.appendChild(sub);
-
-      const right = document.createElement('div');
-      right.className = 'nw-config-item__right';
-      right.style.display = 'flex';
-      right.style.gap = '8px';
-      right.style.alignItems = 'center';
-      const inp = document.createElement('input');
-      inp.className = 'nw-config-input';
-      inp.type = 'number';
-      inp.style.width = '92px';
-      inp.placeholder = 'min';
-      inp.value = String(Number.isFinite(Number(t.manualHoldMin)) ? Math.round(Number(t.manualHoldMin)) : 20);
-      inp.addEventListener('change', () => {
-        const n = Number(inp.value);
-        const t2 = _ensureThermalCfg();
-        t2.manualHoldMin = (Number.isFinite(n) && n >= 0) ? Math.round(n) : 20;
-      });
-      right.appendChild(inp);
-      const lbl = document.createElement('span');
-      lbl.className = 'nw-config-muted';
-      lbl.textContent = 'Minuten';
-      right.appendChild(lbl);
-
-      row.appendChild(left);
-      row.appendChild(right);
-      els.thermalDevices.appendChild(row);
-    }
-
-    for (const dev of t.devices) {
-      const slot = Number(dev.slot);
-      const idx = Math.max(1, Math.min(FLOW_CONSUMER_SLOT_COUNT, Math.round(slot)));
-      const slotCfg = (consumers[idx - 1] && typeof consumers[idx - 1] === 'object') ? consumers[idx - 1] : {};
-      const ctrl = (slotCfg.ctrl && typeof slotCfg.ctrl === 'object') ? slotCfg.ctrl : {};
-      const name = String(slotCfg.name || '').trim() || _defaultSlotName('consumers', idx);
-
-      const hasSwitch = !!String(ctrl.switchWriteId || '').trim();
-      const hasSetpoint = !!String(ctrl.setpointWriteId || '').trim();
-      const hasSgA = !!String(ctrl.sgReadyAWriteId || '').trim();
-      const hasSgB = !!String(ctrl.sgReadyBWriteId || '').trim();
-      const hasSg = hasSgA || hasSgB;
-      const canActuate = hasSwitch || hasSetpoint || hasSg;
-
-      const row = document.createElement('div');
-      row.className = 'nw-config-item';
-
-      const left = document.createElement('div');
-      left.className = 'nw-config-item__left';
-
-      const title = document.createElement('div');
-      title.className = 'nw-config-item__title';
-      title.textContent = `Slot ${idx} – ${name}`;
-
-      const sub = document.createElement('div');
-      sub.className = 'nw-config-item__subtitle';
-      sub.textContent = canActuate
-        ? (hasSg ? 'Steuerung: SG‑Ready (2 Relais)' : (hasSwitch && hasSetpoint ? 'Steuerung: Switch + Sollwert' : (hasSwitch ? 'Steuerung: Switch' : 'Steuerung: Sollwert')))
-        : 'Keine Steuer‑Datenpunkte gesetzt (nur Anzeige)';
-
-      left.appendChild(title);
-      left.appendChild(sub);
-
-      const right = document.createElement('div');
-      right.className = 'nw-config-item__right';
-      right.style.display = 'flex';
-      right.style.gap = '8px';
-      right.style.alignItems = 'center';
-      right.style.flexWrap = 'wrap';
-
-      const badge = document.createElement('span');
-      badge.className = 'nw-config-badge ' + (canActuate ? 'nw-config-badge--ok' : 'nw-config-badge--warn');
-      badge.textContent = canActuate ? 'steuerbar' : 'nicht steuerbar';
-      right.appendChild(badge);
-
-      const en = document.createElement('input');
-      en.type = 'checkbox';
-      en.id = `thermal_slot_${idx}_enabled`;
-      en.checked = !!dev.enabled;
-      en.title = 'PV‑Auto aktiv';
-      en.addEventListener('change', () => {
-        const t2 = _ensureThermalCfg();
-        const d2 = t2.devices[idx - 1];
-        d2.enabled = !!en.checked;
-      });
-      const enLbl = document.createElement('label');
-      enLbl.htmlFor = en.id;
-      enLbl.style.fontSize = '0.82rem';
-      enLbl.style.color = '#e5e7eb';
-      enLbl.style.display = 'inline-flex';
-      enLbl.style.alignItems = 'center';
-      enLbl.style.gap = '6px';
-      enLbl.appendChild(en);
-      enLbl.appendChild(document.createTextNode('PV‑Auto'));
-      right.appendChild(enLbl);
-
-      const modeSel = document.createElement('select');
-      modeSel.className = 'nw-config-input';
-      modeSel.style.width = '120px';
-      modeSel.id = `thermal_slot_${idx}_mode`;
-      const opts = [
-        { v: 'pvAuto', t: 'PV‑Auto' },
-        { v: 'manual', t: 'Manuell' },
-        { v: 'off', t: 'Aus' }
-      ];
-      for (const o of opts) {
-        const op = document.createElement('option');
-        op.value = o.v;
-        op.textContent = o.t;
-        modeSel.appendChild(op);
-      }
-      modeSel.value = String(dev.mode || 'pvAuto');
-      modeSel.addEventListener('change', () => {
-        const t2 = _ensureThermalCfg();
-        const d2 = t2.devices[idx - 1];
-        d2.mode = String(modeSel.value || 'pvAuto');
-      });
-      right.appendChild(modeSel);
-
-      // Device type / profile
-      const typeSel = document.createElement('select');
-      typeSel.className = 'nw-config-input';
-      typeSel.style.width = '170px';
-      typeSel.id = `thermal_slot_${idx}_type`;
-      const typeOpts = [
-        { v: 'power', t: 'Leistung (W)' },
-        { v: 'setpoint', t: 'Setpoint (z.B. °C)' },
-        { v: 'sgready', t: 'SG‑Ready (2 Relais)' }
-      ];
-      for (const o of typeOpts) {
-        const op = document.createElement('option');
-        op.value = o.v;
-        op.textContent = o.t;
-        typeSel.appendChild(op);
-      }
-      typeSel.value = String(dev.type || 'power');
-      typeSel.addEventListener('change', () => {
-        const t2 = _ensureThermalCfg();
-        const d2 = t2.devices[idx - 1];
-        d2.type = String(typeSel.value || 'power');
-        // keep UI in sync
-        buildThermalUI();
-      });
-      right.appendChild(typeSel);
-
-      const profileSel = document.createElement('select');
-      profileSel.className = 'nw-config-input';
-      profileSel.style.width = '140px';
-      profileSel.id = `thermal_slot_${idx}_profile`;
-      const profOpts = [
-        { v: 'heating', t: 'Heizen' },
-        { v: 'cooling', t: 'Kühlen' },
-        { v: 'neutral', t: 'Neutral' }
-      ];
-      for (const o of profOpts) {
-        const op = document.createElement('option');
-        op.value = o.v;
-        op.textContent = o.t;
-        profileSel.appendChild(op);
-      }
-      profileSel.value = String(dev.profile || 'heating');
-      profileSel.style.display = (String(dev.type) === 'setpoint') ? '' : 'none';
-      profileSel.addEventListener('change', () => {
-        const t2 = _ensureThermalCfg();
-        const d2 = t2.devices[idx - 1];
-        d2.profile = String(profileSel.value || 'heating');
-      });
-      right.appendChild(profileSel);
-
-      // Boost enabled toggle (only meaningful if controllable)
-      const b = document.createElement('input');
-      b.type = 'checkbox';
-      b.id = `thermal_slot_${idx}_boostEnabled`;
-      b.checked = (dev.boostEnabled !== false);
-      b.addEventListener('change', () => {
-        const t2 = _ensureThermalCfg();
-        const d2 = t2.devices[idx - 1];
-        d2.boostEnabled = !!b.checked;
-      });
-      const bLbl = document.createElement('label');
-      bLbl.htmlFor = b.id;
-      bLbl.style.fontSize = '0.82rem';
-      bLbl.style.color = '#e5e7eb';
-      bLbl.style.display = 'inline-flex';
-      bLbl.style.alignItems = 'center';
-      bLbl.style.gap = '6px';
-      bLbl.appendChild(b);
-      bLbl.appendChild(document.createTextNode('Boost'));
-      right.appendChild(bLbl);
-
-      const mkNum = (idSfx, value, placeholder, onChange) => {
-        const inp = document.createElement('input');
-        inp.className = 'nw-config-input';
-        inp.type = 'number';
-        inp.style.width = '92px';
-        inp.id = `thermal_slot_${idx}_${idSfx}`;
-        inp.placeholder = placeholder;
-        inp.value = (value !== undefined && value !== null) ? String(value) : '';
-        inp.addEventListener('change', () => {
-          const n = Number(inp.value);
-          onChange(Number.isFinite(n) ? n : 0);
-        });
-        return inp;
-      };
-
-      // Common: start/stop + min on/off
-      right.appendChild(mkNum('startSurplusW', dev.startSurplusW, 'Start W', (n) => { const t2 = _ensureThermalCfg(); t2.devices[idx - 1].startSurplusW = n; }));
-      right.appendChild(mkNum('stopSurplusW', dev.stopSurplusW, 'Stop W', (n) => { const t2 = _ensureThermalCfg(); t2.devices[idx - 1].stopSurplusW = n; }));
-      right.appendChild(mkNum('minOnSec', dev.minOnSec, 'MinOn s', (n) => { const t2 = _ensureThermalCfg(); t2.devices[idx - 1].minOnSec = n; }));
-      right.appendChild(mkNum('minOffSec', dev.minOffSec, 'MinOff s', (n) => { const t2 = _ensureThermalCfg(); t2.devices[idx - 1].minOffSec = n; }));
-
-      // Type-specific fields
-      if (String(dev.type) === 'setpoint') {
-        right.appendChild(mkNum('estimatedPowerW', dev.estimatedPowerW, 'Est. W', (n) => { const t2 = _ensureThermalCfg(); t2.devices[idx - 1].estimatedPowerW = n; }));
-        right.appendChild(mkNum('autoOnSetpoint', dev.autoOnSetpoint, 'PV SP', (n) => { const t2 = _ensureThermalCfg(); t2.devices[idx - 1].autoOnSetpoint = n; }));
-        right.appendChild(mkNum('autoOffSetpoint', dev.autoOffSetpoint, 'Norm SP', (n) => { const t2 = _ensureThermalCfg(); t2.devices[idx - 1].autoOffSetpoint = n; }));
-        right.appendChild(mkNum('boostSetpoint', dev.boostSetpoint, 'Boost SP', (n) => { const t2 = _ensureThermalCfg(); t2.devices[idx - 1].boostSetpoint = n; }));
-        right.appendChild(mkNum('boostDurationMin', dev.boostDurationMin, 'Boost min', (n) => { const t2 = _ensureThermalCfg(); t2.devices[idx - 1].boostDurationMin = n; }));
-      } else if (String(dev.type) === 'sgready') {
-        right.appendChild(mkNum('estimatedPowerW', dev.estimatedPowerW, 'Est. W', (n) => { const t2 = _ensureThermalCfg(); t2.devices[idx - 1].estimatedPowerW = n; }));
-        right.appendChild(mkNum('boostDurationMin', dev.boostDurationMin, 'Boost min', (n) => { const t2 = _ensureThermalCfg(); t2.devices[idx - 1].boostDurationMin = n; }));
-
-        if (!hasSg) {
-          const warn = document.createElement('span');
-          warn.className = 'nw-config-badge nw-config-badge--warn';
-          warn.textContent = 'SG‑Ready DPs fehlen';
-          right.appendChild(warn);
-        }
-      } else {
-        right.appendChild(mkNum('maxPowerW', dev.maxPowerW, 'Max W', (n) => { const t2 = _ensureThermalCfg(); t2.devices[idx - 1].maxPowerW = n; }));
-        right.appendChild(mkNum('boostPowerW', dev.boostPowerW, 'Boost W', (n) => { const t2 = _ensureThermalCfg(); t2.devices[idx - 1].boostPowerW = n; }));
-        right.appendChild(mkNum('boostDurationMin', dev.boostDurationMin, 'Boost min', (n) => { const t2 = _ensureThermalCfg(); t2.devices[idx - 1].boostDurationMin = n; }));
-      }
-
-      row.appendChild(left);
-      row.appendChild(right);
-      els.thermalDevices.appendChild(row);
-    }
-
-    const hint = document.createElement('div');
-    hint.className = 'nw-config-empty';
-    hint.style.marginTop = '8px';
-    hint.textContent = 'Tipp: Slot‑Name und Steuer‑Datenpunkte werden im Energiefluss‑Tab (Verbraucher) gesetzt. Hier wird nur die Automatik aktiviert.';
-    els.thermalDevices.appendChild(hint);
+  // Ensure 8 device slots
+  cfg.devices = Array.isArray(cfg.devices) ? cfg.devices : [];
+  while (cfg.devices.length < 8) {
+    cfg.devices.push({
+      enabled: false,
+      name: '',
+      // variant: 'power' (Leistung), 'setpoint' (Sollwert), 'sgready' (SG-Ready)
+      type: 'power',
+      // profile: 'heat'/'cool' (used for labels in UI)
+      profile: 'heat',
+      // PV-auto thresholds
+      startSurplusW: 800,
+      stopSurplusW: 300,
+      // anti-flutter
+      minOnSec: 300,
+      minOffSec: 300,
+      // boost
+      boostEnabled: false,
+      boostPowerW: 2500,
+      boostDurationMin: 30,
+      // setpoint-specific
+      autoOnSetpoint: 55,
+      autoOffSetpoint: 45,
+      // power/setpoint estimation
+      estimatedPowerW: 1500,
+      // power-specific
+      maxPowerW: 2500,
+      // sgready-specific
+      maxSgStage: 4,
+    });
   }
+
+  // Manual-hold (Schnellsteuerung)
+  els.thermalHoldMinutes.value = (cfg.manualHoldMinutes ?? 20);
+  els.thermalHoldMinutes.onchange = () => {
+    cfg.manualHoldMinutes = parseInt(els.thermalHoldMinutes.value, 10) || 0;
+    setDirty();
+  };
+
+  // Render devices
+  els.thermalDevices.innerHTML = '';
+
+  // Helpers
+  const mkGroup = (title, children) => {
+    const g = document.createElement('div');
+    g.style.display = 'flex';
+    g.style.flexDirection = 'column';
+    g.style.gap = '6px';
+    g.style.padding = '10px 12px';
+    g.style.border = '1px solid rgba(255,255,255,0.08)';
+    g.style.borderRadius = '12px';
+    g.style.background = 'rgba(255,255,255,0.02)';
+
+    const h = document.createElement('div');
+    h.textContent = title;
+    h.style.fontSize = '0.78rem';
+    h.style.opacity = '0.85';
+    h.style.fontWeight = '600';
+
+    const body = document.createElement('div');
+    body.style.display = 'flex';
+    body.style.flexWrap = 'wrap';
+    body.style.gap = '10px';
+    body.style.alignItems = 'flex-end';
+
+    children.forEach((c) => body.appendChild(c));
+    g.appendChild(h);
+    g.appendChild(body);
+    return g;
+  };
+
+  const mkField = (label, inputEl, help) => {
+    const w = document.createElement('div');
+    w.style.display = 'flex';
+    w.style.flexDirection = 'column';
+    w.style.gap = '4px';
+    w.style.minWidth = '140px';
+
+    const l = document.createElement('div');
+    l.textContent = label;
+    l.style.fontSize = '0.72rem';
+    l.style.opacity = '0.75';
+
+    if (help) {
+      w.title = help;
+      inputEl.title = help;
+    } else {
+      inputEl.title = label;
+    }
+
+    w.appendChild(l);
+    w.appendChild(inputEl);
+    return w;
+  };
+
+  const mkNum = (value, onChange, opts = {}) => {
+    const inp = document.createElement('input');
+    inp.type = 'number';
+    inp.value = (value ?? '');
+    if (opts.min != null) inp.min = String(opts.min);
+    if (opts.max != null) inp.max = String(opts.max);
+    if (opts.step != null) inp.step = String(opts.step);
+    if (opts.placeholder) inp.placeholder = opts.placeholder;
+    inp.style.width = (opts.width || '140px');
+    inp.onchange = () => onChange(parseFloat(inp.value));
+    return inp;
+  };
+
+  const mkSelect = (value, options, onChange, opts = {}) => {
+    const sel = document.createElement('select');
+    sel.style.width = (opts.width || '180px');
+    options.forEach((o) => {
+      const opt = document.createElement('option');
+      opt.value = o.value;
+      opt.textContent = o.label;
+      sel.appendChild(opt);
+    });
+    sel.value = value;
+    sel.onchange = () => onChange(sel.value);
+    return sel;
+  };
+
+  const mkToggle = (checked, onChange, opts = {}) => {
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!checked;
+    cb.onchange = () => onChange(cb.checked);
+    if (opts.disabled) cb.disabled = true;
+    return cb;
+  };
+
+  const typeOptions = [
+    { value: 'power', label: 'Leistung (W) – modulierend' },
+    { value: 'setpoint', label: 'Sollwert (z.B. °C) – Setpoint' },
+    { value: 'sgready', label: 'SG-Ready – Stufe/Relais' },
+  ];
+
+  const profileOptions = [
+    { value: 'heat', label: 'Heizen' },
+    { value: 'cool', label: 'Kühlen' },
+  ];
+
+  cfg.devices.forEach((dev, i) => {
+    const idx = i + 1;
+
+    // Row layout
+    const row = document.createElement('div');
+    row.className = 'row thermalRow';
+    row.style.display = 'grid';
+    row.style.gridTemplateColumns = '240px 1fr';
+    row.style.gap = '14px';
+    row.style.alignItems = 'start';
+
+    // Left: basic
+    const left = document.createElement('div');
+    left.style.display = 'flex';
+    left.style.flexDirection = 'column';
+    left.style.gap = '8px';
+
+    const title = document.createElement('div');
+    title.style.display = 'flex';
+    title.style.alignItems = 'center';
+    title.style.gap = '10px';
+
+    const en = mkToggle(dev.enabled, (v) => { dev.enabled = !!v; setDirty(); });
+    title.appendChild(en);
+
+    const t = document.createElement('div');
+    t.textContent = `Slot ${idx} – Verbraucher ${idx}`;
+    t.style.fontWeight = '600';
+    title.appendChild(t);
+
+    left.appendChild(title);
+
+    const nameInp = document.createElement('input');
+    nameInp.type = 'text';
+    nameInp.value = dev.name || '';
+    nameInp.placeholder = 'Name (z.B. Wärmepumpe, Heizstab, Klima ...)';
+    nameInp.style.width = '220px';
+    nameInp.onchange = () => { dev.name = nameInp.value; setDirty(); };
+    left.appendChild(mkField('Name', nameInp, 'Freier Anzeigename für VIS & AppCenter.'));
+
+    // Right: parameters
+    const right = document.createElement('div');
+    right.style.display = 'flex';
+    right.style.flexWrap = 'wrap';
+    right.style.gap = '12px';
+
+    // Variant / profile
+    const selType = mkSelect(dev.type || 'power', typeOptions, (v) => { dev.type = v; setDirty(); syncVisibility(); }, { width: '260px' });
+    const selProfile = mkSelect(dev.profile || 'heat', profileOptions, (v) => { dev.profile = v; setDirty(); }, { width: '160px' });
+
+    // PV-auto thresholds
+    const inpStart = mkNum(dev.startSurplusW, (v) => { dev.startSurplusW = isFinite(v) ? v : 0; setDirty(); }, { min: 0, step: 10, placeholder: 'z.B. 800', width: '130px' });
+    const inpStop = mkNum(dev.stopSurplusW, (v) => { dev.stopSurplusW = isFinite(v) ? v : 0; setDirty(); }, { min: 0, step: 10, placeholder: 'z.B. 300', width: '130px' });
+
+    // Timing (anti-flutter)
+    const inpMinOn = mkNum(dev.minOnSec, (v) => { dev.minOnSec = isFinite(v) ? v : 0; setDirty(); }, { min: 0, step: 1, placeholder: 'Sek.', width: '110px' });
+    const inpMinOff = mkNum(dev.minOffSec, (v) => { dev.minOffSec = isFinite(v) ? v : 0; setDirty(); }, { min: 0, step: 1, placeholder: 'Sek.', width: '110px' });
+
+    // Boost
+    const inpBoostEn = mkToggle(dev.boostEnabled, (v) => { dev.boostEnabled = !!v; setDirty(); syncVisibility(); });
+    const inpBoostW = mkNum(dev.boostPowerW, (v) => { dev.boostPowerW = isFinite(v) ? v : 0; setDirty(); }, { min: 0, step: 10, placeholder: 'W', width: '120px' });
+    const inpBoostMin = mkNum(dev.boostDurationMin, (v) => { dev.boostDurationMin = isFinite(v) ? v : 0; setDirty(); }, { min: 0, step: 1, placeholder: 'Min.', width: '120px' });
+
+    // Setpoint
+    const inpAutoOn = mkNum(dev.autoOnSetpoint, (v) => { dev.autoOnSetpoint = isFinite(v) ? v : 0; setDirty(); }, { step: 1, placeholder: 'z.B. 55', width: '120px' });
+    const inpAutoOff = mkNum(dev.autoOffSetpoint, (v) => { dev.autoOffSetpoint = isFinite(v) ? v : 0; setDirty(); }, { step: 1, placeholder: 'z.B. 45', width: '120px' });
+
+    // Power estimation / limits
+    const inpEstW = mkNum(dev.estimatedPowerW, (v) => { dev.estimatedPowerW = isFinite(v) ? v : 0; setDirty(); }, { min: 0, step: 10, placeholder: 'W', width: '120px' });
+    const inpMaxW = mkNum(dev.maxPowerW, (v) => { dev.maxPowerW = isFinite(v) ? v : 0; setDirty(); }, { min: 0, step: 10, placeholder: 'W', width: '120px' });
+
+    // SG-Ready
+    const inpMaxStage = mkNum(dev.maxSgStage, (v) => { dev.maxSgStage = isFinite(v) ? v : 0; setDirty(); }, { min: 1, step: 1, placeholder: '1-4', width: '110px' });
+
+    // Assemble groups
+    right.appendChild(mkGroup('Variante & Modus', [
+      mkField('Regelvariante', selType, 'Wählen, wie der Verbraucher geregelt wird (Leistung, Sollwert oder SG‑Ready).'),
+      mkField('Profil', selProfile, 'Nur Anzeige/Label (z.B. Heizen/Kühlen).'),
+    ]));
+
+    right.appendChild(mkGroup('PV‑Auto Schwellwerte', [
+      mkField('Start Überschuss (W)', inpStart, 'Ab diesem PV‑Überschuss wird der Verbraucher eingeschaltet/angehoben.'),
+      mkField('Stop Überschuss (W)', inpStop, 'Unterhalb dieses Überschusses wird der Verbraucher wieder reduziert/ausgeschaltet.'),
+    ]));
+
+    right.appendChild(mkGroup('Timing (Anti‑Flattern)', [
+      mkField('Min. Ein‑Zeit (s)', inpMinOn, 'Verhindert häufiges Ein/Aus (Mindestlaufzeit).'),
+      mkField('Min. Aus‑Zeit (s)', inpMinOff, 'Verhindert häufiges Ein/Aus (Mindestruhezeit).'),
+    ]));
+
+    // Variant-specific
+    const grpSetpoint = mkGroup('Sollwert (Setpoint)', [
+      mkField('Auto‑On Sollwert', inpAutoOn, 'Sollwert der bei PV‑Auto gesetzt wird (z.B. °C).'),
+      mkField('Auto‑Off Sollwert', inpAutoOff, 'Sollwert der bei PV‑Auto gesetzt wird (z.B. °C).'),
+      mkField('Leistungs‑Schätzung (W)', inpEstW, 'Für Regelung/Anzeige – typische Leistungsaufnahme bei aktivem Setpoint.'),
+    ]);
+
+    const grpPower = mkGroup('Leistung (W)', [
+      mkField('Leistungs‑Schätzung (W)', inpEstW, 'Für Regelung/Anzeige – typische Leistungsaufnahme bei aktivem Verbraucher.'),
+      mkField('Max. Leistung (W)', inpMaxW, 'Obergrenze für modulierende Leistungs‑Ansteuerung.'),
+    ]);
+
+    const grpSg = mkGroup('SG‑Ready', [
+      mkField('Leistungs‑Schätzung (W)', inpEstW, 'Für Regelung/Anzeige – typische Leistungsaufnahme bei SG‑Ready Stufe.'),
+      mkField('Max. SG‑Stufe', inpMaxStage, 'Maximale Stufe (z.B. 4).'),
+    ]);
+
+    right.appendChild(grpSetpoint);
+    right.appendChild(grpPower);
+    right.appendChild(grpSg);
+
+    // Boost group
+    const boostWrap = document.createElement('div');
+    boostWrap.style.display = 'flex';
+    boostWrap.style.alignItems = 'center';
+    boostWrap.style.gap = '8px';
+    boostWrap.appendChild(inpBoostEn);
+    const boostEnLabel = document.createElement('div');
+    boostEnLabel.textContent = 'Boost aktiv';
+    boostEnLabel.style.fontSize = '0.9rem';
+    boostWrap.appendChild(boostEnLabel);
+
+    const grpBoost = mkGroup('Boost (Schnellsteuerung)', [
+      mkField('Boost Ein/Aus', boostWrap, 'Erlaubt dem Endkunden einen zeitlich begrenzten Boost über die VIS.'),
+      mkField('Boost Wert (W)', inpBoostW, 'Bei Boost: Ziel‑Leistung oder Schaltwert.'),
+      mkField('Boost Dauer (min)', inpBoostMin, 'Wie lange Boost aktiv bleibt.'),
+    ]);
+    right.appendChild(grpBoost);
+
+    // Visibility logic
+    function syncVisibility() {
+      const t = String(dev.type || 'power');
+      grpSetpoint.style.display = (t === 'setpoint') ? '' : 'none';
+      grpPower.style.display = (t === 'power') ? '' : 'none';
+      grpSg.style.display = (t === 'sgready') ? '' : 'none';
+
+      inpBoostW.disabled = !dev.boostEnabled;
+      inpBoostMin.disabled = !dev.boostEnabled;
+    }
+    syncVisibility();
+
+    row.appendChild(left);
+    row.appendChild(right);
+    els.thermalDevices.appendChild(row);
+  });
+
+  updateAppActive();
+}
+
 
 
   // ------------------------------
