@@ -1,8 +1,18 @@
 {
   "common": {
     "name": "nexowatt-vis",
-  "version": "0.6.4",
+  "version": "0.6.5",
     "news": {
+      "0.6.5": {
+        "en": [
+          "Thermik App-Center: use consistent dark input/select styling",
+          "Energyflow Quick-Control: improved layout (gauge right, boost below; no overlap)"
+        ],
+        "de": [
+          "Thermik App-Center: einheitliches Dark-Design für Eingabefelder/Dropdowns",
+          "Energiefluss Quick-Control: Layout verbessert (Gauge rechts, Boost unten; kein Überlappen)"
+        ]
+      },
       "0.6.4": {
         "en": [
           "Fix Thermik table rendering",

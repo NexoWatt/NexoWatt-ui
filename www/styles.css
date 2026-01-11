@@ -2078,14 +2078,22 @@ body{ padding-top: var(--topbar-h); }
 
 .flow-qc-grid{
   display: grid;
-  grid-template-columns: 220px 1fr;
+  /* Controls left, gauge right (prevents overlap and matches the EVCS layout). */
+  grid-template-columns: 1fr 240px;
   gap: 18px;
   align-items: start;
 }
 
 .flow-qc-gauge{
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
+}
+
+/* Boost block should sit below the main grid and not compete for horizontal space. */
+.flow-qc-boost{
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.08);
 }
 
 .flow-qc-controls{
@@ -2105,5 +2113,6 @@ body{ padding-top: var(--topbar-h); }
   }
   .flow-qc-gauge{
     order: -1;
+    justify-content: center;
   }
 }

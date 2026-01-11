@@ -1209,6 +1209,8 @@
     const inp = document.createElement('input');
     inp.type = 'number';
     inp.value = (value ?? '');
+	  // Make inputs visually consistent with the rest of the App-Center.
+	  inp.className = 'nw-config-input';
     if (opts.min != null) inp.min = String(opts.min);
     if (opts.max != null) inp.max = String(opts.max);
     if (opts.step != null) inp.step = String(opts.step);
@@ -1220,6 +1222,8 @@
 
   const mkSelect = (value, options, onChange, opts = {}) => {
     const sel = document.createElement('select');
+	  // Make selects visually consistent with the rest of the App-Center.
+	  sel.className = 'nw-config-select';
     sel.style.width = (opts.width || '180px');
     options.forEach((o) => {
       const opt = document.createElement('option');
@@ -1287,6 +1291,7 @@
     const nameInp = document.createElement('input');
     nameInp.type = 'text';
     nameInp.value = dev.name || '';
+	  nameInp.className = 'nw-config-input';
     nameInp.placeholder = 'Name (z.B. Wärmepumpe, Heizstab, Klima ...)';
     nameInp.style.width = '220px';
     nameInp.onchange = () => { dev.name = nameInp.value; setDirty(); };

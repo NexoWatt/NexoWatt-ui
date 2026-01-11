@@ -697,14 +697,8 @@
     </div>
 
     <div class="dialog-body">
-      <div class="flow-qc-grid">
-        <div class="flow-qc-gauge">
-          <div class="evcs-gauge">
-            <div class="gauge-value" id="flowQcPower">--</div>
-          </div>
-        </div>
-
-        <div class="flow-qc-controls">
+	      <div class="flow-qc-grid">
+	        <div class="flow-qc-controls">
           <!-- Betriebsmodus & Regelung (nur für thermische Verbraucher, wenn vorhanden) -->
           <div class="flow-qc-section" id="flowQcRegWrap" style="display:none;">
             <div class="row two" style="align-items:center">
@@ -757,23 +751,29 @@
             </div>
           </div>
 
-          <div class="flow-qc-section" id="flowQcBoostWrap" style="display:none;">
-            <div class="row two" style="align-items:center">
-              <div>
-                <small>Boost</small>
-                <div style="font-weight:600" id="flowQcBoostStatus">—</div>
-              </div>
-              <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end;align-items:center;">
-                <button type="button" class="btn" id="flowQcBoostBtn">Boost starten</button>
-                <button type="button" class="btn" id="flowQcBoostStopBtn" style="display:none;">Boost stoppen</button>
-              </div>
-            </div>
-            <small id="flowQcBoostHint" style="display:block;opacity:0.85;margin-top:6px"></small>
-          </div>
-
           <small id="flowQcMsg" style="display:block;margin-top:10px;opacity:0.85"></small>
         </div>
+
+	        <div class="flow-qc-gauge">
+	          <div class="evcs-gauge">
+	            <div class="gauge-value" id="flowQcPower">--</div>
+	          </div>
+	        </div>
       </div>
+
+	      <div class="flow-qc-section flow-qc-boost" id="flowQcBoostWrap" style="display:none;">
+	        <div class="row two" style="align-items:center">
+	          <div>
+	            <small>Boost</small>
+	            <div style="font-weight:600" id="flowQcBoostStatus">—</div>
+	          </div>
+	          <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end;align-items:center;">
+	            <button type="button" class="btn" id="flowQcBoostBtn">Boost starten</button>
+	            <button type="button" class="btn" id="flowQcBoostStopBtn" style="display:none;">Boost stoppen</button>
+	          </div>
+	        </div>
+	        <small id="flowQcBoostHint" style="display:block;opacity:0.85;margin-top:6px"></small>
+	      </div>
     </div>
   </div>
 </div>
