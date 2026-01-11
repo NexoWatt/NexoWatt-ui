@@ -1095,8 +1095,15 @@
 
   function buildThermalUI() {
   // Thermik (Wärmepumpe/Heizung/Klima): PV-Überschuss intelligent nutzen.
-  const cfg = config.thermal || (config.thermal = { devices: [], manualHoldMinutes: 20 });
-  const apps = config.apps || (config.apps = {});
+  // NOTE: This UI lives in App-Center and works on the *currentConfig* object.
+  // A previous refactor accidentally referenced a non-existent global "config" which
+  // broke the complete Thermik tab (rendering stopped with a ReferenceError).
+  const cfg = (currentConfig.thermal || (currentConfig.thermal = { devices: [], manualHoldMinutes: 20 }));
+
+  // App toggle lives under currentConfig.emsApps.apps.* (like all other apps)
+  currentConfig.emsApps = currentConfig.emsApps || { apps: {} };
+  currentConfig.emsApps.apps = currentConfig.emsApps.apps || {};
+  const apps = currentConfig.emsApps.apps;
   const app = apps.thermal || (apps.thermal = { installed: false, enabled: false });
 
   // Keep app.enabled in sync with App-Center toggle

@@ -361,6 +361,20 @@ function initEnergyWebExtras(flowSlots){
 
     gNodes.appendChild(g);
 
+    // Enable click-to-open control modal for steerable (QC-enabled) slots.
+    // This matches the UX of the EVCS node and makes *all* steerable devices accessible
+    // directly from the Energiefluss view.
+    try {
+      if (item && item.qc && item.qc.enabled) {
+        g.classList.add('clickable');
+        g.style.cursor = 'pointer';
+        g.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          openFlowQc(kind, idx);
+        });
+      }
+    } catch(_e) {}
+
     const slot = {
       key: item && item.key != null ? item.key : undefined,
       stateKey,
@@ -535,8 +549,11 @@ const placeSpecialLowerLeftArc = (items) => {
     const endDeg = spanDeg;
     const stepDeg = (n <= 1) ? 0 : ((endDeg - startDeg) / (n - 1));
 
-    for (let i = 0; i < n; i++) {
-      const aDeg = (n <= 1) ? 0 : (startDeg + stepDeg * i);
+	    for (let i = 0; i < n; i++) {
+	      // If there is only a single optional consumer, avoid placing it exactly on the
+	      // EVCS horizontal axis (y=300) to prevent the visual impression that the
+	      // consumer is "behind" the EVCS. A small upward offset keeps the diagram clear.
+	      const aDeg = (n <= 1) ? -25 : (startDeg + stepDeg * i);
       const a = aDeg * Math.PI / 180;
       const x = ringCx + rx * Math.cos(a);
       const y = ringCy + ry * Math.sin(a);
@@ -3572,7 +3589,9 @@ function updateThermalConsumerUi(){
 
   const apps = (window.__nwEmsApps && window.__nwEmsApps.apps) ? window.__nwEmsApps.apps : {};
   const thermApp = apps.thermal || {};
-  const appActive = (thermApp.installed === true && thermApp.enabled === true);
+  const appInstalled = (thermApp.installed === true);
+  const appEnabled = (thermApp.enabled === true);
+  const appActive = appInstalled && appEnabled;
 
   const slots = (flowSlotsCfg && Array.isArray(flowSlotsCfg.consumers)) ? flowSlotsCfg.consumers : [];
   const thermalCfg = (window.__nwEmsApps && window.__nwEmsApps.thermal) ? window.__nwEmsApps.thermal : {};
@@ -3588,7 +3607,7 @@ function updateThermalConsumerUi(){
     const slot = slots[idx - 1];
     const qcEnabled = !!(slot && slot.qc && slot.qc.enabled);
 
-    const show = appActive && qcEnabled;
+    const show = appInstalled && qcEnabled;
     refs.tile.style.display = show ? '' : 'none';
     if (!show) continue;
 
