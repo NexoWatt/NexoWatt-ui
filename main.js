@@ -8461,6 +8461,19 @@ return res.json(out);
       })());
     }
 
+    // E‑Mobilität Gesamt-kWh (für CO₂‑Berechnung): fallback via Integration der EVCS-Leistung
+    // (Nur notwendig, wenn kein externer CO₂‑DP gemappt ist.)
+    const needCo2Calc = !this._nwHasMappedDatapoint('co2Savings');
+    if (needCo2Calc) {
+      const id = this._nwGetHistoryDpId('evcsPower');
+      if (id) tasks.push((async () => {
+        const stepMs = this._nwChooseStepMs(spanMs, 3500, 5 * 60 * 1000);
+        const series = await this._nwGetHistoryAvgSeries(id, startMs, now, stepMs);
+        const kwh = this._nwIntegrateKwh(series, now, stepMs, true);
+        if (kwh != null) this.updateValue('evEnergyKwh', kwh, now);
+      })());
+    }
+
     // "Letzte Ladung" (EVCS): fallback from history if not mapped
     if (!this._nwHasMappedDatapoint('evcsLastChargeKwh')) {
       const evcsId = this._nwGetHistoryDpId('evcsPower');
@@ -8498,6 +8511,33 @@ return res.json(out);
     }
 
     try { await Promise.allSettled(tasks); } catch (_e) {}
+
+    // CO₂‑Einsparung (t) – wird automatisch berechnet, wenn kein externer DP gemappt ist.
+    // Formel (sauber, ohne Doppelzählung):
+    //   PV spart Netzstrom ein: PV_kWh * Netz‑Faktor
+    //   E‑Mobilität spart gegenüber Verbrenner: EV_kWh * (Verbrenner‑Faktor − Netz‑Faktor)
+    // Ergebnis in Tonnen.
+    if (!this._nwHasMappedDatapoint('co2Savings')) {
+      const pvKwh = Number(this.stateCache.productionEnergyKwh?.value);
+      const evKwh = Number(this.stateCache.evEnergyKwh?.value);
+
+      const cfg = (this.config && this.config.settings) ? this.config.settings : {};
+      const gridKgPerKwhRaw = Number(cfg.co2GridKgPerKwh);
+      const iceKgPerKwhRaw = Number(cfg.co2IceKgPerKwh);
+      const gridKgPerKwh = Number.isFinite(gridKgPerKwhRaw) ? gridKgPerKwhRaw : 0.4;
+      const iceKgPerKwh = Number.isFinite(iceKgPerKwhRaw) ? iceKgPerKwhRaw : 0.85;
+
+      const pv = Number.isFinite(pvKwh) ? pvKwh : 0;
+      const ev = Number.isFinite(evKwh) ? evKwh : 0;
+      const evNetKgPerKwh = Math.max(0, iceKgPerKwh - gridKgPerKwh);
+      const totalKg = (pv * gridKgPerKwh) + (ev * evNetKgPerKwh);
+      const totalT = totalKg / 1000;
+
+      // nur setzen, wenn plausibel
+      if (Number.isFinite(totalT)) {
+        this.updateValue('co2Savings', totalT, now);
+      }
+    }
   }
 
 
