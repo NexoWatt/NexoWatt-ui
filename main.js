@@ -8413,7 +8413,11 @@ return res.json(out);
       if (!Number.isFinite(v)) continue;
       if (positiveOnly) v = Math.max(0, v);
       else v = Math.abs(v);
-      kwh += (v * dt) / 3600000; // W * ms -> Wh -> kWh
+      // dt is in milliseconds:
+      //   W * (ms / 3_600_000) = Wh
+      //   Wh / 1_000          = kWh
+      // => W * ms / 3_600_000_000 = kWh
+      kwh += (v * dt) / 3600000000;
     }
     return kwh;
   }
