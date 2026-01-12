@@ -8297,10 +8297,24 @@ return res.json(out);
     // Otherwise users would need to enable Influx logging for *device* datapoints
     // in addition to the canonical nexowatt-vis.0.historie.* states (double mapping).
     //
-    // We therefore prefer:
-    // 1) explicit history mapping (config.history.datapoints) for power users
-    // 2) canonical 'historie.*' states created by the adapter.
-    return this._nwTrimId(dp[name]) || this._nwTrimId(this._nwGetCanonicalHistorieId(name)) || '';
+    // NOTE: Earlier versions allowed overriding the Historie input states via
+    // config.history.datapoints. In practice this led to many installations still
+    // referencing legacy helper states (e.g. 0_userdata.* / "Leistung_Visu_Historie"),
+    // even though the adapter already auto-creates and historizes canonical states
+    // under `${this.namespace}.historie.*`.
+    //
+    // For a predictable, low-maintenance setup we therefore *default* to the canonical
+    // adapter states. Explicit mappings are only honored if they also point into the
+    // adapter's own historized namespace. (Advanced users can still force any ID by
+    // prefixing it with '!'.)
+    const canon = this._nwTrimId(this._nwGetCanonicalHistorieId(name));
+    const raw = (dp && typeof dp[name] === 'string') ? dp[name].trim() : '';
+    const explicitForced = raw.startsWith('!') ? this._nwTrimId(raw.slice(1)) : '';
+    if (explicitForced) return explicitForced;
+
+    const explicit = this._nwTrimId(raw);
+    const allowExplicit = !!(explicit && explicit.startsWith(`${this.namespace}.historie.`));
+    return (allowExplicit ? explicit : canon) || explicit || '';
   }
 
   _nwHasMappedDatapoint(key) {
