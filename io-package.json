@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.7",
+    "version": "0.6.8",
     "news": {
+      "0.6.8": {
+        "en": [
+          "History/Billing: added per-charging-point (LP) EVCS power history states and auto-enable InfluxDB logging. EVCS report now reads these states (no manual Influx setup per OCPP/Modbus datapoint)."
+        ],
+        "de": [
+          "Historie/Abrechnung: pro Ladepunkt (LP) eigene EVCS-Leistungs-Historiestates inkl. automatischer InfluxDB-Aktivierung. EVCS-Report nutzt jetzt diese States (keine manuelle Influx-Konfiguration pro OCPP/Modbus-Datenpunkt mehr)."
+        ]
+      },
       "0.6.7": {
         "en": [
           "Schnellsteuerung: Thermik-Kachel zeigt jetzt ein passendes Icon (wie andere Kacheln)."

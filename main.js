@@ -2737,6 +2737,7 @@ async migrateNativeConfig() {
         for (let i = evcsCount + 1; i <= MAX_EVCSSLOTS; i++) {
           await delRec(`evcs.${i}`);
           await delRec(`chargingManagement.wallboxes.lp${i}`);
+          await delRec(`historie.evcs.lp${i}`);
         }
       }
 
@@ -5436,8 +5437,14 @@ const nwBuildEvcsReport = async (query = {}) => {
     const reportStepMs = chooseStepMs(end - start, baseReportStepMs);
 
     // Power series (W): use average for energy integration and max for daily peak
-    const pAvg = await getHist(wb.powerId, start, end, 'average', reportStepMs);
-    const pMax = await getHist(wb.powerId, start, end, 'max', reportStepMs);
+    const histPowerId = `${this.namespace}.historie.evcs.lp${idx}.powerW`;
+    let pAvg = await getHist(histPowerId, start, end, 'average', reportStepMs);
+    let pMax = await getHist(histPowerId, start, end, 'max', reportStepMs);
+    // Fallback for legacy setups where only the raw wallbox datapoint is historized
+    if ((!pAvg || pAvg.length === 0) && wb.powerId) {
+      pAvg = await getHist(wb.powerId, start, end, 'average', reportStepMs);
+      pMax = await getHist(wb.powerId, start, end, 'max', reportStepMs);
+    }
 
     const pAgg = buckets.map(_b => ({ kwh: 0, maxW: 0 }));
 
@@ -7863,6 +7870,18 @@ return res.json(out);
     await ensureChannel('historie.core.ev', 'E-Mobilität');
     await ensureState('historie.core.ev.totalW', 'E-Mobilität (gesamt)', 'value.power', 'W');
 
+    // EVCS per Ladepunkt (für Abrechnung/Detailanalyse)
+    // Diese States werden aus den internen EVCS-Leistungswerten befüllt und
+    // (optional) automatisch für InfluxDB aktiviert.
+    const evcsCount = Number(this.evcsCount || 0);
+    if (Number.isFinite(evcsCount) && evcsCount > 0) {
+      await ensureChannel('historie.evcs', 'EVCS (Ladepunkte)');
+      for (let i = 1; i <= evcsCount; i++) {
+        await ensureChannel(`historie.evcs.lp${i}`, `Ladepunkt ${i}`);
+        await ensureState(`historie.evcs.lp${i}.powerW`, `Ladepunkt ${i} Leistung`, 'value.power', 'W');
+      }
+    }
+
     // Dynamic: optional consumers/producers from Energiefluss-Monitor
     const vis = (this.config && this.config.vis) || {};
     const fs = (vis && vis.flowSlots && typeof vis.flowSlots === 'object') ? vis.flowSlots : {};
@@ -7997,6 +8016,15 @@ return res.json(out);
     if (Number.isFinite(soc)) this._nwSetHistorieValue('historie.core.storage.socPct', soc, now, 0.1);
 
     this._nwSetHistorieValue('historie.core.ev.totalW', evAbs, now, 1);
+
+    // EVCS per Ladepunkt (Leistung) – für detaillierte Abrechnung
+    const evcsCount = Number(this.evcsCount || 0);
+    if (Number.isFinite(evcsCount) && evcsCount > 0) {
+      for (let i = 1; i <= evcsCount; i++) {
+        const v = this._nwGetNumberFromCache(`evcs.${i}.powerW`);
+        if (Number.isFinite(v)) this._nwSetHistorieValue(`historie.evcs.lp${i}.powerW`, Math.max(0, Math.abs(v)), now, 1);
+      }
+    }
 
     // Dynamic slots (only if the corresponding cache entries exist)
     for (let i = 1; i <= 10; i++) {
