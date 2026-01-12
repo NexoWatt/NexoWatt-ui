@@ -314,22 +314,49 @@ function draw(){
     return out;
   }
 
+    function toTsMs(t){
+    if(t === null || t === undefined) return NaN;
+    if(typeof t === 'number'){
+      if(!Number.isFinite(t)) return NaN;
+      // Heuristic: influxdb can return seconds; we need ms
+      return (t > 0 && t < 1e12) ? t * 1000 : t;
+    }
+    if(t instanceof Date) return t.getTime();
+    if(typeof t === 'string'){
+      const s = t.trim();
+      if(!s) return NaN;
+      const asNum = Number(s);
+      if(Number.isFinite(asNum)) return (asNum > 0 && asNum < 1e12) ? asNum * 1000 : asNum;
+      const parsed = Date.parse(s);
+      return Number.isNaN(parsed) ? NaN : parsed;
+    }
+    const n = Number(t);
+    if(Number.isFinite(n)) return (n > 0 && n < 1e12) ? n * 1000 : n;
+    return NaN;
+  }
+
   function sumEnergyKWh(vals){
-    if(!vals || vals.length < 2) return 0;
+    if(!Array.isArray(vals) || vals.length < 2) return 0;
+    const points = vals
+      .map(p => [toTsMs(p[0]), Number(p[1])])
+      .filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1]))
+      .sort((a, b) => a[0] - b[0]);
+    if(points.length < 2) return 0;
+
     let eWh = 0;
-    for(let i=0;i<vals.length-1;i++){
-      const t0 = +vals[i][0], v0 = +vals[i][1];
-      const t1 = +vals[i+1][0], v1 = +vals[i+1][1];
-      if(isFinite(t0) && isFinite(t1) && t1>t0){
-        const dt_s = (t1 - t0) / 1000;
-        const avgW = (Math.abs(v0) + Math.abs(v1)) / 2;
-        eWh += avgW * dt_s / 3600;
-      }
+    for(let i=0; i<points.length-1; i++){
+      const t0 = points[i][0], v0 = Math.abs(points[i][1]);
+      const t1 = points[i+1][0], v1 = Math.abs(points[i+1][1]);
+      if(t1 <= t0) continue;
+
+      const dt_s = (t1 - t0) / 1000;
+      const avgW = (v0 + v1) / 2;
+      eWh += avgW * dt_s / 3600;
     }
     return eWh / 1000;
   }
 
-  async function load(){
+async function load(){
     const from = new Date(document.getElementById('from').value || new Date(Date.now()-24*3600*1000).toISOString().slice(0,16));
     const to   = new Date(document.getElementById('to').value   || new Date().toISOString().slice(0,16));
     const step = (chartMode==='day')?60: (chartMode==='week'?300:(chartMode==='month'?1800:21600));

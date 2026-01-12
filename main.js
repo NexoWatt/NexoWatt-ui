@@ -5205,6 +5205,36 @@ app.get('/api/history', async (req, res) => {
           const id = `${this.namespace}.historie.producers.p${i}.powerW`;
           extraProducerReq.push({ idx: i, name, id });
         }
+
+        const normTsMs = (ts) => {
+          if (ts === null || ts === undefined) return null;
+          if (typeof ts === 'number') {
+            if (!Number.isFinite(ts)) return null;
+            // Heuristic: influxdb can return seconds; we need ms
+            if (ts > 0 && ts < 1e12) return Math.round(ts * 1000);
+            return Math.round(ts);
+          }
+          if (ts instanceof Date) return ts.getTime();
+          if (typeof ts === 'string') {
+            const s = ts.trim();
+            if (!s) return null;
+            const asNum = Number(s);
+            if (Number.isFinite(asNum)) {
+              if (asNum > 0 && asNum < 1e12) return Math.round(asNum * 1000);
+              return Math.round(asNum);
+            }
+            const parsed = Date.parse(s);
+            if (!Number.isNaN(parsed)) return parsed;
+            return null;
+          }
+          const n = Number(ts);
+          if (Number.isFinite(n)) {
+            if (n > 0 && n < 1e12) return Math.round(n * 1000);
+            return Math.round(n);
+          }
+          return null;
+        };
+
         const ask = (id) => new Promise(resolve => {
           if (!id) return resolve({ id, values: [] });
           const options = { start, end, step: stepS * 1000, aggregate: 'average', addId: false, ignoreNull: true };
@@ -5232,10 +5262,18 @@ app.get('/api/history', async (req, res) => {
               } else if (resu && Array.isArray(resu.data)) {
                 outArr = resu.data;
               }
-              const norm = (outArr || [])
-                .map(p => Array.isArray(p) ? [p[0], Number(p[1])] : [p.ts || p.time || p.t || p[0], Number(p.val ?? p.value ?? p[1])])
-                .filter(r => r[0] != null && !Number.isNaN(r[1]));
-              resolve({ id, values: norm });
+                            const norm = (outArr || [])
+                              .map(p => {
+                                const tRaw = Array.isArray(p) ? p[0] : (p.ts ?? p.time ?? p.t ?? p[0]);
+                                const vRaw = Array.isArray(p) ? p[1] : (p.val ?? p.value ?? p[1]);
+                                const t = normTsMs(tRaw);
+                                const v = Number(vRaw);
+                                if (t == null || Number.isNaN(v)) return null;
+                                return [t, v];
+                              })
+                              .filter(Boolean)
+                              .sort((a, b) => a[0] - b[0]);
+                            resolve({ id, values: norm });
             });
           } catch (e) {
             if (!done) {
