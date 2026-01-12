@@ -5257,6 +5257,63 @@ app.get('/api/history', async (req, res) => {
           ask(ids.evcs)
         ]);
 
+        // --- Robustness for E‑Mobilität (EVCS) ---
+        // In der Praxis kann es vorkommen, dass die Historie-Abfrage für den
+        // aggregierten EV-Kanal ("historie.core.ev.totalW") leer zurückkommt,
+        // obwohl Daten existieren (z.B. falsches Mapping/alte Konfiguration).
+        //
+        // Ziel: Die VIS-Historie soll immer aus unseren automatisch angelegten
+        // Historie-Datenpunkten lesen, ohne dass der Kunde manuell nacharbeiten muss.
+        //
+        // Fallback-Strategie:
+        //  1) Wenn die Abfrage für ids.evcs leer ist, versuche den kanonischen DP
+        //     `${namespace}.historie.core.ev.totalW`.
+        //  2) Wenn weiterhin leer: aggregiere aus den pro Ladepunkt angelegten
+        //     Historie-DPs `${namespace}.historie.evcs.lpX.powerW`.
+        //
+        // Damit bekommen wir in jedem Fall eine belastbare Zeitreihe für "E‑Mobilität".
+        const evcsHasData = (s) => Array.isArray(s?.values) && s.values.length >= 2;
+        if (!evcsHasData(evcs)) {
+          const canonicalEvcsId = `${this.namespace}.historie.core.ev.totalW`;
+          if (ids.evcs && ids.evcs !== canonicalEvcsId) {
+            const alt = await ask(canonicalEvcsId);
+            if (evcsHasData(alt)) {
+              evcs.id = canonicalEvcsId;
+              evcs.values = alt.values;
+              evcs._source = 'canonical';
+            }
+          }
+        }
+        if (!evcsHasData(evcs)) {
+          const count = Number(this.evcsCount || 0);
+          if (count > 0) {
+            const lpIds = [];
+            for (let i = 1; i <= count; i++) {
+              lpIds.push(`${this.namespace}.historie.evcs.lp${i}.powerW`);
+            }
+            const lpSeries = await Promise.all(lpIds.map((id) => ask(id)));
+            const sumByTs = new Map();
+            for (const s of lpSeries) {
+              if (!Array.isArray(s?.values)) continue;
+              for (const p of s.values) {
+                if (!Array.isArray(p) || p.length < 2) continue;
+                const ts = Number(p[0]);
+                const v = Number(p[1]);
+                if (!Number.isFinite(ts) || !Number.isFinite(v)) continue;
+                sumByTs.set(ts, (sumByTs.get(ts) || 0) + v);
+              }
+            }
+            const vals = Array.from(sumByTs.entries())
+              .sort((a, b) => a[0] - b[0])
+              .map(([ts, v]) => [ts, v]);
+            if (vals.length >= 2) {
+              evcs.id = `${this.namespace}.historie.evcs.sum.powerW`;
+              evcs.values = vals;
+              evcs._source = 'lp-sum';
+            }
+          }
+        }
+
         const [extraConsumers, extraProducers] = await Promise.all([
           Promise.all(extraConsumerReq.map(async (c) => {
             const r = await ask(c.id);
