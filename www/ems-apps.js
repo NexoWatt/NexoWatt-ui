@@ -2783,7 +2783,33 @@
 
     if (typeof gc.zeroExportEnabled !== 'boolean') gc.zeroExportEnabled = false;
 
+    // PV Abregelung (EVU Relais) – optional zusätzlich zur 0‑Einspeisung
+    if (typeof gc.pvEvuEnabled !== 'boolean') gc.pvEvuEnabled = false;
+    if (typeof gc.pvEvuRelay60Id !== 'string') gc.pvEvuRelay60Id = '';
+    if (typeof gc.pvEvuRelay30Id !== 'string') gc.pvEvuRelay30Id = '';
+    if (typeof gc.pvEvuRelay0Id !== 'string') gc.pvEvuRelay0Id = '';
+
+    // Wechselrichter‑Gruppen (pro WR) – bevorzugt gegenüber Legacy‑Einzel‑DP
+    if (!Array.isArray(gc.pvCurtailInvertersEvu)) gc.pvCurtailInvertersEvu = [];
+    if (!Array.isArray(gc.pvCurtailInvertersZero)) gc.pvCurtailInvertersZero = [];
+
     if (typeof gc.pvCurtailMode !== 'string') gc.pvCurtailMode = 'auto';
+
+    // Normalise strings in inverter tables
+    const normInv = (it) => {
+      if (!it || typeof it !== 'object') return null;
+      const name = String(it.name || '').trim();
+      const kwp = Number(it.kwp);
+      return {
+        name,
+        kwp: (Number.isFinite(kwp) && kwp >= 0) ? kwp : 0,
+        feedInLimitWId: String(it.feedInLimitWId || it.pvFeedInLimitWId || '').trim(),
+        pvLimitWId: String(it.pvLimitWId || '').trim(),
+        pvLimitPctId: String(it.pvLimitPctId || '').trim(),
+      };
+    };
+    gc.pvCurtailInvertersEvu = (gc.pvCurtailInvertersEvu || []).map(normInv).filter(Boolean);
+    gc.pvCurtailInvertersZero = (gc.pvCurtailInvertersZero || []).map(normInv).filter(Boolean);
 
     return gc;
   }
@@ -2977,16 +3003,244 @@
       rlmEl.appendChild(mkHint('Der RLM‑Deckel reduziert den maximal zulässigen Import dynamisch basierend auf dem 15‑Minuten‑Durchschnitt.'));
     }
 
-    // Zero export
+    // PV Abregelung (EVU / 0‑Einspeisung)
+    const deriveCurtailMode = () => {
+      if (gc.pvEvuEnabled && gc.zeroExportEnabled) return 'combined';
+      if (gc.pvEvuEnabled) return 'evu';
+      if (gc.zeroExportEnabled) return 'zero';
+      return 'off';
+    };
+
+    const applyCurtailMode = (mode) => {
+      const m = String(mode || 'off');
+      gc.pvEvuEnabled = (m === 'evu' || m === 'combined');
+      gc.zeroExportEnabled = (m === 'zero' || m === 'combined');
+    };
+
+    const curMode = deriveCurtailMode();
+
+    // Card 1: Mode + Relays + Reglerparameter
     if (zeroEl) {
-      zeroEl.appendChild(mkChk('0‑Einspeisung aktiv', 'gc_zeroExportEnabled', !!gc.zeroExportEnabled, (b) => { gc.zeroExportEnabled = b; }));
-      zeroEl.appendChild(mkNum('Bias', 'gc_zeroExportBiasW', Number(gc.zeroExportBiasW || 0) || 0, (n) => { gc.zeroExportBiasW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 50'));
-      zeroEl.appendChild(mkNum('Deadband', 'gc_zeroExportDeadbandW', Number(gc.zeroExportDeadbandW || 0) || 0, (n) => { gc.zeroExportDeadbandW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 15'));
-      zeroEl.appendChild(mkHint('Bias/Deadband stabilisieren die Regelung (verhindern „Zittern“ um 0W).'));
+      zeroEl.appendChild(mkSelect('Modus', 'gc_pvCurtailAppMode', curMode, [
+        { v: 'off', t: 'Aus' },
+        { v: 'evu', t: 'EVU‑Abregelung (Relais 60% / 30% / 0%)' },
+        { v: 'zero', t: '0‑Einspeisung (Regler am NVP)' },
+        { v: 'combined', t: 'Kombiniert (EVU + 0‑Einspeisung)' },
+      ], (v) => {
+        applyCurtailMode(v);
+        buildGridConstraintsUI();
+        scheduleValidation(200);
+      }));
+
+      if (gc.pvEvuEnabled) {
+        zeroEl.appendChild(mkDpField('Relais 60% (Read)', 'gc_pvEvuRelay60Id', gc.pvEvuRelay60Id, (v) => { gc.pvEvuRelay60Id = v; }, 'BOOL / 0|1'));
+        zeroEl.appendChild(mkDpField('Relais 30% (Read)', 'gc_pvEvuRelay30Id', gc.pvEvuRelay30Id, (v) => { gc.pvEvuRelay30Id = v; }, 'BOOL / 0|1'));
+        zeroEl.appendChild(mkDpField('Relais 0% (Read)', 'gc_pvEvuRelay0Id', gc.pvEvuRelay0Id, (v) => { gc.pvEvuRelay0Id = v; }, 'BOOL / 0|1'));
+        zeroEl.appendChild(mkHint('Wenn mehrere Relais gleichzeitig aktiv sind, gilt automatisch die strengste Stufe: 0% > 30% > 60% > 100%.'));
+      }
+
+      if (gc.zeroExportEnabled) {
+        zeroEl.appendChild(mkNum('Bias', 'gc_zeroExportBiasW', Number(gc.zeroExportBiasW || 0) || 0, (n) => { gc.zeroExportBiasW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 50'));
+        zeroEl.appendChild(mkNum('Deadband', 'gc_zeroExportDeadbandW', Number(gc.zeroExportDeadbandW || 0) || 0, (n) => { gc.zeroExportDeadbandW = Math.max(0, Math.round(n)); }, 'W', 'z.B. 15'));
+        zeroEl.appendChild(mkHint('Bias/Deadband stabilisieren die Regelung (verhindern „Zittern“ um 0W).'));
+      } else {
+        zeroEl.appendChild(mkHint('0‑Einspeisung ist im aktuellen Modus deaktiviert.'));
+      }
+
+      zeroEl.appendChild(mkHint('Die Regelung arbeitet am NVP‑Datenpunkt (Zuordnung → Allgemein → Netzpunkt) und nutzt das Vorzeichen (Import + / Export −).'));
     }
 
-    // PV curtail mapping
+    // Card 2: Wechselrichter‑Gruppen (pro WR)
     if (pvEl) {
+      const showEvuGroup = (curMode === 'evu' || curMode === 'combined' || curMode === 'off');
+      const showZeroGroup = (curMode === 'zero' || curMode === 'combined' || curMode === 'off');
+
+      const mkTitle = (text) => {
+        const t = document.createElement('div');
+        t.style.margin = '10px 0 6px';
+        t.style.fontWeight = '700';
+        t.style.color = '#e5e7eb';
+        t.textContent = text;
+        return t;
+      };
+
+      const mkInvLegend = () => {
+        const legend = document.createElement('div');
+        legend.className = 'nw-inv-legend';
+
+        const meta = document.createElement('div');
+        meta.className = 'nw-inv-legend__meta';
+        meta.textContent = 'WR';
+
+        const fields = document.createElement('div');
+        fields.className = 'nw-inv-legend__fields';
+        const cols = ['Name', 'kWp', 'Einspeise‑Limit W (Write)', 'PV‑Limit W (Write)', 'PV‑Limit % (Write)', ''];
+        cols.forEach(c => {
+          const d = document.createElement('div');
+          d.textContent = c;
+          fields.appendChild(d);
+        });
+
+        legend.appendChild(meta);
+        legend.appendChild(fields);
+        return legend;
+      };
+
+      const mkText = (id, value, placeholder, onChange) => {
+        const input = document.createElement('input');
+        input.className = 'nw-config-input';
+        input.type = 'text';
+        input.id = id;
+        input.placeholder = placeholder || '';
+        input.value = value ? String(value) : '';
+        input.addEventListener('change', () => {
+          onChange(String(input.value || '').trim());
+        });
+        return input;
+      };
+
+      const mkKwp = (id, value, onChange) => {
+        const input = document.createElement('input');
+        input.className = 'nw-config-input';
+        input.type = 'number';
+        input.id = id;
+        input.min = '0';
+        input.step = '0.01';
+        input.placeholder = 'z.B. 9.75';
+        input.value = (value !== undefined && value !== null && value !== '') ? String(value) : '';
+        input.addEventListener('change', () => {
+          const n = Number(String(input.value || '').replace(',', '.'));
+          onChange(Number.isFinite(n) && n >= 0 ? n : 0);
+        });
+        return input;
+      };
+
+      const mkDpMini = (id, value, placeholder, onChange) => {
+        const dpWrap = document.createElement('div');
+        dpWrap.className = 'nw-config-dp-input-wrapper';
+
+        const input = document.createElement('input');
+        input.className = 'nw-config-input nw-config-dp-input';
+        input.type = 'text';
+        input.id = id;
+        input.value = value ? String(value) : '';
+        input.dataset.dpInput = '1';
+        input.placeholder = placeholder || 'Write‑DP';
+        input.addEventListener('change', () => {
+          onChange(String(input.value || '').trim());
+          scheduleValidation(200);
+        });
+
+        const b = document.createElement('button');
+        b.className = 'nw-config-dp-button';
+        b.type = 'button';
+        b.setAttribute('data-browse', id);
+        b.textContent = '…';
+        b.title = 'Datenpunkt auswählen';
+
+        const badge = document.createElement('span');
+        badge.className = 'nw-config-badge nw-config-badge--idle';
+        badge.id = 'val_' + id;
+        badge.textContent = '—';
+
+        dpWrap.appendChild(input);
+        dpWrap.appendChild(b);
+        dpWrap.appendChild(badge);
+        return dpWrap;
+      };
+
+      const mkInvRow = (list, idx, groupPrefix) => {
+        const inv = list[idx];
+        const row = document.createElement('div');
+        row.className = 'nw-flow-slot nw-inv-row';
+
+        const meta = document.createElement('div');
+        meta.className = 'nw-flow-slot__meta';
+        const t = document.createElement('div');
+        t.className = 'nw-flow-slot__title';
+        t.textContent = inv.name ? inv.name : `Wechselrichter ${idx + 1}`;
+        const k = document.createElement('div');
+        k.className = 'nw-flow-slot__key';
+        k.textContent = groupPrefix;
+        meta.appendChild(t);
+        meta.appendChild(k);
+
+        const fields = document.createElement('div');
+        fields.className = 'nw-inv-fields';
+
+        fields.appendChild(mkText(`gc_${groupPrefix}_inv_${idx}_name`, inv.name || '', 'Name', (v) => { inv.name = v; }));
+        fields.appendChild(mkKwp(`gc_${groupPrefix}_inv_${idx}_kwp`, inv.kwp, (n) => { inv.kwp = n; }));
+        fields.appendChild(mkDpMini(`gc_${groupPrefix}_inv_${idx}_feedIn`, inv.feedInLimitWId || '', 'Write‑DP', (v) => { inv.feedInLimitWId = v; }));
+        fields.appendChild(mkDpMini(`gc_${groupPrefix}_inv_${idx}_limitW`, inv.pvLimitWId || '', 'Write‑DP', (v) => { inv.pvLimitWId = v; }));
+        fields.appendChild(mkDpMini(`gc_${groupPrefix}_inv_${idx}_limitPct`, inv.pvLimitPctId || '', 'Write‑DP', (v) => { inv.pvLimitPctId = v; }));
+
+        const del = document.createElement('button');
+        del.className = 'nw-config-mini-btn';
+        del.type = 'button';
+        del.textContent = 'Entfernen';
+        del.addEventListener('click', () => {
+          list.splice(idx, 1);
+          buildGridConstraintsUI();
+          scheduleValidation(200);
+        });
+        fields.appendChild(del);
+
+        row.appendChild(meta);
+        row.appendChild(fields);
+        return row;
+      };
+
+      const mkInvGroup = (titleText, list, groupPrefix, inactiveHint) => {
+        pvEl.appendChild(mkTitle(titleText));
+        if (inactiveHint) pvEl.appendChild(mkHint(inactiveHint));
+        pvEl.appendChild(mkInvLegend());
+
+        const listWrap = document.createElement('div');
+        listWrap.className = 'nw-inv-list';
+        if (!list.length) {
+          const empty = document.createElement('div');
+          empty.className = 'nw-config-empty';
+          empty.textContent = 'Keine Wechselrichter konfiguriert.';
+          listWrap.appendChild(empty);
+        } else {
+          list.forEach((_it, i) => listWrap.appendChild(mkInvRow(list, i, groupPrefix)));
+        }
+        pvEl.appendChild(listWrap);
+
+        const add = document.createElement('button');
+        add.className = 'nw-config-mini-btn';
+        add.type = 'button';
+        add.textContent = 'Wechselrichter hinzufügen';
+        add.addEventListener('click', () => {
+          list.push({ name: '', kwp: 0, feedInLimitWId: '', pvLimitWId: '', pvLimitPctId: '' });
+          buildGridConstraintsUI();
+          scheduleValidation(200);
+        });
+        pvEl.appendChild(add);
+      };
+
+      if (showEvuGroup) {
+        mkInvGroup(
+          'Gruppe 1: EVU‑Abregelung (Relais‑Stufen)',
+          gc.pvCurtailInvertersEvu,
+          'evu',
+          (curMode === 'off') ? 'Modus ist aktuell AUS – du kannst die Gruppe vorkonfigurieren.' : null
+        );
+      }
+
+      if (showZeroGroup) {
+        mkInvGroup(
+          'Gruppe 2: 0‑Einspeisung (NVP‑Regler)',
+          gc.pvCurtailInvertersZero,
+          'zero',
+          (curMode === 'off') ? 'Modus ist aktuell AUS – du kannst die Gruppe vorkonfigurieren.' : null
+        );
+      }
+
+      // Fallback (Legacy)
+      pvEl.appendChild(mkTitle('Fallback (Legacy): Einzel‑WR / Sammel‑DP'));
+      pvEl.appendChild(mkHint('Wenn keine Wechselrichter‑Gruppen konfiguriert sind, nutzt die Regelung die folgenden Datenpunkte. Für neue Setups bitte bevorzugt die Gruppen oben verwenden.'));
+
       const mode = String(gc.pvCurtailMode || 'auto');
       pvEl.appendChild(mkSelect('Begrenzungs‑Modus', 'gc_pvCurtailMode', mode, [
         { v: 'auto', t: 'Auto (beste verfügbare Methode)' },
@@ -3001,7 +3255,7 @@
       pvEl.appendChild(mkDpField('PV‑Limit (%) (Write) (optional)', 'gc_pvLimitPctId', gc.pvLimitPctId, (v) => { gc.pvLimitPctId = v; }, 'Write‑Datenpunkt'));
       pvEl.appendChild(mkDpField('PV Nennleistung (W) (Read) (optional)', 'gc_pvRatedPowerWId', gc.pvRatedPowerWId, (v) => { gc.pvRatedPowerWId = v; }, 'Read‑Datenpunkt'));
 
-      pvEl.appendChild(mkHint('Für 0‑Einspeisung muss mindestens ein passender Write‑Datenpunkt konfiguriert sein. Auto wählt die beste Methode.'));
+      pvEl.appendChild(mkHint('Auto wählt die beste Methode. Für 0‑Einspeisung muss mindestens ein passender Write‑Datenpunkt gesetzt sein.'));
     }
   }
 

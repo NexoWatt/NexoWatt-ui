@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-vis",
-  "version": "0.6.15",
+  "version": "0.6.16",
     "news": {
+      "0.6.16": {
+        "en": [
+          "Netzlimits: PV curtailment as inverter groups + EVU relay stages (60/30/0) in App Center."
+        ],
+        "de": [
+          "Netzlimits: PV-Abregelung als Wechselrichter-Gruppen + EVU-Relais-Stufen (60/30/0) im App-Center."
+        ]
+      },
       "0.6.15": {
         "en": [
           "History: densify aggregated Influx series (hold-last) to avoid long diagonal interpolation lines when datapoints are logged sparsely (e.g. on-change). Improves plot clarity and kWh integration."

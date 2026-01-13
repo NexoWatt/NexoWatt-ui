@@ -32,6 +32,11 @@ class GridConstraintsModule extends BaseModule {
             limitW: null,
             limitPct: null,
         };
+
+        // EVU stage (Relais 60/30/0)
+        this._pvEvu = {
+            lastStagePct: null,
+        };
     }
 
     _isEnabled() {
@@ -108,6 +113,8 @@ class GridConstraintsModule extends BaseModule {
         await mk('gridConstraints.pvCurtail.setpointW', 'PV limit setpoint (W)', 'number', 'value.power');
         await mk('gridConstraints.pvCurtail.setpointPct', 'PV limit setpoint (%)', 'number', 'value');
         await mk('gridConstraints.pvCurtail.applied', 'Curtail applied', 'boolean', 'indicator');
+        await mk('gridConstraints.pvCurtail.evuStagePct', 'EVU stage (%)', 'number', 'value');
+        await mk('gridConstraints.pvCurtail.evuRelays', 'EVU relays (60/30/0)', 'string', 'text');
 
         // Datapoint mapping
         const cfg = this._cfg();
@@ -136,6 +143,41 @@ class GridConstraintsModule extends BaseModule {
         if (cfg.pvRatedPowerWId) {
             await dp.upsert({ key: 'pv.ratedPowerW', objectId: String(cfg.pvRatedPowerWId).trim(), dataType: 'number', direction: 'in', unit: 'W' });
         }
+
+        // PV Abregelung (EVU Relais) – Inputs
+        if (cfg.pvEvuRelay60Id) {
+            await dp.upsert({ key: 'pv.evu.relay60', objectId: String(cfg.pvEvuRelay60Id).trim(), dataType: 'boolean', direction: 'in' });
+        }
+        if (cfg.pvEvuRelay30Id) {
+            await dp.upsert({ key: 'pv.evu.relay30', objectId: String(cfg.pvEvuRelay30Id).trim(), dataType: 'boolean', direction: 'in' });
+        }
+        if (cfg.pvEvuRelay0Id) {
+            await dp.upsert({ key: 'pv.evu.relay0', objectId: String(cfg.pvEvuRelay0Id).trim(), dataType: 'boolean', direction: 'in' });
+        }
+
+        // PV Abregelung – Wechselrichter-Gruppen (pro WR: optional 3 Setpoints)
+        const upsertInvList = async (list, prefix) => {
+            const arr = Array.isArray(list) ? list : [];
+            for (let i = 0; i < arr.length; i++) {
+                const it = arr[i];
+                if (!it || typeof it !== 'object') continue;
+                const feedIn = String(it.feedInLimitWId || '').trim();
+                const limitW = String(it.pvLimitWId || '').trim();
+                const limitPct = String(it.pvLimitPctId || '').trim();
+                if (feedIn) {
+                    await dp.upsert({ key: `${prefix}.${i}.feedInLimitW`, objectId: feedIn, dataType: 'number', direction: 'out', unit: 'W' });
+                }
+                if (limitW) {
+                    await dp.upsert({ key: `${prefix}.${i}.limitW`, objectId: limitW, dataType: 'number', direction: 'out', unit: 'W' });
+                }
+                if (limitPct) {
+                    await dp.upsert({ key: `${prefix}.${i}.limitPct`, objectId: limitPct, dataType: 'number', direction: 'out', unit: '%' });
+                }
+            }
+        };
+
+        await upsertInvList(cfg.pvCurtailInvertersEvu, 'pv.evu');
+        await upsertInvList(cfg.pvCurtailInvertersZero, 'pv.zero');
     }
 
     _resolveCurtailMode(cfg) {
@@ -146,6 +188,179 @@ class GridConstraintsModule extends BaseModule {
         if (cfg.pvLimitWId) return 'pvLimitW';
         if (cfg.pvLimitPctId) return 'pvLimitPct';
         return 'off';
+    }
+
+    _normalizeInvList(list) {
+        const arr = Array.isArray(list) ? list : [];
+        const out = [];
+        for (let i = 0; i < arr.length; i++) {
+            const it = arr[i];
+            if (!it || typeof it !== 'object') continue;
+            const kwpRaw = typeof it.kwp === 'string' ? it.kwp.replace(',', '.') : it.kwp;
+            const kwp = Number(kwpRaw);
+            const ratedW = (Number.isFinite(kwp) && kwp > 0) ? Math.round(kwp * 1000) : 0;
+            out.push({
+                idx: i,
+                name: String(it.name || '').trim(),
+                ratedW,
+            });
+        }
+        return out;
+    }
+
+    _sumRatedW(invList) {
+        return (Array.isArray(invList) ? invList : []).reduce((sum, it) => sum + (Number(it?.ratedW) || 0), 0);
+    }
+
+    _getEvuStagePct(cfg) {
+        const dp = this.dp;
+        const r60 = dp ? dp.getBoolean('pv.evu.relay60', false) : false;
+        const r30 = dp ? dp.getBoolean('pv.evu.relay30', false) : false;
+        const r0 = dp ? dp.getBoolean('pv.evu.relay0', false) : false;
+
+        // Strictest wins if multiple active
+        let pct = 100;
+        if (r0) pct = 0;
+        else if (r30) pct = 30;
+        else if (r60) pct = 60;
+
+        return { pct, r60, r30, r0 };
+    }
+
+    async _tickPvEvu(nowMs, cfg) {
+        const enabled = !!cfg.pvEvuEnabled;
+        const inv = this._normalizeInvList(cfg.pvCurtailInvertersEvu);
+
+        if (!enabled || inv.length === 0) {
+            // keep states meaningful
+            await this.adapter.setStateAsync('gridConstraints.pvCurtail.evuStagePct', 100, true);
+            await this.adapter.setStateAsync('gridConstraints.pvCurtail.evuRelays', enabled ? 'no_wr' : 'disabled', true);
+            return { enabled: false, stagePct: 100 };
+        }
+
+        const s = this._getEvuStagePct(cfg);
+        const stagePct = Math.max(0, Math.min(100, Math.round(Number(s.pct))));
+        const relaysStr = `${s.r60 ? 1 : 0}/${s.r30 ? 1 : 0}/${s.r0 ? 1 : 0}`;
+
+        await this.adapter.setStateAsync('gridConstraints.pvCurtail.evuStagePct', stagePct, true);
+        await this.adapter.setStateAsync('gridConstraints.pvCurtail.evuRelays', relaysStr, true);
+
+        // Write per WR (all available setpoints)
+        for (const it of inv) {
+            const ratedW = Math.max(0, Number(it.ratedW) || 0);
+            const limitW = Math.round(ratedW * stagePct / 100);
+            await this.dp.writeNumber(`pv.evu.${it.idx}.feedInLimitW`, limitW, false);
+            await this.dp.writeNumber(`pv.evu.${it.idx}.limitW`, limitW, false);
+            await this.dp.writeNumber(`pv.evu.${it.idx}.limitPct`, stagePct, false);
+        }
+
+        this._pvEvu.lastStagePct = stagePct;
+        return { enabled: true, stagePct };
+    }
+
+    async _tickZeroExportGroup(nowMs, gridW, cfg, gridStale) {
+        const enabled = !!cfg.zeroExportEnabled;
+        const inv = this._normalizeInvList(cfg.pvCurtailInvertersZero);
+
+        const biasW = Math.max(0, this._num(cfg.zeroExportBiasW, 80));
+        const deadbandW = Math.max(0, this._num(cfg.zeroExportDeadbandW, 50));
+
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.enabled', enabled, true);
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.targetImportBiasW', Math.round(biasW), true);
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.deadbandW', Math.round(deadbandW), true);
+
+        const exportW = Math.max(0, -(Number(gridW) || 0));
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.exportW', Math.round(exportW), true);
+
+        // Mark mode to make it obvious in status/debug
+        await this.adapter.setStateAsync('gridConstraints.pvCurtail.mode', 'group', true);
+
+        if (!enabled) {
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'off', true);
+            await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', false, true);
+            return { enabled: false, biasW, deadbandW, exportW };
+        }
+
+        if (inv.length === 0) {
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'no_wr', true);
+            await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', false, true);
+            return { enabled: true, biasW, deadbandW, exportW };
+        }
+
+        // If we cannot measure grid power reliably, go failsafe (cut PV / export)
+        if (gridStale) {
+            let applied = false;
+            for (const it of inv) {
+                const ok1 = await this.dp.writeNumber(`pv.zero.${it.idx}.feedInLimitW`, 0, false);
+                const ok2 = await this.dp.writeNumber(`pv.zero.${it.idx}.limitW`, 0, false);
+                const ok3 = await this.dp.writeNumber(`pv.zero.${it.idx}.limitPct`, 0, false);
+                applied = applied || (ok1 === true || ok1 === null) || (ok2 === true || ok2 === null) || (ok3 === true || ok3 === null);
+            }
+            this._pv.limitW = 0;
+            this._pv.limitPct = 0;
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'failsafe_stale', true);
+            await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', applied, true);
+            await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointW', 0, true);
+            await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointPct', 0, true);
+            return { enabled: true, biasW, deadbandW, exportW };
+        }
+
+        const ratedSumW = this._sumRatedW(inv);
+        if (!(ratedSumW > 0)) {
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'missing_rated', true);
+            await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', false, true);
+            return { enabled: true, biasW, deadbandW, exportW };
+        }
+
+        // Closed-loop based on grid power error
+        const errorW = biasW - Number(gridW || 0); // positive => exporting or too low import
+        if (Math.abs(errorW) <= deadbandW) {
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', 'within_deadband', true);
+            await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', false, true);
+            return { enabled: true, biasW, deadbandW, exportW };
+        }
+
+        const fastTripW = Math.max(0, this._num(cfg.pvCurtailFastTripExportW, 500));
+        const fastTrip = exportW >= fastTripW;
+
+        const maxDeltaW = Math.max(0, this._num(cfg.pvCurtailMaxDeltaWPerTick, 8000));
+        if (typeof this._pv.limitW !== 'number' || !Number.isFinite(this._pv.limitW) || this._pv.limitW > ratedSumW) {
+            this._pv.limitW = ratedSumW;
+        }
+
+        const prev = this._pv.limitW;
+        const rawNext = fastTrip ? 0 : this._clamp(prev - errorW, 0, ratedSumW);
+
+        let next = rawNext;
+        const effMaxDelta = fastTrip ? Math.max(maxDeltaW, Math.abs(prev - rawNext)) : maxDeltaW;
+        if (effMaxDelta > 0) {
+            const d = rawNext - prev;
+            if (Math.abs(d) > effMaxDelta) next = prev + Math.sign(d) * effMaxDelta;
+        }
+
+        next = this._clamp(next, 0, ratedSumW);
+        this._pv.limitW = next;
+
+        const pct = this._clamp((next / ratedSumW) * 100, 0, 100);
+        this._pv.limitPct = pct;
+
+        // Write per WR
+        let applied = false;
+        for (const it of inv) {
+            const ratedW = Math.max(0, Number(it.ratedW) || 0);
+            const invLimitW = ratedSumW > 0 ? Math.round(next * (ratedW / ratedSumW)) : 0;
+            const ok1 = await this.dp.writeNumber(`pv.zero.${it.idx}.feedInLimitW`, 0, false);
+            const ok2 = await this.dp.writeNumber(`pv.zero.${it.idx}.limitW`, invLimitW, false);
+            const ok3 = await this.dp.writeNumber(`pv.zero.${it.idx}.limitPct`, pct, false);
+            applied = applied || (ok1 === true || ok1 === null) || (ok2 === true || ok2 === null) || (ok3 === true || ok3 === null);
+        }
+
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.action', fastTrip ? 'group_fast' : 'group', true);
+        await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', applied, true);
+        await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointW', Math.round(next), true);
+        await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointPct', Math.round(pct * 10) / 10, true);
+
+        return { enabled: true, biasW, deadbandW, exportW };
     }
 
     _isStaleGrid(cfg) {
@@ -439,8 +654,17 @@ class GridConstraintsModule extends BaseModule {
             await this._tickRlm(nowMs, 0, { ...cfg, rlmEnabled: !!cfg.rlmEnabled });
         }
 
+        // PV-Abregelung: EVU-Relais (statisch) & 0-Einspeisung (dynamisch)
+        // EVU stage works independent of gridW freshness.
+        await this._tickPvEvu(nowMs, cfg);
+
+        const gridWNum = (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : 0;
+        const hasZeroGroup = Array.isArray(cfg.pvCurtailInvertersZero) && cfg.pvCurtailInvertersZero.length > 0;
+
         // Zero export tick (may work even if grid stale via failsafe)
-        const ze = await this._tickZeroExport(nowMs, (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : 0, cfg, gridStale);
+        const ze = hasZeroGroup
+            ? await this._tickZeroExportGroup(nowMs, gridWNum, cfg, gridStale)
+            : await this._tickZeroExport(nowMs, gridWNum, cfg, gridStale);
 
         // Compute final "max import" cap: min(connectionLimit, rlmCapNow)
         // Prefer central plant parameter "Netzanschlussleistung" (installerConfig.gridConnectionPower).

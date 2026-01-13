@@ -1164,6 +1164,53 @@ body {
   gap: 8px;
 }
 
+/* PV-Abregelung (App-Center): Wechselrichter-Gruppen */
+.nw-inv-legend {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(0, 2fr);
+  gap: 10px;
+  padding: 0 10px 6px 10px;
+  font-size: 0.78rem;
+  color: rgba(229, 231, 235, 0.65);
+  user-select: none;
+}
+
+.nw-inv-legend__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.6fr) minmax(0, 1.4fr) minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.nw-inv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.nw-inv-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.6fr) minmax(0, 1.4fr) minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .nw-inv-legend {
+    display: none;
+  }
+  .nw-inv-fields {
+    grid-template-columns: 1fr;
+  }
+  .nw-inv-fields .nw-config-dp-input-wrapper {
+    flex-wrap: wrap;
+  }
+  .nw-inv-fields .nw-config-dp-button {
+    padding: 6px 10px;
+  }
+}
+
 .nw-flow-ctrl-field {
   display: grid;
   grid-template-columns: 1fr;
