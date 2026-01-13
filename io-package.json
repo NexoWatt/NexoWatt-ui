@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.14",
+  "version": "0.6.15",
     "news": {
+      "0.6.15": {
+        "en": [
+          "History: densify aggregated Influx series (hold-last) to avoid long diagonal interpolation lines when datapoints are logged sparsely (e.g. on-change). Improves plot clarity and kWh integration."
+        ],
+        "de": [
+          "Historie: Influx-Zeitreihen werden auf das Schritt-Raster verdichtet (Hold-Last), damit bei sparsamer Aufzeichnung (z.B. nur bei Änderung) keine langen diagonalen Verbindungslinien entstehen. Verbessert Darstellung und kWh-Berechnung."
+        ]
+      },
       "0.6.14": {
         "en": [
           "Fix Historie: storage charge/discharge is now normalised to positive magnitudes (charging power may be negative depending on the source datapoint)."

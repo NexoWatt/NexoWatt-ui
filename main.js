@@ -5161,6 +5161,49 @@ app.get('/api/history', async (req, res) => {
         const end   = Number(req.query.to   || Date.now());
         const stepS = Number(req.query.step || 60);
 
+        // For many states we log data sparsely (e.g. only "on change").
+        // In that case the aggregated history query only returns values for time-buckets
+        // that contain at least one raw datapoint. Buckets without any datapoint are missing.
+        // If we draw a line chart on such sparse buckets, the renderer connects far away points
+        // with long diagonal lines (looks like ramps) which is misleading and was not intended.
+        //
+        // Solution: densify the returned data to an equidistant time-grid ("step") and
+        // forward-fill (hold last) values. This yields clean plots and also improves the
+        // kWh integration in the frontend.
+        const stepMs = (Number.isFinite(stepS) && stepS > 0) ? (stepS * 1000) : 60_000;
+        const densifyHoldLast = (values) => {
+          if (!Array.isArray(values) || values.length === 0 || !Number.isFinite(stepMs) || stepMs <= 0) {
+            return Array.isArray(values) ? values : [];
+          }
+
+          const n = Math.max(0, Math.floor((end - start) / stepMs));
+          const byIdx = new Map();
+
+          for (const row of values) {
+            const ts = normTsMs(row?.[0]);
+            const val = Number(row?.[1]);
+            if (!Number.isFinite(ts)) continue;
+
+            const idx = Math.round((ts - start) / stepMs);
+            if (idx < 0 || idx > n) continue;
+            if (!Number.isFinite(val)) continue;
+
+            byIdx.set(idx, val);
+          }
+
+          const out = [];
+          let havePrev = false;
+          let prev = null;
+          for (let i = 0; i <= n; i++) {
+            if (byIdx.has(i)) {
+              prev = byIdx.get(i);
+              havePrev = true;
+            }
+            out.push([start + i * stepMs, havePrev ? prev : null]);
+          }
+          return out;
+        };
+
         // Prefer explicit mapping from config.history.datapoints;
         // if absent, fall back to the adapter's canonical 'historie.*' states.
         const ids = {
@@ -5273,7 +5316,7 @@ app.get('/api/history', async (req, res) => {
                               })
                               .filter(Boolean)
                               .sort((a, b) => a[0] - b[0]);
-                            resolve({ id, values: norm });
+                            resolve({ id, values: densifyHoldLast(norm) });
             });
           } catch (e) {
             if (!done) {
