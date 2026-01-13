@@ -8544,6 +8544,17 @@ return res.json(out);
 
 
   updateValue(key, value, ts) {
+    // Some devices provide charging/discharging power as signed values
+    // (e.g. charging power can be negative). In NexoWatt we treat
+    // charge/discharge as positive magnitudes for UI/Historie.
+    if (
+      typeof value === 'number' &&
+      !isNaN(value) &&
+      (key === 'storageChargePower' || key === 'storageDischargePower')
+    ) {
+      value = Math.abs(value);
+    }
+
     this.stateCache[key] = { value, ts };
 
     const payload = { [key]: this.stateCache[key] };

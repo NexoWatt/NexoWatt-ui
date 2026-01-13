@@ -1,14 +1,22 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.9",
+    "version": "0.6.14",
     "news": {
+      "0.6.14": {
+        "en": [
+          "Fix Historie: storage charge/discharge is now normalised to positive magnitudes (charging power may be negative depending on the source datapoint)."
+        ],
+        "de": [
+          "Fix Historie: Speicher-Beladung/Entladung wird jetzt auf positive Beträge normalisiert (je nach Quell-Datenpunkt kann die Ladeleistung negativ sein)."
+        ]
+      },
       "0.6.9": {
         "en": [
           "Fix: ensure E-Mobility (EVCS) is reliably included in History (fallback to canonical DP and loadpoint sum if needed)."
         ],
         "de": [
-          "Fix: E-Mobilit\u00e4t (EVCS) wird in der Historie zuverl\u00e4ssig angezeigt (Fallback auf kanonischen DP und Ladepunkt-Summe falls erforderlich)."
+          "Fix: E-Mobilität (EVCS) wird in der Historie zuverlässig angezeigt (Fallback auf kanonischen DP und Ladepunkt-Summe falls erforderlich)."
         ]
       },
       "0.6.8": {
@@ -684,6 +692,16 @@
       "0.6.1": {
         "en": "VIS: relay control uses Aus/An buttons; Threshold-Control: end-customer can optionally adjust MinOn/MinOff via VIS; Added user permission flags for MinOn/MinOff.",
         "de": "VIS: Relaissteuerung nutzt Aus/An-Buttons; Schwellwertsteuerung: Endkunde kann optional MinOn/MinOff in der VIS anpassen; Neue Rechte-Flags für MinOn/MinOff."
+      },
+      "0.6.13": {
+        "en": [
+          "Fix: bump adapter version to 0.6.13 (previous builds reported 0.6.9).",
+          "Feature: calculate CO₂ savings internally (PV generation + e-mobility consumption)."
+        ],
+        "de": [
+          "Fix: Adapter-Version korrekt auf 0.6.13 angehoben (vorher wurden Builds fälschlich als 0.6.9 angezeigt).",
+          "Feature: CO₂-Einsparung wird intern berechnet (PV-Erzeugung + E‑Mobilität-Verbrauch)."
+        ]
       }
     },
     "title": "NexoWatt VIS",
