@@ -10,6 +10,8 @@
 
     appsList: document.getElementById('appsList'),
     appsEmpty: document.getElementById('appsEmpty'),
+    nwDevicesQuickSetup: document.getElementById('nwDevicesQuickSetup'),
+
 
     gridConnectionPower: document.getElementById('gridConnectionPower'),
     gridPointPowerId: document.getElementById('gridPointPowerId'),
@@ -5293,6 +5295,335 @@
     }
   }
 
+  // ------------------------------
+  // Schnell‑Inbetriebnahme: Geräteadapter (nexowatt-devices)
+  // ------------------------------
+
+  function _nwNormCat(v) {
+    return String(v || '').trim().toUpperCase();
+  }
+  function _isNwEvcsCategory(cat) {
+    const c = _nwNormCat(cat);
+    return (c === 'EVCS' || c === 'CHARGER' || c === 'DC_CHARGER' || c === 'EVSE');
+  }
+  function _isNwPvInverterCategory(cat) {
+    return _nwNormCat(cat) === 'PV_INVERTER';
+  }
+  function _isNwHeatCategory(cat) {
+    return _nwNormCat(cat) === 'HEAT';
+  }
+
+  function _nwGetAlias(dev, key) {
+    const a = dev && dev.aliases && typeof dev.aliases === 'object' ? dev.aliases : null;
+    const dp = dev && dev.dp && typeof dev.dp === 'object' ? dev.dp : null;
+    const v = (dp && dp[key]) ? String(dp[key]).trim() : '';
+    if (v) return v;
+    const v2 = (a && a[key]) ? String(a[key]).trim() : '';
+    return v2;
+  }
+
+  function _nwGetDpFallback(dev, suffix) {
+    const base = String((dev && dev.baseId) || '').trim();
+    if (!base || !suffix) return '';
+    return base + '.' + suffix;
+  }
+
+  function _applyNwDeviceToEvcsRow(row, dev, opts) {
+    const onlyEmpty = !!(opts && opts.onlyEmpty);
+    const out = (row && typeof row === 'object') ? { ...row } : {};
+
+    const setIf = (k, v) => {
+      const val = String(v || '').trim();
+      if (!val) return;
+      if (onlyEmpty) {
+        if (String(out[k] || '').trim()) return;
+      }
+      out[k] = val;
+    };
+
+    // Metadata
+    setIf('name', dev && dev.name ? dev.name : '');
+    if (onlyEmpty && out.enabled === undefined) out.enabled = true;
+
+    const cat = _nwNormCat(dev && dev.category);
+    if (cat === 'DC_CHARGER') setIf('chargerType', 'dc');
+    else setIf('chargerType', 'ac');
+
+    // Datapoints (prefer aliases)
+    setIf('powerId', _nwGetAlias(dev, 'r.power'));
+    setIf('energyTotalId', _nwGetAlias(dev, 'r.energyTotal'));
+    setIf('statusId', _nwGetAlias(dev, 'r.statusCode'));
+    setIf('onlineId', _nwGetAlias(dev, 'comm.connected'));
+
+    // Control (optional)
+    setIf('setCurrentAId', _nwGetAlias(dev, 'ctrl.currentLimitA'));
+    setIf('setPowerWId', _nwGetAlias(dev, 'ctrl.powerLimitW'));
+    setIf('enableWriteId', _nwGetAlias(dev, 'ctrl.run'));
+
+    // Some devices expose "active" as status; we keep it optional
+    // setIf('activeId', _nwGetAlias(dev, 'r.active'));
+
+    return out;
+  }
+
+  function _classifyHeatDevice(dev) {
+    const name = String((dev && dev.name) || '').toLowerCase();
+    const tpl = String((dev && dev.templateId) || '').toLowerCase();
+
+    const isWp = /\bwp\b|\bhp\b|wärmepumpe|waermepumpe|heatpump/.test(name) || /waermepumpe|heatpump/.test(tpl);
+    const isRod = /heizstab|heaterrod|\brod\b|acthor|askoma/.test(name) || /heizstab|heaterrod|rod|acthor|askoma/.test(tpl);
+
+    if (isWp && !isRod) return { type: 'heatPump', icon: '♨️', thermalType: 'setpoint' };
+    if (isRod && !isWp) return { type: 'heatingRod', icon: '🔥', thermalType: 'power' };
+
+    // default: generic heat consumer
+    return { type: 'custom', icon: '♨️', thermalType: 'power' };
+  }
+
+  function _findFreeConsumerSlot(range) {
+    const dps = (currentConfig && currentConfig.datapoints && typeof currentConfig.datapoints === 'object') ? currentConfig.datapoints : {};
+    const from = (range && range.from) ? range.from : 1;
+    const to = (range && range.to) ? range.to : FLOW_CONSUMER_SLOT_COUNT;
+    for (let i = from; i <= to; i++) {
+      const key = `consumer${i}Power`;
+      if (!String(dps[key] || '').trim()) return i;
+    }
+    return 0;
+  }
+
+  async function nwDevicesQuickSetup() {
+    try {
+      setStatus('Schnell‑Inbetriebnahme: Suche Geräte…');
+
+      const data = await fetchJson('/api/nwdevices/discover');
+      if (!data || data.ok !== true) throw new Error((data && data.error) ? data.error : 'discover failed');
+
+      const devices = Array.isArray(data.devices) ? data.devices : [];
+      if (!devices.length) {
+        setStatus('Schnell‑Inbetriebnahme: Keine Geräte unter nexowatt-devices.* gefunden.', 'error');
+        return;
+      }
+
+      const evcsDevs = devices.filter(d => _isNwEvcsCategory(d && d.category));
+      const pvDevs = devices.filter(d => _isNwPvInverterCategory(d && d.category));
+      const heatDevs = devices.filter(d => _isNwHeatCategory(d && d.category));
+
+      let changed = false;
+
+      // --- 1) Ladepunkte (EVCS) ---
+      let evcsMapped = 0;
+      if (evcsDevs.length) {
+        const sc = _ensureSettingsConfig();
+        const curCount = _clampInt(sc.evcsCount, 1, 50, 1);
+        const wantCount = _clampInt(Math.max(curCount, evcsDevs.length), 1, 50, curCount);
+        if (wantCount !== curCount) {
+          sc.evcsCount = wantCount;
+          changed = true;
+        }
+        const list = _ensureEvcsList(sc);
+
+        for (let i = 0; i < evcsDevs.length && i < list.length; i++) {
+          const before = JSON.stringify(list[i] || {});
+          list[i] = _applyNwDeviceToEvcsRow(list[i], evcsDevs[i], { onlyEmpty: true });
+          if (JSON.stringify(list[i] || {}) !== before) {
+            evcsMapped++;
+            changed = true;
+          }
+        }
+      }
+
+      // --- 2) PV‑Regelung: Wechselrichter (0‑Einspeisung Gruppe) ---
+      let pvAdded = 0;
+      let pvUpdated = 0;
+      if (pvDevs.length) {
+        const gc = _ensureGridConstraintsCfg();
+        gc.pvCurtailInvertersZero = Array.isArray(gc.pvCurtailInvertersZero) ? gc.pvCurtailInvertersZero : [];
+        const list = gc.pvCurtailInvertersZero;
+
+        const addOrUpdate = (dev) => {
+          const name = String((dev && dev.name) || '').trim() || String((dev && dev.devId) || '').trim() || 'WR';
+          const feedInLimitWId = _nwGetAlias(dev, 'ctrl.feedInLimitW') || '';
+          const pvLimitWId = _nwGetAlias(dev, 'ctrl.powerLimitW') || '';
+          const pvLimitPctId = _nwGetAlias(dev, 'ctrl.powerLimitPct') || _nwGetAlias(dev, 'ctrlPvLimitPct') || '';
+
+          if (!feedInLimitWId && !pvLimitWId && !pvLimitPctId) return;
+
+          const match = list.find(it => {
+            if (!it || typeof it !== 'object') return false;
+            if (pvLimitPctId && String(it.pvLimitPctId || '').trim() === pvLimitPctId) return true;
+            if (pvLimitWId && String(it.pvLimitWId || '').trim() === pvLimitWId) return true;
+            if (feedInLimitWId && String(it.feedInLimitWId || '').trim() === feedInLimitWId) return true;
+            // fallback: same baseId (rare) or same name
+            if (String(it.name || '').trim() && String(it.name || '').trim() === name) return true;
+            return false;
+          });
+
+          if (match) {
+            const before = JSON.stringify(match);
+            if (!String(match.name || '').trim()) match.name = name;
+            if (match.kwp === undefined || match.kwp === null) match.kwp = '';
+            if (!String(match.feedInLimitWId || '').trim() && feedInLimitWId) match.feedInLimitWId = feedInLimitWId;
+            if (!String(match.pvLimitWId || '').trim() && pvLimitWId) match.pvLimitWId = pvLimitWId;
+            if (!String(match.pvLimitPctId || '').trim() && pvLimitPctId) match.pvLimitPctId = pvLimitPctId;
+
+            if (JSON.stringify(match) !== before) {
+              pvUpdated++;
+              changed = true;
+            }
+          } else {
+            list.push({
+              name,
+              kwp: '',
+              feedInLimitWId,
+              pvLimitWId,
+              pvLimitPctId
+            });
+            pvAdded++;
+            changed = true;
+          }
+        };
+
+        pvDevs.forEach(addOrUpdate);
+      }
+
+      // --- 3) Thermik + Energiefluss‑Verbraucher‑Slots (Wärmepumpen / Heizstäbe) ---
+      let heatSlotsMapped = 0;
+      let heatPara14aAdded = 0;
+      let heatPara14aUpdated = 0;
+
+      if (heatDevs.length) {
+        currentConfig.datapoints = (currentConfig.datapoints && typeof currentConfig.datapoints === 'object') ? currentConfig.datapoints : {};
+        const dps = currentConfig.datapoints;
+        const fs = _ensureFlowSlots();
+
+        const tcfg = _ensureThermalCfg();
+        const icfg = _ensurePara14aCfg();
+        icfg.para14aConsumers = Array.isArray(icfg.para14aConsumers) ? icfg.para14aConsumers : [];
+
+        // helper for para14a
+        const findPara14aMatch = (dev, setId, enableId) => {
+          const name = String((dev && dev.name) || '').trim();
+          const key = String((dev && dev.devId) || '').trim();
+          return (icfg.para14aConsumers || []).find(r => {
+            if (!r || typeof r !== 'object') return false;
+            if (setId && String(r.setPowerWId || r.setWId || '').trim() === setId) return true;
+            if (enableId && String(r.enableId || r.enableWriteId || '').trim() === enableId) return true;
+            if (key && String(r.key || '').trim() === key) return true;
+            if (name && String(r.name || '').trim() === name) return true;
+            return false;
+          });
+        };
+
+        for (const dev of heatDevs) {
+          const powerId = _nwGetAlias(dev, 'r.power') || (dev && dev.dp && dev.dp.powerW) || _nwGetDpFallback(dev, 'aCTIVE_POWER');
+          if (!String(powerId || '').trim()) continue;
+
+          // Find free slot (prefer first 8, so Thermik slots stay aligned)
+          let slot = _findFreeConsumerSlot({ from: 1, to: 8 });
+          if (!slot) slot = _findFreeConsumerSlot({ from: 9, to: FLOW_CONSUMER_SLOT_COUNT });
+          if (!slot) break;
+
+          const dpKey = `consumer${slot}Power`;
+          dps[dpKey] = powerId;
+
+          // Slot meta
+          const c = _classifyHeatDevice(dev);
+          fs.consumers[slot - 1] = fs.consumers[slot - 1] || { name: '', icon: '', ctrl: {} };
+          fs.consumers[slot - 1].name = String((dev && dev.name) || '').trim() || fs.consumers[slot - 1].name;
+          fs.consumers[slot - 1].icon = c.icon;
+
+          // Optional control aliases (will be filled automatically once your adapter provides them)
+          const ctrlRun = _nwGetAlias(dev, 'ctrl.run') || (dev && dev.dp && dev.dp.ctrlRun) || '';
+          const ctrlLimitW = _nwGetAlias(dev, 'ctrl.powerLimitW') || (dev && dev.dp && dev.dp.ctrlPowerLimitW) || '';
+          if (ctrlRun) {
+            fs.consumers[slot - 1].ctrl = fs.consumers[slot - 1].ctrl || {};
+            if (!String(fs.consumers[slot - 1].ctrl.switchWriteId || '').trim()) fs.consumers[slot - 1].ctrl.switchWriteId = ctrlRun;
+            if (!String(fs.consumers[slot - 1].ctrl.switchReadId || '').trim()) fs.consumers[slot - 1].ctrl.switchReadId = ctrlRun;
+          }
+          if (ctrlLimitW) {
+            fs.consumers[slot - 1].ctrl = fs.consumers[slot - 1].ctrl || {};
+            if (!String(fs.consumers[slot - 1].ctrl.setpointWriteId || '').trim()) fs.consumers[slot - 1].ctrl.setpointWriteId = ctrlLimitW;
+            if (!String(fs.consumers[slot - 1].ctrl.setpointReadId || '').trim()) fs.consumers[slot - 1].ctrl.setpointReadId = ctrlLimitW;
+            if (!String(fs.consumers[slot - 1].ctrl.setpointUnit || '').trim()) fs.consumers[slot - 1].ctrl.setpointUnit = 'W';
+            if (!String(fs.consumers[slot - 1].ctrl.setpointLabel || '').trim()) fs.consumers[slot - 1].ctrl.setpointLabel = 'Sollwert (W)';
+          }
+
+          // Thermik slot (aligned for slots 1..8)
+          if (slot >= 1 && slot <= 8) {
+            const td = tcfg.devices[slot - 1] || {};
+            if (!String(td.name || '').trim()) td.name = String((dev && dev.name) || '').trim();
+            if (!String(td.type || '').trim()) td.type = c.thermalType;
+            if (td.enabled === undefined) td.enabled = true;
+            tcfg.devices[slot - 1] = td;
+          }
+
+          // §14a Verbraucher (nur anlegen/ergänzen; ohne Schreib-IDs bleibt es automatisch inaktiv)
+          const setWId = ctrlLimitW;
+          const enableId = ctrlRun;
+
+          const existing = findPara14aMatch(dev, setWId, enableId);
+          if (existing) {
+            const before = JSON.stringify(existing);
+            if (!String(existing.name || '').trim()) existing.name = String((dev && dev.name) || '').trim();
+            if (!String(existing.type || '').trim()) existing.type = c.type;
+            if (!String(existing.controlType || '').trim()) existing.controlType = setWId ? 'limitW' : 'onOff';
+            if (!String(existing.setPowerWId || existing.setWId || '').trim() && setWId) existing.setPowerWId = setWId;
+            if (!String(existing.enableId || existing.enableWriteId || '').trim() && enableId) existing.enableId = enableId;
+            if (!String(existing.key || '').trim() && String((dev && dev.devId) || '').trim()) existing.key = String(dev.devId).trim();
+            if (existing.enabled === undefined) existing.enabled = !!(setWId || enableId);
+
+            if (JSON.stringify(existing) !== before) {
+              heatPara14aUpdated++;
+              changed = true;
+            }
+          } else {
+            icfg.para14aConsumers.push({
+              enabled: !!(setWId || enableId),
+              key: String((dev && dev.devId) || '').trim(),
+              name: String((dev && dev.name) || '').trim(),
+              type: c.type,
+              controlType: setWId ? 'limitW' : 'onOff',
+              maxPowerW: 0,
+              installedPowerW: 0,
+              priority: 100,
+              setPowerWId: setWId,
+              enableId
+            });
+            heatPara14aAdded++;
+            changed = true;
+          }
+
+          heatSlotsMapped++;
+          changed = true;
+        }
+      }
+
+      // UI refresh (targeted)
+      try { buildEvcsUI(); } catch (_e) {}
+      try { buildGridConstraintsUI(); } catch (_e) {}
+      try { buildFlowSlotsUI('consumers', FLOW_CONSUMER_SLOT_COUNT); } catch (_e) {}
+      try { buildThermalUI(); } catch (_e) {}
+      try { buildPara14aUI(); } catch (_e) {}
+      scheduleValidation(250);
+
+      const msgParts = [];
+      msgParts.push(`Geräte gefunden: ${devices.length}`);
+      if (evcsDevs.length) msgParts.push(`Ladepunkte: ${evcsDevs.length} (zugeordnet: ${evcsMapped})`);
+      if (pvDevs.length) msgParts.push(`Wechselrichter: ${pvDevs.length} (+${pvAdded}/${pvUpdated})`);
+      if (heatDevs.length) msgParts.push(`Thermik: ${heatDevs.length} (Slots: ${heatSlotsMapped}, §14a: +${heatPara14aAdded}/${heatPara14aUpdated})`);
+
+      if (!changed) {
+        setStatus('Schnell‑Inbetriebnahme: keine Änderungen (alles bereits belegt).', 'ok');
+      } else {
+        setStatus('Schnell‑Inbetriebnahme abgeschlossen. Bitte prüfen und speichern. • ' + msgParts.join(' • '), 'ok');
+      }
+    } catch (e) {
+      setStatus('Schnell‑Inbetriebnahme fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error');
+    }
+  }
+
+
+
 
   async function loadConfig() {
     setStatus('Lade Konfiguration…');
@@ -6271,7 +6602,14 @@
     });
   }
 
-  if (els.ocppAutoDetect) {
+  
+  if (els.nwDevicesQuickSetup) {
+    els.nwDevicesQuickSetup.addEventListener('click', () => {
+      nwDevicesQuickSetup().catch(e => setStatus('Schnell‑Inbetriebnahme fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
+    });
+  }
+
+if (els.ocppAutoDetect) {
     els.ocppAutoDetect.addEventListener('click', () => {
       ocppAutoDetect().catch(e => setStatus('OCPP: Erkennung fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
     });

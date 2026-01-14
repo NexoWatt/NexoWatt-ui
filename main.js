@@ -4495,7 +4495,164 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
       }
     });
 
-    // --- EMS Status (Phase 2) ---
+    
+    // --- NexoWatt-Devices discovery (Installer → Schnell‑Inbetriebnahme) ---
+    // Scans foreign objects under `nexowatt-devices.*.devices.*` and returns a compact
+    // device list with known alias datapoints (aliases.*). The frontend can use this to
+    // auto-fill App-Center mappings (EVCS / PV‑Regelung / Thermik / §14a).
+    //
+    // IMPORTANT: This endpoint only discovers; it never writes config.
+    app.get('/api/nwdevices/discover', requireInstaller, async (_req, res) => {
+      try {
+        const now = Date.now();
+
+        let devChannels = {};
+        try {
+          devChannels = await this.getForeignObjectsAsync('nexowatt-devices.*.devices.*', 'channel');
+        } catch (_e) {
+          devChannels = {};
+        }
+
+        let states = {};
+        try {
+          states = await this.getForeignObjectsAsync('nexowatt-devices.*.devices.*', 'state');
+        } catch (_e) {
+          states = {};
+        }
+
+        // Group states by base device id (nexowatt-devices.X.devices.<devId>)
+        const statesByDev = new Map();
+        for (const [id, obj] of Object.entries(states || {})) {
+          const sid = String(id || '');
+          if (!sid.startsWith('nexowatt-devices.')) continue;
+          const parts = sid.split('.');
+          if (parts.length < 5) continue;
+          if (parts[2] !== 'devices') continue;
+          const base = parts.slice(0, 4).join('.');
+          if (!statesByDev.has(base)) statesByDev.set(base, {});
+          statesByDev.get(base)[sid] = obj;
+        }
+
+        const normName = (v) => {
+          try {
+            if (typeof v === 'string') return v.trim();
+            if (v && typeof v === 'object') {
+              // common.name can be translated object
+              const any = v.en || v.de || v.text || v.value;
+              if (typeof any === 'string') return any.trim();
+              const first = Object.values(v).find(x => typeof x === 'string');
+              if (typeof first === 'string') return first.trim();
+            }
+          } catch (_e) {}
+          return '';
+        };
+
+        const devices = [];
+        const counts = { total: 0, evcs: 0, pvInverter: 0, heat: 0 };
+        const instances = new Set();
+
+        const isEvcsCat = (c) => {
+          const s = String(c || '').trim().toUpperCase();
+          return (s === 'EVCS' || s === 'CHARGER' || s === 'DC_CHARGER' || s === 'EVSE');
+        };
+        const isPvInvCat = (c) => String(c || '').trim().toUpperCase() === 'PV_INVERTER';
+        const isHeatCat = (c) => String(c || '').trim().toUpperCase() === 'HEAT';
+
+        for (const [base, chObj] of Object.entries(devChannels || {})) {
+          const id = String(base || '');
+          if (!id.startsWith('nexowatt-devices.')) continue;
+          const parts = id.split('.');
+          if (parts.length !== 4) continue;
+          if (parts[2] !== 'devices') continue;
+
+          const devId = parts[3];
+          const instance = parts.slice(0, 2).join('.');
+          instances.add(instance);
+
+          const common = (chObj && chObj.common && typeof chObj.common === 'object') ? chObj.common : {};
+          const native = (chObj && chObj.native && typeof chObj.native === 'object') ? chObj.native : {};
+
+          const name = normName(common.name) || devId;
+          const category = String(native.category || '').trim();
+          const manufacturer = String(native.manufacturer || '').trim();
+          const templateId = String(native.templateId || native.template || '').trim();
+
+          const devStates = statesByDev.get(id) || {};
+
+          // Collect alias datapoints: "<base>.aliases.<aliasKey>" => { aliasKey: fullId }
+          const aliases = {};
+          for (const sid of Object.keys(devStates || {})) {
+            const k = String(sid || '');
+            const idx = k.indexOf('.aliases.');
+            if (idx < 0) continue;
+            const a = k.substring(idx + 9);
+            if (!a) continue;
+            aliases[a] = k;
+          }
+
+          const basePrefix = id + '.';
+          const hasState = (suffix) => {
+            const sid = basePrefix + suffix;
+            return (devStates && devStates[sid]) ? sid : '';
+          };
+
+          // Recommended IDs (prefer alias, fall back to canonical template datapoints if present)
+          const dp = {
+            powerW: aliases['r.power'] || hasState('aCTIVE_POWER') || '',
+            energyTotalKWh: aliases['r.energyTotal'] || hasState('energyTotal') || '',
+            statusCode: aliases['r.statusCode'] || hasState('statusCode') || '',
+            connected: aliases['comm.connected'] || '',
+            ctrlRun: aliases['ctrl.run'] || '',
+            ctrlCurrentLimitA: aliases['ctrl.currentLimitA'] || '',
+            ctrlPowerLimitW: aliases['ctrl.powerLimitW'] || '',
+            ctrlPvLimitPct: aliases['ctrl.powerLimitPct'] || '',
+            ctrlPvLimitEnable: aliases['ctrl.powerLimitEnable'] || '',
+          };
+
+          devices.push({
+            baseId: id,
+            devId,
+            instance,
+            name,
+            category,
+            manufacturer,
+            templateId,
+            aliases,
+            dp,
+          });
+
+          counts.total++;
+          if (isEvcsCat(category)) counts.evcs++;
+          else if (isPvInvCat(category)) counts.pvInverter++;
+          else if (isHeatCat(category)) counts.heat++;
+        }
+
+        // Stable sort: category, then name, then id
+        devices.sort((a, b) => {
+          const ca = String(a.category || '');
+          const cb = String(b.category || '');
+          if (ca !== cb) return ca.localeCompare(cb);
+          const na = String(a.name || '');
+          const nb = String(b.name || '');
+          if (na !== nb) return na.localeCompare(nb);
+          return String(a.baseId || '').localeCompare(String(b.baseId || ''));
+        });
+
+        res.json({
+          ok: true,
+          ts: now,
+          instances: Array.from(instances.values()).sort(),
+          counts,
+          deviceCount: devices.length,
+          devices,
+        });
+      } catch (e) {
+        try { this.log.warn('NWDevices discover API error: ' + (e && e.message ? e.message : e)); } catch (_e2) {}
+        res.status(500).json({ ok: false, error: 'internal error' });
+      }
+    });
+
+// --- EMS Status (Phase 2) ---
     app.get('/api/ems/status', requireInstaller, async (req, res) => {
       try {
         const engine = this.emsEngine;
