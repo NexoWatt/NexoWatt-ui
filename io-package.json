@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.27",
+    "version": "0.6.28",
     "news": {
+      "0.6.28": {
+        "en": [
+          "History (day): SoC axis is now anchored at the kW zero-line (0% at midline, 100% at top) for a cleaner combined kW/% chart."
+        ],
+        "de": [
+          "Historie (Tag): SoC-Achse startet jetzt auf der kW-0-Linie (0% auf der Mittellinie, 100% oben) – sauberer kombinierter kW/% Chart."
+        ]
+      },
       "0.6.27": {
         "en": [
           "History: Added quick navigation (◀/▶) to step day/week/month/year without editing the date inputs.",

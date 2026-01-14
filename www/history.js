@@ -204,10 +204,14 @@ function draw(){
     minKW -= pad; maxKW += pad;
     const yPow = (kw)=> T + (H-B-T)*(1 - ((kw - minKW)/((maxKW-minKW)||1)));
     const y0 = yPow(0);
-    // SoC axis is always 0..100% over the full chart height (like the reference chart).
+
+    // SoC axis: in this chart we want SoC to live only in the upper half.
+    // 0% should sit on the *power* 0‑line (midline), and 100% should be at the top.
+    // This matches the typical reference chart layout (kW with positive/negative, SoC above).
+    const ySocBase = Math.min(Math.max(y0, T), H - B);
     const ySoc = (pct)=> {
       const p = Math.max(0, Math.min(100, Number(pct) || 0));
-      return T + (H - B - T) * (1 - (p / 100));
+      return ySocBase - (p / 100) * (ySocBase - T);
     };
 
     // grid
