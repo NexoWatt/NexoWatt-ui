@@ -5316,7 +5316,9 @@ app.get('/api/history', async (req, res) => {
         const inst = this._nwGetHistoryInstance();
         const start = Number(req.query.from || (Date.now() - 24*3600*1000));
         const end   = Number(req.query.to   || Date.now());
-        const stepS = Number(req.query.step || 60);
+        // Historie wird im 10‑Minuten‑Raster nach Influx geschrieben.
+        // Default daher ebenfalls 10 Minuten (Frontend kann weiterhin explizit steuern).
+        const stepS = Number(req.query.step || 600);
 
         // For many states we log data sparsely (e.g. only "on change").
         // In that case the aggregated history query only returns values for time-buckets
@@ -5357,6 +5359,16 @@ app.get('/api/history', async (req, res) => {
               havePrev = true;
             }
             out.push([start + i * stepMs, havePrev ? prev : null]);
+          }
+
+          // Ensure the series reaches exactly `end` so the chart does not visually "stop"
+          // before the right edge when `end` is not aligned to the step grid.
+          // This also improves kWh integration for the last partial bucket.
+          if (out.length) {
+            const lastTs = out[out.length - 1][0];
+            if (Number.isFinite(lastTs) && lastTs < end) {
+              out.push([end, havePrev ? prev : null]);
+            }
           }
           return out;
         };

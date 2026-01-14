@@ -359,7 +359,10 @@ function draw(){
 async function load(){
     const from = new Date(document.getElementById('from').value || new Date(Date.now()-24*3600*1000).toISOString().slice(0,16));
     const to   = new Date(document.getElementById('to').value   || new Date().toISOString().slice(0,16));
-    const step = (chartMode==='day')?60: (chartMode==='week'?300:(chartMode==='month'?1800:21600));
+    // NOTE: Historie wird in Influx im 10‑Minuten‑Raster geschrieben.
+    // Damit die Linien nicht „treppenförmig“ werden (Hold‑Last auf zu kleinem Raster),
+    // holen wir in der Tagesansicht die Daten auch in 10‑Minuten‑Schritten.
+    const step = (chartMode==='day')?600: (chartMode==='week'?300:(chartMode==='month'?1800:21600));
     const url = `/api/history?from=${from.getTime()}&to=${to.getTime()}&step=${step}`;
     const res = await fetch(url).then(r=>r.json()).catch(()=>null);
     if(!res || !res.ok){ alert('History kann nicht geladen werden'); return; }

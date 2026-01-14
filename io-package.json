@@ -1,8 +1,18 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.18",
+    "version": "0.6.19",
     "news": {
+      "0.6.19": {
+        "en": [
+          "History: Day view now queries data in 10-minute steps to match 10-minute Influx logging (prevents stair-step plots).",
+          "History: Densified series now always include the exact 'to' timestamp so plots extend to the right edge and kWh integration covers the last partial bucket."
+        ],
+        "de": [
+          "Historie: Tagesansicht fragt Daten jetzt im 10-Minuten-Schritt ab (passend zum 10-Minuten-Logging in Influx) – verhindert treppenförmige Linien.",
+          "Historie: Verdichtete Zeitreihen enthalten jetzt immer den exakten 'Bis'-Zeitpunkt, damit die Kurven bis zum Rand laufen und die kWh-Berechnung den letzten Teil-Abschnitt berücksichtigt."
+        ]
+      },
       "0.6.17": {
         "en": [
           "App Center: Split EVU/PV regulation (EVU curtailment + zero export) into its own tab for clearer configuration.",
