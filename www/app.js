@@ -764,14 +764,29 @@ function render() {
   const d = (k) => s[k]?.value;
 
   // Top ring values: map PV, Grid, Load, Bat flows to percent of max for visualization
-  const sfEnabled = !!window.__nwStorageFarmEnabled;
+  const sfEnabled = !!window.__nwStorageFarmEnabled || !!(s['storageFarm.enabled']?.value);
   const dpCfg = (window.__nwCfg && window.__nwCfg.datapoints) ? window.__nwCfg.datapoints : {};
   const pvMapped = !!(dpCfg && (dpCfg.pvPower || dpCfg.productionTotal));
 
+  // PV (W): primary from mapped PV datapoint; fallback to productionTotal if used as power DP.
   let pv = d('pvPower') ?? d('productionTotal');
-  if (sfEnabled && !pvMapped) {
-    const pvFarm = d('storageFarm.totalPvPowerW');
-    if (pv == null || isNaN(Number(pv)) || Number(pv) === 0) pv = pvFarm;
+  pv = (pv == null || isNaN(Number(pv))) ? 0 : Number(pv);
+
+  // Speicherfarm (DC‑PV): im Farm‑Modus zur PV‑Erzeugung addieren (oder ersetzen, wenn kein PV‑DP gemappt ist).
+  if (sfEnabled) {
+    const pvFarmRaw = d('storageFarm.totalPvPowerW');
+    const pvFarm = (pvFarmRaw == null || isNaN(Number(pvFarmRaw))) ? 0 : Number(pvFarmRaw);
+    if (pvFarm > 0) {
+      if (!pvMapped || pv === 0) {
+        pv = pvFarm;
+      } else {
+        const sign = pv < 0 ? -1 : 1;
+        const pvAbs = Math.abs(pv);
+        const relDiff = Math.abs(pvAbs - pvFarm) / Math.max(1, pvFarm);
+        if (relDiff < 0.05) pv = sign * pvFarm;
+        else pv = pv + (sign * pvFarm);
+      }
+    }
   }
 
   const load = d('consumptionTotal');
@@ -784,12 +799,13 @@ function render() {
   if (sfEnabled) {
     const c = d('storageFarm.totalChargePowerW');
     const dch = d('storageFarm.totalDischargePowerW');
-    const socMedian = d('storageFarm.medianSoc');
     const socAvg = d('storageFarm.totalSoc');
+    const socMedian = d('storageFarm.medianSoc');
     if (c != null && !isNaN(Number(c))) charge = c;
     if (dch != null && !isNaN(Number(dch))) discharge = dch;
-    if (socMedian != null && !isNaN(Number(socMedian))) soc = socMedian;
-    else if (socAvg != null && !isNaN(Number(socAvg))) soc = socAvg;
+    // Im Farm‑Modus bevorzugen wir den Durchschnitt (Ø), Median bleibt als Fallback.
+    if (socAvg != null && !isNaN(Number(socAvg))) soc = socAvg;
+    else if (socMedian != null && !isNaN(Number(socMedian))) soc = socMedian;
   }
 
   const maxVal = Math.max(1, ...[pv, load, buy, sell, charge, discharge].filter(x => typeof x === 'number').map(Math.abs));
@@ -3680,14 +3696,31 @@ function updateEnergyWeb() {
   const s = window.latestState || {};
 
   // Raw datapoints (1:1)
-  const sfEnabled = !!window.__nwStorageFarmEnabled;
+  const sfEnabled = !!window.__nwStorageFarmEnabled || !!(s['storageFarm.enabled']?.value);
   const dpCfg = (window.__nwCfg && window.__nwCfg.datapoints) ? window.__nwCfg.datapoints : {};
   const pvMapped = !!(dpCfg && (dpCfg.pvPower || dpCfg.productionTotal));
 
-  let pv = +(d('pvPower') ?? 0);
-  if (sfEnabled && !pvMapped) {
+  // PV (W): primary from mapped PV datapoint; fallback to productionTotal if used as power DP.
+  let pv = +(d('pvPower') ?? d('productionTotal') ?? 0);
+  if (!Number.isFinite(pv)) pv = 0;
+
+  // Speicherfarm (DC‑PV): im Farm‑Modus zur PV‑Erzeugung addieren (oder ersetzen, wenn kein PV‑DP gemappt ist).
+  if (sfEnabled) {
     const pvFarm = +(d('storageFarm.totalPvPowerW') ?? 0);
-    if (!Number.isFinite(pv) || pv === 0) pv = pvFarm;
+    if (Number.isFinite(pvFarm) && pvFarm > 0) {
+      if (!pvMapped || pv === 0) {
+        pv = pvFarm;
+      } else {
+        // Keep sign-consistency (some adapters use negative PV generation)
+        const sign = pv < 0 ? -1 : 1;
+        const pvAbs = Math.abs(pv);
+        const relDiff = Math.abs(pvAbs - pvFarm) / Math.max(1, pvFarm);
+
+        // Avoid obvious double counting if pvPower already equals the farm sum
+        if (relDiff < 0.05) pv = sign * pvFarm;
+        else pv = pv + (sign * pvFarm);
+      }
+    }
   }
   let buy = +(d('gridBuyPower') ?? 0);
   let sell = +(d('gridSellPower') ?? 0);
@@ -3701,12 +3734,13 @@ function updateEnergyWeb() {
   if (sfEnabled) {
     const c = d('storageFarm.totalChargePowerW');
     const dch = d('storageFarm.totalDischargePowerW');
-    const socMedian = d('storageFarm.medianSoc');
     const socAvg = d('storageFarm.totalSoc');
+    const socMedian = d('storageFarm.medianSoc');
     if (c != null && !isNaN(Number(c))) batCharge = +c;
     if (dch != null && !isNaN(Number(dch))) batDischarge = +dch;
-    if (socMedian != null && !isNaN(Number(socMedian))) soc = socMedian;
-    else if (socAvg != null && !isNaN(Number(socAvg))) soc = socAvg;
+    // Im Farm‑Modus bevorzugen wir den Durchschnitt (Ø), Median bleibt als Fallback.
+    if (socAvg != null && !isNaN(Number(socAvg))) soc = socAvg;
+    else if (socMedian != null && !isNaN(Number(socMedian))) soc = socMedian;
   }
 
   // Invert toggles (remain verfügbar)

@@ -770,6 +770,133 @@ class NexoWattVis extends utils.Adapter {
       try { list = raw ? JSON.parse(raw) : []; } catch (_e) { list = []; }
       if (!Array.isArray(list)) list = [];
 
+      // Robust number parsing (some adapters deliver strings like "4,62 kW")
+      const parseNum = (val) => {
+        try {
+          if (val === null || val === undefined) return NaN;
+          if (typeof val === 'number') return val;
+          if (typeof val === 'boolean') return val ? 1 : 0;
+          if (typeof val === 'string') {
+            let s = val.trim();
+            if (!s) return NaN;
+
+            // Extract first number-like token
+            const m = s.match(/[-+]?\d[\d.,]*([eE][-+]?\d+)?/);
+            if (!m) return NaN;
+            let num = m[0];
+
+            const hasDot = num.includes('.');
+            const hasComma = num.includes(',');
+
+            if (hasDot && hasComma) {
+              // Determine decimal separator by last occurrence
+              if (num.lastIndexOf(',') > num.lastIndexOf('.')) {
+                // comma decimal, dots thousands
+                num = num.replace(/\./g, '').replace(',', '.');
+              } else {
+                // dot decimal, commas thousands
+                num = num.replace(/,/g, '');
+              }
+            } else if (hasComma && !hasDot) {
+              // comma decimal
+              num = num.replace(',', '.');
+            } else if (hasDot) {
+              // multiple dots -> thousands separators
+              const parts = num.split('.');
+              if (parts.length > 2) {
+                const dec = parts.pop();
+                num = parts.join('') + '.' + dec;
+              }
+            }
+
+            const n = parseFloat(num);
+            return Number.isFinite(n) ? n : NaN;
+          }
+          return NaN;
+        } catch (_e) {
+          return NaN;
+        }
+      };
+
+      // Cache units of datapoints (for kW → W conversion, etc.)
+      const _unitCache = this._nwDpUnitCache || (this._nwDpUnitCache = new Map());
+
+      const getUnit = async (id) => {
+        const sid = String(id || '').trim();
+        if (!sid) return '';
+        if (_unitCache.has(sid)) return _unitCache.get(sid) || '';
+
+        let unit = '';
+        try {
+          const obj = await this.getForeignObjectAsync(sid);
+          unit = (obj && obj.common && obj.common.unit !== undefined && obj.common.unit !== null) ? String(obj.common.unit) : '';
+        } catch (_e) {
+          unit = '';
+        }
+        _unitCache.set(sid, unit);
+        return unit;
+      };
+
+      const scalePowerToW = (n, unit) => {
+        if (!Number.isFinite(n)) return NaN;
+        const u = String(unit || '').trim();
+        if (!u) return n;
+
+        const ul = u.toLowerCase();
+
+        // Avoid scaling energy units
+        if (ul.includes('kwh') || ul.includes('mwh') || ul.includes('wh')) return n;
+
+        if (ul === 'kw' || ul.endsWith(' kw') || ul.startsWith('kw ') || ul.includes('kilowatt')) return n * 1000;
+        if (ul === 'mw' || ul.endsWith(' mw') || ul.startsWith('mw ') || ul.includes('megawatt')) return n * 1000000;
+        if (ul === 'gw' || ul.endsWith(' gw') || ul.startsWith('gw ') || ul.includes('gigawatt')) return n * 1000000000;
+        return n;
+      };
+
+      const readNumber = async (id, kind) => {
+        const sid = String(id || '').trim();
+        if (!sid) return NaN;
+
+        const st = await this.getForeignStateAsync(sid).catch(() => null);
+        if (!st || st.val === undefined || st.val === null) return NaN;
+
+        let n = parseNum(st.val);
+        if (!Number.isFinite(n)) return NaN;
+
+        if (kind === 'soc') {
+          // Accept both percent (0..100) and fraction (0..1) formats.
+          const unit = await getUnit(sid);
+          const ul = String(unit || '').toLowerCase();
+          if (!ul.includes('%')) {
+            if (n > 0 && n <= 1) n = n * 100;
+          }
+          if (Number.isFinite(n)) {
+            if (n < 0) n = 0;
+            if (n > 100) n = 100;
+          }
+          return n;
+        }
+
+        if (kind === 'power') {
+          let unit = await getUnit(sid);
+
+          // If unit is missing on the DP, try to infer it from a string value (e.g. "4,62 kW")
+          if (!unit && typeof st.val === 'string') {
+            const sl = String(st.val).toLowerCase();
+            if (sl.includes('kwh') || sl.includes('mwh')) unit = '';
+            else if (sl.includes('kw')) unit = 'kW';
+            else if (sl.includes('mw')) unit = 'MW';
+            else if (sl.includes('gw')) unit = 'GW';
+            else if (sl.includes(' w')) unit = 'W';
+            else if (sl.endsWith('w')) unit = 'W';
+          }
+
+          return scalePowerToW(n, unit);
+        }
+
+        return n;
+      };
+
 
       let totalCharge = 0;
       let totalDischarge = 0;
@@ -795,6 +922,7 @@ class NexoWattVis extends utils.Adapter {
           pvPowerW: null,
           online: false,
         };
+
         const socId = String(row.socId || '').trim();
         const signedId = String(row.signedPowerId || '').trim();
         const invSigned = !!row.invertSignedPowerSign;
@@ -806,9 +934,9 @@ class NexoWattVis extends utils.Adapter {
         const w = Number.isFinite(cap) && cap > 0 ? cap : 1;
 
         let anyOk = false;
+
         if (socId) {
-          const st = await this.getForeignStateAsync(socId).catch(() => null);
-          const soc = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
+          const soc = await readNumber(socId, 'soc');
           if (Number.isFinite(soc)) {
             status.soc = soc;
             socList.push(soc);
@@ -817,19 +945,24 @@ class NexoWattVis extends utils.Adapter {
             anyOk = true;
           }
         }
+
         let usedSigned = false;
+
         if (signedId) {
-          const st = await this.getForeignStateAsync(signedId).catch(() => null);
-          const v = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
+          const v = await readNumber(signedId, 'power');
           if (Number.isFinite(v)) {
             let vv = invSigned ? -v : v;
+
             // Signed: (-) laden / (+) entladen
             const charge = vv < 0 ? Math.abs(vv) : 0;
             const discharge = vv > 0 ? vv : 0;
+
             totalCharge += charge;
             totalDischarge += discharge;
+
             status.chargePowerW = charge;
             status.dischargePowerW = discharge;
+
             anyOk = true;
             usedSigned = true;
           }
@@ -837,8 +970,7 @@ class NexoWattVis extends utils.Adapter {
 
         // Fallback: getrennte Messwerte
         if (!usedSigned && chgId) {
-          const st = await this.getForeignStateAsync(chgId).catch(() => null);
-          const v = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
+          const v = await readNumber(chgId, 'power');
           if (Number.isFinite(v)) {
             let vv = invChg ? -v : v;
             // In der Farm interpretieren wir Ladeleistung als positive Größe.
@@ -848,9 +980,9 @@ class NexoWattVis extends utils.Adapter {
             anyOk = true;
           }
         }
+
         if (!usedSigned && dchgId) {
-          const st = await this.getForeignStateAsync(dchgId).catch(() => null);
-          const v = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
+          const v = await readNumber(dchgId, 'power');
           if (Number.isFinite(v)) {
             let vv = invDchg ? -v : v;
             // In der Farm interpretieren wir Entladeleistung als positive Größe.
@@ -861,19 +993,19 @@ class NexoWattVis extends utils.Adapter {
           }
         }
 
+        // PV-Leistung (nur DC-gekoppelte Speicher) – als positive Größe
         const pvId = String(row.pvPowerId || '').trim();
         if (pvId) {
-          const st = await this.getForeignStateAsync(pvId).catch(() => null);
-          const v = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
+          const v = await readNumber(pvId, 'power');
           if (Number.isFinite(v)) {
             let vv = v;
-            // PV-Leistung immer als positive Größe interpretieren (DC-gekoppelte Systeme)
             if (vv < 0) vv = Math.abs(vv);
             totalPv += vv;
             status.pvPowerW = vv;
             anyOk = true;
           }
         }
+
         status.online = !!anyOk;
         statusRows.push(status);
         if (anyOk) online++;
@@ -888,6 +1020,7 @@ class NexoWattVis extends utils.Adapter {
       })();
 
       const totalSoc = socWeight > 0 ? (socWeighted / socWeight) : 0;
+
       await this.setStateAsync('storageFarm.totalSoc', { val: Math.round(totalSoc * 10) / 10, ack: true });
       await this.setStateAsync('storageFarm.medianSoc', { val: Math.round(medianSoc * 10) / 10, ack: true });
       await this.setStateAsync('storageFarm.totalChargePowerW', { val: Math.round(totalCharge), ack: true });
@@ -899,29 +1032,32 @@ class NexoWattVis extends utils.Adapter {
 
       // keep stateCache fresh for the UI
       try {
-        this.updateValue('storageFarm.totalSoc', Math.round(totalSoc * 10) / 10, Date.now());
-        this.updateValue('storageFarm.medianSoc', Math.round(medianSoc * 10) / 10, Date.now());
-        this.updateValue('storageFarm.totalChargePowerW', Math.round(totalCharge), Date.now());
-        this.updateValue('storageFarm.totalDischargePowerW', Math.round(totalDischarge), Date.now());
-        this.updateValue('storageFarm.totalPvPowerW', Math.round(totalPv), Date.now());
-        this.updateValue('storageFarm.storagesOnline', online, Date.now());
-        this.updateValue('storageFarm.storagesTotal', configured, Date.now());
-        this.updateValue('storageFarm.storagesStatusJson', JSON.stringify(statusRows), Date.now());
+        const now = Date.now();
+        this.updateValue('storageFarm.totalSoc', Math.round(totalSoc * 10) / 10, now);
+        this.updateValue('storageFarm.medianSoc', Math.round(medianSoc * 10) / 10, now);
+        this.updateValue('storageFarm.totalChargePowerW', Math.round(totalCharge), now);
+        this.updateValue('storageFarm.totalDischargePowerW', Math.round(totalDischarge), now);
+        this.updateValue('storageFarm.totalPvPowerW', Math.round(totalPv), now);
+        this.updateValue('storageFarm.storagesOnline', online, now);
+        this.updateValue('storageFarm.storagesTotal', configured, now);
+        this.updateValue('storageFarm.storagesStatusJson', JSON.stringify(statusRows), now);
+
         // Aggregierte Werte als Fallback für den Energiefluss‑Monitor,
         // falls die generischen Batterie‑Datenpunkte nicht gemappt sind.
         try {
-          const now = Date.now();
           if (typeof this._nwHasMappedDatapoint === 'function') {
-            if (!this._nwHasMappedDatapoint('storageSoc')) this.updateValue('storageSoc', Math.round(medianSoc * 10) / 10, now);
+            // SoC: im Farm-Modus verwenden wir den Durchschnitt (Ø) als Standardanzeige
+            if (!this._nwHasMappedDatapoint('storageSoc')) this.updateValue('storageSoc', Math.round(totalSoc * 10) / 10, now);
             if (!this._nwHasMappedDatapoint('storageChargePower')) this.updateValue('storageChargePower', Math.round(totalCharge), now);
             if (!this._nwHasMappedDatapoint('storageDischargePower')) this.updateValue('storageDischargePower', Math.round(totalDischarge), now);
             if (!this._nwHasMappedDatapoint('batteryPower')) this.updateValue('batteryPower', Math.round(totalDischarge - totalCharge), now);
-            // PV (DC) Farm-Summe optional als Fallback für den Energiefluss, wenn kein PV-DP gemappt ist
+
+            // PV (DC) Farm-Summe optional als Fallback für den Energiefluss,
+            // wenn kein PV-DP gemappt ist.
             if (!this._nwHasMappedDatapoint('pvPower') && totalPv > 0) this.updateValue('pvPower', Math.round(totalPv), now);
             if (!this._nwHasMappedDatapoint('productionTotal') && totalPv > 0) this.updateValue('productionTotal', Math.round(totalPv), now);
           }
         } catch (_e3) {}
-
       } catch (_e2) {}
     } catch (e) {
       this.log.debug('storageFarm derive failed (' + reason + '): ' + (e && e.message ? e.message : e));
