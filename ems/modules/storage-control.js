@@ -341,6 +341,43 @@ class SpeicherRegelungModule extends BaseModule {
             // ignore
         }
 
+        // Speicherfarm: aggregierte Ist-Leistung nutzen (Netto: Entladen - Laden).
+        //
+        // Hintergrund:
+        // In Farm-Setups ist st.batteryPowerW häufig nur auf einen Einzel-Speicher gemappt
+        // oder (Fehler) sogar auf einen Setpoint. Das führt bei NVP-Balancing zu einem
+        // stabilen Fehlpunkt (z. B. ~50% Netzbezug).
+        //
+        // Daher: wenn Farm aktiv ist und die abgeleiteten Summen frisch sind,
+        // überschreiben wir battPowerW mit der Farm-Nettoleistung.
+        if (farmEnabled) {
+            try {
+                const stOnline = await this.adapter.getStateAsync('storageFarm.storagesOnline');
+                const onlineN = stOnline && stOnline.val !== undefined && stOnline.val !== null ? Number(stOnline.val) : NaN;
+                const hasOnline = Number.isFinite(onlineN) && onlineN > 0;
+
+                if (hasOnline) {
+                    const stChg = await this.adapter.getStateAsync('storageFarm.totalChargePowerW');
+                    const stDchg = await this.adapter.getStateAsync('storageFarm.totalDischargePowerW');
+
+                    const chg = stChg && stChg.val !== undefined && stChg.val !== null ? Number(stChg.val) : NaN;
+                    const dchg = stDchg && stDchg.val !== undefined && stDchg.val !== null ? Number(stDchg.val) : NaN;
+
+                    const ageChg = stChg && typeof stChg.ts === 'number' ? (now - Number(stChg.ts)) : null;
+                    const ageDchg = stDchg && typeof stDchg.ts === 'number' ? (now - Number(stDchg.ts)) : null;
+                    const age = (ageChg === null && ageDchg === null) ? null : Math.max(ageChg || 0, ageDchg || 0);
+
+                    if (Number.isFinite(chg) && Number.isFinite(dchg) && (age === null || age <= staleMs)) {
+                        battPowerW = dchg - chg;
+                        battPowerAge = age;
+                        battPowerInvalidReason = 'Farm: aggregierte Ist-Leistung (Entladen-Laden)';
+                    }
+                }
+            } catch (_eFarm) {
+                // ignore
+            }
+        }
+
         // Wenn Netzleistung fehlt: sicher auf 0
         if (typeof gridW !== 'number') {
             await this._setIfChanged('speicher.regelung.requestW', 0);

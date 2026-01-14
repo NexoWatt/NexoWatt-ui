@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.23",
+    "version": "0.6.24",
     "news": {
       "0.6.23": {
         "en": "StorageFarm: Energyflow shows aggregated SoC/power correctly (dominant net flow) and avoids maintenance-charge misdirection.",
