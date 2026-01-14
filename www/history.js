@@ -155,7 +155,9 @@ function draw(){
     // On small screens we keep margins compact.
     const L = (W < 520) ? 54 : 64;
     const R = (W < 520) ? 48 : 56;
-    const T = 10;
+    // Extra top padding so axis titles (kW / %) and the top-most tick values do not clash
+    // and are not clipped by rounded card corners.
+    const T = (W < 520) ? 20 : 24;
     const B = 42;
     ctx.clearRect(0,0,W,H);
     ctx.fillStyle='#0e1216'; ctx.fillRect(0,0,W,H);
@@ -297,15 +299,18 @@ function draw(){
     });
     ctx.restore();
 
-    // Unit labels (move away from rounded corners so they don't get clipped)
+    // Axis titles (units): render in the top padding area, above the tick labels
+    // (matches the reference chart and avoids the previous "stacked" look).
     ctx.save();
-    ctx.fillStyle = '#cbd3db';
-    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillStyle = '#aeb7bf';
+    ctx.font = '11px system-ui, sans-serif';
     ctx.textBaseline = 'alphabetic';
+    const yTitle = Math.max(12, T - 8);
+    // align with tick label columns
     ctx.textAlign = 'right';
-    ctx.fillText('kW', L - 8, T + 12);
+    ctx.fillText('kW', L - 8, yTitle);
     ctx.textAlign = 'left';
-    ctx.fillText('%', W - R + 8, T + 12);
+    ctx.fillText('%', W - R + 8, yTitle);
     ctx.restore();
 
     // x ticks

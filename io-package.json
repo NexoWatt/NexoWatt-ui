@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.25",
+    "version": "0.6.26",
     "news": {
+      "0.6.26": {
+        "en": [
+          "History (day): Improve axis aesthetics (more top padding, axis titles kW/% above the scale, no stacked corner labels)."
+        ],
+        "de": [
+          "Historie (Tag): Achsen optisch verbessert (mehr Top-Padding, Achsentitel kW/% oberhalb der Skala, keine gestapelten Eck-Labels)."
+        ]
+      },
       "0.6.25": {
         "en": [
           "History: Show readable Y-axis tick labels (kW) on the left and SoC axis (0..100%) on the right.",
