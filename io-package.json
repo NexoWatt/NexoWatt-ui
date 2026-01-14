@@ -1,8 +1,18 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.20",
+    "version": "0.6.21",
     "news": {
+      "0.6.21": {
+        "en": [
+          "Storage farm: Added signed actual power datapoint per storage (Istleistung Signed). Farm aggregation now supports signed measurement and falls back to separate charge/discharge values.",
+          "Storage farm UI: Clear separation of measured values (Istwerte) vs setpoints (Sollwerte) and additional sign inversion option for signed measurement."
+        ],
+        "de": [
+          "Speicherfarm: Pro Speicher kann jetzt ein Signed‑Messwert (Istleistung Signed) hinterlegt werden. Die Farm‑Summenbildung unterstützt Signed und fällt sonst auf getrennte Lade-/Entlade‑Messwerte zurück.",
+          "Speicherfarm UI: Saubere Trennung von Istwerten (Messwerte) und Sollwerten (Setpoint) + zusätzliche Vorzeichen‑Option für Signed‑Messwert."
+        ]
+      },
       "0.6.20": {
         "en": [
           "Storage farm: Added derived median SoC and aggregated PV power (DC). Energy flow monitor now uses farm sums (charge/discharge) and median SoC when farm is active.",

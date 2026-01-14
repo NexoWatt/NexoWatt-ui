@@ -708,6 +708,8 @@ class NexoWattVis extends utils.Adapter {
           dischargePowerId: String(r.dischargePowerId || '').trim(),
           pvPowerId: String(r.pvPowerId || '').trim(),
           invertDischargeSign: !!r.invertDischargeSign,
+          signedPowerId: String(r.signedPowerId || '').trim(),
+          invertSignedPowerSign: !!r.invertSignedPowerSign,
           setChargePowerId: String(r.setChargePowerId || '').trim(),
           setDischargePowerId: String(r.setDischargePowerId || '').trim(),
           setSignedPowerId: String(r.setSignedPowerId || '').trim(),
@@ -793,8 +795,9 @@ class NexoWattVis extends utils.Adapter {
           pvPowerW: null,
           online: false,
         };
-
         const socId = String(row.socId || '').trim();
+        const signedId = String(row.signedPowerId || '').trim();
+        const invSigned = !!row.invertSignedPowerSign;
         const chgId = String(row.chargePowerId || '').trim();
         const dchgId = String(row.dischargePowerId || '').trim();
         const invChg = !!row.invertChargeSign;
@@ -814,20 +817,38 @@ class NexoWattVis extends utils.Adapter {
             anyOk = true;
           }
         }
-        if (chgId) {
+        let usedSigned = false;
+        if (signedId) {
+          const st = await this.getForeignStateAsync(signedId).catch(() => null);
+          const v = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
+          if (Number.isFinite(v)) {
+            let vv = invSigned ? -v : v;
+            // Signed: (-) laden / (+) entladen
+            const charge = vv < 0 ? Math.abs(vv) : 0;
+            const discharge = vv > 0 ? vv : 0;
+            totalCharge += charge;
+            totalDischarge += discharge;
+            status.chargePowerW = charge;
+            status.dischargePowerW = discharge;
+            anyOk = true;
+            usedSigned = true;
+          }
+        }
+
+        // Fallback: getrennte Messwerte
+        if (!usedSigned && chgId) {
           const st = await this.getForeignStateAsync(chgId).catch(() => null);
           const v = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
           if (Number.isFinite(v)) {
             let vv = invChg ? -v : v;
             // In der Farm interpretieren wir Ladeleistung als positive Größe.
-            // Negative Werte (z.B. signed power DP) werden hier als 0 behandelt.
             if (vv < 0) vv = 0;
             totalCharge += vv;
             status.chargePowerW = vv;
             anyOk = true;
           }
         }
-        if (dchgId) {
+        if (!usedSigned && dchgId) {
           const st = await this.getForeignStateAsync(dchgId).catch(() => null);
           const v = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
           if (Number.isFinite(v)) {
@@ -839,6 +860,7 @@ class NexoWattVis extends utils.Adapter {
             anyOk = true;
           }
         }
+
         const pvId = String(row.pvPowerId || '').trim();
         if (pvId) {
           const st = await this.getForeignStateAsync(pvId).catch(() => null);

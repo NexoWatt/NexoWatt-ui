@@ -3623,17 +3623,25 @@
     const storOut = [];
     for (let i = 0; i < Math.min(maxStor, sf.storages.length); i++) {
       const r = sf.storages[i] || {};
+      const couplingRaw = String(r.coupling || '').trim().toLowerCase();
+      const coupling = (couplingRaw === 'dc') ? 'dc' : ((couplingRaw === 'ac') ? 'ac' : '');
       storOut.push({
         enabled: (r.enabled === false) ? false : true,
         name: String(r.name || '').trim() || `Speicher ${i + 1}`,
+        coupling,
         socId: String(r.socId || '').trim(),
+        // Istwerte (Messwerte): entweder Signed oder Laden/Entladen getrennt
+        signedPowerId: String(r.signedPowerId || '').trim(),
         chargePowerId: String(r.chargePowerId || '').trim(),
         dischargePowerId: String(r.dischargePowerId || '').trim(),
+        pvPowerId: String(r.pvPowerId || '').trim(),
+        invertSignedPowerSign: !!r.invertSignedPowerSign,
+        invertChargeSign: !!r.invertChargeSign,
+        invertDischargeSign: !!r.invertDischargeSign,
+        // Sollwerte (Setpoint): entweder Signed oder Laden/Entladen getrennt
         setChargePowerId: String(r.setChargePowerId || '').trim(),
         setDischargePowerId: String(r.setDischargePowerId || '').trim(),
         setSignedPowerId: String(r.setSignedPowerId || '').trim(),
-        invertChargeSign: !!r.invertChargeSign,
-        invertDischargeSign: !!r.invertDischargeSign,
         capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : '',
         group: String(r.group || '').trim(),
       });
@@ -3786,6 +3794,23 @@
       return wrap;
     };
 
+    const mkSelectField = (labelText, id, value, options, onChange) => {
+      const { wrap } = mkField(labelText);
+      const sel = document.createElement('select');
+      sel.className = 'nw-config-select';
+      sel.id = id;
+      (options || []).forEach((opt) => {
+        const o = document.createElement('option');
+        o.value = String(opt.value);
+        o.textContent = String(opt.label);
+        sel.appendChild(o);
+      });
+      sel.value = (value !== undefined && value !== null) ? String(value) : '';
+      sel.addEventListener('change', () => { onChange(String(sel.value || '')); });
+      wrap.appendChild(sel);
+      return wrap;
+    };
+
     const mkCheckField = (labelText, id, checked, onChange) => {
       const { wrap } = mkField(labelText);
       const box = document.createElement('input');
@@ -3804,6 +3829,21 @@
       lbl.appendChild(document.createTextNode(labelText));
       wrap.appendChild(lbl);
       return wrap;
+    };
+
+    const mkGridDivider = (text) => {
+      const d = document.createElement('div');
+      d.style.gridColumn = '1 / -1';
+      d.style.marginTop = '4px';
+      d.style.paddingTop = '6px';
+      d.style.borderTop = '1px solid rgba(255,255,255,0.08)';
+      d.style.fontSize = '0.72rem';
+      d.style.fontWeight = '600';
+      d.style.letterSpacing = '0.04em';
+      d.style.textTransform = 'uppercase';
+      d.style.opacity = '0.75';
+      d.textContent = text;
+      return d;
     };
 
     // Storages list
@@ -3831,8 +3871,11 @@
         const sub = document.createElement('div');
         sub.className = 'nw-config-item__subtitle';
         const grp = String(s.group || '').trim();
+        const mp = (String(s.signedPowerId || '').trim() || String(s.chargePowerId || '').trim() || String(s.dischargePowerId || '').trim()) ? 'Istwert: gesetzt' : 'Istwert: fehlt';
         const sp = (String(s.setSignedPowerId || '').trim() || String(s.setChargePowerId || '').trim() || String(s.setDischargePowerId || '').trim()) ? 'Sollwert: gesetzt' : 'Sollwert: fehlt';
-        sub.textContent = (sf.mode === 'groups' ? (`Gruppe: ${grp || '—'} • `) : '') + sp;
+        const cpl = String(s.coupling || '').trim().toLowerCase();
+        const cplTxt = (cpl === 'dc') ? 'DC' : ((cpl === 'ac') ? 'AC' : 'Auto');
+        sub.textContent = (sf.mode === 'groups' ? (`Gruppe: ${grp || '—'} • `) : '') + `Kopplung: ${cplTxt} • ${mp} • ${sp}`;
 
         left.appendChild(title);
         left.appendChild(sub);
@@ -3843,7 +3886,7 @@
 
         const grid = document.createElement('div');
         grid.className = 'nw-flow-ctrl-grid';
-
+        // Grunddaten
         grid.appendChild(mkCheckField('Aktiv', `sf_${idx}_enabled`, s.enabled !== false, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].enabled = !!v; }));
         grid.appendChild(mkTextField('Name', `sf_${idx}_name`, s.name, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].name = v; }, 'z.B. Batterie 1'));
         grid.appendChild(mkNumField('Kapazität (kWh)', `sf_${idx}_cap`, s.capacityKWh, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].capacityKWh = v; }, 'optional'));
@@ -3852,12 +3895,28 @@
           grid.appendChild(mkTextField('Gruppe', `sf_${idx}_group`, s.group, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].group = v; }, 'z.B. Gruppe A'));
         }
 
+        grid.appendChild(mkSelectField('Kopplung', `sf_${idx}_coupling`, s.coupling || '', [
+          { value: '', label: 'Auto/Unbekannt' },
+          { value: 'ac', label: 'AC' },
+          { value: 'dc', label: 'DC' },
+        ], (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].coupling = String(v || '').trim().toLowerCase(); }));
+
+        grid.appendChild(mkDpField('PV Leistung (W) (DC)', `sf_${idx}_pvPowerId`, s.pvPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].pvPowerId = v; }, 'nur DC (optional)'));
+
+        // Istwerte (Messwerte)
+        grid.appendChild(mkGridDivider('Istwerte (Messwerte)'));
+
+        grid.appendChild(mkCheckField('Vorzeichen Istleistung Signed invertieren', `sf_${idx}_invSigned`, !!s.invertSignedPowerSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertSignedPowerSign = !!v; }));
         grid.appendChild(mkCheckField('Vorzeichen Ladeleistung invertieren', `sf_${idx}_invChg`, !!s.invertChargeSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertChargeSign = !!v; }));
         grid.appendChild(mkCheckField('Vorzeichen Entladeleistung invertieren', `sf_${idx}_invDchg`, !!s.invertDischargeSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertDischargeSign = !!v; }));
 
         grid.appendChild(mkDpField('SoC (%)', `sf_${idx}_socId`, s.socId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].socId = v; }, 'SoC‑Datenpunkt'));
-        grid.appendChild(mkDpField('Ladeleistung (W)', `sf_${idx}_chargePowerId`, s.chargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].chargePowerId = v; }, 'Messwert (optional)'));
-        grid.appendChild(mkDpField('Entladeleistung (W)', `sf_${idx}_dischargePowerId`, s.dischargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].dischargePowerId = v; }, 'Messwert (optional)'));
+        grid.appendChild(mkDpField('Istleistung Signed (W)', `sf_${idx}_signedPowerId`, s.signedPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].signedPowerId = v; }, '(-) laden / (+) entladen'));
+        grid.appendChild(mkDpField('Ist Ladeleistung (W)', `sf_${idx}_chargePowerId`, s.chargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].chargePowerId = v; }, 'Messwert (optional)'));
+        grid.appendChild(mkDpField('Ist Entladeleistung (W)', `sf_${idx}_dischargePowerId`, s.dischargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].dischargePowerId = v; }, 'Messwert (optional)'));
+
+        // Sollwerte (Setpoint)
+        grid.appendChild(mkGridDivider('Sollwerte (Setpoint)'));
 
         grid.appendChild(mkDpField('Sollwert Signed (W)', `sf_${idx}_setSignedPowerId`, s.setSignedPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].setSignedPowerId = v; }, '(-) laden / (+) entladen'));
         grid.appendChild(mkDpField('Sollwert Laden (W)', `sf_${idx}_setChargePowerId`, s.setChargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].setChargePowerId = v; }, 'nur Laden (optional)'));
@@ -3893,14 +3952,18 @@
         sf2.storages.push({
           enabled: true,
           name: `Speicher ${sf2.storages.length + 1}`,
+          coupling: '',
           socId: '',
+          signedPowerId: '',
           chargePowerId: '',
           dischargePowerId: '',
+          pvPowerId: '',
+          invertSignedPowerSign: false,
+          invertChargeSign: false,
+          invertDischargeSign: false,
           setChargePowerId: '',
           setDischargePowerId: '',
           setSignedPowerId: '',
-          invertChargeSign: false,
-          invertDischargeSign: false,
           capacityKWh: '',
           group: '',
         });
