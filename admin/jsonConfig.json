@@ -3373,7 +3373,7 @@
                 "width": "100%"
               },
               "tableStyle": {
-                "minWidth": "2300px"
+                "minWidth": "2700px"
               },
               "items": [
                 {
@@ -3399,6 +3399,29 @@
                   "style": {
                     "minWidth": "160px"
                   }
+                },
+                {
+                  "type": "select",
+                  "label": "Kopplung",
+                  "attr": "coupling",
+                  "default": "ac",
+                  "options": [
+                    {
+                      "label": "AC‑geführt",
+                      "value": "ac"
+                    },
+                    {
+                      "label": "DC‑geführt (Hybrid / PV am Speicher‑WR)",
+                      "value": "dc"
+                    }
+                  ],
+                  "xs": 12,
+                  "sm": 6,
+                  "md": 2,
+                  "style": {
+                    "minWidth": "200px"
+                  },
+                  "tooltip": "Optional: AC/ DC‑Kopplung des Speichers. Bei DC kann zusätzlich die PV‑Leistung gemappt werden (für Farm‑PV‑Summe)."
                 },
                 {
                   "type": "objectId",
@@ -3458,6 +3481,18 @@
                     "minWidth": "220px"
                   },
                   "tooltip": "Aktivieren, wenn der Hersteller beim Entladen ein negatives Vorzeichen liefert bzw. erwartet. Gilt für Entladeleistung und Soll-Entladen."
+                },
+                {
+                  "type": "objectId",
+                  "label": "PV‑Leistung (W) – DP (DC)",
+                  "attr": "pvPowerId",
+                  "xs": 12,
+                  "sm": 6,
+                  "md": 3,
+                  "style": {
+                    "minWidth": "260px"
+                  },
+                  "tooltip": "Nur für DC‑gekoppelte Systeme: PV‑Leistung am Speicher‑/Hybrid‑Wechselrichter. Wird in der Farm zu einer Gesamt‑PV‑Summe addiert."
                 },
                 {
                   "type": "objectId",

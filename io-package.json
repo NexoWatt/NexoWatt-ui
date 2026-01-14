@@ -1,8 +1,18 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.19",
+    "version": "0.6.20",
     "news": {
+      "0.6.20": {
+        "en": [
+          "Storage farm: Added derived median SoC and aggregated PV power (DC). Energy flow monitor now uses farm sums (charge/discharge) and median SoC when farm is active.",
+          "Admin: Storage farm table extended with AC/DC coupling and optional PV power datapoint per storage (DC)."
+        ],
+        "de": [
+          "Speicherfarm: Neuer abgeleiteter Median‑SoC und Gesamt‑PV‑Leistung (DC). Energiefluss nutzt bei aktiver Farm die Summen (Laden/Entladen) und den Median‑SoC.",
+          "Admin: Speicherfarm‑Tabelle um AC/DC‑Kopplung und optionalen PV‑Leistungs‑Datenpunkt (DC) erweitert."
+        ]
+      },
       "0.6.19": {
         "en": [
           "History: Day view now queries data in 10-minute steps to match 10-minute Influx logging (prevents stair-step plots).",

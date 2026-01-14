@@ -607,8 +607,10 @@ class NexoWattVis extends utils.Adapter {
       configJson: { type: 'string', role: 'json', def: '[]', name: 'Speicherfarm Konfiguration (JSON, Liste)' },
       groupsJson: { type: 'string', role: 'json', def: '[]', name: 'Gruppenkonfiguration (optional)' },
       totalSoc: { type: 'number', role: 'value', def: 0, name: 'Gesamt SoC (%) (abgeleitet)' },
+      medianSoc: { type: 'number', role: 'value', def: 0, name: 'SoC Median (%) (abgeleitet)' },
       totalChargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt Ladeleistung (W) (abgeleitet)' },
       totalDischargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt Entladeleistung (W) (abgeleitet)' },
+      totalPvPowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt PV-Leistung (W) (DC, abgeleitet)' },
       storagesOnline: { type: 'number', role: 'value', def: 0, name: 'Online Speicher (abgeleitet)' },
       storagesTotal: { type: 'number', role: 'value', def: 0, name: 'Konfigurierte Speicher' },
       storagesStatusJson: { type: 'string', role: 'json', def: '[]', name: 'Speicher-Status (JSON, abgeleitet)' },
@@ -645,8 +647,10 @@ class NexoWattVis extends utils.Adapter {
       configJson: '[]',
       groupsJson: '[]',
       totalSoc: 0,
+      medianSoc: 0,
       totalChargePowerW: 0,
       totalDischargePowerW: 0,
+      totalPvPowerW: 0,
       storagesOnline: 0,
       storagesTotal: 0,
       storagesStatusJson: '[]',
@@ -697,13 +701,16 @@ class NexoWattVis extends utils.Adapter {
         .map(r => ({
           enabled: !(r.enabled === false),
           name: String(r.name || '').trim(),
+          coupling: String(r.coupling || '').trim().toLowerCase(),
           socId: String(r.socId || '').trim(),
           chargePowerId: String(r.chargePowerId || '').trim(),
           invertChargeSign: !!r.invertChargeSign,
           dischargePowerId: String(r.dischargePowerId || '').trim(),
+          pvPowerId: String(r.pvPowerId || '').trim(),
           invertDischargeSign: !!r.invertDischargeSign,
           setChargePowerId: String(r.setChargePowerId || '').trim(),
           setDischargePowerId: String(r.setDischargePowerId || '').trim(),
+          setSignedPowerId: String(r.setSignedPowerId || '').trim(),
           capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : null,
           group: String(r.group || '').trim(),
         }));
@@ -764,10 +771,12 @@ class NexoWattVis extends utils.Adapter {
 
       let totalCharge = 0;
       let totalDischarge = 0;
+      let totalPv = 0;
       let online = 0;
       let configured = 0;
       let socWeighted = 0;
       let socWeight = 0;
+      const socList = [];
       const statusRows = [];
 
       for (const row of list) {
@@ -781,6 +790,7 @@ class NexoWattVis extends utils.Adapter {
           soc: null,
           chargePowerW: null,
           dischargePowerW: null,
+          pvPowerW: null,
           online: false,
         };
 
@@ -798,6 +808,7 @@ class NexoWattVis extends utils.Adapter {
           const soc = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
           if (Number.isFinite(soc)) {
             status.soc = soc;
+            socList.push(soc);
             socWeighted += soc * w;
             socWeight += w;
             anyOk = true;
@@ -828,15 +839,38 @@ class NexoWattVis extends utils.Adapter {
             anyOk = true;
           }
         }
+        const pvId = String(row.pvPowerId || '').trim();
+        if (pvId) {
+          const st = await this.getForeignStateAsync(pvId).catch(() => null);
+          const v = st && st.val !== undefined && st.val !== null ? Number(st.val) : NaN;
+          if (Number.isFinite(v)) {
+            let vv = v;
+            // PV-Leistung immer als positive Größe interpretieren (DC-gekoppelte Systeme)
+            if (vv < 0) vv = Math.abs(vv);
+            totalPv += vv;
+            status.pvPowerW = vv;
+            anyOk = true;
+          }
+        }
         status.online = !!anyOk;
         statusRows.push(status);
         if (anyOk) online++;
       }
 
+      const medianSoc = (() => {
+        if (!socList || !socList.length) return 0;
+        const arr = socList.slice().sort((a, b) => a - b);
+        const mid = Math.floor(arr.length / 2);
+        if (arr.length % 2) return arr[mid];
+        return (arr[mid - 1] + arr[mid]) / 2;
+      })();
+
       const totalSoc = socWeight > 0 ? (socWeighted / socWeight) : 0;
       await this.setStateAsync('storageFarm.totalSoc', { val: Math.round(totalSoc * 10) / 10, ack: true });
+      await this.setStateAsync('storageFarm.medianSoc', { val: Math.round(medianSoc * 10) / 10, ack: true });
       await this.setStateAsync('storageFarm.totalChargePowerW', { val: Math.round(totalCharge), ack: true });
       await this.setStateAsync('storageFarm.totalDischargePowerW', { val: Math.round(totalDischarge), ack: true });
+      await this.setStateAsync('storageFarm.totalPvPowerW', { val: Math.round(totalPv), ack: true });
       await this.setStateAsync('storageFarm.storagesOnline', { val: online, ack: true });
       await this.setStateAsync('storageFarm.storagesTotal', { val: configured, ack: true });
       await this.setStateAsync('storageFarm.storagesStatusJson', { val: JSON.stringify(statusRows), ack: true });
@@ -844,8 +878,10 @@ class NexoWattVis extends utils.Adapter {
       // keep stateCache fresh for the UI
       try {
         this.updateValue('storageFarm.totalSoc', Math.round(totalSoc * 10) / 10, Date.now());
+        this.updateValue('storageFarm.medianSoc', Math.round(medianSoc * 10) / 10, Date.now());
         this.updateValue('storageFarm.totalChargePowerW', Math.round(totalCharge), Date.now());
         this.updateValue('storageFarm.totalDischargePowerW', Math.round(totalDischarge), Date.now());
+        this.updateValue('storageFarm.totalPvPowerW', Math.round(totalPv), Date.now());
         this.updateValue('storageFarm.storagesOnline', online, Date.now());
         this.updateValue('storageFarm.storagesTotal', configured, Date.now());
         this.updateValue('storageFarm.storagesStatusJson', JSON.stringify(statusRows), Date.now());
@@ -854,10 +890,13 @@ class NexoWattVis extends utils.Adapter {
         try {
           const now = Date.now();
           if (typeof this._nwHasMappedDatapoint === 'function') {
-            if (!this._nwHasMappedDatapoint('storageSoc')) this.updateValue('storageSoc', Math.round(totalSoc * 10) / 10, now);
+            if (!this._nwHasMappedDatapoint('storageSoc')) this.updateValue('storageSoc', Math.round(medianSoc * 10) / 10, now);
             if (!this._nwHasMappedDatapoint('storageChargePower')) this.updateValue('storageChargePower', Math.round(totalCharge), now);
             if (!this._nwHasMappedDatapoint('storageDischargePower')) this.updateValue('storageDischargePower', Math.round(totalDischarge), now);
             if (!this._nwHasMappedDatapoint('batteryPower')) this.updateValue('batteryPower', Math.round(totalDischarge - totalCharge), now);
+            // PV (DC) Farm-Summe optional als Fallback für den Energiefluss, wenn kein PV-DP gemappt ist
+            if (!this._nwHasMappedDatapoint('pvPower') && totalPv > 0) this.updateValue('pvPower', Math.round(totalPv), now);
+            if (!this._nwHasMappedDatapoint('productionTotal') && totalPv > 0) this.updateValue('productionTotal', Math.round(totalPv), now);
           }
         } catch (_e3) {}
 
@@ -7846,7 +7885,7 @@ return res.json(out);
     const installer = (this.config && this.config.installer) || {};
         const namespace = this.namespace + '.';
     const settingsLocalKeys = ['notifyEnabled','email','dynamicTariff','storagePower','price','priority','tariffMode','evcsMaxPower','evcsCount'];
-    const storageFarmLocalKeys = ['enabled','mode','configJson','groupsJson','totalSoc','totalChargePowerW','totalDischargePowerW','storagesOnline','storagesTotal','storagesStatusJson'];
+    const storageFarmLocalKeys = ['enabled','mode','configJson','groupsJson','totalSoc','medianSoc','totalChargePowerW','totalDischargePowerW','totalPvPowerW','storagesOnline','storagesTotal','storagesStatusJson'];
     // Weitere lokale States, die in der VIS angezeigt werden sollen (ohne Admin-Mapping)
     // Wichtig: Diese Keys müssen auch dann funktionieren, wenn sie NICHT im Admin unter
     // "Datenpunkte" gemappt wurden. Daher wird im Subscribe-Loop unten auf die lokalen

@@ -764,13 +764,33 @@ function render() {
   const d = (k) => s[k]?.value;
 
   // Top ring values: map PV, Grid, Load, Bat flows to percent of max for visualization
-  const pv = d('pvPower') ?? d('productionTotal');
+  const sfEnabled = !!window.__nwStorageFarmEnabled;
+  const dpCfg = (window.__nwCfg && window.__nwCfg.datapoints) ? window.__nwCfg.datapoints : {};
+  const pvMapped = !!(dpCfg && (dpCfg.pvPower || dpCfg.productionTotal));
+
+  let pv = d('pvPower') ?? d('productionTotal');
+  if (sfEnabled && !pvMapped) {
+    const pvFarm = d('storageFarm.totalPvPowerW');
+    if (pv == null || isNaN(Number(pv)) || Number(pv) === 0) pv = pvFarm;
+  }
+
   const load = d('consumptionTotal');
   const buy = d('gridBuyPower');
   const sell = d('gridSellPower');
-  const charge = d('storageChargePower');
-  const discharge = d('storageDischargePower');
-  const soc = d('storageSoc');
+  let charge = d('storageChargePower');
+  let discharge = d('storageDischargePower');
+  let soc = d('storageSoc');
+
+  if (sfEnabled) {
+    const c = d('storageFarm.totalChargePowerW');
+    const dch = d('storageFarm.totalDischargePowerW');
+    const socMedian = d('storageFarm.medianSoc');
+    const socAvg = d('storageFarm.totalSoc');
+    if (c != null && !isNaN(Number(c))) charge = c;
+    if (dch != null && !isNaN(Number(dch))) discharge = dch;
+    if (socMedian != null && !isNaN(Number(socMedian))) soc = socMedian;
+    else if (socAvg != null && !isNaN(Number(socAvg))) soc = socAvg;
+  }
 
   const maxVal = Math.max(1, ...[pv, load, buy, sell, charge, discharge].filter(x => typeof x === 'number').map(Math.abs));
   const pct = (v) => typeof v === 'number' ? (Math.abs(v) / maxVal) * 100 : 0;
@@ -3660,7 +3680,15 @@ function updateEnergyWeb() {
   const s = window.latestState || {};
 
   // Raw datapoints (1:1)
+  const sfEnabled = !!window.__nwStorageFarmEnabled;
+  const dpCfg = (window.__nwCfg && window.__nwCfg.datapoints) ? window.__nwCfg.datapoints : {};
+  const pvMapped = !!(dpCfg && (dpCfg.pvPower || dpCfg.productionTotal));
+
   let pv = +(d('pvPower') ?? 0);
+  if (sfEnabled && !pvMapped) {
+    const pvFarm = +(d('storageFarm.totalPvPowerW') ?? 0);
+    if (!Number.isFinite(pv) || pv === 0) pv = pvFarm;
+  }
   let buy = +(d('gridBuyPower') ?? 0);
   let sell = +(d('gridSellPower') ?? 0);
   let load = +(d('consumptionTotal') ?? 0);
@@ -3668,7 +3696,18 @@ function updateEnergyWeb() {
   let batCharge = +(d('storageChargePower') ?? 0);
   let batDischarge = +(d('storageDischargePower') ?? 0);
   const batSingle = d('batteryPower'); // optional fallback
-  const soc = d('storageSoc');
+  let soc = d('storageSoc');
+
+  if (sfEnabled) {
+    const c = d('storageFarm.totalChargePowerW');
+    const dch = d('storageFarm.totalDischargePowerW');
+    const socMedian = d('storageFarm.medianSoc');
+    const socAvg = d('storageFarm.totalSoc');
+    if (c != null && !isNaN(Number(c))) batCharge = +c;
+    if (dch != null && !isNaN(Number(dch))) batDischarge = +dch;
+    if (socMedian != null && !isNaN(Number(socMedian))) soc = socMedian;
+    else if (socAvg != null && !isNaN(Number(socAvg))) soc = socAvg;
+  }
 
   // Invert toggles (remain verfügbar)
   const invPv   = !!(s['settings.flowInvertPv']?.value);
