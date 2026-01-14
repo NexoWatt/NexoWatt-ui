@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.28",
+    "version": "0.6.29",
     "news": {
       "0.6.28": {
         "en": [
@@ -798,6 +798,10 @@
           "Fix: Adapter-Version korrekt auf 0.6.13 angehoben (vorher wurden Builds fälschlich als 0.6.9 angezeigt).",
           "Feature: CO₂-Einsparung wird intern berechnet (PV-Erzeugung + E‑Mobilität-Verbrauch)."
         ]
+      },
+      "0.6.29": {
+        "en": "Added RFID billing report (daily kWh per card) with PDF/CSV export.",
+        "de": "RFID/Ladekarten-Abrechnung (Tageswerte) inkl. PDF/CSV Export hinzugefügt."
       }
     },
     "title": "NexoWatt VIS",

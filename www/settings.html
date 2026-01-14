@@ -139,6 +139,50 @@
         </div>
         <small id="rfidLearnMsg" style="display:block;margin-top:8px;color:var(--muted)"></small>
       </div>
+
+      <hr style="margin:14px 0;border:0;border-top:1px solid rgba(255,255,255,.08)"/>
+
+      <div class="rfid-billing">
+        <div class="row" style="align-items:center">
+          <span>Ladekarten-Abrechnung</span>
+          <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex:1 1 auto">
+            <button class="btn" id="rfidBillingOpen" type="button">Bericht öffnen (PDF)</button>
+          </div>
+        </div>
+
+        <div class="row" style="align-items:center">
+          <span>Karte</span>
+          <div style="flex:1 1 auto;display:flex;align-items:center;justify-content:flex-end">
+            <select id="rfidBillingCard" style="min-width:280px;max-width:100%"></select>
+          </div>
+        </div>
+
+        <div class="row" style="align-items:center">
+          <span>Zeitraum</span>
+          <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex:1 1 auto">
+            <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2" id="rfidBillingMode">
+              <button type="button" class="active" data-value="month">Monat</button>
+              <button type="button" data-value="year">Jahr</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="row" id="rfidBillingMonthRow" style="align-items:center">
+          <span>Monat</span>
+          <div style="flex:1 1 auto;display:flex;align-items:center;justify-content:flex-end">
+            <input type="month" id="rfidBillingMonth" style="min-width:200px;max-width:100%" />
+          </div>
+        </div>
+
+        <div class="row hidden" id="rfidBillingYearRow" style="align-items:center">
+          <span>Jahr</span>
+          <div style="flex:1 1 auto;display:flex;align-items:center;justify-content:flex-end">
+            <input type="number" id="rfidBillingYear" min="2000" max="2100" step="1" style="min-width:120px;max-width:100%" />
+          </div>
+        </div>
+
+        <small id="rfidBillingMsg" style="display:block;margin-top:8px;color:var(--muted)"></small>
+      </div>
     </div>
   </section>
 

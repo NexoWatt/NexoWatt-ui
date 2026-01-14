@@ -6273,6 +6273,19 @@ app.get('/api/evcs/sessions.csv', async (req, res) => {
     const from = Number.isFinite(Number(fromMs)) ? Number(fromMs) : 0;
     const to = Number.isFinite(Number(toMs)) ? Number(toMs) : Date.now();
 
+    const wantRfid = (() => {
+      const raw = req.query && req.query.rfid;
+      if (raw === undefined || raw === null || raw === '') return '';
+      try {
+        const n = (this.normalizeRfidCode ? this.normalizeRfidCode(raw) : null);
+        const s = (n !== null && n !== undefined) ? String(n) : String(raw);
+        return s.trim().replace(/\s+/g, '').toUpperCase();
+      } catch (_e) {
+        return String(raw).trim().replace(/\s+/g, '').toUpperCase();
+      }
+    })();
+
+
     // Prefer in-memory ring buffer
     let sessions = Array.isArray(this._evcsSessionsBuf) ? this._evcsSessionsBuf.slice() : [];
 
@@ -6296,6 +6309,18 @@ app.get('/api/evcs/sessions.csv', async (req, res) => {
         // ignore still running sessions (optional)
         const et = Number(s && s.endTs);
         if (!Number.isFinite(et) || et <= 0) return false;
+        // Optional filter: only one RFID card
+        if (wantRfid) {
+          let sr = '';
+          try {
+            const n = (this.normalizeRfidCode ? this.normalizeRfidCode(s && s.rfid) : null);
+            sr = (n !== null && n !== undefined) ? String(n) : String((s && s.rfid) || '');
+          } catch (_e) {
+            sr = String((s && s.rfid) || '');
+          }
+          sr = sr.trim().replace(/\s+/g, '').toUpperCase();
+          if (sr !== wantRfid) return false;
+        }
         return true;
       })
       .sort((a, b) => (Number(a.startTs) || 0) - (Number(b.startTs) || 0));
@@ -6313,6 +6338,230 @@ app.get('/api/evcs/sessions.csv', async (req, res) => {
   }
 });
 
+
+
+
+// ---- RFID / Ladekarten Abrechnung ----
+const nwNormalizeRfid = (ctx, raw) => {
+  if (raw === null || raw === undefined) return '';
+  try {
+    const n = (ctx && ctx.normalizeRfidCode) ? ctx.normalizeRfidCode(raw) : null;
+    const s = (n !== null && n !== undefined) ? String(n) : String(raw);
+    return s.trim().replace(/\s+/g, '').toUpperCase();
+  } catch (_e) {
+    return String(raw).trim().replace(/\s+/g, '').toUpperCase();
+  }
+};
+
+const nwLoadEvcsSessions = async (ctx) => {
+  // Prefer in-memory ring buffer
+  let sessions = Array.isArray(ctx && ctx._evcsSessionsBuf) ? ctx._evcsSessionsBuf.slice() : [];
+
+  // Fallback: read persisted state
+  if (!sessions.length && ctx && ctx.getStateAsync) {
+    try {
+      const st = await ctx.getStateAsync('evcs.sessionsJson');
+      if (st && typeof st.val === 'string' && st.val.trim()) {
+        const parsed = JSON.parse(st.val);
+        if (Array.isArray(parsed)) sessions = parsed;
+      }
+    } catch (_e) {}
+  }
+
+  return Array.isArray(sessions) ? sessions : [];
+};
+
+const nwGetRfidNameFromWhitelist = async (ctx, rfidNorm) => {
+  if (!rfidNorm || !ctx || !ctx.getStateAsync) return '';
+  try {
+    const st = await ctx.getStateAsync('evcs.rfid.whitelistJson');
+    if (!st || typeof st.val !== 'string' || !st.val.trim()) return '';
+    const arr = JSON.parse(st.val);
+    if (!Array.isArray(arr)) return '';
+    for (const it of arr) {
+      if (typeof it === 'string') {
+        const r = nwNormalizeRfid(ctx, it);
+        if (r && r === rfidNorm) return '';
+      } else if (it && typeof it === 'object') {
+        const r = nwNormalizeRfid(ctx, it.rfid ?? it.id ?? it.uid ?? it.card ?? '');
+        if (!r) continue;
+        if (r === rfidNorm) {
+          const n = String(it.name ?? it.user ?? it.label ?? '').trim();
+          return n;
+        }
+      }
+    }
+  } catch (_e) {}
+  return '';
+};
+
+const nwStartOfLocalDay = (ms) => {
+  const d = new Date(Number(ms) || 0);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+};
+const nwEndOfLocalDay = (ms) => {
+  const d = new Date(Number(ms) || 0);
+  d.setHours(23, 59, 59, 999);
+  return d.getTime();
+};
+
+const nwBuildRfidDailyReport = async (ctx, query) => {
+  const q = query || {};
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  const fromMs = nwParseTsLoose(q.from) ?? null;
+  const toMs = nwParseTsLoose(q.to, { endOfDay: true }) ?? null;
+
+  const from = Number.isFinite(Number(fromMs)) ? Number(fromMs) : (Date.now() - 30 * DAY_MS);
+  const to = Number.isFinite(Number(toMs)) ? Number(toMs) : Date.now();
+
+  const start = nwStartOfLocalDay(from);
+  const end = nwEndOfLocalDay(to);
+
+  let rfid = nwNormalizeRfid(ctx, q.rfid);
+  const wantAll = !rfid || rfid === 'ALL' || rfid === '*' || rfid === 'ALLE';
+
+  let name = '';
+  if (!wantAll) {
+    name = await nwGetRfidNameFromWhitelist(ctx, rfid);
+  }
+
+  let sessions = await nwLoadEvcsSessions(ctx);
+
+  sessions = (Array.isArray(sessions) ? sessions : [])
+    .filter(s => {
+      const st = Number(s && s.startTs);
+      if (!Number.isFinite(st)) return false;
+      if (st < start || st > end) return false;
+      const et = Number(s && s.endTs);
+      if (!Number.isFinite(et) || et <= 0) return false;
+      if (!wantAll) {
+        const sr = nwNormalizeRfid(ctx, s && s.rfid);
+        if (sr !== rfid) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => (Number(a && a.startTs) || 0) - (Number(b && b.startTs) || 0));
+
+  const map = {}; // dayKey -> {kwh, sessions, maxKw}
+  for (const s of sessions) {
+    const st = Number(s && s.startTs);
+    if (!Number.isFinite(st)) continue;
+    const dk = nwDayKey(st);
+    if (!map[dk]) map[dk] = { kwh: 0, sessions: 0, maxKw: 0 };
+    const kwh = Number(s && s.energyKwh);
+    if (Number.isFinite(kwh)) map[dk].kwh += kwh;
+    map[dk].sessions += 1;
+    const mx = Number(s && s.maxKw);
+    if (Number.isFinite(mx)) map[dk].maxKw = Math.max(map[dk].maxKw || 0, mx);
+  }
+
+  const days = [];
+  let totalKwh = 0;
+  let totalSessions = 0;
+  let peakKw = 0;
+
+  // iterate days (DST-safe)
+  for (let d = new Date(start); d.getTime() <= end; d.setDate(d.getDate() + 1)) {
+    const t = d.getTime();
+    const dk = nwDayKey(t);
+    const row = map[dk] || { kwh: 0, sessions: 0, maxKw: 0 };
+    const kwh = Number(row.kwh) || 0;
+    const sessCnt = Number(row.sessions) || 0;
+    const maxKw = Number(row.maxKw) || 0;
+
+    totalKwh += kwh;
+    totalSessions += sessCnt;
+    peakKw = Math.max(peakKw, maxKw);
+
+    days.push({
+      date: dk,
+      sessions: sessCnt,
+      kwh: Math.round(kwh * 1000) / 1000,
+      maxKw: Math.round(maxKw * 100) / 100,
+    });
+  }
+
+  return {
+    start,
+    end,
+    rfid: wantAll ? 'ALL' : rfid,
+    name: name || '',
+    totalKwh: Math.round(totalKwh * 1000) / 1000,
+    totalSessions,
+    peakKw: Math.round(peakKw * 100) / 100,
+    days
+  };
+};
+
+const nwRfidReportToCsv = (report) => {
+  const days = Array.isArray(report && report.days) ? report.days : [];
+  const header = ['Datum', 'Sessions', 'Energie_kWh', 'Max_kW'];
+  const lines = [];
+  lines.push(header.map(nwCsvEscape).join(';'));
+
+  let sumKwh = 0;
+  let sumSess = 0;
+  let peak = 0;
+
+  for (const d of days) {
+    const kwh = Number(d && d.kwh);
+    const sess = Number(d && d.sessions);
+    const mx = Number(d && d.maxKw);
+
+    sumKwh += Number.isFinite(kwh) ? kwh : 0;
+    sumSess += Number.isFinite(sess) ? sess : 0;
+    peak = Math.max(peak, Number.isFinite(mx) ? mx : 0);
+
+    const row = [
+      d.date || '',
+      String(Number.isFinite(sess) ? Math.round(sess) : 0),
+      nwFormatDe(Number.isFinite(kwh) ? kwh : 0, 3),
+      nwFormatDe(Number.isFinite(mx) ? mx : 0, 2),
+    ];
+    lines.push(row.map(nwCsvEscape).join(';'));
+  }
+
+  // totals row
+  if (days.length) {
+    const totalRow = [
+      'Summe Zeitraum',
+      String(Math.round(sumSess)),
+      nwFormatDe(sumKwh, 3),
+      nwFormatDe(peak, 2),
+    ];
+    lines.push(totalRow.map(nwCsvEscape).join(';'));
+  }
+
+  return lines.join('\r\n');
+};
+
+app.get('/api/evcs/rfid/report', async (req, res) => {
+  try {
+    const report = await nwBuildRfidDailyReport(this, req.query || {});
+    res.json({ ok: true, ...report });
+  } catch (e) {
+    res.json({ ok: false, error: String(e) });
+  }
+});
+
+app.get('/api/evcs/rfid/report.csv', async (req, res) => {
+  try {
+    const report = await nwBuildRfidDailyReport(this, req.query || {});
+    const fromStr = (report.days && report.days[0] && report.days[0].date) ? report.days[0].date : 'from';
+    const toStr = (report.days && report.days.length && report.days[report.days.length - 1].date) ? report.days[report.days.length - 1].date : 'to';
+    const rfidStr = (report && report.rfid && report.rfid !== 'ALL') ? report.rfid : 'ALL';
+    const filename = `RFID_${rfidStr}_${fromStr}_${toStr}.csv`;
+
+    const csv = '\ufeff' + nwRfidReportToCsv(report);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(200).send(csv);
+  } catch (e) {
+    res.status(500).type('text/plain').send('RFID CSV Fehler: ' + String(e));
+  }
+});
 
 
 app.get('/config', (req, res) => {

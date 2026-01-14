@@ -1432,6 +1432,7 @@ function setupSettings(){
   document.querySelectorAll('[data-scope="rfid"]').forEach(el=> bindInputValue(el, 'evcs.rfid.'+el.dataset.key));
   try { setupRfidWhitelistUi(); } catch (e) {}
   try { setupRfidLearningUi(); } catch (e) {}
+  try { setupRfidBillingUi(); } catch (e) {}
 }
 
 // --- Speicherfarm (VIS read-only) ---
@@ -1800,6 +1801,168 @@ function setupRfidLearningUi(){
 
   applyUi();
 }
+
+
+function setupRfidBillingUi(){
+  const btnOpen = document.getElementById('rfidBillingOpen');
+  const sel = document.getElementById('rfidBillingCard');
+  const modeWrap = document.getElementById('rfidBillingMode');
+  const monthRow = document.getElementById('rfidBillingMonthRow');
+  const yearRow = document.getElementById('rfidBillingYearRow');
+  const inMonth = document.getElementById('rfidBillingMonth');
+  const inYear = document.getElementById('rfidBillingYear');
+  const msgEl = document.getElementById('rfidBillingMsg');
+
+  if (!btnOpen || !sel) return;
+
+  function pad2(n){ return String(Number(n)||0).padStart(2,'0'); }
+  function setMsg(t){ if (msgEl) msgEl.textContent = t || ''; }
+
+  function getWhitelist(){
+    // Prefer the editor API (keeps same parsing logic)
+    try{
+      if (window.__nwRfidWhitelist && typeof window.__nwRfidWhitelist.get === 'function') {
+        const a = window.__nwRfidWhitelist.get();
+        if (Array.isArray(a)) return a;
+      }
+    }catch(_e){}
+
+    // Fallback: parse state snapshot
+    try{
+      const st = window.latestState || {};
+      const raw = st['evcs.rfid.whitelistJson'] && st['evcs.rfid.whitelistJson'].value;
+      if (raw && typeof raw === 'string') {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      }
+    }catch(_e){}
+    return [];
+  }
+
+  function renderOptions(){
+    const list = getWhitelist();
+    const prev = String(sel.value || '');
+
+    sel.innerHTML = '';
+    const opt0 = document.createElement('option');
+    opt0.value = '';
+    opt0.textContent = list && list.length ? 'Bitte wählen…' : 'Keine Karten in Whitelist';
+    sel.appendChild(opt0);
+
+    if (Array.isArray(list)) {
+      for (const it of list) {
+        let rfid = '';
+        let name = '';
+        let comment = '';
+
+        if (typeof it === 'string') {
+          rfid = it;
+        } else if (it && typeof it === 'object') {
+          rfid = it.rfid || it.id || it.uid || it.card || '';
+          name = it.name || it.user || it.label || '';
+          comment = it.comment || it.note || '';
+        }
+
+        rfid = String(rfid || '').trim();
+        if (!rfid) continue;
+
+        const o = document.createElement('option');
+        o.value = rfid;
+
+        const n = String(name || '').trim();
+        const c = String(comment || '').trim();
+        let label = n ? (n + ' (' + rfid + ')') : rfid;
+        if (c) label += ' – ' + c;
+
+        o.textContent = label;
+        sel.appendChild(o);
+      }
+    }
+
+    if (prev) sel.value = prev;
+  }
+
+  let mode = 'month';
+  function applyMode(m){
+    mode = (m === 'year') ? 'year' : 'month';
+
+    if (modeWrap) {
+      modeWrap.querySelectorAll('button[data-value]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.value === mode);
+      });
+    }
+
+    if (monthRow) monthRow.classList.toggle('hidden', mode !== 'month');
+    if (yearRow) yearRow.classList.toggle('hidden', mode !== 'year');
+
+    setMsg('');
+  }
+
+  // Bind mode buttons
+  if (modeWrap && modeWrap.dataset.nwBound !== '1') {
+    modeWrap.dataset.nwBound = '1';
+    modeWrap.querySelectorAll('button[data-value]').forEach(btn => {
+      btn.addEventListener('click', () => applyMode(btn.dataset.value));
+    });
+  }
+
+  // Default month/year
+  const now = new Date();
+  try{
+    if (inMonth && !inMonth.value) inMonth.value = now.getFullYear() + '-' + pad2(now.getMonth() + 1);
+    if (inYear && !inYear.value) inYear.value = String(now.getFullYear());
+  }catch(_e){}
+
+  renderOptions();
+  applyMode('month');
+
+  // Bind open button
+  if (btnOpen && btnOpen.dataset.nwBound !== '1') {
+    btnOpen.dataset.nwBound = '1';
+    btnOpen.addEventListener('click', () => {
+      try{ renderOptions(); } catch(_e){}
+      const rfid = String(sel.value || '').trim();
+      if (!rfid) {
+        setMsg('Bitte eine Karte auswählen.');
+        return;
+      }
+
+      let fromMs = 0;
+      let toMs = Date.now();
+
+      if (mode === 'year') {
+        const y = Number(inYear && inYear.value) || now.getFullYear();
+        const start = new Date(y, 0, 1, 0, 0, 0, 0);
+        const end = new Date(y, 11, 31, 23, 59, 59, 999);
+        fromMs = start.getTime();
+        toMs = end.getTime();
+      } else {
+        const v = String((inMonth && inMonth.value) || '');
+        const parts = v.split('-');
+        const y = Number(parts[0]) || now.getFullYear();
+        const m = (Number(parts[1]) || (now.getMonth() + 1)) - 1;
+        const start = new Date(y, m, 1, 0, 0, 0, 0);
+        const end = new Date(y, m + 1, 0, 23, 59, 59, 999);
+        fromMs = start.getTime();
+        toMs = end.getTime();
+      }
+
+      const url = '/static/rfid-report.html'
+        + '?rfid=' + encodeURIComponent(rfid)
+        + '&from=' + encodeURIComponent(String(fromMs))
+        + '&to=' + encodeURIComponent(String(toMs));
+
+      try{
+        window.open(url, '_blank', 'noopener');
+        setMsg('');
+      }catch(_e){
+        // fallback
+        window.location.href = url;
+      }
+    });
+  }
+}
+
 
 
 function setupInstaller(){
