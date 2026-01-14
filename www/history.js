@@ -149,7 +149,14 @@ function draw(){
     if(chartMode!=='day'){ return drawBars(); }
     const {start, end} = data;
     const series = buildSeriesAll();
-    const W=canvas.width, H=canvas.height, L=50, R=40, T=10, B=42;
+    const W = canvas.width;
+    const H = canvas.height;
+    // Leave enough room for axis labels (rounded canvas corners clip text near the edges).
+    // On small screens we keep margins compact.
+    const L = (W < 520) ? 54 : 64;
+    const R = (W < 520) ? 48 : 56;
+    const T = 10;
+    const B = 42;
     ctx.clearRect(0,0,W,H);
     ctx.fillStyle='#0e1216'; ctx.fillRect(0,0,W,H);
 
@@ -177,7 +184,11 @@ function draw(){
     minKW -= pad; maxKW += pad;
     const yPow = (kw)=> T + (H-B-T)*(1 - ((kw - minKW)/((maxKW-minKW)||1)));
     const y0 = yPow(0);
-    const ySoc = (pct)=> y0 - (pct/100) * (y0 - T);
+    // SoC axis is always 0..100% over the full chart height (like the reference chart).
+    const ySoc = (pct)=> {
+      const p = Math.max(0, Math.min(100, Number(pct) || 0));
+      return T + (H - B - T) * (1 - (p / 100));
+    };
 
     // grid
     ctx.strokeStyle='#1d242b'; ctx.lineWidth=1;
@@ -249,10 +260,54 @@ function draw(){
 
     line('soc', '#95a5a6', 'val', [6,6]);
 
-    // axes labels
-    ctx.fillStyle='#cbd3db'; ctx.font='12px system-ui, sans-serif';
-    ctx.fillText('kW', 6, T+12);
-    ctx.fillText('%', W-R+6, T+12);
+    // ------------------------------
+    // Axes: labels + tick values
+    // ------------------------------
+    const fmtKWAxis = (v) => {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return '';
+      if (Math.abs(n) < 0.05) return '0';
+      return n.toLocaleString([], { maximumFractionDigits: 1, minimumFractionDigits: 0 });
+    };
+
+    ctx.fillStyle = '#cbd3db';
+    ctx.font = '12px system-ui, sans-serif';
+
+    // Y (Power) tick labels at grid lines
+    ctx.save();
+    ctx.fillStyle = '#aeb7bf';
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i <= 5; i++) {
+      const yy = T + i * (H - B - T) / 5;
+      const val = maxKW - i * (maxKW - minKW) / 5;
+      ctx.fillText(fmtKWAxis(val), L - 8, yy);
+    }
+    ctx.restore();
+
+    // Y (SoC) tick labels 0..100% on the right
+    ctx.save();
+    ctx.fillStyle = '#aeb7bf';
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    [0, 20, 40, 60, 80, 100].forEach(p => {
+      ctx.fillText(String(p), W - R + 8, ySoc(p));
+    });
+    ctx.restore();
+
+    // Unit labels (move away from rounded corners so they don't get clipped)
+    ctx.save();
+    ctx.fillStyle = '#cbd3db';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'right';
+    ctx.fillText('kW', L - 8, T + 12);
+    ctx.textAlign = 'left';
+    ctx.fillText('%', W - R + 8, T + 12);
+    ctx.restore();
+
     // x ticks
     ctx.textAlign='center';
     for(let i=0;i<6;i++){
