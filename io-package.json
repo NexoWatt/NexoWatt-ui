@@ -1,8 +1,18 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.26",
+    "version": "0.6.27",
     "news": {
+      "0.6.27": {
+        "en": [
+          "History: Added quick navigation (◀/▶) to step day/week/month/year without editing the date inputs.",
+          "History (day): Added drag-to-zoom selection with \"Zoom zurück\" reset (date inputs remain available for detailed search)."
+        ],
+        "de": [
+          "Historie: Schnelle Navigation (◀/▶), um Tag/Woche/Monat/Jahr durchzuschalten ohne Datum/Uhrzeit zu bearbeiten.",
+          "Historie (Tag): Drag-to-Zoom Auswahl + \"Zoom zurück\" Reset (Datum/Uhrzeit bleibt für detaillierte Suche verfügbar)."
+        ]
+      },
       "0.6.26": {
         "en": [
           "History (day): Improve axis aesthetics (more top padding, axis titles kW/% above the scale, no stacked corner labels)."

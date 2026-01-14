@@ -12,6 +12,24 @@
   
   let barState = null;
 
+  // --- Zoom & Navigation (History) ---
+  // Zoom is implemented for the day chart (line mode) via drag-selection.
+  // The date inputs remain as a detailed search tool.
+  let zoomStack = []; // stack of {fromMs,toMs}
+  let zoomSel = null; // {x0,x1} while dragging
+  let zoomDragging = false;
+  let zoomDragStartX = 0;
+  let zoomSuppressClickUntil = 0;
+
+  function getChartMargins(){
+    const W = canvas.width;
+    const L = (W < 520) ? 54 : 64;
+    const R = (W < 520) ? 48 : 56;
+    const T = (W < 520) ? 20 : 24;
+    const B = 42;
+    return { L, R, T, B };
+  }
+
   // --- Optional Energiefluss series (Verbraucher/Erzeuger) ---
   function getExtras(){
     const ex = (data && data.extras && typeof data.extras === 'object') ? data.extras : null;
@@ -487,6 +505,16 @@ async function load(){
     function setActive(mode){
       chartMode = mode;
       btns.forEach(b=> b.classList.toggle('active', b.dataset.range===mode));
+
+      // Any explicit mode switch is a manual action -> stop auto live.
+      try { __stopAuto(); } catch(_e){}
+
+      // Reset zoom stack when switching modes (zoom is only for day view).
+      zoomStack = [];
+      zoomSel = null;
+      zoomDragging = false;
+      try { if (typeof window.__nxHistoryShowZoomReset === 'function') window.__nxHistoryShowZoomReset(); } catch(_e){}
+
       // auto adjust from/to
       const toEl = document.getElementById('to');
       const fromEl = document.getElementById('from');
@@ -691,16 +719,43 @@ async function load(){
 
 
     canvas.addEventListener('mouseleave', ()=>{ tip.style.display='none'; crossX=null; draw(); });
-    canvas.addEventListener('click', (ev)=>{ showTipFromEvent(ev); });
-    canvas.addEventListener('touchstart', (ev)=>{ showTipFromEvent(ev); }, {passive:true});
-    /* BINDINGS_INSERTED */
-    canvas.addEventListener('touchstart', (ev)=>{ showTipFromEvent(ev); }, {passive:true});
+    canvas.addEventListener('click', (ev)=>{ 
+      // If a drag-zoom just happened, suppress the click-to-inspect tooltip.
+      if (Date.now() < zoomSuppressClickUntil) return;
+      showTipFromEvent(ev);
+    });
+    canvas.addEventListener('touchstart', (ev)=>{ 
+      if (Date.now() < zoomSuppressClickUntil) return;
+      showTipFromEvent(ev);
+    }, {passive:true});
+    // (removed duplicate binding)
 
     // draw crosshair over chart
     const _draw = draw;
     draw = function(){
       _draw();
       if (!data) return;
+
+      // Zoom selection overlay (day chart only)
+      if (chartMode === 'day' && zoomSel && Number.isFinite(zoomSel.x0) && Number.isFinite(zoomSel.x1)){
+        const { L, R, T, B } = getChartMargins();
+        const W = canvas.width;
+        const H = canvas.height;
+        const x0 = Math.max(L, Math.min(W - R, zoomSel.x0));
+        const x1 = Math.max(L, Math.min(W - R, zoomSel.x1));
+        const a = Math.min(x0, x1);
+        const b = Math.max(x0, x1);
+        if (b - a >= 2){
+          ctx.save();
+          ctx.fillStyle = 'rgba(16, 185, 129, 0.10)';
+          ctx.strokeStyle = 'rgba(16, 185, 129, 0.45)';
+          ctx.lineWidth = 1;
+          ctx.fillRect(a, T, b - a, (H - B - T));
+          ctx.strokeRect(a + 0.5, T + 0.5, (b - a) - 1, (H - B - T) - 1);
+          ctx.restore();
+        }
+      }
+
       if (crossX==null) return;
       const W=canvas.width, H=canvas.height;
       ctx.save();
@@ -712,6 +767,181 @@ async function load(){
       ctx.stroke();
       ctx.restore();
     };
+  })();
+
+  // --- History navigation (◀/▶) + zoom reset button ---
+  (function(){
+    const prevBtn = document.getElementById('navPrev');
+    const nextBtn = document.getElementById('navNext');
+    const resetBtn = document.getElementById('resetZoomBtn');
+
+    function showReset(){
+      if (!resetBtn) return;
+      resetBtn.classList.toggle('hidden', zoomStack.length === 0);
+    }
+    showReset();
+
+    function addMonths(date, delta){
+      const d = new Date(date);
+      const day = d.getDate();
+      d.setDate(1);
+      d.setMonth(d.getMonth() + delta);
+      const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      d.setDate(Math.min(day, maxDay));
+      return d;
+    }
+
+    function shiftRange(dir){
+      const fromEl = document.getElementById('from');
+      const toEl = document.getElementById('to');
+      if (!fromEl || !toEl) return;
+      const from = new Date(fromEl.value);
+      const to = new Date(toEl.value);
+      if (!isFinite(from.getTime()) || !isFinite(to.getTime())) return;
+      let nf = new Date(from);
+      let nt = new Date(to);
+
+      if (chartMode === 'day'){
+        nf.setDate(nf.getDate() + dir);
+        nt.setDate(nt.getDate() + dir);
+      } else if (chartMode === 'week'){
+        nf.setDate(nf.getDate() + (dir * 7));
+        nt.setDate(nt.getDate() + (dir * 7));
+      } else if (chartMode === 'month'){
+        nf = addMonths(nf, dir);
+        nt = addMonths(nt, dir);
+      } else if (chartMode === 'year'){
+        nf.setFullYear(nf.getFullYear() + dir);
+        nt.setFullYear(nt.getFullYear() + dir);
+      }
+
+      // Avoid stepping into the future when the current view ends near "now".
+      const now = new Date();
+      if (nt.getTime() > now.getTime() && to.getTime() <= (now.getTime() + 5*60*1000)){
+        const span = nt.getTime() - nf.getTime();
+        nt = now;
+        nf = new Date(now.getTime() - span);
+      }
+
+      // stop auto-live mode on manual navigation
+      try { __stopAuto(); } catch(_e){}
+
+      fromEl.value = toLocal(nf);
+      toEl.value = toLocal(nt);
+      load();
+    }
+
+    if (prevBtn) prevBtn.addEventListener('click', ()=> shiftRange(-1));
+    if (nextBtn) nextBtn.addEventListener('click', ()=> shiftRange(+1));
+    if (resetBtn) resetBtn.addEventListener('click', ()=>{
+      if (!zoomStack.length) return;
+      const last = zoomStack.pop();
+      showReset();
+      if (!last) return;
+      const fromEl = document.getElementById('from');
+      const toEl = document.getElementById('to');
+      if (!fromEl || !toEl) return;
+      fromEl.value = toLocal(new Date(last.fromMs));
+      toEl.value = toLocal(new Date(last.toMs));
+      try { __stopAuto(); } catch(_e){}
+      load();
+    });
+
+    // expose helper for other parts (mode switch)
+    window.__nxHistoryShowZoomReset = showReset;
+  })();
+
+  // --- Drag-to-zoom (day chart) ---
+  (function(){
+    function xToTs(x, start, end){
+      const { L, R } = getChartMargins();
+      const W = canvas.width;
+      const frac = (x - L) / (W - L - R);
+      return start + Math.max(0, Math.min(1, frac)) * (end - start);
+    }
+
+    function setInputs(fromMs, toMs){
+      const fromEl = document.getElementById('from');
+      const toEl = document.getElementById('to');
+      if (!fromEl || !toEl) return;
+      fromEl.value = toLocal(new Date(fromMs));
+      toEl.value = toLocal(new Date(toMs));
+    }
+
+    function clearSel(){
+      zoomSel = null;
+      zoomDragging = false;
+      draw();
+    }
+
+    canvas.addEventListener('mousedown', (ev)=>{
+      if (chartMode !== 'day') return;
+      if (!data) return;
+      if (ev.button !== 0) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      zoomDragging = true;
+      zoomDragStartX = x;
+      zoomSel = { x0: x, x1: x };
+      draw();
+    });
+
+    window.addEventListener('mousemove', (ev)=>{
+      if (!zoomDragging) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      if (!zoomSel) zoomSel = { x0: zoomDragStartX, x1: x };
+      zoomSel.x1 = x;
+      draw();
+    });
+
+    window.addEventListener('mouseup', (ev)=>{
+      if (!zoomDragging) return;
+      if (!data){ clearSel(); return; }
+      const rect = canvas.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const a = Math.min(zoomDragStartX, x);
+      const b = Math.max(zoomDragStartX, x);
+      const px = b - a;
+
+      // selection too small -> treat as click, no zoom
+      if (px < 18){
+        clearSel();
+        return;
+      }
+
+      const { start, end } = data;
+      const fromMs = xToTs(a, start, end);
+      const toMs = xToTs(b, start, end);
+
+      // push previous range for reset
+      const fromEl = document.getElementById('from');
+      const toEl = document.getElementById('to');
+      const prevFromMs = fromEl ? new Date(fromEl.value).getTime() : start;
+      const prevToMs = toEl ? new Date(toEl.value).getTime() : end;
+      if (isFinite(prevFromMs) && isFinite(prevToMs)){
+        zoomStack.push({ fromMs: prevFromMs, toMs: prevToMs });
+      }
+
+      // stop auto-live on zoom
+      try { __stopAuto(); } catch(_e){}
+
+      setInputs(fromMs, toMs);
+      zoomSuppressClickUntil = Date.now() + 400;
+      clearSel();
+
+      // show reset button
+      try { if (typeof window.__nxHistoryShowZoomReset === 'function') window.__nxHistoryShowZoomReset(); } catch(_e){}
+      load();
+    });
+
+    canvas.addEventListener('dblclick', ()=>{
+      if (!zoomStack.length) return;
+      const resetBtn = document.getElementById('resetZoomBtn');
+      if (resetBtn && !resetBtn.classList.contains('hidden')) resetBtn.click();
+    });
+
+    canvas.addEventListener('mouseleave', ()=>{ if (zoomDragging) clearSel(); });
   })();
   resize(); load();
   // --- Auto-advance when 'Bis'≈Jetzt (no UI) ---
