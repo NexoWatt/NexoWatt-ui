@@ -1211,6 +1211,45 @@ body {
   }
 }
 
+/* EVU/PV-Regelung: kompakte WR-Zeilen (Übersicht + Details) */
+.nw-inv-item {
+  align-items: start;
+}
+
+.nw-inv-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.nw-inv-summary .nw-inv-name {
+  width: 190px;
+  max-width: 100%;
+}
+
+.nw-inv-summary .nw-inv-kwp {
+  width: 110px;
+}
+
+.nw-inv-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.nw-inv-chips .nw-config-badge {
+  padding: 2px 8px;
+}
+
+@media (max-width: 900px) {
+  .nw-inv-summary .nw-inv-name,
+  .nw-inv-summary .nw-inv-kwp {
+    width: 100%;
+  }
+}
+
 .nw-flow-ctrl-field {
   display: grid;
   grid-template-columns: 1fr;

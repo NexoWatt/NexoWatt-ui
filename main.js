@@ -7947,14 +7947,40 @@ return res.json(out);
   startHistorieExportTimer() {
     try {
       const hcfg = (this.config && this.config.history) || {};
+
+      // Reduce Influx storage pressure: sample at 10‑minute cadence (minimum).
+      const DEFAULT_MS = 10 * 60 * 1000;
       const intervalMsRaw = Number(hcfg.exportIntervalMs || hcfg.intervalMs);
-      const intervalMs = Number.isFinite(intervalMsRaw) ? Math.max(1000, Math.min(60000, Math.round(intervalMsRaw))) : 5000;
+      let intervalMs = Number.isFinite(intervalMsRaw) ? Math.round(intervalMsRaw) : DEFAULT_MS;
+      // Clamp to [10 min .. 60 min] to avoid runaway write volumes.
+      intervalMs = Math.max(DEFAULT_MS, Math.min(60 * 60 * 1000, intervalMs));
 
-      if (this._nwHistorieTimer) { try { clearInterval(this._nwHistorieTimer); } catch (_e) {} this._nwHistorieTimer = null; }
+      // Clear previous timers
+      if (this._nwHistorieTimer) {
+        try { clearInterval(this._nwHistorieTimer); } catch (_e) {}
+        this._nwHistorieTimer = null;
+      }
+      if (this._nwHistorieTimerOnce) {
+        try { clearTimeout(this._nwHistorieTimerOnce); } catch (_e) {}
+        this._nwHistorieTimerOnce = null;
+      }
 
-      this._nwHistorieTimer = setInterval(() => {
+      const tick = () => {
         this.updateHistorieExportStates('timer').catch(() => {});
-      }, intervalMs);
+      };
+
+      // Align to interval boundaries for cleaner/consistent series timestamps
+      const now = Date.now();
+      const next = Math.ceil(now / intervalMs) * intervalMs;
+      let delay = Math.max(0, next - now);
+      // Avoid immediate double-write (startup already writes once)
+      if (delay < 1000) delay += intervalMs;
+
+      this._nwHistorieTimerOnce = setTimeout(() => {
+        this._nwHistorieTimerOnce = null;
+        tick();
+        this._nwHistorieTimer = setInterval(tick, intervalMs);
+      }, delay);
     } catch (_e) {}
   }
 
@@ -8060,12 +8086,18 @@ return res.json(out);
       if (!obj || !obj.common) return;
       const custom = (obj.common.custom && typeof obj.common.custom === 'object') ? obj.common.custom : {};
       const cur = (custom[instance] && typeof custom[instance] === 'object') ? custom[instance] : {};
-      if (cur.enabled === true) return;
 
-      custom[instance] = Object.assign({}, cur, {
+      // For Historie export states we want a predictable time series (10‑min cadence),
+      // so we log *per write* (changesOnly=false).
+      const desired = {
         enabled: true,
-        changesOnly: true
-      });
+        changesOnly: false
+      };
+
+      const alreadyOk = (cur.enabled === true && cur.changesOnly === desired.changesOnly);
+      if (alreadyOk) return;
+
+      custom[instance] = Object.assign({}, cur, desired);
 
       await this.extendObjectAsync(localId, { common: { custom } });
     } catch (_e) {}
@@ -8141,37 +8173,37 @@ return res.json(out);
     const loadRest = Math.max(0, (loadTotal || 0) - evAbs - extrasConsumersSum);
 
     // Core series
-    this._nwSetHistorieValue('historie.core.grid.buyW', gridBuy, now, 1);
-    this._nwSetHistorieValue('historie.core.grid.sellW', gridSell, now, 1);
-    this._nwSetHistorieValue('historie.core.grid.netW', gridNet, now, 1);
+    this._nwSetHistorieValue('historie.core.grid.buyW', gridBuy, now, 0);
+    this._nwSetHistorieValue('historie.core.grid.sellW', gridSell, now, 0);
+    this._nwSetHistorieValue('historie.core.grid.netW', gridNet, now, 0);
 
-    this._nwSetHistorieValue('historie.core.pv.totalW', pvTotal || 0, now, 1);
-    this._nwSetHistorieValue('historie.core.building.loadTotalW', loadTotal || 0, now, 1);
-    this._nwSetHistorieValue('historie.core.building.loadRestW', loadRest || 0, now, 1);
+    this._nwSetHistorieValue('historie.core.pv.totalW', pvTotal || 0, now, 0);
+    this._nwSetHistorieValue('historie.core.building.loadTotalW', loadTotal || 0, now, 0);
+    this._nwSetHistorieValue('historie.core.building.loadRestW', loadRest || 0, now, 0);
 
-    this._nwSetHistorieValue('historie.core.storage.chargeW', chg, now, 1);
-    this._nwSetHistorieValue('historie.core.storage.dischargeW', dchg, now, 1);
-    if (Number.isFinite(soc)) this._nwSetHistorieValue('historie.core.storage.socPct', soc, now, 0.1);
+    this._nwSetHistorieValue('historie.core.storage.chargeW', chg, now, 0);
+    this._nwSetHistorieValue('historie.core.storage.dischargeW', dchg, now, 0);
+    if (Number.isFinite(soc)) this._nwSetHistorieValue('historie.core.storage.socPct', soc, now, 0);
 
-    this._nwSetHistorieValue('historie.core.ev.totalW', evAbs, now, 1);
+    this._nwSetHistorieValue('historie.core.ev.totalW', evAbs, now, 0);
 
     // EVCS per Ladepunkt (Leistung) – für detaillierte Abrechnung
     const evcsCount = Number(this.evcsCount || 0);
     if (Number.isFinite(evcsCount) && evcsCount > 0) {
       for (let i = 1; i <= evcsCount; i++) {
         const v = this._nwGetNumberFromCache(`evcs.${i}.powerW`);
-        if (Number.isFinite(v)) this._nwSetHistorieValue(`historie.evcs.lp${i}.powerW`, Math.max(0, Math.abs(v)), now, 1);
+        if (Number.isFinite(v)) this._nwSetHistorieValue(`historie.evcs.lp${i}.powerW`, Math.max(0, Math.abs(v)), now, 0);
       }
     }
 
     // Dynamic slots (only if the corresponding cache entries exist)
     for (let i = 1; i <= 10; i++) {
       const v = this._nwGetNumberFromCache(`consumer${i}Power`);
-      if (Number.isFinite(v)) this._nwSetHistorieValue(`historie.consumers.c${i}.powerW`, Math.abs(v), now, 1);
+      if (Number.isFinite(v)) this._nwSetHistorieValue(`historie.consumers.c${i}.powerW`, Math.abs(v), now, 0);
     }
     for (let i = 1; i <= 5; i++) {
       const v = this._nwGetNumberFromCache(`producer${i}Power`);
-      if (Number.isFinite(v)) this._nwSetHistorieValue(`historie.producers.p${i}.powerW`, Math.abs(v), now, 1);
+      if (Number.isFinite(v)) this._nwSetHistorieValue(`historie.producers.p${i}.powerW`, Math.abs(v), now, 0);
     }
   }
 

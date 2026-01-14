@@ -1,8 +1,18 @@
 {
   "common": {
     "name": "nexowatt-vis",
-  "version": "0.6.16",
+    "version": "0.6.17",
     "news": {
+      "0.6.17": {
+        "en": [
+          "App Center: Split EVU/PV regulation (EVU curtailment + zero export) into its own tab for clearer configuration.",
+          "History/Influx: Log historie export states at 10-minute cadence to reduce write volume and prevent history truncation."
+        ],
+        "de": [
+          "App-Center: EVU/PV-Regelung (EVU-Abregelung + 0-Einspeisung) als eigener Tab für übersichtliche Konfiguration.",
+          "Historie/Influx: Export-States werden im 10-Minuten-Raster geschrieben, um Datenmenge zu reduzieren und Abbrüche zu vermeiden."
+        ]
+      },
       "0.6.16": {
         "en": [
           "Netzlimits: PV curtailment as inverter groups + EVU relay stages (60/30/0) in App Center."

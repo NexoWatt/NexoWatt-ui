@@ -56,6 +56,7 @@
       <button type="button" class="nw-tab" data-tab="threshold">Schwellwerte</button>
       <button type="button" class="nw-tab" data-tab="relay">Relais</button>
       <button type="button" class="nw-tab" data-tab="grid">Netzlimits</button>
+      <button type="button" class="nw-tab" data-tab="evupv">EVU / PV Regelung</button>
       <button type="button" class="nw-tab" data-tab="para14a">§14a</button>
       <button type="button" class="nw-tab" data-tab="evcs">Ladepunkte</button>
       <button type="button" class="nw-tab" data-tab="status">Status</button>
@@ -683,7 +684,7 @@
         <h2 class="nw-config-section__title">Netzlimits</h2>
       </div>
       <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
-        Netzrestriktionen (RLM/0‑Einspeisung/Import‑Limits). Diese Funktionen dienen dem Netzschutz und werden ausschließlich im Installer‑/App‑Center konfiguriert.
+        Netzrestriktionen (RLM/Import‑Limits). Diese Funktionen dienen dem Netzschutz und werden ausschließlich im Installer‑/App‑Center konfiguriert.
         <br/>
         Hinweis: Die Netzanschlussleistung wird unter <b>Zuordnung → Allgemein</b> gesetzt und wird als obere Grenze genutzt.
       </div>
@@ -710,9 +711,34 @@
           </div>
         </div>
 
+        </div>
+
+      <div class="nw-help" style="margin-top:10px;">
+        EVU‑Abregelung / 0‑Einspeisung und Wechselrichter‑Gruppen sind jetzt in der App <b>EVU / PV Regelung</b> konfigurierbar.
+        <button id="gotoEvuPvTab" class="nw-config-btn nw-config-btn--ghost" type="button" style="margin-left:8px;">Öffnen</button>
+      </div>
+    </section>
+
+  </div>
+
+
+  
+
+  <div id="nw-tabpanel-evupv" data-tabpanel="evupv" style="display:none;">
+
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">EVU / PV Regelung</h2>
+      </div>
+      <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
+        PV‑Abregelung (EVU‑Relaisstufen) und 0‑Einspeisung (NVP‑Regler). Diese Funktionen dienen dem Netzschutz und werden ausschließlich im Installer‑/App‑Center konfiguriert.
+      </div>
+
+      <div class="nw-config-grid">
+
         <div class="nw-config-card">
           <div class="nw-config-card__header">
-            <div class="nw-config-card__title">PV Abregelung (EVU / 0‑Einspeisung)</div>
+            <div class="nw-config-card__title">EVU‑Abregelung &amp; 0‑Einspeisung</div>
             <div class="nw-config-card__subtitle">Modus, Relais‑Eingänge und Reglerparameter</div>
           </div>
           <div class="nw-config-card__body">
@@ -723,7 +749,7 @@
         <div class="nw-config-card">
           <div class="nw-config-card__header">
             <div class="nw-config-card__title">Wechselrichter‑Gruppen</div>
-            <div class="nw-config-card__subtitle">Pro WR: Name, installierte Leistung (kWp) + optionale Setpoints (Einspeise‑Limit W / PV‑Limit W / PV‑Limit %)</div>
+            <div class="nw-config-card__subtitle">Übersichtliche WR‑Listen mit Details (Setpoints pro WR)</div>
           </div>
           <div class="nw-config-card__body">
             <div id="gridConstraintsPvCurtail"></div>
@@ -735,8 +761,7 @@
 
   </div>
 
-
-  <div id="nw-tabpanel-para14a" data-tabpanel="para14a" style="display:none;">
+<div id="nw-tabpanel-para14a" data-tabpanel="para14a" style="display:none;">
     <h2>§14a Steuerung</h2>
     <div class="nw-subtitle">Konfiguration für netzseitige Leistungsbegrenzung (steuerbare Verbrauchseinrichtungen). Diese Funktion ist Netzschutz und wird nicht durch Endkunden bedient.</div>
 
