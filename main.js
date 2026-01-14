@@ -1042,23 +1042,25 @@ class NexoWattVis extends utils.Adapter {
         this.updateValue('storageFarm.storagesTotal', configured, now);
         this.updateValue('storageFarm.storagesStatusJson', JSON.stringify(statusRows), now);
 
-        // Aggregierte Werte als Fallback für den Energiefluss‑Monitor,
-        // falls die generischen Batterie‑Datenpunkte nicht gemappt sind.
-        try {
-          if (typeof this._nwHasMappedDatapoint === 'function') {
-            // SoC: im Farm-Modus verwenden wir den Durchschnitt (Ø) als Standardanzeige
-            if (!this._nwHasMappedDatapoint('storageSoc')) this.updateValue('storageSoc', Math.round(totalSoc * 10) / 10, now);
-            if (!this._nwHasMappedDatapoint('storageChargePower')) this.updateValue('storageChargePower', Math.round(totalCharge), now);
-            if (!this._nwHasMappedDatapoint('storageDischargePower')) this.updateValue('storageDischargePower', Math.round(totalDischarge), now);
-            if (!this._nwHasMappedDatapoint('batteryPower')) this.updateValue('batteryPower', Math.round(totalDischarge - totalCharge), now);
+        // Im Farm‑Modus sollen Energiefluss + Historie immer die Farm‑Summen anzeigen.
+// Dafür spiegeln wir die aggregierten Werte bewusst auf die generischen Keys
+// (storageSoc/storageChargePower/storageDischargePower/batteryPower).
+// Hintergrund: In vielen Setups sind dort Einzel‑Speicher gemappt – im Farm‑Modus
+// soll jedoch die Pool‑/Gruppen‑Summe angezeigt werden (ohne die Regel‑Logik zu verändern).
+try {
+  // SoC: Durchschnitt (Ø) als Standardanzeige
+  this.updateValue('storageSoc', Math.round(totalSoc * 10) / 10, now);
+  this.updateValue('storageChargePower', Math.round(totalCharge), now);
+  this.updateValue('storageDischargePower', Math.round(totalDischarge), now);
+  this.updateValue('batteryPower', Math.round(totalDischarge - totalCharge), now);
 
-            // PV (DC) Farm-Summe optional als Fallback für den Energiefluss,
-            // wenn kein PV-DP gemappt ist.
-            if (!this._nwHasMappedDatapoint('pvPower') && totalPv > 0) this.updateValue('pvPower', Math.round(totalPv), now);
-            if (!this._nwHasMappedDatapoint('productionTotal') && totalPv > 0) this.updateValue('productionTotal', Math.round(totalPv), now);
-          }
-        } catch (_e3) {}
-      } catch (_e2) {}
+  // PV (DC) Farm‑Summe nur als Fallback, wenn kein PV‑DP gemappt ist
+  if (typeof this._nwHasMappedDatapoint === 'function') {
+    if (!this._nwHasMappedDatapoint('pvPower') && totalPv > 0) this.updateValue('pvPower', Math.round(totalPv), now);
+    if (!this._nwHasMappedDatapoint('productionTotal') && totalPv > 0) this.updateValue('productionTotal', Math.round(totalPv), now);
+  }
+} catch (_e3) {}
+} catch (_e2) {}
     } catch (e) {
       this.log.debug('storageFarm derive failed (' + reason + '): ' + (e && e.message ? e.message : e));
     }

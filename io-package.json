@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.22",
+    "version": "0.6.23",
     "news": {
+      "0.6.23": {
+        "en": "StorageFarm: Energyflow shows aggregated SoC/power correctly (dominant net flow) and avoids maintenance-charge misdirection.",
+        "de": "Speicherfarm: Energiefluss zeigt aggregierten SoC/Leistung korrekt (dominanter Netto‑Fluss) und vermeidet Fehlanzeige durch Erhaltungsladung."
+      },
       "0.6.21": {
         "en": [
           "Storage farm: Added signed actual power datapoint per storage (Istleistung Signed). Farm aggregation now supports signed measurement and falls back to separate charge/discharge values.",

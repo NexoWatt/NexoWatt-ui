@@ -764,7 +764,7 @@ function render() {
   const d = (k) => s[k]?.value;
 
   // Top ring values: map PV, Grid, Load, Bat flows to percent of max for visualization
-  const sfEnabled = !!window.__nwStorageFarmEnabled || !!(s['storageFarm.enabled']?.value);
+  const sfEnabled = !!(s['storageFarm.enabled']?.value);
   const dpCfg = (window.__nwCfg && window.__nwCfg.datapoints) ? window.__nwCfg.datapoints : {};
   const pvMapped = !!(dpCfg && (dpCfg.pvPower || dpCfg.productionTotal));
 
@@ -3696,7 +3696,7 @@ function updateEnergyWeb() {
   const s = window.latestState || {};
 
   // Raw datapoints (1:1)
-  const sfEnabled = !!window.__nwStorageFarmEnabled || !!(s['storageFarm.enabled']?.value);
+  const sfEnabled = !!(s['storageFarm.enabled']?.value);
   const dpCfg = (window.__nwCfg && window.__nwCfg.datapoints) ? window.__nwCfg.datapoints : {};
   const pvMapped = !!(dpCfg && (dpCfg.pvPower || dpCfg.productionTotal));
 
@@ -3796,19 +3796,33 @@ function updateEnergyWeb() {
 // removed stray block
 // removed stray block
 
-  // BATTERIE: wähle vorhandenen Strom (kein Netto)
-  // - Entladen (batDischarge>0) -> zur Mitte; Anzeige +batDischarge
-  // - Laden (batCharge>0) -> von Mitte zur Batterie; Anzeige -batCharge
+  // BATTERIE:
+  // Standard (Einzel‑Speicher): wähle vorhandenen Strom (kein Netto)
+  // Farm‑Modus: wenn gleichzeitig Laden & Entladen vorkommt, zeigen wir den dominanten Netto‑Fluss
+  //             (|Entladen − Laden|) und bestimmen die Richtung über den höheren Wert.
   let batShowVal = 0;
   let batRev = false;
-  if (batDischarge > 0 && batCharge <= 0) { batShowVal = batDischarge; batRev = false; }
-  else if (batCharge > 0 && batDischarge <= 0) { batShowVal = batCharge; batRev = true; }
-  else if (batCharge > 0 || batDischarge > 0) {
-    if (batCharge >= batDischarge) { batShowVal = batCharge; batRev = true; }
-    else { batShowVal = batDischarge; batRev = false; }
+
+  if (sfEnabled) {
+    const ch = Math.max(0, Number(batCharge) || 0);
+    const dch = Math.max(0, Number(batDischarge) || 0);
+    if (ch > 0 || dch > 0) {
+      if (dch >= ch) { batShowVal = dch - ch; batRev = false; }
+      else { batShowVal = ch - dch; batRev = true; }
+    }
+  } else {
+    // - Entladen (batDischarge>0) -> zur Mitte; Anzeige +batDischarge
+    // - Laden (batCharge>0) -> von Mitte zur Batterie; Anzeige -batCharge
+    if (batDischarge > 0 && batCharge <= 0) { batShowVal = batDischarge; batRev = false; }
+    else if (batCharge > 0 && batDischarge <= 0) { batShowVal = batCharge; batRev = true; }
+    else if (batCharge > 0 || batDischarge > 0) {
+      if (batCharge >= batDischarge) { batShowVal = batCharge; batRev = true; }
+      else { batShowVal = batDischarge; batRev = false; }
+    }
   }
 
-  // ---------- Ausgabe ----------
+
+// ---------- Ausgabe ----------
   const T = (id, t) => { const el=document.getElementById(id); if (el) el.textContent=t; };
   const signed = (num, negIsMinus=false)=>{
     const n = Number(num)||0;
