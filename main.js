@@ -70,9 +70,25 @@ class NexoWattVis extends utils.Adapter {
       pending: false,
       lastRunMs: 0,
       minIntervalMs: 250,
+      diagLastMs: 0,
+
+      // Auto‑sources (no manual mapping required)
+      auto: {
+        pvInverters: {
+          ts: 0,
+          list: [], // { id, name, powerId, connectedId, offlineId }
+          ids: new Set(),
+          cache: new Map(), // objectId -> { val, ts }
+        },
+      },
+
       last: {
         loadTotalW: null,
         loadRestW: null,
+        pvAcW: null,
+        pvDcW: null,
+        pvTotalW: null,
+        quality: '',
       },
     };
 
@@ -8634,6 +8650,16 @@ return res.json(out);
         this.updateValue(key, state.val, state.ts);
       }
 
+      // Auto‑PV: cache PV‑Inverter values from nexowatt-devices (no manual mapping)
+      try {
+        const pvAuto = this._derivedFlow?.auto?.pvInverters;
+        if (pvAuto && pvAuto.ids && pvAuto.ids.has(id)) {
+          const tsMs = Number(state.ts) || Date.now();
+          pvAuto.cache.set(id, { val: state.val, ts: tsMs });
+          this.scheduleDerivedFlowUpdate('autoPv');
+        }
+      } catch (_e) {}
+
       // Sync: EVCS numerischer Modus (evcs.<i>.mode) <-> EMS User-Mode (chargingManagement.wallboxes.lp<i>.userMode)
       try {
         if (key) {
@@ -9561,6 +9587,77 @@ return res.json(out);
       },
       native: {},
     });
+
+    // PV (berechnet) – AC/DC/Total
+    await this.setObjectNotExistsAsync('derived.core.pv', {
+      type: 'channel',
+      common: { name: 'PV (berechnet)' },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync('derived.core.pv.acW', {
+      type: 'state',
+      common: {
+        name: 'PV-Leistung AC (W, berechnet)',
+        type: 'number',
+        role: 'value.power',
+        unit: 'W',
+        read: true,
+        write: false,
+      },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync('derived.core.pv.dcW', {
+      type: 'state',
+      common: {
+        name: 'PV-Leistung DC (W, berechnet – Speicherfarm/DC)',
+        type: 'number',
+        role: 'value.power',
+        unit: 'W',
+        read: true,
+        write: false,
+      },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync('derived.core.pv.totalW', {
+      type: 'state',
+      common: {
+        name: 'PV-Leistung gesamt (W, berechnet)',
+        type: 'number',
+        role: 'value.power',
+        unit: 'W',
+        read: true,
+        write: false,
+      },
+      native: {},
+    });
+
+    // Diagnose/Debug
+    await this.setObjectNotExistsAsync('derived.core.building.quality', {
+      type: 'state',
+      common: {
+        name: 'Qualität (berechnet) – OK/DEGRADED/MISSING_INPUT',
+        type: 'string',
+        role: 'text',
+        read: true,
+        write: false,
+      },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync('derived.core.building.inputsJson', {
+      type: 'state',
+      common: {
+        name: 'Inputs (berechnet) – Debug JSON',
+        type: 'string',
+        role: 'json',
+        read: true,
+        write: false,
+      },
+      native: {},
+    });
   }
 
   async updateHistorieExportStates(reason = 'timer') {
@@ -9829,6 +9926,77 @@ return res.json(out);
   }
 
 
+  async _derivedRefreshPvInvertersCache(force = false) {
+    try {
+      const cache = this._derivedFlow?.auto?.pvInverters;
+      if (!cache) return;
+
+      const now = Date.now();
+      const maxAgeMs = 10 * 60 * 1000; // refresh at most every 10 min
+      if (!force && cache.ts && (now - cache.ts) < maxAgeMs) return;
+      cache.ts = now;
+
+      // Query PV inverter devices from nexowatt-devices
+      const objs = await this.getForeignObjectsAsync('nexowatt-devices.*.devices.*', 'channel');
+      const list = [];
+      for (const [cid, obj] of Object.entries(objs || {})) {
+        const cat = String(obj?.native?.category || '').toUpperCase();
+        if (cat !== 'PV_INVERTER') continue;
+
+        const aliases = obj?.native?.aliases || {};
+
+        const powerId = (typeof aliases['r.power'] === 'string' && aliases['r.power'].trim())
+          ? aliases['r.power'].trim()
+          : `${cid}.aliases.r.power`;
+
+        const connectedId = (typeof aliases['comm.connected'] === 'string' && aliases['comm.connected'].trim())
+          ? aliases['comm.connected'].trim()
+          : `${cid}.aliases.comm.connected`;
+
+        const offlineId = (typeof aliases['alarm.offline'] === 'string' && aliases['alarm.offline'].trim())
+          ? aliases['alarm.offline'].trim()
+          : `${cid}.aliases.alarm.offline`;
+
+        const name = String(obj?.common?.name || cid).trim();
+        list.push({ id: cid, name, powerId, connectedId, offlineId });
+      }
+
+      const newIds = new Set();
+      for (const d of list) {
+        if (d.powerId) newIds.add(d.powerId);
+        if (d.connectedId) newIds.add(d.connectedId);
+        if (d.offlineId) newIds.add(d.offlineId);
+      }
+
+      const oldIds = cache.ids || new Set();
+
+      // Unsubscribe removed IDs
+      for (const oid of oldIds) {
+        if (!newIds.has(oid)) {
+          try { await this.unsubscribeForeignStatesAsync(oid); } catch (_e) {}
+          try { cache.cache.delete(oid); } catch (_e) {}
+        }
+      }
+
+      // Subscribe new IDs and seed cache
+      for (const nid of newIds) {
+        if (!oldIds.has(nid)) {
+          try { await this.subscribeForeignStatesAsync(nid); } catch (_e) {}
+          try {
+            const st = await this.getForeignStateAsync(nid);
+            if (st && st.val !== undefined) cache.cache.set(nid, { val: st.val, ts: st.ts || now });
+          } catch (_e) {}
+        }
+      }
+
+      cache.ids = newIds;
+      cache.list = list;
+    } catch (e) {
+      this.log.debug(`[derivedFlow] PV inverter cache refresh failed: ${e?.message || e}`);
+    }
+  }
+
+
   scheduleDerivedFlowUpdate(reason = '') {
     // Throttle derived calculations to avoid excessive state writes on high-frequency meters.
     const now = Date.now();
@@ -9851,61 +10019,171 @@ return res.json(out);
     }, delay);
   }
 
+
   async updateDerivedFlowStates(reason = '') {
     // Building consumption can be derived from the power balance at NVP:
-    // load = PV + gridImport + batteryDischarge - gridExport - batteryCharge
+    // load = (PV + other production) + gridImport + batteryDischarge - gridExport - batteryCharge
     // If no direct house meter (consumptionTotal) is configured, we use this as fallback for the UI.
 
     const ts = Date.now();
 
+    // Keep PV-inverter auto-cache reasonably fresh (cheap no-op when not due)
+    await this._derivedRefreshPvInvertersCache(false);
+
+    const pvPowerMapped = this._nwHasMappedDatapoint('pvPower');
+    const prodTotalMapped = this._nwHasMappedDatapoint('productionTotal');
+    const consumptionMapped = this._nwHasMappedDatapoint('consumptionTotal');
+
     // --- Grid ---
-    let gridBuyW = this._nwGetNumberFromCache('gridBuyPower');
-    let gridSellW = this._nwGetNumberFromCache('gridSellPower');
-    const gridNetW = this._nwGetNumberFromCache('gridPointPower');
+    let gridBuyRaw = this._nwGetNumberFromCache('gridBuyPower');
+    let gridSellRaw = this._nwGetNumberFromCache('gridSellPower');
+    const gridNetRaw = this._nwGetNumberFromCache('gridPointPower');
 
-    if (gridBuyW === null && gridNetW !== null) gridBuyW = Math.max(0, gridNetW);
-    if (gridSellW === null && gridNetW !== null) gridSellW = Math.max(0, -gridNetW);
-
-    gridBuyW = Math.max(0, Math.abs(gridBuyW ?? 0));
-    gridSellW = Math.max(0, Math.abs(gridSellW ?? 0));
-
-    // --- PV / Production (AC-side) ---
-    let pvW = this._nwGetNumberFromCache('pvPower');
-    if (pvW === null) pvW = this._nwGetNumberFromCache('productionTotal');
-
-    if (pvW === null) {
-      // Fallback: sum producer slots (if configured)
-      pvW = 0;
-      for (let i = 1; i <= 5; i++) {
-        const p = this._nwGetNumberFromCache(`producer${i}Power`);
-        if (p !== null) pvW += Math.abs(p);
-      }
+    let gridSrc = 'mapped';
+    if (gridBuyRaw === null && gridSellRaw === null && gridNetRaw !== null) {
+      gridBuyRaw = Math.max(0, gridNetRaw);
+      gridSellRaw = Math.max(0, -gridNetRaw);
+      gridSrc = 'net';
+    } else if (gridNetRaw !== null && (gridBuyRaw === null || gridSellRaw === null)) {
+      if (gridBuyRaw === null) gridBuyRaw = Math.max(0, gridNetRaw);
+      if (gridSellRaw === null) gridSellRaw = Math.max(0, -gridNetRaw);
+      gridSrc = 'mapped+net';
     }
-    pvW = Math.max(0, Math.abs(pvW ?? 0));
 
-    // --- Storage (charge/discharge on AC bus) ---
-    let chargeW = this._nwGetNumberFromCache('storageChargePower');
-    let dischargeW = this._nwGetNumberFromCache('storageDischargePower');
+    const gridBuyW = Math.max(0, Math.abs(gridBuyRaw ?? 0));
+    const gridSellW = Math.max(0, Math.abs(gridSellRaw ?? 0));
+    const hasGrid = (gridBuyRaw !== null || gridSellRaw !== null || gridNetRaw !== null);
 
-    if (chargeW === null && dischargeW === null) {
-      // Fallback: signed batteryPower (optional)
-      const batteryP = this._nwGetNumberFromCache('batteryPower');
-      if (batteryP !== null) {
-        if (batteryP >= 0) {
-          dischargeW = batteryP;
-          chargeW = 0;
+    // --- Storage ---
+    let chargeRaw = this._nwGetNumberFromCache('storageChargePower');
+    let dischargeRaw = this._nwGetNumberFromCache('storageDischargePower');
+    const batteryRaw = this._nwGetNumberFromCache('batteryPower');
+
+    let storageSrc = 'chargeDischarge';
+    if (chargeRaw === null && dischargeRaw === null) {
+      if (batteryRaw !== null) {
+        const signed = Number(batteryRaw);
+        if (Number.isFinite(signed)) {
+          if (signed >= 0) {
+            dischargeRaw = signed;
+            chargeRaw = 0;
+          } else {
+            chargeRaw = -signed;
+            dischargeRaw = 0;
+          }
+          storageSrc = 'batterySigned';
         } else {
-          chargeW = Math.abs(batteryP);
-          dischargeW = 0;
+          chargeRaw = 0;
+          dischargeRaw = 0;
+          storageSrc = 'missing';
+        }
+      } else {
+        chargeRaw = 0;
+        dischargeRaw = 0;
+        storageSrc = 'missing';
+      }
+    } else {
+      if (chargeRaw === null) chargeRaw = 0;
+      if (dischargeRaw === null) dischargeRaw = 0;
+    }
+
+    const chargeW = Math.max(0, Math.abs(chargeRaw ?? 0));
+    const dischargeW = Math.max(0, Math.abs(dischargeRaw ?? 0));
+
+    // --- Producer slots (optional extra production) ---
+    let producerSumW = 0;
+    let producerCount = 0;
+    for (let i = 1; i <= 5; i++) {
+      const p = this._nwGetNumberFromCache(`producer${i}Power`);
+      if (p !== null) {
+        const n = Number(p);
+        if (Number.isFinite(n)) {
+          producerSumW += Math.abs(n);
+          producerCount++;
         }
       }
     }
 
-    chargeW = Math.max(0, Math.abs(chargeW ?? 0));
-    dischargeW = Math.max(0, Math.abs(dischargeW ?? 0));
+    // --- PV (AC) ---
+    let pvAcRaw = null;
+    let pvSource = '';
+    if (pvPowerMapped) {
+      pvAcRaw = this._nwGetNumberFromCache('pvPower');
+      pvSource = 'mapped:pvPower';
+    } else if (prodTotalMapped) {
+      pvAcRaw = this._nwGetNumberFromCache('productionTotal');
+      pvSource = 'mapped:productionTotal';
+    }
+
+    let pvAcW = 0;
+    if (pvAcRaw !== null && Number.isFinite(Number(pvAcRaw))) {
+      pvAcW = Math.max(0, Math.abs(Number(pvAcRaw)));
+    } else {
+      // Auto: sum all PV_INVERTER devices from nexowatt-devices
+      const pvAuto = this._derivedFlow?.auto?.pvInverters;
+      const staleSec = Number(this.config?.settings?.deviceStaleTimeoutSec);
+      const staleMs = Math.max(10 * 1000, (Number.isFinite(staleSec) ? staleSec : 60) * 1000);
+
+      let sum = 0;
+      let used = 0;
+      let offline = 0;
+
+      for (const dev of (pvAuto?.list || [])) {
+        const pRec = pvAuto?.cache?.get(dev.powerId);
+        const cRec = pvAuto?.cache?.get(dev.connectedId);
+        const oRec = pvAuto?.cache?.get(dev.offlineId);
+
+        const connected = (cRec && cRec.val !== undefined) ? !!cRec.val : true;
+        const isOffline = (oRec && oRec.val !== undefined) ? !!oRec.val : false;
+        const ageOk = (pRec && Number.isFinite(Number(pRec.ts))) ? ((ts - Number(pRec.ts)) <= staleMs) : false;
+
+        if (!connected || isOffline || !ageOk) {
+          offline++;
+          continue;
+        }
+
+        const v = Number(pRec?.val);
+        if (!Number.isFinite(v)) continue;
+        sum += Math.abs(v);
+        used++;
+      }
+
+      if (used > 0) {
+        pvAcW = Math.max(0, sum);
+        pvSource = 'auto:nwdevices';
+      } else if (producerCount > 0) {
+        // Legacy fallback: if PV was mapped into producer slots
+        pvAcW = Math.max(0, producerSumW);
+        producerSumW = 0;
+        producerCount = 0;
+        pvSource = 'fallback:producerSlots';
+      } else {
+        pvAcW = 0;
+        pvSource = 'missing';
+      }
+    }
+
+    // --- PV (DC) from Speicherfarm (optional) ---
+    const sfEnabled = !!(this.stateCache?.['storageFarm.enabled'] && this.stateCache['storageFarm.enabled'].value);
+    let pvDcW = 0;
+    if (sfEnabled) {
+      const dc = this._nwGetNumberFromCache('storageFarm.totalPvPowerW');
+      if (dc !== null && Number.isFinite(Number(dc))) pvDcW = Math.max(0, Math.abs(Number(dc)));
+    }
+
+    // Default behaviour: only add DC-PV automatically when PV is NOT explicitly mapped (avoid double-count)
+    let pvTotalW = pvAcW;
+    let pvDcIncluded = false;
+    if (!pvPowerMapped && !prodTotalMapped && sfEnabled && pvDcW > 0) {
+      pvTotalW += pvDcW;
+      pvDcIncluded = true;
+    }
+
+    // Total production = PV(total) + extra producers
+    const productionW = pvTotalW + producerSumW;
 
     // --- Derived loads ---
-    let loadTotalW = pvW + gridBuyW + dischargeW - gridSellW - chargeW;
+    let loadTotalW = productionW + gridBuyW + dischargeW - gridSellW - chargeW;
 
     // Clamp to plausible range
     if (!Number.isFinite(loadTotalW)) loadTotalW = 0;
@@ -9916,7 +10194,10 @@ return res.json(out);
     let consumersW = 0;
     for (let i = 1; i <= 10; i++) {
       const c = this._nwGetNumberFromCache(`consumer${i}Power`);
-      if (c !== null) consumersW += Math.abs(c);
+      if (c !== null) {
+        const n = Number(c);
+        if (Number.isFinite(n)) consumersW += Math.abs(n);
+      }
     }
 
     let loadRestW = loadTotalW - evW - consumersW;
@@ -9926,7 +10207,7 @@ return res.json(out);
     const loadTotalRound = Math.round(loadTotalW);
     const loadRestRound = Math.round(loadRestW);
 
-    // Update adapter states (for App-Center mapping / debugging)
+    // --- Update adapter states (for App-Center mapping / debugging) ---
     if (this._derivedFlow?.last?.loadTotalW !== loadTotalRound) {
       this._derivedFlow.last.loadTotalW = loadTotalRound;
       await this.setStateAsync('derived.core.building.loadTotalW', { val: loadTotalRound, ack: true });
@@ -9936,9 +10217,79 @@ return res.json(out);
       await this.setStateAsync('derived.core.building.loadRestW', { val: loadRestRound, ack: true });
     }
 
-    // Fallback for UI: if no direct house meter is mapped, publish as "consumptionTotal"
-    if (!this._nwHasMappedDatapoint('consumptionTotal')) {
+    const pvAcRound = Math.round(pvAcW);
+    const pvDcRound = Math.round(pvDcW);
+    const pvTotalRound = Math.round(pvTotalW);
+
+    if (this._derivedFlow?.last?.pvAcW !== pvAcRound) {
+      this._derivedFlow.last.pvAcW = pvAcRound;
+      await this.setStateAsync('derived.core.pv.acW', { val: pvAcRound, ack: true });
+    }
+    if (this._derivedFlow?.last?.pvDcW !== pvDcRound) {
+      this._derivedFlow.last.pvDcW = pvDcRound;
+      await this.setStateAsync('derived.core.pv.dcW', { val: pvDcRound, ack: true });
+    }
+    if (this._derivedFlow?.last?.pvTotalW !== pvTotalRound) {
+      this._derivedFlow.last.pvTotalW = pvTotalRound;
+      await this.setStateAsync('derived.core.pv.totalW', { val: pvTotalRound, ack: true });
+    }
+
+    // --- Quality indicator ---
+    let quality = 'ok';
+    if (!hasGrid) quality = 'missing-grid';
+    else if (pvSource === 'missing') quality = 'missing-pv';
+    else if (storageSrc === 'missing') quality = 'missing-storage';
+
+    if (this._derivedFlow?.last?.quality !== quality) {
+      this._derivedFlow.last.quality = quality;
+      await this.setStateAsync('derived.core.building.quality', { val: quality, ack: true });
+    }
+
+    // Diagnostics payload (throttled)
+    try {
+      const diagEveryMs = 15000;
+      const lastDiag = Number(this._derivedFlow?.diagLastMs) || 0;
+      if (!this._derivedFlow) this._derivedFlow = {};
+      if ((ts - lastDiag) >= diagEveryMs) {
+        this._derivedFlow.diagLastMs = ts;
+        const payload = {
+          ts,
+          reason,
+          grid: { buyW: Math.round(gridBuyW), sellW: Math.round(gridSellW), src: gridSrc },
+          pv: {
+            acW: pvAcRound,
+            dcW: pvDcRound,
+            dcIncluded: pvDcIncluded,
+            totalW: pvTotalRound,
+            src: pvSource,
+            mappedPvPower: pvPowerMapped,
+            mappedProductionTotal: prodTotalMapped,
+            sfEnabled,
+          },
+          storage: { chargeW: Math.round(chargeW), dischargeW: Math.round(dischargeW), src: storageSrc },
+          extraProductionW: Math.round(producerSumW),
+          consumersW: Math.round(consumersW),
+          evW: Math.round(evW),
+          building: { loadTotalW: loadTotalRound, loadRestW: loadRestRound },
+          quality,
+        };
+        const json = JSON.stringify(payload);
+        await this.setStateAsync('derived.core.building.inputsJson', { val: json, ack: true });
+      }
+    } catch (_e) {}
+
+    // --- Fallbacks for UI (stateCache keys) ---
+    // 1) If no direct house meter is mapped, publish as "consumptionTotal" so the energyflow can render it.
+    if (!consumptionMapped) {
       this.updateValue('consumptionTotal', loadTotalRound, ts);
+    }
+
+    // 2) If PV is not mapped, publish PV total as "pvPower" so the energyflow can render PV without mapping.
+    if (!pvPowerMapped && !prodTotalMapped) {
+      const cur = this.stateCache?.pvPower?.value;
+      if (cur !== pvTotalRound) {
+        this.updateValue('pvPower', pvTotalRound, ts);
+      }
     }
   }
 
