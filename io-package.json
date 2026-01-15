@@ -1,8 +1,18 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.29",
+    "version": "0.6.30",
     "news": {
+      "0.6.30": {
+        "en": [
+          "Notifications: Added monitoring + e-mail alerts (system/adapter down, PV inverter offline via nexowatt-devices, hard NVP/PV curtailment warning).",
+          "Settings: Added per-category switches and a test-mail button."
+        ],
+        "de": [
+          "Benachrichtigungen: Monitoring + E-Mail-Alarme (System/Adapter down, PV-Wechselrichter offline über nexowatt-devices, Warnung bei harter NVP/PV-Abregelung).",
+          "Einstellungen: Schalter pro Kategorie + Test-Mail Button."
+        ]
+      },
       "0.6.28": {
         "en": [
           "History (day): SoC axis is now anchored at the kW zero-line (0% at midline, 100% at top) for a cleaner combined kW/% chart."

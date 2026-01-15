@@ -64,6 +64,18 @@ class NexoWattVis extends utils.Adapter {
     // Storagefarm: remember last commanded setpoints to reduce write spam
     this._sfLastSetpoints = new Map(); // objectId -> last numeric value
 
+    // Notifications / Monitoring
+    this._notifyTimer = null;
+    this._notify = {
+      // eventId -> { active, sinceMs, lastSentMs, alertSent, meta }
+      events: new Map(),
+      // Cached watch lists (refreshed periodically)
+      watchedInstances: { ts: 0, instances: [] },
+      nwDevices: { ts: 0, pvInverters: [] },
+      // Last exported active event JSON (to avoid unnecessary writes)
+      lastActiveJson: '',
+    };
+
     this.on('ready', this.onReady.bind(this));
     this.on('stateChange', this.onStateChange.bind(this));
     this.on('unload', this.onUnload.bind(this));
@@ -99,6 +111,14 @@ class NexoWattVis extends utils.Adapter {
     // NOTE: These are user-facing runtime settings that the VIS UI reads via /api/state.
     // Keep this list in sync with syncSettingsToStates() and the frontend (www/app.js, www/ems-apps.js).
     const defs = {
+      // Notifications
+      notifyEnabled: { type: 'boolean', role: 'state', def: false },
+      email: { type: 'string', role: 'text', def: '' },
+      notifySystem: { type: 'boolean', role: 'state', def: true },
+      notifyInverters: { type: 'boolean', role: 'state', def: true },
+      notifyHardCurtailment: { type: 'boolean', role: 'state', def: true },
+      notifyRecovery: { type: 'boolean', role: 'state', def: true },
+
       dynamicTariff: { type: 'boolean', role: 'state', def: false },
       storagePower: { type: 'number', role: 'value.power', def: 1000 },
       price: { type: 'number', role: 'value', def: 0.25 },
@@ -138,6 +158,34 @@ class NexoWattVis extends utils.Adapter {
         if (!st) {
           await this.setStateAsync(id, { val: c.def, ack: true });
         }
+      } catch (_e) {}
+    }
+  }
+
+
+  async ensureNotificationStates() {
+    // Debug / runtime states for notifications (emails). These are optional, but
+    // extremely helpful when commissioning and diagnosing alert behaviour.
+    const defs = {
+      lastMailTs: { type: 'number', role: 'value.time', def: 0, write: false },
+      lastMailSubject: { type: 'string', role: 'text', def: '', write: false },
+      lastMailResult: { type: 'string', role: 'text', def: '', write: false },
+      activeCount: { type: 'number', role: 'value', def: 0, write: false },
+      activeJson: { type: 'string', role: 'json', def: '[]', write: false },
+    };
+
+    for (const [key, c] of Object.entries(defs)) {
+      const id = `notifications.${key}`;
+      await this.setObjectNotExistsAsync(id, {
+        type: 'state',
+        common: { name: id, type: c.type, role: c.role, read: true, write: !!c.write, def: c.def },
+        native: {}
+      });
+
+      // Seed default once
+      try {
+        const st = await this.getStateAsync(id);
+        if (!st) await this.setStateAsync(id, { val: c.def, ack: true });
       } catch (_e) {}
     }
   }
@@ -2991,6 +3039,9 @@ async onReady() {
 
       await this.ensureSettingsStates();
 
+      // Notifications: runtime + debug states
+      try { await this.ensureNotificationStates(); } catch (_e) {}
+
       // Load persisted App‑Center configuration (stored in adapter states).
       // This must happen before we sync defaults and start the EMS engine.
       await this.loadInstallerConfigFromState();
@@ -3024,6 +3075,9 @@ async onReady() {
 
       // finally subscribe and read initial values
       await this.subscribeConfiguredStates();
+
+      // Notifications monitoring (emails)
+      try { this.startNotificationMonitor(); } catch (_e) {}
 
       // Historie (Influx): canonical export states under 'nexowatt-vis.0.historie.*'
       // This avoids double-mapping of device datapoints for dashboards/history.
@@ -6948,6 +7002,30 @@ settingsConfig: {
       res.json(this.stateCache);
     });
 
+    // Test email for notification commissioning
+    app.post('/api/notify/test', requireAuth, async (req, res) => {
+      try {
+        const body = (req && req.body) ? req.body : {};
+        const toBody = (body && body.to) ? String(body.to).trim() : '';
+        const to = toBody || this._notifyGetSettingString('email', '');
+        if (!to) return res.status(400).json({ ok: false, error: 'missing recipient' });
+
+        const now = Date.now();
+        const subject = 'NexoWatt EMS: Test-Benachrichtigung';
+        const text = [
+          `Zeit: ${new Date(now).toLocaleString()}`,
+          `Adapter: ${this.namespace}`,
+          '',
+          'Dies ist eine Testbenachrichtigung. Wenn du diese E-Mail erhältst, ist der Versand korrekt konfiguriert.'
+        ].join('\n');
+
+        const r = await this._notifySendEmail(to, subject, text);
+        return res.json({ ok: !!(r && r.ok), result: r });
+      } catch (e) {
+        return res.status(500).json({ ok: false, error: e && e.message ? e.message : String(e) });
+      }
+    });
+
     // generic setter for settings/installer datapoints
     app.post('/api/set', requireAuth, async (req, res) => {
       try {
@@ -8293,7 +8371,17 @@ return res.json(out);
     const settings = (this.config && this.config.settings) || {};
     const installer = (this.config && this.config.installer) || {};
         const namespace = this.namespace + '.';
-    const settingsLocalKeys = ['notifyEnabled','email','dynamicTariff','storagePower','price','priority','tariffMode','evcsMaxPower','evcsCount'];
+    const settingsLocalKeys = [
+      'notifyEnabled',
+      'email',
+      // Notification categories
+      'notifySystem',
+      'notifyInverters',
+      'notifyHardCurtailment',
+      'notifyRecovery',
+      // Tariff/charging settings
+      'dynamicTariff','storagePower','price','priority','tariffMode','evcsMaxPower','evcsCount'
+    ];
     const storageFarmLocalKeys = ['enabled','mode','configJson','groupsJson','totalSoc','medianSoc','totalChargePowerW','totalDischargePowerW','totalPvPowerW','storagesOnline','storagesTotal','storagesStatusJson'];
     // Weitere lokale States, die in der VIS angezeigt werden sollen (ohne Admin-Mapping)
     // Wichtig: Diese Keys müssen auch dann funktionieren, wenn sie NICHT im Admin unter
@@ -8558,6 +8646,513 @@ return res.json(out);
     const t = Number(ts) || Date.now();
     this.setStateAsync(id, val, true).catch(()=>{});
     try { this.updateValue(id, val, t); } catch(_e) {}
+  }
+
+  // --- Notifications / Monitoring (E-Mail) ---
+  startNotificationMonitor() {
+    try {
+      if (this._notifyTimer) {
+        try { clearInterval(this._notifyTimer); } catch (_e) {}
+        this._notifyTimer = null;
+      }
+
+      // Lightweight periodic checks. Default: 30 seconds.
+      const intervalMs = 30 * 1000;
+      const tick = () => {
+        this.notificationTick().catch((_e) => {
+          // keep timer alive
+        });
+      };
+
+      // Start a bit delayed to allow states/config to settle.
+      setTimeout(tick, 5 * 1000);
+      this._notifyTimer = setInterval(tick, intervalMs);
+    } catch (_e) {}
+  }
+
+  stopNotificationMonitor() {
+    try {
+      if (this._notifyTimer) {
+        try { clearInterval(this._notifyTimer); } catch (_e) {}
+        this._notifyTimer = null;
+      }
+    } catch (_e) {}
+  }
+
+  _notifyParseBool(val, def) {
+    if (val === undefined || val === null) return !!def;
+    if (typeof val === 'boolean') return val;
+    if (typeof val === 'number') return val !== 0;
+    const s = String(val).trim().toLowerCase();
+    if (!s) return !!def;
+    if (s === 'true' || s === '1' || s === 'yes' || s === 'ja' || s === 'on') return true;
+    if (s === 'false' || s === '0' || s === 'no' || s === 'nein' || s === 'off') return false;
+    return !!def;
+  }
+
+  _notifyGetCached(key, def) {
+    try {
+      const e = this.stateCache[key];
+      if (e && e.value !== undefined) return e.value;
+    } catch (_e) {}
+    return def;
+  }
+
+  _notifyGetSettingBool(key, def = false) {
+    const v = this._notifyGetCached(`settings.${key}`, def);
+    return this._notifyParseBool(v, def);
+  }
+
+  _notifyGetSettingString(key, def = '') {
+    const v = this._notifyGetCached(`settings.${key}`, def);
+    if (v === undefined || v === null) return String(def || '');
+    return String(v).trim();
+  }
+
+  async _notifySetDebugState(key, val) {
+    try {
+      const id = `notifications.${key}`;
+      await this.setStateAsync(id, { val, ack: true });
+      try { this.updateValue(id, val, Date.now()); } catch (_e) {}
+    } catch (_e) {}
+  }
+
+  async _notifySendEmail(to, subject, text) {
+    const payload = {
+      to: String(to || '').trim(),
+      subject: String(subject || '').trim(),
+      text: String(text || ''),
+    };
+    if (!payload.to) return { ok: false, error: 'missing recipient' };
+
+    // Try sendTo('email') (all instances) first, then fallback to 'email.0'.
+    const trySend = (target) => new Promise((resolve) => {
+      let done = false;
+      try {
+        this.sendTo(target, 'send', payload, (resp) => {
+          done = true;
+          resolve({ ok: true, resp });
+        });
+        setTimeout(() => {
+          if (!done) resolve({ ok: true, resp: null });
+        }, 2000);
+      } catch (e) {
+        resolve({ ok: false, error: e && e.message ? e.message : String(e) });
+      }
+    });
+
+    let r = await trySend('email');
+    if (!r.ok) r = await trySend('email.0');
+    return r;
+  }
+
+  _notifyCollectObjectIdsFromConfig() {
+    const ids = new Set();
+    const re = /^([a-zA-Z0-9_-]+\.[0-9]+)\./;
+    const walk = (v) => {
+      if (v === null || v === undefined) return;
+      if (typeof v === 'string') {
+        const s = v.trim();
+        if (re.test(s)) ids.add(s);
+        return;
+      }
+      if (Array.isArray(v)) {
+        for (const it of v) walk(it);
+        return;
+      }
+      if (typeof v === 'object') {
+        for (const vv of Object.values(v)) walk(vv);
+      }
+    };
+
+    try { walk(this.config || {}); } catch (_e) {}
+    return Array.from(ids);
+  }
+
+  async _notifyRefreshWatchedInstances(force = false) {
+    try {
+      const now = Date.now();
+      const cache = this._notify.watchedInstances || { ts: 0, instances: [] };
+      if (!force && cache.instances && cache.instances.length && (now - (cache.ts || 0) < 10 * 60 * 1000)) return;
+
+      const ids = this._notifyCollectObjectIdsFromConfig();
+      const inst = new Set();
+      for (const id of ids) {
+        const m = String(id || '').match(/^([a-zA-Z0-9_-]+\.[0-9]+)\./);
+        if (!m) continue;
+        const i = m[1];
+        if (!i) continue;
+        // Skip own instance
+        if (i === this.namespace) continue;
+        inst.add(i);
+      }
+
+      cache.ts = now;
+      cache.instances = Array.from(inst).sort();
+      this._notify.watchedInstances = cache;
+    } catch (_e) {}
+  }
+
+  async _notifyRefreshNwDevicesCache(force = false) {
+    try {
+      const now = Date.now();
+      const cache = this._notify.nwDevices || { ts: 0, pvInverters: [] };
+      if (!force && cache.pvInverters && cache.pvInverters.length && (now - (cache.ts || 0) < 10 * 60 * 1000)) return;
+
+      // Discover PV inverters from nexowatt-devices adapter
+      const channels = await this.getForeignObjectsAsync('nexowatt-devices.*.devices.*', 'channel');
+      const states = await this.getForeignObjectsAsync('nexowatt-devices.*.devices.*.*', 'state');
+
+      const hasState = (baseId, suffix) => {
+        const id = `${baseId}.${suffix}`;
+        return !!(states && states[id]);
+      };
+
+      const getAlias = (obj, key) => {
+        try {
+          const a = obj && obj.native && obj.native.aliases;
+          if (!a || typeof a !== 'object') return '';
+          const id = a[key];
+          return (typeof id === 'string') ? id : '';
+        } catch (_e) {
+          return '';
+        }
+      };
+
+      const pv = [];
+      for (const [cid, ch] of Object.entries(channels || {})) {
+        const cat = ch && ch.native && ch.native.category ? String(ch.native.category) : '';
+        if (cat !== 'PV_INVERTER') continue;
+        const name = (ch && ch.common && ch.common.name) ? String(ch.common.name) : cid.split('.').slice(-1)[0];
+
+        const connected = getAlias(ch, 'comm.connected') || (hasState(cid, 'aliases.comm.connected') ? `${cid}.aliases.comm.connected` : '');
+        const statusCode = getAlias(ch, 'r.statusCode') || (hasState(cid, 'aliases.r.statusCode') ? `${cid}.aliases.r.statusCode` : (hasState(cid, 'statusCode') ? `${cid}.statusCode` : ''));
+
+        pv.push({ id: cid, name, dp: { connected, statusCode } });
+      }
+
+      cache.ts = now;
+      cache.pvInverters = pv;
+      this._notify.nwDevices = cache;
+    } catch (_e) {
+      // keep old cache
+    }
+  }
+
+  _notifyFormatDuration(ms) {
+    const s = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+    const m = Math.floor(s / 60);
+    const h = Math.floor(m / 60);
+    const d = Math.floor(h / 24);
+    if (d > 0) return `${d}d ${h % 24}h`;
+    if (h > 0) return `${h}h ${m % 60}m`;
+    if (m > 0) return `${m}m`;
+    return `${s}s`;
+  }
+
+  async notificationTick() {
+    const enabled = this._notifyGetSettingBool('notifyEnabled', false);
+    const to = this._notifyGetSettingString('email', '');
+    if (!enabled || !to) return;
+
+    const now = Date.now();
+    const wantRecovery = this._notifyGetSettingBool('notifyRecovery', true);
+    const wantSystem = this._notifyGetSettingBool('notifySystem', true);
+    const wantInv = this._notifyGetSettingBool('notifyInverters', true);
+    const wantCurtail = this._notifyGetSettingBool('notifyHardCurtailment', true);
+
+    // Refresh caches periodically
+    if (wantSystem) await this._notifyRefreshWatchedInstances(false);
+    if (wantInv) await this._notifyRefreshNwDevicesCache(false);
+
+    const active = [];
+
+    // --- System / EMS health ---
+    if (wantSystem) {
+      try {
+        const lastTick = await this.getStateAsync('ems.core.lastTickStart');
+        const lastTickTs = lastTick && typeof lastTick.val === 'number' ? Number(lastTick.val) : 0;
+        if (lastTickTs > 0 && (now - lastTickTs) > 60 * 1000) {
+          active.push({
+            id: 'emsTickStalled',
+            severity: 'critical',
+            title: 'EMS Tick läuft nicht',
+            message: `Die EMS-Loop wurde seit ${this._notifyFormatDuration(now - lastTickTs)} nicht mehr ausgeführt (lastTickStart=${new Date(lastTickTs).toLocaleString()}).`,
+            persistMs: 60 * 1000,
+            repeatMs: 6 * 60 * 60 * 1000,
+          });
+        }
+      } catch (_e) {}
+
+      try {
+        const err = await this.getStateAsync('ems.core.lastTickError');
+        const msg = err && err.val ? String(err.val).trim() : '';
+        if (msg) {
+          active.push({
+            id: 'emsLastError',
+            severity: 'critical',
+            title: 'EMS Fehler',
+            message: `Letzter EMS-Fehler: ${msg}`,
+            persistMs: 15 * 1000,
+            repeatMs: 6 * 60 * 60 * 1000,
+          });
+        }
+      } catch (_e) {}
+
+      // Adapter instances referenced by configured datapoints
+      try {
+        const instances = (this._notify.watchedInstances && Array.isArray(this._notify.watchedInstances.instances)) ? this._notify.watchedInstances.instances : [];
+        if (instances.length) {
+          const checks = await Promise.all(instances.map(async (inst) => {
+            const sid = `system.adapter.${inst}.alive`;
+            try {
+              const st = await this.getForeignStateAsync(sid);
+              const ok = st && st.val === true;
+              return { inst, ok, st };
+            } catch (e) {
+              return { inst, ok: false, st: null, err: e };
+            }
+          }));
+
+          for (const c of checks) {
+            if (c.ok) continue;
+            active.push({
+              id: `adapterDown:${c.inst}`,
+              severity: 'critical',
+              title: `Adapter offline: ${c.inst}`,
+              message: `Die Instanz ${c.inst} ist nicht erreichbar (system.adapter.${c.inst}.alive=false).`,
+              persistMs: 60 * 1000,
+              repeatMs: 6 * 60 * 60 * 1000,
+            });
+          }
+        }
+      } catch (_e) {}
+    }
+
+    // --- PV Inverters (nexowatt-devices) ---
+    if (wantInv) {
+      try {
+        const inv = (this._notify.nwDevices && Array.isArray(this._notify.nwDevices.pvInverters)) ? this._notify.nwDevices.pvInverters : [];
+        for (const d of inv) {
+          const dpConn = d && d.dp && d.dp.connected ? String(d.dp.connected) : '';
+          if (!dpConn) continue;
+          let connected = true;
+          try {
+            const st = await this.getForeignStateAsync(dpConn);
+            connected = this._notifyParseBool(st && st.val, true);
+          } catch (_e) {
+            connected = false;
+          }
+          if (!connected) {
+            active.push({
+              id: `pvInverterOffline:${d.id}`,
+              severity: 'critical',
+              title: `Wechselrichter offline: ${d.name}`,
+              message: `Der PV-Wechselrichter "${d.name}" meldet keine Verbindung (connected=false).`,
+              persistMs: 120 * 1000,
+              repeatMs: 6 * 60 * 60 * 1000,
+            });
+          }
+
+          // Optional: status code
+          try {
+            const dpStatus = d && d.dp && d.dp.statusCode ? String(d.dp.statusCode) : '';
+            if (dpStatus) {
+              const st = await this.getForeignStateAsync(dpStatus);
+              const v = st && st.val !== undefined && st.val !== null ? st.val : null;
+              if (v !== null && v !== 0 && String(v).trim() !== '' && String(v).trim().toLowerCase() !== 'ok') {
+                active.push({
+                  id: `pvInverterStatus:${d.id}`,
+                  severity: 'warning',
+                  title: `Wechselrichter Status: ${d.name}`,
+                  message: `Der Wechselrichter "${d.name}" meldet StatusCode=${v}.`,
+                  persistMs: 120 * 1000,
+                  repeatMs: 6 * 60 * 60 * 1000,
+                });
+              }
+            }
+          } catch (_e) {}
+        }
+      } catch (_e) {}
+    }
+
+    // --- Hard curtailment at NVP (GridConstraints) ---
+    if (wantCurtail) {
+      try {
+        const zEn = await this.getStateAsync('gridConstraints.zeroExport.enabled');
+        const enabledZero = this._notifyParseBool(zEn && zEn.val, false);
+
+        const mMode = await this.getStateAsync('gridConstraints.pvCurtail.mode');
+        const mode = mMode && mMode.val ? String(mMode.val) : '';
+
+        const stApplied = await this.getStateAsync('gridConstraints.pvCurtail.applied');
+        const applied = this._notifyParseBool(stApplied && stApplied.val, false);
+
+        const stEvu = await this.getStateAsync('gridConstraints.pvCurtail.evuStagePct');
+        const evuPct = (stEvu && stEvu.val !== undefined && stEvu.val !== null) ? Number(stEvu.val) : NaN;
+
+        const stPct = await this.getStateAsync('gridConstraints.pvCurtail.setpointPct');
+        const setPct = (stPct && stPct.val !== undefined && stPct.val !== null) ? Number(stPct.val) : NaN;
+
+        const stW = await this.getStateAsync('gridConstraints.pvCurtail.setpointW');
+        const setW = (stW && stW.val !== undefined && stW.val !== null) ? Number(stW.val) : NaN;
+
+        const stAction = await this.getStateAsync('gridConstraints.zeroExport.action');
+        const action = stAction && stAction.val ? String(stAction.val) : '';
+
+        const stExport = await this.getStateAsync('gridConstraints.zeroExport.exportW');
+        const exportW = (stExport && stExport.val !== undefined && stExport.val !== null) ? Number(stExport.val) : NaN;
+
+        // Determine effective curtailment percentage
+        let effPct = NaN;
+        if (Number.isFinite(evuPct)) effPct = evuPct;
+        else if (mode === 'feedInLimitW' && enabledZero) effPct = 0;
+        else if (Number.isFinite(setPct)) effPct = setPct;
+        else {
+          const rated = (this.config && this.config.gridConstraints && Number(this.config.gridConstraints.pvRatedPowerW)) || NaN;
+          if (Number.isFinite(setW) && Number.isFinite(rated) && rated > 0) effPct = (setW / rated) * 100;
+        }
+
+        const hardByFailSafe = String(action).toLowerCase().includes('failsafe');
+        const hardByStage = Number.isFinite(effPct) && effPct < 100 && effPct <= 60;
+
+        if ((applied || hardByFailSafe) && (hardByFailSafe || hardByStage)) {
+          const pctTxt = Number.isFinite(effPct) ? `${Math.round(effPct)}%` : 'n/a';
+          const exTxt = Number.isFinite(exportW) ? `${Math.round(exportW)} W` : 'n/a';
+          active.push({
+            id: 'hardCurtailment',
+            severity: hardByFailSafe ? 'critical' : 'warning',
+            title: 'Harte Abregelung am NVP',
+            message: `PV-Regelung aktiv (Mode=${mode || 'n/a'}, Action=${action || 'n/a'}, Limit=${pctTxt}, Export=${exTxt}).`,
+            persistMs: 60 * 1000,
+            repeatMs: 60 * 60 * 1000,
+          });
+        }
+      } catch (_e) {}
+    }
+
+    // --- Process transitions + send emails ---
+    const activeIds = new Set(active.map(e => e.id));
+    const alertsToSend = [];
+    const recoveriesToSend = [];
+
+    // Update active events
+    for (const ev of active) {
+      const rec = this._notify.events.get(ev.id) || { active: false, sinceMs: 0, lastSentMs: 0, alertSent: false, meta: null };
+      rec.meta = ev;
+      if (!rec.active) {
+        rec.active = true;
+        rec.sinceMs = now;
+        rec.lastSentMs = 0;
+        rec.alertSent = false;
+      }
+
+      const persist = Number(ev.persistMs) || 0;
+      const repeat = Number(ev.repeatMs) || 0;
+      const dueFirst = !rec.alertSent && (now - rec.sinceMs) >= persist;
+      const dueRepeat = rec.alertSent && repeat > 0 && (now - (rec.lastSentMs || 0)) >= repeat;
+
+      if (dueFirst || dueRepeat) {
+        // Prevent too frequent sends even if persist==0
+        if (!rec.lastSentMs || (now - rec.lastSentMs) >= 30 * 1000) {
+          alertsToSend.push(ev);
+          rec.lastSentMs = now;
+          rec.alertSent = true;
+        }
+      }
+
+      this._notify.events.set(ev.id, rec);
+    }
+
+    // Handle recoveries
+    for (const [id, rec] of Array.from(this._notify.events.entries())) {
+      if (!rec || !rec.active) continue;
+      if (activeIds.has(id)) continue;
+
+      // Recovery
+      const meta = rec.meta || { id };
+      const since = rec.sinceMs || now;
+      const dur = now - since;
+      if (wantRecovery && rec.alertSent) {
+        recoveriesToSend.push({
+          id,
+          severity: 'ok',
+          title: meta.title || id,
+          message: `OK nach ${this._notifyFormatDuration(dur)}: ${meta.title || id}`,
+        });
+      }
+      rec.active = false;
+      rec.sinceMs = 0;
+      rec.lastSentMs = 0;
+      rec.alertSent = false;
+      this._notify.events.set(id, rec);
+    }
+
+    // Export active events snapshot for debugging
+    try {
+      const activeList = Array.from(this._notify.events.entries())
+        .filter(([, r]) => r && r.active)
+        .map(([id, r]) => ({ id, sinceMs: r.sinceMs || 0, severity: (r.meta && r.meta.severity) ? r.meta.severity : 'n/a', title: (r.meta && r.meta.title) ? r.meta.title : id }));
+      const json = JSON.stringify(activeList);
+      if (json !== this._notify.lastActiveJson) {
+        this._notify.lastActiveJson = json;
+        await this._notifySetDebugState('activeJson', json);
+        await this._notifySetDebugState('activeCount', activeList.length);
+      }
+    } catch (_e) {}
+
+    if (!alertsToSend.length && !recoveriesToSend.length) return;
+
+    const fmt = (sev) => {
+      const s = String(sev || '').toLowerCase();
+      if (s === 'critical') return 'STÖRUNG';
+      if (s === 'warning') return 'WARNUNG';
+      if (s === 'info') return 'INFO';
+      if (s === 'ok') return 'OK';
+      return s.toUpperCase();
+    };
+
+    // Compose one aggregated mail to avoid flooding.
+    const parts = [];
+    parts.push(`Zeit: ${new Date(now).toLocaleString()}`);
+    parts.push(`Adapter: ${this.namespace}`);
+
+    if (alertsToSend.length) {
+      parts.push('');
+      parts.push(`ALARM (${alertsToSend.length}):`);
+      for (const a of alertsToSend) {
+        parts.push(`- [${fmt(a.severity)}] ${a.title}`);
+        parts.push(`  ${a.message}`);
+      }
+    }
+    if (recoveriesToSend.length) {
+      parts.push('');
+      parts.push(`OK (${recoveriesToSend.length}):`);
+      for (const r of recoveriesToSend) {
+        parts.push(`- ${r.title}`);
+      }
+    }
+
+    const subject = (() => {
+      const c = alertsToSend.filter(a => String(a.severity).toLowerCase() === 'critical').length;
+      const w = alertsToSend.filter(a => String(a.severity).toLowerCase() === 'warning').length;
+      const i = alertsToSend.filter(a => String(a.severity).toLowerCase() === 'info').length;
+      const ok = recoveriesToSend.length;
+      const seg = [];
+      if (c) seg.push(`${c} Störung`);
+      if (w) seg.push(`${w} Warnung`);
+      if (i) seg.push(`${i} Info`);
+      if (ok) seg.push(`${ok} OK`);
+      const tail = seg.length ? seg.join(', ') : 'Benachrichtigung';
+      return `NexoWatt EMS: ${tail}`;
+    })();
+
+    const text = parts.join('\n');
+    const r = await this._notifySendEmail(to, subject, text);
+
+    await this._notifySetDebugState('lastMailTs', now);
+    await this._notifySetDebugState('lastMailSubject', subject);
+    await this._notifySetDebugState('lastMailResult', r && r.ok ? 'ok' : (`error: ${r && r.error ? r.error : 'unknown'}`));
   }
 
   // --- Historie / Influx: canonical export states (no extra mapping required) ---
@@ -9326,6 +9921,7 @@ return res.json(out);
     try {
       try { if (this._nwEnergyTotalsTimer) clearInterval(this._nwEnergyTotalsTimer); } catch (_e) {}
       try { if (this._nwHistorieTimer) clearInterval(this._nwHistorieTimer); } catch (_e) {}
+      try { this.stopNotificationMonitor(); } catch (_e) {}
       try { if (this._sseFlushTimer) clearTimeout(this._sseFlushTimer); } catch (_e) {}
       try { if (this.emsEngine && typeof this.emsEngine.stop === 'function') this.emsEngine.stop(); } catch (_e2) {}
       if (this.server) this.server.close();

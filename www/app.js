@@ -1198,6 +1198,34 @@ function initSettingsPanel(){
     dynToggle.addEventListener('change', updateDynVisibility);
   }
 
+  // Test-Mail für Benachrichtigungen
+  const notifyTestBtn = document.getElementById('notifyTestBtn');
+  const notifyTestMsg = document.getElementById('notifyTestMsg');
+  if (notifyTestBtn) {
+    notifyTestBtn.addEventListener('click', async ()=>{
+      try {
+        notifyTestBtn.disabled = true;
+        if (notifyTestMsg) notifyTestMsg.textContent = 'Sende Test-Mail...';
+        const r = await fetch('/api/notify/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        const j = await r.json().catch(()=>({ ok: false }));
+        if (j && j.ok) {
+          if (notifyTestMsg) notifyTestMsg.textContent = 'OK: Test-Mail wurde gesendet.';
+        } else {
+          const err = (j && j.error) ? j.error : (`HTTP ${r.status}`);
+          if (notifyTestMsg) notifyTestMsg.textContent = 'Fehler: ' + err;
+        }
+      } catch (e) {
+        if (notifyTestMsg) notifyTestMsg.textContent = 'Fehler: ' + (e && e.message ? e.message : String(e));
+      } finally {
+        try { notifyTestBtn.disabled = false; } catch (_e) {}
+      }
+    });
+  }
+
   const LS_KEY = 'nexowatt.settings';
   let opts;
   try { opts = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(_) { opts = {}; }

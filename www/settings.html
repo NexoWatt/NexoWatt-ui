@@ -57,6 +57,35 @@
       <label class="row"><span>E-Mail</span>
         <input type="email" id="s_email" data-scope="settings" data-key="email">
       </label>
+
+      <div class="row" style="align-items:center; margin-top:6px;">
+        <span style="opacity:.85; font-size:12px;">Überwachung (Ereignisse)</span>
+        <small style="opacity:.7; text-align:right; flex:1 1 auto;">wird per E-Mail gemeldet</small>
+      </div>
+      <label class="row"><span>System / Adapter</span>
+        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_notify_system"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+        <input type="checkbox" class="nw-toggle-hidden" id="s_notify_system" data-scope="settings" data-key="notifySystem">
+      </label>
+      <label class="row"><span>Wechselrichter</span>
+        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_notify_inv"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+        <input type="checkbox" class="nw-toggle-hidden" id="s_notify_inv" data-scope="settings" data-key="notifyInverters">
+      </label>
+      <label class="row"><span>Harte Abregelung (NVP)</span>
+        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_notify_hard"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+        <input type="checkbox" class="nw-toggle-hidden" id="s_notify_hard" data-scope="settings" data-key="notifyHardCurtailment">
+      </label>
+      <label class="row"><span>OK-Meldungen</span>
+        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_notify_ok"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+        <input type="checkbox" class="nw-toggle-hidden" id="s_notify_ok" data-scope="settings" data-key="notifyRecovery">
+      </label>
+      <div class="row" style="align-items:center;">
+        <span>Test</span>
+        <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex:1 1 auto">
+          <button class="btn" id="notifyTestBtn" type="button">Test-Mail senden</button>
+        </div>
+      </div>
+      <small id="notifyTestMsg" style="opacity:.75; display:block; margin-top:-6px;"></small>
+
       <label class="row"><span>Dynamischer Zeittarif</span>
         <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_dyn_toggle"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
         <input type="checkbox" class="nw-toggle-hidden" id="s_dyn_toggle" data-scope="settings" data-key="dynamicTariff">
