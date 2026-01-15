@@ -64,6 +64,18 @@ class NexoWattVis extends utils.Adapter {
     // Storagefarm: remember last commanded setpoints to reduce write spam
     this._sfLastSetpoints = new Map(); // objectId -> last numeric value
 
+
+    // Derived / calculated live values (e.g. energy flow helper KPIs)
+    this._derivedFlow = {
+      pending: false,
+      lastRunMs: 0,
+      minIntervalMs: 250,
+      last: {
+        loadTotalW: null,
+        loadRestW: null,
+      },
+    };
+
     // Notifications / Monitoring
     this._notifyTimer = null;
     this._notify = {
@@ -3208,6 +3220,11 @@ async onReady() {
 
       // finally subscribe and read initial values
       await this.subscribeConfiguredStates();
+
+      // Derived / calculated live states (used as fallbacks for UI, optional for mapping)
+      await this.ensureDerivedFlowStates();
+      // Compute once at startup so UI has immediate values even before the first state change
+      this.scheduleDerivedFlowUpdate('startup');
 
       // Notifications monitoring (emails)
       try { this.startNotificationMonitor(); } catch (_e) {}
@@ -9498,6 +9515,54 @@ return res.json(out);
     } catch (_e) {}
   }
 
+
+  async ensureDerivedFlowStates() {
+    // Derived / calculated live states (used as fallbacks for UI, optional for mapping)
+    await this.setObjectNotExistsAsync('derived', {
+      type: 'channel',
+      common: { name: 'Derived (berechnet)' },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync('derived.core', {
+      type: 'channel',
+      common: { name: 'Core (berechnet)' },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync('derived.core.building', {
+      type: 'channel',
+      common: { name: 'Gebäude (berechnet)' },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync('derived.core.building.loadTotalW', {
+      type: 'state',
+      common: {
+        name: 'Gebäudeverbrauch gesamt (W, berechnet)',
+        type: 'number',
+        role: 'value.power',
+        unit: 'W',
+        read: true,
+        write: false,
+      },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync('derived.core.building.loadRestW', {
+      type: 'state',
+      common: {
+        name: 'Gebäudeverbrauch Rest (W, berechnet – ohne EV/Extra-Verbraucher)',
+        type: 'number',
+        role: 'value.power',
+        unit: 'W',
+        read: true,
+        write: false,
+      },
+      native: {},
+    });
+  }
+
   async updateHistorieExportStates(reason = 'timer') {
     const now = Date.now();
 
@@ -9761,6 +9826,120 @@ return res.json(out);
     const explicit = this._nwTrimId(raw);
     const allowExplicit = !!(explicit && explicit.startsWith(`${this.namespace}.historie.`));
     return (allowExplicit ? explicit : canon) || explicit || '';
+  }
+
+
+  scheduleDerivedFlowUpdate(reason = '') {
+    // Throttle derived calculations to avoid excessive state writes on high-frequency meters.
+    const now = Date.now();
+    const minMs = this._derivedFlow?.minIntervalMs ?? 250;
+
+    // Remember latest reason (debug only)
+    if (this._derivedFlow) this._derivedFlow.lastReason = reason;
+
+    if (this._derivedFlow?.pending) return;
+
+    const since = now - (this._derivedFlow?.lastRunMs ?? 0);
+    const delay = since >= minMs ? 0 : (minMs - since);
+
+    this._derivedFlow.pending = true;
+    setTimeout(() => {
+      this._derivedFlow.pending = false;
+      this._derivedFlow.lastRunMs = Date.now();
+      this.updateDerivedFlowStates(this._derivedFlow.lastReason || 'scheduled')
+        .catch((e) => this.log.debug(`[derivedFlow] ${e?.message || e}`));
+    }, delay);
+  }
+
+  async updateDerivedFlowStates(reason = '') {
+    // Building consumption can be derived from the power balance at NVP:
+    // load = PV + gridImport + batteryDischarge - gridExport - batteryCharge
+    // If no direct house meter (consumptionTotal) is configured, we use this as fallback for the UI.
+
+    const ts = Date.now();
+
+    // --- Grid ---
+    let gridBuyW = this._nwGetNumberFromCache('gridBuyPower');
+    let gridSellW = this._nwGetNumberFromCache('gridSellPower');
+    const gridNetW = this._nwGetNumberFromCache('gridPointPower');
+
+    if (gridBuyW === null && gridNetW !== null) gridBuyW = Math.max(0, gridNetW);
+    if (gridSellW === null && gridNetW !== null) gridSellW = Math.max(0, -gridNetW);
+
+    gridBuyW = Math.max(0, Math.abs(gridBuyW ?? 0));
+    gridSellW = Math.max(0, Math.abs(gridSellW ?? 0));
+
+    // --- PV / Production (AC-side) ---
+    let pvW = this._nwGetNumberFromCache('pvPower');
+    if (pvW === null) pvW = this._nwGetNumberFromCache('productionTotal');
+
+    if (pvW === null) {
+      // Fallback: sum producer slots (if configured)
+      pvW = 0;
+      for (let i = 1; i <= 5; i++) {
+        const p = this._nwGetNumberFromCache(`producer${i}Power`);
+        if (p !== null) pvW += Math.abs(p);
+      }
+    }
+    pvW = Math.max(0, Math.abs(pvW ?? 0));
+
+    // --- Storage (charge/discharge on AC bus) ---
+    let chargeW = this._nwGetNumberFromCache('storageChargePower');
+    let dischargeW = this._nwGetNumberFromCache('storageDischargePower');
+
+    if (chargeW === null && dischargeW === null) {
+      // Fallback: signed batteryPower (optional)
+      const batteryP = this._nwGetNumberFromCache('batteryPower');
+      if (batteryP !== null) {
+        if (batteryP >= 0) {
+          dischargeW = batteryP;
+          chargeW = 0;
+        } else {
+          chargeW = Math.abs(batteryP);
+          dischargeW = 0;
+        }
+      }
+    }
+
+    chargeW = Math.max(0, Math.abs(chargeW ?? 0));
+    dischargeW = Math.max(0, Math.abs(dischargeW ?? 0));
+
+    // --- Derived loads ---
+    let loadTotalW = pvW + gridBuyW + dischargeW - gridSellW - chargeW;
+
+    // Clamp to plausible range
+    if (!Number.isFinite(loadTotalW)) loadTotalW = 0;
+    if (loadTotalW < 0) loadTotalW = 0;
+
+    // Rest-load: subtract EV and configured extra consumers (for convenience / mapping)
+    const evW = Math.max(0, Math.abs(this._nwGetNumberFromCache('evcs.totalPowerW') ?? 0));
+    let consumersW = 0;
+    for (let i = 1; i <= 10; i++) {
+      const c = this._nwGetNumberFromCache(`consumer${i}Power`);
+      if (c !== null) consumersW += Math.abs(c);
+    }
+
+    let loadRestW = loadTotalW - evW - consumersW;
+    if (!Number.isFinite(loadRestW)) loadRestW = 0;
+    if (loadRestW < 0) loadRestW = 0;
+
+    const loadTotalRound = Math.round(loadTotalW);
+    const loadRestRound = Math.round(loadRestW);
+
+    // Update adapter states (for App-Center mapping / debugging)
+    if (this._derivedFlow?.last?.loadTotalW !== loadTotalRound) {
+      this._derivedFlow.last.loadTotalW = loadTotalRound;
+      await this.setStateAsync('derived.core.building.loadTotalW', { val: loadTotalRound, ack: true });
+    }
+    if (this._derivedFlow?.last?.loadRestW !== loadRestRound) {
+      this._derivedFlow.last.loadRestW = loadRestRound;
+      await this.setStateAsync('derived.core.building.loadRestW', { val: loadRestRound, ack: true });
+    }
+
+    // Fallback for UI: if no direct house meter is mapped, publish as "consumptionTotal"
+    if (!this._nwHasMappedDatapoint('consumptionTotal')) {
+      this.updateValue('consumptionTotal', loadTotalRound, ts);
+    }
   }
 
   _nwHasMappedDatapoint(key) {
@@ -10050,6 +10229,19 @@ return res.json(out);
 
     // EVCS session logger (start/stop + energy/max + RFID)
     try { this.maybeUpdateEvcsSessionTracker(key, ts); } catch(_e2) {}
+
+
+    // Derived / calculated live values (e.g. building consumption fallback for UI)
+    try {
+      const isTrigger =
+        key === 'gridBuyPower' || key === 'gridSellPower' || key === 'gridPointPower' ||
+        key === 'pvPower' || key === 'productionTotal' ||
+        key === 'storageChargePower' || key === 'storageDischargePower' || key === 'batteryPower' ||
+        /^producer\d+Power$/.test(key) || /^consumer\d+Power$/.test(key) ||
+        /^evcs\.\d+\.powerW$/.test(key) || key === 'evcs.totalPowerW' ||
+        key.startsWith('storageFarm.');
+      if (isTrigger) this.scheduleDerivedFlowUpdate(`key:${key}`);
+    } catch (_e3) {}
 
 // push update to all SSE clients (batched to avoid UI freezes)
     try {

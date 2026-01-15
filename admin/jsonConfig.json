@@ -199,7 +199,7 @@
               ],
               "button": true,
               "placeholder": "z.B. smartmeter.0.power.house (oder Summe Verbrauch AC)",
-              "help": "Aktueller Gebäude-/Hausverbrauch in W. Empfohlen: fenecon.0._sum.ConsumptionAcActivePower",
+              "help": "Optional. Wenn leer, wird der Gebäudeverbrauch automatisch berechnet: PV + Netzbezug + Speicher-Entladung − Einspeisung − Speicher-Beladung (aus den konfigurierten Leistungs-Datenpunkten).",
               "newLine": false,
               "attr": "datapoints.consumptionTotal",
               "xs": 12,
