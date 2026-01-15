@@ -834,6 +834,37 @@ class NexoWattVis extends utils.Adapter {
       const staleSec = (Number.isFinite(staleSecRaw) && staleSecRaw > 0) ? staleSecRaw : 300;
       const staleMs = Math.max(10_000, Math.round(staleSec * 1000));
 
+      // Local read cache (per tick) to avoid repeating getForeignStateAsync calls.
+      const _stCache = new Map();
+      const getState = async (id) => {
+        const sid = String(id || '').trim();
+        if (!sid) return null;
+        if (_stCache.has(sid)) return _stCache.get(sid);
+        const st = await this.getForeignStateAsync(sid).catch(() => null);
+        _stCache.set(sid, st);
+        return st;
+      };
+
+      const toBool = (v) => {
+        if (v === null || v === undefined) return null;
+        if (typeof v === 'boolean') return v;
+        if (typeof v === 'number') return v !== 0;
+        const s = String(v).trim().toLowerCase();
+        if (!s) return null;
+        if (['true', '1', 'on', 'yes', 'y'].includes(s)) return true;
+        if (['false', '0', 'off', 'no', 'n'].includes(s)) return false;
+        return null;
+      };
+
+      // If datapoints come from nexowatt-devices, we can infer a stable device base path
+      // and use its connected/offline signals for status.
+      const inferDeviceAliasBase = (id) => {
+        const sid = String(id || '').trim();
+        if (!sid) return '';
+        const m = sid.match(/^(nexowatt-devices\.\d+\.devices\.[^.]+\.aliases)(?:\.|$)/);
+        return m ? m[1] : '';
+      };
+
       // Robust number parsing (some adapters deliver strings like "4,62 kW")
       const parseNum = (val) => {
         try {
@@ -917,17 +948,23 @@ class NexoWattVis extends utils.Adapter {
         return n;
       };
 
-      const readNumber = async (id, kind) => {
+      const readNumber = async (id, kind, opts = {}) => {
         const sid = String(id || '').trim();
         if (!sid) return NaN;
 
-        const st = await this.getForeignStateAsync(sid).catch(() => null);
+        const st = await getState(sid);
         if (!st || st.val === undefined || st.val === null) return NaN;
 
-        // Stale protection: if the value wasn't updated recently, treat it as missing.
-        // We use 'ts' (last update) instead of 'lc' (last change) so a polling adapter
-        // stays "Online" even if the numeric value does not change.
-        if (typeof st.ts !== 'number' || !Number.isFinite(st.ts) || (now - st.ts) > staleMs) return NaN;
+        // IMPORTANT: We intentionally do NOT apply stale filtering here.
+        // Some devices update SoC or power only sporadically; the UI should still show
+        // the last known value. Offline detection is handled separately via
+        // connected/offline states and a heartbeat timestamp.
+        const allowStale = (opts && opts.allowStale !== undefined) ? !!opts.allowStale : true;
+        if (!allowStale) {
+          // Use 'ts' (last update) instead of 'lc' (last change) so a polling adapter
+          // stays "Online" even if the numeric value does not change.
+          if (typeof st.ts !== 'number' || !Number.isFinite(st.ts) || (now - st.ts) > staleMs) return NaN;
+        }
 
         let n = parseNum(st.val);
         if (!Number.isFinite(n)) return NaN;
@@ -1002,23 +1039,104 @@ class NexoWattVis extends utils.Adapter {
         const cap = Number(row.capacityKWh);
         const w = Number.isFinite(cap) && cap > 0 ? cap : 1;
 
-        let anyOk = false;
+        const pvId = String(row.pvPowerId || '').trim();
 
+        // ---------------------------------------------------------------------
+        // Online/Offline logic
+        // ---------------------------------------------------------------------
+        // Requirement:
+        // - SoC must NOT "timeout" (some systems update SoC less frequently)
+        // - Powers should still show last known values when online
+        // - A device shall be marked Offline when the device adapter reports it
+        //   (connected=false / offline=true) OR when no data arrives for some time
+        //   (adapter hung → timestamps stop updating)
+
+        // Infer device base from nexowatt-devices datapoints
+        const devBase = inferDeviceAliasBase(socId) || inferDeviceAliasBase(signedId) || inferDeviceAliasBase(chgId) || inferDeviceAliasBase(dchgId) || inferDeviceAliasBase(pvId);
+        const connectedId = devBase ? `${devBase}.comm.connected` : '';
+        const offlineId = devBase ? `${devBase}.alarm.offline` : '';
+        const lastErrorId = devBase ? `${devBase}.comm.lastError` : '';
+
+        const stConn = connectedId ? await getState(connectedId) : null;
+        const stOff = offlineId ? await getState(offlineId) : null;
+        const stErr = lastErrorId ? await getState(lastErrorId) : null;
+
+        const connB = stConn ? toBool(stConn.val) : null;
+        const offB = stOff ? toBool(stOff.val) : null;
+
+        const explicitOffline = (offB === true) || (connB === false);
+
+        // Heartbeat ts: prefer device adapter status + power states.
+        // NOTE: We intentionally exclude SoC as primary heartbeat because it may update slowly.
+        let heartbeatTs = NaN;
+        const considerTs = (st) => {
+          if (st && typeof st.ts === 'number' && Number.isFinite(st.ts)) {
+            heartbeatTs = Number.isFinite(heartbeatTs) ? Math.max(heartbeatTs, st.ts) : st.ts;
+          }
+        };
+
+        considerTs(stConn);
+        considerTs(stOff);
+        considerTs(stErr);
+        if (signedId) considerTs(await getState(signedId));
+        if (chgId) considerTs(await getState(chgId));
+        if (dchgId) considerTs(await getState(dchgId));
+        if (pvId) considerTs(await getState(pvId));
+        // Fallback: if nothing else exists, use SoC ts so minimal configs still work.
+        if (!Number.isFinite(heartbeatTs) && socId) considerTs(await getState(socId));
+
+        const stale = Number.isFinite(heartbeatTs) ? ((now - heartbeatTs) > staleMs) : false;
+
+        // Do we have any measurement values configured/available?
+        let hasAnyValue = false;
+        for (const id of [signedId, chgId, dchgId, pvId, socId]) {
+          if (!id) continue;
+          const st = await getState(id);
+          if (st && st.val !== undefined && st.val !== null) { hasAnyValue = true; break; }
+        }
+
+        let isOnline = false;
+        let offlineReason = '';
+
+        if (explicitOffline) {
+          isOnline = false;
+          offlineReason = 'device_offline';
+        } else if (stale) {
+          isOnline = false;
+          offlineReason = 'stale';
+        } else if (connB === true) {
+          isOnline = true;
+        } else if (hasAnyValue) {
+          isOnline = true;
+        } else {
+          isOnline = false;
+          offlineReason = 'no_data';
+        }
+
+        status.online = !!isOnline;
+        if (!isOnline) {
+          status.offlineReason = offlineReason;
+          statusRows.push(status);
+          continue;
+        }
+
+        // ---------------------------------------------------------------------
+        // Read values (always show last known value while online)
+        // ---------------------------------------------------------------------
         if (socId) {
-          const soc = await readNumber(socId, 'soc');
+          const soc = await readNumber(socId, 'soc', { allowStale: true });
           if (Number.isFinite(soc)) {
             status.soc = soc;
             socList.push(soc);
             socWeighted += soc * w;
             socWeight += w;
-            anyOk = true;
           }
         }
 
         let usedSigned = false;
 
         if (signedId) {
-          const v = await readNumber(signedId, 'power');
+          const v = await readNumber(signedId, 'power', { allowStale: true });
           if (Number.isFinite(v)) {
             let vv = invSigned ? -v : v;
 
@@ -1032,52 +1150,46 @@ class NexoWattVis extends utils.Adapter {
             status.chargePowerW = charge;
             status.dischargePowerW = discharge;
 
-            anyOk = true;
             usedSigned = true;
           }
         }
 
         // Fallback: getrennte Messwerte
         if (!usedSigned && chgId) {
-          const v = await readNumber(chgId, 'power');
+          const v = await readNumber(chgId, 'power', { allowStale: true });
           if (Number.isFinite(v)) {
             let vv = invChg ? -v : v;
             // In der Farm interpretieren wir Ladeleistung als positive Größe.
             if (vv < 0) vv = 0;
             totalCharge += vv;
             status.chargePowerW = vv;
-            anyOk = true;
           }
         }
 
         if (!usedSigned && dchgId) {
-          const v = await readNumber(dchgId, 'power');
+          const v = await readNumber(dchgId, 'power', { allowStale: true });
           if (Number.isFinite(v)) {
             let vv = invDchg ? -v : v;
             // In der Farm interpretieren wir Entladeleistung als positive Größe.
             if (vv < 0) vv = 0;
             totalDischarge += vv;
             status.dischargePowerW = vv;
-            anyOk = true;
           }
         }
 
         // PV-Leistung (nur DC-gekoppelte Speicher) – als positive Größe
-        const pvId = String(row.pvPowerId || '').trim();
         if (pvId) {
-          const v = await readNumber(pvId, 'power');
+          const v = await readNumber(pvId, 'power', { allowStale: true });
           if (Number.isFinite(v)) {
             let vv = v;
             if (vv < 0) vv = Math.abs(vv);
             totalPv += vv;
             status.pvPowerW = vv;
-            anyOk = true;
           }
         }
 
-        status.online = !!anyOk;
         statusRows.push(status);
-        if (anyOk) online++;
+        online++;
       }
 
       const medianSoc = (() => {

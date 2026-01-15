@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.30",
+    "version": "0.6.32",
     "news": {
+      "0.6.32": {
+        "en": [
+          "Storagefarm: Online/Offline detection improved (SoC/power no longer time out in UI; offline is derived from device connected/offline signals + heartbeat timestamps)."
+        ],
+        "de": [
+          "Speicherfarm: Online/Offline-Erkennung verbessert (SoC/Leistung haben kein UI-Timeout mehr; Offline wird über Device-Connected/Offline-Signale + Heartbeat-Zeitstempel erkannt)."
+        ]
+      },
       "0.6.30": {
         "en": [
           "Notifications: Added monitoring + e-mail alerts (system/adapter down, PV inverter offline via nexowatt-devices, hard NVP/PV curtailment warning).",
