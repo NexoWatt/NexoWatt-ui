@@ -78,6 +78,12 @@
         <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_notify_ok"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
         <input type="checkbox" class="nw-toggle-hidden" id="s_notify_ok" data-scope="settings" data-key="notifyRecovery">
       </label>
+
+      <label class="row"><span>Offline, wenn keine Daten seit (Sek.)</span>
+        <input type="number" id="s_devStaleTimeout" min="30" step="30" data-scope="settings" data-key="deviceStaleTimeoutSec">
+      </label>
+      <small style="opacity:.75; display:block; margin-top:-6px;">Wenn ein Geräte-Adapter hängt und keine Werte mehr aktualisiert, wird das Gerät nach Ablauf dieser Zeit als <b>Offline</b> behandelt.</small>
+
       <div class="row" style="align-items:center;">
         <span>Test</span>
         <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex:1 1 auto">

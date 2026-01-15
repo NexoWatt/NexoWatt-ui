@@ -119,6 +119,11 @@ class NexoWattVis extends utils.Adapter {
       notifyHardCurtailment: { type: 'boolean', role: 'state', def: true },
       notifyRecovery: { type: 'boolean', role: 'state', def: true },
 
+      // Device/data freshness: if a datapoint did not update within this time window,
+      // it will be treated as "offline" (prevents stuck adapters from showing "online" forever).
+      // Used in live views (e.g. Speicherfarm) and monitoring/notifications.
+      deviceStaleTimeoutSec: { type: 'number', role: 'value.interval', def: 300 },
+
       dynamicTariff: { type: 'boolean', role: 'state', def: false },
       storagePower: { type: 'number', role: 'value.power', def: 1000 },
       price: { type: 'number', role: 'value', def: 0.25 },
@@ -818,6 +823,17 @@ class NexoWattVis extends utils.Adapter {
       try { list = raw ? JSON.parse(raw) : []; } catch (_e) { list = []; }
       if (!Array.isArray(list)) list = [];
 
+      // --- Offline/Stale detection -------------------------------------------------
+      // If a device adapter (e.g. nexowatt-devices / modbus) hangs, ioBroker keeps the
+      // last value and the UI would still show "Online" forever. To avoid that we treat
+      // datapoints as invalid once they have not been updated for some time.
+      //
+      // The timeout is configurable in the end-user settings page (Einstellungen).
+      const now = Date.now();
+      const staleSecRaw = Number(this.stateCache && this.stateCache['settings.deviceStaleTimeoutSec'] ? this.stateCache['settings.deviceStaleTimeoutSec'].value : NaN);
+      const staleSec = (Number.isFinite(staleSecRaw) && staleSecRaw > 0) ? staleSecRaw : 300;
+      const staleMs = Math.max(10_000, Math.round(staleSec * 1000));
+
       // Robust number parsing (some adapters deliver strings like "4,62 kW")
       const parseNum = (val) => {
         try {
@@ -907,6 +923,11 @@ class NexoWattVis extends utils.Adapter {
 
         const st = await this.getForeignStateAsync(sid).catch(() => null);
         if (!st || st.val === undefined || st.val === null) return NaN;
+
+        // Stale protection: if the value wasn't updated recently, treat it as missing.
+        // We use 'ts' (last update) instead of 'lc' (last change) so a polling adapter
+        // stays "Online" even if the numeric value does not change.
+        if (typeof st.ts !== 'number' || !Number.isFinite(st.ts) || (now - st.ts) > staleMs) return NaN;
 
         let n = parseNum(st.val);
         if (!Number.isFinite(n)) return NaN;
@@ -8709,6 +8730,12 @@ return res.json(out);
     return String(v).trim();
   }
 
+  _notifyGetSettingNumber(key, def = 0) {
+    const v = this._notifyGetCached(`settings.${key}`, def);
+    const n = Number(v);
+    return Number.isFinite(n) ? n : def;
+  }
+
   async _notifySetDebugState(key, val) {
     try {
       const id = `notifications.${key}`;
@@ -8861,6 +8888,12 @@ return res.json(out);
     const wantInv = this._notifyGetSettingBool('notifyInverters', true);
     const wantCurtail = this._notifyGetSettingBool('notifyHardCurtailment', true);
 
+    // Data freshness window: if a datapoint wasn't updated within this time,
+    // we treat it as "offline" (stuck adapter protection).
+    const staleSecRaw = this._notifyGetSettingNumber('deviceStaleTimeoutSec', 300);
+    const staleSec = (Number.isFinite(staleSecRaw) && staleSecRaw > 0) ? staleSecRaw : 300;
+    const staleMs = Math.max(10_000, Math.round(staleSec * 1000));
+
     // Refresh caches periodically
     if (wantSystem) await this._notifyRefreshWatchedInstances(false);
     if (wantInv) await this._notifyRefreshNwDevicesCache(false);
@@ -8937,18 +8970,26 @@ return res.json(out);
           const dpConn = d && d.dp && d.dp.connected ? String(d.dp.connected) : '';
           if (!dpConn) continue;
           let connected = true;
+          let stale = false;
+          let ageMs = 0;
           try {
             const st = await this.getForeignStateAsync(dpConn);
-            connected = this._notifyParseBool(st && st.val, true);
+            const ts = st && typeof st.ts === 'number' ? st.ts : 0;
+            ageMs = ts ? (now - ts) : 0;
+            stale = (!ts) || (ageMs > staleMs);
+            connected = !stale && this._notifyParseBool(st && st.val, true);
           } catch (_e) {
             connected = false;
           }
           if (!connected) {
+            const why = stale
+              ? `Keine Daten seit ${this._notifyFormatDuration(ageMs)} (stale).`
+              : `connected=false.`;
             active.push({
               id: `pvInverterOffline:${d.id}`,
               severity: 'critical',
               title: `Wechselrichter offline: ${d.name}`,
-              message: `Der PV-Wechselrichter "${d.name}" meldet keine Verbindung (connected=false).`,
+              message: `Der PV-Wechselrichter "${d.name}" ist offline. ${why}`,
               persistMs: 120 * 1000,
               repeatMs: 6 * 60 * 60 * 1000,
             });
@@ -8959,6 +9000,12 @@ return res.json(out);
             const dpStatus = d && d.dp && d.dp.statusCode ? String(d.dp.statusCode) : '';
             if (dpStatus) {
               const st = await this.getForeignStateAsync(dpStatus);
+              const ts = st && typeof st.ts === 'number' ? st.ts : 0;
+              const ageMs = ts ? (now - ts) : 0;
+              if (!ts || ageMs > staleMs) {
+                // Do not evaluate stale status codes.
+                continue;
+              }
               const v = st && st.val !== undefined && st.val !== null ? st.val : null;
               if (v !== null && v !== 0 && String(v).trim() !== '' && String(v).trim().toLowerCase() !== 'ok') {
                 active.push({
