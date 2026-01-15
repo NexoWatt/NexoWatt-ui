@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.33",
+    "version": "0.6.36",
     "news": {
       "0.6.32": {
         "en": [
@@ -820,6 +820,14 @@
       "0.6.29": {
         "en": "Added RFID billing report (daily kWh per card) with PDF/CSV export.",
         "de": "RFID/Ladekarten-Abrechnung (Tageswerte) inkl. PDF/CSV Export hinzugefügt."
+      },
+      "0.6.36": {
+        "en": [
+          "Storagefarm: Stabilized SoC aggregation (no jumps when a storage temporarily stops responding); added quality/debug states."
+        ],
+        "de": [
+          "Speicherfarm: SoC-Aggregation stabilisiert (keine Sprünge mehr bei kurzen Aussetzern); Qualitäts-/Debug-States ergänzt."
+        ]
       }
     },
     "title": "NexoWatt VIS",

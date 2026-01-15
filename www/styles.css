@@ -1014,6 +1014,17 @@ body {
 }
 
 
+.nw-config-badge--auto {
+  border-color: rgba(59, 130, 246, 0.75);
+  color: #bfdbfe;
+}
+
+.nw-config-badge--override {
+  border-color: rgba(34, 197, 94, 0.75);
+  color: #bbf7d0;
+}
+
+
 .nw-config-empty {
   font-size: 0.8rem;
   color: #9ca3af;
@@ -1068,6 +1079,49 @@ body {
   font-weight: 500;
   text-align: right;
   color: #a5b4fc;
+}
+
+
+/* App-Center: Konfigurations-Item (links Beschreibung, rechts Controls) */
+.nw-config-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 2fr);
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(31, 41, 55, 0.9);
+}
+
+.nw-config-item__left {
+  min-width: 0;
+}
+
+.nw-config-item__right {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nw-config-item__title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.nw-config-item__subtitle {
+  font-size: 0.72rem;
+  color: #9ca3af;
+}
+
+.nw-config-item__hint {
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: rgba(203, 213, 225, 0.85);
+  line-height: 1.25;
 }
 
 /* Energiefluss-Slots (App-Center): optionale Verbraucher/Erzeuger */

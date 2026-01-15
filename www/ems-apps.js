@@ -155,15 +155,41 @@
 
   // Energiefluss-Monitor: Basis-Datapoints (VIS & Algorithmen)
   const FLOW_BASE_DP_FIELDS = [
-    { key: 'gridBuyPower', label: 'Netz Bezug (W)', placeholder: '… (Import)' },
-    { key: 'gridSellPower', label: 'Netz Einspeisung (W)', placeholder: '… (Export)' },
-    { key: 'pvPower', label: 'PV Leistung (W)', placeholder: '' },
-    { key: 'consumptionTotal', label: 'Verbrauch Gesamt (W)', placeholder: '' },
-    { key: 'consumptionEvcs', label: 'E‑Mobilität (W) (optional)', placeholder: 'optional – Wallbox/EVCS Verbrauch' },
-    { key: 'storageChargePower', label: 'Batterie Laden (W)', placeholder: 'optional – getrennt (falls vorhanden)' },
-    { key: 'storageDischargePower', label: 'Batterie Entladen (W)', placeholder: 'optional – getrennt (falls vorhanden)' },
-    { key: 'batteryPower', label: 'Batterie Leistung (W) (Fallback, Vorzeichen)', placeholder: 'optional – falls nur ein DP vorhanden' },
-    { key: 'storageSoc', label: 'Speicher SoC (%)', placeholder: '' }
+    { key: 'gridBuyPower', label: 'Netz Bezug (W)', placeholder: '… (Import)', required: true,
+      hint: 'Pflicht: Import-Leistung am Netzverknüpfungspunkt (NVP).' },
+    { key: 'gridSellPower', label: 'Netz Einspeisung (W)', placeholder: '… (Export)', required: true,
+      hint: 'Pflicht: Export-Leistung am Netzverknüpfungspunkt (NVP).' },
+
+    // PV: Optional – wenn leer wird automatisch summiert (Devices + optional DC-PV aus Speicherfarm)
+    { key: 'pvPower', label: 'PV Leistung (W)', placeholder: 'leer lassen für Auto‑Summe', auto: true,
+      hintAuto: 'Auto: PV‑Summe aus allen PV‑Wechselrichtern (nexowatt-devices) + DC‑PV aus Speicherfarm (wenn aktiv). Zusätzliche Erzeuger separat im Tab „Erzeuger“.',
+      hintOverride: 'Override aktiv: PV wird aus diesem Datenpunkt genommen (Auto‑Summe inkl. DC‑PV wird deaktiviert).' },
+
+    // Gebäude: Optional – wenn leer wird Verbrauch bilanziert (PV + Netz + Batterie + Erzeuger)
+    { key: 'consumptionTotal', label: 'Verbrauch Gesamt (W)', placeholder: 'leer lassen für Auto‑Bilanz', auto: true,
+      hintAuto: 'Auto: Gebäudeverbrauch wird bilanziert (PV + Netz + Batterie + Erzeuger‑Slots).',
+      hintOverride: 'Override aktiv: Gebäudeverbrauch wird direkt aus diesem Datenpunkt verwendet (Bilanz deaktiviert).' },
+
+    // EV: Optional – wenn leer wird EVCS‑Summe genutzt (wenn EVCS aktiv)
+    { key: 'consumptionEvcs', label: 'E‑Mobilität (W) (optional)', placeholder: 'optional – leer = EVCS‑Summe', auto: true,
+      hintAuto: 'Auto: E‑Mobilität wird aus EVCS‑Summenleistung genutzt (wenn EVCS aktiv).',
+      hintOverride: 'Override aktiv: EV‑Leistung wird aus diesem Datenpunkt genutzt.' },
+
+    // Batterie: Optional – wenn leer werden Werte aus Speicher/Speicherfarm genutzt
+    { key: 'storageChargePower', label: 'Batterie Laden (W)', placeholder: 'optional – leer = Auto', auto: true,
+      hintAuto: 'Auto: Ladeleistung kommt aus Speicher / Speicherfarm. Override optional.',
+      hintOverride: 'Override aktiv: Ladeleistung wird aus diesem Datenpunkt genutzt.' },
+    { key: 'storageDischargePower', label: 'Batterie Entladen (W)', placeholder: 'optional – leer = Auto', auto: true,
+      hintAuto: 'Auto: Entladeleistung kommt aus Speicher / Speicherfarm. Override optional.',
+      hintOverride: 'Override aktiv: Entladeleistung wird aus diesem Datenpunkt genutzt.' },
+
+    // Fallback, falls ein System nur einen Signed‑Leistungs‑DP liefert
+    { key: 'batteryPower', label: 'Batterie Leistung (W) (Fallback, Vorzeichen)', placeholder: 'optional – Signed (-Laden/+Entladen)',
+      hint: 'Optional: Nur verwenden, wenn kein Laden/Entladen getrennt verfügbar ist (Signed: - Laden / + Entladen).' },
+
+    { key: 'storageSoc', label: 'Speicher SoC (%)', placeholder: 'leer lassen für Auto', auto: true,
+      hintAuto: 'Auto: SoC kommt aus Speicher / Speicherfarm (Median/Ø). Override möglich.',
+      hintOverride: 'Override aktiv: SoC wird aus diesem Datenpunkt genutzt.' }
   ];
 
   // Energiefluss‑Monitor: optionale Verbraucher/Erzeuger
@@ -663,18 +689,30 @@
       left.appendChild(title);
       left.appendChild(sub);
 
+      const inputId = (options && options.idPrefix ? options.idPrefix : 'dp_') + field.key;
+
+      // Optional: erklärender Hinweistext (Auto/Override/Info)
+      let hintEl = null;
+      if (field.hintAuto || field.hintOverride || field.hint) {
+        hintEl = document.createElement('div');
+        hintEl.className = 'nw-config-item__hint';
+        hintEl.id = 'hint_' + inputId;
+        left.appendChild(hintEl);
+      }
+
       const right = document.createElement('div');
       right.className = 'nw-config-item__right';
       right.style.display = 'flex';
       right.style.gap = '8px';
       right.style.alignItems = 'center';
+      right.style.flexWrap = 'wrap';
 
       const input = document.createElement('input');
       input.className = 'nw-config-input';
       input.type = 'text';
       input.placeholder = field.placeholder || '';
       input.value = valueOrEmpty(getter(field.key));
-      input.id = (options && options.idPrefix ? options.idPrefix : 'dp_') + field.key;
+      input.id = inputId;
 
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -682,12 +720,20 @@
       btn.textContent = 'Auswählen…';
       btn.addEventListener('click', () => openDpModal(input.id));
 
-      input.dataset.dpInput = '1';
-      input.addEventListener('change', () => { setter(field.key, input.value.trim()); scheduleValidation(200); });
-
       right.appendChild(input);
       right.appendChild(btn);
 
+      // Mode badge (Pflicht / Auto / Override) – nur wenn relevant
+      let modeBadge = null;
+      if (field.required || field.auto) {
+        modeBadge = document.createElement('span');
+        modeBadge.className = 'nw-config-badge nw-config-badge--idle';
+        modeBadge.id = 'mode_' + input.id;
+        modeBadge.textContent = '—';
+        right.appendChild(modeBadge);
+      }
+
+      // Validation badge (existiert / warn / error)
       const badge = document.createElement('span');
       badge.className = 'nw-config-badge nw-config-badge--idle';
       badge.id = 'val_' + input.id;
@@ -697,6 +743,43 @@
       row.appendChild(left);
       row.appendChild(right);
 
+      const updateMeta = () => {
+        const v = String(input.value || '').trim();
+        const isSet = !!v;
+
+        if (modeBadge) {
+          if (field.required) {
+            modeBadge.textContent = 'PFLICHT';
+            modeBadge.className = 'nw-config-badge ' + (isSet ? 'nw-config-badge--ok' : 'nw-config-badge--error');
+          } else if (field.auto) {
+            if (isSet) {
+              modeBadge.textContent = 'OVERRIDE';
+              modeBadge.className = 'nw-config-badge nw-config-badge--override';
+            } else {
+              modeBadge.textContent = 'AUTO';
+              modeBadge.className = 'nw-config-badge nw-config-badge--auto';
+            }
+          }
+        }
+
+        if (hintEl) {
+          let t = '';
+          if (field.hintAuto || field.hintOverride) {
+            t = isSet ? (field.hintOverride || '') : (field.hintAuto || '');
+          } else {
+            t = field.hint || '';
+          }
+
+          hintEl.textContent = t;
+          hintEl.style.display = t ? 'block' : 'none';
+        }
+      };
+
+      input.dataset.dpInput = '1';
+      input.addEventListener('input', () => { updateMeta(); });
+      input.addEventListener('change', () => { setter(field.key, input.value.trim()); updateMeta(); scheduleValidation(200); });
+
+      updateMeta();
       return row;
     };
 
@@ -5129,6 +5212,17 @@
         },
         { idPrefix: 'flow_' }
       );
+
+
+      // Hinweis: Minimal erforderlich sind nur Netz Bezug + Netz Einspeisung.
+      // PV/Verbrauch/Batterie können automatisch abgeleitet werden (Override möglich).
+      try {
+        const info = document.createElement('div');
+        info.className = 'nw-config-empty';
+        info.style.margin = '0 0 6px 0';
+        info.textContent = 'Minimal erforderlich: Netz Bezug + Netz Einspeisung. PV/Verbrauch/Batterie werden automatisch abgeleitet, wenn leer (Override möglich).';
+        els.dpFlow.prepend(info);
+      } catch (_e) {}
     }
 
     // Optionale Verbraucher/Erzeuger (max. 10/10) + Namen

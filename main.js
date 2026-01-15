@@ -688,6 +688,10 @@ class NexoWattVis extends utils.Adapter {
       configJson: { type: 'string', role: 'json', def: '[]', name: 'Speicherfarm Konfiguration (JSON, Liste)' },
       groupsJson: { type: 'string', role: 'json', def: '[]', name: 'Gruppenkonfiguration (optional)' },
       totalSoc: { type: 'number', role: 'value', def: 0, name: 'Gesamt SoC (%) (abgeleitet)' },
+      totalSocOnline: { type: 'number', role: 'value', def: 0, name: 'Gesamt SoC (%) Online (Debug)' },
+      socSourcesTotal: { type: 'number', role: 'value', def: 0, name: 'SoC Quellen (gesamt, Debug)' },
+      socSourcesOnline: { type: 'number', role: 'value', def: 0, name: 'SoC Quellen (online, Debug)' },
+      socDegraded: { type: 'boolean', role: 'indicator', def: false, name: 'SoC Qualität reduziert (Debug)' },
       medianSoc: { type: 'number', role: 'value', def: 0, name: 'SoC Median (%) (abgeleitet)' },
       totalChargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt Ladeleistung (W) (abgeleitet)' },
       totalDischargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt Entladeleistung (W) (abgeleitet)' },
@@ -728,6 +732,10 @@ class NexoWattVis extends utils.Adapter {
       configJson: '[]',
       groupsJson: '[]',
       totalSoc: 0,
+      totalSocOnline: 0,
+      socSourcesTotal: 0,
+      socSourcesOnline: 0,
+      socDegraded: false,
       medianSoc: 0,
       totalChargePowerW: 0,
       totalDischargePowerW: 0,
@@ -1037,9 +1045,20 @@ class NexoWattVis extends utils.Adapter {
       let totalPv = 0;
       let online = 0;
       let configured = 0;
-      let socWeighted = 0;
-      let socWeight = 0;
-      const socList = [];
+
+      // SoC aggregation must be stable in Farm mode even when a storage
+      // temporarily stops responding (adapter hiccups).
+      // We therefore aggregate SoC from the *last known* value per storage
+      // (independent of the online flag) and expose additional quality flags.
+      let socWeightedAll = 0;
+      let socWeightAll = 0;
+      let socWeightedOnline = 0;
+      let socWeightOnline = 0;
+      const socListAll = [];
+      const socListOnline = [];
+      let socSourcesTotal = 0;
+      let socSourcesOnline = 0;
+
       const statusRows = [];
 
       for (const row of list) {
@@ -1141,25 +1160,72 @@ class NexoWattVis extends utils.Adapter {
           offlineReason = 'no_data';
         }
 
+        // ---------------------------------------------------------------------
+        // SoC read (stable aggregation)
+        // ---------------------------------------------------------------------
+        // Even when a storage becomes temporarily offline (e.g. adapter hang),
+        // the farm SoC must not jump to a different value. We therefore use
+        // the last known SoC per storage and keep contributing it to the farm
+        // SoC aggregation. The UI can still show the storage as Offline via
+        // status.online/offlineReason.
+
+        if (!this._nwSfSocCache) this._nwSfSocCache = new Map();
+
+        let socVal = NaN;
+        let socFromCache = false;
+        let socTs = NaN;
+
+        // Prefer a stable key derived from the device base. Fallback to socId/name.
+        const socCacheKey = (devBase ? (devBase + '::soc') : '') || (socId ? ('id::' + socId) : status.name);
+
+        if (socId) {
+          const stSoc = await getState(socId);
+          if (stSoc && stSoc.val !== undefined && stSoc.val !== null) {
+            const v = await readNumber(socId, 'soc', { allowStale: true });
+            if (Number.isFinite(v)) {
+              socVal = v;
+              socTs = (typeof stSoc.ts === 'number' && Number.isFinite(stSoc.ts)) ? stSoc.ts : now;
+              this._nwSfSocCache.set(socCacheKey, { val: socVal, ts: socTs });
+            }
+          }
+        }
+
+        if (!Number.isFinite(socVal)) {
+          const cached = this._nwSfSocCache.get(socCacheKey);
+          if (cached && Number.isFinite(cached.val)) {
+            socVal = cached.val;
+            socFromCache = true;
+            socTs = (typeof cached.ts === 'number' && Number.isFinite(cached.ts)) ? cached.ts : NaN;
+          }
+        }
+
+        if (Number.isFinite(socVal)) {
+          status.soc = socVal;
+          if (socFromCache) status.socFromCache = true;
+          if (Number.isFinite(socTs)) status.socAgeSec = Math.max(0, Math.floor((now - socTs) / 1000));
+
+          socListAll.push(socVal);
+          socWeightedAll += socVal * w;
+          socWeightAll += w;
+          socSourcesTotal++;
+
+          if (isOnline) {
+            socListOnline.push(socVal);
+            socWeightedOnline += socVal * w;
+            socWeightOnline += w;
+            socSourcesOnline++;
+          }
+        }
+
         status.online = !!isOnline;
         if (!isOnline) {
           status.offlineReason = offlineReason;
           statusRows.push(status);
           continue;
         }
-
         // ---------------------------------------------------------------------
-        // Read values (always show last known value while online)
+        // Read values (powers)
         // ---------------------------------------------------------------------
-        if (socId) {
-          const soc = await readNumber(socId, 'soc', { allowStale: true });
-          if (Number.isFinite(soc)) {
-            status.soc = soc;
-            socList.push(soc);
-            socWeighted += soc * w;
-            socWeight += w;
-          }
-        }
 
         let usedSigned = false;
 
@@ -1219,19 +1285,24 @@ class NexoWattVis extends utils.Adapter {
         statusRows.push(status);
         online++;
       }
-
       const medianSoc = (() => {
-        if (!socList || !socList.length) return 0;
-        const arr = socList.slice().sort((a, b) => a - b);
+        if (!socListAll || !socListAll.length) return 0;
+        const arr = socListAll.slice().sort((a, b) => a - b);
         const mid = Math.floor(arr.length / 2);
         if (arr.length % 2) return arr[mid];
         return (arr[mid - 1] + arr[mid]) / 2;
       })();
 
-      const totalSoc = socWeight > 0 ? (socWeighted / socWeight) : 0;
+      const totalSoc = socWeightAll > 0 ? (socWeightedAll / socWeightAll) : 0;
+      const totalSocOnline = socWeightOnline > 0 ? (socWeightedOnline / socWeightOnline) : 0;
+      const socDegraded = (socSourcesTotal > 0 && socSourcesOnline >= 0 && socSourcesOnline < socSourcesTotal) || (online < configured);
 
       await this.setStateAsync('storageFarm.totalSoc', { val: Math.round(totalSoc * 10) / 10, ack: true });
       await this.setStateAsync('storageFarm.medianSoc', { val: Math.round(medianSoc * 10) / 10, ack: true });
+      await this.setStateAsync('storageFarm.totalSocOnline', { val: Math.round(totalSocOnline * 10) / 10, ack: true });
+      await this.setStateAsync('storageFarm.socSourcesTotal', { val: socSourcesTotal, ack: true });
+      await this.setStateAsync('storageFarm.socSourcesOnline', { val: socSourcesOnline, ack: true });
+      await this.setStateAsync('storageFarm.socDegraded', { val: !!socDegraded, ack: true });
       await this.setStateAsync('storageFarm.totalChargePowerW', { val: Math.round(totalCharge), ack: true });
       await this.setStateAsync('storageFarm.totalDischargePowerW', { val: Math.round(totalDischarge), ack: true });
       await this.setStateAsync('storageFarm.totalPvPowerW', { val: Math.round(totalPv), ack: true });
@@ -1244,6 +1315,10 @@ class NexoWattVis extends utils.Adapter {
         const now = Date.now();
         this.updateValue('storageFarm.totalSoc', Math.round(totalSoc * 10) / 10, now);
         this.updateValue('storageFarm.medianSoc', Math.round(medianSoc * 10) / 10, now);
+        this.updateValue('storageFarm.totalSocOnline', Math.round(totalSocOnline * 10) / 10, now);
+        this.updateValue('storageFarm.socSourcesTotal', socSourcesTotal, now);
+        this.updateValue('storageFarm.socSourcesOnline', socSourcesOnline, now);
+        this.updateValue('storageFarm.socDegraded', !!socDegraded, now);
         this.updateValue('storageFarm.totalChargePowerW', Math.round(totalCharge), now);
         this.updateValue('storageFarm.totalDischargePowerW', Math.round(totalDischarge), now);
         this.updateValue('storageFarm.totalPvPowerW', Math.round(totalPv), now);
@@ -8548,7 +8623,7 @@ return res.json(out);
       // Tariff/charging settings
       'dynamicTariff','storagePower','price','priority','tariffMode','evcsMaxPower','evcsCount'
     ];
-    const storageFarmLocalKeys = ['enabled','mode','configJson','groupsJson','totalSoc','medianSoc','totalChargePowerW','totalDischargePowerW','totalPvPowerW','storagesOnline','storagesTotal','storagesStatusJson'];
+    const storageFarmLocalKeys = ['enabled', 'mode', 'configJson', 'groupsJson', 'totalSoc', 'medianSoc', 'totalSocOnline', 'socSourcesTotal', 'socSourcesOnline', 'socDegraded', 'totalChargePowerW', 'totalDischargePowerW', 'totalPvPowerW', 'storagesOnline', 'storagesTotal', 'storagesStatusJson'];
     // Weitere lokale States, die in der VIS angezeigt werden sollen (ohne Admin-Mapping)
     // Wichtig: Diese Keys müssen auch dann funktionieren, wenn sie NICHT im Admin unter
     // "Datenpunkte" gemappt wurden. Daher wird im Subscribe-Loop unten auf die lokalen
