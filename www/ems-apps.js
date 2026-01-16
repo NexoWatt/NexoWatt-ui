@@ -3215,9 +3215,11 @@
         const chipFeed = mkBadge('Einsp. W', !!inv.feedInLimitWId);
         const chipPvW = mkBadge('PV W', !!inv.pvLimitWId);
         const chipPvPct = mkBadge('PV %', !!inv.pvLimitPctId);
+        const chipPvRead = mkBadge('PV Ist', !!inv.pvPowerReadId);
         chips.appendChild(chipFeed);
         chips.appendChild(chipPvW);
         chips.appendChild(chipPvPct);
+        chips.appendChild(chipPvRead);
 
         const editBtn = document.createElement('button');
         editBtn.className = 'nw-config-mini-btn';
@@ -3244,6 +3246,10 @@
 
         const advGrid = document.createElement('div');
         advGrid.className = 'nw-flow-ctrl-grid';
+        advGrid.appendChild(mkDpField('PV‑Leistung (W) (Read)', `gc_${groupPrefix}_inv_${idx}_pvRead`, inv.pvPowerReadId || '', (v) => {
+          inv.pvPowerReadId = v;
+          chipPvRead.className = 'nw-config-badge ' + (v ? 'nw-config-badge--ok' : 'nw-config-badge--idle');
+        }, 'Optional: Für PV‑Gesamtleistung (Energiefluss), wenn kein globaler PV‑Datenpunkt gemappt ist.'));
         advGrid.appendChild(mkDpField('Einspeise‑Limit (W) (Write)', `gc_${groupPrefix}_inv_${idx}_feedIn`, inv.feedInLimitWId || '', (v) => {
           inv.feedInLimitWId = v;
           chipFeed.className = 'nw-config-badge ' + (v ? 'nw-config-badge--ok' : 'nw-config-badge--idle');
@@ -3260,7 +3266,7 @@
         const hint = document.createElement('div');
         hint.className = 'nw-config-field-hint';
         hint.style.marginTop = '6px';
-        hint.textContent = 'Hinweis: Setze mindestens einen passenden Write‑Datenpunkt (je WR), damit die Regelung Limits schreiben kann.';
+        hint.textContent = 'Hinweis: Setze mindestens einen passenden Write‑Datenpunkt (je WR), damit die Regelung Limits schreiben kann. PV‑Leistung (Read) ist optional und wird für die PV‑Summierung genutzt.';
 
         advanced.appendChild(advGrid);
         advanced.appendChild(hint);
@@ -3303,7 +3309,7 @@
         add.type = 'button';
         add.textContent = 'Wechselrichter hinzufügen';
         add.addEventListener('click', () => {
-          list.push({ name: '', kwp: 0, feedInLimitWId: '', pvLimitWId: '', pvLimitPctId: '' });
+          list.push({ name: '', kwp: 0, pvPowerReadId: '', feedInLimitWId: '', pvLimitWId: '', pvLimitPctId: '' });
           buildGridConstraintsUI();
           scheduleValidation(200);
         });
@@ -5602,6 +5608,7 @@
           const feedInLimitWId = _nwGetAlias(dev, 'ctrl.feedInLimitW') || '';
           const pvLimitWId = _nwGetAlias(dev, 'ctrl.powerLimitW') || '';
           const pvLimitPctId = _nwGetAlias(dev, 'ctrl.powerLimitPct') || _nwGetAlias(dev, 'ctrlPvLimitPct') || '';
+          const pvPowerReadId = _nwGetAlias(dev, 'r.pvPower') || _nwGetAlias(dev, 'r.power') || _nwGetAlias(dev, 'r.activePower') || (dev && dev.dp && dev.dp.powerW ? String(dev.dp.powerW).trim() : '') || '';
 
           if (!feedInLimitWId && !pvLimitWId && !pvLimitPctId) return;
 
@@ -5622,6 +5629,7 @@
             if (!String(match.feedInLimitWId || '').trim() && feedInLimitWId) match.feedInLimitWId = feedInLimitWId;
             if (!String(match.pvLimitWId || '').trim() && pvLimitWId) match.pvLimitWId = pvLimitWId;
             if (!String(match.pvLimitPctId || '').trim() && pvLimitPctId) match.pvLimitPctId = pvLimitPctId;
+            if (!String(match.pvPowerReadId || '').trim() && pvPowerReadId) match.pvPowerReadId = pvPowerReadId;
 
             if (JSON.stringify(match) !== before) {
               pvUpdated++;
@@ -5633,7 +5641,8 @@
               kwp: '',
               feedInLimitWId,
               pvLimitWId,
-              pvLimitPctId
+              pvLimitPctId,
+              pvPowerReadId
             });
             pvAdded++;
             changed = true;
