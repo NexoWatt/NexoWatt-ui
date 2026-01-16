@@ -1086,7 +1086,10 @@ class NexoWattVis extends utils.Adapter {
         const cap = Number(row.capacityKWh);
         const w = Number.isFinite(cap) && cap > 0 ? cap : 1;
 
-        const pvId = String(row.pvPowerId || '').trim();
+        const coupling = String(row.coupling || '').trim().toLowerCase();
+        const isDcCoupled = coupling === 'dc';
+
+        let pvId = String(row.pvPowerId || '').trim();
 
         // ---------------------------------------------------------------------
         // Online/Offline logic
@@ -1103,6 +1106,27 @@ class NexoWattVis extends utils.Adapter {
         const connectedId = devBase ? `${devBase}.comm.connected` : '';
         const offlineId = devBase ? `${devBase}.alarm.offline` : '';
         const lastErrorId = devBase ? `${devBase}.comm.lastError` : '';
+
+        // Auto-PV detection (DC-coupled storages):
+        // If pvPowerId is not configured, try to use the standardized nexowatt-devices alias datapoints.
+        // This keeps the farm PV sum correct even when the installer did not map PV (DC) manually.
+        if (!pvId && isDcCoupled && devBase) {
+          const candidates = [
+            `${devBase}.r.pvPower`,
+            `${devBase}.r.pvPowerW`,
+            `${devBase}.r.pvPowerDc`,
+            `${devBase}.r.pvPowerDC`,
+          ];
+          for (const cid of candidates) {
+            const st = await getState(cid);
+            if (st && st.val !== undefined && st.val !== null) {
+              pvId = cid;
+              // Debug only: included in storagesStatusJson
+              status.pvAutoId = cid;
+              break;
+            }
+          }
+        }
 
         const stConn = connectedId ? await getState(connectedId) : null;
         const stOff = offlineId ? await getState(offlineId) : null;
@@ -1272,7 +1296,7 @@ class NexoWattVis extends utils.Adapter {
         }
 
         // PV-Leistung (nur DC-gekoppelte Speicher) – als positive Größe
-        if (pvId) {
+        if (isDcCoupled && pvId) {
           const v = await readNumber(pvId, 'power', { allowStale: true });
           if (Number.isFinite(v)) {
             let vv = v;

@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.37",
+    "version": "0.6.38",
     "news": {
       "0.6.32": {
         "en": [
@@ -835,6 +835,14 @@
         ],
         "de": [
           "Tarif: SoC-basierte Ladehysterese (günstig: Laden nur unter 98%; ab 100% 0 W/ruhen solange günstig)."
+        ]
+      },
+      "0.6.38": {
+        "en": [
+          "Storagefarm: PV (DC) is now auto-detected from nexowatt-devices (aliases.r.pvPower) when not explicitly mapped; fixes missing PV sum in farm mode."
+        ],
+        "de": [
+          "Speicherfarm: PV (DC) wird bei Bedarf automatisch aus nexowatt-devices (aliases.r.pvPower) erkannt, wenn nicht manuell gemappt; behebt fehlende PV-Summe im Farm-Modus."
         ]
       }
     },
