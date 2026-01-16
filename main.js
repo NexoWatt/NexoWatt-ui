@@ -894,11 +894,25 @@ class NexoWattVis extends utils.Adapter {
 
       // If datapoints come from nexowatt-devices, we can infer a stable device base path
       // and use its connected/offline signals for status.
-      const inferDeviceAliasBase = (id) => {
+      const inferDeviceBases = (id) => {
         const sid = String(id || '').trim();
-        if (!sid) return '';
-        const m = sid.match(/^(nexowatt-devices\.\d+\.devices\.[^.]+\.aliases)(?:\.|$)/);
-        return m ? m[1] : '';
+        if (!sid) return [];
+
+        // Support both: "...devices.X.aliases...." and direct "...devices.X...."
+        const mAlias = sid.match(/^(nexowatt-devices\.\d+\.devices\.[^.]+\.aliases)(?:\.|$)/);
+        if (mAlias) {
+          const aliasBase = mAlias[1];
+          const rootBase = aliasBase.replace(/\.aliases$/, '');
+          return [aliasBase, rootBase];
+        }
+
+        const mRoot = sid.match(/^(nexowatt-devices\.\d+\.devices\.[^.]+)(?:\.|$)/);
+        if (mRoot) {
+          const rootBase = mRoot[1];
+          return [`${rootBase}.aliases`, rootBase];
+        }
+
+        return [];
       };
 
       // Robust number parsing (some adapters deliver strings like "4,62 kW")
@@ -1102,21 +1116,46 @@ class NexoWattVis extends utils.Adapter {
         //   (adapter hung → timestamps stop updating)
 
         // Infer device base from nexowatt-devices datapoints
-        const devBase = inferDeviceAliasBase(socId) || inferDeviceAliasBase(signedId) || inferDeviceAliasBase(chgId) || inferDeviceAliasBase(dchgId) || inferDeviceAliasBase(pvId);
-        const connectedId = devBase ? `${devBase}.comm.connected` : '';
-        const offlineId = devBase ? `${devBase}.alarm.offline` : '';
-        const lastErrorId = devBase ? `${devBase}.comm.lastError` : '';
+        // Support both: "...devices.X.aliases...." and direct "...devices.X...." mappings.
+        const devBases = [];
+        const addBases = (id) => {
+          for (const b of inferDeviceBases(id)) {
+            if (b && !devBases.includes(b)) devBases.push(b);
+          }
+        };
+
+        addBases(socId);
+        addBases(signedId);
+        addBases(chgId);
+        addBases(dchgId);
+        addBases(pvId);
+
+        const pickFirstState = async (candidates) => {
+          for (const cid of candidates) {
+            if (!cid) continue;
+            const st = await getState(cid);
+            if (st && st.val !== undefined && st.val !== null) return { id: cid, st };
+          }
+          return { id: '', st: null };
+        };
+
+        const { id: connectedId, st: stConn } = await pickFirstState(devBases.map((b) => `${b}.comm.connected`));
+        const { id: offlineId, st: stOff } = await pickFirstState(devBases.map((b) => `${b}.alarm.offline`));
+        const { id: lastErrorId, st: stErr } = await pickFirstState(devBases.map((b) => `${b}.comm.lastError`));
 
         // Auto-PV detection (DC-coupled storages):
-        // If pvPowerId is not configured, try to use the standardized nexowatt-devices alias datapoints.
+        // If pvPowerId is not configured, try to use standardized nexowatt-devices datapoints.
         // This keeps the farm PV sum correct even when the installer did not map PV (DC) manually.
-        if (!pvId && isDcCoupled && devBase) {
-          const candidates = [
-            `${devBase}.r.pvPower`,
-            `${devBase}.r.pvPowerW`,
-            `${devBase}.r.pvPowerDc`,
-            `${devBase}.r.pvPowerDC`,
-          ];
+        if (!pvId && isDcCoupled && devBases.length) {
+          const candidates = [];
+          for (const b of devBases) {
+            candidates.push(
+              `${b}.r.pvPower`,
+              `${b}.r.pvPowerW`,
+              `${b}.r.pvPowerDc`,
+              `${b}.r.pvPowerDC`,
+            );
+          }
           for (const cid of candidates) {
             const st = await getState(cid);
             if (st && st.val !== undefined && st.val !== null) {
@@ -1127,10 +1166,6 @@ class NexoWattVis extends utils.Adapter {
             }
           }
         }
-
-        const stConn = connectedId ? await getState(connectedId) : null;
-        const stOff = offlineId ? await getState(offlineId) : null;
-        const stErr = lastErrorId ? await getState(lastErrorId) : null;
 
         const connB = stConn ? toBool(stConn.val) : null;
         const offB = stOff ? toBool(stOff.val) : null;
@@ -9068,8 +9103,20 @@ return res.json(out);
         inst.add(i);
       }
 
+      // Only keep real ioBroker adapter instances that actually exist under system.adapter.*
+      const candidates = Array.from(inst).sort();
+      const valid = [];
+      for (const i of candidates) {
+        if (!i || !/^[a-zA-Z0-9_-]+\.[0-9]+$/.test(i)) continue;
+        try {
+          const obj = await this.getForeignObjectAsync(`system.adapter.${i}`);
+          if (!obj) continue;
+          valid.push(i);
+        } catch (_e) {}
+      }
+
       cache.ts = now;
-      cache.instances = Array.from(inst).sort();
+      cache.instances = valid;
       this._notify.watchedInstances = cache;
     } catch (_e) {}
   }
@@ -9203,11 +9250,25 @@ return res.json(out);
 
           for (const c of checks) {
             if (c.ok) continue;
+            const adapterId = (String(c.inst).split('.')[0] || '').toLowerCase();
+            const friendlyMap = {
+              'nexowatt-devices': 'NexoWatt Geräte (Devices)',
+              'modbus': 'Modbus',
+              'mqtt': 'MQTT',
+              'alias': 'Alias-Zuordnungen',
+              'influxdb': 'InfluxDB (Historie)',
+              'sql': 'SQL Datenbank',
+              'history': 'Historie',
+              'email': 'E-Mail Versand',
+            };
+            const friendly = friendlyMap[adapterId] || adapterId || String(c.inst);
+
             active.push({
               id: `adapterDown:${c.inst}`,
               severity: 'critical',
-              title: `Adapter offline: ${c.inst}`,
-              message: `Die Instanz ${c.inst} ist nicht erreichbar (system.adapter.${c.inst}.alive=false).`,
+              title: `Datenquelle offline: ${friendly}`,
+              message: `Es werden keine aktuellen Daten mehr von "${friendly}" empfangen. Bitte prüfen Sie die Verbindung bzw. starten Sie den ioBroker-Adapter neu. (Instanz: ${c.inst})
+Technische Details: system.adapter.${c.inst}.alive=false`,
               persistMs: 60 * 1000,
               repeatMs: 6 * 60 * 60 * 1000,
             });
@@ -9776,6 +9837,26 @@ return res.json(out);
     const gridNet = gridBuy - gridSell;
 
     let pvTotal = Number.isFinite(pvW) ? Math.max(0, pvW) : null;
+
+    // In Farm-/DC-Speicher-Setups kommt ein Teil der PV-Leistung direkt aus den Speichersystemen (DC-PV).
+    // Diese Summe wird unter storageFarm.totalPvPowerW bereitgestellt und soll auch in der Historie/Abrechnung
+    // zur PV-Erzeugung addiert werden (mit einfacher Double-Count-Heuristik analog zum Energiefluss-Monitor).
+    const sfEnabled = !!this._nwGetNumberFromCache('storageFarm.enabled');
+    const pvFarmW = this._nwGetNumberFromCache('storageFarm.totalPvPowerW');
+    if (sfEnabled && Number.isFinite(pvFarmW) && pvFarmW > 0) {
+      const farmAbs = Math.abs(pvFarmW);
+      if (pvTotal === null || pvTotal === 0) {
+        pvTotal = farmAbs;
+      } else {
+        const pvAbs = Math.abs(pvTotal);
+        const relDiff = Math.abs(pvAbs - farmAbs) / Math.max(1, farmAbs);
+        if (relDiff < 0.05) {
+          pvTotal = Math.max(pvAbs, farmAbs);
+        } else {
+          pvTotal = pvAbs + farmAbs;
+        }
+      }
+    }
     let loadTotal = Number.isFinite(loadW) ? Math.max(0, loadW) : null;
     const chg = Number.isFinite(chgW) ? Math.max(0, chgW) : 0;
     const dchg = Number.isFinite(dchgW) ? Math.max(0, dchgW) : 0;
