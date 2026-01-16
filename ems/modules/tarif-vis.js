@@ -23,6 +23,20 @@ class TarifVisModule extends BaseModule {
 
         /** @type {boolean} */
         this._warnedManualPriceMissing = false;
+
+        /**
+         * SoC-basierte Tarif-Ladehysterese ("günstig"-Fenster):
+         * - Start charging when SoC <= start threshold
+         * - Stop charging when SoC >= stop threshold
+         * - Between start/stop we keep the previous decision to avoid flapping.
+         *
+         * This avoids "SoC 100%" batteries being continuously requested to charge.
+         * (The storage-control already blocks at SoC-max, but this makes the intent
+         * explicit and keeps UI/status stable.)
+         *
+         * @type {boolean}
+         */
+        this._tariffChargeLatch = false;
     }
 
     async init() {
@@ -627,17 +641,73 @@ class TarifVisModule extends BaseModule {
             const allowStorageCheap = (prioritaet === 1 || prioritaet === 2);
             const allowEvcsCheap = (prioritaet === 2 || prioritaet === 3);
 
+            // Speicher-SoC (optional, aus Storage-Mapping / Farm-SoC wenn gemappt)
+            const socRaw = this.dp ? this.dp.getNumber('st.socPct', null) : null;
+            const storageSocPct = (typeof socRaw === 'number' && Number.isFinite(socRaw))
+                ? this._clamp(socRaw, 0, 100)
+                : null;
+
+            // Tarif-SoC-Schwellen (Default: Start <= 98%, Stop >= 100%)
+            // Ziel: Wenn Speicher bei 100% ist und Tarif weiterhin günstig ist, soll er ruhen (0 W).
+            // Gleichzeitig vermeiden wir "Flattern" durch eine Start/Stop-Hysterese.
+            let socStartChargePct = this._clamp(this._num(cfgTariff.socStartChargePct, 98), 0, 100);
+            let socStopChargePct = this._clamp(this._num(cfgTariff.socStopChargePct, 100), 0, 100);
+            if (socStartChargePct > socStopChargePct) {
+                const tmp = socStartChargePct;
+                socStartChargePct = socStopChargePct;
+                socStopChargePct = tmp;
+            }
+
             // Sollleistung Speicher: negativ = Laden, positiv = Entladen
+            // Zusätzlich: Im günstigen Tarif-Fenster bei vollem Speicher (SoC=100%) 0 W halten.
             let speicherSollW = 0;
+            let storageFullHold = false;
+            let storageChargeWanted = false;
+
             if (aktivEff && storagePowerAbsW > 0) {
                 // gewünschtes Verhalten:
-                // - günstig  : (optional) Speicher laden
+                // - günstig  : Speicher laden (nur wenn SoC <= Start), bis SoC >= Stop, dann ruhen (0 W)
                 // - neutral/teuer/unbekannt: Speicher entladen (NVP-Regelung)
                 if (tarifState === 'guenstig' && allowStorageCheap) {
-                    speicherSollW = -storagePowerAbsW;
+                    // Default/Fallback: wenn SoC nicht verfügbar ist, verhalte dich wie bisher (laden)
+                    storageChargeWanted = true;
+
+                    if (typeof storageSocPct === 'number' && Number.isFinite(storageSocPct)) {
+                        // Hysterese / Latch
+                        if (this._tariffChargeLatch) {
+                            if (storageSocPct >= (socStopChargePct - 1e-9)) {
+                                this._tariffChargeLatch = false;
+                            }
+                        } else {
+                            if (storageSocPct <= (socStartChargePct + 1e-9)) {
+                                this._tariffChargeLatch = true;
+                            }
+                        }
+
+                        storageChargeWanted = !!this._tariffChargeLatch;
+                        storageFullHold = (!storageChargeWanted) && (storageSocPct >= (socStopChargePct - 1e-9));
+                    }
+
+                    speicherSollW = storageChargeWanted ? -storagePowerAbsW : 0;
                 } else if (tarifState === 'neutral' || tarifState === 'teuer' || tarifState === 'unbekannt') {
+                    // Reset der Lade-Hysterese außerhalb von "günstig"
+                    this._tariffChargeLatch = false;
+                    storageChargeWanted = false;
+                    storageFullHold = false;
                     speicherSollW = storagePowerAbsW;
+                } else {
+                    // Tarif aus/sonstiges: keine Vorgabe
+                    this._tariffChargeLatch = false;
+                    storageChargeWanted = false;
+                    storageFullHold = false;
+                    speicherSollW = 0;
                 }
+            } else {
+                // Wenn Speicher nicht aktiv/konfiguriert ist: Latch zurücksetzen
+                this._tariffChargeLatch = false;
+                storageChargeWanted = false;
+                storageFullHold = false;
+                speicherSollW = 0;
             }
 
             // Netzladen für Ladestationen (globales Gate für Charging-Management):
@@ -726,12 +796,19 @@ if (aktivEff) {
 
   if (tarifState === 'guenstig') {
     if (prioritaet === 1) {
-      statusText = storageCharging ? `${base}: Speicher lädt` : `${base}: keine Speicher-Ladung`;
+      if (storageCharging) {
+        statusText = `${base}: Speicher lädt`;
+      } else if (storageFullHold) {
+        statusText = `${base}: Speicher voll – ruht`;
+      } else {
+        statusText = `${base}: keine Speicher-Ladung`;
+      }
     } else if (prioritaet === 3) {
       statusText = gridChargeAllowed ? `${base}: EVCS freigegeben` : `${base}: EVCS gesperrt`;
     } else {
       const parts = [];
       if (storageCharging) parts.push('Speicher lädt');
+      else if (storageFullHold) parts.push('Speicher voll (ruht)');
       parts.push(gridChargeAllowed ? 'EVCS freigegeben' : 'EVCS gesperrt');
       statusText = `${base}: ${parts.join(' + ')}`;
     }
@@ -774,6 +851,12 @@ await this._setIfChanged('tarif.statusText', statusText);
                 horizonHours: (typeof horizonHours === 'number' && Number.isFinite(horizonHours)) ? horizonHours : null,
                 preisRef: (preisRef !== null && preisRef !== undefined && Number.isFinite(preisRef)) ? preisRef : null,
                 speicherSollW,
+                // SoC-aware charging (cheap window)
+                storageSocPct,
+                socStartChargePct,
+                socStopChargePct,
+                storageChargeWanted,
+                storageFullHold,
                 gridChargeAllowed,
                 dischargeAllowed,
                 ladeparkLimitW: limitW,

@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.36",
+    "version": "0.6.37",
     "news": {
       "0.6.32": {
         "en": [
@@ -827,6 +827,14 @@
         ],
         "de": [
           "Speicherfarm: SoC-Aggregation stabilisiert (keine Sprünge mehr bei kurzen Aussetzern); Qualitäts-/Debug-States ergänzt."
+        ]
+      },
+      "0.6.37": {
+        "en": [
+          "Tariff: SoC-aware storage charging hysteresis (cheap: charge only below 98%; stop at 100% and hold 0 W while full)."
+        ],
+        "de": [
+          "Tarif: SoC-basierte Ladehysterese (günstig: Laden nur unter 98%; ab 100% 0 W/ruhen solange günstig)."
         ]
       }
     },
