@@ -1463,30 +1463,46 @@ try {
     return { enabled, mode, storages, groups };
   }
   async _sfWriteIfChanged(objectId, value) {
-    if (!objectId) return;
-    if (typeof value !== 'number' || !isFinite(value)) return;
+    // Writes a setpoint only when it changed OR a keepalive interval has elapsed.
+    // Returns an object so callers can reliably detect success/failure.
 
-    // Some batteries/EMS devices require a periodic setpoint write (watchdog).
-    // Therefore we re-send unchanged setpoints every keepalive interval.
+    if (!objectId) {
+      return { ok: false, skipped: true, changed: false, reason: 'no_objectId' };
+    }
+
+    // Only allow finite numbers; everything else is a skip (safety).
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return { ok: false, skipped: true, changed: false, reason: 'invalid_value' };
+    }
+
     const now = Date.now();
     const keepaliveMs = 5000;
 
-    const prev = this._sfLastSetpoints.get(objectId);
+    const lastVal = this._sfLastSetpoints.get(objectId);
     const lastTs = this._sfLastSetpointsTs.get(objectId) || 0;
-    const valueChanged = prev === undefined || prev !== value;
-    const stale = now - lastTs >= keepaliveMs;
 
-    if (!valueChanged && !stale) return;
+    const same = (lastVal === value);
+    const age = now - lastTs;
 
-    if (valueChanged) this._sfLastSetpoints.set(objectId, value);
+    // Skip when unchanged and not stale
+    if (same && age < keepaliveMs) {
+      return { ok: true, skipped: true, changed: false, same: true };
+    }
 
     try {
       await this.setForeignStateAsync(objectId, value, false);
+      this._sfLastSetpoints.set(objectId, value);
       this._sfLastSetpointsTs.set(objectId, now);
+      return { ok: true, skipped: false, changed: true, same, keepalive: same && age >= keepaliveMs };
     } catch (e) {
-      this.log.warn(`StorageFarm: Failed to write setpoint ${objectId}=${value}: ${e}`);
+      const msg = (e && e.message) ? e.message : String(e);
+      if (this.log && typeof this.log.warn === 'function') {
+        this.log.warn(`[storageFarm] Failed to write setpoint ${objectId}=${value}: ${msg}`);
+      }
+      return { ok: false, skipped: false, changed: false, error: msg };
     }
   }
+
 
   async applyStorageFarmTargetW(targetW, meta = {}) {
     const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
@@ -1658,29 +1674,29 @@ try {
       }
 
       const r = { name: s.name || '', chargeW, dischargeW, ok: true, writes: {} };
-
       if (s.setSignedPowerId) {
         const wr = await this._sfWriteIfChanged(s.setSignedPowerId, outSignedW);
         r.writes.signed = wr;
         if (!wr.ok) r.ok = false;
         if (wr.ok) anyOkRelevant = true;
-      } else {
-        // Write charge setpoint
-        if (s.setChargePowerId) {
-          const wr = await this._sfWriteIfChanged(s.setChargePowerId, outChargeW);
-          r.writes.charge = wr;
-          if (!wr.ok) r.ok = false;
-          if (direction === 'charge' && wr.ok) anyOkRelevant = true;
-          if (direction === 'idle' && wr.ok) anyOkRelevant = true;
-        }
-        // Write discharge setpoint
-        if (s.setDischargePowerId) {
-          const wr = await this._sfWriteIfChanged(s.setDischargePowerId, outDischargeW);
-          r.writes.discharge = wr;
-          if (!wr.ok) r.ok = false;
-          if (direction === 'discharge' && wr.ok) anyOkRelevant = true;
-          if (direction === 'idle' && wr.ok) anyOkRelevant = true;
-        }
+      }
+
+      // Write charge setpoint (also when signed is configured; keeps both paths consistent)
+      if (s.setChargePowerId) {
+        const wr = await this._sfWriteIfChanged(s.setChargePowerId, outChargeW);
+        r.writes.charge = wr;
+        if (!wr.ok) r.ok = false;
+        if (direction === 'charge' && wr.ok) anyOkRelevant = true;
+        if (direction === 'idle' && wr.ok) anyOkRelevant = true;
+      }
+
+      // Write discharge setpoint (also when signed is configured; keeps both paths consistent)
+      if (s.setDischargePowerId) {
+        const wr = await this._sfWriteIfChanged(s.setDischargePowerId, outDischargeW);
+        r.writes.discharge = wr;
+        if (!wr.ok) r.ok = false;
+        if (direction === 'discharge' && wr.ok) anyOkRelevant = true;
+        if (direction === 'idle' && wr.ok) anyOkRelevant = true;
       }
 
       results.push(r);
@@ -8686,7 +8702,54 @@ return res.json(out);
       return [];
     }
   }
+  _nwNormalizeUnit(unit) {
+    return String(unit || '').replace(/\s+/g, '').toLowerCase();
+  }
+
+  _nwPowerScaleToWFromUnit(unit) {
+    const u = this._nwNormalizeUnit(unit);
+    if (u === 'w') return 1;
+    if (u === 'kw') return 1000;
+    if (u === 'mw') return 1000000;
+    if (u === 'gw') return 1000000000;
+    return 1;
+  }
+
+  _nwIsMappedPowerKey(key) {
+    if (!key) return false;
+    // Base flow datapoints
+    if (['gridBuyPower','gridSellPower','gridPointPower','pvPower','consumptionTotal','consumptionEvcs','storageChargePower','storageDischargePower'].includes(key)) return true;
+    // Slot-based flow datapoints
+    if ((key.startsWith('producerSlots.') || key.startsWith('consumerSlots.')) && key.endsWith('.power')) return true;
+    return false;
+  }
+
+  _nwScaleMappedValue(key, objectId, val) {
+    if (!this._nwIsMappedPowerKey(key)) return val;
+    if (typeof val !== 'number' || !isFinite(val)) return val;
+    const factor = this._nwForeignPowerScaleCache.get(objectId) || 1;
+    return val * factor;
+  }
+
+  async _nwPrimeForeignPowerScale(objectId) {
+    if (!objectId || typeof objectId !== 'string') return;
+    if (this._nwForeignUnitCache.has(objectId)) return;
+    try {
+      const obj = await this.getForeignObjectAsync(objectId);
+      const unit = obj && obj.common ? obj.common.unit : undefined;
+      const norm = this._nwNormalizeUnit(unit);
+      this._nwForeignUnitCache.set(objectId, norm);
+      this._nwForeignPowerScaleCache.set(objectId, this._nwPowerScaleToWFromUnit(norm));
+    } catch (e) {
+      // Ignore; keep default factor=1
+      this._nwForeignUnitCache.set(objectId, '');
+      this._nwForeignPowerScaleCache.set(objectId, 1);
+    }
+  }
+
   async subscribeConfiguredStates() {
+    this._nwForeignUnitCache.clear();
+    this._nwForeignPowerScaleCache.clear();
     const dps = (this.config && this.config.datapoints) || {};
     const settings = (this.config && this.config.settings) || {};
     const installer = (this.config && this.config.installer) || {};
@@ -8744,9 +8807,10 @@ return res.json(out);
 
       // get initial value
       try {
+        await this._nwPrimeForeignPowerScale(id);
         const state = await this.getForeignStateAsync(id);
         if (state && state.val !== undefined) {
-          this.updateValue(key, state.val, state.ts);
+          this.updateValue(key, this._nwScaleMappedValue(key, id, state.val), state.ts);
         }
       } catch (e) {
         this.log.warn(`Cannot read initial state for ${key} (${id}): ${e.message}`);
@@ -8774,9 +8838,10 @@ return res.json(out);
 
         // prime initial value
         try {
+          await this._nwPrimeForeignPowerScale(id);
           const st = await this.getForeignStateAsync(id);
           if (st && st.val !== undefined) {
-            this.updateValue(slot.stateKey, st.val, st.ts);
+            this.updateValue(slot.stateKey, this._nwScaleMappedValue(slot.stateKey, id, st.val), st.ts);
           }
         } catch (e) {
           this.log.warn(`Cannot read initial flow slot state for ${slot.stateKey} (${id}): ${e.message}`);
@@ -8801,7 +8866,7 @@ return res.json(out);
     try {
       const key = this.keyFromId(id);
       if (key) {
-        this.updateValue(key, state.val, state.ts);
+        this.updateValue(key, this._nwScaleMappedValue(key, id, state.val), state.ts);
       }
 
       // Auto‑PV: cache PV‑Inverter values from nexowatt-devices (no manual mapping)

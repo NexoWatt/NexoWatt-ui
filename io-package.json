@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.44",
+    "version": "0.6.45",
     "news": {
       "0.6.44": {
         "en": "Fix: Auto unit scaling for power/energy datapoints (kW/kWh sources now work without manual conversion); Grid sign invert option added in Allgemein; StorageFarm keepalive writes setpoints every 5s to satisfy watchdogs.",
@@ -870,6 +870,10 @@
           "PV-Summe: PV-Read-Datenpunkte aus der EVU/PV-Regelung (Wechselrichterlisten) werden (optional) berücksichtigt – zusätzlich zu automatisch erkannten PV_INVERTER-Geräten.",
           "Speicherfarm: DC-PV Auto-Erkennung greift jetzt auch, wenn pvPowerId auf kein State zeigt (z.B. Channel) – dadurch bleibt die PV-Summe korrekt."
         ]
+      },
+      "0.6.45": {
+        "en": "Fix: StorageFarm setpoint writes are now applied for all storages (including split charge/discharge setpoints). Fix: /api/state + Energiefluss monitor now auto-scales mapped kW power datapoints to W (grid import/export + derived loads).",
+        "de": "Fix: Speicherfarm Setpoints werden jetzt für alle Speicher sauber geschrieben (inkl. getrennter Lade-/Entlade-Setpoints). Fix: /api/state + Energiefluss-Monitor skaliert gemappte kW-Leistungs-Datenpunkte automatisch auf W (Netz Bezug/Einspeisung + abgeleitete Verbräuche)."
       }
     },
     "title": "NexoWatt VIS",
