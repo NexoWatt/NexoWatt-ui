@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.45",
+    "version": "0.6.46",
     "news": {
+      "0.6.46": {
+        "en": "Fix: History tooltip/crosshair now aligns with chart margins; prevents duplicate SSE connections on the history page; increases getHistory count to avoid missing points. Week view uses 10-minute step to match Influx cadence.",
+        "de": "Fix: Historie-Tooltip/Fadenkreuz passt wieder zu den Chart-Rändern; verhindert doppelte SSE-Verbindungen auf der Historie-Seite; getHistory-Count wird passend zum Zeitraum gesetzt, um fehlende Punkte zu vermeiden. Wochenansicht nutzt 10-Minuten-Raster (Influx)."
+      },
       "0.6.44": {
         "en": "Fix: Auto unit scaling for power/energy datapoints (kW/kWh sources now work without manual conversion); Grid sign invert option added in Allgemein; StorageFarm keepalive writes setpoints every 5s to satisfy watchdogs.",
         "de": "Fix: Automatische Einheiten-Skalierung für Leistungs/Energie-Datenpunkte (kW/kWh funktioniert ohne manuelle Umrechnung); Option zum Invertieren des Netz-Vorzeichens in Allgemein ergänzt; StorageFarm Keepalive schreibt Setpoints alle 5s (Watchdog)."
@@ -1057,7 +1061,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.43",
+  "version": "0.6.46",
   "news": {
     "0.6.43": {
       "en": "Fix: Historie in StorageFarm uses farm totals for charge/discharge/SoC (SoC shown again).",

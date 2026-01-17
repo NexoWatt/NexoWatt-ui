@@ -5962,6 +5962,18 @@ app.get('/api/history', async (req, res) => {
           return out;
         };
 
+        // Many history adapters (incl. InfluxDB) have a default return limit (often 2000 points).
+        // Week ranges with small steps can exceed that and lead to missing tail buckets.
+        // We therefore request a count big enough for the given range/step.
+        const histCount = (() => {
+          const span = Math.max(0, end - start);
+          const st = Math.max(1, Number(stepMs) || 60000);
+          const est = Math.ceil(span / st) + 20;
+          const min = 2000;
+          const max = 60000;
+          return Math.min(max, Math.max(min, est));
+        })();
+
         // Prefer explicit mapping from config.history.datapoints;
         // if absent, fall back to the adapter's canonical 'historie.*' states.
         const ids = {
@@ -6038,7 +6050,7 @@ app.get('/api/history', async (req, res) => {
 
         const ask = (id) => new Promise(resolve => {
           if (!id) return resolve({ id, values: [] });
-          const options = { start, end, step: stepS * 1000, aggregate: 'average', addId: false, ignoreNull: true };
+          const options = { start, end, step: stepMs, aggregate: 'average', addId: false, ignoreNull: true, count: histCount, returnNewestEntries: true };
           let done = false;
           const timer = setTimeout(() => {
             if (done) return;

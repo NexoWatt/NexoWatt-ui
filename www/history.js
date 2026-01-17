@@ -171,12 +171,7 @@ function draw(){
     const H = canvas.height;
     // Leave enough room for axis labels (rounded canvas corners clip text near the edges).
     // On small screens we keep margins compact.
-    const L = (W < 520) ? 54 : 64;
-    const R = (W < 520) ? 48 : 56;
-    // Extra top padding so axis titles (kW / %) and the top-most tick values do not clash
-    // and are not clipped by rounded card corners.
-    const T = (W < 520) ? 20 : 24;
-    const B = 42;
+    const { L, R, T, B } = getChartMargins();
     ctx.clearRect(0,0,W,H);
     ctx.fillStyle='#0e1216'; ctx.fillRect(0,0,W,H);
 
@@ -441,10 +436,10 @@ function draw(){
 async function load(){
     const from = new Date(document.getElementById('from').value || new Date(Date.now()-24*3600*1000).toISOString().slice(0,16));
     const to   = new Date(document.getElementById('to').value   || new Date().toISOString().slice(0,16));
-    // NOTE: Historie wird in Influx im 10‑Minuten‑Raster geschrieben.
-    // Damit die Linien nicht „treppenförmig“ werden (Hold‑Last auf zu kleinem Raster),
-    // holen wir in der Tagesansicht die Daten auch in 10‑Minuten‑Schritten.
-    const step = (chartMode==='day')?600: (chartMode==='week'?300:(chartMode==='month'?1800:21600));
+    // NOTE: Historie wird im 10-Minuten-Raster nach Influx geschrieben.
+    // Für die Tagesansicht verwenden wir ebenfalls 10 Minuten (keine "Treppen" durch Hold‑Last).
+    // Für Woche/Monat/Jahr reicht eine gröbere Auflösung; dadurch vermeiden wir zudem getHistory-Limits.
+    const step = (chartMode==='day') ? 600 : (chartMode==='week' ? 600 : (chartMode==='month' ? 1800 : 21600));
     const url = `/api/history?from=${from.getTime()}&to=${to.getTime()}&step=${step}`;
     const res = await fetch(url).then(r=>r.json()).catch(()=>null);
     if(!res || !res.ok){ alert('History kann nicht geladen werden'); return; }
@@ -543,7 +538,6 @@ async function load(){
   })();
 
 
-
   // === click-to-inspect tooltip (inside main scope) ===
   (function(){
     const wrap = canvas.parentElement || document.body;
@@ -587,7 +581,18 @@ async function load(){
 
       const {start, end} = data;
       const series = buildSeriesAll();
-      const W=canvas.width, H=canvas.height, L=50, R=40, T=10, B=42;
+      const W = canvas.width, H = canvas.height;
+      // Use the same margins as the renderer so click-to-inspect aligns with the chart.
+      let L = 50, R = 40, T = 10, B = 42;
+      if (chartMode === 'day') {
+        const m = getChartMargins();
+        L = m.L; R = m.R; T = m.T; B = m.B;
+      } else if (typeof barState === 'object' && barState) {
+        L = Number.isFinite(Number(barState.L)) ? Number(barState.L) : L;
+        R = Number.isFinite(Number(barState.R)) ? Number(barState.R) : R;
+        T = Number.isFinite(Number(barState.T)) ? Number(barState.T) : T;
+        B = Number.isFinite(Number(barState.B)) ? Number(barState.B) : B;
+      }
 
       // --- BAR TOOLTIP (week/month/year) ---
       if (chartMode !== 'day' && typeof barState === 'object' && barState){
@@ -719,7 +724,6 @@ async function load(){
       crossX = px;
       draw(); // redraw to show crosshair
     }
-
 
 
     canvas.addEventListener('mouseleave', ()=>{ tip.style.display='none'; crossX=null; draw(); });
@@ -1001,34 +1005,7 @@ async function load(){
 
 
   
-  // --- live dot via SSE (same as live) ---
-  (function(){
-    const dot = document.getElementById('liveDot');
-    function connect(){
-      try{
-        const es = new EventSource('/events');
-        if (dot) dot.classList.remove('live');
-        es.onopen = ()=>{ if (dot) dot.classList.add('live'); };
-        es.onerror = ()=>{ 
-          if (dot) dot.classList.remove('live'); 
-          try{ es.close(); }catch(_){ } 
-          setTimeout(connect, 3000);
-        };
-        // ignore incoming messages on history page
-        es.onmessage = ()=>{};
-      }catch(e){
-        if (dot) dot.classList.remove('live');
-        setTimeout(connect, 3000);
-      }
-    }
-    connect();
-  })();
-
-
-  
-  
-
-// menu: open settings by redirecting to live with query
+  // menu: open settings by redirecting to live with query
   (function(){
     const settingsBtn = document.getElementById('menuOpenSettings');
     if (settingsBtn) settingsBtn.addEventListener('click', (e)=>{

@@ -1,3 +1,9 @@
+## 0.6.46 (Historie)
+- Fix: Tooltip/Fadenkreuz in der Tagesansicht sind wieder exakt am Chart ausgerichtet (Ränder/Margins konsistent).
+- Fix: Doppelte SSE-Verbindung auf der Historie-Seite entfernt (verhindert unnötige /events-Connections).
+- Fix: /api/history setzt `count` passend zum Zeitraum/Step, damit keine Datenpunkte durch Standard-Limits (z.B. 2000) abgeschnitten werden.
+- Change: Wochenansicht nutzt 10-Minuten-Step (Influx-Raster) zur Stabilisierung und weniger Payload.
+
 ## 0.6.41 (EMS/Tarif)
 - Fix: Speicherregelung wird bei aktivem dynamischem Tarif wieder automatisch aktiviert (Auto-Enable), damit Be-/Entladung im Farm-/Einzelspeicher nicht stehen bleibt.
 
