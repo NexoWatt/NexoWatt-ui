@@ -190,10 +190,28 @@ class SpeicherRegelungModule extends BaseModule {
         try {
             // Prefer the already freshness-validated snapshot from the Tarif-Modul.
             const tv = (this.adapter && this.adapter._tarifVis) ? this.adapter._tarifVis : null;
-            if (tv && tv.aktiv) {
-                const sp = Math.abs(num(tv.speicherLeistungW, 0));
-                autoTarifEnabled = sp > 0;
-            } else if (this.dp) {
+			if (tv && tv.aktiv) {
+				// Bugfix (Phase 7/8): Tarif-Modul liefert die VIS-Leistungsgrenze als
+				// speicherLeistungW / speicherLeistungAbsW. In manchen Builds fehlte
+				// dieses Feld, wodurch Auto-Enable fälschlich deaktiviert wurde.
+				let sp = null;
+				if (typeof tv.speicherLeistungAbsW === 'number' && Number.isFinite(tv.speicherLeistungAbsW)) {
+					sp = Math.abs(tv.speicherLeistungAbsW);
+				} else if (typeof tv.speicherLeistungW === 'number' && Number.isFinite(tv.speicherLeistungW)) {
+					sp = Math.abs(tv.speicherLeistungW);
+				}
+				if (typeof sp === 'number') {
+					autoTarifEnabled = sp > 0;
+				} else if (this.dp) {
+					// Fallback: directly read VIS toggle (best-effort).
+					const aktiv = this.dp.getBoolean('vis.settings.dynamicTariff', false);
+					const age = this.dp.getAgeMs('vis.settings.dynamicTariff');
+					if (aktiv && (age === null || age <= staleMs)) {
+						const spAbs = Math.abs(this.dp.getNumber('vis.settings.storagePower', 0));
+						autoTarifEnabled = spAbs > 0;
+					}
+				}
+			} else if (this.dp) {
                 // Fallback: directly read VIS toggle (best-effort).
                 const aktiv = this.dp.getBoolean('vis.settings.dynamicTariff', false);
                 const age = this.dp.getAgeMs('vis.settings.dynamicTariff');

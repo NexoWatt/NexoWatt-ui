@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.38",
+    "version": "0.6.41",
     "news": {
+      "0.6.41": {
+        "en": [
+          "Tariff + SoC logic: Fixed auto-enable of storage control when dynamic tariff is active (prevents battery charge/discharge from stopping)."
+        ],
+        "de": [
+          "Tarif + SoC-Logik: Auto-Aktivierung der Speicherregelung bei aktivem dynamischem Tarif gefixt (verhindert, dass Be-/Entladung stehen bleibt)."
+        ]
+      },
       "0.6.32": {
         "en": [
           "Storagefarm: Online/Offline detection improved (SoC/power no longer time out in UI; offline is derived from device connected/offline signals + heartbeat timestamps)."
@@ -844,6 +852,16 @@
         "de": [
           "Speicherfarm: PV (DC) wird bei Bedarf automatisch aus nexowatt-devices (aliases.r.pvPower) erkannt, wenn nicht manuell gemappt; behebt fehlende PV-Summe im Farm-Modus."
         ]
+      },
+      "0.6.40": {
+        "en": [
+          "PV sum: include PV read datapoints from EVU/PV regulation inverter lists (optional) and auto-detected PV_INVERTER devices.",
+          "StorageFarm: DC PV auto-detection now also kicks in when pvPowerId points to a non-state (e.g. channel) so farm PV sum stays correct."
+        ],
+        "de": [
+          "PV-Summe: PV-Read-Datenpunkte aus der EVU/PV-Regelung (Wechselrichterlisten) werden (optional) berücksichtigt – zusätzlich zu automatisch erkannten PV_INVERTER-Geräten.",
+          "Speicherfarm: DC-PV Auto-Erkennung greift jetzt auch, wenn pvPowerId auf kein State zeigt (z.B. Channel) – dadurch bleibt die PV-Summe korrekt."
+        ]
       }
     },
     "title": "NexoWatt VIS",
@@ -1027,5 +1045,21 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.34"
+  "version": "0.6.40",
+  "news": {
+    "en": {
+      "0.6.40": [
+        "PV total: include PV power datapoints from PV curtailment inverter lists (read) + StorageFarm DC PV (derived).",
+        "StorageFarm: Auto-PV fallback when mapped PV datapoint does not resolve to a state (e.g. channel selected).",
+        "App-Center: PV curtailment inverter UI now supports mapping PV power (read); quick-setup auto-fills when available."
+      ]
+    },
+    "de": {
+      "0.6.40": [
+        "PV Gesamtleistung: PV-Istleistung aus PV-Abregelung (Read) + DC-PV aus Speicherfarm (abgeleitet) werden berücksichtigt.",
+        "Speicherfarm: Auto-PV Fallback wenn der gemappte PV-Datenpunkt keine State ist (z.B. Channel ausgewählt).",
+        "App-Center: PV-Abregelung (Wechselrichter) unterstützt PV-Istleistung (Read); Schnell-Inbetriebnahme füllt automatisch."
+      ]
+    }
+  }
 }

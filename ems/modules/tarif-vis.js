@@ -850,6 +850,9 @@ await this._setIfChanged('tarif.statusText', statusText);
                 autoBandEur: (typeof autoBandEur === 'number' && Number.isFinite(autoBandEur)) ? autoBandEur : null,
                 horizonHours: (typeof horizonHours === 'number' && Number.isFinite(horizonHours)) ? horizonHours : null,
                 preisRef: (preisRef !== null && preisRef !== undefined && Number.isFinite(preisRef)) ? preisRef : null,
+                // VIS-Konfiguration (für Auto-Enable anderer Module)
+                speicherLeistungW: (typeof storageW === 'number' && Number.isFinite(storageW)) ? storageW : 0,
+                speicherLeistungAbsW: (typeof storagePowerAbsW === 'number' && Number.isFinite(storagePowerAbsW)) ? storagePowerAbsW : 0,
                 speicherSollW,
                 // SoC-aware charging (cheap window)
                 storageSocPct,

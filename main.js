@@ -1144,9 +1144,11 @@ class NexoWattVis extends utils.Adapter {
         const { id: lastErrorId, st: stErr } = await pickFirstState(devBases.map((b) => `${b}.comm.lastError`));
 
         // Auto-PV detection (DC-coupled storages):
-        // If pvPowerId is not configured, try to use standardized nexowatt-devices datapoints.
+        // If pvPowerId is not configured OR does not resolve to a state (e.g. a channel was selected),
+        // try to use standardized nexowatt-devices datapoints.
         // This keeps the farm PV sum correct even when the installer did not map PV (DC) manually.
-        if (!pvId && isDcCoupled && devBases.length) {
+        const pvIdState = pvId ? await getState(pvId) : null;
+        if ((!pvId || !pvIdState) && isDcCoupled && devBases.length) {
           const candidates = [];
           for (const b of devBases) {
             candidates.push(
@@ -1234,8 +1236,15 @@ class NexoWattVis extends utils.Adapter {
         let socFromCache = false;
         let socTs = NaN;
 
-        // Prefer a stable key derived from the device base. Fallback to socId/name.
-        const socCacheKey = (devBase ? (devBase + '::soc') : '') || (socId ? ('id::' + socId) : status.name);
+        // Prefer a stable key derived from the SoC datapoint id. If that is not
+        // available, fall back to detected device base(s) or the configured name.
+        //
+        // NOTE: A previous implementation referenced an undefined variable here
+        // which could break the entire storage-farm aggregation and, downstream,
+        // the setpoint distribution logic.
+        const socCacheKey = (socId ? ('id::' + socId)
+          : (devBases.length ? ('dev::' + devBases.slice().sort().join('|') + '::soc')
+            : status.name));
 
         if (socId) {
           const stSoc = await getState(socId);
@@ -10111,6 +10120,29 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       const cache = this._derivedFlow?.auto?.pvInverters;
       if (!cache) return;
 
+      // Force refresh when gridConstraints PV read datapoints change (used for PV total sum).
+      try {
+        const gc = this.config?.gridConstraints;
+        const ids = [];
+        const collect = (arr) => {
+          if (!Array.isArray(arr)) return;
+          for (const inv of arr) {
+            const pid = this._nwTrimId(inv?.pvPowerReadId);
+            if (pid) ids.push(pid);
+          }
+        };
+        if (gc && typeof gc === 'object') {
+          collect(gc.pvCurtailInvertersEvu);
+          collect(gc.pvCurtailInvertersZero);
+        }
+        ids.sort();
+        const sig = ids.join('|');
+        if (sig !== cache.cfgSig) {
+          cache.cfgSig = sig;
+          force = true;
+        }
+      } catch (_e) {}
+
       const now = Date.now();
       const maxAgeMs = 10 * 60 * 1000; // refresh at most every 10 min
       if (!force && cache.ts && (now - cache.ts) < maxAgeMs) return;
@@ -10140,6 +10172,28 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         const name = String(obj?.common?.name || cid).trim();
         list.push({ id: cid, name, powerId, connectedId, offlineId });
       }
+
+            // Also include PV power datapoints configured in gridConstraints inverter lists (optional).
+      // This enables PV total sum even for inverters that are not discovered via nexowatt-devices.
+      try {
+        const gc = this.config?.gridConstraints;
+        const seenPower = new Set(list.map((d) => d.powerId).filter(Boolean));
+        const addCfg = (arr, tag) => {
+          if (!Array.isArray(arr)) return;
+          for (let i = 0; i < arr.length; i++) {
+            const inv = arr[i] || {};
+            const pid = this._nwTrimId(inv.pvPowerReadId);
+            if (!pid) continue;
+            if (seenPower.has(pid)) continue;
+            seenPower.add(pid);
+            list.push({ id: `cfg:${tag}:${i}`, name: String(inv.name || `PV ${tag} ${i + 1}`), powerId: pid, connectedId: null, offlineId: null });
+          }
+        };
+        if (gc && typeof gc === 'object') {
+          addCfg(gc.pvCurtailInvertersEvu, 'evu');
+          addCfg(gc.pvCurtailInvertersZero, 'zero');
+        }
+      } catch (_e) {}
 
       const newIds = new Set();
       for (const d of list) {
@@ -10330,7 +10384,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
       if (used > 0) {
         pvAcW = Math.max(0, sum);
-        pvSource = 'auto:nwdevices';
+        pvSource = 'auto:pvSources';
       } else if (producerCount > 0) {
         // Legacy fallback: if PV was mapped into producer slots
         pvAcW = Math.max(0, producerSumW);
