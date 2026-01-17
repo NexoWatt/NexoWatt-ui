@@ -10,6 +10,32 @@
  *
  * Modules may upsert additional datapoints derived from their module configuration.
  */
+// Unit auto-scaling helpers (e.g., convert kW -> W when a device reports in kW but EMS expects W)
+function _normalizeUnit(unit) {
+    if (!unit) return '';
+    return String(unit).trim().replace(/\s+/g, '').toLowerCase();
+}
+
+function _computeUnitScale(fromUnit, toUnit) {
+    const from = _normalizeUnit(fromUnit);
+    const to = _normalizeUnit(toUnit);
+    if (!from || !to || from === to) return 1;
+
+    // Power family (base: W)
+    const POWER = { w: 1, kw: 1e3, mw: 1e6, gw: 1e9 };
+    // Energy family (base: Wh)
+    const ENERGY = { wh: 1, kwh: 1e3, mwh: 1e6, gwh: 1e9 };
+
+    if (Object.prototype.hasOwnProperty.call(POWER, from) && Object.prototype.hasOwnProperty.call(POWER, to)) {
+        return POWER[from] / POWER[to];
+    }
+    if (Object.prototype.hasOwnProperty.call(ENERGY, from) && Object.prototype.hasOwnProperty.call(ENERGY, to)) {
+        return ENERGY[from] / ENERGY[to];
+    }
+
+    return 1;
+}
+
 class DatapointRegistry {
     /**
      * @param {any} adapter
@@ -58,6 +84,8 @@ class DatapointRegistry {
             dataType: entry.dataType || prev?.dataType || entry.type || 'number',
             direction: entry.direction || prev?.direction || entry.dir || 'in',
             unit: entry.unit || prev?.unit || '',
+            unitIn: prev?.unitIn || '',
+            unitScale: (prev?.unitScale !== undefined ? Number(prev.unitScale) : 1),
             scale: (entry.scale !== undefined ? Number(entry.scale) : prev?.scale),
             offset: (entry.offset !== undefined ? Number(entry.offset) : prev?.offset),
             invert: (entry.invert !== undefined ? !!entry.invert : prev?.invert),
@@ -79,6 +107,32 @@ class DatapointRegistry {
         if (!Number.isFinite(normalized.min)) normalized.min = undefined;
         if (!Number.isFinite(normalized.max)) normalized.max = undefined;
 
+
+
+        // Auto unit scaling based on source object's unit (common.unit)
+        // Example: meter reports 0.73 kW but EMS expects W -> multiply by 1000 internally.
+        if (typeof this.adapter.getForeignObjectAsync === 'function') {
+            try {
+                const obj = await this.adapter.getForeignObjectAsync(objectId);
+                const inUnit = obj?.common?.unit;
+                normalized.unitIn = inUnit ? String(inUnit) : '';
+                const factor = _computeUnitScale(normalized.unitIn, normalized.unit);
+                if (Number.isFinite(factor) && factor !== 0 && factor !== 1) {
+                    // Avoid obvious double scaling if user already applied the same factor via `scale`.
+                    const eps = 1e-9;
+                    const invFactor = factor !== 0 ? 1 / factor : 0;
+                    if (Math.abs(normalized.scale - factor) < eps || Math.abs(normalized.scale - invFactor) < eps) {
+                        normalized.unitScale = 1;
+                    } else {
+                        normalized.unitScale = factor;
+                    }
+                } else {
+                    normalized.unitScale = 1;
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
         this.byKey.set(key, normalized);
         this.keyByObjectId.set(objectId, key);
 
@@ -208,6 +262,7 @@ class DatapointRegistry {
         if (!Number.isFinite(n)) return fallback;
 
         let v = n;
+        if (Number.isFinite(e.unitScale) && e.unitScale !== 1) v = v * e.unitScale;
         if (e.invert) v = -v;
         v = v * e.scale + e.offset;
 
@@ -258,6 +313,8 @@ class DatapointRegistry {
         // reverse transform
         let raw = (v - e.offset) / (e.scale || 1);
         if (e.invert) raw = -raw;
+
+        if (Number.isFinite(e.unitScale) && e.unitScale !== 1) raw = raw / e.unitScale;
 
         // deadband in physical space against last written value
         const last = this.lastWriteByObjectId.get(e.objectId);

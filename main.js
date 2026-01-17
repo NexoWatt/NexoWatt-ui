@@ -63,10 +63,7 @@ class NexoWattVis extends utils.Adapter {
 
     // Storagefarm: remember last commanded setpoints to reduce write spam
     this._sfLastSetpoints = new Map(); // objectId -> last numeric value
-
-    // Storagefarm setpoint keepalive: some ESS controllers require periodic refresh
-    // of the same setpoint value (watchdog). Track last write timestamps per objectId.
-    this._sfLastSetpointWriteAt = new Map(); // objectId -> last write timestamp (ms)
+    this._sfLastSetpointsTs = new Map(); // objectId -> last write timestamp (ms)
 
 
     // Derived / calculated live values (e.g. energy flow helper KPIs)
@@ -1465,29 +1462,29 @@ try {
 
     return { enabled, mode, storages, groups };
   }
+  async _sfWriteIfChanged(objectId, value) {
+    if (!objectId) return;
+    if (typeof value !== 'number' || !isFinite(value)) return;
 
-  async _sfWriteIfChanged(objectId, value, options = {}) {
-    const id = String(objectId || '').trim();
-    if (!id) return { ok: false, written: false, reason: 'missing_id' };
-    const v = Number.isFinite(Number(value)) ? Math.round(Number(value)) : 0;
-
-    const keepaliveMs = Number.isFinite(Number(options.keepaliveMs)) ? Math.max(0, Math.round(Number(options.keepaliveMs))) : 0;
-    const force = options.force === true;
-
-    const prev = this._sfLastSetpoints ? this._sfLastSetpoints.get(id) : undefined;
-    const lastAt = this._sfLastSetpointWriteAt ? (this._sfLastSetpointWriteAt.get(id) || 0) : 0;
+    // Some batteries/EMS devices require a periodic setpoint write (watchdog).
+    // Therefore we re-send unchanged setpoints every keepalive interval.
     const now = Date.now();
+    const keepaliveMs = 5000;
 
-    const same = (prev === v);
-    const dueKeepalive = (keepaliveMs > 0) && (lastAt === 0 || (now - lastAt) >= keepaliveMs);
-    if (same && !force && !dueKeepalive) return { ok: true, written: false };
+    const prev = this._sfLastSetpoints.get(objectId);
+    const lastTs = this._sfLastSetpointsTs.get(objectId) || 0;
+    const valueChanged = prev === undefined || prev !== value;
+    const stale = now - lastTs >= keepaliveMs;
+
+    if (!valueChanged && !stale) return;
+
+    if (valueChanged) this._sfLastSetpoints.set(objectId, value);
+
     try {
-      await this.setForeignStateAsync(id, v);
-      if (this._sfLastSetpoints) this._sfLastSetpoints.set(id, v);
-      if (this._sfLastSetpointWriteAt) this._sfLastSetpointWriteAt.set(id, now);
-      return { ok: true, written: true, changed: !same, keepalive: same && dueKeepalive };
+      await this.setForeignStateAsync(objectId, value, false);
+      this._sfLastSetpointsTs.set(objectId, now);
     } catch (e) {
-      return { ok: false, written: false, error: e && e.message ? e.message : String(e) };
+      this.log.warn(`StorageFarm: Failed to write setpoint ${objectId}=${value}: ${e}`);
     }
   }
 
@@ -1499,10 +1496,6 @@ try {
 
     const direction = (w < 0) ? 'charge' : ((w > 0) ? 'discharge' : 'idle');
     const absW = Math.abs(w);
-
-    // Some ESS controllers use a watchdog and require periodic refresh of setpoints
-    // (even if the value did not change). Default to 5s keepalive.
-    const keepaliveMs = 5000;
 
     // Determine SoC values from derived status (preferred)
     let status = [];
@@ -1667,14 +1660,14 @@ try {
       const r = { name: s.name || '', chargeW, dischargeW, ok: true, writes: {} };
 
       if (s.setSignedPowerId) {
-        const wr = await this._sfWriteIfChanged(s.setSignedPowerId, outSignedW, { keepaliveMs });
+        const wr = await this._sfWriteIfChanged(s.setSignedPowerId, outSignedW);
         r.writes.signed = wr;
         if (!wr.ok) r.ok = false;
         if (wr.ok) anyOkRelevant = true;
       } else {
         // Write charge setpoint
         if (s.setChargePowerId) {
-          const wr = await this._sfWriteIfChanged(s.setChargePowerId, outChargeW, { keepaliveMs });
+          const wr = await this._sfWriteIfChanged(s.setChargePowerId, outChargeW);
           r.writes.charge = wr;
           if (!wr.ok) r.ok = false;
           if (direction === 'charge' && wr.ok) anyOkRelevant = true;
@@ -1682,7 +1675,7 @@ try {
         }
         // Write discharge setpoint
         if (s.setDischargePowerId) {
-          const wr = await this._sfWriteIfChanged(s.setDischargePowerId, outDischargeW, { keepaliveMs });
+          const wr = await this._sfWriteIfChanged(s.setDischargePowerId, outDischargeW);
           r.writes.discharge = wr;
           if (!wr.ok) r.ok = false;
           if (direction === 'discharge' && wr.ok) anyOkRelevant = true;
@@ -9854,9 +9847,9 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const gridSellW = this._nwGetNumberFromCache('gridSellPower');
     const pvW = this._nwGetNumberFromCache('pvPower');
     const loadW = this._nwGetNumberFromCache('consumptionTotal');
-    const chgW = this._nwGetNumberFromCache('storageChargePower');
-    const dchgW = this._nwGetNumberFromCache('storageDischargePower');
-    const soc = this._nwGetNumberFromCache('storageSoc');
+    let chgW = this._nwGetNumberFromCache('storageChargePower');
+    let dchgW = this._nwGetNumberFromCache('storageDischargePower');
+    let soc = this._nwGetNumberFromCache('storageSoc');
     const evW = this._nwGetNumberFromCache('evcs.totalPowerW');
 
     const gridBuy = Number.isFinite(gridBuyW) ? Math.max(0, gridBuyW) : 0;
@@ -9884,6 +9877,19 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         }
       }
     }
+
+    // In StorageFarm mode, prefer the aggregated farm totals for charge/discharge/SoC.
+    // This avoids race conditions with legacy single-storage datapoint mappings that may
+    // still update the generic cache keys.
+    if (sfEnabled) {
+      const chgFarmW = this._nwGetNumberFromCache('storageFarm.totalChargePowerW');
+      const dchgFarmW = this._nwGetNumberFromCache('storageFarm.totalDischargePowerW');
+      const socFarm = this._nwGetNumberFromCache('storageFarm.totalSoc');
+      if (Number.isFinite(chgFarmW)) chgW = chgFarmW;
+      if (Number.isFinite(dchgFarmW)) dchgW = dchgFarmW;
+      if (Number.isFinite(socFarm)) soc = socFarm;
+    }
+
     let loadTotal = Number.isFinite(loadW) ? Math.max(0, loadW) : null;
     const chg = Number.isFinite(chgW) ? Math.max(0, chgW) : 0;
     const dchg = Number.isFinite(dchgW) ? Math.max(0, dchgW) : 0;

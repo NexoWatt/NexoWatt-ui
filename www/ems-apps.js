@@ -16,6 +16,7 @@
     gridConnectionPower: document.getElementById('gridConnectionPower'),
     gridPointPowerId: document.getElementById('gridPointPowerId'),
     gridPointPowerIdDisplay: document.getElementById('gridPointPowerIdDisplay'),
+    gridInvertGrid: document.getElementById('gridInvertGrid'),
 
     // Energiefluss-Monitor (Tab)
     flowSubtractEvFromBuilding: document.getElementById('flowSubtractEvFromBuilding'),
@@ -135,6 +136,17 @@
 
     gotoEvuPvTab: document.getElementById('gotoEvuPvTab')
   };
+
+  // Keep grid sign checkboxes in sync (Allgemein vs Energiefluss)
+  if (els.gridInvertGrid && els.flowInvertGrid) {
+    const syncGridInvert = (val) => {
+      els.gridInvertGrid.checked = !!val;
+      els.flowInvertGrid.checked = !!val;
+    };
+
+    els.gridInvertGrid.addEventListener('change', () => syncGridInvert(els.gridInvertGrid.checked));
+    els.flowInvertGrid.addEventListener('change', () => syncGridInvert(els.flowInvertGrid.checked));
+  }
 
   // Phase 2: App-Center (install + enable per capability)
   const APP_CATALOG = [
@@ -5279,6 +5291,7 @@
     const st = (currentConfig && currentConfig.settings && typeof currentConfig.settings === 'object') ? currentConfig.settings : {};
     if (els.flowSubtractEvFromBuilding) els.flowSubtractEvFromBuilding.checked = (st.flowSubtractEvFromBuilding !== undefined) ? !!st.flowSubtractEvFromBuilding : true;
     if (els.flowInvertGrid) els.flowInvertGrid.checked = !!st.flowInvertGrid;
+    if (els.gridInvertGrid) els.gridInvertGrid.checked = !!st.flowInvertGrid;
     if (els.flowInvertBattery) els.flowInvertBattery.checked = !!st.flowInvertBattery;
     if (els.flowInvertPv) els.flowInvertPv.checked = !!st.flowInvertPv;
     if (els.flowInvertEv) els.flowInvertEv.checked = !!st.flowInvertEv;

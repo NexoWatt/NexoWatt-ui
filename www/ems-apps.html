@@ -114,6 +114,14 @@
             </div>
           </div>
           <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="gridInvertGrid">Netz-Vorzeichen invertieren</label>
+            <div class="nw-config-field-control" style="display:flex; align-items:center; gap:10px;">
+              <input type="checkbox" id="gridInvertGrid"/>
+              <span class="nw-config-field-hint" style="margin:0;">Bezug/Einspeisung tauschen (Import-/Export+)</span>
+            </div>
+          </div>
+
+          <div class="nw-config-field-row">
             <div class="nw-config-field-label">Scheduler-Intervall (ms)</div>
             <div class="nw-config-field-control">
               <input id="schedulerIntervalMs" class="nw-config-input" type="number" min="250" step="50" placeholder="1000"/>

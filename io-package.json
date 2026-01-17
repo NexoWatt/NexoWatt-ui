@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.41",
+    "version": "0.6.44",
     "news": {
+      "0.6.44": {
+        "en": "Fix: Auto unit scaling for power/energy datapoints (kW/kWh sources now work without manual conversion); Grid sign invert option added in Allgemein; StorageFarm keepalive writes setpoints every 5s to satisfy watchdogs.",
+        "de": "Fix: Automatische Einheiten-Skalierung für Leistungs/Energie-Datenpunkte (kW/kWh funktioniert ohne manuelle Umrechnung); Option zum Invertieren des Netz-Vorzeichens in Allgemein ergänzt; StorageFarm Keepalive schreibt Setpoints alle 5s (Watchdog)."
+      },
+      "0.6.43": {
+        "en": "Fix: Historie in StorageFarm uses farm totals for charge/discharge/SoC (SoC shown again).",
+        "de": "Fix: Historie im Speicherfarm-Modus nutzt Farm-Gesamtwerte für Laden/Entladen/SoC (SoC wieder sichtbar)."
+      },
       "0.6.41": {
         "en": [
           "Tariff + SoC logic: Fixed auto-enable of storage control when dynamic tariff is active (prevents battery charge/discharge from stopping)."
@@ -1045,8 +1053,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.40",
+  "version": "0.6.43",
   "news": {
+    "0.6.43": {
+      "en": "Fix: Historie in StorageFarm uses farm totals for charge/discharge/SoC (SoC shown again).",
+      "de": "Fix: Historie im Speicherfarm-Modus nutzt Farm-Gesamtwerte für Laden/Entladen/SoC (SoC wieder sichtbar)."
+    },
     "en": {
       "0.6.40": [
         "PV total: include PV power datapoints from PV curtailment inverter lists (read) + StorageFarm DC PV (derived).",
