@@ -64,6 +64,10 @@ class NexoWattVis extends utils.Adapter {
     // Storagefarm: remember last commanded setpoints to reduce write spam
     this._sfLastSetpoints = new Map(); // objectId -> last numeric value
 
+    // Storagefarm setpoint keepalive: some ESS controllers require periodic refresh
+    // of the same setpoint value (watchdog). Track last write timestamps per objectId.
+    this._sfLastSetpointWriteAt = new Map(); // objectId -> last write timestamp (ms)
+
 
     // Derived / calculated live values (e.g. energy flow helper KPIs)
     this._derivedFlow = {
@@ -1462,16 +1466,26 @@ try {
     return { enabled, mode, storages, groups };
   }
 
-  async _sfWriteIfChanged(objectId, value) {
+  async _sfWriteIfChanged(objectId, value, options = {}) {
     const id = String(objectId || '').trim();
     if (!id) return { ok: false, written: false, reason: 'missing_id' };
     const v = Number.isFinite(Number(value)) ? Math.round(Number(value)) : 0;
+
+    const keepaliveMs = Number.isFinite(Number(options.keepaliveMs)) ? Math.max(0, Math.round(Number(options.keepaliveMs))) : 0;
+    const force = options.force === true;
+
     const prev = this._sfLastSetpoints ? this._sfLastSetpoints.get(id) : undefined;
-    if (prev === v) return { ok: true, written: false };
+    const lastAt = this._sfLastSetpointWriteAt ? (this._sfLastSetpointWriteAt.get(id) || 0) : 0;
+    const now = Date.now();
+
+    const same = (prev === v);
+    const dueKeepalive = (keepaliveMs > 0) && (lastAt === 0 || (now - lastAt) >= keepaliveMs);
+    if (same && !force && !dueKeepalive) return { ok: true, written: false };
     try {
       await this.setForeignStateAsync(id, v);
       if (this._sfLastSetpoints) this._sfLastSetpoints.set(id, v);
-      return { ok: true, written: true };
+      if (this._sfLastSetpointWriteAt) this._sfLastSetpointWriteAt.set(id, now);
+      return { ok: true, written: true, changed: !same, keepalive: same && dueKeepalive };
     } catch (e) {
       return { ok: false, written: false, error: e && e.message ? e.message : String(e) };
     }
@@ -1485,6 +1499,10 @@ try {
 
     const direction = (w < 0) ? 'charge' : ((w > 0) ? 'discharge' : 'idle');
     const absW = Math.abs(w);
+
+    // Some ESS controllers use a watchdog and require periodic refresh of setpoints
+    // (even if the value did not change). Default to 5s keepalive.
+    const keepaliveMs = 5000;
 
     // Determine SoC values from derived status (preferred)
     let status = [];
@@ -1649,14 +1667,14 @@ try {
       const r = { name: s.name || '', chargeW, dischargeW, ok: true, writes: {} };
 
       if (s.setSignedPowerId) {
-        const wr = await this._sfWriteIfChanged(s.setSignedPowerId, outSignedW);
+        const wr = await this._sfWriteIfChanged(s.setSignedPowerId, outSignedW, { keepaliveMs });
         r.writes.signed = wr;
         if (!wr.ok) r.ok = false;
         if (wr.ok) anyOkRelevant = true;
       } else {
         // Write charge setpoint
         if (s.setChargePowerId) {
-          const wr = await this._sfWriteIfChanged(s.setChargePowerId, outChargeW);
+          const wr = await this._sfWriteIfChanged(s.setChargePowerId, outChargeW, { keepaliveMs });
           r.writes.charge = wr;
           if (!wr.ok) r.ok = false;
           if (direction === 'charge' && wr.ok) anyOkRelevant = true;
@@ -1664,7 +1682,7 @@ try {
         }
         // Write discharge setpoint
         if (s.setDischargePowerId) {
-          const wr = await this._sfWriteIfChanged(s.setDischargePowerId, outDischargeW);
+          const wr = await this._sfWriteIfChanged(s.setDischargePowerId, outDischargeW, { keepaliveMs });
           r.writes.discharge = wr;
           if (!wr.ok) r.ok = false;
           if (direction === 'discharge' && wr.ok) anyOkRelevant = true;
