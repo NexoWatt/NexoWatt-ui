@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.47",
+    "version": "0.6.48",
     "news": {
       "0.6.44": {
         "en": "Fix: Auto unit scaling for power/energy datapoints (kW/kWh sources now work without manual conversion); Grid sign invert option added in Allgemein; StorageFarm keepalive writes setpoints every 5s to satisfy watchdogs.",
@@ -1061,7 +1061,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.47",
+  "version": "0.6.48",
   "news": {
     "0.6.43": {
       "en": "Fix: Historie in StorageFarm uses farm totals for charge/discharge/SoC (SoC shown again).",
@@ -1080,6 +1080,10 @@
         "Speicherfarm: Auto-PV Fallback wenn der gemappte PV-Datenpunkt keine State ist (z.B. Channel ausgewählt).",
         "App-Center: PV-Abregelung (Wechselrichter) unterstützt PV-Istleistung (Read); Schnell-Inbetriebnahme füllt automatisch."
       ]
+    },
+    "0.6.48": {
+      "en": "Stability: App-Center configuration is treated as single source of truth (SoT); automatic migration/seed from native config; improved EMS engine restart + init error diagnostics.",
+      "de": "Stabilitaet: App-Center-Konfiguration ist Single Source of Truth (SoT); automatische Migration/Initialisierung aus der nativen Admin-Konfiguration; robuster EMS-Engine-Restart + Init-Fehler-Diagnose."
     }
   }
 }

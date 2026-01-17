@@ -6063,6 +6063,11 @@
       )
     );
 
+    const initError = (engine && engine.initError) ? String(engine.initError) : '';
+    if (initError) {
+      els.emsStatus.appendChild(mkItem('Engine-Fehler', initError, '', 'error'));
+    }
+
     if (!mm || !Array.isArray(mm.results)) {
       els.emsStatus.appendChild(mkItem('Module', 'Keine Diagnosedaten verfügbar.', '', ''));
       return;

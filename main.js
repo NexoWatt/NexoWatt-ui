@@ -269,6 +269,180 @@ class NexoWattVis extends utils.Adapter {
   }
 
 
+
+  /**
+   * Keys that are managed via the App‑Center (installer.configJson) and should be treated
+   * as installer single source of truth (SoT).
+   */
+  nwInstallerManagedKeys() {
+    return [
+      // Base
+      'units',
+      'settings',
+      'settingsConfig',
+      'datapoints',
+      'installerConfig',
+      'emsApps',
+      'schedulerIntervalMs',
+
+      // VIS config
+      'vis',
+
+      // EMS module configs
+      'chargingManagement',
+      'peakShaving',
+      'gridConstraints',
+      'storage',
+      'storageFarm',
+      'thermal',
+      'bhkw',
+      'generator',
+      'threshold',
+      'relay',
+      'smartHome',
+
+      // Optional diagnostics
+      'diagnostics',
+    ];
+  }
+
+  _nwIsPlainObject(v) {
+    return !!v && typeof v === 'object' && !Array.isArray(v);
+  }
+
+  _nwDeepClone(v) {
+    if (v === undefined) return undefined;
+    return this.nwDeepMerge(Array.isArray(v) ? [] : {}, v);
+  }
+
+  /**
+   * Normalize/complete an installer patch:
+   * - Ensure all managed keys exist (filled from base native config or defaults).
+   * - Ensure correct types (plain objects / arrays / numbers).
+   * - Canonicalize emsApps structure.
+   *
+   * Returns { patch, changed }.
+   */
+  nwNormalizeInstallerPatch(patchIn, baseNative) {
+    const base = this._nwIsPlainObject(baseNative) ? baseNative : {};
+    const patch = this._nwIsPlainObject(patchIn) ? patchIn : {};
+
+    // Clone to avoid mutating caller
+    const out = this._nwDeepClone(patch) || {};
+    let changed = false;
+
+    const ensurePlainObj = (key, defObj = {}) => {
+      const cur = out[key];
+      if (cur === undefined) {
+        const src = this._nwIsPlainObject(base[key]) ? base[key] : defObj;
+        out[key] = this._nwDeepClone(src) || {};
+        changed = true;
+        return;
+      }
+      if (!this._nwIsPlainObject(cur)) {
+        const src = this._nwIsPlainObject(base[key]) ? base[key] : defObj;
+        out[key] = this._nwDeepClone(src) || {};
+        changed = true;
+      }
+    };
+
+    // Base structures
+    ensurePlainObj('units', { power: 'W', energy: 'kWh' });
+    ensurePlainObj('settings', {});
+    ensurePlainObj('settingsConfig', {});
+    ensurePlainObj('datapoints', {});
+    ensurePlainObj('installerConfig', {});
+    ensurePlainObj('vis', {});
+    ensurePlainObj('chargingManagement', {});
+    ensurePlainObj('peakShaving', {});
+    ensurePlainObj('gridConstraints', {});
+    ensurePlainObj('storage', {});
+    ensurePlainObj('storageFarm', {});
+    ensurePlainObj('thermal', {});
+    ensurePlainObj('bhkw', {});
+    ensurePlainObj('generator', {});
+    ensurePlainObj('threshold', {});
+    ensurePlainObj('relay', {});
+    ensurePlainObj('smartHome', {});
+    ensurePlainObj('diagnostics', {});
+
+    // Scheduler interval
+    if (out.schedulerIntervalMs === undefined) {
+      const n = Number(base.schedulerIntervalMs);
+      out.schedulerIntervalMs = Number.isFinite(n) ? n : 1000;
+      changed = true;
+    } else {
+      const n = Number(out.schedulerIntervalMs);
+      if (!Number.isFinite(n)) {
+        const b = Number(base.schedulerIntervalMs);
+        out.schedulerIntervalMs = Number.isFinite(b) ? b : 1000;
+        changed = true;
+      } else {
+        out.schedulerIntervalMs = n;
+      }
+    }
+
+    // Normalize emsApps (canonical structure)
+    try {
+      const mergedForApps = Object.assign({}, base, out);
+      const norm = this.nwNormalizeEmsApps(mergedForApps);
+      const prev = out.emsApps;
+      out.emsApps = norm;
+      try {
+        const a = JSON.stringify(prev || {});
+        const b = JSON.stringify(norm || {});
+        if (a != b) changed = true;
+      } catch (_e) {
+        changed = true;
+      }
+    } catch (_e) {
+      if (!this._nwIsPlainObject(out.emsApps)) {
+        out.emsApps = { schemaVersion: 1, apps: {} };
+        changed = true;
+      }
+    }
+
+    // App‑Center only: do not depend on legacy admin mappings for EVCS active/mode
+    try {
+      if (this._nwIsPlainObject(out.settings)) {
+        for (const k of ['evcsActive', 'evcsMode']) {
+          if (typeof out.settings[k] === 'string' && out.settings[k].trim()) {
+            out.settings[k] = '';
+            changed = true;
+          }
+        }
+      }
+    } catch (_e) {}
+
+    return { patch: out, changed };
+  }
+
+  /**
+   * Apply an installer patch to a runtime config:
+   * - baseConfig is usually the adapter instance native config (or the current runtime config).
+   * - managed keys from patch REPLACE the base values to avoid admin leftovers.
+   * - legacy enable flags are derived from emsApps afterwards.
+   */
+  nwApplyInstallerPatchToRuntimeConfig(baseConfig, patch) {
+    const base = this._nwIsPlainObject(baseConfig) ? baseConfig : {};
+    const p = this._nwIsPlainObject(patch) ? patch : {};
+
+    // Start with a deep clone of base to preserve non-installer settings (port/bind/auth/...)
+    const out = this._nwDeepClone(base) || {};
+
+    for (const k of this.nwInstallerManagedKeys()) {
+      if (Object.prototype.hasOwnProperty.call(p, k)) {
+        out[k] = this._nwDeepClone(p[k]);
+      }
+    }
+
+    // Ensure emsApps + legacy enable flags are consistent at runtime
+    try { this.nwApplyEmsAppsToLegacyFlags(out); } catch (_e) {}
+
+    return out;
+  }
+
+
   /**
    * Normalize EMS App installation/enabled state into a canonical structure.
    *
@@ -545,66 +719,71 @@ class NexoWattVis extends utils.Adapter {
     }
   }
 
-
   async loadInstallerConfigFromState() {
     try {
+      const baseNative = (this.config && typeof this.config === 'object') ? this.config : {};
+
       let patch = {};
+      let needPersist = false;
+      let source = 'state';
+
       const st = await this.getStateAsync('installer.configJson');
       const raw = st && st.val;
+
       if (typeof raw === 'string' && raw.trim()) {
         try {
           const parsed = JSON.parse(raw);
-          if (parsed && typeof parsed === 'object') patch = parsed;
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            patch = parsed;
+          } else {
+            needPersist = true;
+          }
         } catch (e) {
-          this.log.warn('installer.configJson: invalid JSON, ignoring. ' + (e && e.message ? e.message : e));
+          needPersist = true;
+          try {
+            this.log.warn('installer.configJson: invalid JSON, trying userdata backup. ' + (e && e.message ? e.message : e));
+          } catch (_e2) {}
+        }
+      } else {
+        // Empty state → seed from native defaults and persist for App‑Center use
+        needPersist = true;
+      }
+
+      // Fallback: read uninstall-proof backup from 0_userdata.0 when state is empty/invalid
+      if (needPersist) {
+        try {
+          const b = await this.nwReadUserdataBackup();
+          if (b && b.configPatch && typeof b.configPatch === 'object' && !Array.isArray(b.configPatch)) {
+            patch = b.configPatch;
+            source = 'userdata';
+          }
+        } catch (_e3) {
+          // ignore
         }
       }
 
+      // Normalize patch (fills missing keys from native config; canonicalizes emsApps)
+      const norm = this.nwNormalizeInstallerPatch(patch, baseNative);
+      patch = norm.patch;
+      if (norm.changed) needPersist = true;
+
       this._nwInstallerConfigPatch = patch;
 
-      // Merge patch into runtime config
-      this.config = this.config || {};
-      const merged = this.nwDeepMerge(this.config, patch);
+      // Apply patch as installer SoT (replace installer-managed sections)
+      this.config = this.nwApplyInstallerPatchToRuntimeConfig(baseNative, patch);
 
-      // App-Center is the installer-facing single source of truth.
-      // For installer-managed sections we REPLACE whole sub-objects instead of deep-merging
-      // to avoid legacy/admin leftovers influencing runtime behavior.
-      try {
-        const replaceObj = (key) => {
-          if (!patch || typeof patch !== 'object') return;
-          if (!Object.prototype.hasOwnProperty.call(patch, key)) return;
-          const v = patch[key];
-          if (v && typeof v === 'object') merged[key] = v;
-        };
+      // Persist normalized/seeded patch back to state (migration / first-run bootstrap)
+      if (needPersist) {
+        try {
+          await this.persistInstallerConfigToState(patch);
+        } catch (_e4) {}
 
-        // Config sections managed by the App-Center
-        [
-          'emsApps',
-          'installerConfig',
-          'datapoints',
-          'settings',
-          'settingsConfig',
-          'vis',
-          'chargingManagement',
-          'peakShaving',
-          'gridConstraints',
-          'storage',
-          'storageFarm',
-          'thermal',
-          'bhkw',
-          'generator',
-          'threshold',
-          'relay',
-          'smartHome'
-        ].forEach(replaceObj);
-      } catch (_e) {
-        // ignore
+        // Keep userdata backup in sync (best-effort)
+        try {
+          await this.nwWriteUserdataBackup(patch, source === 'userdata' ? 'restore-userdata' : 'normalize');
+        } catch (_e5) {}
       }
 
-      this.config = merged;
-
-      // Ensure emsApps + legacy enable flags are consistent at runtime
-      this.nwApplyEmsAppsToLegacyFlags(this.config);
     } catch (e) {
       this.log.warn('loadInstallerConfigFromState failed: ' + (e && e.message ? e.message : e));
     }
@@ -3509,11 +3688,33 @@ async onReady() {
     }
   }
 
+  async initEmsEngine(force) {
+    const doForce = !!force;
 
-  async initEmsEngine() {
-    if (this.emsEngine) return;
-    this.emsEngine = new EmsEngine(this);
-    await this.emsEngine.init();
+    if (this.emsEngine && !doForce) return;
+
+    // Force: stop + drop existing engine so we can recover from init failures
+    if (doForce && this.emsEngine && typeof this.emsEngine.stop === 'function') {
+      try { this.emsEngine.stop(); } catch (_e) {}
+    }
+
+    // Reset last error
+    this._nwEmsInitError = '';
+
+    try {
+      if (!this.emsEngine) this.emsEngine = new EmsEngine(this);
+      await this.emsEngine.init();
+      this._nwEmsInitError = '';
+    } catch (e) {
+      this._nwEmsInitError = (e && e.message) ? String(e.message) : String(e);
+
+      try {
+        if (this.emsEngine && typeof this.emsEngine.stop === 'function') this.emsEngine.stop();
+      } catch (_e2) {}
+
+      this.emsEngine = null;
+      throw e;
+    }
   }
 
 
@@ -4468,15 +4669,7 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
 
     const _nwRestartEms = async () => {
       try {
-        if (this.emsEngine && typeof this.emsEngine.stop === 'function') {
-          this.emsEngine.stop();
-        }
-      } catch (_e) {}
-
-      try {
-        if (this.emsEngine && typeof this.emsEngine.init === 'function') {
-          await this.emsEngine.init();
-        }
+        await this.initEmsEngine(true);
       } catch (e) {
         try { this.log.warn('EMS restart failed: ' + (e && e.message ? e.message : e)); } catch (_e2) {}
       }
@@ -4528,26 +4721,31 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
           safePatch[k] = v;
         }
 
-        // Persist (state‑based) + apply to runtime config.
+        // Persist (state-based) + apply to runtime config.
         // We merge into the already persisted patch (loaded on startup) to keep full configuration.
         const basePatch = (this._nwInstallerConfigPatch && typeof this._nwInstallerConfigPatch === 'object') ? this._nwInstallerConfigPatch : {};
         let mergedPatch = this.nwDeepMerge(this.nwDeepMerge({}, basePatch), safePatch);
-        // Normalize App‑Center config and map App toggles to legacy enable* flags
+
+        // Map App toggles to legacy enable* flags and ensure forward-compatible shape
         mergedPatch = this.nwApplyEmsAppsToLegacyFlags(mergedPatch);
+        try {
+          const norm = this.nwNormalizeInstallerPatch(mergedPatch, this.config || {});
+          mergedPatch = (norm && norm.patch) ? norm.patch : mergedPatch;
+        } catch (_e) {}
 
         // Persist patch to states (no ioBroker restart)
         await this.persistInstallerConfigToState(mergedPatch);
         this._nwInstallerConfigPatch = mergedPatch;
-        // Persist an additional uninstall-proof backup into 0_userdata.0
+
+        // Persist an additional uninstall-proof backup into 0_userdata.0 (best-effort)
         try { await this.nwWriteUserdataBackup(mergedPatch, 'config-save'); } catch (_e) {}
 
-
-        // Apply to runtime config (best‑effort)
+        // Apply patch to runtime config (App-Center SoT: replace installer-managed sections)
         this.config = (this.config && typeof this.config === 'object') ? this.config : {};
-        this.config = this.nwDeepMerge(this.config, safePatch);
-        try { this.nwApplyEmsAppsToLegacyFlags(this.config); } catch (_e) {}
+        this.config = this.nwApplyInstallerPatchToRuntimeConfig(this.config, mergedPatch);
 
         // Apply updated VIS/EVCS configuration to runtime (best-effort)
+
         try { await this.syncInstallerConfigToStates(); } catch (_e) {}
         try { await this.syncSettingsToStates(); } catch (_e) {}
         try { await this.syncSettingsConfigToStates(); } catch (_e) {}
@@ -4712,10 +4910,6 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
           finalPatch = this.nwApplyEmsAppsToLegacyFlags(finalPatch);
         }
 
-        // Persist patch to states (no ioBroker restart)
-        await this.persistInstallerConfigToState(finalPatch);
-        this._nwInstallerConfigPatch = finalPatch;
-
         // Apply to runtime config based on instance native (drop old patch leftovers)
         let baseNative = {};
         try {
@@ -4723,8 +4917,18 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
           baseNative = (instObj && instObj.native && typeof instObj.native === 'object') ? instObj.native : {};
         } catch (_e) {}
 
-        this.config = this.nwDeepMerge(this.nwDeepMerge({}, baseNative), finalPatch);
-        try { this.nwApplyEmsAppsToLegacyFlags(this.config); } catch (_e) {}
+        // Normalize patch (fills missing keys/types) BEFORE persisting
+        try {
+          const norm = this.nwNormalizeInstallerPatch(finalPatch, baseNative);
+          finalPatch = (norm && norm.patch) ? norm.patch : finalPatch;
+        } catch (_e) {}
+
+        // Persist patch to states (no ioBroker restart)
+        await this.persistInstallerConfigToState(finalPatch);
+        this._nwInstallerConfigPatch = finalPatch;
+
+        // Apply patch as SoT (replace installer-managed sections)
+        this.config = this.nwApplyInstallerPatchToRuntimeConfig(baseNative, finalPatch);
 
         // Apply updated config to runtime (best-effort)
         try { await this.syncInstallerConfigToStates(); } catch (_e) {}
@@ -5293,6 +5497,7 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
           engine: {
             running,
             intervalMs,
+            initError: (this._nwEmsInitError && String(this._nwEmsInitError)) ? String(this._nwEmsInitError) : '',
           },
           lastTickDiag,
         });
