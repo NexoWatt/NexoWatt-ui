@@ -1,12 +1,8 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.46",
+    "version": "0.6.47",
     "news": {
-      "0.6.46": {
-        "en": "Fix: History tooltip/crosshair now aligns with chart margins; prevents duplicate SSE connections on the history page; increases getHistory count to avoid missing points. Week view uses 10-minute step to match Influx cadence.",
-        "de": "Fix: Historie-Tooltip/Fadenkreuz passt wieder zu den Chart-Rändern; verhindert doppelte SSE-Verbindungen auf der Historie-Seite; getHistory-Count wird passend zum Zeitraum gesetzt, um fehlende Punkte zu vermeiden. Wochenansicht nutzt 10-Minuten-Raster (Influx)."
-      },
       "0.6.44": {
         "en": "Fix: Auto unit scaling for power/energy datapoints (kW/kWh sources now work without manual conversion); Grid sign invert option added in Allgemein; StorageFarm keepalive writes setpoints every 5s to satisfy watchdogs.",
         "de": "Fix: Automatische Einheiten-Skalierung für Leistungs/Energie-Datenpunkte (kW/kWh funktioniert ohne manuelle Umrechnung); Option zum Invertieren des Netz-Vorzeichens in Allgemein ergänzt; StorageFarm Keepalive schreibt Setpoints alle 5s (Watchdog)."
@@ -878,6 +874,10 @@
       "0.6.45": {
         "en": "Fix: StorageFarm setpoint writes are now applied for all storages (including split charge/discharge setpoints). Fix: /api/state + Energiefluss monitor now auto-scales mapped kW power datapoints to W (grid import/export + derived loads).",
         "de": "Fix: Speicherfarm Setpoints werden jetzt für alle Speicher sauber geschrieben (inkl. getrennter Lade-/Entlade-Setpoints). Fix: /api/state + Energiefluss-Monitor skaliert gemappte kW-Leistungs-Datenpunkte automatisch auf W (Netz Bezug/Einspeisung + abgeleitete Verbräuche)."
+      },
+      "0.6.47": {
+        "en": "Hotfix: App-Center (installer.configJson) is authoritative for installer-managed config sections (datapoints/settings/vis/emsApps/…). Prevents legacy Admin leftovers from affecting EMS/energyflow/tariff. UI: History chart tooltip alignment + reduced SSE connections.",
+        "de": "Hotfix: App-Center (installer.configJson) ist Source-of-Truth für installer-verwaltete Konfigbereiche (datapoints/settings/vis/emsApps/…). Verhindert, dass alte Admin-Reste EMS/Energiefluss/Tarif beeinflussen. UI: Historie Tooltip-Ausrichtung + weniger SSE-Verbindungen."
       }
     },
     "title": "NexoWatt VIS",
@@ -1061,7 +1061,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.46",
+  "version": "0.6.47",
   "news": {
     "0.6.43": {
       "en": "Fix: Historie in StorageFarm uses farm totals for charge/discharge/SoC (SoC shown again).",

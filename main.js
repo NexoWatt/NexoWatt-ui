@@ -564,7 +564,44 @@ class NexoWattVis extends utils.Adapter {
 
       // Merge patch into runtime config
       this.config = this.config || {};
-      this.config = this.nwDeepMerge(this.config, patch);
+      const merged = this.nwDeepMerge(this.config, patch);
+
+      // App-Center is the installer-facing single source of truth.
+      // For installer-managed sections we REPLACE whole sub-objects instead of deep-merging
+      // to avoid legacy/admin leftovers influencing runtime behavior.
+      try {
+        const replaceObj = (key) => {
+          if (!patch || typeof patch !== 'object') return;
+          if (!Object.prototype.hasOwnProperty.call(patch, key)) return;
+          const v = patch[key];
+          if (v && typeof v === 'object') merged[key] = v;
+        };
+
+        // Config sections managed by the App-Center
+        [
+          'emsApps',
+          'installerConfig',
+          'datapoints',
+          'settings',
+          'settingsConfig',
+          'vis',
+          'chargingManagement',
+          'peakShaving',
+          'gridConstraints',
+          'storage',
+          'storageFarm',
+          'thermal',
+          'bhkw',
+          'generator',
+          'threshold',
+          'relay',
+          'smartHome'
+        ].forEach(replaceObj);
+      } catch (_e) {
+        // ignore
+      }
+
+      this.config = merged;
 
       // Ensure emsApps + legacy enable flags are consistent at runtime
       this.nwApplyEmsAppsToLegacyFlags(this.config);
@@ -5962,18 +5999,6 @@ app.get('/api/history', async (req, res) => {
           return out;
         };
 
-        // Many history adapters (incl. InfluxDB) have a default return limit (often 2000 points).
-        // Week ranges with small steps can exceed that and lead to missing tail buckets.
-        // We therefore request a count big enough for the given range/step.
-        const histCount = (() => {
-          const span = Math.max(0, end - start);
-          const st = Math.max(1, Number(stepMs) || 60000);
-          const est = Math.ceil(span / st) + 20;
-          const min = 2000;
-          const max = 60000;
-          return Math.min(max, Math.max(min, est));
-        })();
-
         // Prefer explicit mapping from config.history.datapoints;
         // if absent, fall back to the adapter's canonical 'historie.*' states.
         const ids = {
@@ -6050,7 +6075,7 @@ app.get('/api/history', async (req, res) => {
 
         const ask = (id) => new Promise(resolve => {
           if (!id) return resolve({ id, values: [] });
-          const options = { start, end, step: stepMs, aggregate: 'average', addId: false, ignoreNull: true, count: histCount, returnNewestEntries: true };
+          const options = { start, end, step: stepS * 1000, aggregate: 'average', addId: false, ignoreNull: true };
           let done = false;
           const timer = setTimeout(() => {
             if (done) return;
