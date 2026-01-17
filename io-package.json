@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.40",
+    "version": "0.6.41",
     "news": {
+      "0.6.41": {
+        "en": [
+          "Tariff + SoC logic: Fixed auto-enable of storage control when dynamic tariff is active (prevents battery charge/discharge from stopping)."
+        ],
+        "de": [
+          "Tarif + SoC-Logik: Auto-Aktivierung der Speicherregelung bei aktivem dynamischem Tarif gefixt (verhindert, dass Be-/Entladung stehen bleibt)."
+        ]
+      },
       "0.6.32": {
         "en": [
           "Storagefarm: Online/Offline detection improved (SoC/power no longer time out in UI; offline is derived from device connected/offline signals + heartbeat timestamps)."
