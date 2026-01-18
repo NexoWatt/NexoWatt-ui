@@ -1500,8 +1500,9 @@ function storageFarmUpdateSummary(){
   const chg = st['storageFarm.totalChargePowerW'] && st['storageFarm.totalChargePowerW'].value;
   const dchg = st['storageFarm.totalDischargePowerW'] && st['storageFarm.totalDischargePowerW'].value;
   const on = st['storageFarm.storagesOnline'] && st['storageFarm.storagesOnline'].value;
+  const deg = st['storageFarm.storagesDegraded'] && st['storageFarm.storagesDegraded'].value;
   const tot = st['storageFarm.storagesTotal'] && st['storageFarm.storagesTotal'].value;
-  sum.textContent = `SoC Ø: ${soc!==undefined?soc:'--'} % | Laden: ${chg!==undefined?formatPower(chg):'--'} | Entladen: ${dchg!==undefined?formatPower(dchg):'--'} | Online: ${on!==undefined?on:'--'}/${tot!==undefined?tot:'--'}`;
+  sum.textContent = `SoC Ø: ${soc!==undefined?soc:'--'} % | Laden: ${chg!==undefined?formatPower(chg):'--'} | Entladen: ${dchg!==undefined?formatPower(dchg):'--'} | Online: ${on!==undefined?on:'--'}/${tot!==undefined?tot:'--'}${(deg!==undefined && Number(deg)>0) ? (' | Degraded: ' + deg) : ''}`;
 }
 
 function storageFarmRenderStatusRows(list){
@@ -1534,7 +1535,9 @@ function storageFarmRenderStatusRows(list){
     const soc = (row && row.soc !== undefined && row.soc !== null && !isNaN(Number(row.soc))) ? (Number(row.soc).toFixed(1)) : '--';
     const chg = (row && row.chargePowerW !== undefined && row.chargePowerW !== null && !isNaN(Number(row.chargePowerW))) ? formatPower(Number(row.chargePowerW)) : '--';
     const dchg = (row && row.dischargePowerW !== undefined && row.dischargePowerW !== null && !isNaN(Number(row.dischargePowerW))) ? formatPower(Number(row.dischargePowerW)) : '--';
-    const online = (row && row.online) ? 'Online' : 'Offline';
+    let online = 'Offline';
+    if (row && (row.degraded === true || row.state === 'degraded')) online = 'Degraded';
+    else if (row && row.online) online = 'Online';
 
     r.appendChild(mkCell(name, 'Speicher'));
     
@@ -3966,7 +3969,26 @@ function updateEnergyWeb() {
   // Gebäudeanzeige: EV (optional) + optionale Verbraucher abziehen, damit der Energiefluss optisch sauber aufgeht
   const evAbs = Math.max(0, Math.abs(c2));
   const loadDisplayBase = Math.max(0, subEvFromLoad ? (load - evAbs) : load);
-  const loadDisplay = Math.max(0, loadDisplayBase - extrasConsumersSum);
+  let loadDisplay = Math.max(0, loadDisplayBase - extrasConsumersSum);
+
+  // Anti-glitch: if the building load temporarily drops to 0 W while there is clear activity,
+  // hold the last plausible value for a short time to avoid confusing UI spikes.
+  try {
+    const sysActivityW = Math.abs(pv) + Math.abs(buy) + Math.abs(sell) + Math.abs(batCharge) + Math.abs(batDischarge) + Math.abs(c2) + Math.abs(extrasConsumersSum);
+    if (sysActivityW > 300 && loadDisplay === 0) {
+      const lastW = Number(window.__nwLastGoodLoadDisplayW);
+      const lastTs = Number(window.__nwLastGoodLoadDisplayTs);
+      if (Number.isFinite(lastW) && Number.isFinite(lastTs) && (Date.now() - lastTs) < 60 * 1000 && lastW > 0) {
+        loadDisplay = lastW;
+      } else {
+        loadDisplay = 100;
+      }
+    }
+    if (loadDisplay > 0) {
+      window.__nwLastGoodLoadDisplayW = loadDisplay;
+      window.__nwLastGoodLoadDisplayTs = Date.now();
+    }
+  } catch (_e) {}
 
   // -------- Anzeige-Werte & Richtungen (ohne Netto-Berechnung) --------
   // PV: immer Richtung Gebäude (keine Richtungsumschaltung); Wert = |pv|

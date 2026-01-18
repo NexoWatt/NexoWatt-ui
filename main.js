@@ -97,6 +97,12 @@ class NexoWattVis extends utils.Adapter {
         pvTotalW: null,
         quality: '',
       },
+
+      good: {
+        loadTotalW: null,
+        loadRestW: null,
+        ts: 0,
+      },
     };
 
     // Notifications / Monitoring
@@ -920,6 +926,7 @@ class NexoWattVis extends utils.Adapter {
       totalDischargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt Entladeleistung (W) (abgeleitet)' },
       totalPvPowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt PV-Leistung (W) (DC, abgeleitet)' },
       storagesOnline: { type: 'number', role: 'value', def: 0, name: 'Online Speicher (abgeleitet)' },
+      storagesDegraded: { type: 'number', role: 'value', def: 0, name: 'Degraded Speicher (abgeleitet)' },
       storagesTotal: { type: 'number', role: 'value', def: 0, name: 'Konfigurierte Speicher' },
       storagesStatusJson: { type: 'string', role: 'json', def: '[]', name: 'Speicher-Status (JSON, abgeleitet)' },
     };
@@ -964,6 +971,7 @@ class NexoWattVis extends utils.Adapter {
       totalDischargePowerW: 0,
       totalPvPowerW: 0,
       storagesOnline: 0,
+      storagesDegraded: 0,
       storagesTotal: 0,
       storagesStatusJson: '[]',
     };
@@ -1281,6 +1289,7 @@ class NexoWattVis extends utils.Adapter {
       let totalDischarge = 0;
       let totalPv = 0;
       let online = 0;
+      let degraded = 0;
       let configured = 0;
 
       // SoC aggregation must be stable in Farm mode even when a storage
@@ -1426,23 +1435,37 @@ class NexoWattVis extends utils.Adapter {
           if (st && st.val !== undefined && st.val !== null) { hasAnyValue = true; break; }
         }
 
-        let isOnline = false;
-        let offlineReason = '';
+        // Health-state for UI/summary
+        // - offline: adapter/device explicitly reports offline OR there is no data at all
+        // - degraded: no fresh updates for a while (stale heartbeat) but we keep last known values
+        // - online: fresh updates
+        let health = 'offline';
+        let stateReason = '';
 
         if (explicitOffline) {
-          isOnline = false;
-          offlineReason = 'device_offline';
+          health = 'offline';
+          stateReason = 'device_offline';
+        } else if (!hasAnyValue) {
+          health = 'offline';
+          stateReason = 'no_data';
         } else if (stale) {
-          isOnline = false;
-          offlineReason = 'stale';
-        } else if (connB === true) {
-          isOnline = true;
-        } else if (hasAnyValue) {
-          isOnline = true;
+          health = 'degraded';
+          stateReason = 'stale';
         } else {
-          isOnline = false;
-          offlineReason = 'no_data';
+          health = 'online';
         }
+
+        const isAvailable = (health !== 'offline');
+        const isFreshOnline = (health === 'online');
+        const isDegraded = (health === 'degraded');
+
+        // Expose for VIS rows
+        status.state = health;
+        status.degraded = !!isDegraded;
+        // Backwards-compatible: 'online' means available (online OR degraded)
+        status.online = !!isAvailable;
+        if (!isAvailable) status.offlineReason = stateReason;
+        if (isDegraded) status.degradedReason = stateReason;
 
         // ---------------------------------------------------------------------
         // SoC read (stable aggregation)
@@ -1500,7 +1523,7 @@ class NexoWattVis extends utils.Adapter {
           socWeightAll += w;
           socSourcesTotal++;
 
-          if (isOnline) {
+          if (isFreshOnline) {
             socListOnline.push(socVal);
             socWeightedOnline += socVal * w;
             socWeightOnline += w;
@@ -1508,9 +1531,12 @@ class NexoWattVis extends utils.Adapter {
           }
         }
 
-        status.online = !!isOnline;
-        if (!isOnline) {
-          status.offlineReason = offlineReason;
+        // Count storages
+        if (health === 'online') online++;
+        else if (health === 'degraded') degraded++;
+
+        // Offline storages: keep row but skip power aggregation
+        if (!isAvailable) {
           statusRows.push(status);
           continue;
         }
@@ -1586,7 +1612,7 @@ class NexoWattVis extends utils.Adapter {
 
       const totalSoc = socWeightAll > 0 ? (socWeightedAll / socWeightAll) : 0;
       const totalSocOnline = socWeightOnline > 0 ? (socWeightedOnline / socWeightOnline) : 0;
-      const socDegraded = (socSourcesTotal > 0 && socSourcesOnline >= 0 && socSourcesOnline < socSourcesTotal) || (online < configured);
+      const socDegraded = (degraded > 0) || (socSourcesTotal > 0 && socSourcesOnline >= 0 && socSourcesOnline < socSourcesTotal) || (online < configured);
 
       await this.setStateAsync('storageFarm.totalSoc', { val: Math.round(totalSoc * 10) / 10, ack: true });
       await this.setStateAsync('storageFarm.medianSoc', { val: Math.round(medianSoc * 10) / 10, ack: true });
@@ -1598,6 +1624,7 @@ class NexoWattVis extends utils.Adapter {
       await this.setStateAsync('storageFarm.totalDischargePowerW', { val: Math.round(totalDischarge), ack: true });
       await this.setStateAsync('storageFarm.totalPvPowerW', { val: Math.round(totalPv), ack: true });
       await this.setStateAsync('storageFarm.storagesOnline', { val: online, ack: true });
+      await this.setStateAsync('storageFarm.storagesDegraded', { val: degraded, ack: true });
       await this.setStateAsync('storageFarm.storagesTotal', { val: configured, ack: true });
       await this.setStateAsync('storageFarm.storagesStatusJson', { val: JSON.stringify(statusRows), ack: true });
 
@@ -1614,6 +1641,7 @@ class NexoWattVis extends utils.Adapter {
         this.updateValue('storageFarm.totalDischargePowerW', Math.round(totalDischarge), now);
         this.updateValue('storageFarm.totalPvPowerW', Math.round(totalPv), now);
         this.updateValue('storageFarm.storagesOnline', online, now);
+        this.updateValue('storageFarm.storagesDegraded', degraded, now);
         this.updateValue('storageFarm.storagesTotal', configured, now);
         this.updateValue('storageFarm.storagesStatusJson', JSON.stringify(statusRows), now);
 
@@ -9047,7 +9075,7 @@ return res.json(out);
       // Tariff/charging settings
       'dynamicTariff','storagePower','price','priority','tariffMode','evcsMaxPower','evcsCount'
     ];
-    const storageFarmLocalKeys = ['enabled', 'mode', 'configJson', 'groupsJson', 'totalSoc', 'medianSoc', 'totalSocOnline', 'socSourcesTotal', 'socSourcesOnline', 'socDegraded', 'totalChargePowerW', 'totalDischargePowerW', 'totalPvPowerW', 'storagesOnline', 'storagesTotal', 'storagesStatusJson'];
+    const storageFarmLocalKeys = ['enabled', 'mode', 'configJson', 'groupsJson', 'totalSoc', 'medianSoc', 'totalSocOnline', 'socSourcesTotal', 'socSourcesOnline', 'socDegraded', 'totalChargePowerW', 'totalDischargePowerW', 'totalPvPowerW', 'storagesOnline', 'storagesDegraded', 'storagesTotal', 'storagesStatusJson'];
     // Weitere lokale States, die in der VIS angezeigt werden sollen (ohne Admin-Mapping)
     // Wichtig: Diese Keys müssen auch dann funktionieren, wenn sie NICHT im Admin unter
     // "Datenpunkte" gemappt wurden. Daher wird im Subscribe-Loop unten auf die lokalen
@@ -10776,22 +10804,86 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       if (dc !== null && Number.isFinite(Number(dc))) pvDcW = Math.max(0, Math.abs(Number(dc)));
     }
 
-    // Default behaviour: only add DC-PV automatically when PV is NOT explicitly mapped (avoid double-count)
+    // PV total = AC + optional DC (Speicherfarm).
+    // In Farm-/DC-Setups kann PV direkt aus den Speichersystemen kommen (DC-PV).
+    // Wir berücksichtigen diese Leistung grundsätzlich, vermeiden aber offensichtliches Double-Count
+    // via einfacher Heuristik (analog Energiefluss/Historie).
     let pvTotalW = pvAcW;
     let pvDcIncluded = false;
-    if (!pvPowerMapped && !prodTotalMapped && sfEnabled && pvDcW > 0) {
-      pvTotalW += pvDcW;
-      pvDcIncluded = true;
+    if (sfEnabled && pvDcW > 0) {
+      if (!pvTotalW || pvTotalW === 0) {
+        pvTotalW = pvDcW;
+        pvDcIncluded = true;
+        if (pvSource === 'missing') pvSource = 'farm:dc';
+      } else {
+        const acAbs = Math.abs(pvTotalW);
+        const dcAbs = Math.abs(pvDcW);
+        const relDiff = Math.abs(acAbs - dcAbs) / Math.max(1, dcAbs);
+        if (relDiff < 0.05) {
+          // likely already included
+          pvTotalW = Math.max(acAbs, dcAbs);
+        } else {
+          pvTotalW = acAbs + dcAbs;
+          pvDcIncluded = true;
+        }
+      }
     }
 
     // Total production = PV(total) + extra producers
     const productionW = pvTotalW + producerSumW;
 
     // --- Derived loads ---
-    let loadTotalW = productionW + gridBuyW + dischargeW - gridSellW - chargeW;
+    const rawLoadTotalW = productionW + gridBuyW + dischargeW - gridSellW - chargeW;
 
-    // Clamp to plausible range
+    // Some meters/adapters update asynchronously (grid/PV/battery).
+    // This can temporarily yield an impossible negative power balance.
+    // To avoid 0 W spikes in the VIS, we hold the last plausible value for a short time.
+    let loadTotalW = rawLoadTotalW;
+
+    const activityW = (Math.abs(productionW) + Math.abs(gridBuyW) + Math.abs(gridSellW) + Math.abs(chargeW) + Math.abs(dischargeW));
+    const hasActivity = activityW > 200;
+
+    // Timestamp skew between inputs (debug only)
+    const tsList = [];
+    const pushTs = (k) => {
+      const rec = this.stateCache && this.stateCache[k];
+      const t = rec && rec.ts;
+      if (typeof t === 'number' && Number.isFinite(t)) tsList.push(t);
+    };
+    pushTs('gridBuyPower'); pushTs('gridSellPower'); pushTs('gridPointPower');
+    pushTs('storageChargePower'); pushTs('storageDischargePower'); pushTs('batteryPower');
+    pushTs('pvPower'); pushTs('productionTotal');
+    if (sfEnabled) {
+      pushTs('storageFarm.totalPvPowerW');
+      pushTs('storageFarm.totalChargePowerW');
+      pushTs('storageFarm.totalDischargePowerW');
+    }
+    const inputSkewMs = (tsList.length >= 2) ? (Math.max(...tsList) - Math.min(...tsList)) : null;
+
+    if (!this._derivedFlow) this._derivedFlow = {};
+    if (!this._derivedFlow.good) this._derivedFlow.good = { loadTotalW: null, loadRestW: null, ts: 0 };
+    const good = this._derivedFlow.good;
+    const goodLoad = (typeof good.loadTotalW === 'number' && Number.isFinite(good.loadTotalW)) ? good.loadTotalW : null;
+    const goodRest = (typeof good.loadRestW === 'number' && Number.isFinite(good.loadRestW)) ? good.loadRestW : null;
+    const goodAgeMs = (good && typeof good.ts === 'number' && Number.isFinite(good.ts)) ? (ts - good.ts) : Infinity;
+
+    const holdMaxAgeMs = 60 * 1000;
+    let usedFallback = false;
+
+    // Clamp to plausible range + anti-spike
     if (!Number.isFinite(loadTotalW)) loadTotalW = 0;
+    if (loadTotalW < 0 || (loadTotalW === 0 && hasActivity)) {
+      if (goodLoad !== null && goodAgeMs <= holdMaxAgeMs) {
+        loadTotalW = goodLoad;
+        usedFallback = true;
+      } else if (hasActivity) {
+        // Minimal plausible base-load to avoid "0.00 kW" optics while there is clearly energy activity.
+        loadTotalW = 100;
+        usedFallback = true;
+      } else {
+        loadTotalW = 0;
+      }
+    }
     if (loadTotalW < 0) loadTotalW = 0;
 
     // Rest-load: subtract EV and configured extra consumers (for convenience / mapping)
@@ -10805,12 +10897,33 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     }
 
+    const rawLoadRestW = rawLoadTotalW - evW - consumersW;
+
     let loadRestW = loadTotalW - evW - consumersW;
+    // If we had to hold/fallback the total load, prefer holding the last plausible rest-load as well.
+    if (usedFallback && goodRest !== null && goodAgeMs <= holdMaxAgeMs) {
+      loadRestW = goodRest;
+    }
     if (!Number.isFinite(loadRestW)) loadRestW = 0;
     if (loadRestW < 0) loadRestW = 0;
 
     const loadTotalRound = Math.round(loadTotalW);
     const loadRestRound = Math.round(loadRestW);
+
+    // Update last-plausible cache only when the raw balance is plausible
+    // (avoid locking-in 0W during active operation).
+    try {
+      if (Number.isFinite(rawLoadTotalW) && rawLoadTotalW >= 0) {
+        const rawRound = Math.round(rawLoadTotalW);
+        const rawRestRound = Math.round(Math.max(0, rawLoadRestW));
+        const goodCandidateOk = (rawRound > 10) || !hasActivity;
+        if (goodCandidateOk) {
+          good.loadTotalW = rawRound;
+          good.loadRestW = rawRestRound;
+          good.ts = ts;
+        }
+      }
+    } catch (_eHold) {}
 
     // --- Update adapter states (for App-Center mapping / debugging) ---
     if (this._derivedFlow?.last?.loadTotalW !== loadTotalRound) {
@@ -10845,6 +10958,11 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     else if (pvSource === 'missing') quality = 'missing-pv';
     else if (storageSrc === 'missing') quality = 'missing-storage';
 
+    if (usedFallback) {
+      if (quality === 'ok') quality = 'degraded-balance';
+      else quality = String(quality) + '+degraded';
+    }
+
     if (this._derivedFlow?.last?.quality !== quality) {
       this._derivedFlow.last.quality = quality;
       await this.setStateAsync('derived.core.building.quality', { val: quality, ack: true });
@@ -10876,6 +10994,13 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
           consumersW: Math.round(consumersW),
           evW: Math.round(evW),
           building: { loadTotalW: loadTotalRound, loadRestW: loadRestRound },
+          balance: {
+            rawLoadTotalW: Math.round(rawLoadTotalW),
+            rawLoadRestW: Math.round(Math.max(0, rawLoadRestW)),
+            usedFallback: !!usedFallback,
+            inputSkewMs: inputSkewMs,
+            activityW: Math.round(activityW),
+          },
           quality,
         };
         const json = JSON.stringify(payload);
