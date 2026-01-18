@@ -8,6 +8,7 @@ const path = require('path');
 // The default Express JSON limit (100kb) is too small and causes "Payload Too Large" and failed saves.
 const bodyParser = express.json({ limit: '5mb' });
 const crypto = require('crypto');
+const https = require('https');
 const pkg = require('./package.json');
 
 // Embedded EMS engine (Charging Management from nexowatt-multiuse)
@@ -47,6 +48,17 @@ class NexoWattVis extends utils.Adapter {
     this._ssePendingPayload = {};
     this._sseFlushTimer = null;
     this.smartHomeDevices = [];
+
+    // Root-level local UI keys (internal states without a folder prefix)
+    // Used e.g. for the integrated Weather tile (Plug&Play, no extra adapter).
+    this._nwRootUiKeys = new Set([
+      'weatherTempC',
+      'weatherText',
+      'weatherCode',
+      'weatherWindKmh',
+      'weatherCloudPct',
+      'weatherLocation',
+    ]);
 
     // EMS engine (Sprint 2)
     this.emsEngine = null;
@@ -206,6 +218,216 @@ class NexoWattVis extends utils.Adapter {
         }
       } catch (_e) {}
     }
+  }
+
+
+  // ---------------------------------------------------------------------------
+  // Weather (Plug&Play)
+  // ---------------------------------------------------------------------------
+  // The VIS dashboard can optionally show a Weather tile. To keep commissioning
+  // 100% Plug&Play (no additional ioBroker weather adapter), we maintain a small
+  // set of local states and fill them via an integrated Open‑Meteo fetch.
+  //
+  // IMPORTANT: App‑Center mapping can still override these keys. If the customer
+  // maps e.g. weatherTempC to a different datapoint, the UI will use that mapping.
+  async ensureWeatherStates() {
+    const defs = {
+      weatherTempC:     { type: 'number', role: 'value.temperature', def: null },
+      weatherCode:      { type: 'number', role: 'value', def: null },
+      weatherText:      { type: 'string', role: 'text', def: '' },
+      weatherWindKmh:   { type: 'number', role: 'value.speed', def: null },
+      weatherCloudPct:  { type: 'number', role: 'value', def: null },
+      weatherLocation:  { type: 'string', role: 'text', def: '' },
+    };
+
+    for (const [id, c] of Object.entries(defs)) {
+      await this.setObjectNotExistsAsync(id, {
+        type: 'state',
+        common: {
+          name: id,
+          type: c.type,
+          role: c.role,
+          read: true,
+          write: false,
+          def: c.def,
+        },
+        native: {},
+      });
+
+      // Seed defaults only once
+      try {
+        const st = await this.getStateAsync(id);
+        if (!st && c.def !== undefined && c.def !== null) {
+          await this.setStateAsync(id, { val: c.def, ack: true });
+        }
+      } catch (_e) {}
+    }
+  }
+
+  _nwHttpsGetJson(url, timeoutMs = 10000) {
+    return new Promise((resolve, reject) => {
+      try {
+        const req = https.get(
+          url,
+          {
+            headers: {
+              'User-Agent': `nexowatt-vis/${pkg && pkg.version ? pkg.version : 'dev'}`,
+              'Accept-Encoding': 'identity',
+            },
+          },
+          (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+              const sc = Number(res.statusCode) || 0;
+              if (sc < 200 || sc >= 300) {
+                return reject(new Error(`HTTP ${sc}: ${String(data || '').slice(0, 200)}`));
+              }
+              try {
+                resolve(JSON.parse(data));
+              } catch (e) {
+                reject(e);
+              }
+            });
+          }
+        );
+
+        req.on('error', reject);
+        req.setTimeout(timeoutMs, () => req.destroy(new Error('timeout')));
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  async _nwGetSystemGeo() {
+    try {
+      const sys = await this.getForeignObjectAsync('system.config');
+      const c = (sys && sys.common) ? sys.common : {};
+      const lat = Number(c.latitude);
+      const lon = Number(c.longitude);
+
+      // Optional location hints
+      const city = (c.city || c.town || c.name || '').toString().trim();
+      const country = (c.country || '').toString().trim();
+      const locName = [city, country].filter(Boolean).join(', ');
+
+      return {
+        lat: Number.isFinite(lat) ? lat : null,
+        lon: Number.isFinite(lon) ? lon : null,
+        locName,
+      };
+    } catch (_e) {
+      return { lat: null, lon: null, locName: '' };
+    }
+  }
+
+  _nwWeatherTextDe(code) {
+    const c = Number(code);
+    if (!Number.isFinite(c)) return '';
+
+    // WMO interpretation codes (Open‑Meteo weather_code)
+    // 0 clear, 1/2/3 cloudiness, 45/48 fog, 51..57 drizzle, 61..67 rain,
+    // 71..77 snow, 80..86 showers, 95..99 thunderstorm.
+    const map = {
+      0:  'Klar',
+      1:  'Überwiegend klar',
+      2:  'Teilweise bewölkt',
+      3:  'Bedeckt',
+      45: 'Nebel',
+      48: 'Nebel (Reif)',
+      51: 'Nieselregen (leicht)',
+      53: 'Nieselregen',
+      55: 'Nieselregen (stark)',
+      56: 'Gefrierender Nieselregen (leicht)',
+      57: 'Gefrierender Nieselregen',
+      61: 'Regen (leicht)',
+      63: 'Regen',
+      65: 'Regen (stark)',
+      66: 'Gefrierender Regen (leicht)',
+      67: 'Gefrierender Regen',
+      71: 'Schneefall (leicht)',
+      73: 'Schneefall',
+      75: 'Schneefall (stark)',
+      77: 'Schneegriesel',
+      80: 'Regenschauer (leicht)',
+      81: 'Regenschauer',
+      82: 'Regenschauer (heftig)',
+      85: 'Schneeschauer (leicht)',
+      86: 'Schneeschauer',
+      95: 'Gewitter',
+      96: 'Gewitter (Hagel)',
+      99: 'Gewitter (starker Hagel)',
+    };
+
+    return map[c] || `Code ${c}`;
+  }
+
+  async nwUpdateWeather(reason = 'interval') {
+    if (this._nwWeatherUpdating) return;
+    this._nwWeatherUpdating = true;
+    try {
+      const geo = await this._nwGetSystemGeo();
+      const lat = geo.lat;
+      const lon = geo.lon;
+      const loc = (geo.locName && String(geo.locName).trim())
+        ? String(geo.locName).trim()
+        : (Number.isFinite(lat) && Number.isFinite(lon) ? `${lat.toFixed(2)}, ${lon.toFixed(2)}` : '');
+
+      if (loc) {
+        try { await this.setStateAsync('weatherLocation', { val: loc, ack: true }); } catch (_e) {}
+      }
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        // No system coordinates configured -> keep previous values and show a minimal hint
+        try {
+          const st = await this.getStateAsync('weatherTempC');
+          if (!st || st.val === null || st.val === undefined) {
+            await this.setStateAsync('weatherText', { val: 'Standort nicht konfiguriert', ack: true });
+          }
+        } catch (_e) {}
+        return;
+      }
+
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&current=temperature_2m,weather_code,cloud_cover,wind_speed_10m,is_day&timezone=auto`;
+      const json = await this._nwHttpsGetJson(url, 9000);
+      if (!json) throw new Error('Empty response');
+      if (json.error) throw new Error(String(json.reason || 'API error'));
+
+      const cur = (json.current && typeof json.current === 'object') ? json.current : {};
+      const temp = Number(cur.temperature_2m);
+      const code = Number(cur.weather_code);
+      const wind = Number(cur.wind_speed_10m);
+      const cloud = Number(cur.cloud_cover);
+
+      const tempOut = Number.isFinite(temp) ? Math.round(temp * 10) / 10 : null;
+      const codeOut = Number.isFinite(code) ? code : null;
+      const windOut = Number.isFinite(wind) ? Math.round(wind) : null;
+      const cloudOut = Number.isFinite(cloud) ? Math.round(cloud) : null;
+      const textOut = (codeOut != null) ? this._nwWeatherTextDe(codeOut) : '';
+
+      await this.setStateAsync('weatherTempC', { val: tempOut, ack: true });
+      await this.setStateAsync('weatherCode', { val: codeOut, ack: true });
+      await this.setStateAsync('weatherText', { val: textOut, ack: true });
+      await this.setStateAsync('weatherWindKmh', { val: windOut, ack: true });
+      await this.setStateAsync('weatherCloudPct', { val: cloudOut, ack: true });
+    } catch (e) {
+      // Keep last values on transient failures; only log at debug to avoid log spam.
+      try { this.log.debug(`[weather] update failed (${reason}): ${e.message}`); } catch (_e2) {}
+    } finally {
+      this._nwWeatherUpdating = false;
+    }
+  }
+
+  startWeatherService() {
+    try {
+      if (this._nwWeatherTimer) return;
+      const intervalMs = 15 * 60 * 1000;
+      const run = () => this.nwUpdateWeather('interval').catch(() => {});
+      // First update shortly after startup so UI gets fresh values quickly
+      this._nwWeatherStartupTimer = setTimeout(run, 2000);
+      this._nwWeatherTimer = setInterval(run, intervalMs);
+    } catch (_e) {}
   }
 
 
@@ -3630,6 +3852,9 @@ async onReady() {
 
       await this.ensureSettingsStates();
 
+      // Weather (Plug&Play)
+      try { await this.ensureWeatherStates(); } catch (_e) {}
+
       // Notifications: runtime + debug states
       try { await this.ensureNotificationStates(); } catch (_e) {}
 
@@ -3666,6 +3891,9 @@ async onReady() {
 
       // finally subscribe and read initial values
       await this.subscribeConfiguredStates();
+
+      // Weather (Plug&Play) background refresh (no additional adapter required)
+      try { this.startWeatherService(); } catch (_e) {}
 
       // Derived / calculated live states (used as fallbacks for UI, optional for mapping)
       await this.ensureDerivedFlowStates();
@@ -9080,7 +9308,18 @@ return res.json(out);
     // Wichtig: Diese Keys müssen auch dann funktionieren, wenn sie NICHT im Admin unter
     // "Datenpunkte" gemappt wurden. Daher wird im Subscribe-Loop unten auf die lokalen
     // Adapter-States (namespace + key) zurückgefallen.
-    const localUiKeys = ['tarif.statusText','tarif.state'];
+    const localUiKeys = [
+      'tarif.statusText',
+      'tarif.state',
+
+      // Weather tile (Plug&Play): local root-level states
+      'weatherTempC',
+      'weatherText',
+      'weatherCode',
+      'weatherWindKmh',
+      'weatherCloudPct',
+      'weatherLocation',
+    ];
     const keys = [
       ...Object.keys(dps),
       // always include built-in local settings keys so UI keeps values on reload
@@ -9261,6 +9500,18 @@ return res.json(out);
     if (id && id.startsWith(prefTH)) return 'thermal.' + id.slice(prefTH.length);
     if (id && id.startsWith(prefTR)) return 'threshold.' + id.slice(prefTR.length);
     if (id && id.startsWith(prefGC)) return 'gridConstraints.' + id.slice(prefGC.length);
+
+    // Root-level local UI states without a folder prefix (e.g. weatherTempC)
+    // Only allow a strict whitelist to avoid leaking arbitrary internal states into the UI.
+    try {
+      const prefRoot = this.namespace + '.';
+      if (id && id.startsWith(prefRoot)) {
+        const rest = id.slice(prefRoot.length);
+        if (rest && !rest.includes('.') && this._nwRootUiKeys && this._nwRootUiKeys.has(rest)) {
+          return rest;
+        }
+      }
+    } catch (_e) {}
     return null;
   }
 
@@ -11351,6 +11602,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
   onUnload(callback) {
     try {
+      // Weather timers
+      try { if (this._nwWeatherStartupTimer) clearTimeout(this._nwWeatherStartupTimer); } catch (_e) {}
+      try { if (this._nwWeatherTimer) clearInterval(this._nwWeatherTimer); } catch (_e) {}
+
       try { if (this._nwEnergyTotalsTimer) clearInterval(this._nwEnergyTotalsTimer); } catch (_e) {}
       try { if (this._nwHistorieTimer) clearInterval(this._nwHistorieTimer); } catch (_e) {}
       try { this.stopNotificationMonitor(); } catch (_e) {}

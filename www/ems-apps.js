@@ -273,7 +273,10 @@
     { key: 'gridVoltage', label: 'Netzspannung (V) (optional)', placeholder: 'optional' }
   ];
 
-  // Wetter (optional) – reine UI. Kann aus jedem Wetter-Adapter gemappt werden.
+  // Wetter (optional)
+  // Plug&Play: Standardmäßig befüllt der nexowatt-vis Adapter die Wetter-States selbst (Open-Meteo,
+  // basierend auf system.config.latitude/longitude). Kein zusätzlicher Wetter-Adapter erforderlich.
+  // Optional: Mapping hier überschreibt die integrierten Werte (z.B. eigener Wetterdienst).
   // Mindestanforderung fuer sinnvolle Anzeige: Temperatur ODER Wettertext/Wettercode.
   const WEATHER_DP_FIELDS = [
     { key: 'weatherTempC', label: 'Temperatur (°C)', placeholder: 'z.B. weather.0.current.temperature (optional)' },

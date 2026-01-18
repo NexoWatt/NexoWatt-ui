@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.56",
+    "version": "0.6.57",
     "news": {
+      "0.6.57": {
+        "en": "VIS: Weather tile is now Plug&Play (integrated Open-Meteo fetch using system latitude/longitude). No additional adapter required; App-Center mapping can still override if desired.",
+        "de": "VIS: Wetter-Kachel jetzt Plug&Play (integrierter Open-Meteo Abruf ueber System-Lat/Lon). Kein weiterer Adapter noetig; App-Center Mapping kann optional uebersteuern."
+      },
       "0.6.56": {
         "en": "VIS: Optional Weather tile in Status section + App-Center mapping (temperature/condition/wind/clouds).",
         "de": "VIS: Optionale Wetter-Kachel im Status-Bereich + App-Center Mapping (Temperatur/Wettertext/Wind/Wolken)."
@@ -1085,8 +1089,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.50",
+  "version": "0.6.57",
   "news": {
+    "0.6.57": {
+      "en": "VIS: Weather tile Plug&Play (integrated Open-Meteo fetch; optional App-Center override).",
+      "de": "VIS: Wetter-Kachel Plug&Play (integrierter Open-Meteo Abruf; optional App-Center Override)."
+    },
     "0.6.50": {
       "en": "Fix: App-Center save now correctly persists installerConfig changes (grid connection limit / NVP).",
       "de": "Fix: App-Center speichert installerConfig-Aenderungen wieder korrekt (Netzanschlussleistung/NVP)."
