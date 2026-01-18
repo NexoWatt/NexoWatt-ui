@@ -641,8 +641,47 @@ class TarifVisModule extends BaseModule {
             const allowStorageCheap = (prioritaet === 1 || prioritaet === 2);
             const allowEvcsCheap = (prioritaet === 2 || prioritaet === 3);
 
-            // Speicher-SoC (optional, aus Storage-Mapping / Farm-SoC wenn gemappt)
-            const socRaw = this.dp ? this.dp.getNumber('st.socPct', null) : null;
+            // Speicher-SoC (optional)
+            //
+            // Wichtig (Speicherfarm): In Farm-Setups ist st.socPct häufig nur auf einen Einzel-Speicher
+            // gemappt. Für die Tarif-SoC-Hysterese ("Speicher voll → ruht") müssen wir jedoch den
+            // aggregierten Farm-SoC verwenden, sonst wird bereits bei einem vollen Einzel-Speicher
+            // fälschlicherweise "voll" erkannt.
+            //
+            // Daher: Wenn Speicherfarm aktiv ist und ein Farm-SoC verfügbar/fresh ist,
+            // bevorzugen wir storageFarm.totalSocOnline (fallback: totalSoc).
+            let socRaw = this.dp ? this.dp.getNumber('st.socPct', null) : null;
+            if (this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm) {
+                const now = Date.now();
+                const staleMs = 120000;
+                try {
+                    const stOnline = await this.adapter.getStateAsync('storageFarm.storagesOnline');
+                    const onlineN = stOnline && stOnline.val !== undefined && stOnline.val !== null ? Number(stOnline.val) : NaN;
+                    const hasOnline = Number.isFinite(onlineN) && onlineN > 0;
+
+                    if (hasOnline) {
+                        // Prefer SoC of ONLINE storages (best reflects what the farm can actually do)
+                        const stSocOnline = await this.adapter.getStateAsync('storageFarm.totalSocOnline');
+                        const vOnline = stSocOnline && stSocOnline.val !== undefined && stSocOnline.val !== null ? Number(stSocOnline.val) : NaN;
+                        const ageOnline = (stSocOnline && typeof stSocOnline.ts === 'number') ? (now - Number(stSocOnline.ts)) : null;
+
+                        if (Number.isFinite(vOnline) && (ageOnline === null || ageOnline <= staleMs)) {
+                            socRaw = vOnline;
+                        } else {
+                            // Fallback: totalSoc across all configured storages
+                            const stSoc = await this.adapter.getStateAsync('storageFarm.totalSoc');
+                            const v = stSoc && stSoc.val !== undefined && stSoc.val !== null ? Number(stSoc.val) : NaN;
+                            const age = (stSoc && typeof stSoc.ts === 'number') ? (now - Number(stSoc.ts)) : null;
+                            if (Number.isFinite(v) && (age === null || age <= staleMs)) {
+                                socRaw = v;
+                            }
+                        }
+                    }
+                } catch (_e) {
+                    // ignore
+                }
+            }
+
             const storageSocPct = (typeof socRaw === 'number' && Number.isFinite(socRaw))
                 ? this._clamp(socRaw, 0, 100)
                 : null;
