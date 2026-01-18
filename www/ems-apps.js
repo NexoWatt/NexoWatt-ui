@@ -445,15 +445,17 @@
     if (showStatusMessage) setStatus('Validierung: abgeschlossen.', 'ok');
   }
 
-  function deepMerge(target, patch) {
+  function deepMerge(target, ...patches) {
     const out = (target && typeof target === 'object') ? JSON.parse(JSON.stringify(target)) : {};
-    if (!patch || typeof patch !== 'object') return out;
-    for (const k of Object.keys(patch)) {
-      const v = patch[k];
-      if (v && typeof v === 'object' && !Array.isArray(v)) {
-        out[k] = deepMerge(out[k], v);
-      } else {
-        out[k] = v;
+    for (const patch of patches) {
+      if (!patch || typeof patch !== 'object') continue;
+      for (const k of Object.keys(patch)) {
+        const v = patch[k];
+        if (v && typeof v === 'object' && !Array.isArray(v)) {
+          out[k] = deepMerge(out[k], v);
+        } else {
+          out[k] = v;
+        }
       }
     }
     return out;

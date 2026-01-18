@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.49",
+    "version": "0.6.50",
     "news": {
+      "0.6.50": {
+        "en": "Fix: App-Center save now correctly persists installerConfig changes (e.g., grid connection limit / NVP plant power). This restores stable Peak-Shaving and charging management configuration via App-Center only.",
+        "de": "Fix: App-Center speichert installerConfig-Aenderungen wieder korrekt (z.B. Netzanschlussleistung/NVP). Damit funktionieren Peak-Shaving und Lademanagement wieder stabil und ohne Admin-Konfiguration."
+      },
       "0.6.49": {
         "en": "Fix: Prevented onStateChange crashes in unit scaling (kW→W cache init); StorageFarm setpoint distribution now allocates only to online storages; App-Center: Added tariff JSON datapoint mappings for today and tomorrow.",
         "de": "Fix: onStateChange-Crash in Einheiten-Skalierung (kW→W Cache-Init) behoben; Speicherfarm Sollwert-Verteilung nur noch auf Online-Speicher; App-Center: Tarif JSON-Datenpunkte für heute und morgen ergänzt."
@@ -1065,8 +1069,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.48",
+  "version": "0.6.50",
   "news": {
+    "0.6.50": {
+      "en": "Fix: App-Center save now correctly persists installerConfig changes (grid connection limit / NVP).",
+      "de": "Fix: App-Center speichert installerConfig-Aenderungen wieder korrekt (Netzanschlussleistung/NVP)."
+    },
     "0.6.43": {
       "en": "Fix: Historie in StorageFarm uses farm totals for charge/discharge/SoC (SoC shown again).",
       "de": "Fix: Historie im Speicherfarm-Modus nutzt Farm-Gesamtwerte für Laden/Entladen/SoC (SoC wieder sichtbar)."
