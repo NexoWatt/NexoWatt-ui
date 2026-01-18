@@ -58,6 +58,14 @@ class NexoWattVis extends utils.Adapter {
       'weatherWindKmh',
       'weatherCloudPct',
       'weatherLocation',
+
+      // Energy totals / KPIs (provided by NexoWatt EMS if no App-Center override mapping is set)
+      'productionEnergyKwh',
+      'consumptionEnergyKwh',
+      'gridEnergyKwh',
+      'evEnergyKwh',
+      'evcsLastChargeKwh',
+      'co2Savings',
     ]);
 
     // EMS engine (Sprint 2)
@@ -263,6 +271,53 @@ class NexoWattVis extends utils.Adapter {
       } catch (_e) {}
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Energy totals / KPIs (Plug&Play)
+  // ---------------------------------------------------------------------------
+  // The dashboard shows lifetime kWh counters (PV/Consumption/Grid import) and
+  // selected KPIs. These values are provided by the NexoWatt EMS by default and
+  // are only used from external datapoints if the customer configures an
+  // App-Center override mapping.
+  async ensureEnergyTotalStates() {
+    const defs = {
+      productionEnergyKwh: { name: 'PV Energie gesamt (kWh)', type: 'number', role: 'value.energy', unit: 'kWh' },
+      consumptionEnergyKwh: { name: 'Verbrauch Energie gesamt (kWh)', type: 'number', role: 'value.energy', unit: 'kWh' },
+      gridEnergyKwh: { name: 'Netz Energie gesamt (Bezug, kWh)', type: 'number', role: 'value.energy', unit: 'kWh' },
+
+      // Optional (derived fallbacks)
+      evEnergyKwh: { name: 'E-Mobilitaet Energie gesamt (kWh, abgeleitet)', type: 'number', role: 'value.energy', unit: 'kWh' },
+      evcsLastChargeKwh: { name: 'EVCS letzte Ladung (kWh, abgeleitet)', type: 'number', role: 'value.energy', unit: 'kWh' },
+      co2Savings: { name: 'CO2 Ersparnis (t, abgeleitet)', type: 'number', role: 'value', unit: 't' },
+    };
+
+    // Optional: enable Influx logging for these totals (changesOnly=true to reduce noise).
+    let inst = null;
+    try { await this._nwDetectInfluxInstance(); } catch (_e) {}
+    try { inst = this._nwGetHistoryInstance(); } catch (_e) {}
+
+    for (const [id, c] of Object.entries(defs)) {
+      await this.setObjectNotExistsAsync(id, {
+        type: 'state',
+        common: {
+          name: c.name,
+          type: c.type,
+          role: c.role,
+          unit: c.unit,
+          read: true,
+          write: false,
+        },
+        native: {},
+      });
+
+      // Log to Influx if available (used for reporting / debugging). This is safe even
+      // if the user runs without Influx; the helper will simply no-op.
+      try {
+        if (inst) await this._nwEnsureInfluxCustom(id, inst, { changesOnly: true });
+      } catch (_e) {}
+    }
+  }
+
 
   _nwHttpsGetJson(url, timeoutMs = 10000) {
     return new Promise((resolve, reject) => {
@@ -3854,6 +3909,9 @@ async onReady() {
 
       // Weather (Plug&Play)
       try { await this.ensureWeatherStates(); } catch (_e) {}
+
+      // Energy totals / KPIs (kWh/CO2)
+      try { await this.ensureEnergyTotalStates(); } catch (_e) {}
 
       // Notifications: runtime + debug states
       try { await this.ensureNotificationStates(); } catch (_e) {}
@@ -9319,6 +9377,14 @@ return res.json(out);
       'weatherWindKmh',
       'weatherCloudPct',
       'weatherLocation',
+
+      // Energy totals / KPIs (Plug&Play): local root-level states
+      'productionEnergyKwh',
+      'consumptionEnergyKwh',
+      'gridEnergyKwh',
+      'evEnergyKwh',
+      'evcsLastChargeKwh',
+      'co2Savings',
     ];
     const keys = [
       ...Object.keys(dps),
@@ -10298,7 +10364,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
   }
 
-  async _nwEnsureInfluxCustom(localId, inst) {
+  async _nwEnsureInfluxCustom(localId, inst, opts = null) {
     try {
       const instance = String(inst || '').trim();
       if (!instance) return;
@@ -10308,10 +10374,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       const cur = (custom[instance] && typeof custom[instance] === 'object') ? custom[instance] : {};
 
       // For Historie export states we want a predictable time series (10‑min cadence),
-      // so we log *per write* (changesOnly=false).
+      // so we log *per write* (changesOnly=false). For totals/KPIs we prefer changesOnly=true.
       const desired = {
         enabled: true,
-        changesOnly: false
+        changesOnly: (opts && typeof opts.changesOnly === 'boolean') ? opts.changesOnly : false
       };
 
       const alreadyOk = (cur.enabled === true && cur.changesOnly === desired.changesOnly);
@@ -11385,6 +11451,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const startMs = now - LOOKBACK_DAYS * 24 * 3600 * 1000;
     const spanMs = now - startMs;
 
+    const persistLocal = (key, val) => {
+      try {
+        this.setStateAsync(key, val, true).catch(() => {});
+      } catch (_e) {}
+    };
+
     // Only compute if the corresponding kWh datapoints are NOT mapped.
     const tasks = [];
 
@@ -11394,7 +11466,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         const stepMs = this._nwChooseStepMs(spanMs, 3500, 5 * 60 * 1000);
         const series = await this._nwGetHistoryAvgSeries(id, startMs, now, stepMs);
         const kwh = this._nwIntegrateKwh(series, now, stepMs, true);
-        if (kwh != null) this.updateValue('productionEnergyKwh', kwh, now);
+        if (kwh != null) {
+          this.updateValue('productionEnergyKwh', kwh, now);
+          persistLocal('productionEnergyKwh', kwh);
+        }
       })());
     }
 
@@ -11404,7 +11479,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         const stepMs = this._nwChooseStepMs(spanMs, 3500, 5 * 60 * 1000);
         const series = await this._nwGetHistoryAvgSeries(id, startMs, now, stepMs);
         const kwh = this._nwIntegrateKwh(series, now, stepMs, true);
-        if (kwh != null) this.updateValue('consumptionEnergyKwh', kwh, now);
+        if (kwh != null) {
+          this.updateValue('consumptionEnergyKwh', kwh, now);
+          persistLocal('consumptionEnergyKwh', kwh);
+        }
       })());
     }
 
@@ -11414,7 +11492,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         const stepMs = this._nwChooseStepMs(spanMs, 3500, 5 * 60 * 1000);
         const series = await this._nwGetHistoryAvgSeries(id, startMs, now, stepMs);
         const kwh = this._nwIntegrateKwh(series, now, stepMs, true);
-        if (kwh != null) this.updateValue('gridEnergyKwh', kwh, now);
+        if (kwh != null) {
+          this.updateValue('gridEnergyKwh', kwh, now);
+          persistLocal('gridEnergyKwh', kwh);
+        }
       })());
     }
 
@@ -11427,7 +11508,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         const stepMs = this._nwChooseStepMs(spanMs, 3500, 5 * 60 * 1000);
         const series = await this._nwGetHistoryAvgSeries(id, startMs, now, stepMs);
         const kwh = this._nwIntegrateKwh(series, now, stepMs, true);
-        if (kwh != null) this.updateValue('evEnergyKwh', kwh, now);
+        if (kwh != null) {
+          this.updateValue('evEnergyKwh', kwh, now);
+          persistLocal('evEnergyKwh', kwh);
+        }
       })());
     }
 
@@ -11463,7 +11547,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
         const seg = series.slice(startIdx, endIdx + 1);
         const kwh = this._nwIntegrateKwh(seg, now, stepMs, true);
-        if (kwh != null) this.updateValue('evcsLastChargeKwh', kwh, now);
+        if (kwh != null) {
+          this.updateValue('evcsLastChargeKwh', kwh, now);
+          persistLocal('evcsLastChargeKwh', kwh);
+        }
       })());
     }
 
@@ -11493,6 +11580,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       // nur setzen, wenn plausibel
       if (Number.isFinite(totalT)) {
         this.updateValue('co2Savings', totalT, now);
+        persistLocal('co2Savings', totalT);
       }
     }
   }

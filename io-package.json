@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.57",
+    "version": "0.6.58",
     "news": {
       "0.6.57": {
         "en": "VIS: Weather tile is now Plug&Play (integrated Open-Meteo fetch using system latitude/longitude). No additional adapter required; App-Center mapping can still override if desired.",
@@ -906,6 +906,10 @@
       "0.6.47": {
         "en": "Hotfix: App-Center (installer.configJson) is authoritative for installer-managed config sections (datapoints/settings/vis/emsApps/…). Prevents legacy Admin leftovers from affecting EMS/energyflow/tariff. UI: History chart tooltip alignment + reduced SSE connections.",
         "de": "Hotfix: App-Center (installer.configJson) ist Source-of-Truth für installer-verwaltete Konfigbereiche (datapoints/settings/vis/emsApps/…). Verhindert, dass alte Admin-Reste EMS/Energiefluss/Tarif beeinflussen. UI: Historie Tooltip-Ausrichtung + weniger SSE-Verbindungen."
+      },
+      "0.6.58": {
+        "en": "EMS/VIS: Energy totals (kWh) are now provided + historized by NexoWatt by default; App-Center mapping acts as override for external EMS counters.",
+        "de": "EMS/VIS: Energie-Gesamtwerte (kWh) werden jetzt standardmaessig vom NexoWatt-EMS bereitgestellt und historisiert; App-Center-Mapping dient nur noch als Override fuer externe EMS-Zaehler."
       }
     },
     "title": "NexoWatt VIS",
@@ -1089,7 +1093,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.57",
+  "version": "0.6.58",
   "news": {
     "0.6.57": {
       "en": "VIS: Weather tile Plug&Play (integrated Open-Meteo fetch; optional App-Center override).",
@@ -1120,6 +1124,10 @@
     "0.6.48": {
       "en": "Stability: App-Center configuration is treated as single source of truth (SoT); automatic migration/seed from native config; improved EMS engine restart + init error diagnostics.",
       "de": "Stabilitaet: App-Center-Konfiguration ist Single Source of Truth (SoT); automatische Migration/Initialisierung aus der nativen Admin-Konfiguration; robuster EMS-Engine-Restart + Init-Fehler-Diagnose."
+    },
+    "0.6.58": {
+      "en": "EMS/VIS: Energy totals (kWh) are now provided + historized by NexoWatt by default; App-Center mapping acts as override for external EMS counters.",
+      "de": "EMS/VIS: Energie-Gesamtwerte (kWh) werden jetzt standardmaessig vom NexoWatt-EMS bereitgestellt und historisiert; App-Center-Mapping dient nur noch als Override fuer externe EMS-Zaehler."
     }
   }
 }
