@@ -574,8 +574,11 @@ async function load(){
     function showTipFromEvent(ev){
       if (!data) return;
       const rect = canvas.getBoundingClientRect();
-      const cx = (ev.touches && ev.touches[0] ? ev.touches[0].clientX : ev.clientX);
-      const cy = (ev.touches && ev.touches[0] ? ev.touches[0].clientY : ev.clientY);
+      const t = (ev.touches && ev.touches[0]) ? ev.touches[0]
+              : (ev.changedTouches && ev.changedTouches[0]) ? ev.changedTouches[0]
+              : null;
+      const cx = t ? t.clientX : ev.clientX;
+      const cy = t ? t.clientY : ev.clientY;
       const x = cx - rect.left;
       const y = cy - rect.top;
 
@@ -726,14 +729,20 @@ async function load(){
     }
 
 
+
+    // expose for touch drag/tap handling (used by drag-to-zoom on mobile)
+    window.__nxHistoryShowTipFromEvent = showTipFromEvent;
+
     canvas.addEventListener('mouseleave', ()=>{ tip.style.display='none'; crossX=null; draw(); });
     canvas.addEventListener('click', (ev)=>{ 
       // If a drag-zoom just happened, suppress the click-to-inspect tooltip.
       if (Date.now() < zoomSuppressClickUntil) return;
       showTipFromEvent(ev);
     });
-    canvas.addEventListener('touchstart', (ev)=>{ 
+    canvas.addEventListener('touchend', (ev)=>{ 
       if (Date.now() < zoomSuppressClickUntil) return;
+      // In day view, touch is used for drag-to-zoom; tap-to-inspect is handled there.
+      if (chartMode === 'day') return;
       showTipFromEvent(ev);
     }, {passive:true});
     // (removed duplicate binding)
@@ -893,6 +902,119 @@ async function load(){
       zoomSel = { x0: x, x1: x };
       draw();
     });
+
+
+    // Touch: drag-to-zoom + tap-to-inspect (Tag-Ansicht)
+    canvas.addEventListener('touchstart', (ev)=>{
+      if (chartMode !== 'day') return;
+      if (!data) return;
+      if (!ev.touches || ev.touches.length !== 1) return;
+      try { ev.preventDefault(); } catch(_e){}
+      const rect = canvas.getBoundingClientRect();
+      const x = ev.touches[0].clientX - rect.left;
+      zoomDragging = true;
+      zoomDragStartX = x;
+      zoomSel = { x0: x, x1: x };
+      draw();
+    }, {passive:false});
+
+    canvas.addEventListener('touchmove', (ev)=>{
+      if (!zoomDragging) return;
+      if (!ev.touches || !ev.touches[0]) return;
+      try { ev.preventDefault(); } catch(_e){}
+      const rect = canvas.getBoundingClientRect();
+      const x = ev.touches[0].clientX - rect.left;
+      if (!zoomSel) zoomSel = { x0: zoomDragStartX, x1: x };
+      zoomSel.x1 = x;
+      draw();
+    }, {passive:false});
+
+    canvas.addEventListener('touchend', (ev)=>{
+      if (chartMode !== 'day') return;
+      if (!zoomDragging) return;
+      if (!data){ clearSel(); return; }
+      try { ev.preventDefault(); } catch(_e){}
+      const rect = canvas.getBoundingClientRect();
+      const t = (ev.changedTouches && ev.changedTouches[0]) ? ev.changedTouches[0] : null;
+      const x = t ? (t.clientX - rect.left) : zoomDragStartX;
+      const a = Math.min(zoomDragStartX, x);
+      const b = Math.max(zoomDragStartX, x);
+      const px = b - a;
+
+      // selection too small -> treat as tap (tooltip)
+      if (px < 18){
+        clearSel();
+        zoomSuppressClickUntil = Date.now() + 350;
+        try { if (typeof window.__nxHistoryShowTipFromEvent === 'function') window.__nxHistoryShowTipFromEvent(ev); } catch(_e){}
+        return;
+      }
+
+      const { start, end } = data;
+      const fromMs = xToTs(a, start, end);
+      const toMs = xToTs(b, start, end);
+
+      // push previous range for reset
+      const fromEl = document.getElementById('from');
+      const toEl = document.getElementById('to');
+      const prevFromMs = fromEl ? new Date(fromEl.value).getTime() : start;
+      const prevToMs = toEl ? new Date(toEl.value).getTime() : end;
+      if (isFinite(prevFromMs) && isFinite(prevToMs)){
+        zoomStack.push({ fromMs: prevFromMs, toMs: prevToMs });
+      }
+
+      try { __stopAuto(); } catch(_e){}
+      setInputs(fromMs, toMs);
+      zoomSuppressClickUntil = Date.now() + 400;
+      clearSel();
+      try { if (typeof window.__nxHistoryShowZoomReset === 'function') window.__nxHistoryShowZoomReset(); } catch(_e){}
+      load();
+    }, {passive:false});
+
+    canvas.addEventListener('touchcancel', ()=>{ if (zoomDragging) clearSel(); });
+
+    // Optional: Ctrl/⌘ + Wheel zoom (Tag) – allows trackpad pinch (ctrlKey) without breaking normal page scroll.
+    let __wheelTimer = null;
+    let __wheelLast = 0;
+    canvas.addEventListener('wheel', (ev)=>{
+      if (chartMode !== 'day') return;
+      if (!data) return;
+      if (!(ev.ctrlKey || ev.metaKey)) return;
+      try { ev.preventDefault(); } catch(_e){}
+
+      const fromEl = document.getElementById('from');
+      const toEl = document.getElementById('to');
+      let start = fromEl ? new Date(fromEl.value).getTime() : data.start;
+      let end   = toEl ? new Date(toEl.value).getTime() : data.end;
+      if (!isFinite(start) || !isFinite(end) || end <= start) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const ts = xToTs(x, start, end);
+      const r = (ts - start) / (end - start);
+
+      const factor = (ev.deltaY < 0) ? 0.85 : 1.18;
+      let newRange = (end - start) * factor;
+      const minRange = 10 * 60 * 1000; // 10min
+      const maxRange = 7 * 24 * 60 * 60 * 1000; // 7d (still ok in day mode)
+      if (newRange < minRange) newRange = minRange;
+      if (newRange > maxRange) newRange = maxRange;
+
+      const now = Date.now();
+      if (now - __wheelLast > 800){
+        zoomStack.push({ fromMs: start, toMs: end });
+        try { if (typeof window.__nxHistoryShowZoomReset === 'function') window.__nxHistoryShowZoomReset(); } catch(_e){}
+      }
+      __wheelLast = now;
+
+      let fromMs = ts - r * newRange;
+      let toMs = fromMs + newRange;
+      try { __stopAuto(); } catch(_e){}
+      setInputs(fromMs, toMs);
+      zoomSuppressClickUntil = Date.now() + 250;
+
+      if (__wheelTimer) clearTimeout(__wheelTimer);
+      __wheelTimer = setTimeout(()=>{ load(); }, 200);
+    }, {passive:false});
 
     window.addEventListener('mousemove', (ev)=>{
       if (!zoomDragging) return;
