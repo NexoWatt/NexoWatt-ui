@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.54",
+    "version": "0.6.55",
     "news": {
+      "0.6.55": {
+        "en": "Admin UI: Removed legacy EMS/admin configuration panels (moved fully to App-Center). Kept only Diagnostics settings in Admin (log level/intervals/state writing). Removed legacy 'power unit', 'Tariff now' and 'show advanced tabs' options from Admin.",
+        "de": "Admin UI: Legacy EMS-/Admin-Konfiguration entfernt (vollstaendig ins App-Center verlagert). In Admin bleiben nur Diagnose-Einstellungen (Log-Level/Intervalle/State-Schreiben). Legacy-Optionen 'Leistungseinheit', 'Tarif jetzt' und 'Erweiterte Reiter' entfernt."
+      },
       "0.6.54": {
         "en": "Fix: History chart zoom works again (touch drag-to-zoom + tap tooltip). Added optional Ctrl/⌘+wheel zoom and improved touch handling.",
         "de": "Fix: Historie-Chart Zoom funktioniert wieder (Touch: Drag-to-Zoom + Tap-Tooltip). Optional Ctrl/⌘+Mausrad-Zoom und verbessertes Touch-Handling."

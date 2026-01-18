@@ -1,3 +1,8 @@
+## 0.6.55 (Admin UI)
+- Admin: Legacy EMS-/Admin-Konfigurationsreiter entfernt (EMS/Datenpunkte/§14a/Historie/Ladepunkte werden ausschließlich im App-Center konfiguriert).
+- Admin: Diagnose-Einstellungen bleiben verfügbar (Diagnose aktiv, Log-Level, Log-/State-Intervalle, JSON-Länge, Diagnose-States schreiben).
+- Admin: Entfernt: Leistungseinheit, "Tarif jetzt" und "Erweiterte Reiter anzeigen".
+
 ## 0.6.47 (Hotfix)
 - App-Center (installer.configJson) ist Source-of-Truth für installer-verwaltete Konfigbereiche (datapoints/settings/vis/emsApps/…). Admin-Reste beeinflussen EMS/Energiefluss/Tarif nicht mehr.
 - UI: Historie Tooltip-Ausrichtung verbessert + doppelte SSE-Verbindung entfernt.
