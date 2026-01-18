@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.52",
+  "version": "0.6.53",
     "news": {
       "0.6.52": {
         "en": "Fix: Tariff SoC hysteresis now uses aggregated StorageFarm SoC (totalSocOnline/totalSoc) when StorageFarm is enabled. Prevents false 'storage full (hold)' status and premature stop of tariff charging when only one battery is full.",

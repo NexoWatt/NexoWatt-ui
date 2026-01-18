@@ -35,6 +35,7 @@
     storageTable: document.getElementById('storageTable'),
 
     storageControlMode: document.getElementById('storageControlMode'),
+    storageCapacityKWh: document.getElementById('storageCapacityKWh'),
 
     // Speicherfarm
     storageFarmMode: document.getElementById('storageFarmMode'),
@@ -250,7 +251,12 @@
     { key: 'priceCurrent', label: 'Tarif Preis aktuell (€/kWh)', placeholder: 'Provider-State (optional)' },
     { key: 'priceAverage', label: 'Tarif Preis Durchschnitt (€/kWh)', placeholder: 'Provider-State (optional)' },
     { key: 'priceTodayJson', label: 'Stundenpreise heute (JSON)', placeholder: 'Provider-State (optional)' },
-    { key: 'priceTomorrowJson', label: 'Stundenpreise morgen (JSON)', placeholder: 'Provider-State (optional)' }
+    { key: 'priceTomorrowJson', label: 'Stundenpreise morgen (JSON)', placeholder: 'Provider-State (optional)' },
+
+    // PV Forecast (für PV-aware Netzladen / Speicher-Optimierung)
+    // Erwartet: JSON (String) vom Forecast-Provider (z.B. forecast.solar / Solcast / eigener Adapter)
+    { key: 'pvForecastTodayJson', label: 'PV Forecast heute (JSON)', placeholder: 'Provider-State (optional)' },
+    { key: 'pvForecastTomorrowJson', label: 'PV Forecast morgen (JSON)', placeholder: 'Provider-State (optional)' }
   ];
 
   // Live / Kennzahlen (für die unteren Kacheln in der VIS)
@@ -5304,6 +5310,12 @@
     // Storage
     const mode = (currentConfig.storage && typeof currentConfig.storage.controlMode === 'string') ? currentConfig.storage.controlMode : 'targetPower';
     els.storageControlMode.value = (['targetPower','limits','enableFlags'].includes(mode)) ? mode : 'targetPower';
+
+    // Optional: Kapazität (kWh) – relevant für PV‑Forecast / Tarif‑Netzladeentscheidungen
+    if (els.storageCapacityKWh) {
+      const cap = Number(currentConfig.storage && currentConfig.storage.capacityKWh);
+      els.storageCapacityKWh.value = (Number.isFinite(cap) && cap > 0) ? String(cap) : '';
+    }
     rebuildStorageTable();
     try { buildStorageFarmUI(); } catch (_e) {}
     try { buildStorageMultiUseUI(); } catch (_e) {}
@@ -6673,6 +6685,21 @@
       currentConfig.storage.controlMode = getStorageMode();
       rebuildStorageTable();
     });
+  }
+
+  if (els.storageCapacityKWh) {
+    const _update = () => {
+      currentConfig = currentConfig || {};
+      currentConfig.storage = currentConfig.storage || {};
+      const n = Number(els.storageCapacityKWh.value);
+      if (Number.isFinite(n) && n > 0) {
+        currentConfig.storage.capacityKWh = n;
+      } else {
+        delete currentConfig.storage.capacityKWh;
+      }
+    };
+    els.storageCapacityKWh.addEventListener('change', _update);
+    els.storageCapacityKWh.addEventListener('input', _update);
   }
 
   // Browse buttons (event delegation) – works for dynamically created fields too

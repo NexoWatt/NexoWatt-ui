@@ -287,6 +287,10 @@ class SpeicherRegelungModule extends BaseModule {
         // Messwerte lesen
         const now = Date.now();
 
+        // PV‑Forecast / PV‑aware Tarif‑Netzlade-Entscheidung (Debug/Policy)
+        // Wird weiter unten im Tarif-Block (want < 0) befüllt.
+        let pvAwareTariff = null;
+
         // grid.powerW is expected to be the *filtered* NVP (Import + / Export -)
         // grid.powerRawW is the raw signal (if available). If not, fall back to ps.gridPowerW.
         let gridW = this.dp ? this.dp.getNumberFresh('grid.powerW', staleMs, null) : null;
@@ -846,8 +850,131 @@ if (typeof soc === 'number') {
 							chargeW = 0;
 						}
 
+						// ------------------------------------------------------------
+						// PV-aware Netzladen (Stufe 1)
+						// Idee: Wenn ein PV‑Forecast gemappt ist und dieser mit hoher
+						// Wahrscheinlichkeit den Speicher innerhalb der nächsten 24h
+						// auf das Ziel-SoC bringen kann, wird das Netzladen im
+						// günstigen Tarif-Fenster übersprungen.
+						//
+						// Wichtig: Das ist bewusst konservativ (captureFactor + safety),
+						// damit wir in Zweifelsfällen weiterhin Netzladen zulassen.
+						// ------------------------------------------------------------
+						let pvBlockGridCharge = false;
+						let pvBlockReason = '';
+						let pvDebug = null;
+						try {
+							const pf = (this.adapter && this.adapter._pvForecast) ? this.adapter._pvForecast : null;
+							if (pf && pf.valid && Array.isArray(pf.curve) && pf.curve.length) {
+								// Bei sehr alten Forecasts lieber keine PV-aware Sperre erzwingen.
+								const maxAgeMs = 24 * 3600000;
+								const ageOk = (pf.ageMs === null || pf.ageMs === undefined) ? true : (pf.ageMs <= maxAgeMs);
+								if (ageOk && typeof soc === 'number' && Number.isFinite(soc)) {
+									// Kapazität (kWh):
+									// - Speicherfarm: Summe aus Farm-Konfig
+									// - Single: installerConfig.storage.capacityKWh (optional)
+									// - Fallback: gemappter DP (st.capacityKwh)
+									let capKWh = null;
+									try {
+										const farmCfg2 = (this.adapter && this.adapter.config && this.adapter.config.storageFarm) ? this.adapter.config.storageFarm : null;
+										if (farmCfg2 && farmCfg2.enabled && Array.isArray(farmCfg2.storages)) {
+											let sum = 0;
+											for (const s of farmCfg2.storages) {
+												if (!s || s.enabled === false) continue;
+												const c = Number(s.capacityKWh);
+												if (Number.isFinite(c) && c > 0) sum += c;
+											}
+											if (sum > 0) capKWh = sum;
+										}
+									} catch {
+										// ignore
+									}
+
+									if (!(typeof capKWh === 'number' && Number.isFinite(capKWh) && capKWh > 0)) {
+										const capCfg = Number(this.adapter?.config?.storage?.capacityKWh);
+										if (Number.isFinite(capCfg) && capCfg > 0) capKWh = capCfg;
+									}
+
+									if (!(typeof capKWh === 'number' && Number.isFinite(capKWh) && capKWh > 0) && this.dp) {
+										const capDp = this.dp.getNumber('st.capacityKwh', null);
+										if (typeof capDp === 'number' && Number.isFinite(capDp) && capDp > 0) capKWh = capDp;
+									}
+
+									const socTarget = (typeof hardChargeMaxSoc === 'number' && Number.isFinite(hardChargeMaxSoc)) ? hardChargeMaxSoc : 100;
+									const needKWh = (typeof capKWh === 'number' && Number.isFinite(capKWh) && capKWh > 0)
+										? Math.max(0, ((socTarget - soc) / 100) * capKWh)
+										: null;
+
+									// PV Charge-Potential (kWh) über die nächsten 24h,
+									// limitiert durch maxChargeW (falls gesetzt).
+									let pvChargePotentialKWh24h = 0;
+									if (needKWh !== null) {
+										const t0 = now;
+										const t1 = t0 + 24 * 3600000;
+										const limitW = (typeof maxChargeW === 'number' && Number.isFinite(maxChargeW) && maxChargeW > 0) ? maxChargeW : null;
+										for (const seg of pf.curve) {
+											if (!seg || typeof seg.t !== 'number' || typeof seg.dtMs !== 'number' || typeof seg.w !== 'number') continue;
+											const s0 = seg.t;
+											const s1 = seg.t + seg.dtMs;
+											if (s1 <= t0) continue;
+											if (s0 >= t1) break;
+											const ov0 = Math.max(s0, t0);
+											const ov1 = Math.min(s1, t1);
+											const ovMs = ov1 - ov0;
+											if (ovMs <= 0) continue;
+											const w = Math.max(0, seg.w);
+											const wEff = (limitW ? Math.min(w, limitW) : w);
+											pvChargePotentialKWh24h += (wEff * (ovMs / 3600000)) / 1000;
+										}
+
+										// Heuristik: nicht jede PV‑kWh landet im Speicher
+										// (Hausverbrauch, EVCS, Verluste...).
+										const captureFactor = 0.6;
+										const safety = 1.15;
+										const effKWh = pvChargePotentialKWh24h * captureFactor;
+
+										// Wenn SoC sehr niedrig: nicht warten, sondern laden.
+										const reserveMinEff = reserveEnabled ? reserveMin : 0;
+										const minSocForWait = Math.max(reserveMinEff + 2, 10);
+
+										if (soc >= minSocForWait && effKWh >= (needKWh * safety)) {
+											pvBlockGridCharge = true;
+											pvBlockReason = `PV‑Forecast: Netzladen übersprungen (${effKWh.toFixed(1)} kWh ≥ Bedarf ${needKWh.toFixed(1)} kWh)`;
+										}
+
+										pvDebug = {
+											ageMs: (pf.ageMs === null || pf.ageMs === undefined) ? null : Math.round(Number(pf.ageMs)),
+											capKWh: (typeof capKWh === 'number' && Number.isFinite(capKWh)) ? Number(capKWh) : null,
+											socNow: soc,
+											socTarget,
+											needKWh: (needKWh !== null) ? Number(needKWh) : null,
+											pvChargePotentialKWh24h: Number(pvChargePotentialKWh24h),
+											captureFactor,
+											safety,
+											blocked: pvBlockGridCharge,
+											minSocForWait,
+										};
+									}
+								}
+							}
+						} catch {
+							// ignore
+						}
+
+						if (pvDebug) {
+							pvAwareTariff = pvDebug;
+						}
+
+						if (pvBlockGridCharge) {
+							chargeW = 0;
+						}
+
 						targetW = -Math.max(0, chargeW);
-						reason = (targetW === 0) ? 'Tarif: günstig – Netzladen nicht möglich' : 'Tarif: günstig – Netzladen';
+						if (pvBlockGridCharge) {
+							reason = pvBlockReason || 'Tarif: günstig – PV Forecast -> Netzladen gesperrt';
+						} else {
+							reason = (targetW === 0) ? 'Tarif: günstig – Netzladen nicht möglich' : 'Tarif: günstig – Netzladen';
+						}
 						source = 'tarif';
 					}
 				} else if (want > 0) {
@@ -1391,6 +1518,18 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     state: (tvPol && typeof tvPol.state === 'string') ? tvPol.state : null,
                     storageWantW: (tvPol && typeof tvPol.speicherSollW === 'number') ? tvPol.speicherSollW : null,
                 },
+                pvForecast: (() => {
+                    const pf = (this.adapter && this.adapter._pvForecast) ? this.adapter._pvForecast : null;
+                    if (!pf) return null;
+                    return {
+                        valid: !!pf.valid,
+                        ageMs: (pf.ageMs === null || pf.ageMs === undefined || !Number.isFinite(Number(pf.ageMs))) ? null : Math.round(Number(pf.ageMs)),
+                        kwhNext24h: (typeof pf.kwhNext24h === 'number' && Number.isFinite(pf.kwhNext24h)) ? Number(pf.kwhNext24h) : null,
+                        peakWNext24h: (typeof pf.peakWNext24h === 'number' && Number.isFinite(pf.peakWNext24h)) ? Math.round(pf.peakWNext24h) : null,
+                        points: (typeof pf.points === 'number' && Number.isFinite(pf.points)) ? pf.points : null,
+                    };
+                })(),
+                pvAwareTarifNetzladen: pvAwareTariff ? pvAwareTariff : null,
                 evcs: {
                     storageAssistReqW: (typeof evcsAssistReqW === 'number' && Number.isFinite(evcsAssistReqW)) ? Math.round(evcsAssistReqW) : 0,
                 },
@@ -1411,6 +1550,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 },
             };
             await this._setIfChanged('speicher.regelung.tarifState', (pol.tarif && typeof pol.tarif.state === 'string') ? pol.tarif.state : '');
+            await this._setIfChanged('speicher.regelung.tarifPvBlock', !!(pvAwareTariff && pvAwareTariff.blocked));
+            await this._setIfChanged('speicher.regelung.tarifPvBlockGrund', (pvAwareTariff && typeof pvAwareTariff.reason === 'string') ? pvAwareTariff.reason : '');
             await this._setIfChanged('speicher.regelung.policyJson', JSON.stringify(pol));
         } catch {
             // ignore
@@ -1636,6 +1777,8 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.netzLadenErlaubt', 'Netzladen erlaubt', 'boolean', 'indicator', true);
         await mk('speicher.regelung.entladenErlaubt', 'Entladen erlaubt', 'boolean', 'indicator', true);
         await mk('speicher.regelung.tarifState', 'Tarif Zustand', 'string', 'text', '');
+        await mk('speicher.regelung.tarifPvBlock', 'Tarif-Netzladen durch PV-Forecast gesperrt', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.tarifPvBlockGrund', 'PV-Forecast Sperrgrund', 'string', 'text', '');
         await mk('speicher.regelung.policyJson', 'Policy/Audit (JSON)', 'string', 'text', '');
 
         await mk('speicher.regelung.importLimitW', 'Netzbezug-Limit effektiv (W)', 'number', 'value.power');

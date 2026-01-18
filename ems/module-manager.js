@@ -5,6 +5,7 @@ const { SpeicherRegelungModule } = require('./modules/storage-control');
 const { GridConstraintsModule } = require('./modules/grid-constraints');
 const { PeakShavingModule } = require('./modules/peak-shaving');
 const { TarifVisModule } = require('./modules/tarif-vis');
+const { PvForecastModule } = require('./modules/pv-forecast');
 const { ChargingManagementModule } = require('./modules/charging-management');
 const { MultiUseModule } = require('./modules/multi-use');
 const { Para14aModule } = require('./modules/para14a');
@@ -122,6 +123,14 @@ class ModuleManager {
         this.modules.push({
             key: 'tarifVis',
             instance: new TarifVisModule(this.adapter, this.dp),
+            enabledFn: () => true,
+        });
+
+        // PV Forecast (Provider-agnostisch) – liefert kWh/24h usw. für PV-aware Strategien
+        // Runs after Tarife (independent), before storage-control so the snapshot is fresh.
+        this.modules.push({
+            key: 'pvForecast',
+            instance: new PvForecastModule(this.adapter, this.dp),
             enabledFn: () => true,
         });
 
