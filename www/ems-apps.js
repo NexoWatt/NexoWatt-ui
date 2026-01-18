@@ -248,7 +248,9 @@
 
   const TARIFF_DP_FIELDS = [
     { key: 'priceCurrent', label: 'Tarif Preis aktuell (€/kWh)', placeholder: 'Provider-State (optional)' },
-    { key: 'priceAverage', label: 'Tarif Preis Durchschnitt (€/kWh)', placeholder: 'Provider-State (optional)' }
+    { key: 'priceAverage', label: 'Tarif Preis Durchschnitt (€/kWh)', placeholder: 'Provider-State (optional)' },
+    { key: 'priceTodayJson', label: 'Stundenpreise heute (JSON)', placeholder: 'Provider-State (optional)' },
+    { key: 'priceTomorrowJson', label: 'Stundenpreise morgen (JSON)', placeholder: 'Provider-State (optional)' }
   ];
 
   // Live / Kennzahlen (für die unteren Kacheln in der VIS)

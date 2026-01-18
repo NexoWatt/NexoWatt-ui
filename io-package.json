@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.48",
+    "version": "0.6.49",
     "news": {
+      "0.6.49": {
+        "en": "Fix: Prevented onStateChange crashes in unit scaling (kW→W cache init); StorageFarm setpoint distribution now allocates only to online storages; App-Center: Added tariff JSON datapoint mappings for today and tomorrow.",
+        "de": "Fix: onStateChange-Crash in Einheiten-Skalierung (kW→W Cache-Init) behoben; Speicherfarm Sollwert-Verteilung nur noch auf Online-Speicher; App-Center: Tarif JSON-Datenpunkte für heute und morgen ergänzt."
+      },
       "0.6.44": {
         "en": "Fix: Auto unit scaling for power/energy datapoints (kW/kWh sources now work without manual conversion); Grid sign invert option added in Allgemein; StorageFarm keepalive writes setpoints every 5s to satisfy watchdogs.",
         "de": "Fix: Automatische Einheiten-Skalierung für Leistungs/Energie-Datenpunkte (kW/kWh funktioniert ohne manuelle Umrechnung); Option zum Invertieren des Netz-Vorzeichens in Allgemein ergänzt; StorageFarm Keepalive schreibt Setpoints alle 5s (Watchdog)."

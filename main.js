@@ -65,6 +65,12 @@ class NexoWattVis extends utils.Adapter {
     this._sfLastSetpoints = new Map(); // objectId -> last numeric value
     this._sfLastSetpointsTs = new Map(); // objectId -> last write timestamp (ms)
 
+    // Foreign datapoint unit caches (kW/kWh sources):
+    // Used to automatically scale mapped power values into W without requiring
+    // manual conversion in the App-Center.
+    this._nwForeignUnitCache = new Map();        // objectId -> normalized unit (e.g. "w", "kw")
+    this._nwForeignPowerScaleCache = new Map();  // objectId -> factor to W
+
 
     // Derived / calculated live values (e.g. energy flow helper KPIs)
     this._derivedFlow = {
@@ -1738,10 +1744,14 @@ try {
       status = Array.isArray(parsed) ? parsed : [];
     } catch (_e) { status = []; }
 
-    // Attach SoC to storage rows (index-based; derived list is built from enabled rows in same order)
+    // Attach derived status to storage rows (index-based; derived list is built from enabled rows in same order)
+    // We explicitly keep the online flag so we can avoid allocating setpoints to offline storages.
     const storages = sf.storages.map((s, i) => {
-      const soc = status[i] && Number.isFinite(Number(status[i].soc)) ? Number(status[i].soc) : null;
-      return { ...s, soc };
+      const st = (status && status[i] && typeof status[i] === 'object') ? status[i] : {};
+      const soc = (st && Number.isFinite(Number(st.soc))) ? Number(st.soc) : null;
+      const online = (st && typeof st.online === 'boolean') ? st.online : undefined;
+      const offlineReason = (st && typeof st.offlineReason === 'string') ? st.offlineReason : '';
+      return { ...s, soc, online, offlineReason };
     });
 
     // Helper: weighted allocation with rounding to ensure sum == total
@@ -1801,8 +1811,14 @@ try {
       return !!(s.setSignedPowerId || s.setChargePowerId || s.setDischargePowerId);
     };
 
-    const eligible = storages.filter(canUse);
-    if (eligible.length === 0) return { applied: false, reason: 'no_setpoint_dps' };
+    const eligibleAll = storages.filter(canUse);
+    if (eligibleAll.length === 0) return { applied: false, reason: 'no_setpoint_dps' };
+
+    // If we have online/offline information from the derived farm status, distribute power only to
+    // online storages. This prevents under-delivery when some storages are offline (e.g. 1/2 online).
+    const hasOnlineInfo = eligibleAll.some(s => typeof s.online === 'boolean');
+    const eligible = hasOnlineInfo ? eligibleAll.filter(s => s.online === true) : eligibleAll;
+    if (hasOnlineInfo && eligible.length === 0) return { applied: false, reason: 'no_online_storages' };
 
     // Allocation map: storage -> watts for active direction
     let allocMap = new Map();
@@ -8969,12 +8985,28 @@ return res.json(out);
   _nwScaleMappedValue(key, objectId, val) {
     if (!this._nwIsMappedPowerKey(key)) return val;
     if (typeof val !== 'number' || !isFinite(val)) return val;
-    const factor = this._nwForeignPowerScaleCache.get(objectId) || 1;
+
+    // Safety: older builds might not have initialized the caches yet.
+    // Fail-open (factor=1) instead of crashing the adapter.
+    const cache = (this._nwForeignPowerScaleCache && typeof this._nwForeignPowerScaleCache.get === 'function')
+      ? this._nwForeignPowerScaleCache
+      : null;
+
+    const factor = cache ? (cache.get(objectId) || 1) : 1;
     return val * factor;
   }
 
   async _nwPrimeForeignPowerScale(objectId) {
     if (!objectId || typeof objectId !== 'string') return;
+
+    // Safety: ensure caches exist (fail-open).
+    if (!this._nwForeignUnitCache || typeof this._nwForeignUnitCache.has !== 'function') {
+      this._nwForeignUnitCache = new Map();
+    }
+    if (!this._nwForeignPowerScaleCache || typeof this._nwForeignPowerScaleCache.set !== 'function') {
+      this._nwForeignPowerScaleCache = new Map();
+    }
+
     if (this._nwForeignUnitCache.has(objectId)) return;
     try {
       const obj = await this.getForeignObjectAsync(objectId);
@@ -8990,6 +9022,14 @@ return res.json(out);
   }
 
   async subscribeConfiguredStates() {
+    // Safety: ensure caches exist (older builds might miss these initializations).
+    if (!this._nwForeignUnitCache || typeof this._nwForeignUnitCache.clear !== 'function') {
+      this._nwForeignUnitCache = new Map();
+    }
+    if (!this._nwForeignPowerScaleCache || typeof this._nwForeignPowerScaleCache.clear !== 'function') {
+      this._nwForeignPowerScaleCache = new Map();
+    }
+
     this._nwForeignUnitCache.clear();
     this._nwForeignPowerScaleCache.clear();
     const dps = (this.config && this.config.datapoints) || {};
