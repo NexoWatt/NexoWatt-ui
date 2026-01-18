@@ -160,6 +160,54 @@ function formatPricePerKwh(v){
   if (n < 10) return n.toFixed(3) + ' €/kWh';
   return (n/100).toFixed(2) + ' €/kWh'; // if provided in ct
 }
+
+// ------------------------------
+// Wetter (optional)
+// ------------------------------
+function _fmtTempC(v){
+  if (v === undefined || v === null || isNaN(v)) return '-- °C';
+  return Number(v).toFixed(1) + ' °C';
+}
+function _fmtPct(v){
+  if (v === undefined || v === null || isNaN(v)) return '-- %';
+  return Number(v).toFixed(0) + ' %';
+}
+function _fmtKmh(v){
+  if (v === undefined || v === null || isNaN(v)) return '-- km/h';
+  return Number(v).toFixed(0) + ' km/h';
+}
+function _fmtTimeHHmm(ts){
+  if (!ts || isNaN(Number(ts))) return '—';
+  const d = new Date(Number(ts));
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  return hh + ':' + mm;
+}
+function _pickWeatherIcon(code, text){
+  const t = (text == null ? '' : String(text)).toLowerCase();
+  const c = (code == null || isNaN(Number(code))) ? null : Number(code);
+
+  // Open‑Meteo/WMO style codes (optional)
+  if (c != null) {
+    if (c === 0) return '☀️';
+    if (c >= 1 && c <= 3) return '⛅';
+    if (c === 45 || c === 48) return '🌫️';
+    if (c >= 51 && c <= 57) return '🌦️';
+    if (c >= 61 && c <= 67) return '🌧️';
+    if (c >= 71 && c <= 77) return '🌨️';
+    if (c >= 80 && c <= 82) return '🌧️';
+    if (c >= 95 && c <= 99) return '⛈️';
+  }
+
+  // Text heuristics (DE/EN)
+  if (t.includes('sonn') || t.includes('sun') || t.includes('klar') || t.includes('clear')) return '☀️';
+  if (t.includes('wol') || t.includes('cloud') || t.includes('overcast')) return '☁️';
+  if (t.includes('regen') || t.includes('rain') || t.includes('shower')) return '🌧️';
+  if (t.includes('schnee') || t.includes('snow')) return '🌨️';
+  if (t.includes('nebel') || t.includes('fog') || t.includes('mist')) return '🌫️';
+  if (t.includes('gewitter') || t.includes('thunder') || t.includes('storm')) return '⛈️';
+  return '🌤️';
+}
 function setWidth(id, pct) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -872,6 +920,39 @@ function render() {
   const lastChargeN = coerceNumber(d('evcsLastChargeKwh'));
   setText('evcsLastChargeKwh', lastChargeN != null ? lastChargeN.toFixed(2) + ' kWh' : '--');
   if (window.__evcsApply) window.__evcsApply(d, state);
+
+  // Wetter (optional) – rein UI, frei mappbar im App‑Center
+  try {
+    const wTemp = coerceNumber(d('weatherTempC'));
+    const wText = d('weatherText');
+    const wCode = coerceNumber(d('weatherCode'));
+    const wWind = coerceNumber(d('weatherWindKmh'));
+    const wCloud = coerceNumber(d('weatherCloudPct'));
+    const wLoc = d('weatherLocation');
+    const hasWeather = (wTemp != null) || (wCode != null) || (wText != null && String(wText).trim() !== '');
+
+    // Icon
+    const iconEl = document.getElementById('weatherIconCircle');
+    if (iconEl) iconEl.textContent = hasWeather ? _pickWeatherIcon(wCode, wText) : '🌡️';
+
+    // Location
+    setText('weatherLocation', (wLoc != null && String(wLoc).trim() ? String(wLoc) : 'Standort'));
+
+    // Values
+    setText('weatherTemp', _fmtTempC(wTemp));
+    const cond = (wText != null && String(wText).trim() !== '') ? String(wText) : (wCode != null ? ('Code ' + Number(wCode)) : (hasWeather ? '—' : 'Nicht konfiguriert'));
+    setText('weatherCondition', cond);
+    setText('weatherWind', _fmtKmh(wWind));
+    setText('weatherCloud', _fmtPct(wCloud));
+
+    // Timestamp (prefer temperature, else any other weather dp)
+    const wTs = s.weatherTempC?.ts || s.weatherText?.ts || s.weatherCode?.ts || s.weatherWindKmh?.ts || s.weatherCloudPct?.ts;
+    setText('weatherUpdated', hasWeather && wTs ? ('aktualisiert ' + _fmtTimeHHmm(wTs)) : '—');
+
+    // Hint only if not configured
+    const hintEl = document.getElementById('weatherHint');
+    if (hintEl) hintEl.style.display = hasWeather ? 'none' : '';
+  } catch (_e) {}
 
   // Settings: RFID learning UI state (if present)
   try {

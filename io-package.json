@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.55",
+    "version": "0.6.56",
     "news": {
+      "0.6.56": {
+        "en": "VIS: Optional Weather tile in Status section + App-Center mapping (temperature/condition/wind/clouds).",
+        "de": "VIS: Optionale Wetter-Kachel im Status-Bereich + App-Center Mapping (Temperatur/Wettertext/Wind/Wolken)."
+      },
       "0.6.55": {
         "en": "Admin UI: Removed legacy EMS/admin configuration panels (moved fully to App-Center). Kept only Diagnostics settings in Admin (log level/intervals/state writing). Removed legacy 'power unit', 'Tariff now' and 'show advanced tabs' options from Admin.",
         "de": "Admin UI: Legacy EMS-/Admin-Konfiguration entfernt (vollstaendig ins App-Center verlagert). In Admin bleiben nur Diagnose-Einstellungen (Log-Level/Intervalle/State-Schreiben). Legacy-Optionen 'Leistungseinheit', 'Tarif jetzt' und 'Erweiterte Reiter' entfernt."

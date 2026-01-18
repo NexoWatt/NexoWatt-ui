@@ -32,6 +32,7 @@
     flowProducers: document.getElementById('flowProducers'),
     dpTariffs: document.getElementById('dpTariffs'),
     dpLive: document.getElementById('dpLive'),
+    dpWeather: document.getElementById('dpWeather'),
     storageTable: document.getElementById('storageTable'),
 
     storageControlMode: document.getElementById('storageControlMode'),
@@ -270,6 +271,17 @@
     { key: 'evcsStatus', label: 'Ladestation Status (optional)', placeholder: 'z.B. Available/Charging' },
     { key: 'gridFrequency', label: 'Netzfrequenz (Hz) (optional)', placeholder: 'optional' },
     { key: 'gridVoltage', label: 'Netzspannung (V) (optional)', placeholder: 'optional' }
+  ];
+
+  // Wetter (optional) – reine UI. Kann aus jedem Wetter-Adapter gemappt werden.
+  // Mindestanforderung fuer sinnvolle Anzeige: Temperatur ODER Wettertext/Wettercode.
+  const WEATHER_DP_FIELDS = [
+    { key: 'weatherTempC', label: 'Temperatur (°C)', placeholder: 'z.B. weather.0.current.temperature (optional)' },
+    { key: 'weatherText', label: 'Wettertext (optional)', placeholder: 'z.B. "stark bewölkt" / "cloudy"' },
+    { key: 'weatherCode', label: 'Wetter-Code (optional)', placeholder: 'z.B. WMO/Open-Meteo Code' },
+    { key: 'weatherWindKmh', label: 'Wind (km/h) (optional)', placeholder: 'optional' },
+    { key: 'weatherCloudPct', label: 'Wolken (%) (optional)', placeholder: 'optional' },
+    { key: 'weatherLocation', label: 'Ort/Standort (optional)', placeholder: 'z.B. Bocholt / Anlage 1' }
   ];
 
   const STORAGE_DP_FIELDS = [
@@ -5294,6 +5306,20 @@
           currentConfig.datapoints[key] = val;
         },
         { idPrefix: 'live_' }
+      );
+    }
+
+    // Wetter (optional)
+    if (els.dpWeather) {
+      buildDpTable(
+        els.dpWeather,
+        WEATHER_DP_FIELDS,
+        (key) => dps[key],
+        (key, val) => {
+          currentConfig.datapoints = currentConfig.datapoints || {};
+          currentConfig.datapoints[key] = val;
+        },
+        { idPrefix: 'wth_' }
       );
     }
 
