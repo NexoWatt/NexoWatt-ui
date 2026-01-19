@@ -1002,20 +1002,34 @@ function render() {
 
       // PV Forecast (optional): next-24h solar forecast from NexoWatt PV-Forecast manager
       try {
-        const pvValid = !!d('forecast.pv.valid');
+        const pvValidRaw = d('forecast.pv.valid');
+        const pvValid = !!pvValidRaw;
         const pvKwh24 = coerceNumber(d('forecast.pv.kwhNext24h'));
         const pvPeakW = coerceNumber(d('forecast.pv.peakWNext24h'));
+        const pvAgeMs = coerceNumber(d('forecast.pv.ageMs'));
+        const pvStatus = d('forecast.pv.statusText');
 
-        if (pvValid && pvKwh24 != null && pvKwh24 > 0) {
-          const kwhTxt = _fmtNumLocal(pvKwh24, 1) + ' kWh';
-          const peakTxt = (pvPeakW != null && pvPeakW > 0) ? (_fmtNumLocal(pvPeakW / 1000, 1) + ' kW') : '';
-          let line = '☀️ PV 24h: ' + kwhTxt;
-          if (peakTxt) line += ' • Peak ' + peakTxt;
-          if (pvLineEl) pvLineEl.textContent = line;
-          if (pvRow) pvRow.style.display = '';
-        } else {
+        const pvKnown = (pvValidRaw !== undefined) || (pvStatus !== undefined);
+
+        if (!pvKnown) {
           if (pvLineEl) pvLineEl.textContent = '';
           if (pvRow) pvRow.style.display = 'none';
+        } else {
+          let line = '';
+          if (pvValid) {
+            const kwhTxt = (pvKwh24 != null) ? (_fmtNumLocal(pvKwh24, 1) + ' kWh') : '--';
+            const peakTxt = (pvPeakW != null && pvPeakW > 0) ? (_fmtNumLocal(pvPeakW / 1000, 1) + ' kW') : '';
+            const ageTxt = (pvAgeMs != null && pvAgeMs > 0) ? (Math.round(pvAgeMs / 60000) + ' min') : '';
+            line = '☀️ PV 24h: ' + kwhTxt;
+            if (peakTxt) line += ' • Peak ' + peakTxt;
+            if (ageTxt) line += ' • ' + ageTxt;
+          } else {
+            let st = (pvStatus != null && String(pvStatus).trim() !== '') ? String(pvStatus).trim() : 'nicht verfügbar';
+            if (st.length > 80) st = st.slice(0, 77) + '…';
+            line = '☀️ PV Forecast: ' + st;
+          }
+          if (pvLineEl) pvLineEl.textContent = line;
+          if (pvRow) pvRow.style.display = '';
         }
       } catch (_e2) {
         if (pvLineEl) pvLineEl.textContent = '';

@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.63",
+    "version": "0.6.64",
     "news": {
       "0.6.63": {
         "en": "PV Forecast: Improved pvforecast JSONTable compatibility (German time parsing + automatic kW detection). Forecast validity should now work out-of-the-box.",
@@ -926,6 +926,10 @@
       "0.6.61": {
         "en": "Fix: Weather App settings toggle no longer reverts to OFF due to stale state updates. UI now trusts current input values and properly shows the weather configuration block (Private/Commercial + API key).",
         "de": "Fix: Wetter-App Schalter springt nicht mehr durch veraltete State-Updates zurueck auf AUS. UI nutzt jetzt die aktuellen Eingabewerte und zeigt den Wetter-Konfigurationsbereich (Privat/Gewerblich + API-Key) korrekt an."
+      },
+      "0.6.64": {
+        "en": "VIS/EMS: Weather tile now shows PV forecast status even if forecast is invalid (helps diagnose missing tomorrow data). Storage Control: improved NVP fine balancing (smaller default NVP target/deadband in tariff discharge and allows smaller setpoints for :nvp sources).",
+        "de": "VIS/EMS: Wetter-Kachel zeigt jetzt den PV-Forecast-Status auch bei ungueltiger Prognose (hilft bei Diagnose, z.B. fehlende Morgen-Daten). Storage-Control: verbesserte NVP-Feinregelung (kleinere Default-Zielwerte/Hysterese im Tarif-Entladen und kleinere Setpoints fuer :nvp Quellen)."
       }
     },
     "title": "NexoWatt VIS",
