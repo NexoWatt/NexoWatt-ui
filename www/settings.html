@@ -119,6 +119,45 @@
         </div>
       </div>
     
+
+      <hr style="margin:14px 0;border:0;border-top:1px solid rgba(255,255,255,.08)"/>
+
+      <div class="subhead">Wetter</div>
+
+      <label class="row"><span>Wetter-App</span>
+        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_weather_enabled">
+          <button type="button" data-value="false">Aus</button>
+          <button type="button" data-value="true">An</button>
+        </div>
+        <input type="checkbox" class="nw-toggle-hidden" id="s_weather_enabled" data-scope="settings" data-key="weatherEnabled">
+      </label>
+
+      <div id="weather_settings_block" class="nw-weather-settings" style="display:none">
+        <div class="row" style="align-items:center">
+          <span>Nutzungsart</span>
+          <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-weather-mode" id="weatherUsageButtons" style="justify-content:flex-end;gap:8px">
+            <button type="button" data-value="private">Privat</button>
+            <button type="button" data-value="commercial">Gewerblich</button>
+          </div>
+          <input type="hidden" id="s_weather_usage" data-scope="settings" data-key="weatherUsageMode" value="private">
+        </div>
+
+        <small id="weatherHintPrivate" style="display:block;margin-top:6px;color:var(--muted)">Für private Nutzung kostenlos. Standort wird automatisch aus der Anlagen-/Systemkonfiguration übernommen.</small>
+        <small id="weatherHintCommercial" style="display:none;margin-top:6px;color:var(--muted)">Für gewerbliche/betriebliche Nutzung ist ein eigener API-Schlüssel erforderlich. Standort wird automatisch aus der Anlagen-/Systemkonfiguration übernommen. Die Verantwortung für die rechtmäßige Nutzung liegt beim Betreiber.</small>
+
+        <div id="weatherApiKeyRow" style="display:none;margin-top:10px">
+          <label class="row"><span>API-Schlüssel</span>
+            <input type="password" id="s_weather_apiKey" data-scope="settings" data-key="weatherApiKey" placeholder="API-Key">
+          </label>
+          <small id="weatherApiKeyMissing" style="display:none;margin-top:6px;color:var(--muted)">Kein API-Schlüssel gesetzt – Wetterdaten werden nicht abgefragt.</small>
+        </div>
+
+        <small class="muted" style="display:block;margin-top:8px;color:var(--muted)">
+          Hinweis &amp; Informationen: Wetterdaten werden vom externen Dienst Open‑Meteo bereitgestellt. Weitere Details finden Sie unter
+          <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">open-meteo.com</a>.
+        </small>
+      </div>
+
       <!-- Installateur-/Admin-Konfiguration erfolgt außerhalb des Endkunden-Dashboards -->
     </div>
   </section>

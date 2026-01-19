@@ -321,8 +321,8 @@
       </div>
     </div>
 
-    <!-- Wetter (optional) – fuellt die freie Flaeche rechts unten. Werte werden im App-Center gemappt. -->
-    <div class="nw-tile nw-tile--size-m nw-tile--type-sensor nw-weather-tile" style="cursor:default; grid-column: span 2;" id="weatherTile">
+    <!-- Wetter (optional) – wird in Einstellungen (Wetter-App) aktiviert. -->
+    <div class="nw-tile nw-tile--size-m nw-tile--type-sensor nw-weather-tile" style="cursor:default; grid-column: span 2; display:none;" id="weatherTile">
       <div class="nw-tile__top">
         <div class="nw-tile__icon-circle" id="weatherIconCircle">☁️</div>
         <div style="flex:1; margin-left:8px; min-width:0;">
@@ -350,8 +350,6 @@
           <span class="muted" id="weatherUpdated">—</span>
           <span class="muted" id="weatherTomorrow">—</span>
         </div>
-	        <a class="nw-weather-attrib muted" href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Weather data by Open-Meteo.com</a>
-        <div class="muted nw-weather-bottom__hint" id="weatherHint">Plug&amp;Play: System-Standort + Open-Meteo (optional Override im App-Center → Zuordnung → Wetter)</div>
       </div>
     </div>
 

@@ -932,35 +932,32 @@ function render() {
   setText('evcsLastChargeKwh', lastChargeN != null ? lastChargeN.toFixed(2) + ' kWh' : '--');
   if (window.__evcsApply) window.__evcsApply(d, state);
 
-  // Wetter (optional) – rein UI, frei mappbar im App‑Center
+
+  // Wetter (optional) – aktiviert in FIS → Einstellungen (Wetter-App)
   try {
-    const wTemp = coerceNumber(d('weatherTempC'));
-    const wText = d('weatherText');
-    const wCode = coerceNumber(d('weatherCode'));
-    const wWind = coerceNumber(d('weatherWindKmh'));
-    const wCloud = coerceNumber(d('weatherCloudPct'));
-    const wLoc = d('weatherLocation');
-
-    // Forecast (tomorrow)
-    const wTMin = coerceNumber(d('weatherTomorrowMinC'));
-    const wTMax = coerceNumber(d('weatherTomorrowMaxC'));
-    const wTPre = coerceNumber(d('weatherTomorrowPrecipPct'));
-    const wTText = d('weatherTomorrowText');
-    const wTCode = coerceNumber(d('weatherTomorrowCode'));
-
-    // "Active" only if we actually have real data (avoid showing an empty tile)
-    const hasWeather = (wTemp != null) || (wCode != null) || (wWind != null) || (wCloud != null);
-
+    const weatherEnabled = !!d('settings.weatherEnabled');
     const tileEl = document.getElementById('weatherTile');
-    if (tileEl) tileEl.style.display = hasWeather ? '' : 'none';
+    if (tileEl) tileEl.style.display = weatherEnabled ? '' : 'none';
 
-    if (!hasWeather) {
-      // Nothing configured / no data yet -> keep hidden
+    if (!weatherEnabled) {
+      // Weather-App ist aus -> komplette Kachel ausblenden, keine UI-Hinweise
       setText('weatherTomorrow', '');
       setText('weatherUpdated', '—');
-      const hintEl = document.getElementById('weatherHint');
-      if (hintEl) hintEl.style.display = '';
     } else {
+      const wTemp = coerceNumber(d('weatherTempC'));
+      const wText = d('weatherText');
+      const wCode = coerceNumber(d('weatherCode'));
+      const wWind = coerceNumber(d('weatherWindKmh'));
+      const wCloud = coerceNumber(d('weatherCloudPct'));
+      const wLoc = d('weatherLocation');
+
+      // Forecast (tomorrow)
+      const wTMin = coerceNumber(d('weatherTomorrowMinC'));
+      const wTMax = coerceNumber(d('weatherTomorrowMaxC'));
+      const wTPre = coerceNumber(d('weatherTomorrowPrecipPct'));
+      const wTText = d('weatherTomorrowText');
+      const wTCode = coerceNumber(d('weatherTomorrowCode'));
+
       // Icon
       const iconEl = document.getElementById('weatherIconCircle');
       if (iconEl) iconEl.textContent = _pickWeatherIcon(wCode, wText);
@@ -987,10 +984,6 @@ function render() {
       // Timestamp (prefer temperature, else any other weather dp)
       const wTs = s.weatherTempC?.ts || s.weatherText?.ts || s.weatherCode?.ts || s.weatherWindKmh?.ts || s.weatherCloudPct?.ts;
       setText('weatherUpdated', wTs ? ('aktualisiert ' + _fmtTimeHHmm(wTs)) : '—');
-
-      // Hint hidden while weather is active
-      const hintEl = document.getElementById('weatherHint');
-      if (hintEl) hintEl.style.display = 'none';
     }
   } catch (_e) {}
 
@@ -1300,6 +1293,71 @@ function initSettingsPanel(){
   updateTariffModeLabel();
   updateDynVisibility();
 
+  // Weather App (Plug&Play)
+  const weatherToggle = document.getElementById('s_weather_enabled');
+  const weatherBlock = document.getElementById('weather_settings_block');
+  const weatherUsageInput = document.getElementById('s_weather_usage');
+  const weatherBtns = document.getElementById('weatherUsageButtons');
+  const weatherHintPrivate = document.getElementById('weatherHintPrivate');
+  const weatherHintCommercial = document.getElementById('weatherHintCommercial');
+  const weatherApiRow = document.getElementById('weatherApiKeyRow');
+  const weatherApiKey = document.getElementById('s_weather_apiKey');
+  const weatherApiMissing = document.getElementById('weatherApiKeyMissing');
+
+
+  const _nwBool = (v) => {
+    if (v === true || v === 1 || v === '1') return true;
+    const s = String(v || '').toLowerCase().trim();
+    return s === 'true' || s === 'yes' || s === 'on';
+  };
+
+  const updateWeatherVisibility = () => {
+    if (!weatherBlock || !weatherToggle) return;
+    const stVal = window.latestState && window.latestState['settings.weatherEnabled']
+      ? window.latestState['settings.weatherEnabled'].value
+      : weatherToggle.checked;
+    const enabled = _nwBool(stVal);
+
+    // sync checkbox so the toggle buttons render correct when navigating back
+    weatherToggle.checked = enabled;
+    weatherBlock.style.display = enabled ? '' : 'none';
+  };
+
+  const updateWeatherModeUi = () => {
+    if (!weatherUsageInput) return;
+
+    const stMode = window.latestState && window.latestState['settings.weatherUsageMode']
+      ? window.latestState['settings.weatherUsageMode'].value
+      : weatherUsageInput.value;
+    let mode = String(stMode || '').trim().toLowerCase();
+    if (mode !== 'commercial' && mode !== 'private') mode = 'private';
+    if (weatherUsageInput.value !== mode) weatherUsageInput.value = mode;
+
+    const stKey = window.latestState && window.latestState['settings.weatherApiKey']
+      ? window.latestState['settings.weatherApiKey'].value
+      : '';
+    const keyVal = (weatherApiKey && String(weatherApiKey.value || '').trim()) || String(stKey || '').trim();
+
+    if (weatherBtns) {
+      [...weatherBtns.querySelectorAll('button')].forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.value === mode);
+      });
+    }
+
+    const isCommercial = mode === 'commercial';
+    if (weatherHintPrivate) weatherHintPrivate.style.display = isCommercial ? 'none' : 'block';
+    if (weatherHintCommercial) weatherHintCommercial.style.display = isCommercial ? 'block' : 'none';
+    if (weatherApiRow) weatherApiRow.style.display = isCommercial ? 'block' : 'none';
+
+    const missing = isCommercial && !keyVal;
+    if (weatherApiMissing) weatherApiMissing.style.display = missing ? 'block' : 'none';
+  };
+
+  // UI-Update immer ausführen
+  updateWeatherVisibility();
+  updateWeatherModeUi();
+
+
   // Listener nur einmal binden
   if (window.__nwSettingsPanelInit) return;
   window.__nwSettingsPanelInit = true;
@@ -1318,6 +1376,22 @@ function initSettingsPanel(){
   if (dynToggle) {
     dynToggle.addEventListener('change', updateDynVisibility);
   }
+
+  // Wetter: Aktivierung & Nutzungsart
+  if (weatherToggle) weatherToggle.addEventListener('change', updateWeatherVisibility);
+  if (weatherBtns && weatherUsageInput) {
+    [...weatherBtns.querySelectorAll('button')].forEach(btn => {
+      btn.addEventListener('click', () => {
+        const v = btn.dataset.value || 'private';
+        weatherUsageInput.value = v;
+        // Trigger persistence via bindInputValue()
+        weatherUsageInput.dispatchEvent(new Event('change'));
+        updateWeatherModeUi();
+      });
+    });
+  }
+  if (weatherUsageInput) weatherUsageInput.addEventListener('change', updateWeatherModeUi);
+  if (weatherApiKey) weatherApiKey.addEventListener('input', updateWeatherModeUi);
 
   // Test-Mail für Benachrichtigungen
   const notifyTestBtn = document.getElementById('notifyTestBtn');

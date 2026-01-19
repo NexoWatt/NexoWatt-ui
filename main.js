@@ -198,6 +198,11 @@ class NexoWattVis extends utils.Adapter {
       priority: { type: 'number', role: 'value', def: 2 },
       tariffMode: { type: 'number', role: 'value', def: 1 },
 
+      // Weather App (Plug&Play)
+      weatherEnabled: { type: 'boolean', role: 'state', def: false },
+      weatherUsageMode: { type: 'string', role: 'text', def: 'private' },
+      weatherApiKey: { type: 'string', role: 'text', def: '' },
+
       // EVCS defaults mirrored into runtime settings (written by syncSettingsConfigToStates())
       evcsCount: { type: 'number', role: 'value', def: 1 },
       evcsMaxPower: { type: 'number', role: 'value.power', def: 11000 },
@@ -441,8 +446,33 @@ class NexoWattVis extends utils.Adapter {
   }
 
   async nwUpdateWeather(reason = 'interval') {
+    // Weather-App is optional and must be explicitly enabled in FIS → Einstellungen.
+    if (!this._notifyGetSettingBool('weatherEnabled', false)) return;
+
     if (this._nwWeatherUpdating) return;
     this._nwWeatherUpdating = true;
+
+    const setIfUnmapped = async (key, val) => {
+      try {
+        if (!this._nwHasMappedDatapoint(key)) {
+          await this.setStateAsync(key, { val, ack: true });
+        }
+      } catch (_e) {}
+    };
+
+    const clearAll = async () => {
+      await setIfUnmapped('weatherTempC', null);
+      await setIfUnmapped('weatherCode', null);
+      await setIfUnmapped('weatherText', '');
+      await setIfUnmapped('weatherWindKmh', null);
+      await setIfUnmapped('weatherCloudPct', null);
+      await setIfUnmapped('weatherTomorrowMinC', null);
+      await setIfUnmapped('weatherTomorrowMaxC', null);
+      await setIfUnmapped('weatherTomorrowPrecipPct', null);
+      await setIfUnmapped('weatherTomorrowCode', null);
+      await setIfUnmapped('weatherTomorrowText', '');
+    };
+
     try {
       const geo = await this._nwGetSystemGeo();
       const lat = geo.lat;
@@ -452,31 +482,37 @@ class NexoWattVis extends utils.Adapter {
         : (Number.isFinite(lat) && Number.isFinite(lon) ? `${lat.toFixed(2)}, ${lon.toFixed(2)}` : '');
 
       if (loc) {
-        try { await this.setStateAsync('weatherLocation', { val: loc, ack: true }); } catch (_e) {}
+        await setIfUnmapped('weatherLocation', loc);
       }
 
+      // No coordinates configured -> no query (silent). Values are cleared so the live tile shows placeholders.
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-        // No system coordinates configured -> keep previous values and show a minimal hint
-        try {
-          const st = await this.getStateAsync('weatherTempC');
-          if (!st || st.val === null || st.val === undefined) {
-            await this.setStateAsync('weatherText', { val: 'Standort nicht konfiguriert', ack: true });
-          }
-        } catch (_e) {}
+        await clearAll();
         return;
       }
 
-      const apiKey =
-        this.config.openMeteoApiKey ||
-        this.config.weatherApiKey ||
-        this.config.weatherOpenMeteoApiKey ||
-        (this.config.weather && this.config.weather.openMeteoApiKey);
+      // Two explicit usage modes (legal separation)
+      let usage = String(this._notifyGetSettingString('weatherUsageMode', 'private') || '').trim().toLowerCase();
+      if (usage !== 'commercial' && usage !== 'private') usage = 'private';
 
-      const baseUrl =
-        this.config.openMeteoBaseUrl ||
-        (apiKey ? 'https://customer-api.open-meteo.com/v1/forecast' : 'https://api.open-meteo.com/v1/forecast');
+      const apiKey = (usage === 'commercial')
+        ? String(this._notifyGetSettingString('weatherApiKey', '') || '').trim()
+        : '';
 
-      const apikeyParam = apiKey ? `&apikey=${encodeURIComponent(String(apiKey))}` : '';
+      // Commercial / business usage requires an own API key. If missing, do not query.
+      if (usage === 'commercial' && !apiKey) {
+        await clearAll();
+        return;
+      }
+
+      const baseUrl = (usage === 'commercial')
+        ? 'https://customer-api.open-meteo.com/v1/forecast'
+        : 'https://api.open-meteo.com/v1/forecast';
+
+      const apikeyParam = (usage === 'commercial')
+        ? `&apikey=${encodeURIComponent(apiKey)}`
+        : '';
+
       const url = `${baseUrl}?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&current=temperature_2m,weather_code,cloud_cover,wind_speed_10m,is_day&daily=temperature_2m_min,temperature_2m_max,precipitation_probability_max,weather_code&timezone=auto${apikeyParam}`;
       const json = await this._nwHttpsGetJson(url, 9000);
       if (!json) throw new Error('Empty response');
@@ -494,11 +530,11 @@ class NexoWattVis extends utils.Adapter {
       const cloudOut = Number.isFinite(cloud) ? Math.round(cloud) : null;
       const textOut = (codeOut != null) ? this._nwWeatherTextDe(codeOut) : '';
 
-      if (!this._nwHasMappedDatapoint('weatherTempC'))   await this.setStateAsync('weatherTempC', { val: tempOut, ack: true });
-      if (!this._nwHasMappedDatapoint('weatherCode'))    await this.setStateAsync('weatherCode', { val: codeOut, ack: true });
-      if (!this._nwHasMappedDatapoint('weatherText'))    await this.setStateAsync('weatherText', { val: textOut, ack: true });
-      if (!this._nwHasMappedDatapoint('weatherWindKmh')) await this.setStateAsync('weatherWindKmh', { val: windOut, ack: true });
-      if (!this._nwHasMappedDatapoint('weatherCloudPct'))await this.setStateAsync('weatherCloudPct', { val: cloudOut, ack: true });
+      await setIfUnmapped('weatherTempC', tempOut);
+      await setIfUnmapped('weatherCode', codeOut);
+      await setIfUnmapped('weatherText', textOut);
+      await setIfUnmapped('weatherWindKmh', windOut);
+      await setIfUnmapped('weatherCloudPct', cloudOut);
 
       // Tomorrow forecast (daily[1])
       const daily = (json.daily && typeof json.daily === 'object') ? json.daily : {};
@@ -519,11 +555,11 @@ class NexoWattVis extends utils.Adapter {
       const cOut = Number.isFinite(cT) ? cT : null;
       const tTextOut = (cOut != null) ? this._nwWeatherTextDe(cOut) : '';
 
-      if (!this._nwHasMappedDatapoint('weatherTomorrowMinC'))      await this.setStateAsync('weatherTomorrowMinC', { val: tMinOut, ack: true });
-      if (!this._nwHasMappedDatapoint('weatherTomorrowMaxC'))      await this.setStateAsync('weatherTomorrowMaxC', { val: tMaxOut, ack: true });
-      if (!this._nwHasMappedDatapoint('weatherTomorrowPrecipPct')) await this.setStateAsync('weatherTomorrowPrecipPct', { val: pOut, ack: true });
-      if (!this._nwHasMappedDatapoint('weatherTomorrowCode'))      await this.setStateAsync('weatherTomorrowCode', { val: cOut, ack: true });
-      if (!this._nwHasMappedDatapoint('weatherTomorrowText'))      await this.setStateAsync('weatherTomorrowText', { val: tTextOut, ack: true });
+      await setIfUnmapped('weatherTomorrowMinC', tMinOut);
+      await setIfUnmapped('weatherTomorrowMaxC', tMaxOut);
+      await setIfUnmapped('weatherTomorrowPrecipPct', pOut);
+      await setIfUnmapped('weatherTomorrowCode', cOut);
+      await setIfUnmapped('weatherTomorrowText', tTextOut);
     } catch (e) {
       // Keep last values on transient failures; only log at debug to avoid log spam.
       try { this.log.debug(`[weather] update failed (${reason}): ${e.message}`); } catch (_e2) {}
@@ -532,13 +568,31 @@ class NexoWattVis extends utils.Adapter {
     }
   }
 
+  stopWeatherService() {
+    try {
+      if (this._nwWeatherStartupTimer) {
+        clearTimeout(this._nwWeatherStartupTimer);
+        this._nwWeatherStartupTimer = null;
+      }
+      if (this._nwWeatherTimer) {
+        clearInterval(this._nwWeatherTimer);
+        this._nwWeatherTimer = null;
+      }
+    } catch (_e) {}
+  }
+
   startWeatherService() {
     try {
+      const enabled = this._notifyGetSettingBool('weatherEnabled', false);
+      if (!enabled) {
+        this.stopWeatherService();
+        return;
+      }
       if (this._nwWeatherTimer) return;
       const intervalMs = 15 * 60 * 1000;
       const run = () => this.nwUpdateWeather('interval').catch(() => {});
-      // First update shortly after startup so UI gets fresh values quickly
-      this._nwWeatherStartupTimer = setTimeout(run, 2000);
+      // First update shortly after activation/startup so UI gets fresh values quickly
+      this._nwWeatherStartupTimer = setTimeout(run, 1000);
       this._nwWeatherTimer = setInterval(run, intervalMs);
     } catch (_e) {}
   }
@@ -9417,7 +9471,9 @@ return res.json(out);
       'notifyHardCurtailment',
       'notifyRecovery',
       // Tariff/charging settings
-      'dynamicTariff','storagePower','price','priority','tariffMode','evcsMaxPower','evcsCount'
+      'dynamicTariff','storagePower','price','priority','tariffMode','evcsMaxPower','evcsCount',
+      // Weather App (FIS settings)
+      'weatherEnabled','weatherUsageMode','weatherApiKey'
     ];
     const storageFarmLocalKeys = ['enabled', 'mode', 'configJson', 'groupsJson', 'totalSoc', 'medianSoc', 'totalSocOnline', 'socSourcesTotal', 'socSourcesOnline', 'socDegraded', 'totalChargePowerW', 'totalDischargePowerW', 'totalPvPowerW', 'storagesOnline', 'storagesDegraded', 'storagesTotal', 'storagesStatusJson'];
     // Weitere lokale States, die in der VIS angezeigt werden sollen (ohne Admin-Mapping)
@@ -9541,6 +9597,20 @@ return res.json(out);
       if (key) {
         this.updateValue(key, this._nwScaleMappedValue(key, id, state.val), state.ts);
       }
+
+      // Weather-App activation (FIS → Einstellungen)
+      try {
+        if (key === 'settings.weatherEnabled') {
+          const enabled = this._notifyParseBool(state.val, false);
+          if (enabled) this.startWeatherService();
+          else this.stopWeatherService();
+        } else if (key === 'settings.weatherUsageMode' || key === 'settings.weatherApiKey') {
+          if (this._notifyGetSettingBool('weatherEnabled', false)) {
+            this.startWeatherService();
+            this.nwUpdateWeather('settings').catch(() => {});
+          }
+        }
+      } catch (_e) {}
 
       // Auto‑PV: cache PV‑Inverter values from nexowatt-devices (no manual mapping)
       try {

@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.59",
+    "version": "0.6.60",
     "news": {
       "0.6.57": {
         "en": "VIS: Weather tile is now Plug&Play (integrated Open-Meteo fetch using system latitude/longitude). No additional adapter required; App-Center mapping can still override if desired.",
@@ -910,6 +910,10 @@
       "0.6.58": {
         "en": "EMS/VIS: Energy totals (kWh) are now provided + historized by NexoWatt by default; App-Center mapping acts as override for external EMS counters.",
         "de": "EMS/VIS: Energie-Gesamtwerte (kWh) werden jetzt standardmaessig vom NexoWatt-EMS bereitgestellt und historisiert; App-Center-Mapping dient nur noch als Override fuer externe EMS-Zaehler."
+      },
+      "0.6.60": {
+        "en": "Weather App: Added end-user activation toggle in Settings, with explicit Private vs Commercial mode. Commercial mode requires own API key. Live tile has no attribution/hint text and is only shown when enabled; weather API is not queried when disabled.",
+        "de": "Wetter-App: Aktivierung per Schalter in Einstellungen, mit klarer Auswahl Privat vs Gewerblich. Gewerblich erfordert eigenen API-Key. Live-Kachel ohne Hinweis/Attribution und nur bei Aktivierung sichtbar; bei deaktivierter Wetter-App keine API-Abfragen."
       }
     },
     "title": "NexoWatt VIS",
