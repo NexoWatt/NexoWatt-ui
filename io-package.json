@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.58",
+    "version": "0.6.59",
     "news": {
       "0.6.57": {
         "en": "VIS: Weather tile is now Plug&Play (integrated Open-Meteo fetch using system latitude/longitude). No additional adapter required; App-Center mapping can still override if desired.",
@@ -1093,8 +1093,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.58",
+  "version": "0.6.59",
   "news": {
+    "0.6.59": {
+      "en": "Mobile responsive improvements (iPhone): stable 2-column KPI grid + overflow-safe KPI rows. Weather tile: hide when inactive and show a compact tomorrow line (Open-Meteo daily). Energy totals are seeded with 0 on fresh installs and formatted (kWh/MWh/GWh) in UI.",
+      "de": "Mobile Responsive-Verbesserungen (iPhone): stabiles 2-Spalten KPI-Raster + ueberlaufsichere KPI-Zeilen. Wetter-Kachel: nur anzeigen wenn aktiv und mit kompakter Morgen-Zeile (Open-Meteo daily). Energie-Gesamtwerte werden bei Neuinstallationen mit 0 initialisiert und in der UI automatisch formatiert (kWh/MWh/GWh)."
+    },
     "0.6.57": {
       "en": "VIS: Weather tile Plug&Play (integrated Open-Meteo fetch; optional App-Center override).",
       "de": "VIS: Wetter-Kachel Plug&Play (integrierter Open-Meteo Abruf; optional App-Center Override)."

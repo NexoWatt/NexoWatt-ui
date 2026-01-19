@@ -59,6 +59,13 @@ class NexoWattVis extends utils.Adapter {
       'weatherCloudPct',
       'weatherLocation',
 
+      // Simple daily forecast (tomorrow) for the Weather tile
+      'weatherTomorrowMinC',
+      'weatherTomorrowMaxC',
+      'weatherTomorrowPrecipPct',
+      'weatherTomorrowCode',
+      'weatherTomorrowText',
+
       // Energy totals / KPIs (provided by NexoWatt EMS if no App-Center override mapping is set)
       'productionEnergyKwh',
       'consumptionEnergyKwh',
@@ -246,6 +253,13 @@ class NexoWattVis extends utils.Adapter {
       weatherWindKmh:   { type: 'number', role: 'value.speed', def: null },
       weatherCloudPct:  { type: 'number', role: 'value', def: null },
       weatherLocation:  { type: 'string', role: 'text', def: '' },
+
+      // Simple tomorrow forecast (used by the optional dashboard line)
+      weatherTomorrowMinC: { type: 'number', role: 'value.temperature', def: null },
+      weatherTomorrowMaxC: { type: 'number', role: 'value.temperature', def: null },
+      weatherTomorrowPrecipPct: { type: 'number', role: 'value.percent', def: null },
+      weatherTomorrowCode: { type: 'number', role: 'value', def: null },
+      weatherTomorrowText: { type: 'string', role: 'text', def: '' },
     };
 
     for (const [id, c] of Object.entries(defs)) {
@@ -261,7 +275,6 @@ class NexoWattVis extends utils.Adapter {
         },
         native: {},
       });
-
       // Seed defaults only once
       try {
         const st = await this.getStateAsync(id);
@@ -309,6 +322,15 @@ class NexoWattVis extends utils.Adapter {
         },
         native: {},
       });
+
+      // Seed with 0 to avoid (null) values in the UI on fresh installations.
+      // Existing values (e.g. after an update) stay untouched.
+      try {
+        const st = await this.getStateAsync(id);
+        if (!st || st.val === null || st.val === undefined) {
+          await this.setStateAsync(id, { val: 0, ack: true });
+        }
+      } catch (_e) {}
 
       // Log to Influx if available (used for reporting / debugging). This is safe even
       // if the user runs without Influx; the helper will simply no-op.
@@ -444,7 +466,18 @@ class NexoWattVis extends utils.Adapter {
         return;
       }
 
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&current=temperature_2m,weather_code,cloud_cover,wind_speed_10m,is_day&timezone=auto`;
+      const apiKey =
+        this.config.openMeteoApiKey ||
+        this.config.weatherApiKey ||
+        this.config.weatherOpenMeteoApiKey ||
+        (this.config.weather && this.config.weather.openMeteoApiKey);
+
+      const baseUrl =
+        this.config.openMeteoBaseUrl ||
+        (apiKey ? 'https://customer-api.open-meteo.com/v1/forecast' : 'https://api.open-meteo.com/v1/forecast');
+
+      const apikeyParam = apiKey ? `&apikey=${encodeURIComponent(String(apiKey))}` : '';
+      const url = `${baseUrl}?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&current=temperature_2m,weather_code,cloud_cover,wind_speed_10m,is_day&daily=temperature_2m_min,temperature_2m_max,precipitation_probability_max,weather_code&timezone=auto${apikeyParam}`;
       const json = await this._nwHttpsGetJson(url, 9000);
       if (!json) throw new Error('Empty response');
       if (json.error) throw new Error(String(json.reason || 'API error'));
@@ -461,11 +494,36 @@ class NexoWattVis extends utils.Adapter {
       const cloudOut = Number.isFinite(cloud) ? Math.round(cloud) : null;
       const textOut = (codeOut != null) ? this._nwWeatherTextDe(codeOut) : '';
 
-      await this.setStateAsync('weatherTempC', { val: tempOut, ack: true });
-      await this.setStateAsync('weatherCode', { val: codeOut, ack: true });
-      await this.setStateAsync('weatherText', { val: textOut, ack: true });
-      await this.setStateAsync('weatherWindKmh', { val: windOut, ack: true });
-      await this.setStateAsync('weatherCloudPct', { val: cloudOut, ack: true });
+      if (!this._nwHasMappedDatapoint('weatherTempC'))   await this.setStateAsync('weatherTempC', { val: tempOut, ack: true });
+      if (!this._nwHasMappedDatapoint('weatherCode'))    await this.setStateAsync('weatherCode', { val: codeOut, ack: true });
+      if (!this._nwHasMappedDatapoint('weatherText'))    await this.setStateAsync('weatherText', { val: textOut, ack: true });
+      if (!this._nwHasMappedDatapoint('weatherWindKmh')) await this.setStateAsync('weatherWindKmh', { val: windOut, ack: true });
+      if (!this._nwHasMappedDatapoint('weatherCloudPct'))await this.setStateAsync('weatherCloudPct', { val: cloudOut, ack: true });
+
+      // Tomorrow forecast (daily[1])
+      const daily = (json.daily && typeof json.daily === 'object') ? json.daily : {};
+      const idxTomorrow = 1;
+      const tMinArr = Array.isArray(daily.temperature_2m_min) ? daily.temperature_2m_min : [];
+      const tMaxArr = Array.isArray(daily.temperature_2m_max) ? daily.temperature_2m_max : [];
+      const pArr = Array.isArray(daily.precipitation_probability_max) ? daily.precipitation_probability_max : [];
+      const cArr = Array.isArray(daily.weather_code) ? daily.weather_code : [];
+
+      const tMin = Number(tMinArr[idxTomorrow]);
+      const tMax = Number(tMaxArr[idxTomorrow]);
+      const pMax = Number(pArr[idxTomorrow]);
+      const cT = Number(cArr[idxTomorrow]);
+
+      const tMinOut = Number.isFinite(tMin) ? Math.round(tMin * 10) / 10 : null;
+      const tMaxOut = Number.isFinite(tMax) ? Math.round(tMax * 10) / 10 : null;
+      const pOut = Number.isFinite(pMax) ? Math.round(pMax) : null;
+      const cOut = Number.isFinite(cT) ? cT : null;
+      const tTextOut = (cOut != null) ? this._nwWeatherTextDe(cOut) : '';
+
+      if (!this._nwHasMappedDatapoint('weatherTomorrowMinC'))      await this.setStateAsync('weatherTomorrowMinC', { val: tMinOut, ack: true });
+      if (!this._nwHasMappedDatapoint('weatherTomorrowMaxC'))      await this.setStateAsync('weatherTomorrowMaxC', { val: tMaxOut, ack: true });
+      if (!this._nwHasMappedDatapoint('weatherTomorrowPrecipPct')) await this.setStateAsync('weatherTomorrowPrecipPct', { val: pOut, ack: true });
+      if (!this._nwHasMappedDatapoint('weatherTomorrowCode'))      await this.setStateAsync('weatherTomorrowCode', { val: cOut, ack: true });
+      if (!this._nwHasMappedDatapoint('weatherTomorrowText'))      await this.setStateAsync('weatherTomorrowText', { val: tTextOut, ack: true });
     } catch (e) {
       // Keep last values on transient failures; only log at debug to avoid log spam.
       try { this.log.debug(`[weather] update failed (${reason}): ${e.message}`); } catch (_e2) {}

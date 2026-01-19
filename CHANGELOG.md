@@ -1,3 +1,14 @@
+## 0.6.59 (Mobile/UI/Weather)
+- UI: Status-KPIs auf iPhone/kleinen Displays sauber responsiv (stabile 2-Spalten-Kacheln), Schnellsteuerung als 1-Spalte.
+- UI: KPI-Zeilen ueberlaufsicher; Gesamtenergien werden automatisch in kWh/MWh/GWh formatiert.
+- Wetter: Kachel wird nur angezeigt, wenn Wetterdaten wirklich verfuegbar sind; zusaetzliche kompakte "Morgen"-Zeile.
+- Backend: Open-Meteo Daily-Forecast (Morgen) -> neue States: weatherTomorrowMinC/MaxC/PrecipPct/Code/Text.
+- Backend: Gesamtenergie-States werden bei Neuinstallation mit 0 initialisiert (keine (null)-Anzeige).
+
+## 0.6.58 (Energiegesamtwerte)
+- Gesamtenergie-States (PV/Verbrauch/Netz/EV/CO2 etc.) als eigene Adapter-States; Influx-Logging vorbereitet.
+- UI: Anzeige der Gesamtenergien ueber dedizierte Keys (nicht mehr ueber externe EMS-Adapter notwendig).
+
 ## 0.6.55 (Admin UI)
 - Admin: Legacy EMS-/Admin-Konfigurationsreiter entfernt (EMS/Datenpunkte/§14a/Historie/Ladepunkte werden ausschließlich im App-Center konfiguriert).
 - Admin: Diagnose-Einstellungen bleiben verfügbar (Diagnose aktiv, Log-Level, Log-/State-Intervalle, JSON-Länge, Diagnose-States schreiben).

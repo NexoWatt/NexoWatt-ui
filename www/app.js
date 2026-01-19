@@ -118,6 +118,17 @@ function formatPower(v) {
   return n.toFixed(0) + ' W';
 }
 
+// Energy formatting for KPI tiles (keep values readable on mobile)
+function formatEnergyKwh(v){
+  if (v === undefined || v === null || isNaN(v)) return '--';
+  const n = Number(v);
+  if (!isFinite(n)) return '--';
+  const abs = Math.abs(n);
+  if (abs >= 1000000) return (n/1000000).toFixed(2) + ' GWh';
+  if (abs >= 1000) return (n/1000).toFixed(2) + ' MWh';
+  return n.toFixed(2) + ' kWh';
+}
+
 function formatPowerSigned(v){
   if (v === undefined || v === null || isNaN(v)) return '--';
   const n = Number(v);
@@ -898,10 +909,10 @@ function render() {
 
   setText('gridBuyPowerCard', formatPower(buy ?? 0));
   setText('gridSellPowerCard', formatPower(sell ?? 0));
-  setText('gridEnergyKwh', (d('gridEnergyKwh')!=null? Number(d('gridEnergyKwh')).toFixed(2)+' kWh':'--'));
-  setText('productionEnergyKwh', (d('productionEnergyKwh')!=null? Number(d('productionEnergyKwh')).toFixed(2)+' kWh':'--'));
+  setText('gridEnergyKwh', formatEnergyKwh(d('gridEnergyKwh')));
+  setText('productionEnergyKwh', formatEnergyKwh(d('productionEnergyKwh')));
   const pvEnergyKwh = coerceNumber(d('productionEnergyKwh'));
-  const co2FromPvT = pvEnergyKwh != null ? (pvEnergyKwh * 0.0004) : null; // 0.4 kg CO₂ / kWh -> t CO₂
+  const co2FromPvT = pvEnergyKwh != null ? (pvEnergyKwh * 0.00049) : null; // 0.49 kg CO₂ / kWh -> t CO₂ (default, configurable via DP override)
   const co2Dp = d('co2Savings');
   setText('co2Savings', (co2Dp != null ? (isNaN(Number(co2Dp)) ? String(co2Dp) : Number(co2Dp).toFixed(1) + ' t') : (co2FromPvT != null ? co2FromPvT.toFixed(1) + ' t' : '--')));
 
@@ -911,7 +922,7 @@ function render() {
   setText('gridFrequency', gfN != null ? gfN.toFixed(2) + ' Hz' : '--');
 
   setText('consumptionEvcs', formatPower(d('consumptionEvcs') ?? 0));
-  setText('consumptionEnergyKwh', (d('consumptionEnergyKwh')!=null? Number(d('consumptionEnergyKwh')).toFixed(2)+' kWh':'--'));
+  setText('consumptionEnergyKwh', formatEnergyKwh(d('consumptionEnergyKwh')));
   setText('consumptionBuilding', formatPower(d('consumptionTotal') ?? 0));
 
   // EVCS status: prefer per-connector status (single wallbox) and fall back to legacy dp
@@ -929,29 +940,58 @@ function render() {
     const wWind = coerceNumber(d('weatherWindKmh'));
     const wCloud = coerceNumber(d('weatherCloudPct'));
     const wLoc = d('weatherLocation');
-    const hasWeather = (wTemp != null) || (wCode != null) || (wText != null && String(wText).trim() !== '');
 
-    // Icon
-    const iconEl = document.getElementById('weatherIconCircle');
-    if (iconEl) iconEl.textContent = hasWeather ? _pickWeatherIcon(wCode, wText) : '🌡️';
+    // Forecast (tomorrow)
+    const wTMin = coerceNumber(d('weatherTomorrowMinC'));
+    const wTMax = coerceNumber(d('weatherTomorrowMaxC'));
+    const wTPre = coerceNumber(d('weatherTomorrowPrecipPct'));
+    const wTText = d('weatherTomorrowText');
+    const wTCode = coerceNumber(d('weatherTomorrowCode'));
 
-    // Location
-    setText('weatherLocation', (wLoc != null && String(wLoc).trim() ? String(wLoc) : 'Standort'));
+    // "Active" only if we actually have real data (avoid showing an empty tile)
+    const hasWeather = (wTemp != null) || (wCode != null) || (wWind != null) || (wCloud != null);
 
-    // Values
-    setText('weatherTemp', _fmtTempC(wTemp));
-    const cond = (wText != null && String(wText).trim() !== '') ? String(wText) : (wCode != null ? ('Code ' + Number(wCode)) : (hasWeather ? '—' : 'Nicht konfiguriert'));
-    setText('weatherCondition', cond);
-    setText('weatherWind', _fmtKmh(wWind));
-    setText('weatherCloud', _fmtPct(wCloud));
+    const tileEl = document.getElementById('weatherTile');
+    if (tileEl) tileEl.style.display = hasWeather ? '' : 'none';
 
-    // Timestamp (prefer temperature, else any other weather dp)
-    const wTs = s.weatherTempC?.ts || s.weatherText?.ts || s.weatherCode?.ts || s.weatherWindKmh?.ts || s.weatherCloudPct?.ts;
-    setText('weatherUpdated', hasWeather && wTs ? ('aktualisiert ' + _fmtTimeHHmm(wTs)) : '—');
+    if (!hasWeather) {
+      // Nothing configured / no data yet -> keep hidden
+      setText('weatherTomorrow', '');
+      setText('weatherUpdated', '—');
+      const hintEl = document.getElementById('weatherHint');
+      if (hintEl) hintEl.style.display = '';
+    } else {
+      // Icon
+      const iconEl = document.getElementById('weatherIconCircle');
+      if (iconEl) iconEl.textContent = _pickWeatherIcon(wCode, wText);
 
-    // Hint only if not configured
-    const hintEl = document.getElementById('weatherHint');
-    if (hintEl) hintEl.style.display = hasWeather ? 'none' : '';
+      // Location
+      setText('weatherLocation', (wLoc != null && String(wLoc).trim() ? String(wLoc) : 'Standort'));
+
+      // Values
+      setText('weatherTemp', _fmtTempC(wTemp));
+      const cond = (wText != null && String(wText).trim() !== '') ? String(wText) : (wCode != null ? ('Code ' + Number(wCode)) : '—');
+      setText('weatherCondition', cond);
+      setText('weatherWind', _fmtKmh(wWind));
+      setText('weatherCloud', _fmtPct(wCloud));
+
+      // Tomorrow line
+      let tomorrowLine = '';
+      if (wTMin != null && wTMax != null) {
+        const tIcon = _pickWeatherIcon(wTCode, wTText);
+        tomorrowLine = `Morgen: ${tIcon} ${Math.round(wTMin)}–${Math.round(wTMax)} °C`;
+        if (wTPre != null) tomorrowLine += ` • ${Math.round(wTPre)}%`;
+      }
+      setText('weatherTomorrow', tomorrowLine || '');
+
+      // Timestamp (prefer temperature, else any other weather dp)
+      const wTs = s.weatherTempC?.ts || s.weatherText?.ts || s.weatherCode?.ts || s.weatherWindKmh?.ts || s.weatherCloudPct?.ts;
+      setText('weatherUpdated', wTs ? ('aktualisiert ' + _fmtTimeHHmm(wTs)) : '—');
+
+      // Hint hidden while weather is active
+      const hintEl = document.getElementById('weatherHint');
+      if (hintEl) hintEl.style.display = 'none';
+    }
   } catch (_e) {}
 
   // Settings: RFID learning UI state (if present)

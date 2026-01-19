@@ -184,7 +184,7 @@
     <span>Status</span>
   </div>
 
-  <div class="nw-tiles-grid" id="liveStatusTiles" style="padding:12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+  <div class="nw-tiles-grid" id="liveStatusTiles" style="padding:12px;">
 
     <div class="nw-tile nw-tile--size-m nw-tile--type-sensor" style="cursor:default">
       <div class="nw-tile__top">
@@ -322,7 +322,7 @@
     </div>
 
     <!-- Wetter (optional) – fuellt die freie Flaeche rechts unten. Werte werden im App-Center gemappt. -->
-    <div class="nw-tile nw-tile--size-m nw-tile--type-sensor" style="cursor:default; grid-column: span 2;" id="weatherTile">
+    <div class="nw-tile nw-tile--size-m nw-tile--type-sensor nw-weather-tile" style="cursor:default; grid-column: span 2;" id="weatherTile">
       <div class="nw-tile__top">
         <div class="nw-tile__icon-circle" id="weatherIconCircle">☁️</div>
         <div style="flex:1; margin-left:8px; min-width:0;">
@@ -345,9 +345,13 @@
           <div class="nw-tile__unit">Wolken</div>
         </div>
       </div>
-      <div class="nw-tile__bottom">
-        <span class="muted" id="weatherUpdated">—</span>
-        <span class="muted" id="weatherHint">Plug&amp;Play: System-Standort + Open-Meteo (optional Override im App-Center → Zuordnung → Wetter)</span>
+      <div class="nw-tile__bottom nw-weather-bottom">
+        <div class="nw-weather-bottom__row">
+          <span class="muted" id="weatherUpdated">—</span>
+          <span class="muted" id="weatherTomorrow">—</span>
+        </div>
+	        <a class="nw-weather-attrib muted" href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Weather data by Open-Meteo.com</a>
+        <div class="muted nw-weather-bottom__hint" id="weatherHint">Plug&amp;Play: System-Standort + Open-Meteo (optional Override im App-Center → Zuordnung → Wetter)</div>
       </div>
     </div>
 
@@ -361,7 +365,7 @@
     <span>Schnellsteuerung</span>
   </div>
 
-  <div class="nw-tiles-grid" id="liveQuickTiles" style="padding:12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+  <div class="nw-tiles-grid" id="liveQuickTiles" style="padding:12px;">
 
     <div class="nw-tile nw-tile--size-m nw-tile--type-scene" id="tariffCard" tabindex="0" role="button" aria-label="Optimierung öffnen">
       <div class="nw-tile__top">

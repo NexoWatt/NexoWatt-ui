@@ -616,9 +616,51 @@ body {
 /* Responsives Grid für Kacheln */
 .nw-tiles-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px;
+  /* Desktop default: comfortable card width. */
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
   width: 100%;
+}
+
+/* Live "Status" section: keep a stable 4/3/2 column layout so the dashboard looks
+   consistent on large screens (and the weather tile span works as intended). */
+#liveStatusTiles.nw-tiles-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (max-width: 1200px) {
+  #liveStatusTiles.nw-tiles-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 900px) {
+  #liveStatusTiles.nw-tiles-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Mobile first fine-tuning
+   - Status-KPIs: 2 columns (compact, "native" dashboard look)
+   - Quick actions: 1 column (bigger touch targets)
+*/
+@media (max-width: 480px) {
+  #liveStatusTiles.nw-tiles-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  #liveQuickTiles.nw-tiles-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+@media (max-width: 360px) {
+  #liveStatusTiles.nw-tiles-grid {
+    grid-template-columns: 1fr;
+  }
+  /* If we only have one column, the weather tile must not span 2 columns */
+  #weatherTile {
+    grid-column: span 1 !important;
+  }
 }
 
 /* Kachel – Grundform */
@@ -713,8 +755,77 @@ body {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: 10px;
   font-size: 0.72rem;
   color: #9ca3af;
+}
+
+/* Prevent KPI overflow (long numbers on mobile) */
+.nw-tile__bottom > * {
+  min-width: 0;
+}
+.nw-tile__bottom > *:last-child {
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Weather tile: bottom stack + dedicated row */
+.nw-weather-bottom {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.nw-weather-bottom__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.nw-weather-bottom__hint {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nw-weather-attrib {
+  display: inline-block;
+  font-size: 0.64rem;
+  text-decoration: none;
+}
+.nw-weather-attrib:hover {
+  text-decoration: underline;
+}
+
+/* Weather tile: wrap metric columns on small screens */
+.nw-weather-tile .nw-tile__middle {
+  justify-content: space-between;
+  gap: 12px;
+}
+@media (max-width: 480px) {
+  .nw-weather-tile .nw-tile__middle {
+    flex-wrap: wrap;
+  }
+  .nw-weather-tile .nw-tile__middle > div {
+    flex: 1 1 46%;
+  }
+  .nw-weather-tile .nw-tile__middle > div:nth-child(3) {
+    flex: 1 1 100%;
+    text-align: left;
+  }
+  .nw-weather-bottom {
+	    font-size: 0.66rem;
+  }
+  #weatherTomorrow {
+	    font-size: 0.62rem;
+  }
+  .nw-weather-bottom__hint {
+    display: none;
+  }
 }
 
 /* Icon-Kreis */
@@ -2255,4 +2366,17 @@ body{ padding-top: var(--topbar-h); }
     order: -1;
     justify-content: center;
   }
+}
+
+/* --------------------------------------------------------------------------
+   Mobile typography: keep KPI cards readable + avoid overflow
+   (Placed at the end so it reliably overrides base rules.)
+---------------------------------------------------------------------------*/
+@media (max-width: 480px) {
+  .nw-tile__alias { font-size: 0.74rem; }
+  .nw-tile__room  { font-size: 0.62rem; }
+  .nw-tile__value { font-size: 1.05rem; }
+  .nw-tile__unit  { font-size: 0.70rem; }
+  .nw-tile__bottom { font-size: 0.68rem; }
+  .nw-tile__badge { font-size: 0.58rem; }
 }
