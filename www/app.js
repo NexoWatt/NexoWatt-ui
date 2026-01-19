@@ -1313,30 +1313,27 @@ function initSettingsPanel(){
 
   const updateWeatherVisibility = () => {
     if (!weatherBlock || !weatherToggle) return;
-    const stVal = window.latestState && window.latestState['settings.weatherEnabled']
-      ? window.latestState['settings.weatherEnabled'].value
-      : weatherToggle.checked;
-    const enabled = _nwBool(stVal);
-
-    // sync checkbox so the toggle buttons render correct when navigating back
-    weatherToggle.checked = enabled;
+    // IMPORTANT:
+    // Do *not* derive visibility from window.latestState here.
+    // latestState lags behind user interactions (async /api/set) and caused the UI
+    // to immediately flip back to OFF after clicking ON.
+    const enabled = _nwBool(weatherToggle.checked);
     weatherBlock.style.display = enabled ? '' : 'none';
+
+    // keep custom toggle buttons in sync
+    try { syncToggleButtonsForInputId('s_weather_enabled'); } catch (_e) {}
   };
 
   const updateWeatherModeUi = () => {
     if (!weatherUsageInput) return;
 
-    const stMode = window.latestState && window.latestState['settings.weatherUsageMode']
-      ? window.latestState['settings.weatherUsageMode'].value
-      : weatherUsageInput.value;
-    let mode = String(stMode || '').trim().toLowerCase();
+    // Same rationale as updateWeatherVisibility():
+    // Always trust the current input value to avoid UI reverts while /api/set is in-flight.
+    let mode = String(weatherUsageInput.value || '').trim().toLowerCase();
     if (mode !== 'commercial' && mode !== 'private') mode = 'private';
     if (weatherUsageInput.value !== mode) weatherUsageInput.value = mode;
 
-    const stKey = window.latestState && window.latestState['settings.weatherApiKey']
-      ? window.latestState['settings.weatherApiKey'].value
-      : '';
-    const keyVal = (weatherApiKey && String(weatherApiKey.value || '').trim()) || String(stKey || '').trim();
+    const keyVal = (weatherApiKey && String(weatherApiKey.value || '').trim()) || '';
 
     if (weatherBtns) {
       [...weatherBtns.querySelectorAll('button')].forEach(btn => {
