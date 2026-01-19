@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.62",
+    "version": "0.6.63",
     "news": {
+      "0.6.63": {
+        "en": "PV Forecast: Improved pvforecast JSONTable compatibility (German time parsing + automatic kW detection). Forecast validity should now work out-of-the-box.",
+        "de": "PV Forecast: Verbesserte pvforecast-JSONTable-Kompatibilitaet (deutsches Zeitformat + automatische kW-Erkennung). Forecast sollte jetzt Plug&Play gueltig werden."
+      },
       "0.6.62": {
         "en": "VIS: Weather tile shows PV forecast (24h kWh + peak kW) and uses a larger weather icon for better readability.",
         "de": "VIS: Wetter-Kachel zeigt PV-Prognose (24h kWh + Peak kW) und nutzt ein groesseres Wetter-Icon fuer bessere Lesbarkeit."

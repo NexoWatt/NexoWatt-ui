@@ -111,6 +111,56 @@ class PvForecastModule extends BaseModule {
     const iso = s.includes('T') ? s : s.replace(' ', 'T');
     const t = Date.parse(iso);
     if (Number.isFinite(t)) return t;
+
+    // pvforecast JSONTable often uses German localized formats like:
+    // - "18.01. 10:00" / "18.01. 10:00:00"
+    // - "18.01.2026 10:00" / "18.01.2026 10:00:00"
+    // (without timezone -> treat as local time)
+    {
+      const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+      if (m) {
+        const day = parseInt(m[1], 10);
+        const month = parseInt(m[2], 10);
+        const hasYear = !!m[3];
+        let year = hasYear ? parseInt(m[3], 10) : (new Date()).getFullYear();
+        if (hasYear && String(m[3]).length === 2) year += 2000;
+
+        const hour = parseInt(m[4], 10);
+        const minute = parseInt(m[5], 10);
+        const second = m[6] ? parseInt(m[6], 10) : 0;
+
+        let dt = new Date(year, month - 1, day, hour, minute, second);
+        let ts = dt.getTime();
+        if (Number.isFinite(ts)) {
+          // If year is missing, handle the edge case around New Year:
+          // e.g. today is Dec 31 and forecast contains "01.01. 00:15".
+          if (!hasYear) {
+            const now = Date.now();
+            const sixMonths = 180 * 24 * 3600 * 1000;
+            if (ts < (now - sixMonths)) {
+              dt = new Date(year + 1, month - 1, day, hour, minute, second);
+              ts = dt.getTime();
+            }
+          }
+          return Number.isFinite(ts) ? ts : null;
+        }
+      }
+    }
+
+    // Time-only formats like "10:00" (assume today, local time)
+    {
+      const m = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+      if (m) {
+        const now = new Date();
+        const hour = parseInt(m[1], 10);
+        const minute = parseInt(m[2], 10);
+        const second = m[3] ? parseInt(m[3], 10) : 0;
+        const dt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute, second);
+        const ts = dt.getTime();
+        return Number.isFinite(ts) ? ts : null;
+      }
+    }
+
     return null;
   }
 
@@ -219,7 +269,17 @@ class PvForecastModule extends BaseModule {
         return { key: '', val: null };
       };
 
-      const tStartPick = pick(['startsAt', 'start', 'from', 'time', 'timestamp', 'period_start', 'periodStart', 't', 'date', 'datetime']);
+      const tStartPick = pick([
+        'startsAt', 'start', 'from',
+        'time', 'Time',
+        'timestamp',
+        'period_start', 'periodStart',
+        't',
+        'date', 'datetime',
+        // pvforecast JSONTable (UI)
+        'Uhrzeit', 'uhrzeit',
+        'Zeit', 'zeit',
+      ]);
       const tEndPick = pick(['endsAt', 'end', 'to', 'period_end', 'periodEnd']);
 
       let tStart = this._parseTimeMs(tStartPick.val);
@@ -240,6 +300,12 @@ class PvForecastModule extends BaseModule {
         'watts',
         'w',
         'value',
+        // pvforecast JSONTable
+        'Total', 'total',
+        'Gesamt', 'gesamt',
+        'Summe', 'summe',
+        'Watt', 'watt',
+        'Leistung', 'leistung',
       ]);
 
       const n = this._num(valPick.val);
@@ -459,6 +525,21 @@ class PvForecastModule extends BaseModule {
     const maxKeepMs = 48 * 3600000;
     segs = segs.filter((s) => (s.t + s.dtMs) >= (now - 2 * 3600000) && s.t <= (now + maxKeepMs));
 
+    // Heuristic: Some sources (notably pvforecast JSONTable) may provide kW values
+    // without an explicit "kW" hint in the key. If the forecast peak is suspiciously
+    // low (<200) but non-zero values exist, assume the unit is kW and scale to W.
+    // This keeps PV-aware decisions usable out-of-the-box.
+    let scaledFromKw = false;
+    if (segs.length) {
+      const nonZero = segs.filter((s) => s.w > 0);
+      const maxNonZero = nonZero.reduce((m, s) => Math.max(m, s.w), 0);
+      const hasFraction = nonZero.some((s) => Math.abs(s.w - Math.round(s.w)) > 1e-6);
+      if (maxNonZero > 0 && maxNonZero < 200 && (hasFraction || maxNonZero < 50)) {
+        segs = segs.map((s) => ({ t: s.t, dtMs: s.dtMs, w: s.w * 1000 }));
+        scaledFromKw = true;
+      }
+    }
+
     // Compute metrics
     const t6 = now + 6 * 3600000;
     const t12 = now + 12 * 3600000;
@@ -499,7 +580,7 @@ class PvForecastModule extends BaseModule {
       const ageTxt = (ageEff !== null && ageEff > 0)
         ? (ageEff > 3600000 ? `${Math.round(ageEff / 3600000)}h alt` : `${Math.round(ageEff / 60000)}min alt`)
         : 'frisch';
-      statusText = `PV Forecast ok: ${kwh24.toFixed(1)} kWh/24h (Peak ${Math.round(peakW)} W), ${ageTxt}`;
+      statusText = `PV Forecast ok: ${kwh24.toFixed(1)} kWh/24h (Peak ${Math.round(peakW)} W), ${ageTxt}${scaledFromKw ? ' (kW erkannt)' : ''}`;
     }
 
     // Publish snapshot for other modules (synchronous access)
