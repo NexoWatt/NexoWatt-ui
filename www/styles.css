@@ -786,6 +786,16 @@ body {
   gap: 10px;
 }
 
+.nw-weather-bottom__row--pv {
+  justify-content: flex-start;
+}
+
+#pvForecastLine {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .nw-weather-bottom__hint {
   white-space: nowrap;
   overflow: hidden;
@@ -823,6 +833,9 @@ body {
   #weatherTomorrow {
 	    font-size: 0.62rem;
   }
+  #pvForecastLine {
+	    font-size: 0.62rem;
+  }
   .nw-weather-bottom__hint {
     display: none;
   }
@@ -840,6 +853,21 @@ body {
   background: rgba(15, 23, 42, 0.9);
   border: 1px solid rgba(148, 163, 184, 0.35);
   font-size: 0.9rem;
+}
+
+/* Weather tile: larger icon for quick recognition */
+.nw-weather-tile .nw-tile__icon-circle {
+  width: 40px;
+  height: 40px;
+  font-size: 1.55rem;
+}
+
+@media (max-width: 480px) {
+  .nw-weather-tile .nw-tile__icon-circle {
+    width: 36px;
+    height: 36px;
+    font-size: 1.45rem;
+  }
 }
 
 

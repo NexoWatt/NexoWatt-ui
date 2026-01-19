@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.61",
+    "version": "0.6.62",
     "news": {
+      "0.6.62": {
+        "en": "VIS: Weather tile shows PV forecast (24h kWh + peak kW) and uses a larger weather icon for better readability.",
+        "de": "VIS: Wetter-Kachel zeigt PV-Prognose (24h kWh + Peak kW) und nutzt ein groesseres Wetter-Icon fuer bessere Lesbarkeit."
+      },
       "0.6.57": {
         "en": "VIS: Weather tile is now Plug&Play (integrated Open-Meteo fetch using system latitude/longitude). No additional adapter required; App-Center mapping can still override if desired.",
         "de": "VIS: Wetter-Kachel jetzt Plug&Play (integrierter Open-Meteo Abruf ueber System-Lat/Lon). Kein weiterer Adapter noetig; App-Center Mapping kann optional uebersteuern."

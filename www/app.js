@@ -187,6 +187,16 @@ function _fmtKmh(v){
   if (v === undefined || v === null || isNaN(v)) return '-- km/h';
   return Number(v).toFixed(0) + ' km/h';
 }
+function _fmtNumLocal(v, digits=1){
+  if (v === undefined || v === null || isNaN(v)) return '--';
+  const n = Number(v);
+  const d = (digits === undefined || digits === null || isNaN(digits)) ? 1 : Number(digits);
+  try {
+    return n.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+  } catch (_e) {
+    return n.toFixed(d).replace('.', ',');
+  }
+}
 function _fmtTimeHHmm(ts){
   if (!ts || isNaN(Number(ts))) return '—';
   const d = new Date(Number(ts));
@@ -939,10 +949,15 @@ function render() {
     const tileEl = document.getElementById('weatherTile');
     if (tileEl) tileEl.style.display = weatherEnabled ? '' : 'none';
 
+    const pvRow = document.getElementById('pvForecastRow');
+    const pvLineEl = document.getElementById('pvForecastLine');
+
     if (!weatherEnabled) {
       // Weather-App ist aus -> komplette Kachel ausblenden, keine UI-Hinweise
       setText('weatherTomorrow', '');
       setText('weatherUpdated', '—');
+      if (pvRow) pvRow.style.display = 'none';
+      if (pvLineEl) pvLineEl.textContent = '';
     } else {
       const wTemp = coerceNumber(d('weatherTempC'));
       const wText = d('weatherText');
@@ -984,6 +999,28 @@ function render() {
       // Timestamp (prefer temperature, else any other weather dp)
       const wTs = s.weatherTempC?.ts || s.weatherText?.ts || s.weatherCode?.ts || s.weatherWindKmh?.ts || s.weatherCloudPct?.ts;
       setText('weatherUpdated', wTs ? ('aktualisiert ' + _fmtTimeHHmm(wTs)) : '—');
+
+      // PV Forecast (optional): next-24h solar forecast from NexoWatt PV-Forecast manager
+      try {
+        const pvValid = !!d('forecast.pv.valid');
+        const pvKwh24 = coerceNumber(d('forecast.pv.kwhNext24h'));
+        const pvPeakW = coerceNumber(d('forecast.pv.peakWNext24h'));
+
+        if (pvValid && pvKwh24 != null && pvKwh24 > 0) {
+          const kwhTxt = _fmtNumLocal(pvKwh24, 1) + ' kWh';
+          const peakTxt = (pvPeakW != null && pvPeakW > 0) ? (_fmtNumLocal(pvPeakW / 1000, 1) + ' kW') : '';
+          let line = '☀️ PV 24h: ' + kwhTxt;
+          if (peakTxt) line += ' • Peak ' + peakTxt;
+          if (pvLineEl) pvLineEl.textContent = line;
+          if (pvRow) pvRow.style.display = '';
+        } else {
+          if (pvLineEl) pvLineEl.textContent = '';
+          if (pvRow) pvRow.style.display = 'none';
+        }
+      } catch (_e2) {
+        if (pvLineEl) pvLineEl.textContent = '';
+        if (pvRow) pvRow.style.display = 'none';
+      }
     }
   } catch (_e) {}
 
