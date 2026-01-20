@@ -19,13 +19,13 @@
     gridInvertGrid: document.getElementById('gridInvertGrid'),
 
     // Energiefluss-Monitor (Tab)
-    flowAutoScalePower: document.getElementById('flowAutoScalePower'),
-  flowSubtractEvFromBuilding: document.getElementById('flowSubtractEvFromBuilding'),
+    flowSubtractEvFromBuilding: document.getElementById('flowSubtractEvFromBuilding'),
     flowInvertGrid: document.getElementById('flowInvertGrid'),
     flowInvertBattery: document.getElementById('flowInvertBattery'),
     flowInvertPv: document.getElementById('flowInvertPv'),
     flowInvertEv: document.getElementById('flowInvertEv'),
     flowGridShowNet: document.getElementById('flowGridShowNet'),
+    flowPowerInputIsW: document.getElementById('flowPowerInputIsW'),
     schedulerIntervalMs: document.getElementById('schedulerIntervalMs'),
 
     dpFlow: document.getElementById('dpFlow'),
@@ -5329,14 +5329,14 @@
 
     // Energiefluss-Optionen (wie bisherige Instanzeinstellungen)
     const st = (currentConfig && currentConfig.settings && typeof currentConfig.settings === 'object') ? currentConfig.settings : {};
-    if (els.flowAutoScalePower) els.flowAutoScalePower.checked = (st.flowAutoScalePower === undefined) ? true : !!st.flowAutoScalePower;
-if (els.flowSubtractEvFromBuilding) els.flowSubtractEvFromBuilding.checked = (st.flowSubtractEvFromBuilding !== undefined) ? !!st.flowSubtractEvFromBuilding : true;
+    if (els.flowSubtractEvFromBuilding) els.flowSubtractEvFromBuilding.checked = (st.flowSubtractEvFromBuilding !== undefined) ? !!st.flowSubtractEvFromBuilding : true;
     if (els.flowInvertGrid) els.flowInvertGrid.checked = !!st.flowInvertGrid;
     if (els.gridInvertGrid) els.gridInvertGrid.checked = !!st.flowInvertGrid;
     if (els.flowInvertBattery) els.flowInvertBattery.checked = !!st.flowInvertBattery;
     if (els.flowInvertPv) els.flowInvertPv.checked = !!st.flowInvertPv;
     if (els.flowInvertEv) els.flowInvertEv.checked = !!st.flowInvertEv;
     if (els.flowGridShowNet) els.flowGridShowNet.checked = (st.flowGridShowNet !== undefined) ? !!st.flowGridShowNet : true;
+    if (els.flowPowerInputIsW) els.flowPowerInputIsW.checked = (st.flowPowerInputIsW !== undefined) ? !!st.flowPowerInputIsW : true;
 
     // Storage
     const mode = (currentConfig.storage && typeof currentConfig.storage.controlMode === 'string') ? currentConfig.storage.controlMode : 'targetPower';
@@ -5920,13 +5920,13 @@ if (els.flowSubtractEvFromBuilding) els.flowSubtractEvFromBuilding.checked = (st
 
     // Energiefluss-Optionen (wie bisherige Instanzeinstellungen)
     patch.settings = deepMerge({}, (currentConfig && currentConfig.settings) ? currentConfig.settings : {});
-    if (els.flowAutoScalePower) patch.settings.flowAutoScalePower = !!els.flowAutoScalePower.checked;
     if (els.flowSubtractEvFromBuilding) patch.settings.flowSubtractEvFromBuilding = !!els.flowSubtractEvFromBuilding.checked;
     if (els.flowInvertGrid) patch.settings.flowInvertGrid = !!els.flowInvertGrid.checked;
     if (els.flowInvertBattery) patch.settings.flowInvertBattery = !!els.flowInvertBattery.checked;
     if (els.flowInvertPv) patch.settings.flowInvertPv = !!els.flowInvertPv.checked;
     if (els.flowInvertEv) patch.settings.flowInvertEv = !!els.flowInvertEv.checked;
     if (els.flowGridShowNet) patch.settings.flowGridShowNet = !!els.flowGridShowNet.checked;
+    if (els.flowPowerInputIsW) patch.settings.flowPowerInputIsW = !!els.flowPowerInputIsW.checked;
 
     // VIS-Konfiguration (z.B. Namen/Slots für den Energiefluss-Monitor)
     patch.vis = deepMerge({}, (currentConfig && currentConfig.vis) ? currentConfig.vis : {});

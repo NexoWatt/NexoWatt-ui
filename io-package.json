@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.65",
+    "version": "0.6.66",
     "news": {
+      "0.6.66": {
+        "en": "Energyflow: add manual W/kW input toggle (no double conversion for kW datapoints)",
+        "de": "Energiefluss: manueller W/kW Eingangsschalter (keine Doppel-Umrechnung bei kW-Datenpunkten)"
+      },
       "0.6.63": {
         "en": "PV Forecast: Improved pvforecast JSONTable compatibility (German time parsing + automatic kW detection). Forecast validity should now work out-of-the-box.",
         "de": "PV Forecast: Verbesserte pvforecast-JSONTable-Kompatibilitaet (deutsches Zeitformat + automatische kW-Erkennung). Forecast sollte jetzt Plug&Play gueltig werden."

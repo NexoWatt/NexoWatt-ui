@@ -9406,27 +9406,29 @@ return res.json(out);
     // Slot-based flow datapoints
     if ((key.startsWith('producerSlots.') || key.startsWith('consumerSlots.')) && key.endsWith('.power')) return true;
     return false;
-  }
-
-  _nwScaleMappedValue(key, objectId, val) {
+  }  _nwScaleMappedValue(key, objectId, val) {
+    // Skalierung fuer gemappte Leistungswerte (Power).
+    // Intern arbeitet das EMS in Watt (W). Die UI zeigt i.d.R. kW an (W/1000).
+    // Manche Fremd-Adapter liefern bereits kW (z.B. 1 = 1 kW).
+    // -> App-Center Option flowPowerInputIsW steuert, ob Eingangswerte als W oder kW interpretiert werden.
     if (!this._nwIsMappedPowerKey(key)) return val;
-    if (typeof val !== 'number' || !isFinite(val)) return val;
+    if (typeof val !== 'number' || !Number.isFinite(val)) return val;
 
-    // Optional: allow disabling automatic W/kW/MW normalization for mapped power datapoints.
-    // Default behaviour (undefined) is enabled for backward compatibility.
-    const autoScale = (this.config && this.config.settings && this.config.settings.flowAutoScalePower !== undefined)
-      ? !!this.config.settings.flowAutoScalePower
-      : true;
-    if (!autoScale) return val;
+    const st = (this.config && this.config.settings) ? this.config.settings : {};
 
-    // Safety: older builds might not have initialized the caches yet.
-    // Fail-open (factor=1) instead of crashing the adapter.
-    const cache = (this._nwForeignPowerScaleCache && typeof this._nwForeignPowerScaleCache.get === 'function')
-      ? this._nwForeignPowerScaleCache
-      : null;
+    // Manueller Override (App-Center):
+    // - true  => Eingang in W (z.B. 1000 = 1 kW)
+    // - false => Eingang in kW (z.B. 1 = 1 kW)
+    if (typeof st.flowPowerInputIsW === 'boolean') {
+      return st.flowPowerInputIsW ? val : (val * 1000);
+    }
 
-    const factor = cache ? (cache.get(objectId) || 1) : 1;
-    return val * factor;
+    // Legacy: automatische Skalierung ueber common.unit (W/kW/MW)
+    if (st.flowAutoScalePower === false) return val;
+
+    const factor = this._nwForeignPowerScaleCache.get(objectId);
+    if (typeof factor === 'number' && Number.isFinite(factor) && factor !== 1) return val * factor;
+    return val;
   }
 
   async _nwPrimeForeignPowerScale(objectId) {
