@@ -9412,6 +9412,13 @@ return res.json(out);
     if (!this._nwIsMappedPowerKey(key)) return val;
     if (typeof val !== 'number' || !isFinite(val)) return val;
 
+    // Optional: allow disabling automatic W/kW/MW normalization for mapped power datapoints.
+    // Default behaviour (undefined) is enabled for backward compatibility.
+    const autoScale = (this.config && this.config.settings && this.config.settings.flowAutoScalePower !== undefined)
+      ? !!this.config.settings.flowAutoScalePower
+      : true;
+    if (!autoScale) return val;
+
     // Safety: older builds might not have initialized the caches yet.
     // Fail-open (factor=1) instead of crashing the adapter.
     const cache = (this._nwForeignPowerScaleCache && typeof this._nwForeignPowerScaleCache.get === 'function')

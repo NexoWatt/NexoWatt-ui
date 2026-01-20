@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.64",
+    "version": "0.6.65",
     "news": {
       "0.6.63": {
         "en": "PV Forecast: Improved pvforecast JSONTable compatibility (German time parsing + automatic kW detection). Forecast validity should now work out-of-the-box.",

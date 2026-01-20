@@ -482,6 +482,14 @@
           </div>
           <div class="nw-config-card__body">
             <div class="nw-config-field-row">
+              <label class="nw-config-field-label" for="flowAutoScalePower">Leistungs‑Umrechnung automatisch (W/kW/MW → W)</label>
+              <div class="nw-config-field-control" style="display:flex;align-items:center;gap:10px;">
+                <input id="flowAutoScalePower" type="checkbox"/>
+                <span class="nw-config-field-hint" style="margin:0;">Wenn deaktiviert, werden die zugeordneten Leistungswerte 1:1 übernommen (keine automatische Umrechnung). Sinnvoll, wenn deine Datenpunkte bereits W liefern oder du bewusst selbst skalierst.</span>
+              </div>
+            </div>
+
+            <div class="nw-config-field-row">
               <label class="nw-config-field-label" for="flowSubtractEvFromBuilding">EV‑Leistung vom Gebäude‑Verbrauch abziehen</label>
               <div class="nw-config-field-control" style="display:flex;align-items:center;gap:10px;">
                 <input id="flowSubtractEvFromBuilding" type="checkbox"/>

@@ -19,7 +19,8 @@
     gridInvertGrid: document.getElementById('gridInvertGrid'),
 
     // Energiefluss-Monitor (Tab)
-    flowSubtractEvFromBuilding: document.getElementById('flowSubtractEvFromBuilding'),
+    flowAutoScalePower: document.getElementById('flowAutoScalePower'),
+  flowSubtractEvFromBuilding: document.getElementById('flowSubtractEvFromBuilding'),
     flowInvertGrid: document.getElementById('flowInvertGrid'),
     flowInvertBattery: document.getElementById('flowInvertBattery'),
     flowInvertPv: document.getElementById('flowInvertPv'),
@@ -5328,7 +5329,8 @@
 
     // Energiefluss-Optionen (wie bisherige Instanzeinstellungen)
     const st = (currentConfig && currentConfig.settings && typeof currentConfig.settings === 'object') ? currentConfig.settings : {};
-    if (els.flowSubtractEvFromBuilding) els.flowSubtractEvFromBuilding.checked = (st.flowSubtractEvFromBuilding !== undefined) ? !!st.flowSubtractEvFromBuilding : true;
+    if (els.flowAutoScalePower) els.flowAutoScalePower.checked = (st.flowAutoScalePower === undefined) ? true : !!st.flowAutoScalePower;
+if (els.flowSubtractEvFromBuilding) els.flowSubtractEvFromBuilding.checked = (st.flowSubtractEvFromBuilding !== undefined) ? !!st.flowSubtractEvFromBuilding : true;
     if (els.flowInvertGrid) els.flowInvertGrid.checked = !!st.flowInvertGrid;
     if (els.gridInvertGrid) els.gridInvertGrid.checked = !!st.flowInvertGrid;
     if (els.flowInvertBattery) els.flowInvertBattery.checked = !!st.flowInvertBattery;
@@ -5918,6 +5920,7 @@
 
     // Energiefluss-Optionen (wie bisherige Instanzeinstellungen)
     patch.settings = deepMerge({}, (currentConfig && currentConfig.settings) ? currentConfig.settings : {});
+    if (els.flowAutoScalePower) patch.settings.flowAutoScalePower = !!els.flowAutoScalePower.checked;
     if (els.flowSubtractEvFromBuilding) patch.settings.flowSubtractEvFromBuilding = !!els.flowSubtractEvFromBuilding.checked;
     if (els.flowInvertGrid) patch.settings.flowInvertGrid = !!els.flowInvertGrid.checked;
     if (els.flowInvertBattery) patch.settings.flowInvertBattery = !!els.flowInvertBattery.checked;
