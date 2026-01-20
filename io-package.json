@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.67",
+    "version": "0.6.68",
     "news": {
+      "0.6.68": {
+        "en": "App-Center: fixed DP input row overflow in mapping grid (grid point measurement W/kW). Controls now wrap cleanly inside the card.",
+        "de": "App-Center: DP-Zeilen-Overflow im Zuordnungs-Grid behoben (Netzpunkt-Messung W/kW). Bedienelemente umbrechen jetzt sauber innerhalb der Karte."
+      },
       "0.6.66": {
         "en": "Energyflow: add manual W/kW input toggle (no double conversion for kW datapoints)",
         "de": "Energiefluss: manueller W/kW Eingangsschalter (keine Doppel-Umrechnung bei kW-Datenpunkten)"

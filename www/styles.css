@@ -1866,6 +1866,25 @@ body {
   gap: 4px;
   width: 100%;
   min-width: 0;
+  /*
+    App-Center (Zuordnung → Allgemein): Eine DP-Zeile kann aus Input + Button +
+    Unit‑Toggle + Validierungs‑Badge bestehen. In schmalen Karten (mehrspaltiges
+    Grid) darf das nicht horizontal über die Karte hinauslaufen.
+  */
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+/* Ensure the main DP input can shrink and never forces horizontal overflow */
+.nw-config-dp-input-wrapper .nw-config-dp-input {
+  flex: 1 1 180px;
+}
+
+/* Keep small controls compact */
+.nw-config-dp-input-wrapper .nw-config-dp-button,
+.nw-config-dp-input-wrapper .nw-unit-toggle,
+.nw-config-dp-input-wrapper .nw-config-badge {
+  flex: 0 0 auto;
 }
 
 .nw-config-dp-input {
