@@ -1163,6 +1163,47 @@ body {
   color: #bbf7d0;
 }
 
+/* Per-DP power unit toggle (W/kW) */
+.nw-unit-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.65);
+  color: rgba(226, 232, 240, 0.85);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.nw-unit-toggle input {
+  margin: 0;
+}
+
+.nw-unit-toggle span {
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+
+.nw-unit-toggle--mini {
+  padding: 2px 8px;
+}
+
+/* Flow slot DP wrapper (DP + unit toggle) */
+.nw-flow-slot__dpwrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.nw-flow-slot__dpwrap .nw-flow-slot__dp {
+  flex: 1;
+  min-width: 0;
+}
+
 
 .nw-config-empty {
   font-size: 0.8rem;

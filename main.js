@@ -9398,27 +9398,52 @@ return res.json(out);
     if (u === 'gw') return 1000000000;
     return 1;
   }
-
   _nwIsMappedPowerKey(key) {
     if (!key) return false;
-    // Base flow datapoints
-    if (['gridBuyPower','gridSellPower','gridPointPower','pvPower','consumptionTotal','consumptionEvcs','storageChargePower','storageDischargePower'].includes(key)) return true;
-    // Slot-based flow datapoints
+
+    // Base flow datapoints (Leistung)
+    if ([
+      'gridBuyPower',
+      'gridSellPower',
+      'gridPointPower',
+      'pvPower',
+      'consumptionTotal',
+      'consumptionEvcs',
+      'storageChargePower',
+      'storageDischargePower',
+      'batteryPower',
+      'consumptionHeating' // legacy
+    ].includes(key)) return true;
+
+    // Slot-Keys (neu): consumer1Power..consumer10Power / producer1Power..producer5Power
+    if (/^(consumer|producer)\d+Power$/.test(key)) return true;
+
+    // Slot-Keys (legacy, nested)
     if ((key.startsWith('producerSlots.') || key.startsWith('consumerSlots.')) && key.endsWith('.power')) return true;
+
     return false;
-  }  _nwScaleMappedValue(key, objectId, val) {
+  }
+
+  _nwScaleMappedValue(key, objectId, val) {
     // Skalierung fuer gemappte Leistungswerte (Power).
     // Intern arbeitet das EMS in Watt (W). Die UI zeigt i.d.R. kW an (W/1000).
     // Manche Fremd-Adapter liefern bereits kW (z.B. 1 = 1 kW).
-    // -> App-Center Option flowPowerInputIsW steuert, ob Eingangswerte als W oder kW interpretiert werden.
+    // -> App-Center: pro DP per settings.flowPowerDpIsW[key] (W/kW), optionaler Legacy-Fallback settings.flowPowerInputIsW.
     if (!this._nwIsMappedPowerKey(key)) return val;
     if (typeof val !== 'number' || !Number.isFinite(val)) return val;
 
     const st = (this.config && this.config.settings) ? this.config.settings : {};
+    // Manueller Override (App-Center) – Einheit pro DP (W vs kW):
+    // - settings.flowPowerDpIsW[key] = true  => Eingang in W (z.B. 1000 = 1 kW)
+    // - settings.flowPowerDpIsW[key] = false => Eingang in kW (z.B. 1 = 1 kW)
+    const perDp = (st.flowPowerDpIsW && typeof st.flowPowerDpIsW === 'object') ? st.flowPowerDpIsW : null;
+    if (perDp && Object.prototype.hasOwnProperty.call(perDp, key)) {
+      return perDp[key] ? val : (val * 1000);
+    }
 
-    // Manueller Override (App-Center):
-    // - true  => Eingang in W (z.B. 1000 = 1 kW)
-    // - false => Eingang in kW (z.B. 1 = 1 kW)
+    // Legacy (global):
+    // - true  => Eingang in W
+    // - false => Eingang in kW
     if (typeof st.flowPowerInputIsW === 'boolean') {
       return st.flowPowerInputIsW ? val : (val * 1000);
     }

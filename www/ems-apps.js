@@ -25,8 +25,7 @@
     flowInvertPv: document.getElementById('flowInvertPv'),
     flowInvertEv: document.getElementById('flowInvertEv'),
     flowGridShowNet: document.getElementById('flowGridShowNet'),
-    flowPowerInputIsW: document.getElementById('flowPowerInputIsW'),
-    schedulerIntervalMs: document.getElementById('schedulerIntervalMs'),
+      schedulerIntervalMs: document.getElementById('schedulerIntervalMs'),
 
     dpFlow: document.getElementById('dpFlow'),
     flowConsumers: document.getElementById('flowConsumers'),
@@ -170,36 +169,36 @@
 
   // Energiefluss-Monitor: Basis-Datapoints (VIS & Algorithmen)
   const FLOW_BASE_DP_FIELDS = [
-    { key: 'gridBuyPower', label: 'Netz Bezug (W)', placeholder: '… (Import)', required: true,
+    { key: 'gridBuyPower', label: 'Netz Bezug (W/kW)', placeholder: '… (Import)', required: true, power: true,
       hint: 'Pflicht: Import-Leistung am Netzverknüpfungspunkt (NVP).' },
-    { key: 'gridSellPower', label: 'Netz Einspeisung (W)', placeholder: '… (Export)', required: true,
+    { key: 'gridSellPower', label: 'Netz Einspeisung (W/kW)', placeholder: '… (Export)', required: true, power: true,
       hint: 'Pflicht: Export-Leistung am Netzverknüpfungspunkt (NVP).' },
 
     // PV: Optional – wenn leer wird automatisch summiert (Devices + optional DC-PV aus Speicherfarm)
-    { key: 'pvPower', label: 'PV Leistung (W)', placeholder: 'leer lassen für Auto‑Summe', auto: true,
+    { key: 'pvPower', label: 'PV Leistung (W/kW)', placeholder: 'leer lassen für Auto‑Summe', auto: true, power: true,
       hintAuto: 'Auto: PV‑Summe aus allen PV‑Wechselrichtern (nexowatt-devices) + DC‑PV aus Speicherfarm (wenn aktiv). Zusätzliche Erzeuger separat im Tab „Erzeuger“.',
       hintOverride: 'Override aktiv: PV wird aus diesem Datenpunkt genommen (Auto‑Summe inkl. DC‑PV wird deaktiviert).' },
 
     // Gebäude: Optional – wenn leer wird Verbrauch bilanziert (PV + Netz + Batterie + Erzeuger)
-    { key: 'consumptionTotal', label: 'Verbrauch Gesamt (W)', placeholder: 'leer lassen für Auto‑Bilanz', auto: true,
+    { key: 'consumptionTotal', label: 'Verbrauch Gesamt (W/kW)', placeholder: 'leer lassen für Auto‑Bilanz', auto: true, power: true,
       hintAuto: 'Auto: Gebäudeverbrauch wird bilanziert (PV + Netz + Batterie + Erzeuger‑Slots).',
       hintOverride: 'Override aktiv: Gebäudeverbrauch wird direkt aus diesem Datenpunkt verwendet (Bilanz deaktiviert).' },
 
     // EV: Optional – wenn leer wird EVCS‑Summe genutzt (wenn EVCS aktiv)
-    { key: 'consumptionEvcs', label: 'E‑Mobilität (W) (optional)', placeholder: 'optional – leer = EVCS‑Summe', auto: true,
+    { key: 'consumptionEvcs', label: 'E‑Mobilität (W/kW) (optional)', placeholder: 'optional – leer = EVCS‑Summe', auto: true, power: true,
       hintAuto: 'Auto: E‑Mobilität wird aus EVCS‑Summenleistung genutzt (wenn EVCS aktiv).',
       hintOverride: 'Override aktiv: EV‑Leistung wird aus diesem Datenpunkt genutzt.' },
 
     // Batterie: Optional – wenn leer werden Werte aus Speicher/Speicherfarm genutzt
-    { key: 'storageChargePower', label: 'Batterie Laden (W)', placeholder: 'optional – leer = Auto', auto: true,
+    { key: 'storageChargePower', label: 'Batterie Laden (W/kW)', placeholder: 'optional – leer = Auto', auto: true, power: true,
       hintAuto: 'Auto: Ladeleistung kommt aus Speicher / Speicherfarm. Override optional.',
       hintOverride: 'Override aktiv: Ladeleistung wird aus diesem Datenpunkt genutzt.' },
-    { key: 'storageDischargePower', label: 'Batterie Entladen (W)', placeholder: 'optional – leer = Auto', auto: true,
+    { key: 'storageDischargePower', label: 'Batterie Entladen (W/kW)', placeholder: 'optional – leer = Auto', auto: true, power: true,
       hintAuto: 'Auto: Entladeleistung kommt aus Speicher / Speicherfarm. Override optional.',
       hintOverride: 'Override aktiv: Entladeleistung wird aus diesem Datenpunkt genutzt.' },
 
     // Fallback, falls ein System nur einen Signed‑Leistungs‑DP liefert
-    { key: 'batteryPower', label: 'Batterie Leistung (W) (Fallback, Vorzeichen)', placeholder: 'optional – Signed (-Laden/+Entladen)',
+    { key: 'batteryPower', label: 'Batterie Leistung (W/kW) (Fallback, Vorzeichen)', placeholder: 'optional – Signed (-Laden/+Entladen)', power: true,
       hint: 'Optional: Nur verwenden, wenn kein Laden/Entladen getrennt verfügbar ist (Signed: - Laden / + Entladen).' },
 
     { key: 'storageSoc', label: 'Speicher SoC (%)', placeholder: 'leer lassen für Auto', auto: true,
@@ -302,6 +301,48 @@
   let currentConfig = null;
   let dpTargetInputId = null;
   let treePrefix = '';
+
+// ─────────────────────────────────────────────────────────────
+// Energiefluss: Einheit pro Datenpunkt (W/kW)
+// Intern arbeitet der Energiefluss mit Watt; die Live-UI zeigt kW.
+// Hersteller liefern jedoch teils bereits kW. Daher pro DP umschaltbar.
+function _ensureSettingsObj() {
+  if (!currentConfig || typeof currentConfig !== 'object') currentConfig = {};
+  if (!currentConfig.settings || typeof currentConfig.settings !== 'object') currentConfig.settings = {};
+  return currentConfig.settings;
+}
+
+function _ensureFlowPowerDpIsW() {
+  const st = _ensureSettingsObj();
+  if (!st.flowPowerDpIsW || typeof st.flowPowerDpIsW !== 'object') st.flowPowerDpIsW = {};
+  return st.flowPowerDpIsW;
+}
+
+function _getFlowPowerDpIsW(key) {
+  const st = _ensureSettingsObj();
+  const map = (st.flowPowerDpIsW && typeof st.flowPowerDpIsW === 'object') ? st.flowPowerDpIsW : null;
+  if (map && Object.prototype.hasOwnProperty.call(map, key)) return !!map[key];
+  // Legacy-Fallback (ältere Versionen): globaler Schalter
+  if (typeof st.flowPowerInputIsW === 'boolean') return !!st.flowPowerInputIsW;
+  // Default: DP liefert Watt
+  return true;
+}
+
+function _setFlowPowerDpIsW(key, isW) {
+  const map = _ensureFlowPowerDpIsW();
+  map[key] = !!isW;
+}
+
+function _collectFlowPowerDpIsWFromUI() {
+  const map = {};
+  document.querySelectorAll('input[data-flow-power-unit-key]').forEach((el) => {
+    const k = el.getAttribute('data-flow-power-unit-key');
+    if (k) map[k] = !!el.checked;
+  });
+  return map;
+}
+// ─────────────────────────────────────────────────────────────
+
 
   function setStatus(msg, kind) {
     if (!els.status) return;
@@ -759,6 +800,31 @@
       btn.addEventListener('click', () => openDpModal(input.id));
 
       right.appendChild(input);
+
+      // Einheit pro Datenpunkt (Energiefluss): W vs kW
+      if (field.power) {
+        const unitLabel = document.createElement('label');
+        unitLabel.className = 'nw-unit-toggle';
+        unitLabel.title = 'Wenn aktiv: Datenpunkt liefert Watt (W). Wenn aus: Datenpunkt liefert bereits kW (1 = 1 kW).';
+
+        const unitCb = document.createElement('input');
+        unitCb.type = 'checkbox';
+        unitCb.className = 'nw-unit-toggle__cb';
+        unitCb.id = 'unit_' + input.id;
+        unitCb.checked = _getFlowPowerDpIsW(field.key);
+        unitCb.setAttribute('data-flow-power-unit-key', field.key);
+        unitCb.addEventListener('change', () => {
+          _setFlowPowerDpIsW(field.key, unitCb.checked);
+        });
+
+        const unitText = document.createElement('span');
+        unitText.textContent = 'W';
+
+        unitLabel.appendChild(unitCb);
+        unitLabel.appendChild(unitText);
+        right.appendChild(unitLabel);
+      }
+
       right.appendChild(btn);
 
       // Mode badge (Pflicht / Auto / Override) – nur wenn relevant
@@ -905,7 +971,7 @@
       <div class="nw-flow-slot-legend__fields">
         <span class="c-name">Name</span>
         <span class="c-icon">Icon</span>
-        <span class="c-dp">Datenpunkt (W)</span>
+        <span class="c-dp">Datenpunkt (W/kW)</span>
         <span class="c-meta">Auswahl / Status</span>
         <span class="c-ctrl">Steuerung</span>
       </div>
@@ -970,7 +1036,7 @@
       dpInput.className = 'nw-config-input nw-flow-slot__dp';
       dpInput.type = 'text';
       dpInput.id = `flow_${kind}_dp_${idx}`;
-      dpInput.placeholder = 'Datenpunkt (W) (optional)';
+      dpInput.placeholder = 'Datenpunkt (W/kW) (optional)';
       dpInput.value = valueOrEmpty(dps[dpKey]);
       dpInput.dataset.dpInput = '1';
       dpInput.addEventListener('change', () => {
@@ -978,6 +1044,30 @@
         currentConfig.datapoints[dpKey] = String(dpInput.value || '').trim();
         scheduleValidation(200);
       });
+
+      // Einheit pro Slot-Datenpunkt (W vs kW)
+      const dpWrap = document.createElement('div');
+      dpWrap.className = 'nw-flow-slot__dpwrap';
+      dpWrap.appendChild(dpInput);
+
+      const unitLbl = document.createElement('label');
+      unitLbl.className = 'nw-unit-toggle nw-unit-toggle--mini';
+      unitLbl.title = 'Wenn aktiv: Datenpunkt liefert Watt (W). Wenn aus: Datenpunkt liefert bereits kW (1 = 1 kW).';
+
+      const unitCb = document.createElement('input');
+      unitCb.type = 'checkbox';
+      unitCb.id = `flow_${kind}_unit_${idx}`;
+      unitCb.checked = _getFlowPowerDpIsW(dpKey);
+      unitCb.setAttribute('data-flow-power-unit-key', dpKey);
+      unitCb.addEventListener('change', () => {
+        _setFlowPowerDpIsW(dpKey, !!unitCb.checked);
+      });
+
+      const unitTxt = document.createElement('span');
+      unitTxt.textContent = 'W';
+      unitLbl.appendChild(unitCb);
+      unitLbl.appendChild(unitTxt);
+      dpWrap.appendChild(unitLbl);
 
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -992,7 +1082,7 @@
 
       fields.appendChild(nameInput);
       fields.appendChild(iconSelect);
-      fields.appendChild(dpInput);
+      fields.appendChild(dpWrap);
       fields.appendChild(btn);
       fields.appendChild(badge);
 
@@ -1785,7 +1875,7 @@
       body.appendChild(mkFieldRow('Stop (Write)', _mkDpWrap(`bhkw_b${dev.idx}_stopWriteId`, dev.stopWriteId, 'Write‑Datenpunkt', (v) => { dev.stopWriteId = v; })));
       body.appendChild(mkFieldRow('Laufstatus (Read, optional)', _mkDpWrap(`bhkw_b${dev.idx}_runningReadId`, dev.runningReadId, 'Read‑Datenpunkt', (v) => { dev.runningReadId = v; }),
         'Empfohlen für saubere Auto‑Logik und Statusanzeige.'));
-      body.appendChild(mkFieldRow('Leistung (W) (Read)', _mkDpWrap(`bhkw_b${dev.idx}_powerReadId`, dev.powerReadId, 'Read‑Datenpunkt (W)', (v) => { dev.powerReadId = v; }),
+      body.appendChild(mkFieldRow('Leistung (W) (Read)', _mkDpWrap(`bhkw_b${dev.idx}_powerReadId`, dev.powerReadId, 'Read‑Datenpunkt (W/kW)', (v) => { dev.powerReadId = v; }),
         'Erforderlich für die Anzeige im Energiefluss (BHKW als Erzeuger).'));
 
       // Advanced (ausklappbar)
@@ -2067,7 +2157,7 @@
       body.appendChild(mkFieldRow('Stop (Write)', _mkDpWrap(`gen_g${dev.idx}_stopWriteId`, dev.stopWriteId, 'Write‑Datenpunkt', (v) => { dev.stopWriteId = v; })));
       body.appendChild(mkFieldRow('Laufstatus (Read, optional)', _mkDpWrap(`gen_g${dev.idx}_runningReadId`, dev.runningReadId, 'Read‑Datenpunkt', (v) => { dev.runningReadId = v; }),
         'Empfohlen für saubere Auto‑Logik und Statusanzeige.'));
-      body.appendChild(mkFieldRow('Leistung (W) (Read)', _mkDpWrap(`gen_g${dev.idx}_powerReadId`, dev.powerReadId, 'Read‑Datenpunkt (W)', (v) => { dev.powerReadId = v; }),
+      body.appendChild(mkFieldRow('Leistung (W) (Read)', _mkDpWrap(`gen_g${dev.idx}_powerReadId`, dev.powerReadId, 'Read‑Datenpunkt (W/kW)', (v) => { dev.powerReadId = v; }),
         'Erforderlich für die Anzeige im Energiefluss (Generator als Erzeuger).'));
 
       const adv = document.createElement('div');
@@ -5336,7 +5426,15 @@
     if (els.flowInvertPv) els.flowInvertPv.checked = !!st.flowInvertPv;
     if (els.flowInvertEv) els.flowInvertEv.checked = !!st.flowInvertEv;
     if (els.flowGridShowNet) els.flowGridShowNet.checked = (st.flowGridShowNet !== undefined) ? !!st.flowGridShowNet : true;
-    if (els.flowPowerInputIsW) els.flowPowerInputIsW.checked = (st.flowPowerInputIsW !== undefined) ? !!st.flowPowerInputIsW : true;
+
+    // Einheit pro Leistungs-Datenpunkt (W/kW) – alle vorhandenen Toggles syncen
+    try {
+      document.querySelectorAll('input[data-flow-power-unit-key]').forEach((cb) => {
+        const k = cb.getAttribute('data-flow-power-unit-key');
+        if (!k) return;
+        cb.checked = _getFlowPowerDpIsW(k);
+      });
+    } catch (_e) {}
 
     // Storage
     const mode = (currentConfig.storage && typeof currentConfig.storage.controlMode === 'string') ? currentConfig.storage.controlMode : 'targetPower';
@@ -5926,7 +6024,19 @@
     if (els.flowInvertPv) patch.settings.flowInvertPv = !!els.flowInvertPv.checked;
     if (els.flowInvertEv) patch.settings.flowInvertEv = !!els.flowInvertEv.checked;
     if (els.flowGridShowNet) patch.settings.flowGridShowNet = !!els.flowGridShowNet.checked;
-    if (els.flowPowerInputIsW) patch.settings.flowPowerInputIsW = !!els.flowPowerInputIsW.checked;
+
+    // Energiefluss: Leistungseinheiten pro DP (W vs kW)
+    // Checkbox aktiv = DP liefert Watt (W).
+    // Checkbox aus  = DP liefert kW (1 = 1 kW).
+    const flowPowerDpIsW = {};
+    document.querySelectorAll('input[data-flow-power-unit-key]').forEach((cb) => {
+      const k = cb.getAttribute('data-flow-power-unit-key');
+      if (!k) return;
+      flowPowerDpIsW[k] = !!cb.checked;
+    });
+    patch.settings.flowPowerDpIsW = flowPowerDpIsW;
+    // Legacy global Schalter deaktivieren (wird nicht mehr genutzt)
+    patch.settings.flowPowerInputIsW = null;
 
     // VIS-Konfiguration (z.B. Namen/Slots für den Energiefluss-Monitor)
     patch.vis = deepMerge({}, (currentConfig && currentConfig.vis) ? currentConfig.vis : {});

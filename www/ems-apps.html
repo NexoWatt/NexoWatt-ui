@@ -103,11 +103,15 @@
             </div>
           </div>
           <div class="nw-config-field-row">
-            <div class="nw-config-field-label">Netzpunkt-Messung (W) (Import+ / Export-)</div>
+            <div class="nw-config-field-label">Netzpunkt-Messung (W/kW) (Import+ / Export-)</div>
             <div class="nw-config-field-control nw-config-field-control--stack">
               <div class="nw-config-dp-input-wrapper">
                 <input id="gridPointPowerId" class="nw-config-input nw-config-dp-input" type="text" placeholder="z.B. alias.0.Leistung.NVP"/>
                 <button class="nw-config-dp-button" type="button" data-browse="gridPointPowerId">Auswählen…</button>
+                <label class="nw-unit-toggle nw-unit-toggle--mini" title="Wenn aktiv: DP liefert Watt (W). Wenn aus: DP liefert bereits kW (1 = 1 kW).">
+                  <input type="checkbox" data-flow-power-unit-key="gridPointPower" checked>
+                  <span>W</span>
+                </label>
                 <span id="val_gridPointPowerId" class="nw-config-badge nw-config-badge--idle">—</span>
               </div>
               <div id="gridPointPowerIdDisplay" class="nw-config-field-hint"></div>
@@ -480,12 +484,10 @@
             <div class="nw-config-card__title">Anzeige‑Optionen</div>
 
             <div class="nw-config-field" style="margin-top:10px;">
-              <label class="nw-checkbox">
-                <input type="checkbox" id="flowPowerInputIsW">
-                <span>DP liefern Watt (W) → Anzeige in kW</span>
-              </label>
-              <span class="nw-config-field-hint">Aktiv: Werte sind in W (z.B. 1000 = 1 kW) und werden für die Anzeige nach kW umgerechnet. Deaktiv: Werte sind bereits in kW (z.B. 1 = 1 kW, 1:1).</span>
-            </div>
+  <span class="nw-config-field-hint" style="opacity:.75;">
+    Einheit pro Datenpunkt: Neben jedem <b>Leistungs‑Datenpunkt</b> kannst du festlegen, ob der Wert in <b>W</b> oder bereits in <b>kW</b> geliefert wird (W wird intern korrekt skaliert; kW wird 1:1 übernommen).
+  </span>
+</div>
 
             <div class="nw-config-card__subtitle">Vorzeichen &amp; Darstellung (wie in den bisherigen Instanzeinstellungen)</div>
           </div>
