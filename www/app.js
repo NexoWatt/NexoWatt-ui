@@ -183,6 +183,500 @@ function formatPricePerKwh(v){
 }
 
 // ------------------------------
+// Tarif-Preis-Forecast Tooltip (Chart)
+// ------------------------------
+
+// Parse tibber-like (or similar) price curves from JSON.
+// Expected schema (examples):
+//  - [{ total: 0.318, startsAt: "2026-01-21T00:00:00.000Z", endsAt: "..." }, ...]
+//  - { prices: [ ... ] }
+function nwParsePriceCurve(raw) {
+  if (raw === null || raw === undefined) return [];
+
+  let data = raw;
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    if (!s) return [];
+    try { data = JSON.parse(s); } catch (_e) { return []; }
+  }
+
+  // Some adapters wrap the array
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const arr = data.prices || data.data || data.items || data.values || null;
+    if (Array.isArray(arr)) data = arr;
+    else return [];
+  }
+
+  if (!Array.isArray(data)) return [];
+
+  function normalizePriceEurPerKwh(v){
+    if (v === null || v === undefined) return null;
+    let n = Number(v);
+    if (!Number.isFinite(n)) return null;
+    // auto convert ct/kWh -> €/kWh (same heuristic as backend: values >=10 are assumed to be ct)
+    if (Math.abs(n) >= 10) n = n / 100;
+    if (!Number.isFinite(n)) return null;
+    return n;
+  }
+
+  const out = [];
+  for (const it of data) {
+    if (!it || typeof it !== 'object') continue;
+
+    // price heuristics
+    let pRaw = null;
+    if (it.total !== undefined) pRaw = it.total;
+    else if (it.price !== undefined) pRaw = it.price;
+    else if (it.value !== undefined) pRaw = it.value;
+    else if (it.marketprice !== undefined) pRaw = it.marketprice;
+    else if (it.marketPrice !== undefined) pRaw = it.marketPrice;
+    else if (it.energyPrice !== undefined) pRaw = it.energyPrice;
+    if (pRaw === null && it.price && typeof it.price === 'object') {
+      if (it.price.total !== undefined) pRaw = it.price.total;
+      else if (it.price.value !== undefined) pRaw = it.price.value;
+    }
+    const priceEurKwh = normalizePriceEurPerKwh(pRaw);
+    if (!Number.isFinite(priceEurKwh)) continue;
+
+    // time heuristics
+    const startRaw = (it.startsAt !== undefined) ? it.startsAt
+      : (it.start !== undefined) ? it.start
+      : (it.startTime !== undefined) ? it.startTime
+      : (it.from !== undefined) ? it.from
+      : (it.begin !== undefined) ? it.begin
+      : (it.timestamp !== undefined) ? it.timestamp
+      : (it.time !== undefined) ? it.time
+      : null;
+
+    let startMs = null;
+    if (typeof startRaw === 'number' && Number.isFinite(startRaw)) {
+      startMs = (startRaw < 1e12) ? startRaw * 1000 : startRaw;
+    } else if (typeof startRaw === 'string') {
+      const t = Date.parse(startRaw);
+      if (Number.isFinite(t)) startMs = t;
+    }
+    if (!startMs) continue;
+
+    const endRaw = (it.endsAt !== undefined) ? it.endsAt
+      : (it.end !== undefined) ? it.end
+      : (it.endTime !== undefined) ? it.endTime
+      : (it.to !== undefined) ? it.to
+      : (it.until !== undefined) ? it.until
+      : null;
+
+    let endMs = null;
+    if (typeof endRaw === 'number' && Number.isFinite(endRaw)) {
+      endMs = (endRaw < 1e12) ? endRaw * 1000 : endRaw;
+    } else if (typeof endRaw === 'string') {
+      const t = Date.parse(endRaw);
+      if (Number.isFinite(t)) endMs = t;
+    }
+    if (!endMs) endMs = startMs + 60 * 60 * 1000;
+    if (endMs <= startMs) endMs = startMs + 60 * 60 * 1000;
+
+    out.push({ startMs, endMs, priceEurKwh });
+  }
+  out.sort((a,b)=> a.startMs - b.startMs);
+  return out;
+}
+
+function nwNiceStep(range, targetTicks){
+  const r = Math.max(1e-9, Number(range) || 0);
+  const t = Math.max(2, Number(targetTicks) || 6);
+  const rough = r / (t - 1);
+  const pow10 = Math.pow(10, Math.floor(Math.log10(Math.max(1e-9, rough))));
+  const err = rough / pow10;
+  let step = pow10;
+  if (err >= 7.5) step = 10 * pow10;
+  else if (err >= 3.5) step = 5 * pow10;
+  else if (err >= 1.5) step = 2 * pow10;
+  return step;
+}
+
+function nwClamp(v, lo, hi){
+  const n = Number(v);
+  if (!Number.isFinite(n)) return lo;
+  return Math.max(lo, Math.min(hi, n));
+}
+
+function nwFormatCt(vEurKwh){
+  if (vEurKwh === undefined || vEurKwh === null || isNaN(Number(vEurKwh))) return '--';
+  return (Number(vEurKwh) * 100).toFixed(1) + ' ct/kWh';
+}
+
+function nwTariffColorForPrice(priceEurKwh, cheapThr, expensiveThr){
+  const p = Number(priceEurKwh);
+  const cheap = Number(cheapThr);
+  const expensive = Number(expensiveThr);
+  if (Number.isFinite(cheap) && p <= cheap + 1e-12) return '#22c55e'; // green
+  if (Number.isFinite(expensive) && p >= expensive - 1e-12) return '#f97316'; // orange
+  // neutral
+  return '#facc15'; // yellow
+}
+
+function nwDrawTariffForecastChart(canvas, curve, opts){
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const dpr = (window.devicePixelRatio || 1);
+  const cssW = Math.max(260, canvas.clientWidth || 360);
+  const cssH = Math.max(140, canvas.clientHeight || 180);
+  const needW = Math.round(cssW * dpr);
+  const needH = Math.round(cssH * dpr);
+  if (canvas.width !== needW || canvas.height !== needH) {
+    canvas.width = needW;
+    canvas.height = needH;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const W = cssW;
+  const H = cssH;
+
+  // Background
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = 'rgba(2, 6, 23, 0.55)';
+  ctx.fillRect(0,0,W,H);
+
+  const m = { L: 42, R: 12, T: 14, B: 26 };
+  const plotW = W - m.L - m.R;
+  const plotH = H - m.T - m.B;
+  if (plotW <= 10 || plotH <= 10) return;
+
+  const dayStartMs = opts && Number.isFinite(opts.dayStartMs) ? Number(opts.dayStartMs) : null;
+  const dayEndMs = opts && Number.isFinite(opts.dayEndMs) ? Number(opts.dayEndMs) : null;
+  if (!dayStartMs || !dayEndMs || dayEndMs <= dayStartMs) return;
+
+  const cheapThr = opts ? opts.cheapThr : null;
+  const expensiveThr = opts ? opts.expensiveThr : null;
+  const nowMs = opts && Number.isFinite(opts.nowMs) ? Number(opts.nowMs) : Date.now();
+
+  // Filter/clamp curve to plot range
+  const items = (Array.isArray(curve) ? curve : [])
+    .filter(x => x && Number.isFinite(x.startMs) && Number.isFinite(x.endMs) && Number.isFinite(x.priceEurKwh))
+    .map(x => ({
+      startMs: Math.max(dayStartMs, Number(x.startMs)),
+      endMs: Math.min(dayEndMs, Number(x.endMs)),
+      priceEurKwh: Number(x.priceEurKwh)
+    }))
+    .filter(x => x.endMs > x.startMs);
+
+  if (items.length === 0) {
+    ctx.fillStyle = 'rgba(148, 163, 184, 0.85)';
+    ctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Keine Preisdaten', W/2, H/2);
+    return;
+  }
+
+  const pricesCt = items.map(x => x.priceEurKwh * 100);
+  let minCt = Math.min(...pricesCt);
+  let maxCt = Math.max(...pricesCt);
+  if (!Number.isFinite(minCt) || !Number.isFinite(maxCt)) { minCt = 0; maxCt = 1; }
+  if (Math.abs(maxCt - minCt) < 1e-9) { maxCt = minCt + 1; }
+
+  // Nice ticks
+  const targetTicks = 6;
+  const step = nwNiceStep(maxCt - minCt, targetTicks);
+  const tickMin = Math.floor(minCt / step) * step;
+  const tickMax = Math.ceil(maxCt / step) * step;
+  const yDigits = (step < 1) ? 1 : 0;
+
+  const xOf = (tMs) => {
+    const frac = (tMs - dayStartMs) / (dayEndMs - dayStartMs);
+    return m.L + nwClamp(frac, 0, 1) * plotW;
+  };
+  const yOf = (pCt) => {
+    const frac = (pCt - tickMin) / (tickMax - tickMin);
+    return m.T + (1 - nwClamp(frac, 0, 1)) * plotH;
+  };
+
+  // Grid + Y labels
+  ctx.strokeStyle = 'rgba(148, 163, 184, 0.16)';
+  ctx.lineWidth = 1;
+  ctx.font = '11px system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Arial';
+  ctx.fillStyle = 'rgba(148, 163, 184, 0.85)';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for (let v = tickMin; v <= tickMax + 1e-9; v += step) {
+    const y = yOf(v);
+    ctx.beginPath();
+    ctx.moveTo(m.L, y);
+    ctx.lineTo(W - m.R, y);
+    ctx.stroke();
+    const lab = yDigits ? Number(v).toFixed(yDigits) : String(Math.round(v));
+    ctx.fillText(lab, m.L - 6, y);
+  }
+
+  // X labels at 00/06/12/18
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  const xHours = [0, 6, 12, 18];
+  xHours.forEach(h => {
+    const t = dayStartMs + h * 60 * 60 * 1000;
+    const x = xOf(t);
+    const lab = String(h).padStart(2,'0') + ':00';
+    ctx.fillText(lab, x, H - m.B + 6);
+  });
+
+  // Current time marker (subtle)
+  if (nowMs >= dayStartMs && nowMs <= dayEndMs) {
+    const xN = xOf(nowMs);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(xN, m.T);
+    ctx.lineTo(xN, m.T + plotH);
+    ctx.stroke();
+  }
+
+  // Price curve (step line, colored by thresholds)
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'miter';
+  ctx.lineCap = 'butt';
+
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const next = items[i + 1] || null;
+    const pCt = it.priceEurKwh * 100;
+    const x0 = xOf(it.startMs);
+    const x1 = xOf(it.endMs);
+    const y0 = yOf(pCt);
+    const c0 = nwTariffColorForPrice(it.priceEurKwh, cheapThr, expensiveThr);
+
+    // horizontal
+    ctx.strokeStyle = c0;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y0);
+    ctx.stroke();
+
+    // vertical to next
+    if (next && Number.isFinite(next.startMs) && next.startMs <= it.endMs + 2e3) {
+      const pNextCt = next.priceEurKwh * 100;
+      const y1 = yOf(pNextCt);
+      const c1 = nwTariffColorForPrice(next.priceEurKwh, cheapThr, expensiveThr);
+      ctx.strokeStyle = c1;
+      ctx.beginPath();
+      ctx.moveTo(x1, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+    }
+  }
+}
+
+function initTariffForecastTooltip(){
+  const card = document.getElementById('tariffCard');
+  const btn = document.getElementById('tariffForecastBtn');
+  if (!card || !btn) return;
+
+  // Build tooltip DOM once
+  let tip = document.getElementById('tariffForecastTip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'tariffForecastTip';
+    tip.className = 'nw-tooltip';
+    tip.setAttribute('role', 'tooltip');
+    tip.innerHTML = `
+      <div class="nw-tooltip__header">
+        <div class="nw-tooltip__title">Preisverlauf heute</div>
+        <div class="nw-tooltip__meta" id="tariffForecastMeta">—</div>
+      </div>
+      <canvas class="nw-tooltip__chart" id="tariffForecastCanvas"></canvas>
+      <div class="nw-tooltip__footer">
+        <span id="tariffForecastMin">Min —</span>
+        <span id="tariffForecastAvg">Ø —</span>
+        <span id="tariffForecastMax">Max —</span>
+      </div>
+    `;
+    document.body.appendChild(tip);
+  }
+
+  const canvas = tip.querySelector('#tariffForecastCanvas');
+  const metaEl = tip.querySelector('#tariffForecastMeta');
+  const minEl = tip.querySelector('#tariffForecastMin');
+  const avgEl = tip.querySelector('#tariffForecastAvg');
+  const maxEl = tip.querySelector('#tariffForecastMax');
+
+  let open = false;
+  let hoverTimer = null;
+  let poll = null;
+
+  const v = (k) => {
+    const st = window.latestState || {};
+    return (st && st[k] && st[k].value !== undefined) ? st[k].value : null;
+  };
+
+  const tsOf = (k) => {
+    const st = window.latestState || {};
+    return (st && st[k] && st[k].ts !== undefined) ? Number(st[k].ts) : null;
+  };
+
+  function getTodayRange(){
+    const d0 = new Date();
+    d0.setHours(0,0,0,0);
+    const d1 = new Date(d0.getTime() + 24*60*60*1000);
+    return { startMs: d0.getTime(), endMs: d1.getTime() };
+  }
+
+  function update(){
+    const { startMs, endMs } = getTodayRange();
+    const rawToday = v('priceTodayJson') || v('tarif.pricesTodayJson') || v('pricesTodayJson');
+    const rawTomorrow = v('priceTomorrowJson') || v('tarif.pricesTomorrowJson') || v('pricesTomorrowJson');
+
+    let curve = nwParsePriceCurve(rawToday);
+    // Fallback: if today is missing (some providers update late), try tomorrow and filter for today.
+    if ((!curve || curve.length === 0) && rawTomorrow) {
+      curve = nwParsePriceCurve(rawTomorrow);
+    }
+
+    const curveToday = (Array.isArray(curve) ? curve : []).filter(x => {
+      if (!x || !Number.isFinite(x.startMs) || !Number.isFinite(x.endMs)) return false;
+      // any overlap with today
+      return x.endMs > startMs && x.startMs < endMs;
+    });
+
+    let cheapThr = v('tarif.preisSchwelleGuensigEurProKwh');
+    let expThr = v('tarif.preisGrenzeEurProKwh');
+
+    // Meta: show last update time if possible
+    const ts = tsOf('priceTodayJson') || tsOf('tarif.preisAktuellEurProKwh') || tsOf('priceCurrent');
+    const tsTxt = ts ? ('aktualisiert ' + _fmtTimeHHmm(ts)) : '';
+    // Current price
+    const pNow = v('priceCurrent') ?? v('tarif.preisAktuellEurProKwh');
+    const pNowTxt = (pNow !== null && pNow !== undefined && Number.isFinite(Number(pNow))) ? nwFormatCt(Number(pNow)) : '';
+    const meta = [pNowTxt ? ('Aktuell ' + pNowTxt) : '', tsTxt].filter(Boolean).join(' • ');
+    if (metaEl) metaEl.textContent = meta || '—';
+
+    // min/avg/max
+    const ps = curveToday.map(x => x.priceEurKwh).filter(n => Number.isFinite(Number(n)));
+    if (ps.length > 0) {
+      const min = Math.min(...ps);
+      const max = Math.max(...ps);
+      const avg = ps.reduce((s,n)=>s+Number(n),0) / ps.length;
+
+      // If tariff thresholds are not available (e.g. tariff module not enabled),
+      // derive reasonable thresholds from the daily range so the chart still has
+      // meaningful color segmentation.
+      if (!Number.isFinite(Number(cheapThr)) || !Number.isFinite(Number(expThr))) {
+        const range = Math.max(1e-9, max - min);
+        cheapThr = min + range * 0.33;
+        expThr = min + range * 0.66;
+      }
+
+      if (minEl) minEl.textContent = 'Min ' + nwFormatCt(min);
+      if (avgEl) avgEl.textContent = 'Ø ' + nwFormatCt(avg);
+      if (maxEl) maxEl.textContent = 'Max ' + nwFormatCt(max);
+    } else {
+      if (minEl) minEl.textContent = 'Min —';
+      if (avgEl) avgEl.textContent = 'Ø —';
+      if (maxEl) maxEl.textContent = 'Max —';
+    }
+
+    // Draw
+    nwDrawTariffForecastChart(canvas, curveToday, {
+      dayStartMs: startMs,
+      dayEndMs: endMs,
+      cheapThr,
+      expensiveThr: expThr,
+      nowMs: Date.now(),
+    });
+  }
+
+  function place(){
+    if (!tip) return;
+    const rBtn = btn.getBoundingClientRect();
+    const margin = 10;
+    // Prefer above the card if possible
+    tip.style.left = '0px';
+    tip.style.top = '0px';
+    tip.classList.add('nw-tooltip--show');
+    const rTip = tip.getBoundingClientRect();
+    tip.classList.remove('nw-tooltip--show');
+
+    const vw = window.innerWidth || document.documentElement.clientWidth || 1200;
+    const vh = window.innerHeight || document.documentElement.clientHeight || 800;
+
+    let left = rBtn.left + rBtn.width - rTip.width;
+    left = nwClamp(left, margin, vw - rTip.width - margin);
+
+    let top = rBtn.top - rTip.height - 8;
+    const fitsAbove = (top >= margin);
+    if (!fitsAbove) {
+      top = rBtn.bottom + 8;
+      if (top + rTip.height > vh - margin) {
+        // last resort: center-ish
+        top = nwClamp(vh/2 - rTip.height/2, margin, vh - rTip.height - margin);
+      }
+    }
+
+    tip.style.left = Math.round(left) + 'px';
+    tip.style.top = Math.round(top) + 'px';
+  }
+
+  function show(){
+    if (open) return;
+    open = true;
+    // Make visible first so the canvas has a real clientWidth/clientHeight.
+    tip.classList.add('nw-tooltip--show');
+    place();
+    update();
+    try { requestAnimationFrame(()=>{ if (open) update(); }); } catch(_e) {}
+    // lightweight refresh while open (time marker + live price)
+    if (poll) clearInterval(poll);
+    poll = setInterval(()=>{ try{ if (open) update(); } catch(_e){} }, 15000);
+  }
+  function hide(){
+    open = false;
+    if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+    if (poll) { clearInterval(poll); poll = null; }
+    if (tip) tip.classList.remove('nw-tooltip--show');
+  }
+  function toggle(){ if (open) hide(); else show(); }
+
+  // Stop tile click (opening the EMS modal) when using the tooltip button
+  btn.addEventListener('click', (e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    toggle();
+  });
+  btn.addEventListener('mousedown', (e)=>{ e.stopPropagation(); });
+  btn.addEventListener('touchstart', (e)=>{ try{ e.stopPropagation(); }catch(_e){} }, { passive: true });
+
+  // Desktop hover support (optional)
+  btn.addEventListener('mouseenter', ()=>{
+    if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+    show();
+  });
+  btn.addEventListener('mouseleave', ()=>{
+    if (hoverTimer) clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(()=>{ if (!tip.matches(':hover')) hide(); }, 250);
+  });
+  tip.addEventListener('mouseenter', ()=>{
+    if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+  });
+  tip.addEventListener('mouseleave', ()=>{
+    if (hoverTimer) clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(()=> hide(), 250);
+  });
+
+  // Close on outside click / Esc
+  document.addEventListener('click', (e)=>{
+    if (!open) return;
+    const t = e && e.target;
+    if (t && (t === btn || tip.contains(t))) return;
+    hide();
+  }, true);
+  document.addEventListener('keydown', (e)=>{
+    if (!open) return;
+    if (e && (e.key === 'Escape' || e.key === 'Esc')) hide();
+  });
+  window.addEventListener('resize', ()=>{ if (open) { try{ place(); update(); } catch(_e){} } });
+  window.addEventListener('scroll', ()=>{ if (open) { try{ place(); } catch(_e){} } }, true);
+}
+
+// ------------------------------
 // Wetter (optional)
 // ------------------------------
 function _fmtTempC(v){
@@ -1626,6 +2120,7 @@ window.addEventListener('DOMContentLoaded', ()=> {
   initTabs();
   hideAllPanels();
   applyInitialTabFromUrl();
+  try { initTariffForecastTooltip(); } catch(_e) {}
 
   // If opened directly as standalone Settings page, show settings panel by default
   try {
