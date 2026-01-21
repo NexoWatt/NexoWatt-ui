@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.68",
+    "version": "0.6.69",
     "news": {
       "0.6.68": {
         "en": "App-Center: fixed DP input row overflow in mapping grid (grid point measurement W/kW). Controls now wrap cleanly inside the card.",

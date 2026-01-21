@@ -1,3 +1,7 @@
+## 0.6.69 (UI/Tarif)
+- UI: Tooltip in der Tarif-/Optimierungskachel (📈) zeigt den Preisverlauf "heute" als Chart (Forecast).
+- UI: Tooltip-Positionierung/Anzeige korrigiert; Service-Worker Cache-Version erhöht.
+
 ## 0.6.59 (Mobile/UI/Weather)
 - UI: Status-KPIs auf iPhone/kleinen Displays sauber responsiv (stabile 2-Spalten-Kacheln), Schnellsteuerung als 1-Spalte.
 - UI: KPI-Zeilen ueberlaufsicher; Gesamtenergien werden automatisch in kWh/MWh/GWh formatiert.

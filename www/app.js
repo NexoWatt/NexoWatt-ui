@@ -591,9 +591,10 @@ function initTariffForecastTooltip(){
     // Prefer above the card if possible
     tip.style.left = '0px';
     tip.style.top = '0px';
+    const wasShown = tip.classList.contains('nw-tooltip--show');
     tip.classList.add('nw-tooltip--show');
     const rTip = tip.getBoundingClientRect();
-    tip.classList.remove('nw-tooltip--show');
+    if (!wasShown) tip.classList.remove('nw-tooltip--show');
 
     const vw = window.innerWidth || document.documentElement.clientWidth || 1200;
     const vh = window.innerHeight || document.documentElement.clientHeight || 800;
