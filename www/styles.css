@@ -918,6 +918,20 @@ body {
   color: #bbf7d0;
 }
 
+
+/* Make badge clickable (button) without changing visual style */
+.nw-tile__badge--btn {
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  font: inherit;
+}
+.nw-tile__badge--btn:focus-visible {
+  outline: 2px solid rgba(34, 197, 94, 0.55);
+  outline-offset: 2px;
+}
+
 /* Small tooltip trigger button inside tiles (e.g. Tariff forecast) */
 .nw-tile__tip-btn {
   flex: 0 0 auto;

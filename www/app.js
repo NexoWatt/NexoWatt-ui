@@ -299,6 +299,101 @@ function nwClamp(v, lo, hi){
   return Math.max(lo, Math.min(hi, n));
 }
 
+function nwQuantile(arr, q){
+  try {
+    const a = (Array.isArray(arr) ? arr : []).map(Number).filter(Number.isFinite).sort((x,y)=>x-y);
+    if (a.length === 0) return null;
+    const qq = Math.max(0, Math.min(1, Number(q) || 0));
+    const pos = (a.length - 1) * qq;
+    const base = Math.floor(pos);
+    const rest = pos - base;
+    if (a[base + 1] === undefined) return a[base];
+    return a[base] + rest * (a[base + 1] - a[base]);
+  } catch(_e) { return null; }
+}
+
+function nwMedian(arr){
+  return nwQuantile(arr, 0.5);
+}
+
+function nwResolveTariffThresholds(pricesEur, cheapCandidate, expensiveCandidate){
+  // Validate optional thresholds and compute sensible fallbacks from the day's distribution.
+  const prices = (Array.isArray(pricesEur) ? pricesEur : []).map(Number).filter(Number.isFinite);
+  if (prices.length === 0) return { cheapThr: null, expensiveThr: null };
+
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+
+  const isValid = (v) => Number.isFinite(v) && v > 0 && v >= (min - 1e-12) && v <= (max + 1e-12);
+
+  let cheapThr = Number(cheapCandidate);
+  let expensiveThr = Number(expensiveCandidate);
+
+  if (!isValid(cheapThr)) cheapThr = null;
+  if (!isValid(expensiveThr)) expensiveThr = null;
+
+  if (cheapThr !== null && expensiveThr !== null && cheapThr >= expensiveThr) {
+    cheapThr = null;
+    expensiveThr = null;
+  }
+
+  // Fallbacks: use quantiles so we always get visible color differences.
+  if (cheapThr === null) cheapThr = nwQuantile(prices, 0.30);
+  if (expensiveThr === null) expensiveThr = nwQuantile(prices, 0.70);
+
+  if (!Number.isFinite(cheapThr) || !Number.isFinite(expensiveThr) || cheapThr >= expensiveThr) {
+    // Last resort: split the range.
+    cheapThr = min + (max - min) * 0.33;
+    expensiveThr = min + (max - min) * 0.66;
+  }
+
+  return { cheapThr, expensiveThr };
+}
+
+function nwAggregateCurve(curve, dayStartMs, dayEndMs, targetIntervalMs){
+  // Aggregate (e.g. 15-min) curves into cleaner slots (e.g. 60-min) using weighted average.
+  const src = (Array.isArray(curve) ? curve : [])
+    .filter(x => x && Number.isFinite(x.startMs) && Number.isFinite(x.endMs) && Number.isFinite(x.priceEurKwh))
+    .map(x => ({ startMs: Number(x.startMs), endMs: Number(x.endMs), priceEurKwh: Number(x.priceEurKwh) }))
+    .sort((a,b)=>a.startMs - b.startMs);
+
+  const start = Number(dayStartMs);
+  const end = Number(dayEndMs);
+  const step = Math.max(5 * 60 * 1000, Number(targetIntervalMs) || 0); // >= 5 min
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || !Number.isFinite(step) || step <= 0) return src;
+
+  let i = 0;
+  const out = [];
+  for (let t = start; t < end; t += step) {
+    const slotStart = t;
+    const slotEnd = Math.min(end, t + step);
+
+    // Advance pointer to first relevant item
+    while (i < src.length && src[i].endMs <= slotStart) i++;
+
+    let sum = 0;
+    let dur = 0;
+    let j = i;
+
+    while (j < src.length && src[j].startMs < slotEnd) {
+      const it = src[j];
+      const ovStart = Math.max(slotStart, it.startMs);
+      const ovEnd = Math.min(slotEnd, it.endMs);
+      const ov = ovEnd - ovStart;
+      if (ov > 0) {
+        sum += it.priceEurKwh * ov;
+        dur += ov;
+      }
+      if (it.endMs <= slotEnd) j++;
+      else break;
+    }
+
+    if (dur > 0) {
+      out.push({ startMs: slotStart, endMs: slotEnd, priceEurKwh: sum / dur });
+    }
+  }
+  return out.length ? out : src;
+}
 function nwFormatCt(vEurKwh){
   if (vEurKwh === undefined || vEurKwh === null || isNaN(Number(vEurKwh))) return '--';
   return (Number(vEurKwh) * 100).toFixed(1) + ' ct/kWh';
@@ -433,8 +528,8 @@ function nwDrawTariffForecastChart(canvas, curve, opts){
 
   // Price curve (step line, colored by thresholds)
   ctx.lineWidth = 2;
-  ctx.lineJoin = 'miter';
-  ctx.lineCap = 'butt';
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
 
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
@@ -551,19 +646,25 @@ function initTariffForecastTooltip(){
 
     // min/avg/max
     const ps = curveToday.map(x => x.priceEurKwh).filter(n => Number.isFinite(Number(n)));
+    // Downsample very fine-grained curves (e.g. 15-min) to keep the chart visually clean.
+    // Many providers deliver 15-minute slots; aggregating to 60 minutes makes the forecast easier to read.
+    let curvePlot = curveToday;
+    const intMs = curveToday.map(x => (Number(x.endMs) - Number(x.startMs))).filter(n => Number.isFinite(n) && n > 0);
+    const medMs = nwMedian(intMs);
+    if (Number.isFinite(medMs) && medMs < 30 * 60 * 1000) {
+      curvePlot = nwAggregateCurve(curveToday, startMs, endMs, 60 * 60 * 1000);
+    }
+
     if (ps.length > 0) {
       const min = Math.min(...ps);
       const max = Math.max(...ps);
       const avg = ps.reduce((s,n)=>s+Number(n),0) / ps.length;
 
-      // If tariff thresholds are not available (e.g. tariff module not enabled),
-      // derive reasonable thresholds from the daily range so the chart still has
-      // meaningful color segmentation.
-      if (!Number.isFinite(Number(cheapThr)) || !Number.isFinite(Number(expThr))) {
-        const range = Math.max(1e-9, max - min);
-        cheapThr = min + range * 0.33;
-        expThr = min + range * 0.66;
-      }
+      // Resolve thresholds (günstig/teuer) from config if present,
+      // otherwise derive them from the day's distribution so we always get visible color differences.
+      const thr = nwResolveTariffThresholds(ps, cheapThr, expThr);
+      cheapThr = thr.cheapThr;
+      expThr = thr.expensiveThr;
 
       if (minEl) minEl.textContent = 'Min ' + nwFormatCt(min);
       if (avgEl) avgEl.textContent = 'Ø ' + nwFormatCt(avg);
@@ -575,7 +676,7 @@ function initTariffForecastTooltip(){
     }
 
     // Draw
-    nwDrawTariffForecastChart(canvas, curveToday, {
+    nwDrawTariffForecastChart(canvas, curvePlot, {
       dayStartMs: startMs,
       dayEndMs: endMs,
       cheapThr,
@@ -586,9 +687,11 @@ function initTariffForecastTooltip(){
 
   function place(){
     if (!tip) return;
-    const rBtn = btn.getBoundingClientRect();
+    const anchor = anchorEl || card || btn;
+    if (!anchor || !anchor.getBoundingClientRect) return;
+    const rA = anchor.getBoundingClientRect();
     const margin = 10;
-    // Prefer above the card if possible
+
     tip.style.left = '0px';
     tip.style.top = '0px';
     const wasShown = tip.classList.contains('nw-tooltip--show');
@@ -599,13 +702,15 @@ function initTariffForecastTooltip(){
     const vw = window.innerWidth || document.documentElement.clientWidth || 1200;
     const vh = window.innerHeight || document.documentElement.clientHeight || 800;
 
-    let left = rBtn.left + rBtn.width - rTip.width;
+    // Prefer aligning with the tile's left edge; if space is tight, align to the right.
+    let left = rA.left;
+    if (left + rTip.width > vw - margin) left = rA.right - rTip.width;
     left = nwClamp(left, margin, vw - rTip.width - margin);
 
-    let top = rBtn.top - rTip.height - 8;
+    let top = rA.top - rTip.height - 8;
     const fitsAbove = (top >= margin);
     if (!fitsAbove) {
-      top = rBtn.bottom + 8;
+      top = rA.bottom + 8;
       if (top + rTip.height > vh - margin) {
         // last resort: center-ish
         top = nwClamp(vh/2 - rTip.height/2, margin, vh - rTip.height - margin);
@@ -616,9 +721,12 @@ function initTariffForecastTooltip(){
     tip.style.top = Math.round(top) + 'px';
   }
 
-  function show(){
+  let anchorEl = null;
+
+  function show(anchor){
     if (open) return;
     open = true;
+    anchorEl = anchor || btn || card || null;
     // Make visible first so the canvas has a real clientWidth/clientHeight.
     tip.classList.add('nw-tooltip--show');
     place();
@@ -634,21 +742,51 @@ function initTariffForecastTooltip(){
     if (poll) { clearInterval(poll); poll = null; }
     if (tip) tip.classList.remove('nw-tooltip--show');
   }
-  function toggle(){ if (open) hide(); else show(); }
+  function toggle(anchor){ if (open) hide(); else show(anchor); }
 
-  // Stop tile click (opening the EMS modal) when using the tooltip button
+  // Tooltip controls (icon + whole tile click)
   btn.addEventListener('click', (e)=>{
     e.preventDefault();
     e.stopPropagation();
-    toggle();
+    toggle(btn);
   });
   btn.addEventListener('mousedown', (e)=>{ e.stopPropagation(); });
   btn.addEventListener('touchstart', (e)=>{ try{ e.stopPropagation(); }catch(_e){} }, { passive: true });
 
+
+  // Click on the whole tile toggles the forecast when tariff is active.
+  // EMS modal is opened via the EMS badge button.
+  card.addEventListener('click', (e)=>{
+    const t = e && e.target;
+    try {
+      if (t && (t === btn || (t.closest && t.closest('#tariffForecastBtn')))) return;
+      if (t && (t.closest && t.closest('#tariffEmsBtn'))) return;
+    } catch(_e) {}
+
+    const raw = v('priceTodayJson') || v('tarif.pricesTodayJson') || v('pricesTodayJson') ||
+                v('priceTomorrowJson') || v('tarif.pricesTomorrowJson') || v('pricesTomorrowJson');
+    const tariffOn = !!v('settings.dynamicTariff') || !!raw;
+    if (!tariffOn) return;
+
+    try { if (e) e.preventDefault(); } catch(_e) {}
+    toggle(card);
+  });
+  card.addEventListener('keydown', (e)=>{
+    if (!e) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      const raw = v('priceTodayJson') || v('tarif.pricesTodayJson') || v('pricesTodayJson') ||
+                  v('priceTomorrowJson') || v('tarif.pricesTomorrowJson') || v('pricesTomorrowJson');
+      const tariffOn = !!v('settings.dynamicTariff') || !!raw;
+      if (!tariffOn) return;
+      try { e.preventDefault(); } catch(_e) {}
+      toggle(card);
+    }
+  });
+
   // Desktop hover support (optional)
   btn.addEventListener('mouseenter', ()=>{
     if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
-    show();
+    show(btn);
   });
   btn.addEventListener('mouseleave', ()=>{
     if (hoverTimer) clearTimeout(hoverTimer);
@@ -666,7 +804,7 @@ function initTariffForecastTooltip(){
   document.addEventListener('click', (e)=>{
     if (!open) return;
     const t = e && e.target;
-    if (t && (t === btn || tip.contains(t))) return;
+    if (t && (t === btn || tip.contains(t) || card.contains(t))) return;
     hide();
   }, true);
   document.addEventListener('keydown', (e)=>{
@@ -3244,7 +3382,11 @@ function initEmsControlModal() {
   };
   const close = () => modal.classList.add('hidden');
 
-  card.addEventListener('click', open);
+  // Expose for other UI handlers (e.g. tariff tile click routing)
+  try { window.__nwEmsControlModal = { open, close }; } catch(_e) {}
+
+  const openBtn = document.getElementById('tariffEmsBtn') || card;
+  openBtn.addEventListener('click', (e)=>{ try{ if (e){ e.preventDefault(); e.stopPropagation(); } }catch(_e){} open(e); });
 
   if (closeBtn) closeBtn.addEventListener('click', close);
   modal.addEventListener('click', (e) => { if (e && e.target === modal) close(); });

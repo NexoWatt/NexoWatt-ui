@@ -1,3 +1,11 @@
+## 0.6.70 (UI/Tarif Forecast)
+- UI: Preis-Forecast Tooltip öffnet jetzt auch per Klick auf die gesamte Tarif-/Optimierungskachel (wie bei der Ladestation).
+- UI: EMS-Steuerung der Optimierungskachel liegt nun auf dem Badge "EMS" (Button), damit der Kachel-Klick für Forecast frei ist.
+- UI: Chart-Linie geglättet (Auto-Aggregation von 15‑Minuten Slots auf 60‑Minuten für bessere Lesbarkeit).
+- UI: Farbliche Segmentierung (günstig/neutral/teuer) über valide Schwellenwerte oder Auto-Quantile-Fallback.
+- UI: Browser-Standard-Tooltip (title) am 📈-Icon entfernt (kein Doppelklick mehr nötig auf Touch-Geräten).
+- UI: Service-Worker Cache-Version erhöht, damit Updates zuverlässig im Browser ankommen.
+
 ## 0.6.69 (UI/Tarif)
 - UI: Tooltip in der Tarif-/Optimierungskachel (📈) zeigt den Preisverlauf "heute" als Chart (Forecast).
 - UI: Tooltip-Positionierung/Anzeige korrigiert; Service-Worker Cache-Version erhöht.
