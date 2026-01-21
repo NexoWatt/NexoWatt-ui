@@ -7682,6 +7682,12 @@ app.get('/config', (req, res) => {
           const vis = (cfg && cfg.vis && typeof cfg.vis === 'object') ? cfg.vis : {};
           const stored = (vis.flowSlots && typeof vis.flowSlots === 'object') ? vis.flowSlots : {};
 
+          // Core labels (optional) – used for fixed nodes (e.g. PV) in the Energiefluss.
+          const coreStored = (stored && stored.core && typeof stored.core === 'object') ? stored.core : {};
+          const core = {
+            pvName: (coreStored.pvName !== undefined && coreStored.pvName !== null) ? String(coreStored.pvName).trim() : '',
+          };
+
           const getArr = (k) => (Array.isArray(stored[k]) ? stored[k] : []);
 
           const defName = (kind, idx) => {
@@ -7806,6 +7812,7 @@ app.get('/config', (req, res) => {
           const evcsAltMapped = !!String(dps.consumptionEvcs || '').trim();
 
           return {
+            core,
             consumers: buildSlots('consumers'),
             producers: buildSlots('producers'),
             meta: {
@@ -10749,15 +10756,6 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const dchg = Number.isFinite(dchgW) ? Math.max(0, dchgW) : 0;
     const evAbs = Number.isFinite(evW) ? Math.abs(evW) : 0;
 
-    if (pvTotal === null) {
-      let sum = 0;
-      for (let i = 1; i <= 5; i++) {
-        const v = this._nwGetNumberFromCache(`producer${i}Power`);
-        if (Number.isFinite(v)) sum += Math.max(0, Math.abs(v));
-      }
-      pvTotal = sum;
-    }
-
     if (loadTotal === null) {
       const pvUse = pvTotal || 0;
       loadTotal = Math.max(0, pvUse + gridBuy + dchg - gridSell - chg);
@@ -11263,13 +11261,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       if (used > 0) {
         pvAcW = Math.max(0, sum);
         pvSource = 'auto:pvSources';
-      } else if (producerCount > 0) {
-        // Legacy fallback: if PV was mapped into producer slots
-        pvAcW = Math.max(0, producerSumW);
-        producerSumW = 0;
-        producerCount = 0;
-        pvSource = 'fallback:producerSlots';
       } else {
+        // No PV sources configured/available.
+        // IMPORTANT: Do NOT fall back to producer-slots here. Producer slots are always optional and
+        // must remain separate from PV (to avoid confusing PV totals when only external generators are mapped).
         pvAcW = 0;
         pvSource = 'missing';
       }

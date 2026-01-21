@@ -80,6 +80,16 @@ let units = { power: 'W', energy: 'kWh' };
 let flowSlotsCfg = null; // comes from /config
 let flowExtras = { consumers: [], producers: [], special: [], meta: { evcsAvailable: true } };
 
+function applyFlowCoreLabels() {
+  // Optional PV name override from App-Center (Energiefluss-Monitor -> Basis).
+  // If not provided, we keep the default label "PV".
+  const pvNameRaw = flowSlotsCfg && flowSlotsCfg.core && typeof flowSlotsCfg.core.pvName === 'string' ? flowSlotsCfg.core.pvName : '';
+  const pvName = (pvNameRaw || '').trim();
+  const label = pvName ? pvName : 'PV';
+  const el = document.getElementById('pvLabel');
+  if (el) el.textContent = label;
+}
+
 let _renderScheduled = false;
 let _renderTimer = null;
 let _lastRenderTs = 0;
@@ -1068,6 +1078,7 @@ async function bootstrap() {
 
     // Energiefluss: optionale Verbraucher/Erzeuger (Slots) initialisieren
     flowSlotsCfg = cfg.flowSlots || null;
+    applyFlowCoreLabels();
     initEnergyWebExtras(flowSlotsCfg);
     try{
       const c = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
@@ -1119,8 +1130,9 @@ const applyConfigSnapshot = (nextCfg) => {
   }
 
   // Energyflow slot mapping
-  flowSlotsCfg = cfg.flowSlots || null;
-  initEnergyWebExtras(flowSlotsCfg);
+    flowSlotsCfg = cfg.flowSlots || null;
+    applyFlowCoreLabels();
+    initEnergyWebExtras(flowSlotsCfg);
 
   // Dynamic menu/tab visibility
   try {

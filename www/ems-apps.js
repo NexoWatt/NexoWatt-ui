@@ -887,7 +887,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return row;
     };
 
-    for (const f of fields) container.appendChild(makeRow(f));
+    for (const f of fields) {
+      const row = makeRow(f);
+      container.appendChild(row);
+      // Optional hook for callers to inject additional UI rows close to a specific field
+      if (options && typeof options.afterRow === 'function') {
+        try {
+          options.afterRow(f, row, container);
+        } catch (e) {
+          console.warn('buildDpTable.afterRow failed', e);
+        }
+      }
+    }
   }
 
   // ------------------------------
@@ -935,6 +946,10 @@ function _collectFlowPowerDpIsWFromUI() {
 
     fs.consumers = norm(fs.consumers, FLOW_CONSUMER_SLOT_COUNT);
     fs.producers = norm(fs.producers, FLOW_PRODUCER_SLOT_COUNT);
+
+    // Optional core labels (fixed nodes) for the Energiefluss visualization.
+    fs.core = (fs.core && typeof fs.core === 'object') ? fs.core : {};
+    fs.core.pvName = (fs.core.pvName !== undefined && fs.core.pvName !== null) ? String(fs.core.pvName) : '';
     return fs;
   }
 
@@ -1245,6 +1260,49 @@ function _collectFlowPowerDpIsWFromUI() {
       row.appendChild(advanced);
       container.appendChild(row);
     }
+  }
+
+  function buildFlowPvNameRow() {
+    const fs = _ensureFlowSlots();
+
+    const row = document.createElement('div');
+    row.className = 'nw-config-item';
+
+    const left = document.createElement('div');
+    left.className = 'nw-config-item__left';
+    const title = document.createElement('div');
+    title.className = 'nw-config-item__title';
+    title.textContent = 'PV Name (optional)';
+    const subtitle = document.createElement('div');
+    subtitle.className = 'nw-config-item__subtitle';
+    subtitle.textContent = 'pvName';
+    const hint = document.createElement('div');
+    hint.className = 'nw-config-item__hint';
+    hint.textContent = 'Wird im Energiefluss-Kreis (PV) als Name angezeigt. Leer lassen = "PV".';
+    left.appendChild(title);
+    left.appendChild(subtitle);
+    left.appendChild(hint);
+
+    const right = document.createElement('div');
+    right.className = 'nw-config-item__right';
+    const input = document.createElement('input');
+    input.className = 'nw-config-input';
+    input.type = 'text';
+    input.id = 'flow_pvName';
+    input.maxLength = 24;
+    input.placeholder = 'z.B. PV 1 / Anlage 1';
+    input.value = (fs.core && fs.core.pvName) ? String(fs.core.pvName) : '';
+    input.addEventListener('change', () => {
+      const fs2 = _ensureFlowSlots();
+      fs2.core = fs2.core && typeof fs2.core === 'object' ? fs2.core : {};
+      fs2.core.pvName = String(input.value || '').trim().slice(0, 24);
+      input.value = fs2.core.pvName;
+    });
+    right.appendChild(input);
+
+    row.appendChild(left);
+    row.appendChild(right);
+    return row;
   }
 
   // ------------------------------
@@ -5344,7 +5402,15 @@ function _collectFlowPowerDpIsWFromUI() {
           currentConfig.datapoints = currentConfig.datapoints || {};
           currentConfig.datapoints[key] = val;
         },
-        { idPrefix: 'flow_' }
+        {
+          idPrefix: 'flow_',
+          afterRow: (field, _row, container) => {
+            if (field && field.key === 'pvPower') {
+              // Optional: rename PV main node (PV 1) for clarity
+              container.appendChild(buildFlowPvNameRow());
+            }
+          }
+        }
       );
 
 
