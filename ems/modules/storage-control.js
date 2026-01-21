@@ -991,8 +991,8 @@ if (typeof soc === 'number') {
 						reason = 'Tarif: Entladen blockiert (SoC-Min erreicht)';
 						source = 'tarif';
 					} else {
-						const targetImportW = Math.max(0, num(cfg.tariffTargetGridImportW, 50));
-						const deadbandW = Math.max(0, num(cfg.tariffImportThresholdW, 50));
+						const targetImportW = Math.max(0, num(cfg.tariffTargetGridImportW, selfTargetGridW));
+						const deadbandW = Math.max(0, num(cfg.tariffImportThresholdW, selfImportThresholdW));
 
 						// Tarif-Entladung regelt am NVP.
 						// Primär nutzen wir den ROH-Wert (NVP), weil eine starke Glättung zu Verzögerungen
@@ -1361,7 +1361,10 @@ if (targetW === 0 && selfDischargeEnabled) {
             // Daher: Peak-Hysterese nur für peak-bezogene Quellen (LSK/Refill).
             const psRelevant = (source === 'lastspitze' || source === 'lastspitze_refill');
             const psHystW = psRelevant ? Math.max(0, num(psCfg.hysteresisW, 0)) : 0;
-            const isNvpBalancing = (typeof reason === 'string') && reason.includes(':nvp');
+            // NVP-Balancing (Eigenverbrauch-/Tarif-Entladung): hier wollen wir auch kleine Leistungen zulassen,
+            // sonst bleibt ein Rest-Netzbezug (z. B. 30–90 W) dauerhaft stehen.
+            // Erkennung: Quelle eigenverbrauch oder tarif UND wir entladen (targetW > 0).
+            const isNvpBalancing = (targetW > 0) && (source === 'eigenverbrauch' || source === 'tarif');
             const zeroBandW = Math.max(psHystW, stepW, isNvpBalancing ? 20 : 100);
 
             // Optional: Expert-Parameter. Wenn nicht gesetzt, Default 5s.

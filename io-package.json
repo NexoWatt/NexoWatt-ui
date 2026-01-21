@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.70",
+    "version": "0.6.71",
     "news": {
+      "0.6.71": {
+        "en": "Storage control: improved NVP balancing deadband so small discharge setpoints are not suppressed (self-consumption/tariff). Tariff NVP now defaults to the same target/deadband as self-consumption unless explicitly configured. Reduces residual grid import while the battery is discharging.",
+        "de": "Speicherregelung: NVP-Deadband verbessert, damit kleine Entlade-Sollwerte nicht unterdrückt werden (Eigenverbrauch/Tarif). Tarif-NVP übernimmt standardmäßig Ziel/Deadband aus Eigenverbrauch, sofern nicht separat gesetzt. Reduziert Rest-Netzbezug während der Speicher entlädt."
+      },
       "0.6.68": {
         "en": "App-Center: fixed DP input row overflow in mapping grid (grid point measurement W/kW). Controls now wrap cleanly inside the card.",
         "de": "App-Center: DP-Zeilen-Overflow im Zuordnungs-Grid behoben (Netzpunkt-Messung W/kW). Bedienelemente umbrechen jetzt sauber innerhalb der Karte."
