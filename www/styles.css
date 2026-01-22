@@ -2588,3 +2588,67 @@ body{ padding-top: var(--topbar-h); }
   .nw-tile__bottom { font-size: 0.68rem; }
   .nw-tile__badge { font-size: 0.58rem; }
 }
+
+
+/* --- NW: EVCS Modal responsive fixes (mobile) --- */
+@media (max-width: 680px){
+  /* Place dialog at the top with safe-area padding and allow inner scrolling */
+  #evcsModal{
+    align-items: flex-start;
+    justify-content: center;
+    padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+    box-sizing: border-box;
+  }
+  #evcsModal .dialog{
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    /* Use dynamic viewport height where available (iOS Safari) */
+    max-height: calc(100vh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+  #evcsModal .dialog-header{
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #121416;
+    padding-top: 2px;
+  }
+
+  /* Reduce visual footprint so all controls fit better on small screens */
+  #evcsModal .evcs-gauge{
+    width: 140px;
+    height: 140px;
+    margin: 6px auto 10px;
+  }
+  #evcsModal .evcs-gauge .gauge-value{
+    font-size: 24px;
+  }
+
+  /* Keep the compact two-column layout for EVCS "row two" blocks (saves vertical space) */
+  #evcsModal .dialog .row.two{
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Undo the global EVCS "bigger buttons" tweak on phones (prevents clipping) */
+  #evcsModal .nw-evcs-mode-buttons button{
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 680px) and (max-height: 740px){
+  #evcsModal .evcs-gauge{
+    width: 120px;
+    height: 120px;
+    margin-bottom: 8px;
+  }
+  #evcsModal .evcs-gauge .gauge-value{
+    font-size: 22px;
+  }
+}

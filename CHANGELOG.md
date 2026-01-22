@@ -1,3 +1,6 @@
+## 0.6.73
+- UI: EVCS/Ladestation Modal – mobile responsive improvements (smaller gauge, safe-area padding, better scrolling)
+
 ## 0.6.72 (EMS/Tarif + App-Center)
 - Backend: Tarif-Netzladen nutzt jetzt eine PV‑Reserve (Forecast‑basiertes Headroom). Ergebnis: Wenn PV‑Erzeugung zu erwarten ist, wird der Speicher im günstigen Tarif-Fenster nicht mehr automatisch bis 100% aus dem Netz vollgeladen, sondern bis zu einem dynamischen SoC‑Cap (abhängig von Forecast + Kapazität).
 - App‑Center: Kapazität (kWh) im Single‑Speicher ist wieder sauber nutzbar (Eingabefeld sichtbar, Help-Text gestapelt).

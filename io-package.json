@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.72",
+    "version": "0.6.73",
     "news": {
       "0.6.71": {
         "en": "Storage control: improved NVP balancing deadband so small discharge setpoints are not suppressed (self-consumption/tariff). Tariff NVP now defaults to the same target/deadband as self-consumption unless explicitly configured. Reduces residual grid import while the battery is discharging.",
