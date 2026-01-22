@@ -1,3 +1,7 @@
+## 0.6.72 (EMS/Tarif + App-Center)
+- Backend: Tarif-Netzladen nutzt jetzt eine PV‑Reserve (Forecast‑basiertes Headroom). Ergebnis: Wenn PV‑Erzeugung zu erwarten ist, wird der Speicher im günstigen Tarif-Fenster nicht mehr automatisch bis 100% aus dem Netz vollgeladen, sondern bis zu einem dynamischen SoC‑Cap (abhängig von Forecast + Kapazität).
+- App‑Center: Kapazität (kWh) im Single‑Speicher ist wieder sauber nutzbar (Eingabefeld sichtbar, Help-Text gestapelt).
+
 ## 0.6.71 (EMS/Storage)
 - Backend: NVP-Balancing Deadband in der Speicherregelung korrigiert (Eigenverbrauch/Tarif). Kleine Entlade-Sollwerte werden nicht mehr durch das allgemeine 100W-Zero-Band auf 0 gesetzt → weniger Rest-Netzbezug bei aktivem Entladen.
 - Backend: Tarif-NVP-Regelung übernimmt standardmäßig die Eigenverbrauch-Zielwerte (selfTargetGridImportW/selfImportThresholdW), sofern keine tarif-spezifischen Werte gesetzt sind.

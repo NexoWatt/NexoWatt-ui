@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.71",
+    "version": "0.6.72",
     "news": {
       "0.6.71": {
         "en": "Storage control: improved NVP balancing deadband so small discharge setpoints are not suppressed (self-consumption/tariff). Tariff NVP now defaults to the same target/deadband as self-consumption unless explicitly configured. Reduces residual grid import while the battery is discharging.",
@@ -942,6 +942,10 @@
       "0.6.64": {
         "en": "VIS/EMS: Weather tile now shows PV forecast status even if forecast is invalid (helps diagnose missing tomorrow data). Storage Control: improved NVP fine balancing (smaller default NVP target/deadband in tariff discharge and allows smaller setpoints for :nvp sources).",
         "de": "VIS/EMS: Wetter-Kachel zeigt jetzt den PV-Forecast-Status auch bei ungueltiger Prognose (hilft bei Diagnose, z.B. fehlende Morgen-Daten). Storage-Control: verbesserte NVP-Feinregelung (kleinere Default-Zielwerte/Hysterese im Tarif-Entladen und kleinere Setpoints fuer :nvp Quellen)."
+      },
+      "0.6.72": {
+        "en": "Tariff mode: PV reserve for grid charging using PV forecast (dynamic SoC cap / headroom) to avoid fully charging the battery from the grid when PV is expected. App-Center: single storage capacity (kWh) input is now properly visible (stack layout).",
+        "de": "Tarifmodus: PV‑Reserve fürs Netzladen anhand PV‑Forecast (dynamischer SoC‑Cap / Headroom), damit der Speicher bei erwarteter PV nicht mehr „voll“ aus dem Netz geladen wird. App‑Center: Kapazität (kWh) im Single‑Speicher ist jetzt korrekt sichtbar (Stack‑Layout)."
       }
     },
     "title": "NexoWatt VIS",
