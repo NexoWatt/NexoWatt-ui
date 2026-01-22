@@ -1,3 +1,8 @@
+## 0.6.74 (EMS/Tarif Auto‑KI)
+- Backend: Automatik/Forecast: Die „günstig“-Schwelle (min+Band) wird am wirksamen Durchschnittspreis (Ø) gekappt. Ergebnis: Speicher lädt im Auto‑Tarifmodus nicht mehr bei Preisen > Ø.
+- Backend: „Nächstes günstiges Fenster“ (naechstesGuensigVon/Bis) nutzt nun dieselbe effektive Schwelle wie die Entscheidung (Forecast/Status sind konsistent).
+- Optional (Expert‑Patch): `tariff.autoCheapCapToAvg=false` deaktiviert das Kappen.
+
 ## 0.6.73
 - UI: EVCS/Ladestation Modal – mobile responsive improvements (smaller gauge, safe-area padding, better scrolling)
 

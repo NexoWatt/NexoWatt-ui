@@ -67,7 +67,7 @@ class TarifVisModule extends BaseModule {
         await mk('tarif.preisDurchschnittEurProKwh', 'Tarif Preis Durchschnitt (€/kWh, Provider)', 'number', 'value');
         await mk('tarif.preisRefEurProKwh', 'Tarif Referenzpreis (€/kWh, wirksam)', 'number', 'value');
         await mk('tarif.preisMinEurProKwh', 'Tarif Preis Minimum (€/kWh, Horizon)', 'number', 'value');
-        await mk('tarif.preisSchwelleGuensigEurProKwh', 'Tarif Schwelle günstig (€/kWh, min+Band)', 'number', 'value');
+        await mk('tarif.preisSchwelleGuensigEurProKwh', 'Tarif Schwelle günstig (€/kWh, Auto: min+Band, capped@Ø)', 'number', 'value');
         await mk('tarif.naechstesGuensigVon', 'Nächstes günstiges Fenster ab (ISO)', 'string', 'text');
         await mk('tarif.naechstesGuensigBis', 'Nächstes günstiges Fenster bis (ISO)', 'string', 'text');
 
@@ -503,6 +503,7 @@ class TarifVisModule extends BaseModule {
             let preisDurchschnittCalc = null;
             let nextCheapFromIso = null;
             let nextCheapToIso = null;
+            let horizonCurve = null;
 
             if (aktivEff && modusInt === 2) {
                 const rawToday = (this.dp && typeof this.dp.getEntry === 'function' && this.dp.getEntry('tarif.pricesTodayJson'))
@@ -521,14 +522,53 @@ class TarifVisModule extends BaseModule {
                     .sort((a, b) => a.startMs - b.startMs);
 
                 if (all.length > 0) {
+                    horizonCurve = all;
                     preisMin = Math.min(...all.map(x => x.priceEurKwh));
                     preisSchwelleGuensig = preisMin + autoBandEur;
 
                     // Durchschnitt über den Planungshorizont (Stundenbasis)
                     preisDurchschnittCalc = all.reduce((s, x) => s + x.priceEurKwh, 0) / all.length;
+                }
+            }
 
-                    // Nächstes günstiges Fenster (für Forecast/Anzeige)
-                    const cheap = all.filter(x => x.priceEurKwh <= preisSchwelleGuensig + 1e-9);
+            const preisDurchschnittEff = preisDurchschnittOk ? preisDurchschnitt
+                : (Number.isFinite(preisDurchschnittCalc) ? preisDurchschnittCalc : null);
+            const preisDurchschnittEffOk = (typeof preisDurchschnittEff === 'number' && Number.isFinite(preisDurchschnittEff));
+
+            // Referenzpreis (Preisgrenze) – wirksam
+            let preisRef = null;
+            if (modusInt === 2) {
+                // Automatisch: Durchschnittspreis (Fallback: VIS)
+                preisRef = preisDurchschnittEffOk ? preisDurchschnittEff : (preisVisOk ? preisGrenzeVis : null);
+            } else {
+                // Manuell: VIS Preis (Fallback: Durchschnitt)
+                preisRef = preisVisOk ? preisGrenzeVis : (preisDurchschnittEffOk ? preisDurchschnittEff : null);
+            }
+
+            // ───────────────────────────────────────────────────────────
+            // Auto‑KI / Tarif‑Optimierung (Automatik/Forecast)
+            //
+            // Problem (Praxis): Die alte Auto‑Logik definiert „günstig“ als
+            //   Preis <= (Minimum + autoBandEur)
+            // Wenn autoBandEur größer ist als (Ø − Minimum), liegt diese Schwelle
+            // über dem Durchschnitt → der Speicher lädt dann trotz Preis > Ø.
+            //
+            // Ziel (User‑Wunsch): Im Tarif‑Modus soll Netzladen nur unterhalb des
+            // Durchschnitts stattfinden. Daher kappen wir die „günstig“-Schwelle
+            // in Auto‑Mode am wirksamen Ø‑Preis (Provider‑Ø oder berechneter Ø).
+            //
+            // Optional per Config deaktivierbar (Expert‑Patch):
+            //   tariff.autoCheapCapToAvg = false
+            // ───────────────────────────────────────────────────────────
+            if (aktivEff && modusInt === 2) {
+                const capToAvg = (cfgTariff.autoCheapCapToAvg !== undefined) ? !!cfgTariff.autoCheapCapToAvg : true;
+                if (capToAvg && typeof preisSchwelleGuensig === 'number' && Number.isFinite(preisSchwelleGuensig) && preisDurchschnittEffOk) {
+                    preisSchwelleGuensig = Math.min(preisSchwelleGuensig, preisDurchschnittEff);
+                }
+
+                // Nächstes günstiges Fenster (für Forecast/Anzeige) – basierend auf der effektiven Schwelle
+                if (Array.isArray(horizonCurve) && horizonCurve.length > 0 && typeof preisSchwelleGuensig === 'number' && Number.isFinite(preisSchwelleGuensig)) {
+                    const cheap = horizonCurve.filter(x => x.priceEurKwh <= preisSchwelleGuensig + 1e-9);
                     if (cheap.length > 0) {
                         const first = cheap[0];
                         let winStart = first.startMs;
@@ -548,20 +588,6 @@ class TarifVisModule extends BaseModule {
                         nextCheapToIso = new Date(winEnd).toISOString();
                     }
                 }
-            }
-
-            const preisDurchschnittEff = preisDurchschnittOk ? preisDurchschnitt
-                : (Number.isFinite(preisDurchschnittCalc) ? preisDurchschnittCalc : null);
-            const preisDurchschnittEffOk = (typeof preisDurchschnittEff === 'number' && Number.isFinite(preisDurchschnittEff));
-
-            // Referenzpreis (Preisgrenze) – wirksam
-            let preisRef = null;
-            if (modusInt === 2) {
-                // Automatisch: Durchschnittspreis (Fallback: VIS)
-                preisRef = preisDurchschnittEffOk ? preisDurchschnittEff : (preisVisOk ? preisGrenzeVis : null);
-            } else {
-                // Manuell: VIS Preis (Fallback: Durchschnitt)
-                preisRef = preisVisOk ? preisGrenzeVis : (preisDurchschnittEffOk ? preisDurchschnittEff : null);
             }
 
             // --- Tarifzustand (mit Hysterese) ---
