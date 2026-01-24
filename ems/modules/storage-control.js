@@ -837,16 +837,37 @@ if (typeof soc === 'number') {
 					} else {
 						let chargeW = Math.min(Math.abs(want), maxChargeW);
 						// Gemeinsame Import-Cap: nie über effektives Netzbezugslimit laden
-						if (typeof importHeadroomEffW === 'number') {
-							chargeW = Math.min(chargeW, importHeadroomEffW);
+						// OpenEMS-Ansatz: Begrenzung auf Basis der *realen* Netzleistung ohne aktuelle Batterie-Leistung,
+						// um ein „Hin-und-her Springen“ (Sollwert folgt eigenem Einfluss auf den NVP) zu vermeiden.
+						//
+						// realNvpW = NVP + battPowerW  (battPowerW: +Entladen, -Laden)
+						// -> ergibt näherungsweise die Last ohne Batterieeinfluss.
+						const battSignedW = (typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Number(battPowerW) : 0;
+						const nvpNowW = (typeof gridRawW === 'number' && Number.isFinite(gridRawW)) ? Number(gridRawW) : num(gridW, 0);
+						const realNvpW = nvpNowW + battSignedW;
+						const realImportW = Math.max(0, realNvpW);
+
+						let headroomByImportCapW = null;
+						if (typeof importLimitW === 'number' && Number.isFinite(importLimitW) && importLimitW > 0) {
+							headroomByImportCapW = Math.max(0, importLimitW - realImportW);
+						} else if (typeof importHeadroomEffW === 'number') {
+							// Fallback: (ältere Builds) – headroom basiert auf NVP inkl. Batterie; kann flappen,
+							// aber ist besser als nichts.
+							headroomByImportCapW = Math.max(0, importHeadroomEffW);
+						}
+
+						if (typeof headroomByImportCapW === 'number') {
+							chargeW = Math.min(chargeW, headroomByImportCapW);
 						} else if (peakEnabled && isFinite(psLimitW) && psLimitW > 0) {
-							const importNowW = Math.max(0, num(gridRawW, 0));
-							const headroomW = Math.max(0, psLimitW - importNowW);
+							const headroomW = Math.max(0, psLimitW - realImportW);
 							chargeW = Math.min(chargeW, headroomW);
 						}
 
-						// Nicht gegen Einspeisung "anladen" – PV-Überschuss wird unten behandelt
-						if (num(gridRawW, 0) < 0) {
+
+						// Nicht gegen Einspeisung "anladen" – PV-Überschuss wird unten behandelt.
+						// Hinweis: Dadurch wird bei Einspeisung kein zusätzliches Netzladen erzwungen.
+						// (Bewusstes Design: PV-Überschuss-Laden übernimmt dann die Regelung.)
+						if (nvpNowW < 0) {
 							chargeW = 0;
 						}
 
