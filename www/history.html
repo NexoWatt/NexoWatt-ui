@@ -161,8 +161,12 @@
       <button id="navPrev" class="btn sm" title="Zurück">◀</button>
       <button id="navNext" class="btn sm" title="Weiter">▶</button>
       <button id="resetZoomBtn" class="btn sm hidden" title="Zoom zurücksetzen">Zoom zurück</button>
-      <label>Von: <input type="datetime-local" id="from"></label>
-      <label>Bis: <input type="datetime-local" id="to"></label>
+      <label>Datum: <input type="date" id="day"></label>
+      <button id="stackToggle" class="btn sm active" title="Stapel/Fläche an/aus">Stapel</button>
+
+      <!-- Zeitfilter bleiben intern erhalten (für Zoom/Reset), werden aber nicht mehr im UI gezeigt -->
+      <label class="hidden">Von: <input type="datetime-local" id="from"></label>
+      <label class="hidden">Bis: <input type="datetime-local" id="to"></label>
       <button id="loadBtn" class="btn sm">Laden</button>
       <button id="evcsReportBtn" class="btn sm">EVCS PDF</button>
     </div>

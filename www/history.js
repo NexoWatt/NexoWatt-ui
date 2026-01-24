@@ -9,6 +9,11 @@
   let data=null;
   let chartMode='day'; // 'day' | 'week' | 'month' | 'year'
 
+  // Day chart rendering style
+  // - true  => stacked area (OpenEMS-like) on dark background
+  // - false => classic line chart
+  let stackMode = true;
+
   
   let barState = null;
 
@@ -193,8 +198,46 @@ function draw(){
     const keysExtraCons = ex.consumers.map(c=> 'c' + String(c && c.idx || '')).filter(k=>k && k!=='c' && series[k]);
     const keys = keysBase.concat(keysExtraProd, keysExtraCons);
     let minKW=0, maxKW=0;
-    keys.forEach(k=>{ const vals=(series[k]?.values)||[]; vals.forEach(p=>{ const v=mapKW(k, p[1]); if(v<minKW) minKW=v; if(v>maxKW) maxKW=v; }); });
-    if (minKW===0 && maxKW===0) { maxKW = 1; }
+
+    // When enabled, render the day chart as a stacked area chart (OpenEMS-like).
+    // Important: We stack only the *core* flows to avoid double-counting optional
+    // consumer/producer series (those are shown as dashed overlay lines).
+    let stackCtx = null;
+    if (stackMode) {
+      const stackKeys = keysBase.slice();
+      const valMap = {};
+      stackKeys.forEach(k=>{
+        const m = new Map();
+        const vals = (series[k]?.values)||[];
+        vals.forEach(p=>{ m.set(p[0], mapKW(k, p[1])); });
+        valMap[k] = m;
+      });
+
+      const isNeg = (k)=> (k === 'load' || k === 'evcs' || k === 'chg' || k === 'sell');
+      const posKeys = stackKeys.filter(k=>!isNeg(k));
+      const negKeys = stackKeys.filter(isNeg);
+
+      xs.forEach(ts=>{
+        let pos = 0;
+        let neg = 0;
+        for (const k of posKeys) {
+          const v = valMap[k].get(ts);
+          if (Number.isFinite(v) && v > 0) pos += v;
+        }
+        for (const k of negKeys) {
+          const v = valMap[k].get(ts);
+          if (Number.isFinite(v) && v < 0) neg += v;
+        }
+        if (pos > maxKW) maxKW = pos;
+        if (neg < minKW) minKW = neg;
+      });
+
+      if (minKW===0 && maxKW===0) { maxKW = 1; }
+      stackCtx = { stackKeys, valMap, posKeys, negKeys };
+    } else {
+      keys.forEach(k=>{ const vals=(series[k]?.values)||[]; vals.forEach(p=>{ const v=mapKW(k, p[1]); if(v<minKW) minKW=v; if(v>maxKW) maxKW=v; }); });
+      if (minKW===0 && maxKW===0) { maxKW = 1; }
+    }
     const pad = Math.max(0.05, (maxKW-minKW)*0.08);
     minKW -= pad; maxKW += pad;
     const yPow = (kw)=> T + (H-B-T)*(1 - ((kw - minKW)/((maxKW-minKW)||1)));
@@ -225,13 +268,35 @@ function draw(){
       switch(k){
         case 'load':   return -Math.abs(val)/1000;          // Verbrauch negativ unter 0
         case 'evcs':   return -Math.abs(val)/1000;          // E‑Mobilität Verbrauch negativ
-        case 'chg':    return - Math.abs(val)/1000;           // Beladung positiv
-        case 'dchg':   return  Math.abs(val)/1000;          // Entladung negativ
+        case 'chg':    return -Math.abs(val)/1000;          // Beladung negativ (unter 0)
+        case 'dchg':   return  Math.abs(val)/1000;          // Entladung positiv (über 0)
         case 'sell':   return -Math.abs(val)/1000;          // Einspeisung negativ
         case 'buy':    return Math.abs(val)/1000;           // Bezug positiv
         default:       return (val)/1000;                   // PV etc. nativ (meist positiv)
       }
     }
+
+    // small helpers for stacked fills
+    function hexToRgba(hex, a){
+      const h = String(hex || '').trim();
+      const m = h.match(/^#?([0-9a-f]{6})$/i);
+      if (!m) return `rgba(255,255,255,${a})`;
+      const n = parseInt(m[1], 16);
+      const r = (n >> 16) & 255;
+      const g = (n >> 8) & 255;
+      const b = n & 255;
+      return `rgba(${r},${g},${b},${a})`;
+    }
+
+    const CORE_COLORS = {
+      pv:  '#f1c40f',
+      chg: '#27ae60',
+      dchg:'#e67e22',
+      sell:'#3498db',
+      buy: '#e74c3c',
+      evcs:'#ff6bd6',
+      load:'#9b59b6'
+    };
 
     // helpers
     function line(k, color, accessor='val', dash, width){
@@ -255,13 +320,82 @@ function draw(){
       ctx.stroke(); ctx.restore();
     }
 
-    line('pv',  '#f1c40f');
-    line('chg', '#27ae60');
-    line('dchg','#e67e22');
-    line('sell','#3498db');
-    line('buy', '#e74c3c');
-    line('evcs','#ff6bd6');
-    line('load','#9b59b6');
+    function drawStackedAreas(){
+      if (!stackCtx) return;
+      const { posKeys, negKeys, valMap } = stackCtx;
+      const all = posKeys.concat(negKeys);
+      const stack = {};
+      all.forEach(k=>{ stack[k] = { lower: new Array(xs.length), upper: new Array(xs.length) }; });
+
+      for (let i = 0; i < xs.length; i++) {
+        const ts = xs[i];
+        let pos = 0;
+        let neg = 0;
+
+        for (const k of posKeys) {
+          const v = valMap[k].get(ts);
+          const vv = Number.isFinite(v) ? v : 0;
+          stack[k].lower[i] = pos;
+          pos += (vv > 0 ? vv : 0);
+          stack[k].upper[i] = pos;
+        }
+        for (const k of negKeys) {
+          const v = valMap[k].get(ts);
+          const vv = Number.isFinite(v) ? v : 0;
+          stack[k].lower[i] = neg;
+          neg += (vv < 0 ? vv : 0);
+          stack[k].upper[i] = neg;
+        }
+      }
+
+      const drawArea = (k) => {
+        const seg = stack[k];
+        if (!seg) return;
+        let has = false;
+        for (let i = 0; i < xs.length; i++) {
+          const a = (seg.upper[i] ?? 0) - (seg.lower[i] ?? 0);
+          if (Math.abs(a) > 1e-6) { has = true; break; }
+        }
+        if (!has) return;
+
+        const col = CORE_COLORS[k] || '#9aa4ad';
+        ctx.save();
+        ctx.beginPath();
+        for (let i = 0; i < xs.length; i++) {
+          const xx = x(xs[i]);
+          const yy = yPow(seg.upper[i]);
+          if (i === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
+        }
+        for (let i = xs.length - 1; i >= 0; i--) {
+          const xx = x(xs[i]);
+          const yy = yPow(seg.lower[i]);
+          ctx.lineTo(xx, yy);
+        }
+        ctx.closePath();
+        ctx.fillStyle = hexToRgba(col, 0.32);
+        ctx.fill();
+        ctx.strokeStyle = hexToRgba(col, 0.85);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      };
+
+      // Draw sinks first, then sources.
+      negKeys.forEach(drawArea);
+      posKeys.forEach(drawArea);
+    }
+
+    if (stackMode && stackCtx) {
+      drawStackedAreas();
+    } else {
+      line('pv',  CORE_COLORS.pv);
+      line('chg', CORE_COLORS.chg);
+      line('dchg',CORE_COLORS.dchg);
+      line('sell',CORE_COLORS.sell);
+      line('buy', CORE_COLORS.buy);
+      line('evcs',CORE_COLORS.evcs);
+      line('load',CORE_COLORS.load);
+    }
 
     // Extras (Energiefluss-Monitor): Erzeuger/Verbraucher
     ex.producers.forEach(p=>{
@@ -344,21 +478,31 @@ function draw(){
     const end = new Date(toMs);
     let buckets = [];
     function pushBucket(s, e){ buckets.push({start:+s, end:+e}); }
-    if (mode==='week'){
-      // last 7 Tage, tägliche Buckets
-      let d0 = new Date(end); d0.setHours(0,0,0,0); d0.setDate(d0.getDate()-6);
-      for (let i=0;i<7;i++){ const s = new Date(d0); s.setDate(d0.getDate()+i); const e = new Date(s); e.setDate(s.getDate()+1); pushBucket(s, e); }
-    } else if (mode==='month'){
-      // aktueller Monat: Tage
-      let first = new Date(end.getFullYear(), end.getMonth(), 1);
-      let cur = new Date(first);
-      while (cur.getMonth()===first.getMonth()){ const s = new Date(cur); const e = new Date(cur); e.setDate(e.getDate()+1); pushBucket(s,e); cur.setDate(cur.getDate()+1); }
+
+    if (mode==='week' || mode==='month'){
+      // Daily buckets between [fromMs,toMs)
+      let cur = new Date(start);
+      cur.setHours(0,0,0,0);
+      while (cur.getTime() < toMs){
+        const s = new Date(cur);
+        const e = new Date(cur);
+        e.setDate(e.getDate()+1);
+        pushBucket(s, e);
+        cur = e;
+      }
     } else if (mode==='year'){
-      // aktuelles Jahr: Monate
-      let y = end.getFullYear();
-      for (let m=0;m<12;m++){ const s = new Date(y,m,1); const e = new Date(y,m+1,1); pushBucket(s,e); }
+      // Monthly buckets between [fromMs,toMs)
+      let cur = new Date(start.getFullYear(), start.getMonth(), 1);
+      cur.setHours(0,0,0,0);
+      while (cur.getTime() < toMs){
+        const s = new Date(cur);
+        const e = new Date(cur.getFullYear(), cur.getMonth()+1, 1);
+        pushBucket(s, e);
+        cur = e;
+      }
+    } else {
+      buckets = [{start: fromMs, end: toMs}];
     }
-    else { buckets=[{start:fromMs, end:toMs}]; }
     // clip to requested range
     buckets = buckets.filter(b => b.end>fromMs && b.start<toMs).map(b=>({start:Math.max(b.start, fromMs), end:Math.min(b.end,toMs)}));
     return buckets;
@@ -479,13 +623,107 @@ async function load(){
     });
   }
 
-  // init date inputs (today)
+  // --- Date handling ---
+  // We keep the existing datetime-local inputs internally (used by zoom/reset and for API calls),
+  // but the UI now exposes only a date selector. Ranges always cover whole days.
   const now = new Date();
-  const start = new Date(); start.setHours(0,0,0,0);
-  function toLocal(dt){ const z=dt.getTimezoneOffset(); const d = new Date(dt.getTime() - z*60000); return d.toISOString().slice(0,16); }
-  document.getElementById('from').value = toLocal(start);
-  document.getElementById('to').value   = toLocal(now);
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  function toLocal(dt){
+    const z = dt.getTimezoneOffset();
+    const d = new Date(dt.getTime() - z*60000);
+    return d.toISOString().slice(0,16);
+  }
+  function pad2(n){ return String(n).padStart(2,'0'); }
+  function toDateInput(dt){
+    const d = new Date(dt);
+    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  }
+  function fromDateInput(str){
+    if (!str || typeof str !== 'string') return null;
+    const m = String(str).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const da = Number(m[3]);
+    if (!y || !mo || !da) return null;
+    const d = new Date(y, mo - 1, da, 0,0,0,0);
+    return Number.isFinite(d.getTime()) ? d : null;
+  }
+
+  function getAnchorDate(){
+    const el = document.getElementById('day');
+    const d = el && el.value ? fromDateInput(el.value) : null;
+    return d || new Date();
+  }
+  function setAnchorDate(d){
+    const el = document.getElementById('day');
+    if (!el) return;
+    el.value = toDateInput(d);
+  }
+
+  function applyRangeForMode(mode){
+    const fromEl = document.getElementById('from');
+    const toEl = document.getElementById('to');
+    if (!fromEl || !toEl) return;
+
+    const anchor = getAnchorDate();
+    let from = null;
+    let to = null;
+
+    if (mode === 'day') {
+      from = new Date(anchor); from.setHours(0,0,0,0);
+      to = new Date(from); to.setDate(to.getDate() + 1);
+    } else if (mode === 'week') {
+      const endDay = new Date(anchor); endDay.setHours(0,0,0,0);
+      from = new Date(endDay); from.setDate(from.getDate() - 6);
+      to = new Date(endDay); to.setDate(to.getDate() + 1);
+    } else if (mode === 'month') {
+      from = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+      to = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1);
+    } else if (mode === 'year') {
+      from = new Date(anchor.getFullYear(), 0, 1);
+      to = new Date(anchor.getFullYear() + 1, 0, 1);
+    } else {
+      from = new Date(anchor); from.setHours(0,0,0,0);
+      to = new Date(from); to.setDate(to.getDate() + 1);
+    }
+
+    fromEl.value = toLocal(from);
+    toEl.value = toLocal(to);
+  }
+
+  // init date selector (today)
+  setAnchorDate(today);
+  applyRangeForMode(chartMode);
+
+  const dayEl = document.getElementById('day');
+  if (dayEl) {
+    dayEl.addEventListener('change', ()=>{
+      // Date switch resets zoom (day view) and refreshes.
+      zoomStack = [];
+      zoomSel = null;
+      zoomDragging = false;
+      try { if (typeof window.__nxHistoryShowZoomReset === 'function') window.__nxHistoryShowZoomReset(); } catch(_e){}
+      applyRangeForMode(chartMode);
+      load();
+    });
+  }
+
   document.getElementById('loadBtn').addEventListener('click', load);
+
+  // stacked/line toggle (day view)
+  const stackBtn = document.getElementById('stackToggle');
+  if (stackBtn) {
+    const apply = ()=> stackBtn.classList.toggle('active', !!stackMode);
+    apply();
+    stackBtn.addEventListener('click', ()=>{
+      stackMode = !stackMode;
+      apply();
+      draw();
+    });
+  }
 
   const evcsReportBtn = document.getElementById('evcsReportBtn');
   if (evcsReportBtn) {
@@ -514,23 +752,8 @@ async function load(){
       zoomDragging = false;
       try { if (typeof window.__nxHistoryShowZoomReset === 'function') window.__nxHistoryShowZoomReset(); } catch(_e){}
 
-      // auto adjust from/to
-      const toEl = document.getElementById('to');
-      const fromEl = document.getElementById('from');
-      const now = new Date();
-      if(mode==='day'){
-        const d0 = new Date(); d0.setHours(0,0,0,0);
-        fromEl.value = toLocal(d0); toEl.value = toLocal(now);
-      }else if(mode==='week'){
-        const d1 = new Date(); d1.setHours(0,0,0,0); d1.setDate(d1.getDate()-6);
-        fromEl.value = toLocal(d1); toEl.value = toLocal(now);
-      }else if(mode==='month'){
-        const first = new Date(now.getFullYear(), now.getMonth(), 1);
-        fromEl.value = toLocal(first); toEl.value = toLocal(now);
-      }else if(mode==='year'){
-        const jan1 = new Date(now.getFullYear(), 0, 1);
-        fromEl.value = toLocal(jan1); toEl.value = toLocal(now);
-      }
+      // always show whole-day ranges derived from the selected date
+      applyRangeForMode(mode);
       load();
     }
     btns.forEach(b=> b.addEventListener('click', ()=> setActive(b.dataset.range)));
@@ -809,42 +1032,30 @@ async function load(){
     }
 
     function shiftRange(dir){
-      const fromEl = document.getElementById('from');
-      const toEl = document.getElementById('to');
-      if (!fromEl || !toEl) return;
-      const from = new Date(fromEl.value);
-      const to = new Date(toEl.value);
-      if (!isFinite(from.getTime()) || !isFinite(to.getTime())) return;
-      let nf = new Date(from);
-      let nt = new Date(to);
+      // Navigation is based on the selected anchor date (no time tweaking in the UI).
+      let anchor = getAnchorDate();
+      if (!anchor || !isFinite(anchor.getTime())) anchor = new Date();
+      let next = new Date(anchor);
 
-      if (chartMode === 'day'){
-        nf.setDate(nf.getDate() + dir);
-        nt.setDate(nt.getDate() + dir);
-      } else if (chartMode === 'week'){
-        nf.setDate(nf.getDate() + (dir * 7));
-        nt.setDate(nt.getDate() + (dir * 7));
-      } else if (chartMode === 'month'){
-        nf = addMonths(nf, dir);
-        nt = addMonths(nt, dir);
-      } else if (chartMode === 'year'){
-        nf.setFullYear(nf.getFullYear() + dir);
-        nt.setFullYear(nt.getFullYear() + dir);
+      if (chartMode === 'day') {
+        next.setDate(next.getDate() + dir);
+      } else if (chartMode === 'week') {
+        next.setDate(next.getDate() + (dir * 7));
+      } else if (chartMode === 'month') {
+        next = addMonths(next, dir);
+      } else if (chartMode === 'year') {
+        next.setFullYear(next.getFullYear() + dir);
       }
 
-      // Avoid stepping into the future when the current view ends near "now".
-      const now = new Date();
-      if (nt.getTime() > now.getTime() && to.getTime() <= (now.getTime() + 5*60*1000)){
-        const span = nt.getTime() - nf.getTime();
-        nt = now;
-        nf = new Date(now.getTime() - span);
-      }
+      // Prevent moving into the future (anchor date > today).
+      const today = new Date(); today.setHours(0,0,0,0);
+      if (next.getTime() > today.getTime()) next = today;
+
+      setAnchorDate(next);
+      applyRangeForMode(chartMode);
 
       // stop auto-live mode on manual navigation
       try { __stopAuto(); } catch(_e){}
-
-      fromEl.value = toLocal(nf);
-      toEl.value = toLocal(nt);
       load();
     }
 
