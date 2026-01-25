@@ -243,13 +243,14 @@ function draw(){
     const yPow = (kw)=> T + (H-B-T)*(1 - ((kw - minKW)/((maxKW-minKW)||1)));
     const y0 = yPow(0);
 
-    // SoC axis: in this chart we want SoC to live only in the upper half.
-    // 0% should sit on the *power* 0‑line (midline), and 100% should be at the top.
-    // This matches the typical reference chart layout (kW with positive/negative, SoC above).
-    const ySocBase = Math.min(Math.max(y0, T), H - B);
+    // SoC axis: map the full 0..100% range to the full plot height.
+    // 0% is always at the bottom of the chart; 100% is always at the top.
+    // (This is independent from the power 0‑line.)
+    const ySocTop = T;
+    const ySocBottom = H - B;
     const ySoc = (pct)=> {
       const p = Math.max(0, Math.min(100, Number(pct) || 0));
-      return ySocBase - (p / 100) * (ySocBase - T);
+      return ySocBottom - (p / 100) * (ySocBottom - ySocTop);
     };
 
     // grid
@@ -580,13 +581,60 @@ function draw(){
 async function load(){
     const from = new Date(document.getElementById('from').value || new Date(Date.now()-24*3600*1000).toISOString().slice(0,16));
     const to   = new Date(document.getElementById('to').value   || new Date().toISOString().slice(0,16));
+    const fromMs = from.getTime();
+    const toMs   = to.getTime();
+    const nowMs  = Date.now();
     // NOTE: Historie wird im 10-Minuten-Raster nach Influx geschrieben.
     // Für die Tagesansicht verwenden wir ebenfalls 10 Minuten (keine "Treppen" durch Hold‑Last).
     // Für Woche/Monat/Jahr reicht eine gröbere Auflösung; dadurch vermeiden wir zudem getHistory-Limits.
     const step = (chartMode==='day') ? 600 : (chartMode==='week' ? 600 : (chartMode==='month' ? 1800 : 21600));
-    const url = `/api/history?from=${from.getTime()}&to=${to.getTime()}&step=${step}`;
+    const url = `/api/history?from=${fromMs}&to=${toMs}&step=${step}`;
     const res = await fetch(url).then(r=>r.json()).catch(()=>null);
     if(!res || !res.ok){ alert('History kann nicht geladen werden'); return; }
+
+    // Make sure the display range exactly matches what the UI selected.
+    // (Some backends return slightly different 'start/end' depending on bucket alignment.)
+    res.start = fromMs;
+    res.end   = toMs;
+
+    // If the selected range includes "future" (typical: today 00:00..24:00), some backends
+    // fill empty buckets using the last known value. That creates the impression that
+    // values exist in hours that haven't happened yet and inflates the kWh cards.
+    //
+    // Desired behavior:
+    // - The chart builds up over the day
+    // - Beyond "now" there is simply no data (blank)
+    const clipFuture = (chartMode === 'day' && fromMs <= nowMs && toMs > nowMs);
+    if (clipFuture) {
+      const cutoff = nowMs;
+      const clipArr = (arr) => {
+        if (!Array.isArray(arr)) return [];
+        return arr.filter(p => {
+          const ts = toTsMs(p && p[0]);
+          return Number.isFinite(ts) && ts <= cutoff;
+        });
+      };
+
+      // core series
+      if (res.series && typeof res.series === 'object') {
+        Object.keys(res.series).forEach(k => {
+          const s = res.series[k];
+          if (s && Array.isArray(s.values)) s.values = clipArr(s.values);
+        });
+      }
+
+      // extras
+      if (res.extras && typeof res.extras === 'object') {
+        ['consumers', 'producers'].forEach(kind => {
+          const list = Array.isArray(res.extras[kind]) ? res.extras[kind] : [];
+          list.forEach(item => {
+            if (item && Array.isArray(item.values)) item.values = clipArr(item.values);
+          });
+        });
+      }
+      res.__cutoffNowMs = cutoff;
+    }
+
     data = res;
     // Backward compatible default (older backends won't include extras)
     if (!data.extras) data.extras = { consumers: [], producers: [] };
