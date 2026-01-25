@@ -9,6 +9,207 @@
   let data=null;
   let chartMode='day'; // 'day' | 'week' | 'month' | 'year'
 
+  // --- Diagnose / Debug overlay ---
+  // This helps identify common reasons for deviating day sums:
+  // - future bucket fill (hold-last),
+  // - timezone / range boundary shifts,
+  // - sample rate differences.
+  let debugMode = false;
+  const debugBtn = document.getElementById('debugToggle');
+  const debugPanel = document.getElementById('debugPanel');
+
+  function readLS(k){ try{ return localStorage.getItem(k); }catch(_e){ return null; } }
+  function writeLS(k,v){ try{ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k,String(v)); }catch(_e){} }
+  function getQueryFlag(name){
+    try{
+      const q = new URLSearchParams(window.location.search||'');
+      const v = q.get(name);
+      return v === '1' || v === 'true' || v === 'yes';
+    } catch(_e){ return false; }
+  }
+
+  // Enable debug mode via query param (?debug=1) or via persisted localStorage.
+  debugMode = (readLS('nxHistoryDebug') === '1') || getQueryFlag('debug');
+
+  function applyDebugUI(){
+    if (!debugBtn || !debugPanel) return;
+    debugBtn.classList.toggle('active', !!debugMode);
+    debugPanel.classList.toggle('hidden', !debugMode);
+    // If debug is disabled, keep the panel empty.
+    if (!debugMode) debugPanel.textContent = '';
+  }
+
+  function fmtIso(ms){
+    const t = Number(ms);
+    if (!Number.isFinite(t)) return '';
+    const d = new Date(t);
+    // show local time with timezone offset to spot UTC/local mismatches
+    const zMin = d.getTimezoneOffset();
+    const sign = zMin > 0 ? '-' : '+';
+    const abs = Math.abs(zMin);
+    const hh = String(Math.floor(abs/60)).padStart(2,'0');
+    const mm = String(abs%60).padStart(2,'0');
+    return `${d.toLocaleString()} (UTC${sign}${hh}:${mm})`;
+  }
+
+  function seriesStats(vals, nowMs){
+    const pts = (Array.isArray(vals) ? vals : [])
+      .map(p => [toTsMs(p && p[0]), Number(p && p[1])])
+      .filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1]))
+      .sort((a,b)=>a[0]-b[0]);
+    const out = {
+      count: pts.length,
+      minTs: pts.length ? pts[0][0] : null,
+      maxTs: pts.length ? pts[pts.length-1][0] : null,
+      futureCount: 0,
+      medianDtSec: null,
+      minDtSec: null,
+      maxDtSec: null,
+      tailConstCount: 0,
+      tailConstSec: 0,
+      fillPreviousSuspected: false
+    };
+    if (!pts.length) return out;
+    const n = pts.length;
+    for (let i=0;i<n;i++) if (pts[i][0] > nowMs) out.futureCount++;
+    const dts = [];
+    for (let i=1;i<n;i++){
+      const dt = (pts[i][0] - pts[i-1][0]) / 1000;
+      if (dt > 0 && Number.isFinite(dt)) dts.push(dt);
+    }
+    if (dts.length){
+      dts.sort((a,b)=>a-b);
+      out.medianDtSec = dts[Math.floor(dts.length/2)];
+      out.minDtSec = dts[0];
+      out.maxDtSec = dts[dts.length-1];
+    }
+    // tail constant value detection (helps spotting hold-last filling)
+    let tail = 1;
+    const eps = 1e-6;
+    for (let i=n-1;i>0;i--){
+      if (Math.abs(pts[i][1] - pts[i-1][1]) <= eps) tail++;
+      else break;
+    }
+    out.tailConstCount = tail;
+    if (out.medianDtSec) out.tailConstSec = (tail-1) * out.medianDtSec;
+    out.fillPreviousSuspected = (out.futureCount > 0) && (tail >= 6) && (out.tailConstSec >= 600);
+    return out;
+  }
+
+  function computeDebug(res, fromMs, toMs, step, nowMs, backendInfo){
+    const backend = (backendInfo && typeof backendInfo === 'object')
+      ? backendInfo
+      : { start: res && res.start, end: res && res.end, step: res && res.step };
+    const dbg = {
+      url: `/api/history?from=${fromMs}&to=${toMs}&step=${step}`,
+      fromMs, toMs, step,
+      nowMs,
+      browserTZOffsetMin: (new Date()).getTimezoneOffset(),
+      backend,
+      clipFuture: false,
+      cutoffNowMs: null,
+      seriesPre: {},
+      seriesPost: {},
+      extrasPre: { producers: {}, consumers: {} },
+      extrasPost: { producers: {}, consumers: {} }
+    };
+
+    const s = (res && res.series && typeof res.series === 'object') ? res.series : {};
+    Object.keys(s).forEach(k=>{ dbg.seriesPre[k] = seriesStats(s[k] && s[k].values, nowMs); });
+    const ex = (res && res.extras && typeof res.extras === 'object') ? res.extras : null;
+    const prod = Array.isArray(ex && ex.producers) ? ex.producers : [];
+    const cons = Array.isArray(ex && ex.consumers) ? ex.consumers : [];
+    prod.forEach(p=>{
+      const key = 'p' + String(p && p.idx || '');
+      dbg.extrasPre.producers[key] = seriesStats(p && p.values, nowMs);
+    });
+    cons.forEach(c=>{
+      const key = 'c' + String(c && c.idx || '');
+      dbg.extrasPre.consumers[key] = seriesStats(c && c.values, nowMs);
+    });
+    return dbg;
+  }
+
+  function computeDebugPost(dbg, res, nowMs){
+    if (!dbg) return;
+    const s = (res && res.series && typeof res.series === 'object') ? res.series : {};
+    Object.keys(s).forEach(k=>{ dbg.seriesPost[k] = seriesStats(s[k] && s[k].values, nowMs); });
+    const ex = (res && res.extras && typeof res.extras === 'object') ? res.extras : null;
+    const prod = Array.isArray(ex && ex.producers) ? ex.producers : [];
+    const cons = Array.isArray(ex && ex.consumers) ? ex.consumers : [];
+    prod.forEach(p=>{
+      const key = 'p' + String(p && p.idx || '');
+      dbg.extrasPost.producers[key] = seriesStats(p && p.values, nowMs);
+    });
+    cons.forEach(c=>{
+      const key = 'c' + String(c && c.idx || '');
+      dbg.extrasPost.consumers[key] = seriesStats(c && c.values, nowMs);
+    });
+  }
+
+  function renderDebugPanel(){
+    if (!debugMode || !debugPanel || !data || !data.__dbg) return;
+    const dbg = data.__dbg;
+    const lines = [];
+    lines.push('NexoWatt History – Diagnose');
+    lines.push('');
+    lines.push(`Request: ${dbg.url}`);
+    lines.push(`Range : ${fmtIso(dbg.fromMs)}  →  ${fmtIso(dbg.toMs)}`);
+    lines.push(`Now   : ${fmtIso(dbg.nowMs)}`);
+    lines.push(`TZ    : Browser offset ${dbg.browserTZOffsetMin} min`);
+    if (dbg.backend && (dbg.backend.start || dbg.backend.end || dbg.backend.step!=null)){
+      lines.push(`Backend: start=${dbg.backend.start} end=${dbg.backend.end} step=${dbg.backend.step}`);
+    }
+    if (dbg.clipFuture){
+      lines.push(`Clip  : ON  (cutoff now=${fmtIso(dbg.cutoffNowMs)})`);
+    } else {
+      lines.push('Clip  : OFF');
+    }
+    lines.push('');
+
+    function blockSeries(title, pre, post){
+      lines.push(title);
+      const keys = Object.keys(pre || {}).sort();
+      if (!keys.length){ lines.push('  (keine)'); lines.push(''); return; }
+      keys.forEach(k=>{
+        const a = pre[k] || {};
+        const b = (post && post[k]) ? post[k] : null;
+        const preMax = a.maxTs ? new Date(a.maxTs).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '-';
+        const postMax = (b && b.maxTs) ? new Date(b.maxTs).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '-';
+        const dt = a.medianDtSec ? `${Math.round(a.medianDtSec)}s` : '-';
+        const fut = a.futureCount ? ` future=${a.futureCount}` : '';
+        const fill = a.fillPreviousSuspected ? ' fill=HOLD?' : '';
+        let sLine = `  ${k.padEnd(6)} pre=${String(a.count||0).padStart(4)} (max ${preMax}, dt~${dt}${fut}${fill})`;
+        if (b){
+          sLine += `  → post=${String(b.count||0).padStart(4)} (max ${postMax})`;
+        }
+        lines.push(sLine);
+      });
+      lines.push('');
+    }
+
+    blockSeries('Core series:', dbg.seriesPre, dbg.seriesPost);
+
+    // extras
+    const exPre = dbg.extrasPre || {};
+    const exPost = dbg.extrasPost || {};
+    blockSeries('Extras (Producers):', exPre.producers || {}, exPost.producers || {});
+    blockSeries('Extras (Consumers):', exPre.consumers || {}, exPost.consumers || {});
+
+    debugPanel.textContent = lines.join('\n');
+  }
+
+  if (debugBtn) {
+    applyDebugUI();
+    debugBtn.addEventListener('click', ()=>{
+      debugMode = !debugMode;
+      writeLS('nxHistoryDebug', debugMode ? '1' : null);
+      applyDebugUI();
+      renderDebugPanel();
+      draw();
+    });
+  }
+
   // Day chart rendering style
   // - true  => stacked area (OpenEMS-like) on dark background
   // - false => classic line chart
@@ -258,6 +459,36 @@ function draw(){
     for(let i=0;i<=5;i++){ const yy = T + i*(H-B-T)/5; ctx.beginPath(); ctx.moveTo(L,yy); ctx.lineTo(W-R,yy); ctx.stroke(); }
     // zero axis for power (emphasized)
     ctx.save(); ctx.strokeStyle='#2a323b'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(L,y0); ctx.lineTo(W-R,y0); ctx.stroke(); ctx.restore();
+
+    // Debug helper: visually mark the "now" cutoff when the day range includes future.
+    // This makes it immediately obvious whether the backend is filling future buckets.
+    if (debugMode && data && Number.isFinite(data.__cutoffNowMs)) {
+      const xNowRaw = x(data.__cutoffNowMs);
+      const xNow = Math.max(L, Math.min(W - R, xNowRaw));
+      const plotW = (W - R) - xNow;
+      if (plotW > 2) {
+        ctx.save();
+        // subtle shading to the right (future area)
+        ctx.fillStyle = 'rgba(255,255,255,0.03)';
+        ctx.fillRect(xNow, T, plotW, (H - B) - T);
+        // dashed marker line
+        ctx.strokeStyle = 'rgba(148,163,184,0.35)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4,4]);
+        ctx.beginPath();
+        ctx.moveTo(xNow, T);
+        ctx.lineTo(xNow, H - B);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // small label
+        ctx.fillStyle = 'rgba(148,163,184,0.85)';
+        ctx.font = '11px system-ui, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText('jetzt', xNow + 4, T + 2);
+        ctx.restore();
+      }
+    }
 
     // value mapping for sign conventions
     function mapKW(k, w){
@@ -592,10 +823,19 @@ async function load(){
     const res = await fetch(url).then(r=>r.json()).catch(()=>null);
     if(!res || !res.ok){ alert('History kann nicht geladen werden'); return; }
 
+    // capture backend-aligned start/end before we normalize the UI range
+    const backendInfo = { start: res.start, end: res.end, step: res.step };
+
     // Make sure the display range exactly matches what the UI selected.
     // (Some backends return slightly different 'start/end' depending on bucket alignment.)
     res.start = fromMs;
     res.end   = toMs;
+
+    // prepare debug snapshot BEFORE any post-processing (e.g. future clipping)
+    let dbg = null;
+    if (debugBtn || debugPanel) {
+      dbg = computeDebug(res, fromMs, toMs, step, nowMs, backendInfo);
+    }
 
     // If the selected range includes "future" (typical: today 00:00..24:00), some backends
     // fill empty buckets using the last known value. That creates the impression that
@@ -635,6 +875,14 @@ async function load(){
       res.__cutoffNowMs = cutoff;
     }
 
+    // finalize debug snapshot AFTER post-processing
+    if (dbg) {
+      dbg.clipFuture = !!clipFuture;
+      dbg.cutoffNowMs = clipFuture ? nowMs : null;
+      computeDebugPost(dbg, res, nowMs);
+      res.__dbg = dbg;
+    }
+
     data = res;
     // Backward compatible default (older backends won't include extras)
     if (!data.extras) data.extras = { consumers: [], producers: [] };
@@ -669,6 +917,9 @@ async function load(){
       const kwh = sumEnergyKWh(Array.isArray(c.values) ? c.values : []);
       card(`Verbraucher: ${name}`, kwh.toFixed(1) + ' kWh');
     });
+
+    // Update the optional debug panel once the data is fully processed and rendered.
+    renderDebugPanel();
   }
 
   // --- Date handling ---
