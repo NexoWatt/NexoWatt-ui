@@ -684,16 +684,17 @@ async function load(){
     // cards
     const stepSec = res.step; // legacy info
     const s = res.series;
+    const e = (res && res.energy && typeof res.energy === 'object') ? res.energy : {};
     const cards = document.getElementById('cards');
     function card(title, val){ const el=document.createElement('div'); el.className='card'; el.innerHTML = `<small>${title}</small><b>${val}</b>`; cards.appendChild(el); }
     cards.innerHTML='';
-    card('Erzeugung',  sumEnergyKWh(s.pv.values).toFixed(1) + ' kWh');
-    card('Beladung',   sumEnergyKWh(s.chg.values).toFixed(1) + ' kWh');
-    card('Entladung',  sumEnergyKWh(s.dchg.values).toFixed(1) + ' kWh');
-    card('Einspeisung',sumEnergyKWh(s.sell.values).toFixed(1) + ' kWh');
-    card('Bezug',      sumEnergyKWh(s.buy.values).toFixed(1) + ' kWh');
-    if (s.evcs) card('E‑Mobilität', sumEnergyKWh(s.evcs.values).toFixed(1) + ' kWh');
-    card('Verbrauch',  sumEnergyKWh(s.load.values).toFixed(1) + ' kWh');
+    card('Erzeugung',  (Number.isFinite(e.productionKwh) ? e.productionKwh : sumEnergyKWh(s.pv.values)).toFixed(1) + ' kWh');
+    card('Beladung',   (Number.isFinite(e.storageChargeKwh) ? e.storageChargeKwh : sumEnergyKWh(s.chg.values)).toFixed(1) + ' kWh');
+    card('Entladung',  (Number.isFinite(e.storageDischargeKwh) ? e.storageDischargeKwh : sumEnergyKWh(s.dchg.values)).toFixed(1) + ' kWh');
+    card('Einspeisung',(Number.isFinite(e.gridExportKwh) ? e.gridExportKwh : sumEnergyKWh(s.sell.values)).toFixed(1) + ' kWh');
+    card('Bezug',      (Number.isFinite(e.gridImportKwh) ? e.gridImportKwh : sumEnergyKWh(s.buy.values)).toFixed(1) + ' kWh');
+    if (s.evcs) card('E‑Mobilität', (Number.isFinite(e.evKwh) ? e.evKwh : sumEnergyKWh(s.evcs.values)).toFixed(1) + ' kWh');
+    card('Verbrauch',  (Number.isFinite(e.consumptionKwh) ? e.consumptionKwh : sumEnergyKWh(s.load.values)).toFixed(1) + ' kWh');
 
     // Extras (optional): Verbraucher/Erzeuger aus Energiefluss
     const ex = (res.extras && typeof res.extras === 'object') ? res.extras : { consumers: [], producers: [] };

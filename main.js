@@ -6848,8 +6848,102 @@ app.get('/api/history', async (req, res) => {
           }))
         ]);
 
+
+// --- Optional: Energy totals from kWh counters (more accurate than integrating W) ---
+// If the customer mapped kWh counters in the App-Center, we can compute exact energy
+// for the selected range by subtracting counter values (first -> last).
+// This removes sampling / bucket effects and aligns better with other EMS.
+const energy = {};
+const energyEnd = Math.min(end, Date.now());
+const readCounterPoint = (id, newest) => new Promise(resolve => {
+  if (!id) return resolve(null);
+  const options = {
+    start,
+    end: energyEnd,
+    aggregate: 'none',
+    addId: false,
+    ignoreNull: true,
+    count: 1,
+    returnNewestEntries: !!newest,
+    removeBorderValues: true,
+  };
+  let done = false;
+  const timer = setTimeout(() => {
+    if (done) return;
+    done = true;
+    resolve(null);
+  }, 5000);
+  try {
+    this.sendTo(inst, 'getHistory', { id, options }, (resu) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      let outArr = [];
+      if (Array.isArray(resu)) outArr = resu;
+      else if (resu && Array.isArray(resu.result)) {
+        if (resu.result.length && Array.isArray(resu.result[0]?.data)) outArr = resu.result[0].data;
+        else outArr = resu.result;
+      } else if (resu && Array.isArray(resu.series) && resu.series[0]?.values) {
+        outArr = resu.series[0].values.map(v => ({ ts: v[0], val: v[1] }));
+      } else if (resu && Array.isArray(resu.data)) {
+        outArr = resu.data;
+      }
+
+      const pts = (outArr || [])
+        .map(p => {
+          const tRaw = Array.isArray(p) ? p[0] : (p.ts ?? p.time ?? p.t ?? p[0]);
+          const vRaw = Array.isArray(p) ? p[1] : (p.val ?? p.value ?? p[1]);
+          const ts = normTsMs(tRaw);
+          const val = Number(vRaw);
+          if (!Number.isFinite(ts) || !Number.isFinite(val)) return null;
+          return { ts, val };
+        })
+        .filter(Boolean)
+        .sort((a,b) => a.ts - b.ts);
+
+      if (!pts.length) return resolve(null);
+      // Ensure consistent pick even if history instance ignores returnNewestEntries.
+      resolve(newest ? pts[pts.length - 1] : pts[0]);
+    });
+  } catch (_e) {
+    clearTimeout(timer);
+    resolve(null);
+  }
+});
+
+const counterDelta = async (id) => {
+  const a = await readCounterPoint(id, false);
+  const b = await readCounterPoint(id, true);
+  if (!a || !b) return null;
+  const d = Number(b.val) - Number(a.val);
+  if (!Number.isFinite(d) || d < 0) return null;
+  return d;
+};
+
+// App-Center kWh counters (optional)
+const energyIds = {
+  production: this._nwTrimId(String(dps.productionEnergyKwh || '')),
+  consumption: this._nwTrimId(String(dps.consumptionEnergyKwh || '')),
+  gridImport: this._nwTrimId(String(dps.gridEnergyKwh || '')),
+  // optional future extensions (not yet in UI, but supported if present)
+  gridExport: this._nwTrimId(String(dps.gridSellEnergyKwh || dps.gridExportEnergyKwh || '')),
+  storageCharge: this._nwTrimId(String(dps.storageChargeEnergyKwh || '')),
+  storageDischarge: this._nwTrimId(String(dps.storageDischargeEnergyKwh || '')),
+  ev: this._nwTrimId(String(dps.evEnergyKwh || dps.evcsEnergyKwh || '')),
+};
+
+if (energyIds.production) energy.productionKwh = await counterDelta(energyIds.production);
+if (energyIds.consumption) energy.consumptionKwh = await counterDelta(energyIds.consumption);
+if (energyIds.gridImport) energy.gridImportKwh = await counterDelta(energyIds.gridImport);
+if (energyIds.gridExport) energy.gridExportKwh = await counterDelta(energyIds.gridExport);
+if (energyIds.storageCharge) energy.storageChargeKwh = await counterDelta(energyIds.storageCharge);
+if (energyIds.storageDischarge) energy.storageDischargeKwh = await counterDelta(energyIds.storageDischarge);
+if (energyIds.ev) energy.evKwh = await counterDelta(energyIds.ev);
+
+energy.__endMs = energyEnd;
+
         const out = { pv, load, buy, sell, chg, dchg, soc, evcs };
-        res.json({ ok:true, start, end, step: stepS, series: out, extras: { consumers: extraConsumers, producers: extraProducers } });
+        res.json({ ok:true, start, end, step: stepS, series: out, extras: { consumers: extraConsumers, producers: extraProducers }, energy });
       } catch (e) {
         res.json({ ok:false, error: String(e) });
       }
