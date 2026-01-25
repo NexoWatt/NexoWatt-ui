@@ -163,9 +163,6 @@
       <button id="resetZoomBtn" class="btn sm hidden" title="Zoom zurücksetzen">Zoom zurück</button>
       <label>Datum: <input type="date" id="day"></label>
       <button id="stackToggle" class="btn sm active" title="Stapel/Fläche an/aus">Stapel</button>
-
-      <button id="debugToggle" class="btn sm" title="Diagnose-Overlay (Entwicklung)">Diagnose</button>
-
       <!-- Zeitfilter bleiben intern erhalten (für Zoom/Reset), werden aber nicht mehr im UI gezeigt -->
       <label class="hidden">Von: <input type="datetime-local" id="from"></label>
       <label class="hidden">Bis: <input type="datetime-local" id="to"></label>
@@ -173,20 +170,6 @@
       <button id="evcsReportBtn" class="btn sm">EVCS PDF</button>
     </div>
     <canvas id="chart"></canvas>
-
-    <div id="debugPanel" class="hidden" style="
-      margin-top: 10px;
-      padding: 10px 12px;
-      border-radius: 14px;
-      background: rgba(2, 6, 23, 0.55);
-      border: 1px solid rgba(148, 163, 184, 0.18);
-      color: #cbd3db;
-      font-size: 12px;
-      line-height: 1.35;
-      white-space: pre-wrap;
-      overflow: auto;
-      max-height: 240px;
-    "></div>
     <div class="legend">
       <div class="lg"><div class="sw pv"></div><span>Erzeugung</span></div>
       <div class="lg"><div class="sw chg"></div><span>Beladung</span></div>
