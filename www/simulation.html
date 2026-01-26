@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1" name="viewport"/>
+  <title>NexoWatt EMS – Simulation</title>
+  <link href="/static/styles.css" rel="stylesheet"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/nexowatt-32.png">
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true"></div>
+      <div class="titles">
+        <div class="title">NexoWatt EMS</div>
+        <div class="subtitle">Simulation</div>
+      </div>
+    </div>
+    <div class="actions">
+      <a class="btn" href="/">VIS öffnen</a>
+      <a class="btn" href="/ems-apps.html">App Center</a>
+    </div>
+  </header>
+
+  <main class="content" style="max-width: 1100px;">
+    <div class="nw-smarthome-header" style="margin-top: 10px;">
+      <div>
+        <h1 style="margin: 0;">Simulation</h1>
+        <div class="nw-muted" style="margin-top: 6px;">
+          Startet den <b>nexowatt-sim</b> Testbetrieb und ordnet automatisch alle relevanten Datenpunkte
+          im App Center zu, damit die EMS-Logiken ohne reale Hardware getestet werden können.
+        </div>
+      </div>
+    </div>
+
+    <div class="nw-grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
+      <section class="nw-config-card">
+        <div class="nw-card-header">
+          <h2>Simulation-Status</h2>
+          <button id="nw-sim-refresh" class="btn">Aktualisieren</button>
+        </div>
+        <div class="nw-card-body">
+          <div id="nw-sim-status" class="nw-status"></div>
+          <div id="nw-sim-statusline" class="nw-muted" style="margin-top: 10px;"></div>
+
+          <div style="margin-top: 14px;">
+            <label class="nw-label" for="nw-sim-instance">Simulation-Instanz</label>
+            <select id="nw-sim-instance" class="nw-config-select" style="width: 100%;"></select>
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-top: 16px;">
+            <button id="nw-sim-enable" class="btn btn-primary" style="flex: 1;">Simulation aktivieren</button>
+            <button id="nw-sim-disable" class="btn btn-danger" style="flex: 1;">Simulation deaktivieren</button>
+          </div>
+
+          <div class="nw-muted" style="margin-top: 12px; line-height: 1.35;">
+            Hinweis: Beim Aktivieren wird die aktuelle App-Center Konfiguration als Backup gespeichert und bei
+            „Deaktivieren“ automatisch wiederhergestellt.
+          </div>
+        </div>
+      </section>
+
+      <section class="nw-config-card">
+        <div class="nw-card-header">
+          <h2>Was wird automatisch gemappt?</h2>
+        </div>
+        <div class="nw-card-body">
+          <ul class="nw-list" style="margin: 0; padding-left: 18px;">
+            <li>Grid: <code>gridPointPower</code> → <code>nexowatt-sim.*.grid.power_kw</code></li>
+            <li>PV: <code>pvPower</code> → <code>nexowatt-sim.*.pv.power_kw</code></li>
+            <li>Speicher: <code>batteryPower</code>/<code>storageSoc</code> + Storage-Control Setpoint → <code>nexowatt-sim.*.storage.*</code></li>
+            <li>Tarif: <code>priceCurrent</code> + 24h Preis-Kurve → <code>nexowatt-sim.*.tariff.*</code></li>
+            <li>EVCS: alle Ladepunkte inkl. <code>limit</code> + <code>enable</code> → <code>nexowatt-sim.*.evcs.*</code></li>
+          </ul>
+
+          <div class="nw-muted" style="margin-top: 12px; line-height: 1.35;">
+            Tipp: Szenarien lassen sich direkt über die States im <b>nexowatt-sim</b> Adapter steuern
+            (Tarifmodus, PV Wetterfaktor, EVCS Plug/Limit, Speicher SoC usw.).
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="/static/simulation.js"></script>
+</body>
+</html>

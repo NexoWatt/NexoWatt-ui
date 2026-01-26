@@ -279,6 +279,52 @@ class TarifVisModule extends BaseModule {
 
         if (!Array.isArray(data)) return [];
 
+        // NexoWatt Sim-Adapter / lightweight providers: some sources provide a plain
+        // numeric array (e.g. [32.1, 30.8, ...]) without timestamps.
+        // Interpret this as an hourly curve starting at the current full hour.
+        try {
+            const isNumLike = (v) => {
+                if (typeof v === 'number') return Number.isFinite(v);
+                if (typeof v === 'string') {
+                    const s = v.trim();
+                    if (!s) return false;
+                    const n = Number(s);
+                    return Number.isFinite(n);
+                }
+                return false;
+            };
+
+            // If the array contains objects with startsAt/etc. we keep the original parsing logic below.
+            const hasObject = data.some((it) => it && typeof it === 'object' && !Array.isArray(it));
+            const hasNum = data.some((it) => isNumLike(it));
+
+            if (hasNum && !hasObject) {
+                const out = [];
+                const base = new Date();
+                base.setMinutes(0, 0, 0);
+                const baseMs = base.getTime();
+
+                let idx = 0;
+                for (const it of data) {
+                    if (!isNumLike(it)) {
+                        idx++;
+                        continue;
+                    }
+                    const raw = (typeof it === 'number') ? it : Number(String(it).trim());
+                    const priceEurKwh = this._normalizePriceEurPerKwh(raw, null);
+                    if (!Number.isFinite(priceEurKwh)) {
+                        idx++;
+                        continue;
+                    }
+                    const startMs = baseMs + idx * 3600 * 1000;
+                    const endMs = startMs + 3600 * 1000;
+                    out.push({ startMs, endMs, priceEurKwh });
+                    idx++;
+                }
+                return out;
+            }
+        } catch (_e) {}
+
         const out = [];
         for (const it of data) {
             if (!it || typeof it !== 'object') continue;

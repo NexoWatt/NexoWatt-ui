@@ -240,6 +240,45 @@ class NexoWattVis extends utils.Adapter {
     }
   }
 
+  // --- Simulation (NexoWatt Sim-Adapter Integration) ---
+  // Provides an Admin-startable simulation mode that auto-maps datapoints from nexowatt-sim.*
+  // into the App-Center configuration so EMS logic can be tested without real hardware.
+  async ensureSimulationStates() {
+    try {
+      await this.setObjectNotExistsAsync('simulation', {
+        type: 'channel',
+        common: { name: 'Simulation' },
+        native: {},
+      });
+
+      const defs = {
+        active: { type: 'boolean', role: 'indicator', def: false, name: 'Simulation aktiv' },
+        instanceId: { type: 'string', role: 'text', def: '', name: 'nexowatt-sim Instanz-ID' },
+        backupConfigJson: { type: 'string', role: 'json', def: '', name: 'Backup der App-Center Konfiguration (JSON)' },
+        lastAction: { type: 'string', role: 'text', def: '', name: 'Letzte Aktion' },
+        lastError: { type: 'string', role: 'text', def: '', name: 'Letzter Fehler' },
+        lastTs: { type: 'number', role: 'value.time', def: 0, name: 'Letzte Änderung (ms)' },
+      };
+
+      for (const [key, c] of Object.entries(defs)) {
+        await this.setObjectNotExistsAsync(`simulation.${key}`, {
+          type: 'state',
+          common: {
+            name: c.name,
+            type: c.type,
+            role: c.role,
+            read: true,
+            write: false,
+            def: c.def,
+          },
+          native: {},
+        });
+      }
+    } catch (_e) {
+      // Non-fatal: simulation is optional
+    }
+  }
+
 
   // ---------------------------------------------------------------------------
   // Weather (Plug&Play)
@@ -1290,6 +1329,335 @@ class NexoWattVis extends utils.Adapter {
       }
     } catch (_e) {}
     return null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Simulation helper (nexowatt-sim adapter)
+  // ---------------------------------------------------------------------------
+  async nwSimListInstances() {
+    try {
+      const objs = await this.getForeignObjectsAsync('system.adapter.nexowatt-sim.*', 'instance').catch(() => ({}));
+      const out = [];
+      for (const [id, obj] of Object.entries(objs || {})) {
+        if (!obj || typeof obj !== 'object') continue;
+        const inst = String(id).replace(/^system\.adapter\./, '');
+        const enabled = !!(obj.common && obj.common.enabled);
+        const titleRaw = (obj.common && (obj.common.titleLang || obj.common.title))
+          ? (obj.common.titleLang || obj.common.title)
+          : (obj.common && obj.common.name) ? obj.common.name : inst;
+        const title = (typeof titleRaw === 'string') ? titleRaw : inst;
+        out.push({
+          instanceId: inst,
+          enabled,
+          title,
+          version: (obj.common && obj.common.version) ? String(obj.common.version) : '',
+        });
+      }
+      out.sort((a, b) => String(a.instanceId).localeCompare(String(b.instanceId)));
+      return out;
+    } catch (_e) {
+      return [];
+    }
+  }
+
+  async nwSimPickDefaultInstance(instances) {
+    const arr = Array.isArray(instances) ? instances : [];
+    const enabled = arr.find((it) => it && it.enabled);
+    if (enabled && enabled.instanceId) return String(enabled.instanceId);
+    const any = arr.find((it) => it && it.instanceId);
+    return any ? String(any.instanceId) : '';
+  }
+
+  async nwSimReadBackupPatchFromState() {
+    try {
+      const st = await this.getStateAsync('simulation.backupConfigJson');
+      const raw = st && st.val;
+      if (!raw || typeof raw !== 'string') return null;
+      const s = raw.trim();
+      if (!s) return null;
+      const patch = JSON.parse(s);
+      return (patch && typeof patch === 'object') ? patch : null;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  async nwSimWriteStatus(update) {
+    const u = (update && typeof update === 'object') ? update : {};
+    const now = Date.now();
+    try {
+      if (u.active !== undefined) await this.setStateAsync('simulation.active', { val: !!u.active, ack: true });
+      if (u.instanceId !== undefined) await this.setStateAsync('simulation.instanceId', { val: String(u.instanceId || ''), ack: true });
+      if (u.backupConfigJson !== undefined) await this.setStateAsync('simulation.backupConfigJson', { val: String(u.backupConfigJson || ''), ack: true });
+      if (u.lastAction !== undefined) await this.setStateAsync('simulation.lastAction', { val: String(u.lastAction || ''), ack: true });
+      if (u.lastError !== undefined) await this.setStateAsync('simulation.lastError', { val: String(u.lastError || ''), ack: true });
+      await this.setStateAsync('simulation.lastTs', { val: now, ack: true });
+    } catch (_e) {}
+  }
+
+  async nwSimBuildPatch(simInstanceId) {
+    const inst = String(simInstanceId || '').trim();
+    if (!inst) throw new Error('missing sim instance');
+
+    let simObj = null;
+    try {
+      simObj = await this.getForeignObjectAsync(`system.adapter.${inst}`);
+    } catch (_e) {
+      simObj = null;
+    }
+
+    const native = (simObj && simObj.native && typeof simObj.native === 'object') ? simObj.native : {};
+    const evcsCount = Math.max(1, Math.min(200, Math.round(Number(native.chargersCount || native.chargerCount || native.evcsCount || 1))));
+
+    // Try to read per-charger max power from meta states (fallback to 11kW)
+    let evcsMaxPowerKwSum = 0;
+    const evcsList = [];
+
+    const pad2 = (n) => String(n).padStart(2, '0');
+
+    for (let i = 1; i <= evcsCount; i++) {
+      const cid = `c${pad2(i)}`;
+      let type = 'ac';
+      let maxKw = 11;
+
+      try {
+        const stType = await this.getForeignStateAsync(`${inst}.evcs.${cid}.meta.type`);
+        if (stType && typeof stType.val === 'string' && stType.val.trim()) type = stType.val.trim().toLowerCase();
+      } catch (_e) {}
+
+      try {
+        const stMax = await this.getForeignStateAsync(`${inst}.evcs.${cid}.meta.max_kw`);
+        const v = stMax && stMax.val !== undefined ? Number(stMax.val) : NaN;
+        if (Number.isFinite(v) && v > 0) maxKw = v;
+      } catch (_e) {}
+
+      const chargerType = (type === 'dc') ? 'DC' : 'AC';
+      const maxPowerW = Math.round(maxKw * 1000);
+      evcsMaxPowerKwSum += maxKw;
+
+      evcsList.push({
+        enabled: true,
+        name: `SIM ${cid.toUpperCase()}`,
+        stationKey: '',
+        chargerType,
+        maxPowerW,
+        stationMaxPowerW: maxPowerW,
+        phaseCount: 3,
+        voltageV: 230,
+        controlPreference: 'powerW',
+
+        // Mapping (Sim Adapter)
+        powerId: `${inst}.evcs.${cid}.meas.power_kw`,
+        energyTotalId: `${inst}.evcs.${cid}.meas.energy_kwh`,
+        statusId: `${inst}.evcs.${cid}.meas.status`,
+        vehicleSocId: `${inst}.evcs.${cid}.vehicle.soc_pct`,
+
+        // Write control: limit (kW) + enable
+        setPowerWId: `${inst}.evcs.${cid}.ctrl.limit_kw`,
+        enableWriteId: `${inst}.evcs.${cid}.ctrl.enabled`,
+
+        // Optional: show as "active" when plugged
+        activeId: `${inst}.evcs.${cid}.ctrl.plugged`,
+      });
+    }
+
+    // Storage specs
+    const storageMaxChKw = Number(native.storageMaxChargeKw || native.storageMaxChKw || native.storageMaxCharge || native.storageMaxPowerKw || 5);
+    const storageMaxDisKw = Number(native.storageMaxDischargeKw || native.storageMaxDisKw || native.storageMaxDischarge || native.storageMaxPowerKw || 5);
+
+    const patch = {
+      // Ensure the key apps are enabled for testing
+      enableChargingManagement: true,
+      enableStorageControl: true,
+
+      // Base energy flow mapping (App-Center "Zuordnung")
+      datapoints: {
+        // IMPORTANT: actively clear existing mappings that would otherwise mix
+        // real hardware datapoints with simulation (basePatch merge behaviour).
+        gridBuyPower: '',
+        gridSellPower: '',
+        gridPointPower: `${inst}.grid.power_kw`,
+
+        pvPower: `${inst}.pv.power_kw`,
+        productionTotal: '',
+
+        // Optional producers/consumers for flow visualization (can be used by apps)
+        producer1Power: `${inst}.chp.power_kw`,
+        producer2Power: `${inst}.generator.power_kw`,
+        producer3Power: '',
+        producer4Power: '',
+        producer5Power: '',
+
+        consumer1Power: `${inst}.heatpump.power_kw`,
+        consumer2Power: '',
+        consumer3Power: '',
+        consumer4Power: '',
+        consumer5Power: '',
+
+        // Let the flow engine derive building consumption from balance
+        consumptionTotal: '',
+        consumptionEvcs: '',
+
+        // Storage: use signed batteryPower; clear separate charge/discharge mapping
+        storageChargePower: '',
+        storageDischargePower: '',
+        batteryPower: `${inst}.storage.power_kw`,
+        storageSoc: `${inst}.storage.soc_pct`,
+
+        // Dynamic tariff
+        priceCurrent: `${inst}.tariff.price_ct_per_kwh`,
+        priceAverage: '',
+        // NOTE: tarif-vis.js supports numeric arrays as hourly curve for simulation
+        priceTodayJson: `${inst}.tariff.price_next_24h_json`,
+        priceTomorrowJson: '',
+
+        // Optional forecasts (not provided by sim adapter)
+        pvForecastTodayJson: '',
+        pvForecastTomorrowJson: '',
+      },
+
+      // EVCS mapping (App-Center)
+      settingsConfig: {
+        evcsCount,
+        evcsMaxPowerKw: Math.round(evcsMaxPowerKwSum * 100) / 100,
+        evcsList,
+      },
+
+      // Storage mapping for the Storage-Control module
+      storage: {
+        controlMode: 'targetPower',
+        datapoints: {
+          socObjectId: `${inst}.storage.soc_pct`,
+          batteryPowerObjectId: `${inst}.storage.power_kw`,
+          targetPowerObjectId: `${inst}.storage.ctrl.power_set_kw`,
+          maxChargeObjectId: `${inst}.storage.max_charge_kw`,
+          maxDischargeObjectId: `${inst}.storage.max_discharge_kw`,
+        },
+      },
+
+      // Installer meta (shown in installer overview)
+      installerConfig: {
+        chargepoints: evcsCount,
+        storageCount: 1,
+        storagePower: Math.round(Math.max(storageMaxChKw, storageMaxDisKw) * 1000),
+      },
+    };
+
+    return { patch, meta: { simInstanceId: inst, evcsCount, evcsMaxPowerKwSum, storageMaxChKw, storageMaxDisKw } };
+  }
+
+  async nwSimEnable(simInstanceId, restartEmsFn) {
+    // Safety: do not overwrite an existing backup (would make restore impossible).
+    try {
+      const st = await this.getStateAsync('simulation.backupConfigJson');
+      const raw = st && st.val;
+      if (typeof raw === 'string' && raw.trim()) {
+        throw new Error('Simulation backup already exists. Please disable simulation (restore) before enabling again.');
+      }
+    } catch (e) {
+      // If the check itself failed, proceed; if it threw our guard error, rethrow.
+      if (e && e.message && String(e.message).includes('backup already exists')) throw e;
+    }
+
+    const instances = await this.nwSimListInstances();
+    const inst = String(simInstanceId || '').trim() || await this.nwSimPickDefaultInstance(instances);
+    if (!inst) throw new Error('nexowatt-sim instance not found');
+
+    // Backup current App-Center patch so we can restore after simulation.
+    const basePatch = (this._nwInstallerConfigPatch && typeof this._nwInstallerConfigPatch === 'object') ? this._nwInstallerConfigPatch : {};
+    const backupJson = JSON.stringify(basePatch);
+    await this.nwSimWriteStatus({
+      active: false,
+      instanceId: inst,
+      backupConfigJson: backupJson,
+      lastAction: 'backup',
+      lastError: '',
+    });
+
+    // Build + apply simulation patch
+    const built = await this.nwSimBuildPatch(inst);
+    let mergedPatch = this.nwDeepMerge(this.nwDeepMerge({}, basePatch), built.patch);
+    mergedPatch = this.nwApplyEmsAppsToLegacyFlags(mergedPatch);
+    try {
+      const norm = this.nwNormalizeInstallerPatch(mergedPatch, this.config || {});
+      mergedPatch = (norm && norm.patch) ? norm.patch : mergedPatch;
+    } catch (_e) {}
+
+    await this.persistInstallerConfigToState(mergedPatch);
+    this._nwInstallerConfigPatch = mergedPatch;
+    this.config = (this.config && typeof this.config === 'object') ? this.config : {};
+    this.config = this.nwApplyInstallerPatchToRuntimeConfig(this.config, mergedPatch);
+
+    // Sync runtime states + subscriptions
+    try { await this.syncInstallerConfigToStates(); } catch (_e) {}
+    try { await this.syncSettingsToStates(); } catch (_e) {}
+    try { await this.syncSettingsConfigToStates(); } catch (_e) {}
+    try { await this.ensureEvcsStates(); } catch (_e) {}
+    try { await this.ensureRfidStates(); } catch (_e) {}
+    try { await this.subscribeEvcsMappedStates(); } catch (_e) {}
+    try {
+      if (typeof this.subscribeConfiguredStates === 'function') await this.subscribeConfiguredStates();
+    } catch (_e) {}
+
+    // Restart EMS engine (best-effort)
+    try {
+      if (typeof restartEmsFn === 'function') await restartEmsFn();
+      else await this.initEmsEngine(true);
+    } catch (_e) {}
+
+    await this.nwSimWriteStatus({
+      active: true,
+      instanceId: inst,
+      lastAction: 'enabled',
+      lastError: '',
+    });
+
+    return { ok: true, instanceId: inst, meta: built.meta };
+  }
+
+  async nwSimDisable(restartEmsFn) {
+    const backupPatch = await this.nwSimReadBackupPatchFromState();
+    if (!backupPatch) throw new Error('no simulation backup found');
+
+    // Apply backup patch (replace) and restart EMS
+    let mergedPatch = this.nwDeepMerge({}, backupPatch);
+    mergedPatch = this.nwApplyEmsAppsToLegacyFlags(mergedPatch);
+    try {
+      const norm = this.nwNormalizeInstallerPatch(mergedPatch, this.config || {});
+      mergedPatch = (norm && norm.patch) ? norm.patch : mergedPatch;
+    } catch (_e) {}
+
+    await this.persistInstallerConfigToState(mergedPatch);
+    this._nwInstallerConfigPatch = mergedPatch;
+    this.config = (this.config && typeof this.config === 'object') ? this.config : {};
+    this.config = this.nwApplyInstallerPatchToRuntimeConfig(this.config, mergedPatch);
+
+    // Sync runtime states + subscriptions
+    try { await this.syncInstallerConfigToStates(); } catch (_e) {}
+    try { await this.syncSettingsToStates(); } catch (_e) {}
+    try { await this.syncSettingsConfigToStates(); } catch (_e) {}
+    try { await this.ensureEvcsStates(); } catch (_e) {}
+    try { await this.ensureRfidStates(); } catch (_e) {}
+    try { await this.subscribeEvcsMappedStates(); } catch (_e) {}
+    try {
+      if (typeof this.subscribeConfiguredStates === 'function') await this.subscribeConfiguredStates();
+    } catch (_e) {}
+
+    // Restart EMS engine (best-effort)
+    try {
+      if (typeof restartEmsFn === 'function') await restartEmsFn();
+      else await this.initEmsEngine(true);
+    } catch (_e) {}
+
+    // Clear backup after successful restore
+    await this.nwSimWriteStatus({
+      active: false,
+      backupConfigJson: null,
+      lastAction: 'disabled (restored backup)',
+      lastError: '',
+    });
+
+    return { ok: true };
   }
 
   // Speicherfarm (mehrere Speichersysteme als Pool/Gruppe)
@@ -4019,6 +4387,9 @@ async onReady() {
 
       await this.ensureSettingsStates();
 
+      // Simulation (optional): Admin-startable test mode using nexowatt-sim adapter.
+      try { await this.ensureSimulationStates(); } catch (_e) {}
+
       // Weather (Plug&Play)
       try { await this.ensureWeatherStates(); } catch (_e) {}
 
@@ -5406,6 +5777,63 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
       }
     });
 
+    // --- Simulation (nexowatt-sim) ---
+    // Provides an Admin-triggered simulation mode that automatically maps the
+    // simulation adapter datapoints to the App-Center configuration.
+    app.get('/api/sim/discover', requireInstaller, async (_req, res) => {
+      try {
+        const instances = await this.nwSimListInstances();
+        const def = await this.nwSimPickDefaultInstance(instances);
+        res.json({ ok: true, instances, defaultInstanceId: def });
+      } catch (e) {
+        res.status(500).json({ ok: false, error: e && e.message ? e.message : String(e) });
+      }
+    });
+
+    app.get('/api/sim/status', requireInstaller, async (_req, res) => {
+      try {
+        const stActive = await this.getStateAsync('simulation.active').catch(() => null);
+        const stInst = await this.getStateAsync('simulation.instanceId').catch(() => null);
+        const stBackup = await this.getStateAsync('simulation.backupConfigJson').catch(() => null);
+        const stAction = await this.getStateAsync('simulation.lastAction').catch(() => null);
+        const stErr = await this.getStateAsync('simulation.lastError').catch(() => null);
+        const stTs = await this.getStateAsync('simulation.lastTs').catch(() => null);
+
+        res.json({
+          ok: true,
+          active: !!(stActive && stActive.val),
+          instanceId: stInst && stInst.val ? String(stInst.val) : '',
+          backupExists: !!(stBackup && typeof stBackup.val === 'string' && stBackup.val.trim()),
+          lastAction: stAction && stAction.val ? String(stAction.val) : '',
+          lastError: stErr && stErr.val ? String(stErr.val) : '',
+          lastTs: (stTs && typeof stTs.val === 'number') ? stTs.val : 0,
+        });
+      } catch (e) {
+        res.status(500).json({ ok: false, error: e && e.message ? e.message : String(e) });
+      }
+    });
+
+    app.post('/api/sim/enable', requireInstaller, async (req, res) => {
+      try {
+        const instanceId = req && req.body && req.body.instanceId ? String(req.body.instanceId) : '';
+        const result = await this.nwSimEnable(instanceId, _nwRestartEms);
+        res.json({ ok: true, ...result });
+      } catch (e) {
+        try { await this.nwSimWriteStatus({ lastError: e && e.message ? e.message : String(e), lastAction: 'enable failed' }); } catch (_e2) {}
+        res.status(500).json({ ok: false, error: e && e.message ? e.message : String(e) });
+      }
+    });
+
+    app.post('/api/sim/disable', requireInstaller, async (_req, res) => {
+      try {
+        const result = await this.nwSimDisable(_nwRestartEms);
+        res.json({ ok: true, ...result });
+      } catch (e) {
+        try { await this.nwSimWriteStatus({ lastError: e && e.message ? e.message : String(e), lastAction: 'disable failed' }); } catch (_e2) {}
+        res.status(500).json({ ok: false, error: e && e.message ? e.message : String(e) });
+      }
+    });
+
     // --- OCPP discovery (Installer → Ladepunkte Auto-Erkennung) ---
     // Scans foreign objects under `ocpp.*` (fallback: any state id/name containing "ocpp")
     // and groups them by chargepoint + connector/port/EVSE number.
@@ -6444,6 +6872,17 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
       } catch (e) {
         this.log.warn('EMS Apps page error: ' + e.message);
         res.status(500).send('EMS Apps page error');
+      }
+    });
+
+// --- Simulation Page ---
+    app.get(['/simulation.html', '/simulation'], (req, res) => {
+      try {
+        const file = require('path').join(__dirname, 'www', 'simulation.html');
+        res.sendFile(file);
+      } catch (e) {
+        this.log.warn('Simulation page error: ' + e.message);
+        res.status(500).send('Simulation page error');
       }
     });
 

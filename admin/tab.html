@@ -24,6 +24,7 @@
     <div class="actions">
       <button id="btnVis" class="btn primary" type="button">VIS öffnen</button>
       <button id="btnApps" class="btn" type="button">EMS Apps öffnen</button>
+      <button id="btnSim" class="btn" type="button">Simulation</button>
     </div>
 
     <div class="hint" id="msg">Port wird geladen…</div>
@@ -44,14 +45,17 @@
       var msg = document.getElementById('msg');
       var btnVis = document.getElementById('btnVis');
       var btnApps = document.getElementById('btnApps');
+      var btnSim = document.getElementById('btnSim');
 
       var visUrl = base + '/';
       var appsUrl = base + '/ems-apps.html';
+      var simUrl = base + '/simulation.html';
 
-      msg.innerHTML = 'VIS: <code>' + visUrl + '</code><br/>EMS Apps: <code>' + appsUrl + '</code>';
+      msg.innerHTML = 'VIS: <code>' + visUrl + '</code><br/>EMS Apps: <code>' + appsUrl + '</code><br/>Simulation: <code>' + simUrl + '</code>';
 
       btnVis.onclick = function(){ window.top.location.href = visUrl; };
       btnApps.onclick = function(){ window.top.location.href = appsUrl; };
+      btnSim.onclick = function(){ window.top.location.href = simUrl; };
     }
 
     function fallback(){ bind(buildBase(8188)); }
