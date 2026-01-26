@@ -119,6 +119,20 @@
           "md": 6
         }
       }
+    },
+    "simulation": {
+      "type": "panel",
+      "label": "Simulation",
+      "title": "Simulation",
+      "items": {
+        "__simInfo": {
+          "type": "staticText",
+          "text": "Simulation/Testbetrieb: Startet den nexowatt-sim Adapter und ordnet automatisch alle relevanten Datenpunkte im App-Center zu (Grid/PV/Speicher/Tarif/EVCS). Damit lassen sich alle EMS-Logiken ohne reale Hardware testen.\n\nSimulation öffnen: /adapter/nexowatt-vis/simulation.html?instance=<INSTANZ>\nAlternativ direkt per Port: http://<HOST>:<PORT>/simulation.html\n\nHinweis: Beim Aktivieren wird die aktuelle App-Center Konfiguration als Backup gespeichert und bei 'Deaktivieren' wiederhergestellt.",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        }
+      }
     }
   }
 }

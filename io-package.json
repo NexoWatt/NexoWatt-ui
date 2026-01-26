@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.74",
+    "version": "0.6.75",
     "news": {
+      "0.6.75": {
+        "en": "Admin: Added Simulation tab (opens Simulation control UI). Simulation: One-click enable/disable with automatic App-Center DP mapping for nexowatt-sim (Grid/PV/Storage/Tariff/EVCS).",
+        "de": "Admin: Neuer Reiter 'Simulation' (öffnet Simulation-Steuerung). Simulation: 1-Klick Aktivieren/Deaktivieren inkl. automatischem App-Center DP-Mapping für nexowatt-sim (Netz/PV/Speicher/Tarif/EVCS)."
+      },
       "0.6.71": {
         "en": "Storage control: improved NVP balancing deadband so small discharge setpoints are not suppressed (self-consumption/tariff). Tariff NVP now defaults to the same target/deadband as self-consumption unless explicitly configured. Reduces residual grid import while the battery is discharging.",
         "de": "Speicherregelung: NVP-Deadband verbessert, damit kleine Entlade-Sollwerte nicht unterdrückt werden (Eigenverbrauch/Tarif). Tarif-NVP übernimmt standardmäßig Ziel/Deadband aus Eigenverbrauch, sofern nicht separat gesetzt. Reduziert Rest-Netzbezug während der Speicher entlädt."
