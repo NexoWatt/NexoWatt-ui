@@ -81,39 +81,6 @@
         </div>
       </section>
     </div>
-
-
-      <section class="nw-config-card" style="grid-column: 1 / -1;">
-        <div class="nw-card-header">
-          <h2>Szenarien (nexowatt-sim)</h2>
-          <button id="nw-sim-scen-refresh" class="btn">Aktualisieren</button>
-        </div>
-        <div class="nw-card-body">
-          <div id="nw-sim-scen-status" class="nw-status"></div>
-
-          <div class="nw-grid" style="grid-template-columns: 1.2fr 0.8fr; gap: 14px; margin-top: 12px;">
-            <div>
-              <label class="nw-label" for="nw-sim-scen-select">Szenario auswählen</label>
-              <select id="nw-sim-scen-select" class="nw-config-select" style="width: 100%;"></select>
-              <div id="nw-sim-scen-desc" class="nw-muted" style="margin-top: 10px; line-height: 1.35;"></div>
-            </div>
-
-            <div>
-              <div style="display: flex; gap: 10px;">
-                <button id="nw-sim-scen-start" class="btn btn-primary" style="flex: 1;">Start</button>
-                <button id="nw-sim-scen-stop" class="btn btn-danger" style="flex: 1;">Stop</button>
-              </div>
-              <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <button id="nw-sim-scen-reset" class="btn" style="flex: 1;">Baseline</button>
-              </div>
-
-              <div class="nw-muted" style="margin-top: 12px; line-height: 1.35;">
-                Hinweis: Die Buttons schreiben auf <code>scenario.buttons.*</code> bzw. <code>scenario.ctrl.*</code> im Sim-Adapter.
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
   </main>
 
   <script src="/static/simulation.js"></script>

@@ -822,33 +822,10 @@ function bindControls() {
   const closeBtn = document.getElementById('evcsModalClose');
 
   if (list) {
-    // With many EVCS tiles the UI may re-render frequently (SSE). A click can be
-    // lost if the DOM changes between pointerdown and click. Open the modal on
-    // pointerdown (mouse) to guarantee single-click behaviour.
-    let _ignoreTileClickUntil = 0;
-    list.addEventListener('pointerdown', (e) => {
-      try {
-        if (Date.now() < _ignoreTileClickUntil) return;
-        if (e && e.pointerType && e.pointerType !== 'mouse') return;
-        if (typeof e.button === 'number' && e.button !== 0) return;
-        const tile = e.target && e.target.closest ? e.target.closest('.nw-tile[data-evcs-tile]') : null;
-        if (!tile) return;
-        const idx = Number(tile.getAttribute('data-evcs-tile'));
-        if (!Number.isFinite(idx) || idx <= 0) return;
-        _ignoreTileClickUntil = Date.now() + 450;
-        try { e.preventDefault(); } catch (_e) {}
-        openEvcsModal(idx);
-      } catch (_e) {
-        // ignore
-      }
-    }, { passive: false, capture: true });
-
     list.addEventListener('click', (e) => {
-      if (Date.now() < _ignoreTileClickUntil) return;
       const tile = e.target && e.target.closest ? e.target.closest('.nw-tile[data-evcs-tile]') : null;
       if (!tile) return;
       const idx = Number(tile.getAttribute('data-evcs-tile'));
-      if (!Number.isFinite(idx) || idx <= 0) return;
       openEvcsModal(idx);
     });
 
@@ -858,7 +835,6 @@ function bindControls() {
       if (!tile) return;
       try { e.preventDefault(); } catch (_e) {}
       const idx = Number(tile.getAttribute('data-evcs-tile'));
-      if (!Number.isFinite(idx) || idx <= 0) return;
       openEvcsModal(idx);
     });
   }

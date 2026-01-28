@@ -1,20 +1,8 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.79",
+    "version": "0.6.76",
     "news": {
-      "0.6.79": {
-        "en": "Performance: DatapointRegistry upsert is now idempotent and caches unit detection/subscriptions to prevent very slow chargingManagement ticks with many EVCS. UI: EVCS tiles open the control modal reliably with a single click even under heavy SSE re-renders.",
-        "de": "Performance: DatapointRegistry.upsert ist jetzt idempotent und cached Unit-Detection/Subscriptions – verhindert sehr langsame chargingManagement-Ticks bei vielen EVCS. UI: EVCS-Kacheln öffnen das Regel-Modal wieder zuverlässig mit einem Klick (auch bei starken SSE-Re-Renders)."
-      },
-      "0.6.78": {
-        "en": "Chore: Added automatic version bump helper (scripts/bump-version.js) plus an optional git pre-commit hook (.githooks) to bump patch versions on commits.",
-        "de": "Chore: Automatisches Version-Bumping hinzugefügt (scripts/bump-version.js) plus optionaler Git pre-commit Hook (.githooks) zum Erhöhen der Patch-Version bei Commits."
-      },
-      "0.6.77": {
-        "en": "Simulation: updated integration for nexowatt-sim v0.4.x (scenario controls in Simulation UI, auto-enable sim instance, backup/restore VIS tariff settings).",
-        "de": "Simulation: Integration für nexowatt-sim v0.4.x aktualisiert (Szenario-Steuerung in der Simulation-UI, Sim-Instanz automatisch aktivieren, Backup/Restore der VIS-Tarif-Settings)."
-      },
       "0.6.75": {
         "en": "Admin: Added Simulation tab (opens Simulation control UI). Simulation: One-click enable/disable with automatic App-Center DP mapping for nexowatt-sim (Grid/PV/Storage/Tariff/EVCS).",
         "de": "Admin: Neuer Reiter 'Simulation' (öffnet Simulation-Steuerung). Simulation: 1-Klick Aktivieren/Deaktivieren inkl. automatischem App-Center DP-Mapping für nexowatt-sim (Netz/PV/Speicher/Tarif/EVCS)."
@@ -964,8 +952,8 @@
         "de": "Tarifmodus: PV‑Reserve fürs Netzladen anhand PV‑Forecast (dynamischer SoC‑Cap / Headroom), damit der Speicher bei erwarteter PV nicht mehr „voll“ aus dem Netz geladen wird. App‑Center: Kapazität (kWh) im Single‑Speicher ist jetzt korrekt sichtbar (Stack‑Layout)."
       },
       "0.6.76": {
-        "en": "EVCS Report: Fix kWh calculation when history buckets are sparse (e.g. 10-min logging with 2-min aggregation). Daily kWh now matches Historie/Influx values.",
-        "de": "EVCS Report: kWh-Berechnung korrigiert bei sparsamen Historie-Buckets (z.B. 10‑Minuten Logging mit 2‑Minuten Aggregation). Tages-kWh stimmt jetzt mit Historie/Influx überein."
+        "en": "Hotfix: derive grid import/export (buy/sell) from net meter in derived flow; simulation patch now maps buy/sell directly.",
+        "de": "Hotfix: Netz Bezug/Einspeisung werden bei Nettozähler automatisch abgeleitet; Simulation-Patch mappt buy/sell jetzt direkt."
       }
     },
     "title": "NexoWatt VIS",
@@ -1149,7 +1137,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.76",
+  "version": "0.6.59",
   "news": {
     "0.6.59": {
       "en": "Mobile responsive improvements (iPhone): stable 2-column KPI grid + overflow-safe KPI rows. Weather tile: hide when inactive and show a compact tomorrow line (Open-Meteo daily). Energy totals are seeded with 0 on fresh installs and formatted (kWh/MWh/GWh) in UI.",
@@ -1188,10 +1176,6 @@
     "0.6.58": {
       "en": "EMS/VIS: Energy totals (kWh) are now provided + historized by NexoWatt by default; App-Center mapping acts as override for external EMS counters.",
       "de": "EMS/VIS: Energie-Gesamtwerte (kWh) werden jetzt standardmaessig vom NexoWatt-EMS bereitgestellt und historisiert; App-Center-Mapping dient nur noch als Override fuer externe EMS-Zaehler."
-    },
-    "0.6.76": {
-      "en": "EVCS Report: Fix kWh calculation when history buckets are sparse (e.g. 10-min logging with 2-min aggregation). Daily kWh now matches Historie/Influx values.",
-      "de": "EVCS Report: kWh-Berechnung korrigiert bei sparsamen Historie-Buckets (z.B. 10‑Minuten Logging mit 2‑Minuten Aggregation). Tages-kWh stimmt jetzt mit Historie/Influx überein."
     }
   }
 }
