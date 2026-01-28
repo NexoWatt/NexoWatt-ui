@@ -7561,19 +7561,45 @@ const nwBuildEvcsReport = async (query = {}) => {
 
     const pAgg = buckets.map(_b => ({ kwh: 0, maxW: 0 }));
 
+    
+    // Power -> kWh integration:
+    // The Influx history query may return *sparse* buckets (e.g. when the source is logged every 10 minutes
+    // but the report requests 2-minute aggregates). In that case, multiplying by the requested step would
+    // undercount the energy. We therefore integrate using the actual time distance between points and
+    // split segments at midnight boundaries so kWh is assigned to the correct day.
     if (pAvg && pAvg.length) {
-      const stepS = reportStepMs / 1000;
-      for (const pt of pAvg) {
-        const t = +pt[0];
-        const v = +pt[1];
-        const dk = dayKeyOf(t);
-        if (!(dk in dayIndex)) continue;
-        if (!isFinite(v)) continue;
-        pAgg[dayIndex[dk]].kwh += Math.abs(v) * stepS / 3600 / 1000;
+      const integrationEndMs = Math.min(end, nowMs); // avoid integrating into the future for "today"
+      for (let iPt = 0; iPt < pAvg.length; iPt++) {
+        const t0 = Number(pAvg[iPt][0]);
+        const v0 = Math.abs(Number(pAvg[iPt][1]));
+        if (!Number.isFinite(t0) || !Number.isFinite(v0)) continue;
+
+        let t1 = (iPt + 1 < pAvg.length) ? Number(pAvg[iPt + 1][0]) : integrationEndMs;
+        if (!Number.isFinite(t1)) t1 = integrationEndMs;
+
+        // Clamp to requested range
+        let segStart = Math.max(start, t0);
+        let segEnd = Math.min(integrationEndMs, t1);
+        if (segEnd <= segStart) continue;
+
+        // Split at local midnight boundaries
+        let cur = segStart;
+        while (cur < segEnd) {
+          const d = new Date(cur);
+          const nextMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0).getTime();
+          const partEnd = Math.min(segEnd, nextMidnight);
+
+          const dk = dayKeyOf(cur);
+          if (dk in dayIndex) {
+            // W * ms / 3_600_000_000 = kWh
+            pAgg[dayIndex[dk]].kwh += v0 * (partEnd - cur) / 3600000000;
+          }
+
+          cur = partEnd;
+        }
       }
     }
-
-    if (pMax && pMax.length) {
+if (pMax && pMax.length) {
       for (const pt of pMax) {
         const t = +pt[0];
         const v = +pt[1];
