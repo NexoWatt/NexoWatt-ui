@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-vis",
-  "version": "0.6.77",
+  "version": "0.6.79",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "Proprietary License (NPL) v1.0",
@@ -10,7 +10,11 @@
   },
   "scripts": {
     "start": "node main.js",
-    "dev": "node main.js"
+    "dev": "node main.js",
+    "bump:patch": "node scripts/bump-version.js patch",
+    "bump:minor": "node scripts/bump-version.js minor",
+    "bump:major": "node scripts/bump-version.js major",
+    "githooks:install": "node scripts/install-githooks.js"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.0.0",

@@ -1,3 +1,10 @@
+## 0.6.79 (2026-01-28)
+- Performance: DatapointRegistry.upsert cached Unit-Detection/Subscriptions und primed Foreign-States nur einmal (fixes sehr langsame chargingManagement-Ticks bei vielen EVCS/Ladepunkten, z.B. 50 Stationen).
+- UI: EVCS/Ladestation Modal öffnet wieder zuverlässig mit einem Klick (pointerdown-Handling, damit Klicks bei häufigen SSE-Re-Renders nicht „verloren“ gehen).
+
+## 0.6.78 (2026-01-28)
+- Chore: Automatisches Version-Bumping hinzugefügt (scripts/bump-version.js). Optionaler Git pre-commit Hook (.githooks) erhöht die Patch-Version bei jedem Commit mit echten Änderungen automatisch.
+
 ## 0.6.77 (Simulation v0.4.x)
 - Simulation: angepasst an nexowatt-sim v0.4.x (Szenario-Katalog + Start/Stop/Reset direkt in der Simulation-UI).
 - Simulation: Sim-Instanz kann beim Aktivieren automatisch eingeschaltet werden (common.enabled=true) und wird beim Deaktivieren optional wieder zurückgesetzt.

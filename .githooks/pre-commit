@@ -1,0 +1,41 @@
+#!/bin/sh
+set -e
+
+# Auto-bump adapter version on commits that contain real changes.
+#
+# Enabled by:
+#   npm run githooks:install
+#
+# Behaviour:
+#   - If the commit only touches version files (package.json / io-package.json / CHANGELOG.md), do nothing.
+#   - Otherwise bump PATCH version and stage the updated version files.
+
+command -v git >/dev/null 2>&1 || exit 0
+
+STAGED="$(git diff --cached --name-only)"
+[ -z "$STAGED" ] && exit 0
+
+ONLY_VERSION_FILES=1
+for f in $STAGED; do
+  case "$f" in
+    package.json|io-package.json|CHANGELOG.md)
+      ;;
+    *)
+      ONLY_VERSION_FILES=0
+      ;;
+  esac
+done
+
+if [ "$ONLY_VERSION_FILES" -eq 1 ]; then
+  exit 0
+fi
+
+command -v node >/dev/null 2>&1 || {
+  echo "[githooks] ERROR: node not found in PATH. Version bump requires Node.js." >&2
+  exit 1
+}
+
+node scripts/bump-version.js patch --quiet
+git add package.json io-package.json
+
+exit 0

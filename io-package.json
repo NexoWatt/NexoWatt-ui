@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.77",
+    "version": "0.6.79",
     "news": {
+      "0.6.79": {
+        "en": "Performance: DatapointRegistry upsert is now idempotent and caches unit detection/subscriptions to prevent very slow chargingManagement ticks with many EVCS. UI: EVCS tiles open the control modal reliably with a single click even under heavy SSE re-renders.",
+        "de": "Performance: DatapointRegistry.upsert ist jetzt idempotent und cached Unit-Detection/Subscriptions – verhindert sehr langsame chargingManagement-Ticks bei vielen EVCS. UI: EVCS-Kacheln öffnen das Regel-Modal wieder zuverlässig mit einem Klick (auch bei starken SSE-Re-Renders)."
+      },
+      "0.6.78": {
+        "en": "Chore: Added automatic version bump helper (scripts/bump-version.js) plus an optional git pre-commit hook (.githooks) to bump patch versions on commits.",
+        "de": "Chore: Automatisches Version-Bumping hinzugefügt (scripts/bump-version.js) plus optionaler Git pre-commit Hook (.githooks) zum Erhöhen der Patch-Version bei Commits."
+      },
       "0.6.77": {
         "en": "Simulation: updated integration for nexowatt-sim v0.4.x (scenario controls in Simulation UI, auto-enable sim instance, backup/restore VIS tariff settings).",
         "de": "Simulation: Integration für nexowatt-sim v0.4.x aktualisiert (Szenario-Steuerung in der Simulation-UI, Sim-Instanz automatisch aktivieren, Backup/Restore der VIS-Tarif-Settings)."
