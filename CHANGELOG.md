@@ -1,3 +1,8 @@
+## 0.6.77 (Simulation v0.4.x)
+- Simulation: angepasst an nexowatt-sim v0.4.x (Szenario-Katalog + Start/Stop/Reset direkt in der Simulation-UI).
+- Simulation: Sim-Instanz kann beim Aktivieren automatisch eingeschaltet werden (common.enabled=true) und wird beim Deaktivieren optional wieder zurückgesetzt.
+- Simulation: Backup/Restore zusätzlicher VIS-Settings für reproduzierbare Tests (z.B. dynamicTariff, tariffMode, storagePower).
+
 ## 0.6.76 (EVCS Report Fix)
 - EVCS Report/Abrechnung: kWh-Berechnung korrigiert, wenn Historie-Buckets lückenhaft sind (z.B. 10‑Minuten Logging bei 2‑Minuten Aggregation). kWh pro Tag entspricht jetzt wieder den Influx/Historie-Werten (keine Faktor‑5 Unterzählung mehr).
 
