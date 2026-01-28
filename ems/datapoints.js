@@ -56,6 +56,25 @@ class DatapointRegistry {
         /** @type {Map<string, {val:any, ts:number}>} */
         this.lastWriteByObjectId = new Map();
 
+        // Performance helpers
+        // Some modules (e.g. charging management with many EVCS) upsert datapoints
+        // on every engine tick. Without caching this can hammer the objects/states DB.
+
+        /** @type {Set<string>} */
+        this._subscribedObjectIds = new Set();
+
+        /** @type {Set<string>} */
+        this._primedObjectIds = new Set();
+
+        /** @type {Map<string, string>} */
+        this._unitByObjectId = new Map();
+
+        /** @type {Map<string, number>} */
+        this._unitFetchAttemptMs = new Map();
+
+        // Retry interval for unit detection (common.unit) via getForeignObjectAsync
+        this._unitRetryMs = 10 * 60 * 1000; // 10 min
+
         this._initEntries = Array.isArray(entries) ? entries : [];
     }
 
@@ -84,8 +103,8 @@ class DatapointRegistry {
             dataType: entry.dataType || prev?.dataType || entry.type || 'number',
             direction: entry.direction || prev?.direction || entry.dir || 'in',
             unit: entry.unit || prev?.unit || '',
-            unitIn: prev?.unitIn || '',
-            unitScale: (prev?.unitScale !== undefined ? Number(prev.unitScale) : 1),
+            unitIn: (prev && prev.objectId === objectId) ? (prev.unitIn || '') : '',
+            unitScale: (prev && prev.objectId === objectId && prev.unitScale !== undefined ? Number(prev.unitScale) : 1),
             scale: (entry.scale !== undefined ? Number(entry.scale) : prev?.scale),
             offset: (entry.offset !== undefined ? Number(entry.offset) : prev?.offset),
             invert: (entry.invert !== undefined ? !!entry.invert : prev?.invert),
@@ -107,48 +126,112 @@ class DatapointRegistry {
         if (!Number.isFinite(normalized.min)) normalized.min = undefined;
         if (!Number.isFinite(normalized.max)) normalized.max = undefined;
 
+        // -----------------------------------------------------------------
+        // Unit detection / caching (common.unit)
+        // With many EVCS, datapoints can be upserted on every tick.
+        // Avoid hammering the objects DB by caching the detected unit.
+        // -----------------------------------------------------------------
+        let unitIn = '';
+        if (this._unitByObjectId.has(objectId)) {
+            unitIn = String(this._unitByObjectId.get(objectId) || '');
+        } else if (normalized.unitIn) {
+            unitIn = String(normalized.unitIn || '');
+        }
 
+        const now = Date.now();
+        const lastUnitAttempt = Number(this._unitFetchAttemptMs.get(objectId) || 0);
+        const shouldAttemptUnitFetch =
+            typeof this.adapter.getForeignObjectAsync === 'function' &&
+            (!lastUnitAttempt || (now - lastUnitAttempt) > this._unitRetryMs) &&
+            (!this._unitByObjectId.has(objectId) || unitIn === '');
 
-        // Auto unit scaling based on source object's unit (common.unit)
-        // Example: meter reports 0.73 kW but EMS expects W -> multiply by 1000 internally.
-        if (typeof this.adapter.getForeignObjectAsync === 'function') {
+        if (shouldAttemptUnitFetch) {
+            this._unitFetchAttemptMs.set(objectId, now);
             try {
                 const obj = await this.adapter.getForeignObjectAsync(objectId);
                 const inUnit = obj?.common?.unit;
-                normalized.unitIn = inUnit ? String(inUnit) : '';
-                const factor = _computeUnitScale(normalized.unitIn, normalized.unit);
-                if (Number.isFinite(factor) && factor !== 0 && factor !== 1) {
-                    // Avoid obvious double scaling if user already applied the same factor via `scale`.
-                    const eps = 1e-9;
-                    const invFactor = factor !== 0 ? 1 / factor : 0;
-                    if (Math.abs(normalized.scale - factor) < eps || Math.abs(normalized.scale - invFactor) < eps) {
-                        normalized.unitScale = 1;
-                    } else {
-                        normalized.unitScale = factor;
-                    }
-                } else {
-                    normalized.unitScale = 1;
-                }
-            } catch (e) {
+                unitIn = inUnit ? String(inUnit) : '';
+            } catch (_e) {
                 // ignore
             }
+            // Cache even empty to avoid hammering the objects DB.
+            this._unitByObjectId.set(objectId, unitIn || '');
+        } else {
+            // Remember previously known unit (even if discovered via old entries)
+            if (!this._unitByObjectId.has(objectId)) {
+                this._unitByObjectId.set(objectId, unitIn || '');
+            }
         }
+
+        normalized.unitIn = unitIn || '';
+
+        // Auto unit scaling based on source object's unit (common.unit)
+        // Example: meter reports 0.73 kW but EMS expects W -> multiply by 1000 internally.
+        const factor = _computeUnitScale(normalized.unitIn, normalized.unit);
+        if (Number.isFinite(factor) && factor !== 0 && factor !== 1) {
+            // Avoid obvious double scaling if user already applied the same factor via `scale`.
+            const eps = 1e-9;
+            const invFactor = factor !== 0 ? 1 / factor : 0;
+            if (Math.abs(normalized.scale - factor) < eps || Math.abs(normalized.scale - invFactor) < eps) {
+                normalized.unitScale = 1;
+            } else {
+                normalized.unitScale = factor;
+            }
+        } else {
+            normalized.unitScale = 1;
+        }
+
+        const needSubscribe = (typeof this.adapter.subscribeForeignStatesAsync === 'function') && !this._subscribedObjectIds.has(objectId);
+        const needPrime = (typeof this.adapter.getForeignStateAsync === 'function') && !this._primedObjectIds.has(objectId) && !this.cacheByObjectId.has(objectId);
+
+        const mappingUnchanged = !!(prev
+            && prev.objectId === normalized.objectId
+            && String(prev.dataType || '') === String(normalized.dataType || '')
+            && String(prev.direction || '') === String(normalized.direction || '')
+            && String(prev.unit || '') === String(normalized.unit || '')
+            && String(prev.unitIn || '') === String(normalized.unitIn || '')
+            && Number(prev.unitScale || 1) === Number(normalized.unitScale || 1)
+            && Number(prev.scale || 1) === Number(normalized.scale || 1)
+            && Number(prev.offset || 0) === Number(normalized.offset || 0)
+            && !!prev.invert === !!normalized.invert
+            && Number(prev.deadband || 0) === Number(normalized.deadband || 0)
+            && Number(prev.maxWriteIntervalMs || 0) === Number(normalized.maxWriteIntervalMs || 0)
+            && (prev.min === undefined ? undefined : Number(prev.min)) === (normalized.min === undefined ? undefined : Number(normalized.min))
+            && (prev.max === undefined ? undefined : Number(prev.max)) === (normalized.max === undefined ? undefined : Number(normalized.max))
+            && String(prev.note || '') === String(normalized.note || '')
+            && String(prev.name || '') === String(normalized.name || '')
+        );
+
+        // Fast-path: unchanged mapping and already subscribed/primed -> avoid DB roundtrips.
+        if (mappingUnchanged && !needSubscribe && !needPrime) {
+            this.keyByObjectId.set(objectId, key);
+            return;
+        }
+
         this.byKey.set(key, normalized);
         this.keyByObjectId.set(objectId, key);
 
-        // Subscribe (idempotent; the runtime tolerates multiple subscribe calls)
-        try {
-            await this.adapter.subscribeForeignStatesAsync(objectId);
-        } catch (e) {
-            this.adapter.log.warn(`Datapoint subscribe failed for '${objectId}': ${e?.message || e}`);
+        // Subscribe (idempotent; avoid repeating on every tick)
+        if (needSubscribe) {
+            try {
+                await this.adapter.subscribeForeignStatesAsync(objectId);
+                this._subscribedObjectIds.add(objectId);
+            } catch (e) {
+                this.adapter.log.warn(`Datapoint subscribe failed for '${objectId}': ${e?.message || e}`);
+            }
         }
 
-        // Prime cache
-        try {
-            const st = await this.adapter.getForeignStateAsync(objectId);
-            if (st) this.handleStateChange(objectId, st);
-        } catch (e) {
-            // ignore (not all foreign states exist immediately)
+        // Prime cache (only once per objectId)
+        if (needPrime) {
+            try {
+                const st = await this.adapter.getForeignStateAsync(objectId);
+                if (st) this.handleStateChange(objectId, st);
+            } catch (_e) {
+                // ignore (not all foreign states exist immediately)
+            } finally {
+                // Mark as primed even if missing to avoid hammering the states DB.
+                this._primedObjectIds.add(objectId);
+            }
         }
     }
 

@@ -105,6 +105,202 @@ class ChargingManagementModule extends BaseModule {
         this._lastCmdTargetW = new Map(); // safeKey -> last commanded target power (for ramp limiting)
         this._lastCmdTargetA = new Map(); // safeKey -> last commanded target current (for ramp limiting)
         this._lastDiagLogMs = 0; // MU6.2: rate limit diagnostics log
+
+        // Fast local state publisher (performance):
+        // With many EVCS (e.g. 50+), awaiting hundreds of setStateAsync calls per tick can
+        // easily push the tick time into seconds. We therefore de-duplicate and batch
+        // local state writes and flush them asynchronously with limited concurrency.
+        this._pubQueue = new Map(); // id -> {val:any, ack:boolean}
+        this._pubCache = new Map(); // id -> {val:any, ts:number}
+        this._pubFlushTimer = null;
+        this._pubFlushInFlight = false;
+        this._pubLastFlushMs = 0;
+        this._pubFlushIntervalMs = 50; // do not flush more often than this
+    }
+
+    /**
+     * Default publishing options for certain "noisy" diagnostic counters.
+     * @param {string} id
+     * @returns {{deadband?:number,minIntervalMs?:number}}
+     */
+    _pubDefaults(id) {
+        const s = String(id || '');
+        if (!s) return {};
+
+        // Debug payloads are large and not user-critical → slow down.
+        if (s.startsWith('chargingManagement.debug.')) return { minIntervalMs: 5000 };
+
+        // Always-changing counters → update slower to avoid DB spam.
+        if (s.endsWith('.idleMs') || s.endsWith('.meterAgeMs') || s.endsWith('.statusAgeMs')) return { minIntervalMs: 5000 };
+
+        // Reduce jitter on live power/current values (UI only, not control).
+        if (s.endsWith('.actualPowerW') || s.endsWith('.targetPowerW') || s.endsWith('.stationRemainingW') || s.endsWith('.headroomW') || s.endsWith('.remainingW') || s.endsWith('.usedW') || s.endsWith('.targetSumW')) return { deadband: 5 };
+        if (s.endsWith('.actualCurrentA') || s.endsWith('.targetCurrentA') || s.endsWith('.gridWorstPhaseA') || s.endsWith('.gridMaxPhaseA') || s.endsWith('.worstPhaseA')) return { deadband: 0.05 };
+
+        return {};
+    }
+
+    /**
+     * Queue a local state update (fast). This avoids awaiting many adapter.setStateAsync calls inside the tick loop.
+     * Writes are de-duplicated by id and flushed asynchronously with limited concurrency.
+     *
+     * @param {string} id
+     * @param {any} value
+     * @param {boolean} [ack=true]
+     * @param {{deadband?:number,minIntervalMs?:number}} [opts]
+     * @returns {Promise<true|null>}
+     */
+    async _queueState(id, value, ack = true, opts = null) {
+        const sid = String(id || '').trim();
+        if (!sid) return null;
+
+        const now = Date.now();
+        const o = Object.assign({}, this._pubDefaults(sid), (opts || {}));
+
+        // Normalize value for storage
+        let v = value;
+        if (v === undefined) v = null;
+        if (typeof v === 'number' && !Number.isFinite(v)) v = 0;
+        if (v !== null && typeof v === 'object') {
+            try {
+                v = JSON.stringify(v);
+            } catch {
+                v = String(v);
+            }
+        }
+
+        const prev = this._pubCache.get(sid);
+        if (prev) {
+            // min interval gate (drop until next tick)
+            const mi = Number(o.minIntervalMs);
+            if (Number.isFinite(mi) && mi > 0 && Number.isFinite(prev.ts) && (now - prev.ts) < mi) {
+                return null;
+            }
+
+            // equality / deadband
+            if (typeof v === 'number' && typeof prev.val === 'number' && Number.isFinite(v) && Number.isFinite(prev.val)) {
+                const db = Number(o.deadband);
+                if (Number.isFinite(db) && db > 0) {
+                    if (Math.abs(v - prev.val) < db) return null;
+                } else if (v === prev.val) {
+                    return null;
+                }
+            } else {
+                if (v === prev.val) return null;
+            }
+        }
+
+        // optimistic cache update (we previously ignored setState errors anyway)
+        this._pubCache.set(sid, { val: v, ts: now });
+        this._pubQueue.set(sid, { val: v, ack: !!ack });
+        this._schedulePubFlush();
+        return true;
+    }
+
+    /**
+     * Read a local state using the adapter's in-memory stateCache first (fast),
+     * falling back to getStateAsync only on cache misses.
+     *
+     * @param {string} id
+     * @returns {Promise<{val:any,ts:number,lc?:number,ack?:boolean}|null>}
+     */
+    async _getStateCached(id) {
+        const sid = String(id || '').trim();
+        if (!sid) return null;
+
+        const a = this.adapter;
+        const now = Date.now();
+
+        // Fast path: in-memory stateCache (maintained by main.js onStateChange)
+        try {
+            const sc = a && a.stateCache;
+            if (sc) {
+                const e = sc[sid];
+                if (e && Object.prototype.hasOwnProperty.call(e, 'value')) {
+                    const ts = (typeof e.ts === 'number' && Number.isFinite(e.ts)) ? e.ts : now;
+                    return { val: e.value, ts, lc: ts, ack: true };
+                }
+
+                // If called with full id, attempt keyFromId mapping
+                if (typeof a.keyFromId === 'function' && typeof a.namespace === 'string') {
+                    const pref = a.namespace + '.';
+                    if (sid.startsWith(pref)) {
+                        const k = a.keyFromId(sid);
+                        if (k && sc[k] && Object.prototype.hasOwnProperty.call(sc[k], 'value')) {
+                            const ts = (typeof sc[k].ts === 'number' && Number.isFinite(sc[k].ts)) ? sc[k].ts : now;
+                            return { val: sc[k].value, ts, lc: ts, ack: true };
+                        }
+                    }
+                }
+            }
+        } catch {
+            // ignore
+        }
+
+        // Fallback: DB read
+        try {
+            const st = await a.getStateAsync(sid);
+            // Prime cache (best-effort)
+            try {
+                const sc = a && a.stateCache;
+                if (sc) {
+                    const ts = st && (typeof st.ts === 'number' ? st.ts : (typeof st.lc === 'number' ? st.lc : now));
+                    sc[sid] = { value: st ? st.val : null, ts: ts || now };
+                }
+            } catch {
+                // ignore
+            }
+            return st || null;
+        } catch {
+            return null;
+        }
+    }
+
+    _schedulePubFlush() {
+        if (this._pubFlushTimer) return;
+
+        const now = Date.now();
+        const last = Number(this._pubLastFlushMs) || 0;
+        const diff = now - last;
+        const delay = diff >= this._pubFlushIntervalMs ? 0 : (this._pubFlushIntervalMs - diff);
+
+        this._pubFlushTimer = setTimeout(() => {
+            this._pubFlushTimer = null;
+            this._flushPubQueue().catch(() => {});
+        }, delay);
+    }
+
+    async _flushPubQueue() {
+        if (this._pubFlushInFlight) {
+            // A flush is already running; make sure we flush again afterwards.
+            this._schedulePubFlush();
+            return;
+        }
+
+        this._pubFlushInFlight = true;
+        try {
+            const entries = Array.from(this._pubQueue.entries());
+            this._pubQueue.clear();
+            if (!entries.length) return;
+
+            this._pubLastFlushMs = Date.now();
+
+            const concurrency = 25;
+            for (let i = 0; i < entries.length; i += concurrency) {
+                const slice = entries.slice(i, i + concurrency);
+                await Promise.all(slice.map(([sid, p]) => {
+                    try {
+                        return this.adapter.setStateAsync(sid, p.val, p.ack).catch(() => {});
+                    } catch {
+                        return Promise.resolve();
+                    }
+                }));
+            }
+        } finally {
+            this._pubFlushInFlight = false;
+            // If new entries arrived while flushing, schedule another run.
+            if (this._pubQueue.size > 0) this._schedulePubFlush();
+        }
     }
 
     _isEnabled() {
@@ -661,9 +857,9 @@ class ChargingManagementModule extends BaseModule {
         const wbList = [];
 
         const now = Date.now();
-        await this.adapter.setStateAsync('chargingManagement.debug.lastRun', now, true);
-        await this.adapter.setStateAsync('chargingManagement.debug.sortedOrder', '', true);
-        await this.adapter.setStateAsync('chargingManagement.debug.allocations', '[]', true);
+        await this._queueState('chargingManagement.debug.lastRun', now, true);
+        await this._queueState('chargingManagement.debug.sortedOrder', '', true);
+        await this._queueState('chargingManagement.debug.allocations', '[]', true);
         for (let wbIndex = 0; wbIndex < wallboxes.length; wbIndex++) {
             const wb = wallboxes[wbIndex];
             const key = String(wb.key || '').trim();
@@ -676,14 +872,14 @@ class ChargingManagementModule extends BaseModule {
             // This keeps Boost timeouts + "first-started" charging order stable across restarts.
             if (!this._restoredRuntime.has(safe)) {
                 try {
-                    const cs = await this.adapter.getStateAsync(`${ch}.chargingSince`);
+                    const cs = await this._getStateCached(`${ch}.chargingSince`);
                     const csVal = cs ? Number(cs.val) : 0;
                     if (Number.isFinite(csVal) && csVal > 0) this._chargingSinceMs.set(safe, csVal);
                 } catch {
                     // ignore
                 }
                 try {
-                    const bs = await this.adapter.getStateAsync(`${ch}.boostSince`);
+                    const bs = await this._getStateCached(`${ch}.boostSince`);
                     const bsVal = bs ? Number(bs.val) : 0;
                     if (Number.isFinite(bsVal) && bsVal > 0) this._boostSinceMs.set(safe, bsVal);
                 } catch {
@@ -696,13 +892,13 @@ class ChargingManagementModule extends BaseModule {
             // If the runtime state is empty, initialize it ONCE from config default (userModeDefault).
             let userMode = 'auto';
             try {
-                const st = await this.adapter.getStateAsync(`${ch}.userMode`);
+                const st = await this._getStateCached(`${ch}.userMode`);
                 const cur = st ? st.val : null;
                 const def = normalizeWallboxModeOverride(wb.userModeDefault || wb.userMode || 'auto');
 
                 if (cur === null || cur === undefined || String(cur).trim() === '') {
                     try {
-                        await this.adapter.setStateAsync(`${ch}.userMode`, def, true);
+                        await this._queueState(`${ch}.userMode`, def, true);
                     } catch {
                         // ignore
                     }
@@ -719,10 +915,10 @@ class ChargingManagementModule extends BaseModule {
             // Runtime: end-customer can disable EMS regulation per charge point
             let userEnabled = true;
             try {
-                const stEn = await this.adapter.getStateAsync(`${ch}.userEnabled`);
+                const stEn = await this._getStateCached(`${ch}.userEnabled`);
                 const curEn = stEn ? stEn.val : null;
                 if (curEn === null || curEn === undefined || String(curEn).trim() === '') {
-                    try { await this.adapter.setStateAsync(`${ch}.userEnabled`, true, true); } catch { /* ignore */ }
+                    try { await this._queueState(`${ch}.userEnabled`, true, true); } catch { /* ignore */ }
                     userEnabled = true;
                 } else {
                     userEnabled = !!curEn;
@@ -842,13 +1038,13 @@ class ChargingManagementModule extends BaseModule {
 
             // Publish diagnostics (UI)
             try {
-                await this.adapter.setStateAsync(`${ch}.mappingOk`, hasSetpoint, true);
-                await this.adapter.setStateAsync(`${ch}.hasSetpoint`, hasSetpoint, true);
-                await this.adapter.setStateAsync(`${ch}.mappingIssues`, JSON.stringify(mappingIssues), true);
-                await this.adapter.setStateAsync(`${ch}.meterAgeMs`, meterAgeMs, true);
-                await this.adapter.setStateAsync(`${ch}.meterStale`, !!meterStale, true);
-                await this.adapter.setStateAsync(`${ch}.statusAgeMs`, statusAgeMs, true);
-                await this.adapter.setStateAsync(`${ch}.statusStale`, !!statusStale, true);
+                await this._queueState(`${ch}.mappingOk`, hasSetpoint, true);
+                await this._queueState(`${ch}.hasSetpoint`, hasSetpoint, true);
+                await this._queueState(`${ch}.mappingIssues`, JSON.stringify(mappingIssues), true);
+                await this._queueState(`${ch}.meterAgeMs`, meterAgeMs, true);
+                await this._queueState(`${ch}.meterStale`, !!meterStale, true);
+                await this._queueState(`${ch}.statusAgeMs`, statusAgeMs, true);
+                await this._queueState(`${ch}.statusStale`, !!statusStale, true);
             } catch {
                 // ignore
             }
@@ -1001,31 +1197,31 @@ class ChargingManagementModule extends BaseModule {
             if (typeof iA === 'number') totalCurrentA += iA;
             if (online) onlineCount += 1;
 
-            await this.adapter.setStateAsync(`${ch}.name`, String(wb.name || key), true);
-            await this.adapter.setStateAsync(`${ch}.cfgEnabled`, cfgEnabled, true);
-            await this.adapter.setStateAsync(`${ch}.enabled`, enabled, true);
-            await this.adapter.setStateAsync(`${ch}.online`, online, true);
-            await this.adapter.setStateAsync(`${ch}.priority`, priority, true);
-            await this.adapter.setStateAsync(`${ch}.chargerType`, chargerType, true);
-            await this.adapter.setStateAsync(`${ch}.controlBasis`, controlBasis, true);
-            await this.adapter.setStateAsync(`${ch}.stationKey`, stationKey || '', true);
-            await this.adapter.setStateAsync(`${ch}.connectorNo`, connectorNo || 0, true);
-            await this.adapter.setStateAsync(`${ch}.stationMaxPowerW`, (typeof stationMaxPowerW === 'number' && Number.isFinite(stationMaxPowerW)) ? stationMaxPowerW : 0, true);
-            await this.adapter.setStateAsync(`${ch}.allowBoost`, !!allowBoost, true);
-            await this.adapter.setStateAsync(`${ch}.phases`, phases, true);
-            await this.adapter.setStateAsync(`${ch}.minPowerW`, minPW, true);
-            await this.adapter.setStateAsync(`${ch}.maxPowerW`, maxPW, true);
-            await this.adapter.setStateAsync(`${ch}.para14aCapW`, para14aCapW || 0, true);
-            await this.adapter.setStateAsync(`${ch}.para14aCapped`, !!para14aCapped, true);
-            await this.adapter.setStateAsync(`${ch}.actualPowerW`, typeof pW === 'number' ? pW : 0, true);
-            await this.adapter.setStateAsync(`${ch}.actualCurrentA`, typeof iA === 'number' ? iA : 0, true);
+            await this._queueState(`${ch}.name`, String(wb.name || key), true);
+            await this._queueState(`${ch}.cfgEnabled`, cfgEnabled, true);
+            await this._queueState(`${ch}.enabled`, enabled, true);
+            await this._queueState(`${ch}.online`, online, true);
+            await this._queueState(`${ch}.priority`, priority, true);
+            await this._queueState(`${ch}.chargerType`, chargerType, true);
+            await this._queueState(`${ch}.controlBasis`, controlBasis, true);
+            await this._queueState(`${ch}.stationKey`, stationKey || '', true);
+            await this._queueState(`${ch}.connectorNo`, connectorNo || 0, true);
+            await this._queueState(`${ch}.stationMaxPowerW`, (typeof stationMaxPowerW === 'number' && Number.isFinite(stationMaxPowerW)) ? stationMaxPowerW : 0, true);
+            await this._queueState(`${ch}.allowBoost`, !!allowBoost, true);
+            await this._queueState(`${ch}.phases`, phases, true);
+            await this._queueState(`${ch}.minPowerW`, minPW, true);
+            await this._queueState(`${ch}.maxPowerW`, maxPW, true);
+            await this._queueState(`${ch}.para14aCapW`, para14aCapW || 0, true);
+            await this._queueState(`${ch}.para14aCapped`, !!para14aCapped, true);
+            await this._queueState(`${ch}.actualPowerW`, typeof pW === 'number' ? pW : 0, true);
+            await this._queueState(`${ch}.actualCurrentA`, typeof iA === 'number' ? iA : 0, true);
 
-            await this.adapter.setStateAsync(`${ch}.charging`, isCharging, true);
-            await this.adapter.setStateAsync(`${ch}.chargingSince`, chargingSinceForState, true);
-            await this.adapter.setStateAsync(`${ch}.chargingRaw`, isChargingRaw, true);
-            await this.adapter.setStateAsync(`${ch}.lastActive`, lastActive || 0, true);
-            await this.adapter.setStateAsync(`${ch}.idleMs`, lastActive ? (now - lastActive) : 0, true);
-            await this.adapter.setStateAsync(`${ch}.allocationRank`, 0, true);
+            await this._queueState(`${ch}.charging`, isCharging, true);
+            await this._queueState(`${ch}.chargingSince`, chargingSinceForState, true);
+            await this._queueState(`${ch}.chargingRaw`, isChargingRaw, true);
+            await this._queueState(`${ch}.lastActive`, lastActive || 0, true);
+            await this._queueState(`${ch}.idleMs`, lastActive ? (now - lastActive) : 0, true);
+            await this._queueState(`${ch}.allocationRank`, 0, true);
             // userMode is writable; do NOT overwrite here. effectiveMode will be set later.
             // Zeit-Ziel Laden (Depot-/Deadline-Laden)
             let goalEnabled = false;
@@ -1034,14 +1230,14 @@ class ChargingManagementModule extends BaseModule {
             let goalBatteryKwhUser = 0;
 
             try {
-                const st = await this.adapter.getStateAsync(`${ch}.goalEnabled`);
+                const st = await this._getStateCached(`${ch}.goalEnabled`);
                 goalEnabled = !!(st && st.val);
             } catch {
                 goalEnabled = false;
             }
 
             try {
-                const st = await this.adapter.getStateAsync(`${ch}.goalTargetSocPct`);
+                const st = await this._getStateCached(`${ch}.goalTargetSocPct`);
                 const v = st ? Number(st.val) : NaN;
                 goalTargetSocPct = Number.isFinite(v) ? clamp(v, 0, 100) : 100;
             } catch {
@@ -1049,7 +1245,7 @@ class ChargingManagementModule extends BaseModule {
             }
 
             try {
-                const st = await this.adapter.getStateAsync(`${ch}.goalFinishTs`);
+                const st = await this._getStateCached(`${ch}.goalFinishTs`);
                 const v = st ? Number(st.val) : NaN;
                 goalFinishTs = Number.isFinite(v) ? Math.max(0, Math.round(v)) : 0;
             } catch {
@@ -1057,7 +1253,7 @@ class ChargingManagementModule extends BaseModule {
             }
 
             try {
-                const st = await this.adapter.getStateAsync(`${ch}.goalBatteryKwh`);
+                const st = await this._getStateCached(`${ch}.goalBatteryKwh`);
                 const v = st ? Number(st.val) : NaN;
                 goalBatteryKwhUser = Number.isFinite(v) ? Math.max(0, v) : 0;
             } catch {
@@ -1087,7 +1283,7 @@ class ChargingManagementModule extends BaseModule {
                     goalStatus = 'no_index';
                 } else {
                     try {
-                        const stSoc = await this.adapter.getStateAsync(`evcs.${Math.round(evcsIndex)}.vehicleSoc`);
+                        const stSoc = await this._getStateCached(`evcs.${Math.round(evcsIndex)}.vehicleSoc`);
                         const socVal = stSoc ? Number(stSoc.val) : NaN;
                         if (!Number.isFinite(socVal) || socVal < 0 || socVal > 100) {
                             goalStatus = 'no_soc';
@@ -1136,12 +1332,12 @@ class ChargingManagementModule extends BaseModule {
 
             // Publish computed goal states (shortfall will be updated after command calculation)
             try {
-                await this.adapter.setStateAsync(`${ch}.goalActive`, !!goalActive, true);
-                await this.adapter.setStateAsync(`${ch}.goalRemainingMin`, goalRemainingMin || 0, true);
-                await this.adapter.setStateAsync(`${ch}.goalRequiredPowerW`, Math.round(goalRequiredW || 0), true);
-                await this.adapter.setStateAsync(`${ch}.goalDesiredPowerW`, Math.round(goalDesiredW || 0), true);
-                await this.adapter.setStateAsync(`${ch}.goalShortfallW`, Math.round(goalShortfallW || 0), true);
-                await this.adapter.setStateAsync(`${ch}.goalStatus`, String(goalStatus || 'inactive'), true);
+                await this._queueState(`${ch}.goalActive`, !!goalActive, true);
+                await this._queueState(`${ch}.goalRemainingMin`, goalRemainingMin || 0, true);
+                await this._queueState(`${ch}.goalRequiredPowerW`, Math.round(goalRequiredW || 0), true);
+                await this._queueState(`${ch}.goalDesiredPowerW`, Math.round(goalDesiredW || 0), true);
+                await this._queueState(`${ch}.goalShortfallW`, Math.round(goalShortfallW || 0), true);
+                await this._queueState(`${ch}.goalStatus`, String(goalStatus || 'inactive'), true);
             } catch {
                 // ignore
             }
@@ -1214,10 +1410,10 @@ class ChargingManagementModule extends BaseModule {
 });
         }
 
-        await this.adapter.setStateAsync('chargingManagement.wallboxCount', wbList.length, true);
-        await this.adapter.setStateAsync('chargingManagement.summary.totalPowerW', totalPowerW, true);
-        await this.adapter.setStateAsync('chargingManagement.summary.totalCurrentA', totalCurrentA, true);
-        await this.adapter.setStateAsync('chargingManagement.summary.onlineWallboxes', onlineCount, true);
+        await this._queueState('chargingManagement.wallboxCount', wbList.length, true);
+        await this._queueState('chargingManagement.summary.totalPowerW', totalPowerW, true);
+        await this._queueState('chargingManagement.summary.totalCurrentA', totalCurrentA, true);
+        await this._queueState('chargingManagement.summary.onlineWallboxes', onlineCount, true);
 
         // Determine budget
         let budgetW = Number.POSITIVE_INFINITY;
@@ -1243,7 +1439,7 @@ class ChargingManagementModule extends BaseModule {
          */
         const isStateStale = async (id, maxAgeMs) => {
             try {
-                const st = await this.adapter.getStateAsync(id);
+                const st = await this._getStateCached(id);
                 const ts = st && (typeof st.ts === 'number' ? st.ts : (typeof st.lc === 'number' ? st.lc : 0));
                 if (!ts) return true;
                 return (Date.now() - ts) > maxAgeMs;
@@ -1311,8 +1507,8 @@ class ChargingManagementModule extends BaseModule {
         }
 
         try {
-            await this.adapter.setStateAsync('chargingManagement.control.gridChargeAllowed', !!gridChargeAllowed, true);
-            await this.adapter.setStateAsync('chargingManagement.control.dischargeAllowed', !!dischargeAllowed, true);
+            await this._queueState('chargingManagement.control.gridChargeAllowed', !!gridChargeAllowed, true);
+            await this._queueState('chargingManagement.control.dischargeAllowed', !!dischargeAllowed, true);
         } catch {
             // ignore
         }
@@ -1338,7 +1534,7 @@ class ChargingManagementModule extends BaseModule {
                 override = 'auto';
                 // If boost is disabled for this chargepoint, reset runtime mode to avoid confusing UI
                 try {
-                    await this.adapter.setStateAsync(`${w.ch}.userMode`, 'auto', true);
+                    await this._queueState(`${w.ch}.userMode`, 'auto', true);
                 } catch {
                     // ignore
                 }
@@ -1393,7 +1589,7 @@ class ChargingManagementModule extends BaseModule {
 
                         // Switch off boost in runtime state (so VIS toggles back)
                         try {
-                            await this.adapter.setStateAsync(`${w.ch}.userMode`, 'auto', true);
+                            await this._queueState(`${w.ch}.userMode`, 'auto', true);
                         } catch {
                             // ignore
                         }
@@ -1443,13 +1639,13 @@ class ChargingManagementModule extends BaseModule {
 
             // Expose effective mode + boost runtime details for VIS/debugging
             try {
-                await this.adapter.setStateAsync(`${w.ch}.effectiveMode`, eff, true);
-                await this.adapter.setStateAsync(`${w.ch}.goalTariffOverride`, !!goalTariffOverrideActive, true);
-                await this.adapter.setStateAsync(`${w.ch}.boostTimeoutMin`, Number.isFinite(effBoostTimeoutMin) ? effBoostTimeoutMin : 0, true);
-                await this.adapter.setStateAsync(`${w.ch}.boostActive`, eff === 'boost', true);
-                await this.adapter.setStateAsync(`${w.ch}.boostSince`, boostSince || 0, true);
-                await this.adapter.setStateAsync(`${w.ch}.boostUntil`, boostUntil || 0, true);
-                await this.adapter.setStateAsync(`${w.ch}.boostRemainingMin`, boostRemainingMin || 0, true);
+                await this._queueState(`${w.ch}.effectiveMode`, eff, true);
+                await this._queueState(`${w.ch}.goalTariffOverride`, !!goalTariffOverrideActive, true);
+                await this._queueState(`${w.ch}.boostTimeoutMin`, Number.isFinite(effBoostTimeoutMin) ? effBoostTimeoutMin : 0, true);
+                await this._queueState(`${w.ch}.boostActive`, eff === 'boost', true);
+                await this._queueState(`${w.ch}.boostSince`, boostSince || 0, true);
+                await this._queueState(`${w.ch}.boostUntil`, boostUntil || 0, true);
+                await this._queueState(`${w.ch}.boostRemainingMin`, boostRemainingMin || 0, true);
             } catch {
                 // ignore
             }
@@ -1546,9 +1742,9 @@ class ChargingManagementModule extends BaseModule {
 
         // Publish PV diagnostics (even if PV budgeting is not active)
         try {
-            await this.adapter.setStateAsync('chargingManagement.control.pvCapRawW', pvCapRawWState || 0, true);
-            await this.adapter.setStateAsync('chargingManagement.control.pvCapEffectiveW', pvCapEffectiveWState || 0, true);
-            await this.adapter.setStateAsync('chargingManagement.control.pvAvailable', !!pvAvailableState, true);
+            await this._queueState('chargingManagement.control.pvCapRawW', pvCapRawWState || 0, true);
+            await this._queueState('chargingManagement.control.pvCapEffectiveW', pvCapEffectiveWState || 0, true);
+            await this._queueState('chargingManagement.control.pvAvailable', !!pvAvailableState, true);
         } catch {
             // ignore
         }
@@ -1787,22 +1983,22 @@ if (components.length) {
 
         // Publish cap diagnostics (even when caps are not configured)
         try {
-            await this.adapter.setStateAsync('chargingManagement.control.gridImportLimitW', gridImportLimitW || 0, true);
-            await this.adapter.setStateAsync('chargingManagement.control.gridImportLimitW_effective', gridImportLimitEffW || 0, true);
-            await this.adapter.setStateAsync('chargingManagement.control.gridImportW', (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : 0, true);
-            await this.adapter.setStateAsync('chargingManagement.control.gridBaseLoadW', (typeof gridBaseLoadW === 'number' && Number.isFinite(gridBaseLoadW)) ? gridBaseLoadW : 0, true);
-            await this.adapter.setStateAsync('chargingManagement.control.gridCapEvcsW', (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : 0, true);
-            await this.adapter.setStateAsync('chargingManagement.control.gridCapBinding', !!gridCapBinding, true);
-            await this.adapter.setStateAsync('chargingManagement.control.gridMaxPhaseA', gridMaxPhaseA || 0, true);
-            await this.adapter.setStateAsync('chargingManagement.control.gridWorstPhaseA', (typeof worstPhaseA === 'number' && Number.isFinite(worstPhaseA)) ? worstPhaseA : 0, true);
-            await this.adapter.setStateAsync('chargingManagement.control.gridPhaseCapEvcsW', (typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)) ? phaseCapEvcsW : 0, true);
-            await this.adapter.setStateAsync('chargingManagement.control.phaseCapBinding', !!phaseCapBinding, true);
+            await this._queueState('chargingManagement.control.gridImportLimitW', gridImportLimitW || 0, true);
+            await this._queueState('chargingManagement.control.gridImportLimitW_effective', gridImportLimitEffW || 0, true);
+            await this._queueState('chargingManagement.control.gridImportW', (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : 0, true);
+            await this._queueState('chargingManagement.control.gridBaseLoadW', (typeof gridBaseLoadW === 'number' && Number.isFinite(gridBaseLoadW)) ? gridBaseLoadW : 0, true);
+            await this._queueState('chargingManagement.control.gridCapEvcsW', (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : 0, true);
+            await this._queueState('chargingManagement.control.gridCapBinding', !!gridCapBinding, true);
+            await this._queueState('chargingManagement.control.gridMaxPhaseA', gridMaxPhaseA || 0, true);
+            await this._queueState('chargingManagement.control.gridWorstPhaseA', (typeof worstPhaseA === 'number' && Number.isFinite(worstPhaseA)) ? worstPhaseA : 0, true);
+            await this._queueState('chargingManagement.control.gridPhaseCapEvcsW', (typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)) ? phaseCapEvcsW : 0, true);
+            await this._queueState('chargingManagement.control.phaseCapBinding', !!phaseCapBinding, true);
 
             // §14a transparency
-            await this.adapter.setStateAsync('chargingManagement.control.para14aActive', !!para14aActive, true);
-            await this.adapter.setStateAsync('chargingManagement.control.para14aMode', para14aMode || '', true);
-            await this.adapter.setStateAsync('chargingManagement.control.para14aCapEvcsW', (typeof para14aTotalCapW === 'number' && Number.isFinite(para14aTotalCapW)) ? para14aTotalCapW : 0, true);
-            await this.adapter.setStateAsync('chargingManagement.control.para14aBinding', !!para14aBinding, true);
+            await this._queueState('chargingManagement.control.para14aActive', !!para14aActive, true);
+            await this._queueState('chargingManagement.control.para14aMode', para14aMode || '', true);
+            await this._queueState('chargingManagement.control.para14aCapEvcsW', (typeof para14aTotalCapW === 'number' && Number.isFinite(para14aTotalCapW)) ? para14aTotalCapW : 0, true);
+            await this._queueState('chargingManagement.control.para14aBinding', !!para14aBinding, true);
         } catch {
             // ignore
         }
@@ -1888,9 +2084,9 @@ if (components.length) {
 
         // Publish diagnostics for UI
         try {
-            await this.adapter.setStateAsync('chargingManagement.control.storageAssistSoCPct', Number.isFinite(storageSoC) ? storageSoC : 0, true);
-            await this.adapter.setStateAsync('chargingManagement.control.storageAssistActive', !!storageAssistActive, true);
-            await this.adapter.setStateAsync('chargingManagement.control.storageAssistW', Number.isFinite(storageAssistW) ? storageAssistW : 0, true);
+            await this._queueState('chargingManagement.control.storageAssistSoCPct', Number.isFinite(storageSoC) ? storageSoC : 0, true);
+            await this._queueState('chargingManagement.control.storageAssistActive', !!storageAssistActive, true);
+            await this._queueState('chargingManagement.control.storageAssistW', Number.isFinite(storageAssistW) ? storageAssistW : 0, true);
         } catch {
             // ignore
         }
@@ -1953,39 +2149,39 @@ if (components.length) {
         if (staleRelevant) {
             const reason = ReasonCodes.STALE_METER;
 
-            await this.adapter.setStateAsync('chargingManagement.control.active', true, true);
-            await this.adapter.setStateAsync('chargingManagement.control.mode', mode, true);
-            await this.adapter.setStateAsync('chargingManagement.control.budgetMode', effectiveBudgetMode, true);
-            await this.adapter.setStateAsync('chargingManagement.control.pausedByPeakShaving', false, true);
-            await this.adapter.setStateAsync('chargingManagement.control.status', 'failsafe_stale_meter', true);
-            await this.adapter.setStateAsync('chargingManagement.control.budgetW', 0, true);
-            await this.adapter.setStateAsync('chargingManagement.control.usedW', 0, true);
-            await this.adapter.setStateAsync('chargingManagement.control.remainingW', 0, true);
+            await this._queueState('chargingManagement.control.active', true, true);
+            await this._queueState('chargingManagement.control.mode', mode, true);
+            await this._queueState('chargingManagement.control.budgetMode', effectiveBudgetMode, true);
+            await this._queueState('chargingManagement.control.pausedByPeakShaving', false, true);
+            await this._queueState('chargingManagement.control.status', 'failsafe_stale_meter', true);
+            await this._queueState('chargingManagement.control.budgetW', 0, true);
+            await this._queueState('chargingManagement.control.usedW', 0, true);
+            await this._queueState('chargingManagement.control.remainingW', 0, true);
 
             // Phase 4.2: Even in failsafe, publish Gate A (Netz/Phasen) diagnostics so the
             // App-Center can show the configured grid limits. The control itself is still forced
             // to 0W/0A below.
             try {
-                await this.adapter.setStateAsync('chargingManagement.control.gridImportLimitW', (typeof gridImportLimitW === 'number' && Number.isFinite(gridImportLimitW)) ? gridImportLimitW : 0, true);
-                await this.adapter.setStateAsync('chargingManagement.control.gridImportLimitW_effective', (typeof gridImportLimitEffW === 'number' && Number.isFinite(gridImportLimitEffW)) ? gridImportLimitEffW : 0, true);
-                await this.adapter.setStateAsync('chargingManagement.control.gridImportW', (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : 0, true);
-                await this.adapter.setStateAsync('chargingManagement.control.gridBaseLoadW', (typeof gridBaseLoadW === 'number' && Number.isFinite(gridBaseLoadW)) ? gridBaseLoadW : 0, true);
-                await this.adapter.setStateAsync('chargingManagement.control.gridCapEvcsW', (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : 0, true);
-                await this.adapter.setStateAsync('chargingManagement.control.gridCapBinding', false, true);
+                await this._queueState('chargingManagement.control.gridImportLimitW', (typeof gridImportLimitW === 'number' && Number.isFinite(gridImportLimitW)) ? gridImportLimitW : 0, true);
+                await this._queueState('chargingManagement.control.gridImportLimitW_effective', (typeof gridImportLimitEffW === 'number' && Number.isFinite(gridImportLimitEffW)) ? gridImportLimitEffW : 0, true);
+                await this._queueState('chargingManagement.control.gridImportW', (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : 0, true);
+                await this._queueState('chargingManagement.control.gridBaseLoadW', (typeof gridBaseLoadW === 'number' && Number.isFinite(gridBaseLoadW)) ? gridBaseLoadW : 0, true);
+                await this._queueState('chargingManagement.control.gridCapEvcsW', (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : 0, true);
+                await this._queueState('chargingManagement.control.gridCapBinding', false, true);
 
-                await this.adapter.setStateAsync('chargingManagement.control.worstPhaseA', (typeof worstPhaseA === 'number' && Number.isFinite(worstPhaseA)) ? worstPhaseA : 0, true);
-                await this.adapter.setStateAsync('chargingManagement.control.phaseCapEvcsW', (typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)) ? phaseCapEvcsW : 0, true);
-                await this.adapter.setStateAsync('chargingManagement.control.phaseCapBinding', false, true);
+                await this._queueState('chargingManagement.control.worstPhaseA', (typeof worstPhaseA === 'number' && Number.isFinite(worstPhaseA)) ? worstPhaseA : 0, true);
+                await this._queueState('chargingManagement.control.phaseCapEvcsW', (typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)) ? phaseCapEvcsW : 0, true);
+                await this._queueState('chargingManagement.control.phaseCapBinding', false, true);
             } catch {
                 // ignore
             }
 
             // Gate C: Speicher-Unterstützung in Failsafe immer deaktivieren
             this._storageAssistActive = false;
-            await this.adapter.setStateAsync('chargingManagement.control.storageAssistActive', false, true);
-            await this.adapter.setStateAsync('chargingManagement.control.storageAssistW', 0, true);
+            await this._queueState('chargingManagement.control.storageAssistActive', false, true);
+            await this._queueState('chargingManagement.control.storageAssistW', 0, true);
 
-            await this.adapter.setStateAsync('chargingManagement.debug.sortedOrder', wbList.map(w => w.safe).join(','), true);
+            await this._queueState('chargingManagement.debug.sortedOrder', wbList.map(w => w.safe).join(','), true);
 
             /** @type {any[]} */
             const debugAlloc = [];
@@ -2022,24 +2218,24 @@ if (components.length) {
                     }
 
                     const reasonToSet = (!!w.cfgEnabled && !w.userEnabled) ? ReasonCodes.CONTROL_DISABLED : reason;
-                    await this.adapter.setStateAsync(`${w.ch}.reason`, reasonToSet, true);
+                    await this._queueState(`${w.ch}.reason`, reasonToSet, true);
                 } else {
-                    await this.adapter.setStateAsync(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online), true);
+                    await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online), true);
                 }
 
-                await this.adapter.setStateAsync(`${w.ch}.targetCurrentA`, 0, true);
-                await this.adapter.setStateAsync(`${w.ch}.targetPowerW`, 0, true);
-                try { await this.adapter.setStateAsync(`${w.ch}.stationRemainingW`, 0, true); } catch { /* ignore */ }
-                await this.adapter.setStateAsync(`${w.ch}.applied`, applied, true);
-                await this.adapter.setStateAsync(`${w.ch}.applyStatus`, applyStatus, true);
+                await this._queueState(`${w.ch}.targetCurrentA`, 0, true);
+                await this._queueState(`${w.ch}.targetPowerW`, 0, true);
+                try { await this._queueState(`${w.ch}.stationRemainingW`, 0, true); } catch { /* ignore */ }
+                await this._queueState(`${w.ch}.applied`, applied, true);
+                await this._queueState(`${w.ch}.applyStatus`, applyStatus, true);
                 if (applyWrites) {
                     try {
-                        await this.adapter.setStateAsync(`${w.ch}.applyWrites`, JSON.stringify(applyWrites), true);
+                        await this._queueState(`${w.ch}.applyWrites`, JSON.stringify(applyWrites), true);
                     } catch {
-                        await this.adapter.setStateAsync(`${w.ch}.applyWrites`, '{}', true);
+                        await this._queueState(`${w.ch}.applyWrites`, '{}', true);
                     }
                 } else {
-                    await this.adapter.setStateAsync(`${w.ch}.applyWrites`, '{}', true);
+                    await this._queueState(`${w.ch}.applyWrites`, '{}', true);
                 }
 
                 debugAlloc.push({
@@ -2068,7 +2264,7 @@ if (components.length) {
         // ---- Stations (DC multi-connector) diagnostics ----
         try {
             const stationKeys = Array.from(stationCapW.keys());
-            await this.adapter.setStateAsync('chargingManagement.stationCount', stationKeys.length, true);
+            await this._queueState('chargingManagement.stationCount', stationKeys.length, true);
 
             for (const sk of stationKeys) {
                 const ch = await this._ensureStationChannel(sk);
@@ -2092,33 +2288,33 @@ if (components.length) {
                 const connsSet = stationConnectors.get(sk);
                 const conns = connsSet ? Array.from(connsSet).filter(s => s).join(',') : '';
 
-                await this.adapter.setStateAsync(`${ch}.stationKey`, sk, true);
-                await this.adapter.setStateAsync(`${ch}.name`, name, true);
-                await this.adapter.setStateAsync(`${ch}.maxPowerW`, (typeof cap === 'number' && Number.isFinite(cap)) ? cap : 0, true);
-                await this.adapter.setStateAsync(`${ch}.remainingW`, (typeof rem === 'number' && Number.isFinite(rem)) ? rem : 0, true);
-                await this.adapter.setStateAsync(`${ch}.usedW`, used, true);
-                await this.adapter.setStateAsync(`${ch}.binding`, !!binding, true);
-                await this.adapter.setStateAsync(`${ch}.headroomW`, headroom, true);
-                await this.adapter.setStateAsync(`${ch}.targetSumW`, targetSum, true);
-                await this.adapter.setStateAsync(`${ch}.connectorCount`, cnt, true);
-                await this.adapter.setStateAsync(`${ch}.boostConnectors`, bc, true);
-                await this.adapter.setStateAsync(`${ch}.pvLimitedConnectors`, pvc, true);
-                await this.adapter.setStateAsync(`${ch}.connectors`, conns, true);
-                await this.adapter.setStateAsync(`${ch}.lastUpdate`, Date.now(), true);
+                await this._queueState(`${ch}.stationKey`, sk, true);
+                await this._queueState(`${ch}.name`, name, true);
+                await this._queueState(`${ch}.maxPowerW`, (typeof cap === 'number' && Number.isFinite(cap)) ? cap : 0, true);
+                await this._queueState(`${ch}.remainingW`, (typeof rem === 'number' && Number.isFinite(rem)) ? rem : 0, true);
+                await this._queueState(`${ch}.usedW`, used, true);
+                await this._queueState(`${ch}.binding`, !!binding, true);
+                await this._queueState(`${ch}.headroomW`, headroom, true);
+                await this._queueState(`${ch}.targetSumW`, targetSum, true);
+                await this._queueState(`${ch}.connectorCount`, cnt, true);
+                await this._queueState(`${ch}.boostConnectors`, bc, true);
+                await this._queueState(`${ch}.pvLimitedConnectors`, pvc, true);
+                await this._queueState(`${ch}.connectors`, conns, true);
+                await this._queueState(`${ch}.lastUpdate`, Date.now(), true);
             }
         } catch {
             // ignore
         }
 
-        await this.adapter.setStateAsync('chargingManagement.summary.totalTargetPowerW', totalTargetPowerW, true);
-            await this.adapter.setStateAsync('chargingManagement.summary.totalTargetCurrentA', totalTargetCurrentA, true);
-            await this.adapter.setStateAsync('chargingManagement.summary.lastUpdate', Date.now(), true);
+        await this._queueState('chargingManagement.summary.totalTargetPowerW', totalTargetPowerW, true);
+            await this._queueState('chargingManagement.summary.totalTargetCurrentA', totalTargetCurrentA, true);
+            await this._queueState('chargingManagement.summary.lastUpdate', Date.now(), true);
 
             try {
                 const s = JSON.stringify(debugAlloc);
-                await this.adapter.setStateAsync('chargingManagement.debug.allocations', s, true);
+                await this._queueState('chargingManagement.debug.allocations', s, true);
             } catch {
-                await this.adapter.setStateAsync('chargingManagement.debug.allocations', '[]', true);
+                await this._queueState('chargingManagement.debug.allocations', '[]', true);
             }
 
             // Cleanup session tracking for removed wallboxes (avoid memory leaks)
@@ -2138,16 +2334,16 @@ if (components.length) {
         }
 
         const controlActive = mode !== 'off';
-        await this.adapter.setStateAsync('chargingManagement.control.active', controlActive, true);
-        await this.adapter.setStateAsync('chargingManagement.control.mode', mode, true);
-        await this.adapter.setStateAsync('chargingManagement.control.budgetMode', effectiveBudgetMode, true);
-        await this.adapter.setStateAsync('chargingManagement.control.pausedByPeakShaving', pausedByPeakShaving, true);
+        await this._queueState('chargingManagement.control.active', controlActive, true);
+        await this._queueState('chargingManagement.control.mode', mode, true);
+        await this._queueState('chargingManagement.control.budgetMode', effectiveBudgetMode, true);
+        await this._queueState('chargingManagement.control.pausedByPeakShaving', pausedByPeakShaving, true);
 
         if (mode === 'off') {
-            await this.adapter.setStateAsync('chargingManagement.control.status', 'off', true);
-            await this.adapter.setStateAsync('chargingManagement.control.budgetW', Number.isFinite(budgetW) ? budgetW : 0, true);
-            await this.adapter.setStateAsync('chargingManagement.control.usedW', 0, true);
-            await this.adapter.setStateAsync('chargingManagement.control.remainingW', Number.isFinite(budgetW) ? budgetW : 0, true);
+            await this._queueState('chargingManagement.control.status', 'off', true);
+            await this._queueState('chargingManagement.control.budgetW', Number.isFinite(budgetW) ? budgetW : 0, true);
+            await this._queueState('chargingManagement.control.usedW', 0, true);
+            await this._queueState('chargingManagement.control.remainingW', Number.isFinite(budgetW) ? budgetW : 0, true);
             // Cleanup session tracking for removed wallboxes (avoid memory leaks)
             for (const [safeKey, lastSeenTs] of this._chargingLastSeenMs.entries()) {
                 const ls = (typeof lastSeenTs === 'number' && Number.isFinite(lastSeenTs)) ? lastSeenTs : 0;
@@ -2161,9 +2357,9 @@ if (components.length) {
                 }
             }
 
-            await this.adapter.setStateAsync('chargingManagement.summary.totalTargetPowerW', 0, true);
-            await this.adapter.setStateAsync('chargingManagement.summary.totalTargetCurrentA', 0, true);
-            await this.adapter.setStateAsync('chargingManagement.summary.lastUpdate', Date.now(), true);
+            await this._queueState('chargingManagement.summary.totalTargetPowerW', 0, true);
+            await this._queueState('chargingManagement.summary.totalTargetCurrentA', 0, true);
+            await this._queueState('chargingManagement.summary.lastUpdate', Date.now(), true);
             return;
         }
 
@@ -2179,7 +2375,7 @@ if (components.length) {
                     budgetW = psBudgetW;
                     effectiveBudgetMode = 'fromPeakShaving';
                     // Ensure control state reflects the effective mode (overrides earlier value)
-                    await this.adapter.setStateAsync('chargingManagement.control.budgetMode', effectiveBudgetMode, true);
+                    await this._queueState('chargingManagement.control.budgetMode', effectiveBudgetMode, true);
                     pauseFollowPeakBudget = true;
                 }
 
@@ -2191,7 +2387,7 @@ if (components.length) {
                     else budgetW = Math.min(budgetW, gridCapEvcsW);
 
                     // Keep effectiveBudgetMode as-is (it already includes +gridImport/+phaseCap when active)
-                    await this.adapter.setStateAsync('chargingManagement.control.budgetMode', effectiveBudgetMode, true);
+                    await this._queueState('chargingManagement.control.budgetMode', effectiveBudgetMode, true);
                     pauseFollowPeakBudget = true;
                     pauseFollowGridCaps = true;
                 }
@@ -2201,21 +2397,21 @@ if (components.length) {
             if (!pauseFollowPeakBudget) {
                 const reason = ReasonCodes.PAUSED_BY_PEAK_SHAVING;
 
-                await this.adapter.setStateAsync('chargingManagement.control.active', true, true);
-                await this.adapter.setStateAsync('chargingManagement.control.mode', mode, true);
-                await this.adapter.setStateAsync('chargingManagement.control.budgetMode', effectiveBudgetMode, true);
-                await this.adapter.setStateAsync('chargingManagement.control.pausedByPeakShaving', true, true);
-                await this.adapter.setStateAsync('chargingManagement.control.status', 'paused_by_peak_shaving_ramp_down', true);
-                await this.adapter.setStateAsync('chargingManagement.control.budgetW', 0, true);
-                await this.adapter.setStateAsync('chargingManagement.control.usedW', 0, true);
-                await this.adapter.setStateAsync('chargingManagement.control.remainingW', 0, true);
+                await this._queueState('chargingManagement.control.active', true, true);
+                await this._queueState('chargingManagement.control.mode', mode, true);
+                await this._queueState('chargingManagement.control.budgetMode', effectiveBudgetMode, true);
+                await this._queueState('chargingManagement.control.pausedByPeakShaving', true, true);
+                await this._queueState('chargingManagement.control.status', 'paused_by_peak_shaving_ramp_down', true);
+                await this._queueState('chargingManagement.control.budgetW', 0, true);
+                await this._queueState('chargingManagement.control.usedW', 0, true);
+                await this._queueState('chargingManagement.control.remainingW', 0, true);
 
             // Gate C: Speicher-Unterstützung in Failsafe immer deaktivieren
             this._storageAssistActive = false;
-            await this.adapter.setStateAsync('chargingManagement.control.storageAssistActive', false, true);
-            await this.adapter.setStateAsync('chargingManagement.control.storageAssistW', 0, true);
+            await this._queueState('chargingManagement.control.storageAssistActive', false, true);
+            await this._queueState('chargingManagement.control.storageAssistW', 0, true);
 
-                await this.adapter.setStateAsync('chargingManagement.debug.sortedOrder', wbList.map(w => w.safe).join(','), true);
+                await this._queueState('chargingManagement.debug.sortedOrder', wbList.map(w => w.safe).join(','), true);
 
                 /** @type {any[]} */
                 const debugAlloc = [];
@@ -2251,23 +2447,23 @@ if (components.length) {
                             applyStatus = 'no_dp_registry';
                         }
 
-                        await this.adapter.setStateAsync(`${w.ch}.reason`, reason, true);
+                        await this._queueState(`${w.ch}.reason`, reason, true);
                     } else {
-                        await this.adapter.setStateAsync(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online), true);
+                        await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online), true);
                     }
 
-                    await this.adapter.setStateAsync(`${w.ch}.targetCurrentA`, 0, true);
-                    await this.adapter.setStateAsync(`${w.ch}.targetPowerW`, 0, true);
-                    await this.adapter.setStateAsync(`${w.ch}.applied`, applied, true);
-                    await this.adapter.setStateAsync(`${w.ch}.applyStatus`, applyStatus, true);
+                    await this._queueState(`${w.ch}.targetCurrentA`, 0, true);
+                    await this._queueState(`${w.ch}.targetPowerW`, 0, true);
+                    await this._queueState(`${w.ch}.applied`, applied, true);
+                    await this._queueState(`${w.ch}.applyStatus`, applyStatus, true);
                     if (applyWrites) {
                         try {
-                            await this.adapter.setStateAsync(`${w.ch}.applyWrites`, JSON.stringify(applyWrites), true);
+                            await this._queueState(`${w.ch}.applyWrites`, JSON.stringify(applyWrites), true);
                         } catch {
-                            await this.adapter.setStateAsync(`${w.ch}.applyWrites`, '{}', true);
+                            await this._queueState(`${w.ch}.applyWrites`, '{}', true);
                         }
                     } else {
-                        await this.adapter.setStateAsync(`${w.ch}.applyWrites`, '{}', true);
+                        await this._queueState(`${w.ch}.applyWrites`, '{}', true);
                     }
 
                     debugAlloc.push({
@@ -2291,9 +2487,9 @@ if (components.length) {
 
                 try {
                     const s = JSON.stringify(debugAlloc);
-                    await this.adapter.setStateAsync('chargingManagement.debug.allocations', diagMaxJsonLen ? (s.slice(0, diagMaxJsonLen) + '...') : s, true);
+                    await this._queueState('chargingManagement.debug.allocations', diagMaxJsonLen ? (s.slice(0, diagMaxJsonLen) + '...') : s, true);
                 } catch {
-                    await this.adapter.setStateAsync('chargingManagement.debug.allocations', '[]', true);
+                    await this._queueState('chargingManagement.debug.allocations', '[]', true);
                 }
 
                 // Cleanup session tracking for removed wallboxes (avoid memory leaks)
@@ -2306,9 +2502,9 @@ if (components.length) {
                     }
                 }
 
-                await this.adapter.setStateAsync('chargingManagement.summary.totalTargetPowerW', 0, true);
-                await this.adapter.setStateAsync('chargingManagement.summary.totalTargetCurrentA', 0, true);
-                await this.adapter.setStateAsync('chargingManagement.summary.lastUpdate', Date.now(), true);
+                await this._queueState('chargingManagement.summary.totalTargetPowerW', 0, true);
+                await this._queueState('chargingManagement.summary.totalTargetCurrentA', 0, true);
+                await this._queueState('chargingManagement.summary.lastUpdate', Date.now(), true);
                 return;
             }
         }
@@ -2423,9 +2619,9 @@ if (components.length) {
         // MU3.1: expose allocation order for transparency
         for (let i = 0; i < sorted.length; i++) {
             const w = sorted[i];
-            await this.adapter.setStateAsync(`${w.ch}.allocationRank`, i + 1, true);
+            await this._queueState(`${w.ch}.allocationRank`, i + 1, true);
         }
-        await this.adapter.setStateAsync('chargingManagement.debug.sortedOrder', sorted.map(w => w.safe).join(','), true);
+        await this._queueState('chargingManagement.debug.sortedOrder', sorted.map(w => w.safe).join(','), true);
 
 
         // Stationsbudgets (gemeinsame Leistungsgrenzen je Station)
@@ -2864,35 +3060,35 @@ if (components.length) {
                     goalShortfallNow = 0;
                 }
 
-                await this.adapter.setStateAsync(`${w.ch}.goalShortfallW`, goalShortfallNow, true);
-                await this.adapter.setStateAsync(`${w.ch}.goalStatus`, goalStatusNow, true);
+                await this._queueState(`${w.ch}.goalShortfallW`, goalShortfallNow, true);
+                await this._queueState(`${w.ch}.goalStatus`, goalStatusNow, true);
             } catch {
                 // ignore
             }
 
-            await this.adapter.setStateAsync(`${w.ch}.targetCurrentA`, cmdA, true);
-            await this.adapter.setStateAsync(`${w.ch}.targetPowerW`, cmdW, true);
+            await this._queueState(`${w.ch}.targetCurrentA`, cmdA, true);
+            await this._queueState(`${w.ch}.targetPowerW`, cmdW, true);
             // Stationsgruppe: verbleibendes Stationsbudget (nach Abzug dieses Connectors)
             try {
                 const rem = (w.stationKey && stationRemainingW && stationRemainingW.has(w.stationKey))
                     ? stationRemainingW.get(w.stationKey)
                     : null;
-                await this.adapter.setStateAsync(`${w.ch}.stationRemainingW`, (typeof rem === 'number' && Number.isFinite(rem)) ? rem : 0, true);
+                await this._queueState(`${w.ch}.stationRemainingW`, (typeof rem === 'number' && Number.isFinite(rem)) ? rem : 0, true);
             } catch {
                 // ignore
             }
-            await this.adapter.setStateAsync(`${w.ch}.applied`, applied, true);
-            await this.adapter.setStateAsync(`${w.ch}.applyStatus`, applyStatus, true);
+            await this._queueState(`${w.ch}.applied`, applied, true);
+            await this._queueState(`${w.ch}.applyStatus`, applyStatus, true);
             if (applyWrites) {
                 try {
-                    await this.adapter.setStateAsync(`${w.ch}.applyWrites`, JSON.stringify(applyWrites), true);
+                    await this._queueState(`${w.ch}.applyWrites`, JSON.stringify(applyWrites), true);
                 } catch {
-                    await this.adapter.setStateAsync(`${w.ch}.applyWrites`, '', true);
+                    await this._queueState(`${w.ch}.applyWrites`, '', true);
                 }
             } else {
-                await this.adapter.setStateAsync(`${w.ch}.applyWrites`, '', true);
+                await this._queueState(`${w.ch}.applyWrites`, '', true);
             }
-            await this.adapter.setStateAsync(`${w.ch}.reason`, reason, true);
+            await this._queueState(`${w.ch}.reason`, reason, true);
 
             debugAlloc.push({
                 safe: w.safe,
@@ -2958,20 +3154,20 @@ if (components.length) {
                 }
             }
 
-            await this.adapter.setStateAsync(`${w.ch}.targetCurrentA`, 0, true);
-            await this.adapter.setStateAsync(`${w.ch}.targetPowerW`, 0, true);
-            await this.adapter.setStateAsync(`${w.ch}.applied`, applied, true);
-            await this.adapter.setStateAsync(`${w.ch}.applyStatus`, applyStatus, true);
+            await this._queueState(`${w.ch}.targetCurrentA`, 0, true);
+            await this._queueState(`${w.ch}.targetPowerW`, 0, true);
+            await this._queueState(`${w.ch}.applied`, applied, true);
+            await this._queueState(`${w.ch}.applyStatus`, applyStatus, true);
             if (applyWrites) {
                 try {
-                    await this.adapter.setStateAsync(`${w.ch}.applyWrites`, JSON.stringify(applyWrites), true);
+                    await this._queueState(`${w.ch}.applyWrites`, JSON.stringify(applyWrites), true);
                 } catch {
-                    await this.adapter.setStateAsync(`${w.ch}.applyWrites`, '', true);
+                    await this._queueState(`${w.ch}.applyWrites`, '', true);
                 }
             } else {
-                await this.adapter.setStateAsync(`${w.ch}.applyWrites`, '', true);
+                await this._queueState(`${w.ch}.applyWrites`, '', true);
             }
-            await this.adapter.setStateAsync(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online), true);
+            await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online), true);
         }
 
 
@@ -3010,9 +3206,9 @@ if (components.length) {
 
         try {
             const s = JSON.stringify(debugAlloc);
-            await this.adapter.setStateAsync('chargingManagement.debug.allocations', s.length > diagMaxJsonLen ? (s.slice(0, diagMaxJsonLen) + '...') : s, true);
+            await this._queueState('chargingManagement.debug.allocations', s.length > diagMaxJsonLen ? (s.slice(0, diagMaxJsonLen) + '...') : s, true);
         } catch {
-            await this.adapter.setStateAsync('chargingManagement.debug.allocations', '[]', true);
+            await this._queueState('chargingManagement.debug.allocations', '[]', true);
         }
 
         // Gate A: expose which top-level limiter is active
@@ -3026,10 +3222,10 @@ if (components.length) {
         } else if (phaseCapBinding) {
             finalStatus = 'limited_phase_cap';
         }
-        await this.adapter.setStateAsync('chargingManagement.control.status', finalStatus, true);
-        await this.adapter.setStateAsync('chargingManagement.control.budgetW', Number.isFinite(budgetW) ? budgetW : 0, true);
-        await this.adapter.setStateAsync('chargingManagement.control.usedW', Number.isFinite(budgetW) ? usedW : totalTargetPowerW, true);
-        await this.adapter.setStateAsync('chargingManagement.control.remainingW', Number.isFinite(budgetW) ? remainingW : 0, true);
+        await this._queueState('chargingManagement.control.status', finalStatus, true);
+        await this._queueState('chargingManagement.control.budgetW', Number.isFinite(budgetW) ? budgetW : 0, true);
+        await this._queueState('chargingManagement.control.usedW', Number.isFinite(budgetW) ? usedW : totalTargetPowerW, true);
+        await this._queueState('chargingManagement.control.remainingW', Number.isFinite(budgetW) ? remainingW : 0, true);
 
             // Cleanup session tracking for removed wallboxes (avoid memory leaks)
             for (const [safeKey, lastSeenTs] of this._chargingLastSeenMs.entries()) {
@@ -3044,9 +3240,9 @@ if (components.length) {
                 }
             }
 
-        await this.adapter.setStateAsync('chargingManagement.summary.totalTargetPowerW', totalTargetPowerW, true);
-        await this.adapter.setStateAsync('chargingManagement.summary.totalTargetCurrentA', totalTargetCurrentA, true);
-        await this.adapter.setStateAsync('chargingManagement.summary.lastUpdate', Date.now(), true);
+        await this._queueState('chargingManagement.summary.totalTargetPowerW', totalTargetPowerW, true);
+        await this._queueState('chargingManagement.summary.totalTargetCurrentA', totalTargetCurrentA, true);
+        await this._queueState('chargingManagement.summary.lastUpdate', Date.now(), true);
     }
 }
 
