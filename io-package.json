@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.86",
+    "version": "0.6.87",
     "news": {
       "0.6.86": {
         "en": "Tariff/Net fee: Standard (ST) times no longer override the dynamic tariff logic. Only NT/HT act as overlays (NT allows grid charging; HT blocks it). Quarters without NT/HT can be configured by disabling the NT/HT windows (Von=Bis / 00:00–00:00).",

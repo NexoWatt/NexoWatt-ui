@@ -5109,6 +5109,30 @@ function updateEnergyWeb() {
       else msg = '';
     }
 
+    // PV‑Reserve (Forecast) kann das Netzladen bewusst blockieren.
+    // Damit der Kunde nicht "Speicher lädt" liest, obwohl das Netzladen
+    // wegen erwarteter PV-Erzeugung absichtlich gestoppt wurde, ergänzen
+    // wir die Statuszeile entsprechend.
+    try {
+      const pvBlocked = !!(s['speicher.regelung.tarifPvBlock'] && s['speicher.regelung.tarifPvBlock'].value);
+      if (pvBlocked) {
+        const pvCapSocRaw = (s['speicher.regelung.tarifPvCapSocPct'] && s['speicher.regelung.tarifPvCapSocPct'].value !== undefined)
+          ? Number(s['speicher.regelung.tarifPvCapSocPct'].value)
+          : NaN;
+        const capTxt = Number.isFinite(pvCapSocRaw) ? ` (max ${pvCapSocRaw.toFixed(1)}%)` : '';
+        msg = msg ? `${msg} — PV‑Reserve: Netzladen gesperrt${capTxt}` : `PV‑Reserve: Netzladen gesperrt${capTxt}`;
+
+        const pvReason = (s['speicher.regelung.tarifPvBlockGrund'] && s['speicher.regelung.tarifPvBlockGrund'].value !== undefined && s['speicher.regelung.tarifPvBlockGrund'].value !== null)
+          ? String(s['speicher.regelung.tarifPvBlockGrund'].value)
+          : '';
+        statusEl.title = pvReason;
+      } else {
+        statusEl.title = '';
+      }
+    } catch(_e) {
+      statusEl.title = '';
+    }
+
     statusEl.textContent = msg;
     statusEl.classList.toggle('hidden', !msg);
   }
