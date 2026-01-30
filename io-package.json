@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.81",
+    "version": "0.6.82",
     "news": {
+      "0.6.82": {
+        "en": "UI: Hid Peak-Shaving (Lastspitzenkappung) entry in customer settings to reduce clutter; feature remains installer-protected elsewhere.",
+        "de": "UI: Eintrag 'Lastspitzenkappung' in den Endkunden-Einstellungen ausgeblendet (weniger Verwirrung/Clutter); Funktion bleibt installateurgeschützt an anderer Stelle."
+      },
       "0.6.81": {
         "en": "Tariff: Added optional time-variable grid fee (HT/NT) configuration in dynamic tariff settings. In NT window EVCS grid charging is allowed and the battery may charge; outside NT the battery returns to normal self-consumption optimisation and EVCS grid charging is blocked (goal charging can still override per EVCS).",
         "de": "Tarif: Optionales zeitvariables Netzentgelt (HT/NT) in den Dynamik-Tarif-Einstellungen. Im NT-Fenster ist EVCS-Netzladen erlaubt und der Speicher darf laden; außerhalb NT läuft der Speicher wieder in der Eigenverbrauchsoptimierung und EVCS-Netzladen ist gesperrt (Ziel-Laden kann weiterhin pro Ladepunkt übersteuern)."
