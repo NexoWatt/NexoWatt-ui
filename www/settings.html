@@ -127,7 +127,9 @@
 
         <div id="dynNetFeePanel" data-dynpanel="netfee" style="display:none">
           <small style="opacity:.75; display:block; margin-top:6px;">
-            <b>NT</b>: EVCS Netzladen freigegeben + Speicher darf laden. <b>Standard/HT</b>: Speicher = Eigenverbrauchsoptimierung, EVCS Netzladen gesperrt (PV möglich).
+            <b>NT</b>: EVCS Netzladen freigegeben + Speicher darf laden.&nbsp;
+            <b>HT</b>: Speicher = Eigenverbrauchsoptimierung, EVCS Netzladen gesperrt (PV möglich).&nbsp;
+            <b>Standard (ST)</b>: keine zusätzliche Sperre/Erzwingung – dynamischer Tarif regelt wie zuvor.
           </small>
 
           <label class="row" style="margin-top:10px"><span>Modell</span>
@@ -171,7 +173,9 @@
           <!-- Modell 2: Quartale (NT/HT je Quartal, Rest = Standard) -->
           <div id="netFeeQuarterBlock" style="display:none">
             <small style="opacity:.75; display:block; margin-top:10px;">
-              Q1 = Jan–Mär, Q2 = Apr–Jun, Q3 = Jul–Sep, Q4 = Okt–Dez. Zeiten gelten täglich. Nicht definierte Zeit = <b>Standard</b>.
+              Q1 = Jan–Mär, Q2 = Apr–Jun, Q3 = Jul–Sep, Q4 = Okt–Dez. Zeiten gelten täglich. Nicht definierte Zeit = <b>Standard (ST)</b>.
+              <br/>
+              Tipp: Wenn ein Quartal <b>kein</b> NT/HT hat, setze bei NT <b>Von = Bis</b> und bei HT <b>Von = Bis</b> (z.&nbsp;B. 00:00–00:00). Dann gilt 24/7 Standard.
             </small>
 
             <!-- Q1 -->

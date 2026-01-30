@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.85",
+    "version": "0.6.86",
     "news": {
+      "0.6.86": {
+        "en": "Tariff/Net fee: Standard (ST) times no longer override the dynamic tariff logic. Only NT/HT act as overlays (NT allows grid charging; HT blocks it). Quarters without NT/HT can be configured by disabling the NT/HT windows (Von=Bis / 00:00–00:00).",
+        "de": "Tarif/Netzentgelt: Standard (ST) hebelt die dynamische Tarif-Logik nicht mehr aus. Nur NT/HT wirken als Overlay (NT gibt Netzladen frei; HT sperrt). Quartale ohne NT/HT können durch Deaktivieren der NT/HT-Fenster (Von=Bis / 00:00–00:00) als 24/7 Standard betrieben werden."
+      },
       "0.6.85": {
         "en": "Tariff: Time-variable grid fee (HT/NT) now supports a quarter-based schedule (Q1..Q4). You can configure NT/HT windows per quarter; remaining time is treated as Standard.",
         "de": "Tarif: Zeitvariables Netzentgelt (HT/NT) unterstützt jetzt ein quartalsbasiertes Zeitraster (Q1..Q4). NT/HT-Zeiten können pro Quartal gesetzt werden; die restliche Zeit gilt als Standard."
