@@ -1,3 +1,6 @@
+## 0.6.84 (2026-01-30)
+- UI: In der Tarif-/Optimierungsansicht wird jetzt sichtbar, wenn Speicher-Netzladen bewusst durch die PV‑Reserve (Forecast‑Headroom) geblockt wird (Transparenz statt „Bug“-Eindruck).
+
 ## 0.6.83 (2026-01-30)
 - Tarif: PV‑Forecast wird im Nacht-/NT‑Netzladen jetzt auch dann berücksichtigt, wenn keine Speicherkapazität (kWh) gemappt ist (konservative Kapazitäts‑Schätzung als Fallback). Dadurch wird der Speicher bei erwarteter PV‑Erzeugung nicht mehr „blind“ auf 100% aus dem Netz geladen.
 

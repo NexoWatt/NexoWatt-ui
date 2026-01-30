@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.83",
+    "version": "0.6.84",
     "news": {
+      "0.6.84": {
+        "en": "UI: Tariff/Optimisation view now shows when storage grid charging is intentionally blocked by PV reserve (forecast headroom), making the behaviour transparent (not a bug).",
+        "de": "UI: In der Tarif-/Optimierungsansicht wird jetzt sichtbar, wenn Speicher-Netzladen bewusst durch die PV-Reserve (Forecast-Headroom) geblockt wird – das Verhalten ist damit transparent (kein Bug)."
+      },
       "0.6.83": {
         "en": "Tariff (PV Reserve): Night-time grid charging now considers PV forecast even if storage capacity is not mapped (conservative capacity estimation fallback). Prevents charging the battery to 100% from the grid when significant PV is expected the same day.",
         "de": "Tarif (PV‑Reserve): Netzladen in der Nacht berücksichtigt jetzt den PV‑Forecast auch dann, wenn die Speicherkapazität nicht gemappt ist (konservative Kapazitäts‑Schätzung als Fallback). Verhindert, dass der Speicher bei erwarteter PV‑Erzeugung „blind“ auf 100% aus dem Netz lädt."

@@ -3327,6 +3327,21 @@ function updateEmsControlUi() {
     }
     setText('para14aShort', p14Short);
 
+    // PV‑Reserve Indikator (Tarif-Netzladen wird bewusst begrenzt)
+    try {
+      const pvWrap = document.getElementById('pvReserveWrap');
+      const pvShortEl = document.getElementById('pvReserveShort');
+      const pvBlocked = !!v('speicher.regelung.tarifPvBlock');
+      const pvReason = v('speicher.regelung.tarifPvBlockGrund');
+      const show = !!(tariffOn && pvBlocked);
+
+      if (pvWrap) {
+        pvWrap.style.display = show ? '' : 'none';
+        pvWrap.title = (show && pvReason) ? String(pvReason) : '';
+      }
+      if (pvShortEl) pvShortEl.textContent = show ? '⛔' : '⛔';
+    } catch (_e) {}
+
     // Modal
     const modal = document.getElementById('emsModal');
     const modalOpen = modal && !modal.classList.contains('hidden');
@@ -3342,7 +3357,33 @@ function updateEmsControlUi() {
       const stTariff = document.getElementById('emsTariffStatus');
       const hintTariff = document.getElementById('emsTariffHint');
       if (stTariff) stTariff.textContent = tariffOn ? ((tariffMode === 2) ? 'Automatik' : 'Manuell') : 'Aus';
-      if (hintTariff) hintTariff.textContent = tariffOn ? 'Optimierung aktiv' : 'Optimierung deaktiviert';
+      if (hintTariff) {
+        if (!tariffOn) {
+          hintTariff.textContent = 'Optimierung deaktiviert';
+          hintTariff.title = '';
+        } else {
+          const statusText = v('tarif.statusText');
+          const pvBlocked = !!v('speicher.regelung.tarifPvBlock');
+          const pvReason = v('speicher.regelung.tarifPvBlockGrund');
+          const pvCapSoc = v('speicher.regelung.tarifPvCapSocPct');
+
+          let hint = (statusText !== null && statusText !== undefined && String(statusText).trim())
+            ? String(statusText)
+            : 'Optimierung aktiv';
+
+          if (pvBlocked) {
+            const capTxt = (pvCapSoc !== null && pvCapSoc !== undefined && Number.isFinite(Number(pvCapSoc)))
+              ? ` (max ${Number(pvCapSoc).toFixed(1)}%)`
+              : '';
+            hint += ` — Netzladen aktiv, aber durch PV‑Reserve geblockt${capTxt}`;
+            hintTariff.title = (pvReason !== null && pvReason !== undefined && String(pvReason).trim()) ? String(pvReason) : '';
+          } else {
+            hintTariff.title = '';
+          }
+
+          hintTariff.textContent = hint;
+        }
+      }
 
       setText('emsPriceCurrent', tariffOn ? formatPricePerKwh(priceNow) : '--');
       setText('emsPriceAvg', tariffOn ? formatPricePerKwh(priceAvg) : '--');
