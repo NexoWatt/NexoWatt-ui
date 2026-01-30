@@ -12,7 +12,7 @@ const https = require('https');
 const pkg = require('./package.json');
 
 // Embedded EMS engine (Charging Management from nexowatt-multiuse)
-const { EmsEngine } = require('./.nwcore/engine');
+const { EmsEngine } = require('./ems/engine');
 
 function parseCookies(req) {
   const raw = req.headers.cookie || '';
