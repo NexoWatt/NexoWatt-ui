@@ -1,3 +1,6 @@
+## 0.6.83 (2026-01-30)
+- Tarif: PV‑Forecast wird im Nacht-/NT‑Netzladen jetzt auch dann berücksichtigt, wenn keine Speicherkapazität (kWh) gemappt ist (konservative Kapazitäts‑Schätzung als Fallback). Dadurch wird der Speicher bei erwarteter PV‑Erzeugung nicht mehr „blind“ auf 100% aus dem Netz geladen.
+
 ## 0.6.82 (2026-01-30)
 - UI: Eintrag „Lastspitzenkappung“ in den Endkunden-Einstellungen ausgeblendet (Kundenansicht aufgeräumt).
 

@@ -901,7 +901,15 @@ if (typeof soc === 'number') {
 						      // - Speicherfarm: Summe aus Farm‑Konfig
 						      // - Single: installerConfig.storage.capacityKWh (optional)
 						      // - Fallback: gemappter DP (st.capacityKwh)
+						      //
+						      // Hinweis:
+						      // Damit PV‑Reserve im Nacht‑Tarif wirklich verhindert, dass der Speicher
+						      // „blind“ auf 100% aus dem Netz geladen wird, brauchen wir eine Kapazität.
+						      // Wenn sie nicht gemappt/konfiguriert ist, schätzen wir sie konservativ aus
+						      // der im Tarif angeforderten Ladeleistung (SoC‑Cap bleibt dadurch trotzdem aktiv).
 						      let capKWh = null;
+						      let capKWhSource = '';
+						      let capKWhEstimated = false;
 						      try {
 						        const farmCfg2 = (this.adapter && this.adapter.config && this.adapter.config.storageFarm) ? this.adapter.config.storageFarm : null;
 						        if (farmCfg2 && farmCfg2.enabled && Array.isArray(farmCfg2.storages)) {
@@ -911,77 +919,107 @@ if (typeof soc === 'number') {
 						            const c = Number(s.capacityKWh);
 						            if (Number.isFinite(c) && c > 0) sum += c;
 						          }
-						          if (sum > 0) capKWh = sum;
+						          if (sum > 0) {
+						            capKWh = sum;
+						            capKWhSource = 'farm';
+						          }
 						        }
 						      } catch {
 						        // ignore
 						      }
-
+						
 						      if (!(typeof capKWh === 'number' && Number.isFinite(capKWh) && capKWh > 0)) {
 						        const capCfg = Number(this.adapter?.config?.storage?.capacityKWh);
-						        if (Number.isFinite(capCfg) && capCfg > 0) capKWh = capCfg;
+						        if (Number.isFinite(capCfg) && capCfg > 0) {
+						          capKWh = capCfg;
+						          capKWhSource = 'config';
+						        }
 						      }
-
+						
 						      if (!(typeof capKWh === 'number' && Number.isFinite(capKWh) && capKWh > 0) && this.dp) {
 						        const capDp = this.dp.getNumber('st.capacityKwh', null);
-						        if (typeof capDp === 'number' && Number.isFinite(capDp) && capDp > 0) capKWh = capDp;
-						      }
-
-						      if (typeof capKWh === 'number' && Number.isFinite(capKWh) && capKWh > 0) {
-						        const socTarget = (typeof hardChargeMaxSoc === 'number' && Number.isFinite(hardChargeMaxSoc)) ? hardChargeMaxSoc : 100;
-
-						        // Horizon (h) + Heuristik‑Faktoren
-						        const horizonH = clamp(num(cfg.tariffPvReserveHorizonHours, 24), 1, 48);
-						        const captureFactor = clamp(num(cfg.tariffPvReserveCaptureFactor, 0.6), 0, 1);
-						        const confidence = clamp(num(cfg.tariffPvReserveConfidence, 0.85), 0, 1);
-
-						        // Wenn SoC sehr niedrig: nicht warten, sondern laden.
-						        const reserveMinEff = reserveEnabled ? reserveMin : 0;
-						        const minSocForWaitCfg = num(cfg.tariffPvReserveMinSocPct, NaN);
-						        const minSocForWait = (Number.isFinite(minSocForWaitCfg))
-						          ? clamp(minSocForWaitCfg, 0, socTarget)
-						          : Math.max(reserveMinEff + 2, 10);
-
-						        // PV Charge‑Potential (kWh) über den Horizon, limitiert durch maxChargeW (falls gesetzt).
-						        let pvChargePotentialKWh = 0;
-						        const t0 = now;
-						        const t1 = t0 + horizonH * 3600000;
-						        const limitW = (typeof maxChargeW === 'number' && Number.isFinite(maxChargeW) && maxChargeW > 0) ? maxChargeW : null;
-						        for (const seg of pf.curve) {
-						          if (!seg || typeof seg.t !== 'number' || typeof seg.dtMs !== 'number' || typeof seg.w !== 'number') continue;
-						          const s0 = seg.t;
-						          const s1 = seg.t + seg.dtMs;
-						          if (s1 <= t0) continue;
-						          if (s0 >= t1) break;
-						          const ov0 = Math.max(s0, t0);
-						          const ov1 = Math.min(s1, t1);
-						          const ovMs = ov1 - ov0;
-						          if (ovMs <= 0) continue;
-						          const w = Math.max(0, seg.w);
-						          const wEff = (limitW ? Math.min(w, limitW) : w);
-						          pvChargePotentialKWh += (wEff * (ovMs / 3600000)) / 1000;
+						        if (typeof capDp === 'number' && Number.isFinite(capDp) && capDp > 0) {
+						          capKWh = capDp;
+						          capKWhSource = 'dp';
 						        }
-
-						        // Erwartbar speicherbare PV‑kWh (konservativ)
-						        const pvStorableKWh = pvChargePotentialKWh * captureFactor * confidence;
-
+						      }
+						
+						      const socTarget = (typeof hardChargeMaxSoc === 'number' && Number.isFinite(hardChargeMaxSoc)) ? hardChargeMaxSoc : 100;
+						
+						      // Horizon (h) + Heuristik‑Faktoren
+						      const horizonH = clamp(num(cfg.tariffPvReserveHorizonHours, 24), 1, 48);
+						      const captureFactor = clamp(num(cfg.tariffPvReserveCaptureFactor, 0.6), 0, 1);
+						      const confidence = clamp(num(cfg.tariffPvReserveConfidence, 0.85), 0, 1);
+						
+						      // Wenn SoC sehr niedrig: nicht warten, sondern laden.
+						      const reserveMinEff = reserveEnabled ? reserveMin : 0;
+						      const minSocForWaitCfg = num(cfg.tariffPvReserveMinSocPct, NaN);
+						      const minSocForWait = (Number.isFinite(minSocForWaitCfg))
+						        ? clamp(minSocForWaitCfg, 0, socTarget)
+						        : Math.max(reserveMinEff + 2, 10);
+						
+						      // PV Charge‑Potential (kWh) über den Horizon, limitiert durch maxChargeW (falls gesetzt).
+						      let pvChargePotentialKWh = 0;
+						      const t0 = now;
+						      const t1 = t0 + horizonH * 3600000;
+						      const limitW = (typeof maxChargeW === 'number' && Number.isFinite(maxChargeW) && maxChargeW > 0 && maxChargeW !== Number.POSITIVE_INFINITY)
+						        ? maxChargeW
+						        : null;
+						      for (const seg of pf.curve) {
+						        if (!seg || typeof seg.t !== 'number' || typeof seg.dtMs !== 'number' || typeof seg.w !== 'number') continue;
+						        const s0 = seg.t;
+						        const s1 = seg.t + seg.dtMs;
+						        if (s1 <= t0) continue;
+						        if (s0 >= t1) break;
+						        const ov0 = Math.max(s0, t0);
+						        const ov1 = Math.min(s1, t1);
+						        const ovMs = ov1 - ov0;
+						        if (ovMs <= 0) continue;
+						        const w = Math.max(0, seg.w);
+						        const wEff = (limitW ? Math.min(w, limitW) : w);
+						        pvChargePotentialKWh += (wEff * (ovMs / 3600000)) / 1000;
+						      }
+						
+						      // Erwartbar speicherbare PV‑kWh (konservativ)
+						      const pvStorableKWh = pvChargePotentialKWh * captureFactor * confidence;
+						
+						      // Kapazität: wenn unbekannt, grob aus Tarif‑Ladeleistung schätzen (Fallback)
+						      let capKWhEff = capKWh;
+						      if (!(typeof capKWhEff === 'number' && Number.isFinite(capKWhEff) && capKWhEff > 0)) {
+						        // Schätzung: 0→100% dauert typischerweise ca. 2.5h bei Nennleistung.
+						        const estHours = 2.5;
+						        const reqW = (Number.isFinite(Math.abs(want)) && Math.abs(want) > 0) ? Math.abs(want) : null;
+						        let estKWh = (reqW && Number.isFinite(reqW)) ? (reqW / 1000) * estHours : NaN;
+						        if (Number.isFinite(estKWh) && estKWh > 0) {
+						          // Sane bounds to avoid extreme behaviour on bad configs
+						          estKWh = clamp(estKWh, 1, 200);
+						          capKWhEff = estKWh;
+						          capKWhSource = 'estimated';
+						          capKWhEstimated = true;
+						        }
+						      }
+						
+						      if (typeof capKWhEff === 'number' && Number.isFinite(capKWhEff) && capKWhEff > 0) {
 						        // Headroom in % (clamp auf sinnvolle Range)
-						        const headroomSocPctRaw = (pvStorableKWh > 0) ? (pvStorableKWh / capKWh) * 100 : 0;
+						        const headroomSocPctRaw = (pvStorableKWh > 0) ? (pvStorableKWh / capKWhEff) * 100 : 0;
 						        const headroomSocPct = clamp(headroomSocPctRaw, 0, socTarget);
-
+						
 						        // Netzlade‑SoC‑Cap: Ziel minus Headroom (mindestens minSocForWait)
 						        const capSocPct = clamp(socTarget - headroomSocPct, minSocForWait, socTarget);
-
-						        const active = (headroomSocPct >= 1.0) && (capSocPct < (socTarget - 0.5));
+						
+						        const active = (headroomSocPct >= 0.5) && (capSocPct < (socTarget - 0.5));
 						        if (active && soc >= (capSocPct - 1e-9)) {
 						          pvBlockGridCharge = true;
-						          pvBlockReason = `PV‑Reserve: Netzladen bis max ${capSocPct.toFixed(1)}% (Headroom ${headroomSocPct.toFixed(1)}% ≈ ${pvStorableKWh.toFixed(1)} kWh)`;
+						          const capNote = capKWhEstimated ? ' (Cap geschätzt)' : '';
+						          pvBlockReason = `PV‑Reserve: Netzladen bis max ${capSocPct.toFixed(1)}%${capNote} (Headroom ${headroomSocPct.toFixed(1)}% ≈ ${pvStorableKWh.toFixed(1)} kWh)`;
 						        }
-
+						
 						        pvDebug = {
 						          mode: 'pvReserveCap',
 						          ageMs: (pf.ageMs === null || pf.ageMs === undefined) ? null : Math.round(Number(pf.ageMs)),
-						          capKWh: Number(capKWh),
+						          capKWh: Number(capKWhEff),
+						          capKWhSource,
+						          capKWhEstimated,
 						          socNow: soc,
 						          socTarget,
 						          horizonH,
@@ -994,6 +1032,27 @@ if (typeof soc === 'number') {
 						          minSocForWait,
 						          blocked: pvBlockGridCharge,
 						          reason: pvBlockGridCharge ? pvBlockReason : '',
+						        };
+						      } else {
+						        // Kapazität nicht ermittelbar -> PV‑Reserve kann nicht sauber rechnen, aber Debug liefern.
+						        pvDebug = {
+						          mode: 'pvReserveUnavailable',
+						          ageMs: (pf.ageMs === null || pf.ageMs === undefined) ? null : Math.round(Number(pf.ageMs)),
+						          capKWh: null,
+						          capKWhSource: capKWhSource || '',
+						          capKWhEstimated: false,
+						          socNow: soc,
+						          socTarget,
+						          horizonH,
+						          pvChargePotentialKWh: Number(pvChargePotentialKWh),
+						          captureFactor,
+						          confidence,
+						          pvStorableKWh: Number(pvStorableKWh),
+						          headroomSocPct: null,
+						          capSocPct: null,
+						          minSocForWait,
+						          blocked: false,
+						          reason: 'PV‑Reserve: Kapazität unbekannt',
 						        };
 						      }
 						    }
