@@ -103,24 +103,68 @@
 
       <!-- Diese Einstellungen sollen nur sichtbar sein, wenn der Dynamische Tarif aktiviert ist -->
       <div id="dyn_settings_block">
-        <label class="row"><span>Speicher Leistung (W)</span>
-          <input type="number" id="s_storagePower" step="1" data-scope="settings" data-key="storagePower">
+        <label class="row"><span>Zeitvariables Netzentgelt (HT/NT)</span>
+          <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_netFeeEnabled"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+          <input type="checkbox" class="nw-toggle-hidden" id="s_netFeeEnabled" data-scope="settings" data-key="netFeeEnabled">
         </label>
-        <label class="row"><span>Strompreis (€)</span>
-          <input type="number" id="s_price" step="0.01" data-scope="settings" data-key="price">
-        </label>
-        <div class="row"><span>Priorität (Tarif): <b id="s_priority_label">Auto</b></span>
-          <input type="range" id="s_priority" min="1" max="3" step="1" data-scope="settings" data-key="priority">
-          <small>1 = Speicher, 2 = Auto, 3 = Ladestation</small>
+
+        <div class="nw-tabs nw-tabs--sub" id="dynTariffSubtabs" style="display:none;margin-top:8px">
+          <button type="button" class="nw-tab nw-tab--active" data-dyntab="tariff">Tarif</button>
+          <button type="button" class="nw-tab" data-dyntab="netfee">Netzentgelt</button>
         </div>
-        <div class="row"><span>Modus Tarif: <b id="s_tariffMode_label">Manuell</b></span>
-          <input type="range" id="s_tariffMode" min="1" max="2" step="1" data-scope="settings" data-key="tariffMode">
-          <small>1 = Manuell, 2 = Automatisch</small>
+
+        <div id="dynTariffPanel" data-dynpanel="tariff">
+          <label class="row"><span>Speicher Leistung (W)</span>
+            <input type="number" id="s_storagePower" step="1" data-scope="settings" data-key="storagePower">
+          </label>
+          <label class="row"><span>Strompreis (€)</span>
+            <input type="number" id="s_price" step="0.01" data-scope="settings" data-key="price">
+          </label>
+          <div class="row"><span>Priorität (Tarif): <b id="s_priority_label">Auto</b></span>
+            <input type="range" id="s_priority" min="1" max="3" step="1" data-scope="settings" data-key="priority">
+            <small>1 = Speicher, 2 = Auto, 3 = Ladestation</small>
+          </div>
+          <div class="row"><span>Modus Tarif: <b id="s_tariffMode_label">Manuell</b></span>
+            <input type="range" id="s_tariffMode" min="1" max="2" step="1" data-scope="settings" data-key="tariffMode">
+            <small>1 = Manuell, 2 = Automatisch</small>
+          </div>
+        </div>
+
+        <div id="dynNetFeePanel" data-dynpanel="netfee" style="display:none">
+          <small style="opacity:.75; display:block; margin-top:6px;">
+            <b>NT</b>: EVCS Netzladen freigegeben + Speicher darf laden. <b>HT/zwischen</b>: Speicher = Eigenverbrauchsoptimierung, EVCS Netzladen gesperrt (PV möglich).
+          </small>
+
+          <div class="row" style="margin-top:10px;align-items:flex-start">
+            <span>NT (Niedertarif)</span>
+            <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+              <label style="display:flex;align-items:center;gap:6px">
+                <span style="opacity:.8">Von</span>
+                <input type="time" id="s_netFeeNtStart" data-scope="settings" data-key="netFeeNtStart">
+              </label>
+              <label style="display:flex;align-items:center;gap:6px">
+                <span style="opacity:.8">Bis</span>
+                <input type="time" id="s_netFeeNtEnd" data-scope="settings" data-key="netFeeNtEnd">
+              </label>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:10px;align-items:flex-start">
+            <span>HT (Hochtarif)</span>
+            <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+              <label style="display:flex;align-items:center;gap:6px">
+                <span style="opacity:.8">Von</span>
+                <input type="time" id="s_netFeeHtStart" data-scope="settings" data-key="netFeeHtStart">
+              </label>
+              <label style="display:flex;align-items:center;gap:6px">
+                <span style="opacity:.8">Bis</span>
+                <input type="time" id="s_netFeeHtEnd" data-scope="settings" data-key="netFeeHtEnd">
+              </label>
+            </div>
+          </div>
         </div>
       </div>
-    
-
-      <hr style="margin:14px 0;border:0;border-top:1px solid rgba(255,255,255,.08)"/>
+<hr style="margin:14px 0;border:0;border-top:1px solid rgba(255,255,255,.08)"/>
 
       <div class="subhead">Wetter</div>
 

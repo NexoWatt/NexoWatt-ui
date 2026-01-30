@@ -198,6 +198,13 @@ class NexoWattVis extends utils.Adapter {
       priority: { type: 'number', role: 'value', def: 2 },
       tariffMode: { type: 'number', role: 'value', def: 1 },
 
+      // Zeitvariables Netzentgelt (HT/NT)
+      netFeeEnabled: { type: 'boolean', role: 'state', def: false },
+      netFeeNtStart: { type: 'string', role: 'text', def: '22:00' },
+      netFeeNtEnd: { type: 'string', role: 'text', def: '06:00' },
+      netFeeHtStart: { type: 'string', role: 'text', def: '06:00' },
+      netFeeHtEnd: { type: 'string', role: 'text', def: '22:00' },
+
       // Weather App (Plug&Play)
       weatherEnabled: { type: 'boolean', role: 'state', def: false },
       weatherUsageMode: { type: 'string', role: 'text', def: 'private' },
@@ -10347,7 +10354,11 @@ return res.json(out);
       'notifyHardCurtailment',
       'notifyRecovery',
       // Tariff/charging settings
-      'dynamicTariff','storagePower','price','priority','tariffMode','evcsMaxPower','evcsCount',
+      'dynamicTariff','storagePower','price','priority','tariffMode',
+      // Zeitvariables Netzentgelt (HT/NT)
+      'netFeeEnabled','netFeeNtStart','netFeeNtEnd','netFeeHtStart','netFeeHtEnd',
+      // EVCS defaults
+      'evcsMaxPower','evcsCount',
       // Weather App (FIS settings)
       'weatherEnabled','weatherUsageMode','weatherApiKey'
     ];

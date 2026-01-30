@@ -1,3 +1,7 @@
+## 0.6.81 (2026-01-30)
+- Tarif: Zeitvariables Netzentgelt (HT/NT) als Zusatz in den Dynamik-Tarif Einstellungen (Toggle + Zeitfenster).
+- Logik: Im NT-Fenster dürfen EVCS aus dem Netz laden und der Speicher darf gezielt laden. In HT/zwischen läuft der Speicher wieder in der normalen Eigenverbrauchsoptimierung; EVCS Netzladen ist gesperrt (Ziel-Laden kann weiterhin pro Ladepunkt übersteuern).
+
 ## 0.6.80 (2026-01-28)
 - Performance: chargingManagement tick massiv beschleunigt bei vielen Ladepunkten (z.B. 50+). Lokale setState-Updates werden jetzt dedupliziert/gebündelt und asynchron mit begrenzter Parallelität geschrieben (kein "await setState"-Bottleneck mehr).
 - Performance: Lokale Reads nutzen primär den in-memory stateCache (Fallback nur bei Cache-Miss), wodurch DB-Reads pro Tick stark reduziert werden.

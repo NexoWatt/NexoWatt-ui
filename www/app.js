@@ -1989,6 +1989,49 @@ function initSettingsPanel(){
   updateTariffModeLabel();
   updateDynVisibility();
 
+  // Zeitvariables Netzentgelt (HT/NT) – UI
+  const netFeeToggle = document.getElementById('s_netFeeEnabled');
+  const netFeeTabs = document.getElementById('dynTariffSubtabs');
+  const dynTariffPanel = document.getElementById('dynTariffPanel');
+  const dynNetFeePanel = document.getElementById('dynNetFeePanel');
+
+  const setDynSubTab = (tab) => {
+    const t = (tab === 'netfee') ? 'netfee' : 'tariff';
+    if (netFeeTabs) netFeeTabs.dataset.active = t;
+    if (dynTariffPanel) dynTariffPanel.style.display = (t === 'tariff') ? '' : 'none';
+    if (dynNetFeePanel) dynNetFeePanel.style.display = (t === 'netfee') ? '' : 'none';
+    if (netFeeTabs) {
+      [...netFeeTabs.querySelectorAll('button[data-dyntab]')].forEach(btn => {
+        const isActive = (btn.dataset.dyntab || 'tariff') === t;
+        btn.classList.toggle('nw-tab--active', isActive);
+      });
+    }
+  };
+
+  const updateNetFeeUi = (opts = {}) => {
+    const enabled = netFeeToggle ? !!netFeeToggle.checked : false;
+
+    // Tabs nur anzeigen, wenn Feature aktiv ist
+    if (netFeeTabs) netFeeTabs.style.display = enabled ? '' : 'none';
+
+    if (!enabled) {
+      setDynSubTab('tariff');
+    } else {
+      if (opts.openNetFee) {
+        setDynSubTab('netfee');
+      } else {
+        const current = (netFeeTabs && netFeeTabs.dataset.active);
+        setDynSubTab(current || 'netfee');
+      }
+    }
+
+    // keep custom toggle buttons in sync
+    try { syncToggleButtonsForInputId('s_netFeeEnabled'); } catch (_e) {}
+  };
+
+  // UI-Update immer ausführen
+  updateNetFeeUi();
+
   // Weather App (Plug&Play)
   const weatherToggle = document.getElementById('s_weather_enabled');
   const weatherBlock = document.getElementById('weather_settings_block');
@@ -2068,6 +2111,19 @@ function initSettingsPanel(){
   }
   if (dynToggle) {
     dynToggle.addEventListener('change', updateDynVisibility);
+  }
+
+  // Netzentgelt: Aktivierung & Tabs
+  if (netFeeToggle) {
+    netFeeToggle.addEventListener('change', () => updateNetFeeUi({ openNetFee: !!netFeeToggle.checked }));
+  }
+  if (netFeeTabs) {
+    [...netFeeTabs.querySelectorAll('button[data-dyntab]')].forEach(btn => {
+      btn.addEventListener('click', () => {
+        const t = btn.dataset.dyntab || 'tariff';
+        setDynSubTab(t);
+      });
+    });
   }
 
   // Wetter: Aktivierung & Nutzungsart

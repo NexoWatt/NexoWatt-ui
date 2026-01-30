@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.80",
+    "version": "0.6.81",
     "news": {
+      "0.6.81": {
+        "en": "Tariff: Added optional time-variable grid fee (HT/NT) configuration in dynamic tariff settings. In NT window EVCS grid charging is allowed and the battery may charge; outside NT the battery returns to normal self-consumption optimisation and EVCS grid charging is blocked (goal charging can still override per EVCS).",
+        "de": "Tarif: Optionales zeitvariables Netzentgelt (HT/NT) in den Dynamik-Tarif-Einstellungen. Im NT-Fenster ist EVCS-Netzladen erlaubt und der Speicher darf laden; außerhalb NT läuft der Speicher wieder in der Eigenverbrauchsoptimierung und EVCS-Netzladen ist gesperrt (Ziel-Laden kann weiterhin pro Ladepunkt übersteuern)."
+      },
       "0.6.79": {
         "en": "Performance: DatapointRegistry upsert is now idempotent and caches unit detection/subscriptions to prevent very slow chargingManagement ticks with many EVCS. UI: EVCS tiles open the control modal reliably with a single click even under heavy SSE re-renders.",
         "de": "Performance: DatapointRegistry.upsert ist jetzt idempotent und cached Unit-Detection/Subscriptions – verhindert sehr langsame chargingManagement-Ticks bei vielen EVCS. UI: EVCS-Kacheln öffnen das Regel-Modal wieder zuverlässig mit einem Klick (auch bei starken SSE-Re-Renders)."

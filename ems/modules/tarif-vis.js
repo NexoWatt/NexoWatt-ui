@@ -76,6 +76,8 @@ class TarifVisModule extends BaseModule {
         await mk('tarif.netzLadenErlaubt', 'Netzladung erlaubt (Tarif-Logik)', 'boolean', 'indicator');
         await mk('tarif.entladenErlaubt', 'Entladen erlaubt (Tarif-Logik)', 'boolean', 'indicator');
         await mk('tarif.statusText', 'Tarif Status (VIS)', 'string', 'text');
+        await mk('tarif.netFeeEnabled', 'Zeitvariables Netzentgelt aktiv (VIS)', 'boolean', 'indicator');
+        await mk('tarif.netFeeMode', 'Netzentgelt Modus (NT/HT/zwischen)', 'string', 'text');
         // VIS-Settings als Datenpunkte registrieren (nur wenn dp-Registry vorhanden ist)
         if (this.dp && typeof this.dp.upsert === 'function') {
             const visInst = this._getVisInstance();
@@ -87,6 +89,13 @@ class TarifVisModule extends BaseModule {
             await this.dp.upsert({ key: 'vis.settings.priority', objectId: `${visInst}.settings.priority` });
             await this.dp.upsert({ key: 'vis.settings.storagePower', objectId: `${visInst}.settings.storagePower` });
             await this.dp.upsert({ key: 'vis.settings.evcsMaxPower', objectId: `${visInst}.settings.evcsMaxPower` });
+
+            // Zeitvariables Netzentgelt (HT/NT)
+            await this.dp.upsert({ key: 'vis.settings.netFeeEnabled', objectId: `${visInst}.settings.netFeeEnabled` });
+            await this.dp.upsert({ key: 'vis.settings.netFeeNtStart', objectId: `${visInst}.settings.netFeeNtStart`, dataType: 'string' });
+            await this.dp.upsert({ key: 'vis.settings.netFeeNtEnd', objectId: `${visInst}.settings.netFeeNtEnd`, dataType: 'string' });
+            await this.dp.upsert({ key: 'vis.settings.netFeeHtStart', objectId: `${visInst}.settings.netFeeHtStart`, dataType: 'string' });
+            await this.dp.upsert({ key: 'vis.settings.netFeeHtEnd', objectId: `${visInst}.settings.netFeeHtEnd`, dataType: 'string' });
 
             // Optional: aktueller Tarifpreis direkt als State-ID (ohne globale DP-Tabelle)
             const priceCurrentId = this._getVisPriceCurrentId();
@@ -401,6 +410,55 @@ class TarifVisModule extends BaseModule {
     }
 
     /**
+     * Parses a HH:MM time string into minutes from midnight.
+     * Returns null if the value is invalid.
+     * @param {any} raw
+     * @returns {number|null}
+     */
+    _parseTimeToMinutes(raw) {
+        if (raw === null || raw === undefined) return null;
+        const s = String(raw).trim();
+        if (!s) return null;
+        const m = s.match(/^(\d{1,2}):(\d{2})$/);
+        if (!m) return null;
+        const hh = Number(m[1]);
+        const mm = Number(m[2]);
+        if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+        if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+        return hh * 60 + mm;
+    }
+
+    /**
+     * Checks if nowMin (minutes from midnight) is inside the [start,end) window.
+     * Handles cross-midnight windows (e.g. 22:00-06:00).
+     * @param {number} nowMin
+     * @param {number|null} startMin
+     * @param {number|null} endMin
+     */
+    _isInTimeWindow(nowMin, startMin, endMin) {
+        if (!Number.isFinite(nowMin)) return false;
+        if (startMin === null || startMin === undefined) return false;
+        if (endMin === null || endMin === undefined) return false;
+        const s = Number(startMin);
+        const e = Number(endMin);
+        if (!Number.isFinite(s) || !Number.isFinite(e)) return false;
+        if (s === e) return false;
+        if (s < e) {
+            return nowMin >= s && nowMin < e;
+        }
+        // cross midnight
+        return (nowMin >= s) || (nowMin < e);
+    }
+
+    /**
+     * @param {number} [nowMs]
+     */
+    _nowMinutesLocal(nowMs) {
+        const d = nowMs ? new Date(nowMs) : new Date();
+        return d.getHours() * 60 + d.getMinutes();
+    }
+
+    /**
      * Priorität normalisieren:
      *
      * Neue VIS-Logik (Slider, diskret):
@@ -480,6 +538,30 @@ class TarifVisModule extends BaseModule {
             const prioritaet = this._normPrioritaet(priorRaw);
             const storagePowerAbsW = Math.max(0, Math.abs(this._num(storageW, 0)));
             const baseW = Math.max(0, Math.abs(this._num(evcsMaxW, 0)));
+
+            // --- Zeitvariables Netzentgelt (HT/NT) ---
+            const netFeeEnabledRaw = this.dp ? this.dp.getBoolean('vis.settings.netFeeEnabled', false) : false;
+            const netFeeAge = this.dp ? this.dp.getAgeMs('vis.settings.netFeeEnabled') : null;
+            const netFeeFresh = (netFeeAge === null || netFeeAge === undefined) ? true : (netFeeAge <= staleTimeoutMs);
+            const netFeeEff = !!(aktivEff && netFeeFresh && netFeeEnabledRaw);
+
+            const ntStartRaw = (this.dp && typeof this.dp.getRaw === 'function') ? this.dp.getRaw('vis.settings.netFeeNtStart') : null;
+            const ntEndRaw = (this.dp && typeof this.dp.getRaw === 'function') ? this.dp.getRaw('vis.settings.netFeeNtEnd') : null;
+            const htStartRaw = (this.dp && typeof this.dp.getRaw === 'function') ? this.dp.getRaw('vis.settings.netFeeHtStart') : null;
+            const htEndRaw = (this.dp && typeof this.dp.getRaw === 'function') ? this.dp.getRaw('vis.settings.netFeeHtEnd') : null;
+
+            const ntStartMin = this._parseTimeToMinutes(ntStartRaw || '22:00');
+            const ntEndMin = this._parseTimeToMinutes(ntEndRaw || '06:00');
+            const htStartMin = this._parseTimeToMinutes(htStartRaw || '06:00');
+            const htEndMin = this._parseTimeToMinutes(htEndRaw || '22:00');
+            const nowMinLocal = this._nowMinutesLocal();
+
+            let netFeeMode = 'off'; // off | NT | HT | zwischen
+            if (netFeeEff) {
+                const inNt = this._isInTimeWindow(nowMinLocal, ntStartMin, ntEndMin);
+                const inHt = (!inNt) && this._isInTimeWindow(nowMinLocal, htStartMin, htEndMin);
+                netFeeMode = inNt ? 'NT' : inHt ? 'HT' : 'zwischen';
+            }
 
 			// --- Preise (Provider + VIS) ---
                 const preisGrenzeVis = this._normalizePriceEurPerKwh(preisGrenzeVisRaw, null);
@@ -777,9 +859,20 @@ class TarifVisModule extends BaseModule {
 
             if (aktivEff && storagePowerAbsW > 0) {
                 // gewünschtes Verhalten:
-                // - günstig  : Speicher laden (nur wenn SoC <= Start), bis SoC >= Stop, dann ruhen (0 W)
-                // - neutral/teuer/unbekannt: Speicher entladen (NVP-Regelung)
-                if (tarifState === 'guenstig' && allowStorageCheap) {
+                // - günstig/NT : Speicher laden (nur wenn SoC <= Start), bis SoC >= Stop, dann ruhen (0 W)
+                // - außerhalb NT (Zeit-Netzentgelt): keine Tarif-Vorgabe (Eigenverbrauchsoptimierung übernimmt)
+                // - neutral/teuer/unbekannt (ohne Zeit-Netzentgelt): Speicher entladen (NVP-Regelung)
+                const netFeeActive = !!(netFeeEff && netFeeMode !== 'off');
+                const netFeeIsNt = !!(netFeeActive && netFeeMode === 'NT');
+
+                if (netFeeActive && !netFeeIsNt) {
+                    // In HT/zwischen: Speicher soll NICHT durch Tarif entladen/geladen werden → Eigenverbrauch
+                    this._tariffChargeLatch = false;
+                    storageChargeWanted = false;
+                    storageFullHold = false;
+                    speicherSollW = 0;
+                } else if ((tarifState === 'guenstig' && allowStorageCheap) || netFeeIsNt) {
+                    // günstig (Preis) ODER NT (Netzentgelt): Speicher laden (SoC-Hysterese)
                     // Default/Fallback: wenn SoC nicht verfügbar ist, verhalte dich wie bisher (laden)
                     storageChargeWanted = true;
 
@@ -800,7 +893,7 @@ class TarifVisModule extends BaseModule {
                     }
 
                     speicherSollW = storageChargeWanted ? -storagePowerAbsW : 0;
-                } else if (tarifState === 'neutral' || tarifState === 'teuer' || tarifState === 'unbekannt') {
+                } else if (!netFeeActive && (tarifState === 'neutral' || tarifState === 'teuer' || tarifState === 'unbekannt')) {
                     // Reset der Lade-Hysterese außerhalb von "günstig"
                     this._tariffChargeLatch = false;
                     storageChargeWanted = false;
@@ -828,7 +921,14 @@ class TarifVisModule extends BaseModule {
             // - bei günstig: nur true, wenn Priorität EVCS zulässt
             let gridChargeAllowed = true;
             if (aktivEff) {
-                if (tarifState === 'teuer') {
+                const netFeeActive = !!(netFeeEff && netFeeMode !== 'off');
+                const netFeeIsNt = !!(netFeeActive && netFeeMode === 'NT');
+
+                if (netFeeActive) {
+                    // Zeitvariables Netzentgelt: Netzladen nur im NT-Fenster freigeben.
+                    // (Ziel-Laden kann im Charging-Management pro Ladepunkt übersteuern.)
+                    gridChargeAllowed = netFeeIsNt;
+                } else if (tarifState === 'teuer') {
                     gridChargeAllowed = false;
                 } else if (tarifState === 'guenstig') {
                     gridChargeAllowed = allowEvcsCheap ? true : false;
@@ -843,7 +943,11 @@ class TarifVisModule extends BaseModule {
             // - sonst freigeben
             let dischargeAllowed = true;
             if (aktivEff) {
-                dischargeAllowed = (tarifState !== 'guenstig');
+                const netFeeActive = !!(netFeeEff && netFeeMode !== 'off');
+                const netFeeIsNt = !!(netFeeActive && netFeeMode === 'NT');
+
+                // Entladen im NT sperren (Batterie nicht leerfahren), sonst freigeben.
+                dischargeAllowed = netFeeActive ? (!netFeeIsNt) : (tarifState !== 'guenstig');
             } else {
                 dischargeAllowed = true;
             }
@@ -851,7 +955,7 @@ class TarifVisModule extends BaseModule {
 
             // Ladepark-Limit: Standard = baseW; Reservierung wenn Speicher im Tarif-Fenster lädt
             let limitW = baseW;
-            if (aktivEff && tarifState === 'guenstig' && speicherSollW < 0 && baseW > 0) {
+            if (aktivEff && ((tarifState === 'guenstig') || (netFeeEff && netFeeMode === 'NT')) && speicherSollW < 0 && baseW > 0) {
                 const reserveW = Math.max(0, -speicherSollW);
                 const storageShare = (prioritaet === 1) ? 1.0 : (prioritaet === 3) ? 0.0 : 0.5;
                 limitW = Math.max(0, Math.round(baseW - (reserveW * storageShare)));
@@ -882,6 +986,9 @@ class TarifVisModule extends BaseModule {
             await this._setIfChanged('tarif.netzLadenErlaubt', gridChargeAllowed);
             await this._setIfChanged('tarif.entladenErlaubt', dischargeAllowed);
 
+            await this._setIfChanged('tarif.netFeeEnabled', netFeeEff);
+            await this._setIfChanged('tarif.netFeeMode', netFeeMode);
+
             
 // Kurz-Status für die VIS (Live-Ansicht)
 // Ziel: Kunde sieht sofort, ob Tarif gerade Laden/Entladen triggert.
@@ -903,9 +1010,29 @@ if (aktivEff) {
         ? 'teuer'
         : 'unbekannt';
 
-  const base = `Tarif ${tarifStateTxt} (${priceCurTxt})`;
+  const baseTarif = `Tarif ${tarifStateTxt} (${priceCurTxt})`;
 
-  if (tarifState === 'guenstig') {
+  // Zeitvariables Netzentgelt (HT/NT) als Overlay:
+  // - NT: EVCS freigegeben + Speicher darf (netto) laden
+  // - HT/zwischen: Speicher läuft in Eigenverbrauchsoptimierung, EVCS Netzladen gesperrt (PV möglich)
+  const netFeeActive = !!(netFeeEff && netFeeMode !== 'off');
+  const base = netFeeActive ? `Netzentgelt ${netFeeMode} | ${baseTarif}` : baseTarif;
+
+  if (netFeeActive) {
+    if (netFeeMode === 'NT') {
+      const parts = [];
+      if (storageCharging) parts.push('Speicher lädt');
+      else if (storageFullHold) parts.push('Speicher voll (ruht)');
+      else parts.push('Speicher: kein Netzladen');
+      parts.push('EVCS freigegeben');
+      statusText = `${base}: ${parts.join(' + ')}`;
+    } else {
+      const parts = [];
+      parts.push('Speicher: Eigenverbrauch');
+      parts.push('EVCS Netzladen gesperrt (PV möglich)');
+      statusText = `${base}: ${parts.join(' + ')}`;
+    }
+  } else if (tarifState === 'guenstig') {
     if (prioritaet === 1) {
       if (storageCharging) {
         statusText = `${base}: Speicher lädt`;
@@ -951,6 +1078,8 @@ await this._setIfChanged('tarif.statusText', statusText);
                 modus: modusInt,
                 prioritaet,
                 state: tarifState,
+                netFeeEnabled: netFeeEff,
+                netFeeMode,
                 deltaEur: delta,
                 preisAktuell: preisAktuellOk ? preisAktuell : null,
                 preisDurchschnitt: preisDurchschnittEffOk ? preisDurchschnittEff : null,
