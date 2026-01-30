@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.84",
+    "version": "0.6.85",
     "news": {
+      "0.6.85": {
+        "en": "Tariff: Time-variable grid fee (HT/NT) now supports a quarter-based schedule (Q1..Q4). You can configure NT/HT windows per quarter; remaining time is treated as Standard.",
+        "de": "Tarif: Zeitvariables Netzentgelt (HT/NT) unterstützt jetzt ein quartalsbasiertes Zeitraster (Q1..Q4). NT/HT-Zeiten können pro Quartal gesetzt werden; die restliche Zeit gilt als Standard."
+      },
       "0.6.84": {
         "en": "UI: Tariff/Optimisation view now shows when storage grid charging is intentionally blocked by PV reserve (forecast headroom), making the behaviour transparent (not a bug).",
         "de": "UI: In der Tarif-/Optimierungsansicht wird jetzt sichtbar, wenn Speicher-Netzladen bewusst durch die PV-Reserve (Forecast-Headroom) geblockt wird – das Verhalten ist damit transparent (kein Bug)."

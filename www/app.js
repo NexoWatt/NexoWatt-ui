@@ -1991,9 +1991,12 @@ function initSettingsPanel(){
 
   // Zeitvariables Netzentgelt (HT/NT) – UI
   const netFeeToggle = document.getElementById('s_netFeeEnabled');
+  const netFeeModelSel = document.getElementById('s_netFeeModel');
   const netFeeTabs = document.getElementById('dynTariffSubtabs');
   const dynTariffPanel = document.getElementById('dynTariffPanel');
   const dynNetFeePanel = document.getElementById('dynNetFeePanel');
+  const netFeeSimpleBlock = document.getElementById('netFeeSimpleBlock');
+  const netFeeQuarterBlock = document.getElementById('netFeeQuarterBlock');
 
   const setDynSubTab = (tab) => {
     const t = (tab === 'netfee') ? 'netfee' : 'tariff';
@@ -2027,6 +2030,14 @@ function initSettingsPanel(){
 
     // keep custom toggle buttons in sync
     try { syncToggleButtonsForInputId('s_netFeeEnabled'); } catch (_e) {}
+
+    // Modell (Einfach vs. Quartale)
+    try {
+      const model = netFeeModelSel ? String(netFeeModelSel.value || '1').trim() : '1';
+      const isQuarter = model === '2';
+      if (netFeeSimpleBlock) netFeeSimpleBlock.style.display = isQuarter ? 'none' : '';
+      if (netFeeQuarterBlock) netFeeQuarterBlock.style.display = isQuarter ? '' : 'none';
+    } catch (_e) {}
   };
 
   // UI-Update immer ausführen
@@ -2116,6 +2127,9 @@ function initSettingsPanel(){
   // Netzentgelt: Aktivierung & Tabs
   if (netFeeToggle) {
     netFeeToggle.addEventListener('change', () => updateNetFeeUi({ openNetFee: !!netFeeToggle.checked }));
+  }
+  if (netFeeModelSel) {
+    netFeeModelSel.addEventListener('change', () => updateNetFeeUi({}));
   }
   if (netFeeTabs) {
     [...netFeeTabs.querySelectorAll('button[data-dyntab]')].forEach(btn => {

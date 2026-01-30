@@ -200,10 +200,34 @@ class NexoWattVis extends utils.Adapter {
 
       // Zeitvariables Netzentgelt (HT/NT)
       netFeeEnabled: { type: 'boolean', role: 'state', def: false },
+      // Modell: 1 = Einfach (HT/NT), 2 = Quartale (NT/HT pro Quartal, Rest = Standard)
+      netFeeModel: { type: 'number', role: 'value', def: 1 },
       netFeeNtStart: { type: 'string', role: 'text', def: '22:00' },
       netFeeNtEnd: { type: 'string', role: 'text', def: '06:00' },
       netFeeHtStart: { type: 'string', role: 'text', def: '06:00' },
       netFeeHtEnd: { type: 'string', role: 'text', def: '22:00' },
+
+      // Quartalszeiten (nur wenn netFeeModel=2 aktiv ist)
+      // Q1 = Jan–Mär, Q2 = Apr–Jun, Q3 = Jul–Sep, Q4 = Okt–Dez
+      netFeeQ1NtStart: { type: 'string', role: 'text', def: '22:00' },
+      netFeeQ1NtEnd: { type: 'string', role: 'text', def: '06:00' },
+      netFeeQ1HtStart: { type: 'string', role: 'text', def: '06:00' },
+      netFeeQ1HtEnd: { type: 'string', role: 'text', def: '22:00' },
+
+      netFeeQ2NtStart: { type: 'string', role: 'text', def: '22:00' },
+      netFeeQ2NtEnd: { type: 'string', role: 'text', def: '06:00' },
+      netFeeQ2HtStart: { type: 'string', role: 'text', def: '06:00' },
+      netFeeQ2HtEnd: { type: 'string', role: 'text', def: '22:00' },
+
+      netFeeQ3NtStart: { type: 'string', role: 'text', def: '22:00' },
+      netFeeQ3NtEnd: { type: 'string', role: 'text', def: '06:00' },
+      netFeeQ3HtStart: { type: 'string', role: 'text', def: '06:00' },
+      netFeeQ3HtEnd: { type: 'string', role: 'text', def: '22:00' },
+
+      netFeeQ4NtStart: { type: 'string', role: 'text', def: '22:00' },
+      netFeeQ4NtEnd: { type: 'string', role: 'text', def: '06:00' },
+      netFeeQ4HtStart: { type: 'string', role: 'text', def: '06:00' },
+      netFeeQ4HtEnd: { type: 'string', role: 'text', def: '22:00' },
 
       // Weather App (Plug&Play)
       weatherEnabled: { type: 'boolean', role: 'state', def: false },
@@ -10356,7 +10380,11 @@ return res.json(out);
       // Tariff/charging settings
       'dynamicTariff','storagePower','price','priority','tariffMode',
       // Zeitvariables Netzentgelt (HT/NT)
-      'netFeeEnabled','netFeeNtStart','netFeeNtEnd','netFeeHtStart','netFeeHtEnd',
+      'netFeeEnabled','netFeeModel','netFeeNtStart','netFeeNtEnd','netFeeHtStart','netFeeHtEnd',
+      'netFeeQ1NtStart','netFeeQ1NtEnd','netFeeQ1HtStart','netFeeQ1HtEnd',
+      'netFeeQ2NtStart','netFeeQ2NtEnd','netFeeQ2HtStart','netFeeQ2HtEnd',
+      'netFeeQ3NtStart','netFeeQ3NtEnd','netFeeQ3HtStart','netFeeQ3HtEnd',
+      'netFeeQ4NtStart','netFeeQ4NtEnd','netFeeQ4HtStart','netFeeQ4HtEnd',
       // EVCS defaults
       'evcsMaxPower','evcsCount',
       // Weather App (FIS settings)

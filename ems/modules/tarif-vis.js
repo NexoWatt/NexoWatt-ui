@@ -77,7 +77,7 @@ class TarifVisModule extends BaseModule {
         await mk('tarif.entladenErlaubt', 'Entladen erlaubt (Tarif-Logik)', 'boolean', 'indicator');
         await mk('tarif.statusText', 'Tarif Status (VIS)', 'string', 'text');
         await mk('tarif.netFeeEnabled', 'Zeitvariables Netzentgelt aktiv (VIS)', 'boolean', 'indicator');
-        await mk('tarif.netFeeMode', 'Netzentgelt Modus (NT/HT/zwischen)', 'string', 'text');
+        await mk('tarif.netFeeMode', 'Netzentgelt Modus (NT/Standard/HT)', 'string', 'text');
         // VIS-Settings als Datenpunkte registrieren (nur wenn dp-Registry vorhanden ist)
         if (this.dp && typeof this.dp.upsert === 'function') {
             const visInst = this._getVisInstance();
@@ -92,10 +92,20 @@ class TarifVisModule extends BaseModule {
 
             // Zeitvariables Netzentgelt (HT/NT)
             await this.dp.upsert({ key: 'vis.settings.netFeeEnabled', objectId: `${visInst}.settings.netFeeEnabled` });
+            await this.dp.upsert({ key: 'vis.settings.netFeeModel', objectId: `${visInst}.settings.netFeeModel` });
             await this.dp.upsert({ key: 'vis.settings.netFeeNtStart', objectId: `${visInst}.settings.netFeeNtStart`, dataType: 'string' });
             await this.dp.upsert({ key: 'vis.settings.netFeeNtEnd', objectId: `${visInst}.settings.netFeeNtEnd`, dataType: 'string' });
             await this.dp.upsert({ key: 'vis.settings.netFeeHtStart', objectId: `${visInst}.settings.netFeeHtStart`, dataType: 'string' });
             await this.dp.upsert({ key: 'vis.settings.netFeeHtEnd', objectId: `${visInst}.settings.netFeeHtEnd`, dataType: 'string' });
+
+            // Quartals-Zeiten (netFeeModel=2): NT/HT je Quartal, Rest = Standard
+            const q = ['Q1', 'Q2', 'Q3', 'Q4'];
+            for (const qq of q) {
+                await this.dp.upsert({ key: `vis.settings.netFee${qq}NtStart`, objectId: `${visInst}.settings.netFee${qq}NtStart`, dataType: 'string' });
+                await this.dp.upsert({ key: `vis.settings.netFee${qq}NtEnd`, objectId: `${visInst}.settings.netFee${qq}NtEnd`, dataType: 'string' });
+                await this.dp.upsert({ key: `vis.settings.netFee${qq}HtStart`, objectId: `${visInst}.settings.netFee${qq}HtStart`, dataType: 'string' });
+                await this.dp.upsert({ key: `vis.settings.netFee${qq}HtEnd`, objectId: `${visInst}.settings.netFee${qq}HtEnd`, dataType: 'string' });
+            }
 
             // Optional: aktueller Tarifpreis direkt als State-ID (ohne globale DP-Tabelle)
             const priceCurrentId = this._getVisPriceCurrentId();
@@ -459,6 +469,21 @@ class TarifVisModule extends BaseModule {
     }
 
     /**
+     * Returns the current quarter (1..4) based on local time.
+     * Q1 = Jan–Mär, Q2 = Apr–Jun, Q3 = Jul–Sep, Q4 = Okt–Dez
+     * @param {number} [nowMs]
+     * @returns {number}
+     */
+    _currentQuarter(nowMs) {
+        const d = nowMs ? new Date(nowMs) : new Date();
+        const m = d.getMonth(); // 0..11
+        if (m <= 2) return 1;
+        if (m <= 5) return 2;
+        if (m <= 8) return 3;
+        return 4;
+    }
+
+    /**
      * Priorität normalisieren:
      *
      * Neue VIS-Logik (Slider, diskret):
@@ -540,27 +565,54 @@ class TarifVisModule extends BaseModule {
             const baseW = Math.max(0, Math.abs(this._num(evcsMaxW, 0)));
 
             // --- Zeitvariables Netzentgelt (HT/NT) ---
+            // Unterstützt zwei Modelle:
+            // 1) Einfach (HT/NT) – ganzjährig
+            // 2) Quartale (NT/HT je Quartal, Rest = Standard)
             const netFeeEnabledRaw = this.dp ? this.dp.getBoolean('vis.settings.netFeeEnabled', false) : false;
             const netFeeAge = this.dp ? this.dp.getAgeMs('vis.settings.netFeeEnabled') : null;
             const netFeeFresh = (netFeeAge === null || netFeeAge === undefined) ? true : (netFeeAge <= staleTimeoutMs);
             const netFeeEff = !!(aktivEff && netFeeFresh && netFeeEnabledRaw);
 
-            const ntStartRaw = (this.dp && typeof this.dp.getRaw === 'function') ? this.dp.getRaw('vis.settings.netFeeNtStart') : null;
-            const ntEndRaw = (this.dp && typeof this.dp.getRaw === 'function') ? this.dp.getRaw('vis.settings.netFeeNtEnd') : null;
-            const htStartRaw = (this.dp && typeof this.dp.getRaw === 'function') ? this.dp.getRaw('vis.settings.netFeeHtStart') : null;
-            const htEndRaw = (this.dp && typeof this.dp.getRaw === 'function') ? this.dp.getRaw('vis.settings.netFeeHtEnd') : null;
+            const netFeeModelRaw = this.dp ? this.dp.getNumberFresh('vis.settings.netFeeModel', staleTimeoutMs, 1) : 1;
+            const netFeeModel = (typeof netFeeModelRaw === 'number' && Number.isFinite(netFeeModelRaw)) ? Math.round(netFeeModelRaw) : 1;
+            const netFeeModelEff = (netFeeModel === 2) ? 2 : 1;
 
-            const ntStartMin = this._parseTimeToMinutes(ntStartRaw || '22:00');
-            const ntEndMin = this._parseTimeToMinutes(ntEndRaw || '06:00');
-            const htStartMin = this._parseTimeToMinutes(htStartRaw || '06:00');
-            const htEndMin = this._parseTimeToMinutes(htEndRaw || '22:00');
-            const nowMinLocal = this._nowMinutesLocal();
+            const nowMs = Date.now();
+            const nowMinLocal = this._nowMinutesLocal(nowMs);
 
-            let netFeeMode = 'off'; // off | NT | HT | zwischen
+            // Default: Simple (global)
+            let ntStartRaw = (this.dp && typeof this.dp.getRaw === 'function') ? this.dp.getRaw('vis.settings.netFeeNtStart') : null;
+            let ntEndRaw = (this.dp && typeof this.dp.getRaw === 'function') ? this.dp.getRaw('vis.settings.netFeeNtEnd') : null;
+            let htStartRaw = (this.dp && typeof this.dp.getRaw === 'function') ? this.dp.getRaw('vis.settings.netFeeHtStart') : null;
+            let htEndRaw = (this.dp && typeof this.dp.getRaw === 'function') ? this.dp.getRaw('vis.settings.netFeeHtEnd') : null;
+
+            // Quartale: überschreibt die Simple-Zeiten (wenn gesetzt)
+            if (netFeeModelEff === 2 && this.dp && typeof this.dp.getRaw === 'function') {
+                const q = this._currentQuarter(nowMs);
+                const qq = `Q${q}`;
+                const ntS = this.dp.getRaw(`vis.settings.netFee${qq}NtStart`);
+                const ntE = this.dp.getRaw(`vis.settings.netFee${qq}NtEnd`);
+                const htS = this.dp.getRaw(`vis.settings.netFee${qq}HtStart`);
+                const htE = this.dp.getRaw(`vis.settings.netFee${qq}HtEnd`);
+                // Wichtig: Leere Werte ("") sollen die Zeitfenster bewusst deaktivieren können.
+                // Daher: nur bei null/undefined fallbacken.
+                if (ntS !== null && ntS !== undefined) ntStartRaw = ntS;
+                if (ntE !== null && ntE !== undefined) ntEndRaw = ntE;
+                if (htS !== null && htS !== undefined) htStartRaw = htS;
+                if (htE !== null && htE !== undefined) htEndRaw = htE;
+            }
+
+            // NOTE: "" (empty string) should disable the window instead of falling back.
+            const ntStartMin = this._parseTimeToMinutes((ntStartRaw === null || ntStartRaw === undefined) ? '22:00' : ntStartRaw);
+            const ntEndMin = this._parseTimeToMinutes((ntEndRaw === null || ntEndRaw === undefined) ? '06:00' : ntEndRaw);
+            const htStartMin = this._parseTimeToMinutes((htStartRaw === null || htStartRaw === undefined) ? '06:00' : htStartRaw);
+            const htEndMin = this._parseTimeToMinutes((htEndRaw === null || htEndRaw === undefined) ? '22:00' : htEndRaw);
+
+            let netFeeMode = 'off'; // off | NT | Standard | HT
             if (netFeeEff) {
                 const inNt = this._isInTimeWindow(nowMinLocal, ntStartMin, ntEndMin);
                 const inHt = (!inNt) && this._isInTimeWindow(nowMinLocal, htStartMin, htEndMin);
-                netFeeMode = inNt ? 'NT' : inHt ? 'HT' : 'zwischen';
+                netFeeMode = inNt ? 'NT' : inHt ? 'HT' : 'Standard';
             }
 
 			// --- Preise (Provider + VIS) ---
@@ -623,7 +675,7 @@ class TarifVisModule extends BaseModule {
             // Beide Werte sind optional per Adapter-Config überschreibbar.
             const deltaAutoEur = this._clamp(this._num(cfgTariff.deltaEur, 0.02), 0, 1);
             const deltaManualEur = this._clamp(this._num(cfgTariff.manualDeltaEur, 0.005), 0, 1);
-            const nowMs = Date.now();
+            // nowMs wird oben bereits einmal bestimmt (u.a. für Netzentgelt/Quartal)
             const horizonEndMs = nowMs + horizonHours * 60 * 60 * 1000;
 
             let preisMin = null;

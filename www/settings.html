@@ -97,8 +97,8 @@
         <input type="checkbox" class="nw-toggle-hidden" id="s_dyn_toggle" data-scope="settings" data-key="dynamicTariff">
       </label>
 <!-- Diese Einstellungen sollen nur sichtbar sein, wenn der Dynamische Tarif aktiviert ist -->
-      <div id="dyn_settings_block">
-        <label class="row"><span>Zeitvariables Netzentgelt (HT/NT)</span>
+	      <div id="dyn_settings_block">
+	        <label class="row"><span>Zeitvariables Netzentgelt (HT/NT, Quartal)</span>
           <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_netFeeEnabled"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
           <input type="checkbox" class="nw-toggle-hidden" id="s_netFeeEnabled" data-scope="settings" data-key="netFeeEnabled">
         </label>
@@ -127,34 +127,119 @@
 
         <div id="dynNetFeePanel" data-dynpanel="netfee" style="display:none">
           <small style="opacity:.75; display:block; margin-top:6px;">
-            <b>NT</b>: EVCS Netzladen freigegeben + Speicher darf laden. <b>HT/zwischen</b>: Speicher = Eigenverbrauchsoptimierung, EVCS Netzladen gesperrt (PV möglich).
+            <b>NT</b>: EVCS Netzladen freigegeben + Speicher darf laden. <b>Standard/HT</b>: Speicher = Eigenverbrauchsoptimierung, EVCS Netzladen gesperrt (PV möglich).
           </small>
 
-          <div class="row" style="margin-top:10px;align-items:flex-start">
-            <span>NT (Niedertarif)</span>
-            <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
-              <label style="display:flex;align-items:center;gap:6px">
-                <span style="opacity:.8">Von</span>
-                <input type="time" id="s_netFeeNtStart" data-scope="settings" data-key="netFeeNtStart">
-              </label>
-              <label style="display:flex;align-items:center;gap:6px">
-                <span style="opacity:.8">Bis</span>
-                <input type="time" id="s_netFeeNtEnd" data-scope="settings" data-key="netFeeNtEnd">
-              </label>
+          <label class="row" style="margin-top:10px"><span>Modell</span>
+            <select id="s_netFeeModel" data-scope="settings" data-key="netFeeModel" style="min-width:260px;max-width:100%;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.08);background:#a7c400;color:#000;">
+              <option value="1">Einfach (HT/NT, ganzjährig)</option>
+              <option value="2">Quartale (NT/HT je Quartal, Rest = Standard)</option>
+            </select>
+          </label>
+
+          <!-- Modell 1: Einfach (ganzjährig) -->
+          <div id="netFeeSimpleBlock">
+            <div class="row" style="margin-top:10px;align-items:flex-start">
+              <span>NT (Niedertarif)</span>
+              <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:6px">
+                  <span style="opacity:.8">Von</span>
+                  <input type="time" id="s_netFeeNtStart" data-scope="settings" data-key="netFeeNtStart">
+                </label>
+                <label style="display:flex;align-items:center;gap:6px">
+                  <span style="opacity:.8">Bis</span>
+                  <input type="time" id="s_netFeeNtEnd" data-scope="settings" data-key="netFeeNtEnd">
+                </label>
+              </div>
+            </div>
+
+            <div class="row" style="margin-top:10px;align-items:flex-start">
+              <span>HT (Hochtarif)</span>
+              <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:6px">
+                  <span style="opacity:.8">Von</span>
+                  <input type="time" id="s_netFeeHtStart" data-scope="settings" data-key="netFeeHtStart">
+                </label>
+                <label style="display:flex;align-items:center;gap:6px">
+                  <span style="opacity:.8">Bis</span>
+                  <input type="time" id="s_netFeeHtEnd" data-scope="settings" data-key="netFeeHtEnd">
+                </label>
+              </div>
             </div>
           </div>
 
-          <div class="row" style="margin-top:10px;align-items:flex-start">
-            <span>HT (Hochtarif)</span>
-            <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
-              <label style="display:flex;align-items:center;gap:6px">
-                <span style="opacity:.8">Von</span>
-                <input type="time" id="s_netFeeHtStart" data-scope="settings" data-key="netFeeHtStart">
-              </label>
-              <label style="display:flex;align-items:center;gap:6px">
-                <span style="opacity:.8">Bis</span>
-                <input type="time" id="s_netFeeHtEnd" data-scope="settings" data-key="netFeeHtEnd">
-              </label>
+          <!-- Modell 2: Quartale (NT/HT je Quartal, Rest = Standard) -->
+          <div id="netFeeQuarterBlock" style="display:none">
+            <small style="opacity:.75; display:block; margin-top:10px;">
+              Q1 = Jan–Mär, Q2 = Apr–Jun, Q3 = Jul–Sep, Q4 = Okt–Dez. Zeiten gelten täglich. Nicht definierte Zeit = <b>Standard</b>.
+            </small>
+
+            <!-- Q1 -->
+            <div style="margin-top:12px;font-weight:700;opacity:.9">Quartal 1 (Jan–Mär)</div>
+            <div class="row" style="margin-top:6px;align-items:flex-start">
+              <span>NT</span>
+              <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:6px"><span style="opacity:.8">Von</span><input type="time" id="s_netFeeQ1NtStart" data-scope="settings" data-key="netFeeQ1NtStart"></label>
+                <label style="display:flex;align-items:center;gap:6px"><span style="opacity:.8">Bis</span><input type="time" id="s_netFeeQ1NtEnd" data-scope="settings" data-key="netFeeQ1NtEnd"></label>
+              </div>
+            </div>
+            <div class="row" style="margin-top:6px;align-items:flex-start">
+              <span>HT</span>
+              <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:6px"><span style="opacity:.8">Von</span><input type="time" id="s_netFeeQ1HtStart" data-scope="settings" data-key="netFeeQ1HtStart"></label>
+                <label style="display:flex;align-items:center;gap:6px"><span style="opacity:.8">Bis</span><input type="time" id="s_netFeeQ1HtEnd" data-scope="settings" data-key="netFeeQ1HtEnd"></label>
+              </div>
+            </div>
+
+            <!-- Q2 -->
+            <div style="margin-top:12px;font-weight:700;opacity:.9">Quartal 2 (Apr–Jun)</div>
+            <div class="row" style="margin-top:6px;align-items:flex-start">
+              <span>NT</span>
+              <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:6px"><span style="opacity:.8">Von</span><input type="time" id="s_netFeeQ2NtStart" data-scope="settings" data-key="netFeeQ2NtStart"></label>
+                <label style="display:flex;align-items:center;gap:6px"><span style="opacity:.8">Bis</span><input type="time" id="s_netFeeQ2NtEnd" data-scope="settings" data-key="netFeeQ2NtEnd"></label>
+              </div>
+            </div>
+            <div class="row" style="margin-top:6px;align-items:flex-start">
+              <span>HT</span>
+              <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:6px"><span style="opacity:.8">Von</span><input type="time" id="s_netFeeQ2HtStart" data-scope="settings" data-key="netFeeQ2HtStart"></label>
+                <label style="display:flex;align-items:center;gap:6px"><span style="opacity:.8">Bis</span><input type="time" id="s_netFeeQ2HtEnd" data-scope="settings" data-key="netFeeQ2HtEnd"></label>
+              </div>
+            </div>
+
+            <!-- Q3 -->
+            <div style="margin-top:12px;font-weight:700;opacity:.9">Quartal 3 (Jul–Sep)</div>
+            <div class="row" style="margin-top:6px;align-items:flex-start">
+              <span>NT</span>
+              <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:6px"><span style="opacity:.8">Von</span><input type="time" id="s_netFeeQ3NtStart" data-scope="settings" data-key="netFeeQ3NtStart"></label>
+                <label style="display:flex;align-items:center;gap:6px"><span style="opacity:.8">Bis</span><input type="time" id="s_netFeeQ3NtEnd" data-scope="settings" data-key="netFeeQ3NtEnd"></label>
+              </div>
+            </div>
+            <div class="row" style="margin-top:6px;align-items:flex-start">
+              <span>HT</span>
+              <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:6px"><span style="opacity:.8">Von</span><input type="time" id="s_netFeeQ3HtStart" data-scope="settings" data-key="netFeeQ3HtStart"></label>
+                <label style="display:flex;align-items:center;gap:6px"><span style="opacity:.8">Bis</span><input type="time" id="s_netFeeQ3HtEnd" data-scope="settings" data-key="netFeeQ3HtEnd"></label>
+              </div>
+            </div>
+
+            <!-- Q4 -->
+            <div style="margin-top:12px;font-weight:700;opacity:.9">Quartal 4 (Okt–Dez)</div>
+            <div class="row" style="margin-top:6px;align-items:flex-start">
+              <span>NT</span>
+              <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:6px"><span style="opacity:.8">Von</span><input type="time" id="s_netFeeQ4NtStart" data-scope="settings" data-key="netFeeQ4NtStart"></label>
+                <label style="display:flex;align-items:center;gap:6px"><span style="opacity:.8">Bis</span><input type="time" id="s_netFeeQ4NtEnd" data-scope="settings" data-key="netFeeQ4NtEnd"></label>
+              </div>
+            </div>
+            <div class="row" style="margin-top:6px;align-items:flex-start">
+              <span>HT</span>
+              <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:6px"><span style="opacity:.8">Von</span><input type="time" id="s_netFeeQ4HtStart" data-scope="settings" data-key="netFeeQ4HtStart"></label>
+                <label style="display:flex;align-items:center;gap:6px"><span style="opacity:.8">Bis</span><input type="time" id="s_netFeeQ4HtEnd" data-scope="settings" data-key="netFeeQ4HtEnd"></label>
+              </div>
             </div>
           </div>
         </div>
