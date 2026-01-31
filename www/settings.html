@@ -133,31 +133,42 @@
             </label>
 
             <div id="tariffPvSeasonBlock" style="display:none;margin-top:8px">
-              <div class="row" style="align-items:flex-start">
-                <span>Faktor je Quartal</span>
-                <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
-                  <label style="display:flex;align-items:center;gap:6px">
-                    <span style="opacity:.8">Q1</span>
-                    <input type="number" id="s_tariffPvSeasonQ1Factor" step="0.05" min="0" max="2" data-scope="settings" data-key="tariffPvSeasonQ1Factor" style="width:90px">
-                  </label>
-                  <label style="display:flex;align-items:center;gap:6px">
-                    <span style="opacity:.8">Q2</span>
-                    <input type="number" id="s_tariffPvSeasonQ2Factor" step="0.05" min="0" max="2" data-scope="settings" data-key="tariffPvSeasonQ2Factor" style="width:90px">
-                  </label>
-                  <label style="display:flex;align-items:center;gap:6px">
-                    <span style="opacity:.8">Q3</span>
-                    <input type="number" id="s_tariffPvSeasonQ3Factor" step="0.05" min="0" max="2" data-scope="settings" data-key="tariffPvSeasonQ3Factor" style="width:90px">
-                  </label>
-                  <label style="display:flex;align-items:center;gap:6px">
-                    <span style="opacity:.8">Q4</span>
-                    <input type="number" id="s_tariffPvSeasonQ4Factor" step="0.05" min="0" max="2" data-scope="settings" data-key="tariffPvSeasonQ4Factor" style="width:90px">
-                  </label>
-                </div>
-              </div>
-              <small style="opacity:.75; display:block; margin-top:6px">
-                <b>Wirkung:</b> Faktor &gt; 1 = mehr PV-Reserve (mehr Headroom, weniger Netzladen). Faktor &lt; 1 = weniger PV-Reserve (mehr Netzladen).<br>
-                Empfehlung (DE): Q2/Q3 eher &gt; 1 (Sonne stark), Q1/Q4 eher &lt; 1 (Sonne schwach). Default ist bereits passend gesetzt.
+              <label class="row"><span>KI Automatik (empfohlen)</span>
+                <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_tariffPvSeasonAiEnabled"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
+                <input type="checkbox" class="nw-toggle-hidden" id="s_tariffPvSeasonAiEnabled" data-scope="settings" data-key="tariffPvSeasonAiEnabled">
+              </label>
+
+              <small id="tariffPvSeasonAiHint" style="opacity:.75; display:none; margin-top:6px">
+                <b>KI aktiv:</b> Saisonfaktor wird automatisch aus PV-Forecast (Stärke) und Quartal abgeleitet – du musst nichts einstellen.
               </small>
+
+              <div id="tariffPvSeasonManualBlock" style="margin-top:8px">
+                <div class="row" style="align-items:flex-start">
+                  <span>Faktor je Quartal</span>
+                  <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+                    <label style="display:flex;align-items:center;gap:6px">
+                      <span style="opacity:.8">Q1</span>
+                      <input type="number" id="s_tariffPvSeasonQ1Factor" step="0.05" min="0" max="2" data-scope="settings" data-key="tariffPvSeasonQ1Factor" style="width:90px">
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px">
+                      <span style="opacity:.8">Q2</span>
+                      <input type="number" id="s_tariffPvSeasonQ2Factor" step="0.05" min="0" max="2" data-scope="settings" data-key="tariffPvSeasonQ2Factor" style="width:90px">
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px">
+                      <span style="opacity:.8">Q3</span>
+                      <input type="number" id="s_tariffPvSeasonQ3Factor" step="0.05" min="0" max="2" data-scope="settings" data-key="tariffPvSeasonQ3Factor" style="width:90px">
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px">
+                      <span style="opacity:.8">Q4</span>
+                      <input type="number" id="s_tariffPvSeasonQ4Factor" step="0.05" min="0" max="2" data-scope="settings" data-key="tariffPvSeasonQ4Factor" style="width:90px">
+                    </label>
+                  </div>
+                </div>
+                <small style="opacity:.75; display:block; margin-top:6px">
+                  <b>Wirkung:</b> Faktor &gt; 1 = mehr PV-Reserve (mehr Headroom, weniger Netzladen). Faktor &lt; 1 = weniger PV-Reserve (mehr Netzladen).<br>
+                  Empfehlung (DE): Q2/Q3 eher &gt; 1 (Sonne stark), Q1/Q4 eher &lt; 1 (Sonne schwach). Default ist bereits passend gesetzt.
+                </small>
+              </div>
             </div>
           </div>
         </div>

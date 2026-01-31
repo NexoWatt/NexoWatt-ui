@@ -2046,12 +2046,25 @@ function initSettingsPanel(){
   // PV Saisonprofil (Quartale) – steuert die PV-Reserve im Tarifmodus
   const pvSeasonToggle = document.getElementById('s_tariffPvSeasonEnabled');
   const pvSeasonBlock = document.getElementById('tariffPvSeasonBlock');
+  const pvSeasonAiToggle = document.getElementById('s_tariffPvSeasonAiEnabled');
+  const pvSeasonManualBlock = document.getElementById('tariffPvSeasonManualBlock');
+  const pvSeasonAiHint = document.getElementById('tariffPvSeasonAiHint');
 
   const updatePvSeasonUi = () => {
     if (!pvSeasonToggle || !pvSeasonBlock) return;
-    pvSeasonBlock.style.display = pvSeasonToggle.checked ? '' : 'none';
+
+    const enabled = !!pvSeasonToggle.checked;
+    pvSeasonBlock.style.display = enabled ? '' : 'none';
+
     // keep custom toggle buttons in sync
     try { syncToggleButtonsForInputId('s_tariffPvSeasonEnabled'); } catch (_e) {}
+    try { if (pvSeasonAiToggle) syncToggleButtonsForInputId('s_tariffPvSeasonAiEnabled'); } catch (_e) {}
+
+    if (!enabled) return;
+
+    const aiOn = pvSeasonAiToggle ? !!pvSeasonAiToggle.checked : false;
+    if (pvSeasonAiHint) pvSeasonAiHint.style.display = aiOn ? 'block' : 'none';
+    if (pvSeasonManualBlock) pvSeasonManualBlock.style.display = aiOn ? 'none' : '';
   };
 
   // UI-Update immer ausführen
@@ -2141,6 +2154,9 @@ function initSettingsPanel(){
   // PV Saisonprofil
   if (pvSeasonToggle) {
     pvSeasonToggle.addEventListener('change', updatePvSeasonUi);
+  }
+  if (pvSeasonAiToggle) {
+    pvSeasonAiToggle.addEventListener('change', updatePvSeasonUi);
   }
 
   // Netzentgelt: Aktivierung & Tabs

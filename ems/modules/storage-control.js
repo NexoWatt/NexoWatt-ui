@@ -985,6 +985,13 @@ if (typeof soc === 'number') {
 						      let pvSeasonEnabled = false;
 						      let pvSeasonQuarter = null;
 						      let pvSeasonFactor = 1;
+
+						      // KI-Automatik: passt den Faktor anhand PV-Forecast (Stärke) an,
+						      // damit Kunden keine Quartalswerte manuell pflegen müssen.
+						      let pvSeasonAiEnabled = false;
+						      let pvSeasonAiUsed = false;
+						      let pvSeasonBaseFactor = 1;
+						      let pvSeasonAiReason = '';
 						      try {
 						        if (this.dp) {
 						          const kEn = 'vis.settings.tariffPvSeasonEnabled';
@@ -995,11 +1002,38 @@ if (typeof soc === 'number') {
 						            const month = new Date(now).getMonth(); // 0..11
 						            const q = Math.floor(month / 3) + 1; // 1..4
 						            pvSeasonQuarter = q;
+
+						            // Basisfaktor (manuell) je Quartal
 						            const kF = `vis.settings.tariffPvSeasonQ${q}Factor`;
 						            const ageF = this.dp.getAgeMs(kF);
 						            const fRaw = this.dp.getNumber(kF, 1);
 						            if ((ageF === null || ageF <= staleMs) && Number.isFinite(fRaw) && fRaw >= 0) {
-						              pvSeasonFactor = clamp(fRaw, 0, 2);
+						              pvSeasonBaseFactor = clamp(fRaw, 0, 2);
+						            } else {
+						              pvSeasonBaseFactor = 1;
+						            }
+
+						            // KI-Automatik aktiv?
+						            const kAi = 'vis.settings.tariffPvSeasonAiEnabled';
+						            const ai = this.dp.getBoolean(kAi, true);
+						            const ageAi = this.dp.getAgeMs(kAi);
+						            pvSeasonAiEnabled = !!ai && (ageAi === null || ageAi <= staleMs);
+
+						            if (pvSeasonAiEnabled) {
+						              // PV-Stärke aus Forecast ableiten:
+						              // - Wenn Kapazität bekannt: Verhältnis PV-kWh / Cap-kWh
+						              // - Sonst: heuristische Normierung (12 kWh ≈ "voll" in vielen Haushalten)
+						              const pvKwh = Math.max(0, Number(pvChargePotentialKWh) || 0);
+						              const capRef = (typeof capKWh === 'number' && Number.isFinite(capKWh) && capKWh > 0) ? capKWh : 12;
+						              const pvScore = clamp(pvKwh / capRef, 0, 1); // 0..1
+						              const adj = clamp(0.85 + 0.30 * pvScore, 0.75, 1.20); // 0.75..1.20
+						              const fAuto = clamp(pvSeasonBaseFactor * adj, 0, 2);
+
+						              pvSeasonFactor = fAuto;
+						              pvSeasonAiUsed = true;
+						              pvSeasonAiReason = `KI: Q${q} Basis ${pvSeasonBaseFactor.toFixed(2)} * Adj ${adj.toFixed(2)} (PV ${pvKwh.toFixed(1)} kWh, Ref ${capRef.toFixed(1)} kWh)`;
+						            } else {
+						              pvSeasonFactor = pvSeasonBaseFactor;
 						            }
 						          }
 						        }
@@ -1007,6 +1041,10 @@ if (typeof soc === 'number') {
 						        pvSeasonEnabled = false;
 						        pvSeasonQuarter = null;
 						        pvSeasonFactor = 1;
+						        pvSeasonAiEnabled = false;
+						        pvSeasonAiUsed = false;
+						        pvSeasonBaseFactor = 1;
+						        pvSeasonAiReason = '';
 						      }
 
 						      const pvStorableKWh = pvChargePotentialKWh * captureFactor * confidence * pvSeasonFactor;
@@ -1038,7 +1076,7 @@ if (typeof soc === 'number') {
 						        if (active && soc >= (capSocPct - 1e-9)) {
 						          pvBlockGridCharge = true;
 						          const capNote = capKWhEstimated ? ' (Cap geschätzt)' : '';
-						          pvBlockReason = `PV‑Reserve: Netzladen bis max ${capSocPct.toFixed(1)}%${capNote} (Headroom ${headroomSocPct.toFixed(1)}% ≈ ${pvStorableKWh.toFixed(1)} kWh)`;
+						          pvBlockReason = `PV‑Reserve: Netzladen bis max ${capSocPct.toFixed(1)}%${capNote} (Headroom ${headroomSocPct.toFixed(1)}% ≈ ${pvStorableKWh.toFixed(1)} kWh) · Saison ${pvSeasonFactor.toFixed(2)}${pvSeasonAiUsed ? ' (KI)' : ''}`;
 						        }
 						
 						        pvDebug = {
@@ -1056,6 +1094,10 @@ if (typeof soc === 'number') {
 						          pvSeasonEnabled,
 						          pvSeasonQuarter,
 						          pvSeasonFactor: Number(pvSeasonFactor),
+						          pvSeasonAiEnabled,
+						          pvSeasonAiUsed,
+						          pvSeasonBaseFactor: Number(pvSeasonBaseFactor),
+						          pvSeasonAiReason,
 						          pvStorableKWh: Number(pvStorableKWh),
 						          headroomSocPct: Number(headroomSocPct),
 						          capSocPct: Number(capSocPct),
@@ -1080,6 +1122,10 @@ if (typeof soc === 'number') {
 						          pvSeasonEnabled,
 						          pvSeasonQuarter,
 						          pvSeasonFactor: Number(pvSeasonFactor),
+						          pvSeasonAiEnabled,
+						          pvSeasonAiUsed,
+						          pvSeasonBaseFactor: Number(pvSeasonBaseFactor),
+						          pvSeasonAiReason,
 						          pvStorableKWh: Number(pvStorableKWh),
 						          headroomSocPct: null,
 						          capSocPct: null,

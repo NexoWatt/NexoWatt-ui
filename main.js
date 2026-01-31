@@ -200,6 +200,7 @@ class NexoWattVis extends utils.Adapter {
 
       // PV Saisonprofil (Quartale) – beeinflusst die PV‑Reserve im Tarifmodus
       tariffPvSeasonEnabled: { type: 'boolean', role: 'state', def: false },
+      tariffPvSeasonAiEnabled: { type: 'boolean', role: 'state', def: true },
       tariffPvSeasonQ1Factor: { type: 'number', role: 'value', def: 0.6 },
       tariffPvSeasonQ2Factor: { type: 'number', role: 'value', def: 1.1 },
       tariffPvSeasonQ3Factor: { type: 'number', role: 'value', def: 1.1 },
@@ -10387,7 +10388,7 @@ return res.json(out);
       // Tariff/charging settings
       'dynamicTariff','storagePower','price','priority','tariffMode',
       // PV Saisonprofil (Quartale)
-      'tariffPvSeasonEnabled','tariffPvSeasonQ1Factor','tariffPvSeasonQ2Factor','tariffPvSeasonQ3Factor','tariffPvSeasonQ4Factor',
+      'tariffPvSeasonEnabled','tariffPvSeasonAiEnabled','tariffPvSeasonQ1Factor','tariffPvSeasonQ2Factor','tariffPvSeasonQ3Factor','tariffPvSeasonQ4Factor',
       // Zeitvariables Netzentgelt (HT/NT)
       'netFeeEnabled','netFeeModel','netFeeNtStart','netFeeNtEnd','netFeeHtStart','netFeeHtEnd',
       'netFeeQ1NtStart','netFeeQ1NtEnd','netFeeQ1HtStart','netFeeQ1HtEnd',

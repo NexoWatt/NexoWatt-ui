@@ -92,6 +92,7 @@ class TarifVisModule extends BaseModule {
 
             // PV Saisonprofil (Quartale)
             await this.dp.upsert({ key: 'vis.settings.tariffPvSeasonEnabled', objectId: `${visInst}.settings.tariffPvSeasonEnabled` });
+            await this.dp.upsert({ key: 'vis.settings.tariffPvSeasonAiEnabled', objectId: `${visInst}.settings.tariffPvSeasonAiEnabled` });
             await this.dp.upsert({ key: 'vis.settings.tariffPvSeasonQ1Factor', objectId: `${visInst}.settings.tariffPvSeasonQ1Factor` });
             await this.dp.upsert({ key: 'vis.settings.tariffPvSeasonQ2Factor', objectId: `${visInst}.settings.tariffPvSeasonQ2Factor` });
             await this.dp.upsert({ key: 'vis.settings.tariffPvSeasonQ3Factor', objectId: `${visInst}.settings.tariffPvSeasonQ3Factor` });

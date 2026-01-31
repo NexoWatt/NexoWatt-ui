@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.89",
+    "version": "0.6.90",
     "news": {
+      "0.6.90": {
+        "en": "Tariff: Added optional AI automation for the PV season profile. When enabled, the quarter factor is adjusted automatically based on PV forecast strength so customers don't need to tune it (manual quarter values remain available for installers).",
+        "de": "Tarif: Optionale KI-Automatik für das PV-Saisonprofil ergänzt. Wenn aktiv, wird der Quartalsfaktor automatisch aus der PV-Forecast-Stärke abgeleitet – Kunden müssen nichts mehr feinjustieren (manuelle Quartalswerte bleiben für Installateure verfügbar)."
+      },
       "0.6.89": {
         "en": "Tariff: Added an optional PV season profile (quarter-based) that adjusts PV-reserve aggressiveness. In strong PV quarters the battery keeps more headroom for cheap PV; in weak quarters it allows more grid charging (while EV goal charging keeps priority).",
         "de": "Tarif: Optionales PV-Saisonprofil (quartalsbasiert) ergänzt, das die PV-Reserve aggressiver/konservativer macht. In starken PV-Quartalen bleibt mehr Headroom für günstige PV; in schwachen Quartalen ist mehr Netzladen möglich (E-Mobilität/Ziel-Laden behält Vorrang)."
