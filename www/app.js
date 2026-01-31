@@ -2043,6 +2043,20 @@ function initSettingsPanel(){
   // UI-Update immer ausführen
   updateNetFeeUi();
 
+  // PV Saisonprofil (Quartale) – steuert die PV-Reserve im Tarifmodus
+  const pvSeasonToggle = document.getElementById('s_tariffPvSeasonEnabled');
+  const pvSeasonBlock = document.getElementById('tariffPvSeasonBlock');
+
+  const updatePvSeasonUi = () => {
+    if (!pvSeasonToggle || !pvSeasonBlock) return;
+    pvSeasonBlock.style.display = pvSeasonToggle.checked ? '' : 'none';
+    // keep custom toggle buttons in sync
+    try { syncToggleButtonsForInputId('s_tariffPvSeasonEnabled'); } catch (_e) {}
+  };
+
+  // UI-Update immer ausführen
+  updatePvSeasonUi();
+
   // Weather App (Plug&Play)
   const weatherToggle = document.getElementById('s_weather_enabled');
   const weatherBlock = document.getElementById('weather_settings_block');
@@ -2122,6 +2136,11 @@ function initSettingsPanel(){
   }
   if (dynToggle) {
     dynToggle.addEventListener('change', updateDynVisibility);
+  }
+
+  // PV Saisonprofil
+  if (pvSeasonToggle) {
+    pvSeasonToggle.addEventListener('change', updatePvSeasonUi);
   }
 
   // Netzentgelt: Aktivierung & Tabs

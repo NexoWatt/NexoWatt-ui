@@ -981,8 +981,35 @@ if (typeof soc === 'number') {
 						      }
 						
 						      // Erwartbar speicherbare PV‑kWh (konservativ)
-						      const pvStorableKWh = pvChargePotentialKWh * captureFactor * confidence;
-						
+						      // Saisonfaktor (Quartale) – optional über VIS-Settings
+						      let pvSeasonEnabled = false;
+						      let pvSeasonQuarter = null;
+						      let pvSeasonFactor = 1;
+						      try {
+						        if (this.dp) {
+						          const kEn = 'vis.settings.tariffPvSeasonEnabled';
+						          const en = this.dp.getBoolean(kEn, false);
+						          const ageEn = this.dp.getAgeMs(kEn);
+						          if (en && (ageEn === null || ageEn <= staleMs)) {
+						            pvSeasonEnabled = true;
+						            const month = new Date(now).getMonth(); // 0..11
+						            const q = Math.floor(month / 3) + 1; // 1..4
+						            pvSeasonQuarter = q;
+						            const kF = `vis.settings.tariffPvSeasonQ${q}Factor`;
+						            const ageF = this.dp.getAgeMs(kF);
+						            const fRaw = this.dp.getNumber(kF, 1);
+						            if ((ageF === null || ageF <= staleMs) && Number.isFinite(fRaw) && fRaw >= 0) {
+						              pvSeasonFactor = clamp(fRaw, 0, 2);
+						            }
+						          }
+						        }
+						      } catch (_e) {
+						        pvSeasonEnabled = false;
+						        pvSeasonQuarter = null;
+						        pvSeasonFactor = 1;
+						      }
+
+						      const pvStorableKWh = pvChargePotentialKWh * captureFactor * confidence * pvSeasonFactor;
 						      // Kapazität: wenn unbekannt, grob aus Tarif‑Ladeleistung schätzen (Fallback)
 						      let capKWhEff = capKWh;
 						      if (!(typeof capKWhEff === 'number' && Number.isFinite(capKWhEff) && capKWhEff > 0)) {
@@ -1026,6 +1053,9 @@ if (typeof soc === 'number') {
 						          pvChargePotentialKWh: Number(pvChargePotentialKWh),
 						          captureFactor,
 						          confidence,
+						          pvSeasonEnabled,
+						          pvSeasonQuarter,
+						          pvSeasonFactor: Number(pvSeasonFactor),
 						          pvStorableKWh: Number(pvStorableKWh),
 						          headroomSocPct: Number(headroomSocPct),
 						          capSocPct: Number(capSocPct),
@@ -1047,6 +1077,9 @@ if (typeof soc === 'number') {
 						          pvChargePotentialKWh: Number(pvChargePotentialKWh),
 						          captureFactor,
 						          confidence,
+						          pvSeasonEnabled,
+						          pvSeasonQuarter,
+						          pvSeasonFactor: Number(pvSeasonFactor),
 						          pvStorableKWh: Number(pvStorableKWh),
 						          headroomSocPct: null,
 						          capSocPct: null,

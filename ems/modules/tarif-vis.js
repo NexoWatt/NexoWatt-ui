@@ -90,6 +90,13 @@ class TarifVisModule extends BaseModule {
             await this.dp.upsert({ key: 'vis.settings.storagePower', objectId: `${visInst}.settings.storagePower` });
             await this.dp.upsert({ key: 'vis.settings.evcsMaxPower', objectId: `${visInst}.settings.evcsMaxPower` });
 
+            // PV Saisonprofil (Quartale)
+            await this.dp.upsert({ key: 'vis.settings.tariffPvSeasonEnabled', objectId: `${visInst}.settings.tariffPvSeasonEnabled` });
+            await this.dp.upsert({ key: 'vis.settings.tariffPvSeasonQ1Factor', objectId: `${visInst}.settings.tariffPvSeasonQ1Factor` });
+            await this.dp.upsert({ key: 'vis.settings.tariffPvSeasonQ2Factor', objectId: `${visInst}.settings.tariffPvSeasonQ2Factor` });
+            await this.dp.upsert({ key: 'vis.settings.tariffPvSeasonQ3Factor', objectId: `${visInst}.settings.tariffPvSeasonQ3Factor` });
+            await this.dp.upsert({ key: 'vis.settings.tariffPvSeasonQ4Factor', objectId: `${visInst}.settings.tariffPvSeasonQ4Factor` });
+
             // Zeitvariables Netzentgelt (HT/NT)
             await this.dp.upsert({ key: 'vis.settings.netFeeEnabled', objectId: `${visInst}.settings.netFeeEnabled` });
             await this.dp.upsert({ key: 'vis.settings.netFeeModel', objectId: `${visInst}.settings.netFeeModel` });
