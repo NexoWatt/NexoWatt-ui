@@ -133,16 +133,17 @@
             </label>
 
             <div id="tariffPvSeasonBlock" style="display:none;margin-top:8px">
-              <label class="row"><span>KI Automatik (empfohlen)</span>
-                <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_tariffPvSeasonAiEnabled"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
-                <input type="checkbox" class="nw-toggle-hidden" id="s_tariffPvSeasonAiEnabled" data-scope="settings" data-key="tariffPvSeasonAiEnabled">
-              </label>
+              <!-- KI ist immer aktiv. Manuelle Basiswerte sind optional. -->
+              <input type="checkbox" class="nw-toggle-hidden" id="s_tariffPvSeasonAiEnabled" data-scope="settings" data-key="tariffPvSeasonAiEnabled">
 
-              <small id="tariffPvSeasonAiHint" style="opacity:.75; display:none; margin-top:6px">
-                <b>KI aktiv:</b> Saisonfaktor wird automatisch aus PV-Forecast (Stärke) und Quartal abgeleitet – du musst nichts einstellen.
-              </small>
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-top:6px">
+                <small id="tariffPvSeasonAiHint" style="opacity:.75; display:block; margin:0">
+                  <b>KI aktiv:</b> Saisonfaktor wird automatisch aus PV-Forecast (Stärke) und Quartal abgeleitet.
+                </small>
+                <button class="btn" id="pvSeasonManualBtn" type="button" style="white-space:nowrap">Manuell (optional)</button>
+              </div>
 
-              <div id="tariffPvSeasonManualBlock" style="margin-top:8px">
+              <div id="tariffPvSeasonManualBlock" style="display:none;margin-top:8px">
                 <div class="row" style="align-items:flex-start">
                   <span>Faktor je Quartal</span>
                   <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">

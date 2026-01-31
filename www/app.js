@@ -2044,11 +2044,15 @@ function initSettingsPanel(){
   updateNetFeeUi();
 
   // PV Saisonprofil (Quartale) – steuert die PV-Reserve im Tarifmodus
+  // KI ist immer aktiv; manuelle Basisfaktoren sind optional (Feintuning).
   const pvSeasonToggle = document.getElementById('s_tariffPvSeasonEnabled');
   const pvSeasonBlock = document.getElementById('tariffPvSeasonBlock');
-  const pvSeasonAiToggle = document.getElementById('s_tariffPvSeasonAiEnabled');
+  const pvSeasonAiToggle = document.getElementById('s_tariffPvSeasonAiEnabled'); // hidden, always ON
   const pvSeasonManualBlock = document.getElementById('tariffPvSeasonManualBlock');
   const pvSeasonAiHint = document.getElementById('tariffPvSeasonAiHint');
+  const pvSeasonManualBtn = document.getElementById('pvSeasonManualBtn');
+
+  let pvSeasonManualOpen = false;
 
   const updatePvSeasonUi = () => {
     if (!pvSeasonToggle || !pvSeasonBlock) return;
@@ -2058,14 +2062,35 @@ function initSettingsPanel(){
 
     // keep custom toggle buttons in sync
     try { syncToggleButtonsForInputId('s_tariffPvSeasonEnabled'); } catch (_e) {}
-    try { if (pvSeasonAiToggle) syncToggleButtonsForInputId('s_tariffPvSeasonAiEnabled'); } catch (_e) {}
 
-    if (!enabled) return;
+    if (!enabled) {
+      pvSeasonManualOpen = false;
+      if (pvSeasonManualBlock) pvSeasonManualBlock.style.display = 'none';
+      if (pvSeasonAiHint) pvSeasonAiHint.style.display = 'none';
+      return;
+    }
 
-    const aiOn = pvSeasonAiToggle ? !!pvSeasonAiToggle.checked : false;
-    if (pvSeasonAiHint) pvSeasonAiHint.style.display = aiOn ? 'block' : 'none';
-    if (pvSeasonManualBlock) pvSeasonManualBlock.style.display = aiOn ? 'none' : '';
+    // Force KI to ON (hidden control) to keep behaviour stable for end customers.
+    try {
+      if (pvSeasonAiToggle && !pvSeasonAiToggle.checked) {
+        pvSeasonAiToggle.checked = true;
+        // Persist to backend (older installs may still have it off)
+        pvSeasonAiToggle.dispatchEvent(new Event('change'));
+      }
+    } catch (_e) {}
+
+    if (pvSeasonAiHint) pvSeasonAiHint.style.display = 'block';
+
+    if (pvSeasonManualBtn) {
+      pvSeasonManualBtn.textContent = pvSeasonManualOpen ? 'Manuell schließen' : 'Manuell (optional)';
+    }
+    if (pvSeasonManualBlock) {
+      pvSeasonManualBlock.style.display = pvSeasonManualOpen ? '' : 'none';
+    }
   };
+
+  try { if (pvSeasonToggle) pvSeasonToggle.addEventListener('change', updatePvSeasonUi); } catch (_e) {}
+  try { if (pvSeasonManualBtn) pvSeasonManualBtn.addEventListener('click', () => { pvSeasonManualOpen = !pvSeasonManualOpen; updatePvSeasonUi(); }); } catch (_e) {}
 
   // UI-Update immer ausführen
   updatePvSeasonUi();

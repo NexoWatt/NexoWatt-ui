@@ -1,3 +1,7 @@
+## 0.6.91 (2026-01-31)
+- Tarif: PV-Saisonprofil KI ist jetzt immer aktiv (Standard). Manuelle Quartals-Basisfaktoren sind optional (Feintuning) und werden in der UI standardmäßig eingeklappt.
+- UI: Service-Worker Cache-Version erhöht, damit Updates zuverlässig im Browser ankommen.
+
 ## 0.6.90 (2026-01-31)
 - Tarif: KI-Automatik für das PV-Saisonprofil. Wenn aktiv, wird der Saisonfaktor automatisch anhand der PV-Forecast-Stärke angepasst, damit Kunden nichts manuell feinjustieren müssen (manuelle Quartalswerte bleiben verfügbar).
 

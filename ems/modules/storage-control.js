@@ -1013,28 +1013,22 @@ if (typeof soc === 'number') {
 						              pvSeasonBaseFactor = 1;
 						            }
 
-						            // KI-Automatik aktiv?
-						            const kAi = 'vis.settings.tariffPvSeasonAiEnabled';
-						            const ai = this.dp.getBoolean(kAi, true);
-						            const ageAi = this.dp.getAgeMs(kAi);
-						            pvSeasonAiEnabled = !!ai && (ageAi === null || ageAi <= staleMs);
+						            // KI-Automatik ist immer aktiv (Standard).
+						            // Manuelle Quartalsfaktoren bleiben optional als Basiswert (Feintuning).
+						            pvSeasonAiEnabled = true;
 
-						            if (pvSeasonAiEnabled) {
-						              // PV-Stärke aus Forecast ableiten:
-						              // - Wenn Kapazität bekannt: Verhältnis PV-kWh / Cap-kWh
-						              // - Sonst: heuristische Normierung (12 kWh ≈ "voll" in vielen Haushalten)
-						              const pvKwh = Math.max(0, Number(pvChargePotentialKWh) || 0);
-						              const capRef = (typeof capKWh === 'number' && Number.isFinite(capKWh) && capKWh > 0) ? capKWh : 12;
-						              const pvScore = clamp(pvKwh / capRef, 0, 1); // 0..1
-						              const adj = clamp(0.85 + 0.30 * pvScore, 0.75, 1.20); // 0.75..1.20
-						              const fAuto = clamp(pvSeasonBaseFactor * adj, 0, 2);
+						            // PV-Stärke aus Forecast ableiten:
+						            // - Wenn Kapazität bekannt: Verhältnis PV-kWh / Cap-kWh
+						            // - Sonst: heuristische Normierung (12 kWh ≈ "voll" in vielen Haushalten)
+						            const pvKwh = Math.max(0, Number(pvChargePotentialKWh) || 0);
+						            const capRef = (typeof capKWh === 'number' && Number.isFinite(capKWh) && capKWh > 0) ? capKWh : 12;
+						            const pvScore = clamp(pvKwh / capRef, 0, 1); // 0..1
+						            const adj = clamp(0.85 + 0.30 * pvScore, 0.75, 1.20); // 0.75..1.20
+						            const fAuto = clamp(pvSeasonBaseFactor * adj, 0, 2);
 
-						              pvSeasonFactor = fAuto;
-						              pvSeasonAiUsed = true;
-						              pvSeasonAiReason = `KI: Q${q} Basis ${pvSeasonBaseFactor.toFixed(2)} * Adj ${adj.toFixed(2)} (PV ${pvKwh.toFixed(1)} kWh, Ref ${capRef.toFixed(1)} kWh)`;
-						            } else {
-						              pvSeasonFactor = pvSeasonBaseFactor;
-						            }
+						            pvSeasonFactor = fAuto;
+						            pvSeasonAiUsed = true;
+						            pvSeasonAiReason = `KI: Q${q} Basis ${pvSeasonBaseFactor.toFixed(2)} * Adj ${adj.toFixed(2)} (PV ${pvKwh.toFixed(1)} kWh, Ref ${capRef.toFixed(1)} kWh)`;
 						          }
 						        }
 						      } catch (_e) {

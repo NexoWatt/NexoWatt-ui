@@ -4557,6 +4557,10 @@ async onReady() {
 
       await this.ensureSettingsStates();
 
+      // PV Saisonprofil: KI ist immer aktiv.
+      // Ältere Installationen könnten den Schalter noch auf false haben – wir setzen ihn beim Startup wieder auf true.
+      try { await this.setStateAsync('settings.tariffPvSeasonAiEnabled', { val: true, ack: true }); } catch (_e) {}
+
       // Simulation (optional): Admin-startable test mode using nexowatt-sim adapter.
       try { await this.ensureSimulationStates(); } catch (_e) {}
 
@@ -8939,6 +8943,28 @@ settingsConfig: {
         // Konfiguration erfolgt ausschließlich über das Installer‑/App‑Center.
         if (scope === 'settings' && String(key) === 'peakShavingEnabled') {
           return res.status(403).json({ ok: false, error: 'forbidden' });
+        }
+
+
+        // Tarif: PV Saisonprofil – KI ist immer aktiv (Endkundenfreundlich).
+        // Manuelle Quartalsfaktoren bleiben optional als Basiswerte (Feintuning).
+        if (scope === 'settings' && String(key) === 'tariffPvSeasonAiEnabled') {
+          try {
+            const forced = true;
+            const map2 = (this.config && this.config.settings) || {};
+            const mapped2 = map2[key];
+            const id2 = (typeof mapped2 === 'string' && mapped2.trim()) ? mapped2.trim() : '';
+            if (id2) {
+              await this.setForeignStateAsync(id2, forced);
+            } else {
+              const localId2 = `settings.${key}`;
+              await this.setStateAsync(localId2, { val: forced, ack: false });
+            }
+            return res.json({ ok: true });
+          } catch (e) {
+            this.log.warn('set error (tariffPvSeasonAiEnabled): ' + (e && e.message ? e.message : e));
+            return res.status(500).json({ ok: false, error: 'internal error' });
+          }
         }
 
 

@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.90",
+    "version": "0.6.91",
     "news": {
+      "0.6.91": {
+        "en": "Tariff: PV season profile AI is now always active (customer-friendly default). Manual quarter base factors remain optional as fine-tuning.",
+        "de": "Tarif: PV-Saisonprofil KI ist jetzt immer aktiv (kundenfreundlicher Standard). Manuelle Quartals-Basisfaktoren bleiben optional als Feintuning."
+      },
       "0.6.90": {
         "en": "Tariff: Added optional AI automation for the PV season profile. When enabled, the quarter factor is adjusted automatically based on PV forecast strength so customers don't need to tune it (manual quarter values remain available for installers).",
         "de": "Tarif: Optionale KI-Automatik für das PV-Saisonprofil ergänzt. Wenn aktiv, wird der Quartalsfaktor automatisch aus der PV-Forecast-Stärke abgeleitet – Kunden müssen nichts mehr feinjustieren (manuelle Quartalswerte bleiben für Installateure verfügbar)."
