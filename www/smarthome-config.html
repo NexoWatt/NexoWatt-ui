@@ -35,6 +35,9 @@
         <div class="nw-smarthome-header__actions">
           <button id="nw-config-save-btn" class="nw-config-btn nw-config-btn--primary" type="button">Speichern</button>
           <button id="nw-config-reload-btn" class="nw-config-btn nw-config-btn--ghost" type="button">Neu laden</button>
+          <button id="nw-config-export-btn" class="nw-config-btn nw-config-btn--ghost" type="button">Export</button>
+          <button id="nw-config-import-btn" class="nw-config-btn nw-config-btn--ghost" type="button">Import</button>
+          <input id="nw-config-import-file" type="file" accept="application/json,.json" style="display:none;"/>
           <a class="nw-config-btn nw-config-btn--ghost" href="/smarthome.html">SmartHome öffnen</a>
           <a class="nw-config-btn nw-config-btn--ghost" href="/logic.html">Logic öffnen</a>
 
@@ -70,7 +73,19 @@
     <section class="nw-config-section">
       <div class="nw-config-section__head">
         <h2 class="nw-config-section__title">Geräte / Kacheln</h2>
-        <button id="nw-config-add-device-btn" class="nw-config-btn nw-config-btn--ghost" type="button">+ Gerät</button>
+        <div class="nw-config-row__actions">
+          <select id="nw-config-template-select" class="nw-config-select" style="max-width:260px;">
+            <option value="">Template…</option>
+            <option value="switch">Schalter</option>
+            <option value="dimmer">Dimmer</option>
+            <option value="blind">Jalousie / Rollladen</option>
+            <option value="rtr">Heizung (RTR)</option>
+            <option value="sensor">Sensor</option>
+            <option value="scene">Szene</option>
+          </select>
+          <button id="nw-config-add-template-btn" class="nw-config-btn nw-config-btn--ghost" type="button" title="Gerät aus Template anlegen">+ Template</button>
+          <button id="nw-config-add-device-btn" class="nw-config-btn nw-config-btn--ghost" type="button">+ Gerät</button>
+        </div>
       </div>
       <div id="nw-config-devices" class="nw-config-grid"></div>
       <div id="nw-config-devices-empty" class="nw-config-empty" style="display:none;">

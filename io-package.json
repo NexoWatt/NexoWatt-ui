@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.93",
+    "version": "0.6.94",
     "news": {
+      "0.6.94": {
+        "en": "SmartHomeConfig: Added JSON import/export (rollout/support), device templates for faster setup, and an installer DP test (read/write) button next to each datapoint field. SmartHome: Added lightweight live auto-refresh with change detection.",
+        "de": "SmartHomeConfig: JSON-Import/Export (Rollout/Support), Geräte-Templates für schnellere Einrichtung und DP-Test (Lesen/Schreiben) direkt an den Datenpunkt-Feldern ergänzt. SmartHome: Leichtes Live-Auto-Refresh mit Change-Detection ergänzt."
+      },
       "0.6.93": {
         "en": "SmartHomeConfig: Added a validator panel with an error/warning list and highlights to make the setup more stable.",
         "de": "SmartHomeConfig: Validator-Panel mit Fehler-/Warnliste und Hervorhebung hinzugefügt, damit die Einrichtung stabiler wird."

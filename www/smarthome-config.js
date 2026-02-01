@@ -454,6 +454,105 @@ async function nwFetchSmartHomeConfig() {
   }
 }
 
+
+/* --- Import / Export (Rollout & Support) --- */
+
+function nwDownloadTextFile(filename, text, mimeType) {
+  try {
+    const blob = new Blob([text], { type: mimeType || 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      try { URL.revokeObjectURL(url); } catch (_e) {}
+      try { a.remove(); } catch (_e) {}
+    }, 0);
+  } catch (e) {
+    console.error('Download failed:', e);
+  }
+}
+
+function nwNormalizeImportedSmartHomeConfig(rawCfg) {
+  const cfgIn = (rawCfg && typeof rawCfg === 'object') ? rawCfg : {};
+  // preserve any future top-level fields, but guarantee the core structure
+  const cfg = Object.assign({}, cfgIn);
+  cfg.version = (typeof cfg.version === 'number') ? cfg.version : 1;
+  cfg.rooms = Array.isArray(cfg.rooms) ? cfg.rooms : [];
+  cfg.functions = Array.isArray(cfg.functions) ? cfg.functions : [];
+  cfg.devices = Array.isArray(cfg.devices) ? cfg.devices : [];
+  return cfg;
+}
+
+function nwExportSmartHomeConfig() {
+  const cfg = nwShcState.config;
+  if (!cfg) {
+    nwSetStatus('Keine Konfiguration zum Exportieren geladen.', 'error');
+    return;
+  }
+
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  const v = (typeof cfg.version === 'number') ? ('_cfg' + cfg.version) : '';
+  const filename = 'nexowatt-smarthome-config' + v + '_' + stamp + '.json';
+
+  const out = nwNormalizeImportedSmartHomeConfig(cfg);
+  const text = JSON.stringify(out, null, 2);
+  nwDownloadTextFile(filename, text, 'application/json');
+  nwSetStatus('Export erstellt: ' + filename, 'ok');
+}
+
+async function nwImportSmartHomeConfigFromFile(file) {
+  if (!file) return;
+  try {
+    const text = await file.text();
+    if (!text || !text.trim()) {
+      nwSetStatus('Import fehlgeschlagen: Datei ist leer.', 'error');
+      return;
+    }
+    let obj;
+    try {
+      obj = JSON.parse(text);
+    } catch (e) {
+      nwSetStatus('Import fehlgeschlagen: ungültiges JSON.', 'error');
+      return;
+    }
+
+    // Accept either raw config or wrapper {config: {...}}
+    const cfgRaw = (obj && obj.config && typeof obj.config === 'object') ? obj.config : obj;
+    const normalized = nwNormalizeImportedSmartHomeConfig(cfgRaw);
+
+    const summary =
+      'Räume: ' + normalized.rooms.length + '\n' +
+      'Funktionen: ' + normalized.functions.length + '\n' +
+      'Geräte: ' + normalized.devices.length + '\n\n' +
+      'Import anwenden? (bestehende Konfig wird im Editor ersetzt – erst nach „Speichern“ wird es aktiv)';
+    const ok = confirm(summary);
+    if (!ok) {
+      nwSetStatus('Import abgebrochen.', 'error');
+      return;
+    }
+
+    nwShcState.config = normalized;
+    nwNormalizeRoomFunctionOrder();
+    nwNormalizeDeviceOrder();
+    nwMarkDirty(true);
+    nwRenderAll();
+
+    nwSetStatus('Import geladen. Bitte speichern, um ihn zu übernehmen.', 'ok');
+
+    // Optional: offer immediate save for fast rollout
+    const saveNow = confirm('Jetzt direkt speichern und anwenden?');
+    if (saveNow) {
+      await nwSaveSmartHomeConfig();
+    }
+  } catch (e) {
+    console.error('Import error:', e);
+    nwSetStatus('Import fehlgeschlagen: Ausnahme.', 'error');
+  }
+}
+
 async function nwSaveSmartHomeConfig() {
   if (!nwShcState.config) return;
 
@@ -661,9 +760,7 @@ function nwRenderRoomsEditor(rooms) {
 
     const row = document.createElement('div');
     row.className = 'nw-config-row';
-    row.dataset.nwEntity = 'function';
-    row.dataset.nwIndex = String(idx);
-    row.dataset.nwId = (fn.id || '');
+    // used by validator focus/highlight
     row.dataset.nwEntity = 'room';
     row.dataset.nwIndex = String(idx);
     row.dataset.nwId = (room.id || '');
@@ -785,6 +882,10 @@ function nwRenderFunctionsEditor(functions) {
 
     const row = document.createElement('div');
     row.className = 'nw-config-row';
+    // used by validator focus/highlight
+    row.dataset.nwEntity = 'function';
+    row.dataset.nwIndex = String(idx);
+    row.dataset.nwId = (fn.id || '');
 
     const idInput = document.createElement('input');
     idInput.type = 'text';
@@ -937,6 +1038,104 @@ function nwAddDevice() {
   nwRenderAll();
 }
 
+
+// Quick templates (installer speed): create a pre-filled device skeleton so the
+// installer only needs to pick the datapoints.
+function nwAddDeviceFromTemplate(templateType) {
+  if (!nwShcState.config) return;
+
+  const t = String(templateType || '').trim();
+  if (!t) {
+    nwSetStatus('Bitte zuerst ein Template auswählen.', 'error');
+    return;
+  }
+
+  const devices = Array.isArray(nwShcState.config.devices) ? nwShcState.config.devices : [];
+  const rooms = Array.isArray(nwShcState.config.rooms) ? nwShcState.config.rooms : [];
+  const funcs = Array.isArray(nwShcState.config.functions) ? nwShcState.config.functions : [];
+
+  const roomId = rooms.length ? (rooms[0] && rooms[0].id) : null;
+  const functionId = funcs.length ? (funcs[0] && funcs[0].id) : null;
+
+  const baseIdMap = {
+    switch: 'schalter',
+    dimmer: 'dimmer',
+    blind: 'jalousie',
+    rtr: 'heizung',
+    sensor: 'sensor',
+    scene: 'szene',
+  };
+  const aliasMap = {
+    switch: 'Neuer Schalter',
+    dimmer: 'Neuer Dimmer',
+    blind: 'Neue Jalousie',
+    rtr: 'Neue Heizung',
+    sensor: 'Neuer Sensor',
+    scene: 'Neue Szene',
+  };
+  const iconMap = {
+    switch: 'SW',
+    dimmer: 'DM',
+    blind: 'BL',
+    rtr: 'RT',
+    sensor: 'SE',
+    scene: 'SC',
+  };
+
+  const id = nwEnsureUniqueDeviceId(devices, baseIdMap[t] || 'geraet');
+
+  const dev = {
+    id,
+    alias: aliasMap[t] || 'Neues Gerät',
+    type: t,
+    roomId: roomId || null,
+    functionId: functionId || null,
+    icon: iconMap[t] || '',
+    size: 'm',
+    behavior: { favorite: false, readOnly: false },
+    io: {},
+  };
+
+  // IO skeletons by type
+  if (t === 'switch') {
+    dev.io.switch = { readId: null, writeId: null };
+  } else if (t === 'scene') {
+    dev.io.switch = { readId: null, writeId: null };
+  } else if (t === 'dimmer') {
+    dev.io.level = { readId: null, writeId: null, min: 0, max: 100 };
+  } else if (t === 'blind') {
+    dev.io.level = { readId: null, writeId: null, min: 0, max: 100 };
+    dev.io.cover = { upId: null, downId: null, stopId: null };
+  } else if (t === 'rtr') {
+    dev.io.climate = {
+      currentTempId: null,
+      setpointId: null,
+      modeId: null,
+      humidityId: null,
+      minSetpoint: 15,
+      maxSetpoint: 30,
+    };
+  } else if (t === 'sensor') {
+    dev.io.sensor = { readId: null };
+    // Sensoren sind in der Regel reine Anzeige (optional anpassbar)
+    dev.behavior.readOnly = true;
+  } else {
+    // Fallback: switch
+    dev.type = 'switch';
+    dev.io.switch = { readId: null, writeId: null };
+  }
+
+  devices.push(dev);
+  nwShcState.config.devices = devices;
+  nwNormalizeDeviceOrder();
+  nwMarkDirty(true);
+  nwRenderAll();
+
+  // Reset template selector (UX)
+  const sel = document.getElementById('nw-config-template-select');
+  if (sel) sel.value = '';
+}
+
 function nwCreateFieldRow(labelText, controlElem) {
   const row = document.createElement('div');
   row.className = 'nw-config-card__row nw-config-field-row';
@@ -954,6 +1153,59 @@ function nwCreateFieldRow(labelText, controlElem) {
   return row;
 }
 
+
+/* --- DP-Test (Installer) --- */
+
+function nwDpFormatValueShort(val) {
+  try {
+    if (typeof val === 'undefined') return '—';
+    if (val === null) return 'null';
+    if (typeof val === 'boolean') return val ? 'true' : 'false';
+    if (typeof val === 'number') {
+      if (!Number.isFinite(val)) return String(val);
+      // keep it compact: 0.00–99.99 => 2 decimals, otherwise round
+      if (Math.abs(val) < 100) return (Math.round(val * 100) / 100).toString();
+      return Math.round(val).toString();
+    }
+    if (typeof val === 'object') {
+      const s = JSON.stringify(val);
+      return s.length > 22 ? (s.slice(0, 21) + '…') : s;
+    }
+    const s = String(val);
+    return s.length > 22 ? (s.slice(0, 21) + '…') : s;
+  } catch (_e) {
+    return String(val);
+  }
+}
+
+async function nwDpGetState(dpId) {
+  const id = String(dpId || '').trim();
+  if (!id) return { ok: false, error: 'missing id' };
+  try {
+    const res = await fetch('/api/smarthome/dpget?id=' + encodeURIComponent(id), { cache: 'no-store' });
+    if (!res.ok) return { ok: false, error: 'http_' + res.status };
+    return await res.json().catch(() => ({ ok: false, error: 'invalid json' }));
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : String(e) };
+  }
+}
+
+async function nwDpSetState(dpId, val) {
+  const id = String(dpId || '').trim();
+  if (!id) return { ok: false, error: 'missing id' };
+  try {
+    const res = await fetch('/api/smarthome/dpset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, val }),
+    });
+    if (!res.ok) return { ok: false, error: 'http_' + res.status };
+    return await res.json().catch(() => ({ ok: false, error: 'invalid json' }));
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : String(e) };
+  }
+}
+
 function nwCreateDpInput(labelText, value, onChange) {
   const wrapper = document.createElement('div');
   wrapper.className = 'nw-config-dp-input-wrapper';
@@ -969,12 +1221,12 @@ function nwCreateDpInput(labelText, value, onChange) {
     nwMarkDirty(true);
   });
 
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'nw-config-dp-button';
-  btn.textContent = '…';
-  btn.title = 'Datenpunkt auswählen';
-  btn.addEventListener('click', () => {
+  const btnPick = document.createElement('button');
+  btnPick.type = 'button';
+  btnPick.className = 'nw-config-dp-button';
+  btnPick.textContent = '…';
+  btnPick.title = 'Datenpunkt auswählen';
+  btnPick.addEventListener('click', () => {
     nwOpenDatapointDialog({
       title: labelText,
       initial: input.value,
@@ -986,8 +1238,113 @@ function nwCreateDpInput(labelText, value, onChange) {
     });
   });
 
+  const badge = document.createElement('span');
+  badge.className = 'nw-config-badge nw-config-badge--idle';
+  badge.textContent = '—';
+
+  const setBadge = (kind, text) => {
+    badge.classList.remove('nw-config-badge--ok', 'nw-config-badge--warn', 'nw-config-badge--error', 'nw-config-badge--idle');
+    badge.classList.add('nw-config-badge--' + (kind || 'idle'));
+    badge.textContent = text || '';
+  };
+
+  const btnTest = document.createElement('button');
+  btnTest.type = 'button';
+  btnTest.className = 'nw-config-dp-button';
+  btnTest.textContent = 'Test';
+  btnTest.title = 'DP lesen (Installer)';
+
+  btnTest.addEventListener('click', async () => {
+    const id = input.value.trim();
+    if (!id) {
+      setBadge('warn', 'kein DP');
+      return;
+    }
+    setBadge('idle', 'Lese…');
+    const data = await nwDpGetState(id);
+    if (!data || !data.ok) {
+      setBadge('error', 'Fehler');
+      return;
+    }
+    const st = data.state;
+    if (!st) {
+      setBadge('warn', 'kein State');
+      return;
+    }
+    const txt = nwDpFormatValueShort(st.val) + (st.ack ? ' ack' : '');
+    setBadge('ok', txt);
+  });
+
+  const labelLower = String(labelText || '').toLowerCase();
+  const allowWrite = (
+    labelLower.includes('writeid') ||
+    labelLower.includes('setpointid') ||
+    labelLower.includes('upid') ||
+    labelLower.includes('downid') ||
+    labelLower.includes('stopid') ||
+    labelLower.includes('modeid')
+  );
+
+  let btnSet = null;
+  if (allowWrite) {
+    btnSet = document.createElement('button');
+    btnSet.type = 'button';
+    btnSet.className = 'nw-config-dp-button';
+    btnSet.textContent = 'Set';
+    btnSet.title = 'DP schreiben (Installer)';
+
+    btnSet.addEventListener('click', async () => {
+      const id = input.value.trim();
+      if (!id) {
+        setBadge('warn', 'kein DP');
+        return;
+      }
+
+      let val;
+      // Cover commands are usually trigger-like booleans
+      if (labelLower.includes('upid') || labelLower.includes('downid') || labelLower.includes('stopid')) {
+        const ok = confirm('Befehl an ' + id + ' senden?\n\nWert: true');
+        if (!ok) return;
+        val = true;
+      } else {
+        const raw = prompt('Wert für ' + id + ' setzen:', '');
+        if (raw === null) return;
+        const t = String(raw).trim();
+        if (t.toLowerCase() === 'true') val = true;
+        else if (t.toLowerCase() === 'false') val = false;
+        else {
+          const num = parseFloat(t.replace(',', '.'));
+          if (Number.isFinite(num) && t !== '') val = num;
+          else val = t;
+        }
+
+        const ok = confirm('DP setzen?\n\n' + id + ' = ' + String(val));
+        if (!ok) return;
+      }
+
+      setBadge('idle', 'Schreibe…');
+      const wr = await nwDpSetState(id, val);
+      if (!wr || !wr.ok) {
+        setBadge('error', 'Fehler');
+        return;
+      }
+      // re-read to show result (best-effort)
+      const data = await nwDpGetState(id);
+      if (data && data.ok && data.state) {
+        const st = data.state;
+        const txt = nwDpFormatValueShort(st.val) + (st.ack ? ' ack' : '');
+        setBadge('ok', txt);
+      } else {
+        setBadge('ok', 'gesetzt');
+      }
+    });
+  }
+
   wrapper.appendChild(input);
-  wrapper.appendChild(btn);
+  wrapper.appendChild(btnPick);
+  wrapper.appendChild(btnTest);
+  if (btnSet) wrapper.appendChild(btnSet);
+  wrapper.appendChild(badge);
 
   return nwCreateFieldRow(labelText, wrapper);
 }
@@ -1674,9 +2031,16 @@ function nwAttachToolbarHandlers() {
   const saveBtn = document.getElementById('nw-config-save-btn');
   const reloadBtn = document.getElementById('nw-config-reload-btn');
 
+  const exportBtn = document.getElementById('nw-config-export-btn');
+  const importBtn = document.getElementById('nw-config-import-btn');
+  const importFile = document.getElementById('nw-config-import-file');
+
   const addRoomBtn = document.getElementById('nw-config-add-room-btn');
   const addFnBtn = document.getElementById('nw-config-add-function-btn');
   const addDeviceBtn = document.getElementById('nw-config-add-device-btn');
+
+  const tplSelect = document.getElementById('nw-config-template-select');
+  const addTplBtn = document.getElementById('nw-config-add-template-btn');
   if (saveBtn) {
     saveBtn.addEventListener('click', () => {
       nwSaveSmartHomeConfig();
@@ -1685,6 +2049,31 @@ function nwAttachToolbarHandlers() {
   if (reloadBtn) {
     reloadBtn.addEventListener('click', () => {
       nwReloadSmartHomeConfig();
+    });
+  }
+
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      nwExportSmartHomeConfig();
+    });
+  }
+
+  if (importBtn) {
+    importBtn.addEventListener('click', () => {
+      if (importFile) {
+        // reset so same file can be re-imported
+        importFile.value = '';
+        importFile.click();
+      }
+    });
+  }
+
+  if (importFile) {
+    importFile.addEventListener('change', (ev) => {
+      const file = ev && ev.target && ev.target.files ? ev.target.files[0] : null;
+      if (file) {
+        nwImportSmartHomeConfigFromFile(file);
+      }
     });
   }
 
@@ -1702,6 +2091,13 @@ function nwAttachToolbarHandlers() {
   if (addDeviceBtn) {
     addDeviceBtn.addEventListener('click', () => {
       nwAddDevice();
+    });
+  }
+
+  if (addTplBtn) {
+    addTplBtn.addEventListener('click', () => {
+      const t = tplSelect ? tplSelect.value : '';
+      nwAddDeviceFromTemplate(t);
     });
   }
 }

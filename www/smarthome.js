@@ -1,6 +1,9 @@
 // NexoWatt SmartHome – A3: Switch-Kachel mit neuem Modell
 
 let nwAllDevices = [];
+let nwLastDevicesSignature = '';
+let nwReloadInFlight = false;
+let nwAutoRefreshTimer = null;
 const nwFilterState = {
   room: null,
   func: null,
@@ -603,18 +606,55 @@ function nwCreateBadge(dev) {
   }
 
 
-async function nwReloadDevices() {
+async function nwReloadDevices(opts) {
+  // avoid overlapping network requests (prevents UI jitter)
+  if (nwReloadInFlight) return;
+  nwReloadInFlight = true;
   try {
     const devices = await nwFetchDevices();
-    nwAllDevices = devices || [];
+    const arr = Array.isArray(devices) ? devices : [];
+    const sig = JSON.stringify(arr);
+    const force = !!(opts && opts.force);
+    if (!force && sig === nwLastDevicesSignature) {
+      return;
+    }
+    nwLastDevicesSignature = sig;
+    nwAllDevices = arr;
     nwApplyFiltersAndRender();
   } catch (e) {
     console.error('SmartHome reload error:', e);
+  } finally {
+    nwReloadInFlight = false;
   }
 }
 
+function nwStartAutoRefresh(intervalMs) {
+  const ms = (typeof intervalMs === 'number' && intervalMs > 1000) ? intervalMs : 5000;
+  if (nwAutoRefreshTimer) return;
+  nwAutoRefreshTimer = setInterval(() => {
+    if (document.hidden) return;
+    nwReloadDevices();
+  }, ms);
+}
+
+function nwStopAutoRefresh() {
+  if (!nwAutoRefreshTimer) return;
+  try { clearInterval(nwAutoRefreshTimer); } catch (_e) {}
+  nwAutoRefreshTimer = null;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-  nwReloadDevices();
+  nwReloadDevices({ force: true });
+  nwStartAutoRefresh(5000);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      nwStopAutoRefresh();
+    } else {
+      nwReloadDevices({ force: true });
+      nwStartAutoRefresh(5000);
+    }
+  });
 });
 
 

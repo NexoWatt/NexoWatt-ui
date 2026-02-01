@@ -5473,6 +5473,72 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
     });
 
 
+    // --- SmartHomeConfig DP-Test (Installer): read/write a datapoint quickly ---
+    // Read current foreign state
+    app.get('/api/smarthome/dpget', requireInstaller, async (req, res) => {
+      try {
+        const idRaw = (req.query && req.query.id) || '';
+        const id = (typeof idRaw === 'string' ? idRaw : String(idRaw || '')).trim();
+        if (!id) return res.status(400).json({ ok: false, error: 'missing id' });
+        if (id.length > 300) return res.status(400).json({ ok: false, error: 'id too long' });
+        if (typeof this.getForeignStateAsync !== 'function') {
+          return res.status(500).json({ ok: false, error: 'getForeignStateAsync not available' });
+        }
+        const st = await this.getForeignStateAsync(id);
+        if (!st) {
+          return res.json({ ok: true, id, state: null });
+        }
+        res.json({
+          ok: true,
+          id,
+          state: {
+            val: st.val,
+            ack: !!st.ack,
+            ts: st.ts || 0,
+            lc: st.lc || 0,
+            from: st.from || '',
+            q: typeof st.q !== 'undefined' ? st.q : null,
+          },
+        });
+      } catch (e) {
+        this.log.warn('SmartHome dpget error: ' + (e && e.message ? e.message : e));
+        res.status(500).json({ ok: false, error: 'internal error' });
+      }
+    });
+
+    // Write foreign state (installer only). Use with care.
+    app.post('/api/smarthome/dpset', requireInstaller, async (req, res) => {
+      try {
+        const body = req.body || {};
+        const id = String(body.id || '').trim();
+        if (!id) return res.status(400).json({ ok: false, error: 'missing id' });
+        if (id.length > 300) return res.status(400).json({ ok: false, error: 'id too long' });
+
+        let val = body.val;
+        if (typeof val === 'string') {
+          const t = val.trim();
+          if (t.toLowerCase() === 'true') val = true;
+          else if (t.toLowerCase() === 'false') val = false;
+          else {
+            // Try to parse numbers (installer often pastes values)
+            const num = parseFloat(t.replace(',', '.'));
+            if (Number.isFinite(num) && t !== '') val = num;
+          }
+        }
+
+        if (typeof this.setForeignStateAsync !== 'function') {
+          return res.status(500).json({ ok: false, error: 'setForeignStateAsync not available' });
+        }
+
+        await this.setForeignStateAsync(id, val);
+        res.json({ ok: true, id, written: true });
+      } catch (e) {
+        this.log.warn('SmartHome dpset error: ' + (e && e.message ? e.message : e));
+        res.status(500).json({ ok: false, error: 'internal error' });
+      }
+    });
+
+
 
     // --- Installer / EMS Apps API ---
     // Diese API dient dazu, die Konfiguration (native) auch direkt über die Installer-Webseite
