@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.94",
+    "version": "0.6.95",
     "news": {
+      "0.6.95": {
+        "en": "SmartHome: VIS now uses the standard NexoWatt header tabs (LIVE/HISTORY/EVCS/SMARTHOME) and shows a clear empty-state hint when SmartHome is disabled or no tiles are configured. SmartHomeConfig: Added a warning when SmartHome is disabled. Backend: SmartHomeConfig is now installer-managed/persistent across restarts; SmartHome enabled flag follows the admin instance setting.",
+        "de": "SmartHome: VIS nutzt jetzt die Standard-NexoWatt-Header-Tabs (LIVE/HISTORY/EVCS/SMARTHOME) und zeigt einen klaren Hinweis, wenn SmartHome deaktiviert ist oder keine Kacheln konfiguriert sind. SmartHomeConfig: Hinweis ergänzt, wenn SmartHome deaktiviert ist. Backend: SmartHomeConfig ist nun installer-managed und bleibt über Neustarts erhalten; SmartHome-Aktivierung folgt dem Admin-Instanzschalter."
+      },
       "0.6.94": {
         "en": "SmartHomeConfig: Added JSON import/export (rollout/support), device templates for faster setup, and an installer DP test (read/write) button next to each datapoint field. SmartHome: Added lightweight live auto-refresh with change detection.",
         "de": "SmartHomeConfig: JSON-Import/Export (Rollout/Support), Geräte-Templates für schnellere Einrichtung und DP-Test (Lesen/Schreiben) direkt an den Datenpunkt-Feldern ergänzt. SmartHome: Leichtes Live-Auto-Refresh mit Change-Detection ergänzt."

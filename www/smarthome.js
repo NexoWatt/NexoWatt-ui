@@ -4,6 +4,8 @@ let nwAllDevices = [];
 let nwLastDevicesSignature = '';
 let nwReloadInFlight = false;
 let nwAutoRefreshTimer = null;
+let nwSmartHomeEnabled = null;
+let nwEvcsCount = 1;
 const nwFilterState = {
   room: null,
   func: null,
@@ -276,10 +278,48 @@ async function nwCoverAction(id, action) {
   }
 }
 
-function nwShowEmptyState(show) {
+function nwIsAnyFilterActive() {
+  return !!(nwFilterState.room || nwFilterState.func || nwFilterState.favorite);
+}
+
+function nwSetEmptyStateHtml(html) {
   const empty = document.getElementById('nw-smarthome-empty');
   if (!empty) return;
-  empty.style.display = show ? 'block' : 'none';
+  empty.innerHTML = html || '';
+}
+
+function nwShowEmptyState(show, ctx) {
+  const empty = document.getElementById('nw-smarthome-empty');
+  if (!empty) return;
+
+  if (!show) {
+    empty.style.display = 'none';
+    return;
+  }
+
+  const total = (ctx && typeof ctx.total === 'number') ? ctx.total : (Array.isArray(nwAllDevices) ? nwAllDevices.length : 0);
+  const filtered = (ctx && typeof ctx.filtered === 'number') ? ctx.filtered : 0;
+
+  // Resolve enabled flag (null = unknown)
+  const enabled = (typeof ctx?.enabled === 'boolean') ? ctx.enabled : (typeof nwSmartHomeEnabled === 'boolean' ? nwSmartHomeEnabled : null);
+
+  let html = '';
+
+  if (enabled === false) {
+    html = `⚠️ SmartHome ist aktuell <strong>deaktiviert</strong>.<br>
+    Bitte im ioBroker Admin unter <strong>nexowatt-vis → SmartHome → „SmartHome aktivieren“</strong> einschalten.<br>
+    Danach Seite neu laden.`;
+  } else if (total === 0) {
+    html = `Noch keine SmartHome-Geräte konfiguriert.<br>
+    Öffne die <a href="/smarthome-config.html" style="color:inherit; text-decoration:underline;">SmartHome-Konfiguration</a> und lege mindestens eine Kachel an.`;
+  } else if (filtered === 0 && nwIsAnyFilterActive()) {
+    html = `Keine Geräte passen zum aktuellen Filter. Entferne Filter (Räume/Funktionen/Favoriten), um wieder Geräte zu sehen.`;
+  } else {
+    html = `Keine SmartHome-Geräte verfügbar.`;
+  }
+
+  nwSetEmptyStateHtml(html);
+  empty.style.display = 'block';
 }
 
 function nwRenderTiles(devices) {
@@ -613,7 +653,7 @@ async function nwReloadDevices(opts) {
   try {
     const devices = await nwFetchDevices();
     const arr = Array.isArray(devices) ? devices : [];
-    const sig = JSON.stringify(arr);
+    const sig = JSON.stringify(arr) + '|' + String(nwSmartHomeEnabled);
     const force = !!(opts && opts.force);
     if (!force && sig === nwLastDevicesSignature) {
       return;
@@ -643,36 +683,59 @@ function nwStopAutoRefresh() {
   nwAutoRefreshTimer = null;
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  nwReloadDevices({ force: true });
+function nwInitMenu() {
+  const menuBtn = document.getElementById('menuBtn');
+  const menu = document.getElementById('menuDropdown');
+  if (menuBtn && menu) {
+    const close = () => menu.classList.add('hidden');
+    const toggle = () => menu.classList.toggle('hidden');
+    menuBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); toggle(); });
+    menu.addEventListener('click', (e) => e.stopPropagation());
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    document.addEventListener('click', () => close());
+  }
+}
+
+async function nwLoadUiConfigFlags() {
+  try {
+    const cfg = await fetch('/config', { cache: 'no-store' }).then(r => r.json());
+
+    nwEvcsCount = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
+    nwSmartHomeEnabled = !!(cfg.smartHome && cfg.smartHome.enabled);
+
+    // EVCS visibility (only relevant for multi-wallbox installs)
+    const l = document.getElementById('menuEvcsLink');
+    if (l) l.classList.toggle('hidden', nwEvcsCount < 2);
+    const t = document.getElementById('tabEvcs');
+    if (t) t.classList.toggle('hidden', nwEvcsCount < 2);
+
+    // SmartHome menu item (tab stays visible on this page)
+    const sl = document.getElementById('menuSmartHomeLink');
+    if (sl) sl.classList.toggle('hidden', !nwSmartHomeEnabled);
+  } catch (_e) {
+    // keep defaults
+  }
+}
+
+async function nwBootstrap() {
+  nwInitMenu();
+  await nwLoadUiConfigFlags();
+
+  // First paint
+  await nwReloadDevices({ force: true });
   nwStartAutoRefresh(5000);
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       nwStopAutoRefresh();
-    } else {
+      return;
+    }
+    // Re-evaluate flags on resume (installer might have enabled SmartHome in the meantime)
+    nwLoadUiConfigFlags().then(() => {
       nwReloadDevices({ force: true });
       nwStartAutoRefresh(5000);
-    }
+    });
   });
-});
+}
 
-
-// Topbar menu + EVCS menu visibility
-(function(){
-  const btn=document.getElementById('menuBtn');
-  const dd=document.getElementById('menuDropdown');
-  if(btn && dd){
-    btn.addEventListener('click', (e)=>{ e.preventDefault(); dd.classList.toggle('hidden'); });
-    document.addEventListener('click', (e)=>{ if(!dd.contains(e.target) && e.target!==btn) dd.classList.add('hidden'); });
-  }
-  fetch('/config').then(r=>r.json()).then(cfg=>{
-    const c = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
-    const l=document.getElementById('menuEvcsLink');
-    if(l) l.classList.toggle('hidden', c < 2);
-      const t=document.getElementById('tabEvcs');
-    if(t) t.classList.toggle('hidden', c < 2);
-    const n=document.getElementById('nav-evcs');
-    if(n) n.classList.toggle('hidden', c < 2);
-}).catch(()=>{});
-})();
+document.addEventListener('DOMContentLoaded', nwBootstrap);

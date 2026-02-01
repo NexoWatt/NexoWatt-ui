@@ -1,3 +1,8 @@
+## 0.6.95 (2026-02-01)
+- SmartHome: VIS-Header/Tabs an die Haupt-UI angeglichen (LIVE/HISTORY/EVCS/SMARTHOME) und Empty-State verbessert (klarer Hinweis bei deaktiviertem SmartHome bzw. wenn keine Kacheln konfiguriert sind).
+- SmartHomeConfig: Hinweis ergänzt, wenn SmartHome deaktiviert ist (damit klar ist, warum die VIS-Seite leer bleibt).
+- Backend: SmartHomeConfig ist jetzt installer-managed und bleibt über Adapter-Neustarts erhalten. Außerdem folgt SmartHome-Aktivierung zuverlässig dem Admin-Instanzschalter.
+
 ## 0.6.93 (2026-02-01)
 - SmartHomeConfig: Validator-Panel + Fehler-/Warnliste ergänzt. Betroffene Räume/Funktionen/Geräte werden direkt im Editor markiert, damit das Einrichten stabiler wird.
 - UI: Service-Worker Cache-Version erhöht, damit Updates zuverlässig im Browser ankommen.

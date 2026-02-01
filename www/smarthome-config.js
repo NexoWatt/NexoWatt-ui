@@ -2104,6 +2104,23 @@ function nwAttachToolbarHandlers() {
 
 async function nwInitSmartHomeConfig() {
   nwAttachToolbarHandlers();
+  // Hint: SmartHome must be enabled in the adapter settings, otherwise the VIS page stays empty.
+  try {
+    const hint = document.getElementById('nw-config-enabled-hint');
+    if (hint) {
+      const cfg = await fetch('/config', { cache: 'no-store' }).then(r => r.json());
+      const enabled = !!(cfg && cfg.smartHome && cfg.smartHome.enabled);
+      if (!enabled) {
+        hint.style.display = 'block';
+        hint.innerHTML = '⚠️ SmartHome ist deaktiviert – die VIS-Seite bleibt leer. Bitte im ioBroker Admin unter <strong>nexowatt-vis → SmartHome → „SmartHome aktivieren“</strong> einschalten.';
+      } else {
+        hint.style.display = 'none';
+        hint.innerHTML = '';
+      }
+    }
+  } catch (_e) {
+    // ignore
+  }
   await nwReloadSmartHomeConfig();
 }
 

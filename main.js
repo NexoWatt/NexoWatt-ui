@@ -780,6 +780,7 @@ class NexoWattVis extends utils.Adapter {
       'threshold',
       'relay',
       'smartHome',
+      'smartHomeConfig',
 
       // Optional diagnostics
       'diagnostics',
@@ -844,6 +845,8 @@ class NexoWattVis extends utils.Adapter {
     ensurePlainObj('threshold', {});
     ensurePlainObj('relay', {});
     ensurePlainObj('smartHome', {});
+    // SmartHomeConfig (rooms/functions/devices) – stored as installer-managed config
+    ensurePlainObj('smartHomeConfig', { version: 1, rooms: [], functions: [], devices: [] });
     ensurePlainObj('diagnostics', {});
 
     // Scheduler interval
@@ -911,9 +914,25 @@ class NexoWattVis extends utils.Adapter {
     const out = this._nwDeepClone(base) || {};
 
     for (const k of this.nwInstallerManagedKeys()) {
-      if (Object.prototype.hasOwnProperty.call(p, k)) {
-        out[k] = this._nwDeepClone(p[k]);
+      if (!Object.prototype.hasOwnProperty.call(p, k)) continue;
+
+      // SmartHome enable flag should follow the admin instance setting (customer-facing toggle).
+      // We still allow installer-managed smartHome sub-keys (datapoints, defaults, …) to merge in.
+      if (k === 'smartHome') {
+        const baseSh = this._nwIsPlainObject(out.smartHome) ? out.smartHome : {};
+        const patchSh = this._nwIsPlainObject(p.smartHome) ? p.smartHome : {};
+        const merged = this.nwDeepMerge(this._nwDeepClone(baseSh) || {}, this._nwDeepClone(patchSh) || {});
+
+        // Preserve base enabled flag if explicitly set in native config.
+        if (typeof baseSh.enabled === 'boolean') {
+          merged.enabled = baseSh.enabled;
+        }
+
+        out.smartHome = merged;
+        continue;
       }
+
+      out[k] = this._nwDeepClone(p[k]);
     }
 
     // Ensure emsApps + legacy enable flags are consistent at runtime
