@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.92",
+    "version": "0.6.93",
     "news": {
+      "0.6.93": {
+        "en": "SmartHomeConfig: Added a validator panel with an error/warning list and highlights to make the setup more stable.",
+        "de": "SmartHomeConfig: Validator-Panel mit Fehler-/Warnliste und Hervorhebung hinzugefügt, damit die Einrichtung stabiler wird."
+      },
       "0.6.92": {
         "en": "Admin: Added SmartHome tab (enable toggle + open links) and extended the Installer 'Tab' page with SmartHome VIS/Config shortcuts.",
         "de": "Admin: Neuer SmartHome-Reiter (Aktivieren-Schalter + Öffnen-Links) und Installer-\"Tab\" um SmartHome VIS/Config-Shortcuts erweitert."

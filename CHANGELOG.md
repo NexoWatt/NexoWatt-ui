@@ -1,3 +1,7 @@
+## 0.6.93 (2026-02-01)
+- SmartHomeConfig: Validator-Panel + Fehler-/Warnliste ergänzt. Betroffene Räume/Funktionen/Geräte werden direkt im Editor markiert, damit das Einrichten stabiler wird.
+- UI: Service-Worker Cache-Version erhöht, damit Updates zuverlässig im Browser ankommen.
+
 ## 0.6.91 (2026-01-31)
 - Tarif: PV-Saisonprofil KI ist jetzt immer aktiv (Standard). Manuelle Quartals-Basisfaktoren sind optional (Feintuning) und werden in der UI standardmäßig eingeklappt.
 - UI: Service-Worker Cache-Version erhöht, damit Updates zuverlässig im Browser ankommen.

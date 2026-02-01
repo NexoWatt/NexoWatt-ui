@@ -1940,6 +1940,115 @@ body {
   user-select: text;
 }
 
+/* SmartHomeConfig Validator (Fehlerliste) */
+.nw-validation {
+  border-radius: 1rem;
+  padding: 10px 12px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(31, 41, 55, 0.9);
+}
+
+.nw-validation__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.nw-validation__title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.nw-validation__badges {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.nw-validation__hint {
+  margin-top: 6px;
+  font-size: 0.72rem;
+  color: rgba(203, 213, 225, 0.85);
+  line-height: 1.25;
+}
+
+.nw-validation__list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nw-validation-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 8px 10px;
+  border-radius: 0.9rem;
+  background: rgba(2, 6, 23, 0.4);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  cursor: pointer;
+}
+
+.nw-validation-item:hover {
+  border-color: rgba(148, 163, 184, 0.65);
+}
+
+.nw-validation-item__sev {
+  font-size: 0.78rem;
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+.nw-validation-item__sev--error { color: #fecaca; }
+.nw-validation-item__sev--warn  { color: #fde68a; }
+
+.nw-validation-item__text {
+  min-width: 0;
+}
+
+.nw-validation-item__title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.nw-validation-item__msg {
+  margin-top: 2px;
+  font-size: 0.74rem;
+  color: rgba(203, 213, 225, 0.85);
+  overflow-wrap: anywhere;
+}
+
+/* Highlight invalid entities in editor */
+.nw-config-row.nw-issue--error,
+.nw-config-card.nw-issue--error {
+  border-color: rgba(239, 68, 68, 0.75) !important;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.25), 0 6px 18px rgba(15, 23, 42, 0.5);
+}
+
+.nw-config-row.nw-issue--warn,
+.nw-config-card.nw-issue--warn {
+  border-color: rgba(251, 191, 36, 0.75) !important;
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.18), 0 6px 18px rgba(15, 23, 42, 0.5);
+}
+
+.nw-issue-attention {
+  animation: nwIssuePulse 1.2s ease;
+}
+
+@keyframes nwIssuePulse {
+  0%   { transform: scale(1); }
+  20%  { transform: scale(1.01); }
+  55%  { transform: scale(1); }
+  100% { transform: scale(1); }
+}
+
 .nw-config-input,
 .nw-config-select {
   width: 100%;

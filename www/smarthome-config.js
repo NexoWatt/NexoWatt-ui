@@ -6,7 +6,381 @@ const nwShcState = {
   config: null,
   originalJson: null,
   dirty: false,
+  validation: null,
 };
+
+/* --- Validator (A10): Fehlerliste für stabile Einrichtung --- */
+
+let nwValidateTimer = null;
+
+function nwScheduleValidation() {
+  if (nwValidateTimer) clearTimeout(nwValidateTimer);
+  nwValidateTimer = setTimeout(() => {
+    nwValidateTimer = null;
+    nwRunValidationNow();
+  }, 180);
+}
+
+function nwCssEscape(value) {
+  const s = String(value || '');
+  if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(s);
+  return s.replace(/[^a-zA-Z0-9_-]/g, (ch) => '\\' + ch);
+}
+
+function nwEntityKey(entity) {
+  if (!entity || !entity.kind) return 'global';
+  const idx = (typeof entity.index === 'number') ? entity.index : -1;
+  const id = (typeof entity.id === 'string' && entity.id) ? entity.id : '';
+  return entity.kind + ':' + idx + ':' + id;
+}
+
+function nwPushIssue(out, severity, title, message, entity) {
+  const item = {
+    severity,
+    title: title || (severity === 'error' ? 'Fehler' : 'Warnung'),
+    message: message || '',
+    entity: entity || { kind: 'global' },
+  };
+  if (severity === 'error') out.errors.push(item);
+  else out.warnings.push(item);
+
+  const key = nwEntityKey(item.entity);
+  const prev = out.byEntity[key] || { kind: item.entity.kind, index: item.entity.index, id: item.entity.id, errorCount: 0, warnCount: 0, maxSeverity: null };
+  if (severity === 'error') prev.errorCount += 1;
+  else prev.warnCount += 1;
+  if (!prev.maxSeverity || prev.maxSeverity === 'warn') {
+    prev.maxSeverity = severity;
+  }
+  out.byEntity[key] = prev;
+}
+
+function nwLooksLikeDpId(id) {
+  const s = String(id || '').trim();
+  if (!s) return false;
+  if (/\s/.test(s)) return false;
+  // ioBroker ids typically contain at least one dot
+  return s.includes('.');
+}
+
+function nwValidateConfig(cfg) {
+  const out = { errors: [], warnings: [], byEntity: {} };
+  const safe = cfg || {};
+
+  const rooms = Array.isArray(safe.rooms) ? safe.rooms : [];
+  const fns = Array.isArray(safe.functions) ? safe.functions : [];
+  const devices = Array.isArray(safe.devices) ? safe.devices : [];
+
+  const seenRoomIds = new Map();
+  rooms.forEach((r, idx) => {
+    const id = (r && typeof r.id === 'string') ? r.id.trim() : '';
+    if (!id) {
+      nwPushIssue(out, 'error', 'Raum', 'Raum ohne ID (bitte eine eindeutige ID vergeben).', { kind: 'room', index: idx, id: '' });
+    } else {
+      if (seenRoomIds.has(id)) {
+        nwPushIssue(out, 'error', 'Raum', 'Doppelte Raum-ID: „' + id + '“', { kind: 'room', index: idx, id });
+      } else {
+        seenRoomIds.set(id, idx);
+      }
+    }
+    const name = (r && typeof r.name === 'string') ? r.name.trim() : '';
+    if (!name) {
+      nwPushIssue(out, 'warn', 'Raum', 'Raum ohne Namen (UI wird unübersichtlich).', { kind: 'room', index: idx, id });
+    }
+  });
+
+  const seenFnIds = new Map();
+  fns.forEach((f, idx) => {
+    const id = (f && typeof f.id === 'string') ? f.id.trim() : '';
+    if (!id) {
+      nwPushIssue(out, 'error', 'Funktion', 'Funktion ohne ID (bitte eine eindeutige ID vergeben).', { kind: 'function', index: idx, id: '' });
+    } else {
+      if (seenFnIds.has(id)) {
+        nwPushIssue(out, 'error', 'Funktion', 'Doppelte Funktions-ID: „' + id + '“', { kind: 'function', index: idx, id });
+      } else {
+        seenFnIds.set(id, idx);
+      }
+    }
+    const name = (f && typeof f.name === 'string') ? f.name.trim() : '';
+    if (!name) {
+      nwPushIssue(out, 'warn', 'Funktion', 'Funktion ohne Namen (UI wird unübersichtlich).', { kind: 'function', index: idx, id });
+    }
+  });
+
+  const seenDeviceIds = new Map();
+  devices.forEach((d, idx) => {
+    const id = (d && typeof d.id === 'string') ? d.id.trim() : '';
+    const ent = { kind: 'device', index: idx, id };
+
+    if (!id) {
+      nwPushIssue(out, 'error', 'Gerät', 'Gerät ohne ID (muss eindeutig sein).', ent);
+    } else {
+      if (seenDeviceIds.has(id)) {
+        nwPushIssue(out, 'error', 'Gerät', 'Doppelte Geräte-ID: „' + id + '“', ent);
+      } else {
+        seenDeviceIds.set(id, idx);
+      }
+    }
+
+    const alias = (d && typeof d.alias === 'string') ? d.alias.trim() : '';
+    if (!alias) {
+      nwPushIssue(out, 'warn', 'Gerät', 'Gerät ohne Alias (Kachel-Titel wirkt leer).', ent);
+    }
+
+    const type = (d && typeof d.type === 'string') ? d.type.trim() : '';
+    if (!type) {
+      nwPushIssue(out, 'error', 'Gerät', 'Gerät ohne Typ.', ent);
+    }
+
+    // Room / Function mapping
+    const roomId = (d && typeof d.roomId === 'string') ? d.roomId.trim() : '';
+    if (!roomId) {
+      nwPushIssue(out, 'warn', 'Gerät', 'Kein Raum zugewiesen (Filter/Struktur leidet).', ent);
+    } else if (!seenRoomIds.has(roomId)) {
+      nwPushIssue(out, 'error', 'Gerät', 'Zugewiesener Raum existiert nicht: „' + roomId + '“', ent);
+    }
+    const fnId = (d && typeof d.functionId === 'string') ? d.functionId.trim() : '';
+    if (!fnId) {
+      nwPushIssue(out, 'warn', 'Gerät', 'Keine Funktion zugewiesen (Filter/Struktur leidet).', ent);
+    } else if (!seenFnIds.has(fnId)) {
+      nwPushIssue(out, 'error', 'Gerät', 'Zugewiesene Funktion existiert nicht: „' + fnId + '“', ent);
+    }
+
+    const beh = (d && typeof d.behavior === 'object' && d.behavior) ? d.behavior : {};
+    const readOnly = !!beh.readOnly;
+
+    // IO validation by type (lightweight, no DB reads)
+    const io = (d && typeof d.io === 'object' && d.io) ? d.io : {};
+
+    const chkDp = (label, dp) => {
+      const v = String(dp || '').trim();
+      if (!v) return;
+      if (!nwLooksLikeDpId(v)) {
+        nwPushIssue(out, 'warn', 'Datenpunkt', label + ': sieht nicht wie eine ioBroker-ID aus („' + v + '“).', ent);
+      }
+    };
+
+    if (type === 'switch' || type === 'scene') {
+      const sw = (io && io.switch) ? io.switch : {};
+      const readId = (sw && typeof sw.readId === 'string') ? sw.readId.trim() : '';
+      const writeId = (sw && typeof sw.writeId === 'string') ? sw.writeId.trim() : '';
+      chkDp('Switch readId', readId);
+      chkDp('Switch writeId', writeId);
+      if (!readId && !writeId) {
+        nwPushIssue(out, 'error', 'Gerät', 'Switch/Scene ohne Datenpunkt (readId/writeId fehlt).', ent);
+      } else if (readOnly && !readId) {
+        nwPushIssue(out, 'error', 'Gerät', 'readOnly aktiv, aber Switch readId fehlt.', ent);
+      }
+    } else if (type === 'dimmer') {
+      const lvl = (io && io.level) ? io.level : {};
+      const readId = (lvl && typeof lvl.readId === 'string') ? lvl.readId.trim() : '';
+      const writeId = (lvl && typeof lvl.writeId === 'string') ? lvl.writeId.trim() : '';
+      chkDp('Level readId', readId);
+      chkDp('Level writeId', writeId);
+      if (!readId && !writeId) {
+        nwPushIssue(out, 'error', 'Gerät', 'Dimmer ohne Level-Datenpunkt (readId/writeId fehlt).', ent);
+      } else if (readOnly && !readId) {
+        nwPushIssue(out, 'error', 'Gerät', 'readOnly aktiv, aber Level readId fehlt.', ent);
+      }
+    } else if (type === 'blind') {
+      const lvl = (io && io.level) ? io.level : {};
+      const cover = (io && io.cover) ? io.cover : {};
+      const posRead = (lvl && typeof lvl.readId === 'string') ? lvl.readId.trim() : '';
+      const posWrite = (lvl && typeof lvl.writeId === 'string') ? lvl.writeId.trim() : '';
+      const upId = (cover && typeof cover.upId === 'string') ? cover.upId.trim() : '';
+      const downId = (cover && typeof cover.downId === 'string') ? cover.downId.trim() : '';
+      const stopId = (cover && typeof cover.stopId === 'string') ? cover.stopId.trim() : '';
+      chkDp('Level readId', posRead);
+      chkDp('Level writeId', posWrite);
+      chkDp('Cover upId', upId);
+      chkDp('Cover downId', downId);
+      chkDp('Cover stopId', stopId);
+      if (!posRead && !posWrite && !upId && !downId && !stopId) {
+        nwPushIssue(out, 'error', 'Gerät', 'Jalousie/Rollladen ohne Datenpunkte (Position oder up/down/stop fehlt).', ent);
+      }
+      if (readOnly && !posRead && !upId && !downId && !stopId) {
+        nwPushIssue(out, 'error', 'Gerät', 'readOnly aktiv, aber kein Read-DP (Position) und keine Tasten-DPs gesetzt.', ent);
+      }
+    } else if (type === 'rtr') {
+      const cl = (io && io.climate) ? io.climate : {};
+      const cur = (cl && typeof cl.currentTempId === 'string') ? cl.currentTempId.trim() : '';
+      const sp = (cl && typeof cl.setpointId === 'string') ? cl.setpointId.trim() : '';
+      const mode = (cl && typeof cl.modeId === 'string') ? cl.modeId.trim() : '';
+      const hum = (cl && typeof cl.humidityId === 'string') ? cl.humidityId.trim() : '';
+      chkDp('Climate currentTempId', cur);
+      chkDp('Climate setpointId', sp);
+      chkDp('Climate modeId', mode);
+      chkDp('Climate humidityId', hum);
+      if (!cur && !sp) {
+        nwPushIssue(out, 'error', 'Gerät', 'RTR ohne currentTempId und ohne setpointId (keine Anzeige/Regelung möglich).', ent);
+      }
+      if (!readOnly && !sp) {
+        nwPushIssue(out, 'warn', 'Gerät', 'RTR ohne setpointId (nur Anzeige möglich).', ent);
+      }
+    } else if (type === 'sensor') {
+      const se = (io && io.sensor) ? io.sensor : {};
+      const readId = (se && typeof se.readId === 'string') ? se.readId.trim() : '';
+      chkDp('Sensor readId', readId);
+      if (!readId) {
+        nwPushIssue(out, 'error', 'Gerät', 'Sensor ohne readId.', ent);
+      }
+    } else if (type === 'logicStatus') {
+      nwPushIssue(out, 'warn', 'Gerät', 'Typ „logicStatus“ ist (noch) nicht vollständig implementiert.', ent);
+    } else if (type) {
+      nwPushIssue(out, 'warn', 'Gerät', 'Unbekannter Typ: „' + type + '“', ent);
+    }
+  });
+
+  return out;
+}
+
+function nwRenderValidationPanel(result) {
+  const host = document.getElementById('nw-config-validation');
+  if (!host) return;
+
+  const v = result || { errors: [], warnings: [] };
+  const errCount = v.errors ? v.errors.length : 0;
+  const warnCount = v.warnings ? v.warnings.length : 0;
+
+  host.innerHTML = '';
+
+  const head = document.createElement('div');
+  head.className = 'nw-validation__head';
+
+  const title = document.createElement('div');
+  title.className = 'nw-validation__title';
+  title.textContent = 'Validator (SmartHomeConfig)';
+
+  const badges = document.createElement('div');
+  badges.className = 'nw-validation__badges';
+
+  const bErr = document.createElement('span');
+  bErr.className = 'nw-config-badge ' + (errCount ? 'nw-config-badge--error' : 'nw-config-badge--ok');
+  bErr.textContent = 'Fehler: ' + errCount;
+
+  const bWarn = document.createElement('span');
+  bWarn.className = 'nw-config-badge ' + (warnCount ? 'nw-config-badge--warn' : 'nw-config-badge--idle');
+  bWarn.textContent = 'Warnungen: ' + warnCount;
+
+  badges.appendChild(bErr);
+  badges.appendChild(bWarn);
+
+  head.appendChild(title);
+  head.appendChild(badges);
+
+  const hint = document.createElement('div');
+  hint.className = 'nw-validation__hint';
+  hint.textContent = errCount
+    ? 'Bitte die Fehler beheben, damit die SmartHome-Seite stabil funktioniert. Warnungen sind Hinweise (z.B. fehlende Namen oder DPs).'
+    : (warnCount ? 'Keine Fehler. Bitte Warnungen prüfen (Qualität/Übersichtlichkeit).' : '✅ Keine Fehler oder Warnungen.');
+
+  host.appendChild(head);
+  host.appendChild(hint);
+
+  const items = [];
+  (v.errors || []).forEach(it => items.push(it));
+  (v.warnings || []).forEach(it => items.push(it));
+  if (!items.length) return;
+
+  const list = document.createElement('div');
+  list.className = 'nw-validation__list';
+
+  items.forEach((it) => {
+    const row = document.createElement('div');
+    row.className = 'nw-validation-item';
+
+    const sev = document.createElement('div');
+    sev.className = 'nw-validation-item__sev ' + (it.severity === 'error' ? 'nw-validation-item__sev--error' : 'nw-validation-item__sev--warn');
+    sev.textContent = it.severity === 'error' ? '⛔' : '⚠️';
+
+    const text = document.createElement('div');
+    text.className = 'nw-validation-item__text';
+
+    const t = document.createElement('div');
+    t.className = 'nw-validation-item__title';
+
+    const kind = (it.entity && it.entity.kind) ? it.entity.kind : 'global';
+    const idx = (it.entity && typeof it.entity.index === 'number') ? it.entity.index : null;
+    const id = (it.entity && it.entity.id) ? it.entity.id : '';
+
+    let where = '';
+    if (kind === 'room') where = 'Raum' + (id ? ' „' + id + '“' : (idx !== null ? ' #' + (idx + 1) : ''));
+    else if (kind === 'function') where = 'Funktion' + (id ? ' „' + id + '“' : (idx !== null ? ' #' + (idx + 1) : ''));
+    else if (kind === 'device') where = 'Gerät' + (id ? ' „' + id + '“' : (idx !== null ? ' #' + (idx + 1) : ''));
+    else where = 'Global';
+
+    t.textContent = (it.title ? it.title + ' · ' : '') + where;
+
+    const msg = document.createElement('div');
+    msg.className = 'nw-validation-item__msg';
+    msg.textContent = it.message || '';
+
+    text.appendChild(t);
+    text.appendChild(msg);
+
+    row.appendChild(sev);
+    row.appendChild(text);
+
+    row.addEventListener('click', () => {
+      nwFocusEntity(it.entity);
+    });
+
+    list.appendChild(row);
+  });
+
+  host.appendChild(list);
+}
+
+function nwFocusEntity(entity) {
+  if (!entity || !entity.kind) return;
+  const kind = entity.kind;
+  const idx = (typeof entity.index === 'number') ? entity.index : null;
+  const id = (typeof entity.id === 'string') ? entity.id : '';
+
+  let selector = '';
+  if (idx !== null) {
+    selector = '[data-nw-entity="' + nwCssEscape(kind) + '"][data-nw-index="' + idx + '"]';
+  } else if (id) {
+    selector = '[data-nw-entity="' + nwCssEscape(kind) + '"][data-nw-id="' + nwCssEscape(id) + '"]';
+  }
+  if (!selector) return;
+  const el = document.querySelector(selector);
+  if (!el) return;
+
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.remove('nw-issue-attention');
+  // force reflow to restart animation
+  void el.offsetWidth;
+  el.classList.add('nw-issue-attention');
+  setTimeout(() => {
+    el.classList.remove('nw-issue-attention');
+  }, 1300);
+}
+
+function nwApplyValidationToDom(result) {
+  // clear previous marks
+  document.querySelectorAll('.nw-issue--error, .nw-issue--warn').forEach((el) => {
+    el.classList.remove('nw-issue--error', 'nw-issue--warn');
+  });
+
+  const v = result || {};
+  const byEntity = v.byEntity || {};
+  Object.keys(byEntity).forEach((k) => {
+    const info = byEntity[k];
+    if (!info || !info.kind || typeof info.index !== 'number') return;
+    const el = document.querySelector('[data-nw-entity="' + nwCssEscape(info.kind) + '"][data-nw-index="' + info.index + '"]');
+    if (!el) return;
+    if (info.maxSeverity === 'error') el.classList.add('nw-issue--error');
+    else if (info.maxSeverity === 'warn') el.classList.add('nw-issue--warn');
+  });
+}
+
+function nwRunValidationNow() {
+  const cfg = nwShcState.config || { rooms: [], functions: [], devices: [] };
+  const v = nwValidateConfig(cfg);
+  nwShcState.validation = v;
+  nwRenderValidationPanel(v);
+  nwApplyValidationToDom(v);
+}
 
 function nwGetRoomLabel(room) {
   if (!room) return '';
@@ -53,6 +427,9 @@ function nwMarkDirty(dirty) {
   } else {
     nwSetStatus('', null);
   }
+
+  // Run validator (debounced) so installer sees issues immediately.
+  nwScheduleValidation();
 }
 
 async function nwFetchSmartHomeConfig() {
@@ -79,6 +456,22 @@ async function nwFetchSmartHomeConfig() {
 
 async function nwSaveSmartHomeConfig() {
   if (!nwShcState.config) return;
+
+  // Validate immediately before saving (installer feedback)
+  nwRunValidationNow();
+  const v = nwShcState.validation || { errors: [], warnings: [] };
+  const errCount = Array.isArray(v.errors) ? v.errors.length : 0;
+  if (errCount > 0) {
+    const ok = confirm(
+      'Es gibt ' + errCount + ' Fehler in der SmartHomeConfig.\n' +
+      'Das kann dazu führen, dass Kacheln nicht funktionieren oder fehlen.\n\n' +
+      'Trotzdem speichern?'
+    );
+    if (!ok) {
+      nwSetStatus('Speichern abgebrochen (bitte Fehler beheben)', 'error');
+      return;
+    }
+  }
   try {
     const payload = { config: nwShcState.config };
     const res = await fetch('/api/smarthome/config', {
@@ -128,6 +521,7 @@ async function nwReloadSmartHomeConfig() {
   nwShcState.originalJson = JSON.stringify(nwShcState.config);
   nwMarkDirty(false);
   nwRenderAll();
+  nwRunValidationNow();
   nwSetStatus('Konfiguration geladen', 'ok');
 }
 
@@ -136,6 +530,9 @@ function nwRenderAll() {
   nwRenderRoomsEditor(cfg.rooms || []);
   nwRenderFunctionsEditor(cfg.functions || []);
   nwRenderDevicesEditor(cfg.devices || [], cfg.rooms || [], cfg.functions || []);
+
+  // After re-rendering, re-apply validation highlights / list
+  nwScheduleValidation();
 }
 
 /* --- Räume & Funktionen Editor (B7) --- */
@@ -264,6 +661,12 @@ function nwRenderRoomsEditor(rooms) {
 
     const row = document.createElement('div');
     row.className = 'nw-config-row';
+    row.dataset.nwEntity = 'function';
+    row.dataset.nwIndex = String(idx);
+    row.dataset.nwId = (fn.id || '');
+    row.dataset.nwEntity = 'room';
+    row.dataset.nwIndex = String(idx);
+    row.dataset.nwId = (room.id || '');
 
     const idInput = document.createElement('input');
     idInput.type = 'text';
@@ -613,6 +1016,9 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
   devices.forEach((dev, index) => {
     const card = document.createElement('div');
     card.className = 'nw-config-card';
+    card.dataset.nwEntity = 'device';
+    card.dataset.nwIndex = String(index);
+    card.dataset.nwId = (dev && dev.id) ? String(dev.id) : '';
 
     const header = document.createElement('div');
     header.className = 'nw-config-card__header';
