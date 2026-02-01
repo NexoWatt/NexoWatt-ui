@@ -3125,10 +3125,231 @@ body{ padding-top: var(--topbar-h); }
   transform: translateY(1px);
 }
 
-.nw-sh-slider{
-  width: 100%;
+
+/* SmartHome VIS: Detail-Button (öffnet Tooltip/Bedienpanel) */
+.nw-sh-detailbtn{
+  appearance: none;
+  border: 1px solid rgba(148,163,184,0.22);
+  background: rgba(2,6,23,0.25);
+  color: rgba(226,232,240,0.9);
+  border-radius: 999px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+.nw-sh-detailbtn:hover{
+  opacity: 1;
+  border-color: rgba(129,230,217,0.35);
+}
+.nw-sh-detailbtn:active{
+  transform: translateY(1px);
 }
 
+/* SmartHome VIS: Tooltip/Popover für erweiterte Bedienung */
+.nw-sh-popover-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(8px);
+  z-index: 9998;
+}
+
+.nw-sh-popover{
+  position: fixed;
+  z-index: 9999;
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  border-radius: 22px;
+  border: 1px solid rgba(148,163,184,0.22);
+  background: rgba(17,24,39,0.82);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 18px 60px rgba(0,0,0,0.55);
+  padding: 12px;
+}
+
+.nw-sh-popover__hdr{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.nw-sh-popover__hdr-left{
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.nw-sh-popover__title{
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: #e5e7eb;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nw-sh-popover__state{
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: #9ca3af;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nw-sh-popover__close{
+  appearance: none;
+  border: 1px solid rgba(148,163,184,0.22);
+  background: rgba(2,6,23,0.25);
+  color: #e5e7eb;
+  border-radius: 999px;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.nw-sh-popover__close:hover{
+  border-color: rgba(129,230,217,0.35);
+}
+
+.nw-sh-popover__body{
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.nw-sh-popover__hint{
+  font-size: 0.75rem;
+  color: rgba(203, 213, 225, 0.75);
+}
+
+.nw-sh-popover__row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.nw-sh-popover__label{
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  opacity: 0.9;
+}
+
+.nw-sh-popover__value{
+  font-size: 0.85rem;
+  color: #e5e7eb;
+  font-weight: 700;
+}
+
+/* Halbkreis-Slider (Temperatur) */
+.nw-sh-dial{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.nw-sh-dial__value{
+  font-size: 2.0rem;
+  font-weight: 900;
+  letter-spacing: -0.3px;
+  line-height: 1;
+}
+
+.nw-sh-dial__sub{
+  font-size: 0.78rem;
+  color: rgba(203, 213, 225, 0.8);
+  margin-top: -2px;
+}
+
+.nw-sh-dial svg{
+  width: 280px;
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+.nw-sh-dial__minmax{
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: rgba(203, 213, 225, 0.65);
+  margin-top: -6px;
+}
+
+/* SmartHome VIS: Slider Styling (größer + touch-friendly) */
+.nw-sh-slider{
+  width: 100%;
+  height: 28px;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 6px 0 0 0;
+}
+.nw-sh-slider:focus{ outline: none; }
+
+/* WebKit */
+.nw-sh-slider::-webkit-slider-runnable-track{
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(148,163,184,0.28);
+  border: 1px solid rgba(148,163,184,0.22);
+}
+.nw-sh-slider::-webkit-slider-thumb{
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--sh-accent);
+  border: 2px solid rgba(2,6,23,0.55);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+  margin-top: -6px;
+}
+
+/* Firefox */
+.nw-sh-slider::-moz-range-track{
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(148,163,184,0.28);
+  border: 1px solid rgba(148,163,184,0.22);
+}
+.nw-sh-slider::-moz-range-thumb{
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--sh-accent);
+  border: 2px solid rgba(2,6,23,0.55);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+}
+
+/* größerer Regler im Tooltip/Panel */
+.nw-sh-slider--big{
+  height: 38px;
+}
+.nw-sh-slider--big::-webkit-slider-runnable-track{ height: 10px; }
+.nw-sh-slider--big::-webkit-slider-thumb{ width: 26px; height: 26px; margin-top: -9px; }
+.nw-sh-slider--big::-moz-range-track{ height: 10px; }
+.nw-sh-slider--big::-moz-range-thumb{ width: 26px; height: 26px; }
 /* Config: small icon preview chip */
 .nw-config-icon-preview{
   width: 34px;

@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.98",
+    "version": "0.6.99",
     "news": {
       "0.6.98": {
         "en": "SmartHomeConfig: fixed the icon selector layout so it no longer overlaps in multi-column cards; cleaned up mixed UI wording and adjusted DP test button labels.",

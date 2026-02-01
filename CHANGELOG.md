@@ -1,3 +1,11 @@
+## 0.6.99 (2026-02-01)
+- SmartHome VIS: Kopftext und „Zurück zur Live‑Ansicht“ entfernt (Header ist bereits vorhanden).
+- SmartHome VIS: Bedien‑Tooltip/Popover (Icon/⋯) für Dimmer, Jalousie und Raumthermostat (RTR):
+  - RTR: Halbkreis‑Slider (Drag) für Solltemperatur.
+  - Dimmer/Jalousie: großer Slider im Bedienpanel.
+- SmartHome VIS: Slider generell größer/Touch‑friendly.
+- UI: Service‑Worker Cache-Version erhöht, damit Änderungen im Browser sofort sichtbar sind.
+
 ## 0.6.98 (2026-02-01)
 - SmartHomeConfig: Icon-Auswahl überarbeitet (kein Überlappen mehr in mehrspaltigen Karten). Benutzerdefinierte Icons/Emoji optional.
 - SmartHomeConfig: UI-Begriffe konsistent auf Deutsch gesetzt (u. a. Vorlage, Nur Anzeige, Sollwert min/max, DP-Test: Lesen/Schreiben).

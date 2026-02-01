@@ -351,6 +351,22 @@ function nwGetStateText(dev) {
   return '';
 }
 
+function nwGetTileHint(dev) {
+  const type = String(dev && dev.type ? dev.type : '').toLowerCase();
+  const canWrite = nwHasWriteAccess(dev);
+
+  // Wenn ReadOnly: kurze Info (keine Bedienhinweise)
+  if (!canWrite) return 'Nur Anzeige';
+
+  if (type === 'switch') return 'Klicken: Ein/Aus';
+  if (type === 'scene') return 'Klicken: Szene auslösen';
+  if (type === 'dimmer') return 'Klicken: Ein/Aus · Regler: Helligkeit · Symbol/⋯: Bedienung';
+  if (type === 'blind') return 'Regler: Position · Tasten: Auf/Stop/Ab · Symbol/⋯: Bedienung';
+  if (type === 'rtr') return 'Symbol/⋯: Solltemperatur einstellen';
+  return '';
+}
+
+
 function nwFormatBigValue(dev) {
   const st = dev && dev.state ? dev.state : {};
   const ui = dev.ui || {};
@@ -740,6 +756,9 @@ function nwCreateTile(dev) {
 
   tile.style.setProperty('--sh-accent', accent);
 
+  // Tooltip (kurz) – hilft bei der Bedienung
+  tile.title = nwGetTileHint(dev);
+
   // Header: Icon + Name + State
   const header = document.createElement('div');
   header.className = 'nw-sh-tile__header';
@@ -769,6 +788,30 @@ function nwCreateTile(dev) {
     star.className = 'nw-sh-tile__star';
     star.textContent = '★';
     header.appendChild(star);
+  }
+
+  // Detail/Tooltip-Popover (für Dimmer/Jalousie/RTR)
+  const hasDetails = (type === 'dimmer' || type === 'blind' || type === 'rtr');
+  if (hasDetails) {
+    // Klick auf Icon öffnet das Bedienpanel (Tooltip)
+    icon.title = 'Bedienung';
+    icon.style.cursor = 'pointer';
+    icon.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      nwOpenDevicePopover(dev, tile);
+    });
+
+    // Optionaler "Mehr"-Button (⋯)
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'nw-sh-detailbtn';
+    more.textContent = '⋯';
+    more.title = 'Bedienung';
+    more.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      nwOpenDevicePopover(dev, tile);
+    });
+    header.appendChild(more);
   }
 
   tile.appendChild(header);
@@ -864,7 +907,7 @@ function nwCreateTile(dev) {
     slider.addEventListener('click', stop);
 
     slider.addEventListener('change', async (ev) => {
-      if (!canWrite) return;
+      if (!hasWrite) return;
       const raw = Number(ev.target.value);
       if (!Number.isFinite(raw)) return;
       await nwSetLevel(dev.id, raw);
@@ -909,6 +952,572 @@ function nwCreateTile(dev) {
   });
 
   return tile;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Tooltip/Bedienpanel (Popover)                                              */
+/* -------------------------------------------------------------------------- */
+
+let nwPopoverBackdropEl = null;
+let nwPopoverEl = null;
+let nwPopoverOpenId = null;
+let nwPopoverAnchorEl = null;
+let nwPopoverDragging = false;
+
+function nwEnsurePopover() {
+  if (nwPopoverBackdropEl && nwPopoverEl) return;
+
+  nwPopoverBackdropEl = document.createElement('div');
+  nwPopoverBackdropEl.id = 'nw-sh-popover-backdrop';
+  nwPopoverBackdropEl.className = 'nw-sh-popover-backdrop hidden';
+
+  nwPopoverEl = document.createElement('div');
+  nwPopoverEl.id = 'nw-sh-popover';
+  nwPopoverEl.className = 'nw-sh-popover hidden';
+
+  document.body.appendChild(nwPopoverBackdropEl);
+  document.body.appendChild(nwPopoverEl);
+
+  // clicks inside should not close
+  nwPopoverEl.addEventListener('click', (ev) => ev.stopPropagation());
+
+  const close = () => nwClosePopover();
+  nwPopoverBackdropEl.addEventListener('click', close);
+
+  window.addEventListener('resize', () => {
+    if (nwPopoverOpenId) nwPositionPopover(nwPopoverAnchorEl);
+  }, { passive: true });
+
+  window.addEventListener('scroll', () => {
+    if (nwPopoverOpenId) nwPositionPopover(nwPopoverAnchorEl);
+  }, { passive: true, capture: true });
+
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') close();
+  }, { passive: true });
+}
+
+function nwClosePopover() {
+  if (!nwPopoverEl || !nwPopoverBackdropEl) return;
+  nwPopoverEl.classList.add('hidden');
+  nwPopoverBackdropEl.classList.add('hidden');
+  nwPopoverEl.innerHTML = '';
+  nwPopoverOpenId = null;
+  nwPopoverAnchorEl = null;
+  nwPopoverDragging = false;
+}
+
+function nwOpenDevicePopover(dev, anchorEl) {
+  if (!dev || !dev.id) return;
+  nwEnsurePopover();
+
+  // if same device is open -> close (toggle)
+  if (nwPopoverOpenId && nwPopoverOpenId === dev.id && !nwPopoverEl.classList.contains('hidden')) {
+    nwClosePopover();
+    return;
+  }
+
+  nwPopoverOpenId = dev.id;
+  nwPopoverAnchorEl = anchorEl || null;
+  nwPopoverDragging = false;
+
+  nwPopoverBackdropEl.classList.remove('hidden');
+  nwPopoverEl.classList.remove('hidden');
+  nwPopoverEl.innerHTML = '';
+
+  nwBuildPopoverContent(dev);
+
+  // Position after layout
+  requestAnimationFrame(() => nwPositionPopover(nwPopoverAnchorEl));
+}
+
+function nwPositionPopover(anchorEl) {
+  if (!nwPopoverEl || nwPopoverEl.classList.contains('hidden')) return;
+
+  const vpW = window.innerWidth || 0;
+  const vpH = window.innerHeight || 0;
+  const pad = 12;
+
+  const w = nwPopoverEl.offsetWidth || 360;
+  const h = nwPopoverEl.offsetHeight || 260;
+
+  // default: centered
+  let left = (vpW - w) / 2;
+  let top = (vpH - h) / 2;
+
+  if (anchorEl && anchorEl.getBoundingClientRect) {
+    const r = anchorEl.getBoundingClientRect();
+
+    left = r.left + (r.width / 2) - (w / 2);
+    left = Math.max(pad, Math.min(vpW - w - pad, left));
+
+    const below = r.bottom + 10;
+    const above = r.top - h - 10;
+
+    if (below + h + pad <= vpH) top = below;
+    else if (above >= pad) top = above;
+    else top = Math.max(pad, Math.min(vpH - h - pad, top));
+  } else {
+    left = Math.max(pad, Math.min(vpW - w - pad, left));
+    top = Math.max(pad, Math.min(vpH - h - pad, top));
+  }
+
+  nwPopoverEl.style.left = Math.round(left) + 'px';
+  nwPopoverEl.style.top = Math.round(top) + 'px';
+}
+
+function nwClampNumber(v, min, max) {
+  const x = Number(v);
+  if (!Number.isFinite(x)) return Number.isFinite(min) ? min : 0;
+  return Math.max(min, Math.min(max, x));
+}
+
+function nwRoundToStep(v, step) {
+  const x = Number(v);
+  const s = Number(step);
+  if (!Number.isFinite(x) || !Number.isFinite(s) || s <= 0) return x;
+  return Math.round(x / s) * s;
+}
+
+function nwBuildPopoverContent(dev) {
+  if (!nwPopoverEl) return;
+
+  const type = String(dev.type || '').toLowerCase();
+  const isOn = nwIsOn(dev);
+  const canWrite = nwHasWriteAccess(dev);
+
+  const iconSpec = nwGetIconSpec(dev);
+  const iconName = iconSpec.kind === 'svg' ? iconSpec.name : 'generic';
+  const accent = nwGetAccentColor(dev, iconName);
+
+  nwPopoverEl.style.setProperty('--sh-accent', accent);
+
+  const hdr = document.createElement('div');
+  hdr.className = 'nw-sh-popover__hdr';
+
+  const left = document.createElement('div');
+  left.className = 'nw-sh-popover__hdr-left';
+
+  const icon = nwCreateIconElement(dev, isOn, iconSpec, accent);
+
+  const txt = document.createElement('div');
+  txt.style.minWidth = '0';
+
+  const title = document.createElement('div');
+  title.className = 'nw-sh-popover__title';
+  title.textContent = dev.alias || dev.id;
+
+  const st = document.createElement('div');
+  st.className = 'nw-sh-popover__state';
+  st.textContent = nwGetStateText(dev);
+
+  txt.appendChild(title);
+  txt.appendChild(st);
+
+  left.appendChild(icon);
+  left.appendChild(txt);
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'nw-sh-popover__close';
+  close.textContent = '✕';
+  close.title = 'Schließen';
+  close.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    nwClosePopover();
+  });
+
+  hdr.appendChild(left);
+  hdr.appendChild(close);
+
+  const body = document.createElement('div');
+  body.className = 'nw-sh-popover__body';
+
+  if (type === 'dimmer') {
+    body.appendChild(nwCreateLevelPopover(dev, canWrite, { label: 'Helligkeit' }));
+  } else if (type === 'blind') {
+    body.appendChild(nwCreateBlindPopover(dev, canWrite));
+  } else if (type === 'rtr') {
+    body.appendChild(nwCreateRtrPopover(dev, canWrite));
+  } else {
+    const hint = document.createElement('div');
+    hint.className = 'nw-sh-popover__hint';
+    hint.textContent = 'Keine erweiterten Bedienelemente für diesen Gerätetyp.';
+    body.appendChild(hint);
+  }
+
+  nwPopoverEl.appendChild(hdr);
+  nwPopoverEl.appendChild(body);
+}
+
+function nwCreateLevelPopover(dev, canWrite, opts) {
+  const wrap = document.createElement('div');
+
+  const label = (opts && opts.label) ? String(opts.label) : 'Wert';
+
+  const lvlCfg = (dev.io && dev.io.level) ? dev.io.level : {};
+  const hasWrite = canWrite && (typeof lvlCfg.writeId === 'string') && (String(lvlCfg.writeId).trim() !== '');
+  const min = (typeof lvlCfg.min === 'number') ? lvlCfg.min : 0;
+  const max = (typeof lvlCfg.max === 'number') ? lvlCfg.max : 100;
+
+  const st = dev.state || {};
+  const current = (typeof st.level === 'number') ? st.level : 0;
+
+  const row = document.createElement('div');
+  row.className = 'nw-sh-popover__row';
+
+  const l = document.createElement('div');
+  l.className = 'nw-sh-popover__label';
+  l.textContent = label;
+
+  const v = document.createElement('div');
+  v.className = 'nw-sh-popover__value';
+  v.textContent = Math.round(current) + ' %';
+
+  row.appendChild(l);
+  row.appendChild(v);
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = String(min);
+  slider.max = String(max);
+  slider.value = String(nwClampNumber(current, min, max));
+  slider.className = 'nw-sh-slider nw-sh-slider--big';
+  slider.disabled = !hasWrite;
+
+  slider.addEventListener('click', (ev) => ev.stopPropagation());
+
+  slider.addEventListener('input', (ev) => {
+    const raw = Number(ev.target.value);
+    if (!Number.isFinite(raw)) return;
+    v.textContent = Math.round(raw) + ' %';
+  });
+
+  slider.addEventListener('change', async (ev) => {
+    if (!hasWrite) return;
+    const raw = Number(ev.target.value);
+    if (!Number.isFinite(raw)) return;
+    await nwSetLevel(dev.id, raw);
+    await nwReloadDevices({ force: true });
+  });
+
+  const hint = document.createElement('div');
+  hint.className = 'nw-sh-popover__hint';
+  hint.textContent = hasWrite ? 'Tipp: Regler ziehen – Wert wird beim Loslassen übernommen.' : 'Nur Anzeige (keine Schreib‑DP / writeId konfiguriert).';
+
+  wrap.appendChild(row);
+  wrap.appendChild(slider);
+  wrap.appendChild(hint);
+
+  // Optional: Ein/Aus Button
+  const btnRow = document.createElement('div');
+  btnRow.className = 'nw-sh-popover__row';
+
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'nw-sh-btn';
+  toggle.textContent = nwIsOn(dev) ? 'Ausschalten' : 'Einschalten';
+  toggle.disabled = !canWrite;
+  toggle.addEventListener('click', (ev) => ev.stopPropagation());
+  toggle.addEventListener('click', async () => {
+    if (!canWrite) return;
+    await nwToggleDevice(dev.id);
+    await nwReloadDevices({ force: true });
+    // close label text not auto-updated; ok
+  });
+
+  btnRow.appendChild(document.createElement('div'));
+  btnRow.appendChild(toggle);
+  wrap.appendChild(btnRow);
+
+  return wrap;
+}
+
+function nwCreateBlindPopover(dev, canWrite) {
+  const wrap = document.createElement('div');
+
+  const lvlCfg = (dev.io && dev.io.level) ? dev.io.level : {};
+  const hasWrite = canWrite && (typeof lvlCfg.writeId === 'string') && (String(lvlCfg.writeId).trim() !== '');
+  const min = (typeof lvlCfg.min === 'number') ? lvlCfg.min : 0;
+  const max = (typeof lvlCfg.max === 'number') ? lvlCfg.max : 100;
+
+  const st = dev.state || {};
+  const current = (typeof st.position === 'number') ? st.position : (typeof st.level === 'number' ? st.level : 0);
+
+  const row = document.createElement('div');
+  row.className = 'nw-sh-popover__row';
+
+  const l = document.createElement('div');
+  l.className = 'nw-sh-popover__label';
+  l.textContent = 'Position';
+
+  const v = document.createElement('div');
+  v.className = 'nw-sh-popover__value';
+  v.textContent = Math.round(current) + ' %';
+
+  row.appendChild(l);
+  row.appendChild(v);
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = String(min);
+  slider.max = String(max);
+  slider.value = String(nwClampNumber(current, min, max));
+  slider.className = 'nw-sh-slider nw-sh-slider--big';
+  slider.disabled = !hasWrite;
+
+  slider.addEventListener('click', (ev) => ev.stopPropagation());
+
+  slider.addEventListener('input', (ev) => {
+    const raw = Number(ev.target.value);
+    if (!Number.isFinite(raw)) return;
+    v.textContent = Math.round(raw) + ' %';
+  });
+
+  slider.addEventListener('change', async (ev) => {
+    if (!canWrite) return;
+    const raw = Number(ev.target.value);
+    if (!Number.isFinite(raw)) return;
+    await nwSetLevel(dev.id, raw);
+    await nwReloadDevices({ force: true });
+  });
+
+  const hint = document.createElement('div');
+  hint.className = 'nw-sh-popover__hint';
+  hint.textContent = (hasWrite || canWrite) ? 'Tipp: Regler ziehen oder Tasten nutzen.' : 'Nur Anzeige (keine Schreib‑DP konfiguriert).';
+
+  const controls = document.createElement('div');
+  controls.className = 'nw-sh-controls';
+
+  const mk = (label, action) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'nw-sh-btn';
+    b.textContent = label;
+    b.disabled = !canWrite;
+    b.addEventListener('click', (ev) => ev.stopPropagation());
+    b.addEventListener('click', async () => {
+      if (!canWrite) return;
+      await nwCoverAction(dev.id, action);
+      await nwReloadDevices({ force: true });
+    });
+    return b;
+  };
+
+  controls.appendChild(mk('▲', 'up'));
+  controls.appendChild(mk('■', 'stop'));
+  controls.appendChild(mk('▼', 'down'));
+
+  wrap.appendChild(row);
+  wrap.appendChild(slider);
+  wrap.appendChild(controls);
+  wrap.appendChild(hint);
+
+  return wrap;
+}
+
+function nwGetRtrRange(dev) {
+  const c = (dev.io && dev.io.climate) ? dev.io.climate : {};
+  const min = (typeof c.minSetpoint === 'number') ? c.minSetpoint : 15;
+  const max = (typeof c.maxSetpoint === 'number') ? c.maxSetpoint : 30;
+  return { min, max };
+}
+
+function nwCreateRtrPopover(dev, canWrite) {
+  const wrap = document.createElement('div');
+
+  const st = dev.state || {};
+  const range = nwGetRtrRange(dev);
+
+  let setpoint = (typeof st.setpoint === 'number') ? st.setpoint : null;
+  if (!Number.isFinite(setpoint)) {
+    setpoint = (typeof st.currentTemp === 'number') ? st.currentTemp : range.min;
+  }
+  setpoint = nwClampNumber(setpoint, range.min, range.max);
+  setpoint = nwRoundToStep(setpoint, 0.5);
+
+  const dial = nwCreateHalfDial({
+    value: setpoint,
+    min: range.min,
+    max: range.max,
+    step: 0.5,
+    canWrite: !!(canWrite && dev.io && dev.io.climate && dev.io.climate.setpointId),
+    subtitle: 'Solltemperatur',
+    sub2: (typeof st.currentTemp === 'number')
+      ? ('Ist ' + nwFormatNumberDE(st.currentTemp, 1) + '°C' + (typeof st.humidity === 'number' ? (' · RH ' + Math.round(st.humidity) + '%') : ''))
+      : (typeof st.humidity === 'number' ? ('RH ' + Math.round(st.humidity) + '%') : ''),
+    onCommit: async (val) => {
+      if (!canWrite) return;
+      await nwSetRtrSetpoint(dev.id, val);
+      await nwReloadDevices({ force: true });
+    },
+  });
+
+  const hint = document.createElement('div');
+  hint.className = 'nw-sh-popover__hint';
+  hint.textContent = (canWrite && dev.io && dev.io.climate && dev.io.climate.setpointId)
+    ? 'Tipp: Halbkreis ziehen – Sollwert wird beim Loslassen übernommen.'
+    : 'Nur Anzeige (keine Sollwert‑Schreib‑DP konfiguriert).';
+
+  wrap.appendChild(dial);
+  wrap.appendChild(hint);
+
+  return wrap;
+}
+
+function nwCreateHalfDial(opts) {
+  const min = Number(opts && opts.min);
+  const max = Number(opts && opts.max);
+  const step = Number(opts && opts.step) || 0.5;
+  const canWrite = !!(opts && opts.canWrite);
+  const subtitle = (opts && typeof opts.subtitle === 'string') ? opts.subtitle : '';
+  const sub2 = (opts && typeof opts.sub2 === 'string') ? opts.sub2 : '';
+  const onCommit = (opts && typeof opts.onCommit === 'function') ? opts.onCommit : null;
+
+  let value = Number(opts && opts.value);
+  if (!Number.isFinite(value)) value = min;
+  value = nwClampNumber(value, min, max);
+  value = nwRoundToStep(value, step);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'nw-sh-dial';
+
+  const valEl = document.createElement('div');
+  valEl.className = 'nw-sh-dial__value';
+
+  const subEl = document.createElement('div');
+  subEl.className = 'nw-sh-dial__sub';
+  subEl.textContent = subtitle || '';
+
+  const sub2El = document.createElement('div');
+  sub2El.className = 'nw-sh-dial__sub';
+  sub2El.style.opacity = '0.85';
+  sub2El.textContent = sub2 || '';
+
+  // SVG dial
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 200 120');
+  svg.setAttribute('role', 'img');
+
+  const base = document.createElementNS(NS, 'path');
+  base.setAttribute('d', 'M 20 100 A 80 80 0 0 0 180 100');
+  base.setAttribute('fill', 'none');
+  base.setAttribute('stroke', 'rgba(148,163,184,0.28)');
+  base.setAttribute('stroke-width', '12');
+  base.setAttribute('stroke-linecap', 'round');
+
+  const active = document.createElementNS(NS, 'path');
+  active.setAttribute('fill', 'none');
+  active.setAttribute('stroke', 'var(--sh-accent)');
+  active.setAttribute('stroke-width', '12');
+  active.setAttribute('stroke-linecap', 'round');
+
+  const knob = document.createElementNS(NS, 'circle');
+  knob.setAttribute('r', '10');
+  knob.setAttribute('fill', 'var(--sh-accent)');
+  knob.setAttribute('stroke', 'rgba(2,6,23,0.65)');
+  knob.setAttribute('stroke-width', '3');
+
+  svg.appendChild(base);
+  svg.appendChild(active);
+  svg.appendChild(knob);
+
+  const minMax = document.createElement('div');
+  minMax.className = 'nw-sh-dial__minmax';
+  minMax.innerHTML = `<span>${nwFormatNumberDE(min, 1)}°C</span><span>${nwFormatNumberDE(max, 1)}°C</span>`;
+
+  const cx = 100;
+  const cy = 100;
+  const r = 80;
+
+  const setValue = (v) => {
+    value = nwClampNumber(nwRoundToStep(v, step), min, max);
+    valEl.textContent = nwFormatNumberDE(value, 1) + '°C';
+
+    const f = (max - min) > 0 ? ((value - min) / (max - min)) : 0;
+    const angle = Math.PI * (1 - f); // pi (links) -> 0 (rechts)
+
+    const x = cx + r * Math.cos(angle);
+    const y = cy - r * Math.sin(angle);
+
+    active.setAttribute('d', `M 20 100 A 80 80 0 0 0 ${x.toFixed(2)} ${y.toFixed(2)}`);
+    knob.setAttribute('cx', x.toFixed(2));
+    knob.setAttribute('cy', y.toFixed(2));
+  };
+
+  setValue(value);
+
+  // Pointer events
+  const posToValue = (ev) => {
+    const rect = svg.getBoundingClientRect();
+    if (!rect || !rect.width || !rect.height) return value;
+
+    const px = (ev.clientX - rect.left) / rect.width * 200;
+    const py = (ev.clientY - rect.top) / rect.height * 120;
+
+    const dx = px - cx;
+    const dy = cy - py; // nach oben positiv
+
+    let ang = Math.atan2(dy, dx); // 0..pi für oberen Halbkreis
+    if (!Number.isFinite(ang)) ang = 0;
+
+    // clamp to [0, pi]
+    ang = Math.max(0, Math.min(Math.PI, ang));
+
+    const f = 1 - (ang / Math.PI);
+    const v = min + f * (max - min);
+    return v;
+  };
+
+  const onDown = (ev) => {
+    if (!canWrite) return;
+    nwPopoverDragging = true;
+    svg.setPointerCapture(ev.pointerId);
+    setValue(posToValue(ev));
+    ev.preventDefault();
+    ev.stopPropagation();
+  };
+
+  const onMove = (ev) => {
+    if (!canWrite) return;
+    if (!nwPopoverDragging) return;
+    setValue(posToValue(ev));
+    ev.preventDefault();
+    ev.stopPropagation();
+  };
+
+  const onUp = async (ev) => {
+    if (!canWrite) return;
+    if (!nwPopoverDragging) return;
+    nwPopoverDragging = false;
+    try { svg.releasePointerCapture(ev.pointerId); } catch (_e) {}
+    setValue(posToValue(ev));
+
+    if (onCommit) {
+      const v = value;
+      await onCommit(v);
+    }
+    ev.preventDefault();
+    ev.stopPropagation();
+  };
+
+  svg.addEventListener('pointerdown', onDown);
+  svg.addEventListener('pointermove', onMove);
+  svg.addEventListener('pointerup', onUp);
+  svg.addEventListener('pointercancel', () => { nwPopoverDragging = false; });
+
+  // Accessibility hint
+  if (!canWrite) svg.style.opacity = '0.6';
+
+  wrap.appendChild(valEl);
+  if (subtitle) wrap.appendChild(subEl);
+  if (sub2) wrap.appendChild(sub2El);
+  wrap.appendChild(svg);
+  wrap.appendChild(minMax);
+
+  return wrap;
 }
 
 function nwRenderRooms(devices) {
