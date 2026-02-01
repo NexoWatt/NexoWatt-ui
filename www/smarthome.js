@@ -1,653 +1,901 @@
-// NexoWatt SmartHome – A3: Switch-Kachel mit neuem Modell
+/*
+  NexoWatt SmartHome VIS
+  - Raum-Sektionen (Apple Home ähnlich)
+  - Glassmorphism-Kacheln
+  - Dynamische Icons (An/Aus)
+
+  NOTE: bewusst ohne externe Icon-Libraries.
+*/
 
 let nwAllDevices = [];
 let nwLastDevicesSignature = '';
 let nwReloadInFlight = false;
 let nwAutoRefreshTimer = null;
+
 let nwSmartHomeEnabled = null;
 let nwEvcsCount = 1;
+
 const nwFilterState = {
-  room: null,
-  func: null,
-  favorite: null,
+  func: null,        // string | null
+  favoritesOnly: false,
 };
 
-function nwGetFilteredDevices() {
-  if (!Array.isArray(nwAllDevices) || !nwAllDevices.length) return [];
-  return nwAllDevices.filter(dev => {
-    if (!dev) return false;
-    const roomMatch = !nwFilterState.room || (dev.room === nwFilterState.room);
-    const funcMatch = !nwFilterState.func || (dev.function === nwFilterState.func);
-    const favMatch = !nwFilterState.favorite || (dev.behavior && dev.behavior.favorite);
-    return roomMatch && funcMatch && favMatch;
-  });
+// ---------- Icons (inline SVG) ----------
+
+const NW_ICON_SVGS = {
+  bulb: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M9 18h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M10 22h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 2a7 7 0 0 0-4 12c.8.7 1.3 1.6 1.5 2.6l.1.4h4.8l.1-.4c.2-1 .7-1.9 1.5-2.6A7 7 0 0 0 12 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 1v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M4.2 4.2l1.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M19.8 4.2l-1.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M3 12h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M19 12h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9 18h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M10 22h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 2a7 7 0 0 0-4 12c.8.7 1.3 1.6 1.5 2.6l.1.4h4.8l.1-.4c.2-1 .7-1.9 1.5-2.6A7 7 0 0 0 12 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+  },
+
+  plug: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M9 2v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M15 2v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M7 8h10v4a5 5 0 0 1-5 5h0a5 5 0 0 1-5-5V8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12 17v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M9 2v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M15 2v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M7 8h10v4a5 5 0 0 1-5 5h0a5 5 0 0 1-5-5V8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12 17v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M11 10l-1 2h2l-1 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`,
+  },
+
+  thermostat: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12 17a1 1 0 1 0 0-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12 17a1 1 0 1 0 0-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M18 10c0 1.2-1 2.2-2.2 2.2S13.6 11.2 13.6 10c0-1.5 1.2-2.2 2.2-3.6 1 1.4 2.2 2.1 2.2 3.6Z" fill="currentColor" fill-opacity="0.25"/>
+      </svg>`,
+  },
+
+  blinds: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="5" y="4" width="14" height="16" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M5 8h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M5 16h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="5" y="4" width="14" height="16" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M5 8h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M5 16h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 20v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+
+  tv: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 20h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 20h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M11 10l4 2-4 2v-4Z" fill="currentColor" fill-opacity="0.25"/>
+      </svg>`,
+  },
+
+  speaker: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M11 5 7 9H4v6h3l4 4V5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M11 5 7 9H4v6h3l4 4V5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M15 9a3 3 0 0 1 0 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M17.5 7a6 6 0 0 1 0 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+      </svg>`,
+  },
+
+  fire: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 2c2 3 4 4.5 4 7.5S13.8 14 12 14 8 12.5 8 9.5C8 6.8 10 5 12 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M6 13.5C6 18 9 22 12 22s6-4 6-8.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 2c2 3 4 4.5 4 7.5S13.8 14 12 14 8 12.5 8 9.5C8 6.8 10 5 12 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M6 13.5C6 18 9 22 12 22s6-4 6-8.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 16c1.2 1 2 1.8 2 3.2A2.2 2.2 0 0 1 12 21a2.2 2.2 0 0 1-2-1.8c0-1.4.8-2.2 2-3.2Z" fill="currentColor" fill-opacity="0.25"/>
+      </svg>`,
+  },
+
+  scene: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 2l1.2 4.2L17.5 8l-4.3 1.8L12 14l-1.2-4.2L6.5 8l4.3-1.8L12 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 2l1.2 4.2L17.5 8l-4.3 1.8L12 14l-1.2-4.2L6.5 8l4.3-1.8L12 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M19 13l.6 2.1L22 16l-2.4.9L19 19l-.6-2.1L16 16l2.4-.9L19 13Z" fill="currentColor" fill-opacity="0.25"/>
+      </svg>`,
+  },
+
+  sensor: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 8v4l2 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 8v4l2 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="12" cy="12" r="2" fill="currentColor" fill-opacity="0.25"/>
+      </svg>`,
+  },
+
+  generic: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="5" y="5" width="14" height="14" rx="3" stroke="currentColor" stroke-width="2"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="5" y="5" width="14" height="14" rx="3" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 12l2.2 2.2L16 8.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`,
+  },
+};
+
+function nwIsEmojiLike(str) {
+  if (!str) return false;
+  const s = String(str).trim();
+  // emoji are typically > 1 byte, but we accept any short string
+  return s.length > 0 && s.length <= 3;
 }
 
-function nwRenderRoomTabs(devices) {
-  const tabsContainer = document.getElementById('nw-tabs-rooms');
-  if (!tabsContainer) return;
-
-  tabsContainer.innerHTML = '';
-
-  if (!devices || !devices.length) return;
-
-  const rooms = Array.from(new Set(
-    devices
-      .map(d => d && d.room)
-      .filter(Boolean)
-  ));
-
-  const hasFavorites = devices.some(d => d && d.behavior && d.behavior.favorite);
-
-  const createTab = (label, active, onClick) => {
-    const tab = document.createElement('button');
-    tab.type = 'button';
-    tab.className = 'nw-tab' + (active ? ' nw-tab--active' : '');
-    tab.textContent = label;
-    tab.addEventListener('click', onClick);
-    return tab;
+function nwNormalizeIconName(raw) {
+  const s = String(raw || '').trim().toLowerCase();
+  if (!s) return '';
+  // normalize common german terms
+  const map = {
+    licht: 'bulb',
+    lampe: 'bulb',
+    beleuchtung: 'bulb',
+    bulb: 'bulb',
+    light: 'bulb',
+    steckdose: 'plug',
+    stecker: 'plug',
+    plug: 'plug',
+    tv: 'tv',
+    fernseher: 'tv',
+    speaker: 'speaker',
+    lautsprecher: 'speaker',
+    heizung: 'thermostat',
+    klima: 'thermostat',
+    thermostat: 'thermostat',
+    rtr: 'thermostat',
+    jalousie: 'blinds',
+    rollladen: 'blinds',
+    blinds: 'blinds',
+    szene: 'scene',
+    scene: 'scene',
+    sensor: 'sensor',
+    uhr: 'sensor',
+    kamin: 'fire',
+    fire: 'fire',
   };
+  return map[s] || s;
+}
 
-  // Favoriten-Tab nur anzeigen, wenn es mindestens ein Favorit-Device gibt
-  if (hasFavorites) {
-    tabsContainer.appendChild(
-      createTab('★ Favoriten', !!nwFilterState.favorite, () => {
-        // Toggle: Favoriten an/aus, Raum-Filter zurücksetzen
-        nwFilterState.favorite = nwFilterState.favorite ? null : true;
-        if (nwFilterState.favorite) {
-          nwFilterState.room = null;
-        }
-        nwApplyFiltersAndRender();
-      })
-    );
+function nwGuessIconName(dev) {
+  const type = String(dev.type || '').toLowerCase();
+  const fn = String(dev.function || '').toLowerCase();
+  const alias = String(dev.alias || dev.id || '').toLowerCase();
+  const unit = String(dev.ui && dev.ui.unit ? dev.ui.unit : '').toLowerCase();
+
+  // type-based defaults
+  if (type === 'blind') return 'blinds';
+  if (type === 'rtr') return 'thermostat';
+  if (type === 'scene') return 'scene';
+  if (type === 'sensor') {
+    if (unit.includes('°c') || alias.includes('temp') || fn.includes('klima')) return 'thermostat';
+    return 'sensor';
   }
 
-  // "Alle Räume" Tab
-  tabsContainer.appendChild(
-    createTab('Alle Räume', !nwFilterState.room && !nwFilterState.favorite, () => {
-      nwFilterState.room = null;
-      nwFilterState.favorite = null;
-      nwApplyFiltersAndRender();
-    })
-  );
+  // keyword based
+  const hay = fn + ' ' + alias;
+  if (hay.match(/licht|lampe|leuchte|beleucht|decke|wand|spiegel/)) return 'bulb';
+  if (hay.match(/steck|dose|plug|socket/)) return 'plug';
+  if (hay.match(/jalous|rolllad|blind|beschatt/)) return 'blinds';
+  if (hay.match(/heiz|rtr|therm|klima/)) return 'thermostat';
+  if (hay.match(/tv|fernseh|apple tv/)) return 'tv';
+  if (hay.match(/sonos|speaker|lautsprech/)) return 'speaker';
+  if (hay.match(/kamin|ofen|fire/)) return 'fire';
+  if (hay.match(/szene|scene/)) return 'scene';
 
-  rooms.forEach(roomName => {
-    tabsContainer.appendChild(
-      createTab(roomName, nwFilterState.room === roomName && !nwFilterState.favorite, () => {
-        nwFilterState.favorite = null;
-        nwFilterState.room = (nwFilterState.room === roomName) ? null : roomName;
-        nwApplyFiltersAndRender();
-      })
-    );
-  });
+  return 'generic';
 }
 
-function nwRenderFilterChips(devices) {
-  const roomsContainer = document.getElementById('nw-filter-rooms');
-  const funcsContainer = document.getElementById('nw-filter-functions');
-  if (roomsContainer) {
-    roomsContainer.innerHTML = '';
+function nwGetIconSpec(dev) {
+  const raw = (dev && typeof dev.icon !== 'undefined') ? dev.icon : '';
+  const iconStr = String(raw || '').trim();
+
+  // If config contains a known icon keyword -> use it
+  const normalized = nwNormalizeIconName(iconStr);
+  if (NW_ICON_SVGS[normalized]) {
+    return { kind: 'svg', name: normalized };
   }
-  if (!funcsContainer) return;
 
-  funcsContainer.innerHTML = '';
+  // If user entered an emoji/short string -> use as text icon
+  if (iconStr && nwIsEmojiLike(iconStr)) {
+    return { kind: 'text', text: iconStr };
+  }
 
-  if (!devices || !devices.length) return;
-
-  const funcs = Array.from(new Set(
-    devices
-      .map(d => d && d.function)
-      .filter(Boolean)
-  ));
-
-  const createChip = (label, active, onClick) => {
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'nw-filter-chip' + (active ? ' nw-filter-chip--active' : '');
-    chip.textContent = label;
-    chip.addEventListener('click', onClick);
-    return chip;
-  };
-
-  // Funktionen: "Alle" + einzelne Funktionen
-  funcsContainer.appendChild(
-    createChip('Alle', !nwFilterState.func, () => {
-      nwFilterState.func = null;
-      nwApplyFiltersAndRender();
-    })
-  );
-
-  funcs.forEach(fnName => {
-    funcsContainer.appendChild(
-      createChip(fnName, nwFilterState.func === fnName, () => {
-        nwFilterState.func = (nwFilterState.func === fnName) ? null : fnName;
-        nwApplyFiltersAndRender();
-      })
-    );
-  });
+  // auto
+  return { kind: 'svg', name: nwGuessIconName(dev) };
 }
 
-function nwApplyFiltersAndRender() {
-  const devices = nwGetFilteredDevices();
-  nwRenderRoomTabs(nwAllDevices);
-  nwRenderFilterChips(nwAllDevices);
-  nwRenderTiles(devices);
+function nwGetAccentColor(dev, iconName) {
+  const type = String(dev.type || '').toLowerCase();
+  const fn = String(dev.function || '').toLowerCase();
+
+  // keep palette small and "calm" (works in dark UI)
+  if (iconName === 'bulb') return '#fbbf24';     // amber
+  if (iconName === 'fire') return '#fb7185';     // rose
+  if (iconName === 'plug') return '#60a5fa';     // blue
+  if (iconName === 'thermostat') return '#fb923c'; // orange
+  if (iconName === 'blinds') return '#a78bfa';   // violet
+  if (iconName === 'tv' || iconName === 'speaker') return '#38bdf8'; // sky
+  if (iconName === 'scene') return '#f472b6';    // pink
+  if (type === 'sensor' || iconName === 'sensor') return '#22c55e'; // green
+
+  if (fn.includes('pv') || fn.includes('energie')) return '#22c55e';
+  return '#00e676';
 }
 
+function nwIsOn(dev) {
+  const st = dev && dev.state ? dev.state : {};
+  const type = String(dev.type || '').toLowerCase();
 
+  if (type === 'switch') return !!st.on;
+  if (type === 'scene') {
+    const active = (typeof st.active !== 'undefined') ? !!st.active : !!st.on;
+    return active;
+  }
+  if (type === 'dimmer') {
+    const lvl = (typeof st.level === 'number') ? st.level : 0;
+    const min = (dev.io && dev.io.level && typeof dev.io.level.min === 'number') ? dev.io.level.min : 0;
+    return lvl > min;
+  }
+  if (type === 'blind') {
+    // blinds have no true "on"; we keep them neutral
+    return false;
+  }
+  if (type === 'rtr') {
+    return true;
+  }
+  return false;
+}
 
+function nwGetStateText(dev) {
+  const st = dev && dev.state ? dev.state : {};
+  const type = String(dev.type || '').toLowerCase();
+
+  if (st && st.error) return 'Fehler';
+
+  if (type === 'switch') return st.on ? 'Ein' : 'Aus';
+  if (type === 'scene') {
+    const active = (typeof st.active !== 'undefined') ? !!st.active : !!st.on;
+    return active ? 'Aktiv' : 'Bereit';
+  }
+  if (type === 'dimmer') {
+    const lvl = (typeof st.level === 'number') ? st.level : 0;
+    const pct = Math.round(lvl);
+    return pct > 0 ? (pct + ' %') : 'Aus';
+  }
+  if (type === 'blind') {
+    const pos = (typeof st.position === 'number') ? st.position : (typeof st.level === 'number' ? st.level : null);
+    if (typeof pos === 'number') return Math.round(pos) + ' %';
+    return '—';
+  }
+  if (type === 'rtr') {
+    if (typeof st.mode !== 'undefined' && st.mode !== null && String(st.mode).trim() !== '') {
+      return String(st.mode);
+    }
+    if (typeof st.setpoint === 'number') {
+      return 'Soll ' + st.setpoint.toFixed(1).replace('.', ',') + '°C';
+    }
+    return 'Heizung';
+  }
+  if (type === 'sensor') {
+    // sensor uses value field primarily
+    if (typeof st.value !== 'undefined' && st.value !== null) {
+      const ui = dev.ui || {};
+      if (typeof st.value === 'number') {
+        const prec = (typeof ui.precision === 'number') ? ui.precision : 1;
+        const unit = ui.unit || '';
+        return st.value.toFixed(prec).replace('.', ',') + (unit ? ' ' + unit : '');
+      }
+      return String(st.value);
+    }
+    return '—';
+  }
+
+  return '';
+}
+
+function nwFormatBigValue(dev) {
+  const st = dev && dev.state ? dev.state : {};
+  const ui = dev.ui || {};
+  const type = String(dev.type || '').toLowerCase();
+
+  if (type === 'rtr') {
+    if (typeof st.currentTemp === 'number') {
+      const prec = (typeof ui.precision === 'number') ? ui.precision : 1;
+      return {
+        value: st.currentTemp.toFixed(prec).replace('.', ','),
+        unit: ui.unit || '°C',
+      };
+    }
+    if (typeof st.setpoint === 'number') {
+      const prec = (typeof ui.precision === 'number') ? ui.precision : 1;
+      return {
+        value: st.setpoint.toFixed(prec).replace('.', ','),
+        unit: ui.unit || '°C',
+      };
+    }
+  }
+
+  if (type === 'sensor') {
+    if (typeof st.value === 'number') {
+      const prec = (typeof ui.precision === 'number') ? ui.precision : 1;
+      return {
+        value: st.value.toFixed(prec).replace('.', ','),
+        unit: ui.unit || '',
+      };
+    }
+  }
+
+  return { value: '', unit: '' };
+}
+
+function nwGetTileSize(dev) {
+  // Runtime device carries ui.size from config -> allow s/m/l/xl
+  let sz = String((dev && dev.ui && dev.ui.size) ? dev.ui.size : '').trim().toLowerCase();
+  if (!sz) {
+    const type = String(dev.type || '').toLowerCase();
+    if (type === 'rtr') sz = 'xl';
+    else sz = 'm';
+  }
+  if (sz !== 's' && sz !== 'm' && sz !== 'l' && sz !== 'xl') sz = 'm';
+  return sz;
+}
+
+function nwHasWriteAccess(dev) {
+  const beh = dev && dev.behavior ? dev.behavior : {};
+  if (beh.readOnly) return false;
+  return true;
+}
+
+function nwCreateIconElement(dev, isOn, iconSpec, accent) {
+  const wrap = document.createElement('div');
+  wrap.className = 'nw-sh-icon';
+
+  if (iconSpec.kind === 'text') {
+    const t = document.createElement('span');
+    t.className = 'nw-sh-icon__text';
+    t.textContent = iconSpec.text;
+    wrap.appendChild(t);
+    return wrap;
+  }
+
+  const svgWrap = document.createElement('div');
+  svgWrap.className = 'nw-sh-icon__svg';
+  const name = iconSpec.name;
+  const variant = isOn ? 'on' : 'off';
+  const svg = (NW_ICON_SVGS[name] && NW_ICON_SVGS[name][variant])
+    ? NW_ICON_SVGS[name][variant]
+    : (NW_ICON_SVGS.generic && NW_ICON_SVGS.generic[variant]);
+
+  svgWrap.innerHTML = svg;
+  wrap.appendChild(svgWrap);
+
+  // set accent as CSS var so SVG uses currentColor
+  wrap.style.color = isOn ? accent : 'rgba(203, 213, 225, 0.85)';
+
+  return wrap;
+}
+
+// ---------- Networking ----------
 
 async function nwFetchDevices() {
   const res = await fetch('/api/smarthome/devices', { cache: 'no-store' });
-  if (!res.ok) {
-    console.error('SmartHome devices fetch failed:', res.status, res.statusText);
-    return [];
-  }
-  const data = await res.json().catch(() => ({}));
-  if (!data || !data.ok || !Array.isArray(data.devices)) return [];
-  return data.devices;
+  if (!res.ok) throw new Error('devices fetch failed');
+  const data = await res.json();
+  if (!data || !data.ok) throw new Error('devices fetch not ok');
+  return Array.isArray(data.devices) ? data.devices : [];
 }
 
 async function nwToggleDevice(id) {
-  try {
-    const res = await fetch('/api/smarthome/toggle', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
-    });
-    if (!res.ok) {
-      console.error('SmartHome toggle failed:', res.status, res.statusText);
-      return null;
-    }
-    const data = await res.json().catch(() => ({}));
-    if (!data || !data.ok) {
-      console.error('SmartHome toggle failed (payload)', data);
-      return null;
-    }
-    return data.state || null;
-  } catch (e) {
-    console.error('SmartHome toggle error:', e);
-    return null;
-  }
+  const res = await fetch('/api/smarthome/toggle', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data || !data.ok) return null;
+  return data.state || null;
 }
 
-
-
 async function nwSetLevel(id, level) {
-  try {
-    const res = await fetch('/api/smarthome/level', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, level }),
-    });
-    if (!res.ok) {
-      console.error('SmartHome level request failed:', res.status, res.statusText);
-      return null;
-    }
-    const data = await res.json().catch(() => ({}));
-    if (!data || !data.ok) {
-      console.error('SmartHome level failed (payload)', data);
-      return null;
-    }
-    return data.state || null;
-  } catch (e) {
-    console.error('SmartHome level error:', e);
-    return null;
-  }
+  const res = await fetch('/api/smarthome/level', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, level }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data || !data.ok) return null;
+  return data.state || null;
+}
+
+async function nwCoverAction(id, action) {
+  const res = await fetch('/api/smarthome/cover', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, action }),
+  });
+  if (!res.ok) return false;
+  const data = await res.json();
+  return !!(data && data.ok);
 }
 
 async function nwSetRtrSetpoint(id, setpoint) {
-  try {
-    const res = await fetch('/api/smarthome/rtrSetpoint', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, setpoint }),
-    });
-    if (!res.ok) {
-      console.error('SmartHome RTR setpoint request failed:', res.status, res.statusText);
-      return null;
-    }
-    const data = await res.json().catch(() => ({}));
-    if (!data || !data.ok) {
-      console.error('SmartHome RTR setpoint failed (payload)', data);
-      return null;
-    }
-    return data.state || null;
-  } catch (e) {
-    console.error('SmartHome RTR setpoint error:', e);
-    return null;
-  }
+  const res = await fetch('/api/smarthome/rtrSetpoint', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, setpoint }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data || !data.ok) return null;
+  return data.state || null;
 }
 
 async function nwAdjustRtrSetpoint(dev, delta) {
-  if (!dev || dev.type !== 'rtr') return;
-  const io = dev.io || {};
-  const cl = io.climate || {};
-  if (!cl.setpointId) {
-    console.warn('RTR device has no setpointId:', dev.id);
-    return;
-  }
-
   const st = dev.state || {};
-  let base;
-  if (typeof st.setpoint === 'number') {
-    base = st.setpoint;
-  } else if (typeof st.currentTemp === 'number') {
-    base = st.currentTemp;
-  } else {
-    const min0 = typeof cl.minSetpoint === 'number' ? cl.minSetpoint : 15;
-    const max0 = typeof cl.maxSetpoint === 'number' ? cl.maxSetpoint : 30;
-    base = (min0 + max0) / 2;
-  }
+  const cl = dev.io && dev.io.climate ? dev.io.climate : {};
 
-  let target = base + delta;
   const min = typeof cl.minSetpoint === 'number' ? cl.minSetpoint : 15;
   const max = typeof cl.maxSetpoint === 'number' ? cl.maxSetpoint : 30;
+
+  const current = (typeof st.setpoint === 'number') ? st.setpoint : min;
+  let target = current + delta;
   if (target < min) target = min;
   if (target > max) target = max;
 
-  const state = await nwSetRtrSetpoint(dev.id, target);
-  if (!state) return;
-  dev.state = Object.assign({}, dev.state || {}, state);
-  await nwReloadDevices();
+  await nwSetRtrSetpoint(dev.id, target);
+  await nwReloadDevices({ force: true });
 }
 
+// ---------- Rendering ----------
 
+function nwClear(el) {
+  if (!el) return;
+  while (el.firstChild) el.removeChild(el.firstChild);
+}
 
+function nwSortBy(a, b) {
+  const sa = String(a || '').toLowerCase();
+  const sb = String(b || '').toLowerCase();
+  if (sa < sb) return -1;
+  if (sa > sb) return 1;
+  return 0;
+}
 
-async function nwCoverAction(id, action) {
-  try {
-    const res = await fetch('/api/smarthome/cover', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, action }),
-    });
-    if (!res.ok) {
-      console.error('SmartHome cover request failed:', res.status, res.statusText);
-      return false;
-    }
-    const data = await res.json().catch(() => ({}));
-    if (!data || !data.ok) {
-      console.error('SmartHome cover failed (payload)', data);
-      return false;
-    }
-    return true;
-  } catch (e) {
-    console.error('SmartHome cover error:', e);
-    return false;
+function nwApplyFilters(devices) {
+  const arr = Array.isArray(devices) ? devices.slice() : [];
+
+  let out = arr;
+
+  // favorites
+  if (nwFilterState.favoritesOnly) {
+    out = out.filter(d => !!(d.behavior && d.behavior.favorite));
   }
+
+  // function filter
+  if (nwFilterState.func) {
+    out = out.filter(d => String(d.function || '') === String(nwFilterState.func));
+  }
+
+  return out;
 }
 
-function nwIsAnyFilterActive() {
-  return !!(nwFilterState.room || nwFilterState.func || nwFilterState.favorite);
+function nwGetAllFunctions(devices) {
+  const set = new Set();
+  (devices || []).forEach(d => {
+    const fn = String(d.function || '').trim();
+    if (fn) set.add(fn);
+  });
+  return Array.from(set).sort(nwSortBy);
 }
 
-function nwSetEmptyStateHtml(html) {
-  const empty = document.getElementById('nw-smarthome-empty');
-  if (!empty) return;
-  empty.innerHTML = html || '';
+function nwRenderFunctionChips(devices) {
+  const wrap = document.getElementById('nw-filter-functions');
+  if (!wrap) return;
+  nwClear(wrap);
+
+  const allFns = nwGetAllFunctions(devices);
+  const hasFav = (devices || []).some(d => !!(d.behavior && d.behavior.favorite));
+
+  const mkChip = (label, active, onClick, extraClass) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'nw-sh-chip' + (active ? ' nw-sh-chip--active' : '') + (extraClass ? ' ' + extraClass : '');
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      onClick();
+      nwApplyFiltersAndRender();
+    });
+    wrap.appendChild(btn);
+  };
+
+  mkChip('Alle', !nwFilterState.func && !nwFilterState.favoritesOnly, () => {
+    nwFilterState.func = null;
+    nwFilterState.favoritesOnly = false;
+  });
+
+  if (hasFav) {
+    mkChip('★ Favoriten', !!nwFilterState.favoritesOnly, () => {
+      nwFilterState.favoritesOnly = !nwFilterState.favoritesOnly;
+      if (nwFilterState.favoritesOnly) nwFilterState.func = null;
+    });
+  }
+
+  allFns.forEach(fn => {
+    mkChip(fn, nwFilterState.func === fn, () => {
+      if (nwFilterState.func === fn) nwFilterState.func = null;
+      else nwFilterState.func = fn;
+      nwFilterState.favoritesOnly = false;
+    });
+  });
+}
+
+function nwGroupByRoom(devices) {
+  const map = new Map();
+  (devices || []).forEach(d => {
+    const room = String(d.room || '').trim() || 'Ohne Raum';
+    if (!map.has(room)) map.set(room, []);
+    map.get(room).push(d);
+  });
+
+  const rooms = Array.from(map.keys()).sort(nwSortBy);
+  return rooms.map(r => ({ room: r, devices: map.get(r) || [] }));
 }
 
 function nwShowEmptyState(show, ctx) {
   const empty = document.getElementById('nw-smarthome-empty');
+  const rooms = document.getElementById('nw-smarthome-rooms');
+  if (rooms) rooms.style.display = show ? 'none' : '';
   if (!empty) return;
 
   if (!show) {
     empty.style.display = 'none';
+    empty.textContent = '';
     return;
   }
 
-  const total = (ctx && typeof ctx.total === 'number') ? ctx.total : (Array.isArray(nwAllDevices) ? nwAllDevices.length : 0);
-  const filtered = (ctx && typeof ctx.filtered === 'number') ? ctx.filtered : 0;
+  const enabled = (typeof ctx?.enabled === 'boolean')
+    ? ctx.enabled
+    : (typeof nwSmartHomeEnabled === 'boolean' ? nwSmartHomeEnabled : null);
 
-  // Resolve enabled flag (null = unknown)
-  const enabled = (typeof ctx?.enabled === 'boolean') ? ctx.enabled : (typeof nwSmartHomeEnabled === 'boolean' ? nwSmartHomeEnabled : null);
-
-  let html = '';
+  empty.style.display = '';
 
   if (enabled === false) {
-    html = `⚠️ SmartHome ist aktuell <strong>deaktiviert</strong>.<br>
-    Bitte im ioBroker Admin unter <strong>nexowatt-vis → SmartHome → „SmartHome aktivieren“</strong> einschalten.<br>
-    Danach Seite neu laden.`;
-  } else if (total === 0) {
-    html = `Noch keine SmartHome-Geräte konfiguriert.<br>
-    Öffne die <a href="/smarthome-config.html" style="color:inherit; text-decoration:underline;">SmartHome-Konfiguration</a> und lege mindestens eine Kachel an.`;
-  } else if (filtered === 0 && nwIsAnyFilterActive()) {
-    html = `Keine Geräte passen zum aktuellen Filter. Entferne Filter (Räume/Funktionen/Favoriten), um wieder Geräte zu sehen.`;
-  } else {
-    html = `Keine SmartHome-Geräte verfügbar.`;
-  }
-
-  nwSetEmptyStateHtml(html);
-  empty.style.display = 'block';
-}
-
-function nwRenderTiles(devices) {
-  const grid = document.getElementById('nw-tiles-grid');
-  if (!grid) return;
-
-  grid.innerHTML = '';
-
-  if (!devices.length) {
-    nwShowEmptyState(true);
+    empty.innerHTML = [
+      '⚠️ <b>SmartHome ist deaktiviert</b> – deshalb bleibt diese Seite leer.<br/>',
+      'Aktiviere SmartHome im <b>Admin → SmartHome</b> und lade die Seite neu.<br/>',
+      '<span style="opacity:0.85">Tipp: Wenn du gerade konfiguriert hast, bitte einmal Hard‑Reload (Strg+F5).</span>'
+    ].join('');
     return;
   }
-  nwShowEmptyState(false);
 
-  devices.forEach((dev) => {
-    const tile = document.createElement('div');
-    tile.classList.add('nw-tile');
+  if (ctx && ctx.reason === 'filtered') {
+    empty.innerHTML = 'Keine Treffer für die aktuellen Filter. <span style="opacity:0.85">(„Alle“ wählen oder Filter zurücksetzen)</span>';
+    return;
+  }
 
-    const size = (dev.ui && dev.ui.size) || 'm';
-    tile.classList.add('nw-tile--size-' + size);
-    tile.classList.add('nw-tile--type-' + (dev.type || 'generic'));
+  empty.innerHTML = [
+    'Noch keine SmartHome‑Kacheln konfiguriert.<br/>',
+    '<span style="opacity:0.85">Bitte im Admin unter <b>SmartHome‑Konfiguration</b> Geräte/DPs anlegen.</span>'
+  ].join('');
+}
 
-    if (dev.behavior && dev.behavior.favorite) {
-      tile.classList.add('nw-tile--favorite');
+function nwCreateTile(dev) {
+  const type = String(dev.type || '').toLowerCase();
+  const size = nwGetTileSize(dev);
+  const isOn = nwIsOn(dev);
+  const canWrite = nwHasWriteAccess(dev);
+
+  const iconSpec = nwGetIconSpec(dev);
+  const iconName = iconSpec.kind === 'svg' ? iconSpec.name : 'generic';
+  const accent = nwGetAccentColor(dev, iconName);
+
+  const tile = document.createElement('div');
+  tile.className = [
+    'nw-sh-tile',
+    'nw-sh-tile--type-' + (type || 'unknown'),
+    'nw-sh-tile--size-' + size,
+    isOn ? 'nw-sh-tile--on' : 'nw-sh-tile--off',
+    canWrite ? '' : 'nw-sh-tile--readonly',
+    (dev.behavior && dev.behavior.favorite) ? 'nw-sh-tile--favorite' : '',
+  ].filter(Boolean).join(' ');
+
+  tile.style.setProperty('--sh-accent', accent);
+
+  // Header: Icon + Name + State
+  const header = document.createElement('div');
+  header.className = 'nw-sh-tile__header';
+
+  const icon = nwCreateIconElement(dev, isOn, iconSpec, accent);
+
+  const titleWrap = document.createElement('div');
+  titleWrap.className = 'nw-sh-tile__title';
+
+  const name = document.createElement('div');
+  name.className = 'nw-sh-tile__name';
+  name.textContent = dev.alias || dev.id;
+
+  const state = document.createElement('div');
+  state.className = 'nw-sh-tile__state';
+  state.textContent = nwGetStateText(dev);
+
+  titleWrap.appendChild(name);
+  titleWrap.appendChild(state);
+
+  header.appendChild(icon);
+  header.appendChild(titleWrap);
+
+  // Favorite star (top-right)
+  if (dev.behavior && dev.behavior.favorite) {
+    const star = document.createElement('div');
+    star.className = 'nw-sh-tile__star';
+    star.textContent = '★';
+    header.appendChild(star);
+  }
+
+  tile.appendChild(header);
+
+  // Big content (RTR / large sensors)
+  if (type === 'rtr' || size === 'xl') {
+    const big = document.createElement('div');
+    big.className = 'nw-sh-tile__big';
+
+    const { value, unit } = nwFormatBigValue(dev);
+    if (value) {
+      const val = document.createElement('div');
+      val.className = 'nw-sh-tile__value';
+      val.textContent = value;
+
+      const u = document.createElement('span');
+      u.className = 'nw-sh-tile__unit';
+      u.textContent = unit || '';
+
+      val.appendChild(u);
+      big.appendChild(val);
     }
 
-    const stateClass = nwGetStateClass(dev);
-    if (stateClass) tile.classList.add(stateClass);
-
-    const top = document.createElement('div');
-    top.className = 'nw-tile__top';
-
-    const iconCircle = document.createElement('div');
-    iconCircle.className = 'nw-tile__icon-circle';
-    const iconSpan = document.createElement('span');
-    iconSpan.textContent = dev.icon || '□';
-    iconCircle.appendChild(iconSpan);
-    top.appendChild(iconCircle);
-
-    const badge = nwCreateBadge(dev);
-    top.appendChild(badge || document.createElement('div'));
-
-    const middle = document.createElement('div');
-    middle.className = 'nw-tile__middle';
-
-    const valueSpan = document.createElement('span');
-    valueSpan.className = 'nw-tile__value';
-    const unitSpan = document.createElement('span');
-    unitSpan.className = 'nw-tile__unit';
-
-    const vinfo = nwGetValueAndProgress(dev);
-    valueSpan.textContent = vinfo.valueText;
-    unitSpan.textContent = vinfo.unitText;
-
-    if (vinfo.valueText) middle.appendChild(valueSpan);
-    if (vinfo.unitText) middle.appendChild(unitSpan);
-
-    let progress;
-    let slider;
-    if (typeof vinfo.progressValue === 'number') {
-      progress = document.createElement('div');
-      progress.className = 'nw-tile__progress';
-      const bar = document.createElement('div');
-      bar.className = 'nw-tile__progress-bar';
-      bar.style.width = Math.max(0, Math.min(100, vinfo.progressValue)) + '%';
-      progress.appendChild(bar);
-
-      // Dimmer-Slider nur für Dimmer-Geräte anzeigen
-      if (dev.type === 'dimmer') {
-        slider = document.createElement('input');
-        slider.type = 'range';
-        const lvlCfg = (dev.io && dev.io.level) || {};
-        const min = typeof lvlCfg.min === 'number' ? lvlCfg.min : 0;
-        const max = typeof lvlCfg.max === 'number' ? lvlCfg.max : 100;
-        slider.min = String(min);
-        slider.max = String(max);
-        slider.value = String(typeof dev.state === 'object' && dev.state && typeof dev.state.level === 'number'
-          ? dev.state.level
-          : vinfo.progressValue);
-        slider.className = 'nw-dimmer-slider';
-
-        // Tile-Klick beim Schieben des Sliders verhindern
-        const stop = (ev) => {
-          ev.stopPropagation();
-        };
-        slider.addEventListener('mousedown', stop);
-        slider.addEventListener('touchstart', stop);
-        slider.addEventListener('click', stop);
-
-        slider.addEventListener('change', async (ev) => {
-          const beh = dev.behavior || {};
-          if (beh.readOnly) return;
-          const raw = Number(ev.target.value);
-          if (!Number.isFinite(raw)) return;
-          const newState = await nwSetLevel(dev.id, raw);
-          if (!newState) return;
-          dev.state = Object.assign({}, dev.state || {}, newState);
-          await nwReloadDevices();
-        });
-      }
-    }
-
-    const bottom = document.createElement('div');
-    bottom.className = 'nw-tile__bottom';
-
-    const aliasSpan = document.createElement('span');
-    aliasSpan.className = 'nw-tile__alias';
-    aliasSpan.textContent = dev.alias || dev.id;
-
-    const roomSpan = document.createElement('span');
-    roomSpan.className = 'nw-tile__room';
-    const showRoom = !dev.ui || typeof dev.ui.showRoom === 'undefined' ? true : !!dev.ui.showRoom;
-    roomSpan.textContent = showRoom ? (dev.room || '') : '';
-
-    bottom.appendChild(aliasSpan);
-    bottom.appendChild(roomSpan);
-
-    tile.appendChild(top);
-    tile.appendChild(middle);
-    if (progress) tile.appendChild(progress);
-    if (slider) tile.appendChild(slider);
-    
-if (dev.type === 'blind') {
-      const controls = document.createElement('div');
-      controls.className = 'nw-tile__controls';
-
-      const btnUp = document.createElement('button');
-      btnUp.type = 'button';
-      btnUp.className = 'nw-tile__control-btn nw-tile__control-btn--up';
-      btnUp.textContent = '▲';
-
-      const btnStop = document.createElement('button');
-      btnStop.type = 'button';
-      btnStop.className = 'nw-tile__control-btn nw-tile__control-btn--stop';
-      btnStop.textContent = '■';
-
-      const btnDown = document.createElement('button');
-      btnDown.type = 'button';
-      btnDown.className = 'nw-tile__control-btn nw-tile__control-btn--down';
-      btnDown.textContent = '▼';
-
-      const stopPropagation = (ev) => ev.stopPropagation();
-      btnUp.addEventListener('click', stopPropagation);
-      btnStop.addEventListener('click', stopPropagation);
-      btnDown.addEventListener('click', stopPropagation);
-
-      btnUp.addEventListener('click', async () => {
-        const ok = await nwCoverAction(dev.id, 'up');
-        if (!ok) return;
-      });
-      btnStop.addEventListener('click', async () => {
-        const ok = await nwCoverAction(dev.id, 'stop');
-        if (!ok) return;
-      });
-      btnDown.addEventListener('click', async () => {
-        const ok = await nwCoverAction(dev.id, 'down');
-        if (!ok) return;
-      });
-
-      controls.appendChild(btnUp);
-      controls.appendChild(btnStop);
-      controls.appendChild(btnDown);
-      tile.appendChild(controls);
-    } else if (dev.type === 'rtr' && dev.io && dev.io.climate && dev.io.climate.setpointId) {
-      const cl = dev.io.climate;
-      const controls = document.createElement('div');
-      controls.className = 'nw-tile__controls nw-tile__controls--rtr';
-
-      const btnMinus = document.createElement('button');
-      btnMinus.type = 'button';
-      btnMinus.className = 'nw-tile__control-btn nw-tile__control-btn--rtr-minus';
-      btnMinus.textContent = '−';
-
-      const center = document.createElement('div');
-      center.className = 'nw-tile__rtr-center';
-
-      const spSpan = document.createElement('span');
-      spSpan.className = 'nw-tile__rtr-setpoint';
-
+    // Secondary line for RTR: setpoint/humidity
+    if (type === 'rtr') {
       const st = dev.state || {};
-      const ui = dev.ui || {};
-      const min = typeof cl.minSetpoint === 'number' ? cl.minSetpoint : 15;
-      const max = typeof cl.maxSetpoint === 'number' ? cl.maxSetpoint : 30;
+      const meta = document.createElement('div');
+      meta.className = 'nw-sh-tile__meta';
 
+      const parts = [];
       if (typeof st.setpoint === 'number') {
-        const prec = typeof ui.precision === 'number' ? ui.precision : 1;
-        spSpan.textContent = 'Soll ' + st.setpoint.toFixed(prec).replace('.', ',') + '°C';
-      } else {
-        spSpan.textContent = 'Soll ' + min + '–' + max + '°C';
+        parts.push('Soll ' + st.setpoint.toFixed(1).replace('.', ',') + '°C');
       }
+      if (typeof st.humidity === 'number') {
+        parts.push('RH ' + Math.round(st.humidity) + '%');
+      }
+      meta.textContent = parts.join(' · ') || '';
+      big.appendChild(meta);
 
-      center.appendChild(spSpan);
+      if (canWrite && dev.io && dev.io.climate && dev.io.climate.setpointId) {
+        const controls = document.createElement('div');
+        controls.className = 'nw-sh-controls nw-sh-controls--rtr';
 
-      const btnPlus = document.createElement('button');
-      btnPlus.type = 'button';
-      btnPlus.className = 'nw-tile__control-btn nw-tile__control-btn--rtr-plus';
-      btnPlus.textContent = '+';
+        const btnMinus = document.createElement('button');
+        btnMinus.type = 'button';
+        btnMinus.className = 'nw-sh-btn';
+        btnMinus.textContent = '−';
 
-      const stopPropagation2 = (ev) => ev.stopPropagation();
-      btnMinus.addEventListener('click', stopPropagation2);
-      btnPlus.addEventListener('click', stopPropagation2);
+        const btnPlus = document.createElement('button');
+        btnPlus.type = 'button';
+        btnPlus.className = 'nw-sh-btn';
+        btnPlus.textContent = '+';
 
-      btnMinus.addEventListener('click', async () => {
-        const beh = dev.behavior || {};
-        if (beh.readOnly) return;
-        await nwAdjustRtrSetpoint(dev, -0.5);
-      });
+        const stop = (ev) => ev.stopPropagation();
+        btnMinus.addEventListener('click', stop);
+        btnPlus.addEventListener('click', stop);
 
-      btnPlus.addEventListener('click', async () => {
-        const beh = dev.behavior || {};
-        if (beh.readOnly) return;
-        await nwAdjustRtrSetpoint(dev, 0.5);
-      });
+        btnMinus.addEventListener('click', async () => {
+          await nwAdjustRtrSetpoint(dev, -0.5);
+        });
 
-      controls.appendChild(btnMinus);
-      controls.appendChild(center);
-      controls.appendChild(btnPlus);
-      tile.appendChild(controls);
+        btnPlus.addEventListener('click', async () => {
+          await nwAdjustRtrSetpoint(dev, 0.5);
+        });
+
+        controls.appendChild(btnMinus);
+        controls.appendChild(btnPlus);
+        big.appendChild(controls);
+      }
     }
-    tile.appendChild(bottom);
 
-    tile.addEventListener('click', async () => {
-      const beh = dev.behavior || {};
-      if (beh.readOnly) return;
-      // Switch, Dimmer und Szenen per Tile-Tap toggeln
-      if (dev.type !== 'switch' && dev.type !== 'dimmer' && dev.type !== 'scene') return;
-      const newState = await nwToggleDevice(dev.id);
-      if (!newState) return;
-      dev.state = Object.assign({}, dev.state || {}, newState);
-      // Nach dem Toggle alle Geräte neu laden, damit UI konsistent bleibt
-      await nwReloadDevices();
+    tile.appendChild(big);
+  }
+
+  // Dimmer/Blind: optional slider (if level mapping exists)
+  if ((type === 'dimmer' || type === 'blind') && dev.io && dev.io.level && dev.io.level.readId) {
+    const lvlCfg = dev.io.level;
+    const min = typeof lvlCfg.min === 'number' ? lvlCfg.min : 0;
+    const max = typeof lvlCfg.max === 'number' ? lvlCfg.max : 100;
+    const st = dev.state || {};
+    const current = (typeof st.level === 'number') ? st.level : (typeof st.position === 'number' ? st.position : 0);
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = String(min);
+    slider.max = String(max);
+    slider.value = String(Math.max(min, Math.min(max, current)));
+    slider.className = 'nw-sh-slider';
+
+    const stop = (ev) => ev.stopPropagation();
+    slider.addEventListener('mousedown', stop);
+    slider.addEventListener('touchstart', stop);
+    slider.addEventListener('click', stop);
+
+    slider.addEventListener('change', async (ev) => {
+      if (!canWrite) return;
+      const raw = Number(ev.target.value);
+      if (!Number.isFinite(raw)) return;
+      await nwSetLevel(dev.id, raw);
+      await nwReloadDevices({ force: true });
     });
 
-    grid.appendChild(tile);
+    tile.appendChild(slider);
+  }
+
+  // Blind buttons (up/stop/down)
+  if (type === 'blind') {
+    const controls = document.createElement('div');
+    controls.className = 'nw-sh-controls';
+
+    const mk = (label, action) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'nw-sh-btn';
+      b.textContent = label;
+      b.addEventListener('click', (ev) => ev.stopPropagation());
+      b.addEventListener('click', async () => {
+        if (!canWrite) return;
+        await nwCoverAction(dev.id, action);
+      });
+      return b;
+    };
+
+    controls.appendChild(mk('▲', 'up'));
+    controls.appendChild(mk('■', 'stop'));
+    controls.appendChild(mk('▼', 'down'));
+
+    tile.appendChild(controls);
+  }
+
+  // Tap actions (switch / dimmer / scene)
+  tile.addEventListener('click', async () => {
+    if (!canWrite) return;
+    if (type !== 'switch' && type !== 'dimmer' && type !== 'scene') return;
+    const st = await nwToggleDevice(dev.id);
+    if (!st) return;
+    await nwReloadDevices({ force: true });
+  });
+
+  return tile;
+}
+
+function nwRenderRooms(devices) {
+  const wrap = document.getElementById('nw-smarthome-rooms');
+  if (!wrap) return;
+  nwClear(wrap);
+
+  const groups = nwGroupByRoom(devices);
+
+  groups.forEach(g => {
+    const section = document.createElement('section');
+    section.className = 'nw-sh-room';
+
+    const header = document.createElement('div');
+    header.className = 'nw-sh-room__header';
+
+    const title = document.createElement('div');
+    title.className = 'nw-sh-room__title';
+    title.textContent = g.room;
+
+    header.appendChild(title);
+    section.appendChild(header);
+
+    const grid = document.createElement('div');
+    grid.className = 'nw-sh-grid';
+
+    // stable ordering inside room
+    const arr = (g.devices || []).slice();
+    arr.sort((a, b) => {
+      const oa = (typeof a.order === 'number') ? a.order : (typeof a.ui?.order === 'number' ? a.ui.order : 0);
+      const ob = (typeof b.order === 'number') ? b.order : (typeof b.ui?.order === 'number' ? b.ui.order : 0);
+      if (oa !== ob) return oa - ob;
+      return nwSortBy(a.alias || a.id, b.alias || b.id);
+    });
+
+    arr.forEach(dev => {
+      grid.appendChild(nwCreateTile(dev));
+    });
+
+    section.appendChild(grid);
+    wrap.appendChild(section);
   });
 }
 
-function nwGetStateClass(dev) {
-  const st = dev.state || {};
-  if (dev.type === 'switch') {
-    return st.on ? 'nw-tile--state-on' : 'nw-tile--state-off';
-  }
-  if (dev.type === 'scene') {
-    const active = (typeof st.active !== 'undefined') ? st.active : !!st.on;
-    return active ? 'nw-tile--state-on' : 'nw-tile--state-off';
-  }
-  if (dev.type === 'dimmer') {
-    const lvl = st.level != null ? st.level : 0;
-    return lvl > 0 ? 'nw-tile--state-on' : 'nw-tile--state-off';
-  }
-  if (dev.type === 'rtr') {
-    return 'nw-tile--state-on';
-  }
-  if (dev.type === 'sensor') {
-    return 'nw-tile--state-off';
-  }
-  return 'nw-tile--state-off';
-}
+function nwApplyFiltersAndRender() {
+  const filtered = nwApplyFilters(nwAllDevices);
 
-function nwCreateBadge(dev) {
-  const st = dev.state || {};
-  const span = document.createElement('span');
-  span.className = 'nw-tile__badge';
+  // chips always based on all devices (so user can clear filters)
+  nwRenderFunctionChips(nwAllDevices);
 
-  if (dev.type === 'rtr' && st.mode) {
-    span.textContent = st.mode;
-    span.classList.add('nw-tile__badge--accent');
-    return span;
-  }
-  if (dev.type === 'scene' && st.active) {
-    span.textContent = 'AKTIV';
-    span.classList.add('nw-tile__badge--accent');
-    return span;
-  }
-
-  return null;
-}
-
-
-  
-  function nwGetValueAndProgress(dev) {
-    const st = dev.state || {};
-    const ui = dev.ui || {};
-    let valueText = '';
-    let unitText = ui.unit || '';
-    let progressValue = null;
-
-    if (dev.type === 'switch') {
-      valueText = st.on ? 'Ein' : 'Aus';
-      unitText = '';
-    } else if (dev.type === 'scene') {
-      const active = (typeof st.active !== 'undefined') ? !!st.active : !!st.on;
-      valueText = active ? 'Aktiv' : 'Bereit';
-      unitText = '';
-    } else if (dev.type === 'dimmer') {
-      const lvl = st.level != null ? st.level : 0;
-      valueText = String(Math.round(lvl));
-      unitText = ui.unit || '%';
-      progressValue = lvl;
-    } else if (dev.type === 'blind') {
-      const pos = st.position != null ? st.position : 0;
-      valueText = String(Math.round(pos));
-      unitText = ui.unit || '%';
-      progressValue = pos;
-    } else if (dev.type === 'rtr') {
-      if (typeof st.currentTemp === 'number') {
-        const prec = typeof ui.precision === 'number' ? ui.precision : 1;
-        valueText = st.currentTemp.toFixed(prec);
-        unitText = ui.unit || '°C';
-      }
-    } else if (dev.type === 'sensor') {
-      if (typeof st.value === 'number') {
-        const prec = typeof ui.precision === 'number' ? ui.precision : 1;
-        valueText = st.value.toFixed(prec);
-      } else if (typeof st.value !== 'undefined') {
-        valueText = String(st.value);
-      } else {
-        valueText = '—';
-      }
-      unitText = ui.unit || '';
+  if (!filtered.length) {
+    if (!nwAllDevices.length) {
+      nwShowEmptyState(true, { enabled: nwSmartHomeEnabled, reason: 'empty' });
+    } else {
+      nwShowEmptyState(true, { reason: 'filtered' });
     }
-
-    return { valueText, unitText, progressValue };
+    return;
   }
 
+  nwShowEmptyState(false);
+  nwRenderRooms(filtered);
+}
+
+// ---------- Auto refresh + bootstrap ----------
 
 async function nwReloadDevices(opts) {
-  // avoid overlapping network requests (prevents UI jitter)
   if (nwReloadInFlight) return;
   nwReloadInFlight = true;
   try {
@@ -655,9 +903,9 @@ async function nwReloadDevices(opts) {
     const arr = Array.isArray(devices) ? devices : [];
     const sig = JSON.stringify(arr) + '|' + String(nwSmartHomeEnabled);
     const force = !!(opts && opts.force);
-    if (!force && sig === nwLastDevicesSignature) {
-      return;
-    }
+
+    if (!force && sig === nwLastDevicesSignature) return;
+
     nwLastDevicesSignature = sig;
     nwAllDevices = arr;
     nwApplyFiltersAndRender();
@@ -703,17 +951,17 @@ async function nwLoadUiConfigFlags() {
     nwEvcsCount = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
     nwSmartHomeEnabled = !!(cfg.smartHome && cfg.smartHome.enabled);
 
-    // EVCS visibility (only relevant for multi-wallbox installs)
+    // EVCS visibility
     const l = document.getElementById('menuEvcsLink');
     if (l) l.classList.toggle('hidden', nwEvcsCount < 2);
     const t = document.getElementById('tabEvcs');
     if (t) t.classList.toggle('hidden', nwEvcsCount < 2);
 
-    // SmartHome menu item (tab stays visible on this page)
+    // SmartHome menu item
     const sl = document.getElementById('menuSmartHomeLink');
     if (sl) sl.classList.toggle('hidden', !nwSmartHomeEnabled);
   } catch (_e) {
-    // keep defaults
+    // ignore
   }
 }
 
@@ -721,7 +969,6 @@ async function nwBootstrap() {
   nwInitMenu();
   await nwLoadUiConfigFlags();
 
-  // First paint
   await nwReloadDevices({ force: true });
   nwStartAutoRefresh(5000);
 
@@ -730,7 +977,6 @@ async function nwBootstrap() {
       nwStopAutoRefresh();
       return;
     }
-    // Re-evaluate flags on resume (installer might have enabled SmartHome in the meantime)
     nwLoadUiConfigFlags().then(() => {
       nwReloadDevices({ force: true });
       nwStartAutoRefresh(5000);

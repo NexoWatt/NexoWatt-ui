@@ -1,3 +1,8 @@
+## 0.6.96 (2026-02-01)
+- SmartHome VIS: Raum-Sektionen (statt leerer Demo-Ansicht) + Kacheln im „Apple Home“-ähnlichen Look (Glassmorphism) inkl. dynamischer Icons (An/Aus).
+- SmartHomeConfig: Kachelgröße (S/M/L/XL) auswählbar + Icon-Picker/Vorschau, damit die Einrichtung schneller und konsistenter wird.
+- UI: Service-Worker Cache-Version erhöht, damit SmartHome-Updates sofort sichtbar sind.
+
 ## 0.6.95 (2026-02-01)
 - SmartHome: VIS-Header/Tabs an die Haupt-UI angeglichen (LIVE/HISTORY/EVCS/SMARTHOME) und Empty-State verbessert (klarer Hinweis bei deaktiviertem SmartHome bzw. wenn keine Kacheln konfiguriert sind).
 - SmartHomeConfig: Hinweis ergänzt, wenn SmartHome deaktiviert ist (damit klar ist, warum die VIS-Seite leer bleibt).

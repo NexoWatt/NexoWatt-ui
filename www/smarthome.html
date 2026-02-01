@@ -51,35 +51,23 @@
 
 <main class="content">
   <div id="nw-smarthome-root">
-    <div class="nw-smarthome-header">
+    <div class="nw-sh-header">
       <div>
-        <div class="nw-smarthome-header__title">SmartHome</div>
-        <div class="nw-smarthome-header__subtitle">
-          Erste Switch-Kacheln im NexoWatt-Design (Demo · A3)
-        </div>
+        <div class="nw-sh-header__title">SmartHome</div>
+        <div class="nw-sh-header__subtitle">Steuere Räume, Funktionen und Geräte – im NexoWatt‑Look ✨</div>
       </div>
-      <div style="font-size:0.7rem;color:#9ca3af;">
-        <a href="/" style="color:inherit;text-decoration:none;">Zurück zur Live-Ansicht</a>
+      <a class="nw-sh-header__back" href="/">Zurück zur Live‑Ansicht</a>
+    </div>
+
+    <div class="nw-sh-filters">
+      <div class="nw-sh-filter-row">
+        <span class="nw-sh-filter-label">Funktionen</span>
+        <div id="nw-filter-functions" class="nw-sh-filter-chips"></div>
       </div>
     </div>
 
-    <div class="nw-smarthome-tabs">
-      <div id="nw-tabs-rooms" class="nw-tabs nw-tabs--rooms"></div>
-    </div>
-
-    <div class="nw-smarthome-filters">
-      <div class="nw-filter-row">
-        <span class="nw-filter-label">Räume:</span>
-        <div id="nw-filter-rooms" class="nw-filter-chips"></div>
-      </div>
-      <div class="nw-filter-row">
-        <span class="nw-filter-label">Funktionen:</span>
-        <div id="nw-filter-functions" class="nw-filter-chips"></div>
-      </div>
-    </div>
-
-    <div id="nw-tiles-grid" class="nw-tiles-grid"></div>
-    <div id="nw-smarthome-empty" style="display:none;font-size:0.8rem;color:#9ca3af;margin-top:12px;"></div>
+    <div id="nw-smarthome-empty" class="nw-sh-empty" style="display:none;"></div>
+    <div id="nw-smarthome-rooms" class="nw-sh-rooms"></div>
   </div>
 </main>
 

@@ -9,6 +9,48 @@ const nwShcState = {
   validation: null,
 };
 
+
+/* --- Icon Picker (A11): kleine Vorschau + Standard-Icons --- */
+
+const NW_SH_ICON_PREVIEW_SVGS = {
+  bulb: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9 18h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10 22h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 2a7 7 0 0 0-4 12c.8.7 1.3 1.6 1.5 2.6l.1.4h4.8l.1-.4c.2-1 .7-1.9 1.5-2.6A7 7 0 0 0 12 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`,
+  plug: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M8 3v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16 3v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 9h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 9v3a3 3 0 0 0 6 0V9" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 15v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+  thermostat: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 18a1.2 1.2 0 1 0 0-2.4A1.2 1.2 0 0 0 12 18Z" fill="currentColor"/></svg>`,
+  blinds: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M5 4h14v16H5V4Z" stroke="currentColor" stroke-width="2"/><path d="M5 8h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 16h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+  tv: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 7h16v10H4V7Z" stroke="currentColor" stroke-width="2"/><path d="M8 21h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 17v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+  speaker: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 9h4l5-4v18l-5-4H6V9Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M18 10c1 .9 1 3.1 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+  fire: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 2s4 4 4 8a4 4 0 1 1-8 0c0-4 4-8 4-8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 22a6 6 0 0 0 6-6c0-3-2-5-3-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+  scene: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 2l1.1 3.4L16.5 6.5l-3.4 1.1L12 11l-1.1-3.4L7.5 6.5l3.4-1.1L12 2Z" fill="currentColor"/><path d="M19 13l.7 2.1 2.1.7-2.1.7L19 18.6l-.7-2.1-2.1-.7 2.1-.7.7-2.1Z" fill="currentColor"/><path d="M5 13l.7 2.1 2.1.7-2.1.7L5 18.6l-.7-2.1-2.1-.7 2.1-.7L5 13Z" fill="currentColor"/></svg>`,
+  thermometer: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 18a1.2 1.2 0 1 0 0-2.4A1.2 1.2 0 0 0 12 18Z" fill="currentColor"/></svg>`,
+  sensor: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 3a7 7 0 0 0-7 7c0 5 7 11 7 11s7-6 7-11a7 7 0 0 0-7-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" fill="currentColor"/></svg>`,
+  generic: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 6h12v12H6V6Z" stroke="currentColor" stroke-width="2"/></svg>`,
+};
+
+function nwShcNormalizeIconName(value) {
+  const s = String(value || '').trim();
+  if (!s) return '';
+  return s.toLowerCase();
+}
+
+function nwShcRenderIconPreview(previewEl, iconValue) {
+  if (!previewEl) return;
+  const raw = String(iconValue || '').trim();
+  const key = nwShcNormalizeIconName(raw);
+  if (key && NW_SH_ICON_PREVIEW_SVGS[key]) {
+    previewEl.innerHTML = NW_SH_ICON_PREVIEW_SVGS[key];
+    previewEl.style.fontSize = '';
+    return;
+  }
+  // Emoji / short text fallback
+  previewEl.innerHTML = '';
+  if (raw && raw.length <= 3) {
+    previewEl.textContent = raw;
+    previewEl.style.fontSize = '0.9rem';
+  } else {
+    previewEl.textContent = '';
+  }
+}
+
 /* --- Validator (A10): Fehlerliste für stabile Einrichtung --- */
 
 let nwValidateTimer = null;
@@ -1074,12 +1116,12 @@ function nwAddDeviceFromTemplate(templateType) {
     scene: 'Neue Szene',
   };
   const iconMap = {
-    switch: 'SW',
-    dimmer: 'DM',
-    blind: 'BL',
-    rtr: 'RT',
-    sensor: 'SE',
-    scene: 'SC',
+    switch: 'bulb',
+    dimmer: 'bulb',
+    blind: 'blinds',
+    rtr: 'thermostat',
+    sensor: 'thermometer',
+    scene: 'scene',
   };
 
   const id = nwEnsureUniqueDeviceId(devices, baseIdMap[t] || 'geraet');
@@ -1091,7 +1133,7 @@ function nwAddDeviceFromTemplate(templateType) {
     roomId: roomId || null,
     functionId: functionId || null,
     icon: iconMap[t] || '',
-    size: 'm',
+    size: (t === 'rtr') ? 'xl' : 'm',
     behavior: { favorite: false, readOnly: false },
     io: {},
   };
@@ -1570,16 +1612,99 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
     });
     body.appendChild(nwCreateFieldRow('Funktion', fnSelect));
 
+    // Kachelgröße (Layout)
+    const sizeSelect = document.createElement('select');
+    sizeSelect.className = 'nw-config-select';
+    const sizeOptions = [
+      { value: 's', label: 'S (klein)' },
+      { value: 'm', label: 'M (normal)' },
+      { value: 'l', label: 'L (breit)' },
+      { value: 'xl', label: 'XL (groß)' },
+    ];
+    sizeOptions.forEach(def => {
+      const opt = document.createElement('option');
+      opt.value = def.value;
+      opt.textContent = def.label;
+      if ((dev.size || 'm') === def.value) opt.selected = true;
+      sizeSelect.appendChild(opt);
+    });
+    sizeSelect.addEventListener('change', () => {
+      nwShcState.config.devices[index].size = sizeSelect.value || 'm';
+      nwMarkDirty(true);
+    });
+    body.appendChild(nwCreateFieldRow('Kachelgröße', sizeSelect));
+
     // Icon
     const iconInput = document.createElement('input');
     iconInput.type = 'text';
     iconInput.className = 'nw-config-input';
+    iconInput.placeholder = 'z.B. bulb, plug, thermostat, blinds, tv, speaker… oder Emoji';
     iconInput.value = dev.icon || '';
-    iconInput.addEventListener('input', () => {
-      nwShcState.config.devices[index].icon = iconInput.value || null;
-      nwMarkDirty(true);
+    iconInput.style.flex = '1';
+
+    const iconSelect = document.createElement('select');
+    iconSelect.className = 'nw-config-select';
+    iconSelect.style.minWidth = '170px';
+    const iconOptions = [
+      { value: '', label: '(leer / Auto)' },
+      { value: 'bulb', label: '💡 Licht (bulb)' },
+      { value: 'plug', label: '🔌 Steckdose (plug)' },
+      { value: 'fire', label: '🔥 Kamin (fire)' },
+      { value: 'thermostat', label: '🌡️ Heizung (thermostat)' },
+      { value: 'thermometer', label: '🌡️ Temperatur (thermometer)' },
+      { value: 'blinds', label: '🪟 Jalousie (blinds)' },
+      { value: 'tv', label: '📺 TV (tv)' },
+      { value: 'speaker', label: '🔊 Audio (speaker)' },
+      { value: 'scene', label: '✨ Szene (scene)' },
+      { value: 'sensor', label: '📍 Sensor (sensor)' },
+      { value: 'generic', label: '⬜ Generic (generic)' },
+    ];
+    iconOptions.forEach(def => {
+      const opt = document.createElement('option');
+      opt.value = def.value;
+      opt.textContent = def.label;
+      iconSelect.appendChild(opt);
     });
-    body.appendChild(nwCreateFieldRow('Icon', iconInput));
+
+    const iconPreview = document.createElement('div');
+    iconPreview.className = 'nw-config-icon-preview';
+
+    const syncIconUi = () => {
+      const raw = String(iconInput.value || '').trim();
+      const key = nwShcNormalizeIconName(raw);
+      // Select only matches known icon names; otherwise fall back to "".
+      if (key && iconOptions.some(o => o.value === key)) iconSelect.value = key;
+      else iconSelect.value = '';
+      nwShcRenderIconPreview(iconPreview, raw);
+    };
+
+    iconSelect.addEventListener('change', () => {
+      const val = iconSelect.value || '';
+      iconInput.value = val;
+      nwShcState.config.devices[index].icon = val || null;
+      nwMarkDirty(true);
+      syncIconUi();
+    });
+
+    iconInput.addEventListener('input', () => {
+      const v = iconInput.value || '';
+      nwShcState.config.devices[index].icon = v || null;
+      nwMarkDirty(true);
+      syncIconUi();
+    });
+
+    // Initial
+    syncIconUi();
+
+    const iconWrap = document.createElement('div');
+    iconWrap.style.display = 'flex';
+    iconWrap.style.alignItems = 'center';
+    iconWrap.style.gap = '8px';
+    iconWrap.appendChild(iconInput);
+    iconWrap.appendChild(iconSelect);
+    iconWrap.appendChild(iconPreview);
+
+    body.appendChild(nwCreateFieldRow('Icon', iconWrap));
 
     // Verhalten: readOnly / favorite
     const behRow = document.createElement('div');

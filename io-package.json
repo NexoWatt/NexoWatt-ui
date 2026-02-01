@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.95",
+    "version": "0.6.96",
     "news": {
+      "0.6.96": {
+        "en": "SmartHome VIS: new room-section layout and Apple-Home-like tiles (glass cards) with dynamic on/off icons. SmartHomeConfig: added tile size selector and an icon picker/preview to make setup faster.",
+        "de": "SmartHome VIS: neues Raum-Layout (Sektionen) und Apple‑Home‑ähnliche Kacheln (Glass‑Cards) mit dynamischen An/Aus‑Icons. SmartHomeConfig: Kachelgrößen-Auswahl sowie Icon‑Picker/Vorschau für schnellere Einrichtung."
+      },
       "0.6.95": {
         "en": "SmartHome: VIS now uses the standard NexoWatt header tabs (LIVE/HISTORY/EVCS/SMARTHOME) and shows a clear empty-state hint when SmartHome is disabled or no tiles are configured. SmartHomeConfig: Added a warning when SmartHome is disabled. Backend: SmartHomeConfig is now installer-managed/persistent across restarts; SmartHome enabled flag follows the admin instance setting.",
         "de": "SmartHome: VIS nutzt jetzt die Standard-NexoWatt-Header-Tabs (LIVE/HISTORY/EVCS/SMARTHOME) und zeigt einen klaren Hinweis, wenn SmartHome deaktiviert ist oder keine Kacheln konfiguriert sind. SmartHomeConfig: Hinweis ergänzt, wenn SmartHome deaktiviert ist. Backend: SmartHomeConfig ist nun installer-managed und bleibt über Neustarts erhalten; SmartHome-Aktivierung folgt dem Admin-Instanzschalter."
