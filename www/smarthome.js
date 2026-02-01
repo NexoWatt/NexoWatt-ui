@@ -521,6 +521,85 @@ function nwSortBy(a, b) {
   return 0;
 }
 
+function nwGetDeviceOrder(dev) {
+  const o = (dev && typeof dev.order === 'number')
+    ? dev.order
+    : (dev && dev.ui && typeof dev.ui.order === 'number' ? dev.ui.order : 0);
+  return Number.isFinite(o) ? o : 0;
+}
+
+function nwFormatNumberDE(value, precision) {
+  const v = Number(value);
+  if (!Number.isFinite(v)) return '';
+  const p = (typeof precision === 'number' && precision >= 0 && precision <= 6) ? precision : 1;
+  return v.toFixed(p).replace('.', ',');
+}
+
+function nwComputeRoomSummary(roomName, allDevices) {
+  const room = String(roomName || '').trim();
+  if (!room) return '';
+
+  const devs = Array.isArray(allDevices) ? allDevices.filter(d => String(d.room || '').trim() === room) : [];
+  if (!devs.length) return '';
+
+  const tempCandidates = [];
+  const humCandidates = [];
+
+  devs.forEach(d => {
+    if (!d) return;
+    const type = String(d.type || '').toLowerCase();
+    const st = d.state || {};
+    const ui = d.ui || {};
+    const order = nwGetDeviceOrder(d);
+    const alias = String(d.alias || d.id || '').toLowerCase();
+    const unit = String(ui.unit || '').toLowerCase();
+
+    if (type === 'rtr') {
+      if (typeof st.currentTemp === 'number') {
+        tempCandidates.push({ prio: 0, order, value: st.currentTemp, precision: (typeof ui.precision === 'number' ? ui.precision : 1), unit: ui.unit || '°C' });
+      }
+      if (typeof st.humidity === 'number') {
+        humCandidates.push({ prio: 0, order, value: st.humidity, precision: 0, unit: '%' });
+      }
+    }
+
+    if (type === 'sensor') {
+      if (typeof st.value === 'number') {
+        const looksTemp = unit.includes('°c') || unit.includes('c') || alias.includes('temp') || alias.includes('temperatur');
+        const looksHum = unit.includes('%') || alias.includes('feuchte') || alias.includes('humidity') || alias.includes('luft');
+
+        if (looksTemp) {
+          tempCandidates.push({ prio: 1, order, value: st.value, precision: (typeof ui.precision === 'number' ? ui.precision : 1), unit: ui.unit || '°C' });
+        }
+        if (looksHum) {
+          humCandidates.push({ prio: 1, order, value: st.value, precision: 0, unit: '%' });
+        }
+      }
+    }
+  });
+
+  const pick = (arr) => {
+    if (!arr.length) return null;
+    arr.sort((a, b) => (a.prio - b.prio) || (a.order - b.order));
+    return arr[0];
+  };
+
+  const t = pick(tempCandidates);
+  const h = pick(humCandidates);
+
+  const parts = [];
+  if (t) {
+    const val = nwFormatNumberDE(t.value, t.precision);
+    if (val) parts.push(val + (t.unit ? String(t.unit).replace(/\s+/g, '') : ''));
+  }
+  if (h) {
+    const v = Number(h.value);
+    if (Number.isFinite(v)) parts.push(Math.round(v) + '%');
+  }
+
+  return parts.join(' · ');
+}
+
 function nwApplyFilters(devices) {
   const arr = Array.isArray(devices) ? devices.slice() : [];
 
@@ -851,6 +930,15 @@ function nwRenderRooms(devices) {
     title.textContent = g.room;
 
     header.appendChild(title);
+
+    // Small room summary (e.g. temperature / humidity) based on all devices in that room.
+    const summaryText = nwComputeRoomSummary(g.room, nwAllDevices);
+    if (summaryText) {
+      const summary = document.createElement('div');
+      summary.className = 'nw-sh-room__summary';
+      summary.textContent = summaryText;
+      header.appendChild(summary);
+    }
     section.appendChild(header);
 
     const grid = document.createElement('div');

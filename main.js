@@ -3768,10 +3768,12 @@ buildSmartHomeDevicesFromConfig() {
       const behavior = cfgDev.behavior || {};
       const ioCfg = cfgDev.io || {};
       const size = cfgDev.size || 'm';
+      const order = (typeof cfgDev.order === 'number') ? cfgDev.order : undefined;
 
       const dev = {
         id: cfgDev.id,
         type,
+        ...(typeof order === 'number' ? { order } : {}),
         room: roomName,
         function: fnName,
         alias: cfgDev.alias || cfgDev.id,
@@ -3780,6 +3782,7 @@ buildSmartHomeDevicesFromConfig() {
           size,
           showRoom: true,
           showValue: true,
+          ...(typeof order === 'number' ? { order } : {}),
           unit: (cfgDev.ui && cfgDev.ui.unit) || cfgDev.unit || '',
           precision: (cfgDev.ui && typeof cfgDev.ui.precision === 'number')
             ? cfgDev.ui.precision

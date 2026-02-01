@@ -1,3 +1,9 @@
+## 0.6.97 (2026-02-01)
+- SmartHome VIS: Hintergrund an das Standard-VIS-Design angepasst (kein blaues Panel mehr).
+- SmartHome VIS: Raum-Header jetzt mit kleiner Summary (z. B. Temperatur/Luftfeuchte), wenn entsprechende Sensoren vorhanden sind.
+- SmartHomeConfig: Kachel-Reihenfolge per Drag&Drop (Handle) sowie über „Reihenfolge“ (Positions-Index) steuerbar.
+- Backend: Geräte-Order wird aus der SmartHomeConfig in die SmartHome-VIS übernommen.
+
 ## 0.6.96 (2026-02-01)
 - SmartHome VIS: Raum-Sektionen (statt leerer Demo-Ansicht) + Kacheln im „Apple Home“-ähnlichen Look (Glassmorphism) inkl. dynamischer Icons (An/Aus).
 - SmartHomeConfig: Kachelgröße (S/M/L/XL) auswählbar + Icon-Picker/Vorschau, damit die Einrichtung schneller und konsistenter wird.

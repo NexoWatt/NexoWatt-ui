@@ -9,6 +9,9 @@ const nwShcState = {
   validation: null,
 };
 
+// Drag&Drop ordering (devices)
+let nwDragDeviceFromIndex = null;
+
 
 /* --- Icon Picker (A11): kleine Vorschau + Standard-Icons --- */
 
@@ -744,6 +747,26 @@ function nwMoveItem(arr, index, dir) {
   });
 }
 
+function nwMoveItemTo(arr, fromIndex, toIndex) {
+  if (!Array.isArray(arr)) return;
+  const len = arr.length;
+  if (!Number.isFinite(fromIndex) || !Number.isFinite(toIndex)) return;
+  let from = Math.trunc(fromIndex);
+  let to = Math.trunc(toIndex);
+  if (from < 0 || from >= len) return;
+  if (to < 0) to = 0;
+  if (to >= len) to = len - 1;
+  if (from === to) return;
+
+  const item = arr.splice(from, 1)[0];
+  // If moved downwards, the target index shifts after removal.
+  if (from < to) to -= 1;
+  arr.splice(to, 0, item);
+  arr.forEach((it, i) => {
+    if (it) it.order = i + 1;
+  });
+}
+
 function nwReplaceRoomIdInDevices(oldId, newId) {
   if (!nwShcState.config || !Array.isArray(nwShcState.config.devices)) return;
   nwShcState.config.devices.forEach(d => {
@@ -1432,6 +1455,14 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
     const actions = document.createElement('div');
     actions.className = 'nw-config-card__header-actions';
 
+    // Drag handle (Drag&Drop ordering)
+    const btnDrag = document.createElement('button');
+    btnDrag.type = 'button';
+    btnDrag.className = 'nw-config-mini-btn nw-config-drag-handle';
+    btnDrag.textContent = '⠿';
+    btnDrag.title = 'Reihenfolge ändern (Drag&Drop)';
+    btnDrag.setAttribute('draggable', 'true');
+
     const btnUp = document.createElement('button');
     btnUp.type = 'button';
     btnUp.className = 'nw-config-mini-btn';
@@ -1493,6 +1524,56 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       nwRenderAll();
     });
 
+    // Drag&Drop: start drag from handle, drop on cards
+    btnDrag.addEventListener('dragstart', (ev) => {
+      nwDragDeviceFromIndex = index;
+      try {
+        ev.dataTransfer.effectAllowed = 'move';
+        ev.dataTransfer.setData('text/plain', String(index));
+      } catch (_e) {}
+      card.classList.add('nw-drag-src');
+    });
+
+    btnDrag.addEventListener('dragend', () => {
+      nwDragDeviceFromIndex = null;
+      card.classList.remove('nw-drag-src');
+      // cleanup potential hover states
+      document.querySelectorAll('.nw-drag-over').forEach(el => el.classList.remove('nw-drag-over'));
+    });
+
+    card.addEventListener('dragover', (ev) => {
+      // allow drop
+      ev.preventDefault();
+      card.classList.add('nw-drag-over');
+    });
+    card.addEventListener('dragleave', () => {
+      card.classList.remove('nw-drag-over');
+    });
+    card.addEventListener('drop', (ev) => {
+      ev.preventDefault();
+      card.classList.remove('nw-drag-over');
+
+      // Determine source index
+      let from = (typeof nwDragDeviceFromIndex === 'number') ? nwDragDeviceFromIndex : null;
+      if (from === null) {
+        try {
+          const raw = ev.dataTransfer.getData('text/plain');
+          const n = parseInt(String(raw || ''), 10);
+          if (Number.isFinite(n)) from = n;
+        } catch (_e) {}
+      }
+      const to = index;
+      if (from === null || !Number.isFinite(from)) return;
+      if (from === to) return;
+
+      if (!nwShcState.config || !Array.isArray(nwShcState.config.devices)) return;
+      nwMoveItemTo(nwShcState.config.devices, from, to);
+      nwNormalizeDeviceOrder();
+      nwMarkDirty(true);
+      nwRenderAll();
+    });
+
+    actions.appendChild(btnDrag);
     actions.appendChild(btnUp);
     actions.appendChild(btnDown);
     actions.appendChild(btnDup);
@@ -1522,6 +1603,31 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
     idRow.className = 'nw-config-card__row';
     idRow.textContent = 'ID: ' + (dev.id || '(ohne ID)');
     body.appendChild(idRow);
+
+    // Reihenfolge (Sortier-Index) – moves the card to the desired position
+    const orderInput = document.createElement('input');
+    orderInput.type = 'number';
+    orderInput.className = 'nw-config-input';
+    orderInput.min = '1';
+    orderInput.max = String(devices.length);
+    orderInput.step = '1';
+    orderInput.value = String((typeof dev.order === 'number') ? dev.order : (index + 1));
+    orderInput.addEventListener('change', () => {
+      const raw = parseInt(String(orderInput.value || ''), 10);
+      if (!Number.isFinite(raw)) {
+        orderInput.value = String(index + 1);
+        return;
+      }
+      const targetPos = Math.max(1, Math.min(devices.length, raw));
+      const toIdx = targetPos - 1;
+      if (toIdx === index) return;
+      if (!nwShcState.config || !Array.isArray(nwShcState.config.devices)) return;
+      nwMoveItemTo(nwShcState.config.devices, index, toIdx);
+      nwNormalizeDeviceOrder();
+      nwMarkDirty(true);
+      nwRenderAll();
+    });
+    body.appendChild(nwCreateFieldRow('Reihenfolge', orderInput));
 
     // Alias
     const aliasInput = document.createElement('input');
