@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.99",
+    "version": "0.6.100",
     "news": {
+      "0.6.100": {
+        "en": "SmartHome: Thermostat popover now uses a premium gauge (Apple-like) with +/- buttons and tick marks; dimmer/blinds tile sliders are larger for touch. Logic: Added search + room filter chips and rendered logic blocks as proper NexoWatt tiles for a more premium look.",
+        "de": "SmartHome: Thermostat-Popup jetzt als wertiger Gauge (Apple-Look) mit +/- und Skala; Dimmer-/Jalousie-Slider in den Kacheln größer (touch-freundlich). Logik: Suche + Raum-Filter ergänzt und Logikblöcke als echte NexoWatt-Kacheln gerendert (wertiger Look)."
+      },
       "0.6.98": {
         "en": "SmartHomeConfig: fixed the icon selector layout so it no longer overlaps in multi-column cards; cleaned up mixed UI wording and adjusted DP test button labels.",
         "de": "SmartHomeConfig: Icon-Auswahl überlappt nicht mehr in mehrspaltigen Karten; gemischte UI-Begriffe bereinigt (Deutsch) und DP-Test-Buttons angepasst."

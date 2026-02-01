@@ -3258,6 +3258,144 @@ body{ padding-top: var(--topbar-h); }
   font-weight: 700;
 }
 
+
+/* Thermostat‑Gauge (wertiger als Halbkreis) */
+.nw-sh-gauge{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.nw-sh-gauge__canvas{
+  position: relative;
+  width: 280px;
+  max-width: 92vw;
+}
+
+.nw-sh-gauge__svg{
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.nw-sh-gauge__track{
+  stroke: rgba(148, 163, 184, 0.22);
+  stroke-width: 14;
+  stroke-linecap: round;
+}
+
+.nw-sh-gauge__active{
+  stroke-width: 14;
+  stroke-linecap: round;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,0.25));
+}
+
+.nw-sh-gauge__ticks{
+  opacity: 0.95;
+}
+
+.nw-sh-gauge__tick{
+  stroke: rgba(148, 163, 184, 0.28);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.nw-sh-gauge__tick--major{
+  stroke: rgba(148, 163, 184, 0.48);
+  stroke-width: 2.6;
+}
+
+.nw-sh-gauge__knob{
+  fill: #f8fafc;
+  stroke: rgba(2, 6, 23, 0.75);
+  stroke-width: 2;
+}
+
+.nw-sh-gauge__hit{
+  stroke: transparent;
+  stroke-width: 46;
+  stroke-linecap: round;
+  cursor: pointer;
+}
+
+.nw-sh-gauge__overlay{
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 56%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 18px;
+  pointer-events: none; /* enable clicks only on the buttons */
+}
+
+.nw-sh-gauge__btn{
+  pointer-events: auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(2, 6, 23, 0.35);
+  color: #e5e7eb;
+  font-size: 22px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.nw-sh-gauge__btn:hover{
+  border-color: rgba(34, 197, 94, 0.75);
+}
+.nw-sh-gauge__btn:active{
+  transform: translateY(1px);
+}
+
+.nw-sh-gauge__center{
+  pointer-events: none;
+  text-align: center;
+  min-width: 120px;
+}
+
+.nw-sh-gauge__value{
+  font-size: 2.2rem;
+  font-weight: 900;
+  letter-spacing: -0.3px;
+}
+
+.nw-sh-gauge__label{
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  opacity: 0.95;
+}
+
+.nw-sh-gauge__sub{
+  font-size: 0.74rem;
+  color: #9ca3af;
+  opacity: 0.95;
+  margin-top: 2px;
+}
+
+.nw-sh-gauge__minmax{
+  width: 280px;
+  max-width: 92vw;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  color: #9ca3af;
+  font-size: 0.72rem;
+  padding: 0 6px;
+  margin-top: -2px;
+}
+
+
 /* Halbkreis-Slider (Temperatur) */
 .nw-sh-dial{
   display: flex;
@@ -3343,6 +3481,16 @@ body{ padding-top: var(--topbar-h); }
 }
 
 /* größerer Regler im Tooltip/Panel */
+
+/* Medium‑groß: Slider direkt in Kacheln (touch‑freundlich) */
+.nw-sh-slider--tilebig{
+  height: 34px;
+}
+.nw-sh-slider--tilebig::-webkit-slider-runnable-track{ height: 9px; }
+.nw-sh-slider--tilebig::-webkit-slider-thumb{ width: 22px; height: 22px; margin-top: -7px; }
+.nw-sh-slider--tilebig::-moz-range-track{ height: 9px; }
+.nw-sh-slider--tilebig::-moz-range-thumb{ width: 22px; height: 22px; }
+
 .nw-sh-slider--big{
   height: 38px;
 }
