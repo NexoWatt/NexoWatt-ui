@@ -3148,3 +3148,26 @@ body{ padding-top: var(--topbar-h); }
   height: 18px;
 }
 
+/* SmartHome Config: Icon-Auswahl darf in mehrspaltigen Karten nicht überlappen */
+.nw-config-icon-row{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.nw-config-icon-row__top{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.nw-config-icon-row__top .nw-config-select{
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+

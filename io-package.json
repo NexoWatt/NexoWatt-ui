@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.97",
+    "version": "0.6.98",
     "news": {
+      "0.6.98": {
+        "en": "SmartHomeConfig: fixed the icon selector layout so it no longer overlaps in multi-column cards; cleaned up mixed UI wording and adjusted DP test button labels.",
+        "de": "SmartHomeConfig: Icon-Auswahl überlappt nicht mehr in mehrspaltigen Karten; gemischte UI-Begriffe bereinigt (Deutsch) und DP-Test-Buttons angepasst."
+      },
       "0.6.97": {
         "en": "SmartHome VIS: room headers now show a small summary (e.g. temperature/humidity) and the page uses the standard VIS background. SmartHomeConfig: device tile ordering can be changed via Drag&Drop or by position index; ordering is respected in SmartHome VIS.",
         "de": "SmartHome VIS: Raum-Header zeigen jetzt eine kleine Summary (z. B. Temperatur/Luftfeuchte) und die Seite nutzt den Standard-VIS-Hintergrund. SmartHomeConfig: Kachel-Reihenfolge per Drag&Drop oder Positions-Index; die Sortierung wird in der SmartHome-VIS übernommen."

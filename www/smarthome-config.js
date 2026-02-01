@@ -208,23 +208,23 @@ function nwValidateConfig(cfg) {
       const sw = (io && io.switch) ? io.switch : {};
       const readId = (sw && typeof sw.readId === 'string') ? sw.readId.trim() : '';
       const writeId = (sw && typeof sw.writeId === 'string') ? sw.writeId.trim() : '';
-      chkDp('Switch readId', readId);
-      chkDp('Switch writeId', writeId);
+      chkDp('Schalter lesen (readId)', readId);
+      chkDp('Schalter schreiben (writeId)', writeId);
       if (!readId && !writeId) {
-        nwPushIssue(out, 'error', 'Gerät', 'Switch/Scene ohne Datenpunkt (readId/writeId fehlt).', ent);
+        nwPushIssue(out, 'error', 'Gerät', 'Schalter/Szene ohne Datenpunkt (readId/writeId fehlt).', ent);
       } else if (readOnly && !readId) {
-        nwPushIssue(out, 'error', 'Gerät', 'readOnly aktiv, aber Switch readId fehlt.', ent);
+        nwPushIssue(out, 'error', 'Gerät', 'Nur Anzeige (readOnly) aktiv, aber Schalter readId fehlt.', ent);
       }
     } else if (type === 'dimmer') {
       const lvl = (io && io.level) ? io.level : {};
       const readId = (lvl && typeof lvl.readId === 'string') ? lvl.readId.trim() : '';
       const writeId = (lvl && typeof lvl.writeId === 'string') ? lvl.writeId.trim() : '';
-      chkDp('Level readId', readId);
-      chkDp('Level writeId', writeId);
+      chkDp('Wert/Position lesen (readId)', readId);
+      chkDp('Wert/Position schreiben (writeId)', writeId);
       if (!readId && !writeId) {
-        nwPushIssue(out, 'error', 'Gerät', 'Dimmer ohne Level-Datenpunkt (readId/writeId fehlt).', ent);
+        nwPushIssue(out, 'error', 'Gerät', 'Dimmer ohne Wert/Position-Datenpunkt (readId/writeId fehlt).', ent);
       } else if (readOnly && !readId) {
-        nwPushIssue(out, 'error', 'Gerät', 'readOnly aktiv, aber Level readId fehlt.', ent);
+        nwPushIssue(out, 'error', 'Gerät', 'Nur Anzeige (readOnly) aktiv, aber Wert/Position readId fehlt.', ent);
       }
     } else if (type === 'blind') {
       const lvl = (io && io.level) ? io.level : {};
@@ -234,16 +234,16 @@ function nwValidateConfig(cfg) {
       const upId = (cover && typeof cover.upId === 'string') ? cover.upId.trim() : '';
       const downId = (cover && typeof cover.downId === 'string') ? cover.downId.trim() : '';
       const stopId = (cover && typeof cover.stopId === 'string') ? cover.stopId.trim() : '';
-      chkDp('Level readId', posRead);
-      chkDp('Level writeId', posWrite);
-      chkDp('Cover upId', upId);
-      chkDp('Cover downId', downId);
-      chkDp('Cover stopId', stopId);
+      chkDp('Wert/Position lesen (readId)', posRead);
+      chkDp('Wert/Position schreiben (writeId)', posWrite);
+      chkDp('Taster Auf (upId)', upId);
+      chkDp('Taster Ab (downId)', downId);
+      chkDp('Taster Stop (stopId)', stopId);
       if (!posRead && !posWrite && !upId && !downId && !stopId) {
         nwPushIssue(out, 'error', 'Gerät', 'Jalousie/Rollladen ohne Datenpunkte (Position oder up/down/stop fehlt).', ent);
       }
       if (readOnly && !posRead && !upId && !downId && !stopId) {
-        nwPushIssue(out, 'error', 'Gerät', 'readOnly aktiv, aber kein Read-DP (Position) und keine Tasten-DPs gesetzt.', ent);
+        nwPushIssue(out, 'error', 'Gerät', 'Nur Anzeige (readOnly) aktiv, aber kein Read-DP (Position) und keine Tasten-DPs gesetzt.', ent);
       }
     } else if (type === 'rtr') {
       const cl = (io && io.climate) ? io.climate : {};
@@ -251,10 +251,10 @@ function nwValidateConfig(cfg) {
       const sp = (cl && typeof cl.setpointId === 'string') ? cl.setpointId.trim() : '';
       const mode = (cl && typeof cl.modeId === 'string') ? cl.modeId.trim() : '';
       const hum = (cl && typeof cl.humidityId === 'string') ? cl.humidityId.trim() : '';
-      chkDp('Climate currentTempId', cur);
-      chkDp('Climate setpointId', sp);
-      chkDp('Climate modeId', mode);
-      chkDp('Climate humidityId', hum);
+      chkDp('Klima Ist-Temperatur (currentTempId)', cur);
+      chkDp('Klima Sollwert (setpointId)', sp);
+      chkDp('Klima Modus (modeId)', mode);
+      chkDp('Klima Luftfeuchte (humidityId)', hum);
       if (!cur && !sp) {
         nwPushIssue(out, 'error', 'Gerät', 'RTR ohne currentTempId und ohne setpointId (keine Anzeige/Regelung möglich).', ent);
       }
@@ -264,7 +264,7 @@ function nwValidateConfig(cfg) {
     } else if (type === 'sensor') {
       const se = (io && io.sensor) ? io.sensor : {};
       const readId = (se && typeof se.readId === 'string') ? se.readId.trim() : '';
-      chkDp('Sensor readId', readId);
+      chkDp('Sensor lesen (readId)', readId);
       if (!readId) {
         nwPushIssue(out, 'error', 'Gerät', 'Sensor ohne readId.', ent);
       }
@@ -1111,7 +1111,7 @@ function nwAddDeviceFromTemplate(templateType) {
 
   const t = String(templateType || '').trim();
   if (!t) {
-    nwSetStatus('Bitte zuerst ein Template auswählen.', 'error');
+    nwSetStatus('Bitte zuerst eine Vorlage auswählen.', 'error');
     return;
   }
 
@@ -1316,8 +1316,8 @@ function nwCreateDpInput(labelText, value, onChange) {
   const btnTest = document.createElement('button');
   btnTest.type = 'button';
   btnTest.className = 'nw-config-dp-button';
-  btnTest.textContent = 'Test';
-  btnTest.title = 'DP lesen (Installer)';
+  btnTest.textContent = 'Lesen';
+  btnTest.title = 'Datenpunkt lesen (Installer)';
 
   btnTest.addEventListener('click', async () => {
     const id = input.value.trim();
@@ -1355,8 +1355,8 @@ function nwCreateDpInput(labelText, value, onChange) {
     btnSet = document.createElement('button');
     btnSet.type = 'button';
     btnSet.className = 'nw-config-dp-button';
-    btnSet.textContent = 'Set';
-    btnSet.title = 'DP schreiben (Installer)';
+    btnSet.textContent = 'Schreiben';
+    btnSet.title = 'Datenpunkt schreiben (Installer)';
 
     btnSet.addEventListener('click', async () => {
       const id = input.value.trim();
@@ -1740,31 +1740,26 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
     });
     body.appendChild(nwCreateFieldRow('Kachelgröße', sizeSelect));
 
-    // Icon
-    const iconInput = document.createElement('input');
-    iconInput.type = 'text';
-    iconInput.className = 'nw-config-input';
-    iconInput.placeholder = 'z.B. bulb, plug, thermostat, blinds, tv, speaker… oder Emoji';
-    iconInput.value = dev.icon || '';
-    iconInput.style.flex = '1';
-
+    // Icon (Dropdown + Vorschau, optional benutzerdefiniert)
     const iconSelect = document.createElement('select');
     iconSelect.className = 'nw-config-select';
-    iconSelect.style.minWidth = '170px';
+
     const iconOptions = [
-      { value: '', label: '(leer / Auto)' },
+      { value: '', label: '(leer / automatisch)' },
       { value: 'bulb', label: '💡 Licht (bulb)' },
       { value: 'plug', label: '🔌 Steckdose (plug)' },
       { value: 'fire', label: '🔥 Kamin (fire)' },
       { value: 'thermostat', label: '🌡️ Heizung (thermostat)' },
       { value: 'thermometer', label: '🌡️ Temperatur (thermometer)' },
       { value: 'blinds', label: '🪟 Jalousie (blinds)' },
-      { value: 'tv', label: '📺 TV (tv)' },
+      { value: 'tv', label: '📺 Fernseher (tv)' },
       { value: 'speaker', label: '🔊 Audio (speaker)' },
       { value: 'scene', label: '✨ Szene (scene)' },
       { value: 'sensor', label: '📍 Sensor (sensor)' },
-      { value: 'generic', label: '⬜ Generic (generic)' },
+      { value: 'generic', label: '⬜ Allgemein (generic)' },
+      { value: '__custom__', label: 'Benutzerdefiniert…' },
     ];
+
     iconOptions.forEach(def => {
       const opt = document.createElement('option');
       opt.value = def.value;
@@ -1772,28 +1767,60 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       iconSelect.appendChild(opt);
     });
 
+    const iconCustomInput = document.createElement('input');
+    iconCustomInput.type = 'text';
+    iconCustomInput.className = 'nw-config-input';
+    iconCustomInput.placeholder = 'Benutzerdefiniert: Icon-Name (z. B. bulb) oder Emoji';
+    iconCustomInput.autocomplete = 'off';
+    iconCustomInput.style.display = 'none';
+
     const iconPreview = document.createElement('div');
     iconPreview.className = 'nw-config-icon-preview';
 
+    const setCustomVisible = (on) => {
+      iconCustomInput.style.display = on ? 'block' : 'none';
+    };
+
     const syncIconUi = () => {
-      const raw = String(iconInput.value || '').trim();
+      const raw = String((nwShcState.config.devices[index] && nwShcState.config.devices[index].icon) || '').trim();
       const key = nwShcNormalizeIconName(raw);
-      // Select only matches known icon names; otherwise fall back to "".
-      if (key && iconOptions.some(o => o.value === key)) iconSelect.value = key;
-      else iconSelect.value = '';
+      const known = !!(key && iconOptions.some(o => o.value === key && o.value !== '__custom__'));
+
+      if (!raw) {
+        iconSelect.value = '';
+        iconCustomInput.value = '';
+        setCustomVisible(false);
+      } else if (known) {
+        iconSelect.value = key;
+        iconCustomInput.value = raw;
+        setCustomVisible(false);
+      } else {
+        iconSelect.value = '__custom__';
+        iconCustomInput.value = raw;
+        setCustomVisible(true);
+      }
+
       nwShcRenderIconPreview(iconPreview, raw);
     };
 
     iconSelect.addEventListener('change', () => {
-      const val = iconSelect.value || '';
-      iconInput.value = val;
-      nwShcState.config.devices[index].icon = val || null;
+      const val = String(iconSelect.value || '');
+      if (val === '__custom__') {
+        setCustomVisible(true);
+        const raw = String((nwShcState.config.devices[index] && nwShcState.config.devices[index].icon) || '').trim();
+        iconCustomInput.value = raw;
+        nwShcState.config.devices[index].icon = raw || null;
+      } else {
+        setCustomVisible(false);
+        iconCustomInput.value = val;
+        nwShcState.config.devices[index].icon = val || null;
+      }
       nwMarkDirty(true);
       syncIconUi();
     });
 
-    iconInput.addEventListener('input', () => {
-      const v = iconInput.value || '';
+    iconCustomInput.addEventListener('input', () => {
+      const v = String(iconCustomInput.value || '').trim();
       nwShcState.config.devices[index].icon = v || null;
       nwMarkDirty(true);
       syncIconUi();
@@ -1803,12 +1830,15 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
     syncIconUi();
 
     const iconWrap = document.createElement('div');
-    iconWrap.style.display = 'flex';
-    iconWrap.style.alignItems = 'center';
-    iconWrap.style.gap = '8px';
-    iconWrap.appendChild(iconInput);
-    iconWrap.appendChild(iconSelect);
-    iconWrap.appendChild(iconPreview);
+    iconWrap.className = 'nw-config-icon-row';
+
+    const iconTop = document.createElement('div');
+    iconTop.className = 'nw-config-icon-row__top';
+    iconTop.appendChild(iconSelect);
+    iconTop.appendChild(iconPreview);
+
+    iconWrap.appendChild(iconTop);
+    iconWrap.appendChild(iconCustomInput);
 
     body.appendChild(nwCreateFieldRow('Icon', iconWrap));
 
@@ -1839,7 +1869,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       nwMarkDirty(true);
     });
     const roText = document.createElement('span');
-    roText.textContent = 'readOnly';
+    roText.textContent = 'Nur Anzeige';
 
     readOnlyLabel.appendChild(roCb);
     readOnlyLabel.appendChild(roText);
@@ -1874,12 +1904,12 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
 
     if (io.switch) {
       const s = io.switch;
-      const readRow = nwCreateDpInput('Switch readId', s.readId || '', (val) => {
+      const readRow = nwCreateDpInput('Schalter lesen (readId)', s.readId || '', (val) => {
         nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
         nwShcState.config.devices[index].io.switch = nwShcState.config.devices[index].io.switch || {};
         nwShcState.config.devices[index].io.switch.readId = val || null;
       });
-      const writeRow = nwCreateDpInput('Switch writeId', s.writeId || '', (val) => {
+      const writeRow = nwCreateDpInput('Schalter schreiben (writeId)', s.writeId || '', (val) => {
         nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
         nwShcState.config.devices[index].io.switch = nwShcState.config.devices[index].io.switch || {};
         nwShcState.config.devices[index].io.switch.writeId = val || null;
@@ -1890,12 +1920,12 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
 
     if (io.level) {
       const l = io.level;
-      const readRow = nwCreateDpInput('Level readId', l.readId || '', (val) => {
+      const readRow = nwCreateDpInput('Wert/Position lesen (readId)', l.readId || '', (val) => {
         nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
         nwShcState.config.devices[index].io.level = nwShcState.config.devices[index].io.level || {};
         nwShcState.config.devices[index].io.level.readId = val || null;
       });
-      const writeRow = nwCreateDpInput('Level writeId', l.writeId || '', (val) => {
+      const writeRow = nwCreateDpInput('Wert/Position schreiben (writeId)', l.writeId || '', (val) => {
         nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
         nwShcState.config.devices[index].io.level = nwShcState.config.devices[index].io.level || {};
         nwShcState.config.devices[index].io.level.writeId = val || null;
@@ -1937,7 +1967,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       minMaxCtl.appendChild(minInput);
       minMaxCtl.appendChild(maxInput);
 
-      const minMaxRow = nwCreateFieldRow('Level min/max', minMaxCtl);
+      const minMaxRow = nwCreateFieldRow('Bereich min/max', minMaxCtl);
 
       body.appendChild(readRow);
       body.appendChild(writeRow);
@@ -1946,17 +1976,17 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
 
     if (io.cover) {
       const c = io.cover;
-      const upRow = nwCreateDpInput('Cover upId', c.upId || '', (val) => {
+      const upRow = nwCreateDpInput('Taster Auf (upId)', c.upId || '', (val) => {
         nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
         nwShcState.config.devices[index].io.cover = nwShcState.config.devices[index].io.cover || {};
         nwShcState.config.devices[index].io.cover.upId = val || null;
       });
-      const downRow = nwCreateDpInput('Cover downId', c.downId || '', (val) => {
+      const downRow = nwCreateDpInput('Taster Ab (downId)', c.downId || '', (val) => {
         nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
         nwShcState.config.devices[index].io.cover = nwShcState.config.devices[index].io.cover || {};
         nwShcState.config.devices[index].io.cover.downId = val || null;
       });
-      const stopRow = nwCreateDpInput('Cover stopId', c.stopId || '', (val) => {
+      const stopRow = nwCreateDpInput('Taster Stop (stopId)', c.stopId || '', (val) => {
         nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
         nwShcState.config.devices[index].io.cover = nwShcState.config.devices[index].io.cover || {};
         nwShcState.config.devices[index].io.cover.stopId = val || null;
@@ -1968,22 +1998,22 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
 
     if (io.climate) {
       const cl = io.climate;
-      const curRow = nwCreateDpInput('Climate currentTempId', cl.currentTempId || '', (val) => {
+      const curRow = nwCreateDpInput('Klima Ist-Temperatur (currentTempId)', cl.currentTempId || '', (val) => {
         nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
         nwShcState.config.devices[index].io.climate = nwShcState.config.devices[index].io.climate || {};
         nwShcState.config.devices[index].io.climate.currentTempId = val || null;
       });
-      const spRow = nwCreateDpInput('Climate setpointId', cl.setpointId || '', (val) => {
+      const spRow = nwCreateDpInput('Klima Sollwert (setpointId)', cl.setpointId || '', (val) => {
         nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
         nwShcState.config.devices[index].io.climate = nwShcState.config.devices[index].io.climate || {};
         nwShcState.config.devices[index].io.climate.setpointId = val || null;
       });
-      const modeRow = nwCreateDpInput('Climate modeId', cl.modeId || '', (val) => {
+      const modeRow = nwCreateDpInput('Klima Modus (modeId)', cl.modeId || '', (val) => {
         nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
         nwShcState.config.devices[index].io.climate = nwShcState.config.devices[index].io.climate || {};
         nwShcState.config.devices[index].io.climate.modeId = val || null;
       });
-      const humRow = nwCreateDpInput('Climate humidityId', cl.humidityId || '', (val) => {
+      const humRow = nwCreateDpInput('Klima Luftfeuchte (humidityId)', cl.humidityId || '', (val) => {
         nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
         nwShcState.config.devices[index].io.climate = nwShcState.config.devices[index].io.climate || {};
         nwShcState.config.devices[index].io.climate.humidityId = val || null;
@@ -1997,7 +2027,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       const minSpInput = document.createElement('input');
       minSpInput.type = 'number';
       minSpInput.className = 'nw-config-input';
-      minSpInput.placeholder = 'Min °C';
+      minSpInput.placeholder = 'Min. °C';
       if (typeof cl.minSetpoint === 'number') minSpInput.value = String(cl.minSetpoint);
       minSpInput.addEventListener('change', () => {
         const v = minSpInput.value.trim();
@@ -2011,7 +2041,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       const maxSpInput = document.createElement('input');
       maxSpInput.type = 'number';
       maxSpInput.className = 'nw-config-input';
-      maxSpInput.placeholder = 'Max °C';
+      maxSpInput.placeholder = 'Max. °C';
       if (typeof cl.maxSetpoint === 'number') maxSpInput.value = String(cl.maxSetpoint);
       maxSpInput.addEventListener('change', () => {
         const v = maxSpInput.value.trim();
@@ -2025,7 +2055,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       minMaxCtl.appendChild(minSpInput);
       minMaxCtl.appendChild(maxSpInput);
 
-      const minMaxRow = nwCreateFieldRow('Setpoint min/max', minMaxCtl);
+      const minMaxRow = nwCreateFieldRow('Sollwert min/max', minMaxCtl);
 
       body.appendChild(curRow);
       body.appendChild(spRow);
@@ -2036,7 +2066,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
 
     if (io.sensor) {
       const se = io.sensor;
-      const readRow = nwCreateDpInput('Sensor readId', se.readId || '', (val) => {
+      const readRow = nwCreateDpInput('Sensor lesen (readId)', se.readId || '', (val) => {
         nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
         nwShcState.config.devices[index].io.sensor = nwShcState.config.devices[index].io.sensor || {};
         nwShcState.config.devices[index].io.sensor.readId = val || null;
