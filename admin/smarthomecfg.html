@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <title>NexoWatt – SmartHome Config</title>
+  <style>
+    body{background:#0b0d0f;color:#e7edf2;font-family:system-ui,Segoe UI,Roboto,Ubuntu,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+    .box{opacity:.95;text-align:center;max-width:720px;padding:24px}
+    .title{font-size:22px;margin:0 0 10px 0}
+    .sub{opacity:.8;margin:0 0 18px 0;font-size:14px;line-height:1.4}
+    code{font-family:ui-monospace,Menlo,Consolas,monospace}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2 class="title">NexoWatt – SmartHome Config</h2>
+    <p class="sub">Weiterleitung wird vorbereitet…</p>
+    <div id="msg" class="sub">Port wird geladen…</div>
+  </div>
+
+  <script>
+  (function(){
+    function getQuery(key){ const m = new URLSearchParams(window.location.search); return m.get(key); }
+    var inst = getQuery('instance') || '0';
+
+    function buildBase(port){
+      var host = window.location.hostname;
+      var proto = window.location.protocol;
+      return proto + '//' + host + ':' + port;
+    }
+
+    function go(port){
+      var base = buildBase(port);
+      var url = base + '/smarthome-config.html';
+      var msg = document.getElementById('msg');
+      if (msg) msg.innerHTML = 'Öffne: <code>' + url + '</code>';
+      try { window.top.location.href = url; } catch(_e) { window.location.href = url; }
+    }
+
+    function fallback(){ go(8188); }
+
+    try {
+      if (window.parent && window.parent.servConn) {
+        window.parent.servConn.getObject('system.adapter.nexowatt-vis.' + inst, function(err, obj){
+          var port = (obj && obj.native && obj.native.port) || 8188;
+          go(port);
+        });
+      } else {
+        fallback();
+      }
+    } catch(e) {
+      fallback();
+    }
+  })();
+  </script>
+</body>
+</html>

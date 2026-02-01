@@ -133,6 +133,29 @@
           "md": 12
         }
       }
+    },
+    "smarthome": {
+      "type": "panel",
+      "label": "SmartHome",
+      "title": "SmartHome",
+      "items": {
+        "__smarthomeInfo": {
+          "type": "staticText",
+          "text": "SmartHome: Aktiviert die SmartHome-Ansicht in der VIS (Header-Reiter + Menülink).\nDie Konfiguration (Räume/Funktionen/Geräte + Datenpunkt-Zuordnung) erfolgt in der SmartHome-Config Seite.\n\nSmartHome Config öffnen:\n• Im Adapter-Reiter \"Tab\" auf \"SmartHome Config\" klicken.\n• Oder direkt aus dem Admin: /adapter/nexowatt-vis/smarthomecfg.html?instance=<INSTANZ>\n• Alternativ direkt per Port: http://<HOST>:<PORT>/smarthome-config.html\n\nSmartHome VIS öffnen:\n• Im Adapter-Reiter \"Tab\" auf \"SmartHome VIS\" klicken.\n• Oder direkt aus dem Admin: /adapter/nexowatt-vis/smarthomevis.html?instance=<INSTANZ>\n• Alternativ direkt per Port: http://<HOST>:<PORT>/smarthome.html\n\nHinweis: Änderungen an den Adapter-Einstellungen werden von ioBroker mit einem Adapter-Neustart übernommen.",
+          "xs": 12,
+          "sm": 12,
+          "md": 12
+        },
+        "smartHome.enabled": {
+          "type": "checkbox",
+          "label": "SmartHome aktivieren",
+          "default": false,
+          "attr": "smartHome.enabled",
+          "xs": 12,
+          "sm": 6,
+          "md": 6
+        }
+      }
     }
   }
 }

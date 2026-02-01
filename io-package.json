@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.91",
+    "version": "0.6.92",
     "news": {
+      "0.6.92": {
+        "en": "Admin: Added SmartHome tab (enable toggle + open links) and extended the Installer 'Tab' page with SmartHome VIS/Config shortcuts.",
+        "de": "Admin: Neuer SmartHome-Reiter (Aktivieren-Schalter + Öffnen-Links) und Installer-\"Tab\" um SmartHome VIS/Config-Shortcuts erweitert."
+      },
       "0.6.91": {
         "en": "Tariff: PV season profile AI is now always active (customer-friendly default). Manual quarter base factors remain optional as fine-tuning.",
         "de": "Tarif: PV-Saisonprofil KI ist jetzt immer aktiv (kundenfreundlicher Standard). Manuelle Quartals-Basisfaktoren bleiben optional als Feintuning."
