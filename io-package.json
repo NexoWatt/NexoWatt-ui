@@ -1,11 +1,15 @@
 {
   "common": {
     "name": "nexowatt-vis",
-  "version": "0.6.101",
+    "version": "0.6.102",
     "news": {
+      "0.6.102": {
+        "en": "NexoLogic: Multi-page logic projects (pages), per-page enable/disable, zoom controls, and fixed save error in the editor.",
+        "de": "NexoLogic: Mehrseitige Logik-Projekte (Seiten), Aktivieren/Deaktivieren pro Seite, Zoom-Steuerung und Speichern-Fehler im Editor behoben."
+      },
       "0.6.101": {
-        "en": "NexoLogic: Introduced a first Gira-like node/graph logic editor (modules, wiring, DP picker, save/import/export) and a lightweight runtime engine that evaluates basic logic/math/timer blocks event-driven.",
-        "de": "NexoLogic: Erster Gira-ähnlicher Node/Graph-Logikeditor (Module, Verbindungen, DP-Picker, Speichern/Import/Export) plus schlanke Runtime, die Grundbausteine (Logik/Mathe/Zeit) event-driven ausführt."
+        "en": "NexoLogic: Introduced a first node/graph logic editor (modules, wiring, DP picker, save/import/export) and a lightweight runtime engine that evaluates basic logic/math/timer blocks event-driven.",
+        "de": "NexoLogic: Erster Node/Graph-Logikeditor (Module, Verbindungen, DP-Picker, Speichern/Import/Export) plus schlanke Runtime, die Grundbausteine (Logik/Mathe/Zeit) event-driven ausführt."
       },
       "0.6.100": {
         "en": "SmartHome: Thermostat popover now uses a premium gauge (Apple-like) with +/- buttons and tick marks; dimmer/blinds tile sliders are larger for touch. Logic: Added search + room filter chips and rendered logic blocks as proper NexoWatt tiles for a more premium look.",

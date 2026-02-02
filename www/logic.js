@@ -1,4 +1,4 @@
-/* NexoLogic – Node/Graph Logic Editor (Gira‑ähnlich, Basis) */
+/* NexoLogic – Node/Graph Logik-Editor (Basis) */
 
 // -----------------------------
 // Helpers
@@ -6,8 +6,11 @@
 const nwLE = {
   cfg: null,
   graph: null,
+  graphId: null,
   lib: null,
   el: {},
+
+  zoom: 1,
 
   selectedNodeId: null,
   dragging: null,
@@ -466,13 +469,138 @@ function nwDefaultGraph() {
   };
 }
 
+function nwEnsureConfigDefaults(cfg) {
+  if (!cfg || typeof cfg !== 'object') cfg = {};
+  if (!Array.isArray(cfg.graphs)) cfg.graphs = [];
+  if (!cfg.graphs.length) cfg.graphs = nwDefaultGraph().graphs;
+  if (!cfg.version) cfg.version = 1;
+  return cfg;
+}
+
+function nwGetGraphById(cfg, id) {
+  cfg = nwEnsureConfigDefaults(cfg);
+  const graphs = cfg.graphs;
+  let g = null;
+  if (id) g = graphs.find(x => x && x.id === id);
+  if (!g) g = graphs.find(x => x && x.id === 'main') || graphs[0];
+  if (!g) {
+    cfg.graphs = nwDefaultGraph().graphs;
+    g = cfg.graphs[0];
+  }
+  return g;
+}
+
 function nwGetMainGraph(cfg) {
-  const c = cfg && typeof cfg === 'object' ? cfg : null;
-  const graphs = c && Array.isArray(c.graphs) ? c.graphs : [];
-  const g = graphs.find(x => x && x.id === 'main') || graphs[0];
-  if (g) return g;
-  const def = nwDefaultGraph();
-  return def.graphs[0];
+  return nwGetGraphById(cfg, 'main');
+}
+
+
+function nwRenderGraphSelector() {
+  const sel = nwLE.el.graphSelect;
+  if (!sel) return;
+  const cfg = nwEnsureConfigDefaults(nwLE.cfg || {});
+  sel.innerHTML = '';
+  const graphs = Array.isArray(cfg.graphs) ? cfg.graphs : [];
+  for (const g of graphs) {
+    if (!g || typeof g !== 'object') continue;
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    const dis = (g.enabled === false);
+    const name = g.name || g.id || 'Logik';
+    opt.textContent = dis ? `${name} (deaktiviert)` : name;
+    sel.appendChild(opt);
+  }
+  if (nwLE.graphId) sel.value = nwLE.graphId;
+}
+
+function nwUpdateGraphControls() {
+  const g = nwLE.graph;
+  const chk = nwLE.el.graphEnabled;
+  if (chk) chk.checked = !(g && g.enabled === false);
+}
+
+function nwSelectGraph(id, opts = {}) {
+  const cfg = nwEnsureConfigDefaults(nwLE.cfg || {});
+  const g = nwGetGraphById(cfg, id);
+  nwLE.cfg = cfg;
+  nwLE.graph = g;
+  nwLE.graphId = g && g.id ? g.id : null;
+  try { if (nwLE.graphId) localStorage.setItem('nwLE.graphId', nwLE.graphId); } catch {}
+
+  nwEnsureGraphDefaults(g);
+  nwRenderGraphSelector();
+  nwUpdateGraphControls();
+
+  if (!opts || opts.skipRender !== true) {
+    nwRenderGraph();
+  }
+}
+
+function nwAddGraph() {
+  const cfg = nwEnsureConfigDefaults(nwLE.cfg || {});
+  const name = (prompt('Name der neuen Logikseite:', 'Neue Logik') || '').trim();
+  if (!name) return;
+  let id = nwUuid('g');
+  // ensure unique
+  const ids = new Set(cfg.graphs.map(x => x && x.id).filter(Boolean));
+  while (ids.has(id)) id = nwUuid('g');
+  const g = {
+    id,
+    name,
+    enabled: true,
+    board: { w: 2400, h: 1400 },
+    nodes: [],
+    links: [],
+  };
+  cfg.graphs.push(g);
+  nwLE.cfg = cfg;
+  nwSelectGraph(id);
+  nwMarkDirty();
+}
+
+function nwDuplicateGraph() {
+  const cfg = nwEnsureConfigDefaults(nwLE.cfg || {});
+  const src = nwLE.graph;
+  if (!src) return;
+  let id = nwUuid('g');
+  const ids = new Set(cfg.graphs.map(x => x && x.id).filter(Boolean));
+  while (ids.has(id)) id = nwUuid('g');
+  const copy = nwJsonClone(src);
+  copy.id = id;
+  copy.name = `${src.name || 'Logik'} (Kopie)`;
+  if (copy.enabled === undefined) copy.enabled = true;
+  cfg.graphs.push(copy);
+  nwLE.cfg = cfg;
+  nwSelectGraph(id);
+  nwMarkDirty();
+}
+
+function nwRenameGraph() {
+  const g = nwLE.graph;
+  if (!g) return;
+  const name = (prompt('Neuer Name der Logikseite:', g.name || g.id || '') || '').trim();
+  if (!name) return;
+  g.name = name;
+  nwRenderGraphSelector();
+  nwMarkDirty();
+}
+
+function nwDeleteGraph() {
+  const cfg = nwEnsureConfigDefaults(nwLE.cfg || {});
+  if (!Array.isArray(cfg.graphs) || cfg.graphs.length <= 1) {
+    alert('Mindestens eine Logikseite muss vorhanden sein.');
+    return;
+  }
+  const g = nwLE.graph;
+  if (!g) return;
+  if (!confirm(`Logikseite "${g.name || g.id}" wirklich löschen?`)) return;
+  const idx = cfg.graphs.findIndex(x => x && x.id === g.id);
+  if (idx < 0) return;
+  cfg.graphs.splice(idx, 1);
+  nwLE.cfg = cfg;
+  const next = cfg.graphs[Math.min(idx, cfg.graphs.length - 1)];
+  nwSelectGraph(next && next.id ? next.id : 'main');
+  nwMarkDirty();
 }
 
 function nwMarkDirty() {
@@ -498,16 +626,98 @@ function nwEnsureBoardSize() {
   if (!g) return;
   const board = nwLE.el.board;
   if (!board) return;
+
   const w = Math.max(800, Number(g.board && g.board.w) || 2400);
   const h = Math.max(600, Number(g.board && g.board.h) || 1400);
+
+  const z = nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5);
+  nwLE.zoom = z;
+
+  const scale = nwLE.el.boardScale;
+  if (scale) {
+    scale.style.width = `${Math.round(w * z)}px`;
+    scale.style.height = `${Math.round(h * z)}px`;
+  }
+
   board.style.width = `${w}px`;
   board.style.height = `${h}px`;
+  board.style.transform = `scale(${z})`;
+
   const svg = nwLE.el.wires;
   if (svg) {
     svg.setAttribute('width', String(w));
     svg.setAttribute('height', String(h));
     svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
   }
+
+  nwUpdateZoomLabel();
+}
+
+
+function nwUpdateZoomLabel() {
+  const el = nwLE.el.zoomLabel;
+  if (!el) return;
+  const z = nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5);
+  el.textContent = `${Math.round(z * 100)}%`;
+}
+
+function nwSetZoom(newZoom, opts = {}) {
+  const wrap = nwLE.el.boardWrap;
+  const g = nwLE.graph;
+  const w = Math.max(800, Number(g && g.board && g.board.w) || 2400);
+  const h = Math.max(600, Number(g && g.board && g.board.h) || 1400);
+
+  const oldZ = nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5);
+  const z = nwClamp(nwNum(newZoom, 1), 0.4, 2.5);
+  if (Math.abs(z - oldZ) < 0.001) return;
+
+  // keep visual center stable
+  let cx = 0, cy = 0;
+  if (wrap) {
+    cx = (wrap.scrollLeft + (wrap.clientWidth / 2)) / oldZ;
+    cy = (wrap.scrollTop + (wrap.clientHeight / 2)) / oldZ;
+  }
+
+  nwLE.zoom = z;
+  try { localStorage.setItem('nwLE.zoom', String(z)); } catch {}
+
+  nwEnsureBoardSize();
+  nwUpdateAllWirePaths();
+
+  if (wrap) {
+    const nx = cx * z - (wrap.clientWidth / 2);
+    const ny = cy * z - (wrap.clientHeight / 2);
+    wrap.scrollLeft = Math.max(0, nx);
+    wrap.scrollTop = Math.max(0, ny);
+  }
+
+  // ensure fit bounds
+  const scale = nwLE.el.boardScale;
+  if (scale) {
+    scale.style.width = `${Math.round(w * z)}px`;
+    scale.style.height = `${Math.round(h * z)}px`;
+  }
+}
+
+function nwZoomIn() {
+  nwSetZoom(nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5) + 0.1);
+}
+function nwZoomOut() {
+  nwSetZoom(nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5) - 0.1);
+}
+function nwZoomReset() {
+  nwSetZoom(1);
+}
+function nwZoomFit() {
+  const wrap = nwLE.el.boardWrap;
+  const g = nwLE.graph;
+  if (!wrap || !g) return;
+  const w = Math.max(800, Number(g.board && g.board.w) || 2400);
+  const h = Math.max(600, Number(g.board && g.board.h) || 1400);
+  const zx = (wrap.clientWidth - 24) / w;
+  const zy = (wrap.clientHeight - 24) / h;
+  const z = Math.min(zx, zy);
+  nwSetZoom(z);
 }
 
 function nwRenderPalette() {
@@ -704,14 +914,15 @@ function nwUpdateAllWirePaths() {
   if (!svg || !board) return;
 
   const boardRect = board.getBoundingClientRect();
+  const z = nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5);
 
   const getPortPos = (nodeId, portKey, dir) => {
     const el = board.querySelector(`.nw-le-port[data-node-id="${CSS.escape(nodeId)}"][data-port-key="${CSS.escape(portKey)}"][data-port-dir="${dir}"] .nw-le-port__dot`);
     if (!el) return null;
     const r = el.getBoundingClientRect();
     return {
-      x: (r.left + r.width/2) - boardRect.left,
-      y: (r.top + r.height/2) - boardRect.top,
+      x: ((r.left + r.width/2) - boardRect.left) / z,
+      y: ((r.top + r.height/2) - boardRect.top) / z,
     };
   };
 
@@ -963,8 +1174,8 @@ function nwAddNode(type) {
     type,
     label: def.name,
     enabled: true,
-    x: scrollL + 140,
-    y: scrollT + 100,
+    x: (scrollL + 140) / nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5),
+    y: (scrollT + 100) / nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5),
     params: nwJsonClone(def.defaults) || {},
   };
   g.nodes = Array.isArray(g.nodes) ? g.nodes : [];
@@ -1183,32 +1394,24 @@ function nwCloseImport() {
 function nwApplyImport() {
   const t = nwLE.el.importText;
   if (!t) return;
-  let obj = null;
+  const raw = t.value || '';
+  let cfg = null;
   try {
-    obj = JSON.parse(t.value);
+    cfg = JSON.parse(raw);
   } catch (e) {
-    nwSetStatus('Import: JSON ist ungültig.', false);
+    alert('Ungültiges JSON');
     return;
   }
-  if (!obj || typeof obj !== 'object') {
-    nwSetStatus('Import: ungültiges Format.', false);
-    return;
-  }
-
-  // Basic normalize
-  if (!Array.isArray(obj.graphs)) obj.graphs = [];
-  if (!obj.graphs.length) obj.graphs = nwDefaultGraph().graphs;
-  if (!obj.version) obj.version = 1;
-
-  nwLE.cfg = obj;
-  nwLE.graph = nwGetMainGraph(nwLE.cfg);
-  nwEnsureGraphDefaults(nwLE.graph);
-  nwLE.selectedNodeId = null;
+  nwLE.cfg = nwEnsureConfigDefaults(cfg);
+  // nach Import auf "main" (oder erste Seite) springen
+  nwRenderGraphSelector();
+  nwSelectGraph('main', { skipRender: true });
   nwRenderGraph();
   nwRenderInspector();
-  nwCloseImport();
   nwMarkDirty();
+  nwCloseImport();
 }
+
 
 function nwOpenExport() {
   const modal = nwLE.el.exportModal;
@@ -1278,21 +1481,26 @@ function nwEnsureGraphDefaults(g) {
 // Global events (drag, connect)
 // -----------------------------
 function nwInstallGlobalHandlers() {
+  // dragging nodes
   document.addEventListener('mousemove', (e) => {
-    // dragging node
     if (nwLE.dragging) {
       const d = nwLE.dragging;
-      const node = nwFindNode(d.nodeId);
+      const g = nwLE.graph;
+      if (!g) return;
+      const node = g.nodes.find(n => n.id === d.nodeId);
+      if (!node) return;
       const board = nwLE.el.board;
-      if (!node || !board) return;
+      if (!board) return;
 
       const boardRect = board.getBoundingClientRect();
-      const x = e.clientX - boardRect.left - d.offsetX;
-      const y = e.clientY - boardRect.top - d.offsetY;
-      node.x = nwClamp(x, 0, (Number(nwLE.graph.board.w) || 2400) - 40);
-      node.y = nwClamp(y, 0, (Number(nwLE.graph.board.h) || 1400) - 40);
+      const z = nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5);
+      const x = (e.clientX - boardRect.left - d.offsetX) / z;
+      const y = (e.clientY - boardRect.top - d.offsetY) / z;
 
-      const el = board.querySelector(`.nw-le-node[data-node-id="${CSS.escape(node.id)}"]`);
+      node.x = Math.max(0, Math.min(x, (g.board.w || 2400) - 40));
+      node.y = Math.max(0, Math.min(y, (g.board.h || 1400) - 40));
+
+      const el = document.querySelector(`[data-node-id="${node.id}"]`);
       if (el) {
         el.style.left = `${Math.round(node.x)}px`;
         el.style.top = `${Math.round(node.y)}px`;
@@ -1307,9 +1515,10 @@ function nwInstallGlobalHandlers() {
       const board = nwLE.el.board;
       if (!board) return;
       const boardRect = board.getBoundingClientRect();
+      const z = nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5);
       nwLE.connecting.mouse = {
-        x: e.clientX - boardRect.left,
-        y: e.clientY - boardRect.top,
+        x: (e.clientX - boardRect.left) / z,
+        y: (e.clientY - boardRect.top) / z,
       };
       nwUpdateAllWirePaths();
     }
@@ -1338,32 +1547,46 @@ function nwInstallGlobalHandlers() {
       nwHandleSave();
     }
   });
+
+  // Ctrl/Cmd + Mausrad zum Zoomen
+  const wrap = nwLE.el.boardWrap;
+  if (wrap) {
+    wrap.addEventListener('wheel', (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      if (e.deltaY > 0) {
+        nwZoomOut();
+      } else {
+        nwZoomIn();
+      }
+    }, { passive: false });
+  }
 }
+
 
 
 // -----------------------------
 // Toolbar actions
 // -----------------------------
 async function nwHandleSave() {
-  const cfg = nwLE.cfg || nwDefaultGraph();
+  // Clone so we don't mutate the live object while saving
+  const cfg = nwEnsureConfigDefaults(nwJsonClone(nwLE.cfg || nwDefaultGraph()));
+
   // bump version
   cfg.version = (typeof cfg.version === 'number' ? cfg.version : 0) + 1;
   cfg.updatedAt = Date.now();
 
-  // keep graph updated
-  const main = nwGetMainGraph(cfg);
-  // replace main graph with current runtime graph
-  cfg.graphs = Array.isArray(cfg.graphs) ? cfg.graphs : [];
-  const idx = cfg.graphs.findIndex(g => g && g.id === main.id);
-  if (idx >= 0) cfg.graphs[idx] = nwLE.graph;
-  else cfg.graphs.push(nwLE.graph);
-
   nwSetStatus('Speichern…');
   const res = await nwSaveConfig(cfg);
   if (res && res.ok) {
-    nwLE.cfg = res.config || cfg;
-    nwLE.graph = nwGetMainGraph(nwLE.cfg);
-    nwEnsureGraphDefaults(nwLE.graph);
+    nwLE.cfg = nwEnsureConfigDefaults(res.config || cfg);
+
+    // restore selected page
+    const keepId = nwLE.graphId || (nwLE.graph && nwLE.graph.id) || 'main';
+    nwSelectGraph(keepId, { skipRender: true });
+    nwRenderGraph();
+    nwRenderInspector();
+
     nwLE.dirty = false;
     nwSetStatus(`Gespeichert (v${nwLE.cfg.version || '?'}) ✅`, true);
   } else {
@@ -1371,15 +1594,17 @@ async function nwHandleSave() {
   }
 }
 
+
 function nwHandleNew() {
-  nwLE.cfg = nwDefaultGraph();
-  nwLE.graph = nwGetMainGraph(nwLE.cfg);
-  nwEnsureGraphDefaults(nwLE.graph);
+  nwLE.cfg = nwEnsureConfigDefaults(nwDefaultGraph());
   nwLE.selectedNodeId = null;
+  nwRenderGraphSelector();
+  nwSelectGraph('main', { skipRender: true });
   nwRenderGraph();
   nwRenderInspector();
   nwMarkDirty();
 }
+
 
 
 // -----------------------------
@@ -1387,12 +1612,28 @@ function nwHandleNew() {
 // -----------------------------
 async function nwInitLogicEditor() {
   // Elements
-  nwLE.el.board = document.getElementById('nw-le-board');
   nwLE.el.boardWrap = document.getElementById('nw-le-board-wrap');
+  nwLE.el.boardScale = document.getElementById('nw-le-board-scale');
+  nwLE.el.board = document.getElementById('nw-le-board');
   nwLE.el.wires = document.getElementById('nw-le-wires');
   nwLE.el.palette = document.getElementById('nw-le-palette');
   nwLE.el.inspector = document.getElementById('nw-le-inspector');
   nwLE.el.status = document.getElementById('nw-le-status');
+
+  // Graph / Seiten
+  nwLE.el.graphSelect = document.getElementById('nw-le-graph-select');
+  nwLE.el.graphEnabled = document.getElementById('nw-le-graph-enabled');
+  nwLE.el.graphAdd = document.getElementById('nw-le-graph-add');
+  nwLE.el.graphDup = document.getElementById('nw-le-graph-dup');
+  nwLE.el.graphRename = document.getElementById('nw-le-graph-rename');
+  nwLE.el.graphDel = document.getElementById('nw-le-graph-del');
+
+  // Zoom
+  nwLE.el.zoomLabel = document.getElementById('nw-le-zoom-label');
+  nwLE.el.zoomIn = document.getElementById('nw-le-zoom-in');
+  nwLE.el.zoomOut = document.getElementById('nw-le-zoom-out');
+  nwLE.el.zoomReset = document.getElementById('nw-le-zoom-reset');
+  nwLE.el.zoomFit = document.getElementById('nw-le-zoom-fit');
 
   // modals
   nwLE.el.dpModal = document.getElementById('nw-le-dp-modal');
@@ -1424,6 +1665,29 @@ async function nwInitLogicEditor() {
   if (btnExport) btnExport.addEventListener('click', () => nwOpenExport());
   if (btnImport) btnImport.addEventListener('click', () => nwOpenImport());
 
+
+  // graph controls
+  if (nwLE.el.graphSelect) nwLE.el.graphSelect.addEventListener('change', (e) => {
+    const v = (e.target && e.target.value) || '';
+    if (v) nwSelectGraph(v);
+  });
+  if (nwLE.el.graphEnabled) nwLE.el.graphEnabled.addEventListener('change', () => {
+    if (!nwLE.graph) return;
+    nwLE.graph.enabled = !!nwLE.el.graphEnabled.checked;
+    nwRenderGraphSelector();
+    nwMarkDirty();
+  });
+  if (nwLE.el.graphAdd) nwLE.el.graphAdd.addEventListener('click', () => nwAddGraph());
+  if (nwLE.el.graphDup) nwLE.el.graphDup.addEventListener('click', () => nwDuplicateGraph());
+  if (nwLE.el.graphRename) nwLE.el.graphRename.addEventListener('click', () => nwRenameGraph());
+  if (nwLE.el.graphDel) nwLE.el.graphDel.addEventListener('click', () => nwDeleteGraph());
+
+  // zoom controls
+  if (nwLE.el.zoomIn) nwLE.el.zoomIn.addEventListener('click', () => nwZoomIn());
+  if (nwLE.el.zoomOut) nwLE.el.zoomOut.addEventListener('click', () => nwZoomOut());
+  if (nwLE.el.zoomReset) nwLE.el.zoomReset.addEventListener('click', () => nwZoomReset());
+  if (nwLE.el.zoomFit) nwLE.el.zoomFit.addEventListener('click', () => nwZoomFit());
+
   // import modal
   if (nwLE.el.importClose) nwLE.el.importClose.addEventListener('click', () => nwCloseImport());
   if (nwLE.el.importCancel) nwLE.el.importCancel.addEventListener('click', () => nwCloseImport());
@@ -1444,9 +1708,19 @@ async function nwInitLogicEditor() {
   // load config
   nwSetStatus('Lade…');
   const cfg = await nwFetchConfig();
-  nwLE.cfg = cfg || nwDefaultGraph();
-  nwLE.graph = nwGetMainGraph(nwLE.cfg);
-  nwEnsureGraphDefaults(nwLE.graph);
+  nwLE.cfg = nwEnsureConfigDefaults(cfg || nwDefaultGraph());
+
+  // restore zoom / page selection
+  try {
+    const z = parseFloat(localStorage.getItem('nwLE.zoom') || '1');
+    if (Number.isFinite(z)) nwLE.zoom = nwClamp(z, 0.4, 2.5);
+    const gid = localStorage.getItem('nwLE.graphId');
+    if (gid) nwLE.graphId = gid;
+  } catch (e) {}
+
+  nwRenderGraphSelector();
+  nwSelectGraph(nwLE.graphId || 'main', { skipRender: true });
+
   nwRenderGraph();
   nwRenderInspector();
   nwLE.dirty = false;

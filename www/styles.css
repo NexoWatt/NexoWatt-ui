@@ -215,7 +215,10 @@ body {
   width: var(--size);
   height: var(--size);
   aspect-ratio: 1 / 1;
-  position: relative;
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
   margin: 0 auto;
 }
 .donut{ width: 100%; height: 100%; }
@@ -3621,14 +3624,23 @@ body{ padding-top: var(--topbar-h); }
 
 .nw-le__board-wrap{
   width: 100%;
-  height: 70vh;
-  min-height: 560px;
+  height: 78vh;
+  min-height: 640px;
   overflow: auto;
   position: relative;
 }
 
-.nw-le__board{
+
+.nw-le__board-scale {
   position: relative;
+}
+
+.nw-le__board{
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
   background:
     radial-gradient(circle at 1px 1px, rgba(148,163,184,0.10) 1px, transparent 0),
     linear-gradient(180deg, rgba(2,6,23,0.02), rgba(2,6,23,0.20));

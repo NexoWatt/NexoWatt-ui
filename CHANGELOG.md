@@ -1,3 +1,11 @@
+## 0.6.102 (2026-02-02)
+- NexoLogic: Mehrere Logikseiten (Pages) im Editor inkl. Umbenennen, Duplizieren und Löschen.
+- NexoLogic: Jede Logikseite kann aktiviert/deaktiviert werden (Engine ignoriert deaktivierte Seiten).
+- NexoLogic UI: Editor-Layout breiter + Board höher.
+- NexoLogic UI: Zoom (Buttons + Strg/Cmd + Mausrad) inkl. Reset (100%) und Fit-to-View.
+- Backend: Fix beim Speichern der Logik-Konfiguration (DeepMerge), damit „Speichern“ wieder zuverlässig funktioniert.
+- UI/Text: Keine Referenzen auf externe Systeme/Editoren in der Oberfläche/Files.
+
 ## 0.6.99 (2026-02-01)
 - SmartHome VIS: Kopftext und „Zurück zur Live‑Ansicht“ entfernt (Header ist bereits vorhanden).
 - SmartHome VIS: Bedien‑Tooltip/Popover (Icon/⋯) für Dimmer, Jalousie und Raumthermostat (RTR):

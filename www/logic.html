@@ -45,17 +45,41 @@
     </nav>
   </header>
 
-  <main class="container" style="max-width: 1320px;">
+  <main class="container" style="max-width: 96vw;">
     <div class="nw-card" style="padding: 16px;">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <div style="font-weight:700;">Logik‑Editor</div>
-        <div class="muted" style="font-size:0.85rem;">Bausteine platzieren und über Ein-/Ausgänge verbinden (ähnlich Gira‑Logikeditor).</div>
+        <div class="muted" style="font-size:0.85rem;">Bausteine platzieren und über Ein-/Ausgänge verbinden.</div>
         <div style="flex:1;"></div>
         <button id="nw-le-btn-new" class="nw-config-btn nw-config-btn--ghost" type="button">Neu</button>
         <button id="nw-le-btn-save" class="nw-config-btn" type="button">Speichern</button>
         <button id="nw-le-btn-export" class="nw-config-btn nw-config-btn--ghost" type="button">Export</button>
         <button id="nw-le-btn-import" class="nw-config-btn nw-config-btn--ghost" type="button">Import</button>
         <span id="nw-le-status" class="muted" style="font-size:0.8rem;">—</span>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;">
+        <div class="muted" style="font-size:0.85rem;">Seite</div>
+        <select id="nw-le-graph-select" class="nw-config-input" style="min-width:220px;"></select>
+
+        <div class="muted" style="font-size:0.85rem;">Aktiv</div>
+        <label class="switch" title="Logikseite aktivieren/deaktivieren">
+          <input id="nw-le-graph-enabled" type="checkbox"><span></span>
+        </label>
+
+        <button id="nw-le-graph-add" class="nw-config-btn nw-config-btn--ghost" type="button">+ Seite</button>
+        <button id="nw-le-graph-dup" class="nw-config-btn nw-config-btn--ghost" type="button">Duplizieren</button>
+        <button id="nw-le-graph-rename" class="nw-config-btn nw-config-btn--ghost" type="button">Umbenennen</button>
+        <button id="nw-le-graph-del" class="nw-config-btn nw-config-btn--ghost" type="button">Löschen</button>
+
+        <div style="flex:1;"></div>
+
+        <div class="muted" style="font-size:0.85rem;">Zoom</div>
+        <button id="nw-le-zoom-out" class="nw-config-btn nw-config-btn--ghost" type="button" title="Verkleinern">−</button>
+        <button id="nw-le-zoom-reset" class="nw-config-btn nw-config-btn--ghost" type="button" title="100%">100%</button>
+        <button id="nw-le-zoom-in" class="nw-config-btn nw-config-btn--ghost" type="button" title="Vergrößern">+</button>
+        <button id="nw-le-zoom-fit" class="nw-config-btn nw-config-btn--ghost" type="button" title="An Fenster anpassen">Anpassen</button>
+        <span id="nw-le-zoom-label" class="muted" style="font-size:0.8rem;min-width:44px;text-align:right;">100%</span>
       </div>
     </div>
 
@@ -71,9 +95,11 @@
 
       <section class="nw-le__workspace" aria-label="Arbeitsbereich">
         <div id="nw-le-board-wrap" class="nw-le__board-wrap">
-          <div id="nw-le-board" class="nw-le__board">
-            <svg id="nw-le-wires" class="nw-le__wires"></svg>
-            <!-- Nodes are injected by JS -->
+          <div id="nw-le-board-scale" class="nw-le__board-scale">
+            <div id="nw-le-board" class="nw-le__board">
+              <svg id="nw-le-wires" class="nw-le__wires"></svg>
+              <!-- Nodes are injected by JS -->
+            </div>
           </div>
         </div>
       </section>

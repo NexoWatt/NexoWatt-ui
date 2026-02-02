@@ -4,7 +4,7 @@
  * NexoLogic – Node/Graph runtime engine (Basis).
  *
  * Goal:
- * - Provide a Gira-Homeserver-like logic editor in the VIS.
+ * - Provide a modular node/graph logic editor in the VIS.
  * - Execute the configured graph in an event-driven way (stateChange-based) so it reacts fast.
  *
  * Notes:

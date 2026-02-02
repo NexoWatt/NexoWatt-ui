@@ -4296,7 +4296,7 @@ buildSmartHomeDevicesFromConfig() {
     precision: 0,
   });
 
-  // Szenen (einfacher Gira-ähnlicher Szenen-Baustein)
+  // Szenen (einfacher Szenen-Baustein)
   pushScene(dps.scene1, {
     id: 'scene1',
     alias: 'Szene Wohlfühlen',
@@ -7604,7 +7604,7 @@ app.post('/api/logic/editor', requireInstaller, async (req, res) => {
 
     // Persist as installer-managed config
     const basePatch = this.nwGetInstallerBaseConfigPatch ? this.nwGetInstallerBaseConfigPatch() : {};
-    const merged = this._nwDeepMerge(this._nwDeepClone(basePatch), { logicEditor: out });
+    const merged = this.nwDeepMerge(this._nwDeepClone(basePatch), { logicEditor: out });
     const patch = this.nwNormalizeInstallerPatch ? this.nwNormalizeInstallerPatch(merged) : merged;
     const persisted = this.persistInstallerConfigToState ? await this.persistInstallerConfigToState(patch) : null;
 
