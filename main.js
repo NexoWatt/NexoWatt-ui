@@ -14,6 +14,9 @@ const pkg = require('./package.json');
 // Embedded EMS engine (Charging Management from nexowatt-multiuse)
 const { EmsEngine } = require('./ems/engine');
 
+// NexoLogic (node/graph) runtime engine
+const { NexoLogicEngine } = require('./ems/nexologic-engine');
+
 function parseCookies(req) {
   const raw = req.headers.cookie || '';
   const out = {};
@@ -77,6 +80,9 @@ class NexoWattVis extends utils.Adapter {
 
     // EMS engine (Sprint 2)
     this.emsEngine = null;
+
+    // NexoLogic engine (node/graph editor runtime)
+    this.logicEngine = null;
 
     
 
@@ -782,6 +788,9 @@ class NexoWattVis extends utils.Adapter {
       'smartHome',
       'smartHomeConfig',
 
+      // NexoLogic editor config (node/graph)
+      'logicEditor',
+
       // Optional diagnostics
       'diagnostics',
     ];
@@ -847,6 +856,9 @@ class NexoWattVis extends utils.Adapter {
     ensurePlainObj('smartHome', {});
     // SmartHomeConfig (rooms/functions/devices) – stored as installer-managed config
     ensurePlainObj('smartHomeConfig', { version: 1, rooms: [], functions: [], devices: [] });
+
+    // NexoLogic editor config (node/graph) – stored as installer-managed config
+    ensurePlainObj('logicEditor', { version: 1, graphs: [] });
     ensurePlainObj('diagnostics', {});
 
     // Scheduler interval
@@ -3729,6 +3741,124 @@ getSmartHomeConfig() {
   return out;
 }
 
+/**
+ * Returns the NexoLogic editor config (node/graph).
+ * Stored inside installer-managed config key `logicEditor`.
+ */
+getLogicEditorConfig() {
+  const cfg = this.config || {};
+  const le = cfg.logicEditor || {};
+  const out = {
+    version: typeof le.version === 'number' ? le.version : 1,
+    updatedAt: typeof le.updatedAt === 'number' ? le.updatedAt : undefined,
+    graphs: Array.isArray(le.graphs) ? le.graphs : [],
+  };
+  return out;
+}
+
+/**
+ * Normalizes a user-provided logic editor config to a safe structure.
+ * (This prevents broken configs from breaking runtime logic.)
+ */
+nwNormalizeLogicEditorConfig(inCfg) {
+  const isPlain = (o) => this._nwIsPlainObject(o);
+  const safeStr = (s, maxLen) => {
+    if (s === null || s === undefined) return '';
+    const str = String(s);
+    return str.length > maxLen ? str.slice(0, maxLen) : str;
+  };
+
+  const cfg = isPlain(inCfg) ? inCfg : {};
+  const mkId = (prefix) => {
+    const rnd = Math.random().toString(36).slice(2, 8);
+    return `${prefix}_${Date.now().toString(36)}_${rnd}`;
+  };
+  const out = {
+    version: (typeof cfg.version === 'number' && Number.isFinite(cfg.version)) ? cfg.version : 1,
+    updatedAt: (typeof cfg.updatedAt === 'number' && Number.isFinite(cfg.updatedAt)) ? cfg.updatedAt : Date.now(),
+    graphs: [],
+  };
+
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const toNum = (v, def) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : def;
+  };
+
+  const graphs = Array.isArray(cfg.graphs) ? cfg.graphs : [];
+  for (const g of graphs) {
+    if (!isPlain(g)) continue;
+    const id = safeStr(g.id || 'main', 64) || 'main';
+    const graph = {
+      id,
+      name: safeStr(g.name || 'Hauptlogik', 120) || 'Hauptlogik',
+      enabled: g.enabled === undefined ? true : !!g.enabled,
+      board: {
+        w: clamp(toNum(g.board && g.board.w, 2400), 800, 12000),
+        h: clamp(toNum(g.board && g.board.h, 1400), 600, 12000),
+      },
+      nodes: [],
+      links: [],
+    };
+
+    const nodes = Array.isArray(g.nodes) ? g.nodes : [];
+    for (const n of nodes) {
+      if (!isPlain(n)) continue;
+      const node = {
+        id: safeStr(n.id || mkId('n'), 80) || mkId('n'),
+        type: safeStr(n.type || '', 64),
+        label: safeStr(n.label || '', 120),
+        enabled: n.enabled === undefined ? true : !!n.enabled,
+        x: clamp(toNum(n.x, 40), 0, graph.board.w - 40),
+        y: clamp(toNum(n.y, 40), 0, graph.board.h - 40),
+        params: {},
+      };
+      // params: only primitives
+      if (isPlain(n.params)) {
+        for (const [k, v] of Object.entries(n.params)) {
+          const key = safeStr(k, 64);
+          if (!key) continue;
+          if (v === null || v === undefined) continue;
+          if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+            node.params[key] = v;
+          }
+        }
+      }
+      graph.nodes.push(node);
+    }
+
+    const links = Array.isArray(g.links) ? g.links : [];
+    for (const l of links) {
+      if (!isPlain(l)) continue;
+      const from = isPlain(l.from) ? l.from : {};
+      const to = isPlain(l.to) ? l.to : {};
+      const link = {
+        id: safeStr(l.id || mkId('l'), 80) || mkId('l'),
+        from: { node: safeStr(from.node || '', 80), port: safeStr(from.port || '', 40) },
+        to: { node: safeStr(to.node || '', 80), port: safeStr(to.port || '', 40) },
+      };
+      if (!link.from.node || !link.from.port || !link.to.node || !link.to.port) continue;
+      graph.links.push(link);
+    }
+
+    out.graphs.push(graph);
+  }
+
+  // Ensure at least one graph exists
+  if (!out.graphs.length) {
+    out.graphs.push({
+      id: 'main',
+      name: 'Hauptlogik',
+      enabled: true,
+      board: { w: 2400, h: 1400 },
+      nodes: [],
+      links: [],
+    });
+  }
+
+  return out;
+}
+
 buildSmartHomeDevicesFromConfig() {
   const smCfg = (this.config && this.config.smartHome) || {};
   const enabled = !!smCfg.enabled;
@@ -4691,9 +4821,33 @@ async onReady() {
 
 
       this.buildSmartHomeDevicesFromConfig();
+
+      // NexoLogic (node/graph) runtime engine
+      try { await this.initLogicEngine(); } catch (e) { this.log.warn('NexoLogic init failed: ' + (e && e.message ? e.message : e)); }
       this.log.info('NexoWatt VIS adapter ready.');
     } catch (e) {
       this.log.error(`onReady error: ${e.message}`);
+    }
+  }
+
+  async initLogicEngine(force) {
+    const doForce = !!force;
+
+    if (this.logicEngine && !doForce) return;
+
+    // Force: stop + drop existing engine
+    if (doForce && this.logicEngine && typeof this.logicEngine.stop === 'function') {
+      try { await this.logicEngine.stop(); } catch (_e) {}
+    }
+
+    try {
+      if (!this.logicEngine) this.logicEngine = new NexoLogicEngine(this);
+      const cfg = this.getLogicEditorConfig ? this.getLogicEditorConfig() : ((this.config && this.config.logicEditor) || { version: 1, graphs: [] });
+      await this.logicEngine.init(cfg);
+    } catch (e) {
+      try { if (this.logicEngine && typeof this.logicEngine.stop === 'function') await this.logicEngine.stop(); } catch (_e2) {}
+      this.logicEngine = null;
+      throw e;
     }
   }
 
@@ -4722,6 +4876,33 @@ async onReady() {
       } catch (_e2) {}
 
       this.emsEngine = null;
+      throw e;
+    }
+  }
+
+  /**
+   * Init / reload the NexoLogic runtime engine (node/graph editor).
+   * The engine is event-driven and reacts on stateChanges of configured input datapoints.
+   */
+  async initLogicEngine(force) {
+    const doForce = !!force;
+
+    if (this.logicEngine && !doForce) return;
+
+    // Force: stop existing engine so we can recover from init failures
+    if (doForce && this.logicEngine && typeof this.logicEngine.stop === 'function') {
+      try { await this.logicEngine.stop(); } catch (_e) {}
+    }
+
+    try {
+      if (!this.logicEngine) this.logicEngine = new NexoLogicEngine(this);
+      const cfg = this.getLogicEditorConfig ? this.getLogicEditorConfig() : ((this.config && this.config.logicEditor) || {});
+      await this.logicEngine.init(cfg);
+    } catch (e) {
+      try {
+        if (this.logicEngine && typeof this.logicEngine.stop === 'function') await this.logicEngine.stop();
+      } catch (_e2) {}
+      this.logicEngine = null;
       throw e;
     }
   }
@@ -7392,6 +7573,48 @@ app.get('/api/logic/blocks', async (_req, res) => {
   } catch (e) {
     this.log.warn('Logic blocks API error: ' + e.message);
     res.status(500).json({ ok: false, error: 'internal error' });
+  }
+});
+
+// --- NexoLogic (node/graph) editor config API ---
+app.get('/api/logic/editor', async (_req, res) => {
+  try {
+    const cfg = (typeof this.getLogicEditorConfig === 'function')
+      ? this.getLogicEditorConfig()
+      : ((this.config && this.config.logicEditor) || { version: 1, graphs: [] });
+
+    res.json({ ok: true, config: cfg });
+  } catch (e) {
+    this.log.warn('Logic editor GET error: ' + e.message);
+    res.status(500).json({ ok: false, error: 'internal error' });
+  }
+});
+
+app.post('/api/logic/editor', requireInstaller, async (req, res) => {
+  try {
+    const body = (req && req.body) || {};
+    const inCfg = body.config;
+
+    const out = (typeof this.nwNormalizeLogicEditorConfig === 'function')
+      ? this.nwNormalizeLogicEditorConfig(inCfg)
+      : (inCfg || { version: 1, graphs: [] });
+
+    // Apply to runtime config
+    this.config.logicEditor = out;
+
+    // Persist as installer-managed config
+    const basePatch = this.nwGetInstallerBaseConfigPatch ? this.nwGetInstallerBaseConfigPatch() : {};
+    const merged = this._nwDeepMerge(this._nwDeepClone(basePatch), { logicEditor: out });
+    const patch = this.nwNormalizeInstallerPatch ? this.nwNormalizeInstallerPatch(merged) : merged;
+    const persisted = this.persistInstallerConfigToState ? await this.persistInstallerConfigToState(patch) : null;
+
+    // Reload runtime engine (so changes become active without restart)
+    try { await this.initLogicEngine(true); } catch (_e) {}
+
+    res.json({ ok: true, config: out, persisted: !!persisted });
+  } catch (e) {
+    this.log.warn('Logic editor SAVE error: ' + e.message);
+    res.status(500).json({ ok: false, error: e.message || 'internal error' });
   }
 });
 
@@ -10631,6 +10854,13 @@ return res.json(out);
         this.emsEngine.dp.handleStateChange(id, state);
       }
     } catch (_e) {}
+
+    // Feed NexoLogic engine (node/graph)
+    try {
+      if (this.logicEngine && typeof this.logicEngine.handleStateChange === 'function') {
+        this.logicEngine.handleStateChange(id, state);
+      }
+    } catch (_e2) {}
     try {
       const key = this.keyFromId(id);
       if (key) {
@@ -12854,6 +13084,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       try { this.stopNotificationMonitor(); } catch (_e) {}
       try { if (this._sseFlushTimer) clearTimeout(this._sseFlushTimer); } catch (_e) {}
       try { if (this.emsEngine && typeof this.emsEngine.stop === 'function') this.emsEngine.stop(); } catch (_e2) {}
+      try { if (this.logicEngine && typeof this.logicEngine.stop === 'function') this.logicEngine.stop(); } catch (_e3) {}
       if (this.server) this.server.close();
       callback();
     } catch (e) {

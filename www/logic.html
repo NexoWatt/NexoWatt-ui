@@ -1,63 +1,147 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<script>
-/* NexoWatt: normalize base path so relative links work even if opened without trailing slash */
-(function () {
-  try {
-    var p = window.location.pathname || "";
-    if (p && !p.endsWith("/") && !p.endsWith(".html")) {
-      window.location.replace(p + "/" + window.location.search + window.location.hash);
-    }
-  } catch (e) {}
-})();
-</script>
-
-
-  <meta charset="utf-8"/>
-  <meta content="width=device-width, initial-scale=1" name="viewport"/>
-  <title>NexoWatt Logic</title>
-  <link href="/static/styles.css" rel="stylesheet"/>
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/nexowatt-32.png">
-  <link rel="manifest" href="/manifest.webmanifest">
-  <meta name="theme-color" content="#0c0f12">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NexoLogic</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script>
+    // Ensure the app works also when served from sub-paths (reverse proxy)
+    (function(){
+      try {
+        const base = document.querySelector('base');
+        if (!base) {
+          const b = document.createElement('base');
+          b.href = '/';
+          document.head.appendChild(b);
+        }
+      } catch(_e){}
+    })();
+  </script>
 </head>
+
 <body>
-<header class="topbar"><div class="brand"><a href="/"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></a></div><button aria-label="Menu" id="menuBtn">☰</button><h1>NexoLogic</h1><div class="menu hidden" id="menuDropdown"><a class="menu-item" href="./">Live</a><a class="menu-item" href="history.html">History</a>
-<a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item hidden" id="menuSmartHomeLink" href="smarthome.html">SmartHome</a><a class="menu-item" href="settings.html">Einstellungen</a></div></header>
+  <header class="topbar">
+    <div class="brand">
+      <a href="/"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></a>
+    </div>
 
-<main class="content">
-  <div id="nw-logic-root">
-    <div class="nw-smarthome-header">
-      <div>
-        <div class="nw-smarthome-header__title">NexoLogic</div>
-        <div class="nw-smarthome-header__subtitle">
-          Basis-Ansicht für Logik-Blöcke (Szenen) – Vorbereitung für den Gira-ähnlichen Logikeditor.
+    <button aria-label="Menu" id="menuBtn">☰</button>
+    <h1>NexoLogic</h1>
+
+    <div class="menu hidden" id="menuDropdown">
+      <a class="menu-item" href="./">Live</a>
+      <a class="menu-item" href="history.html">History</a>
+      <a class="menu-item" href="evcs.html" id="menuEvcsLink">EVCS</a>
+      <a class="menu-item" href="smarthome.html" id="menuSmartHomeLink">SmartHome</a>
+      <a class="menu-item" href="settings.html">Einstellungen</a>
+    </div>
+
+    <nav class="tabs">
+      <a class="tab" href="./">LIVE</a>
+      <a class="tab" href="history.html">HISTORY</a>
+      <a class="tab" href="smarthome.html" id="tabSmartHome">SMARTHOME</a>
+      <a class="tab tab-active" href="logic.html">NEXOLOGIC</a>
+    </nav>
+  </header>
+
+  <main class="container" style="max-width: 1320px;">
+    <div class="nw-card" style="padding: 16px;">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div style="font-weight:700;">Logik‑Editor</div>
+        <div class="muted" style="font-size:0.85rem;">Bausteine platzieren und über Ein-/Ausgänge verbinden (ähnlich Gira‑Logikeditor).</div>
+        <div style="flex:1;"></div>
+        <button id="nw-le-btn-new" class="nw-config-btn nw-config-btn--ghost" type="button">Neu</button>
+        <button id="nw-le-btn-save" class="nw-config-btn" type="button">Speichern</button>
+        <button id="nw-le-btn-export" class="nw-config-btn nw-config-btn--ghost" type="button">Export</button>
+        <button id="nw-le-btn-import" class="nw-config-btn nw-config-btn--ghost" type="button">Import</button>
+        <span id="nw-le-status" class="muted" style="font-size:0.8rem;">—</span>
+      </div>
+    </div>
+
+    <div class="nw-le" style="margin-top: 14px;">
+      <aside class="nw-le__palette">
+        <div class="nw-le__palette-title">Bausteine</div>
+        <div id="nw-le-palette"></div>
+        <div class="muted" style="font-size:0.8rem;margin-top:10px;line-height:1.35;">
+          Tipp: Klick auf einen Baustein erstellt ihn im Arbeitsbereich. <br/>
+          Verbindung: Ausgang (rechts) → Eingang (links) ziehen.
         </div>
-      </div>
-    </div>
+      </aside>
 
-    <div class="nw-sh-filters" style="margin-top:10px;">
-      <div class="nw-sh-filter-row">
-        <div class="nw-sh-filter-label">Suche</div>
-        <input id="nw-logic-search" class="nw-config-input" placeholder="Name / Raum / Typ…" style="max-width:320px;">
-      </div>
-      <div class="nw-sh-filter-row">
-        <div class="nw-sh-filter-label">Räume</div>
-        <div id="nw-logic-room-chips" class="nw-sh-filter-chips"></div>
-      </div>
-    </div>
+      <section class="nw-le__workspace" aria-label="Arbeitsbereich">
+        <div id="nw-le-board-wrap" class="nw-le__board-wrap">
+          <div id="nw-le-board" class="nw-le__board">
+            <svg id="nw-le-wires" class="nw-le__wires"></svg>
+            <!-- Nodes are injected by JS -->
+          </div>
+        </div>
+      </section>
 
-    <div id="nw-logic-grid" class="nw-tiles-grid"></div>
-    <div id="nw-logic-empty" style="display:none;font-size:0.8rem;color:#9ca3af;margin-top:12px;">
-      Keine Logik-Blöcke gefunden. Bitte mindestens eine Szene im Tab „SmartHome (vorbereitet)“ konfigurieren.
+      <aside class="nw-le__inspector" aria-label="Eigenschaften">
+        <div class="nw-le__inspector-title">Eigenschaften</div>
+        <div id="nw-le-inspector" class="nw-le__inspector-body"></div>
+      </aside>
+    </div>
+  </main>
+
+
+  <!-- DP Picker Modal -->
+  <div id="nw-le-dp-modal" class="modal hidden" aria-hidden="true">
+    <div class="dialog">
+      <div class="dialog-header">
+        <div style="font-weight:700;">Datenpunkt auswählen</div>
+        <button id="nw-le-dp-close" class="btn small" type="button">✕</button>
+      </div>
+
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <input id="nw-le-dp-q" class="nw-config-input" placeholder="Suchen… (z.B. knx.0, temp, schalten)" style="flex:1;min-width:260px;" />
+        <button id="nw-le-dp-search" class="nw-config-btn" type="button">Suchen</button>
+      </div>
+
+      <div id="nw-le-dp-results" style="max-height: 55vh; overflow:auto;"></div>
     </div>
   </div>
-</main>
 
-<script src="/static/logic.js"></script>
+
+  <!-- Import Modal -->
+  <div id="nw-le-import-modal" class="modal hidden" aria-hidden="true">
+    <div class="dialog">
+      <div class="dialog-header">
+        <div style="font-weight:700;">Import</div>
+        <button id="nw-le-import-close" class="btn small" type="button">✕</button>
+      </div>
+      <div class="muted" style="font-size:0.85rem;margin-bottom:10px;">
+        JSON einfügen (Export‑Format).
+      </div>
+      <textarea id="nw-le-import-text" class="nw-config-input" style="width:100%;min-height:240px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;"></textarea>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px;">
+        <button id="nw-le-import-cancel" class="nw-config-btn nw-config-btn--ghost" type="button">Abbrechen</button>
+        <button id="nw-le-import-apply" class="nw-config-btn" type="button">Importieren</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Export Modal -->
+  <div id="nw-le-export-modal" class="modal hidden" aria-hidden="true">
+    <div class="dialog">
+      <div class="dialog-header">
+        <div style="font-weight:700;">Export</div>
+        <button id="nw-le-export-close" class="btn small" type="button">✕</button>
+      </div>
+      <div class="muted" style="font-size:0.85rem;margin-bottom:10px;">
+        Diese JSON kannst du für Rollout/Support speichern.
+      </div>
+      <textarea id="nw-le-export-text" class="nw-config-input" readonly style="width:100%;min-height:240px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;"></textarea>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px;">
+        <button id="nw-le-export-download" class="nw-config-btn" type="button">Download</button>
+        <button id="nw-le-export-ok" class="nw-config-btn nw-config-btn--ghost" type="button">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+
+  <script src="/static/logic.js"></script>
 </body>
 </html>

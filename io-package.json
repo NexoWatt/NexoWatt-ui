@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.100",
+  "version": "0.6.101",
     "news": {
+      "0.6.101": {
+        "en": "NexoLogic: Introduced a first Gira-like node/graph logic editor (modules, wiring, DP picker, save/import/export) and a lightweight runtime engine that evaluates basic logic/math/timer blocks event-driven.",
+        "de": "NexoLogic: Erster Gira-ähnlicher Node/Graph-Logikeditor (Module, Verbindungen, DP-Picker, Speichern/Import/Export) plus schlanke Runtime, die Grundbausteine (Logik/Mathe/Zeit) event-driven ausführt."
+      },
       "0.6.100": {
         "en": "SmartHome: Thermostat popover now uses a premium gauge (Apple-like) with +/- buttons and tick marks; dimmer/blinds tile sliders are larger for touch. Logic: Added search + room filter chips and rendered logic blocks as proper NexoWatt tiles for a more premium look.",
         "de": "SmartHome: Thermostat-Popup jetzt als wertiger Gauge (Apple-Look) mit +/- und Skala; Dimmer-/Jalousie-Slider in den Kacheln größer (touch-freundlich). Logik: Suche + Raum-Filter ergänzt und Logikblöcke als echte NexoWatt-Kacheln gerendert (wertiger Look)."
