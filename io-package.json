@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.106",
+    "version": "0.6.107",
     "news": {
+      "0.6.107": {
+        "en": "SmartHome: Thermostat popover gauge – moved +/- buttons below the dial for a clearer UX. SmartHome tiles with DP read/write errors are now highlighted more clearly.",
+        "de": "SmartHome: Thermostat-Popup-Gauge – +/- Buttons nach unten verlegt (übersichtlicher). SmartHome-Kacheln mit DP-Lese/Schreib-Fehlern werden jetzt deutlicher hervorgehoben."
+      },
       "0.6.106": {
         "en": "SmartHome: Thermostat popover gauge fixed (mirrored to match the reference look) + gradient rendering corrected. SmartHome popovers now lock background scrolling while open (no page sliding behind).",
         "de": "SmartHome: Thermostat-Popup-Gauge korrigiert (spiegelverkehr wie Referenz) + Gradient-Darstellung gefixt. SmartHome-Popover sperren jetzt das Hintergrund-Scrollen (keins mehr \"hinter\" dem Tooltip)."

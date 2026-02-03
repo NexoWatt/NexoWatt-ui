@@ -752,6 +752,7 @@ function nwCreateTile(dev) {
     isOn ? 'nw-sh-tile--on' : 'nw-sh-tile--off',
     canWrite ? '' : 'nw-sh-tile--readonly',
     (dev.behavior && dev.behavior.favorite) ? 'nw-sh-tile--favorite' : '',
+    (dev.state && dev.state.error) ? 'nw-sh-tile--error' : '',
   ].filter(Boolean).join(' ');
 
   tile.style.setProperty('--sh-accent', accent);
@@ -1571,9 +1572,15 @@ function nwCreateThermostatGauge(opts) {
   if (subtitle) center.appendChild(labEl);
   if (sub2) center.appendChild(sub2El);
 
-  overlay.appendChild(btnMinus);
+  // Buttons are placed BELOW the value for a cleaner, more readable layout
+  // (especially on touch devices).
+  const btnRow = document.createElement('div');
+  btnRow.className = 'nw-sh-gauge__btnrow';
+  btnRow.appendChild(btnMinus);
+  btnRow.appendChild(btnPlus);
+
   overlay.appendChild(center);
-  overlay.appendChild(btnPlus);
+  overlay.appendChild(btnRow);
 
   canvas.appendChild(overlay);
 

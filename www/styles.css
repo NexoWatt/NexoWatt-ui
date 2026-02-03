@@ -2981,6 +2981,15 @@ body{ padding-top: var(--topbar-h); }
   border-style: dashed;
 }
 
+/* SmartHome: devices with DP read/write errors should stand out */
+.nw-sh-tile--error{
+  border-color: rgba(239, 68, 68, 0.75);
+  background: radial-gradient(circle at top left, rgba(239, 68, 68, 0.14), rgba(17,24,39,0.42));
+}
+.nw-sh-tile--error .nw-sh-tile__state{
+  color: rgba(248, 113, 113, 0.95);
+}
+
 /* Size mapping (grid spans) */
 .nw-sh-tile--size-s,
 .nw-sh-tile--size-m{
@@ -3329,11 +3338,20 @@ body{ padding-top: var(--topbar-h); }
   top: 56%;
   transform: translateY(-50%);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 18px;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 14px;
   pointer-events: none; /* enable clicks only on the buttons */
+}
+
+.nw-sh-gauge__btnrow{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  pointer-events: none;
 }
 
 .nw-sh-gauge__btn{
