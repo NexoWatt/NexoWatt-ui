@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.109",
+    "version": "0.6.110",
     "news": {
+      "0.6.110": {
+        "en": "SmartHome: Popover got quick presets (dimmer 0/25/50/75/100, blinds 0/50/100), step tuning (1/5/10) with +/- and a small write feedback badge (sending/ok/error).",
+        "de": "SmartHome: Popover mit Quick-Presets (Dimmer 0/25/50/75/100, Jalousie 0/50/100), Schritt-Tuning (1/5/10) mit +/- und Schreib-Feedback (Senden/OK/Fehler)."
+      },
       "0.6.109": {
         "en": "SmartHome: Optional live-preview for dimmer/blinds sliders in the popover (throttled while dragging, final commit on release).",
         "de": "SmartHome: Optionale Live-Vorschau für Dimmer-/Jalousie-Slider im Popover (gedrosselt beim Ziehen, final beim Loslassen)."

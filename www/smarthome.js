@@ -1159,6 +1159,50 @@ const NW_SH_LIVE_PREVIEW_LS_KEY = 'nw_sh_live_preview';
 const NW_SH_LIVE_PREVIEW_DEFAULT = true;
 const NW_SH_LIVE_PREVIEW_THROTTLE_MS = 200; // max ~5 writes/s while dragging
 
+// SmartHome Tooltip/Popover: step controls for sliders (Dimmer/Jalousie)
+const NW_SH_STEP_DIMMER_LS_KEY = 'nw_sh_step_dimmer';
+const NW_SH_STEP_BLIND_LS_KEY = 'nw_sh_step_blind';
+const NW_SH_STEP_DEFAULT = 5;
+
+function nwLoadNumberLS(key, defVal) {
+  try {
+    const v = localStorage.getItem(key);
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+    return Number(defVal);
+  } catch (_e) {
+    return Number(defVal);
+  }
+}
+
+function nwSaveNumberLS(key, val) {
+  try {
+    localStorage.setItem(key, String(val));
+  } catch (_e) {}
+}
+
+function nwCreateStatusBadge() {
+  const el = document.createElement('div');
+  el.className = 'nw-sh-popover__status hidden';
+  el.setAttribute('aria-live', 'polite');
+  el.setAttribute('aria-atomic', 'true');
+  return el;
+}
+
+function nwSetStatusBadge(el, kind, text) {
+  if (!el) return;
+  el.classList.remove('hidden', 'nw-sh-popover__status--busy', 'nw-sh-popover__status--ok', 'nw-sh-popover__status--err');
+  if (!kind) {
+    el.textContent = '';
+    el.classList.add('hidden');
+    return;
+  }
+  el.textContent = text || '';
+  if (kind === 'busy') el.classList.add('nw-sh-popover__status--busy');
+  if (kind === 'ok') el.classList.add('nw-sh-popover__status--ok');
+  if (kind === 'err') el.classList.add('nw-sh-popover__status--err');
+}
+
 function nwLoadBoolLS(key, defVal) {
   try {
     const v = localStorage.getItem(key);
@@ -1345,6 +1389,31 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
   right.className = 'nw-sh-popover__right';
   right.appendChild(v);
 
+  // Write feedback (Senden/OK/Fehler) – small and non-intrusive.
+  const status = nwCreateStatusBadge();
+  right.appendChild(status);
+
+  let statusTimer = null;
+  function clearStatusTimer() {
+    if (statusTimer) {
+      clearTimeout(statusTimer);
+      statusTimer = null;
+    }
+  }
+  function flashStatus(kind, text, ms) {
+    clearStatusTimer();
+    nwSetStatusBadge(status, kind, text);
+    if (ms && ms > 0) {
+      statusTimer = setTimeout(() => {
+        nwSetStatusBadge(status, null, '');
+        statusTimer = null;
+      }, ms);
+    }
+  }
+  function setBusy() { flashStatus('busy', 'Senden…'); }
+  function setOk() { flashStatus('ok', 'OK', 1100); }
+  function setErr() { flashStatus('err', 'Fehler', 1600); }
+
   let liveBtn = null;
   if (hasWrite) {
     liveBtn = document.createElement('button');
@@ -1378,8 +1447,28 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
   // Premium: colored progress track.
   nwUpdateRangeFill(slider);
 
-  // Premium: colored progress track.
-  nwUpdateRangeFill(slider);
+  // Helper: commit a new value (writes once + reload) with feedback.
+  async function commitLevel(nextVal, opts) {
+    const options = opts || {};
+    const showStatus = (options.showStatus !== false);
+    const reload = (options.reload !== false);
+
+    const clamped = nwClampNumber(nextVal, min, max);
+    slider.value = String(clamped);
+    v.textContent = Math.round(clamped) + ' %';
+    nwUpdateRangeFill(slider);
+
+    if (!hasWrite) return clamped;
+
+    if (showStatus) setBusy();
+    const res = await nwSetLevel(dev.id, clamped);
+    if (showStatus) {
+      if (res === null) setErr();
+      else setOk();
+    }
+    if (reload) await nwReloadDevices({ force: true });
+    return clamped;
+  }
 
   slider.addEventListener('click', (ev) => ev.stopPropagation());
 
@@ -1399,10 +1488,106 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
     if (!hasWrite) return;
     const raw = Number(ev.target.value);
     if (!Number.isFinite(raw)) return;
-    nwUpdateRangeFill(slider);
-    await nwSetLevel(dev.id, raw);
-    await nwReloadDevices({ force: true });
+    await commitLevel(raw);
   });
+
+  // Presets (quick set): 0/25/50/75/100
+  const presets = document.createElement('div');
+  presets.className = 'nw-sh-popover__presets';
+  const presetVals = [0, 25, 50, 75, 100];
+  presetVals.forEach((pv) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'nw-sh-chip nw-sh-chip--mini';
+    b.textContent = pv + '%';
+    b.disabled = !hasWrite;
+    b.addEventListener('click', (ev) => ev.stopPropagation());
+    b.addEventListener('click', async () => {
+      if (!hasWrite) return;
+      await commitLevel(pv);
+    });
+    presets.appendChild(b);
+  });
+
+  // Step controls: step size (1/5/10) + +/-
+  let step = nwLoadNumberLS(NW_SH_STEP_DIMMER_LS_KEY, NW_SH_STEP_DEFAULT);
+  if (![1, 5, 10].includes(step)) step = NW_SH_STEP_DEFAULT;
+
+  const stepRow = document.createElement('div');
+  stepRow.className = 'nw-sh-popover__steprow';
+
+  const stepLabel = document.createElement('div');
+  stepLabel.className = 'nw-sh-popover__label';
+  stepLabel.textContent = 'Schritt';
+
+  const stepTools = document.createElement('div');
+  stepTools.className = 'nw-sh-popover__steptools';
+
+  const stepChoices = [1, 5, 10];
+  const stepBtns = new Map();
+  function syncStepBtns() {
+    stepChoices.forEach((s) => {
+      const btn = stepBtns.get(s);
+      if (!btn) return;
+      btn.classList.toggle('nw-sh-chip--active', s === step);
+      btn.setAttribute('aria-pressed', s === step ? 'true' : 'false');
+    });
+  }
+
+  const stepChoiceWrap = document.createElement('div');
+  stepChoiceWrap.className = 'nw-sh-popover__stepchoices';
+  stepChoices.forEach((s) => {
+    const c = document.createElement('button');
+    c.type = 'button';
+    c.className = 'nw-sh-chip nw-sh-chip--mini';
+    c.textContent = String(s);
+    c.title = 'Schrittweite ' + s;
+    c.disabled = !hasWrite;
+    c.setAttribute('aria-pressed', 'false');
+    c.addEventListener('click', (ev) => ev.stopPropagation());
+    c.addEventListener('click', () => {
+      if (!hasWrite) return;
+      step = s;
+      nwSaveNumberLS(NW_SH_STEP_DIMMER_LS_KEY, step);
+      syncStepBtns();
+    });
+    stepBtns.set(s, c);
+    stepChoiceWrap.appendChild(c);
+  });
+  syncStepBtns();
+
+  const minus = document.createElement('button');
+  minus.type = 'button';
+  minus.className = 'nw-sh-btn nw-sh-btn--mini';
+  minus.textContent = '−';
+  minus.title = 'Wert verringern';
+  minus.disabled = !hasWrite;
+  minus.addEventListener('click', (ev) => ev.stopPropagation());
+  minus.addEventListener('click', async () => {
+    if (!hasWrite) return;
+    const cur = Number(slider.value);
+    await commitLevel(cur - step);
+  });
+
+  const plus = document.createElement('button');
+  plus.type = 'button';
+  plus.className = 'nw-sh-btn nw-sh-btn--mini';
+  plus.textContent = '+';
+  plus.title = 'Wert erhöhen';
+  plus.disabled = !hasWrite;
+  plus.addEventListener('click', (ev) => ev.stopPropagation());
+  plus.addEventListener('click', async () => {
+    if (!hasWrite) return;
+    const cur = Number(slider.value);
+    await commitLevel(cur + step);
+  });
+
+  stepTools.appendChild(stepChoiceWrap);
+  stepTools.appendChild(minus);
+  stepTools.appendChild(plus);
+
+  stepRow.appendChild(stepLabel);
+  stepRow.appendChild(stepTools);
 
   const hint = document.createElement('div');
   hint.className = 'nw-sh-popover__hint';
@@ -1421,6 +1606,8 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
 
   wrap.appendChild(row);
   wrap.appendChild(slider);
+  wrap.appendChild(presets);
+  wrap.appendChild(stepRow);
   wrap.appendChild(hint);
 
   // Optional: Ein/Aus Button
@@ -1435,7 +1622,10 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
   toggle.addEventListener('click', (ev) => ev.stopPropagation());
   toggle.addEventListener('click', async () => {
     if (!canWrite) return;
-    await nwToggleDevice(dev.id);
+    setBusy();
+    const res = await nwToggleDevice(dev.id);
+    if (res === null) setErr();
+    else setOk();
     await nwReloadDevices({ force: true });
     // close label text not auto-updated; ok
   });
@@ -1479,6 +1669,30 @@ function nwCreateBlindPopover(dev, canWrite) {
   right.className = 'nw-sh-popover__right';
   right.appendChild(v);
 
+  // Write feedback (Senden/OK/Fehler)
+  const status = nwCreateStatusBadge();
+  right.appendChild(status);
+  let statusTimer = null;
+  function clearStatusTimer() {
+    if (statusTimer) {
+      clearTimeout(statusTimer);
+      statusTimer = null;
+    }
+  }
+  function flashStatus(kind, text, ms) {
+    clearStatusTimer();
+    nwSetStatusBadge(status, kind, text);
+    if (ms && ms > 0) {
+      statusTimer = setTimeout(() => {
+        nwSetStatusBadge(status, null, '');
+        statusTimer = null;
+      }, ms);
+    }
+  }
+  function setBusy() { flashStatus('busy', 'Senden…'); }
+  function setOk() { flashStatus('ok', 'OK', 1100); }
+  function setErr() { flashStatus('err', 'Fehler', 1600); }
+
   if (hasWrite) {
     const liveBtn = document.createElement('button');
     liveBtn.type = 'button';
@@ -1511,6 +1725,29 @@ function nwCreateBlindPopover(dev, canWrite) {
   // Premium: colored progress track.
   nwUpdateRangeFill(slider);
 
+  // Helper: commit a new value (writes once + reload) with feedback.
+  async function commitPos(nextVal, opts) {
+    const options = opts || {};
+    const showStatus = (options.showStatus !== false);
+    const reload = (options.reload !== false);
+
+    const clamped = nwClampNumber(nextVal, min, max);
+    slider.value = String(clamped);
+    v.textContent = Math.round(clamped) + ' %';
+    nwUpdateRangeFill(slider);
+
+    if (!hasWrite) return clamped;
+
+    if (showStatus) setBusy();
+    const res = await nwSetLevel(dev.id, clamped);
+    if (showStatus) {
+      if (res === null) setErr();
+      else setOk();
+    }
+    if (reload) await nwReloadDevices({ force: true });
+    return clamped;
+  }
+
   slider.addEventListener('click', (ev) => ev.stopPropagation());
 
   slider.addEventListener('input', (ev) => {
@@ -1526,13 +1763,109 @@ function nwCreateBlindPopover(dev, canWrite) {
   });
 
   slider.addEventListener('change', async (ev) => {
-    if (!canWrite) return;
+    if (!hasWrite) return;
     const raw = Number(ev.target.value);
     if (!Number.isFinite(raw)) return;
-    nwUpdateRangeFill(slider);
-    await nwSetLevel(dev.id, raw);
-    await nwReloadDevices({ force: true });
+    await commitPos(raw);
   });
+
+  // Presets (quick set): 0/50/100
+  const presets = document.createElement('div');
+  presets.className = 'nw-sh-popover__presets';
+  const presetVals = [0, 50, 100];
+  presetVals.forEach((pv) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'nw-sh-chip nw-sh-chip--mini';
+    b.textContent = pv + '%';
+    b.disabled = !hasWrite;
+    b.addEventListener('click', (ev) => ev.stopPropagation());
+    b.addEventListener('click', async () => {
+      if (!hasWrite) return;
+      await commitPos(pv);
+    });
+    presets.appendChild(b);
+  });
+
+  // Step controls: step size (1/5/10) + +/-
+  let step = nwLoadNumberLS(NW_SH_STEP_BLIND_LS_KEY, NW_SH_STEP_DEFAULT);
+  if (![1, 5, 10].includes(step)) step = NW_SH_STEP_DEFAULT;
+
+  const stepRow = document.createElement('div');
+  stepRow.className = 'nw-sh-popover__steprow';
+
+  const stepLabel = document.createElement('div');
+  stepLabel.className = 'nw-sh-popover__label';
+  stepLabel.textContent = 'Schritt';
+
+  const stepTools = document.createElement('div');
+  stepTools.className = 'nw-sh-popover__steptools';
+
+  const stepChoices = [1, 5, 10];
+  const stepBtns = new Map();
+  function syncStepBtns() {
+    stepChoices.forEach((s) => {
+      const btn = stepBtns.get(s);
+      if (!btn) return;
+      btn.classList.toggle('nw-sh-chip--active', s === step);
+      btn.setAttribute('aria-pressed', s === step ? 'true' : 'false');
+    });
+  }
+
+  const stepChoiceWrap = document.createElement('div');
+  stepChoiceWrap.className = 'nw-sh-popover__stepchoices';
+  stepChoices.forEach((s) => {
+    const c = document.createElement('button');
+    c.type = 'button';
+    c.className = 'nw-sh-chip nw-sh-chip--mini';
+    c.textContent = String(s);
+    c.title = 'Schrittweite ' + s;
+    c.disabled = !hasWrite;
+    c.setAttribute('aria-pressed', 'false');
+    c.addEventListener('click', (ev) => ev.stopPropagation());
+    c.addEventListener('click', () => {
+      if (!hasWrite) return;
+      step = s;
+      nwSaveNumberLS(NW_SH_STEP_BLIND_LS_KEY, step);
+      syncStepBtns();
+    });
+    stepBtns.set(s, c);
+    stepChoiceWrap.appendChild(c);
+  });
+  syncStepBtns();
+
+  const minus = document.createElement('button');
+  minus.type = 'button';
+  minus.className = 'nw-sh-btn nw-sh-btn--mini';
+  minus.textContent = '−';
+  minus.title = 'Position verringern';
+  minus.disabled = !hasWrite;
+  minus.addEventListener('click', (ev) => ev.stopPropagation());
+  minus.addEventListener('click', async () => {
+    if (!hasWrite) return;
+    const cur = Number(slider.value);
+    await commitPos(cur - step);
+  });
+
+  const plus = document.createElement('button');
+  plus.type = 'button';
+  plus.className = 'nw-sh-btn nw-sh-btn--mini';
+  plus.textContent = '+';
+  plus.title = 'Position erhöhen';
+  plus.disabled = !hasWrite;
+  plus.addEventListener('click', (ev) => ev.stopPropagation());
+  plus.addEventListener('click', async () => {
+    if (!hasWrite) return;
+    const cur = Number(slider.value);
+    await commitPos(cur + step);
+  });
+
+  stepTools.appendChild(stepChoiceWrap);
+  stepTools.appendChild(minus);
+  stepTools.appendChild(plus);
+
+  stepRow.appendChild(stepLabel);
+  stepRow.appendChild(stepTools);
 
   const hint = document.createElement('div');
   hint.className = 'nw-sh-popover__hint';
@@ -1565,7 +1898,10 @@ function nwCreateBlindPopover(dev, canWrite) {
     b.addEventListener('click', (ev) => ev.stopPropagation());
     b.addEventListener('click', async () => {
       if (!canWrite) return;
-      await nwCoverAction(dev.id, action);
+      setBusy();
+      const ok = await nwCoverAction(dev.id, action);
+      if (!ok) setErr();
+      else setOk();
       await nwReloadDevices({ force: true });
     });
     return b;
@@ -1577,6 +1913,8 @@ function nwCreateBlindPopover(dev, canWrite) {
 
   wrap.appendChild(row);
   wrap.appendChild(slider);
+  wrap.appendChild(presets);
+  wrap.appendChild(stepRow);
   wrap.appendChild(controls);
   wrap.appendChild(hint);
 

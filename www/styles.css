@@ -2866,6 +2866,15 @@ body{ padding-top: var(--topbar-h); }
   border-color: rgba(129,230,217,0.35);
 }
 
+.nw-sh-chip:disabled{
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.nw-sh-chip:disabled:hover{
+  transform: none;
+  border-color: rgba(148,163,184,0.22);
+}
+
 .nw-sh-chip--active{
   border-color: #00e676;
   background: radial-gradient(circle at top left, rgba(0, 200, 83, 0.22), rgba(2,6,23,0.55));
@@ -3137,6 +3146,21 @@ body{ padding-top: var(--topbar-h); }
   transform: translateY(1px);
 }
 
+.nw-sh-btn:disabled{
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Mini button (used for +/- step tuning inside popovers) */
+.nw-sh-btn--mini{
+  min-width: 44px;
+  min-height: 36px;
+  padding: 6px 10px;
+  font-size: 1rem;
+  border-radius: 14px;
+}
+
 
 /* SmartHome VIS: Detail-Button (öffnet Tooltip/Bedienpanel) */
 .nw-sh-detailbtn{
@@ -3275,6 +3299,60 @@ body{ padding-top: var(--topbar-h); }
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* Popover: write-feedback badge (Senden/OK/Fehler) */
+.nw-sh-popover__status{
+  font-size: 0.72rem;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148,163,184,0.22);
+  background: rgba(2,6,23,0.25);
+  color: rgba(203,213,225,0.92);
+  line-height: 1;
+}
+.nw-sh-popover__status--busy{
+  border-color: rgba(129,230,217,0.35);
+}
+.nw-sh-popover__status--ok{
+  border-color: rgba(0,230,118,0.75);
+  color: rgba(167,243,208,0.95);
+}
+.nw-sh-popover__status--err{
+  border-color: rgba(239,68,68,0.75);
+  color: rgba(254,202,202,0.95);
+}
+
+/* Popover: preset chips row */
+.nw-sh-popover__presets{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+/* Popover: step tuning row (Schritt 1/5/10 + +/-) */
+.nw-sh-popover__steprow{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.nw-sh-popover__steptools{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.nw-sh-popover__stepchoices{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 /* Smaller chip variant (used inside popovers) */
