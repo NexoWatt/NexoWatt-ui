@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.103",
+    "version": "0.6.104",
     "news": {
+      "0.6.104": {
+        "en": "NexoLogic: Palette categories are now collapsible folders for better overview, plus a quick button to jump back to the SmartHome config. Added control blocks for room temperature (2-point and P controller) and a PWM (time-proportional) output.",
+        "de": "NexoLogic: Kategorien in der Baustein-Palette sind jetzt einklappbare Ordner (übersichtlicher) + Schnell-Button zur SmartHome-Konfiguration. Neue Regelungs-Bausteine: Raumtemperaturregler (2-Punkt), Raumtemperaturregler (P) und PWM (Zeitproportional)."
+      },
       "0.6.103": {
         "en": "NexoLogic: Added weekly time programs (schedule + optional holiday input), counters (pulse, up/down, runtime hours), scaling/mapping, a SmartHome scene trigger block, and separate edge blocks (rising/falling/both). Runtime engine synced to editor block types/params.",
         "de": "NexoLogic: Zeitprogramme (Wochen-Schedule + optionaler Feiertag-Eingang), Z\u00e4hler (Impuls, Up/Down, Betriebsstunden), Skalierung/Mapping, SmartHome-Szene ausl\u00f6sen und separate Flanken-Bausteine (steigend/fallend/beide). Runtime-Engine an Editor-Blocktypen/Parameter angeglichen."

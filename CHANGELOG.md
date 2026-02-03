@@ -1,3 +1,9 @@
+## 0.6.104 (2026-02-03)
+- NexoLogic UI: Baustein-Palette als einklappbare Ordner (Kategorien) für mehr Übersicht.
+- NexoLogic UI: Schnell-Button „SmartHome‑Config“ (Sprung zurück zur SmartHome‑Konfiguration).
+- NexoLogic: Neue Regelungs-Bausteine: Raumtemperaturregler (2‑Punkt), Raumtemperaturregler (P) und PWM (Zeitproportional).
+- UI: Service‑Worker Cache‑Version erhöht (Update wird sofort geladen).
+
 ## 0.6.103 (2026-02-02)
 - NexoLogic: Neue Bausteine: Flanke steigend/fallend/beide, Treppenlicht, Nachlauf, Impulsverlängerer.
 - NexoLogic: Zeitprogramm (Wochen-Schedule + optionaler Feiertag-Eingang A; Feiertage standardmäßig wie Sonntag).

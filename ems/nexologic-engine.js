@@ -855,6 +855,186 @@ const NODE_TYPES = {
     },
   },
 
+  // ----- Regelung / Klima
+  rt_2p: {
+    // Raumtemperaturregler (2-Punkt) mit Hysterese
+    inputs: ['enable', 'ist', 'soll'],
+    outputs: ['out', 'delta'],
+    compute: ({ in: inp, params, internal }) => {
+      const enabled = (inp.enable === undefined) ? true : toBool(inp.enable);
+      const mode = String(params.mode || 'heat').toLowerCase(); // heat|cool
+      const band = Math.max(0, Math.min(20, toNum(params.band, 0.3)));
+      const minOnMs = Math.max(0, Math.min(3600_000, Math.round(toNum(params.minOnMs, 0))));
+      const minOffMs = Math.max(0, Math.min(3600_000, Math.round(toNum(params.minOffMs, 0))));
+      const init = toBool(params.init);
+
+      if (internal.state === undefined) internal.state = init;
+      if (!Number.isFinite(internal.lastChangeTs)) internal.lastChangeTs = 0;
+
+      const ist = toNum(inp.ist, NaN);
+      const soll = toNum(inp.soll, NaN);
+      const delta = (Number.isFinite(soll) && Number.isFinite(ist)) ? (soll - ist) : 0;
+
+      let state = toBool(internal.state);
+
+      // Safety: when disabled/invalid -> AUS
+      if (!enabled || !Number.isFinite(ist) || !Number.isFinite(soll)) {
+        if (internal.t) { try { clearTimeout(internal.t); } catch (_e) {} internal.t = null; }
+        internal.state = false;
+        return { out: { out: false, delta }, internal };
+      }
+
+      const nowTs = Date.now();
+      const lastTs = Number.isFinite(internal.lastChangeTs) ? internal.lastChangeTs : 0;
+      const since = Math.max(0, nowTs - lastTs);
+
+      // Hysterese: ON / OFF Schwellen
+      const onTh = (mode === 'cool') ? (soll + band) : (soll - band);
+      const offTh = (mode === 'cool') ? (soll - band) : (soll + band);
+
+      let want = state;
+      if (!state) {
+        if (mode === 'cool') {
+          if (ist >= onTh) want = true;
+        } else {
+          if (ist <= onTh) want = true;
+        }
+      } else {
+        if (mode === 'cool') {
+          if (ist <= offTh) want = false;
+        } else {
+          if (ist >= offTh) want = false;
+        }
+      }
+
+      if (want !== state) {
+        const allow = (want === true) ? (since >= minOffMs) : (since >= minOnMs);
+        if (allow) {
+          state = want;
+          internal.state = state;
+          internal.lastChangeTs = nowTs;
+        }
+      }
+
+      return { out: { out: toBool(state), delta }, internal };
+    },
+  },
+
+  rt_p: {
+    // Raumtemperaturregler (P) -> Stellwert 0..100%
+    inputs: ['enable', 'ist', 'soll'],
+    outputs: ['out', 'delta'],
+    compute: ({ in: inp, params }) => {
+      const enabled = (inp.enable === undefined) ? true : toBool(inp.enable);
+      const mode = String(params.mode || 'heat').toLowerCase();
+      const kp = Math.max(0, Math.min(1000, toNum(params.kp, 30))); // % pro K
+      const deadband = Math.max(0, Math.min(10, toNum(params.deadband, 0.2)));
+      const outMinRaw = toNum(params.outMin, 0);
+      const outMaxRaw = toNum(params.outMax, 100);
+      const outMin = Math.min(outMinRaw, outMaxRaw);
+      const outMax = Math.max(outMinRaw, outMaxRaw);
+      const prec = Math.max(0, Math.min(3, Math.round(toNum(params.precision, 1))));
+
+      const ist = toNum(inp.ist, NaN);
+      const soll = toNum(inp.soll, NaN);
+      const delta = (Number.isFinite(soll) && Number.isFinite(ist)) ? (soll - ist) : 0;
+
+      if (!enabled || !Number.isFinite(ist) || !Number.isFinite(soll)) {
+        return { out: { out: outMin, delta } };
+      }
+
+      let err = (soll - ist);
+      if (Math.abs(err) < deadband) err = 0;
+
+      // Kühlen: Vorzeichen umdrehen (Stellwert >0 bei ist > soll)
+      if (mode === 'cool') err = -err;
+
+      let y = err * kp;
+      y = clamp(y, outMin, outMax);
+      const f = Math.pow(10, prec);
+      y = Math.round(y * f) / f;
+      return { out: { out: y, delta } };
+    },
+  },
+
+  pwm: {
+    // Zeitproportionaler PWM-Generator: 0..100% -> Bool-Ausgang
+    inputs: ['enable', 'in'],
+    outputs: ['out'],
+    compute: ({ in: inp, params, internal, runner, nodeId }) => {
+      const enabled = (inp.enable === undefined) ? true : toBool(inp.enable);
+      const periodMs = Math.max(1000, Math.min(24*3600_000, Math.round(toNum(params.periodMs, 600_000))));
+      const minPulseMs = Math.max(0, Math.min(periodMs, Math.round(toNum(params.minPulseMs, 2000))));
+
+      let duty = toNum(inp.in, 0);
+      if (!Number.isFinite(duty)) duty = 0;
+      duty = clamp(duty, 0, 100);
+
+      const clearTimers = () => {
+        if (internal.t) { try { clearTimeout(internal.t); } catch (_e) {} internal.t = null; }
+        if (internal.t2) { try { clearTimeout(internal.t2); } catch (_e2) {} internal.t2 = null; }
+        internal.nextDueTs = null;
+      };
+
+      if (!enabled || duty <= 0) {
+        clearTimers();
+        internal.state = false;
+        internal.cfg = { enabled: false, duty, periodMs, minPulseMs };
+        return { out: { out: false }, internal };
+      }
+      if (duty >= 100) {
+        clearTimers();
+        internal.state = true;
+        internal.cfg = { enabled: true, duty, periodMs, minPulseMs };
+        return { out: { out: true }, internal };
+      }
+
+      // Compute on/off times (optional min. pulse)
+      let onMs = (periodMs * duty) / 100;
+      let offMs = periodMs - onMs;
+      if (minPulseMs > 0) {
+        if (onMs > 0 && onMs < minPulseMs) { onMs = minPulseMs; offMs = Math.max(0, periodMs - onMs); }
+        if (offMs > 0 && offMs < minPulseMs) { offMs = minPulseMs; onMs = Math.max(0, periodMs - offMs); }
+      }
+
+      // Restart cycle when config changed
+      const prevCfg = internal.cfg || {};
+      const cfgChanged = (prevCfg.enabled !== true) || (prevCfg.duty !== duty) || (prevCfg.periodMs !== periodMs) || (prevCfg.minPulseMs !== minPulseMs);
+      if (cfgChanged) {
+        internal.cycleStart = Date.now();
+        internal.cfg = { enabled: true, duty, periodMs, minPulseMs };
+      }
+
+      const nowTs = Date.now();
+      let cs = Number.isFinite(internal.cycleStart) ? internal.cycleStart : nowTs;
+      let phase = nowTs - cs;
+      if (phase >= periodMs) {
+        // keep modulo so the cycle doesn't drift too much
+        cs = nowTs - (phase % periodMs);
+        internal.cycleStart = cs;
+        phase = nowTs - cs;
+      }
+
+      const state = (phase < onMs);
+      internal.state = state;
+
+      // schedule next toggle
+      const nextIn = state ? Math.max(5, Math.round(onMs - phase)) : Math.max(5, Math.round(periodMs - phase));
+      const dueTs = nowTs + nextIn;
+      const needsResched = (!Number.isFinite(internal.nextDueTs)) || (Math.abs(dueTs - internal.nextDueTs) > 50) || cfgChanged;
+
+      if (needsResched) {
+        if (internal.t) { try { clearTimeout(internal.t); } catch (_e3) {} internal.t = null; }
+        internal.nextDueTs = dueTs;
+        internal.t = setTimeout(() => {
+          try { runner._evalNode(nodeId); } catch (_e4) {}
+        }, nextIn + 5);
+      }
+
+      return { out: { out: !!state }, internal };
+    },
+  },
+
   // ----- Zeit
   delay_on: {
     inputs: ['in'],

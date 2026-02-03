@@ -3582,6 +3582,57 @@ body{ padding-top: var(--topbar-h); }
   margin-bottom: 10px;
 }
 
+/* Palette: Ordner/Folder */
+.nw-le__palette-folder{
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(148,163,184,0.14);
+  background: rgba(15,23,42,0.25);
+  color: rgba(226,232,240,0.92);
+  cursor: pointer;
+  margin: 12px 0 6px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.nw-le__palette-folder:hover{
+  background: rgba(15,23,42,0.35);
+}
+.nw-le__palette-folder-left{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.nw-le__palette-folder-arrow{
+  width: 14px;
+  display: inline-flex;
+  justify-content: center;
+  transition: transform .12s ease;
+  color: rgba(148,163,184,0.95);
+}
+.nw-le__palette-folder[aria-expanded="true"] .nw-le__palette-folder-arrow{
+  transform: rotate(90deg);
+}
+.nw-le__palette-folder-count{
+  font-size: 0.7rem;
+  color: rgba(148,163,184,0.92);
+  background: rgba(148,163,184,0.10);
+  border: 1px solid rgba(148,163,184,0.14);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.nw-le__palette-group{
+  margin-bottom: 6px;
+}
+.nw-le__palette-group.is-collapsed{
+  display: none;
+}
+
 .nw-le__palette-group-title{
   font-size: 0.75rem;
   text-transform: uppercase;

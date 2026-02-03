@@ -412,6 +412,82 @@ function nwBuildLogicLibrary() {
       defaults: { preset: 'custom', inMin: 0, inMax: 100, outMin: 0, outMax: 100, clamp: 'true', precision: 2 },
     },
 
+    // --- Regelung / Klima
+    {
+      type: 'rt_2p',
+      name: 'Raumtemperaturregler (2‑Punkt)',
+      category: 'Regelung',
+      icon: '🌡',
+      inputs: [
+        { key: 'enable', label: 'Freigabe', dataType: 'bool' },
+        { key: 'ist', label: 'Ist', dataType: 'number' },
+        { key: 'soll', label: 'Soll', dataType: 'number' },
+      ],
+      outputs: [
+        { key: 'out', label: 'Aus', dataType: 'bool' },
+        { key: 'delta', label: 'ΔT', dataType: 'number' },
+      ],
+      params: [
+        { key: 'mode', label: 'Modus', kind: 'select', options: [
+          { value: 'heat', label: 'Heizen' },
+          { value: 'cool', label: 'Kühlen' },
+        ] },
+        { key: 'band', label: 'Hysterese (K)', kind: 'number', placeholder: '0,3' },
+        { key: 'minOnMs', label: 'Min. EIN (ms)', kind: 'number', placeholder: '0' },
+        { key: 'minOffMs', label: 'Min. AUS (ms)', kind: 'number', placeholder: '0' },
+        { key: 'init', label: 'Start', kind: 'select', options: [
+          { value: 'false', label: 'Aus' },
+          { value: 'true', label: 'Ein' },
+        ] },
+      ],
+      defaults: { mode: 'heat', band: 0.3, minOnMs: 0, minOffMs: 0, init: 'false' },
+    },
+    {
+      type: 'rt_p',
+      name: 'Raumtemperaturregler (P)',
+      category: 'Regelung',
+      icon: '📈',
+      inputs: [
+        { key: 'enable', label: 'Freigabe', dataType: 'bool' },
+        { key: 'ist', label: 'Ist', dataType: 'number' },
+        { key: 'soll', label: 'Soll', dataType: 'number' },
+      ],
+      outputs: [
+        { key: 'out', label: 'Stellwert (%)', dataType: 'number' },
+        { key: 'delta', label: 'ΔT', dataType: 'number' },
+      ],
+      params: [
+        { key: 'mode', label: 'Modus', kind: 'select', options: [
+          { value: 'heat', label: 'Heizen' },
+          { value: 'cool', label: 'Kühlen' },
+        ] },
+        { key: 'kp', label: 'Kp (%/K)', kind: 'number', placeholder: '30' },
+        { key: 'deadband', label: 'Totband (K)', kind: 'number', placeholder: '0,2' },
+        { key: 'outMin', label: 'Min (%)', kind: 'number', placeholder: '0' },
+        { key: 'outMax', label: 'Max (%)', kind: 'number', placeholder: '100' },
+        { key: 'precision', label: 'Nachkommastellen', kind: 'number', placeholder: '1' },
+      ],
+      defaults: { mode: 'heat', kp: 30, deadband: 0.2, outMin: 0, outMax: 100, precision: 1 },
+    },
+    {
+      type: 'pwm',
+      name: 'PWM (Zeitproportional)',
+      category: 'Regelung',
+      icon: '〰',
+      inputs: [
+        { key: 'enable', label: 'Freigabe', dataType: 'bool' },
+        { key: 'in', label: 'Stellwert (%)', dataType: 'number' },
+      ],
+      outputs: [
+        { key: 'out', label: 'Aus', dataType: 'bool' },
+      ],
+      params: [
+        { key: 'periodMs', label: 'Periode (ms)', kind: 'number', placeholder: '600000' },
+        { key: 'minPulseMs', label: 'Min. Puls (ms)', kind: 'number', placeholder: '2000' },
+      ],
+      defaults: { periodMs: 600000, minPulseMs: 2000 },
+    },
+
     // --- Time
     {
       type: 'delay_on',
@@ -945,6 +1021,20 @@ function nwRenderPalette() {
   if (!wrap) return;
   wrap.innerHTML = '';
 
+  const palKey = (cat) => `nwLE.pal.collapsed.${encodeURIComponent(String(cat || ''))}`;
+  const palGetCollapsed = (cat) => {
+    try {
+      const v = localStorage.getItem(palKey(cat));
+      if (v === '1') return true;
+      if (v === '0') return false;
+    } catch (_e) {}
+    // Default: nur die wichtigsten Ordner offen lassen
+    return !(['Eingänge', 'Logik'].includes(String(cat || '')));
+  };
+  const palSetCollapsed = (cat, collapsed) => {
+    try { localStorage.setItem(palKey(cat), collapsed ? '1' : '0'); } catch (_e) {}
+  };
+
   const groups = {};
   for (const it of nwLE.lib.list) {
     const cat = it.category || 'Sonstiges';
@@ -952,7 +1042,7 @@ function nwRenderPalette() {
     groups[cat].push(it);
   }
   const cats = Object.keys(groups);
-  const order = ['Eingänge','Logik','Vergleich','Mathe','Konvertierung','Zeit','Zeitprogramme','Zähler','SmartHome','Ausgänge'];
+  const order = ['Eingänge','Logik','Vergleich','Mathe','Konvertierung','Regelung','Zeit','Zeitprogramme','Zähler','SmartHome','Ausgänge'];
   cats.sort((a,b) => {
     const ia = order.indexOf(a);
     const ib = order.indexOf(b);
@@ -963,10 +1053,31 @@ function nwRenderPalette() {
   });
 
   for (const cat of cats) {
-    const title = document.createElement('div');
-    title.className = 'nw-le__palette-group-title';
-    title.textContent = cat;
-    wrap.appendChild(title);
+    const collapsed = palGetCollapsed(cat);
+
+    const folder = document.createElement('button');
+    folder.type = 'button';
+    folder.className = 'nw-le__palette-folder';
+    folder.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    folder.innerHTML = `
+      <span class="nw-le__palette-folder-left">
+        <span class="nw-le__palette-folder-arrow">▸</span>
+        <span class="nw-le__palette-folder-title">${nwSafeStr(cat)}</span>
+      </span>
+      <span class="nw-le__palette-folder-count">${groups[cat].length}</span>
+    `;
+
+    const groupWrap = document.createElement('div');
+    groupWrap.className = 'nw-le__palette-group';
+    if (collapsed) groupWrap.classList.add('is-collapsed');
+
+    folder.addEventListener('click', () => {
+      const isCollapsed = groupWrap.classList.toggle('is-collapsed');
+      folder.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+      palSetCollapsed(cat, isCollapsed);
+    });
+
+    wrap.appendChild(folder);
 
     for (const it of groups[cat]) {
       const btn = document.createElement('button');
@@ -974,8 +1085,10 @@ function nwRenderPalette() {
       btn.className = 'nw-le__palette-item';
       btn.innerHTML = `<span class="nw-le__palette-icon">${it.icon || ''}</span><span>${it.name}</span>`;
       btn.addEventListener('click', () => nwAddNode(it.type));
-      wrap.appendChild(btn);
+      groupWrap.appendChild(btn);
     }
+
+    wrap.appendChild(groupWrap);
   }
 }
 
@@ -1970,11 +2083,15 @@ async function nwInitLogicEditor() {
   const btnSave = document.getElementById('nw-le-btn-save');
   const btnExport = document.getElementById('nw-le-btn-export');
   const btnImport = document.getElementById('nw-le-btn-import');
+  const btnSmarthomeCfg = document.getElementById('nw-le-btn-smarthomecfg');
 
   if (btnNew) btnNew.addEventListener('click', () => nwHandleNew());
   if (btnSave) btnSave.addEventListener('click', () => nwHandleSave());
   if (btnExport) btnExport.addEventListener('click', () => nwOpenExport());
   if (btnImport) btnImport.addEventListener('click', () => nwOpenImport());
+  if (btnSmarthomeCfg) btnSmarthomeCfg.addEventListener('click', () => {
+    try { window.location.href = 'smarthome-config.html'; } catch (_e) {}
+  });
 
 
   // graph controls
