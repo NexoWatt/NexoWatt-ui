@@ -950,7 +950,10 @@ class TarifVisModule extends BaseModule {
 	                // Ausnahme: Wenn zeitvariables Netzentgelt im NT ist, darf geladen werden.
 	                const storageTimeOk = !!storageChargeWindowOk;
 	                const cheapWanted = (tarifState === 'guenstig' && allowStorageCheap);
-	                const chargeAllowed = (netFeeIsNt || (cheapWanted && storageTimeOk));
+	                // Speicher darf nur laden wenn der Tarif "günstig" ist.
+	                // Ausnahme zur Zeitfenster-Policy: Wenn Netzentgelt im NT ist, darf auch außerhalb
+	                // des Zeitfensters geladen werden – aber weiterhin nur bei günstigem Tarif.
+	                const chargeAllowed = (cheapWanted && (storageTimeOk || netFeeIsNt));
 
 	                if (netFeeIsHt) {
                     // In HT: Speicher soll NICHT durch Tarif entladen/geladen werden → Eigenverbrauch
@@ -1153,7 +1156,8 @@ if (aktivEff) {
       } else if (storageFullHold) {
         statusText = `${base}: Speicher voll – ruht`;
       } else if (storageChargeBlockedByTime) {
-        statusText = `${base}: Speicher: Netzladen gesperrt (${storageChargeWindowLabel})`;
+        // Tagsüber: kein Speicher-Netzladen (Policy) → normaler Eigenverbrauchsmodus.
+        statusText = `${base}: Eigenverbrauchsoptimierung aktiv (tagsüber)`;
       } else {
         statusText = `${base}: keine Speicher-Ladung`;
       }
@@ -1163,7 +1167,7 @@ if (aktivEff) {
       const parts = [];
       if (storageCharging) parts.push('Speicher lädt');
       else if (storageFullHold) parts.push('Speicher voll (ruht)');
-      else if (storageChargeBlockedByTime) parts.push(`Speicher: Netzladen gesperrt (${storageChargeWindowLabel})`);
+      else if (storageChargeBlockedByTime) parts.push('Eigenverbrauchsoptimierung aktiv (tagsüber)');
       parts.push(gridChargeAllowed ? 'EVCS freigegeben' : 'EVCS gesperrt');
       statusText = `${base}: ${parts.join(' + ')}`;
     }

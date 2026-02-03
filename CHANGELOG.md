@@ -1,3 +1,8 @@
+## 0.6.114 (2026-02-03)
+- Tarif/Speicher: Netzladen des Speichers ist jetzt **nur** bei günstigem Tarif erlaubt.
+- Tarif/Speicher: Ausnahme zur Tages-Sperre – wenn zeitvariables Netzentgelt im **NT** ist, darf auch außerhalb des Zeitfensters geladen werden (weiterhin nur bei günstigem Tarif).
+- Tarif/VIS: Status-Text vereinfacht – keine Uhrzeiten mehr; tagsüber wird **„Eigenverbrauchsoptimierung aktiv“** angezeigt.
+
 ## 0.6.113 (2026-02-03)
 - Tarif/Speicher: Netzladen des Speichers wird jetzt quartalsabhängig zeitlich begrenzt (Q1/Q4: 18:00–06:00, Q2/Q3: 21:00–06:00).
 - Tarif/Speicher: Ausnahme bleibt aktiv – wenn zeitvariables Netzentgelt im NT ist, darf der Speicher trotzdem laden.

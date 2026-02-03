@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.113",
+    "version": "0.6.114",
     "news": {
+      "0.6.114": {
+        "en": "Tariff/storage: Battery grid charging is now allowed only when the tariff is cheap. The NT grid-fee window can override the daytime block, but still requires a cheap tariff. Status text simplified (no time ranges; shows 'self-consumption optimization active' during daytime).",
+        "de": "Tarif/Speicher: Speicher-Netzladen ist jetzt nur bei günstigem Tarif erlaubt. NT (Netzentgelt) kann die Tages-Sperre übersteuern, aber weiterhin nur bei günstigem Tarif. Status-Text vereinfacht (keine Uhrzeiten; tagsüber 'Eigenverbrauchsoptimierung aktiv')."
+      },
+      "0.6.113": {
+        "en": "Tariff/storage: Quarter-based time windows to prevent daytime battery grid charging (Q1/Q4 18:00–06:00, Q2/Q3 21:00–06:00) with an exception for NT grid-fee windows.",
+        "de": "Tarif/Speicher: Quartalsabhängige Zeitfenster gegen Speicher-Netzladen am Tag (Q1/Q4 18:00–06:00, Q2/Q3 21:00–06:00) inkl. Ausnahme bei Netzentgelt NT."
+      },
       "0.6.112": {
         "en": "SmartHome: End users can now toggle Favorites directly on each tile via a star (★/☆). Favorites are stored locally per browser and override optional installer defaults.",
         "de": "SmartHome: Endkunden können Favoriten jetzt direkt in den Kacheln per Stern (★/☆) umschalten. Favoriten werden lokal pro Browser gespeichert und überschreiben optionale Installer-Defaults."
