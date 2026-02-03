@@ -1,3 +1,12 @@
+## 0.6.103 (2026-02-02)
+- NexoLogic: Neue Bausteine: Flanke steigend/fallend/beide, Treppenlicht, Nachlauf, Impulsverlängerer.
+- NexoLogic: Zeitprogramm (Wochen-Schedule + optionaler Feiertag-Eingang A; Feiertage standardmäßig wie Sonntag).
+- NexoLogic: Zähler-Bausteine: Impulszähler, Up/Down-Zähler, Betriebsstunden.
+- NexoLogic: Skalierung/Mapping (Presets 0..255↔0..100%, 0..10V↔0..100%).
+- NexoLogic: SmartHome-Szene auslösen (Szene-Auswahl + Trigger-Flanke, optionaler DP-Fallback).
+- Backend: NexoLogic Runtime-Engine an Editor-Blocktypen/Parameter angepasst (u. a. dp_in cast, cmp/hyst, clamp-Params, dp_out Throttle mit Pending-Write).
+- UI: Service-Worker Cache-Version erhöht, damit Updates sofort sichtbar sind.
+
 ## 0.6.102 (2026-02-02)
 - NexoLogic: Mehrere Logikseiten (Pages) im Editor inkl. Umbenennen, Duplizieren und Löschen.
 - NexoLogic: Jede Logikseite kann aktiviert/deaktiviert werden (Engine ignoriert deaktivierte Seiten).

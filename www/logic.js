@@ -17,6 +17,9 @@ const nwLE = {
   connecting: null,
   dirty: false,
   lastSaveOk: true,
+
+  // SmartHome scenes for scene-trigger block
+  sceneOptions: [],
 };
 
 const nwClamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -211,6 +214,37 @@ function nwBuildLogicLibrary() {
       defaults: {},
     },
 
+    {
+      type: 'edge_rising',
+      name: 'Flanke steigend',
+      category: 'Logik',
+      icon: '↑',
+      inputs: [{ key: 'in', label: 'Ein', dataType: 'bool' }],
+      outputs: [{ key: 'out', label: 'Impuls', dataType: 'bool' }],
+      params: [],
+      defaults: {},
+    },
+    {
+      type: 'edge_falling',
+      name: 'Flanke fallend',
+      category: 'Logik',
+      icon: '↓',
+      inputs: [{ key: 'in', label: 'Ein', dataType: 'bool' }],
+      outputs: [{ key: 'out', label: 'Impuls', dataType: 'bool' }],
+      params: [],
+      defaults: {},
+    },
+    {
+      type: 'edge_both',
+      name: 'Flanke (beide)',
+      category: 'Logik',
+      icon: '↕',
+      inputs: [{ key: 'in', label: 'Ein', dataType: 'bool' }],
+      outputs: [{ key: 'out', label: 'Impuls', dataType: 'bool' }],
+      params: [],
+      defaults: {},
+    },
+
     // --- Compare
     {
       type: 'cmp',
@@ -347,6 +381,37 @@ function nwBuildLogicLibrary() {
       defaults: { min: 0, max: 100 },
     },
 
+    // --- Konvertierung
+    {
+      type: 'scale',
+      name: 'Skalierung/Mapping',
+      category: 'Konvertierung',
+      icon: '↔',
+      inputs: [
+        { key: 'in', label: 'Ein', dataType: 'number' },
+      ],
+      outputs: [{ key: 'out', label: 'Aus', dataType: 'number' }],
+      params: [
+        { key: 'preset', label: 'Preset', kind: 'select', options: [
+          { value: 'custom', label: 'Benutzerdefiniert' },
+          { value: '255_to_100', label: '0..255 → 0..100 %' },
+          { value: '100_to_255', label: '0..100 % → 0..255' },
+          { value: '10v_to_100', label: '0..10 V → 0..100 %' },
+          { value: '100_to_10v', label: '0..100 % → 0..10 V' },
+        ] },
+        { key: 'inMin', label: 'In Min', kind: 'number', placeholder: '0' },
+        { key: 'inMax', label: 'In Max', kind: 'number', placeholder: '100' },
+        { key: 'outMin', label: 'Out Min', kind: 'number', placeholder: '0' },
+        { key: 'outMax', label: 'Out Max', kind: 'number', placeholder: '100' },
+        { key: 'clamp', label: 'Begrenzen', kind: 'select', options: [
+          { value: 'true', label: 'Ja' },
+          { value: 'false', label: 'Nein' },
+        ] },
+        { key: 'precision', label: 'Nachkommastellen', kind: 'number', placeholder: '2' },
+      ],
+      defaults: { preset: 'custom', inMin: 0, inMax: 100, outMin: 0, outMax: 100, clamp: 'true', precision: 2 },
+    },
+
     // --- Time
     {
       type: 'delay_on',
@@ -388,6 +453,161 @@ function nwBuildLogicLibrary() {
         ] },
       ],
       defaults: { ms: 500, edge: 'rising' },
+    },
+    {
+      type: 'staircase',
+      name: 'Treppenlicht',
+      category: 'Zeit',
+      icon: '💡',
+      inputs: [{ key: 'trig', label: 'Trig', dataType: 'bool' }],
+      outputs: [{ key: 'out', label: 'Aus', dataType: 'bool' }],
+      params: [
+        { key: 'ms', label: 'Zeit (ms)', kind: 'number', placeholder: '60000' },
+        { key: 'edge', label: 'Flanke', kind: 'select', options: [
+          { value: 'rising', label: 'steigend' },
+          { value: 'falling', label: 'fallend' },
+          { value: 'both', label: 'beide' },
+        ] },
+      ],
+      defaults: { ms: 60000, edge: 'rising' },
+    },
+    {
+      type: 'after_run',
+      name: 'Nachlauf',
+      category: 'Zeit',
+      icon: '⏳',
+      inputs: [{ key: 'in', label: 'Ein', dataType: 'bool' }],
+      outputs: [{ key: 'out', label: 'Aus', dataType: 'bool' }],
+      params: [
+        { key: 'ms', label: 'Nachlauf (ms)', kind: 'number', placeholder: '1000' },
+      ],
+      defaults: { ms: 1000 },
+    },
+    {
+      type: 'pulse_extend',
+      name: 'Impulsverlängerer',
+      category: 'Zeit',
+      icon: '⏱',
+      inputs: [{ key: 'in', label: 'Ein', dataType: 'bool' }],
+      outputs: [{ key: 'out', label: 'Aus', dataType: 'bool' }],
+      params: [
+        { key: 'ms', label: 'Verlängerung (ms)', kind: 'number', placeholder: '1000' },
+      ],
+      defaults: { ms: 1000 },
+    },
+
+    // --- Zeitprogramme
+    {
+      type: 'schedule',
+      name: 'Zeitprogramm',
+      category: 'Zeitprogramme',
+      icon: '🗓',
+      inputs: [
+        { key: 'enable', label: 'Enable', dataType: 'bool' },
+        { key: 'holiday', label: 'Feiertag (A)', dataType: 'bool' },
+      ],
+      outputs: [{ key: 'out', label: 'Aktiv', dataType: 'bool' }],
+      params: [
+        { key: 'days', label: 'Tage', kind: 'days' },
+        { key: 'from', label: 'Von', kind: 'time', placeholder: '00:00' },
+        { key: 'to', label: 'Bis', kind: 'time', placeholder: '23:59' },
+        { key: 'holidayMode', label: 'Feiertag', kind: 'select', options: [
+          { value: 'asSunday', label: 'wie Sonntag (DE Standard)' },
+          { value: 'ignore', label: 'ignorieren' },
+          { value: 'off', label: 'aus (ST aktiv)' },
+        ] },
+      ],
+      defaults: { days: 'Mo,Di,Mi,Do,Fr,Sa,So', from: '00:00', to: '23:59', holidayMode: 'asSunday' },
+    },
+
+    // --- Zähler
+    {
+      type: 'impulse_counter',
+      name: 'Impulszähler',
+      category: 'Zähler',
+      icon: '#',
+      inputs: [
+        { key: 'trig', label: 'Trig', dataType: 'bool' },
+        { key: 'reset', label: 'Reset', dataType: 'bool' },
+      ],
+      outputs: [{ key: 'out', label: 'Zähler', dataType: 'number' }],
+      params: [
+        { key: 'step', label: 'Schritt', kind: 'number', placeholder: '1' },
+        { key: 'init', label: 'Startwert', kind: 'number', placeholder: '0' },
+        { key: 'clamp', label: 'Begrenzen', kind: 'select', options: [
+          { value: 'false', label: 'Nein' },
+          { value: 'true', label: 'Ja' },
+        ] },
+        { key: 'min', label: 'Min', kind: 'number', placeholder: '0' },
+        { key: 'max', label: 'Max', kind: 'number', placeholder: '100' },
+      ],
+      defaults: { step: 1, init: 0, clamp: 'false', min: 0, max: 100 },
+    },
+    {
+      type: 'counter',
+      name: 'Zähler (Up/Down)',
+      category: 'Zähler',
+      icon: '±',
+      inputs: [
+        { key: 'up', label: 'Up', dataType: 'bool' },
+        { key: 'down', label: 'Down', dataType: 'bool' },
+        { key: 'reset', label: 'Reset', dataType: 'bool' },
+      ],
+      outputs: [{ key: 'out', label: 'Zähler', dataType: 'number' }],
+      params: [
+        { key: 'step', label: 'Schritt', kind: 'number', placeholder: '1' },
+        { key: 'init', label: 'Startwert', kind: 'number', placeholder: '0' },
+        { key: 'clamp', label: 'Begrenzen', kind: 'select', options: [
+          { value: 'false', label: 'Nein' },
+          { value: 'true', label: 'Ja' },
+        ] },
+        { key: 'min', label: 'Min', kind: 'number', placeholder: '0' },
+        { key: 'max', label: 'Max', kind: 'number', placeholder: '100' },
+      ],
+      defaults: { step: 1, init: 0, clamp: 'false', min: 0, max: 100 },
+    },
+    {
+      type: 'runtime_hours',
+      name: 'Betriebsstunden',
+      category: 'Zähler',
+      icon: '⌛',
+      inputs: [
+        { key: 'run', label: 'Run', dataType: 'bool' },
+        { key: 'reset', label: 'Reset', dataType: 'bool' },
+      ],
+      outputs: [{ key: 'out', label: 'h', dataType: 'number' }],
+      params: [
+        { key: 'initHours', label: 'Start (h)', kind: 'number', placeholder: '0' },
+        { key: 'precision', label: 'Nachkommastellen', kind: 'number', placeholder: '2' },
+      ],
+      defaults: { initHours: 0, precision: 2 },
+    },
+
+    // --- SmartHome
+    {
+      type: 'scene_trigger',
+      name: 'Szene auslösen',
+      category: 'SmartHome',
+      icon: '▶',
+      inputs: [{ key: 'trig', label: 'Trig', dataType: 'bool' }],
+      outputs: [{ key: 'out', label: 'Aus', dataType: 'bool' }],
+      params: [
+        { key: 'sceneId', label: 'Szene', kind: 'scene' },
+        { key: 'edge', label: 'Flanke', kind: 'select', options: [
+          { value: 'rising', label: 'steigend' },
+          { value: 'falling', label: 'fallend' },
+          { value: 'both', label: 'beide' },
+        ] },
+        { key: 'payload', label: 'Wert', kind: 'select', options: [
+          { value: 'true', label: 'true' },
+          { value: '1', label: '1' },
+          { value: '0', label: '0' },
+          { value: 'false', label: 'false' },
+        ] },
+        { key: 'pulseMs', label: 'Rücksetzen (ms)', kind: 'number', placeholder: '0' },
+        { key: 'dpId', label: 'Fallback DP', kind: 'dp', placeholder: 'optional' },
+      ],
+      defaults: { sceneId: '', edge: 'rising', payload: 'true', pulseMs: 0, dpId: '' },
     },
 
     // --- Output
@@ -732,7 +952,7 @@ function nwRenderPalette() {
     groups[cat].push(it);
   }
   const cats = Object.keys(groups);
-  const order = ['Eingänge','Logik','Vergleich','Mathe','Zeit','Ausgänge'];
+  const order = ['Eingänge','Logik','Vergleich','Mathe','Konvertierung','Zeit','Zeitprogramme','Zähler','SmartHome','Ausgänge'];
   cats.sort((a,b) => {
     const ia = order.indexOf(a);
     const ib = order.indexOf(b);
@@ -1101,6 +1321,97 @@ function nwRenderInspector() {
           });
         }
       }, 0);
+      continue;
+    }
+
+    if (p.kind === 'scene') {
+      const scenes = Array.isArray(nwLE.sceneOptions) ? nwLE.sceneOptions : [];
+      const opts = [
+        '<option value="">— wählen —</option>',
+        ...scenes.map(s => `<option value="${String(s.value)}" ${String(s.value)===String(val) ? 'selected' : ''}>${s.label}</option>`),
+      ].join('');
+      const html = `<select id="nw-le-insp-${key}" class="nw-config-input">${opts}</select>`;
+      wrap.appendChild(mkRow(p.label, html));
+      setTimeout(() => {
+        const inp = document.getElementById(`nw-le-insp-${key}`);
+        if (inp) {
+          inp.addEventListener('change', () => {
+            node.params = node.params || {};
+            node.params[key] = inp.value;
+            nwMarkDirty();
+          });
+        }
+      }, 0);
+      continue;
+    }
+
+    if (p.kind === 'time') {
+      const html = `<input id="nw-le-insp-${key}" class="nw-config-input" type="time" value="${nwSafeStr(val)}" placeholder="${nwSafeStr(p.placeholder || '')}"/>`;
+      wrap.appendChild(mkRow(p.label, html));
+      setTimeout(() => {
+        const inp = document.getElementById(`nw-le-insp-${key}`);
+        if (inp) {
+          inp.addEventListener('input', () => {
+            node.params = node.params || {};
+            node.params[key] = inp.value;
+            nwMarkDirty();
+          });
+        }
+      }, 0);
+      continue;
+    }
+
+    if (p.kind === 'days') {
+      // Val: "Mo,Di,Mi,Do,Fr,Sa,So" oder "1,2,3"
+      const dayList = [
+        { n: 1, label: 'Mo' },
+        { n: 2, label: 'Di' },
+        { n: 3, label: 'Mi' },
+        { n: 4, label: 'Do' },
+        { n: 5, label: 'Fr' },
+        { n: 6, label: 'Sa' },
+        { n: 7, label: 'So' },
+      ];
+      const map = { mo: 1, di: 2, mi: 3, do: 4, fr: 5, sa: 6, so: 7 };
+      const cur = new Set();
+      try {
+        const parts = nwSafeStr(val).split(/[,; ]+/).map(x => x.trim().toLowerCase()).filter(Boolean);
+        for (const p2 of parts) {
+          if (map[p2]) cur.add(map[p2]);
+          else {
+            const nn = parseInt(p2, 10);
+            if (Number.isFinite(nn) && nn >= 1 && nn <= 7) cur.add(nn);
+          }
+        }
+      } catch (e) {}
+
+      const chips = dayList.map(d => {
+        const checked = cur.has(d.n) ? 'checked' : '';
+        return `<label style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid rgba(255,255,255,.08);border-radius:999px;background:rgba(0,0,0,.15);cursor:pointer;user-select:none;">
+          <input type="checkbox" data-day="${d.n}" ${checked} style="accent-color:#22c55e;"/>
+          <span>${d.label}</span>
+        </label>`;
+      }).join('');
+
+      const html = `<div id="nw-le-insp-${key}" style="display:flex;flex-wrap:wrap;gap:8px;">${chips}</div>`;
+      wrap.appendChild(mkRow(p.label, html));
+
+      setTimeout(() => {
+        const host = document.getElementById(`nw-le-insp-${key}`);
+        if (!host) return;
+        const update = () => {
+          const boxes = host.querySelectorAll('input[type=checkbox][data-day]');
+          const sel = [];
+          boxes.forEach(b => { if (b.checked) sel.push(parseInt(b.getAttribute('data-day'), 10)); });
+          sel.sort((a,b)=>a-b);
+          const str = sel.map(n => dayList.find(d => d.n === n)?.label).filter(Boolean).join(',');
+          node.params = node.params || {};
+          node.params[key] = str;
+          nwMarkDirty();
+        };
+        host.addEventListener('change', update);
+      }, 0);
+
       continue;
     }
 
@@ -1704,6 +2015,17 @@ async function nwInitLogicEditor() {
   // logic lib
   nwLE.lib = nwBuildLogicLibrary();
   nwRenderPalette();
+
+  // SmartHome Szenen (für "Szene auslösen")
+  try {
+    const r = await fetch('/api/logic/blocks');
+    const j = await r.json();
+    if (j && j.ok === true && Array.isArray(j.blocks)) {
+      nwLE.sceneOptions = j.blocks
+        .filter(b => b && b.type === 'scene')
+        .map(b => ({ value: b.id, label: b.name || b.id }));
+    }
+  } catch (_e) {}
 
   // load config
   nwSetStatus('Lade…');
