@@ -957,6 +957,337 @@ const NODE_TYPES = {
     },
   },
 
+  rt_pi: {
+    // Raumtemperaturregler (PI) -> Stellwert 0..100% (mit Anti-Windup)
+    inputs: ['enable', 'ist', 'soll', 'reset'],
+    outputs: ['out', 'delta', 'p', 'i'],
+    compute: ({ in: inp, params, internal, runner, nodeId }) => {
+      const enabled = (inp.enable === undefined) ? true : toBool(inp.enable);
+      const reset = toBool(inp.reset);
+
+      const mode = String(params.mode || 'heat').toLowerCase();
+      const kp = Math.max(0, Math.min(1000, toNum(params.kp, 30))); // % pro K
+      const ti = Math.max(1, Math.min(24*3600, toNum(params.ti, 600))); // s
+      const cycleMs = Math.max(250, Math.min(3600_000, Math.round(toNum(params.cycleMs, 10_000))));
+      const deadband = Math.max(0, Math.min(10, toNum(params.deadband, 0.2)));
+      const outMinRaw = toNum(params.outMin, 0);
+      const outMaxRaw = toNum(params.outMax, 100);
+      const outMin = Math.min(outMinRaw, outMaxRaw);
+      const outMax = Math.max(outMinRaw, outMaxRaw);
+      const antiWindup = (params.antiWindup === undefined) ? true : toBool(params.antiWindup);
+      const resetOnDisable = (params.resetOnDisable === undefined) ? true : toBool(params.resetOnDisable);
+      const prec = Math.max(0, Math.min(3, Math.round(toNum(params.precision, 1))));
+
+      const ist = toNum(inp.ist, NaN);
+      const soll = toNum(inp.soll, NaN);
+      const delta = (Number.isFinite(soll) && Number.isFinite(ist)) ? (soll - ist) : 0;
+
+      // Init internal
+      if (!Number.isFinite(internal.lastTs)) internal.lastTs = Date.now();
+      if (!Number.isFinite(internal.iTerm)) internal.iTerm = 0;
+
+      const clearIntervalSafe = () => {
+        if (internal.i) { try { clearInterval(internal.i); } catch (_e) {} internal.i = null; }
+        internal.iMs = null;
+      };
+
+      // reset input
+      if (reset) internal.iTerm = 0;
+
+      // If disabled/invalid -> output min, stop timer
+      if (!enabled || !Number.isFinite(ist) || !Number.isFinite(soll)) {
+        clearIntervalSafe();
+        internal.lastTs = Date.now();
+        if (resetOnDisable) internal.iTerm = 0;
+        return { out: { out: outMin, delta, p: 0, i: internal.iTerm }, internal };
+      }
+
+      // periodic evaluation (so I-term can build up even without DP changes)
+      if (!internal.i || internal.iMs !== cycleMs) {
+        clearIntervalSafe();
+        internal.iMs = cycleMs;
+        internal.i = setInterval(() => {
+          try { runner._evalNode(nodeId); } catch (_e2) {}
+        }, cycleMs);
+      }
+
+      const nowTs = Date.now();
+      const dtSec = Math.max(0, Math.min(3600, (nowTs - internal.lastTs) / 1000));
+      internal.lastTs = nowTs;
+
+      // Error
+      let err = (soll - ist);
+      if (Math.abs(err) < deadband) err = 0;
+      // Cooling: invert error direction
+      if (mode === 'cool') err = -err;
+
+      const p = err * kp;
+
+      // Integrator (Ki = Kp / Ti)
+      const ki = (ti > 0) ? (kp / ti) : 0;
+      const iPrev = toNum(internal.iTerm, 0);
+      let iNext = iPrev + (ki * err * dtSec);
+
+      // prevent runaway
+      iNext = clamp(iNext, -10000, 10000);
+
+      let uCand = p + iNext;
+      let u = clamp(uCand, outMin, outMax);
+
+      // Anti-windup: if saturated and error pushes further -> do not integrate this step
+      if (antiWindup && u !== uCand) {
+        const pushingUp = (uCand > outMax) && (err > 0);
+        const pushingDown = (uCand < outMin) && (err < 0);
+        if (pushingUp || pushingDown) {
+          iNext = iPrev;
+          uCand = p + iNext;
+          u = clamp(uCand, outMin, outMax);
+        }
+      }
+
+      internal.iTerm = iNext;
+
+      const f = Math.pow(10, prec);
+      const round = (x) => Math.round(x * f) / f;
+
+      return { out: { out: round(u), delta: round(delta), p: round(p), i: round(iNext) }, internal };
+    },
+  },
+
+  season_switch: {
+    // Sommer/Winter Umschalter (Auto per Außentemperatur oder manuell per Input)
+    inputs: ['enable', 'tOut', 'summerIn', 'winterVal', 'summerVal'],
+    outputs: ['out', 'summer', 'winter'],
+    compute: ({ in: inp, params, internal }) => {
+      const enabled = (inp.enable === undefined) ? true : toBool(inp.enable);
+      const mode = String(params.mode || 'auto').toLowerCase(); // auto|manual
+      const summerOn = toNum(params.summerOn, 18);
+      const winterOn = toNum(params.winterOn, 15);
+      const init = String(params.init || 'winter').toLowerCase();
+
+      if (internal.isSummer === undefined) internal.isSummer = (init === 'summer');
+
+      let isSummer = toBool(internal.isSummer);
+
+      if (!enabled) {
+        // disabled: keep last state (output still provided)
+      } else if (mode === 'manual') {
+        isSummer = toBool(inp.summerIn);
+      } else {
+        const tOut = toNum(inp.tOut, NaN);
+        if (Number.isFinite(tOut)) {
+          if (tOut >= summerOn) isSummer = true;
+          else if (tOut <= winterOn) isSummer = false;
+        }
+      }
+
+      internal.isSummer = isSummer;
+      const outVal = isSummer ? inp.summerVal : inp.winterVal;
+
+      return { out: { out: outVal, summer: isSummer, winter: !isSummer }, internal };
+    },
+  },
+
+  window_lock: {
+    // Fensterkontakt-Sperre (mit Verzögerung beim Öffnen/Schließen)
+    inputs: ['enable', 'in', 'window'],
+    outputs: ['out', 'blocked'],
+    compute: ({ in: inp, params, internal, runner, nodeId }) => {
+      const enabled = (inp.enable === undefined) ? true : toBool(inp.enable);
+      const invertWindow = toBool(params.invertWindow);
+      const openDelayMs = Math.max(0, Math.min(24*3600_000, Math.round(toNum(params.openDelayMs, 0))));
+      const closeDelayMs = Math.max(0, Math.min(24*3600_000, Math.round(toNum(params.closeDelayMs, 0))));
+      const blockOut = toBool(params.blockOut);
+
+      const inVal = toBool(inp.in);
+      const winRaw = toBool(inp.window);
+      const winOpen = invertWindow ? !winRaw : winRaw;
+
+      if (internal.blocked === undefined) internal.blocked = false;
+
+      const clearTimers = () => {
+        if (internal.t) { try { clearTimeout(internal.t); } catch (_e) {} internal.t = null; }
+        if (internal.t2) { try { clearTimeout(internal.t2); } catch (_e2) {} internal.t2 = null; }
+      };
+
+      if (!enabled) {
+        clearTimers();
+        internal.blocked = false;
+        return { out: { out: inVal, blocked: false }, internal };
+      }
+
+      // Window open: schedule/activate block
+      if (winOpen) {
+        if (internal.t2) { try { clearTimeout(internal.t2); } catch (_e3) {} internal.t2 = null; }
+
+        if (openDelayMs <= 0) {
+          if (internal.t) { try { clearTimeout(internal.t); } catch (_e4) {} internal.t = null; }
+          internal.blocked = true;
+        } else if (!internal.blocked && !internal.t) {
+          internal.t = setTimeout(() => {
+            try {
+              internal.t = null;
+              internal.blocked = true;
+              runner._evalNode(nodeId);
+            } catch (_e5) {}
+          }, openDelayMs);
+        }
+      } else {
+        // Window closed: schedule/activate release
+        if (internal.t) { try { clearTimeout(internal.t); } catch (_e6) {} internal.t = null; }
+
+        if (closeDelayMs <= 0) {
+          if (internal.t2) { try { clearTimeout(internal.t2); } catch (_e7) {} internal.t2 = null; }
+          internal.blocked = false;
+        } else if (internal.blocked && !internal.t2) {
+          internal.t2 = setTimeout(() => {
+            try {
+              internal.t2 = null;
+              internal.blocked = false;
+              runner._evalNode(nodeId);
+            } catch (_e8) {}
+          }, closeDelayMs);
+        }
+      }
+
+      const blocked = toBool(internal.blocked);
+      const outVal = blocked ? blockOut : inVal;
+
+      return { out: { out: toBool(outVal), blocked }, internal };
+    },
+  },
+
+  heating_curve: {
+    // Heizkurve: Außentemperatur -> Vorlauf-Soll (°C)
+    inputs: ['enable', 'tOut', 'room'],
+    outputs: ['out', 'active'],
+    compute: ({ in: inp, params }) => {
+      const enabled = (inp.enable === undefined) ? true : toBool(inp.enable);
+
+      const model = String(params.model || '2point').toLowerCase(); // 2point|slope
+
+      const tOutWarm = toNum(params.tOutWarm, 20);
+      const tFlowWarm = toNum(params.tFlowWarm, 25);
+      const tOutCold = toNum(params.tOutCold, -10);
+      const tFlowCold = toNum(params.tFlowCold, 50);
+
+      const slope = toNum(params.slope, 1.2);
+      const level = toNum(params.level, 20);
+
+      let shift = toNum(params.shift, 0);
+      const roomRef = toNum(params.roomRef, 20);
+      const roomGain = toNum(params.roomGain, 0);
+
+      const minFlowRaw = toNum(params.minFlow, 20);
+      const maxFlowRaw = toNum(params.maxFlow, 60);
+      const minFlow = Math.min(minFlowRaw, maxFlowRaw);
+      const maxFlow = Math.max(minFlowRaw, maxFlowRaw);
+
+      const prec = Math.max(0, Math.min(2, Math.round(toNum(params.precision, 1))));
+      const f = Math.pow(10, prec);
+
+      const tOut = toNum(inp.tOut, NaN);
+      const room = toNum(inp.room, NaN);
+
+      if (Number.isFinite(room) && roomGain !== 0) {
+        shift += (room - roomRef) * roomGain;
+      }
+
+      if (!enabled || !Number.isFinite(tOut)) {
+        const y0 = clamp(minFlow, minFlow, maxFlow);
+        return { out: { out: Math.round(y0 * f) / f, active: false } };
+      }
+
+      let y = minFlow;
+
+      if (model === 'slope') {
+        // einfache Kennlinie: Niveau + Steigung * (ReferenzRaum - Außen)
+        y = level + slope * (roomRef - tOut);
+      } else {
+        // 2-Punkt linear
+        if (tOutWarm === tOutCold) {
+          y = tFlowWarm;
+        } else if (tOut >= tOutWarm) {
+          y = tFlowWarm;
+        } else if (tOut <= tOutCold) {
+          y = tFlowCold;
+        } else {
+          const t = (tOut - tOutWarm) / (tOutCold - tOutWarm);
+          y = tFlowWarm + t * (tFlowCold - tFlowWarm);
+        }
+      }
+
+      y += shift;
+      y = clamp(y, minFlow, maxFlow);
+      y = Math.round(y * f) / f;
+
+      return { out: { out: y, active: true } };
+    },
+  },
+
+  mixer_2p: {
+    // Mischer-Regler (2-Punkt): erzeugt kurze AUF/ZU-Impulse abhängig von Soll/Ist
+    inputs: ['enable', 'ist', 'soll'],
+    outputs: ['open', 'close', 'delta'],
+    compute: ({ in: inp, params, internal, runner, nodeId }) => {
+      const enabled = (inp.enable === undefined) ? true : toBool(inp.enable);
+      const band = Math.max(0, Math.min(20, toNum(params.band, 0.5)));
+      const pulseMs = Math.max(50, Math.min(60_000, Math.round(toNum(params.pulseMs, 1500))));
+      const pauseMs = Math.max(0, Math.min(60_000, Math.round(toNum(params.pauseMs, 3000))));
+      const invert = toBool(params.invert);
+
+      const ist = toNum(inp.ist, NaN);
+      const soll = toNum(inp.soll, NaN);
+      const delta = (Number.isFinite(soll) && Number.isFinite(ist)) ? (soll - ist) : 0;
+
+      // internal init
+      if (!Number.isFinite(internal.lastActionTs)) internal.lastActionTs = 0;
+      internal.pulses = (internal.pulses && typeof internal.pulses === 'object') ? internal.pulses : { open: false, close: false };
+
+      const clearPulses = () => {
+        try {
+          if (internal.pulseTimers && typeof internal.pulseTimers === 'object') {
+            for (const k of Object.keys(internal.pulseTimers)) {
+              try { clearTimeout(internal.pulseTimers[k]); } catch (_e) {}
+            }
+          }
+        } catch (_e2) {}
+        internal.pulseTimers = null;
+        if (internal.pulses) {
+          internal.pulses.open = false;
+          internal.pulses.close = false;
+        }
+      };
+
+      if (!enabled || !Number.isFinite(ist) || !Number.isFinite(soll)) {
+        clearPulses();
+        return { out: { open: false, close: false, delta }, internal };
+      }
+
+      let want = null; // 'open' | 'close'
+      if (delta > band) want = 'open';
+      else if (delta < -band) want = 'close';
+
+      const nowTs = Date.now();
+      const since = Math.max(0, nowTs - (Number.isFinite(internal.lastActionTs) ? internal.lastActionTs : 0));
+
+      if (want && !(internal.pulses && internal.pulses[want]) && (since >= pauseMs)) {
+        triggerShortPulse({ internal, key: want, widthMs: pulseMs, runner, nodeId });
+        internal.lastActionTs = nowTs;
+      }
+
+      let open = !!(internal.pulses && internal.pulses.open);
+      let close = !!(internal.pulses && internal.pulses.close);
+
+      if (invert) {
+        const tmp = open; open = close; close = tmp;
+      }
+
+      return { out: { open, close, delta }, internal };
+    },
+  },
+
+
   pwm: {
     // Zeitproportionaler PWM-Generator: 0..100% -> Bool-Ausgang
     inputs: ['enable', 'in'],

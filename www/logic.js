@@ -488,6 +488,176 @@ function nwBuildLogicLibrary() {
       defaults: { periodMs: 600000, minPulseMs: 2000 },
     },
 
+
+    {
+      type: 'rt_pi',
+      name: 'Raumtemperaturregler (PI)',
+      category: 'Regelung',
+      icon: '🌀',
+      inputs: [
+        { key: 'enable', label: 'Freigabe', dataType: 'bool' },
+        { key: 'ist', label: 'Ist', dataType: 'number' },
+        { key: 'soll', label: 'Soll', dataType: 'number' },
+        { key: 'reset', label: 'Reset', dataType: 'bool' },
+      ],
+      outputs: [
+        { key: 'out', label: 'Stellwert (%)', dataType: 'number' },
+        { key: 'delta', label: 'ΔT', dataType: 'number' },
+        { key: 'p', label: 'P', dataType: 'number' },
+        { key: 'i', label: 'I', dataType: 'number' },
+      ],
+      params: [
+        { key: 'mode', label: 'Modus', kind: 'select', options: [
+          { value: 'heat', label: 'Heizen' },
+          { value: 'cool', label: 'Kühlen' },
+        ] },
+        { key: 'kp', label: 'Kp (%/K)', kind: 'number', placeholder: '30' },
+        { key: 'ti', label: 'Ti (s)', kind: 'number', placeholder: '600' },
+        { key: 'cycleMs', label: 'Regelzyklus (ms)', kind: 'number', placeholder: '10000' },
+        { key: 'deadband', label: 'Totband (K)', kind: 'number', placeholder: '0,2' },
+        { key: 'outMin', label: 'Min (%)', kind: 'number', placeholder: '0' },
+        { key: 'outMax', label: 'Max (%)', kind: 'number', placeholder: '100' },
+        { key: 'antiWindup', label: 'Anti‑Windup', kind: 'select', options: [
+          { value: 'true', label: 'Ja' },
+          { value: 'false', label: 'Nein' },
+        ] },
+        { key: 'resetOnDisable', label: 'I‑Anteil bei AUS zurücksetzen', kind: 'select', options: [
+          { value: 'true', label: 'Ja' },
+          { value: 'false', label: 'Nein' },
+        ] },
+        { key: 'precision', label: 'Nachkommastellen', kind: 'number', placeholder: '1' },
+      ],
+      defaults: { mode: 'heat', kp: 30, ti: 600, cycleMs: 10000, deadband: 0.2, outMin: 0, outMax: 100, antiWindup: 'true', resetOnDisable: 'true', precision: 1 },
+    },
+
+    {
+      type: 'season_switch',
+      name: 'Sommer/Winter Umschalter',
+      category: 'Regelung',
+      icon: '☀️',
+      inputs: [
+        { key: 'enable', label: 'Freigabe', dataType: 'bool' },
+        { key: 'tOut', label: 'Außen (°C)', dataType: 'number' },
+        { key: 'summerIn', label: 'Sommer (manuell)', dataType: 'bool' },
+        { key: 'winterVal', label: 'Winter‑Wert', dataType: 'any' },
+        { key: 'summerVal', label: 'Sommer‑Wert', dataType: 'any' },
+      ],
+      outputs: [
+        { key: 'out', label: 'Aus', dataType: 'any' },
+        { key: 'summer', label: 'Sommer', dataType: 'bool' },
+        { key: 'winter', label: 'Winter', dataType: 'bool' },
+      ],
+      params: [
+        { key: 'mode', label: 'Modell', kind: 'select', options: [
+          { value: 'auto', label: 'Auto (Außentemperatur)' },
+          { value: 'manual', label: 'Manuell (Sommer‑Input)' },
+        ] },
+        { key: 'summerOn', label: 'Sommer ab (°C)', kind: 'number', placeholder: '18' },
+        { key: 'winterOn', label: 'Winter ab (°C)', kind: 'number', placeholder: '15' },
+        { key: 'init', label: 'Startmodus', kind: 'select', options: [
+          { value: 'winter', label: 'Winter' },
+          { value: 'summer', label: 'Sommer' },
+        ] },
+      ],
+      defaults: { mode: 'auto', summerOn: 18, winterOn: 15, init: 'winter' },
+    },
+
+    {
+      type: 'window_lock',
+      name: 'Fensterkontakt‑Sperre',
+      category: 'Regelung',
+      icon: '🪟',
+      inputs: [
+        { key: 'enable', label: 'Freigabe', dataType: 'bool' },
+        { key: 'in', label: 'Ein', dataType: 'bool' },
+        { key: 'window', label: 'Fenster offen', dataType: 'bool' },
+      ],
+      outputs: [
+        { key: 'out', label: 'Aus', dataType: 'bool' },
+        { key: 'blocked', label: 'Gesperrt', dataType: 'bool' },
+      ],
+      params: [
+        { key: 'invertWindow', label: 'Fenster‑Signal invertieren', kind: 'select', options: [
+          { value: 'false', label: 'Nein' },
+          { value: 'true', label: 'Ja' },
+        ] },
+        { key: 'openDelayMs', label: 'Sperre nach (ms)', kind: 'number', placeholder: '0' },
+        { key: 'closeDelayMs', label: 'Freigabe nach (ms)', kind: 'number', placeholder: '0' },
+        { key: 'blockOut', label: 'Ausgang bei Sperre', kind: 'select', options: [
+          { value: 'false', label: 'Aus (false)' },
+          { value: 'true', label: 'Ein (true)' },
+        ] },
+      ],
+      defaults: { invertWindow: 'false', openDelayMs: 0, closeDelayMs: 0, blockOut: 'false' },
+    },
+
+    {
+      type: 'heating_curve',
+      name: 'Heizkurve (Vorlauf‑Soll)',
+      category: 'Regelung',
+      icon: '🔥',
+      inputs: [
+        { key: 'enable', label: 'Freigabe', dataType: 'bool' },
+        { key: 'tOut', label: 'Außen (°C)', dataType: 'number' },
+        { key: 'room', label: 'Raum‑Soll (°C)', dataType: 'number' },
+      ],
+      outputs: [
+        { key: 'out', label: 'Vorlauf‑Soll (°C)', dataType: 'number' },
+        { key: 'active', label: 'Aktiv', dataType: 'bool' },
+      ],
+      params: [
+        { key: 'model', label: 'Modell', kind: 'select', options: [
+          { value: '2point', label: '2‑Punkt (linear)' },
+          { value: 'slope', label: 'Steigung/Niveau' },
+        ] },
+
+        { key: 'tOutWarm', label: 'Außen warm (°C)', kind: 'number', placeholder: '20' },
+        { key: 'tFlowWarm', label: 'Vorlauf warm (°C)', kind: 'number', placeholder: '25' },
+        { key: 'tOutCold', label: 'Außen kalt (°C)', kind: 'number', placeholder: '-10' },
+        { key: 'tFlowCold', label: 'Vorlauf kalt (°C)', kind: 'number', placeholder: '50' },
+
+        { key: 'slope', label: 'Steigung', kind: 'number', placeholder: '1,2' },
+        { key: 'level', label: 'Niveau (°C)', kind: 'number', placeholder: '20' },
+
+        { key: 'shift', label: 'Parallel‑Shift (°C)', kind: 'number', placeholder: '0' },
+        { key: 'roomRef', label: 'Referenz Raum (°C)', kind: 'number', placeholder: '20' },
+        { key: 'roomGain', label: 'Raum‑Einfluss (°C/K)', kind: 'number', placeholder: '0' },
+
+        { key: 'minFlow', label: 'Min Vorlauf (°C)', kind: 'number', placeholder: '20' },
+        { key: 'maxFlow', label: 'Max Vorlauf (°C)', kind: 'number', placeholder: '60' },
+
+        { key: 'precision', label: 'Nachkommastellen', kind: 'number', placeholder: '1' },
+      ],
+      defaults: { model: '2point', tOutWarm: 20, tFlowWarm: 25, tOutCold: -10, tFlowCold: 50, slope: 1.2, level: 20, shift: 0, roomRef: 20, roomGain: 0, minFlow: 20, maxFlow: 60, precision: 1 },
+    },
+
+    {
+      type: 'mixer_2p',
+      name: 'Mischer‑Regler (2‑Punkt)',
+      category: 'Regelung',
+      icon: '🛠',
+      inputs: [
+        { key: 'enable', label: 'Freigabe', dataType: 'bool' },
+        { key: 'ist', label: 'Ist (°C)', dataType: 'number' },
+        { key: 'soll', label: 'Soll (°C)', dataType: 'number' },
+      ],
+      outputs: [
+        { key: 'open', label: 'Auf', dataType: 'bool' },
+        { key: 'close', label: 'Zu', dataType: 'bool' },
+        { key: 'delta', label: 'ΔT', dataType: 'number' },
+      ],
+      params: [
+        { key: 'band', label: 'Totband (K)', kind: 'number', placeholder: '0,5' },
+        { key: 'pulseMs', label: 'Impuls (ms)', kind: 'number', placeholder: '1500' },
+        { key: 'pauseMs', label: 'Pause (ms)', kind: 'number', placeholder: '3000' },
+        { key: 'invert', label: 'Richtung invertieren', kind: 'select', options: [
+          { value: 'false', label: 'Nein' },
+          { value: 'true', label: 'Ja' },
+        ] },
+      ],
+      defaults: { band: 0.5, pulseMs: 1500, pauseMs: 3000, invert: 'false' },
+    },
+
     // --- Time
     {
       type: 'delay_on',
