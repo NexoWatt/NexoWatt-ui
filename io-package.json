@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-  "version": "0.6.115",
+  "version": "0.6.116",
     "news": {
+      "0.6.116": {
+        "en": "SmartHome: Fixed an issue where the SmartHome VIS could appear empty because the function icon helper was missing. Function filter chips and function headers now render reliably.",
+        "de": "SmartHome: Fix für eine Anzeige‑Störung – die SmartHome‑VIS konnte leer wirken, weil der Icon‑Helper für Funktions‑Icons fehlte. Funktions‑Filterchips und Funktions‑Header werden jetzt zuverlässig gerendert."
+      },
       "0.6.115": {
         "en": "SmartHome: Added a view toggle (Rooms/Functions). In Functions view, devices are grouped by function with a small per-function summary; tiles show the room label for better orientation. Function filter chips now include icons.",
         "de": "SmartHome: Neue Ansicht-Umschaltung (Räume/Funktionen). In der Funktionen-Ansicht werden Geräte nach Funktion gruppiert inkl. kleiner Zusammenfassung; Kacheln zeigen zusätzlich den Raum für bessere Orientierung. Funktions-Filterchips haben jetzt Icons."

@@ -186,6 +186,17 @@ const NW_ICON_SVGS = {
   },
 };
 
+// Helper: return the raw SVG string for a given icon name.
+// Used for filter chips and section headers (no external icon libs).
+function nwGetIconSvg(name, isOn) {
+  const n = String(name || '').trim().toLowerCase();
+  const variant = isOn ? 'on' : 'off';
+
+  if (n && NW_ICON_SVGS[n] && NW_ICON_SVGS[n][variant]) return NW_ICON_SVGS[n][variant];
+  if (NW_ICON_SVGS.generic && NW_ICON_SVGS.generic[variant]) return NW_ICON_SVGS.generic[variant];
+  return '';
+}
+
 function nwIsEmojiLike(str) {
   if (!str) return false;
   const s = String(str).trim();
