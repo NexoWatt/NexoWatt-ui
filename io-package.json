@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.110",
+    "version": "0.6.111",
     "news": {
+      "0.6.111": {
+        "en": "SmartHome: Favorites UX – favorites chip is always visible (disabled if none) + new 'favorites first' chip that pins favorites to the top within each room (stored locally).",
+        "de": "SmartHome: Favoriten-UX – Favoriten-Chip immer sichtbar (deaktiviert falls keine gesetzt) + neuer Chip „★ zuerst“ (Favoriten in Räumen nach oben sortieren, lokal gespeichert)."
+      },
       "0.6.110": {
         "en": "SmartHome: Popover got quick presets (dimmer 0/25/50/75/100, blinds 0/50/100), step tuning (1/5/10) with +/- and a small write feedback badge (sending/ok/error).",
         "de": "SmartHome: Popover mit Quick-Presets (Dimmer 0/25/50/75/100, Jalousie 0/50/100), Schritt-Tuning (1/5/10) mit +/- und Schreib-Feedback (Senden/OK/Fehler)."

@@ -1,3 +1,8 @@
+## 0.6.111 (2026-02-03)
+- SmartHome VIS: Favoriten-Chip ist jetzt immer sichtbar (deaktiviert, wenn keine Favoriten gesetzt sind).
+- SmartHome VIS: Neuer Chip „★ zuerst“ – Favoriten in Räumen nach oben sortieren (persistiert pro Browser).
+- UI: Service‑Worker Cache‑Version erhöht (Update wird sofort geladen).
+
 ## 0.6.110 (2026-02-03)
 - SmartHome Tooltip/Popover: Quick‑Presets (Dimmer: 0/25/50/75/100, Jalousie: 0/50/100).
 - SmartHome Tooltip/Popover: Schritt‑Tuning (1/5/10) + +/- Buttons für Dimmer/Jalousie (persistiert pro Browser).

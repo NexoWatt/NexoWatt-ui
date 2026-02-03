@@ -18,6 +18,7 @@ let nwEvcsCount = 1;
 const nwFilterState = {
   func: null,        // string | null
   favoritesOnly: false,
+  favoritesFirst: false, // Favoriten in Räumen nach oben sortieren
 };
 
 // ---------- Icons (inline SVG) ----------
@@ -651,12 +652,15 @@ function nwRenderFunctionChips(devices) {
   const allFns = nwGetAllFunctions(devices);
   const hasFav = (devices || []).some(d => !!(d.behavior && d.behavior.favorite));
 
-  const mkChip = (label, active, onClick, extraClass) => {
+  const mkChip = (label, active, onClick, extraClass, disabled, title) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'nw-sh-chip' + (active ? ' nw-sh-chip--active' : '') + (extraClass ? ' ' + extraClass : '');
     btn.textContent = label;
+    if (title) btn.title = title;
+    if (disabled) btn.disabled = true;
     btn.addEventListener('click', () => {
+      if (btn.disabled) return;
       onClick();
       nwApplyFiltersAndRender();
     });
@@ -668,12 +672,23 @@ function nwRenderFunctionChips(devices) {
     nwFilterState.favoritesOnly = false;
   });
 
-  if (hasFav) {
-    mkChip('★ Favoriten', !!nwFilterState.favoritesOnly, () => {
-      nwFilterState.favoritesOnly = !nwFilterState.favoritesOnly;
-      if (nwFilterState.favoritesOnly) nwFilterState.func = null;
-    });
-  }
+  // Favoriten (Schnellzugriff)
+  mkChip('★ Favoriten', !!nwFilterState.favoritesOnly, () => {
+    if (!hasFav) return;
+    nwFilterState.favoritesOnly = !nwFilterState.favoritesOnly;
+    if (nwFilterState.favoritesOnly) nwFilterState.func = null;
+  }, null, !hasFav, hasFav
+    ? 'Nur Favoriten anzeigen'
+    : 'Keine Favoriten gesetzt (im Admin → SmartHome‑Konfiguration „Favorit“ aktivieren).');
+
+  mkChip('★ zuerst', !!nwFilterState.favoritesFirst, () => {
+    if (!hasFav) return;
+    nwFilterState.favoritesFirst = !nwFilterState.favoritesFirst;
+    nwSaveBoolLS(NW_SH_FAVORITES_FIRST_LS_KEY, nwFilterState.favoritesFirst);
+  }, 'nw-sh-chip--mini', !hasFav, hasFav
+    ? 'Favoriten in Räumen nach oben sortieren'
+    : 'Keine Favoriten gesetzt.');
+
 
   allFns.forEach(fn => {
     mkChip(fn, nwFilterState.func === fn, () => {
@@ -1163,6 +1178,10 @@ const NW_SH_LIVE_PREVIEW_THROTTLE_MS = 200; // max ~5 writes/s while dragging
 const NW_SH_STEP_DIMMER_LS_KEY = 'nw_sh_step_dimmer';
 const NW_SH_STEP_BLIND_LS_KEY = 'nw_sh_step_blind';
 const NW_SH_STEP_DEFAULT = 5;
+
+// SmartHome: Favoriten (Schnellzugriff)
+const NW_SH_FAVORITES_FIRST_LS_KEY = 'nw_sh_favorites_first';
+const NW_SH_FAVORITES_FIRST_DEFAULT = false;
 
 function nwLoadNumberLS(key, defVal) {
   try {
@@ -2457,6 +2476,12 @@ function nwRenderRooms(devices) {
     // stable ordering inside room
     const arr = (g.devices || []).slice();
     arr.sort((a, b) => {
+      if (nwFilterState.favoritesFirst) {
+        const fa = !!(a.behavior && a.behavior.favorite);
+        const fb = !!(b.behavior && b.behavior.favorite);
+        if (fa !== fb) return fa ? -1 : 1;
+      }
+
       const oa = (typeof a.order === 'number') ? a.order : (typeof a.ui?.order === 'number' ? a.ui.order : 0);
       const ob = (typeof b.order === 'number') ? b.order : (typeof b.ui?.order === 'number' ? b.ui.order : 0);
       if (oa !== ob) return oa - ob;
@@ -2565,6 +2590,9 @@ async function nwLoadUiConfigFlags() {
 
 async function nwBootstrap() {
   nwInitMenu();
+
+  // UI‑Prefs (persistiert pro Browser)
+  nwFilterState.favoritesFirst = nwLoadBoolLS(NW_SH_FAVORITES_FIRST_LS_KEY, NW_SH_FAVORITES_FIRST_DEFAULT);
   await nwLoadUiConfigFlags();
 
   await nwReloadDevices({ force: true });
