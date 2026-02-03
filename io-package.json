@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.114",
+  "version": "0.6.115",
     "news": {
+      "0.6.115": {
+        "en": "SmartHome: Added a view toggle (Rooms/Functions). In Functions view, devices are grouped by function with a small per-function summary; tiles show the room label for better orientation. Function filter chips now include icons.",
+        "de": "SmartHome: Neue Ansicht-Umschaltung (Räume/Funktionen). In der Funktionen-Ansicht werden Geräte nach Funktion gruppiert inkl. kleiner Zusammenfassung; Kacheln zeigen zusätzlich den Raum für bessere Orientierung. Funktions-Filterchips haben jetzt Icons."
+      },
       "0.6.114": {
         "en": "Tariff/storage: Battery grid charging is now allowed only when the tariff is cheap. The NT grid-fee window can override the daytime block, but still requires a cheap tariff. Status text simplified (no time ranges; shows 'self-consumption optimization active' during daytime).",
         "de": "Tarif/Speicher: Speicher-Netzladen ist jetzt nur bei günstigem Tarif erlaubt. NT (Netzentgelt) kann die Tages-Sperre übersteuern, aber weiterhin nur bei günstigem Tarif. Status-Text vereinfacht (keine Uhrzeiten; tagsüber 'Eigenverbrauchsoptimierung aktiv')."

@@ -19,6 +19,14 @@ let nwFavoriteOverrides = {};
 let nwSmartHomeEnabled = null;
 let nwEvcsCount = 1;
 
+// Ansicht (persistiert pro Browser)
+// - rooms: Standard (wie bisher)
+// - functions: gruppiert nach "Funktionen" statt nach Räumen
+const NW_SH_VIEW_MODE_LS_KEY = 'nw_sh_view_mode';
+const nwViewState = {
+  mode: 'rooms',
+};
+
 const nwFilterState = {
   func: null,        // string | null
   favoritesOnly: false,
@@ -648,6 +656,47 @@ function nwGetAllFunctions(devices) {
   return Array.from(set).sort(nwSortBy);
 }
 
+function nwGuessIconForFunctionLabel(label) {
+  const s = String(label || '').toLowerCase();
+  if (!s) return null;
+
+  if (s.includes('licht') || s.includes('beleuchtung') || s.includes('lampe') || s.includes('leuchte')) return 'bulb';
+  if (s.includes('jalous') || s.includes('roll') || s.includes('blind') || s.includes('raff')) return 'blinds';
+  if (s.includes('temp') || s.includes('heiz') || s.includes('klima') || s.includes('thermost')) return 'thermostat';
+  if (s.includes('steck') || s.includes('schalt') || s.includes('dose') || s.includes('strom') || s.includes('power')) return 'plug';
+  if (s.includes('tv') || s.includes('fernseh')) return 'tv';
+  if (s.includes('audio') || s.includes('musik') || s.includes('laut')) return 'speaker';
+  return null;
+}
+
+function nwRenderViewChips() {
+  const wrap = document.getElementById('nw-filter-view');
+  if (!wrap) return;
+  nwClear(wrap);
+
+  const mkChip = (label, active, onClick) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'nw-sh-chip' + (active ? ' nw-sh-chip--active' : '');
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      onClick();
+      nwApplyFiltersAndRender();
+    });
+    wrap.appendChild(btn);
+  };
+
+  mkChip('Räume', nwViewState.mode === 'rooms', () => {
+    nwViewState.mode = 'rooms';
+    nwSaveViewMode(nwViewState.mode);
+  });
+
+  mkChip('Funktionen', nwViewState.mode === 'functions', () => {
+    nwViewState.mode = 'functions';
+    nwSaveViewMode(nwViewState.mode);
+  });
+}
+
 function nwRenderFunctionChips(devices) {
   const wrap = document.getElementById('nw-filter-functions');
   if (!wrap) return;
@@ -656,11 +705,17 @@ function nwRenderFunctionChips(devices) {
   const allFns = nwGetAllFunctions(devices);
   const hasFav = (devices || []).some(d => nwIsFavorite(d));
 
-  const mkChip = (label, active, onClick, extraClass, disabled, title) => {
+  const mkChip = (label, active, onClick, extraClass, disabled, title, iconName) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'nw-sh-chip' + (active ? ' nw-sh-chip--active' : '') + (extraClass ? ' ' + extraClass : '');
-    btn.textContent = label;
+    if (iconName) {
+      btn.innerHTML = `<span class="nw-sh-chip__icon">${nwGetIconSvg(iconName, false)}</span><span class="nw-sh-chip__label"></span>`;
+      const lbl = btn.querySelector('.nw-sh-chip__label');
+      if (lbl) lbl.textContent = label;
+    } else {
+      btn.textContent = label;
+    }
     if (title) btn.title = title;
     if (disabled) btn.disabled = true;
     btn.addEventListener('click', () => {
@@ -695,11 +750,12 @@ function nwRenderFunctionChips(devices) {
 
 
   allFns.forEach(fn => {
+    const ic = nwGuessIconForFunctionLabel(fn);
     mkChip(fn, nwFilterState.func === fn, () => {
       if (nwFilterState.func === fn) nwFilterState.func = null;
       else nwFilterState.func = fn;
       nwFilterState.favoritesOnly = false;
-    });
+    }, null, false, null, ic);
   });
 }
 
@@ -713,6 +769,18 @@ function nwGroupByRoom(devices) {
 
   const rooms = Array.from(map.keys()).sort(nwSortBy);
   return rooms.map(r => ({ room: r, devices: map.get(r) || [] }));
+}
+
+function nwGroupByFunction(devices) {
+  const map = new Map();
+  (devices || []).forEach(d => {
+    const fn = String(d.function || '').trim() || 'Ohne Funktion';
+    if (!map.has(fn)) map.set(fn, []);
+    map.get(fn).push(d);
+  });
+
+  const fns = Array.from(map.keys()).sort(nwSortBy);
+  return fns.map(fn => ({ func: fn, devices: map.get(fn) || [] }));
 }
 
 function nwShowEmptyState(show, ctx) {
@@ -753,7 +821,7 @@ function nwShowEmptyState(show, ctx) {
   ].join('');
 }
 
-function nwCreateTile(dev) {
+function nwCreateTile(dev, opts) {
   const type = String(dev.type || '').toLowerCase();
   const size = nwGetTileSize(dev);
   const isOn = nwIsOn(dev);
@@ -795,7 +863,9 @@ function nwCreateTile(dev) {
 
   const state = document.createElement('div');
   state.className = 'nw-sh-tile__state';
-  state.textContent = nwGetStateText(dev);
+  const baseStateText = nwGetStateText(dev);
+  const roomLabel = (opts && opts.showRoom) ? String(dev.room || '').trim() : '';
+  state.textContent = roomLabel ? `${roomLabel} · ${baseStateText}` : baseStateText;
 
   titleWrap.appendChild(name);
   titleWrap.appendChild(state);
@@ -1324,6 +1394,21 @@ function nwLoadBoolLS(key, defVal) {
 function nwSaveBoolLS(key, val) {
   try {
     localStorage.setItem(key, val ? '1' : '0');
+  } catch (_e) {}
+}
+
+function nwLoadViewMode(defMode) {
+  try {
+    const v = String(localStorage.getItem(NW_SH_VIEW_MODE_LS_KEY) || '').trim().toLowerCase();
+    if (v === 'functions' || v === 'funktion' || v === 'funktionen') return 'functions';
+    if (v === 'rooms' || v === 'room' || v === 'raeume' || v === 'räume') return 'rooms';
+  } catch (_e) {}
+  return (defMode === 'functions') ? 'functions' : 'rooms';
+}
+
+function nwSaveViewMode(mode) {
+  try {
+    localStorage.setItem(NW_SH_VIEW_MODE_LS_KEY, (mode === 'functions') ? 'functions' : 'rooms');
   } catch (_e) {}
 }
 
@@ -2584,10 +2669,91 @@ function nwRenderRooms(devices) {
   });
 }
 
+function nwComputeFunctionSummary(funcName, funcDevices) {
+  const name = String(funcName || '').trim();
+  const devs = Array.isArray(funcDevices) ? funcDevices : [];
+  if (!name || !devs.length) return '';
+
+  const total = devs.length;
+  // "aktiv" = typische An/Aus‑Geräte mit state.on === true
+  let onCount = 0;
+  devs.forEach(d => {
+    const st = d && d.state;
+    if (st && st.on === true) onCount++;
+  });
+
+  if (onCount > 0) return `${total} Geräte · ${onCount} an`;
+  return `${total} Geräte`;
+}
+
+function nwRenderFunctions(devices) {
+  const wrap = document.getElementById('nw-smarthome-rooms');
+  if (!wrap) return;
+  nwClear(wrap);
+
+  const groups = nwGroupByFunction(devices);
+
+  groups.forEach(g => {
+    const section = document.createElement('section');
+    section.className = 'nw-sh-room nw-sh-room--function';
+
+    const header = document.createElement('div');
+    header.className = 'nw-sh-room__header';
+
+    const title = document.createElement('div');
+    title.className = 'nw-sh-room__title';
+    const fnIcon = nwGuessIconForFunctionLabel(g.func);
+    if (fnIcon) {
+      title.innerHTML = `<span class="nw-sh-fn__icon">${nwGetIconSvg(fnIcon, false)}</span><span class="nw-sh-fn__label"></span>`;
+      const lbl = title.querySelector('.nw-sh-fn__label');
+      if (lbl) lbl.textContent = g.func;
+    } else {
+      title.textContent = g.func;
+    }
+    header.appendChild(title);
+
+    const summaryText = nwComputeFunctionSummary(g.func, g.devices);
+    if (summaryText) {
+      const summary = document.createElement('div');
+      summary.className = 'nw-sh-room__summary';
+      summary.textContent = summaryText;
+      header.appendChild(summary);
+    }
+
+    section.appendChild(header);
+
+    const grid = document.createElement('div');
+    grid.className = 'nw-sh-grid';
+
+    // stable ordering inside function
+    const arr = (g.devices || []).slice();
+    arr.sort((a, b) => {
+      if (nwFilterState.favoritesFirst) {
+        const fa = nwIsFavorite(a);
+        const fb = nwIsFavorite(b);
+        if (fa !== fb) return fa ? -1 : 1;
+      }
+
+      const oa = (typeof a.order === 'number') ? a.order : (typeof a.ui?.order === 'number' ? a.ui.order : 0);
+      const ob = (typeof b.order === 'number') ? b.order : (typeof b.ui?.order === 'number' ? b.ui.order : 0);
+      if (oa !== ob) return oa - ob;
+      return nwSortBy(a.alias || a.id, b.alias || b.id);
+    });
+
+    arr.forEach(dev => {
+      grid.appendChild(nwCreateTile(dev, { showRoom: true }));
+    });
+
+    section.appendChild(grid);
+    wrap.appendChild(section);
+  });
+}
+
 function nwApplyFiltersAndRender() {
   const filtered = nwApplyFilters(nwAllDevices);
 
   // chips always based on all devices (so user can clear filters)
+  nwRenderViewChips();
   nwRenderFunctionChips(nwAllDevices);
 
   if (!filtered.length) {
@@ -2600,7 +2766,8 @@ function nwApplyFiltersAndRender() {
   }
 
   nwShowEmptyState(false);
-  nwRenderRooms(filtered);
+  if (nwViewState.mode === 'functions') nwRenderFunctions(filtered);
+  else nwRenderRooms(filtered);
 }
 
 // ---------- Auto refresh + bootstrap ----------
@@ -2679,6 +2846,7 @@ async function nwBootstrap() {
   nwInitMenu();
 
   // UI‑Prefs (persistiert pro Browser)
+  nwViewState.mode = nwLoadViewMode(nwViewState.mode);
   nwFilterState.favoritesFirst = nwLoadBoolLS(NW_SH_FAVORITES_FIRST_LS_KEY, NW_SH_FAVORITES_FIRST_DEFAULT);
   nwFavoriteOverrides = nwLoadFavoriteOverrides();
   await nwLoadUiConfigFlags();

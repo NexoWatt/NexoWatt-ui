@@ -2850,6 +2850,9 @@ body{ padding-top: var(--topbar-h); }
 
 .nw-sh-chip{
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid rgba(148,163,184,0.22);
   background: rgba(2,6,23,0.25);
   color: #e5e7eb;
@@ -2859,6 +2862,23 @@ body{ padding-top: var(--topbar-h); }
   cursor: pointer;
   user-select: none;
   transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.nw-sh-chip__icon{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  opacity: 0.92;
+}
+.nw-sh-chip__icon svg{
+  width: 14px;
+  height: 14px;
+}
+
+.nw-sh-chip__label{
+  display: inline-block;
 }
 
 .nw-sh-chip:hover{
@@ -2907,6 +2927,25 @@ body{ padding-top: var(--topbar-h); }
   font-size: 1.05rem;
   font-weight: 700;
   color: #e5e7eb;
+}
+
+.nw-sh-room--function .nw-sh-room__title{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nw-sh-fn__icon{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  opacity: 0.9;
+}
+.nw-sh-fn__icon svg{
+  width: 18px;
+  height: 18px;
 }
 
 .nw-sh-room__summary{
