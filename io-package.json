@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.107",
+    "version": "0.6.108",
     "news": {
+      "0.6.108": {
+        "en": "SmartHome: Popover sliders (dimmer/blinds) are now more touch-friendly (bigger thumb/track) with a progress-style fill and live value while dragging.",
+        "de": "SmartHome: Popover-Slider (Dimmer/Jalousie) sind jetzt touch-freundlicher (größerer Thumb/Track) mit Progress-Fill und Live-Wert beim Ziehen."
+      },
       "0.6.107": {
         "en": "SmartHome: Thermostat popover gauge – moved +/- buttons below the dial for a clearer UX. SmartHome tiles with DP read/write errors are now highlighted more clearly.",
         "de": "SmartHome: Thermostat-Popup-Gauge – +/- Buttons nach unten verlegt (übersichtlicher). SmartHome-Kacheln mit DP-Lese/Schreib-Fehlern werden jetzt deutlicher hervorgehoben."

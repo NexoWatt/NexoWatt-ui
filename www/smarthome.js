@@ -1139,6 +1139,20 @@ function nwRoundToStep(v, step) {
   return Math.round(x / s) * s;
 }
 
+// Visual fill for <input type="range"> sliders (Premium UX).
+// We write a CSS variable (--nw-range-fill) with the percentage.
+// CSS then renders an accent-colored progress track.
+function nwUpdateRangeFill(rangeEl) {
+  if (!rangeEl) return;
+  const min = Number(rangeEl.min);
+  const max = Number(rangeEl.max);
+  const val = Number(rangeEl.value);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(val) || max <= min) return;
+  const pct = ((val - min) / (max - min)) * 100;
+  const clamped = Math.max(0, Math.min(100, pct));
+  rangeEl.style.setProperty('--nw-range-fill', clamped.toFixed(2) + '%');
+}
+
 function nwBuildPopoverContent(dev) {
   if (!nwPopoverEl) return;
 
@@ -1245,18 +1259,26 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
   slider.className = 'nw-sh-slider nw-sh-slider--big';
   slider.disabled = !hasWrite;
 
+  // Premium: colored progress track.
+  nwUpdateRangeFill(slider);
+
+  // Premium: colored progress track.
+  nwUpdateRangeFill(slider);
+
   slider.addEventListener('click', (ev) => ev.stopPropagation());
 
   slider.addEventListener('input', (ev) => {
     const raw = Number(ev.target.value);
     if (!Number.isFinite(raw)) return;
     v.textContent = Math.round(raw) + ' %';
+    nwUpdateRangeFill(slider);
   });
 
   slider.addEventListener('change', async (ev) => {
     if (!hasWrite) return;
     const raw = Number(ev.target.value);
     if (!Number.isFinite(raw)) return;
+    nwUpdateRangeFill(slider);
     await nwSetLevel(dev.id, raw);
     await nwReloadDevices({ force: true });
   });
@@ -1326,18 +1348,23 @@ function nwCreateBlindPopover(dev, canWrite) {
   slider.className = 'nw-sh-slider nw-sh-slider--big';
   slider.disabled = !hasWrite;
 
+  // Premium: colored progress track.
+  nwUpdateRangeFill(slider);
+
   slider.addEventListener('click', (ev) => ev.stopPropagation());
 
   slider.addEventListener('input', (ev) => {
     const raw = Number(ev.target.value);
     if (!Number.isFinite(raw)) return;
     v.textContent = Math.round(raw) + ' %';
+    nwUpdateRangeFill(slider);
   });
 
   slider.addEventListener('change', async (ev) => {
     if (!canWrite) return;
     const raw = Number(ev.target.value);
     if (!Number.isFinite(raw)) return;
+    nwUpdateRangeFill(slider);
     await nwSetLevel(dev.id, raw);
     await nwReloadDevices({ force: true });
   });

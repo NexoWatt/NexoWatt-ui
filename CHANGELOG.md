@@ -1,3 +1,8 @@
+## 0.6.108 (2026-02-03)
+- SmartHome Tooltip/Popover: Slider (Dimmer/Jalousie) deutlich touch‑freundlicher (größerer Track/Thumb) + Progress-Fill.
+- SmartHome Tooltip/Popover: Live-Wert beim Ziehen (Anzeige) bleibt erhalten, Commit weiterhin erst beim Loslassen.
+- UI: Service‑Worker Cache‑Version erhöht (Update wird sofort geladen).
+
 ## 0.6.107 (2026-02-03)
 - SmartHome Tooltip/Popover: Thermostat-Gauge: +/- Buttons unterhalb des Reglers (übersichtlicher, weniger verdeckt).
 - SmartHome VIS: Fehlerzustände (DP-Lese/Schreib-Fehler) werden in Kacheln deutlicher hervorgehoben.
