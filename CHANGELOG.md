@@ -1,3 +1,7 @@
+## 0.6.109 (2026-02-03)
+- SmartHome Tooltip/Popover: Optional „Live‑Vorschau“ für Dimmer/Jalousie (gedrosselt beim Ziehen, finaler Commit beim Loslassen).
+- UI: Service‑Worker Cache‑Version erhöht (Update wird sofort geladen).
+
 ## 0.6.108 (2026-02-03)
 - SmartHome Tooltip/Popover: Slider (Dimmer/Jalousie) deutlich touch‑freundlicher (größerer Track/Thumb) + Progress-Fill.
 - SmartHome Tooltip/Popover: Live-Wert beim Ziehen (Anzeige) bleibt erhalten, Commit weiterhin erst beim Loslassen.

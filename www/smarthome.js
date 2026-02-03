@@ -1153,6 +1153,93 @@ function nwUpdateRangeFill(rangeEl) {
   rangeEl.style.setProperty('--nw-range-fill', clamped.toFixed(2) + '%');
 }
 
+// Live-preview toggle (Dimmer/Jalousie): write while dragging (throttled).
+// This is optional and can be enabled/disabled by the user in the popover.
+const NW_SH_LIVE_PREVIEW_LS_KEY = 'nw_sh_live_preview';
+const NW_SH_LIVE_PREVIEW_DEFAULT = true;
+const NW_SH_LIVE_PREVIEW_THROTTLE_MS = 200; // max ~5 writes/s while dragging
+
+function nwLoadBoolLS(key, defVal) {
+  try {
+    const v = localStorage.getItem(key);
+    if (v === null || v === undefined) return !!defVal;
+    if (v === '1' || v === 'true' || v === 'on' || v === 'yes') return true;
+    if (v === '0' || v === 'false' || v === 'off' || v === 'no') return false;
+    return !!defVal;
+  } catch (_e) {
+    return !!defVal;
+  }
+}
+
+function nwSaveBoolLS(key, val) {
+  try {
+    localStorage.setItem(key, val ? '1' : '0');
+  } catch (_e) {}
+}
+
+// Create a throttled sender for live-preview updates.
+// - max one send every `intervalMs` (leading+trailing)
+// - avoids overlapping requests: keeps only the last pending value
+function nwCreateLivePreviewSender(sendFn, intervalMs) {
+  let lastSentAt = 0;
+  let lastSentVal = null;
+  let pendingVal = null;
+  let timer = null;
+  let inFlight = false;
+  let forceNext = false;
+
+  function schedule() {
+    if (inFlight) return;
+    if (pendingVal === null || pendingVal === undefined) return;
+
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+
+    const now = Date.now();
+    const wait = forceNext ? 0 : Math.max(0, intervalMs - (now - lastSentAt));
+
+    timer = setTimeout(async () => {
+      timer = null;
+      if (inFlight) return;
+      if (pendingVal === null || pendingVal === undefined) return;
+
+      const val = pendingVal;
+      pendingVal = null;
+      const doForce = forceNext;
+      forceNext = false;
+
+      // Skip duplicate writes.
+      if (val === lastSentVal) {
+        schedule();
+        return;
+      }
+
+      lastSentAt = Date.now();
+      lastSentVal = val;
+      inFlight = true;
+      try {
+        await sendFn(val);
+      } catch (_e) {}
+      inFlight = false;
+
+      // If new pending value arrived during the request, send it next.
+      if (pendingVal !== null && pendingVal !== undefined && pendingVal !== lastSentVal) {
+        schedule();
+      }
+    }, wait);
+  }
+
+  function trigger(val, force) {
+    pendingVal = val;
+    if (force) forceNext = true;
+    schedule();
+  }
+
+  return { trigger };
+}
+
 function nwBuildPopoverContent(dev) {
   if (!nwPopoverEl) return;
 
@@ -1237,6 +1324,12 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
   const st = dev.state || {};
   const current = (typeof st.level === 'number') ? st.level : 0;
 
+  // Live-preview toggle (throttled writes while dragging)
+  let livePreview = nwLoadBoolLS(NW_SH_LIVE_PREVIEW_LS_KEY, NW_SH_LIVE_PREVIEW_DEFAULT);
+  const liveSender = (hasWrite)
+    ? nwCreateLivePreviewSender(async (val) => { await nwSetLevel(dev.id, val); }, NW_SH_LIVE_PREVIEW_THROTTLE_MS)
+    : null;
+
   const row = document.createElement('div');
   row.className = 'nw-sh-popover__row';
 
@@ -1248,8 +1341,31 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
   v.className = 'nw-sh-popover__value';
   v.textContent = Math.round(current) + ' %';
 
+  const right = document.createElement('div');
+  right.className = 'nw-sh-popover__right';
+  right.appendChild(v);
+
+  let liveBtn = null;
+  if (hasWrite) {
+    liveBtn = document.createElement('button');
+    liveBtn.type = 'button';
+    liveBtn.className = 'nw-sh-chip nw-sh-chip--mini' + (livePreview ? ' nw-sh-chip--active' : '');
+    liveBtn.textContent = 'Live';
+    liveBtn.title = 'Live-Vorschau beim Ziehen (gedrosselt)';
+    liveBtn.setAttribute('aria-pressed', livePreview ? 'true' : 'false');
+    liveBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      livePreview = !livePreview;
+      nwSaveBoolLS(NW_SH_LIVE_PREVIEW_LS_KEY, livePreview);
+      liveBtn.classList.toggle('nw-sh-chip--active', livePreview);
+      liveBtn.setAttribute('aria-pressed', livePreview ? 'true' : 'false');
+      updateHint();
+    });
+    right.appendChild(liveBtn);
+  }
+
   row.appendChild(l);
-  row.appendChild(v);
+  row.appendChild(right);
 
   const slider = document.createElement('input');
   slider.type = 'range';
@@ -1272,6 +1388,11 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
     if (!Number.isFinite(raw)) return;
     v.textContent = Math.round(raw) + ' %';
     nwUpdateRangeFill(slider);
+
+    // Optional: live-preview (throttled) while dragging.
+    if (hasWrite && livePreview && liveSender) {
+      liveSender.trigger(raw, false);
+    }
   });
 
   slider.addEventListener('change', async (ev) => {
@@ -1285,7 +1406,18 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
 
   const hint = document.createElement('div');
   hint.className = 'nw-sh-popover__hint';
-  hint.textContent = hasWrite ? 'Tipp: Regler ziehen – Wert wird beim Loslassen übernommen.' : 'Nur Anzeige (keine Schreib‑DP / writeId konfiguriert).';
+
+  function updateHint() {
+    if (!hasWrite) {
+      hint.textContent = 'Nur Anzeige (keine Schreib‑DP / writeId konfiguriert).';
+      return;
+    }
+    hint.textContent = livePreview
+      ? 'Live-Vorschau: AN (gedrosselt). Beim Loslassen wird der Wert final übernommen.'
+      : 'Tipp: Regler ziehen – Wert wird beim Loslassen übernommen.';
+  }
+
+  updateHint();
 
   wrap.appendChild(row);
   wrap.appendChild(slider);
@@ -1326,6 +1458,12 @@ function nwCreateBlindPopover(dev, canWrite) {
   const st = dev.state || {};
   const current = (typeof st.position === 'number') ? st.position : (typeof st.level === 'number' ? st.level : 0);
 
+  // Live-preview toggle (throttled writes while dragging)
+  let livePreview = nwLoadBoolLS(NW_SH_LIVE_PREVIEW_LS_KEY, NW_SH_LIVE_PREVIEW_DEFAULT);
+  const liveSender = (hasWrite)
+    ? nwCreateLivePreviewSender(async (val) => { await nwSetLevel(dev.id, val); }, NW_SH_LIVE_PREVIEW_THROTTLE_MS)
+    : null;
+
   const row = document.createElement('div');
   row.className = 'nw-sh-popover__row';
 
@@ -1337,8 +1475,30 @@ function nwCreateBlindPopover(dev, canWrite) {
   v.className = 'nw-sh-popover__value';
   v.textContent = Math.round(current) + ' %';
 
+  const right = document.createElement('div');
+  right.className = 'nw-sh-popover__right';
+  right.appendChild(v);
+
+  if (hasWrite) {
+    const liveBtn = document.createElement('button');
+    liveBtn.type = 'button';
+    liveBtn.className = 'nw-sh-chip nw-sh-chip--mini' + (livePreview ? ' nw-sh-chip--active' : '');
+    liveBtn.textContent = 'Live';
+    liveBtn.title = 'Live-Vorschau beim Ziehen (gedrosselt)';
+    liveBtn.setAttribute('aria-pressed', livePreview ? 'true' : 'false');
+    liveBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      livePreview = !livePreview;
+      nwSaveBoolLS(NW_SH_LIVE_PREVIEW_LS_KEY, livePreview);
+      liveBtn.classList.toggle('nw-sh-chip--active', livePreview);
+      liveBtn.setAttribute('aria-pressed', livePreview ? 'true' : 'false');
+      updateHint();
+    });
+    right.appendChild(liveBtn);
+  }
+
   row.appendChild(l);
-  row.appendChild(v);
+  row.appendChild(right);
 
   const slider = document.createElement('input');
   slider.type = 'range';
@@ -1358,6 +1518,11 @@ function nwCreateBlindPopover(dev, canWrite) {
     if (!Number.isFinite(raw)) return;
     v.textContent = Math.round(raw) + ' %';
     nwUpdateRangeFill(slider);
+
+    // Optional: live-preview (throttled) while dragging.
+    if (hasWrite && livePreview && liveSender) {
+      liveSender.trigger(raw, false);
+    }
   });
 
   slider.addEventListener('change', async (ev) => {
@@ -1371,7 +1536,22 @@ function nwCreateBlindPopover(dev, canWrite) {
 
   const hint = document.createElement('div');
   hint.className = 'nw-sh-popover__hint';
-  hint.textContent = (hasWrite || canWrite) ? 'Tipp: Regler ziehen oder Tasten nutzen.' : 'Nur Anzeige (keine Schreib‑DP konfiguriert).';
+
+  function updateHint() {
+    if (!canWrite) {
+      hint.textContent = 'Nur Anzeige (keine Schreib‑DP konfiguriert).';
+      return;
+    }
+    if (!hasWrite) {
+      hint.textContent = 'Tipp: Tasten nutzen (kein Positions‑Schreibwert konfiguriert).';
+      return;
+    }
+    hint.textContent = livePreview
+      ? 'Live-Vorschau: AN (gedrosselt). Beim Loslassen wird der Wert final übernommen.'
+      : 'Tipp: Regler ziehen oder Tasten nutzen.';
+  }
+
+  updateHint();
 
   const controls = document.createElement('div');
   controls.className = 'nw-sh-controls';

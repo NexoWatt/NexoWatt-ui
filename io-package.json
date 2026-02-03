@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.108",
+    "version": "0.6.109",
     "news": {
+      "0.6.109": {
+        "en": "SmartHome: Optional live-preview for dimmer/blinds sliders in the popover (throttled while dragging, final commit on release).",
+        "de": "SmartHome: Optionale Live-Vorschau für Dimmer-/Jalousie-Slider im Popover (gedrosselt beim Ziehen, final beim Loslassen)."
+      },
       "0.6.108": {
         "en": "SmartHome: Popover sliders (dimmer/blinds) are now more touch-friendly (bigger thumb/track) with a progress-style fill and live value while dragging.",
         "de": "SmartHome: Popover-Slider (Dimmer/Jalousie) sind jetzt touch-freundlicher (größerer Thumb/Track) mit Progress-Fill und Live-Wert beim Ziehen."

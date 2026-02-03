@@ -3270,6 +3270,19 @@ body{ padding-top: var(--topbar-h); }
   font-weight: 700;
 }
 
+/* Popover: right side (value + mini tools like "Live") */
+.nw-sh-popover__right{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Smaller chip variant (used inside popovers) */
+.nw-sh-chip--mini{
+  padding: 5px 9px;
+  font-size: 0.72rem;
+}
+
 /* Popover: Touch-freundliche Bedien-Controls */
 .nw-sh-popover .nw-sh-controls{
   gap: 10px;
