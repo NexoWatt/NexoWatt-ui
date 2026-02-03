@@ -1,3 +1,9 @@
+## 0.6.113 (2026-02-03)
+- Tarif/Speicher: Netzladen des Speichers wird jetzt quartalsabhängig zeitlich begrenzt (Q1/Q4: 18:00–06:00, Q2/Q3: 21:00–06:00).
+- Tarif/Speicher: Ausnahme bleibt aktiv – wenn zeitvariables Netzentgelt im NT ist, darf der Speicher trotzdem laden.
+- Tarif/VIS: Status-Text zeigt bei günstigem Tarif an, wenn Speicher-Netzladen wegen Zeitfenster gesperrt ist.
+- UI: Service‑Worker Cache‑Version erhöht (Update wird sofort geladen).
+
 ## 0.6.112 (2026-02-03)
 - SmartHome VIS: Favoriten können jetzt vom Endkunden direkt in der Kachel per Stern ★/☆ umgeschaltet werden (lokal pro Browser, überschreibt optionale Installer-Defaults).
 - SmartHome VIS: Favoriten-Filter/Sortierung berücksichtigt Endkunden-Favoriten.

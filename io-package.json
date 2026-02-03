@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.112",
+    "version": "0.6.113",
     "news": {
       "0.6.112": {
         "en": "SmartHome: End users can now toggle Favorites directly on each tile via a star (★/☆). Favorites are stored locally per browser and override optional installer defaults.",

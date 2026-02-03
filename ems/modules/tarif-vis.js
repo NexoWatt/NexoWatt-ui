@@ -585,8 +585,18 @@ class TarifVisModule extends BaseModule {
             const netFeeModel = (typeof netFeeModelRaw === 'number' && Number.isFinite(netFeeModelRaw)) ? Math.round(netFeeModelRaw) : 1;
             const netFeeModelEff = (netFeeModel === 2) ? 2 : 1;
 
-            const nowMs = Date.now();
-            const nowMinLocal = this._nowMinutesLocal(nowMs);
+	            const nowMs = Date.now();
+	            const nowMinLocal = this._nowMinutesLocal(nowMs);
+	            const quarterNow = this._currentQuarter(nowMs);
+
+	            // --- Speicher-Netzladen Zeitfenster (Policy) ---
+	            // Ziel: Tagsüber kein Netzladen des Speichers.
+	            // Q1/Q4: 18:00–06:00 | Q2/Q3: 21:00–06:00
+	            // Ausnahme: Wenn zeitvariables Netzentgelt im NT ist, darf geladen werden.
+	            const storageChargeStartMin = (quarterNow === 1 || quarterNow === 4) ? (18 * 60) : (21 * 60);
+	            const storageChargeEndMin = 6 * 60;
+	            const storageChargeWindowOk = this._isInTimeWindow(nowMinLocal, storageChargeStartMin, storageChargeEndMin);
+	            const storageChargeWindowLabel = (quarterNow === 1 || quarterNow === 4) ? '18:00–06:00 (Q1/Q4)' : '21:00–06:00 (Q2/Q3)';
 
             // Default: Simple (global)
             let ntStartRaw = (this.dp && typeof this.dp.getRaw === 'function') ? this.dp.getRaw('vis.settings.netFeeNtStart') : null;
@@ -918,6 +928,7 @@ class TarifVisModule extends BaseModule {
             let speicherSollW = 0;
             let storageFullHold = false;
             let storageChargeWanted = false;
+	            let storageChargeBlockedByTime = false;
 
             if (aktivEff && storagePowerAbsW > 0) {
                 // gewünschtes Verhalten:
@@ -934,15 +945,22 @@ class TarifVisModule extends BaseModule {
                 //   (z. B. in Quartalen ohne HT/NT gilt 24/7 Standard → Verhalten wie vorher.)
                 const netFeeOverlay = !!(netFeeIsNt || netFeeIsHt);
 
-                if (netFeeIsHt) {
+	                // Policy: Speicher soll tagsüber NICHT aus dem Netz geladen werden.
+	                // Q1/Q4: 18:00–06:00 | Q2/Q3: 21:00–06:00
+	                // Ausnahme: Wenn zeitvariables Netzentgelt im NT ist, darf geladen werden.
+	                const storageTimeOk = !!storageChargeWindowOk;
+	                const cheapWanted = (tarifState === 'guenstig' && allowStorageCheap);
+	                const chargeAllowed = (netFeeIsNt || (cheapWanted && storageTimeOk));
+
+	                if (netFeeIsHt) {
                     // In HT: Speicher soll NICHT durch Tarif entladen/geladen werden → Eigenverbrauch
                     this._tariffChargeLatch = false;
                     storageChargeWanted = false;
                     storageFullHold = false;
                     speicherSollW = 0;
-                } else if ((tarifState === 'guenstig' && allowStorageCheap) || netFeeIsNt) {
-                    // günstig (Preis) ODER NT (Netzentgelt): Speicher laden (SoC-Hysterese)
-                    // Default/Fallback: wenn SoC nicht verfügbar ist, verhalte dich wie bisher (laden)
+	                } else if (chargeAllowed) {
+	                    // günstig (Preis) im erlaubten Zeitfenster ODER NT (Netzentgelt): Speicher laden (SoC-Hysterese)
+	                    // Default/Fallback: wenn SoC nicht verfügbar ist, verhalte dich wie bisher (laden)
                     storageChargeWanted = true;
 
                     if (typeof storageSocPct === 'number' && Number.isFinite(storageSocPct)) {
@@ -961,7 +979,15 @@ class TarifVisModule extends BaseModule {
                         storageFullHold = (!storageChargeWanted) && (storageSocPct >= (socStopChargePct - 1e-9));
                     }
 
-                    speicherSollW = storageChargeWanted ? -storagePowerAbsW : 0;
+	                    speicherSollW = storageChargeWanted ? -storagePowerAbsW : 0;
+	                } else if (cheapWanted && !storageTimeOk && !netFeeIsNt) {
+	                    // Tarif ist günstig, aber Speicher-Netzladen ist tagsüber gesperrt (Policy-Zeitfenster).
+	                    // -> Eigenverbrauchsoptimierung übernimmt.
+	                    this._tariffChargeLatch = false;
+	                    storageChargeWanted = false;
+	                    storageFullHold = false;
+	                    storageChargeBlockedByTime = true;
+	                    speicherSollW = 0;
                 } else if ((!netFeeOverlay || netFeeIsStandard || !netFeeActive) && (tarifState === 'neutral' || tarifState === 'teuer' || tarifState === 'unbekannt')) {
                     // Reset der Lade-Hysterese außerhalb von "günstig"
                     this._tariffChargeLatch = false;
@@ -1126,6 +1152,8 @@ if (aktivEff) {
         statusText = `${base}: Speicher lädt`;
       } else if (storageFullHold) {
         statusText = `${base}: Speicher voll – ruht`;
+      } else if (storageChargeBlockedByTime) {
+        statusText = `${base}: Speicher: Netzladen gesperrt (${storageChargeWindowLabel})`;
       } else {
         statusText = `${base}: keine Speicher-Ladung`;
       }
@@ -1135,6 +1163,7 @@ if (aktivEff) {
       const parts = [];
       if (storageCharging) parts.push('Speicher lädt');
       else if (storageFullHold) parts.push('Speicher voll (ruht)');
+      else if (storageChargeBlockedByTime) parts.push(`Speicher: Netzladen gesperrt (${storageChargeWindowLabel})`);
       parts.push(gridChargeAllowed ? 'EVCS freigegeben' : 'EVCS gesperrt');
       statusText = `${base}: ${parts.join(' + ')}`;
     }
@@ -1188,6 +1217,10 @@ await this._setIfChanged('tarif.statusText', statusText);
                 socStopChargePct,
                 storageChargeWanted,
                 storageFullHold,
+	                // Policy: Speicher-Netzladen Zeitfenster (Q1/Q4 18–6, Q2/Q3 21–6)
+	                storageChargeWindowOk: !!storageChargeWindowOk,
+	                storageChargeWindowLabel: String(storageChargeWindowLabel || ''),
+	                storageChargeBlockedByTime: !!storageChargeBlockedByTime,
                 gridChargeAllowed,
                 dischargeAllowed,
                 ladeparkLimitW: limitW,
