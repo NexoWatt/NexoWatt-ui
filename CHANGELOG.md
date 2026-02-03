@@ -1,3 +1,8 @@
+## 0.6.106 (2026-02-03)
+- SmartHome Tooltip/Popover: Thermostat-Gauge korrigiert (spiegelverkehr wie Referenz: Bogen oben) + Gradient-Darstellung gefixt.
+- SmartHome Tooltip/Popover: Hintergrund-Scroll wird gesperrt solange ein Tooltip offen ist (kein "Seite rauf/runter sliden" mehr).
+- UI: Service‑Worker Cache‑Version erhöht (Update wird sofort geladen).
+
 ## 0.6.105 (2026-02-03)
 - NexoLogic: Neue Regelungs-Bausteine (Heizung): PI-Raumtemperaturregler (Anti‑Windup + zyklisches Update), Sommer/Winter‑Umschalter, Fensterkontakt‑Sperre, Heizkurve (Vorlauf‑Soll) und 2‑Punkt‑Mischer (Impuls AUF/ZU).
 - UI: Service‑Worker Cache‑Version erhöht (Update wird sofort geladen).

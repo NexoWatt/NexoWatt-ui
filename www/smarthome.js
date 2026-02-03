@@ -965,6 +965,55 @@ let nwPopoverOpenId = null;
 let nwPopoverAnchorEl = null;
 let nwPopoverDragging = false;
 
+// Prevent background scrolling while a SmartHome popover is open.
+// (Especially important on mobile/touch devices.)
+let nwBodyScrollLocked = false;
+let nwBodyScrollY = 0;
+
+function nwLockBodyScroll() {
+  if (nwBodyScrollLocked) return;
+  nwBodyScrollLocked = true;
+
+  nwBodyScrollY = window.scrollY || window.pageYOffset || 0;
+
+  // Prevent layout jump when the scrollbar disappears (desktop).
+  const sbW = Math.max(0, (window.innerWidth || 0) - (document.documentElement?.clientWidth || 0));
+  if (sbW > 0) document.body.style.paddingRight = sbW + 'px';
+
+  // Lock both <html> and <body> (some browsers only honor one of them).
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+
+  // iOS/Safari: overflow hidden is not always enough.
+  document.body.style.position = 'fixed';
+  document.body.style.top = (-nwBodyScrollY) + 'px';
+  document.body.style.left = '0';
+  document.body.style.right = '0';
+  document.body.style.width = '100%';
+  document.body.classList.add('nw-scroll-locked');
+}
+
+function nwUnlockBodyScroll() {
+  if (!nwBodyScrollLocked) return;
+  nwBodyScrollLocked = false;
+
+  document.documentElement.style.overflow = '';
+  document.body.style.overflow = '';
+  document.body.style.paddingRight = '';
+  document.body.style.position = '';
+  document.body.style.top = '';
+  document.body.style.left = '';
+  document.body.style.right = '';
+  document.body.style.width = '';
+  document.body.style.paddingRight = '';
+  document.body.classList.remove('nw-scroll-locked');
+
+  // Restore scroll position after removing fixed positioning.
+  const y = nwBodyScrollY || 0;
+  nwBodyScrollY = 0;
+  try { window.scrollTo(0, y); } catch (_e) {}
+}
+
 function nwEnsurePopover() {
   if (nwPopoverBackdropEl && nwPopoverEl) return;
 
@@ -984,6 +1033,11 @@ function nwEnsurePopover() {
 
   const close = () => nwClosePopover();
   nwPopoverBackdropEl.addEventListener('click', close);
+
+  // Block scroll gestures on the backdrop itself (extra safety).
+  // (Body is locked as well, but this prevents "rubber band" scrolling.)
+  nwPopoverBackdropEl.addEventListener('wheel', (ev) => ev.preventDefault(), { passive: false });
+  nwPopoverBackdropEl.addEventListener('touchmove', (ev) => ev.preventDefault(), { passive: false });
 
   window.addEventListener('resize', () => {
     if (nwPopoverOpenId) nwPositionPopover(nwPopoverAnchorEl);
@@ -1006,6 +1060,7 @@ function nwClosePopover() {
   nwPopoverOpenId = null;
   nwPopoverAnchorEl = null;
   nwPopoverDragging = false;
+  nwUnlockBodyScroll();
 }
 
 function nwOpenDevicePopover(dev, anchorEl) {
@@ -1025,6 +1080,9 @@ function nwOpenDevicePopover(dev, anchorEl) {
   nwPopoverBackdropEl.classList.remove('hidden');
   nwPopoverEl.classList.remove('hidden');
   nwPopoverEl.innerHTML = '';
+
+  // Lock background scrolling while the popover is visible.
+  nwLockBodyScroll();
 
   nwBuildPopoverContent(dev);
 
@@ -1404,6 +1462,10 @@ function nwCreateThermostatGauge(opts) {
   const defs = document.createElementNS(NS, 'defs');
   const grad = document.createElementNS(NS, 'linearGradient');
   grad.setAttribute('id', gradId);
+  // IMPORTANT: Use absolute coordinates in the SVG viewBox.
+  // Without this, the gradient uses objectBoundingBox units and collapses
+  // visually (dial looks like a single flat color).
+  grad.setAttribute('gradientUnits', 'userSpaceOnUse');
   grad.setAttribute('x1', String(cx - r));
   grad.setAttribute('y1', String(cy));
   grad.setAttribute('x2', String(cx + r));
@@ -1415,14 +1477,17 @@ function nwCreateThermostatGauge(opts) {
     s.setAttribute('stop-color', col);
     return s;
   };
-  grad.appendChild(mkStop('0%', '#00e676'));
-  grad.appendChild(mkStop('50%', '#ffd54f'));
+  // More "Apple-like" gradient: cyan -> green -> yellow -> orange/red.
+  grad.appendChild(mkStop('0%', '#1dddf2'));
+  grad.appendChild(mkStop('40%', '#00e676'));
+  grad.appendChild(mkStop('70%', '#ffd54f'));
   grad.appendChild(mkStop('100%', '#ff7043'));
   defs.appendChild(grad);
   svg.appendChild(defs);
 
   const base = document.createElementNS(NS, 'path');
-  base.setAttribute('d', `M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${cx + r} ${cy}`);
+  // Upper arc (matches tick marks). sweep=1 draws the arc "over" the value.
+  base.setAttribute('d', `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`);
   base.setAttribute('fill', 'none');
   base.classList.add('nw-sh-gauge__track');
 
@@ -1462,7 +1527,7 @@ function nwCreateThermostatGauge(opts) {
 
   // Invisible hit area for dragging/clicking on the arc
   const hit = document.createElementNS(NS, 'path');
-  hit.setAttribute('d', `M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${cx + r} ${cy}`);
+  hit.setAttribute('d', `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`);
   hit.setAttribute('fill', 'none');
   hit.classList.add('nw-sh-gauge__hit');
 
@@ -1536,7 +1601,7 @@ function nwCreateThermostatGauge(opts) {
     if (f <= 0.001) {
       active.setAttribute('d', '');
     } else {
-      active.setAttribute('d', `M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${x.toFixed(2)} ${y.toFixed(2)}`);
+      active.setAttribute('d', `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)}`);
     }
 
     knob.setAttribute('cx', x.toFixed(2));
