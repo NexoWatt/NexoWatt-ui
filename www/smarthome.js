@@ -12,6 +12,10 @@ let nwLastDevicesSignature = '';
 let nwReloadInFlight = false;
 let nwAutoRefreshTimer = null;
 
+// Endkunden-Favoriten: pro Browser (LocalStorage) – überschreibt optionale Installer-Defaults.
+// Map: { [deviceId]: boolean }
+let nwFavoriteOverrides = {};
+
 let nwSmartHomeEnabled = null;
 let nwEvcsCount = 1;
 
@@ -624,7 +628,7 @@ function nwApplyFilters(devices) {
 
   // favorites
   if (nwFilterState.favoritesOnly) {
-    out = out.filter(d => !!(d.behavior && d.behavior.favorite));
+    out = out.filter(d => nwIsFavorite(d));
   }
 
   // function filter
@@ -650,7 +654,7 @@ function nwRenderFunctionChips(devices) {
   nwClear(wrap);
 
   const allFns = nwGetAllFunctions(devices);
-  const hasFav = (devices || []).some(d => !!(d.behavior && d.behavior.favorite));
+  const hasFav = (devices || []).some(d => nwIsFavorite(d));
 
   const mkChip = (label, active, onClick, extraClass, disabled, title) => {
     const btn = document.createElement('button');
@@ -679,7 +683,7 @@ function nwRenderFunctionChips(devices) {
     if (nwFilterState.favoritesOnly) nwFilterState.func = null;
   }, null, !hasFav, hasFav
     ? 'Nur Favoriten anzeigen'
-    : 'Keine Favoriten gesetzt (im Admin → SmartHome‑Konfiguration „Favorit“ aktivieren).');
+    : 'Keine Favoriten gesetzt. Tipp: Stern ★ in einer Kachel anklicken.');
 
   mkChip('★ zuerst', !!nwFilterState.favoritesFirst, () => {
     if (!hasFav) return;
@@ -754,6 +758,7 @@ function nwCreateTile(dev) {
   const size = nwGetTileSize(dev);
   const isOn = nwIsOn(dev);
   const canWrite = nwHasWriteAccess(dev);
+  const isFav = nwIsFavorite(dev);
 
   const iconSpec = nwGetIconSpec(dev);
   const iconName = iconSpec.kind === 'svg' ? iconSpec.name : 'generic';
@@ -766,7 +771,7 @@ function nwCreateTile(dev) {
     'nw-sh-tile--size-' + size,
     isOn ? 'nw-sh-tile--on' : 'nw-sh-tile--off',
     canWrite ? '' : 'nw-sh-tile--readonly',
-    (dev.behavior && dev.behavior.favorite) ? 'nw-sh-tile--favorite' : '',
+    isFav ? 'nw-sh-tile--favorite' : '',
     (dev.state && dev.state.error) ? 'nw-sh-tile--error' : '',
   ].filter(Boolean).join(' ');
 
@@ -798,13 +803,22 @@ function nwCreateTile(dev) {
   header.appendChild(icon);
   header.appendChild(titleWrap);
 
-  // Favorite star (top-right)
-  if (dev.behavior && dev.behavior.favorite) {
-    const star = document.createElement('div');
-    star.className = 'nw-sh-tile__star';
-    star.textContent = '★';
-    header.appendChild(star);
-  }
+  // Actions (top-right): Favorite (Endkunde) + optional details
+  const actions = document.createElement('div');
+  actions.className = 'nw-sh-tile__actions';
+
+  const favBtn = document.createElement('button');
+  favBtn.type = 'button';
+  favBtn.className = 'nw-sh-favbtn' + (isFav ? ' nw-sh-favbtn--active' : '');
+  favBtn.textContent = isFav ? '★' : '☆';
+  favBtn.title = isFav ? 'Favorit entfernen' : 'Als Favorit markieren';
+  favBtn.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    nwToggleFavorite(dev);
+    nwApplyFiltersAndRender();
+  });
+  actions.appendChild(favBtn);
 
   // Detail/Tooltip-Popover (für Dimmer/Jalousie/RTR)
   const hasDetails = (type === 'dimmer' || type === 'blind' || type === 'rtr');
@@ -827,8 +841,10 @@ function nwCreateTile(dev) {
       ev.stopPropagation();
       nwOpenDevicePopover(dev, tile);
     });
-    header.appendChild(more);
+    actions.appendChild(more);
   }
+
+  header.appendChild(actions);
 
   tile.appendChild(header);
 
@@ -1182,6 +1198,77 @@ const NW_SH_STEP_DEFAULT = 5;
 // SmartHome: Favoriten (Schnellzugriff)
 const NW_SH_FAVORITES_FIRST_LS_KEY = 'nw_sh_favorites_first';
 const NW_SH_FAVORITES_FIRST_DEFAULT = false;
+
+// SmartHome: Favoriten pro Endkunde (LocalStorage Overrides)
+// - Key enthält nur Overrides (Abweichungen) gegenüber dem Installer-Default.
+// - Kunde kann in der Kachel per Stern ★ umschalten.
+const NW_SH_FAVORITES_OVERRIDES_LS_KEY = 'nw_sh_favorites_overrides_v1';
+
+function nwLoadJsonLS(key, defVal) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return defVal;
+    const obj = JSON.parse(raw);
+    if (obj && typeof obj === 'object') return obj;
+    return defVal;
+  } catch (_e) {
+    return defVal;
+  }
+}
+
+function nwSaveJsonLS(key, obj) {
+  try {
+    localStorage.setItem(key, JSON.stringify(obj || {}));
+  } catch (_e) {}
+}
+
+function nwLoadFavoriteOverrides() {
+  const obj = nwLoadJsonLS(NW_SH_FAVORITES_OVERRIDES_LS_KEY, {});
+  // sanitize to {string:boolean}
+  const out = {};
+  try {
+    Object.keys(obj || {}).forEach((k) => {
+      const v = obj[k];
+      if (typeof v === 'boolean') out[String(k)] = v;
+    });
+  } catch (_e) {}
+  return out;
+}
+
+function nwSaveFavoriteOverrides(map) {
+  nwSaveJsonLS(NW_SH_FAVORITES_OVERRIDES_LS_KEY, map || {});
+}
+
+function nwGetInstallerFavorite(dev) {
+  return !!(dev && dev.behavior && dev.behavior.favorite);
+}
+
+function nwIsFavorite(dev) {
+  const id = String(dev && dev.id || '');
+  if (!id) return false;
+  const ov = nwFavoriteOverrides && Object.prototype.hasOwnProperty.call(nwFavoriteOverrides, id)
+    ? nwFavoriteOverrides[id]
+    : undefined;
+  if (typeof ov === 'boolean') return ov;
+  return nwGetInstallerFavorite(dev);
+}
+
+function nwToggleFavorite(dev) {
+  if (!dev || !dev.id) return;
+  const id = String(dev.id);
+  const base = nwGetInstallerFavorite(dev);
+  const next = !nwIsFavorite(dev);
+
+  // Store only the delta to keep the overrides small.
+  if (next === base) {
+    if (nwFavoriteOverrides && Object.prototype.hasOwnProperty.call(nwFavoriteOverrides, id)) {
+      delete nwFavoriteOverrides[id];
+    }
+  } else {
+    nwFavoriteOverrides[id] = next;
+  }
+  nwSaveFavoriteOverrides(nwFavoriteOverrides);
+}
 
 function nwLoadNumberLS(key, defVal) {
   try {
@@ -2477,8 +2564,8 @@ function nwRenderRooms(devices) {
     const arr = (g.devices || []).slice();
     arr.sort((a, b) => {
       if (nwFilterState.favoritesFirst) {
-        const fa = !!(a.behavior && a.behavior.favorite);
-        const fb = !!(b.behavior && b.behavior.favorite);
+        const fa = nwIsFavorite(a);
+        const fb = nwIsFavorite(b);
         if (fa !== fb) return fa ? -1 : 1;
       }
 
@@ -2593,6 +2680,7 @@ async function nwBootstrap() {
 
   // UI‑Prefs (persistiert pro Browser)
   nwFilterState.favoritesFirst = nwLoadBoolLS(NW_SH_FAVORITES_FIRST_LS_KEY, NW_SH_FAVORITES_FIRST_DEFAULT);
+  nwFavoriteOverrides = nwLoadFavoriteOverrides();
   await nwLoadUiConfigFlags();
 
   await nwReloadDevices({ force: true });

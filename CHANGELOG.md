@@ -1,3 +1,8 @@
+## 0.6.112 (2026-02-03)
+- SmartHome VIS: Favoriten können jetzt vom Endkunden direkt in der Kachel per Stern ★/☆ umgeschaltet werden (lokal pro Browser, überschreibt optionale Installer-Defaults).
+- SmartHome VIS: Favoriten-Filter/Sortierung berücksichtigt Endkunden-Favoriten.
+- UI: Service‑Worker Cache‑Version erhöht (Update wird sofort geladen).
+
 ## 0.6.111 (2026-02-03)
 - SmartHome VIS: Favoriten-Chip ist jetzt immer sichtbar (deaktiviert, wenn keine Favoriten gesetzt sind).
 - SmartHome VIS: Neuer Chip „★ zuerst“ – Favoriten in Räumen nach oben sortieren (persistiert pro Browser).

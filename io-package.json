@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.111",
+    "version": "0.6.112",
     "news": {
+      "0.6.112": {
+        "en": "SmartHome: End users can now toggle Favorites directly on each tile via a star (★/☆). Favorites are stored locally per browser and override optional installer defaults.",
+        "de": "SmartHome: Endkunden können Favoriten jetzt direkt in den Kacheln per Stern (★/☆) umschalten. Favoriten werden lokal pro Browser gespeichert und überschreiben optionale Installer-Defaults."
+      },
       "0.6.111": {
         "en": "SmartHome: Favorites UX – favorites chip is always visible (disabled if none) + new 'favorites first' chip that pins favorites to the top within each room (stored locally).",
         "de": "SmartHome: Favoriten-UX – Favoriten-Chip immer sichtbar (deaktiviert falls keine gesetzt) + neuer Chip „★ zuerst“ (Favoriten in Räumen nach oben sortieren, lokal gespeichert)."
