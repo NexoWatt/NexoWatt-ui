@@ -248,6 +248,7 @@ function nwGuessIconName(dev) {
   if (type === 'blind') return 'blinds';
   if (type === 'rtr') return 'thermostat';
   if (type === 'scene') return 'scene';
+  if (type === 'player') return 'speaker';
   if (type === 'sensor') {
     if (unit.includes('°c') || alias.includes('temp') || fn.includes('klima')) return 'thermostat';
     return 'sensor';
@@ -318,6 +319,10 @@ function nwIsOn(dev) {
     const min = (dev.io && dev.io.level && typeof dev.io.level.min === 'number') ? dev.io.level.min : 0;
     return lvl > min;
   }
+  if (type === 'player') {
+    if (typeof st.playing !== 'undefined') return !!st.playing;
+    return !!st.on;
+  }
   if (type === 'blind') {
     // blinds have no true "on"; we keep them neutral
     return false;
@@ -348,6 +353,20 @@ function nwGetStateText(dev) {
     const pos = (typeof st.position === 'number') ? st.position : (typeof st.level === 'number' ? st.level : null);
     if (typeof pos === 'number') return Math.round(pos) + ' %';
     return '—';
+  }
+  if (type === 'player') {
+    const title = String(st.title || '').trim();
+    const artist = String(st.artist || '').trim();
+    const source = String(st.source || '').trim();
+    let line = '';
+    if (title && artist) line = title + ' – ' + artist;
+    else if (title) line = title;
+    else if (artist) line = artist;
+    else line = st.on ? 'Spielt' : 'Pausiert';
+    if (source) {
+      line = line ? (line + ' · ' + source) : source;
+    }
+    return line;
   }
   if (type === 'rtr') {
     if (typeof st.mode !== 'undefined' && st.mode !== null && String(st.mode).trim() !== '') {
@@ -516,6 +535,21 @@ async function nwCoverAction(id, action) {
   if (!res.ok) return false;
   const data = await res.json();
   return !!(data && data.ok);
+}
+
+async function nwPlayerAction(id, action, value) {
+  const body = { id, action };
+  if (typeof value !== 'undefined') body.value = value;
+
+  const res = await fetch('/api/smarthome/player', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data || !data.ok) return null;
+  return data.state || null;
 }
 
 async function nwSetRtrSetpoint(id, setpoint) {
@@ -902,7 +936,7 @@ function nwCreateTile(dev, opts) {
   actions.appendChild(favBtn);
 
   // Detail/Tooltip-Popover (für Dimmer/Jalousie/RTR)
-  const hasDetails = (type === 'dimmer' || type === 'blind' || type === 'rtr');
+  const hasDetails = (type === 'dimmer' || type === 'blind' || type === 'rtr' || type === 'player');
   if (hasDetails) {
     // Klick auf Icon öffnet das Bedienpanel (Tooltip)
     icon.title = 'Bedienung';
@@ -1055,10 +1089,10 @@ function nwCreateTile(dev, opts) {
     tile.appendChild(controls);
   }
 
-  // Tap actions (switch / dimmer / scene)
+  // Tap actions (switch / dimmer / scene / player)
   tile.addEventListener('click', async () => {
     if (!canWrite) return;
-    if (type !== 'switch' && type !== 'dimmer' && type !== 'scene') return;
+    if (type !== 'switch' && type !== 'dimmer' && type !== 'scene' && type !== 'player') return;
     const st = await nwToggleDevice(dev.id);
     if (!st) return;
     await nwReloadDevices({ force: true });
@@ -1546,6 +1580,8 @@ function nwBuildPopoverContent(dev) {
     body.appendChild(nwCreateBlindPopover(dev, canWrite));
   } else if (type === 'rtr') {
     body.appendChild(nwCreateRtrPopover(dev, canWrite));
+  } else if (type === 'player') {
+    body.appendChild(nwCreatePlayerPopover(dev, canWrite));
   } else {
     const hint = document.createElement('div');
     hint.className = 'nw-sh-popover__hint';
@@ -2464,6 +2500,181 @@ function nwCreateThermostatGauge(opts) {
 
   hit.addEventListener('mousedown', onMouseDown);
   hit.addEventListener('touchstart', onTouchStart, { passive: false });
+
+  return wrap;
+}
+
+
+function nwCreatePlayerPopover(dev, canWrite) {
+  const wrap = document.createElement('div');
+  wrap.className = 'nw-sh-player';
+
+  const st = dev.state || {};
+  const io = (dev.io && dev.io.player) ? dev.io.player : {};
+
+  // Now playing
+  const now = document.createElement('div');
+  now.className = 'nw-sh-player__now';
+
+  const coverUrl = String(st.coverUrl || '').trim();
+  if (coverUrl) {
+    const img = document.createElement('img');
+    img.className = 'nw-sh-player__cover';
+    img.alt = '';
+    img.src = coverUrl;
+    img.loading = 'lazy';
+    now.appendChild(img);
+  }
+
+  const meta = document.createElement('div');
+  meta.className = 'nw-sh-player__meta';
+
+  const line1 = document.createElement('div');
+  line1.className = 'nw-sh-player__title';
+  const title = String(st.title || '').trim();
+  line1.textContent = title || (st.on ? 'Wiedergabe läuft' : 'Wiedergabe pausiert');
+
+  const line2 = document.createElement('div');
+  line2.className = 'nw-sh-player__sub';
+  const artist = String(st.artist || '').trim();
+  const source = String(st.source || '').trim();
+  const subParts = [];
+  if (artist) subParts.push(artist);
+  if (source) subParts.push(source);
+  line2.textContent = subParts.join(' · ');
+
+  meta.appendChild(line1);
+  if (line2.textContent) meta.appendChild(line2);
+  now.appendChild(meta);
+  wrap.appendChild(now);
+
+  // Controls
+  const controls = document.createElement('div');
+  controls.className = 'nw-sh-player__controls';
+
+  const mkBtn = (label, text, onClick, extraClass) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'nw-sh-btn nw-sh-btn--mini nw-sh-player__btn' + (extraClass ? (' ' + extraClass) : '');
+    b.textContent = text;
+    b.title = label;
+    b.setAttribute('aria-label', label);
+    if (!canWrite) b.disabled = true;
+    b.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!canWrite) return;
+      await onClick();
+    });
+    return b;
+  };
+
+  const btnPrev = mkBtn('Zurück', '⏮', async () => {
+    await nwPlayerAction(dev.id, 'prev');
+    nwRefreshDevicesSoon(100);
+  });
+
+  const btnPlay = mkBtn(st.on ? 'Pause' : 'Play', st.on ? '⏸' : '▶', async () => {
+    await nwPlayerAction(dev.id, 'toggle');
+    nwRefreshDevicesSoon(100);
+  }, 'nw-sh-player__btn--primary');
+
+  const btnNext = mkBtn('Weiter', '⏭', async () => {
+    await nwPlayerAction(dev.id, 'next');
+    nwRefreshDevicesSoon(100);
+  });
+
+  const btnStop = mkBtn('Stopp', '⏹', async () => {
+    await nwPlayerAction(dev.id, 'stop');
+    nwRefreshDevicesSoon(120);
+  });
+
+  controls.appendChild(btnPrev);
+  controls.appendChild(btnPlay);
+  controls.appendChild(btnNext);
+  controls.appendChild(btnStop);
+  wrap.appendChild(controls);
+
+  // Volume
+  const volMin = Number.isFinite(Number(io.volumeMin)) ? Number(io.volumeMin) : 0;
+  const volMax = Number.isFinite(Number(io.volumeMax)) ? Number(io.volumeMax) : 100;
+  let vol = Number(st.volume);
+  if (!Number.isFinite(vol)) vol = volMin;
+  vol = nwClampNumber(vol, volMin, volMax);
+
+  const volWrap = document.createElement('div');
+  volWrap.className = 'nw-sh-player__vol';
+
+  const volHeader = document.createElement('div');
+  volHeader.className = 'nw-sh-player__volhdr';
+  const volLabel = document.createElement('div');
+  volLabel.className = 'nw-sh-player__vollabel';
+  volLabel.textContent = 'Lautstärke';
+  const volVal = document.createElement('div');
+  volVal.className = 'nw-sh-player__volval';
+  volVal.textContent = String(Math.round(((vol - volMin) / Math.max(1, (volMax - volMin))) * 100)) + ' %';
+  volHeader.appendChild(volLabel);
+  volHeader.appendChild(volVal);
+  volWrap.appendChild(volHeader);
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = String(volMin);
+  slider.max = String(volMax);
+  slider.step = '1';
+  slider.value = String(vol);
+  slider.className = 'nw-sh-slider nw-sh-slider--big';
+  slider.disabled = !canWrite || !io.volumeWriteId;
+  slider.addEventListener('input', () => {
+    const v = Number(slider.value);
+    const pct = Math.round(((v - volMin) / Math.max(1, (volMax - volMin))) * 100);
+    volVal.textContent = String(pct) + ' %';
+  });
+  slider.addEventListener('change', async () => {
+    if (!canWrite || !io.volumeWriteId) return;
+    const v = Number(slider.value);
+    await nwPlayerAction(dev.id, 'volume', v);
+    nwRefreshDevicesSoon(160);
+  });
+  volWrap.appendChild(slider);
+  wrap.appendChild(volWrap);
+
+  // Stations
+  const stations = Array.isArray(dev.stations) ? dev.stations : [];
+  if (stations.length && io.stationId) {
+    const stWrap = document.createElement('div');
+    stWrap.className = 'nw-sh-player__stations';
+
+    const stTitle = document.createElement('div');
+    stTitle.className = 'nw-sh-player__sttitle';
+    stTitle.textContent = 'Radiosender';
+    stWrap.appendChild(stTitle);
+
+    const chips = document.createElement('div');
+    chips.className = 'nw-sh-player__chips';
+
+    stations.forEach((s) => {
+      const name = String((s && s.name) || '').trim();
+      const val = (s && Object.prototype.hasOwnProperty.call(s, 'value')) ? s.value : null;
+      if (!name) return;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'nw-sh-chip';
+      btn.textContent = name;
+      if (!canWrite) btn.disabled = true;
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!canWrite) return;
+        await nwPlayerAction(dev.id, 'station', val);
+        nwRefreshDevicesSoon(200);
+      });
+      chips.appendChild(btn);
+    });
+
+    stWrap.appendChild(chips);
+    wrap.appendChild(stWrap);
+  }
 
   return wrap;
 }

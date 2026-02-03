@@ -3975,6 +3975,33 @@ buildSmartHomeDevicesFromConfig() {
         if (typeof dev.ui.precision !== 'number') {
           dev.ui.precision = 1;
         }
+      } else if (type === 'player') {
+        const player = ioCfg.player || {};
+        dev.io.player = {
+          playingId: player.playingId || '',
+          titleId: player.titleId || '',
+          artistId: player.artistId || '',
+          sourceId: player.sourceId || '',
+          coverId: player.coverId || '',
+          volumeReadId: player.volumeReadId || '',
+          volumeWriteId: player.volumeWriteId || '',
+          volumeMin: typeof player.volumeMin === 'number' ? player.volumeMin : 0,
+          volumeMax: typeof player.volumeMax === 'number' ? player.volumeMax : 100,
+          toggleId: player.toggleId || '',
+          playId: player.playId || '',
+          pauseId: player.pauseId || '',
+          stopId: player.stopId || '',
+          nextId: player.nextId || '',
+          prevId: player.prevId || '',
+          stationId: player.stationId || '',
+        };
+        // Optional: Radiosender-Liste liegt im Device-Root
+        if (Array.isArray(device.stations)) {
+          dev.stations = device.stations.map((s) => ({
+            name: (s && typeof s.name === 'string') ? s.name : '',
+            value: (s && (typeof s.value === 'string' || typeof s.value === 'number')) ? s.value : '',
+          })).filter((s) => s.name || String(s.value || '').trim());
+        }
       } else if (type === 'sensor') {
         const sensor = ioCfg.sensor || {};
         if (sensor.readId) {
@@ -4464,6 +4491,72 @@ if (copy.type === 'scene' && typeof copy.state.on !== 'undefined') {
     }
 
     // Sensor-Werte lesen (read-only)
+    if (copy.io && copy.io.player) {
+      const pl = copy.io.player || {};
+      const getStr = async (id) => {
+        if (!id) return '';
+        try {
+          const st = await this.getForeignStateAsync(id);
+          const v = st && st.val;
+          if (typeof v === 'string') return v;
+          if (typeof v === 'number') return String(v);
+          if (typeof v === 'boolean') return v ? 'true' : 'false';
+          return '';
+        } catch {
+          return '';
+        }
+      };
+      const getNum = async (id) => {
+        if (!id) return null;
+        try {
+          const st = await this.getForeignStateAsync(id);
+          let v = st && st.val;
+          if (typeof v === 'string') {
+            const num = parseFloat(v.replace(',', '.'));
+            if (!Number.isNaN(num)) v = num;
+          }
+          if (typeof v === 'number' && !Number.isNaN(v)) return v;
+          return null;
+        } catch {
+          return null;
+        }
+      };
+
+      // playing / on
+      if (pl.playingId) {
+        try {
+          const st = await this.getForeignStateAsync(pl.playingId);
+          const v = st && st.val;
+          let playing = null;
+          if (typeof v === 'boolean') playing = v;
+          else if (typeof v === 'number') playing = v > 0;
+          else if (typeof v === 'string') {
+            const s = v.trim().toLowerCase();
+            if (['play', 'playing', 'on', 'true', '1'].includes(s)) playing = true;
+            if (['pause', 'paused', 'stop', 'stopped', 'off', 'false', '0'].includes(s)) playing = false;
+          }
+          if (playing !== null) {
+            copy.state.playing = playing;
+            copy.state.on = playing;
+          }
+        } catch (e) {
+          this.log.warn(`SmartHome player playingId state error for ${copy.id}: ${e.message}`);
+        }
+      }
+
+      // Meta / Track-Infos
+      if (pl.titleId) copy.state.title = await getStr(pl.titleId);
+      if (pl.artistId) copy.state.artist = await getStr(pl.artistId);
+      if (pl.sourceId) copy.state.source = await getStr(pl.sourceId);
+      if (pl.coverId) copy.state.cover = await getStr(pl.coverId);
+
+      // volume
+      if (pl.volumeReadId) {
+        const vol = await getNum(pl.volumeReadId);
+        if (vol !== null) copy.state.volume = vol;
+      }
+    }
+
     if (copy.io && copy.io.sensor && copy.io.sensor.readId) {
       try {
         const st = await this.getForeignStateAsync(copy.io.sensor.readId);
@@ -5262,6 +5355,67 @@ app.post('/api/smarthome/toggle', requireAuth, async (req, res) => {
       return res.json({ ok: true, state: { level: next, on: next > min } });
     }
 
+    // Audio-Player: Play/Pause toggeln
+    if (dev.type === 'player' && dev.io.player) {
+      const p = dev.io.player;
+      if (dev.behavior && dev.behavior.readOnly) {
+        return res.status(403).json({ ok: false, error: 'readOnly' });
+      }
+
+      const parsePlaying = (val) => {
+        if (typeof val === 'boolean') return val;
+        if (typeof val === 'number') return val > 0;
+        if (typeof val === 'string') {
+          const s = val.trim().toLowerCase();
+          if (['play', 'playing', 'on', 'true', '1'].includes(s)) return true;
+          if (['pause', 'paused', 'stop', 'stopped', 'off', 'false', '0'].includes(s)) return false;
+        }
+        return null;
+      };
+
+      const pulse = async (dpId) => {
+        if (!dpId) return false;
+        await this.setForeignStateAsync(dpId, true, false);
+        return true;
+      };
+
+      // Wenn toggleId vorhanden: direkt triggern
+      if (p.toggleId) {
+        await pulse(p.toggleId);
+        return res.json({ ok: true, state: { info: 'toggle' } });
+      }
+
+      // Fallback: anhand playingId entscheiden, dann play/pause triggern
+      let currentPlaying = null;
+      if (p.playingId) {
+        try {
+          const st = await this.getForeignStateAsync(p.playingId);
+          currentPlaying = parsePlaying(st && st.val);
+        } catch (_) {
+          currentPlaying = null;
+        }
+      }
+      const nextPlaying = (currentPlaying === null) ? null : !currentPlaying;
+      if (currentPlaying === true) {
+        if (p.pauseId) {
+          await pulse(p.pauseId);
+        } else if (p.playId) {
+          await pulse(p.playId);
+        }
+      } else {
+        if (p.playId) {
+          await pulse(p.playId);
+        } else if (p.pauseId) {
+          await pulse(p.pauseId);
+        }
+      }
+
+      if (nextPlaying === null) {
+        return res.json({ ok: true, state: { info: 'toggled' } });
+      }
+      return res.json({ ok: true, state: { on: nextPlaying, playing: nextPlaying } });
+    }
+
     // Default: Switch toggeln
     if (dev.io.switch && dev.io.switch.readId) {
       const dpId = dev.io.switch.writeId || dev.io.switch.readId;
@@ -5361,7 +5515,124 @@ app.post('/api/smarthome/cover', requireAuth, async (req, res) => {
     this.log.warn('SmartHome cover API error: ' + e.message);
     res.status(500).json({ ok: false, error: 'internal error' });
   }
-});// RTR-Setpoint-API (Solltemperatur einstellen)
+});
+
+
+// Player-API (Transport + Volume + Radiosender)
+app.post('/api/smarthome/player', requireAuth, async (req, res) => {
+  try {
+    const id = req.body && req.body.id;
+    const action = req.body && req.body.action;
+    const value = (req.body && Object.prototype.hasOwnProperty.call(req.body, 'value')) ? req.body.value : undefined;
+    if (!id || !action) {
+      return res.status(400).json({ ok: false, error: 'missing id or action' });
+    }
+
+    const devices = (this.smartHomeDevices && this.smartHomeDevices.length)
+      ? this.smartHomeDevices
+      : this.buildSmartHomeDevicesFromConfig();
+    const dev = devices.find(d => d.id === id);
+    if (!dev || dev.type !== 'player' || !dev.io || !dev.io.player) {
+      return res.status(404).json({ ok: false, error: 'device not found or not a player' });
+    }
+    if (dev.behavior && dev.behavior.readOnly) {
+      return res.status(403).json({ ok: false, error: 'readOnly' });
+    }
+
+    const p = dev.io.player;
+    const pulse = async (dpId) => {
+      if (!dpId) return false;
+      await this.setForeignStateAsync(dpId, true);
+      return true;
+    };
+
+    const parsePlaying = (val) => {
+      if (typeof val === 'boolean') return val;
+      if (typeof val === 'number') return val > 0;
+      if (typeof val === 'string') {
+        const s = val.trim().toLowerCase();
+        if (['play', 'playing', 'on', 'true', '1'].includes(s)) return true;
+        if (['pause', 'paused', 'stop', 'stopped', 'off', 'false', '0'].includes(s)) return false;
+      }
+      return null;
+    };
+
+    let stateUpdate = {};
+
+    if (action === 'play') {
+      const ok = await pulse(p.playId) || await pulse(p.toggleId);
+      if (!ok) return res.status(404).json({ ok: false, error: 'no datapoint for action' });
+      stateUpdate = { on: true, playing: true };
+    } else if (action === 'pause') {
+      const ok = await pulse(p.pauseId) || await pulse(p.toggleId);
+      if (!ok) return res.status(404).json({ ok: false, error: 'no datapoint for action' });
+      stateUpdate = { on: false, playing: false };
+    } else if (action === 'toggle') {
+      // bevorzugt Toggle-DP, sonst play/pause anhand Status
+      if (p.toggleId) {
+        await pulse(p.toggleId);
+        // Status unbekannt -> nur ok
+        return res.json({ ok: true });
+      }
+      let cur = null;
+      if (p.playingId) {
+        try {
+          const st = await this.getForeignStateAsync(p.playingId);
+          cur = parsePlaying(st && st.val);
+        } catch {}
+      }
+      if (cur === true) {
+        const ok = await pulse(p.pauseId);
+        if (!ok) return res.status(404).json({ ok: false, error: 'no datapoint for action' });
+        stateUpdate = { on: false, playing: false };
+      } else {
+        const ok = await pulse(p.playId);
+        if (!ok) return res.status(404).json({ ok: false, error: 'no datapoint for action' });
+        stateUpdate = { on: true, playing: true };
+      }
+    } else if (action === 'stop') {
+      const ok = await pulse(p.stopId);
+      if (!ok) return res.status(404).json({ ok: false, error: 'no datapoint for action' });
+      stateUpdate = { on: false, playing: false };
+    } else if (action === 'next') {
+      const ok = await pulse(p.nextId);
+      if (!ok) return res.status(404).json({ ok: false, error: 'no datapoint for action' });
+    } else if (action === 'prev') {
+      const ok = await pulse(p.prevId);
+      if (!ok) return res.status(404).json({ ok: false, error: 'no datapoint for action' });
+    } else if (action === 'volume') {
+      let vol = value;
+      if (typeof vol === 'string') {
+        const num = parseFloat(vol.replace(',', '.'));
+        if (!Number.isNaN(num)) vol = num;
+      }
+      if (typeof vol !== 'number' || Number.isNaN(vol)) {
+        return res.status(400).json({ ok: false, error: 'invalid volume' });
+      }
+      const min = (typeof p.volumeMin === 'number') ? p.volumeMin : 0;
+      const max = (typeof p.volumeMax === 'number') ? p.volumeMax : 100;
+      vol = Math.max(min, Math.min(max, vol));
+      const dpId = p.volumeWriteId || p.volumeReadId;
+      if (!dpId) return res.status(404).json({ ok: false, error: 'no datapoint for action' });
+      await this.setForeignStateAsync(dpId, vol);
+      stateUpdate = { volume: vol };
+    } else if (action === 'station') {
+      if (!p.stationId) return res.status(404).json({ ok: false, error: 'no datapoint for action' });
+      // value kann String (URL/Preset) oder Zahl sein
+      await this.setForeignStateAsync(p.stationId, value);
+    } else {
+      return res.status(400).json({ ok: false, error: 'invalid action' });
+    }
+
+    return res.json({ ok: true, state: stateUpdate });
+  } catch (e) {
+    this.log.warn('SmartHome player API error: ' + e.message);
+    res.status(500).json({ ok: false, error: 'internal error' });
+  }
+});
+
+
+// RTR-Setpoint-API (Solltemperatur einstellen)
 app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
   try {
     const id = req.body && req.body.id;

@@ -261,6 +261,53 @@ function nwValidateConfig(cfg) {
       if (!readOnly && !sp) {
         nwPushIssue(out, 'warn', 'Gerät', 'RTR ohne setpointId (nur Anzeige möglich).', ent);
       }
+    } else if (type === 'player') {
+      const pl = (io && io.player) ? io.player : {};
+      const playingId = (pl && typeof pl.playingId === 'string') ? pl.playingId.trim() : '';
+      const titleId = (pl && typeof pl.titleId === 'string') ? pl.titleId.trim() : '';
+      const artistId = (pl && typeof pl.artistId === 'string') ? pl.artistId.trim() : '';
+      const sourceId = (pl && typeof pl.sourceId === 'string') ? pl.sourceId.trim() : '';
+      const coverId = (pl && typeof pl.coverId === 'string') ? pl.coverId.trim() : '';
+      const volR = (pl && typeof pl.volumeReadId === 'string') ? pl.volumeReadId.trim() : '';
+      const volW = (pl && typeof pl.volumeWriteId === 'string') ? pl.volumeWriteId.trim() : '';
+      const playId = (pl && typeof pl.playId === 'string') ? pl.playId.trim() : '';
+      const pauseId = (pl && typeof pl.pauseId === 'string') ? pl.pauseId.trim() : '';
+      const stopId = (pl && typeof pl.stopId === 'string') ? pl.stopId.trim() : '';
+      const nextId = (pl && typeof pl.nextId === 'string') ? pl.nextId.trim() : '';
+      const prevId = (pl && typeof pl.prevId === 'string') ? pl.prevId.trim() : '';
+      const toggleId = (pl && typeof pl.toggleId === 'string') ? pl.toggleId.trim() : '';
+      const stationWriteId = (pl && typeof pl.stationId === 'string') ? pl.stationId.trim() : '';
+
+      chkDp('Player Status (playingId)', playingId);
+      chkDp('Titel (titleId)', titleId);
+      chkDp('Interpret (artistId)', artistId);
+      chkDp('Quelle (sourceId)', sourceId);
+      chkDp('Cover URL (coverId)', coverId);
+      chkDp('Lautstärke lesen (volumeReadId)', volR);
+      chkDp('Lautstärke schreiben (volumeWriteId)', volW);
+      chkDp('Play (playId)', playId);
+      chkDp('Pause (pauseId)', pauseId);
+      chkDp('Stop (stopId)', stopId);
+      chkDp('Nächster Titel (nextId)', nextId);
+      chkDp('Vorheriger Titel (prevId)', prevId);
+      chkDp('Toggle (toggleId)', toggleId);
+      chkDp('Radiosender setzen (stationId)', stationWriteId);
+
+      const hasAny = !!(playingId || titleId || volR || volW || playId || pauseId || stopId || nextId || prevId || toggleId || stationWriteId);
+      if (!hasAny) {
+        nwPushIssue(out, 'error', 'Gerät', 'Audio-Player ohne Datenpunkte (mind. 1 DP muss gesetzt sein).', ent);
+      }
+      if (readOnly && !(playingId || titleId || volR)) {
+        nwPushIssue(out, 'warn', 'Gerät', 'Nur Anzeige (readOnly) aktiv, aber es ist kein Read-DP gesetzt (playingId/titleId/volumeReadId).', ent);
+      }
+
+      const stList = (d && Array.isArray(d.stations)) ? d.stations : [];
+      stList.forEach((s, sIdx) => {
+        const nm = (s && typeof s.name === 'string') ? s.name.trim() : '';
+        const val = (s && (typeof s.value === 'string' || typeof s.value === 'number')) ? String(s.value).trim() : '';
+        if (!nm) nwPushIssue(out, 'warn', 'Radiosender', 'Radiosender ohne Namen (Index ' + (sIdx + 1) + ').', ent);
+        if (!val) nwPushIssue(out, 'warn', 'Radiosender', 'Radiosender ohne Wert/URL (Index ' + (sIdx + 1) + ').', ent);
+      });
     } else if (type === 'sensor') {
       const se = (io && io.sensor) ? io.sensor : {};
       const readId = (se && typeof se.readId === 'string') ? se.readId.trim() : '';
@@ -445,9 +492,10 @@ function nwGetTypeLabel(type) {
     dimmer: 'Dimmer',
     blind: 'Jalousie / Rollladen',
     rtr: 'Heizung (RTR)',
+    player: 'Audio-Player',
     sensor: 'Sensor',
     scene: 'Szene',
-    logicStatus: 'Logic Status',
+    logicStatus: 'Logik-Status',
   };
   return map[t] || (t || 'Typ?');
 }
@@ -1127,6 +1175,7 @@ function nwAddDeviceFromTemplate(templateType) {
     dimmer: 'dimmer',
     blind: 'jalousie',
     rtr: 'heizung',
+    player: 'player',
     sensor: 'sensor',
     scene: 'szene',
   };
@@ -1135,6 +1184,7 @@ function nwAddDeviceFromTemplate(templateType) {
     dimmer: 'Neuer Dimmer',
     blind: 'Neue Jalousie',
     rtr: 'Neue Heizung',
+    player: 'Audio-Player',
     sensor: 'Neuer Sensor',
     scene: 'Neue Szene',
   };
@@ -1143,6 +1193,7 @@ function nwAddDeviceFromTemplate(templateType) {
     dimmer: 'bulb',
     blind: 'blinds',
     rtr: 'thermostat',
+    player: 'speaker',
     sensor: 'thermometer',
     scene: 'scene',
   };
@@ -1156,7 +1207,7 @@ function nwAddDeviceFromTemplate(templateType) {
     roomId: roomId || null,
     functionId: functionId || null,
     icon: iconMap[t] || '',
-    size: (t === 'rtr') ? 'xl' : 'm',
+    size: (t === 'rtr') ? 'xl' : ((t === 'player') ? 'l' : 'm'),
     behavior: { favorite: false, readOnly: false },
     io: {},
   };
@@ -1180,6 +1231,26 @@ function nwAddDeviceFromTemplate(templateType) {
       minSetpoint: 15,
       maxSetpoint: 30,
     };
+  } else if (t === 'player') {
+    dev.io.player = {
+      playingId: null,
+      titleId: null,
+      artistId: null,
+      sourceId: null,
+      coverId: null,
+      volumeReadId: null,
+      volumeWriteId: null,
+      volumeMin: 0,
+      volumeMax: 100,
+      toggleId: null,
+      playId: null,
+      pauseId: null,
+      stopId: null,
+      nextId: null,
+      prevId: null,
+      stationId: null,
+    };
+    dev.stations = [];
   } else if (t === 'sensor') {
     dev.io.sensor = { readId: null };
     // Sensoren sind in der Regel reine Anzeige (optional anpassbar)
@@ -1347,7 +1418,13 @@ function nwCreateDpInput(labelText, value, onChange) {
     labelLower.includes('upid') ||
     labelLower.includes('downid') ||
     labelLower.includes('stopid') ||
-    labelLower.includes('modeid')
+    labelLower.includes('modeid') ||
+    labelLower.includes('playid') ||
+    labelLower.includes('pauseid') ||
+    labelLower.includes('toggleid') ||
+    labelLower.includes('nextid') ||
+    labelLower.includes('previd') ||
+    labelLower.includes('stationid')
   );
 
   let btnSet = null;
@@ -1650,9 +1727,10 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       { value: 'dimmer', label: 'Dimmer' },
       { value: 'blind', label: 'Jalousie / Rollladen' },
       { value: 'rtr', label: 'Heizung (RTR)' },
+      { value: 'player', label: 'Audio-Player' },
       { value: 'sensor', label: 'Sensor' },
       { value: 'scene', label: 'Szene' },
-      { value: 'logicStatus', label: 'Logic Status' },
+      { value: 'logicStatus', label: 'Logik-Status' },
     ];
     typeOptions.forEach(optDef => {
       const opt = document.createElement('option');
@@ -1662,7 +1740,42 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       typeSelect.appendChild(opt);
     });
     typeSelect.addEventListener('change', () => {
-      nwShcState.config.devices[index].type = typeSelect.value || null;
+      const t = typeSelect.value || null;
+      const d = nwShcState.config.devices[index];
+      d.type = t;
+      d.io = d.io || {};
+      // Beim Typwechsel passende IO-Struktur anlegen (damit Felder sofort erscheinen)
+      if (t === 'switch' || t === 'scene' || t === 'logicStatus') {
+        d.io.switch = d.io.switch || { readId: null, writeId: null };
+      } else if (t === 'dimmer') {
+        d.io.level = d.io.level || { readId: null, writeId: null, min: 0, max: 100 };
+      } else if (t === 'blind') {
+        d.io.cover = d.io.cover || { readId: null, upId: null, downId: null, stopId: null, min: 0, max: 100 };
+      } else if (t === 'rtr') {
+        d.io.climate = d.io.climate || { currentTempId: null, setpointId: null, modeId: null, humidityId: null, minSetpoint: 15, maxSetpoint: 30 };
+      } else if (t === 'sensor') {
+        d.io.sensor = d.io.sensor || { readId: null };
+      } else if (t === 'player') {
+        d.io.player = d.io.player || {
+          playingId: null,
+          titleId: null,
+          artistId: null,
+          sourceId: null,
+          coverId: null,
+          volumeReadId: null,
+          volumeWriteId: null,
+          volumeMin: 0,
+          volumeMax: 100,
+          toggleId: null,
+          playId: null,
+          pauseId: null,
+          stopId: null,
+          nextId: null,
+          prevId: null,
+          stationId: null,
+        };
+        d.stations = Array.isArray(d.stations) ? d.stations : [];
+      }
       nwMarkDirty(true);
       nwRenderAll(); // Neu rendern, damit IO-Zeilen ggf. angepasst werden
     });
@@ -2062,6 +2175,229 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       body.appendChild(modeRow);
       body.appendChild(humRow);
       body.appendChild(minMaxRow);
+    }
+
+    if (io.player) {
+      const p = io.player;
+
+      const playingRow = nwCreateDpInput('Status (playingId)', p.playingId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player.playingId = val || null;
+      });
+
+      const titleRow = nwCreateDpInput('Titel (titleId)', p.titleId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player.titleId = val || null;
+      });
+
+      const artistRow = nwCreateDpInput('Interpret (artistId)', p.artistId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player.artistId = val || null;
+      });
+
+      const sourceRow = nwCreateDpInput('Quelle (sourceId)', p.sourceId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player.sourceId = val || null;
+      });
+
+      const coverRow = nwCreateDpInput('Cover-URL (coverId)', p.coverId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player.coverId = val || null;
+      });
+
+      const volReadRow = nwCreateDpInput('Lautstärke lesen (volumeReadId)', p.volumeReadId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player.volumeReadId = val || null;
+      });
+
+      const volWriteRow = nwCreateDpInput('Lautstärke schreiben (volumeWriteId)', p.volumeWriteId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player.volumeWriteId = val || null;
+      });
+
+      const minMaxCtl = document.createElement('div');
+      minMaxCtl.style.display = 'flex';
+      minMaxCtl.style.gap = '4px';
+      minMaxCtl.style.width = '100%';
+
+      const minInput = document.createElement('input');
+      minInput.type = 'number';
+      minInput.className = 'nw-config-input';
+      minInput.placeholder = 'Min.';
+      if (typeof p.volumeMin === 'number') minInput.value = String(p.volumeMin);
+      minInput.addEventListener('change', () => {
+        const v = minInput.value.trim();
+        const num = v ? parseFloat(v) : null;
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player.volumeMin = Number.isFinite(num) ? num : null;
+        nwMarkDirty(true);
+      });
+
+      const maxInput = document.createElement('input');
+      maxInput.type = 'number';
+      maxInput.className = 'nw-config-input';
+      maxInput.placeholder = 'Max.';
+      if (typeof p.volumeMax === 'number') maxInput.value = String(p.volumeMax);
+      maxInput.addEventListener('change', () => {
+        const v = maxInput.value.trim();
+        const num = v ? parseFloat(v) : null;
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player.volumeMax = Number.isFinite(num) ? num : null;
+        nwMarkDirty(true);
+      });
+
+      minMaxCtl.appendChild(minInput);
+      minMaxCtl.appendChild(maxInput);
+
+      const minMaxRow = nwCreateFieldRow('Lautstärke min/max', minMaxCtl);
+
+      const toggleRow = nwCreateDpInput('Toggle Play/Pause (toggleId)', p.toggleId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player.toggleId = val || null;
+      });
+
+      const playRow = nwCreateDpInput('Play (playId)', p.playId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player.playId = val || null;
+      });
+
+      const pauseRow = nwCreateDpInput('Pause (pauseId)', p.pauseId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player.pauseId = val || null;
+      });
+
+      const stopRow = nwCreateDpInput('Stop (stopId)', p.stopId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player.stopId = val || null;
+      });
+
+      const nextRow = nwCreateDpInput('Nächster Titel (nextId)', p.nextId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player.nextId = val || null;
+      });
+
+      const prevRow = nwCreateDpInput('Vorheriger Titel (prevId)', p.prevId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player.prevId = val || null;
+      });
+
+      const stationRow = nwCreateDpInput('Sender wählen (stationId)', p.stationId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player.stationId = val || null;
+      });
+
+      // Radiosender-Liste (optional)
+      const stationsWrap = document.createElement('div');
+      stationsWrap.className = 'nw-player-stations';
+
+      const stationsHeader = document.createElement('div');
+      stationsHeader.className = 'nw-player-stations__head';
+
+      const stationsTitle = document.createElement('div');
+      stationsTitle.className = 'nw-player-stations__title';
+      stationsTitle.textContent = 'Radiosender (optional)';
+
+      const addBtn = document.createElement('button');
+      addBtn.className = 'nw-btn nw-btn--mini';
+      addBtn.textContent = '+ Sender';
+      addBtn.addEventListener('click', () => {
+        nwShcState.config.devices[index].stations = Array.isArray(nwShcState.config.devices[index].stations) ? nwShcState.config.devices[index].stations : [];
+        nwShcState.config.devices[index].stations.push({ name: 'Neuer Sender', value: '' });
+        nwMarkDirty(true);
+        nwRunValidatorSoon();
+        renderStations();
+      });
+
+      stationsHeader.appendChild(stationsTitle);
+      stationsHeader.appendChild(addBtn);
+      stationsWrap.appendChild(stationsHeader);
+
+      const stationsList = document.createElement('div');
+      stationsList.className = 'nw-player-stations__list';
+      stationsWrap.appendChild(stationsList);
+
+      const renderStations = () => {
+        stationsList.innerHTML = '';
+        const stations = Array.isArray(nwShcState.config.devices[index].stations) ? nwShcState.config.devices[index].stations : [];
+        stations.forEach((st, si) => {
+          const row = document.createElement('div');
+          row.className = 'nw-player-stations__row';
+
+          const nameIn = document.createElement('input');
+          nameIn.className = 'nw-config-input';
+          nameIn.placeholder = 'Name';
+          nameIn.value = (st && typeof st.name === 'string') ? st.name : '';
+          nameIn.addEventListener('input', () => {
+            stations[si].name = nameIn.value;
+            nwMarkDirty(true);
+            nwRunValidatorSoon();
+          });
+
+          const valIn = document.createElement('input');
+          valIn.className = 'nw-config-input';
+          valIn.placeholder = 'Wert / URL / Preset';
+          valIn.value = (st && typeof st.value === 'string') ? st.value : '';
+          valIn.addEventListener('input', () => {
+            stations[si].value = valIn.value;
+            nwMarkDirty(true);
+            nwRunValidatorSoon();
+          });
+
+          const del = document.createElement('button');
+          del.className = 'nw-btn nw-btn--mini';
+          del.textContent = '✕';
+          del.title = 'Entfernen';
+          del.addEventListener('click', () => {
+            stations.splice(si, 1);
+            nwShcState.config.devices[index].stations = stations;
+            nwMarkDirty(true);
+            nwRunValidatorSoon();
+            renderStations();
+          });
+
+          row.appendChild(nameIn);
+          row.appendChild(valIn);
+          row.appendChild(del);
+          stationsList.appendChild(row);
+        });
+      };
+
+      renderStations();
+
+      const stationsRow = nwCreateFieldRow('Radiosender', stationsWrap);
+
+      body.appendChild(playingRow);
+      body.appendChild(titleRow);
+      body.appendChild(artistRow);
+      body.appendChild(sourceRow);
+      body.appendChild(coverRow);
+      body.appendChild(volReadRow);
+      body.appendChild(volWriteRow);
+      body.appendChild(minMaxRow);
+      body.appendChild(toggleRow);
+      body.appendChild(playRow);
+      body.appendChild(pauseRow);
+      body.appendChild(stopRow);
+      body.appendChild(nextRow);
+      body.appendChild(prevRow);
+      body.appendChild(stationRow);
+      body.appendChild(stationsRow);
     }
 
     if (io.sensor) {

@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-  "version": "0.6.116",
+  "version": "0.6.117",
     "news": {
+      "0.6.117": {
+        "en": "SmartHome: Added an Audio Player tile (transport controls: play/pause, stop, next/prev), volume slider and optional radio station presets. Spotify control is possible via mapped data points (e.g. ioBroker adapters).",
+        "de": "SmartHome: Neuer Audio-Player als Kachel (Play/Pause, Stop, Vor/Zurück), Lautstärke-Slider und optionale Radiosender-Presets. Spotify kann über gemappte Datenpunkte gesteuert werden (z.B. ioBroker-Adapter)."
+      },
       "0.6.116": {
         "en": "SmartHome: Fixed an issue where the SmartHome VIS could appear empty because the function icon helper was missing. Function filter chips and function headers now render reliably.",
         "de": "SmartHome: Fix für eine Anzeige‑Störung – die SmartHome‑VIS konnte leer wirken, weil der Icon‑Helper für Funktions‑Icons fehlte. Funktions‑Filterchips und Funktions‑Header werden jetzt zuverlässig gerendert."
