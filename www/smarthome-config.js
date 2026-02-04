@@ -277,6 +277,7 @@ function nwValidateConfig(cfg) {
       const prevId = (pl && typeof pl.prevId === 'string') ? pl.prevId.trim() : '';
       const toggleId = (pl && typeof pl.toggleId === 'string') ? pl.toggleId.trim() : '';
       const stationWriteId = (pl && typeof pl.stationId === 'string') ? pl.stationId.trim() : '';
+      const playlistWriteId = (pl && typeof pl.playlistId === 'string') ? pl.playlistId.trim() : '';
 
       chkDp('Player Status (playingId)', playingId);
       chkDp('Titel (titleId)', titleId);
@@ -292,8 +293,9 @@ function nwValidateConfig(cfg) {
       chkDp('Vorheriger Titel (prevId)', prevId);
       chkDp('Toggle (toggleId)', toggleId);
       chkDp('Radiosender setzen (stationId)', stationWriteId);
+      chkDp('Playlist wählen (playlistId)', playlistWriteId);
 
-      const hasAny = !!(playingId || titleId || volR || volW || playId || pauseId || stopId || nextId || prevId || toggleId || stationWriteId);
+      const hasAny = !!(playingId || titleId || volR || volW || playId || pauseId || stopId || nextId || prevId || toggleId || stationWriteId || playlistWriteId);
       if (!hasAny) {
         nwPushIssue(out, 'error', 'Gerät', 'Audio-Player ohne Datenpunkte (mind. 1 DP muss gesetzt sein).', ent);
       }
@@ -307,6 +309,17 @@ function nwValidateConfig(cfg) {
         const val = (s && (typeof s.value === 'string' || typeof s.value === 'number')) ? String(s.value).trim() : '';
         if (!nm) nwPushIssue(out, 'warn', 'Radiosender', 'Radiosender ohne Namen (Index ' + (sIdx + 1) + ').', ent);
         if (!val) nwPushIssue(out, 'warn', 'Radiosender', 'Radiosender ohne Wert/URL (Index ' + (sIdx + 1) + ').', ent);
+      });
+
+      const plList = (d && Array.isArray(d.playlists)) ? d.playlists : [];
+      if (plList.length && !playlistWriteId) {
+        nwPushIssue(out, 'warn', 'Playlists', 'Playlists sind konfiguriert, aber playlistId fehlt (Auswahl in der VIS kann nicht schreiben).', ent);
+      }
+      plList.forEach((s, sIdx) => {
+        const nm = (s && typeof s.name === 'string') ? s.name.trim() : '';
+        const val = (s && (typeof s.value === 'string' || typeof s.value === 'number')) ? String(s.value).trim() : '';
+        if (!nm) nwPushIssue(out, 'warn', 'Playlists', 'Playlist ohne Namen (Index ' + (sIdx + 1) + ').', ent);
+        if (!val) nwPushIssue(out, 'warn', 'Playlists', 'Playlist ohne Wert/URI/ID (Index ' + (sIdx + 1) + ').', ent);
       });
     } else if (type === 'sensor') {
       const se = (io && io.sensor) ? io.sensor : {};
@@ -1249,8 +1262,10 @@ function nwAddDeviceFromTemplate(templateType) {
       nextId: null,
       prevId: null,
       stationId: null,
+      playlistId: null,
     };
     dev.stations = [];
+    dev.playlists = [];
   } else if (t === 'sensor') {
     dev.io.sensor = { readId: null };
     // Sensoren sind in der Regel reine Anzeige (optional anpassbar)
@@ -1773,8 +1788,10 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
           nextId: null,
           prevId: null,
           stationId: null,
+          playlistId: null,
         };
         d.stations = Array.isArray(d.stations) ? d.stations : [];
+        d.playlists = Array.isArray(d.playlists) ? d.playlists : [];
       }
       nwMarkDirty(true);
       nwRenderAll(); // Neu rendern, damit IO-Zeilen ggf. angepasst werden
@@ -2302,6 +2319,12 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
         nwShcState.config.devices[index].io.player.stationId = val || null;
       });
 
+      const playlistRow = nwCreateDpInput('Playlist wählen (playlistId)', p.playlistId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.player = nwShcState.config.devices[index].io.player || {};
+        nwShcState.config.devices[index].io.player.playlistId = val || null;
+      });
+
       // Radiosender-Liste (optional)
       const stationsWrap = document.createElement('div');
       stationsWrap.className = 'nw-player-stations';
@@ -2382,6 +2405,86 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
 
       const stationsRow = nwCreateFieldRow('Radiosender', stationsWrap);
 
+      // Playlists-Liste (optional)
+      const playlistsWrap = document.createElement('div');
+      playlistsWrap.className = 'nw-player-stations';
+
+      const playlistsHeader = document.createElement('div');
+      playlistsHeader.className = 'nw-player-stations__head';
+
+      const playlistsTitle = document.createElement('div');
+      playlistsTitle.className = 'nw-player-stations__title';
+      playlistsTitle.textContent = 'Playlists (optional)';
+
+      const addPlBtn = document.createElement('button');
+      addPlBtn.className = 'nw-btn nw-btn--mini';
+      addPlBtn.textContent = '+ Playlist';
+      addPlBtn.addEventListener('click', () => {
+        nwShcState.config.devices[index].playlists = Array.isArray(nwShcState.config.devices[index].playlists) ? nwShcState.config.devices[index].playlists : [];
+        nwShcState.config.devices[index].playlists.push({ name: 'Neue Playlist', value: '' });
+        nwMarkDirty(true);
+        nwRunValidatorSoon();
+        renderPlaylists();
+      });
+
+      playlistsHeader.appendChild(playlistsTitle);
+      playlistsHeader.appendChild(addPlBtn);
+      playlistsWrap.appendChild(playlistsHeader);
+
+      const playlistsList = document.createElement('div');
+      playlistsList.className = 'nw-player-stations__list';
+      playlistsWrap.appendChild(playlistsList);
+
+      const renderPlaylists = () => {
+        playlistsList.innerHTML = '';
+        const playlists = Array.isArray(nwShcState.config.devices[index].playlists) ? nwShcState.config.devices[index].playlists : [];
+        playlists.forEach((plItem, pi) => {
+          const row = document.createElement('div');
+          row.className = 'nw-player-stations__row';
+
+          const nameIn = document.createElement('input');
+          nameIn.className = 'nw-config-input';
+          nameIn.placeholder = 'Name';
+          nameIn.value = (plItem && typeof plItem.name === 'string') ? plItem.name : '';
+          nameIn.addEventListener('input', () => {
+            playlists[pi].name = nameIn.value;
+            nwMarkDirty(true);
+            nwRunValidatorSoon();
+          });
+
+          const valIn = document.createElement('input');
+          valIn.className = 'nw-config-input';
+          valIn.placeholder = 'Wert / URI / ID';
+          valIn.value = (plItem && typeof plItem.value === 'string') ? plItem.value : '';
+          valIn.addEventListener('input', () => {
+            playlists[pi].value = valIn.value;
+            nwMarkDirty(true);
+            nwRunValidatorSoon();
+          });
+
+          const del = document.createElement('button');
+          del.className = 'nw-btn nw-btn--mini';
+          del.textContent = '✕';
+          del.title = 'Entfernen';
+          del.addEventListener('click', () => {
+            playlists.splice(pi, 1);
+            nwShcState.config.devices[index].playlists = playlists;
+            nwMarkDirty(true);
+            nwRunValidatorSoon();
+            renderPlaylists();
+          });
+
+          row.appendChild(nameIn);
+          row.appendChild(valIn);
+          row.appendChild(del);
+          playlistsList.appendChild(row);
+        });
+      };
+
+      renderPlaylists();
+
+      const playlistsRow = nwCreateFieldRow('Playlists', playlistsWrap);
+
       body.appendChild(playingRow);
       body.appendChild(titleRow);
       body.appendChild(artistRow);
@@ -2398,6 +2501,8 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       body.appendChild(prevRow);
       body.appendChild(stationRow);
       body.appendChild(stationsRow);
+      body.appendChild(playlistRow);
+      body.appendChild(playlistsRow);
     }
 
     if (io.sensor) {

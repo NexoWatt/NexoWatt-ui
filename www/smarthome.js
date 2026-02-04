@@ -16,6 +16,131 @@ let nwAutoRefreshTimer = null;
 // Map: { [deviceId]: boolean }
 let nwFavoriteOverrides = {};
 
+// --- Player (Audio) UX state in Browser-LocalStorage ---
+// Multiroom: welche Zonen werden gemeinsam gesteuert?
+const NW_LS_SH_AUDIO_ZONES = 'nw_sh_audio_zones_sel';
+// Favoriten / Zuletzt pro Player
+const NW_LS_SH_PLAYER_FAVS_PREFIX = 'nw_sh_player_favs_'; // + kind + '_' + devId
+const NW_LS_SH_PLAYER_RECENT_PREFIX = 'nw_sh_player_recent_'; // + devId
+
+function nwLsReadJson(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function nwLsWriteJson(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    // ignore
+  }
+}
+
+function nwGetAllPlayerZones() {
+  return Array.isArray(nwAllDevices)
+    ? nwAllDevices.filter((d) => d && d.type === 'player')
+    : [];
+}
+
+function nwLoadAudioZoneSelection() {
+  const ids = nwLsReadJson(NW_LS_SH_AUDIO_ZONES, []);
+  return Array.isArray(ids) ? ids.filter(Boolean) : [];
+}
+
+function nwSaveAudioZoneSelection(ids) {
+  const arr = Array.isArray(ids) ? ids.filter(Boolean) : [];
+  nwLsWriteJson(NW_LS_SH_AUDIO_ZONES, arr);
+}
+
+function nwGetSelectedAudioZones(primaryId) {
+  const all = nwGetAllPlayerZones().map((d) => d.id);
+  let sel = nwLoadAudioZoneSelection().filter((id) => all.includes(id));
+  if (!sel.length) sel = primaryId ? [primaryId] : [];
+  if (primaryId && !sel.includes(primaryId)) sel.unshift(primaryId);
+  return sel;
+}
+
+function nwSetSelectedAudioZones(ids, primaryId) {
+  let arr = Array.isArray(ids) ? ids.filter(Boolean) : [];
+  if (!arr.length && primaryId) arr = [primaryId];
+  if (primaryId && !arr.includes(primaryId)) arr.unshift(primaryId);
+  nwSaveAudioZoneSelection(arr);
+  return arr;
+}
+
+function nwPlayerFavKey(devId, kind) {
+  return NW_LS_SH_PLAYER_FAVS_PREFIX + String(kind || 'station') + '_' + String(devId || '');
+}
+
+function nwLoadPlayerFavs(devId, kind) {
+  const arr = nwLsReadJson(nwPlayerFavKey(devId, kind), []);
+  return Array.isArray(arr) ? arr.map((v) => String(v)) : [];
+}
+
+function nwSavePlayerFavs(devId, kind, favs) {
+  const arr = Array.isArray(favs) ? favs.map((v) => String(v)) : [];
+  nwLsWriteJson(nwPlayerFavKey(devId, kind), arr);
+}
+
+function nwTogglePlayerFav(devId, kind, value) {
+  const v = String(value);
+  const favs = nwLoadPlayerFavs(devId, kind);
+  const idx = favs.indexOf(v);
+  if (idx >= 0) {
+    favs.splice(idx, 1);
+  } else {
+    favs.push(v);
+  }
+  nwSavePlayerFavs(devId, kind, favs);
+  return favs;
+}
+
+function nwMovePlayerFav(devId, kind, value, dir) {
+  const v = String(value);
+  const favs = nwLoadPlayerFavs(devId, kind);
+  const i = favs.indexOf(v);
+  if (i < 0) return favs;
+  const j = i + (dir === 'up' ? -1 : 1);
+  if (j < 0 || j >= favs.length) return favs;
+  const tmp = favs[i];
+  favs[i] = favs[j];
+  favs[j] = tmp;
+  nwSavePlayerFavs(devId, kind, favs);
+  return favs;
+}
+
+function nwPlayerRecentKey(devId) {
+  return NW_LS_SH_PLAYER_RECENT_PREFIX + String(devId || '');
+}
+
+function nwLoadPlayerRecent(devId) {
+  const arr = nwLsReadJson(nwPlayerRecentKey(devId), []);
+  return Array.isArray(arr) ? arr : [];
+}
+
+function nwAddPlayerRecent(devId, item) {
+  const list = nwLoadPlayerRecent(devId);
+  const entry = {
+    kind: item && item.kind ? String(item.kind) : 'station',
+    name: item && item.name ? String(item.name) : '',
+    value: item && (typeof item.value === 'string' || typeof item.value === 'number') ? String(item.value) : '',
+    ts: Date.now(),
+  };
+  // de-duplicate by kind+value
+  const key = entry.kind + '::' + entry.value;
+  const filtered = list.filter((e) => (e && (String(e.kind) + '::' + String(e.value))) !== key);
+  filtered.unshift(entry);
+  const max = 10;
+  const out = filtered.slice(0, max);
+  nwLsWriteJson(nwPlayerRecentKey(devId), out);
+  return out;
+}
+
 let nwSmartHomeEnabled = null;
 let nwEvcsCount = 1;
 
@@ -550,6 +675,21 @@ async function nwPlayerAction(id, action, value) {
   const data = await res.json();
   if (!data || !data.ok) return null;
   return data.state || null;
+}
+
+// Multiroom (UI-seitig): dieselbe Aktion auf mehrere Player-Zonen anwenden
+async function nwPlayerActionMulti(primaryId, action, value) {
+  const zones = nwGetSelectedAudioZones(primaryId);
+  const unique = Array.from(new Set(zones));
+  let lastState = null;
+  for (const zid of unique) {
+    try {
+      lastState = await nwPlayerAction(zid, action, value);
+    } catch (e) {
+      // ignore individual zone errors
+    }
+  }
+  return lastState;
 }
 
 async function nwSetRtrSetpoint(id, setpoint) {
@@ -2512,6 +2652,9 @@ function nwCreatePlayerPopover(dev, canWrite) {
   const st = dev.state || {};
   const io = (dev.io && dev.io.player) ? dev.io.player : {};
 
+  // Ensure current zone is always part of the multiroom selection
+  nwSetSelectedAudioZones(nwGetSelectedAudioZones(dev.id), dev.id);
+
   // Now playing
   const now = document.createElement('div');
   now.className = 'nw-sh-player__now';
@@ -2548,6 +2691,103 @@ function nwCreatePlayerPopover(dev, canWrite) {
   now.appendChild(meta);
   wrap.appendChild(now);
 
+  // Multiroom / Zonen (UI-seitig)
+  const zones = nwGetAllPlayerZones();
+  if (zones.length > 1) {
+    const zWrap = document.createElement('div');
+    zWrap.className = 'nw-sh-player__zones';
+
+    const head = document.createElement('div');
+    head.className = 'nw-sh-player__zoneshead';
+    const zTitle = document.createElement('div');
+    zTitle.className = 'nw-sh-player__zonestitle';
+    zTitle.textContent = 'Multiroom';
+
+    const zActions = document.createElement('div');
+    zActions.className = 'nw-sh-player__zonesactions';
+
+    const partyBtn = document.createElement('button');
+    partyBtn.type = 'button';
+    partyBtn.className = 'nw-sh-chip nw-sh-chip--mini';
+    partyBtn.textContent = 'Party';
+    partyBtn.title = 'Alle Zonen gemeinsam steuern';
+
+    const soloBtn = document.createElement('button');
+    soloBtn.type = 'button';
+    soloBtn.className = 'nw-sh-chip nw-sh-chip--mini';
+    soloBtn.textContent = 'Nur diese';
+    soloBtn.title = 'Nur diese Zone steuern';
+
+    zActions.appendChild(partyBtn);
+    zActions.appendChild(soloBtn);
+
+    head.appendChild(zTitle);
+    head.appendChild(zActions);
+    zWrap.appendChild(head);
+
+    const chips = document.createElement('div');
+    chips.className = 'nw-sh-player__chips';
+    zWrap.appendChild(chips);
+
+    const hint = document.createElement('div');
+    hint.className = 'nw-sh-player__zoneshint';
+    zWrap.appendChild(hint);
+
+    const renderZones = () => {
+      const sel = nwGetSelectedAudioZones(dev.id);
+      const selSet = new Set(sel);
+      nwClear(chips);
+
+      zones.forEach((z) => {
+        const name = String(z.alias || z.name || z.room || z.id || '').trim() || 'Zone';
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'nw-sh-chip nw-sh-chip--mini' + (selSet.has(z.id) ? ' nw-sh-chip--active' : '');
+        b.textContent = name;
+        b.title = 'Zone hinzufügen/entfernen';
+        b.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const cur = nwGetSelectedAudioZones(dev.id);
+          const idx = cur.indexOf(z.id);
+          if (idx >= 0) cur.splice(idx, 1);
+          else cur.push(z.id);
+          nwSetSelectedAudioZones(cur, dev.id);
+          renderZones();
+        });
+        chips.appendChild(b);
+      });
+
+      // buttons state
+      const allIds = zones.map((z) => z.id);
+      const isParty = sel.length && allIds.every((id) => selSet.has(id));
+      partyBtn.classList.toggle('nw-sh-chip--active', isParty);
+      soloBtn.classList.toggle('nw-sh-chip--active', sel.length === 1 && sel[0] === dev.id);
+
+      hint.textContent = sel.length > 1
+        ? `Steuert ${sel.length} Zonen gleichzeitig.`
+        : 'Nur diese Zone.';
+    };
+
+    partyBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const allIds = zones.map((z) => z.id);
+      nwSetSelectedAudioZones(allIds, dev.id);
+      renderZones();
+    });
+
+    soloBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      nwSetSelectedAudioZones([dev.id], dev.id);
+      renderZones();
+    });
+
+    renderZones();
+    wrap.appendChild(zWrap);
+  }
+
   // Controls
   const controls = document.createElement('div');
   controls.className = 'nw-sh-player__controls';
@@ -2570,22 +2810,22 @@ function nwCreatePlayerPopover(dev, canWrite) {
   };
 
   const btnPrev = mkBtn('Zurück', '⏮', async () => {
-    await nwPlayerAction(dev.id, 'prev');
+    await nwPlayerActionMulti(dev.id, 'prev');
     nwRefreshDevicesSoon(100);
   });
 
   const btnPlay = mkBtn(st.on ? 'Pause' : 'Play', st.on ? '⏸' : '▶', async () => {
-    await nwPlayerAction(dev.id, 'toggle');
+    await nwPlayerActionMulti(dev.id, 'toggle');
     nwRefreshDevicesSoon(100);
   }, 'nw-sh-player__btn--primary');
 
   const btnNext = mkBtn('Weiter', '⏭', async () => {
-    await nwPlayerAction(dev.id, 'next');
+    await nwPlayerActionMulti(dev.id, 'next');
     nwRefreshDevicesSoon(100);
   });
 
   const btnStop = mkBtn('Stopp', '⏹', async () => {
-    await nwPlayerAction(dev.id, 'stop');
+    await nwPlayerActionMulti(dev.id, 'stop');
     nwRefreshDevicesSoon(120);
   });
 
@@ -2633,47 +2873,264 @@ function nwCreatePlayerPopover(dev, canWrite) {
   slider.addEventListener('change', async () => {
     if (!canWrite || !io.volumeWriteId) return;
     const v = Number(slider.value);
-    await nwPlayerAction(dev.id, 'volume', v);
+    await nwPlayerActionMulti(dev.id, 'volume', v);
     nwRefreshDevicesSoon(160);
   });
   volWrap.appendChild(slider);
   wrap.appendChild(volWrap);
 
-  // Stations
+  // Library: Radiosender / Playlists (mit Favoriten + Zuletzt)
   const stations = Array.isArray(dev.stations) ? dev.stations : [];
-  if (stations.length && io.stationId) {
-    const stWrap = document.createElement('div');
-    stWrap.className = 'nw-sh-player__stations';
+  const playlists = Array.isArray(dev.playlists) ? dev.playlists : [];
+  const hasStations = stations.length && io.stationId;
+  const hasPlaylists = playlists.length && io.playlistId;
 
-    const stTitle = document.createElement('div');
-    stTitle.className = 'nw-sh-player__sttitle';
-    stTitle.textContent = 'Radiosender';
-    stWrap.appendChild(stTitle);
+  if (hasStations || hasPlaylists) {
+    let tab = hasStations ? 'station' : 'playlist';
+    let favOnly = false;
+    let query = '';
 
-    const chips = document.createElement('div');
-    chips.className = 'nw-sh-player__chips';
+    const lib = document.createElement('div');
+    lib.className = 'nw-sh-player__library';
 
-    stations.forEach((s) => {
-      const name = String((s && s.name) || '').trim();
-      const val = (s && Object.prototype.hasOwnProperty.call(s, 'value')) ? s.value : null;
-      if (!name) return;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'nw-sh-chip';
-      btn.textContent = name;
-      if (!canWrite) btn.disabled = true;
-      btn.addEventListener('click', async (e) => {
+    const head = document.createElement('div');
+    head.className = 'nw-sh-player__libhead';
+
+    const tabs = document.createElement('div');
+    tabs.className = 'nw-sh-player__libtabs';
+
+    const mkTab = (kind, label) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'nw-sh-chip nw-sh-chip--mini';
+      b.textContent = label;
+      b.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (!canWrite) return;
-        await nwPlayerAction(dev.id, 'station', val);
-        nwRefreshDevicesSoon(200);
+        tab = kind;
+        favOnly = false;
+        query = '';
+        search.value = '';
+        render();
       });
-      chips.appendChild(btn);
+      return b;
+    };
+
+    const tabStations = hasStations ? mkTab('station', 'Sender') : null;
+    const tabPlaylists = hasPlaylists ? mkTab('playlist', 'Playlists') : null;
+    if (tabStations) tabs.appendChild(tabStations);
+    if (tabPlaylists) tabs.appendChild(tabPlaylists);
+
+    const filters = document.createElement('div');
+    filters.className = 'nw-sh-player__libfilters';
+
+    const favBtn = document.createElement('button');
+    favBtn.type = 'button';
+    favBtn.className = 'nw-sh-chip nw-sh-chip--mini';
+    favBtn.textContent = '★ Favoriten';
+    favBtn.title = 'Nur Favoriten anzeigen / Reihenfolge anpassen';
+    favBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      favOnly = !favOnly;
+      render();
     });
 
-    stWrap.appendChild(chips);
-    wrap.appendChild(stWrap);
+    filters.appendChild(favBtn);
+
+    head.appendChild(tabs);
+    head.appendChild(filters);
+    lib.appendChild(head);
+
+    const search = document.createElement('input');
+    search.type = 'text';
+    search.className = 'nw-input nw-sh-player__search';
+    search.placeholder = 'Suchen…';
+    search.autocomplete = 'off';
+    search.addEventListener('input', () => {
+      query = String(search.value || '').trim();
+      renderList();
+    });
+    lib.appendChild(search);
+
+    const list = document.createElement('div');
+    list.className = 'nw-sh-player__list';
+    lib.appendChild(list);
+
+    const recentWrap = document.createElement('div');
+    recentWrap.className = 'nw-sh-player__recent';
+    lib.appendChild(recentWrap);
+
+    const getItems = () => {
+      const arr = (tab === 'playlist') ? playlists : stations;
+      return arr
+        .map((x) => {
+          const name = String((x && x.name) || '').trim();
+          const val = (x && Object.prototype.hasOwnProperty.call(x, 'value')) ? x.value : null;
+          if (!name) return null;
+          return { name, value: val, valueStr: String(val) };
+        })
+        .filter(Boolean);
+    };
+
+    const renderRecent = () => {
+      nwClear(recentWrap);
+      const recent = nwLoadPlayerRecent(dev.id);
+      if (!recent.length) return;
+
+      const titleEl = document.createElement('div');
+      titleEl.className = 'nw-sh-player__recenttitle';
+      titleEl.textContent = 'Zuletzt gehört';
+      recentWrap.appendChild(titleEl);
+
+      const chips = document.createElement('div');
+      chips.className = 'nw-sh-player__chips';
+      recent.slice(0, 6).forEach((r) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'nw-sh-chip nw-sh-chip--mini';
+        b.textContent = String(r.name || '').trim() || '—';
+        b.title = 'Erneut starten';
+        b.disabled = !canWrite;
+        b.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!canWrite) return;
+          const kind = String(r.kind || '').trim();
+          if (kind === 'playlist') {
+            await nwPlayerActionMulti(dev.id, 'playlist', r.value);
+          } else {
+            await nwPlayerActionMulti(dev.id, 'station', r.value);
+          }
+          nwRefreshDevicesSoon(200);
+        });
+        chips.appendChild(b);
+      });
+      recentWrap.appendChild(chips);
+    };
+
+    const renderList = () => {
+      const items = getItems();
+      const q = String(query || '').trim().toLowerCase();
+
+      const favs = nwLoadPlayerFavs(dev.id, tab);
+      const favSet = new Set(favs);
+
+      const map = new Map();
+      items.forEach((it) => map.set(it.valueStr, it));
+
+      const matchesQuery = (it) => !q || String(it.name || '').toLowerCase().includes(q);
+
+      let shown;
+      if (favOnly) {
+        shown = favs
+          .map((v) => map.get(String(v)))
+          .filter(Boolean)
+          .filter(matchesQuery);
+      } else {
+        const favItems = favs
+          .map((v) => map.get(String(v)))
+          .filter(Boolean)
+          .filter(matchesQuery);
+        const otherItems = items
+          .filter((it) => !favSet.has(it.valueStr))
+          .filter(matchesQuery);
+        shown = [...favItems, ...otherItems];
+      }
+
+      nwClear(list);
+
+      if (!shown.length) {
+        const empty = document.createElement('div');
+        empty.className = 'nw-sh-empty';
+        empty.textContent = favOnly ? 'Keine Favoriten gefunden.' : 'Keine Treffer.';
+        list.appendChild(empty);
+        return;
+      }
+
+      shown.forEach((it) => {
+        const row = document.createElement('div');
+        row.className = 'nw-sh-player__row';
+
+        const fav = document.createElement('button');
+        fav.type = 'button';
+        fav.className = 'nw-sh-player__iconbtn';
+        fav.textContent = favSet.has(it.valueStr) ? '★' : '☆';
+        fav.title = 'Favorit umschalten';
+        fav.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          nwTogglePlayerFav(dev.id, tab, it.valueStr);
+          render();
+        });
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'nw-sh-player__rowbtn';
+        btn.textContent = it.name;
+        btn.disabled = !canWrite;
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!canWrite) return;
+          if (tab === 'playlist') {
+            await nwPlayerActionMulti(dev.id, 'playlist', it.value);
+          } else {
+            await nwPlayerActionMulti(dev.id, 'station', it.value);
+          }
+          nwAddPlayerRecent(dev.id, { kind: tab, name: it.name, value: it.value });
+          nwRefreshDevicesSoon(200);
+          renderRecent();
+        });
+
+        row.appendChild(fav);
+        row.appendChild(btn);
+
+        if (favOnly && favSet.has(it.valueStr)) {
+          const up = document.createElement('button');
+          up.type = 'button';
+          up.className = 'nw-sh-player__iconbtn';
+          up.textContent = '↑';
+          up.title = 'Nach oben';
+          up.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            nwMovePlayerFav(dev.id, tab, it.valueStr, -1);
+            render();
+          });
+
+          const down = document.createElement('button');
+          down.type = 'button';
+          down.className = 'nw-sh-player__iconbtn';
+          down.textContent = '↓';
+          down.title = 'Nach unten';
+          down.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            nwMovePlayerFav(dev.id, tab, it.valueStr, +1);
+            render();
+          });
+
+          row.appendChild(up);
+          row.appendChild(down);
+        }
+
+        list.appendChild(row);
+      });
+    };
+
+    const render = () => {
+      if (tabStations) tabStations.classList.toggle('nw-sh-chip--active', tab === 'station');
+      if (tabPlaylists) tabPlaylists.classList.toggle('nw-sh-chip--active', tab === 'playlist');
+      favBtn.classList.toggle('nw-sh-chip--active', favOnly);
+
+      search.placeholder = tab === 'playlist' ? 'Playlist suchen…' : 'Sender suchen…';
+      renderList();
+      renderRecent();
+    };
+
+    render();
+    wrap.appendChild(lib);
   }
 
   return wrap;

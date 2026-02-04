@@ -3994,6 +3994,7 @@ buildSmartHomeDevicesFromConfig() {
           nextId: player.nextId || '',
           prevId: player.prevId || '',
           stationId: player.stationId || '',
+          playlistId: player.playlistId || '',
         };
         // Optional: Radiosender-Liste liegt im Device-Root
         if (Array.isArray(device.stations)) {
@@ -4001,6 +4002,14 @@ buildSmartHomeDevicesFromConfig() {
             name: (s && typeof s.name === 'string') ? s.name : '',
             value: (s && (typeof s.value === 'string' || typeof s.value === 'number')) ? s.value : '',
           })).filter((s) => s.name || String(s.value || '').trim());
+        }
+
+        // Optional: Playlists-Liste liegt im Device-Root
+        if (Array.isArray(device.playlists)) {
+          dev.playlists = device.playlists.map((p) => ({
+            name: (p && typeof p.name === 'string') ? p.name : '',
+            value: (p && (typeof p.value === 'string' || typeof p.value === 'number')) ? p.value : '',
+          })).filter((p) => p.name || String(p.value || '').trim());
         }
       } else if (type === 'sensor') {
         const sensor = ioCfg.sensor || {};
@@ -5620,6 +5629,10 @@ app.post('/api/smarthome/player', requireAuth, async (req, res) => {
       if (!p.stationId) return res.status(404).json({ ok: false, error: 'no datapoint for action' });
       // value kann String (URL/Preset) oder Zahl sein
       await this.setForeignStateAsync(p.stationId, value);
+    } else if (action === 'playlist') {
+      if (!p.playlistId) return res.status(404).json({ ok: false, error: 'no datapoint for action' });
+      // value kann String (URI/ID) oder Zahl sein
+      await this.setForeignStateAsync(p.playlistId, value);
     } else {
       return res.status(400).json({ ok: false, error: 'invalid action' });
     }

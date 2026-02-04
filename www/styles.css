@@ -3585,6 +3585,135 @@ body{ padding-top: var(--topbar-h); }
   gap: 8px;
 }
 
+/* --- Player: Multiroom + Favoriten/Listen --- */
+.nw-sh-player__zones,
+.nw-sh-player__lib{
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.nw-sh-player__zones-head,
+.nw-sh-player__lib-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.nw-sh-player__zones-title{
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.95);
+}
+
+.nw-sh-player__zones-actions,
+.nw-sh-player__lib-tabs,
+.nw-sh-player__lib-filters{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nw-sh-player__zones-hint{
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: rgba(148, 163, 184, 0.95);
+}
+
+.nw-sh-player__search{
+  margin-top: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255,255,255,0.10);
+  color: rgba(226, 232, 240, 0.95);
+}
+
+.nw-sh-player__search::placeholder{
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.nw-sh-player__list{
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 240px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.nw-sh-player__row{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(2, 6, 23, 0.25);
+}
+
+.nw-sh-player__iconbtn{
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(15, 23, 42, 0.55);
+  color: rgba(226, 232, 240, 0.95);
+  cursor: pointer;
+}
+
+.nw-sh-player__iconbtn:hover{
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.nw-sh-player__rowbtn{
+  flex: 1;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.95);
+  cursor: pointer;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nw-sh-player__rowbtn:hover{
+  color: rgba(110, 231, 183, 1);
+}
+
+.nw-sh-player__reorder{
+  display: flex;
+  gap: 6px;
+}
+
+.nw-sh-player__recent{
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.nw-sh-player__recent-title{
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.95);
+  margin-bottom: 8px;
+}
+
+.nw-sh-player__recent-chips{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nw-sh-player__recent-empty{
+  font-size: 0.78rem;
+  color: rgba(148, 163, 184, 0.95);
+}
+
 
 /* Thermostat‑Gauge (wertiger als Halbkreis) */
 .nw-sh-gauge{

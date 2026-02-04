@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-  "version": "0.6.117",
+  "version": "0.6.118",
     "news": {
+      "0.6.118": {
+        "en": "SmartHome: Audio player – multiroom zone selection (party mode) + playlists/favorites UX (filter, ordering, recently played).",
+        "de": "SmartHome: Audio-Player – Multiroom-Zonenauswahl (Party-Modus) + Playlists/Favoriten-UX (Filter, Reihenfolge, zuletzt gespielt)."
+      },
       "0.6.117": {
         "en": "SmartHome: Added an Audio Player tile (transport controls: play/pause, stop, next/prev), volume slider and optional radio station presets. Spotify control is possible via mapped data points (e.g. ioBroker adapters).",
         "de": "SmartHome: Neuer Audio-Player als Kachel (Play/Pause, Stop, Vor/Zurück), Lautstärke-Slider und optionale Radiosender-Presets. Spotify kann über gemappte Datenpunkte gesteuert werden (z.B. ioBroker-Adapter)."
