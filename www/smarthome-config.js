@@ -215,6 +215,31 @@ function nwValidateConfig(cfg) {
       } else if (readOnly && !readId) {
         nwPushIssue(out, 'error', 'Gerät', 'Nur Anzeige (readOnly) aktiv, aber Schalter readId fehlt.', ent);
       }
+    } else if (type === 'color') {
+      // Farblicht: Farb-DP ist Pflicht, Schalter ist optional.
+      const sw = (io && io.switch) ? io.switch : {};
+      const swReadId = (sw && typeof sw.readId === 'string') ? sw.readId.trim() : '';
+      const swWriteId = (sw && typeof sw.writeId === 'string') ? sw.writeId.trim() : '';
+      chkDp('Schalter lesen (readId)', swReadId);
+      chkDp('Schalter schreiben (writeId)', swWriteId);
+
+      const col = (io && io.color) ? io.color : {};
+      const cReadId = (col && typeof col.readId === 'string') ? col.readId.trim() : '';
+      const cWriteId = (col && typeof col.writeId === 'string') ? col.writeId.trim() : '';
+      const fmt = (col && typeof col.format === 'string') ? col.format.trim().toLowerCase() : 'hex';
+
+      chkDp('Farbe lesen (readId)', cReadId);
+      chkDp('Farbe schreiben (writeId)', cWriteId);
+
+      if (!cReadId && !cWriteId) {
+        nwPushIssue(out, 'error', 'Gerät', 'Farb‑Licht ohne Farb‑Datenpunkt (readId/writeId fehlt).', ent);
+      } else if (readOnly && !cReadId) {
+        nwPushIssue(out, 'error', 'Gerät', 'Nur Anzeige (readOnly) aktiv, aber Farbe readId fehlt.', ent);
+      }
+
+      if (fmt && !['hex', 'rgb', 'int', 'integer', 'number'].includes(fmt)) {
+        nwPushIssue(out, 'warn', 'Gerät', 'Unbekanntes Farbformat: „' + fmt + '“. (Empfohlen: hex / rgb / int)', ent);
+      }
     } else if (type === 'dimmer') {
       const lvl = (io && io.level) ? io.level : {};
       const readId = (lvl && typeof lvl.readId === 'string') ? lvl.readId.trim() : '';
@@ -502,6 +527,7 @@ function nwGetTypeLabel(type) {
   const t = (type || '').trim();
   const map = {
     switch: 'Schalter',
+    color: 'Farb‑Licht (RGB)',
     dimmer: 'Dimmer',
     blind: 'Jalousie / Rollladen',
     rtr: 'Heizung (RTR)',
@@ -1185,6 +1211,7 @@ function nwAddDeviceFromTemplate(templateType) {
 
   const baseIdMap = {
     switch: 'schalter',
+    color: 'farblicht',
     dimmer: 'dimmer',
     blind: 'jalousie',
     rtr: 'heizung',
@@ -1194,6 +1221,7 @@ function nwAddDeviceFromTemplate(templateType) {
   };
   const aliasMap = {
     switch: 'Neuer Schalter',
+    color: 'Neues Farb‑Licht',
     dimmer: 'Neuer Dimmer',
     blind: 'Neue Jalousie',
     rtr: 'Neue Heizung',
@@ -1203,6 +1231,7 @@ function nwAddDeviceFromTemplate(templateType) {
   };
   const iconMap = {
     switch: 'bulb',
+    color: 'bulb',
     dimmer: 'bulb',
     blind: 'blinds',
     rtr: 'thermostat',
@@ -1230,6 +1259,10 @@ function nwAddDeviceFromTemplate(templateType) {
     dev.io.switch = { readId: null, writeId: null };
   } else if (t === 'scene') {
     dev.io.switch = { readId: null, writeId: null };
+  } else if (t === 'color') {
+    // Farb‑Licht: optionaler Schalter + Farb‑DP
+    dev.io.switch = { readId: null, writeId: null };
+    dev.io.color = { readId: null, writeId: null, format: 'hex' };
   } else if (t === 'dimmer') {
     dev.io.level = { readId: null, writeId: null, min: 0, max: 100 };
   } else if (t === 'blind') {
@@ -1739,6 +1772,7 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
     const typeOptions = [
       { value: '', label: '(kein Typ)' },
       { value: 'switch', label: 'Schalter' },
+      { value: 'color', label: 'Farb‑Licht (RGB)' },
       { value: 'dimmer', label: 'Dimmer' },
       { value: 'blind', label: 'Jalousie / Rollladen' },
       { value: 'rtr', label: 'Heizung (RTR)' },
@@ -1762,6 +1796,9 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       // Beim Typwechsel passende IO-Struktur anlegen (damit Felder sofort erscheinen)
       if (t === 'switch' || t === 'scene' || t === 'logicStatus') {
         d.io.switch = d.io.switch || { readId: null, writeId: null };
+      } else if (t === 'color') {
+        d.io.switch = d.io.switch || { readId: null, writeId: null };
+        d.io.color = d.io.color || { readId: null, writeId: null, format: 'hex' };
       } else if (t === 'dimmer') {
         d.io.level = d.io.level || { readId: null, writeId: null, min: 0, max: 100 };
       } else if (t === 'blind') {
@@ -2513,6 +2550,47 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
         nwShcState.config.devices[index].io.sensor.readId = val || null;
       });
       body.appendChild(readRow);
+    }
+
+    if (io.color) {
+      const c = io.color;
+      const readRow = nwCreateDpInput('Farbe lesen (readId)', c.readId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.color = nwShcState.config.devices[index].io.color || {};
+        nwShcState.config.devices[index].io.color.readId = val || null;
+      });
+      const writeRow = nwCreateDpInput('Farbe schreiben (writeId)', c.writeId || '', (val) => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.color = nwShcState.config.devices[index].io.color || {};
+        nwShcState.config.devices[index].io.color.writeId = val || null;
+      });
+
+      const fmtSel = document.createElement('select');
+      fmtSel.className = 'nw-config-select';
+      const fmtOpts = [
+        { value: 'hex', label: 'HEX (#RRGGBB)' },
+        { value: 'rgb', label: 'RGB (r,g,b)' },
+        { value: 'int', label: 'Integer (0..16777215)' },
+      ];
+      fmtOpts.forEach(def => {
+        const opt = document.createElement('option');
+        opt.value = def.value;
+        opt.textContent = def.label;
+        fmtSel.appendChild(opt);
+      });
+      fmtSel.value = (typeof c.format === 'string' && c.format) ? c.format : 'hex';
+      fmtSel.addEventListener('change', () => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.color = nwShcState.config.devices[index].io.color || {};
+        nwShcState.config.devices[index].io.color.format = fmtSel.value || 'hex';
+        nwMarkDirty(true);
+      });
+
+      const fmtRow = nwCreateFieldRow('Farbformat', fmtSel);
+
+      body.appendChild(readRow);
+      body.appendChild(writeRow);
+      body.appendChild(fmtRow);
     }
 
     card.appendChild(body);

@@ -3169,6 +3169,7 @@ body{ padding-top: var(--topbar-h); }
   width: 38px;
   height: 38px;
   border-radius: 999px;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3176,6 +3177,18 @@ body{ padding-top: var(--topbar-h); }
   background: rgba(2,6,23,0.35);
   border: 1px solid rgba(148,163,184,0.18);
   color: rgba(226,232,240,0.88);
+}
+
+/* Small color indicator for RGB lights */
+.nw-sh-icon__dot{
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid rgba(17,24,39,0.95);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.35);
 }
 
 .nw-sh-tile--on .nw-sh-icon{
@@ -3429,6 +3442,45 @@ body{ padding-top: var(--topbar-h); }
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+/* Popover: Colorpicker (RGB‑Licht) */
+.nw-sh-colorpicker{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nw-sh-colorpreview{
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid rgba(148,163,184,0.22);
+  box-shadow: 0 14px 40px rgba(0,0,0,0.35);
+}
+
+.nw-sh-colorinput{
+  width: 96px;
+  height: 46px;
+  border-radius: 14px;
+  border: 1px solid rgba(148,163,184,0.22);
+  background: rgba(2,6,23,0.25);
+  padding: 6px;
+  cursor: pointer;
+}
+
+.nw-sh-colorinput:disabled{
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.nw-sh-colorinput::-webkit-color-swatch-wrapper{
+  padding: 0;
+}
+
+.nw-sh-colorinput::-webkit-color-swatch{
+  border: none;
+  border-radius: 12px;
 }
 
 /* Smaller chip variant (used inside popovers) */

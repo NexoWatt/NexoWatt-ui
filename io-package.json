@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-  "version": "0.6.118",
+  "version": "0.6.119",
     "news": {
+      "0.6.119": {
+        "en": "SmartHome: Added a new RGB color-light tile type with a color picker popover (HEX/RGB/INT formats). Optional on/off switching via mapped switch DP.",
+        "de": "SmartHome: Neuer RGB-Farblicht-Typ als Kachel mit Colorpicker-Popover (HEX/RGB/INT Formate). Optional Ein/Aus per Schalt-DP."
+      },
       "0.6.118": {
         "en": "SmartHome: Audio player – multiroom zone selection (party mode) + playlists/favorites UX (filter, ordering, recently played).",
         "de": "SmartHome: Audio-Player – Multiroom-Zonenauswahl (Party-Modus) + Playlists/Favoriten-UX (Filter, Reihenfolge, zuletzt gespielt)."

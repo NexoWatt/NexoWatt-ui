@@ -374,6 +374,7 @@ function nwGuessIconName(dev) {
   if (type === 'rtr') return 'thermostat';
   if (type === 'scene') return 'scene';
   if (type === 'player') return 'speaker';
+  if (type === 'color') return 'bulb';
   if (type === 'sensor') {
     if (unit.includes('°c') || alias.includes('temp') || fn.includes('klima')) return 'thermostat';
     return 'sensor';
@@ -435,6 +436,11 @@ function nwIsOn(dev) {
   const type = String(dev.type || '').toLowerCase();
 
   if (type === 'switch') return !!st.on;
+  if (type === 'color') {
+    if (typeof st.on !== 'undefined') return !!st.on;
+    // some lights expose only a color value
+    return !!(st && st.color);
+  }
   if (type === 'scene') {
     const active = (typeof st.active !== 'undefined') ? !!st.active : !!st.on;
     return active;
@@ -465,6 +471,11 @@ function nwGetStateText(dev) {
   if (st && st.error) return 'Fehler';
 
   if (type === 'switch') return st.on ? 'Ein' : 'Aus';
+  if (type === 'color') {
+    if (typeof st.on !== 'undefined') return st.on ? 'Ein' : 'Aus';
+    if (st && st.color) return String(st.color).toUpperCase();
+    return '—';
+  }
   if (type === 'scene') {
     const active = (typeof st.active !== 'undefined') ? !!st.active : !!st.on;
     return active ? 'Aktiv' : 'Bereit';
@@ -527,6 +538,7 @@ function nwGetTileHint(dev) {
   if (!canWrite) return 'Nur Anzeige';
 
   if (type === 'switch') return 'Klicken: Ein/Aus';
+  if (type === 'color') return 'Klicken: Ein/Aus · Symbol/⋯: Farbe einstellen';
   if (type === 'scene') return 'Klicken: Szene auslösen';
   if (type === 'dimmer') return 'Klicken: Ein/Aus · Regler: Helligkeit · Symbol/⋯: Bedienung';
   if (type === 'blind') return 'Regler: Position · Tasten: Auf/Stop/Ab · Symbol/⋯: Bedienung';
@@ -592,27 +604,37 @@ function nwCreateIconElement(dev, isOn, iconSpec, accent) {
   const wrap = document.createElement('div');
   wrap.className = 'nw-sh-icon';
 
+  const type = String(dev && dev.type ? dev.type : '').toLowerCase();
+  const st = dev && dev.state ? dev.state : {};
+  const colorHex = (type === 'color' && st && st.color) ? String(st.color).trim() : '';
+
   if (iconSpec.kind === 'text') {
     const t = document.createElement('span');
     t.className = 'nw-sh-icon__text';
     t.textContent = iconSpec.text;
     wrap.appendChild(t);
-    return wrap;
+  } else {
+    const svgWrap = document.createElement('div');
+    svgWrap.className = 'nw-sh-icon__svg';
+    const name = iconSpec.name;
+    const variant = isOn ? 'on' : 'off';
+    const svg = (NW_ICON_SVGS[name] && NW_ICON_SVGS[name][variant])
+      ? NW_ICON_SVGS[name][variant]
+      : (NW_ICON_SVGS.generic && NW_ICON_SVGS.generic[variant]);
+    svgWrap.innerHTML = svg;
+    wrap.appendChild(svgWrap);
   }
-
-  const svgWrap = document.createElement('div');
-  svgWrap.className = 'nw-sh-icon__svg';
-  const name = iconSpec.name;
-  const variant = isOn ? 'on' : 'off';
-  const svg = (NW_ICON_SVGS[name] && NW_ICON_SVGS[name][variant])
-    ? NW_ICON_SVGS[name][variant]
-    : (NW_ICON_SVGS.generic && NW_ICON_SVGS.generic[variant]);
-
-  svgWrap.innerHTML = svg;
-  wrap.appendChild(svgWrap);
 
   // set accent as CSS var so SVG uses currentColor
   wrap.style.color = isOn ? accent : 'rgba(203, 213, 225, 0.85)';
+
+  // Color dot overlay (for color-lights)
+  if (type === 'color') {
+    const dot = document.createElement('span');
+    dot.className = 'nw-sh-icon__dot';
+    dot.style.background = colorHex || (isOn ? 'rgba(226,232,240,0.75)' : 'rgba(148,163,184,0.45)');
+    wrap.appendChild(dot);
+  }
 
   return wrap;
 }
@@ -644,6 +666,18 @@ async function nwSetLevel(id, level) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, level }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data || !data.ok) return null;
+  return data.state || null;
+}
+
+async function nwSetColor(id, color) {
+  const res = await fetch('/api/smarthome/color', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, color }),
   });
   if (!res.ok) return null;
   const data = await res.json();
@@ -1076,7 +1110,7 @@ function nwCreateTile(dev, opts) {
   actions.appendChild(favBtn);
 
   // Detail/Tooltip-Popover (für Dimmer/Jalousie/RTR)
-  const hasDetails = (type === 'dimmer' || type === 'blind' || type === 'rtr' || type === 'player');
+  const hasDetails = (type === 'dimmer' || type === 'blind' || type === 'rtr' || type === 'player' || type === 'color');
   if (hasDetails) {
     // Klick auf Icon öffnet das Bedienpanel (Tooltip)
     icon.title = 'Bedienung';
@@ -1232,6 +1266,19 @@ function nwCreateTile(dev, opts) {
   // Tap actions (switch / dimmer / scene / player)
   tile.addEventListener('click', async () => {
     if (!canWrite) return;
+    if (type === 'color') {
+      const hasSwitch = !!(dev.io && dev.io.switch && (dev.io.switch.writeId || dev.io.switch.readId));
+      if (!hasSwitch) {
+        // Ohne Schalt-DP: Klick öffnet direkt das Farb-Panel
+        nwOpenDevicePopover(dev, tile);
+        return;
+      }
+      const st = await nwToggleDevice(dev.id);
+      if (!st) return;
+      await nwReloadDevices({ force: true });
+      return;
+    }
+
     if (type !== 'switch' && type !== 'dimmer' && type !== 'scene' && type !== 'player') return;
     const st = await nwToggleDevice(dev.id);
     if (!st) return;
@@ -1716,6 +1763,8 @@ function nwBuildPopoverContent(dev) {
 
   if (type === 'dimmer') {
     body.appendChild(nwCreateLevelPopover(dev, canWrite, { label: 'Helligkeit' }));
+  } else if (type === 'color') {
+    body.appendChild(nwCreateColorPopover(dev, canWrite));
   } else if (type === 'blind') {
     body.appendChild(nwCreateBlindPopover(dev, canWrite));
   } else if (type === 'rtr') {
@@ -2011,6 +2060,223 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
   btnRow.appendChild(document.createElement('div'));
   btnRow.appendChild(toggle);
   wrap.appendChild(btnRow);
+
+  return wrap;
+}
+
+function nwCreateColorPopover(dev, canWrite) {
+  const wrap = document.createElement('div');
+
+  const cCfg = (dev.io && dev.io.color) ? dev.io.color : {};
+  const hasWrite = canWrite && !!(cCfg && (cCfg.writeId || cCfg.readId));
+
+  const st = dev.state || {};
+
+  const normHex = (val) => {
+    if (val === null || typeof val === 'undefined') return null;
+    let s = String(val).trim();
+    if (!s) return null;
+    if (s.startsWith('#')) s = s.slice(1);
+    if (s.startsWith('0x') || s.startsWith('0X')) s = s.slice(2);
+    if (/^[0-9a-fA-F]{6}$/.test(s)) return '#' + s.toLowerCase();
+    return null;
+  };
+
+  let current = normHex(st.color) || '#ffffff';
+
+  // Live-preview toggle (throttled writes while dragging/selecting)
+  let livePreview = nwLoadBoolLS(NW_SH_LIVE_PREVIEW_LS_KEY, NW_SH_LIVE_PREVIEW_DEFAULT);
+  const liveSender = (hasWrite)
+    ? nwCreateLivePreviewSender(async (val) => { await nwSetColor(dev.id, val); }, NW_SH_LIVE_PREVIEW_THROTTLE_MS)
+    : null;
+
+  const row = document.createElement('div');
+  row.className = 'nw-sh-popover__row';
+
+  const l = document.createElement('div');
+  l.className = 'nw-sh-popover__label';
+  l.textContent = 'Farbe';
+
+  const v = document.createElement('div');
+  v.className = 'nw-sh-popover__value';
+  v.textContent = current.toUpperCase();
+
+  const right = document.createElement('div');
+  right.className = 'nw-sh-popover__right';
+  right.appendChild(v);
+
+  const status = nwCreateStatusBadge();
+  right.appendChild(status);
+
+  let statusTimer = null;
+  function clearStatusTimer() {
+    if (statusTimer) {
+      clearTimeout(statusTimer);
+      statusTimer = null;
+    }
+  }
+  function flashStatus(kind, text, ms) {
+    clearStatusTimer();
+    nwSetStatusBadge(status, kind, text);
+    if (ms && ms > 0) {
+      statusTimer = setTimeout(() => {
+        nwSetStatusBadge(status, null, '');
+        statusTimer = null;
+      }, ms);
+    }
+  }
+  function setBusy() { flashStatus('busy', 'Senden…'); }
+  function setOk() { flashStatus('ok', 'OK', 1100); }
+  function setErr() { flashStatus('err', 'Fehler', 1600); }
+
+  let liveBtn = null;
+  if (hasWrite) {
+    liveBtn = document.createElement('button');
+    liveBtn.type = 'button';
+    liveBtn.className = 'nw-sh-chip nw-sh-chip--mini' + (livePreview ? ' nw-sh-chip--active' : '');
+    liveBtn.textContent = 'Live';
+    liveBtn.title = 'Live-Vorschau beim Auswählen (gedrosselt)';
+    liveBtn.setAttribute('aria-pressed', livePreview ? 'true' : 'false');
+    liveBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      livePreview = !livePreview;
+      nwSaveBoolLS(NW_SH_LIVE_PREVIEW_LS_KEY, livePreview);
+      liveBtn.classList.toggle('nw-sh-chip--active', livePreview);
+      liveBtn.setAttribute('aria-pressed', livePreview ? 'true' : 'false');
+      updateHint();
+    });
+    right.appendChild(liveBtn);
+  }
+
+  row.appendChild(l);
+  row.appendChild(right);
+
+  const picker = document.createElement('div');
+  picker.className = 'nw-sh-colorpicker';
+
+  const preview = document.createElement('div');
+  preview.className = 'nw-sh-colorpreview';
+  preview.style.background = current;
+
+  const input = document.createElement('input');
+  input.type = 'color';
+  input.className = 'nw-sh-colorinput';
+  input.value = current;
+  input.disabled = !hasWrite;
+  input.addEventListener('click', (ev) => ev.stopPropagation());
+
+  function setUi(hex) {
+    const h = normHex(hex) || '#ffffff';
+    current = h;
+    preview.style.background = h;
+    v.textContent = h.toUpperCase();
+    try { input.value = h; } catch (_e) {}
+  }
+
+  async function commitColor(hex, opts) {
+    const options = opts || {};
+    const showStatus = (options.showStatus !== false);
+    const reload = (options.reload !== false);
+    const h = normHex(hex) || '#ffffff';
+    setUi(h);
+    if (!hasWrite) return h;
+    if (showStatus) setBusy();
+    const res = await nwSetColor(dev.id, h);
+    if (showStatus) {
+      if (res === null) setErr();
+      else setOk();
+    }
+    if (reload) await nwReloadDevices({ force: true });
+    return h;
+  }
+
+  input.addEventListener('input', (ev) => {
+    const h = ev && ev.target ? ev.target.value : null;
+    if (!h) return;
+    setUi(h);
+    if (hasWrite && livePreview && liveSender) {
+      liveSender.trigger(String(h), false);
+    }
+  });
+
+  input.addEventListener('change', async (ev) => {
+    if (!hasWrite) return;
+    const h = ev && ev.target ? ev.target.value : null;
+    if (!h) return;
+    await commitColor(String(h));
+  });
+
+  picker.appendChild(preview);
+  picker.appendChild(input);
+
+  const presets = document.createElement('div');
+  presets.className = 'nw-sh-popover__presets';
+  const presetList = [
+    { label: 'Warmweiß', value: '#ffd79a' },
+    { label: 'Kaltweiß', value: '#dbeafe' },
+    { label: 'Rot', value: '#ef4444' },
+    { label: 'Grün', value: '#22c55e' },
+    { label: 'Blau', value: '#3b82f6' },
+  ];
+  presetList.forEach((p) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'nw-sh-chip nw-sh-chip--mini';
+    b.textContent = p.label;
+    b.disabled = !hasWrite;
+    b.addEventListener('click', (ev) => ev.stopPropagation());
+    b.addEventListener('click', async () => {
+      if (!hasWrite) return;
+      await commitColor(p.value);
+    });
+    presets.appendChild(b);
+  });
+
+  const hint = document.createElement('div');
+  hint.className = 'nw-sh-popover__hint';
+
+  function updateHint() {
+    if (!hasWrite) {
+      hint.textContent = 'Nur Anzeige (keine Schreib‑DP / writeId konfiguriert).';
+      return;
+    }
+    hint.textContent = livePreview
+      ? 'Live-Vorschau: AN (gedrosselt). Beim Loslassen wird die Farbe final übernommen.'
+      : 'Tipp: Farbe wählen – wird beim Loslassen übernommen.';
+  }
+  updateHint();
+
+  wrap.appendChild(row);
+  wrap.appendChild(picker);
+  wrap.appendChild(presets);
+  wrap.appendChild(hint);
+
+  // Optional: Ein/Aus Button (falls Schalt-DP vorhanden)
+  const sw = (dev.io && dev.io.switch) ? dev.io.switch : null;
+  const hasSwitch = canWrite && !!(sw && (sw.writeId || sw.readId));
+  if (hasSwitch) {
+    const btnRow = document.createElement('div');
+    btnRow.className = 'nw-sh-popover__row';
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'nw-sh-btn';
+    toggle.textContent = nwIsOn(dev) ? 'Ausschalten' : 'Einschalten';
+    toggle.disabled = !canWrite;
+    toggle.addEventListener('click', (ev) => ev.stopPropagation());
+    toggle.addEventListener('click', async () => {
+      if (!canWrite) return;
+      setBusy();
+      const res = await nwToggleDevice(dev.id);
+      if (res === null) setErr();
+      else setOk();
+      await nwReloadDevices({ force: true });
+    });
+
+    btnRow.appendChild(document.createElement('div'));
+    btnRow.appendChild(toggle);
+    wrap.appendChild(btnRow);
+  }
 
   return wrap;
 }

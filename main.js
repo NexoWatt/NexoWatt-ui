@@ -3938,6 +3938,25 @@ buildSmartHomeDevicesFromConfig() {
         if (type === 'scene') {
           dev.ui.unit = dev.ui.unit || '';
         }
+      } else if (type === 'color') {
+        // Farb‑Licht (RGB): optionaler Schalter + separater Farb‑DP
+        const sw = ioCfg.switch || {};
+        const swReadId = sw.readId || sw.writeId || '';
+        const swWriteId = sw.writeId || sw.readId || '';
+        if (swReadId || swWriteId) {
+          dev.io.switch = { readId: swReadId, writeId: swWriteId };
+        }
+
+        const col = ioCfg.color || {};
+        const cRead = col.readId || '';
+        const cWrite = col.writeId || col.readId || '';
+        if (cRead || cWrite) {
+          dev.io.color = {
+            readId: cRead,
+            writeId: cWrite,
+            format: (typeof col.format === 'string' && col.format) ? col.format : 'hex',
+          };
+        }
       } else if (type === 'dimmer' || type === 'blind') {
         const lvl = ioCfg.level || {};
         const readId = lvl.readId || '';
@@ -4387,6 +4406,81 @@ async getSmartHomeDevicesWithState() {
       } catch (e) {
         this.log.warn(`SmartHome state read error (switch) for ${copy.id}: ${e.message}`);
         copy.state.on = false;
+        copy.state.error = true;
+      }
+    }
+
+    // Farbwert lesen (RGB / Farblicht)
+    if (copy.io && copy.io.color && copy.io.color.readId) {
+      const cCfg = copy.io.color || {};
+      const fmt = String(cCfg.format || 'hex').trim().toLowerCase();
+      try {
+        const st = await this.getForeignStateAsync(cCfg.readId);
+        const v = st && typeof st.val !== 'undefined' ? st.val : null;
+
+        const clamp = (n) => {
+          const x = Number(n);
+          if (!Number.isFinite(x)) return 0;
+          return Math.max(0, Math.min(255, Math.round(x)));
+        };
+        const toHex2 = (n) => clamp(n).toString(16).padStart(2, '0');
+
+        let hex = null;
+
+        if (v === null || typeof v === 'undefined') {
+          hex = null;
+        } else if (fmt === 'int' || fmt === 'integer' || fmt === 'number') {
+          const num = (typeof v === 'number') ? v : parseInt(String(v).trim(), 10);
+          if (Number.isFinite(num)) {
+            const x = Math.max(0, Math.min(16777215, Math.round(num)));
+            hex = '#' + x.toString(16).padStart(6, '0');
+          }
+        } else if (fmt === 'rgb') {
+          // Accept: "255,0,0" or "rgb(255,0,0)"
+          const s = String(v).trim();
+          const m = s.match(/(\d{1,3})\s*[,; ]\s*(\d{1,3})\s*[,; ]\s*(\d{1,3})/);
+          if (m) {
+            const r = clamp(m[1]);
+            const g = clamp(m[2]);
+            const b = clamp(m[3]);
+            hex = '#' + toHex2(r) + toHex2(g) + toHex2(b);
+          }
+        } else {
+          // hex (default): "#RRGGBB" or "RRGGBB" or "0xRRGGBB" or number-string
+          if (typeof v === 'number') {
+            const x = Math.max(0, Math.min(16777215, Math.round(v)));
+            hex = '#' + x.toString(16).padStart(6, '0');
+          } else {
+            let s = String(v).trim();
+            if (s.startsWith('0x') || s.startsWith('0X')) {
+              const x = parseInt(s.slice(2), 16);
+              if (Number.isFinite(x)) hex = '#' + Math.max(0, Math.min(16777215, x)).toString(16).padStart(6, '0');
+            } else if (s.startsWith('#')) {
+              s = s.slice(1);
+              if (/^[0-9a-fA-F]{6}$/.test(s)) hex = '#' + s.toLowerCase();
+            } else if (/^[0-9a-fA-F]{6}$/.test(s)) {
+              hex = '#' + s.toLowerCase();
+            } else if (/^\d+$/.test(s)) {
+              const x = parseInt(s, 10);
+              if (Number.isFinite(x)) hex = '#' + Math.max(0, Math.min(16777215, x)).toString(16).padStart(6, '0');
+            } else {
+              // try rgb fallback
+              const m = s.match(/(\d{1,3})\s*[,; ]\s*(\d{1,3})\s*[,; ]\s*(\d{1,3})/);
+              if (m) {
+                const r = clamp(m[1]);
+                const g = clamp(m[2]);
+                const b = clamp(m[3]);
+                hex = '#' + toHex2(r) + toHex2(g) + toHex2(b);
+              }
+            }
+          }
+        }
+
+        if (hex) {
+          copy.state.color = String(hex).toLowerCase();
+        }
+      } catch (e) {
+        this.log.warn(`SmartHome state read error (color) for ${copy.id}: ${e.message}`);
         copy.state.error = true;
       }
     }
@@ -5480,6 +5574,61 @@ app.post('/api/smarthome/level', requireAuth, async (req, res) => {
     return res.json({ ok: true, state: { level: target, on: target > min } });
   } catch (e) {
     this.log.warn('SmartHome level API error: ' + e.message);
+    res.status(500).json({ ok: false, error: 'internal error' });
+  }
+});
+
+
+// Color-API für Farblicht (RGB)
+app.post('/api/smarthome/color', requireAuth, async (req, res) => {
+  try {
+    const id = req.body && req.body.id;
+    const color = req.body && req.body.color;
+    if (!id || !color) {
+      return res.status(400).json({ ok: false, error: 'missing id or color' });
+    }
+
+    const devices = (this.smartHomeDevices && this.smartHomeDevices.length)
+      ? this.smartHomeDevices
+      : this.buildSmartHomeDevicesFromConfig();
+    const dev = devices.find(d => d.id === id);
+    if (!dev || dev.type !== 'color' || !dev.io || !dev.io.color || !(dev.io.color.writeId || dev.io.color.readId)) {
+      return res.status(404).json({ ok: false, error: 'device not found or not a color light' });
+    }
+    if (dev.behavior && dev.behavior.readOnly) {
+      return res.status(403).json({ ok: false, error: 'readOnly' });
+    }
+
+    const cfg = dev.io.color || {};
+    const fmt = String(cfg.format || 'hex').trim().toLowerCase();
+
+    const raw = String(color).trim();
+    let s = raw;
+    if (s.startsWith('#')) s = s.slice(1);
+    if (s.startsWith('0x') || s.startsWith('0X')) s = s.slice(2);
+    if (!/^[0-9a-fA-F]{6}$/.test(s)) {
+      return res.status(400).json({ ok: false, error: 'invalid color (expected #RRGGBB)' });
+    }
+
+    const r = parseInt(s.slice(0, 2), 16);
+    const g = parseInt(s.slice(2, 4), 16);
+    const b = parseInt(s.slice(4, 6), 16);
+
+    let outVal;
+    if (fmt === 'rgb') {
+      outVal = `${r},${g},${b}`;
+    } else if (fmt === 'int' || fmt === 'integer' || fmt === 'number') {
+      outVal = (r << 16) + (g << 8) + b;
+    } else {
+      // hex (default)
+      outVal = '#' + s.toLowerCase();
+    }
+
+    const dpId = cfg.writeId || cfg.readId;
+    await this.setForeignStateAsync(dpId, outVal);
+    return res.json({ ok: true, state: { color: ('#' + s.toLowerCase()) } });
+  } catch (e) {
+    this.log.warn('SmartHome color API error: ' + e.message);
     res.status(500).json({ ok: false, error: 'internal error' });
   }
 });
