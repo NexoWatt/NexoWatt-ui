@@ -147,14 +147,19 @@
         </div>
       </div>
 
-      <div style="display:flex; gap:10px; margin-top: 16px;">
+      <div style="display:flex; gap:10px; margin-top: 16px; flex-wrap: wrap;">
         <button class="btn btn--primary" id="save">Speichern</button>
         <button class="btn" id="reload">Neu laden</button>
+        <button class="btn" id="openGen">Generator</button>
       </div>
 
       <div class="status" id="status"></div>
     </div>
   </div>
+
+  <!-- ioBroker Admin uses socket.io. Some admin versions do not expose "servConn" anymore.
+       We load socket.io and fall back to a direct socket connection if needed. -->
+  <script src="../../lib/js/socket.io.js" onerror="this.onerror=null;this.src='/lib/js/socket.io.js';"></script>
 
   <script>
     (function(){
@@ -180,25 +185,134 @@
         return '';
       }
 
+      // --- Admin connection helper (servConn OR socket.io) ---
+      function _pickExistingSocket(){
+        return (window.socket)
+          || (window.parent && window.parent.socket)
+          || (window.top && window.top.socket)
+          || null;
+      }
+
+      function _pickServConn(){
+        // Older ioBroker Admin versions expose servConn (with getObject/setObject)
+        return (window.servConn)
+          || (window.parent && window.parent.servConn)
+          || (window.top && window.top.servConn)
+          || null;
+      }
+
+      function getAdminConn(){
+        const sc = _pickServConn();
+        if (sc && typeof sc.getObject === 'function' && typeof sc.setObject === 'function'){
+          return {
+            type: 'servConn',
+            getObject: (id, cb) => sc.getObject(id, (err, obj) => cb(err || null, obj || null)),
+            getState: (id, cb) => sc.getState(id, (err, st) => cb(err || null, st || null)),
+            setObject: (id, obj, cb) => sc.setObject(id, obj, (err) => cb(err || null)),
+          };
+        }
+
+        let s = _pickExistingSocket();
+        // Some Admin versions don't expose "socket" to adapter tabs – create our own (and reuse it).
+        if (!s && window.io && typeof window.io.connect === 'function'){
+          try{
+            window.__nwAdminSocket = window.__nwAdminSocket || window.io.connect();
+            s = window.__nwAdminSocket;
+          } catch(_e) {
+            s = null;
+          }
+        }
+        if (s && typeof s.emit === 'function'){
+          return {
+            type: 'socket',
+            getObject: (id, cb) => {
+              try{
+                s.emit('getObject', id, (a, b) => {
+                  // Admin socket callbacks are inconsistent across versions:
+                  // - either (obj)
+                  // - or (err, obj)
+                  const obj = (b !== undefined) ? b : a;
+                  const err = (b !== undefined) ? a : null;
+                  cb(err || null, obj || null);
+                });
+              } catch(e){
+                cb(e, null);
+              }
+            },
+            getState: (id, cb) => {
+              try{
+                s.emit('getState', id, (a, b) => {
+                  const st = (b !== undefined) ? b : a;
+                  const err = (b !== undefined) ? a : null;
+                  cb(err || null, st || null);
+                });
+              } catch(e){
+                cb(e, null);
+              }
+            },
+            setObject: (id, obj, cb) => {
+              try{
+                s.emit('setObject', id, obj, (res) => {
+                  // res might be undefined/null (OK) or an error object/string
+                  if (!res) return cb(null);
+                  if (res === true) return cb(null);
+                  if (typeof res === 'string') return cb(res);
+                  if (typeof res === 'object' && res.error) return cb(res.error);
+                  return cb(null);
+                });
+              } catch(e){
+                cb(e);
+              }
+            },
+          };
+        }
+        return null;
+      }
+
       function loadAll(){
         setStatus('Lade Daten…', true);
-        // UUID
-        if (window.parent && window.parent.servConn && window.parent.servConn.getObject){
-          window.parent.servConn.getObject('system.meta.uuid', function(err, obj){
+        const conn = getAdminConn();
+        if (!conn){
+          setStatus('Admin‑Verbindung nicht verfügbar. (Weder servConn noch socket.io gefunden.) Bitte Seite im ioBroker‑Admin öffnen.', false);
+          return;
+        }
+
+        // UUID (prefer object: system.meta.uuid). Some setups expose it as state only.
+        conn.getObject('system.meta.uuid', function(err, obj){
+          if (!err){
             const u = extractUuid(obj);
-            elUuid.value = u || 'Nicht verfügbar';
-          });
-          window.parent.servConn.getObject(adapterId, function(err, obj){
-            if (err || !obj){
-              setStatus('Adapter‑Objekt nicht gefunden: ' + adapterId, false);
+            if (u){
+              elUuid.value = u;
               return;
             }
-            elKey.value = (obj.native && obj.native.licenseKey) ? String(obj.native.licenseKey) : '';
-            setStatus('Bereit.', true);
-          });
-        } else {
-          setStatus('Admin‑Verbindung nicht verfügbar (servConn). Bitte diese Seite innerhalb des ioBroker‑Admin öffnen (Adapter → NexoWatt → Tab → Lizenz).', false);
-        }
+          }
+
+          // Fallback: try state
+          if (typeof conn.getState === 'function'){
+            conn.getState('system.meta.uuid', function(err2, st){
+              if (err2){
+                elUuid.value = 'Nicht verfügbar';
+                setStatus('UUID konnte nicht gelesen werden: ' + String(err2), false);
+                return;
+              }
+              const v = st && (st.val !== undefined ? String(st.val) : '');
+              elUuid.value = v || 'Nicht verfügbar';
+            });
+          } else {
+            elUuid.value = 'Nicht verfügbar';
+            if (err) setStatus('UUID konnte nicht gelesen werden: ' + String(err), false);
+          }
+        });
+
+        // Adapter object (licenseKey)
+        conn.getObject(adapterId, function(err, obj){
+          if (err || !obj){
+            setStatus('Adapter‑Objekt nicht gefunden: ' + adapterId, false);
+            return;
+          }
+          elKey.value = (obj.native && obj.native.licenseKey) ? String(obj.native.licenseKey) : '';
+          setStatus('Bereit.', true);
+        });
       }
 
       document.getElementById('copyUuid').addEventListener('click', async () => {
@@ -210,23 +324,34 @@
         }
       });
 
+      // Open the standalone generator (admin/license-generator.html)
+      const btnGen = document.getElementById('openGen');
+      if (btnGen){
+        btnGen.addEventListener('click', () => {
+          const u = (elUuid.value || '').trim();
+          const url = 'license-generator.html' + (u && u !== 'Nicht verfügbar' && u !== 'Lade…' ? ('?uuid=' + encodeURIComponent(u)) : '');
+          try { window.open(url, '_blank', 'noopener,noreferrer'); } catch(_e) { window.location.href = url; }
+        });
+      }
+
       document.getElementById('reload').addEventListener('click', () => loadAll());
 
       document.getElementById('save').addEventListener('click', () => {
         const key = (elKey.value || '').trim();
 
-        if (!(window.parent && window.parent.servConn && window.parent.servConn.getObject && window.parent.servConn.setObject)){
-          setStatus('Speichern nicht möglich (servConn fehlt). Bitte diese Seite innerhalb des ioBroker‑Admin öffnen (Adapter → NexoWatt → Tab → Lizenz).', false);
+        const conn = getAdminConn();
+        if (!conn){
+          setStatus('Speichern nicht möglich (Admin‑Verbindung fehlt). Bitte Seite im ioBroker‑Admin öffnen.', false);
           return;
         }
-        window.parent.servConn.getObject(adapterId, function(err, obj){
+        conn.getObject(adapterId, function(err, obj){
           if (err || !obj){
             setStatus('Adapter‑Objekt nicht gefunden: ' + adapterId, false);
             return;
           }
           obj.native = obj.native || {};
           obj.native.licenseKey = key;
-          window.parent.servConn.setObject(adapterId, obj, function(err2){
+          conn.setObject(adapterId, obj, function(err2){
             if (err2){
               setStatus('Speichern fehlgeschlagen: ' + String(err2), false);
               return;

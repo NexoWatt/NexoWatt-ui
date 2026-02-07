@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.122",
+    "version": "0.6.123",
     "news": {
+      "0.6.123": {
+        "en": "Admin/Licensing: Made the license page work reliably in modern ioBroker Admin versions (no servConn) by using a socket.io fallback. System UUID is now shown again. Added an in-admin link to a standalone HTML generator (admin/license-generator.html).",
+        "de": "Admin/Lizenz: Lizenzseite funktioniert jetzt zuverlässig auch in neueren ioBroker-Admin-Versionen ohne servConn (socket.io Fallback). System-UUID wird wieder korrekt angezeigt. Zusätzlich: Link auf den HTML-Generator im Admin (admin/license-generator.html)."
+      },
       "0.6.122": {
         "en": "Admin/Licensing: Fixed license page navigation so it stays inside the ioBroker Admin iframe (servConn available) and reliably shows the system UUID. Added a standalone HTML generator (scripts/license-generator.html) for creating UUID-bound keys.",
         "de": "Admin/Lizenz: Lizenzseite wird jetzt korrekt innerhalb der ioBroker-Admin-iFrame geöffnet (servConn verfügbar) – System-UUID wird zuverlässig angezeigt. Zusätzlich: Standalone HTML-Generator (scripts/license-generator.html) zum Erzeugen UUID-gebundener Lizenzschlüssel."

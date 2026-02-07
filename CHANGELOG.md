@@ -1,3 +1,7 @@
+## 0.6.123 (2026-02-07)
+- Admin/Lizenz: Lizenzseite funktioniert jetzt auch in neueren ioBroker-Admin-Versionen zuverlässig (kein `servConn` erforderlich – socket.io Fallback).
+- Admin/Lizenz: HTML-Generator zusätzlich im Admin verfügbar (`admin/license-generator.html`, per Button auf der Lizenzseite).
+
 ## 0.6.122 (2026-02-07)
 - Admin/Lizenz: Lizenzseite wird jetzt im **ioBroker-Admin iFrame** geöffnet (servConn verfügbar) – die UUID wird wieder korrekt geladen/angezeigt.
 - Tools: Standalone HTML Generator `scripts/license-generator.html` (UUID → Lizenzschlüssel) hinzugefügt.
