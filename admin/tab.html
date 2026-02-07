@@ -25,6 +25,7 @@
       <button id="btnVis" class="btn primary" type="button">VIS öffnen</button>
       <button id="btnApps" class="btn" type="button">EMS Apps öffnen</button>
       <button id="btnSim" class="btn" type="button">Simulation</button>
+      <button id="btnLicense" class="btn" type="button">Lizenz</button>
       <button id="btnShVis" class="btn" type="button">SmartHome VIS</button>
       <button id="btnShCfg" class="btn" type="button">SmartHome Config</button>
     </div>
@@ -48,6 +49,7 @@
       var btnVis = document.getElementById('btnVis');
       var btnApps = document.getElementById('btnApps');
       var btnSim = document.getElementById('btnSim');
+      var btnLicense = document.getElementById('btnLicense');
       var btnShVis = document.getElementById('btnShVis');
       var btnShCfg = document.getElementById('btnShCfg');
 
@@ -63,6 +65,10 @@
       btnVis.onclick = function(){ window.top.location.href = visUrl; };
       btnApps.onclick = function(){ window.top.location.href = appsUrl; };
       btnSim.onclick = function(){ window.top.location.href = simUrl; };
+      if (btnLicense) btnLicense.onclick = function(){
+        // Lizenzverwaltung läuft bewusst nur im ioBroker-Admin
+        window.top.location.href = window.location.origin + '/adapter/nexowatt-vis/license.html?instance=' + inst;
+      };
       if (btnShVis) btnShVis.onclick = function(){ window.top.location.href = shVisUrl; };
       if (btnShCfg) btnShCfg.onclick = function(){ window.top.location.href = shCfgUrl; };
     }

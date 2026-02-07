@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-vis",
-  "version": "0.6.119",
+    "version": "0.6.121",
     "news": {
+      "0.6.121": {
+        "en": "Admin/Licensing: Updated the UUID-bound license key secret to a single constant (HMAC-SHA256). Added an internal CLI tool (scripts/gen-license.js) to generate license keys from a UUID.",
+        "de": "Admin/Lizenz: Lizenz-Secret für UUID-gebundene Lizenzschlüssel auf eine feste Konstante (HMAC-SHA256) umgestellt. Zusätzliches internes CLI-Tool (scripts/gen-license.js) zum Erzeugen von Lizenzschlüsseln aus der UUID."
+      },
+      "0.6.120": {
+        "en": "SmartHome: Upgraded the RGB color-light popover to a mobile-friendly circular color wheel (HSV) with brightness slider and live preview. Admin: Added a dedicated license page (UUID readout + license key input) and a license gate that can lock the VIS/API until activated.",
+        "de": "SmartHome: RGB‑Farblicht‑Popover auf einen mobilfreundlichen Farbkreis (HSV) mit Helligkeits‑Slider und Live‑Vorschau umgestellt. Admin: Neue Lizenz‑Seite (UUID anzeigen + Lizenzschlüssel eingeben) + Lizenz‑Gate (VIS/API können bis zur Freischaltung gesperrt werden)."
+      },
       "0.6.119": {
         "en": "SmartHome: Added a new RGB color-light tile type with a color picker popover (HEX/RGB/INT formats). Optional on/off switching via mapped switch DP.",
         "de": "SmartHome: Neuer RGB-Farblicht-Typ als Kachel mit Colorpicker-Popover (HEX/RGB/INT Formate). Optional Ein/Aus per Schalt-DP."
@@ -1175,6 +1183,7 @@
     "port": 8188,
     "bind": "0.0.0.0",
     "publicPath": "/",
+    "licenseKey": "",
     "units": {
       "power": "W",
       "energy": "kWh"

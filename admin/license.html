@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NexoWatt – Lizenz</title>
+  <style>
+    :root{
+      --bg: #0b1220;
+      --panel: rgba(2,6,23,0.55);
+      --border: rgba(148,163,184,0.22);
+      --txt: rgba(255,255,255,0.92);
+      --muted: rgba(255,255,255,0.64);
+      --accent: #22c55e;
+      --danger: #ef4444;
+    }
+    html, body{ height:100%; }
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 600px at 30% 0%, rgba(30,58,138,0.25), transparent 55%),
+                  radial-gradient(900px 500px at 90% 20%, rgba(14,116,144,0.18), transparent 60%),
+                  var(--bg);
+      color: var(--txt);
+    }
+    .wrap{
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 28px 22px;
+    }
+    h1{
+      margin: 0 0 8px;
+      font-size: 1.25rem;
+      letter-spacing: 0.2px;
+    }
+    .sub{
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
+    .card{
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--panel);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+      padding: 18px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    @media (min-width: 860px){
+      .grid{ grid-template-columns: 1fr 1fr; }
+    }
+    label{
+      display:block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .row{
+      display:flex;
+      gap: 10px;
+      align-items:center;
+    }
+    input{
+      width:100%;
+      border: 1px solid var(--border);
+      background: rgba(2,6,23,0.35);
+      color: var(--txt);
+      border-radius: 12px;
+      padding: 10px 12px;
+      outline: none;
+      font-size: 0.95rem;
+    }
+    input:focus{
+      border-color: rgba(34,197,94,0.65);
+      box-shadow: 0 0 0 3px rgba(34,197,94,0.18);
+    }
+    input[readonly]{
+      opacity: 0.9;
+    }
+    .btn{
+      appearance:none;
+      border: 1px solid var(--border);
+      background: rgba(2,6,23,0.45);
+      color: var(--txt);
+      border-radius: 12px;
+      padding: 10px 14px;
+      cursor:pointer;
+      font-weight: 600;
+    }
+    .btn:hover{ border-color: rgba(34,197,94,0.65); }
+    .btn--primary{
+      border-color: rgba(34,197,94,0.55);
+      background: rgba(34,197,94,0.10);
+    }
+    .hint{
+      margin-top: 10px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .status{
+      margin-top: 12px;
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+    .ok{ color: var(--accent); }
+    .bad{ color: var(--danger); }
+    code{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.92rem;
+      color: rgba(255,255,255,0.88);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>NexoWatt – Lizenz</h1>
+    <p class="sub">
+      Hier wird der Lizenzschlüssel für diese ioBroker‑Instanz hinterlegt. Der Schlüssel ist an die System‑UUID gekoppelt.
+      <br/>Hinweis: Der Lizenzschlüssel ist bewusst nur im Admin verfügbar.
+    </p>
+
+    <div class="card">
+      <div class="grid">
+        <div>
+          <label>System‑UUID (ioBroker)</label>
+          <div class="row">
+            <input id="uuid" type="text" readonly value="Lade…" />
+            <button class="btn" id="copyUuid">Kopieren</button>
+          </div>
+          <div class="hint">
+            Diese UUID bitte beim Support/Vertrieb angeben – daraus wird der Lizenzschlüssel erzeugt.
+          </div>
+        </div>
+
+        <div>
+          <label>Lizenzschlüssel</label>
+          <input id="licenseKey" type="text" placeholder="z. B. NW1-XXXX-XXXX-…" />
+          <div class="hint">
+            Nach dem Speichern startet ioBroker den Adapter ggf. neu. Bei ungültigem Schlüssel bleibt der Adapter gesperrt.
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top: 16px;">
+        <button class="btn btn--primary" id="save">Speichern</button>
+        <button class="btn" id="reload">Neu laden</button>
+      </div>
+
+      <div class="status" id="status"></div>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const qs = new URLSearchParams(window.location.search);
+      const inst = qs.get('instance') || '0';
+      const adapterId = 'system.adapter.nexowatt-vis.' + inst;
+
+      const elUuid = document.getElementById('uuid');
+      const elKey = document.getElementById('licenseKey');
+      const elStatus = document.getElementById('status');
+
+      function setStatus(text, ok){
+        elStatus.textContent = text || '';
+        elStatus.className = 'status ' + (ok ? 'ok' : 'bad');
+      }
+
+      function extractUuid(obj){
+        if (!obj) return '';
+        if (obj.native && typeof obj.native.uuid === 'string') return obj.native.uuid;
+        if (obj.native && typeof obj.native.UUID === 'string') return obj.native.UUID;
+        if (obj.common && typeof obj.common.uuid === 'string') return obj.common.uuid;
+        if (obj.common && typeof obj.common.UUID === 'string') return obj.common.UUID;
+        return '';
+      }
+
+      function loadAll(){
+        setStatus('Lade Daten…', true);
+        // UUID
+        if (window.parent && window.parent.servConn && window.parent.servConn.getObject){
+          window.parent.servConn.getObject('system.meta.uuid', function(err, obj){
+            const u = extractUuid(obj);
+            elUuid.value = u || 'Nicht verfügbar';
+          });
+          window.parent.servConn.getObject(adapterId, function(err, obj){
+            if (err || !obj){
+              setStatus('Adapter‑Objekt nicht gefunden: ' + adapterId, false);
+              return;
+            }
+            elKey.value = (obj.native && obj.native.licenseKey) ? String(obj.native.licenseKey) : '';
+            setStatus('Bereit.', true);
+          });
+        } else {
+          setStatus('Admin‑Verbindung nicht verfügbar (servConn).', false);
+        }
+      }
+
+      document.getElementById('copyUuid').addEventListener('click', async () => {
+        try{
+          await navigator.clipboard.writeText(elUuid.value);
+          setStatus('UUID kopiert ✅', true);
+        } catch(e){
+          setStatus('Kopieren nicht möglich – bitte manuell markieren.', false);
+        }
+      });
+
+      document.getElementById('reload').addEventListener('click', () => loadAll());
+
+      document.getElementById('save').addEventListener('click', () => {
+        const key = (elKey.value || '').trim();
+
+        if (!(window.parent && window.parent.servConn && window.parent.servConn.getObject && window.parent.servConn.setObject)){
+          setStatus('Speichern nicht möglich (servConn.setObject fehlt).', false);
+          return;
+        }
+        window.parent.servConn.getObject(adapterId, function(err, obj){
+          if (err || !obj){
+            setStatus('Adapter‑Objekt nicht gefunden: ' + adapterId, false);
+            return;
+          }
+          obj.native = obj.native || {};
+          obj.native.licenseKey = key;
+          window.parent.servConn.setObject(adapterId, obj, function(err2){
+            if (err2){
+              setStatus('Speichern fehlgeschlagen: ' + String(err2), false);
+              return;
+            }
+            setStatus('Gespeichert ✅ Bitte Adapter ggf. neu starten.', true);
+          });
+        });
+      });
+
+      loadAll();
+    })();
+  </script>
+</body>
+</html>

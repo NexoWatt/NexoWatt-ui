@@ -1,3 +1,8 @@
+## 0.6.121 (2026-02-07)
+- Admin/Lizenz: Lizenz-Secret für UUID-gebundene Lizenzschlüssel auf `const secret = 'nw_lis_salt_v1 change me';` umgestellt.
+- Tools: internes CLI-Tool `scripts/gen-license.js` hinzugefügt (UUID → Lizenzschlüssel).
+- Hinweis: Durch die Secret-Umstellung ändern sich die erwarteten Lizenzschlüssel (Keys bitte neu generieren).
+
 ## 0.6.114 (2026-02-03)
 - Tarif/Speicher: Netzladen des Speichers ist jetzt **nur** bei günstigem Tarif erlaubt.
 - Tarif/Speicher: Ausnahme zur Tages-Sperre – wenn zeitvariables Netzentgelt im **NT** ist, darf auch außerhalb des Zeitfensters geladen werden (weiterhin nur bei günstigem Tarif).

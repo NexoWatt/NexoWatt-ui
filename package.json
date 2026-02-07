@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-vis",
-  "version": "0.6.119",
+  "version": "0.6.121",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "Proprietary License (NPL) v1.0",

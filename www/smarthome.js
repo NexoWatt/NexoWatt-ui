@@ -2084,6 +2084,80 @@ function nwCreateColorPopover(dev, canWrite) {
 
   let current = normHex(st.color) || '#ffffff';
 
+  /* --------------------------- HSV helpers (UI) --------------------------- */
+  const clamp01 = (n) => Math.max(0, Math.min(1, Number(n)));
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, Number(n)));
+
+  function hexToRgb(hex) {
+    const h = normHex(hex);
+    if (!h) return { r: 255, g: 255, b: 255 };
+    const s = h.slice(1);
+    const r = parseInt(s.slice(0, 2), 16);
+    const g = parseInt(s.slice(2, 4), 16);
+    const b = parseInt(s.slice(4, 6), 16);
+    return { r, g, b };
+  }
+
+  function rgbToHex(r, g, b) {
+    const rr = clamp(Math.round(r), 0, 255).toString(16).padStart(2, '0');
+    const gg = clamp(Math.round(g), 0, 255).toString(16).padStart(2, '0');
+    const bb = clamp(Math.round(b), 0, 255).toString(16).padStart(2, '0');
+    return ('#' + rr + gg + bb).toLowerCase();
+  }
+
+  function rgbToHsv(r, g, b) {
+    const rr = clamp01(r / 255);
+    const gg = clamp01(g / 255);
+    const bb = clamp01(b / 255);
+    const max = Math.max(rr, gg, bb);
+    const min = Math.min(rr, gg, bb);
+    const d = max - min;
+    let h = 0;
+    if (d !== 0) {
+      if (max === rr) h = ((gg - bb) / d) % 6;
+      else if (max === gg) h = (bb - rr) / d + 2;
+      else h = (rr - gg) / d + 4;
+      h = h * 60;
+      if (h < 0) h += 360;
+    }
+    const s = (max === 0) ? 0 : (d / max);
+    const v = max;
+    return { h, s, v };
+  }
+
+  function hsvToRgb(h, s, v) {
+    const hh = ((Number(h) % 360) + 360) % 360;
+    const ss = clamp01(s);
+    const vv = clamp01(v);
+    const c = vv * ss;
+    const x = c * (1 - Math.abs(((hh / 60) % 2) - 1));
+    const m = vv - c;
+    let rr = 0, gg = 0, bb = 0;
+    if (hh < 60) { rr = c; gg = x; bb = 0; }
+    else if (hh < 120) { rr = x; gg = c; bb = 0; }
+    else if (hh < 180) { rr = 0; gg = c; bb = x; }
+    else if (hh < 240) { rr = 0; gg = x; bb = c; }
+    else if (hh < 300) { rr = x; gg = 0; bb = c; }
+    else { rr = c; gg = 0; bb = x; }
+    return {
+      r: Math.round((rr + m) * 255),
+      g: Math.round((gg + m) * 255),
+      b: Math.round((bb + m) * 255)
+    };
+  }
+
+  let hsv = { h: 0, s: 0, v: 1 };
+  function setHsvFromHex(hex) {
+    const rgb = hexToRgb(hex);
+    const next = rgbToHsv(rgb.r, rgb.g, rgb.b);
+    // Keep hue when saturation is 0 (gray), so the wheel stays stable.
+    if (next.s === 0 && hsv && typeof hsv.h === 'number') next.h = hsv.h;
+    hsv = next;
+  }
+
+  // Initialize HSV from current color
+  setHsvFromHex(current);
+
   // Live-preview toggle (throttled writes while dragging/selecting)
   let livePreview = nwLoadBoolLS(NW_SH_LIVE_PREVIEW_LS_KEY, NW_SH_LIVE_PREVIEW_DEFAULT);
   const liveSender = (hasWrite)
@@ -2103,6 +2177,12 @@ function nwCreateColorPopover(dev, canWrite) {
 
   const right = document.createElement('div');
   right.className = 'nw-sh-popover__right';
+
+  const preview = document.createElement('div');
+  preview.className = 'nw-sh-colorpreview nw-sh-colorpreview--mini';
+  preview.style.background = current;
+  right.appendChild(preview);
+
   right.appendChild(v);
 
   const status = nwCreateStatusBadge();
@@ -2152,25 +2232,100 @@ function nwCreateColorPopover(dev, canWrite) {
   row.appendChild(right);
 
   const picker = document.createElement('div');
-  picker.className = 'nw-sh-colorpicker';
+  picker.className = 'nw-sh-colorwheelbox';
 
-  const preview = document.createElement('div');
-  preview.className = 'nw-sh-colorpreview';
-  preview.style.background = current;
+  const wheelWrap = document.createElement('div');
+  wheelWrap.className = 'nw-sh-colorwheel-wrap' + (!hasWrite ? ' nw-disabled' : '');
 
-  const input = document.createElement('input');
-  input.type = 'color';
-  input.className = 'nw-sh-colorinput';
-  input.value = current;
-  input.disabled = !hasWrite;
-  input.addEventListener('click', (ev) => ev.stopPropagation());
+  const wheelCanvas = document.createElement('canvas');
+  wheelCanvas.className = 'nw-sh-colorwheel-canvas';
+  wheelWrap.appendChild(wheelCanvas);
+
+  const wheelMarker = document.createElement('div');
+  wheelMarker.className = 'nw-sh-colorwheel-marker';
+  wheelWrap.appendChild(wheelMarker);
+
+  const valueSlider = document.createElement('input');
+  valueSlider.type = 'range';
+  valueSlider.min = '0';
+  valueSlider.max = '100';
+  valueSlider.step = '1';
+  valueSlider.value = String(Math.round(clamp01(hsv.v) * 100));
+  valueSlider.className = 'nw-sh-slider nw-sh-slider--big nw-sh-slider--colorvalue';
+  valueSlider.disabled = !hasWrite;
+
+  function hsvToHex(h, s, vVal) {
+    const rgb = hsvToRgb(h, s, vVal);
+    return rgbToHex(rgb.r, rgb.g, rgb.b);
+  }
+
+  function updateValueSliderGradient() {
+    // Gradient: black -> full brightness of current hue/sat
+    const full = hsvToHex(hsv.h, hsv.s, 1);
+    valueSlider.style.setProperty('--nw-colorvalue', `linear-gradient(90deg, #000000, ${full})`);
+  }
+
+  function updateWheelMarker() {
+    const size = wheelWrap.clientWidth || 240;
+    const radius = size / 2;
+    const r = radius - 10; // keep marker within circle
+    const rad = (hsv.h * Math.PI) / 180;
+    const dist = clamp01(hsv.s) * r;
+    const x = radius + Math.cos(rad) * dist;
+    const y = radius + Math.sin(rad) * dist;
+    wheelMarker.style.left = `${x}px`;
+    wheelMarker.style.top = `${y}px`;
+    wheelMarker.style.background = current;
+  }
 
   function setUi(hex) {
     const h = normHex(hex) || '#ffffff';
     current = h;
     preview.style.background = h;
     v.textContent = h.toUpperCase();
-    try { input.value = h; } catch (_e) {}
+    setHsvFromHex(h);
+    valueSlider.value = String(Math.round(clamp01(hsv.v) * 100));
+    updateValueSliderGradient();
+    updateWheelMarker();
+  }
+
+  function drawWheel() {
+    const sizeCss = wheelWrap.clientWidth || 240;
+    const size = Math.max(160, Math.min(280, Math.round(sizeCss)));
+    const dpr = (window.devicePixelRatio || 1);
+    wheelCanvas.width = Math.round(size * dpr);
+    wheelCanvas.height = Math.round(size * dpr);
+    wheelCanvas.style.width = `${size}px`;
+    wheelCanvas.style.height = `${size}px`;
+    const ctx = wheelCanvas.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const img = ctx.createImageData(size, size);
+    const data = img.data;
+    const cx = size / 2;
+    const cy = size / 2;
+    const R = (size / 2) - 1;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const dx = x - cx;
+        const dy = y - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const idx = (y * size + x) * 4;
+        if (dist > R) {
+          data[idx + 3] = 0;
+          continue;
+        }
+        const sat = dist / R;
+        let ang = Math.atan2(dy, dx) * 180 / Math.PI;
+        if (ang < 0) ang += 360;
+        const rgb = hsvToRgb(ang, sat, 1);
+        data[idx] = rgb.r;
+        data[idx + 1] = rgb.g;
+        data[idx + 2] = rgb.b;
+        data[idx + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
   }
 
   async function commitColor(hex, opts) {
@@ -2190,24 +2345,81 @@ function nwCreateColorPopover(dev, canWrite) {
     return h;
   }
 
-  input.addEventListener('input', (ev) => {
-    const h = ev && ev.target ? ev.target.value : null;
-    if (!h) return;
-    setUi(h);
+  // Render wheel once the element has a size
+  requestAnimationFrame(() => {
+    drawWheel();
+    updateValueSliderGradient();
+    updateWheelMarker();
+  });
+
+  // Wheel interaction (hue/sat)
+  let wheelDragging = false;
+  function updateFromWheelEvent(ev, opts) {
+    const options = opts || {};
+    const commit = options.commit === true;
+    const rect = wheelWrap.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const x = (ev.clientX != null) ? ev.clientX : (ev.touches && ev.touches[0] ? ev.touches[0].clientX : 0);
+    const y = (ev.clientY != null) ? ev.clientY : (ev.touches && ev.touches[0] ? ev.touches[0].clientY : 0);
+    const dx = x - cx;
+    const dy = y - cy;
+    const R = rect.width / 2;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const sat = clamp01(dist / R);
+    let ang = Math.atan2(dy, dx) * 180 / Math.PI;
+    if (ang < 0) ang += 360;
+    hsv.h = ang;
+    hsv.s = sat;
+    const hex = hsvToHex(hsv.h, hsv.s, hsv.v);
+    setUi(hex);
+    if (hasWrite && livePreview && liveSender && !commit) {
+      liveSender.trigger(String(hex), false);
+    }
+  }
+
+  wheelWrap.addEventListener('pointerdown', (ev) => {
+    if (!hasWrite) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    wheelDragging = true;
+    try { wheelWrap.setPointerCapture(ev.pointerId); } catch (_e) {}
+    updateFromWheelEvent(ev, { commit: false });
+  });
+  wheelWrap.addEventListener('pointermove', (ev) => {
+    if (!wheelDragging) return;
+    if (!hasWrite) return;
+    ev.preventDefault();
+    updateFromWheelEvent(ev, { commit: false });
+  });
+  async function endWheel(ev) {
+    if (!wheelDragging) return;
+    wheelDragging = false;
+    if (!hasWrite) return;
+    ev.preventDefault();
+    updateFromWheelEvent(ev, { commit: true });
+    await commitColor(current);
+  }
+  wheelWrap.addEventListener('pointerup', endWheel);
+  wheelWrap.addEventListener('pointercancel', () => { wheelDragging = false; });
+
+  // Brightness (V) slider
+  valueSlider.addEventListener('input', (ev) => {
+    const val = ev && ev.target ? Number(ev.target.value) : 0;
+    hsv.v = clamp01(val / 100);
+    const hex = hsvToHex(hsv.h, hsv.s, hsv.v);
+    setUi(hex);
     if (hasWrite && livePreview && liveSender) {
-      liveSender.trigger(String(h), false);
+      liveSender.trigger(String(hex), false);
     }
   });
-
-  input.addEventListener('change', async (ev) => {
+  valueSlider.addEventListener('change', async () => {
     if (!hasWrite) return;
-    const h = ev && ev.target ? ev.target.value : null;
-    if (!h) return;
-    await commitColor(String(h));
+    await commitColor(current);
   });
 
-  picker.appendChild(preview);
-  picker.appendChild(input);
+  picker.appendChild(wheelWrap);
+  picker.appendChild(valueSlider);
 
   const presets = document.createElement('div');
   presets.className = 'nw-sh-popover__presets';

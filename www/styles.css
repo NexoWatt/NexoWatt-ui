@@ -3459,6 +3459,11 @@ body{ padding-top: var(--topbar-h); }
   box-shadow: 0 14px 40px rgba(0,0,0,0.35);
 }
 
+.nw-sh-colorpreview--mini{
+  width: 28px;
+  height: 28px;
+}
+
 .nw-sh-colorinput{
   width: 96px;
   height: 46px;
@@ -3472,6 +3477,64 @@ body{ padding-top: var(--topbar-h); }
 .nw-sh-colorinput:disabled{
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* Color-Wheel Picker (mobilfreundlich) */
+.nw-sh-colorwheelbox{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.nw-sh-colorwheel-wrap{
+  position: relative;
+  width: 260px;
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
+  touch-action: none;
+}
+
+.nw-sh-colorwheel-canvas{
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 999px;
+  border: 1px solid rgba(148,163,184,0.22);
+  background: rgba(2,6,23,0.25);
+}
+
+.nw-sh-colorwheel-marker{
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(255,255,255,0.9);
+  box-shadow: 0 10px 26px rgba(0,0,0,0.45);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* Brightness slider with dynamic gradient */
+.nw-sh-slider--colorvalue{
+  width: 100%;
+  max-width: 320px;
+  margin-top: 2px;
+}
+
+
+/* Use higher specificity to override the default slider track from .nw-sh-slider--big */
+.nw-sh-slider.nw-sh-slider--colorvalue::-webkit-slider-runnable-track{
+  background: var(--nw-colorvalue, rgba(148,163,184,0.18)) !important;
+}
+
+.nw-sh-slider.nw-sh-slider--colorvalue::-moz-range-track{
+  background: var(--nw-colorvalue, rgba(148,163,184,0.18)) !important;
+}
+
+.nw-sh-slider--colorvalue::-moz-range-progress{
+  background: transparent;
 }
 
 .nw-sh-colorinput::-webkit-color-swatch-wrapper{

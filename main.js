@@ -84,6 +84,10 @@ class NexoWattVis extends utils.Adapter {
     // NexoLogic engine (node/graph editor runtime)
     this.logicEngine = null;
 
+    // License gate (UI/Adapter unlock)
+    this._nwLicenseOk = true;
+    this._nwSystemUuid = '';
+
     
 
     // EVCS session logger (RFID accounting)
@@ -178,6 +182,62 @@ class NexoWattVis extends utils.Adapter {
     for (const [key, c] of Object.entries(defs)) {
       const id = `installer.${key}`;
       await this.setObjectNotExistsAsync(id, { type:'state', common:{ name:id, type:c.type, role:c.role, read:true, write:true, def:c.def }, native:{} });
+    }
+  }
+
+  /* --------------------------------------------------------------------- */
+  /* Lizenz (Adapter-Freischaltung)                                        */
+  /* --------------------------------------------------------------------- */
+
+  _nwNormalizeLicenseKey(key) {
+    // Keep only A-Z0-9, uppercase (hyphens/spaces don't matter)
+    return String(key || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  async _nwGetSystemUuid() {
+    try {
+      const obj = await this.getForeignObjectAsync('system.meta.uuid');
+      if (!obj) return '';
+      const n = obj.native || {};
+      const c = obj.common || {};
+      return String(n.uuid || n.UUID || c.uuid || c.UUID || '').trim();
+    } catch (e) {
+      this.log.debug(`UUID konnte nicht gelesen werden: ${e}`);
+      return '';
+    }
+  }
+
+  _nwExpectedLicenseKey(uuid) {
+    // NOTE: The license key is bound to the ioBroker UUID.
+    // Format: NW1-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX
+    // (derived from a secret HMAC over the UUID)
+    const u = String(uuid || '').trim();
+    if (!u) return '';
+
+    // IMPORTANT: Secret used for license key generation/validation.
+    // Keep this stable across releases (only change if you intend to invalidate all existing keys).
+    const secret = 'nw_lis_salt_v1 change me';
+    const hex = crypto.createHmac('sha256', secret).update(u).digest('hex').toUpperCase();
+    const core = hex.slice(0, 32);
+    const groups = core.match(/.{1,4}/g) || [core];
+    return `NW1-${groups.join('-')}`;
+  }
+
+  _nwIsLicenseValid(uuid, enteredKey) {
+    const expected = this._nwExpectedLicenseKey(uuid);
+    if (!expected) return false;
+    return this._nwNormalizeLicenseKey(expected) === this._nwNormalizeLicenseKey(enteredKey);
+  }
+
+  async _nwInitLicense() {
+    this._nwSystemUuid = await this._nwGetSystemUuid();
+    const entered = String(this.config.licenseKey || '').trim();
+    this._nwLicenseOk = this._nwIsLicenseValid(this._nwSystemUuid, entered);
+
+    if (this._nwLicenseOk) {
+      this.log.info('Lizenz: gültig ✅');
+    } else {
+      this.log.warn('Lizenz: fehlt oder ungültig – VIS/API ist gesperrt. Bitte Lizenz im Admin eintragen.');
     }
   }
 
@@ -4895,6 +4955,10 @@ async migrateNativeConfig() {
 async onReady() {
     try {
       await this.migrateNativeConfig();
+
+      // License gate must be initialized before we start the web server,
+      // because the server middleware relies on this flag.
+      await this._nwInitLicense();
       // start web server
       await this.startServer();
 
@@ -5187,6 +5251,40 @@ async onReady() {
 
   async startServer() {
     const app = express();
+
+    // -------------------------------------------------------------------
+    // License gate: the adapter/UI is locked until a valid license key is
+    // configured in the ioBroker Admin (Lizenz-Seite).
+    // -------------------------------------------------------------------
+    app.use((req, res, next) => {
+      if (this._nwLicenseOk) return next();
+
+      res.status(403);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.end(`<!doctype html>
+        <html lang="de">
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>NexoWatt – Lizenz erforderlich</title>
+            <style>
+              body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0b1020;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+              .card{width:min(720px,92vw);background:rgba(2,6,23,0.55);border:1px solid rgba(148,163,184,0.22);border-radius:16px;padding:20px 18px;box-shadow:0 20px 80px rgba(0,0,0,0.55)}
+              h1{font-size:18px;margin:0 0 10px 0}
+              p{margin:8px 0;color:rgba(255,255,255,0.85);line-height:1.45}
+              code{background:rgba(148,163,184,0.14);padding:2px 6px;border-radius:8px}
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <h1>🔒 Lizenz erforderlich</h1>
+              <p>Dieser Adapter ist noch nicht freigeschaltet.</p>
+              <p>Bitte im <b>ioBroker Admin</b> unter <code>Adapter → NexoWatt EMS → Lizenz</code> einen gültigen Lizenzschlüssel eintragen.</p>
+              <p>Danach den Adapter neu starten (oder kurz deaktivieren/aktivieren).</p>
+            </div>
+          </body>
+        </html>`);
+    });
 
     app.get('/', (_req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'index.html'));
