@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.121",
+    "version": "0.6.122",
     "news": {
+      "0.6.122": {
+        "en": "Admin/Licensing: Fixed license page navigation so it stays inside the ioBroker Admin iframe (servConn available) and reliably shows the system UUID. Added a standalone HTML generator (scripts/license-generator.html) for creating UUID-bound keys.",
+        "de": "Admin/Lizenz: Lizenzseite wird jetzt korrekt innerhalb der ioBroker-Admin-iFrame geöffnet (servConn verfügbar) – System-UUID wird zuverlässig angezeigt. Zusätzlich: Standalone HTML-Generator (scripts/license-generator.html) zum Erzeugen UUID-gebundener Lizenzschlüssel."
+      },
       "0.6.121": {
         "en": "Admin/Licensing: Updated the UUID-bound license key secret to a single constant (HMAC-SHA256). Added an internal CLI tool (scripts/gen-license.js) to generate license keys from a UUID.",
         "de": "Admin/Lizenz: Lizenz-Secret für UUID-gebundene Lizenzschlüssel auf eine feste Konstante (HMAC-SHA256) umgestellt. Zusätzliches internes CLI-Tool (scripts/gen-license.js) zum Erzeugen von Lizenzschlüsseln aus der UUID."

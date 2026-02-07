@@ -66,8 +66,9 @@
       btnApps.onclick = function(){ window.top.location.href = appsUrl; };
       btnSim.onclick = function(){ window.top.location.href = simUrl; };
       if (btnLicense) btnLicense.onclick = function(){
-        // Lizenzverwaltung läuft bewusst nur im ioBroker-Admin
-        window.top.location.href = window.location.origin + '/adapter/nexowatt-vis/license.html?instance=' + inst;
+        // Lizenzverwaltung läuft bewusst nur im ioBroker-Admin.
+        // Wichtig: In der Admin-iFrame bleiben, damit "servConn" verfügbar ist.
+        window.location.href = 'license.html?instance=' + inst;
       };
       if (btnShVis) btnShVis.onclick = function(){ window.top.location.href = shVisUrl; };
       if (btnShCfg) btnShCfg.onclick = function(){ window.top.location.href = shCfgUrl; };

@@ -197,7 +197,7 @@
             setStatus('Bereit.', true);
           });
         } else {
-          setStatus('Admin‑Verbindung nicht verfügbar (servConn).', false);
+          setStatus('Admin‑Verbindung nicht verfügbar (servConn). Bitte diese Seite innerhalb des ioBroker‑Admin öffnen (Adapter → NexoWatt → Tab → Lizenz).', false);
         }
       }
 
@@ -216,7 +216,7 @@
         const key = (elKey.value || '').trim();
 
         if (!(window.parent && window.parent.servConn && window.parent.servConn.getObject && window.parent.servConn.setObject)){
-          setStatus('Speichern nicht möglich (servConn.setObject fehlt).', false);
+          setStatus('Speichern nicht möglich (servConn fehlt). Bitte diese Seite innerhalb des ioBroker‑Admin öffnen (Adapter → NexoWatt → Tab → Lizenz).', false);
           return;
         }
         window.parent.servConn.getObject(adapterId, function(err, obj){

@@ -1,3 +1,7 @@
+## 0.6.122 (2026-02-07)
+- Admin/Lizenz: Lizenzseite wird jetzt im **ioBroker-Admin iFrame** geöffnet (servConn verfügbar) – die UUID wird wieder korrekt geladen/angezeigt.
+- Tools: Standalone HTML Generator `scripts/license-generator.html` (UUID → Lizenzschlüssel) hinzugefügt.
+
 ## 0.6.121 (2026-02-07)
 - Admin/Lizenz: Lizenz-Secret für UUID-gebundene Lizenzschlüssel auf `const secret = 'nw_lis_salt_v1 change me';` umgestellt.
 - Tools: internes CLI-Tool `scripts/gen-license.js` hinzugefügt (UUID → Lizenzschlüssel).
