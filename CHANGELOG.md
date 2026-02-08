@@ -1,3 +1,8 @@
+## 0.6.131
+- SmartHome VIS: Farbkreis/Colorwheel auf High-DPI/iOS korrigiert (Canvas-Rendering).
+- SmartHome VIS: Kachel-Bedienung verbessert – Tippen öffnet Panel bei Jalousie + Raumthermostat; Long-Press öffnet Panel bei Detail-Kacheln (sonst Info-Toast).
+- SmartHome VIS: Raumthermostat-Popover Layout feiner abgestimmt (zentraler Bereich etwas tiefer für bessere Lesbarkeit).
+
 ## 0.6.130
 - Historie: Monats-/Jahresansicht – zukünftige Tage/Monate bleiben jetzt **leer (0)** und die Summen-Kacheln werden nicht mehr verfälscht.
 

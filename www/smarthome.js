@@ -1366,8 +1366,9 @@ function nwCreateTile(dev, opts) {
     tile.appendChild(controls);
   }
 
-  // Long‑Press (Touch) zeigt vollen Namen + Raum/Funktion
-  // -> Hilft besonders auf Smartphones, wenn Titel gekürzt werden.
+  // Long‑Press (Touch)
+  // - Kacheln mit Bedienpanel: Long‑Press öffnet das Tooltip/Panel
+  // - Sonst: zeigt vollen Namen + Raum/Funktion (hilft auf Smartphones bei gekürzten Titeln)
   let lpTimer = null;
   let lpStartX = 0;
   let lpStartY = 0;
@@ -1390,7 +1391,11 @@ function nwCreateTile(dev, opts) {
     lpTimer = setTimeout(() => {
       lpTimer = null;
       tile.__nwIgnoreNextClick = true;
-      nwShowShToastForTile(dev);
+      if (hasDetails) {
+        nwOpenDevicePopover(dev, tile);
+      } else {
+        nwShowShToastForTile(dev);
+      }
     }, 520);
   }, { passive: true });
 
@@ -1407,13 +1412,24 @@ function nwCreateTile(dev, opts) {
   tile.addEventListener('pointerup', lpCancel, { passive: true });
   tile.addEventListener('pointercancel', lpCancel, { passive: true });
 
-  // Tap actions (switch / dimmer / scene / player)
+  // Tap actions
+  // - Jalousie & Raumtemperatur: Tap öffnet das Bedienpanel (Tooltip)
+  // - Schalter/Dimmer/Szene/Player: Tap = Schnellaktion, Long‑Press = Tooltip
   tile.addEventListener('click', async () => {
     if (tile.__nwIgnoreNextClick) {
       tile.__nwIgnoreNextClick = false;
       return;
     }
-    if (!canWrite) return;
+    if (type === 'blind' || type === 'rtr') {
+      nwOpenDevicePopover(dev, tile);
+      return;
+    }
+
+    if (!canWrite) {
+      // Read‑Only: bei Modulen mit Panel trotzdem öffnen
+      if (hasDetails) nwOpenDevicePopover(dev, tile);
+      return;
+    }
     if (type === 'color') {
       const hasSwitch = !!(dev.io && dev.io.switch && (dev.io.switch.writeId || dev.io.switch.readId));
       if (!hasSwitch) {
@@ -2470,31 +2486,43 @@ function nwCreateColorPopover(dev, canWrite) {
   }
 
   function drawWheel() {
+    // IMPORTANT (Mobile/Retina): We must render the wheel in *canvas pixels*,
+    // not CSS pixels. Otherwise the wheel only fills the top-left corner on
+    // high-DPR devices (e.g. iPhone).
     const sizeCss = wheelWrap.clientWidth || 240;
-    const size = Math.max(160, Math.min(280, Math.round(sizeCss)));
+    const size = Math.max(160, Math.min(300, Math.round(sizeCss)));
     const dpr = (window.devicePixelRatio || 1);
-    wheelCanvas.width = Math.round(size * dpr);
-    wheelCanvas.height = Math.round(size * dpr);
+    const px = Math.max(1, Math.round(size * dpr));
+
+    wheelCanvas.width = px;
+    wheelCanvas.height = px;
     wheelCanvas.style.width = `${size}px`;
     wheelCanvas.style.height = `${size}px`;
+
     const ctx = wheelCanvas.getContext('2d');
     if (!ctx) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const img = ctx.createImageData(size, size);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, px, px);
+
+    const cx = px / 2;
+    const cy = px / 2;
+    const R = (px / 2) - 1;
+
+    const img = ctx.createImageData(px, px);
     const data = img.data;
-    const cx = size / 2;
-    const cy = size / 2;
-    const R = (size / 2) - 1;
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
+
+    for (let y = 0; y < px; y++) {
+      for (let x = 0; x < px; x++) {
         const dx = x - cx;
         const dy = y - cy;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const idx = (y * size + x) * 4;
+        const idx = (y * px + x) * 4;
+
         if (dist > R) {
           data[idx + 3] = 0;
           continue;
         }
+
         const sat = dist / R;
         let ang = Math.atan2(dy, dx) * 180 / Math.PI;
         if (ang < 0) ang += 360;
@@ -2505,6 +2533,7 @@ function nwCreateColorPopover(dev, canWrite) {
         data[idx + 3] = 255;
       }
     }
+
     ctx.putImageData(img, 0, 0);
   }
 
