@@ -134,7 +134,7 @@
             <button class="btn" id="copyUuid">Kopieren</button>
           </div>
           <div class="hint">
-            Diese UUID bitte beim Support/Vertrieb angeben – daraus wird der Lizenzschlüssel erzeugt.
+            Diese UUID bitte beim Support/Vertrieb angeben – daraus wird der Lizenzschlüssel erzeugt. (Update-sicher gespeichert)
           </div>
         </div>
 
@@ -150,7 +150,6 @@
       <div style="display:flex; gap:10px; margin-top: 16px; flex-wrap: wrap;">
         <button class="btn btn--primary" id="save">Speichern</button>
         <button class="btn" id="reload">Neu laden</button>
-        <button class="btn" id="openGen">Generator</button>
       </div>
 
       <div class="status" id="status"></div>
@@ -323,16 +322,6 @@
           setStatus('Kopieren nicht möglich – bitte manuell markieren.', false);
         }
       });
-
-      // Open the standalone generator (admin/license-generator.html)
-      const btnGen = document.getElementById('openGen');
-      if (btnGen){
-        btnGen.addEventListener('click', () => {
-          const u = (elUuid.value || '').trim();
-          const url = 'license-generator.html' + (u && u !== 'Nicht verfügbar' && u !== 'Lade…' ? ('?uuid=' + encodeURIComponent(u)) : '');
-          try { window.open(url, '_blank', 'noopener,noreferrer'); } catch(_e) { window.location.href = url; }
-        });
-      }
 
       document.getElementById('reload').addEventListener('click', () => loadAll());
 

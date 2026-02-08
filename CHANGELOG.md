@@ -1,3 +1,8 @@
+## 0.6.124 (2026-02-08)
+
+- Admin/Lizenz: Generator aus dem Adapter-Paket entfernt (separates Tool).
+- Lizenz ist update-sicher: Lizenzschlüssel bleibt in der ioBroker Instanz-Konfiguration erhalten.
+
 ## 0.6.123 (2026-02-07)
 - Admin/Lizenz: Lizenzseite funktioniert jetzt auch in neueren ioBroker-Admin-Versionen zuverlässig (kein `servConn` erforderlich – socket.io Fallback).
 - Admin/Lizenz: HTML-Generator zusätzlich im Admin verfügbar (`admin/license-generator.html`, per Button auf der Lizenzseite).

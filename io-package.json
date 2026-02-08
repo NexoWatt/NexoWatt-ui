@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.123",
+    "version": "0.6.124",
     "news": {
+      "0.6.124": {
+        "en": "Admin/Licensing: Removed the in-admin license key generator from the adapter package. License key is stored in the adapter instance (native.licenseKey) and therefore remains update-safe.",
+        "de": "Admin/Lizenz: Lizenzschlüssel-Generator wurde aus dem Adapter-Paket entfernt (nur noch extern/intern). Der Lizenzschlüssel wird in der Adapter-Instanz (native.licenseKey) gespeichert und ist damit update-sicher."
+      },
       "0.6.123": {
         "en": "Admin/Licensing: Made the license page work reliably in modern ioBroker Admin versions (no servConn) by using a socket.io fallback. System UUID is now shown again. Added an in-admin link to a standalone HTML generator (admin/license-generator.html).",
         "de": "Admin/Lizenz: Lizenzseite funktioniert jetzt zuverlässig auch in neueren ioBroker-Admin-Versionen ohne servConn (socket.io Fallback). System-UUID wird wieder korrekt angezeigt. Zusätzlich: Link auf den HTML-Generator im Admin (admin/license-generator.html)."
