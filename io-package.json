@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.125",
+    "version": "0.6.126",
     "news": {
       "0.6.124": {
         "en": "Admin/Licensing: Removed the in-admin license key generator from the adapter package. License key is stored in the adapter instance (native.licenseKey) and therefore remains update-safe.",
@@ -1366,6 +1366,16 @@
       "de": [
         "Lizenz: Zeitlich begrenzte Testschlüssel (Tage) + Status-States",
         "Admin-Lizenzseite: Status-Anzeige (gültig / Test / gesperrt)"
+      ]
+    },
+    "0.6.126": {
+      "en": [
+        "SmartHome: Improve tile name readability on phones (2-line wrapping + actions overlay)",
+        "License gate: show a clear hint when a trial license expired (incl. expiry date + optional system UUID)"
+      ],
+      "de": [
+        "SmartHome: Bessere Lesbarkeit der Kachel-Namen auf Smartphones (2-Zeilen-Umbruch + Actions als Overlay)",
+        "Lizenz-Sperrseite: Klarer Hinweis bei abgelaufener Testlizenz (inkl. Datum + optionaler System-UUID)"
       ]
     }
   }

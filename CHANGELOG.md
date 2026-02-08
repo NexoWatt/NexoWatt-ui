@@ -1,3 +1,7 @@
+## 0.6.126
+- SmartHome VIS: Kachel‑Titel sind auf Smartphones besser lesbar (2‑Zeilen‑Umbruch + Actions als Overlay)
+- Lizenz‑Sperrseite: Klarer Hinweis bei abgelaufener Testlizenz (inkl. Ablaufdatum + optionaler System‑UUID)
+
 ## 0.6.125
 - (Lizenz) Testlizenz (Tage) unterstützt: NW1T-<Tage>-... (Start/Resttage werden update‑sicher gespeichert)
 - (Lizenz/Admin) Statusanzeige im Lizenz‑Tab: gültig / gesperrt / Test (Resttage)

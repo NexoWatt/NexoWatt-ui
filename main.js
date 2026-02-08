@@ -5437,6 +5437,48 @@ async onReady() {
     app.use((req, res, next) => {
       if (this._nwLicenseOk) return next();
 
+      // Provide a helpful hint (especially for time‑limited trial keys)
+      // without exposing any internal generator logic.
+      const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
+      const lType = String(info.type || '').trim();
+      const lMsgRaw = String(info.msg || '').trim();
+      const lMsg = lMsgRaw || 'Lizenz fehlt oder ist ungültig.';
+      const expiresAt = Number(info.expiresAt || 0);
+      const daysRemaining = (info.daysRemaining !== undefined && info.daysRemaining !== null) ? Number(info.daysRemaining) : null;
+      const isTrial = (lType === 'trial');
+      const isTrialExpired = isTrial && /abgelaufen/i.test(lMsg);
+
+      const esc = (s) => String(s)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+
+      const headline = isTrialExpired
+        ? '⏳ Testphase abgelaufen'
+        : (isTrial ? '⏳ Testlizenz' : '🔒 Lizenz erforderlich');
+
+      let detailLine = '';
+      try {
+        if (isTrial && Number.isFinite(expiresAt) && expiresAt > 0) {
+          const dt = new Date(expiresAt);
+          const dtStr = dt.toLocaleString('de-DE');
+          if (isTrialExpired) {
+            detailLine = `<p><b>Hinweis:</b> Die Testlizenz ist abgelaufen (Ende: <code>${esc(dtStr)}</code>). Bitte eine Voll‑Lizenz eintragen.</p>`;
+          } else if (Number.isFinite(daysRemaining)) {
+            detailLine = `<p><b>Testlizenz:</b> Noch <code>${esc(daysRemaining)}</code> Tage (bis <code>${esc(dtStr)}</code>).</p>`;
+          } else {
+            detailLine = `<p><b>Testlizenz:</b> Gültig bis <code>${esc(dtStr)}</code>.</p>`;
+          }
+        }
+      } catch (_e) {
+        // ignore
+      }
+
+      const uuidStr = String(this._nwSystemUuid || '').trim();
+      const uuidLine = uuidStr ? `<p><b>System‑UUID:</b> <code>${esc(uuidStr)}</code></p>` : '';
+
       res.status(403);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.end(`<!doctype html>
@@ -5444,7 +5486,7 @@ async onReady() {
           <head>
             <meta charset="utf-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <title>NexoWatt – Lizenz erforderlich</title>
+            <title>NexoWatt – Lizenz</title>
             <style>
               body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0b1020;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
               .card{width:min(720px,92vw);background:rgba(2,6,23,0.55);border:1px solid rgba(148,163,184,0.22);border-radius:16px;padding:20px 18px;box-shadow:0 20px 80px rgba(0,0,0,0.55)}
@@ -5455,8 +5497,11 @@ async onReady() {
           </head>
           <body>
             <div class="card">
-              <h1>🔒 Lizenz erforderlich</h1>
-              <p>Dieser Adapter ist noch nicht freigeschaltet.</p>
+              <h1>${headline}</h1>
+              <p><b>Status:</b> ${esc(lMsg)}</p>
+              ${detailLine}
+              ${uuidLine}
+              <p>Diese VIS ist aktuell gesperrt, bis ein gültiger Lizenzschlüssel hinterlegt ist.</p>
               <p>Bitte im <b>ioBroker Admin</b> unter <code>Adapter → NexoWatt EMS → Lizenz</code> einen gültigen Lizenzschlüssel eintragen.</p>
               <p>Danach den Adapter neu starten (oder kurz deaktivieren/aktivieren).</p>
             </div>
