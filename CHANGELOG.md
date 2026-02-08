@@ -1,3 +1,7 @@
+## 0.6.135
+- EVCS Bericht: Status‑Dot nutzt wieder den Standard‑Live‑Indikator (grün)
+- EVCS Bericht: Zurück‑Button ergänzt (zur vorherigen Ansicht)
+
 ## 0.6.134
 - EVCS Bericht: Tabellendaten werden wieder geladen (Header/Footer‑Wiring) + CSV‑Export Buttons funktionieren wieder
 

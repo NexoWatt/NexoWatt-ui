@@ -221,11 +221,25 @@ function toISODate(ms){
     // Button-IDs wurden mit dem Standard-Header vereinheitlicht.
     const csvBtn = el('exportBtn');
     const csvSessionsBtn = el('exportSessionsBtn');
+    const backBtn = el('backBtn');
 
     if (reloadBtn) reloadBtn.addEventListener('click', load);
     if (printBtn) printBtn.addEventListener('click', loadAndPrint);
     if (csvBtn) csvBtn.addEventListener('click', downloadCsv);
     if (csvSessionsBtn) csvSessionsBtn.addEventListener('click', downloadSessionsCsv);
+
+    // Zurück zur vorherigen Seite (typisch: Historie). Falls kein Referrer vorhanden ist,
+    // geht es auf die Historie.
+    if (backBtn) backBtn.addEventListener('click', () => {
+      try{
+        const ref = document.referrer || '';
+        if (ref && ref.indexOf(window.location.origin) === 0 && window.history.length > 1){
+          window.history.back();
+          return;
+        }
+      }catch(_e){}
+      window.location.href = '/history';
+    });
 
     load();
 
@@ -255,8 +269,9 @@ function toISODate(ms){
   const liveDot = document.getElementById('liveDot');
   try {
     const es = new EventSource('/events');
-    es.onopen = () => { if(liveDot) liveDot.classList.add('ok'); };
-    es.onerror = () => { if(liveDot) liveDot.classList.remove('ok'); };
+    // In styles.css heißt der "grün"-Status bewusst .live (wie auf allen anderen Seiten).
+    es.onopen = () => { if(liveDot) liveDot.classList.add('live'); };
+    es.onerror = () => { if(liveDot) liveDot.classList.remove('live'); };
   } catch(_e) {
     // ignore
   }

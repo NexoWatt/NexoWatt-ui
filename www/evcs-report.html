@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/static/evcs-report.css" />
   <style>
     @media print {
-      header.topbar, .toolbar, .hint { display:none !important; }
+      header.topbar, .toolbar, .hint, #backBtn { display:none !important; }
       main.wrap { padding-top: 0; }
       body { background: #ffffff !important; }
     }
@@ -54,6 +54,9 @@
       <div class="report-head-left">
         <h2>EVCS Bericht</h2>
         <div class="report-meta" id="rangeMeta"></div>
+      </div>
+      <div class="report-head-right">
+        <button id="backBtn" class="btn sm" type="button">Zurück</button>
       </div>
     </div>
 

@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.134",
+    "version": "0.6.135",
     "news": {
+      "0.6.135": {
+        "en": "EVCS report: Live status dot is green again + added a Back button to return to the previous view.",
+        "de": "EVCS Bericht: Status-Dot ist wieder grün + Zurück-Button zum Zurückspringen in die vorherige Ansicht."
+      },
       "0.6.134": {
         "en": "EVCS report: Fixed report table rendering (header/footer wiring) and restored CSV export buttons.",
         "de": "EVCS Bericht: Tabellendaten werden wieder korrekt geladen (Header/Footer‑Wiring) + CSV‑Export Buttons funktionieren wieder."
@@ -1440,6 +1444,16 @@
       "de": [
         "EVCS-Bericht: Tabelle nach Header-Integration repariert (Tageswerte + Summen funktionieren wieder)",
         "EVCS-Bericht: CSV-Export Buttons wieder korrekt verdrahtet"
+      ]
+    },
+    "0.6.135": {
+      "en": [
+        "EVCS report: status dot uses the standard green 'live' indicator again",
+        "EVCS report: added a Back button to return to the previous view"
+      ],
+      "de": [
+        "EVCS-Bericht: Status-Dot nutzt wieder den standardmäßigen grünen Live-Indikator",
+        "EVCS-Bericht: Zurück-Button ergänzt (zur vorherigen Ansicht)"
       ]
     },
     "0.6.133": {
