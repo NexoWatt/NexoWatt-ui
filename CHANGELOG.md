@@ -1,3 +1,7 @@
+## 0.6.125
+- (Lizenz) Testlizenz (Tage) unterstützt: NW1T-<Tage>-... (Start/Resttage werden update‑sicher gespeichert)
+- (Lizenz/Admin) Statusanzeige im Lizenz‑Tab: gültig / gesperrt / Test (Resttage)
+
 ## 0.6.124 (2026-02-08)
 
 - Admin/Lizenz: Generator aus dem Adapter-Paket entfernt (separates Tool).

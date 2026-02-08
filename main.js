@@ -185,6 +185,33 @@ class NexoWattVis extends utils.Adapter {
     }
   }
 
+
+  async ensureLicenseStates() {
+    const defs = {
+      uuid: { type: 'string', role: 'text', def: '' },
+      valid: { type: 'boolean', role: 'state', def: false },
+      type: { type: 'string', role: 'text', def: 'none' },
+      message: { type: 'string', role: 'text', def: '' },
+      expiresAt: { type: 'number', role: 'value.time', def: 0 },
+      daysRemaining: { type: 'number', role: 'value', def: 0 },
+
+      // Internal persistence for trial licenses (update-safe, no instance restarts)
+      trialStartTs: { type: 'number', role: 'value.time', def: 0 },
+      trialLastSeenTs: { type: 'number', role: 'value.time', def: 0 },
+      trialDays: { type: 'number', role: 'value', def: 0 },
+      trialSig: { type: 'string', role: 'text', def: '' },
+    };
+
+    for (const [key, c] of Object.entries(defs)) {
+      const id = `license.${key}`;
+      await this.setObjectNotExistsAsync(id, {
+        type: 'state',
+        common: { name: id, type: c.type, role: c.role, read: true, write: true, def: c.def },
+        native: {},
+      });
+    }
+  }
+
   /* --------------------------------------------------------------------- */
   /* Lizenz (Adapter-Freischaltung)                                        */
   /* --------------------------------------------------------------------- */
@@ -208,9 +235,8 @@ class NexoWattVis extends utils.Adapter {
   }
 
   _nwExpectedLicenseKey(uuid) {
-    // NOTE: The license key is bound to the ioBroker UUID.
+    // Voll-Lizenz (unbegrenzt)
     // Format: NW1-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX
-    // (derived from a secret HMAC over the UUID)
     const u = String(uuid || '').trim();
     if (!u) return '';
 
@@ -223,23 +249,174 @@ class NexoWattVis extends utils.Adapter {
     return `NW1-${groups.join('-')}`;
   }
 
+  _nwExpectedTrialSig(uuid, daysStr) {
+    // Test-Lizenz (zeitlich begrenzt)
+    // Signature: HMAC_SHA256(secret, `${uuid}|TRIAL|${daysStr}`) -> first 32 hex chars
+    const u = String(uuid || '').trim();
+    const ds = String(daysStr || '').trim();
+    if (!u || !/^\d{3}$/.test(ds)) return '';
+
+    // IMPORTANT: Must match generator secret.
+    const secret = 'nw_lis_salt_v1 change me';
+    const msg = `${u}|TRIAL|${ds}`;
+    const hex = crypto.createHmac('sha256', secret).update(msg).digest('hex').toUpperCase();
+    return hex.slice(0, 32);
+  }
+
+  _nwExpectedTrialKey(uuid, daysStr) {
+    // Format: NW1T-DDD-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX
+    const core = this._nwExpectedTrialSig(uuid, daysStr);
+    if (!core) return '';
+    const groups = core.match(/.{1,4}/g) || [core];
+    const ds = String(daysStr || '').trim();
+    return `NW1T-${ds}-${groups.join('-')}`;
+  }
+
+  _nwParseTrialKey(enteredKey) {
+    const n = this._nwNormalizeLicenseKey(enteredKey);
+    const m = n.match(/^NW1T(\d{3})([0-9A-F]{32})$/);
+    if (!m) return null;
+    const daysStr = m[1];
+    const sig = m[2];
+    const days = parseInt(daysStr, 10);
+    if (!days || days < 1) return null;
+    return { daysStr, days, sig };
+  }
+
   _nwIsLicenseValid(uuid, enteredKey) {
+    // Voll-Lizenz
     const expected = this._nwExpectedLicenseKey(uuid);
     if (!expected) return false;
     return this._nwNormalizeLicenseKey(expected) === this._nwNormalizeLicenseKey(enteredKey);
   }
 
+  async _nwClearTrialState() {
+    try { await this.setStateAsync('license.trialStartTs', { val: 0, ack: true }); } catch (_e) {}
+    try { await this.setStateAsync('license.trialLastSeenTs', { val: 0, ack: true }); } catch (_e) {}
+    try { await this.setStateAsync('license.trialDays', { val: 0, ack: true }); } catch (_e) {}
+    try { await this.setStateAsync('license.trialSig', { val: '', ack: true }); } catch (_e) {}
+  }
+
+  async _nwCheckTrialLicense(uuid, enteredKey) {
+    const u = String(uuid || '').trim();
+    if (!u) return { ok: false, type: 'invalid', msg: 'UUID nicht verfügbar' };
+
+    const parsed = this._nwParseTrialKey(enteredKey);
+    if (!parsed) return { ok: false, type: 'invalid', msg: 'Kein Testschlüssel erkannt' };
+
+    const expectedSig = this._nwExpectedTrialSig(u, parsed.daysStr);
+    if (!expectedSig || expectedSig !== parsed.sig) {
+      return { ok: false, type: 'invalid', msg: 'Testschlüssel ungültig' };
+    }
+
+    const dayMs = 24 * 60 * 60 * 1000;
+
+    // Load persisted trial meta (update-safe, without native-config changes)
+    const [stSig, stDays, stStart, stLast] = await Promise.all([
+      this.getStateAsync('license.trialSig'),
+      this.getStateAsync('license.trialDays'),
+      this.getStateAsync('license.trialStartTs'),
+      this.getStateAsync('license.trialLastSeenTs'),
+    ]);
+
+    const storedSig = stSig && stSig.val ? String(stSig.val) : '';
+    const storedDays = stDays && stDays.val !== undefined ? parseInt(stDays.val, 10) || 0 : 0;
+    const storedStart = stStart && stStart.val !== undefined ? parseInt(stStart.val, 10) || 0 : 0;
+    const storedLast = stLast && stLast.val !== undefined ? parseInt(stLast.val, 10) || 0 : 0;
+
+    // Prevent "clock rollback" from extending the trial: never go below last seen timestamp.
+    const nowReal = Date.now();
+    const now = Math.max(nowReal, storedLast || 0);
+
+    let startTs = storedStart;
+    let days = storedDays;
+
+    const isSameKey = storedSig === parsed.sig && storedDays === parsed.days && storedStart > 0;
+
+    if (!isSameKey) {
+      // New trial key or first activation → start trial now
+      startTs = now;
+      days = parsed.days;
+      await this.setStateAsync('license.trialSig', { val: parsed.sig, ack: true });
+      await this.setStateAsync('license.trialDays', { val: days, ack: true });
+      await this.setStateAsync('license.trialStartTs', { val: startTs, ack: true });
+    }
+
+    await this.setStateAsync('license.trialLastSeenTs', { val: now, ack: true });
+
+    const expiresAt = startTs + days * dayMs;
+    const remainingMs = expiresAt - now;
+    const daysRemaining = Math.max(0, Math.ceil(remainingMs / dayMs));
+
+    if (remainingMs > 0) {
+      return {
+        ok: true,
+        type: 'trial',
+        msg: `Testlizenz aktiv – noch ${daysRemaining} Tag${daysRemaining === 1 ? '' : 'e'}`,
+        expiresAt,
+        daysRemaining,
+      };
+    }
+
+    return {
+      ok: false,
+      type: 'trial',
+      msg: 'Testlizenz abgelaufen',
+      expiresAt,
+      daysRemaining: 0,
+    };
+  }
+
+  async _nwEvaluateLicense(uuid, enteredKey) {
+    const u = String(uuid || '').trim();
+    if (!u) return { ok: false, type: 'invalid', msg: 'UUID nicht verfügbar' };
+
+    const k = String(enteredKey || '').trim();
+    if (!k) return { ok: false, type: 'none', msg: 'Kein Lizenzschlüssel eingetragen' };
+
+    // 1) Voll-Lizenz
+    if (this._nwIsLicenseValid(u, k)) {
+      await this._nwClearTrialState();
+      return { ok: true, type: 'full', msg: 'Lizenz gültig' };
+    }
+
+    // 2) Test-Lizenz
+    if (this._nwParseTrialKey(k)) {
+      return await this._nwCheckTrialLicense(u, k);
+    }
+
+    // 3) Ungültig
+    return { ok: false, type: 'invalid', msg: 'Lizenz ungültig' };
+  }
+
   async _nwInitLicense() {
     this._nwSystemUuid = await this._nwGetSystemUuid();
     const entered = String(this.config.licenseKey || '').trim();
-    this._nwLicenseOk = this._nwIsLicenseValid(this._nwSystemUuid, entered);
+
+    const info = await this._nwEvaluateLicense(this._nwSystemUuid, entered);
+    this._nwLicenseInfo = info;
+    this._nwLicenseOk = !!info.ok;
+
+    // Publish license status (useful for Admin UI)
+    try { await this.setStateAsync('license.uuid', { val: this._nwSystemUuid, ack: true }); } catch (_e) {}
+    try { await this.setStateAsync('license.valid', { val: this._nwLicenseOk, ack: true }); } catch (_e) {}
+    try { await this.setStateAsync('license.type', { val: info.type || 'none', ack: true }); } catch (_e) {}
+    try { await this.setStateAsync('license.message', { val: info.msg || '', ack: true }); } catch (_e) {}
+    try { await this.setStateAsync('license.expiresAt', { val: info.expiresAt || 0, ack: true }); } catch (_e) {}
+    try { await this.setStateAsync('license.daysRemaining', { val: info.daysRemaining || 0, ack: true }); } catch (_e) {}
 
     if (this._nwLicenseOk) {
-      this.log.info('Lizenz: gültig ✅');
+      if (info.type === 'trial') {
+        this.log.info(`Lizenz: gültig ✅ (Testlizenz, ${info.daysRemaining} Tage übrig)`);
+      } else {
+        this.log.info('Lizenz: gültig ✅');
+      }
     } else {
-      this.log.warn('Lizenz: fehlt oder ungültig – VIS/API ist gesperrt. Bitte Lizenz im Admin eintragen.');
+      // Keep message short; details are in Admin license tab.
+      this.log.warn(`Lizenz: ${info.msg || 'fehlt oder ungültig'} – VIS/API ist gesperrt. Bitte Lizenz im Admin eintragen.`);
     }
   }
+
 
   async ensureSettingsStates() {
     // NOTE: These are user-facing runtime settings that the VIS UI reads via /api/state.
@@ -4955,6 +5132,7 @@ async migrateNativeConfig() {
 async onReady() {
     try {
       await this.migrateNativeConfig();
+      await this.ensureLicenseStates();
 
       // License gate must be initialized before we start the web server,
       // because the server middleware relies on this flag.

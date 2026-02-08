@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.124",
+    "version": "0.6.125",
     "news": {
       "0.6.124": {
         "en": "Admin/Licensing: Removed the in-admin license key generator from the adapter package. License key is stored in the adapter instance (native.licenseKey) and therefore remains update-safe.",
@@ -1357,6 +1357,16 @@
     "0.6.76": {
       "en": "EVCS Report: Fix kWh calculation when history buckets are sparse (e.g. 10-min logging with 2-min aggregation). Daily kWh now matches Historie/Influx values.",
       "de": "EVCS Report: kWh-Berechnung korrigiert bei sparsamen Historie-Buckets (z.B. 10‑Minuten Logging mit 2‑Minuten Aggregation). Tages-kWh stimmt jetzt mit Historie/Influx überein."
+    },
+    "0.6.125": {
+      "en": [
+        "License: add time-limited trial keys (days) + status states",
+        "Admin license page: show license status (valid / trial / locked)"
+      ],
+      "de": [
+        "Lizenz: Zeitlich begrenzte Testschlüssel (Tage) + Status-States",
+        "Admin-Lizenzseite: Status-Anzeige (gültig / Test / gesperrt)"
+      ]
     }
   }
 }

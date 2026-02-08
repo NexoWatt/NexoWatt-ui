@@ -268,7 +268,66 @@
         return null;
       }
 
-      function loadAll(){
+      
+      function getStateP(conn, id){
+        return new Promise((resolve) => {
+          if (!conn || typeof conn.getState !== 'function') return resolve(null);
+          try{
+            conn.getState(id, (err, st) => {
+              if (err) return resolve(null);
+              resolve(st || null);
+            });
+          } catch(_e){
+            resolve(null);
+          }
+        });
+      }
+
+      async function refreshLicenseStatus(conn){
+        try{
+          const base = `nexowatt-vis.${inst}.license.`;
+          const [stValid, stType, stMsg, stDays, stExp] = await Promise.all([
+            getStateP(conn, base + 'valid'),
+            getStateP(conn, base + 'type'),
+            getStateP(conn, base + 'message'),
+            getStateP(conn, base + 'daysRemaining'),
+            getStateP(conn, base + 'expiresAt'),
+          ]);
+
+          const valid = !!(stValid && stValid.val === true);
+          const type = stType && stType.val !== undefined ? String(stType.val) : '';
+          const msg  = stMsg  && stMsg.val  !== undefined ? String(stMsg.val)  : '';
+          const days = stDays && stDays.val !== undefined ? Number(stDays.val) || 0 : 0;
+          const exp  = stExp  && stExp.val  !== undefined ? Number(stExp.val)  || 0 : 0;
+
+          let text = '';
+          let ok = false;
+
+          if (type === 'trial') {
+            ok = valid && days > 0;
+            text = ok
+              ? `Lizenzstatus: Testlizenz aktiv – noch ${days} Tage ✅`
+              : 'Lizenzstatus: Testlizenz abgelaufen ❌';
+            if (exp) {
+              try {
+                const d = new Date(exp);
+                text += ` (bis ${d.toLocaleDateString()})`;
+              } catch(_e) {}
+            }
+          } else if (valid) {
+            ok = true;
+            text = 'Lizenzstatus: gültig ✅';
+          } else {
+            ok = false;
+            text = `Lizenzstatus: ${msg || 'gesperrt/ungültig'} ❌`;
+          }
+
+          setStatus(text, ok);
+        } catch(e) {
+          setStatus('Bereit.', true);
+        }
+      }
+function loadAll(){
         setStatus('Lade Daten…', true);
         const conn = getAdminConn();
         if (!conn){
@@ -310,7 +369,7 @@
             return;
           }
           elKey.value = (obj.native && obj.native.licenseKey) ? String(obj.native.licenseKey) : '';
-          setStatus('Bereit.', true);
+          refreshLicenseStatus(conn);
         });
       }
 
