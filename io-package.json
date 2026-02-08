@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.129",
+    "version": "0.6.130",
     "news": {
+      "0.6.130": {
+        "en": "History: Month/Year view now keeps future days/months empty (0) and no longer inflates the kWh totals.",
+        "de": "Historie: Monats-/Jahresansicht lässt zukünftige Tage/Monate jetzt leer (0) und verfälscht die kWh-Summen nicht mehr."
+      },
       "0.6.124": {
         "en": "Admin/Licensing: Removed the in-admin license key generator from the adapter package. License key is stored in the adapter instance (native.licenseKey) and therefore remains update-safe.",
         "de": "Admin/Lizenz: Lizenzschlüssel-Generator wurde aus dem Adapter-Paket entfernt (nur noch extern/intern). Der Lizenzschlüssel wird in der Adapter-Instanz (native.licenseKey) gespeichert und ist damit update-sicher."
@@ -1402,6 +1406,14 @@
       ],
       "de": [
         "EMS/EVCS: Installer-Debug für PV-Überschuss (ohne EVCS) – Instant + 5-Minuten-Ø"
+      ]
+    },
+    "0.6.130": {
+      "en": [
+        "History: Month/Year view now keeps future days/months empty (0) and no longer inflates totals"
+      ],
+      "de": [
+        "Historie: Monats-/Jahresansicht lässt zukünftige Tage/Monate leer (0) und verfälscht Summen nicht mehr"
       ]
     }
   }

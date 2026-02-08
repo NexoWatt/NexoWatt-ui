@@ -1,3 +1,6 @@
+## 0.6.130
+- Historie: Monats-/Jahresansicht – zukünftige Tage/Monate bleiben jetzt **leer (0)** und die Summen-Kacheln werden nicht mehr verfälscht.
+
 ## 0.6.129
 - EMS/EVCS: Debug‑Anzeige (nur Installer) für **PV‑Überschuss (ohne EVCS)**: *Instant* + *5‑Minuten‑Ø* im Status „Budget & Gates“.
 

@@ -607,7 +607,16 @@ async function load(){
     // Desired behavior:
     // - The chart builds up over the day
     // - Beyond "now" there is simply no data (blank)
-    const clipFuture = (chartMode === 'day' && fromMs <= nowMs && toMs > nowMs);
+    // Week/Month/Year request full ranges (e.g. month 01..31 / year Jan..Dec).
+    // Some backends (e.g. InfluxDB with fill=previous) repeat the last known value into the
+    // future. That produces fake bars for days/months that haven't happened yet and inflates
+    // the kWh cards.
+    //
+    // Desired behavior:
+    // - Past buckets show real data
+    // - Current bucket (today / this month) builds up over time
+    // - Future buckets are empty/0
+    const clipFuture = (fromMs <= nowMs && toMs > nowMs);
     if (clipFuture) {
       const cutoff = nowMs;
       const clipArr = (arr) => {
@@ -684,7 +693,9 @@ async function load(){
     // cards
     const stepSec = res.step; // legacy info
     const s = res.series;
-    const e = (res && res.energy && typeof res.energy === 'object') ? res.energy : {};
+    // If we clipped "future" buckets, ignore backend totals (they may still include
+    // fill=previous artefacts) and sum only from the clipped series.
+    const e = (!res.__cutoffNowMs && res && res.energy && typeof res.energy === 'object') ? res.energy : {};
     const cards = document.getElementById('cards');
     function card(title, val){ const el=document.createElement('div'); el.className='card'; el.innerHTML = `<small>${title}</small><b>${val}</b>`; cards.appendChild(el); }
     cards.innerHTML='';
