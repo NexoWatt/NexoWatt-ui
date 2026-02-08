@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.131",
+    "version": "0.6.132",
     "news": {
+      "0.6.132": {
+        "en": "Installer/Admin: Removed the URL list under the buttons (cleaner for end customers).",
+        "de": "Installer/Admin: URL-Liste unter den Buttons entfernt (übersichtlicher für Endkunden)."
+      },
       "0.6.131": {
         "en": "SmartHome: Fixed the circular color picker on high-DPI/iOS, improved tile interactions (tap opens panel for blinds/thermostat, long-press opens panel on detail tiles). Thermostat panel layout refined.",
         "de": "SmartHome: Farbkreis auf High-DPI/iOS korrigiert, Kachel-Bedienung verbessert (Tippen öffnet Panel bei Jalousie/RTR, Long-Press öffnet Panel bei Detail-Kacheln). RTR-Panel Layout verfeinert."

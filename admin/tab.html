@@ -30,6 +30,7 @@
       <button id="btnShCfg" class="btn" type="button">SmartHome Config</button>
     </div>
 
+    <!-- Hinweisfeld: bewusst ohne direkte URL-Ausgabe, damit Endkunden nicht verwirrt werden. -->
     <div class="hint" id="msg">Port wird geladen…</div>
   </div>
 
@@ -59,8 +60,8 @@
       var shVisUrl = base + '/smarthome.html';
       var shCfgUrl = base + '/smarthome-config.html';
 
-      msg.innerHTML = 'VIS: <code>' + visUrl + '</code><br/>EMS Apps: <code>' + appsUrl + '</code><br/>Simulation: <code>' + simUrl + '</code>' +
-        '<br/>SmartHome VIS: <code>' + shVisUrl + '</code><br/>SmartHome Config: <code>' + shCfgUrl + '</code>';
+      // URLs bewusst NICHT ausgeben (nur per Button öffnen), damit der Installer für Endkunden clean bleibt.
+      msg.textContent = 'Bereit.';
 
       btnVis.onclick = function(){ window.top.location.href = visUrl; };
       btnApps.onclick = function(){ window.top.location.href = appsUrl; };
