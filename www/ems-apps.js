@@ -6593,11 +6593,25 @@ function _collectFlowPowerDpIsWFromUI() {
 
     // PV Gate (B)
     const pvKind = b(ctrl.pvAvailable) ? 'ok' : 'warn';
-    els.chargingBudget.appendChild(mkCard('Gate B – PV', [
+
+    const pvLines = [
       { label: 'PV verfügbar', value: _fmtBool(b(ctrl.pvAvailable), 'JA', 'NEIN') },
       { label: 'PV Cap raw', value: _fmtW(n(ctrl.pvCapRawW)) },
       { label: 'PV Cap effektiv', value: _fmtW(n(ctrl.pvCapEffectiveW)) },
-    ], pvKind));
+    ];
+
+    // Debug only (Installer): show PV surplus without EVCS consumption
+    // Helps to verify sign conventions & smoothing for PV-only charging.
+    try {
+      const as = (window.NW_AUTH && window.NW_AUTH.getState) ? window.NW_AUTH.getState() : null;
+      const isInstaller = as ? !!as.isInstaller : true;
+      if (isInstaller) {
+        pvLines.push({ label: 'PV Überschuss (ohne EV) – Instant', value: _fmtW(n(ctrl.pvSurplusNoEvRawW)) });
+        pvLines.push({ label: 'PV Überschuss (ohne EV) – Ø 5 min', value: _fmtW(n(ctrl.pvSurplusNoEvAvg5mW)) });
+      }
+    } catch (_e) {}
+
+    els.chargingBudget.appendChild(mkCard('Gate B – PV', pvLines, pvKind));
 
     // Grid safety caps (A)
     const gridBind = b(ctrl.gridCapBinding);

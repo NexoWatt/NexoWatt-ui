@@ -430,6 +430,11 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.pvCapEffectiveW', 'PV cap effective (W)', 'number', 'value.power');
         await mk('chargingManagement.control.pvAvailable', 'PV available (hysteresis)', 'boolean', 'indicator');
 
+        // Debug: PV surplus without EVCS (instant + smoothed)
+        // Used to verify sign conventions / smoothing for PV-only charging.
+        await mk('chargingManagement.control.pvSurplusNoEvRawW', 'PV surplus (no EVCS) instant (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvSurplusNoEvAvg5mW', 'PV surplus (no EVCS) 5min avg (W)', 'number', 'value.power');
+
         // Gate A: hard grid safety caps (transparency)
         await mk('chargingManagement.control.gridImportLimitW', 'Grid import limit (W) configured', 'number', 'value.power');
         await mk('chargingManagement.control.gridImportLimitW_effective', 'Grid import limit (W) effective', 'number', 'value.power');
@@ -1706,6 +1711,9 @@ class ChargingManagementModule extends BaseModule {
         let pvCapRawWState = 0;
         let pvCapEffectiveWState = 0;
         let pvAvailableState = false;
+        // Debug: PV surplus without EVCS (instant + smoothed)
+        let pvSurplusNoEvRawWState = 0;
+        let pvSurplusNoEvAvg5mWState = 0;
 
         if (needPvBudget) {
             // PV-Überschuss sauber ermitteln:
@@ -1732,9 +1740,14 @@ class ChargingManagementModule extends BaseModule {
                 pvSurplusNoEvW = Math.max(0, pvSurplusCfgW);
             }
 
+            // Publish raw value (before smoothing) for debugging
+            pvSurplusNoEvRawWState = (typeof pvSurplusNoEvW === 'number' && Number.isFinite(pvSurplusNoEvW)) ? pvSurplusNoEvW : 0;
+
             pvSurplusW = (typeof pvSurplusNoEvW === 'number' && Number.isFinite(pvSurplusNoEvW))
                 ? this._pvSurplusAvgPush(now, pvSurplusNoEvW)
                 : 0;
+
+            pvSurplusNoEvAvg5mWState = (typeof pvSurplusW === 'number' && Number.isFinite(pvSurplusW)) ? pvSurplusW : 0;
 
             const pvCapRawW = (typeof pvSurplusW === 'number' && Number.isFinite(pvSurplusW) && pvSurplusW > 0) ? pvSurplusW : 0;
             pvCapW = pvCapRawW;
@@ -1796,6 +1809,8 @@ class ChargingManagementModule extends BaseModule {
             pvCapRawWState = 0;
             pvCapEffectiveWState = 0;
             pvAvailableState = false;
+            pvSurplusNoEvRawWState = 0;
+            pvSurplusNoEvAvg5mWState = 0;
         }
 
         // Publish PV diagnostics (even if PV budgeting is not active)
@@ -1803,6 +1818,8 @@ class ChargingManagementModule extends BaseModule {
             await this._queueState('chargingManagement.control.pvCapRawW', pvCapRawWState || 0, true);
             await this._queueState('chargingManagement.control.pvCapEffectiveW', pvCapEffectiveWState || 0, true);
             await this._queueState('chargingManagement.control.pvAvailable', !!pvAvailableState, true);
+            await this._queueState('chargingManagement.control.pvSurplusNoEvRawW', pvSurplusNoEvRawWState || 0, true);
+            await this._queueState('chargingManagement.control.pvSurplusNoEvAvg5mW', pvSurplusNoEvAvg5mWState || 0, true);
         } catch {
             // ignore
         }

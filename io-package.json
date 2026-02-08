@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.128",
+    "version": "0.6.129",
     "news": {
       "0.6.124": {
         "en": "Admin/Licensing: Removed the in-admin license key generator from the adapter package. License key is stored in the adapter instance (native.licenseKey) and therefore remains update-safe.",
@@ -1394,6 +1394,14 @@
       ],
       "de": [
         "PV-Überschussladen: PV-Budget ignoriert jetzt EVCS-Last (stabile Regelung) + 5-Minuten Glättung"
+      ]
+    },
+    "0.6.129": {
+      "en": [
+        "EMS/EVCS: Installer-only debug lines for PV surplus (without EVCS) – instant + 5-min avg"
+      ],
+      "de": [
+        "EMS/EVCS: Installer-Debug für PV-Überschuss (ohne EVCS) – Instant + 5-Minuten-Ø"
       ]
     }
   }

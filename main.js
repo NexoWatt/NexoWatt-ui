@@ -8071,6 +8071,9 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
           pvCapRawW: await getOwn('chargingManagement.control.pvCapRawW'),
           pvCapEffectiveW: await getOwn('chargingManagement.control.pvCapEffectiveW'),
           pvAvailable: await getOwn('chargingManagement.control.pvAvailable'),
+          // Debug: PV surplus without EVCS consumption (instant + smoothed)
+          pvSurplusNoEvRawW: await getOwn('chargingManagement.control.pvSurplusNoEvRawW'),
+          pvSurplusNoEvAvg5mW: await getOwn('chargingManagement.control.pvSurplusNoEvAvg5mW'),
 
           gridImportLimitW: await getOwn('chargingManagement.control.gridImportLimitW'),
           gridImportLimitEffW: await getOwn('chargingManagement.control.gridImportLimitW_effective'),
