@@ -1,3 +1,6 @@
+## 0.6.133
+- EVCS Bericht (Wallbox Historie): nutzt jetzt den Standard‑Header mit Navigation und wird aus der Historie im gleichen Tab geöffnet (kein extra Browser‑Tab mehr)
+
 ## 0.6.132
 - Admin/Installer: URL-Liste unter den Buttons entfernt (weniger Verwirrung bei Endkunden).
 - UI: Service‑Worker Cache‑Version erhöht (Update wird sofort geladen).

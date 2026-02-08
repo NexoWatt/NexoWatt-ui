@@ -1,78 +1,95 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>NexoWatt – EVCS Bericht</title>
-  <link rel="stylesheet" href="/static/styles.css"/>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/evcs-report.css" />
   <style>
-    body{ background:#0c0f12; color:#dfe7ee; }
-    .wrap{ max-width: 1200px; margin: 0 auto; padding: 12px; }
-    /* Topbar Styling kommt zentral aus styles.css (fixiert/responsiv). */
-    header .title{ font-weight:700; }
-    header .meta{ color:#9aa4ad; font-size:12px; }
-    .btn-row{ display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
-    button{ background:#11161b; color:#dfe7ee; border:1px solid #2a3038; border-radius:10px; padding:6px 10px; cursor:pointer; }
-    button:hover{ border-color:#3a4250; }
-    .card{ background:#121418; border:1px solid #20262d; border-radius:14px; padding:12px; }
-    table{ width:100%; border-collapse: collapse; }
-    .table-wrap{ overflow:auto; max-height: calc(100vh - 240px); -webkit-overflow-scrolling: touch; }
-#tbl, #tbl th, #tbl td{ color:#dfe7ee !important; }
-    #tbl{ font-variant-numeric: tabular-nums; }
-    th, td{ border-bottom:1px solid #20262d; padding:8px 10px; text-align:right; white-space:nowrap;  color:inherit; }
-    th:first-child, td:first-child{ text-align:left; }
-    th{ position:sticky; top:0; background:#121418; z-index:2; }
-    .subhead{ color:#9aa4ad; font-size:12px; margin-top:4px; }
-    .hint{ color:#9aa4ad; font-size:12px; margin-top:10px; }
-    .err{ color:#ffb4b4; }
-    .total-row th, .total-row td{ font-weight:700; border-top:2px solid #2a3038; background: rgba(255,255,255,0.03); }
-    .total-row th:first-child{ text-align:left; }
-
-    @media print{
-      header.topbar, .btn-row, .hint{ display:none !important; }
-      body{ background:#fff; color:#000; }
-      #tbl, #tbl th, #tbl td{ color:#000 !important; }
-      .card{ border:none; }
-            .table-wrap{ overflow:visible !important; max-height:none !important; }
-      th{ position:static; }
-      thead{ display: table-header-group; }
-      tfoot{ display: table-footer-group; }
-      tr{ page-break-inside: avoid; }
-      td, th{ page-break-inside: avoid; }
+    @media print {
+      header.topbar, .toolbar, .hint { display:none !important; }
+      main.wrap { padding-top: 0; }
+      body { background: #ffffff !important; }
     }
   </style>
 </head>
+
 <body>
   <header class="topbar">
-    <div>
-      <div class="title">EVCS Bericht</div>
-      <div class="meta" id="rangeMeta">–</div>
+    <script>
+      // Normalize base path (works with /history vs /static/history.html etc.)
+      (function () {
+        var p = window.location.pathname;
+        if (!p.endsWith('/') && !p.endsWith('.html')) {
+          window.history.replaceState({}, '', p + '/');
+        }
+      })();
+    </script>
+
+    <div class="brand"><img alt="NexoWatt" src="/static/nexowatt-logo.png" /></div>
+    <button id="menuBtn" aria-label="Menü">☰</button>
+    <h1>NexoWatt EMS</h1>
+
+    <nav class="tabs">
+      <button class="tab" id="liveTabBtn" data-tab="live" onclick="window.location.href='/'">LIVE</button>
+      <button class="tab active" id="historyTabBtn" data-tab="history" onclick="window.location.href='/history'">HISTORY</button>
+      <button class="tab hidden" id="tabStorageFarm" onclick="window.location.href='/?tab=storagefarm'">SPEICHERFARM</button>
+      <button class="tab hidden" id="tabSmartHome" onclick="window.location.href='/smarthome'">SMARTHOME</button>
+      <button class="tab hidden" id="tabEvcs" onclick="window.location.href='/evcs'">EVCS</button>
+    </nav>
+    <div class="status-dot" id="liveDot" title="Live Verbindung"></div>
+    <div class="menu hidden" id="menuDropdown">
+      <a class="menu-item" href="/">Live</a>
+      <a class="menu-item" href="/history">History</a>
+      <a class="menu-item hidden" id="menuStorageFarmLink" href="/?tab=storagefarm">Speicherfarm</a>
+      <a class="menu-item hidden" id="menuSmartHomeLink" href="/smarthome">SmartHome</a>
+      <a class="menu-item hidden" id="menuEvcsLink" href="/evcs">EVCS</a>
+      <a class="menu-item" href="/settings">Einstellungen</a>
     </div>
-    <a href="/history" style="color:#c8d1d9; text-decoration:none; font-weight:600;">Historie</a>
   </header>
 
-  <div class="wrap">
-    <div class="btn-row">
+  <main class="wrap report-wrap">
+    <div class="report-head">
+      <div class="report-head-left">
+        <h2>EVCS Bericht</h2>
+        <div class="report-meta" id="rangeMeta"></div>
+      </div>
+    </div>
+
+    <div class="toolbar">
       <button id="reloadBtn">Neu laden</button>
       <button id="printBtn">Drucken / PDF</button>
-      <button id="csvBtn">CSV / Excel</button>
-      <button id="csvSessionsBtn">CSV Sessions (RFID)</button>
+      <button id="exportBtn">CSV / Excel</button>
+      <button id="exportSessionsBtn">CSV Sessions (RFID)</button>
     </div>
 
     <div class="card">
-      <div class="table-wrap">
-        <table id="tbl">
-          <thead id="thead"></thead>
-          <tbody id="tbody"></tbody>
-          <tfoot id="tfoot"></tfoot>
-        </table>
-      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Datum</th>
+            <th style="text-align:right">Summe kWh</th>
+            <th style="text-align:right">Wallbox<br><small>kWh</small></th>
+            <th style="text-align:right">Wallbox<br><small>max kW</small></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+        <tfoot>
+          <tr>
+            <td><b>Summe Zeitraum</b></td>
+            <td style="text-align:right"><b id="sumTotal">0,00</b></td>
+            <td style="text-align:right"><b id="sumEnergy">0,00</b></td>
+            <td style="text-align:right"><b id="sumMaxPower">0,00</b></td>
+          </tr>
+        </tfoot>
+      </table>
       <div class="hint">
-        Hinweis: kWh wird bevorzugt aus dem jeweiligen Energiezähler (kWh‑Gesamt) als Tagesdifferenz berechnet. Wenn kein Zähler vorhanden ist, wird kWh über die Integration der Leistung berechnet.
+        Hinweis: kWh wird bevorzugt aus dem jeweiligen Energiezähler (kWh‑Gesamt) als Tagesdifferenz berechnet.
+        Wenn kein Zähler vorhanden ist, wird kWh über die Integration der Leistung berechnet.
       </div>
-      <div class="hint err" id="err"></div>
     </div>
-  </div>
+  </main>
 
   <script src="/static/evcs-report.js"></script>
 </body>

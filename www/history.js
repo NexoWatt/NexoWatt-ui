@@ -834,8 +834,9 @@ async function load(){
       const toEl = document.getElementById('to');
       const fromMs = fromEl && fromEl.value ? +new Date(fromEl.value) : (Date.now() - 7*24*3600*1000);
       const toMs = toEl && toEl.value ? +new Date(toEl.value) : Date.now();
-      const url = `/static/evcs-report.html?from=${encodeURIComponent(fromMs)}&to=${encodeURIComponent(toMs)}`;
-      window.open(url, '_blank');
+      // Open in the same tab (so the user can navigate back via the shared header)
+      const url = `/evcs-report?from=${encodeURIComponent(fromMs)}&to=${encodeURIComponent(toMs)}`;
+      window.location.href = url;
     });
   }
 // range buttons

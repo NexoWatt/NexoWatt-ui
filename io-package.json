@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.132",
+    "version": "0.6.133",
     "news": {
+      "0.6.133": {
+        "en": "EVCS report: Uses the standard NexoWatt header/navigation and opens in the same tab from History (no separate browser tab).",
+        "de": "EVCS Bericht: Nutzt jetzt den Standard‑Header mit Navigation und wird aus der Historie im gleichen Tab geöffnet (kein separater Browser‑Tab mehr)."
+      },
       "0.6.132": {
         "en": "Installer/Admin: Removed the URL list under the buttons (cleaner for end customers).",
         "de": "Installer/Admin: URL-Liste unter den Buttons entfernt (übersichtlicher für Endkunden)."
@@ -1422,6 +1426,16 @@
       ],
       "de": [
         "Historie: Monats-/Jahresansicht lässt zukünftige Tage/Monate leer (0) und verfälscht Summen nicht mehr"
+      ]
+    },
+    "0.6.133": {
+      "en": [
+        "EVCS report page: add full NexoWatt header navigation (no separate tab needed)",
+        "History: EVCS report opens in the same tab (easier back/navigation)"
+      ],
+      "de": [
+        "EVCS-Bericht: Voller NexoWatt-Header (Navigation wie auf allen Seiten)",
+        "Historie: EVCS-Bericht öffnet im gleichen Tab (leichter zurück / Navigation)"
       ]
     }
   }

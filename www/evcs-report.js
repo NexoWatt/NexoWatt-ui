@@ -227,6 +227,68 @@ function toISODate(ms){
     if (csvSessionsBtn) csvSessionsBtn.addEventListener('click', downloadSessionsCsv);
 
     load();
+
+
+// ------------------------------
+// Topbar / Navigation (same behavior as other pages)
+// ------------------------------
+
+(function setupTopbar(){
+  // Menu toggle
+  const menuBtn = document.getElementById('menuBtn');
+  const menuDropdown = document.getElementById('menuDropdown');
+  if (menuBtn && menuDropdown){
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menuDropdown.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', () => {
+      menuDropdown.classList.add('hidden');
+    });
+
+    menuDropdown.addEventListener('click', (e) => e.stopPropagation());
+  }
+
+  // Live indicator
+  const liveDot = document.getElementById('liveDot');
+  try {
+    const es = new EventSource('/events');
+    es.onopen = () => { if(liveDot) liveDot.classList.add('ok'); };
+    es.onerror = () => { if(liveDot) liveDot.classList.remove('ok'); };
+  } catch(_e) {
+    // ignore
+  }
+
+  // Tabs visibility (EVCS / SmartHome / Speicherfarm)
+  (async ()=>{
+    try {
+      const res = await fetch('/config');
+      const cfg = await res.json();
+      const settingsConfig = cfg && cfg.settingsConfig;
+      const smartHomeEnabled = !!(cfg && cfg.smartHomeEnabled);
+      const storageFarmEnabled = !!(cfg && cfg.storageFarmEnabled);
+
+      const tabEvcs = document.getElementById('tabEvcs');
+      const menuEvcs = document.getElementById('menuEvcsLink');
+      const showEvcs = !!(settingsConfig && settingsConfig.evcsCount && settingsConfig.evcsCount >= 2);
+      if(tabEvcs) tabEvcs.classList.toggle('hidden', !showEvcs);
+      if(menuEvcs) menuEvcs.classList.toggle('hidden', !showEvcs);
+
+      const tabSmartHome = document.getElementById('tabSmartHome');
+      const menuSmartHome = document.getElementById('menuSmartHomeLink');
+      if(tabSmartHome) tabSmartHome.classList.toggle('hidden', !smartHomeEnabled);
+      if(menuSmartHome) menuSmartHome.classList.toggle('hidden', !smartHomeEnabled);
+
+      const tabStorageFarm = document.getElementById('tabStorageFarm');
+      const menuStorageFarm = document.getElementById('menuStorageFarmLink');
+      if(tabStorageFarm) tabStorageFarm.classList.toggle('hidden', !storageFarmEnabled);
+      if(menuStorageFarm) menuStorageFarm.classList.toggle('hidden', !storageFarmEnabled);
+    } catch(_e) {
+      // ignore
+    }
+  })();
+})();
   }
 
   if (document.readyState === 'loading'){
