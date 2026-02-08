@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.126",
+    "version": "0.6.127",
     "news": {
       "0.6.124": {
         "en": "Admin/Licensing: Removed the in-admin license key generator from the adapter package. License key is stored in the adapter instance (native.licenseKey) and therefore remains update-safe.",
@@ -1376,6 +1376,16 @@
       "de": [
         "SmartHome: Bessere Lesbarkeit der Kachel-Namen auf Smartphones (2-Zeilen-Umbruch + Actions als Overlay)",
         "Lizenz-Sperrseite: Klarer Hinweis bei abgelaufener Testlizenz (inkl. Datum + optionaler System-UUID)"
+      ]
+    },
+    "0.6.127": {
+      "en": [
+        "SmartHome: Mobile readability – 1-column layout <420px, text size toggle (compact/normal/large)",
+        "SmartHome: Long-press info toast (full name + room/function)"
+      ],
+      "de": [
+        "SmartHome: Mobile-Lesbarkeit – 1-Spalten-Layout <420px, Textgrößen-Umschalter (Kompakt/Normal/Groß)",
+        "SmartHome: Long-Press Info-Hinweis (voller Name + Raum/Funktion)"
       ]
     }
   }

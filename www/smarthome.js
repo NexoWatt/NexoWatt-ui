@@ -152,6 +152,14 @@ const nwViewState = {
   mode: 'rooms',
 };
 
+// Textgröße (Endkunde, persistiert pro Browser)
+// - compact | normal | large
+// Wird als CSS‑Klasse auf #nw-smarthome-root gesetzt.
+const NW_SH_TEXT_SIZE_LS_KEY = 'nw_sh_text_size';
+const nwTextSizeState = {
+  size: 'normal',
+};
+
 const nwFilterState = {
   func: null,        // string | null
   favoritesOnly: false,
@@ -916,6 +924,45 @@ function nwRenderViewChips() {
   });
 }
 
+function nwRenderTextSizeChips() {
+  const wrap = document.getElementById('nw-filter-textsize');
+  if (!wrap) return;
+  nwClear(wrap);
+
+  const mkChip = (label, active, onClick) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'nw-sh-chip' + (active ? ' nw-sh-chip--active' : '');
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      onClick();
+      // Kein kompletter Re-Render nötig (nur CSS), aber Chips sollen sofort aktualisiert werden.
+      nwRenderTextSizeChips();
+    });
+    wrap.appendChild(btn);
+  };
+
+  const cur = nwNormTextSize(nwTextSizeState.size);
+
+  mkChip('Kompakt', cur === 'compact', () => {
+    nwTextSizeState.size = 'compact';
+    nwSaveTextSize(nwTextSizeState.size);
+    nwApplyTextSizeClass(nwTextSizeState.size);
+  });
+
+  mkChip('Normal', cur === 'normal', () => {
+    nwTextSizeState.size = 'normal';
+    nwSaveTextSize(nwTextSizeState.size);
+    nwApplyTextSizeClass(nwTextSizeState.size);
+  });
+
+  mkChip('Groß', cur === 'large', () => {
+    nwTextSizeState.size = 'large';
+    nwSaveTextSize(nwTextSizeState.size);
+    nwApplyTextSizeClass(nwTextSizeState.size);
+  });
+}
+
 function nwRenderFunctionChips(devices) {
   const wrap = document.getElementById('nw-filter-functions');
   if (!wrap) return;
@@ -1038,6 +1085,62 @@ function nwShowEmptyState(show, ctx) {
     'Noch keine SmartHome‑Kacheln konfiguriert.<br/>',
     '<span style="opacity:0.85">Bitte im Admin unter <b>SmartHome‑Konfiguration</b> Geräte/DPs anlegen.</span>'
   ].join('');
+}
+
+// ---- Long‑Press Info‑Toast (Mobile UX) ----
+let nwShToastEl = null;
+let nwShToastHideTimer = null;
+
+function nwEnsureShToast() {
+  if (nwShToastEl) return nwShToastEl;
+  const el = document.createElement('div');
+  el.className = 'nw-sh-toast';
+  el.setAttribute('aria-live', 'polite');
+  document.body.appendChild(el);
+  nwShToastEl = el;
+  return el;
+}
+
+function nwHideShToast() {
+  if (!nwShToastEl) return;
+  nwShToastEl.classList.remove('nw-sh-toast--show');
+  if (nwShToastHideTimer) {
+    clearTimeout(nwShToastHideTimer);
+    nwShToastHideTimer = null;
+  }
+}
+
+function nwShowShToastForTile(dev) {
+  const toast = nwEnsureShToast();
+  if (nwShToastHideTimer) {
+    clearTimeout(nwShToastHideTimer);
+    nwShToastHideTimer = null;
+  }
+
+  // Build content with text nodes to avoid injection.
+  nwClear(toast);
+  const name = document.createElement('div');
+  name.className = 'nw-sh-toast__name';
+  name.textContent = String(dev.alias || dev.id || '');
+
+  const meta = document.createElement('div');
+  meta.className = 'nw-sh-toast__meta';
+  const parts = [];
+  if (dev.room) parts.push(String(dev.room));
+  if (dev.function) parts.push(String(dev.function));
+  const st = nwGetStateText(dev);
+  if (st) parts.push(st);
+  meta.textContent = parts.join(' · ');
+
+  toast.appendChild(name);
+  toast.appendChild(meta);
+
+  // show
+  toast.classList.add('nw-sh-toast--show');
+  nwShToastHideTimer = setTimeout(() => {
+    toast.classList.remove('nw-sh-toast--show');
+    nwShToastHideTimer = null;
+  }, 2300);
 }
 
 function nwCreateTile(dev, opts) {
@@ -1263,8 +1366,53 @@ function nwCreateTile(dev, opts) {
     tile.appendChild(controls);
   }
 
+  // Long‑Press (Touch) zeigt vollen Namen + Raum/Funktion
+  // -> Hilft besonders auf Smartphones, wenn Titel gekürzt werden.
+  let lpTimer = null;
+  let lpStartX = 0;
+  let lpStartY = 0;
+
+  const lpCancel = () => {
+    if (lpTimer) {
+      clearTimeout(lpTimer);
+      lpTimer = null;
+    }
+  };
+
+  tile.addEventListener('pointerdown', (ev) => {
+    if (ev.pointerType !== 'touch') return;
+    // In Controls/Buttons/Inputs keinen Long‑Press starten
+    if (ev.target && (ev.target.closest('button') || ev.target.closest('input'))) return;
+
+    lpCancel();
+    lpStartX = ev.clientX;
+    lpStartY = ev.clientY;
+    lpTimer = setTimeout(() => {
+      lpTimer = null;
+      tile.__nwIgnoreNextClick = true;
+      nwShowShToastForTile(dev);
+    }, 520);
+  }, { passive: true });
+
+  tile.addEventListener('pointermove', (ev) => {
+    if (!lpTimer || ev.pointerType !== 'touch') return;
+    const dx = ev.clientX - lpStartX;
+    const dy = ev.clientY - lpStartY;
+    if (Math.abs(dx) + Math.abs(dy) > 14) {
+      // Finger bewegt -> Long‑Press abbrechen
+      lpCancel();
+    }
+  }, { passive: true });
+
+  tile.addEventListener('pointerup', lpCancel, { passive: true });
+  tile.addEventListener('pointercancel', lpCancel, { passive: true });
+
   // Tap actions (switch / dimmer / scene / player)
   tile.addEventListener('click', async () => {
+    if (tile.__nwIgnoreNextClick) {
+      tile.__nwIgnoreNextClick = false;
+      return;
+    }
     if (!canWrite) return;
     if (type === 'color') {
       const hasSwitch = !!(dev.io && dev.io.switch && (dev.io.switch.writeId || dev.io.switch.readId));
@@ -1642,6 +1790,38 @@ function nwSaveViewMode(mode) {
   try {
     localStorage.setItem(NW_SH_VIEW_MODE_LS_KEY, (mode === 'functions') ? 'functions' : 'rooms');
   } catch (_e) {}
+}
+
+function nwNormTextSize(v) {
+  const s = String(v || '').trim().toLowerCase();
+  if (!s) return 'normal';
+  if (s === 'compact' || s === 'kompakt' || s === 'small' || s === 'klein') return 'compact';
+  if (s === 'large' || s === 'gross' || s === 'groß' || s === 'big') return 'large';
+  return 'normal';
+}
+
+function nwLoadTextSize(defSize) {
+  try {
+    const v = localStorage.getItem(NW_SH_TEXT_SIZE_LS_KEY);
+    if (v) return nwNormTextSize(v);
+  } catch (_e) {}
+  return nwNormTextSize(defSize);
+}
+
+function nwSaveTextSize(size) {
+  try {
+    localStorage.setItem(NW_SH_TEXT_SIZE_LS_KEY, nwNormTextSize(size));
+  } catch (_e) {}
+}
+
+function nwApplyTextSizeClass(size) {
+  const root = document.getElementById('nw-smarthome-root');
+  if (!root) return;
+  const normalized = nwNormTextSize(size);
+  root.classList.remove('nw-sh-text-compact', 'nw-sh-text-normal', 'nw-sh-text-large');
+  if (normalized === 'compact') root.classList.add('nw-sh-text-compact');
+  else if (normalized === 'large') root.classList.add('nw-sh-text-large');
+  else root.classList.add('nw-sh-text-normal');
 }
 
 // Create a throttled sender for live-preview updates.
@@ -3912,6 +4092,7 @@ function nwApplyFiltersAndRender() {
   // chips always based on all devices (so user can clear filters)
   nwRenderViewChips();
   nwRenderFunctionChips(nwAllDevices);
+  nwRenderTextSizeChips();
 
   if (!filtered.length) {
     if (!nwAllDevices.length) {
@@ -4004,6 +4185,8 @@ async function nwBootstrap() {
 
   // UI‑Prefs (persistiert pro Browser)
   nwViewState.mode = nwLoadViewMode(nwViewState.mode);
+  nwTextSizeState.size = nwLoadTextSize(nwTextSizeState.size);
+  nwApplyTextSizeClass(nwTextSizeState.size);
   nwFilterState.favoritesFirst = nwLoadBoolLS(NW_SH_FAVORITES_FIRST_LS_KEY, NW_SH_FAVORITES_FIRST_DEFAULT);
   nwFavoriteOverrides = nwLoadFavoriteOverrides();
   await nwLoadUiConfigFlags();
