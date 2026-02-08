@@ -116,6 +116,16 @@ class ChargingManagementModule extends BaseModule {
         this._pubFlushInFlight = false;
         this._pubLastFlushMs = 0;
         this._pubFlushIntervalMs = 50; // do not flush more often than this
+
+        // PV-Überschuss Glättung (5-Minuten Rolling-Mean).
+        // Motivation: Bei reinem PV-Überschussladen darf der EVCS-Verbrauch den
+        // PV-Überschuss nicht "wegdrücken" (sonst fällt die Regelung unter die
+        // 3P-Minimalleistung ~4,2kW und stoppt). Zusätzlich glätten wir den
+        // ermittelten PV-Überschuss (5min), um Wolken-/Messrauschen sauber
+        // abzufangen (stabilere Regelung).
+        this._pvSurplusSamples = [];
+        this._pvSurplusHead = 0;
+        this._pvSurplusSumW = 0;
     }
 
     /**
@@ -138,6 +148,36 @@ class ChargingManagementModule extends BaseModule {
         if (s.endsWith('.actualCurrentA') || s.endsWith('.targetCurrentA') || s.endsWith('.gridWorstPhaseA') || s.endsWith('.gridMaxPhaseA') || s.endsWith('.worstPhaseA')) return { deadband: 0.05 };
 
         return {};
+    }
+
+    /**
+     * 5-Minuten Rolling-Mean für PV-Überschuss (W).
+     * @param {number} nowMs
+     * @param {number} sampleW
+     * @returns {number} avgW
+     */
+    _pvSurplusAvgPush(nowMs, sampleW) {
+        const v = (typeof sampleW === 'number' && Number.isFinite(sampleW)) ? sampleW : 0;
+        const now = (typeof nowMs === 'number' && Number.isFinite(nowMs)) ? nowMs : Date.now();
+        const windowMs = 5 * 60 * 1000;
+
+        this._pvSurplusSamples.push({ t: now, v });
+        this._pvSurplusSumW += v;
+
+        const cutoff = now - windowMs;
+        while (this._pvSurplusHead < this._pvSurplusSamples.length && this._pvSurplusSamples[this._pvSurplusHead].t < cutoff) {
+            this._pvSurplusSumW -= this._pvSurplusSamples[this._pvSurplusHead].v;
+            this._pvSurplusHead++;
+        }
+
+        // gelegentlich kompaktieren (Performance, kein Array.shift)
+        if (this._pvSurplusHead > 100) {
+            this._pvSurplusSamples = this._pvSurplusSamples.slice(this._pvSurplusHead);
+            this._pvSurplusHead = 0;
+        }
+
+        const count = Math.max(1, this._pvSurplusSamples.length - this._pvSurplusHead);
+        return this._pvSurplusSumW / count;
     }
 
     /**
@@ -1668,15 +1708,33 @@ class ChargingManagementModule extends BaseModule {
         let pvAvailableState = false;
 
         if (needPvBudget) {
-            pvSurplusW = getFirstDpNumber(['cm.pvSurplusW']);
+            // PV-Überschuss sauber ermitteln:
+            // Problem (vorher): PV-Cap wurde aus dem NVP (grid export) direkt abgeleitet.
+            // Sobald die Wallbox startet, sinkt der Export (weil EVCS selbst verbraucht)
+            // und der Algorithmus hat die Wallbox wieder abgeschaltet.
+            //
+            // Lösung: PV-Überschuss OHNE EVCS-Verbrauch berechnen:
+            //   pvSurplusNoEv = (-gridW) + evcsW
+            //   gridW: Import + / Export -, evcsW: aktuelle EVCS-Leistung (W)
+            // => entspricht pvW - (Hauslast ohne EVCS)
+            // Zusätzlich: 5-Minuten Durchschnitt für stabilere Regelung.
+
+            const pvSurplusCfgW = getFirstDpNumber(['cm.pvSurplusW']);
             gridW = getFirstDpNumber(['cm.gridPowerW', 'grid.powerW', 'ps.gridPowerW']);
 
-            // Fallback: if no PV surplus DP, estimate from grid import/export (negative = export)
-            if (typeof pvSurplusW !== 'number' || !Number.isFinite(pvSurplusW)) {
-                if (typeof gridW === 'number' && Number.isFinite(gridW)) {
-                    pvSurplusW = Math.max(0, -gridW);
-                }
+            const evcsNowW = (typeof totalPowerW === 'number' && Number.isFinite(totalPowerW)) ? Math.max(0, totalPowerW) : 0;
+
+            let pvSurplusNoEvW = null;
+            if (typeof gridW === 'number' && Number.isFinite(gridW)) {
+                pvSurplusNoEvW = Math.max(0, (-gridW) + evcsNowW);
+            } else if (typeof pvSurplusCfgW === 'number' && Number.isFinite(pvSurplusCfgW)) {
+                // Fallback wenn kein Grid-DP verfügbar (z. B. nur PV-Surplus DP konfiguriert)
+                pvSurplusNoEvW = Math.max(0, pvSurplusCfgW);
             }
+
+            pvSurplusW = (typeof pvSurplusNoEvW === 'number' && Number.isFinite(pvSurplusNoEvW))
+                ? this._pvSurplusAvgPush(now, pvSurplusNoEvW)
+                : 0;
 
             const pvCapRawW = (typeof pvSurplusW === 'number' && Number.isFinite(pvSurplusW) && pvSurplusW > 0) ? pvSurplusW : 0;
             pvCapW = pvCapRawW;

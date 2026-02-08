@@ -1,3 +1,6 @@
+## 0.6.128
+- EMS/EVCS: PV‑Überschussladen stabilisiert – PV‑Budget wird jetzt **ohne EVCS‑Eigenverbrauch** berechnet (NVP/Netz + EVCS) + 5‑Minuten‑Mittelwert.
+
 ## 0.6.127
 - SmartHome VIS: Mobile‑Lesbarkeit verbessert – 1‑Spalten‑Layout unter 420px + Textgrößen‑Umschalter (Kompakt/Normal/Groß)
 - SmartHome VIS: Long‑Press Info‑Toast (zeigt den vollen Gerätenamen + Raum/Funktion)

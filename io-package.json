@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.127",
+    "version": "0.6.128",
     "news": {
       "0.6.124": {
         "en": "Admin/Licensing: Removed the in-admin license key generator from the adapter package. License key is stored in the adapter instance (native.licenseKey) and therefore remains update-safe.",
@@ -1386,6 +1386,14 @@
       "de": [
         "SmartHome: Mobile-Lesbarkeit – 1-Spalten-Layout <420px, Textgrößen-Umschalter (Kompakt/Normal/Groß)",
         "SmartHome: Long-Press Info-Hinweis (voller Name + Raum/Funktion)"
+      ]
+    },
+    "0.6.128": {
+      "en": [
+        "PV surplus charging: PV budget now ignores EVCS load (stable regulation) + 5-min smoothing"
+      ],
+      "de": [
+        "PV-Überschussladen: PV-Budget ignoriert jetzt EVCS-Last (stabile Regelung) + 5-Minuten Glättung"
       ]
     }
   }
