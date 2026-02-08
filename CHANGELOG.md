@@ -1,3 +1,6 @@
+## 0.6.134
+- EVCS Bericht: Tabellendaten werden wieder geladen (Header/Footer‑Wiring) + CSV‑Export Buttons funktionieren wieder
+
 ## 0.6.133
 - EVCS Bericht (Wallbox Historie): nutzt jetzt den Standard‑Header mit Navigation und wird aus der Historie im gleichen Tab geöffnet (kein extra Browser‑Tab mehr)
 

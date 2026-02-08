@@ -218,8 +218,9 @@ function toISODate(ms){
   function init(){
     const reloadBtn = el('reloadBtn');
     const printBtn = el('printBtn');
-    const csvBtn = el('csvBtn');
-    const csvSessionsBtn = el('csvSessionsBtn');
+    // Button-IDs wurden mit dem Standard-Header vereinheitlicht.
+    const csvBtn = el('exportBtn');
+    const csvSessionsBtn = el('exportSessionsBtn');
 
     if (reloadBtn) reloadBtn.addEventListener('click', load);
     if (printBtn) printBtn.addEventListener('click', loadAndPrint);

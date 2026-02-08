@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-vis",
-    "version": "0.6.133",
+    "version": "0.6.134",
     "news": {
+      "0.6.134": {
+        "en": "EVCS report: Fixed report table rendering (header/footer wiring) and restored CSV export buttons.",
+        "de": "EVCS Bericht: Tabellendaten werden wieder korrekt geladen (Header/Footer‑Wiring) + CSV‑Export Buttons funktionieren wieder."
+      },
       "0.6.133": {
         "en": "EVCS report: Uses the standard NexoWatt header/navigation and opens in the same tab from History (no separate browser tab).",
         "de": "EVCS Bericht: Nutzt jetzt den Standard‑Header mit Navigation und wird aus der Historie im gleichen Tab geöffnet (kein separater Browser‑Tab mehr)."
@@ -1426,6 +1430,16 @@
       ],
       "de": [
         "Historie: Monats-/Jahresansicht lässt zukünftige Tage/Monate leer (0) und verfälscht Summen nicht mehr"
+      ]
+    },
+    "0.6.134": {
+      "en": [
+        "EVCS report: Fix table rendering after header integration (data rows + totals work again)",
+        "EVCS report: CSV export buttons wired again"
+      ],
+      "de": [
+        "EVCS-Bericht: Tabelle nach Header-Integration repariert (Tageswerte + Summen funktionieren wieder)",
+        "EVCS-Bericht: CSV-Export Buttons wieder korrekt verdrahtet"
       ]
     },
     "0.6.133": {
