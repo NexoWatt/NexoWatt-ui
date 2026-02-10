@@ -3,7 +3,7 @@
 const { BaseModule } = require('./base');
 
 /**
- * Liest die Tarif-Einstellungen aus der NexoWatt VIS (nexowatt-vis.0.settings.*)
+ * Liest die Tarif-Einstellungen aus der NexoWatt UI (nexowatt-ui.0.settings.*)
  * und berechnet daraus einen Ladepark-Leistungsdeckel (W), damit Speicher/Ladepark
  * sich nicht gegenseitig aushebeln.
  *
@@ -155,7 +155,7 @@ class TarifVisModule extends BaseModule {
     _getVisInstance() {
         const cfg = (this.adapter && this.adapter.config && this.adapter.config.vis) ? this.adapter.config.vis : null;
         const inst = (cfg && typeof cfg.instance === 'string') ? cfg.instance.trim() : '';
-        return inst || 'nexowatt-vis.0';
+        return inst || 'nexowatt-ui.0';
     }
 
     _getTariffHomePath() {

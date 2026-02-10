@@ -8,7 +8,7 @@
       "items": {
         "__appcenterInfo": {
           "type": "staticText",
-          "text": "Hinweis: Die EMS‑Konfiguration (Energiefluss / Datenpunkt‑Mapping / Tarife / Speicherfarm / Ladepunkte) erfolgt ausschließlich im App‑Center.\n\nApp‑Center öffnen: Im Adapter‑Reiter \"Tab\" auf \"EMS Apps öffnen\" klicken. Oder direkt aus dem Admin: /adapter/nexowatt-vis/appcenter.html?instance=<INSTANZ>. Alternativ direkt per Port: http://<HOST>:<PORT>/ems-apps.html",
+          "text": "Hinweis: Die EMS‑Konfiguration (Energiefluss / Datenpunkt‑Mapping / Tarife / Speicherfarm / Ladepunkte) erfolgt ausschließlich im App‑Center.\n\nApp‑Center öffnen: Im Adapter‑Reiter \"Tab\" auf \"EMS Apps öffnen\" klicken. Oder direkt aus dem Admin: /adapter/nexowatt-ui/appcenter.html?instance=<INSTANZ>. Alternativ direkt per Port: http://<HOST>:<PORT>/ems-apps.html",
           "xs": 12,
           "sm": 12,
           "md": 12
@@ -127,7 +127,7 @@
       "items": {
         "__simInfo": {
           "type": "staticText",
-          "text": "Simulation/Testbetrieb: Startet den nexowatt-sim Adapter und ordnet automatisch alle relevanten Datenpunkte im App-Center zu (Grid/PV/Speicher/Tarif/EVCS). Damit lassen sich alle EMS-Logiken ohne reale Hardware testen.\n\nSimulation öffnen: /adapter/nexowatt-vis/simulation.html?instance=<INSTANZ>\nAlternativ direkt per Port: http://<HOST>:<PORT>/simulation.html\n\nHinweis: Beim Aktivieren wird die aktuelle App-Center Konfiguration als Backup gespeichert und bei 'Deaktivieren' wiederhergestellt.",
+          "text": "Simulation/Testbetrieb: Startet den nexowatt-sim Adapter und ordnet automatisch alle relevanten Datenpunkte im App-Center zu (Grid/PV/Speicher/Tarif/EVCS). Damit lassen sich alle EMS-Logiken ohne reale Hardware testen.\n\nSimulation öffnen: /adapter/nexowatt-ui/simulation.html?instance=<INSTANZ>\nAlternativ direkt per Port: http://<HOST>:<PORT>/simulation.html\n\nHinweis: Beim Aktivieren wird die aktuelle App-Center Konfiguration als Backup gespeichert und bei 'Deaktivieren' wiederhergestellt.",
           "xs": 12,
           "sm": 12,
           "md": 12
@@ -141,7 +141,7 @@
       "items": {
         "__smarthomeInfo": {
           "type": "staticText",
-          "text": "SmartHome: Aktiviert die SmartHome-Ansicht in der VIS (Header-Reiter + Menülink).\nDie Konfiguration (Räume/Funktionen/Geräte + Datenpunkt-Zuordnung) erfolgt in der SmartHome-Config Seite.\n\nSmartHome Config öffnen:\n• Im Adapter-Reiter \"Tab\" auf \"SmartHome Config\" klicken.\n• Oder direkt aus dem Admin: /adapter/nexowatt-vis/smarthomecfg.html?instance=<INSTANZ>\n• Alternativ direkt per Port: http://<HOST>:<PORT>/smarthome-config.html\n\nSmartHome VIS öffnen:\n• Im Adapter-Reiter \"Tab\" auf \"SmartHome VIS\" klicken.\n• Oder direkt aus dem Admin: /adapter/nexowatt-vis/smarthomevis.html?instance=<INSTANZ>\n• Alternativ direkt per Port: http://<HOST>:<PORT>/smarthome.html\n\nHinweis: Änderungen an den Adapter-Einstellungen werden von ioBroker mit einem Adapter-Neustart übernommen.",
+          "text": "SmartHome: Aktiviert die SmartHome-Ansicht in der VIS (Header-Reiter + Menülink).\nDie Konfiguration (Räume/Funktionen/Geräte + Datenpunkt-Zuordnung) erfolgt in der SmartHome-Config Seite.\n\nSmartHome Config öffnen:\n• Im Adapter-Reiter \"Tab\" auf \"SmartHome Config\" klicken.\n• Oder direkt aus dem Admin: /adapter/nexowatt-ui/smarthomecfg.html?instance=<INSTANZ>\n• Alternativ direkt per Port: http://<HOST>:<PORT>/smarthome-config.html\n\nSmartHome VIS öffnen:\n• Im Adapter-Reiter \"Tab\" auf \"SmartHome VIS\" klicken.\n• Oder direkt aus dem Admin: /adapter/nexowatt-ui/smarthomevis.html?instance=<INSTANZ>\n• Alternativ direkt per Port: http://<HOST>:<PORT>/smarthome.html\n\nHinweis: Änderungen an den Adapter-Einstellungen werden von ioBroker mit einem Adapter-Neustart übernommen.",
           "xs": 12,
           "sm": 12,
           "md": 12

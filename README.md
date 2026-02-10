@@ -1,6 +1,6 @@
-# NexoWatt VIS
+# NexoWatt UI
 
-Die **NexoWatt VIS** ist die responsive Visualisierungsoberfläche (Web-UI) des NexoWatt EMS.  
+Die **NexoWatt UI** ist die responsive Visualisierungsoberfläche (Web-UI) des NexoWatt EMS.  
 Sie stellt Energieflüsse, Zustände und ausgewählte Steuerfunktionen übersichtlich auf Desktop, Tablet und Smartphone dar.
 
 ## Umfang der Visualisierung

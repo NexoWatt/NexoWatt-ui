@@ -1,6 +1,6 @@
 {
   "common": {
-    "name": "nexowatt-vis",
+    "name": "nexowatt-ui",
     "version": "0.6.135",
     "news": {
       "0.6.135": {
@@ -1156,10 +1156,10 @@
         "de": "NexoLogic: Erweiterte Heizungs-/Regelungs-Bausteine ergänzt (PI-Raumregler mit Anti-Windup + zyklischem Update, Sommer/Winter-Umschalter, Fensterkontakt-Sperre, Heizkurve für Vorlauf-Soll sowie 2-Punkt-Mischer (Impuls))."
       }
     },
-    "title": "NexoWatt VIS",
+    "title": "NexoWatt UI",
     "titleLang": {
-      "en": "NexoWatt VIS",
-      "de": "NexoWatt VIS"
+      "en": "NexoWatt UI",
+      "de": "NexoWatt UI"
     },
     "desc": {
       "en": "responsive dashboard with NexoWatt colors (green/black). All datapoints can be linked in adapter settings.",
@@ -1198,21 +1198,21 @@
     },
     "welcomeScreenPro": [
       {
-        "link": "/adapter/nexowatt-vis/tab.html",
+        "link": "/adapter/nexowatt-ui/tab.html",
         "name": "Energiefluss",
         "desc": {
-          "de": "Direkt zur NexoWatt VIS (aktuelle ioBroker-IP + VIS-Port).",
-          "en": "Go to NexoWatt VIS (current ioBroker IP + VIS port)."
+          "de": "Direkt zur NexoWatt UI (aktuelle ioBroker-IP + VIS-Port).",
+          "en": "Go to NexoWatt UI (current ioBroker IP + VIS port)."
         },
         "img": "admin.png",
         "color": "#00c853",
         "order": 10,
         "localLinks": {
-          "_default": "/adapter/nexowatt-vis/tab.html"
+          "_default": "/adapter/nexowatt-ui/tab.html"
         }
       }
     ],
-    "welcomeScreen": "adapter/nexowatt-vis/tab.html",
+    "welcomeScreen": "adapter/nexowatt-ui/tab.html",
     "license": "UNLICENSED"
   },
   "native": {

@@ -2892,7 +2892,7 @@ async function nwInitSmartHomeConfig() {
       const enabled = !!(cfg && cfg.smartHome && cfg.smartHome.enabled);
       if (!enabled) {
         hint.style.display = 'block';
-        hint.innerHTML = '⚠️ SmartHome ist deaktiviert – die VIS-Seite bleibt leer. Bitte im ioBroker Admin unter <strong>nexowatt-vis → SmartHome → „SmartHome aktivieren“</strong> einschalten.';
+        hint.innerHTML = '⚠️ SmartHome ist deaktiviert – die VIS-Seite bleibt leer. Bitte im ioBroker Admin unter <strong>nexowatt-ui → SmartHome → „SmartHome aktivieren“</strong> einschalten.';
       } else {
         hint.style.display = 'none';
         hint.innerHTML = '';

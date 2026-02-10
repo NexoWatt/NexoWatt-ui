@@ -79,7 +79,7 @@
 
     try {
       if (window.parent && window.parent.servConn) {
-        window.parent.servConn.getObject('system.adapter.nexowatt-vis.' + inst, function(err, obj){
+        window.parent.servConn.getObject('system.adapter.nexowatt-ui.' + inst, function(err, obj){
           var port = (obj && obj.native && obj.native.port) || 8188;
           bind(buildBase(port));
         });

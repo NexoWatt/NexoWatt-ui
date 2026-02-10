@@ -274,7 +274,7 @@
   ];
 
   // Wetter (optional)
-  // Plug&Play: Standardmäßig befüllt der nexowatt-vis Adapter die Wetter-States selbst (Open-Meteo,
+  // Plug&Play: Standardmäßig befüllt der nexowatt-ui Adapter die Wetter-States selbst (Open-Meteo,
   // basierend auf system.config.latitude/longitude). Kein zusätzlicher Wetter-Adapter erforderlich.
   // Optional: Mapping hier überschreibt die integrierten Werte (z.B. eigener Wetterdienst).
   // Mindestanforderung fuer sinnvolle Anzeige: Temperatur ODER Wettertext/Wettercode.
@@ -366,7 +366,7 @@ function _collectFlowPowerDpIsWFromUI() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename || 'nexowatt-vis-backup.json';
+      a.download = filename || 'nexowatt-ui-backup.json';
       document.body.appendChild(a);
       a.click();
       setTimeout(() => {
@@ -7116,7 +7116,7 @@ if (els.ocppAutoDetect) {
 
       const ts = new Date();
       const stamp = ts.toISOString().replace(/[:]/g, '-').replace(/\..+$/, '');
-      const fn = `nexowatt-vis-backup-${stamp}.json`;
+      const fn = `nexowatt-ui-backup-${stamp}.json`;
 
       downloadJsonFile(fn, backup);
       setBackupStatus('Export erstellt: ' + fn, 'ok');

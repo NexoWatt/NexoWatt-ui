@@ -42,7 +42,7 @@ class NexoWattVis extends utils.Adapter {
   constructor(options) {
     super({
       ...options,
-      name: 'nexowatt-vis',
+      name: 'nexowatt-ui',
     });
 
     this.stateCache = {};
@@ -675,7 +675,7 @@ class NexoWattVis extends utils.Adapter {
           url,
           {
             headers: {
-              'User-Agent': `nexowatt-vis/${pkg && pkg.version ? pkg.version : 'dev'}`,
+              'User-Agent': `nexowatt-ui/${pkg && pkg.version ? pkg.version : 'dev'}`,
               'Accept-Encoding': 'identity',
             },
           },
@@ -1561,7 +1561,7 @@ class NexoWattVis extends utils.Adapter {
       if (!ch) {
         await this.setForeignObjectAsync(base, {
           type: 'channel',
-          common: { name: 'NexoWatt VIS – Backup' },
+          common: { name: 'NexoWatt UI – Backup' },
           native: {},
         });
       }
@@ -1580,7 +1580,7 @@ class NexoWattVis extends utils.Adapter {
     };
 
     await ensureState(`${base}.backupJson`, {
-      name: 'NexoWatt VIS – Installer Konfiguration (Backup JSON)',
+      name: 'NexoWatt UI – Installer Konfiguration (Backup JSON)',
       type: 'string',
       role: 'json',
       read: true,
@@ -1589,7 +1589,7 @@ class NexoWattVis extends utils.Adapter {
     });
 
     await ensureState(`${base}.backupTs`, {
-      name: 'NexoWatt VIS – Backup Timestamp (ms)',
+      name: 'NexoWatt UI – Backup Timestamp (ms)',
       type: 'number',
       role: 'value.time',
       read: true,
@@ -1609,7 +1609,7 @@ class NexoWattVis extends utils.Adapter {
       const backup = {
         backupVersion: 1,
         createdAt: new Date().toISOString(),
-        adapter: 'nexowatt-vis',
+        adapter: 'nexowatt-ui',
         adapterVersion: (pkg && pkg.version) ? String(pkg.version) : '',
         instance: this.instance,
         reason: reason ? String(reason) : '',
@@ -3221,7 +3221,7 @@ try {
     const ratedW  = Math.round(ratedKw * 1000);
     const evcsCount = Math.max(1, Math.min(50, Math.round(Number(cfg.evcsCount || 1))));
     this.evcsCount = evcsCount;
-    this.log.info(`[NexoWatt VIS] Ladepunkte konfiguriert: ${evcsCount}`);
+    this.log.info(`[NexoWatt UI] Ladepunkte konfiguriert: ${evcsCount}`);
 
 
     // derive evcs list (names) from config; keep it stable and always at least evcsCount entries
@@ -5208,7 +5208,7 @@ async onReady() {
       // Notifications monitoring (emails)
       try { this.startNotificationMonitor(); } catch (_e) {}
 
-      // Historie (Influx): canonical export states under 'nexowatt-vis.0.historie.*'
+      // Historie (Influx): canonical export states under 'nexowatt-ui.0.historie.*'
       // This avoids double-mapping of device datapoints for dashboards/history.
       try {
         await this.ensureHistorieExportStates();
@@ -5262,7 +5262,7 @@ async onReady() {
 
       // NexoLogic (node/graph) runtime engine
       try { await this.initLogicEngine(); } catch (e) { this.log.warn('NexoLogic init failed: ' + (e && e.message ? e.message : e)); }
-      this.log.info('NexoWatt VIS adapter ready.');
+      this.log.info('NexoWatt UI adapter ready.');
     } catch (e) {
       this.log.error(`onReady error: ${e.message}`);
     }
@@ -6816,7 +6816,7 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
         const backup = {
           backupVersion: 1,
           createdAt: new Date().toISOString(),
-          adapter: 'nexowatt-vis',
+          adapter: 'nexowatt-ui',
           adapterVersion: (pkg && pkg.version) ? String(pkg.version) : '',
           instance: this.instance,
           configPatch: patch,
@@ -12953,7 +12953,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const dp = Object.assign({}, hcfg.datapoints || {}, hcfg.dp || {});
     // History should NOT depend on the live/EMS datapoint mapping.
     // Otherwise users would need to enable Influx logging for *device* datapoints
-    // in addition to the canonical nexowatt-vis.0.historie.* states (double mapping).
+    // in addition to the canonical nexowatt-ui.0.historie.* states (double mapping).
     //
     // NOTE: Earlier versions allowed overriding the Historie input states via
     // config.history.datapoints. In practice this led to many installations still

@@ -1,5 +1,5 @@
 /**
- * NexoWatt VIS – EVCS Seite
+ * NexoWatt UI – EVCS Seite
  * Ziel: skalierbar bis 50 Ladepunkte, Übersicht als Kacheln, Details/Bedienung im Tooltip-Dialog.
  */
 

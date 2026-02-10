@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
-  NexoWatt VIS – version bump helper
+  NexoWatt UI – version bump helper
 
   Updates both:
     - package.json (npm)

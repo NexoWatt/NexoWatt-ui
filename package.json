@@ -1,5 +1,5 @@
 {
-  "name": "iobroker.nexowatt-vis",
+  "name": "iobroker.nexowatt-ui",
   "version": "0.6.135",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
@@ -30,12 +30,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/USER/iobroker.nexowatt-vis.git"
+    "url": "git+https://github.com/USER/iobroker.nexowatt-ui.git"
   },
   "bugs": {
-    "url": "https://github.com/USER/iobroker.nexowatt-vis/issues"
+    "url": "https://github.com/USER/iobroker.nexowatt-ui/issues"
   },
-  "homepage": "https://github.com/USER/iobroker.nexowatt-vis#readme",
+  "homepage": "https://github.com/USER/iobroker.nexowatt-ui#readme",
   "files": [
     "admin/**/*",
     "www/**/*",

@@ -10,7 +10,7 @@ function clampNumber(n, min, max, fallback) {
 }
 
 /**
- * Embedded EMS engine wrapper for nexowatt-vis.
+ * Embedded EMS engine wrapper for nexowatt-ui.
  *
  * Sprint 2.x:
  * - ChargingManagementModule (from nexowatt-multiuse) runs INSIDE the VIS adapter

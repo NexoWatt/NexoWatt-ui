@@ -164,7 +164,7 @@
     (function(){
       const qs = new URLSearchParams(window.location.search);
       const inst = qs.get('instance') || '0';
-      const adapterId = 'system.adapter.nexowatt-vis.' + inst;
+      const adapterId = 'system.adapter.nexowatt-ui.' + inst;
 
       const elUuid = document.getElementById('uuid');
       const elKey = document.getElementById('licenseKey');
@@ -285,7 +285,7 @@
 
       async function refreshLicenseStatus(conn){
         try{
-          const base = `nexowatt-vis.${inst}.license.`;
+          const base = `nexowatt-ui.${inst}.license.`;
           const [stValid, stType, stMsg, stDays, stExp] = await Promise.all([
             getStateP(conn, base + 'valid'),
             getStateP(conn, base + 'type'),

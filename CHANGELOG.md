@@ -209,7 +209,7 @@
 - EVCS Report/Abrechnung: kWh-Berechnung korrigiert, wenn Historie-Buckets lückenhaft sind (z.B. 10‑Minuten Logging bei 2‑Minuten Aggregation). kWh pro Tag entspricht jetzt wieder den Influx/Historie-Werten (keine Faktor‑5 Unterzählung mehr).
 
 ## 0.6.75 (Simulation/Admin + Historie)
-- Admin: Neuer Reiter "Simulation" in den Instanzeinstellungen (öffnet Simulation-Steuerung per Link /adapter/nexowatt-vis/simulation.html?instance=<INSTANZ>).
+- Admin: Neuer Reiter "Simulation" in den Instanzeinstellungen (öffnet Simulation-Steuerung per Link /adapter/nexowatt-ui/simulation.html?instance=<INSTANZ>).
 - Simulation: 1-Klick Aktivieren/Deaktivieren inkl. Backup/Restore der App-Center Konfiguration + automatischem DP-Mapping für nexowatt-sim (Grid/PV/Speicher/Tarif/EVCS).
 - Historie: Dunkler OpenEMS-ähnlicher Stapel-Chart (optional), SoC rechts 0..100% (0 unten, 100 oben), Tagesansicht baut sich progressiv auf (kein leerer Rest des Tages), kWh-Kacheln bevorzugen Counter-Differenzen (exakt) statt kW-Integration.
 - Speicher: Tarif-Netzladen stabilisiert (Anti-Ping-Pong) durch Headroom-Berechnung ohne Rückkopplung.
