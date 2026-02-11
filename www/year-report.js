@@ -88,7 +88,9 @@
   // ------------------------------
   // Report state
   // ------------------------------
-  let activeTab = 'summary';
+  // Default view: show everything in one table (overview).
+  // The other tabs act as optional filters.
+  let activeTab = 'all';
   let report = null; // computed data
 
   function setError(msg){
@@ -289,6 +291,60 @@
     // (We put the unit into the hint below, to keep the table clean.)
   }
 
+  function renderGroupedTable(sections, years, byYear){
+    const thead = el('thead');
+    const tbody = el('tbody');
+    if (!thead || !tbody) return;
+
+    let h = '<tr>';
+    h += '<th></th>';
+    years.forEach(y => { h += `<th>${y}</th>`; });
+    h += '</tr>';
+    thead.innerHTML = h;
+
+    const colSpan = years.length + 1;
+    const esc = (s) => String(s || '').replace(/</g,'&lt;');
+
+    if (!Array.isArray(sections) || sections.length === 0){
+      tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:left;color:#9aa4ad;">Keine Daten.</td></tr>`;
+      return;
+    }
+
+    let html = '';
+    sections.forEach((sec, idx) => {
+      const title = esc(sec && sec.title);
+      const unit = sec && sec.unit ? String(sec.unit) : '';
+      const decimals = Number.isFinite(Number(sec && sec.decimals)) ? Number(sec.decimals) : 1;
+      const rows = Array.isArray(sec && sec.rows) ? sec.rows : [];
+
+      html += `<tr class="group-row"><td colspan="${colSpan}">${title}${unit ? ` <span class="group-unit">[${esc(unit)}]</span>` : ''}</td></tr>`;
+
+      if (!rows.length){
+        html += `<tr class="empty-row"><td colspan="${colSpan}">Keine Daten / keine Zuordnung.</td></tr>`;
+      } else {
+        rows.forEach(r => {
+          html += '<tr class="data-row">';
+          html += `<td>${esc(r.label)}</td>`;
+          years.forEach(y => {
+            const yr = byYear[y];
+            const raw = (typeof r.get === 'function') ? r.get(yr, y) : (yr ? yr[r.key] : 0);
+            const val = Number.isFinite(Number(raw)) ? Number(raw) : 0;
+            const d = (r && r.decimals !== undefined && r.decimals !== null) ? Number(r.decimals) : decimals;
+            const dd = Number.isFinite(d) ? d : decimals;
+            html += `<td>${val.toFixed(dd)}</td>`;
+          });
+          html += '</tr>';
+        });
+      }
+
+      if (idx !== sections.length - 1){
+        html += `<tr class="spacer-row"><td colspan="${colSpan}"></td></tr>`;
+      }
+    });
+
+    tbody.innerHTML = html;
+  }
+
   function renderActiveTab(){
     if (!report) return;
     const years = report.years;
@@ -297,96 +353,128 @@
     const defsP = report.producerDefs;
     const defsC = report.consumerDefs;
 
-    const hasAnyEv = report.hasEv;
-    const includeEvRow = hasAnyEv && !report.consumerHasEvNamed;
+    const includeEvRow = !!report.hasEv && !report.consumerHasEvNamed;
 
-    // Default hint is overwritten per tab
-    let hintHtml = '';
-
-    if (activeTab === 'summary') {
-      const rows = [
+    // --- build sections (rows + hints), used for both overview and optional tab filters ---
+    const sectionSummary = {
+      id: 'summary',
+      title: 'Aufsummiert',
+      unit: 'kWh',
+      decimals: 1,
+      rows: [
         { label: 'Erzeugung', key: 'productionKwh' },
         { label: 'Verbrauch', key: 'consumptionKwh' },
         { label: 'Netzbezug', key: 'gridImportKwh' },
         { label: 'Netzeinspeisung', key: 'gridExportKwh' }
-      ];
-      renderTable(rows, years, byYear, { unit:'kWh', decimals: 1 });
-      hintHtml = 'Hinweis: Werte werden bevorzugt aus kWh‑Zählern (Differenz) berechnet. Falls keine kWh‑Zähler gemappt sind, erfolgt die Berechnung über die Integration der Leistung (W).';
-    }
+      ],
+      hint: 'Hinweis: Werte werden bevorzugt aus kWh‑Zählern (Differenz) berechnet. Falls keine kWh‑Zähler gemappt sind, erfolgt die Berechnung über die Integration der Leistung (W).'
+    };
 
-    if (activeTab === 'producers') {
-      const rows = defsP.map(d => ({
+    const sectionProducers = {
+      id: 'producers',
+      title: 'Erzeuger',
+      unit: 'kWh',
+      decimals: 1,
+      rows: defsP.map(d => ({
         label: d.name,
         get: (yr) => {
           const arr = yr && Array.isArray(yr.producers) ? yr.producers : [];
           const it = arr.find(p => Number(p.idx) === Number(d.idx));
           return it ? it.kwh : 0;
         }
-      }));
+      })),
+      hint: 'Erzeuger‑Aufschlüsselung basiert auf den im Energiefluss‑Monitor gemappten Erzeuger‑Slots.'
+    };
 
-      renderTable(rows, years, byYear, { unit:'kWh', decimals: 1 });
-      hintHtml = 'Erzeuger‑Aufschlüsselung basiert auf den im Energiefluss‑Monitor gemappten Erzeuger‑Slots.';
+    const consumerRows = defsC.map(d => ({
+      label: d.name,
+      get: (yr) => {
+        const arr = yr && Array.isArray(yr.consumers) ? yr.consumers : [];
+        const it = arr.find(c => Number(c.idx) === Number(d.idx));
+        return it ? it.kwh : 0;
+      }
+    }));
+
+    if (includeEvRow) {
+      consumerRows.push({ label: 'E‑Mobilität', key: '__ev', get: (yr) => getYearVal(yr, 'evKwh') });
     }
 
-    if (activeTab === 'consumers') {
-      const rows = defsC.map(d => ({
-        label: d.name,
-        get: (yr) => {
-          const arr = yr && Array.isArray(yr.consumers) ? yr.consumers : [];
-          const it = arr.find(c => Number(c.idx) === Number(d.idx));
-          return it ? it.kwh : 0;
+    // Optional: Rest/Unbekannt (wenn Gesamtverbrauch deutlich größer als Summe der Verbraucher + Batterieverluste)
+    const restByYear = years.map(y => {
+      const yr = byYear[y];
+      const sumC = (yr && Array.isArray(yr.consumers)) ? yr.consumers.reduce((s,c)=> s + (Number.isFinite(c.kwh) ? c.kwh : 0), 0) : 0;
+      const ev = includeEvRow ? getYearVal(yr, 'evKwh') : 0;
+      const loss = getYearVal(yr, 'batteryLossKwh');
+      const total = getYearVal(yr, 'consumptionKwh');
+      return total - sumC - ev - loss;
+    });
+    const restMax = Math.max(...restByYear.map(v => Math.abs(v)));
+    if (Number.isFinite(restMax) && restMax > 1.0) {
+      consumerRows.push({
+        label: 'Sonstiges',
+        get: (_yr, y) => {
+          const idx = years.indexOf(y);
+          return idx >= 0 ? restByYear[idx] : 0;
         }
-      }));
-
-      if (includeEvRow) {
-        rows.push({ label: 'E‑Mobilität', key: '__ev' , get: (yr) => getYearVal(yr, 'evKwh') });
-      }
-
-      // Optional: Rest/Unbekannt (wenn Gesamtverbrauch deutlich größer als Summe der Verbraucher + Batterieverluste)
-      // Das hilft bei der Fehlersuche, ohne das Layout aufzublähen.
-      const restByYear = years.map(y => {
-        const yr = byYear[y];
-        const sumC = (yr && Array.isArray(yr.consumers)) ? yr.consumers.reduce((s,c)=> s + (Number.isFinite(c.kwh) ? c.kwh : 0), 0) : 0;
-        const ev = includeEvRow ? getYearVal(yr, 'evKwh') : 0;
-        const loss = getYearVal(yr, 'batteryLossKwh');
-        const total = getYearVal(yr, 'consumptionKwh');
-        return total - sumC - ev - loss;
       });
-      const restMax = Math.max(...restByYear.map(v => Math.abs(v)));
-      if (Number.isFinite(restMax) && restMax > 1.0) {
-        rows.push({
-          label: 'Sonstiges',
-          get: (yr, y) => {
-            const idx = years.indexOf(y);
-            return idx >= 0 ? restByYear[idx] : 0;
-          }
-        });
-      }
-
-      renderTable(rows, years, byYear, { unit:'kWh', decimals: 1 });
-      hintHtml = 'Verbraucher‑Aufschlüsselung basiert auf den im Energiefluss‑Monitor gemappten Verbraucher‑Slots.' + (includeEvRow ? ' E‑Mobilität wird zusätzlich als Gesamtwert aus der EVCS‑Historie angezeigt.' : '');
     }
 
-    if (activeTab === 'battery') {
-      const rows = [
+    const sectionConsumers = {
+      id: 'consumers',
+      title: 'Verbraucher',
+      unit: 'kWh',
+      decimals: 1,
+      rows: consumerRows,
+      hint: 'Verbraucher‑Aufschlüsselung basiert auf den im Energiefluss‑Monitor gemappten Verbraucher‑Slots.' + (includeEvRow ? ' E‑Mobilität wird zusätzlich als Gesamtwert aus der EVCS‑Historie angezeigt.' : '')
+    };
+
+    const sectionBattery = {
+      id: 'battery',
+      title: 'Batterien',
+      unit: 'kWh',
+      decimals: 1,
+      rows: [
         { label: 'Batterieladung', key: 'chargeKwh' },
         { label: 'Batterieentladung', key: 'dischargeKwh' },
         { label: 'Batterieeigenverbrauch', key: 'batteryLossKwh' }
-      ];
-      renderTable(rows, years, byYear, { unit:'kWh', decimals: 1 });
-      hintHtml = 'Batterieeigenverbrauch = Batterieladung − Batterieentladung (Verluste).';
-    }
+      ],
+      hint: 'Batterieeigenverbrauch = Batterieladung − Batterieentladung (Verluste).'
+    };
 
-    if (activeTab === 'quotes') {
-      const rows = [
+    const sectionQuotes = {
+      id: 'quotes',
+      title: 'Quoten',
+      unit: '%',
+      decimals: 1,
+      rows: [
         { label: 'Eigenverbrauch', key: 'selfConsumptionPct' },
         { label: 'Autarkie', key: 'autarkyPct' }
-      ];
-      renderTable(rows, years, byYear, { unit:'%', decimals: 1 });
-      hintHtml = 'Eigenverbrauch = (Erzeugung − Einspeisung) / Erzeugung. Autarkie = (Erzeugung − Einspeisung) / Verbrauch.';
+      ],
+      hint: 'Eigenverbrauch = (Erzeugung − Einspeisung) / Erzeugung. Autarkie = (Erzeugung − Einspeisung) / Verbrauch.'
+    };
+
+    const sections = [sectionSummary, sectionProducers, sectionConsumers, sectionBattery, sectionQuotes];
+    const byId = Object.create(null);
+    sections.forEach(s => { byId[s.id] = s; });
+
+    // Default: one-page overview
+    if (activeTab === 'all') {
+      renderGroupedTable(sections, years, byYear);
+      setHint('Übersicht: Alle Bereiche werden auf einer Seite angezeigt. Tipp: Mit den Reitern oben kannst du optional einzelne Bereiche filtern. ' + sectionSummary.hint);
+      return;
     }
 
-    setHint(hintHtml);
+    const sec = byId[activeTab];
+    if (!sec) {
+      // Fallback
+      activeTab = 'all';
+      renderGroupedTable(sections, years, byYear);
+      setHint('Übersicht: Alle Bereiche werden auf einer Seite angezeigt. Tipp: Mit den Reitern oben kannst du optional einzelne Bereiche filtern. ' + sectionSummary.hint);
+      return;
+    }
+
+    renderTable(sec.rows, years, byYear, { unit: sec.unit, decimals: sec.decimals });
+    setHint(sec.hint || '');
   }
 
   function setActiveTab(tab){
@@ -534,6 +622,14 @@
     Array.from(document.querySelectorAll('.rep-tab')).forEach(btn => {
       btn.addEventListener('click', ()=> setActiveTab(btn.dataset.tab));
     });
+
+    // Optional: allow deep-links into a specific section via ?tab=
+    // (default stays on the one-page overview)
+    (function(){
+      const raw = (q('tab') || '').trim().toLowerCase();
+      const allowed = new Set(['all','summary','producers','consumers','battery','quotes']);
+      setActiveTab(allowed.has(raw) ? raw : 'all');
+    })();
 
     // Reload / Print / CSV
     const reloadBtn = el('reloadBtn');

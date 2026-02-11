@@ -1,3 +1,7 @@
+## 0.6.138
+- Historie: Jahresreport zeigt jetzt **alle Bereiche auf einer Seite** (Übersicht) – für sofortigen Gesamtüberblick.
+- Historie: Reiter bleiben **optional** als Filter, um einzelne Bereiche separat zu betrachten.
+
 ## 0.6.137
 - Historie: Neuer Jahresreport (Mehrjahres-Tabelle) mit Reitern **Aufsummiert / Erzeuger / Verbraucher / Batterien / Quoten**.
 - Historie: Jahresreport öffnet sich direkt aus der Historie über den Button **Jahresreport**.

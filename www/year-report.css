@@ -57,6 +57,34 @@
   text-align: right;
 }
 
+/* One-page overview: section headers + spacers (inside a single table) */
+.group-row td{
+  padding-top: 16px;
+  padding-bottom: 8px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  border-bottom: none;
+  text-align: left;
+}
+
+.group-row .group-unit{
+  font-weight: 700;
+  opacity: 0.65;
+  font-size: 12px;
+}
+
+.spacer-row td{
+  padding: 6px 0;
+  border-bottom: none;
+}
+
+.empty-row td{
+  padding: 8px 12px;
+  border-bottom: none;
+  color: rgba(255,255,255,0.65);
+  text-align: left;
+}
+
 .err{
   margin: 0 0 10px;
   padding: 10px 12px;
@@ -72,5 +100,6 @@
   body { background: #ffffff !important; color: #000000 !important; }
   .card{ background:#ffffff !important; color:#000000 !important; border: 1px solid #ddd !important; box-shadow:none !important; }
   .card th, .card td{ border-bottom: 1px solid #ddd !important; }
+  .spacer-row td{ border-bottom: none !important; }
   .hint{ color:#333 !important; }
 }

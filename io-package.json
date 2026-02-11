@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.137",
+    "version": "0.6.138",
     "news": {
+      "0.6.138": {
+        "en": "History: The annual report now shows all sections on one page (overview). Tabs are optional filters.",
+        "de": "Historie: Der Jahresreport zeigt jetzt alle Bereiche auf einer Seite (Übersicht). Die Reiter sind optional als Filter nutzbar."
+      },
       "0.6.137": {
         "en": "History: Added a new annual report page (multi-year table) with tabs (summary / producers / consumers / batteries / quotes).",
         "de": "Historie: Neuer Jahresreport (Mehrjahres-Tabelle) mit Reitern (Aufsummiert / Erzeuger / Verbraucher / Batterien / Quoten)."
