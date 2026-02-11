@@ -1,3 +1,7 @@
+## 0.6.136
+- EMS/EVCS: Zeit‑Ziel Laden – „Fertig um“ jetzt im 15‑Minuten Raster (00/15/30/45)
+- EMS/EVCS: Zeit‑Ziel Laden – Wenn die Uhrzeit erreicht ist, wird die Deadline automatisch auf den nächsten Tag fortgeschrieben (tägliche Wiederholung)
+
 ## 0.6.135
 - EVCS Bericht: Status‑Dot nutzt wieder den Standard‑Live‑Indikator (grün)
 - EVCS Bericht: Zurück‑Button ergänzt (zur vorherigen Ansicht)

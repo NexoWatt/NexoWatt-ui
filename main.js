@@ -10143,6 +10143,22 @@ settingsConfig: {
             if (v > 0) {
               const max = now + 366 * 24 * 3600 * 1000;
               if (v > max) v = max;
+
+              // Enforce 15‑minute raster (00/15/30/45) to match UI and avoid odd minute values.
+              // Snap in local time (Date) so DST transitions behave as expected.
+              try {
+                const dt = new Date(v);
+                dt.setSeconds(0, 0);
+                const m = dt.getMinutes();
+                const snapped = Math.round(m / 15) * 15;
+                dt.setMinutes(snapped, 0, 0);
+                v = dt.getTime();
+              } catch (_e) {
+                // ignore
+              }
+
+              // Re-clamp after snapping (snapping may roll over to next hour/day)
+              if (v > max) v = max;
             }
             const id = `chargingManagement.wallboxes.${safe}.goalFinishTs`;
             try {

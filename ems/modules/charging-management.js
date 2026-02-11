@@ -22,6 +22,61 @@ function clamp(n, min, max) {
     return n;
 }
 
+// --- Time helpers (Goal-Charging) -------------------------------------------
+
+/**
+ * Snap a unix timestamp to a 15‑minute grid (00/15/30/45) in local time.
+ * Keeps the date, but may roll over to next hour/day when rounding minutes.
+ *
+ * @param {number} ts
+ * @returns {number}
+ */
+function quantizeTsTo15Min(ts) {
+    const n = Number(ts);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    try {
+        const dt = new Date(n);
+        dt.setSeconds(0, 0);
+        const m = dt.getMinutes();
+        const snapped = Math.round(m / 15) * 15;
+        dt.setMinutes(snapped, 0, 0);
+        return dt.getTime();
+    } catch {
+        return Math.round(n);
+    }
+}
+
+/**
+ * Given an existing goal deadline timestamp, compute the next upcoming occurrence
+ * of the same local HH:MM (today or next days), at least 1 minute in the future.
+ * This keeps the goal schedule repeating daily ("finish by 06:00 every day").
+ *
+ * @param {number} deadlineTs
+ * @param {number} nowMs
+ * @returns {number}
+ */
+function nextOccurrenceSameClock(deadlineTs, nowMs) {
+    const n = Number(deadlineTs);
+    const now = Number(nowMs);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    if (!Number.isFinite(now) || now <= 0) return n;
+    try {
+        const base = new Date(n);
+        const hh = base.getHours();
+        const mm = base.getMinutes();
+
+        const cur = new Date(now);
+        const d = new Date(cur);
+        d.setHours(hh, mm, 0, 0);
+
+        // If the selected time is in the past (or within 1 minute), schedule for the next day.
+        if (d.getTime() <= now + 60000) d.setDate(d.getDate() + 1);
+        return d.getTime();
+    } catch {
+        return n;
+    }
+}
+
 function floorToStep(value, step) {
     const v = Number(value);
     const s = Number(step);
@@ -1295,6 +1350,23 @@ class ChargingManagementModule extends BaseModule {
                 goalFinishTs = Number.isFinite(v) ? Math.max(0, Math.round(v)) : 0;
             } catch {
                 goalFinishTs = 0;
+            }
+
+            // UX/Serienreife: Zeit‑Ziel Laden soll wie eine tägliche Uhrzeit funktionieren.
+            // 1) Minuten immer auf 15‑Min Raster quantisieren (00/15/30/45).
+            // 2) Wenn die Deadline erreicht/überschritten wurde: automatisch auf die nächste
+            //    kommende gleiche Uhrzeit (nächster Tag) weiterschieben, damit es täglich weiterläuft.
+            if (goalFinishTs > 0) {
+                let nextTs = quantizeTsTo15Min(goalFinishTs);
+                if (goalEnabled && nextTs > 0 && now >= nextTs) {
+                    nextTs = nextOccurrenceSameClock(nextTs, now);
+                }
+                if (nextTs > 0 && nextTs !== goalFinishTs) {
+                    goalFinishTs = nextTs;
+                    try { await this._queueState(`${ch}.goalFinishTs`, goalFinishTs, true); } catch {
+                        // ignore
+                    }
+                }
             }
 
             try {

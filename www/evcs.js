@@ -132,7 +132,8 @@ function fmtClock(ts) {
 }
 
 function nextTsFromTimeInput(hhmm) {
-  const s = String(hhmm ?? '').trim();
+  const snapped = snapHhmmTo15Min(hhmm);
+  const s = String(snapped ?? '').trim();
   if (!s || !/^\d{2}:\d{2}$/.test(s)) return 0;
   const parts = s.split(':');
   const hh = Number(parts[0]);
@@ -146,6 +147,26 @@ function nextTsFromTimeInput(hhmm) {
   // If the selected time is in the past (or within 1 minute), schedule for the next day.
   if (dt.getTime() <= now.getTime() + 60000) dt.setDate(dt.getDate() + 1);
   return dt.getTime();
+}
+
+// Snap a HH:MM time string to a 15‑minute grid (00/15/30/45).
+// Returns '' on invalid input.
+function snapHhmmTo15Min(hhmm) {
+  const s = String(hhmm ?? '').trim();
+  if (!s || !/^\d{2}:\d{2}$/.test(s)) return '';
+  const parts = s.split(':');
+  const hh = Number(parts[0]);
+  const mm = Number(parts[1]);
+  if (!isFinite(hh) || !isFinite(mm)) return '';
+
+  const total = ((Math.max(0, Math.min(23, Math.round(hh))) * 60) + Math.max(0, Math.min(59, Math.round(mm))));
+  let snapped = Math.round(total / 15) * 15;
+  // wrap around 24:00 -> 00:00
+  snapped = ((snapped % 1440) + 1440) % 1440;
+
+  const sh = Math.floor(snapped / 60);
+  const sm = snapped % 60;
+  return String(sh).padStart(2, '0') + ':' + String(sm).padStart(2, '0');
 }
 
 function esc(s) {
@@ -620,7 +641,7 @@ function buildEvcsModalBodyHtml(i) {
               </div>
               <div>
                 <div class="muted" style="font-size:12px; opacity:.85; margin-bottom:4px;">Fertig um</div>
-                <input class="nw-input" type="time" data-ems-goal-time="${i}" value="${emsGoalTimeValue}">
+                <input class="nw-input" type="time" step="900" data-ems-goal-time="${i}" value="${emsGoalTimeValue}">
               </div>
             </div>
 
@@ -1069,7 +1090,11 @@ function bindControls() {
       const idx = Number(t.getAttribute('data-ems-goal-time'));
       if (!Number.isFinite(idx) || idx <= 0) return;
 
-      const ts = nextTsFromTimeInput(t.value);
+      // Enforce 15‑minute raster even if the browser allows free typing.
+      const snapped = snapHhmmTo15Min(t.value) || t.value;
+      try { if (snapped && snapped !== t.value) t.value = snapped; } catch (_e) {}
+
+      const ts = nextTsFromTimeInput(snapped);
       const k = `chargingManagement.wallboxes.lp${idx}.goalFinishTs`;
 
       _setPendingWrite(k, ts, 2500);

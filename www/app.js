@@ -5368,7 +5368,8 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
   }
 
   function nextTsFromTimeInput(hhmm){
-    const s = String(hhmm ?? '').trim();
+    const snapped = snapHhmmTo15Min(hhmm);
+    const s = String(snapped ?? '').trim();
     if (!s || !/^\d{2}:\d{2}$/.test(s)) return 0;
     const parts = s.split(':');
     const hh = Number(parts[0]);
@@ -5380,6 +5381,24 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
     // If the selected time is in the past (or within 1 minute), schedule for the next day.
     if (d.getTime() <= now.getTime() + 60000) d.setDate(d.getDate() + 1);
     return d.getTime();
+  }
+
+  // Snap a HH:MM time string to a 15‑minute grid (00/15/30/45).
+  // Returns '' on invalid input.
+  function snapHhmmTo15Min(hhmm){
+    const s = String(hhmm ?? '').trim();
+    if (!s || !/^\d{2}:\d{2}$/.test(s)) return '';
+    const parts = s.split(':');
+    const hh = Number(parts[0]);
+    const mm = Number(parts[1]);
+    if (!isFinite(hh) || !isFinite(mm)) return '';
+
+    const total = ((Math.max(0, Math.min(23, Math.round(hh))) * 60) + Math.max(0, Math.min(59, Math.round(mm))));
+    let snapped = Math.round(total / 15) * 15;
+    snapped = ((snapped % 1440) + 1440) % 1440;
+    const sh = Math.floor(snapped / 60);
+    const sm = snapped % 60;
+    return String(sh).padStart(2,'0') + ':' + String(sm).padStart(2,'0');
   }
 
   function clockValueFromTs(ts){
@@ -5492,7 +5511,11 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
 
   if (goalTime){
     goalTime.addEventListener('change', async ()=>{
-      const ts = nextTsFromTimeInput(goalTime.value);
+      // Enforce 15‑minute raster even if the browser allows free typing.
+      const snapped = snapHhmmTo15Min(goalTime.value) || goalTime.value;
+      try { if (snapped && snapped !== goalTime.value) goalTime.value = snapped; } catch(_e) {}
+
+      const ts = nextTsFromTimeInput(snapped);
       pendingGoalFinishTs = ts;
       pendingGoalFinishUntil = Date.now() + 2500;
       try { scheduleRender(); } catch(_e) {}

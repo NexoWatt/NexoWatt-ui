@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.135",
+    "version": "0.6.136",
     "news": {
+      "0.6.136": {
+        "en": "Goal-Charging: Time picker now supports a 15-minute grid and the configured finish time automatically repeats daily.",
+        "de": "Zeit‑Ziel Laden: Uhrzeit lässt sich jetzt im 15‑Minuten Raster einstellen und wird nach Erreichen automatisch täglich fortgeschrieben."
+      },
       "0.6.135": {
         "en": "EVCS report: Live status dot is green again + added a Back button to return to the previous view.",
         "de": "EVCS Bericht: Status-Dot ist wieder grün + Zurück-Button zum Zurückspringen in die vorherige Ansicht."
