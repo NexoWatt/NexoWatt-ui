@@ -1,3 +1,7 @@
+## 0.6.137
+- Historie: Neuer Jahresreport (Mehrjahres-Tabelle) mit Reitern **Aufsummiert / Erzeuger / Verbraucher / Batterien / Quoten**.
+- Historie: Jahresreport öffnet sich direkt aus der Historie über den Button **Jahresreport**.
+
 ## 0.6.136
 - EMS/EVCS: Zeit‑Ziel Laden – „Fertig um“ jetzt im 15‑Minuten Raster (00/15/30/45)
 - EMS/EVCS: Zeit‑Ziel Laden – Wenn die Uhrzeit erreicht ist, wird die Deadline automatisch auf den nächsten Tag fortgeschrieben (tägliche Wiederholung)

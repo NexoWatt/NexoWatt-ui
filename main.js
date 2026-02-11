@@ -8410,6 +8410,12 @@ app.get(['/logic.html','/logic'], (req, res) => {
       res.redirect('/static/evcs-report.html' + qs);
     });
 
+    // --- Year report page (History: Jahresreport) ---
+    app.get(['/year-report.html','/year-report','/history/year-report','/history/year-report.html'], (req, res) => {
+      const qs = (req && req.url && req.url.includes('?')) ? req.url.slice(req.url.indexOf('?')) : '';
+      res.redirect('/static/year-report.html' + qs);
+    });
+
 app.get('/api/history', async (req, res) => {
       try {
         const inst = this._nwGetHistoryInstance();

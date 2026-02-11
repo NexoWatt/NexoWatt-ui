@@ -839,6 +839,18 @@ async function load(){
       window.location.href = url;
     });
   }
+
+  // Jahresreport (Mehrjahresübersicht) – öffnet eine Tabelle ähnlich EVCS-Abrechnung
+  const yearReportBtn = document.getElementById('yearReportBtn');
+  if (yearReportBtn) {
+    yearReportBtn.addEventListener('click', ()=>{
+      const anchor = getAnchorDate();
+      const y = (anchor && Number.isFinite(anchor.getTime())) ? anchor.getFullYear() : (new Date()).getFullYear();
+      // Default: aktuelles Jahr + die 3 Vorjahre (wie im Screenshot)
+      const url = `/year-report?y=${encodeURIComponent(y)}&span=4`;
+      window.location.href = url;
+    });
+  }
 // range buttons
   (function(){
     const btns = Array.from(document.querySelectorAll('.range-btn'));
