@@ -1,3 +1,8 @@
+## 0.6.140
+- EMS/EVCS: **Priorisierung (Start)** – Zeit‑Ziel Laden übersteuert Tarif‑Netzladesperren pro Ladepunkt, damit die Deadline zuverlässig erreicht wird (optional abschaltbar: `chargingManagement.goalTariffOverrideAlways=false`).
+- UI (Installer/Diagnose): Im Status „Budget & Gates“ wird im Card **Gesamtbudget** jetzt auch der **Tarif‑Modus (Manuell/Automatik/Aus)** angezeigt.
+- UI: Service‑Worker Cache‑Version erhöht (Update wird zuverlässig geladen).
+
 ## 0.6.139
 - EMS/EVCS: **Failsafe Stale Meter** Fix – redundante Grid‑Power Quellen werden jetzt korrekt behandelt (mindestens eine frische Quelle reicht).
 - EMS/EVCS: Neue Diagnose‑States: `chargingManagement.control.staleMeter`, `staleBudget`, `failsafeDetails`.

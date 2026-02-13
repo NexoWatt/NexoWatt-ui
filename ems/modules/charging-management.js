@@ -814,6 +814,12 @@ class ChargingManagementModule extends BaseModule {
         // und kann Sperren bei knappen Deadlines automatisch aufheben.
         const goalStrategy = (String(cfg.goalStrategy || 'standard').trim().toLowerCase() === 'smart') ? 'smart' : 'standard';
 
+        // Priorisierung (Start): Zeit‑Ziel Laden muss sicherstellen, dass ein EVCS bis zur Deadline lädt.
+        // Daher darf ein aktives Ziel eine Tarif‑Sperre für Netzladung grundsätzlich übersteuern.
+        // (Globale PV‑Only Einstellungen bleiben weiterhin dominant.)
+        // Optional abschaltbar (Installer): chargingManagement.goalTariffOverrideAlways = false
+        const goalTariffOverrideAlways = (cfg.goalTariffOverrideAlways !== false);
+
         // Smart‑Parameter (konservative Defaults; optional über Installer konfigurierbar)
         const goalTariffOverrideUrgency = clamp(num(cfg.goalTariffOverrideUrgency, 0.70), 0, 1);
         const goalTariffOverrideMinRemainingMin = clamp(num(cfg.goalTariffOverrideMinRemainingMin, 60), 0, 7 * 24 * 60);
@@ -1668,19 +1674,29 @@ class ChargingManagementModule extends BaseModule {
                 ? Number(w.boostTimeoutMinOverride)
                 : typeDefaultMin;
 
-            // Smart‑Ziel: Tarif‑Sperre pro Ladepunkt aufheben, wenn ein aktives Ziel sonst gefährdet ist.
-            // Wichtig: Globale PV‑Only Einstellungen (pvSurplusOnlyCfg/Mode PV) werden dadurch nicht überschrieben.
+            // Ziel‑Laden Priorität:
+            // - Ein aktives Zeit‑Ziel muss die Deadline sicher erreichen → Tarif‑Sperren für Netzladung dürfen
+            //   (optional) pro Ladepunkt übersteuert werden.
+            // - Globale PV‑Only Einstellungen (pvSurplusOnlyCfg/Mode PV) bleiben dominant.
+            //
+            // Smart‑Ziel (optional): Wenn goalStrategy=smart UND goalTariffOverrideAlways=false,
+            // wird die Übersteuerung nur bei knappen Deadlines aktiviert.
             let forcePvForW = forcePvSurplusOnly;
             let goalTariffOverrideActive = false;
-            if (goalStrategy === 'smart' && forcePvForW && !pvSurplusOnlyCfg && w.enabled && w.online && w.goalActive) {
-                const remMin = (typeof w.goalRemainingMin === 'number' && Number.isFinite(w.goalRemainingMin)) ? w.goalRemainingMin : null;
-                const urg = (typeof w.goalUrgency === 'number' && Number.isFinite(w.goalUrgency)) ? w.goalUrgency : null;
-                const shouldOverride = !!w.goalOverdue
-                    || (remMin !== null && remMin <= goalTariffOverrideMinRemainingMin)
-                    || (urg !== null && urg >= goalTariffOverrideUrgency);
-                if (shouldOverride) {
+            if (forcePvForW && !pvSurplusOnlyCfg && w.enabled && w.online && w.goalActive) {
+                if (goalTariffOverrideAlways) {
                     forcePvForW = false;
                     goalTariffOverrideActive = true;
+                } else if (goalStrategy === 'smart') {
+                    const remMin = (typeof w.goalRemainingMin === 'number' && Number.isFinite(w.goalRemainingMin)) ? w.goalRemainingMin : null;
+                    const urg = (typeof w.goalUrgency === 'number' && Number.isFinite(w.goalUrgency)) ? w.goalUrgency : null;
+                    const shouldOverride = !!w.goalOverdue
+                        || (remMin !== null && remMin <= goalTariffOverrideMinRemainingMin)
+                        || (urg !== null && urg >= goalTariffOverrideUrgency);
+                    if (shouldOverride) {
+                        forcePvForW = false;
+                        goalTariffOverrideActive = true;
+                    }
                 }
             }
 

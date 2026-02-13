@@ -6581,9 +6581,17 @@ function _collectFlowPowerDpIsWFromUI() {
     const usedW = n(ctrl.usedW);
     const remW = n(ctrl.remainingW);
 
+    // Tariff context (visible at a glance)
+    const dynTariffOn = b(ctrl.dynamicTariff);
+    const tariffMode = n(ctrl.tariffMode);
+    const tariffTxt = dynTariffOn
+      ? ((tariffMode === 2) ? 'Automatik' : 'Manuell')
+      : 'Aus';
+
     const budgetKind = (Number.isFinite(budgetW) && Number.isFinite(usedW) && usedW > budgetW + 1) ? 'warn' : 'ok';
 
     els.chargingBudget.appendChild(mkCard('Gesamtbudget', [
+      { label: 'Tarif', value: tariffTxt },
       { label: 'Mode', value: String(ctrl.budgetMode || '') },
       { label: 'Budget', value: _fmtW(budgetW) },
       { label: 'Used', value: _fmtW(usedW) },

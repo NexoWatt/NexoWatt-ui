@@ -8063,6 +8063,10 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
           mode: await getOwn('chargingManagement.control.mode'),
           status: await getOwn('chargingManagement.control.status'),
 
+          // Context: Tariff mode (helps to spot "Manuell" quickly when debugging charging behaviour)
+          dynamicTariff: await getOwn('settings.dynamicTariff'),
+          tariffMode: await getOwn('settings.tariffMode'),
+
           budgetMode: await getOwn('chargingManagement.control.budgetMode'),
           budgetW: await getOwn('chargingManagement.control.budgetW'),
           usedW: await getOwn('chargingManagement.control.usedW'),

@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.139",
+    "version": "0.6.140",
     "news": {
+      "0.6.140": {
+        "en": "Charging Management: Goal-Charging now prioritizes reaching the finish time and can override tariff grid-charge blocking per chargepoint. Diagnostics: Tariff mode (Manual/Auto) is shown in the total budget card.",
+        "de": "Lademanagement: Zeit‑Ziel Laden priorisiert jetzt das Erreichen der Deadline und kann Tarif‑Netzladesperren pro Ladepunkt übersteuern. Diagnose: Tarif‑Modus (Manuell/Automatik) wird im Gesamtbudget angezeigt."
+      },
       "0.6.139": {
         "en": "Charging Management: Fixed false 'failsafe stale meter' when multiple grid power sources are mapped. Added failsafe diagnostics states and a clear 'Tariff manual' indicator in the status line.",
         "de": "Lademanagement: 'Failsafe Stale Meter' wird nicht mehr fälschlich ausgelöst, wenn mehrere Grid‑Power Quellen gemappt sind. Zusätzlich: Failsafe‑Diagnose‑States + Hinweis 'Tarif Manuell' in der Info‑Zeile."
