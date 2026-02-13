@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.138",
+    "version": "0.6.139",
     "news": {
+      "0.6.139": {
+        "en": "Charging Management: Fixed false 'failsafe stale meter' when multiple grid power sources are mapped. Added failsafe diagnostics states and a clear 'Tariff manual' indicator in the status line.",
+        "de": "Lademanagement: 'Failsafe Stale Meter' wird nicht mehr fälschlich ausgelöst, wenn mehrere Grid‑Power Quellen gemappt sind. Zusätzlich: Failsafe‑Diagnose‑States + Hinweis 'Tarif Manuell' in der Info‑Zeile."
+      },
       "0.6.138": {
         "en": "History: The annual report now shows all sections on one page (overview). Tabs are optional filters.",
         "de": "Historie: Der Jahresreport zeigt jetzt alle Bereiche auf einer Seite (Übersicht). Die Reiter sind optional als Filter nutzbar."

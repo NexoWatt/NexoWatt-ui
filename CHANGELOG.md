@@ -1,3 +1,8 @@
+## 0.6.139
+- EMS/EVCS: **Failsafe Stale Meter** Fix – redundante Grid‑Power Quellen werden jetzt korrekt behandelt (mindestens eine frische Quelle reicht).
+- EMS/EVCS: Neue Diagnose‑States: `chargingManagement.control.staleMeter`, `staleBudget`, `failsafeDetails`.
+- UI: Status‑Info zeigt jetzt **Tarif Modus: Manuell**, wenn der Tarif auf manuell steht (sofort sichtbar).
+
 ## 0.6.138
 - Historie: Jahresreport zeigt jetzt **alle Bereiche auf einer Seite** (Übersicht) – für sofortigen Gesamtüberblick.
 - Historie: Reiter bleiben **optional** als Filter, um einzelne Bereiche separat zu betrachten.

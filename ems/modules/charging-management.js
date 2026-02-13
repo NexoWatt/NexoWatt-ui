@@ -476,6 +476,11 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.remainingW', 'Remaining (W)', 'number', 'value.power');
         await mk('chargingManagement.control.pausedByPeakShaving', 'Paused by peak shaving', 'boolean', 'indicator');
 
+        // MU6.8: Failsafe diagnostics (Stale Meter/Budget)
+        await mk('chargingManagement.control.staleMeter', 'Meter stale (failsafe)', 'boolean', 'indicator');
+        await mk('chargingManagement.control.staleBudget', 'Budget stale (failsafe)', 'boolean', 'indicator');
+        await mk('chargingManagement.control.failsafeDetails', 'Failsafe details', 'string', 'text');
+
         // Gate T: Tarif-Freigaben (für Transparenz)
         await mk('chargingManagement.control.gridChargeAllowed', 'Grid charge allowed (Tarif)', 'boolean', 'indicator');
         await mk('chargingManagement.control.dischargeAllowed', 'Discharge allowed (Tarif)', 'boolean', 'indicator');
@@ -894,7 +899,7 @@ class ChargingManagementModule extends BaseModule {
         const pauseBehavior = String(cfg.pauseBehavior || 'rampDownToZero'); // rampDownToZero | followPeakBudget
 
         // MU6.8: stale detection (failsafe)
-        const staleTimeoutSec = clamp(num(cfg.staleTimeoutSec, 15), 1, 3600);
+        const staleTimeoutSec = clamp(num(cfg.staleTimeoutSec, 60), 1, 3600);
         const staleTimeoutMs = staleTimeoutSec * 1000;
 
         // Smart‑Ziel: Preis‑Signal (optional). Wird nur genutzt, wenn entsprechende Datapoints vorhanden sind.
@@ -2246,19 +2251,20 @@ if (components.length) {
         if (!this.dp) {
             staleMeter = true; // cannot validate inputs without DP registry
         } else {
-            const gridKeys = ['cm.gridPowerW', 'grid.powerW', 'ps.gridPowerW'];
+            const gridKeys = ['cm.gridPowerW', 'grid.powerW', 'grid.powerRawW', 'ems.gridPowerW', 'ps.gridPowerW'];
             const configuredGridKeys = gridKeys.filter(k => !!this.dp.getEntry(k));
 
-            // Grid metering is required for safe operation
+            // Grid metering is required for safe operation.
+            // We accept *any* fresh source (redundant signals). A stale secondary signal must NOT
+            // trigger a global failsafe as long as at least one grid power datapoint is fresh.
             if (configuredGridKeys.length === 0) {
                 staleMeter = true;
             } else {
+                let anyFresh = false;
                 for (const k of configuredGridKeys) {
-                    if (this.dp.isStale(k, staleTimeoutMs)) {
-                        staleMeter = true;
-                        break;
-                    }
+                    if (!this.dp.isStale(k, staleTimeoutMs)) { anyFresh = true; break; }
                 }
+                staleMeter = !anyFresh;
             }
 
             // Gate A: If a phase limit is configured, phase current metering must be present and fresh.
@@ -2292,6 +2298,36 @@ if (components.length) {
         }
 
         const staleRelevant = (mode !== 'off') && (staleMeter || staleBudget);
+
+        // Publish stale diagnostics for UI transparency (even when not in failsafe)
+        try {
+            let details = '';
+            if (this.dp) {
+                const parts = [];
+                try {
+                    const keys = ['cm.gridPowerW', 'grid.powerW', 'grid.powerRawW', 'ems.gridPowerW', 'ps.gridPowerW']
+                        .filter(k => !!this.dp.getEntry(k));
+                    if (keys.length) {
+                        const ages = keys.map(k => {
+                            const a = this.dp.getAgeMs(k);
+                            const aTxt = (!Number.isFinite(a) || a === Number.POSITIVE_INFINITY) ? '∞' : String(Math.round(a / 1000));
+                            return `${k}:${aTxt}s`;
+                        });
+                        parts.push(`grid=${ages.join(',')}`);
+                    } else {
+                        parts.push('grid=none');
+                    }
+                } catch (_e) {
+                    // ignore
+                }
+                details = parts.join(' ');
+            }
+            await this._queueState('chargingManagement.control.staleMeter', !!staleMeter, true);
+            await this._queueState('chargingManagement.control.staleBudget', !!staleBudget, true);
+            await this._queueState('chargingManagement.control.failsafeDetails', staleRelevant ? details : '', true);
+        } catch {
+            // ignore
+        }
 
         if (staleRelevant) {
             const reason = ReasonCodes.STALE_METER;

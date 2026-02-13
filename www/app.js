@@ -5193,7 +5193,23 @@ function updateEnergyWeb() {
       statusEl.title = '';
     }
 
-    statusEl.textContent = msg;
+    
+
+    // Tariff UX: Make it immediately visible when the tariff logic runs in MANUAL mode.
+    // This prevents confusion when charging is blocked by a manually set price limit.
+    try {
+      const dyn = !!(s['settings.dynamicTariff'] && s['settings.dynamicTariff'].value);
+      const tm = (s['settings.tariffMode'] && s['settings.tariffMode'].value !== undefined && s['settings.tariffMode'].value !== null)
+        ? Number(s['settings.tariffMode'].value)
+        : NaN;
+      const isManual = !Number.isFinite(tm) ? true : (tm !== 2);
+      if (dyn && isManual) {
+        msg = msg ? `${msg} — Modus: Manuell` : 'Tarif Modus: Manuell';
+      }
+    } catch(_e) {
+      // ignore
+    }
+statusEl.textContent = msg;
     statusEl.classList.toggle('hidden', !msg);
   }
 
