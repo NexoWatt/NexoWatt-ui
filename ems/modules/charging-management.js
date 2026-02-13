@@ -22,6 +22,176 @@ function clamp(n, min, max) {
     return n;
 }
 
+// --- Tarif forecast helpers ------------------------------------------------
+
+/**
+ * Normalizes either €/kWh or ct/kWh into €/kWh.
+ * Heuristic: values with |v| > 2 are interpreted as ct/kWh (common sources: 31.5, 40, ...).
+ * Allows small negative prices.
+ *
+ * @param {any} v
+ * @param {number|null} [fallback=null]
+ * @returns {number|null}
+ */
+function normalizePriceEurPerKwh(v, fallback = null) {
+    let n = (typeof v === 'number') ? v : num(v, fallback);
+    if (!Number.isFinite(n)) return fallback;
+
+    // Auto-convert ct/kWh -> €/kWh
+    const abs = Math.abs(n);
+    if (abs > 2 && abs <= 500) {
+        n = n / 100;
+    }
+
+    // Plausibility (allow small negative prices)
+    if (!Number.isFinite(n) || n < -2 || n > 2) return fallback;
+    return n;
+}
+
+/**
+ * Parse an hourly price curve from either JSON string or already-parsed array/object.
+ * Expected (tibber-like) schema: [{ total: 0.318, startsAt: "...", endsAt: "..." }, ...]
+ * Also supports a plain numeric array (e.g. [32.1, 30.8, ...]) interpreted as ct/kWh per hour
+ * starting at the current full hour.
+ *
+ * @param {any} raw
+ * @returns {Array<{startMs:number,endMs:number,priceEurKwh:number}>}
+ */
+function parsePriceCurve(raw) {
+    if (raw === null || raw === undefined) return [];
+
+    let data = raw;
+    if (typeof raw === 'string') {
+        const s = raw.trim();
+        if (!s) return [];
+        try {
+            data = JSON.parse(s);
+        } catch {
+            return [];
+        }
+    }
+
+    // Some providers wrap the array
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const arr = data.prices || data.data || data.items || data.values || null;
+        if (Array.isArray(arr)) {
+            data = arr;
+        } else {
+            return [];
+        }
+    }
+
+    if (!Array.isArray(data)) return [];
+
+    // Numeric array without timestamps → assume hourly from current full hour
+    try {
+        const isNumLike = (v) => {
+            if (typeof v === 'number') return Number.isFinite(v);
+            if (typeof v === 'string') {
+                const s = v.trim();
+                if (!s) return false;
+                const n = Number(s);
+                return Number.isFinite(n);
+            }
+            return false;
+        };
+
+        const hasObject = data.some((it) => it && typeof it === 'object' && !Array.isArray(it));
+        const hasNum = data.some((it) => isNumLike(it));
+
+        if (hasNum && !hasObject) {
+            const out = [];
+            const base = new Date();
+            base.setMinutes(0, 0, 0);
+            const baseMs = base.getTime();
+
+            let idx = 0;
+            for (const it of data) {
+                if (!isNumLike(it)) {
+                    idx++;
+                    continue;
+                }
+                const rawN = (typeof it === 'number') ? it : Number(String(it).trim());
+                const priceEurKwh = normalizePriceEurPerKwh(rawN, null);
+                if (!Number.isFinite(priceEurKwh)) {
+                    idx++;
+                    continue;
+                }
+                const startMs = baseMs + idx * 3600 * 1000;
+                const endMs = startMs + 3600 * 1000;
+                out.push({ startMs, endMs, priceEurKwh });
+                idx++;
+            }
+            return out;
+        }
+    } catch (_e) {}
+
+    const out = [];
+    for (const it of data) {
+        if (!it || typeof it !== 'object') continue;
+
+        // Price field heuristics
+        let pRaw = null;
+        if (it.total !== undefined) pRaw = it.total;
+        else if (it.price !== undefined) pRaw = it.price;
+        else if (it.value !== undefined) pRaw = it.value;
+        else if (it.marketprice !== undefined) pRaw = it.marketprice;
+        else if (it.marketPrice !== undefined) pRaw = it.marketPrice;
+        else if (it.energyPrice !== undefined) pRaw = it.energyPrice;
+
+        if (pRaw === null && it.price && typeof it.price === 'object') {
+            if (it.price.total !== undefined) pRaw = it.price.total;
+            else if (it.price.value !== undefined) pRaw = it.price.value;
+        }
+
+        const price = normalizePriceEurPerKwh(pRaw, null);
+        if (typeof price !== 'number' || !Number.isFinite(price)) continue;
+
+        // Time field heuristics
+        const startRaw = (it.startsAt !== undefined) ? it.startsAt
+            : (it.start !== undefined) ? it.start
+                : (it.startTime !== undefined) ? it.startTime
+                    : (it.from !== undefined) ? it.from
+                        : (it.begin !== undefined) ? it.begin
+                            : (it.timestamp !== undefined) ? it.timestamp
+                                : (it.time !== undefined) ? it.time
+                                    : null;
+
+        let startMs = null;
+        if (typeof startRaw === 'number' && Number.isFinite(startRaw)) {
+            startMs = (startRaw < 1e12) ? startRaw * 1000 : startRaw;
+        } else if (typeof startRaw === 'string') {
+            const t = Date.parse(startRaw);
+            if (Number.isFinite(t)) startMs = t;
+        }
+        if (!startMs) continue;
+
+        const endRaw = (it.endsAt !== undefined) ? it.endsAt
+            : (it.end !== undefined) ? it.end
+                : (it.endTime !== undefined) ? it.endTime
+                    : (it.to !== undefined) ? it.to
+                        : (it.until !== undefined) ? it.until
+                            : null;
+
+        let endMs = null;
+        if (typeof endRaw === 'number' && Number.isFinite(endRaw)) {
+            endMs = (endRaw < 1e12) ? endRaw * 1000 : endRaw;
+        } else if (typeof endRaw === 'string') {
+            const t = Date.parse(endRaw);
+            if (Number.isFinite(t)) endMs = t;
+        }
+
+        // Default: 1 hour
+        if (!endMs) endMs = startMs + 60 * 60 * 1000;
+        if (endMs <= startMs) endMs = startMs + 60 * 60 * 1000;
+
+        out.push({ startMs, endMs, priceEurKwh: price });
+    }
+
+    out.sort((a, b) => a.startMs - b.startMs);
+    return out;
+}
+
 // --- Time helpers (Goal-Charging) -------------------------------------------
 
 /**
@@ -657,6 +827,7 @@ class ChargingManagementModule extends BaseModule {
 
         await mk('effectiveMode', 'Effective mode', 'string', 'text');
         await mk('goalTariffOverride', 'Ziel: Tarif-Sperre übersteuert', 'boolean', 'indicator');
+        await mk('goalTariffOverrideReason', 'Ziel: Tarif-Override Grund', 'string', 'text');
         await mk('priority', 'Priority', 'number', 'value');
         await mk('chargerType', 'Charger type', 'string', 'text');
         await mk('controlBasis', 'Control basis', 'string', 'text');
@@ -814,17 +985,39 @@ class ChargingManagementModule extends BaseModule {
         // und kann Sperren bei knappen Deadlines automatisch aufheben.
         const goalStrategy = (String(cfg.goalStrategy || 'standard').trim().toLowerCase() === 'smart') ? 'smart' : 'standard';
 
-        // Priorisierung (Start): Zeit‑Ziel Laden muss sicherstellen, dass ein EVCS bis zur Deadline lädt.
-        // Daher darf ein aktives Ziel eine Tarif‑Sperre für Netzladung grundsätzlich übersteuern.
-        // (Globale PV‑Only Einstellungen bleiben weiterhin dominant.)
-        // Optional abschaltbar (Installer): chargingManagement.goalTariffOverrideAlways = false
-        const goalTariffOverrideAlways = (cfg.goalTariffOverrideAlways !== false);
+        // Priorisierung / Tarif‑Bonus (Ziel‑Laden):
+        // Zeit‑Ziel Laden muss (wenn möglich) die Deadline erreichen – auch wenn ein dynamischer Tarif
+        // das Netzladen gerade sperrt. Gleichzeitig soll der Tarif als Optimierungs‑Bonus wirken:
+        // wir laden bevorzugt in günstigen Fenstern und heben die Sperre nur dann auf, wenn es sonst
+        // nicht bis zur Deadline reicht (Forecast/Latest‑Start).
+        //
+        // Policy:
+        // - goalTariffOverrideMode = 'forecast' (default): Tarif wirkt; Override nur wenn nötig
+        // - goalTariffOverrideMode = 'always': Ziel übersteuert Tarif immer (Legacy)
+        // - goalTariffOverrideMode = 'never' : Ziel respektiert Tarif immer (kann Deadline verfehlen)
+        //
+        // Backwards compat: legacy boolean `goalTariffOverrideAlways`:
+        //   true  -> 'always'
+        //   false -> 'forecast'
+        const goalTariffOverrideModeRaw = String(cfg.goalTariffOverrideMode || '').trim().toLowerCase();
+        let goalTariffOverrideMode = (goalTariffOverrideModeRaw === 'always' || goalTariffOverrideModeRaw === 'forecast' || goalTariffOverrideModeRaw === 'never')
+            ? goalTariffOverrideModeRaw
+            : 'forecast';
+        if (cfg.goalTariffOverrideAlways === true) goalTariffOverrideMode = 'always';
+        if (cfg.goalTariffOverrideAlways === false) goalTariffOverrideMode = 'forecast';
 
-        // Smart‑Parameter (konservative Defaults; optional über Installer konfigurierbar)
-        const goalTariffOverrideUrgency = clamp(num(cfg.goalTariffOverrideUrgency, 0.70), 0, 1);
-        const goalTariffOverrideMinRemainingMin = clamp(num(cfg.goalTariffOverrideMinRemainingMin, 60), 0, 7 * 24 * 60);
+        // Forecast/Notfall‑Parameter (konservative Defaults; optional über Installer konfigurierbar)
+        const goalForecastSafetyFactor = clamp(num(cfg.goalForecastSafetyFactor, 1.10), 1, 2);
+        const goalForecastReserveMin = clamp(num(cfg.goalForecastReserveMin, 10), 0, 24 * 60);
+        const goalForecastMinCoverage = clamp(num(cfg.goalForecastMinCoverage, 0.75), 0, 1);
+
+        // Smart‑Parameter (Optimierung)
         const goalCheapBoostFactor = clamp(num(cfg.goalCheapBoostFactor, 1.25), 1, 3);
         const goalCheapPriceFactor = clamp(num(cfg.goalCheapPriceFactor, 0.90), 0.1, 2);
+
+        // Legacy Fallback‑Schwellen (wenn kein Forecast verfügbar ist)
+        const goalTariffOverrideUrgency = clamp(num(cfg.goalTariffOverrideUrgency, 0.70), 0, 1);
+        const goalTariffOverrideMinRemainingMin = clamp(num(cfg.goalTariffOverrideMinRemainingMin, 60), 0, 7 * 24 * 60);
 
         // -----------------------------------------------------------------
         // §14a EnWG snapshot (provided by Para14aModule)
@@ -1655,6 +1848,202 @@ class ChargingManagementModule extends BaseModule {
         let anyPvLimitedActive = false;
         let anyBoostActive = false;
 
+        // -----------------------------------------------------------------
+        // Tarif‑Forecast für Zeit‑Ziel Laden (optional)
+        // -----------------------------------------------------------------
+        // Wenn der Tarif gerade Netzladung sperrt (forcePvSurplusOnly=true), wollen wir im
+        // "forecast"‑Modus NICHT pauschal übersteuern, sondern prüfen:
+        // Reichen die erwarteten Tarif‑Freigaben bis zur Deadline aus?
+        // Falls nein → Notfall: Override (damit das Ziel trotzdem erreicht wird).
+
+        /** @type {null|{active:boolean,modeInt:number|null,prioInt:number|null,allowEvcsCheap:boolean,ref:number|null,exp:number|null,cheap:number|null,cheapManual:number|null,segments:Array<{startMs:number,endMs:number,priceEurKwh:number,allowGrid:boolean}>}} */
+        let tariffForecast = null;
+        const goalForecastReserveMs = Math.round(goalForecastReserveMin * 60 * 1000);
+
+        if (forcePvSurplusOnly && !pvSurplusOnlyCfg && goalTariffOverrideMode === 'forecast') {
+            const anyGoal = wbList.some((w) => w && w.enabled && w.online && w.goalActive && Number.isFinite(Number(w.goalFinishTs)) && Number(w.goalFinishTs) > now);
+            if (anyGoal) {
+                const maxGoalFinishTs = wbList.reduce((m, w) => {
+                    const ts = (w && w.goalActive) ? Number(w.goalFinishTs) : NaN;
+                    return Number.isFinite(ts) ? Math.max(m, ts) : m;
+                }, 0);
+
+                const horizonEndMs = (Number.isFinite(maxGoalFinishTs) && maxGoalFinishTs > now) ? maxGoalFinishTs : (now + 48 * 3600 * 1000);
+
+                try {
+                    // Tariff meta (produced by tarif-vis.js)
+                    const stActive = await this._getStateCached('tarif.aktiv');
+                    const active = stActive ? !!stActive.val : false;
+
+                    const stMode = await this._getStateCached('tarif.modus');
+                    const modeInt = stMode ? Number(stMode.val) : NaN;
+
+                    const stPrio = await this._getStateCached('tarif.prioritaet');
+                    const prioInt = stPrio ? Number(stPrio.val) : NaN;
+                    const allowEvcsCheap = (prioInt === 2 || prioInt === 3);
+
+                    const stRef = await this._getStateCached('tarif.preisRefEurProKwh');
+                    const priceRef = stRef ? Number(stRef.val) : NaN;
+                    const stGrenze = await this._getStateCached('tarif.preisGrenzeEurProKwh');
+                    const priceExpensive = stGrenze ? Number(stGrenze.val) : NaN;
+                    const stCheap = await this._getStateCached('tarif.preisSchwelleGuensigEurProKwh');
+                    const priceCheap = stCheap ? Number(stCheap.val) : NaN;
+
+                    const ref = Number.isFinite(priceRef) ? priceRef : null;
+                    const exp = Number.isFinite(priceExpensive) ? priceExpensive : null;
+                    const cheap = Number.isFinite(priceCheap) ? priceCheap : null;
+
+                    const delta = (ref !== null && exp !== null) ? Math.max(0, exp - ref) : null;
+                    const cheapManual = (ref !== null && delta !== null) ? (ref - delta) : null;
+
+                    // Price curves from provider mapping (via dp registry)
+                    let rawToday = null;
+                    let rawTomorrow = null;
+                    if (this.dp && typeof this.dp.getEntry === 'function') {
+                        if (this.dp.getEntry('tarif.pricesTodayJson')) rawToday = this.dp.getRaw('tarif.pricesTodayJson');
+                        if (this.dp.getEntry('tarif.pricesTomorrowJson')) rawTomorrow = this.dp.getRaw('tarif.pricesTomorrowJson');
+                    }
+
+                    const curve = [
+                        ...parsePriceCurve(rawToday),
+                        ...parsePriceCurve(rawTomorrow),
+                    ].filter((it) => it && Number.isFinite(it.startMs) && Number.isFinite(it.endMs) && Number.isFinite(it.priceEurKwh));
+                    curve.sort((a, b) => a.startMs - b.startMs);
+
+                    const segs = [];
+                    const eps = 1e-9;
+                    for (const it of curve) {
+                        const startMs = it.startMs;
+                        const endMs = it.endMs;
+                        if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= now) continue;
+                        if (startMs >= horizonEndMs) break;
+
+                        const p = it.priceEurKwh;
+
+                        // Approximate tariff state for planning (no hysteresis; conservative enough).
+                        let state = 'neutral';
+                        if (active && exp !== null && p >= (exp - eps)) {
+                            state = 'teuer';
+                        } else if (active) {
+                            if (Number(modeInt) === 2 && cheap !== null && p <= (cheap + eps)) state = 'guenstig';
+                            else if (Number(modeInt) !== 2 && cheapManual !== null && p <= (cheapManual + eps)) state = 'guenstig';
+                        }
+
+                        let allowGrid = true;
+                        if (active) {
+                            if (state === 'teuer') allowGrid = false;
+                            else if (state === 'guenstig') allowGrid = !!allowEvcsCheap;
+                            else allowGrid = true;
+                        }
+
+                        segs.push({ startMs, endMs, priceEurKwh: p, allowGrid });
+                    }
+
+                    tariffForecast = {
+                        active,
+                        modeInt: Number.isFinite(modeInt) ? Number(modeInt) : null,
+                        prioInt: Number.isFinite(prioInt) ? Number(prioInt) : null,
+                        allowEvcsCheap: !!allowEvcsCheap,
+                        ref,
+                        exp,
+                        cheap,
+                        cheapManual,
+                        segments: segs,
+                    };
+                } catch (_e) {
+                    tariffForecast = null;
+                }
+            }
+        }
+
+        /**
+         * Compute allowed & covered duration for the given time range based on the forecast segments.
+         * @param {Array<{startMs:number,endMs:number,allowGrid:boolean}>} segments
+         * @param {number} startMs
+         * @param {number} endMs
+         * @returns {{allowedMs:number, coveredMs:number}}
+         */
+        const computeAllowedAndCoverageMs = (segments, startMs, endMs) => {
+            let allowedMs = 0;
+            let coveredMs = 0;
+            if (!Array.isArray(segments) || segments.length === 0) return { allowedMs, coveredMs };
+            for (const seg of segments) {
+                if (!seg) continue;
+                const s = Math.max(startMs, seg.startMs);
+                const e = Math.min(endMs, seg.endMs);
+                if (e <= s) continue;
+                coveredMs += (e - s);
+                if (seg.allowGrid) allowedMs += (e - s);
+            }
+            return { allowedMs, coveredMs };
+        };
+
+        /**
+         * Decide whether we must override a tariff grid-charging lock in order to still reach the
+         * configured goal deadline.
+         *
+         * @param {any} w wallbox entry
+         * @returns {{override:boolean, reason:string}}
+         */
+        const decideGoalTariffOverride = (w) => {
+            try {
+                if (!w || !w.goalActive) return { override: false, reason: '' };
+
+                if (w.goalOverdue) return { override: true, reason: 'overdue' };
+
+                const finishTs = Number(w.goalFinishTs);
+                if (!Number.isFinite(finishTs) || finishTs <= now) return { override: true, reason: 'overdue' };
+
+                const deltaSoc = Number(w.goalDeltaSocPct);
+                if (!Number.isFinite(deltaSoc) || deltaSoc <= 0) return { override: false, reason: 'no_need' };
+
+                const maxP = Number(w.maxPW);
+                if (!Number.isFinite(maxP) || maxP <= 0) return { override: true, reason: 'no_power' };
+
+                const battUser = Number(w.goalBatteryKwhUser);
+                const battDefault = (String(w.chargerType || '').toUpperCase() === 'DC') ? 200 : 60;
+                const battKwh = (Number.isFinite(battUser) && battUser > 0) ? battUser : battDefault;
+
+                // Energy needed (Wh) with safety factor
+                const needWhRaw = battKwh * 1000 * (deltaSoc / 100);
+                const needWh = needWhRaw * goalForecastSafetyFactor;
+
+                // Latest possible start time if we charge continuously with max power.
+                const requiredMs = (needWh > 0) ? Math.round((needWh * 3600000) / maxP) : 0;
+                const latestStart = finishTs - requiredMs;
+                if (now >= (latestStart - goalForecastReserveMs)) {
+                    return { override: true, reason: 'latest_start' };
+                }
+
+                // If we have a tariff forecast, estimate how much "allowed" time remains until the deadline.
+                if (tariffForecast && Array.isArray(tariffForecast.segments) && tariffForecast.segments.length > 0) {
+                    const { allowedMs, coveredMs } = computeAllowedAndCoverageMs(tariffForecast.segments, now, finishTs);
+                    const remMs = finishTs - now;
+                    if (remMs > 0 && coveredMs >= (remMs * goalForecastMinCoverage)) {
+                        const deliverableWh = maxP * (allowedMs / 3600000);
+                        if (deliverableWh + 1e-6 >= needWh) {
+                            return { override: false, reason: 'forecast_ok' };
+                        }
+                        return { override: true, reason: 'forecast_insufficient' };
+                    }
+                    // Forecast exists but doesn't cover the full horizon reliably → fall back to latest-start.
+                    return { override: false, reason: 'forecast_unreliable' };
+                }
+
+                // No forecast: fall back to legacy urgency thresholds (extra safety) and otherwise wait
+                // until latest-start is reached.
+                const remMin = (typeof w.goalRemainingMin === 'number' && Number.isFinite(w.goalRemainingMin)) ? w.goalRemainingMin : null;
+                const urg = (typeof w.goalUrgency === 'number' && Number.isFinite(w.goalUrgency)) ? w.goalUrgency : null;
+                const legacyOverride = (remMin !== null && remMin <= goalTariffOverrideMinRemainingMin)
+                    || (urg !== null && urg >= goalTariffOverrideUrgency);
+                if (legacyOverride) return { override: true, reason: 'legacy_urgency' };
+
+                return { override: false, reason: 'wait' };
+            } catch {
+                return { override: false, reason: 'err' };
+            }
+        };
+
         for (const w of wbList) {
             let override = normalizeWallboxModeOverride(w.userMode);
             const boostNotAllowed = (override === 'boost' && w.allowBoost === false);
@@ -1674,29 +2063,30 @@ class ChargingManagementModule extends BaseModule {
                 ? Number(w.boostTimeoutMinOverride)
                 : typeDefaultMin;
 
-            // Ziel‑Laden Priorität:
-            // - Ein aktives Zeit‑Ziel muss die Deadline sicher erreichen → Tarif‑Sperren für Netzladung dürfen
-            //   (optional) pro Ladepunkt übersteuert werden.
+            // Ziel‑Laden Priorität / Tarif‑Bonus:
             // - Globale PV‑Only Einstellungen (pvSurplusOnlyCfg/Mode PV) bleiben dominant.
-            //
-            // Smart‑Ziel (optional): Wenn goalStrategy=smart UND goalTariffOverrideAlways=false,
-            // wird die Übersteuerung nur bei knappen Deadlines aktiviert.
+            // - Wenn der Tarif Netzladen sperrt (forcePvSurplusOnly), hängt das Verhalten vom
+            //   goalTariffOverrideMode ab:
+            //   - always   : Ziel übersteuert sofort (Legacy)
+            //   - forecast : Tarif wirkt; Override nur wenn nötig (Forecast/Latest‑Start)
+            //   - never    : nie übersteuern (kann Deadline verfehlen)
             let forcePvForW = forcePvSurplusOnly;
             let goalTariffOverrideActive = false;
+            let goalTariffOverrideReason = '';
             if (forcePvForW && !pvSurplusOnlyCfg && w.enabled && w.online && w.goalActive) {
-                if (goalTariffOverrideAlways) {
+                if (goalTariffOverrideMode === 'always') {
                     forcePvForW = false;
                     goalTariffOverrideActive = true;
-                } else if (goalStrategy === 'smart') {
-                    const remMin = (typeof w.goalRemainingMin === 'number' && Number.isFinite(w.goalRemainingMin)) ? w.goalRemainingMin : null;
-                    const urg = (typeof w.goalUrgency === 'number' && Number.isFinite(w.goalUrgency)) ? w.goalUrgency : null;
-                    const shouldOverride = !!w.goalOverdue
-                        || (remMin !== null && remMin <= goalTariffOverrideMinRemainingMin)
-                        || (urg !== null && urg >= goalTariffOverrideUrgency);
-                    if (shouldOverride) {
+                    goalTariffOverrideReason = 'always';
+                } else if (goalTariffOverrideMode === 'never') {
+                    goalTariffOverrideReason = 'never';
+                } else {
+                    const dec = decideGoalTariffOverride(w);
+                    if (dec && dec.override) {
                         forcePvForW = false;
                         goalTariffOverrideActive = true;
                     }
+                    goalTariffOverrideReason = (dec && dec.reason) ? String(dec.reason) : (goalTariffOverrideActive ? 'override' : 'wait');
                 }
             }
 
@@ -1779,6 +2169,7 @@ class ChargingManagementModule extends BaseModule {
             try {
                 await this._queueState(`${w.ch}.effectiveMode`, eff, true);
                 await this._queueState(`${w.ch}.goalTariffOverride`, !!goalTariffOverrideActive, true);
+                await this._queueState(`${w.ch}.goalTariffOverrideReason`, String(goalTariffOverrideReason || ''), true);
                 await this._queueState(`${w.ch}.boostTimeoutMin`, Number.isFinite(effBoostTimeoutMin) ? effBoostTimeoutMin : 0, true);
                 await this._queueState(`${w.ch}.boostActive`, eff === 'boost', true);
                 await this._queueState(`${w.ch}.boostSince`, boostSince || 0, true);

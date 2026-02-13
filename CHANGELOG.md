@@ -1,3 +1,8 @@
+## 0.6.141
+- EMS/EVCS: **Tarif als Bonus** – Zeit‑Ziel Laden nutzt Preis‑Forecast (Fallback: Latest‑Start) und übersteuert Tarif‑Netzladesperren nur dann, wenn es sonst nicht bis zur Deadline reicht.
+- EMS/EVCS: Neue Diagnose pro Ladepunkt: `goalTariffOverrideReason`.
+- Hinweis: Default Policy ist jetzt `forecast` (für Legacy‑Verhalten: `chargingManagement.goalTariffOverrideMode=always` oder `goalTariffOverrideAlways=true`).
+
 ## 0.6.140
 - EMS/EVCS: **Priorisierung (Start)** – Zeit‑Ziel Laden übersteuert Tarif‑Netzladesperren pro Ladepunkt, damit die Deadline zuverlässig erreicht wird (optional abschaltbar: `chargingManagement.goalTariffOverrideAlways=false`).
 - UI (Installer/Diagnose): Im Status „Budget & Gates“ wird im Card **Gesamtbudget** jetzt auch der **Tarif‑Modus (Manuell/Automatik/Aus)** angezeigt.

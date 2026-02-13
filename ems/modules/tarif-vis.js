@@ -1124,7 +1124,11 @@ if (aktivEff) {
         ? 'teuer'
         : 'unbekannt';
 
-  const baseTarif = `Tarif ${tarifStateTxt} (${priceCurTxt})`;
+  // Make tariff mode instantly visible (Manuell/Automatik)
+  const modeTxt = (modusInt === 2) ? 'Automatik' : (modusInt === 1) ? 'Manuell' : '';
+  const baseTarif = modeTxt
+    ? `Tarif ${modeTxt} ${tarifStateTxt} (${priceCurTxt})`
+    : `Tarif ${tarifStateTxt} (${priceCurTxt})`;
 
   // Zeitvariables Netzentgelt (HT/NT) als Overlay:
   // - NT: EVCS freigegeben + Speicher darf (netto) laden

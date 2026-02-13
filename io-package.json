@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.140",
+    "version": "0.6.141",
     "news": {
+      "0.6.141": {
+        "en": "Charging Management: Goal-Charging now treats the dynamic tariff as an optimization bonus. If the tariff blocks grid charging, the controller uses the tariff price forecast (fallback: latest-start) and only overrides the block when needed to still reach the configured finish time. Added goalTariffOverrideReason diagnostics. Default override policy is now 'forecast' (set chargingManagement.goalTariffOverrideMode='always' or goalTariffOverrideAlways=true to restore legacy behavior).",
+        "de": "Lademanagement: Zeit‑Ziel Laden behandelt den dynamischen Tarif jetzt als Optimierungs‑Bonus. Wenn der Tarif Netzladung sperrt, wird anhand der Preis‑Prognose (Fallback: Latest‑Start) nur dann übersteuert, wenn sonst die Deadline verfehlt würde. Neu: Diagnose goalTariffOverrideReason. Standard‑Policy ist jetzt 'forecast' (für Legacy: chargingManagement.goalTariffOverrideMode='always' oder goalTariffOverrideAlways=true)."
+      },
       "0.6.140": {
         "en": "Charging Management: Goal-Charging now prioritizes reaching the finish time and can override tariff grid-charge blocking per chargepoint. Diagnostics: Tariff mode (Manual/Auto) is shown in the total budget card.",
         "de": "Lademanagement: Zeit‑Ziel Laden priorisiert jetzt das Erreichen der Deadline und kann Tarif‑Netzladesperren pro Ladepunkt übersteuern. Diagnose: Tarif‑Modus (Manuell/Automatik) wird im Gesamtbudget angezeigt."
