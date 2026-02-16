@@ -1044,23 +1044,40 @@ class TarifVisModule extends BaseModule {
             }
 
             // Entladen-Freigabe (für Speicher-/Assist-Logik):
-            // - im günstigen Fenster sperren (Batterie nicht leerfahren)
-            // - sonst freigeben
+            //
+            // Ziel (Bugfix + bessere Praxis):
+            // - Eigenverbrauchs-Optimierung darf grundsätzlich entladen (Netzbezug reduzieren).
+            // - Im günstigen Tarif-Fenster sperren wir die Entladung *nur*, wenn der Speicher
+            //   tatsächlich im Tarif-Kontext aus dem Netz laden soll (sonst würden wir gegen
+            //   das Laden arbeiten und „frieren“ den Speicher fälschlich ein).
+            //
+            // Wichtiger Bugfix:
+            // - Wenn Tarif „günstig“ ist, aber Speicher-Netzladen wegen Zeitfenster-Policy
+            //   (storageChargeBlockedByTime = true, Status: „Eigenverbrauchsoptimierung aktiv (tagsüber)“)
+            //   blockiert ist, muss Entladung weiterhin möglich sein.
             let dischargeAllowed = true;
             if (aktivEff) {
                 const netFeeActive = !!(netFeeEff && netFeeMode !== 'off');
                 const netFeeIsNt = !!(netFeeActive && netFeeMode === 'NT');
                 const netFeeIsHt = !!(netFeeActive && netFeeMode === 'HT');
 
-                if (netFeeIsNt) {
-                    // Entladen im NT sperren (Batterie nicht leerfahren)
-                    dischargeAllowed = false;
-                } else if (netFeeIsHt) {
-                    // HT: Eigenverbrauch darf entladen.
+                const storageChargingPlanned = Number.isFinite(speicherSollW) && speicherSollW < 0;
+                const forceSelfConsumption = !!storageChargeBlockedByTime || netFeeIsHt;
+
+                if (forceSelfConsumption) {
+                    // Eigenverbrauch-Modus (tagsüber Policy oder HT): Entladen erlaubt.
                     dischargeAllowed = true;
+                } else if (netFeeIsNt) {
+                    // NT: Entladung nur sperren, wenn wir wirklich laden wollen.
+                    dischargeAllowed = !storageChargingPlanned;
                 } else {
-                    // Standard (ST) oder Netzentgelt aus: dynamischer Tarif wie vorher
-                    dischargeAllowed = (tarifState !== 'guenstig');
+                    // Standard (ST) oder Netzentgelt aus:
+                    // Im günstigen Fenster nur sperren, wenn Speicher aktiv laden soll.
+                    if (tarifState === 'guenstig') {
+                        dischargeAllowed = !storageChargingPlanned;
+                    } else {
+                        dischargeAllowed = true;
+                    }
                 }
             } else {
                 dischargeAllowed = true;

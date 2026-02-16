@@ -1,3 +1,8 @@
+## 0.6.142
+- EMS/Speicher: **Bugfix Eigenverbrauch-Entladung** – wenn Tarif „günstig“ ist, aber Speicher-Netzladen durch Zeitfenster-Policy („tagsüber“) blockiert ist, darf der Speicher wieder **sauber entladen** (Netzbezug reduzieren).
+- EMS/Speicher: **PV‑Reserve Override** – wenn Tarif-Netzladen durch PV‑Reserve/PV‑Forecast blockiert ist (Soll bleibt 0 W), wird Eigenverbrauchs‑Entladung nicht mehr fälschlich gesperrt.
+- UI: Service‑Worker Cache‑Version erhöht.
+
 ## 0.6.141
 - EMS/EVCS: **Tarif als Bonus** – Zeit‑Ziel Laden nutzt Preis‑Forecast (Fallback: Latest‑Start) und übersteuert Tarif‑Netzladesperren nur dann, wenn es sonst nicht bis zur Deadline reicht.
 - EMS/EVCS: Neue Diagnose pro Ladepunkt: `goalTariffOverrideReason`.

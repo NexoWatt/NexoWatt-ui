@@ -1228,9 +1228,22 @@ if (typeof soc === 'number') {
 		}
 // 3) Eigenverbrauch: Entladen zur Netzbezug-Reduktion (optional)
 if (targetW === 0 && selfDischargeEnabled) {
-    // Wenn der dynamische Tarif im "günstig"-Fenster ist, soll der Speicher nicht
-    // durch Eigenverbrauchs-Entladung geleert werden (Reserve halten / günstigen Netzstrom nutzen).
-    if (typeof dischargeAllowed === 'boolean' && dischargeAllowed === false) {
+    // Wenn der dynamische Tarif im "günstig"-Fenster ist, kann es gewünscht sein,
+    // die Eigenverbrauchs-Entladung zu sperren (z.B. während aktivem Netzladen).
+    //
+    // BUGFIX (Phase 8+):
+    // In Konstellationen, in denen das Tarif-Netzladen zwar "geplant" ist, aber durch
+    // PV‑Reserve / PV‑Forecast bewusst blockiert wird (=> targetW bleibt 0), darf die
+    // Eigenverbrauchs-Entladung nicht pauschal gesperrt werden. Sonst bleibt der Speicher
+    // "eingefroren" und der Kunde zieht unnötig Netzbezug.
+    const tariffBlocksDischarge = (typeof dischargeAllowed === 'boolean' && dischargeAllowed === false);
+    const reasonTxt = (reason === null || reason === undefined) ? '' : String(reason);
+    const pvReserveBlocked = (source === 'tarif') && (
+        (reasonTxt.includes('PV') && reasonTxt.toLowerCase().includes('reserve')) ||
+        reasonTxt.toLowerCase().includes('pv forecast')
+    );
+
+    if (tariffBlocksDischarge && !pvReserveBlocked) {
         if (source === 'idle' || reason === 'Keine Aktion') {
             reason = 'Tarif: günstig – Eigenverbrauchs-Entladung gesperrt';
             source = 'tarif';
