@@ -1198,7 +1198,7 @@
       "de": "responsives Dashboard in NexoWatt-Farben (grün/schwarz). Alle Datenpunkte sind in den Adaptereinstellungen verknüpfbar."
     },
     "authors": [
-      "Visu Helper"
+      "NexoWatt"
     ],
     "platform": "Javascript/Node.js",
     "mode": "daemon",
@@ -1245,7 +1245,9 @@
       }
     ],
     "welcomeScreen": "adapter/nexowatt-ui/tab.html",
-    "license": "UNLICENSED"
+    "license": "NexoWatt Proprietary License (NPL) v1.0",
+    "extIcon": "https://raw.githubusercontent.com/NexoWatt/ioBroker.nexowatt-ui/main/admin/admin.png",
+    "readme": "https://github.com/NexoWatt/ioBroker.nexowatt-ui/blob/main/README.md"
   },
   "native": {
     "port": 8188,
