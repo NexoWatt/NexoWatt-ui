@@ -236,6 +236,8 @@ function reasonHint(reason, applyStatus) {
   if (r === 'NO_PV_SURPLUS') return { level: 'info', text: 'Kein PV-Überschuss verfügbar.' };
   if (r === 'BELOW_MIN') return { level: 'info', text: 'Unter Mindestleistung – Ladepunkt pausiert.' };
 
+  if (r === 'NO_VEHICLE') return { level: 'info', text: 'Kein Fahrzeug verbunden – Sollwert wird auf 0 gesetzt.' };
+
   if (r === 'BOOST_TIMEOUT') return { level: 'info', text: 'Boost beendet (Timeout).' };
   if (r === 'BOOST_NOT_ALLOWED') return { level: 'warn', text: 'Boost für diesen Ladepunkt nicht erlaubt.' };
 
@@ -509,6 +511,12 @@ function buildEvcsModalBodyHtml(i) {
   let emsGoalHint = '';
   if (!emsGoalEnabled) {
     emsGoalHint = 'Aus';
+  } else if (emsGoalStatus === 'no_vehicle') {
+    emsGoalHint = 'Fahrzeug nicht verbunden – Zielladen pausiert.';
+  } else if (emsGoalStatus === 'waiting_soc') {
+    emsGoalHint = 'Warte auf SoC‑Aktualisierung (nach Einstecken).';
+  } else if (emsGoalStatus === 'soc_stale') {
+    emsGoalHint = 'SoC‑Wert veraltet – warte auf neue SoC‑Daten.';
   } else if (emsGoalStatus === 'no_soc') {
     emsGoalHint = 'SoC-Datenpunkt fehlt (Zuordnung im Appcenter prüfen).';
   } else if (emsGoalStatus === 'no_deadline') {

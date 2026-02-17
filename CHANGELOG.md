@@ -1,3 +1,8 @@
+## 0.6.143
+- EMS/EVCS: **Zielladen nur bei verbundenem Fahrzeug** – wenn kein Fahrzeug steckt (`evcs.active=false`), wird der Sollwert konsequent auf **0 W** gesetzt (verhindert „gecachten“ 11 kW Start beim Einstecken).
+- EMS/EVCS: **SoC Freshness** – nach dem Einstecken wartet Zielladen auf eine frische SoC‑Aktualisierung (verhindert Berechnung mit Tage‑altem SoC).
+- UI: Neue Diagnose/Hint: `NO_VEHICLE` + Zielladen Status **Fahrzeug nicht verbunden / warte auf SoC**.
+
 ## 0.6.142
 - EMS/Speicher: **Bugfix Eigenverbrauch-Entladung** – wenn Tarif „günstig“ ist, aber Speicher-Netzladen durch Zeitfenster-Policy („tagsüber“) blockiert ist, darf der Speicher wieder **sauber entladen** (Netzbezug reduzieren).
 - EMS/Speicher: **PV‑Reserve Override** – wenn Tarif-Netzladen durch PV‑Reserve/PV‑Forecast blockiert ist (Soll bleibt 0 W), wird Eigenverbrauchs‑Entladung nicht mehr fälschlich gesperrt.

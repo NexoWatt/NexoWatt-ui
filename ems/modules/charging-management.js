@@ -22,6 +22,20 @@ function clamp(n, min, max) {
     return n;
 }
 
+function toBool(v) {
+    if (v === null || v === undefined) return null;
+    if (typeof v === 'boolean') return v;
+    if (typeof v === 'number') {
+        if (!Number.isFinite(v)) return null;
+        return v !== 0;
+    }
+    const s = String(v).trim().toLowerCase();
+    if (!s) return null;
+    if (s === 'true' || s === 'on' || s === 'yes' || s === 'ja' || s === '1' || s === 'plugged' || s === 'connected') return true;
+    if (s === 'false' || s === 'off' || s === 'no' || s === 'nein' || s === '0' || s === 'unplugged' || s === 'disconnected') return false;
+    return null;
+}
+
 // --- Tarif forecast helpers ------------------------------------------------
 
 /**
@@ -315,6 +329,10 @@ class ChargingManagementModule extends BaseModule {
         this._chargingLastActiveMs = new Map(); // safeKey -> ms of last detected activity
         this._chargingLastSeenMs = new Map(); // safeKey -> ms of last processing (cleanup)
         this._boostSinceMs = new Map(); // safeKey -> ms since epoch (boost start)
+
+        // EV connection tracking (for Zielladen + safe setpoints)
+        this._vehiclePluggedPrev = new Map(); // safeKey -> boolean
+        this._vehiclePluggedSinceMs = new Map(); // safeKey -> ms of last plug-in (rising edge)
         // Gate B: PV hysteresis state (global, for PV-only modes)
         this._pvAvailable = false;
         this._pvAboveSinceMs = 0;
@@ -775,6 +793,9 @@ class ChargingManagementModule extends BaseModule {
         await mk('goalTargetSocPct', 'Ziel-SoC (%)', 'number', 'value.percent', true, { def: 100, min: 0, max: 100, unit: '%' });
         await mk('goalFinishTs', 'Fertig bis (Zeitpunkt ms)', 'number', 'value.time', true, { def: 0 });
         await mk('goalBatteryKwh', 'Akkukapazität (kWh) (optional)', 'number', 'value', true, { def: 0, unit: 'kWh' });
+
+        // Vehicle connection (derived from evcs.<index>.active when mapped via main.js)
+        await mk('vehiclePlugged', 'Fahrzeug verbunden', 'boolean', 'indicator');
 
         // Ziel-Laden: berechnete Werte (read-only)
         await mk('goalActive', 'Zeit-Ziel aktiv (berechnet)', 'boolean', 'indicator');
@@ -1595,6 +1616,48 @@ class ChargingManagementModule extends BaseModule {
             // Stable mapping from wallbox to EVCS index (independent from safe key)
             const evcsIndex = (wb && wb.evcsIndex !== undefined && wb.evcsIndex !== null) ? Number(wb.evcsIndex) : NaN;
 
+            // Vehicle connection (mapped via main.js: evcs.<index>.active). Important:
+            // If a non-zero setpoint was written while the car was unplugged, some wallboxes
+            // may start charging immediately on plug-in (cached setpoint). We therefore track
+            // the plug state and force 0W whenever the vehicle is not connected.
+            /** @type {boolean|null} */
+            let vehiclePlugged = null;
+            let vehiclePluggedSinceMs = 0;
+            if (Number.isFinite(evcsIndex) && evcsIndex > 0) {
+                try {
+                    const stPlg = await this._getStateCached(`evcs.${Math.round(evcsIndex)}.active`);
+                    vehiclePlugged = stPlg ? toBool(stPlg.val) : null;
+                    const tsPlg = stPlg ? Number(stPlg.ts) : NaN;
+                    const tsPlgMs = (Number.isFinite(tsPlg) && tsPlg > 0) ? Math.round(tsPlg) : 0;
+
+                    if (vehiclePlugged === true || vehiclePlugged === false) {
+                        const prev = this._vehiclePluggedPrev.get(safe);
+                        if (prev !== vehiclePlugged) {
+                            if (vehiclePlugged === true) {
+                                this._vehiclePluggedSinceMs.set(safe, tsPlgMs || now);
+                            } else {
+                                this._vehiclePluggedSinceMs.delete(safe);
+                            }
+                        } else if (vehiclePlugged === true) {
+                            const have = this._vehiclePluggedSinceMs.get(safe);
+                            if (!Number.isFinite(have) || have <= 0) {
+                                this._vehiclePluggedSinceMs.set(safe, tsPlgMs || now);
+                            }
+                        }
+                        this._vehiclePluggedPrev.set(safe, vehiclePlugged);
+                    }
+                } catch {
+                    vehiclePlugged = null;
+                }
+            }
+            vehiclePluggedSinceMs = this._vehiclePluggedSinceMs.get(safe) || 0;
+
+            try {
+                await this._queueState(`${ch}.vehiclePlugged`, vehiclePlugged === true, true);
+            } catch {
+                // ignore
+            }
+
             // Goal-Charging (Zielladen) is only supported in AUTO mode.
             if (goalEnabled) {
                 if (userMode !== 'auto') {
@@ -1602,6 +1665,10 @@ class ChargingManagementModule extends BaseModule {
                 } else
                 if (!Number.isFinite(evcsIndex) || evcsIndex <= 0) {
                     goalStatus = 'no_index';
+                } else
+                if (vehiclePlugged === false) {
+                    // Only compute once a vehicle is actually connected.
+                    goalStatus = 'no_vehicle';
                 } else {
                     try {
                         const stSoc = await this._getStateCached(`evcs.${Math.round(evcsIndex)}.vehicleSoc`);
@@ -1609,6 +1676,21 @@ class ChargingManagementModule extends BaseModule {
                         if (!Number.isFinite(socVal) || socVal < 0 || socVal > 100) {
                             goalStatus = 'no_soc';
                         } else {
+                            // Avoid using very old SoC values after long unplugged periods.
+                            // On plug-in we wait for a fresh SoC update (if the state timestamp is older than the plug time).
+                            const socTs = (stSoc && typeof stSoc.ts === 'number' && Number.isFinite(stSoc.ts)) ? Math.round(stSoc.ts) : 0;
+                            const socAgeMs = (socTs > 0 && now >= socTs) ? (now - socTs) : 0;
+                            const SOC_STALE_MS = 48 * 3600 * 1000; // 48h
+                            const SOC_RECENT_GRACE_MS = 10 * 60 * 1000; // 10 min
+                            const SOC_AFTER_PLUG_TOL_MS = 2 * 60 * 1000; // 2 min tolerance
+
+                            if (socAgeMs > SOC_STALE_MS) {
+                                goalStatus = 'soc_stale';
+                            } else if (vehiclePlugged === true && vehiclePluggedSinceMs > 0 && socTs > 0
+                                && socTs < (vehiclePluggedSinceMs - SOC_AFTER_PLUG_TOL_MS)
+                                && socAgeMs > SOC_RECENT_GRACE_MS) {
+                                goalStatus = 'waiting_soc';
+                            } else {
                             goalVehicleSocPct = clamp(socVal, 0, 100);
                             goalDeltaSocPct = Math.max(0, goalTargetSocPct - goalVehicleSocPct);
 
@@ -1643,6 +1725,7 @@ class ChargingManagementModule extends BaseModule {
                                     goalActive = true;
                                     goalStatus = goalOverdue ? 'overdue' : 'active';
                                 }
+                            }
                             }
                         }
                     } catch {
@@ -1685,6 +1768,7 @@ class ChargingManagementModule extends BaseModule {
                 actualPowerW: pWNum,
                 userMode,
                 evcsIndex: (Number.isFinite(evcsIndex) && evcsIndex > 0) ? Math.round(evcsIndex) : 0,
+                vehiclePlugged,
                 goalEnabled,
                 goalActive,
                 goalStatus,
@@ -3466,6 +3550,15 @@ if (components.length) {
                         targetW = desired;
                     }
                 }
+            }
+
+            // Safety: if the vehicle is not plugged, always force 0W.
+            // Otherwise some chargers may start charging immediately on plug-in
+            // if a non-zero setpoint was written while unplugged.
+            if (w.vehiclePlugged === false) {
+                targetW = 0;
+                targetA = 0;
+                reason = ReasonCodes.NO_VEHICLE;
             }
 
             // Convert to A for AC current-based control

@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.142",
+    "version": "0.6.143",
     "news": {
+      "0.6.143": {
+        "en": "Goal-Charging: Fixed stale setpoints when the vehicle is unplugged. Zielladen is now only computed when a vehicle is connected (evcs.active=plugged) and waits for a fresh SoC update after plug-in. If no vehicle is connected, the EMS forces a 0W setpoint (prevents immediate 11kW on plug-in due to cached setpoints). Added reason code NO_VEHICLE + UI hint.",
+        "de": "Zeit‑Ziel Laden: Fix für 'stale' Sollwerte, wenn das Fahrzeug nicht steckt. Zielladen wird jetzt nur berechnet, wenn ein Fahrzeug verbunden ist (evcs.active=plugged) und wartet nach dem Einstecken auf eine frische SoC‑Aktualisierung. Wenn kein Fahrzeug verbunden ist, setzt das EMS den Sollwert konsequent auf 0W (verhindert sofortiges 11kW‑Laden durch gecachte Sollwerte). Neu: Reason‑Code NO_VEHICLE + UI‑Hinweis."
+      },
       "0.6.141": {
         "en": "Charging Management: Goal-Charging now treats the dynamic tariff as an optimization bonus. If the tariff blocks grid charging, the controller uses the tariff price forecast (fallback: latest-start) and only overrides the block when needed to still reach the configured finish time. Added goalTariffOverrideReason diagnostics. Default override policy is now 'forecast' (set chargingManagement.goalTariffOverrideMode='always' or goalTariffOverrideAlways=true to restore legacy behavior).",
         "de": "Lademanagement: Zeit‑Ziel Laden behandelt den dynamischen Tarif jetzt als Optimierungs‑Bonus. Wenn der Tarif Netzladung sperrt, wird anhand der Preis‑Prognose (Fallback: Latest‑Start) nur dann übersteuert, wenn sonst die Deadline verfehlt würde. Neu: Diagnose goalTariffOverrideReason. Standard‑Policy ist jetzt 'forecast' (für Legacy: chargingManagement.goalTariffOverrideMode='always' oder goalTariffOverrideAlways=true)."

@@ -37,6 +37,9 @@ const ReasonCodes = Object.freeze({
     NO_PV_SURPLUS: 'NO_PV_SURPLUS',
     PAUSED_BY_PEAK_SHAVING: 'PAUSED_BY_PEAK_SHAVING',
 
+    // Vehicle / session state
+    NO_VEHICLE: 'NO_VEHICLE',
+
     // Boost
     BOOST_TIMEOUT: 'BOOST_TIMEOUT',
     BOOST_NOT_ALLOWED: 'BOOST_NOT_ALLOWED',
@@ -116,6 +119,8 @@ const ReasonTextDe = Object.freeze({
     [ReasonCodes.BELOW_MIN]: 'Unter Mindestleistung',
     [ReasonCodes.NO_PV_SURPLUS]: 'Kein PV-Überschuss',
     [ReasonCodes.PAUSED_BY_PEAK_SHAVING]: 'Pausiert durch Lastspitzenkappung',
+
+    [ReasonCodes.NO_VEHICLE]: 'Kein Fahrzeug verbunden',
     [ReasonCodes.BOOST_TIMEOUT]: 'Boost abgelaufen',
     [ReasonCodes.BOOST_NOT_ALLOWED]: 'Boost nicht erlaubt',
     [ReasonCodes.CONTROL_DISABLED]: 'Regelung aus',
