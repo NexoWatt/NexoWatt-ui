@@ -493,6 +493,7 @@ function buildEvcsModalBodyHtml(i) {
   const emsGoalFinishTs = Number.isFinite(Number(d(`${cm}.goalFinishTs`))) ? Math.round(Number(d(`${cm}.goalFinishTs`))) : 0;
   const emsGoalBatteryKwh = Number.isFinite(Number(d(`${cm}.goalBatteryKwh`))) ? Number(d(`${cm}.goalBatteryKwh`)) : 0;
   const emsGoalStatus = String(d(`${cm}.goalStatus`) || '');
+  const emsGoalSocAvail = hasEms ? d(`${cm}.goalSocAvailable`) : null;
   const emsGoalActive = hasEms ? !!d(`${cm}.goalActive`) : false;
   const emsGoalRemainingMin = Number.isFinite(Number(d(`${cm}.goalRemainingMin`))) ? Math.round(Number(d(`${cm}.goalRemainingMin`))) : 0;
   const emsGoalDesiredW = Number.isFinite(Number(d(`${cm}.goalDesiredPowerW`))) ? Math.round(Number(d(`${cm}.goalDesiredPowerW`))) : 0;
@@ -518,7 +519,7 @@ function buildEvcsModalBodyHtml(i) {
   } else if (emsGoalStatus === 'soc_stale') {
     emsGoalHint = 'SoC‑Wert veraltet – warte auf neue SoC‑Daten.';
   } else if (emsGoalStatus === 'no_soc') {
-    emsGoalHint = 'SoC-Datenpunkt fehlt (Zuordnung im Appcenter prüfen).';
+    emsGoalHint = 'SoC nicht verfügbar – Zielladen läuft im Fallback (Worst-Case) über Akkukapazität.';
   } else if (emsGoalStatus === 'no_deadline') {
     emsGoalHint = 'Uhrzeit fehlt – bitte setzen.';
   } else if (emsGoalStatus === 'reached') {
@@ -528,7 +529,11 @@ function buildEvcsModalBodyHtml(i) {
   } else if (emsGoalStatus === 'overdue') {
     emsGoalHint = `Überfällig • Unterversorgung: ${fmtW(emsGoalShortfallW)}.`;
   } else if (emsGoalStatus === 'active' || emsGoalActive) {
-    emsGoalHint = `Rest ${fmtMin(emsGoalRemainingMin)} • Ziel ${emsGoalTargetSoc}% • Ø ${fmtW(emsGoalDesiredW)}.`;
+    if (emsGoalSocAvail === false) {
+      emsGoalHint = `Rest ${fmtMin(emsGoalRemainingMin)} • Ziel ${emsGoalTargetSoc}% (Schätzung) • Ø ${fmtW(emsGoalDesiredW)}.`;
+    } else {
+      emsGoalHint = `Rest ${fmtMin(emsGoalRemainingMin)} • Ziel ${emsGoalTargetSoc}% • Ø ${fmtW(emsGoalDesiredW)}.`;
+    }
   } else {
     emsGoalHint = 'Konfiguriert';
   }

@@ -5726,6 +5726,7 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
       const gFinishState = Number(d('chargingManagement.wallboxes.lp1.goalFinishTs'));
       const gKwhState = Number(d('chargingManagement.wallboxes.lp1.goalBatteryKwh'));
       const gStatusCode = String(d('chargingManagement.wallboxes.lp1.goalStatus') || '');
+      const gSocAvail = d('chargingManagement.wallboxes.lp1.goalSocAvailable');
       const gActive = !!d('chargingManagement.wallboxes.lp1.goalActive');
       const gRemaining = Number(d('chargingManagement.wallboxes.lp1.goalRemainingMin'));
       const gDesiredW = Number(d('chargingManagement.wallboxes.lp1.goalDesiredPowerW'));
@@ -5780,8 +5781,8 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
         label = 'Aus';
         hint = 'Zeit‑Ziel‑Laden deaktiviert.';
       } else if (gStatusCode === 'no_soc'){
-        label = 'SoC fehlt';
-        hint = 'Fahrzeug‑SoC Datenpunkt fehlt (Zuordnung im Appcenter).';
+        label = 'SoC n/a';
+        hint = 'SoC nicht verfügbar – Zielladen läuft im Fallback (Worst‑Case) über Akkukapazität.';
       } else if (gStatusCode === 'no_deadline'){
         label = 'Uhrzeit fehlt';
         hint = 'Bitte „Fertig um“ setzen.';
@@ -5795,8 +5796,13 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
         label = 'Unterversorgung';
         hint = `Fehlleistung: ${shortfallW} W.`;
       } else if (gStatusCode === 'active' || gActive){
-        label = 'Aktiv';
-        hint = `Rest ${remMin} min • Ziel ${goalTarget}% • Ø ${desiredW} W.`;
+        if (gSocAvail === false){
+          label = 'Aktiv (ohne SoC)';
+          hint = `Rest ${remMin} min • Ziel ${goalTarget}% (Schätzung) • Ø ${desiredW} W.`;
+        } else {
+          label = 'Aktiv';
+          hint = `Rest ${remMin} min • Ziel ${goalTarget}% • Ø ${desiredW} W.`;
+        }
       } else {
         label = 'Konfiguriert';
       }

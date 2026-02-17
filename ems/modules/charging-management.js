@@ -796,6 +796,8 @@ class ChargingManagementModule extends BaseModule {
 
         // Vehicle connection (derived from evcs.<index>.active when mapped via main.js)
         await mk('vehiclePlugged', 'Fahrzeug verbunden', 'boolean', 'indicator');
+        await mk('goalSocAvailable', 'Fahrzeug-SoC verfügbar', 'boolean', 'indicator');
+
 
         // Ziel-Laden: berechnete Werte (read-only)
         await mk('goalActive', 'Zeit-Ziel aktiv (berechnet)', 'boolean', 'indicator');
@@ -1605,6 +1607,7 @@ class ChargingManagementModule extends BaseModule {
             let goalActive = false;
             let goalStatus = 'inactive';
             let goalVehicleSocPct = null;
+            let goalSocAvailable = false;
             let goalRemainingMin = 0;
             let goalRequiredW = 0;
             let goalDesiredW = 0;
@@ -1673,26 +1676,61 @@ class ChargingManagementModule extends BaseModule {
                     try {
                         const stSoc = await this._getStateCached(`evcs.${Math.round(evcsIndex)}.vehicleSoc`);
                         const socVal = stSoc ? Number(stSoc.val) : NaN;
-                        if (!Number.isFinite(socVal) || socVal < 0 || socVal > 100) {
-                            goalStatus = 'no_soc';
-                        } else {
-                            // Avoid using very old SoC values after long unplugged periods.
-                            // On plug-in we wait for a fresh SoC update (if the state timestamp is older than the plug time).
-                            const socTs = (stSoc && typeof stSoc.ts === 'number' && Number.isFinite(stSoc.ts)) ? Math.round(stSoc.ts) : 0;
-                            const socAgeMs = (socTs > 0 && now >= socTs) ? (now - socTs) : 0;
-                            const SOC_STALE_MS = 48 * 3600 * 1000; // 48h
-                            const SOC_RECENT_GRACE_MS = 10 * 60 * 1000; // 10 min
-                            const SOC_AFTER_PLUG_TOL_MS = 2 * 60 * 1000; // 2 min tolerance
 
+                        const socIsValid = Number.isFinite(socVal) && socVal >= 0 && socVal <= 100;
+
+                        // Avoid using very old SoC values after long unplugged periods.
+                        // On plug-in we wait for a fresh SoC update (if the state timestamp is older than the plug time).
+                        const socTs = (stSoc && typeof stSoc.ts === 'number' && Number.isFinite(stSoc.ts)) ? Math.round(stSoc.ts) : 0;
+                        const socAgeMs = (socTs > 0 && now >= socTs) ? (now - socTs) : 0;
+
+                        const SOC_STALE_MS = 48 * 3600 * 1000; // 48h
+                        const SOC_RECENT_GRACE_MS = 10 * 60 * 1000; // 10 min
+                        const SOC_AFTER_PLUG_TOL_MS = 2 * 60 * 1000; // 2 min tolerance
+                        const SOC_WAIT_FALLBACK_MS = 15 * 60 * 1000; // 15 min after plug-in: fall back to no-SoC planning
+
+                        const waitedSincePlugMs = (vehiclePlugged === true && vehiclePluggedSinceMs > 0 && now >= vehiclePluggedSinceMs)
+                            ? (now - vehiclePluggedSinceMs)
+                            : 0;
+
+                        let canUseSoc = false;
+
+                        if (socIsValid) {
                             if (socAgeMs > SOC_STALE_MS) {
-                                goalStatus = 'soc_stale';
+                                // SoC too old -> wait for an update after plug-in; then fall back.
+                                if (waitedSincePlugMs > 0 && waitedSincePlugMs >= SOC_WAIT_FALLBACK_MS) {
+                                    canUseSoc = false;
+                                } else {
+                                    goalStatus = 'soc_stale';
+                                }
                             } else if (vehiclePlugged === true && vehiclePluggedSinceMs > 0 && socTs > 0
                                 && socTs < (vehiclePluggedSinceMs - SOC_AFTER_PLUG_TOL_MS)
                                 && socAgeMs > SOC_RECENT_GRACE_MS) {
-                                goalStatus = 'waiting_soc';
+                                // SoC timestamp predates plug-in -> wait for refresh; then fall back.
+                                if (waitedSincePlugMs > 0 && waitedSincePlugMs >= SOC_WAIT_FALLBACK_MS) {
+                                    canUseSoc = false;
+                                } else {
+                                    goalStatus = 'waiting_soc';
+                                }
                             } else {
-                            goalVehicleSocPct = clamp(socVal, 0, 100);
-                            goalDeltaSocPct = Math.max(0, goalTargetSocPct - goalVehicleSocPct);
+                                canUseSoc = true;
+                            }
+                        }
+
+                        // If we are waiting for a SoC refresh, do not compute a goal plan yet.
+                        if (goalStatus === 'soc_stale' || goalStatus === 'waiting_soc') {
+                            // keep goalActive=false
+                        } else {
+                            if (canUseSoc) {
+                                goalSocAvailable = true;
+                                goalVehicleSocPct = clamp(socVal, 0, 100);
+                                goalDeltaSocPct = Math.max(0, goalTargetSocPct - goalVehicleSocPct);
+                            } else {
+                                // No SoC available -> still support Zeit-Ziel Laden by planning worst-case from 0% SoC.
+                                goalSocAvailable = false;
+                                goalVehicleSocPct = null;
+                                goalDeltaSocPct = clamp(goalTargetSocPct, 0, 100);
+                            }
 
                             if (goalDeltaSocPct <= 0.01) {
                                 goalStatus = 'reached';
@@ -1726,16 +1764,44 @@ class ChargingManagementModule extends BaseModule {
                                     goalStatus = goalOverdue ? 'overdue' : 'active';
                                 }
                             }
-                            }
                         }
                     } catch {
-                        goalStatus = 'no_soc';
+                        // If SoC is not readable at all, fall back to no-SoC planning.
+                        goalSocAvailable = false;
+                        goalVehicleSocPct = null;
+                        goalDeltaSocPct = clamp(goalTargetSocPct, 0, 100);
+
+                        if (goalDeltaSocPct <= 0.01) {
+                            goalStatus = 'reached';
+                        } else if (!Number.isFinite(goalFinishTs) || goalFinishTs <= 0) {
+                            goalStatus = 'no_deadline';
+                        } else {
+                            const remMs = goalFinishTs - now;
+                            goalOverdue = remMs < 0;
+                            const remMsClamped = Math.max(0, remMs);
+                            goalRemainingMin = Math.max(0, Math.round(remMsClamped / 60000));
+
+                            const defaultBatteryKwh = (chargerType === 'DC') ? 200 : 60;
+                            const batteryKwh = (goalBatteryKwhUser && goalBatteryKwhUser > 0) ? goalBatteryKwhUser : defaultBatteryKwh;
+
+                            const remH = Math.max(0.05, remMsClamped / 3600000); // >= 3 min
+                            const requiredWh = (batteryKwh * 1000) * (goalDeltaSocPct / 100);
+                            const reqW = requiredWh / remH;
+                            goalRequiredW = clamp(reqW, 0, maxPW);
+
+                            goalDesiredW = (goalRequiredW > 0) ? Math.min(maxPW, Math.max(goalRequiredW, minPW)) : 0;
+                            goalUrgency = (maxPW > 0) ? (goalDesiredW / maxPW) : 0;
+
+                            goalActive = true;
+                            goalStatus = goalOverdue ? 'overdue' : 'active';
+                        }
                     }
                 }
             }
 
             // Publish computed goal states (shortfall will be updated after command calculation)
             try {
+                await this._queueState(`${ch}.goalSocAvailable`, !!goalSocAvailable, true);
                 await this._queueState(`${ch}.goalActive`, !!goalActive, true);
                 await this._queueState(`${ch}.goalRemainingMin`, goalRemainingMin || 0, true);
                 await this._queueState(`${ch}.goalRequiredPowerW`, Math.round(goalRequiredW || 0), true);
@@ -1776,6 +1842,7 @@ class ChargingManagementModule extends BaseModule {
                 goalFinishTs,
                 goalBatteryKwhUser,
                 goalVehicleSocPct,
+                goalSocAvailable,
                 goalDeltaSocPct,
                 goalRemainingMin,
                 goalRequiredW,
@@ -3552,7 +3619,15 @@ if (components.length) {
                 }
             }
 
-            // Safety: if the vehicle is not plugged, always force 0W.
+                        // Zeit‑Ziel Laden: Wenn nach dem Einstecken auf eine frische SoC‑Aktualisierung gewartet wird,
+            // pausieren wir die Ladung temporär (verhindert Start mit stalen/falschen Zielwerten).
+            if (w.goalEnabled && (w.goalStatus === 'waiting_soc' || w.goalStatus === 'soc_stale')) {
+                targetW = 0;
+                targetA = 0;
+                reason = ReasonCodes.NO_SETPOINT;
+            }
+
+// Safety: if the vehicle is not plugged, always force 0W.
             // Otherwise some chargers may start charging immediately on plug-in
             // if a non-zero setpoint was written while unplugged.
             if (w.vehiclePlugged === false) {
@@ -3726,7 +3801,7 @@ if (components.length) {
                 if (!w.goalEnabled) {
                     goalStatusNow = 'inactive';
                     goalShortfallNow = 0;
-                } else if (w.goalStatus === 'reached' || w.goalStatus === 'no_soc' || w.goalStatus === 'no_index' || w.goalStatus === 'no_deadline') {
+                } else if (w.goalStatus === 'reached' || w.goalStatus === 'no_index' || w.goalStatus === 'no_deadline') {
                     goalStatusNow = String(w.goalStatus);
                     goalShortfallNow = 0;
                 } else if (w.goalActive && w.goalDesiredW > 0) {
