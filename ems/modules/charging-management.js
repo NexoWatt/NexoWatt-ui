@@ -796,6 +796,7 @@ class ChargingManagementModule extends BaseModule {
 
         // Vehicle connection (derived from evcs.<index>.active when mapped via main.js)
         await mk('vehiclePlugged', 'Fahrzeug verbunden', 'boolean', 'indicator');
+        await mk('vehiclePluggedSource', 'Fahrzeug verbunden (Quelle)', 'string', 'text');
         await mk('goalSocAvailable', 'Fahrzeug-SoC verfügbar', 'boolean', 'indicator');
 
 
@@ -1670,7 +1671,26 @@ class ChargingManagementModule extends BaseModule {
                 }
             }
 
-            const plugByStatus = inferPlugFromStatus(statusRaw);
+            // Prefer EVCS status string (OCPP) if available for plug inference.
+            // Some setups map cm.wb.<key>.st to a boolean "online" flag, while the actual
+            // OCPP status (e.g. SuspendedEVSE) is available on evcs.<index>.status.
+            // Using evcs.status avoids false "no_vehicle" deadlocks (0A forever).
+            let statusForPlug = statusRaw;
+            let statusForPlugSource = 'wb.status';
+            if (Number.isFinite(evcsIndex) && evcsIndex > 0) {
+                try {
+                    const stS = await this._getStateCached(`evcs.${Math.round(evcsIndex)}.status`);
+                    const vS = stS ? stS.val : null;
+                    if (typeof vS === 'string' && vS.trim()) {
+                        statusForPlug = vS;
+                        statusForPlugSource = 'evcs.status';
+                    }
+                } catch {
+                    // ignore
+                }
+            }
+
+            const plugByStatus = inferPlugFromStatus(statusForPlug);
 
             // If there is actual power flow, the vehicle must be connected.
             const plugByPower = !!isChargingRaw;
@@ -1682,7 +1702,7 @@ class ChargingManagementModule extends BaseModule {
                 plugSource = 'power';
             } else if (plugByStatus === true || plugByStatus === false) {
                 vehiclePlugged = plugByStatus;
-                plugSource = 'status';
+                plugSource = `status:${statusForPlugSource}`;
             } else if (plugByDp === true || plugByDp === false) {
                 vehiclePlugged = plugByDp;
                 plugSource = 'dp';
@@ -1715,6 +1735,7 @@ class ChargingManagementModule extends BaseModule {
 
             try {
                 await this._queueState(`${ch}.vehiclePlugged`, vehiclePlugged === true, true);
+                await this._queueState(`${ch}.vehiclePluggedSource`, String(plugSource || ''), true);
             } catch {
                 // ignore
             }
