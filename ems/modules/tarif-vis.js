@@ -437,7 +437,7 @@ class TarifVisModule extends BaseModule {
         if (raw === null || raw === undefined) return null;
         const s = String(raw).trim();
         if (!s) return null;
-        const m = s.match(/^(\d{1,2}):(\d{2})$/);
+        const m = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/);
         if (!m) return null;
         const hh = Number(m[1]);
         const mm = Number(m[2]);
@@ -950,10 +950,14 @@ class TarifVisModule extends BaseModule {
 	                // Ausnahme: Wenn zeitvariables Netzentgelt im NT ist, darf geladen werden.
 	                const storageTimeOk = !!storageChargeWindowOk;
 	                const cheapWanted = (tarifState === 'guenstig' && allowStorageCheap);
-	                // Speicher darf nur laden wenn der Tarif "günstig" ist.
-	                // Ausnahme zur Zeitfenster-Policy: Wenn Netzentgelt im NT ist, darf auch außerhalb
-	                // des Zeitfensters geladen werden – aber weiterhin nur bei günstigem Tarif.
-	                const chargeAllowed = (cheapWanted && (storageTimeOk || netFeeIsNt));
+	                // Im Netzentgelt‑NT gilt das Zeitfenster als "kosten-günstig" genug,
+	                // damit Speicher‑Netzladung überhaupt erlaubt ist (abhängig von Priorität + SoC‑Latch).
+	                // Dadurch funktioniert NT auch dann, wenn der Stromtarif selbst nur neutral/teuer ist.
+	                const cheapOrNtWanted = (cheapWanted || (netFeeIsNt && allowStorageCheap));
+	                // Speicher darf laden, wenn (Tarif günstig ODER Netzentgelt‑NT) UND Zeitfenster ok.
+	                // Ausnahme zur Zeitfenster‑Policy: Wenn Netzentgelt im NT ist, darf auch außerhalb
+	                // des Zeitfensters geladen werden.
+	                const chargeAllowed = (cheapOrNtWanted && (storageTimeOk || netFeeIsNt));
 
 	                if (netFeeIsHt) {
                     // In HT: Speicher soll NICHT durch Tarif entladen/geladen werden → Eigenverbrauch

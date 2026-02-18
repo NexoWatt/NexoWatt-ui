@@ -1936,6 +1936,25 @@ class ChargingManagementModule extends BaseModule {
             dischargeAllowedRaw = this.dp.getBoolean('cm.dischargeAllowed', true);
         }
 
+        // Zeitvariables Netzentgelt (HT/NT) Overlay:
+        // Falls Netzentgelt aktiv ist, kann es die Netzlade-Freigabe erzwingen:
+        // - NT: Netzladen erlauben (auch wenn der Stromtarif gerade sperrt)
+        // - HT: Netzladen sperren (PV bleibt möglich)
+        // Hintergrund: Diese Logik muss zuverlässig laufen, auch wenn tarif-vis Flags
+        // kurzzeitig stale/inkonsistent sind.
+        try {
+            const stNfEn = await this._getStateCached('tarif.netFeeEnabled');
+            const stNfMode = await this._getStateCached('tarif.netFeeMode');
+            const nfEnabled = stNfEn ? !!stNfEn.val : false;
+            const nfMode = stNfMode ? String(stNfMode.val || '') : '';
+            if (nfEnabled) {
+                if (nfMode === 'NT') gridChargeAllowedRaw = true;
+                else if (nfMode === 'HT') gridChargeAllowedRaw = false;
+            }
+        } catch {
+            // ignore
+        }
+
         // Debounce gegen Flattern:
         // - Sperren (false) wirken sofort (Safety-first)
         // - Freigaben (true) erst nach stabiler True-Phase (hold)
