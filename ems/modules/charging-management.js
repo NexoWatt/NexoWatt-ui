@@ -1119,7 +1119,7 @@ class ChargingManagementModule extends BaseModule {
         const gridPowerId = String(cfg.gridPowerId || '').trim();
         const pvSurplusPowerId = String(cfg.pvSurplusPowerId || '').trim();
         const pauseWhenPeakShavingActive = cfg.pauseWhenPeakShavingActive !== false; // default true
-        const pauseBehavior = String(cfg.pauseBehavior || 'rampDownToZero'); // rampDownToZero | followPeakBudget
+        const pauseBehavior = String(cfg.pauseBehavior || 'followPeakBudget'); // rampDownToZero | followPeakBudget
 
         // MU6.8: stale detection (failsafe)
         const staleTimeoutSec = clamp(num(cfg.staleTimeoutSec, 60), 1, 3600);
@@ -3256,7 +3256,21 @@ if (components.length) {
                 }
             }
 
-            // Default / safe pause behavior: ramp down to 0 (do not keep last setpoints)
+            
+            // If the user selected rampDownToZero but we can still compute safe hard caps (Gate A),
+            // follow those caps instead of forcing 0A. Only ramp down to 0 when no safe budget is available.
+            if (!pauseFollowPeakBudget && pb !== 'followPeakBudget' && (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW))) {
+                const before = budgetW;
+                if (!Number.isFinite(budgetW)) budgetW = gridCapEvcsW;
+                else budgetW = Math.min(budgetW, gridCapEvcsW);
+
+                // Keep effectiveBudgetMode as-is (it already includes +gridImport/+phaseCap when active)
+                await this._queueState('chargingManagement.control.budgetMode', effectiveBudgetMode, true);
+                pauseFollowPeakBudget = true;
+                pauseFollowGridCaps = true;
+            }
+
+// Default / safe pause behavior: ramp down to 0 (do not keep last setpoints)
             if (!pauseFollowPeakBudget) {
                 const reason = ReasonCodes.PAUSED_BY_PEAK_SHAVING;
 

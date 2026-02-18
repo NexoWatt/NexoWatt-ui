@@ -193,6 +193,32 @@ class DatapointRegistry {
             }
         }
 
+        // If this mapping uses an ioBroker alias, prefer the unit of the alias target.
+        // Reason: values/freshness come from srcObjectId (= aliasId) but the alias object itself
+        // may have no unit or an incorrect display unit.
+        if (aliasId) {
+            const cachedAliasUnit = this._unitByObjectId.get(aliasId);
+            if (cachedAliasUnit !== undefined) {
+                const u = String(cachedAliasUnit || '');
+                if (u) unitIn = u;
+            } else if (typeof this.adapter.getForeignObjectAsync === 'function') {
+                const lastAliasUnitAttempt = Number(this._unitFetchAttemptMs.get(aliasId) || 0);
+                if (!lastAliasUnitAttempt || (now - lastAliasUnitAttempt) > this._unitRetryMs) {
+                    this._unitFetchAttemptMs.set(aliasId, now);
+                    try {
+                        const aObj = await this.adapter.getForeignObjectAsync(aliasId);
+                        const u = aObj?.common?.unit;
+                        const uStr = u ? String(u) : '';
+                        this._unitByObjectId.set(aliasId, uStr || '');
+                        if (uStr) unitIn = uStr;
+                    } catch (_e) {
+                        // Cache empty to avoid repeated DB roundtrips; retry after _unitRetryMs
+                        this._unitByObjectId.set(aliasId, '');
+                    }
+                }
+            }
+        }
+
         normalized.unitIn = unitIn || '';
         normalized.aliasId = aliasId || '';
         normalized.srcObjectId = normalized.aliasId || normalized.objectId;
