@@ -275,12 +275,22 @@ class DatapointRegistry {
         normalized.srcObjectId = normalized.aliasId || normalized.objectId;
 
         // Derive (or update) alivePrefix if enabled
+        // IMPORTANT: If objectId is a NexoWatt-device adapter alias wrapper (..devices.<key>..),
+        // we must derive the heartbeat prefix from the *wrapper* (objectId), not from the alias target (srcObjectId).
+        // Otherwise we lose the device-level comm.connected / heartbeat updates and can get false STALE_METER.
         try {
             if (normalized.useAliveForStale) {
                 const keepPrevPrefix = !!(prev && prev.objectId === normalized.objectId && prev.srcObjectId === normalized.srcObjectId && prev.alivePrefix);
+
+                // Prefer device prefix from wrapper objectId if it matches the NexoWatt device structure.
+                const objPrefix = this._deriveAlivePrefix(normalized.objectId);
+                const objLooksDevice = !!(objPrefix && String(objPrefix).includes('.devices.'));
+                const preferPrefix = objLooksDevice ? objPrefix : '';
+
                 if (!normalized.alivePrefix || !keepPrevPrefix) {
-                    normalized.alivePrefix = this._deriveAlivePrefix(normalized.srcObjectId || normalized.objectId);
+                    normalized.alivePrefix = preferPrefix || this._deriveAlivePrefix(normalized.srcObjectId || normalized.objectId);
                 }
+
                 // Normalize prefix formatting
                 if (normalized.alivePrefix && !normalized.alivePrefix.endsWith('.')) normalized.alivePrefix = `${normalized.alivePrefix}.`;
             } else {
@@ -304,8 +314,8 @@ class DatapointRegistry {
                 if (normalized.alivePrefix) {
                     normalized.aliveConnectedId = `${normalized.alivePrefix}comm.connected`;
                 }
-                const src = String(normalized.srcObjectId || normalized.objectId || '');
-                const inst = src.match(/^([^.]+\.\d+)\./);
+                const srcForInst = (normalized.alivePrefix && String(normalized.alivePrefix).includes('.devices.')) ? String(normalized.objectId || '') : String(normalized.srcObjectId || normalized.objectId || '');
+                const inst = srcForInst.match(/^([^.]+\.\d+)\./);
                 if (inst && inst[1]) {
                     normalized.infoConnectionId = `${inst[1]}.info.connection`;
                 }

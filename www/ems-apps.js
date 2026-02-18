@@ -16,6 +16,12 @@
     gridConnectionPower: document.getElementById('gridConnectionPower'),
     gridPointPowerId: document.getElementById('gridPointPowerId'),
     gridPointPowerIdDisplay: document.getElementById('gridPointPowerIdDisplay'),
+    gridPointConnectedId: document.getElementById('gridPointConnectedId'),
+    gridPointConnectedIdDisplay: document.getElementById('gridPointConnectedIdDisplay'),
+
+    gridPointWatchdogId: document.getElementById('gridPointWatchdogId'),
+    gridPointWatchdogIdDisplay: document.getElementById('gridPointWatchdogIdDisplay'),
+
     gridInvertGrid: document.getElementById('gridInvertGrid'),
 
     // Energiefluss-Monitor (Tab)
@@ -5392,6 +5398,24 @@ function _collectFlowPowerDpIsWFromUI() {
       els.gridPointPowerIdDisplay.textContent = v ? ('Aktuell: ' + v) : 'Aktuell: nicht gesetzt';
     }
 
+    // Netzpunkt – Connected/Watchdog (optional, für STALE_METER Robustheit)
+    if (els.gridPointConnectedId) els.gridPointConnectedId.value = valueOrEmpty(dps.gridPointConnected);
+    if (els.gridPointConnectedIdDisplay) {
+      const v = String((dps.gridPointConnected || '')).trim();
+      // Keep hint text but prepend current value if available
+      const base = els.gridPointConnectedIdDisplay.dataset.baseHint || els.gridPointConnectedIdDisplay.textContent || '';
+      if (!els.gridPointConnectedIdDisplay.dataset.baseHint) els.gridPointConnectedIdDisplay.dataset.baseHint = base;
+      els.gridPointConnectedIdDisplay.innerHTML = (v ? ('Aktuell: <code>' + v + '</code><br/>') : '') + (els.gridPointConnectedIdDisplay.dataset.baseHint || '');
+    }
+
+    if (els.gridPointWatchdogId) els.gridPointWatchdogId.value = valueOrEmpty(dps.gridPointWatchdog);
+    if (els.gridPointWatchdogIdDisplay) {
+      const v = String((dps.gridPointWatchdog || '')).trim();
+      const base = els.gridPointWatchdogIdDisplay.dataset.baseHint || els.gridPointWatchdogIdDisplay.textContent || '';
+      if (!els.gridPointWatchdogIdDisplay.dataset.baseHint) els.gridPointWatchdogIdDisplay.dataset.baseHint = base;
+      els.gridPointWatchdogIdDisplay.innerHTML = (v ? ('Aktuell: <code>' + v + '</code><br/>') : '') + (els.gridPointWatchdogIdDisplay.dataset.baseHint || '');
+    }
+
     // Energiefluss-Monitor (Tab: Basis + optionale Verbraucher/Erzeuger)
     if (els.dpFlow) {
       buildDpTable(
@@ -6071,6 +6095,8 @@ function _collectFlowPowerDpIsWFromUI() {
 
     // Netzpunkt (NVP): globaler Netto-Netzleistungs-DP (Import+ / Export-)
     if (els.gridPointPowerId) patch.datapoints.gridPointPower = String(els.gridPointPowerId.value || '').trim();
+    if (els.gridPointConnectedId) patch.datapoints.gridPointConnected = String(els.gridPointConnectedId.value || '').trim();
+    if (els.gridPointWatchdogId) patch.datapoints.gridPointWatchdog = String(els.gridPointWatchdogId.value || '').trim();
 
     // EVCS / Stations (stored in settingsConfig)
     try {
@@ -6959,6 +6985,43 @@ function _collectFlowPowerDpIsWFromUI() {
       scheduleValidation(200);
     });
   }
+
+  if (els.gridPointConnectedId) {
+    els.gridPointConnectedId.dataset.dpInput = '1';
+    els.gridPointConnectedId.addEventListener('change', () => {
+      currentConfig = currentConfig || {};
+      currentConfig.datapoints = currentConfig.datapoints || {};
+      const v = String(els.gridPointConnectedId.value || '').trim();
+      currentConfig.datapoints.gridPointConnected = v;
+
+      if (els.gridPointConnectedIdDisplay) {
+        const base = els.gridPointConnectedIdDisplay.dataset.baseHint || els.gridPointConnectedIdDisplay.textContent || '';
+        if (!els.gridPointConnectedIdDisplay.dataset.baseHint) els.gridPointConnectedIdDisplay.dataset.baseHint = base;
+        els.gridPointConnectedIdDisplay.innerHTML = (v ? ('Aktuell: <code>' + v + '</code><br/>') : '') + (els.gridPointConnectedIdDisplay.dataset.baseHint || '');
+      }
+
+      scheduleValidation(200);
+    });
+  }
+
+  if (els.gridPointWatchdogId) {
+    els.gridPointWatchdogId.dataset.dpInput = '1';
+    els.gridPointWatchdogId.addEventListener('change', () => {
+      currentConfig = currentConfig || {};
+      currentConfig.datapoints = currentConfig.datapoints || {};
+      const v = String(els.gridPointWatchdogId.value || '').trim();
+      currentConfig.datapoints.gridPointWatchdog = v;
+
+      if (els.gridPointWatchdogIdDisplay) {
+        const base = els.gridPointWatchdogIdDisplay.dataset.baseHint || els.gridPointWatchdogIdDisplay.textContent || '';
+        if (!els.gridPointWatchdogIdDisplay.dataset.baseHint) els.gridPointWatchdogIdDisplay.dataset.baseHint = base;
+        els.gridPointWatchdogIdDisplay.innerHTML = (v ? ('Aktuell: <code>' + v + '</code><br/>') : '') + (els.gridPointWatchdogIdDisplay.dataset.baseHint || '');
+      }
+
+      scheduleValidation(200);
+    });
+  }
+
 
   // §14a: standalone inputs
   if (els.para14aMode) {

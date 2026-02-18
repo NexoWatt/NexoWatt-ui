@@ -2946,15 +2946,35 @@ if (components.length) {
             const gridKeys = ['cm.gridPowerW', 'grid.powerW', 'grid.powerRawW', 'ems.gridPowerW', 'ps.gridPowerW'];
             const configuredGridKeys = gridKeys.filter(k => !!this.dp.getEntry(k));
 
-            // Grid metering is required for safe operation.
-            // We accept *any* fresh source (redundant signals). A stale secondary signal must NOT
-            // trigger a global failsafe as long as at least one grid power datapoint is fresh.
-            if (configuredGridKeys.length === 0) {
+            // Robust STALE_METER handling:
+            // If a connected DP + watchdog/heartbeat DP are configured, use them as the source of truth.
+            // This avoids false STALE_METER when the power value is stable (setStateChanged -> ts/lc not updated).
+            const hasConn = !!this.dp.getEntry('cm.gridConnected');
+            const hasWd = !!this.dp.getEntry('cm.gridWatchdog');
+            const useConnWd = hasConn || hasWd;
+
+            if (useConnWd) {
+                if (!(hasConn && hasWd)) {
+                    // Configuration incomplete -> go safe. UI will show STALE_METER until both are configured.
+                    staleMeter = true;
+                } else {
+                    const connRaw = this.dp.getRaw('cm.gridConnected');
+                    const connected = (connRaw === true || connRaw === 1 || connRaw === 'true' || connRaw === '1');
+                    const watchdogStale = this.dp.isStale('cm.gridWatchdog', staleTimeoutMs);
+
+                    // If meter is connected AND watchdog is fresh, we consider the meter OK.
+                    staleMeter = !(connected && !watchdogStale);
+                }
+            } else if (configuredGridKeys.length === 0) {
+                // No grid power configured -> safe fallback.
                 staleMeter = true;
             } else {
                 let anyFresh = false;
                 for (const k of configuredGridKeys) {
-                    if (!this.dp.isStale(k, staleTimeoutMs)) { anyFresh = true; break; }
+                    if (!this.dp.isStale(k, staleTimeoutMs)) {
+                        anyFresh = true;
+                        break;
+                    }
                 }
                 staleMeter = !anyFresh;
             }

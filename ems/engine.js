@@ -202,6 +202,28 @@ class EmsEngine {
     const gridSellPowerId = (typeof dps.gridSellPower === 'string' ? dps.gridSellPower.trim() : '') || '';
     // Optional: direct net grid power (NVP) in W (Import + / Export -)
     const gridPointPowerId = (typeof dps.gridPointPower === 'string' ? dps.gridPointPower.trim() : '') || '';
+
+    // Optional: connection + watchdog for robust STALE_METER detection (especially with aliases)
+    const gridPointConnectedIdCfg = (typeof dps.gridPointConnected === 'string' ? dps.gridPointConnected.trim() : '') || '';
+    const gridPointWatchdogIdCfg = (typeof dps.gridPointWatchdog === 'string' ? dps.gridPointWatchdog.trim() : '') || '';
+
+    let gridPointConnectedId = gridPointConnectedIdCfg;
+    let gridPointWatchdogId = gridPointWatchdogIdCfg;
+
+    // Auto-derive defaults for NexoWatt device-adapter structures: <...devices.<devKey>.*>
+    try {
+      if (gridPointPowerId && (!gridPointConnectedId || !gridPointWatchdogId)) {
+        const m = String(gridPointPowerId).match(/^(.*?\.devices\.[^.]+)\./);
+        if (m && m[1]) {
+          const prefix = m[1] + '.';
+          if (!gridPointConnectedId) gridPointConnectedId = prefix + 'comm.connected';
+          // Use a measurement-like heartbeat that is typically updated often
+          if (!gridPointWatchdogId) gridPointWatchdogId = prefix + 'r.frequency';
+        }
+      }
+    } catch (_e) {
+      // ignore
+    }
     const pvSurplusPowerId = gridSellPowerId;
 
     // Default net grid power:
@@ -600,6 +622,16 @@ class EmsEngine {
       await this.dp.upsert({ key: 'grid.powerRawW', objectId: this._gridPowerRawId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
       await this.dp.upsert({ key: 'ems.gridPowerRawW', objectId: this._gridPowerRawId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
     }
+    // Optional robust freshness: connected + watchdog/heartbeat
+    // If configured (or auto-derived), charging-management will use these instead of value-timestamp changes.
+    if (gridPointConnectedId) {
+      await this.dp.upsert({ key: 'cm.gridConnected', objectId: gridPointConnectedId, dataType: 'boolean', direction: 'in', unit: '', useAliveForStale: false });
+    }
+    if (gridPointWatchdogId) {
+      await this.dp.upsert({ key: 'cm.gridWatchdog', objectId: gridPointWatchdogId, dataType: 'number', direction: 'in', unit: '', useAliveForStale: false });
+    }
+
+
 
     // Module manager (PeakShaving / Charging / Tarif / optional Storage etc.)
     this.mm = new ModuleManager(adapter, this.dp);

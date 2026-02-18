@@ -115,7 +115,36 @@
                 <span id="val_gridPointPowerId" class="nw-config-badge nw-config-badge--idle">—</span>
               </div>
               <div id="gridPointPowerIdDisplay" class="nw-config-field-hint"></div>
+            
+          <div class="nw-config-field-row">
+            <div class="nw-config-field-label">Netzpunkt – Connected DP (optional)</div>
+            <div class="nw-config-field-control nw-config-field-control--stack">
+              <div class="nw-config-dp-input-wrapper">
+                <input id="gridPointConnectedId" class="nw-config-input nw-config-dp-input" type="text" placeholder="z.B. nexowatt-devices.0.devices.meter1.comm.connected"/>
+                <button class="nw-config-dp-button" type="button" data-browse="gridPointConnectedId">Auswählen…</button>
+                <span id="val_gridPointConnectedId" class="nw-config-badge nw-config-badge--idle">—</span>
+              </div>
+              <div id="gridPointConnectedIdDisplay" class="nw-config-field-hint">
+                Wenn gesetzt: Nur wenn <b>connected=true</b> läuft das EMS weiter. Sonst Failsafe (STALE_METER).
+              </div>
             </div>
+          </div>
+
+          <div class="nw-config-field-row">
+            <div class="nw-config-field-label">Netzpunkt – Watchdog/Heartbeat DP (optional)</div>
+            <div class="nw-config-field-control nw-config-field-control--stack">
+              <div class="nw-config-dp-input-wrapper">
+                <input id="gridPointWatchdogId" class="nw-config-input nw-config-dp-input" type="text" placeholder="z.B. nexowatt-devices.0.devices.meter1.r.frequency"/>
+                <button class="nw-config-dp-button" type="button" data-browse="gridPointWatchdogId">Auswählen…</button>
+                <span id="val_gridPointWatchdogId" class="nw-config-badge nw-config-badge--idle">—</span>
+              </div>
+              <div id="gridPointWatchdogIdDisplay" class="nw-config-field-hint">
+                Empfohlen: DP der <b>regelmäßig</b> aktualisiert wird (z.B. frequency / current / comm.connected).<br/>
+                Wenn dieser DP &gt; 15s nicht aktualisiert wurde, geht das System in Failsafe (STALE_METER).
+              </div>
+            </div>
+          </div>
+</div>
           </div>
           <div class="nw-config-field-row">
             <label class="nw-config-field-label" for="gridInvertGrid">Netz-Vorzeichen invertieren</label>
