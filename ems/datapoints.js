@@ -581,6 +581,28 @@ class DatapointRegistry {
     }
 
     /**
+     * Activity age based on the datapoint's derived alivePrefix heartbeat.
+     *
+     * This intentionally ignores the "connected" override used in getAgeMs().
+     * It answers: "When did we last see ANY state update under the same device prefix?".
+     *
+     * If no alivePrefix is known or no activity was observed yet, +Infinity is returned.
+     *
+     * @param {string} key
+     * @returns {number}
+     */
+    getAliveAgeMs(key) {
+        const e = this.getEntry(key);
+        if (!e || !e.alivePrefix) return Number.POSITIVE_INFINITY;
+        const aliveTs = this._alivePrefixTs.get(e.alivePrefix);
+        const ts = aliveTs && Number.isFinite(Number(aliveTs)) ? Number(aliveTs) : null;
+        if (!ts) return Number.POSITIVE_INFINITY;
+        let age = Date.now() - ts;
+        age = age >= 0 ? age : 0;
+        return age;
+    }
+
+    /**
      * Returns true if the cached value is older than maxAgeMs.
      * If the datapoint is unknown/not cached, it is treated as stale.
      *

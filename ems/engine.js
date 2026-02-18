@@ -651,7 +651,12 @@ class EmsEngine {
       await this.dp.upsert({ key: 'cm.gridConnected', objectId: gridPointConnectedId, dataType: 'boolean', direction: 'in', unit: '', useAliveForStale: false });
     }
     if (gridPointWatchdogId) {
-      await this.dp.upsert({ key: 'cm.gridWatchdog', objectId: gridPointWatchdogId, dataType: 'number', direction: 'in', unit: '', useAliveForStale: false });
+      // IMPORTANT: enable alive-prefix heartbeat here.
+      // We do NOT want to depend on the watchdog datapoint itself changing every few seconds.
+      // Many adapters use setStateChanged(), so timestamps remain unchanged while a value is stable.
+      // With useAliveForStale=true we subscribe to the device prefix (alivePrefix) so that ANY
+      // regularly updating meter state keeps the watchdog fresh.
+      await this.dp.upsert({ key: 'cm.gridWatchdog', objectId: gridPointWatchdogId, dataType: 'number', direction: 'in', unit: '', useAliveForStale: true });
     }
 
 

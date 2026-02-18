@@ -2960,10 +2960,18 @@ if (components.length) {
                 } else {
                     const connRaw = this.dp.getRaw('cm.gridConnected');
                     const connected = (connRaw === true || connRaw === 1 || connRaw === 'true' || connRaw === '1');
-                    const watchdogStale = this.dp.isStale('cm.gridWatchdog', staleTimeoutMs);
+
+                    // The watchdog should reflect *real meter activity*.
+                    // We intentionally rely on the alivePrefix heartbeat age (ANY state update
+                    // under the same device prefix), not only on the watchdog state's own ts/lc.
+                    // Otherwise we may get false STALE_METER when the chosen watchdog value is stable.
+                    const watchdogAgeMs = typeof this.dp.getAliveAgeMs === 'function'
+                        ? this.dp.getAliveAgeMs('cm.gridWatchdog')
+                        : this.dp.getAgeMs('cm.gridWatchdog');
+                    const watchdogFresh = Number.isFinite(watchdogAgeMs) && watchdogAgeMs <= staleTimeoutMs;
 
                     // If meter is connected AND watchdog is fresh, we consider the meter OK.
-                    staleMeter = !(connected && !watchdogStale);
+                    staleMeter = !(connected && watchdogFresh);
                 }
             } else if (configuredGridKeys.length === 0) {
                 // No grid power configured -> safe fallback.
