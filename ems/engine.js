@@ -591,12 +591,15 @@ class EmsEngine {
     // grid.powerW is intentionally the *filtered* value for stable regulation.
     // grid.powerRawW provides the raw signal for safety clamping and debugging.
     if (this._gridPowerId) {
-      await this.dp.upsert({ key: 'grid.powerW', objectId: this._gridPowerId, dataType: 'number', direction: 'in', unit: 'W' });
-      await this.dp.upsert({ key: 'ems.gridPowerW', objectId: this._gridPowerId, dataType: 'number', direction: 'in', unit: 'W' });
+      // IMPORTANT: enable alive-prefix heartbeat here as well.
+      // Charging-management/peak-shaving use these generic keys, and real-world meters
+      // (especially ioBroker aliases) may not emit new timestamps while values are stable.
+      await this.dp.upsert({ key: 'grid.powerW', objectId: this._gridPowerId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
+      await this.dp.upsert({ key: 'ems.gridPowerW', objectId: this._gridPowerId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
     }
     if (this._gridPowerRawId) {
-      await this.dp.upsert({ key: 'grid.powerRawW', objectId: this._gridPowerRawId, dataType: 'number', direction: 'in', unit: 'W' });
-      await this.dp.upsert({ key: 'ems.gridPowerRawW', objectId: this._gridPowerRawId, dataType: 'number', direction: 'in', unit: 'W' });
+      await this.dp.upsert({ key: 'grid.powerRawW', objectId: this._gridPowerRawId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
+      await this.dp.upsert({ key: 'ems.gridPowerRawW', objectId: this._gridPowerRawId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
     }
 
     // Module manager (PeakShaving / Charging / Tarif / optional Storage etc.)

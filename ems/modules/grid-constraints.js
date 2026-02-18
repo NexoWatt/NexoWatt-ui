@@ -127,7 +127,8 @@ class GridConstraintsModule extends BaseModule {
         //   The module will use `grid.powerW` first (filtered), and fall back to `gc.gridPowerW` if needed.
         const gridPowerId = String(cfg.gridPowerId || this.adapter.config.peakShaving?.gridPointPowerId || '').trim();
         if (gridPowerId) {
-            await dp.upsert({ key: 'gc.gridPowerW', objectId: gridPowerId, dataType: 'number', direction: 'in', unit: 'W' });
+            // Use alive-prefix heartbeat to avoid false stale detections for event-driven meters.
+            await dp.upsert({ key: 'gc.gridPowerW', objectId: gridPowerId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
         }
 
         // PV/WR curtail controls

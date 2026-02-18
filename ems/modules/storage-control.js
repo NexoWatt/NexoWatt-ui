@@ -1925,7 +1925,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         const baseId = String(cfg.baseLoadPowerId || '').trim();
         const battId = String(cfg.batteryPowerId || '').trim();
 
-        if (gridId) await this.dp.upsert({ key: 'ps.gridPowerW', objectId: gridId });
+        if (gridId) await this.dp.upsert({ key: 'ps.gridPowerW', objectId: gridId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
         if (pvId) await this.dp.upsert({ key: 'ps.pvW', objectId: pvId });
         if (baseId) await this.dp.upsert({ key: 'ps.baseLoadW', objectId: baseId });
         if (battId) await this.dp.upsert({ key: 'ps.batteryW', objectId: battId });

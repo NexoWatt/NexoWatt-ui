@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.153",
+    "version": "0.6.154",
     "news": {
+      "0.6.154": {
+        "en": "Fix: Stale-meter detection now uses the device-prefix heartbeat for ALL grid metering keys used by Charging Management / Peak Shaving (cm.gridPowerW, grid.powerW, ems.gridPowerW, ps.gridPowerW, gc.gridPowerW). This prevents intermittent 'failsafe_stale_meter' when meters/adapters only update on value change (e.g., NexoWatt-device alias datapoints).",
+        "de": "Fix: Stale‑Meter Erkennung nutzt jetzt die Device‑Prefix‑Heartbeat‑Freshness für ALLE Netz‑Messwerte, die im Lademanagement / Peak‑Shaving verwendet werden (cm.gridPowerW, grid.powerW, ems.gridPowerW, ps.gridPowerW, gc.gridPowerW). Dadurch tritt der sporadische 'failsafe_stale_meter' nicht mehr auf, wenn Zähler/Adapter nur bei Werteänderung aktualisieren (z. B. NexoWatt-device Alias‑Datenpunkte)."
+      },
       "0.6.153": {
         "en": "Fix: Eliminated recurring false 'failsafe stale meter' with NexoWatt-device alias datapoints. Grid metering inputs now use a device-prefix heartbeat for freshness (stable values no longer go stale). Also fixed alias priming so the source cache is initialized immediately. Charging-Management stale default aligned to 300s.",
         "de": "Fix: Wiederkehrender falscher 'Failsafe Stale Meter' bei NexoWatt-device Alias-Datenpunkten beseitigt. Netz-Messwerte nutzen jetzt eine Device-Prefix-Heartbeat-Freshness (stabile Werte werden nicht mehr fälschlich stale). Zusätzlich: Alias-Priming korrigiert (Source-Cache wird sofort initialisiert). Default Stale-Timeout im Lademanagement auf 300s vereinheitlicht."

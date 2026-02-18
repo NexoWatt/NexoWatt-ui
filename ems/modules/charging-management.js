@@ -1171,7 +1171,9 @@ class ChargingManagementModule extends BaseModule {
             await this.dp.upsert({ key: 'cm.budgetPowerW', objectId: budgetPowerId, dataType: 'number', direction: 'in', unit: 'W' });
         }
         if (gridPowerId && this.dp) {
-            await this.dp.upsert({ key: 'cm.gridPowerW', objectId: gridPowerId, dataType: 'number', direction: 'in', unit: 'W' });
+            // IMPORTANT: enable alive-prefix heartbeat for grid metering. Many meters/adapters are event-driven
+            // and do not update state.ts while the measurement stays stable.
+            await this.dp.upsert({ key: 'cm.gridPowerW', objectId: gridPowerId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
         }
         if (pvSurplusPowerId && this.dp) {
             await this.dp.upsert({ key: 'cm.pvSurplusW', objectId: pvSurplusPowerId, dataType: 'number', direction: 'in', unit: 'W' });

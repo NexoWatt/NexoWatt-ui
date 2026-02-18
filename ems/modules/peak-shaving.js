@@ -171,7 +171,9 @@ class PeakShavingModule extends BaseModule {
 
         // Bind datapoints from config (manufacturer-independent)
         if (cfg.gridPointPowerId) {
-            await this.dp.upsert({ key: 'ps.gridPowerW', objectId: cfg.gridPointPowerId, dataType: 'number', direction: 'in', unit: 'W' });
+            // IMPORTANT: enable alive-prefix heartbeat. Many meters/adapters are event-driven
+            // and do not update state.ts while the measurement stays stable.
+            await this.dp.upsert({ key: 'ps.gridPowerW', objectId: cfg.gridPointPowerId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
         }
         if (cfg.allowedPowerId) {
             await this.dp.upsert({ key: 'ps.allowedPowerW', objectId: cfg.allowedPowerId, dataType: 'number', direction: 'in', unit: 'W' });
@@ -193,10 +195,11 @@ class PeakShavingModule extends BaseModule {
         // IMPORTANT: Many real-world meters update slowly or only on change.
         // A too aggressive legacy default (15s) caused false activation and blocked controlled loads.
         // Default to 300s; if a persisted legacy default "15" exists, treat it as legacy and keep 300.
-        let staleTimeoutSec = num(cfg.staleTimeoutSec, null);
-        if (!Number.isFinite(staleTimeoutSec)) staleTimeoutSec = 300;
+        // Staleness threshold (seconds). Default is conservative (300s) but can be lowered.
+        // NOTE: With the device-prefix heartbeat enabled for NVP/grid metering, low thresholds
+        // like 15s are now safe even for event-driven adapters.
+        let staleTimeoutSec = num(cfg.staleTimeoutSec, 300);
         staleTimeoutSec = clamp(staleTimeoutSec, 1, 3600);
-        if (Math.round(staleTimeoutSec) === 15) staleTimeoutSec = 300;
         const staleMaxAgeMs = staleTimeoutSec * 1000;
         const wantsPowerLimit = typeof plantLimitW === 'number' && plantLimitW > 0;
         const wantsPhaseLimit = (phaseMode === 'info' || phaseMode === 'enforce') && typeof maxPhaseA === 'number' && maxPhaseA > 0;
