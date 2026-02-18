@@ -431,15 +431,14 @@ class EmsEngine {
       const phases_ = Number(userCm.defaultPhases);
       if (Number.isFinite(phases_) && (phases_ === 1 || phases_ === 3)) chargingCfg.defaultPhases = phases_;
 
-      // Migration note:
-      // Older builds used 15s as the implicit default which turned out to be too aggressive for
-      // many real-world meter sources (NVP aliases, slow meters, event-driven updates).
-      // If a user's persisted config still contains exactly "15", treat it as the *legacy default*
-      // and keep the new safer default (300s). Users who truly want 15s can set e.g. 16.
+      // Stale timeout override (seconds)
+      // NOTE:
+      // Older builds treated exactly "15" as a legacy default and silently ignored it.
+      // For field reliability (and to match installer expectations), we now honor ANY
+      // explicit user value including 15s.
       const stale_ = Number(userCm.staleTimeoutSec);
       if (Number.isFinite(stale_) && stale_ >= 1 && stale_ <= 3600) {
-        const sRound = Math.round(stale_);
-        if (sRound !== 15) chargingCfg.staleTimeoutSec = Math.round(stale_);
+        chargingCfg.staleTimeoutSec = Math.round(stale_);
       }
 
       const thr_ = Number(userCm.activityThresholdW);

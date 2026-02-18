@@ -290,6 +290,31 @@ class DatapointRegistry {
             normalized.alivePrefix = normalized.alivePrefix || '';
         }
 
+        // Connection indicators for stale detection.
+        // Many meters/adapters write *only on value change*, so state.ts can get old even while the device is
+        // communicating fine. For NexoWatt device-adapter structures we can additionally use:
+        //   <...devices.<deviceKey>.comm.connected> (per device)
+        // and the standard ioBroker adapter flag:
+        //   <adapter>.<instance>.info.connection
+        // If either indicates "connected", we treat the datapoint as alive and suppress false STALE_METER.
+        normalized.aliveConnectedId = '';
+        normalized.infoConnectionId = '';
+        try {
+            if (normalized.useAliveForStale) {
+                if (normalized.alivePrefix) {
+                    normalized.aliveConnectedId = `${normalized.alivePrefix}comm.connected`;
+                }
+                const src = String(normalized.srcObjectId || normalized.objectId || '');
+                const inst = src.match(/^([^.]+\.\d+)\./);
+                if (inst && inst[1]) {
+                    normalized.infoConnectionId = `${inst[1]}.info.connection`;
+                }
+            }
+        } catch (_e) {
+            normalized.aliveConnectedId = normalized.aliveConnectedId || '';
+            normalized.infoConnectionId = normalized.infoConnectionId || '';
+        }
+
         // Register prefix immediately so future state changes can update the heartbeat,
         // even if the datapoint itself has not been primed yet.
         try {
@@ -342,6 +367,8 @@ class DatapointRegistry {
             && String(prev.srcObjectId || '') === String(normalized.srcObjectId || '')
             && !!prev.useAliveForStale === !!normalized.useAliveForStale
             && String(prev.alivePrefix || '') === String(normalized.alivePrefix || '')
+            && String(prev.aliveConnectedId || '') === String(normalized.aliveConnectedId || '')
+            && String(prev.infoConnectionId || '') === String(normalized.infoConnectionId || '')
         );
 
         // Fast-path: unchanged mapping and already subscribed/primed -> avoid DB roundtrips.
@@ -388,6 +415,45 @@ class DatapointRegistry {
                 // Mark as primed even if missing to avoid hammering the states DB.
                 this._primedObjectIds.add(srcObjectId);
             }
+        }
+
+        // Prime + subscribe connection indicators (best effort, idempotent)
+        // This allows staleness logic to rely on "connected" even if those states rarely change.
+        try {
+            const connIds = [];
+            if (normalized.useAliveForStale) {
+                if (normalized.aliveConnectedId) connIds.push(normalized.aliveConnectedId);
+                if (normalized.infoConnectionId) connIds.push(normalized.infoConnectionId);
+            }
+
+            for (const cid of connIds) {
+                if (!cid) continue;
+
+                // subscribe
+                if (typeof this.adapter.subscribeForeignStatesAsync === 'function' && !this._subscribedObjectIds.has(cid)) {
+                    try {
+                        await this.adapter.subscribeForeignStatesAsync(cid);
+                        this._subscribedObjectIds.add(cid);
+                    } catch (_e) {
+                        // ignore
+                    }
+                }
+
+                // prime
+                const needPrimeConn = (typeof this.adapter.getForeignStateAsync === 'function') && !this._primedObjectIds.has(cid) && !this.cacheByObjectId.has(cid);
+                if (needPrimeConn) {
+                    try {
+                        const st = await this.adapter.getForeignStateAsync(cid);
+                        if (st) this.handleStateChange(cid, st);
+                    } catch (_e) {
+                        // ignore
+                    } finally {
+                        this._primedObjectIds.add(cid);
+                    }
+                }
+            }
+        } catch (_e) {
+            // ignore
         }
 
         // Initialize alive timestamp (best effort) when we have a value.
@@ -472,6 +538,29 @@ class DatapointRegistry {
                     let aliveAge = Date.now() - Number(aliveTs);
                     aliveAge = aliveAge >= 0 ? aliveAge : 0;
                     age = Math.min(age, aliveAge);
+                }
+            }
+        } catch (_e) {
+            // ignore
+        }
+
+        // Additional "connected" override:
+        // If the underlying adapter/device reports a positive connection state, treat this input as alive.
+        // This is critical for sources that do not update state.ts while values are stable.
+        try {
+            if (e.useAliveForStale) {
+                const connIds = [];
+                if (e.aliveConnectedId) connIds.push(String(e.aliveConnectedId));
+                if (e.infoConnectionId) connIds.push(String(e.infoConnectionId));
+                for (const cid of connIds) {
+                    if (!cid) continue;
+                    const cst = this.cacheByObjectId.get(cid);
+                    const v = cst ? cst.val : null;
+                    const connected = (v === true || v === 1 || v === '1' || v === 'true');
+                    if (connected) {
+                        age = 0;
+                        break;
+                    }
                 }
             }
         } catch (_e) {
