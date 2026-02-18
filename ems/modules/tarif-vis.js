@@ -579,7 +579,12 @@ class TarifVisModule extends BaseModule {
             const netFeeEnabledRaw = this.dp ? this.dp.getBoolean('vis.settings.netFeeEnabled', false) : false;
             const netFeeAge = this.dp ? this.dp.getAgeMs('vis.settings.netFeeEnabled') : null;
             const netFeeFresh = (netFeeAge === null || netFeeAge === undefined) ? true : (netFeeAge <= staleTimeoutMs);
-            const netFeeEff = !!(aktivEff && netFeeFresh && netFeeEnabledRaw);
+
+            // IMPORTANT (Robustness/UX):
+            // Zeitvariables Netzentgelt (HT/NT) darf NICHT vom dynamischen Stromtarif abhängig sein.
+            // Viele Installationen nutzen HT/NT, aber keinen dynamischen Tarif.
+            // -> NetFee muss auch funktionieren, wenn vis.settings.dynamicTariff = AUS.
+            const netFeeEff = !!(netFeeFresh && netFeeEnabledRaw);
 
             const netFeeModelRaw = this.dp ? this.dp.getNumberFresh('vis.settings.netFeeModel', staleTimeoutMs, 1) : 1;
             const netFeeModel = (typeof netFeeModelRaw === 'number' && Number.isFinite(netFeeModelRaw)) ? Math.round(netFeeModelRaw) : 1;
@@ -930,7 +935,9 @@ class TarifVisModule extends BaseModule {
             let storageChargeWanted = false;
 	            let storageChargeBlockedByTime = false;
 
-            if (aktivEff && storagePowerAbsW > 0) {
+            // Speichersteuerung ist aktiv, wenn entweder der dynamische Tarif ODER das zeitvariable
+            // Netzentgelt aktiv ist. (Netzentgelt darf unabhängig vom Tarif wirken.)
+            if ((aktivEff || netFeeEff) && storagePowerAbsW > 0) {
                 // gewünschtes Verhalten:
                 // - günstig/NT : Speicher laden (nur wenn SoC <= Start), bis SoC >= Stop, dann ruhen (0 W)
                 // - außerhalb NT (Zeit-Netzentgelt): keine Tarif-Vorgabe (Eigenverbrauchsoptimierung übernimmt)
@@ -1022,29 +1029,29 @@ class TarifVisModule extends BaseModule {
             // - true wenn neutral/unbekannt (keine Tarif-Sperre)
             // - bei günstig: nur true, wenn Priorität EVCS zulässt
             let gridChargeAllowed = true;
-            if (aktivEff) {
-                const netFeeActive = !!(netFeeEff && netFeeMode !== 'off');
-                const netFeeIsNt = !!(netFeeActive && netFeeMode === 'NT');
-                const netFeeIsHt = !!(netFeeActive && netFeeMode === 'HT');
 
-                if (netFeeIsNt) {
-                    // Zeitvariables Netzentgelt: im NT-Fenster Netzladen freigeben.
-                    // (Ziel-Laden kann im Charging-Management pro Ladepunkt zusätzlich übersteuern.)
-                    gridChargeAllowed = true;
-                } else if (netFeeIsHt) {
-                    // Im HT-Fenster Netzladen sperren (PV möglich).
+            // 1) Basis: dynamischer Tarif (falls aktiv)
+            if (aktivEff) {
+                if (tarifState === 'teuer') {
                     gridChargeAllowed = false;
+                } else if (tarifState === 'guenstig') {
+                    gridChargeAllowed = allowEvcsCheap ? true : false;
                 } else {
-                    // Standard (ST) oder Netzentgelt aus: dynamischer Tarif wie vorher
-                    // (teuer blockt, günstig nur wenn Priorität EVCS zulässt, neutral/unbekannt offen).
-                    if (tarifState === 'teuer') {
-                        gridChargeAllowed = false;
-                    } else if (tarifState === 'guenstig') {
-                        gridChargeAllowed = allowEvcsCheap ? true : false;
-                    } else {
-                        gridChargeAllowed = true;
-                    }
+                    gridChargeAllowed = true;
                 }
+            }
+
+            // 2) Overlay: Zeitvariables Netzentgelt (HT/NT) – gilt unabhängig vom Stromtarif
+            const netFeeActiveForGrid = !!(netFeeEff && netFeeMode !== 'off');
+            if (netFeeActiveForGrid) {
+                if (netFeeMode === 'NT') {
+                    // NT: Netzladen freigeben
+                    gridChargeAllowed = true;
+                } else if (netFeeMode === 'HT') {
+                    // HT: Netzladen sperren (PV möglich)
+                    gridChargeAllowed = false;
+                }
+                // Standard (ST): kein Override
             }
 
             // Entladen-Freigabe (für Speicher-/Assist-Logik):
@@ -1060,11 +1067,11 @@ class TarifVisModule extends BaseModule {
             //   (storageChargeBlockedByTime = true, Status: „Eigenverbrauchsoptimierung aktiv (tagsüber)“)
             //   blockiert ist, muss Entladung weiterhin möglich sein.
             let dischargeAllowed = true;
-            if (aktivEff) {
-                const netFeeActive = !!(netFeeEff && netFeeMode !== 'off');
-                const netFeeIsNt = !!(netFeeActive && netFeeMode === 'NT');
-                const netFeeIsHt = !!(netFeeActive && netFeeMode === 'HT');
+            const netFeeActive = !!(netFeeEff && netFeeMode !== 'off');
+            const netFeeIsNt = !!(netFeeActive && netFeeMode === 'NT');
+            const netFeeIsHt = !!(netFeeActive && netFeeMode === 'HT');
 
+            if (aktivEff || netFeeActive) {
                 const storageChargingPlanned = Number.isFinite(speicherSollW) && speicherSollW < 0;
                 const forceSelfConsumption = !!storageChargeBlockedByTime || netFeeIsHt;
 
@@ -1077,7 +1084,7 @@ class TarifVisModule extends BaseModule {
                 } else {
                     // Standard (ST) oder Netzentgelt aus:
                     // Im günstigen Fenster nur sperren, wenn Speicher aktiv laden soll.
-                    if (tarifState === 'guenstig') {
+                    if (aktivEff && tarifState === 'guenstig') {
                         dischargeAllowed = !storageChargingPlanned;
                     } else {
                         dischargeAllowed = true;
@@ -1090,7 +1097,7 @@ class TarifVisModule extends BaseModule {
 
             // Ladepark-Limit: Standard = baseW; Reservierung wenn Speicher im Tarif-Fenster lädt
             let limitW = baseW;
-            if (aktivEff && ((tarifState === 'guenstig') || (netFeeEff && netFeeMode === 'NT')) && speicherSollW < 0 && baseW > 0) {
+            if (((aktivEff && (tarifState === 'guenstig')) || (netFeeEff && netFeeMode === 'NT')) && speicherSollW < 0 && baseW > 0) {
                 const reserveW = Math.max(0, -speicherSollW);
                 const storageShare = (prioritaet === 1) ? 1.0 : (prioritaet === 3) ? 0.0 : 0.5;
                 limitW = Math.max(0, Math.round(baseW - (reserveW * storageShare)));
@@ -1128,7 +1135,9 @@ class TarifVisModule extends BaseModule {
 // Kurz-Status für die VIS (Live-Ansicht)
 // Ziel: Kunde sieht sofort, ob Tarif gerade Laden/Entladen triggert.
 let statusText = '';
-if (aktivEff) {
+const netFeeOverlayUi = !!(netFeeActive && (netFeeMode === 'NT' || netFeeMode === 'HT'));
+
+if (aktivEff || netFeeActive) {
   const priceCurTxt = (preisAktuellOk && Number.isFinite(preisAktuell))
     ? `${preisAktuell.toFixed(3)} €/kWh`
     : '—';
@@ -1143,23 +1152,25 @@ if (aktivEff) {
       ? 'neutral'
       : (tarifState === 'teuer')
         ? 'teuer'
-        : 'unbekannt';
+        : (tarifState === 'aus')
+          ? 'aus'
+          : 'unbekannt';
 
   // Make tariff mode instantly visible (Manuell/Automatik)
   const modeTxt = (modusInt === 2) ? 'Automatik' : (modusInt === 1) ? 'Manuell' : '';
-  const baseTarif = modeTxt
-    ? `Tarif ${modeTxt} ${tarifStateTxt} (${priceCurTxt})`
-    : `Tarif ${tarifStateTxt} (${priceCurTxt})`;
+  const baseTarif = aktivEff
+    ? (modeTxt
+        ? `Tarif ${modeTxt} ${tarifStateTxt} (${priceCurTxt})`
+        : `Tarif ${tarifStateTxt} (${priceCurTxt})`)
+    : 'Tarif aus';
 
   // Zeitvariables Netzentgelt (HT/NT) als Overlay:
   // - NT: EVCS freigegeben + Speicher darf (netto) laden
   // - HT: Speicher läuft in Eigenverbrauchsoptimierung, EVCS Netzladen gesperrt (PV möglich)
   // - Standard (ST): keine Sperre/Erzwingung → dynamischer Tarif wie bisher
-  const netFeeActive = !!(netFeeEff && netFeeMode !== 'off');
-  const netFeeOverlay = !!(netFeeActive && (netFeeMode === 'NT' || netFeeMode === 'HT'));
   const base = netFeeActive ? `Netzentgelt ${netFeeMode} | ${baseTarif}` : baseTarif;
 
-  if (netFeeOverlay) {
+  if (netFeeOverlayUi) {
     if (netFeeMode === 'NT') {
       const parts = [];
       if (storageCharging) parts.push('Speicher lädt');
@@ -1220,7 +1231,10 @@ await this._setIfChanged('tarif.statusText', statusText);
 
             // Für andere Module (synchron) bereithalten
             this.adapter._tarifVis = {
-                aktiv: aktivEff,
+                // "aktiv" bedeutet: dieses Modul liefert eine wirksame Policy (Tarif ODER Netzentgelt).
+                // Der dynamische Tarif selbst kann separat über "tarifAktiv" geprüft werden.
+                aktiv: !!(aktivEff || netFeeEff),
+                tarifAktiv: aktivEff,
                 modus: modusInt,
                 prioritaet,
                 state: tarifState,
