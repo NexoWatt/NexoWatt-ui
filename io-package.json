@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.147",
+    "version": "0.6.148",
     "news": {
+      "0.6.148": {
+        "en": "Fix: Eliminated false 'failsafe stale meter' with NVP/slow grid meters. The default CM stale timeout is now 300s and legacy persisted '15s' values are treated as the old default. The internal ems.gridPowerW derivation now uses the same stale threshold as Charging Management, preventing the 0A/0W deadlock.",
+        "de": "Fix: Keine falschen 'Failsafe Stale Meter' mehr bei NVP/langsam aktualisierenden Netz-Zählern. Standard-Stale-Timeout im Lademanagement ist jetzt 300s; ein alter persistierter Wert '15s' wird als Legacy-Default interpretiert. Die interne ems.gridPowerW-Ableitung nutzt jetzt denselben Stale-Timeout wie das Lademanagement, wodurch der 0A/0W-Deadlock verhindert wird."
+      },
       "0.6.146": {
         "en": "Charging Management / Zielladen: Improved vehicle plug detection. OCPP states like Preparing/SuspendedEVSE now count as 'vehicle connected' even if evcs.active only reports 'charging'. Fix: PV-Reserve can no longer indirectly shrink the EVCS tariff budget to 0W when storage grid charging is blocked by PV-Reserve (EVCS charging in NT works reliably again).",
         "de": "Lademanagement / Zielladen: Robustere Fahrzeug-Erkennung. OCPP-Zust\u00e4nde wie Preparing/SuspendedEVSE z\u00e4hlen jetzt als 'Fahrzeug verbunden', auch wenn evcs.active nur 'charging' meldet. Fix: PV-Reserve kann das EVCS-Tarif-Budget nicht mehr indirekt auf 0W reduzieren, wenn Speicher-Netzladung durch PV-Reserve gesperrt ist (EVCS l\u00e4dt im NT-Fenster wieder zuverl\u00e4ssig)."

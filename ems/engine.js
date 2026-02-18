@@ -356,7 +356,11 @@ class EmsEngine {
       defaultPhases: 3,
 
       // Stability defaults (anti-flutter, safe)
-      staleTimeoutSec: 15,
+      // IMPORTANT: Real-world grid meters (esp. NVP / net power aliases) often update on a slower cadence
+      // (e.g. 30s..300s) and may not write a new value if the power is stable. A too aggressive
+      // timeout causes false "failsafe stale meter" and disables *all* charging.
+      // Default to 5 minutes; installers can tighten this in the App-Center if their meter updates faster.
+      staleTimeoutSec: 300,
       activityThresholdW: 200,
       stopGraceSec: 30,
       sessionKeepSec: 300,
@@ -427,8 +431,16 @@ class EmsEngine {
       const phases_ = Number(userCm.defaultPhases);
       if (Number.isFinite(phases_) && (phases_ === 1 || phases_ === 3)) chargingCfg.defaultPhases = phases_;
 
+      // Migration note:
+      // Older builds used 15s as the implicit default which turned out to be too aggressive for
+      // many real-world meter sources (NVP aliases, slow meters, event-driven updates).
+      // If a user's persisted config still contains exactly "15", treat it as the *legacy default*
+      // and keep the new safer default (300s). Users who truly want 15s can set e.g. 16.
       const stale_ = Number(userCm.staleTimeoutSec);
-      if (Number.isFinite(stale_) && stale_ >= 1 && stale_ <= 3600) chargingCfg.staleTimeoutSec = stale_;
+      if (Number.isFinite(stale_) && stale_ >= 1 && stale_ <= 3600) {
+        const sRound = Math.round(stale_);
+        if (sRound !== 15) chargingCfg.staleTimeoutSec = Math.round(stale_);
+      }
 
       const thr_ = Number(userCm.activityThresholdW);
       if (Number.isFinite(thr_) && thr_ >= 0) chargingCfg.activityThresholdW = Math.round(thr_);
@@ -645,13 +657,17 @@ class EmsEngine {
 
       // Stale timeout for metering input: reuse storage/peak defaults (fallback 15s).
       // Goal: avoid "springing" at the NVP when buy/sell datapoints update asynchronously.
+      // IMPORTANT: Use the same staleness threshold as the charging management failsafe.
+      // If we treat the NVP signal as "stale" too early here, we stop publishing ems.gridPowerW,
+      // which then triggers a global "failsafe stale meter" and forces all setpoints to 0.
       const staleTimeoutSec = clampNumber(
+        (this.adapter && this.adapter.config && this.adapter.config.chargingManagement && this.adapter.config.chargingManagement.staleTimeoutSec) ??
         (this.adapter && this.adapter.config && this.adapter.config.storage && this.adapter.config.storage.staleTimeoutSec) ??
         (this.adapter && this.adapter.config && this.adapter.config.peakShaving && this.adapter.config.peakShaving.staleTimeoutSec) ??
-        15,
+        300,
         1,
         3600,
-        15
+        300
       );
       const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
 
