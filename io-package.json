@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.159",
+    "version": "0.6.160",
     "news": {
+      "0.6.160": {
+        "en": "Hotfix: STALE_METER no longer blocks charging by default. The EMS keeps running even if a meter watchdog falsely reports stale data. You can re-enable strict blocking later via chargingManagement.staleFailsafeMode='block'.",
+        "de": "Hotfix: STALE_METER blockiert Laden standardmäßig nicht mehr. Das EMS läuft weiter, selbst wenn der Watchdog fälschlich 'veraltet' meldet. Striktes Blockieren kann später wieder per chargingManagement.staleFailsafeMode='block' aktiviert werden."
+      },
       "0.6.159": {
         "en": "Fix: STALE_METER now uses the meter device-prefix heartbeat (ANY state update under the same meter) for the grid watchdog. This removes recurring false 'failsafe_stale_meter' when the chosen watchdog value itself is stable (e.g. frequency rounded). Charging will no longer be interrupted as long as the meter keeps sending data.",
         "de": "Fix: STALE_METER nutzt jetzt den Device-Prefix-Heartbeat (JEDE Zustandsänderung unter demselben Zähler) für den Netzpunkt-Watchdog. Damit verschwinden die wiederkehrenden falschen 'failsafe_stale_meter', wenn der gewählte Watchdog-Wert selbst stabil ist (z. B. gerundete Frequenz). Laden wird nicht mehr unterbrochen, solange der Zähler weiterhin Daten liefert."

@@ -1,3 +1,10 @@
+## 0.6.160
+- EMS/Lademanagement: **STALE_METER blockiert standardmäßig nicht mehr** (Hotfix). Dadurch werden Ladepunkte nicht mehr auf 0 gesetzt, wenn der Watchdog fälschlich „veraltet“ meldet.
+- EMS/Lademanagement: Neue Policy (intern): `chargingManagement.staleFailsafeMode` = `off|warn|block` (Default: `off`).
+
+## 0.6.159
+- EMS/Lademanagement: **STALE_METER** nutzt jetzt einen **Device‑Prefix‑Heartbeat** (irgendein State‑Update unter dem Zähler‑Prefix) als Watchdog‑Quelle, um False‑Positives bei stabilen Messwerten zu reduzieren.
+
 ## 0.6.158
 - EMS/Core: **Engine-Start-Crash behoben** (ReferenceError `gridPointConnectedId` / `gridPointWatchdogId`).
 - Zuordnung → Allgemein: **Netzpunkt Connected/Watchdog** ist jetzt wirklich optional und kann sauber gemappt werden, ohne dass der Scheduler stoppt.

@@ -3017,7 +3017,26 @@ if (components.length) {
             if (budgetMode === 'fromPeakShaving' || psActive) staleBudget = !!psBudgetStale;
         }
 
-        const staleRelevant = (mode !== 'off') && (staleMeter || staleBudget);
+        // ---------------------------------------------------------------
+        // STALE_METER policy
+        // ---------------------------------------------------------------
+        // The STALE_METER watchdog is meant as a *safety net* to prevent accidental
+        // overload if the grid meter stops updating. However, in some environments
+        // (aliases / event-driven meters / stable values) false positives can occur.
+        //
+        // To keep the EMS operational while we refine the watchdog, we support a
+        // policy switch:
+        //   - 'off'   : never block charging (default – runs the logic even if stale)
+        //   - 'warn'  : do not block, but expose stale flags/diagnostics
+        //   - 'block' : enforce failsafe (set EVCS targets to 0) when stale
+        //
+        // NOTE: 'off' and 'warn' still publish the stale flags in the UI, but will
+        // not interrupt charging.
+        const stalePolicyRaw = String(cfg.staleFailsafeMode || cfg.stalePolicy || 'off').trim().toLowerCase();
+        const stalePolicy = (stalePolicyRaw === 'block' || stalePolicyRaw === 'warn' || stalePolicyRaw === 'off') ? stalePolicyRaw : 'off';
+
+        const staleDetected = (mode !== 'off') && (staleMeter || staleBudget);
+        const staleBlocks = staleDetected && (stalePolicy === 'block');
 
         // Publish stale diagnostics for UI transparency (even when not in failsafe)
         try {
@@ -3044,12 +3063,14 @@ if (components.length) {
             }
             await this._queueState('chargingManagement.control.staleMeter', !!staleMeter, true);
             await this._queueState('chargingManagement.control.staleBudget', !!staleBudget, true);
-            await this._queueState('chargingManagement.control.failsafeDetails', staleRelevant ? details : '', true);
+            // Keep the name for backwards compatibility with the UI.
+            await this._queueState('chargingManagement.control.failsafeDetails', staleDetected ? details : '', true);
         } catch {
             // ignore
         }
 
-        if (staleRelevant) {
+        // Only enforce failsafe when policy == 'block'.
+        if (staleBlocks) {
             const reason = ReasonCodes.STALE_METER;
 
             await this._queueState('chargingManagement.control.active', true, true);
