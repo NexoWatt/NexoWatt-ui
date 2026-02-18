@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.145",
+    "version": "0.6.146",
     "news": {
+      "0.6.146": {
+        "en": "Charging Management / Zielladen: Improved vehicle plug detection. OCPP states like Preparing/SuspendedEVSE now count as 'vehicle connected' even if evcs.active only reports 'charging'. Fix: PV-Reserve can no longer indirectly shrink the EVCS tariff budget to 0W when storage grid charging is blocked by PV-Reserve (EVCS charging in NT works reliably again).",
+        "de": "Lademanagement / Zielladen: Robustere Fahrzeug-Erkennung. OCPP-Zustände wie Preparing/SuspendedEVSE zählen jetzt als 'Fahrzeug verbunden', auch wenn evcs.active nur 'charging' meldet. Fix: PV-Reserve kann das EVCS-Tarif-Budget nicht mehr indirekt auf 0W reduzieren, wenn Speicher-Netzladung durch PV-Reserve gesperrt ist (EVCS lädt im NT-Fenster wieder zuverlässig)."
+      },
       "0.6.145": {
         "en": "Net fee (HT/NT): Fixed an issue where NT windows could fail to enable grid charging for EVCS/Storage. NT now counts as a 'cheap' enable window for storage charging (respecting SoC hysteresis). Charging Management additionally applies the HT/NT override directly to grid-charge permission for robustness.",
         "de": "Netzentgelt (HT/NT): Fix für einen Fehler, bei dem im NT-Fenster teilweise keine Netzladung für EVCS/Speicher freigegeben wurde. NT zählt jetzt als \"günstiges\" Freigabe-Fenster für Speicher-Netzladung (unter Beachtung der SoC-Hysterese). Zusätzlich wendet das Lademanagement die HT/NT-Übersteuerung direkt auf die Netzlade-Freigabe an (robuster)."

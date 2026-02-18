@@ -1623,36 +1623,94 @@ class ChargingManagementModule extends BaseModule {
             // If a non-zero setpoint was written while the car was unplugged, some wallboxes
             // may start charging immediately on plug-in (cached setpoint). We therefore track
             // the plug state and force 0W whenever the vehicle is not connected.
+            //
+            // Robustness:
+            // Some EVCS/OCPP adapters report "active" as "charging" (true only when power flows),
+            // while the connector can already be physically connected in states like
+            // "Preparing"/"SuspendedEVSE". To avoid false "no_vehicle" states we also infer the
+            // plug state from the wallbox status string when available.
             /** @type {boolean|null} */
             let vehiclePlugged = null;
             let vehiclePluggedSinceMs = 0;
+
+            const inferPlugFromStatus = (raw) => {
+                try {
+                    if (raw === null || raw === undefined) return null;
+                    if (typeof raw !== 'string') return null;
+                    const s = raw.trim().toLowerCase();
+                    if (!s) return null;
+
+                    // Typical OCPP status strings
+                    if (s === 'preparing' || s === 'charging' || s === 'finishing' || s === 'suspendedevse' || s === 'suspendedev' || s === 'occupied' || s === 'reserved') return true;
+                    if (s === 'available' || s === 'idle' || s === 'unplugged' || s === 'notconnected' || s === 'not_connected' || s === 'free' || s === 'ready') return false;
+
+                    // Heuristics for vendor-specific strings
+                    if (s.includes('suspend') || s.includes('charg') || s.includes('prepare') || s.includes('occupied') || s.includes('plug') || (s.includes('connect') && !s.includes('disconnect'))) return true;
+                    if (s.includes('available') || s.includes('idle') || s.includes('unplug') || s.includes('no_vehicle') || s.includes('not connected') || s.includes('disconnect')) return false;
+
+                    return null;
+                } catch {
+                    return null;
+                }
+            };
+
+            /** @type {boolean|null} */
+            let plugByDp = null;
+            let plugByDpTsMs = 0;
+
             if (Number.isFinite(evcsIndex) && evcsIndex > 0) {
                 try {
                     const stPlg = await this._getStateCached(`evcs.${Math.round(evcsIndex)}.active`);
-                    vehiclePlugged = stPlg ? toBool(stPlg.val) : null;
+                    plugByDp = stPlg ? toBool(stPlg.val) : null;
                     const tsPlg = stPlg ? Number(stPlg.ts) : NaN;
-                    const tsPlgMs = (Number.isFinite(tsPlg) && tsPlg > 0) ? Math.round(tsPlg) : 0;
-
-                    if (vehiclePlugged === true || vehiclePlugged === false) {
-                        const prev = this._vehiclePluggedPrev.get(safe);
-                        if (prev !== vehiclePlugged) {
-                            if (vehiclePlugged === true) {
-                                this._vehiclePluggedSinceMs.set(safe, tsPlgMs || now);
-                            } else {
-                                this._vehiclePluggedSinceMs.delete(safe);
-                            }
-                        } else if (vehiclePlugged === true) {
-                            const have = this._vehiclePluggedSinceMs.get(safe);
-                            if (!Number.isFinite(have) || have <= 0) {
-                                this._vehiclePluggedSinceMs.set(safe, tsPlgMs || now);
-                            }
-                        }
-                        this._vehiclePluggedPrev.set(safe, vehiclePlugged);
-                    }
+                    plugByDpTsMs = (Number.isFinite(tsPlg) && tsPlg > 0) ? Math.round(tsPlg) : 0;
                 } catch {
-                    vehiclePlugged = null;
+                    plugByDp = null;
+                    plugByDpTsMs = 0;
                 }
             }
+
+            const plugByStatus = inferPlugFromStatus(statusRaw);
+
+            // If there is actual power flow, the vehicle must be connected.
+            const plugByPower = !!isChargingRaw;
+
+            // Final decision (safety default: unplugged if we cannot determine reliably)
+            let plugSource = 'unknown';
+            if (plugByPower) {
+                vehiclePlugged = true;
+                plugSource = 'power';
+            } else if (plugByStatus === true || plugByStatus === false) {
+                vehiclePlugged = plugByStatus;
+                plugSource = 'status';
+            } else if (plugByDp === true || plugByDp === false) {
+                vehiclePlugged = plugByDp;
+                plugSource = 'dp';
+            } else {
+                vehiclePlugged = false;
+                plugSource = 'default';
+            }
+
+            // Track plug transitions (used for SoC freshness gating)
+            if (vehiclePlugged === true || vehiclePlugged === false) {
+                const prev = this._vehiclePluggedPrev.get(safe);
+                if (prev !== vehiclePlugged) {
+                    if (vehiclePlugged === true) {
+                        const since = (plugSource === 'dp' && plugByDpTsMs > 0) ? plugByDpTsMs : now;
+                        this._vehiclePluggedSinceMs.set(safe, since);
+                    } else {
+                        this._vehiclePluggedSinceMs.delete(safe);
+                    }
+                } else if (vehiclePlugged === true) {
+                    const have = this._vehiclePluggedSinceMs.get(safe);
+                    if (!Number.isFinite(have) || have <= 0) {
+                        const since = (plugSource === 'dp' && plugByDpTsMs > 0) ? plugByDpTsMs : now;
+                        this._vehiclePluggedSinceMs.set(safe, since);
+                    }
+                }
+                this._vehiclePluggedPrev.set(safe, vehiclePlugged);
+            }
+
             vehiclePluggedSinceMs = this._vehiclePluggedSinceMs.get(safe) || 0;
 
             try {
@@ -2504,10 +2562,34 @@ class ChargingManagementModule extends BaseModule {
                 }
             })();
 
-            const tariff = (typeof coreTariffW === 'number') ? coreTariffW : getFirstDpNumber(['cm.tariffBudgetW', 'cm.tariffLimitW']);
+            const tariffRaw = (typeof coreTariffW === 'number') ? coreTariffW : getFirstDpNumber(['cm.tariffBudgetW', 'cm.tariffLimitW']);
+
             // Boost: user explicitly requests full charging -> ignore tariff budget cap.
-            if (!anyBoostActive && typeof tariff === 'number' && Number.isFinite(tariff) && tariff > 0) {
-                components.push({ k: 'tariff', w: tariff });
+            if (!anyBoostActive && typeof tariffRaw === 'number' && Number.isFinite(tariffRaw) && tariffRaw > 0) {
+                let tariffEff = tariffRaw;
+                let tariffKey = 'tariff';
+
+                // If the storage tariff charging is blocked by PV-Reserve (Forecast),
+                // do NOT reserve EVCS power for the storage. In that case "tariffBudgetW"
+                // can be artificially low (baseW - reserveW) and would block EVCS charging.
+                try {
+                    const stPvBlock = await this._getStateCached('speicher.regelung.tarifPvBlock');
+                    const pvBlock = stPvBlock ? !!stPvBlock.val : false;
+
+                    if (pvBlock) {
+                        const stBase = await this._getStateCached('tarif.ladeparkMaxW');
+                        const baseW = stBase ? Number(stBase.val) : NaN;
+
+                        if (Number.isFinite(baseW) && baseW > 0 && baseW >= tariffRaw) {
+                            tariffEff = baseW;
+                            tariffKey = 'tariff(pvReserve)';
+                        }
+                    }
+                } catch {
+                    // ignore
+                }
+
+                components.push({ k: tariffKey, w: tariffEff });
             }
 
             // PV-surplus cap (legacy / compatibility): only used to cap the *total* budget when required.
