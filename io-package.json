@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.157",
+    "version": "0.6.158",
     "news": {
+      "0.6.158": {
+        "en": "Fix: Engine start crash removed (ReferenceError gridPointConnectedId). Added optional GridPoint Connected/Watchdog mappings without breaking the scheduler. Also fixed broken HTML nesting in Mapping → General so the new fields are clean and readable.",
+        "de": "Fix: Engine-Start-Crash behoben (ReferenceError gridPointConnectedId). Optionale Netzpunkt-Connected/Watchdog-Mappings funktionieren jetzt ohne Scheduler-Abbruch. Zusätzlich: kaputte HTML-Verschachtelung in Zuordnung → Allgemein repariert, dadurch sind die neuen Felder sauber und übersichtlich."
+      },
       "0.6.156": {
         "en": "Fix: Eliminated recurring false 'failsafe_stale_meter' when grid power datapoints do not update state.ts while values are stable. Staleness now also respects device/adpater connection indicators (comm.connected / info.connection) for useAliveForStale inputs. Also: Charging-Management staleTimeoutSec override now honors explicit 15s values.",
         "de": "Fix: Wiederkehrender falscher 'failsafe_stale_meter' bei stabilen Netz-Messwerten beseitigt (wenn state.ts nicht fortgeschrieben wird). Freshness berücksichtigt jetzt zusätzlich Verbindungs-Indikatoren (comm.connected / info.connection) für useAliveForStale Eingänge. Außerdem: staleTimeoutSec Override im Lademanagement akzeptiert jetzt explizit auch 15s."

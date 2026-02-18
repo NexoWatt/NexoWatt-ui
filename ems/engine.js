@@ -575,6 +575,29 @@ class EmsEngine {
 
     const gridNetId = (typeof dps.gridPointPower === 'string') ? dps.gridPointPower.trim() : '';
 
+    // Optional robust freshness: connected + watchdog/heartbeat.
+    // NOTE: These inputs are optional, but the engine must never crash if they are not configured.
+    // This mirrors the derivation logic used in _buildChargingConfig().
+    const gridPointConnectedIdCfg = (typeof dps.gridPointConnected === 'string' ? dps.gridPointConnected.trim() : '') || '';
+    const gridPointWatchdogIdCfg = (typeof dps.gridPointWatchdog === 'string' ? dps.gridPointWatchdog.trim() : '') || '';
+    let gridPointConnectedId = gridPointConnectedIdCfg;
+    let gridPointWatchdogId = gridPointWatchdogIdCfg;
+
+    // Auto-derive defaults for NexoWatt device-adapter structures: <...devices.<devKey>.*>
+    try {
+      if (gridNetId && (!gridPointConnectedId || !gridPointWatchdogId)) {
+        const m = String(gridNetId).match(/^(.*?\.devices\.[^.]+)\./);
+        if (m && m[1]) {
+          const prefix = m[1] + '.';
+          if (!gridPointConnectedId) gridPointConnectedId = prefix + 'comm.connected';
+          // Use a measurement-like heartbeat that is typically updated often
+          if (!gridPointWatchdogId) gridPointWatchdogId = prefix + 'r.frequency';
+        }
+      }
+    } catch (_e) {
+      // ignore
+    }
+
     // Bridge: reuse VIS datapoints for EMS modules to avoid double mapping in Admin UI
     try {
       const socId = (typeof dps.storageSoc === 'string') ? dps.storageSoc.trim() : '';

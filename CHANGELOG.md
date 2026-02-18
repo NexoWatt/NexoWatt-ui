@@ -1,3 +1,8 @@
+## 0.6.158
+- EMS/Core: **Engine-Start-Crash behoben** (ReferenceError `gridPointConnectedId` / `gridPointWatchdogId`).
+- Zuordnung → Allgemein: **Netzpunkt Connected/Watchdog** ist jetzt wirklich optional und kann sauber gemappt werden, ohne dass der Scheduler stoppt.
+- UI: **HTML-Verschachtelung repariert** – die neuen Felder sind jetzt übersichtlich dargestellt.
+
 ## 0.6.155
 - EMS/Tarif & Netzentgelt: **Netzentgelt (HT/NT) ist jetzt unabhängig vom dynamischen Tarif** – wirkt auch dann, wenn `Dynamischer Zeittarif = AUS`.
 - EMS/Tarif: **Statuszeile** zeigt Netzentgelt + Tarif auch bei Tarif AUS (z.B. `Netzentgelt NT | Tarif aus`), damit sofort klar ist, was aktiv ist.
