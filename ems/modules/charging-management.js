@@ -1035,6 +1035,12 @@ class ChargingManagementModule extends BaseModule {
         const goalForecastReserveMin = clamp(num(cfg.goalForecastReserveMin, 10), 0, 24 * 60);
         const goalForecastMinCoverage = clamp(num(cfg.goalForecastMinCoverage, 0.75), 0, 1);
 
+        // When a vehicle is plugged in, some EVs/wallboxes update SoC with a delay.
+        // We wait briefly for a fresh SoC update (if the stored SoC timestamp predates plug-in) and then
+        // fall back to "no-SoC" planning. Keep this short so Zielladen remains responsive on systems
+        // that do not provide a real SoC at all (often reporting a static 0%).
+        const goalSocWaitFallbackSec = clamp(num(cfg.goalSocWaitFallbackSec, 30), 0, 15 * 60);
+
         // Smart‑Parameter (Optimierung)
         const goalCheapBoostFactor = clamp(num(cfg.goalCheapBoostFactor, 1.25), 1, 3);
         const goalCheapPriceFactor = clamp(num(cfg.goalCheapPriceFactor, 0.90), 0.1, 2);
@@ -1766,7 +1772,7 @@ class ChargingManagementModule extends BaseModule {
                         const SOC_STALE_MS = 48 * 3600 * 1000; // 48h
                         const SOC_RECENT_GRACE_MS = 10 * 60 * 1000; // 10 min
                         const SOC_AFTER_PLUG_TOL_MS = 2 * 60 * 1000; // 2 min tolerance
-                        const SOC_WAIT_FALLBACK_MS = 15 * 60 * 1000; // 15 min after plug-in: fall back to no-SoC planning
+                        const SOC_WAIT_FALLBACK_MS = Math.round(goalSocWaitFallbackSec * 1000); // after plug-in: fall back to no-SoC planning
 
                         const waitedSincePlugMs = (vehiclePlugged === true && vehiclePluggedSinceMs > 0 && now >= vehiclePluggedSinceMs)
                             ? (now - vehiclePluggedSinceMs)
