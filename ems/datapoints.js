@@ -72,6 +72,13 @@ class DatapointRegistry {
         /** @type {Map<string, number>} */
         this._unitFetchAttemptMs = new Map();
 
+        /** @type {Map<string, string>} */
+        this._aliasIdByObjectId = new Map();
+
+        /** @type {Map<string, number>} */
+        this._aliasFetchAttemptMs = new Map();
+
+
         // Retry interval for unit detection (common.unit) via getForeignObjectAsync
         this._unitRetryMs = 10 * 60 * 1000; // 10 min
 
@@ -138,32 +145,57 @@ class DatapointRegistry {
             unitIn = String(normalized.unitIn || '');
         }
 
+        // ioBroker alias support: for inputs we want freshness/value from the alias target
+        // because alias states themselves may not emit state changes / timestamps.
+        let aliasId = '';
+        if (this._aliasIdByObjectId.has(objectId)) {
+            aliasId = String(this._aliasIdByObjectId.get(objectId) || '');
+        } else if (prev && prev.objectId === objectId && prev.aliasId) {
+            aliasId = String(prev.aliasId || '');
+        }
+
         const now = Date.now();
         const lastUnitAttempt = Number(this._unitFetchAttemptMs.get(objectId) || 0);
-        const shouldAttemptUnitFetch =
-            typeof this.adapter.getForeignObjectAsync === 'function' &&
-            (!lastUnitAttempt || (now - lastUnitAttempt) > this._unitRetryMs) &&
-            (!this._unitByObjectId.has(objectId) || unitIn === '');
+        const lastAliasAttempt = Number(this._aliasFetchAttemptMs.get(objectId) || 0);
+        const lastAttempt = Math.max(lastUnitAttempt, lastAliasAttempt);
 
-        if (shouldAttemptUnitFetch) {
+        const needUnitFetch = (!this._unitByObjectId.has(objectId) || unitIn === '');
+        const needAliasFetch = !this._aliasIdByObjectId.has(objectId);
+        const shouldAttemptObjectFetch =
+            typeof this.adapter.getForeignObjectAsync === 'function' &&
+            (!lastAttempt || (now - lastAttempt) > this._unitRetryMs) &&
+            (needUnitFetch || needAliasFetch);
+
+        if (shouldAttemptObjectFetch) {
             this._unitFetchAttemptMs.set(objectId, now);
+            this._aliasFetchAttemptMs.set(objectId, now);
             try {
                 const obj = await this.adapter.getForeignObjectAsync(objectId);
-                const inUnit = obj?.common?.unit;
-                unitIn = inUnit ? String(inUnit) : '';
+                if (needUnitFetch) {
+                    const inUnit = obj?.common?.unit;
+                    unitIn = inUnit ? String(inUnit) : '';
+                }
+                const aId = obj?.common?.alias?.id;
+                aliasId = aId ? String(aId) : '';
             } catch (_e) {
                 // ignore
             }
             // Cache even empty to avoid hammering the objects DB.
             this._unitByObjectId.set(objectId, unitIn || '');
+            this._aliasIdByObjectId.set(objectId, aliasId || '');
         } else {
-            // Remember previously known unit (even if discovered via old entries)
+            // Remember previously known unit/alias (even if discovered via old entries)
             if (!this._unitByObjectId.has(objectId)) {
                 this._unitByObjectId.set(objectId, unitIn || '');
+            }
+            if (!this._aliasIdByObjectId.has(objectId)) {
+                this._aliasIdByObjectId.set(objectId, aliasId || '');
             }
         }
 
         normalized.unitIn = unitIn || '';
+        normalized.aliasId = aliasId || '';
+        normalized.srcObjectId = normalized.aliasId || normalized.objectId;
 
         // Auto unit scaling based on source object's unit (common.unit)
         // Example: meter reports 0.73 kW but EMS expects W -> multiply by 1000 internally.
@@ -181,8 +213,9 @@ class DatapointRegistry {
             normalized.unitScale = 1;
         }
 
-        const needSubscribe = (typeof this.adapter.subscribeForeignStatesAsync === 'function') && !this._subscribedObjectIds.has(objectId);
-        const needPrime = (typeof this.adapter.getForeignStateAsync === 'function') && !this._primedObjectIds.has(objectId) && !this.cacheByObjectId.has(objectId);
+        const srcObjectId = normalized.srcObjectId || objectId;
+        const needSubscribe = (typeof this.adapter.subscribeForeignStatesAsync === 'function') && !this._subscribedObjectIds.has(srcObjectId);
+        const needPrime = (typeof this.adapter.getForeignStateAsync === 'function') && !this._primedObjectIds.has(srcObjectId) && !this.cacheByObjectId.has(srcObjectId);
 
         const mappingUnchanged = !!(prev
             && prev.objectId === normalized.objectId
@@ -200,22 +233,26 @@ class DatapointRegistry {
             && (prev.max === undefined ? undefined : Number(prev.max)) === (normalized.max === undefined ? undefined : Number(normalized.max))
             && String(prev.note || '') === String(normalized.note || '')
             && String(prev.name || '') === String(normalized.name || '')
+            && String(prev.aliasId || '') === String(normalized.aliasId || '')
+            && String(prev.srcObjectId || '') === String(normalized.srcObjectId || '')
         );
 
         // Fast-path: unchanged mapping and already subscribed/primed -> avoid DB roundtrips.
         if (mappingUnchanged && !needSubscribe && !needPrime) {
             this.keyByObjectId.set(objectId, key);
+            if (srcObjectId && srcObjectId !== objectId) this.keyByObjectId.set(srcObjectId, key);
             return;
         }
 
         this.byKey.set(key, normalized);
         this.keyByObjectId.set(objectId, key);
+        if (srcObjectId && srcObjectId !== objectId) this.keyByObjectId.set(srcObjectId, key);
 
         // Subscribe (idempotent; avoid repeating on every tick)
         if (needSubscribe) {
             try {
-                await this.adapter.subscribeForeignStatesAsync(objectId);
-                this._subscribedObjectIds.add(objectId);
+                await this.adapter.subscribeForeignStatesAsync(srcObjectId);
+                this._subscribedObjectIds.add(srcObjectId);
             } catch (e) {
                 this.adapter.log.warn(`Datapoint subscribe failed for '${objectId}': ${e?.message || e}`);
             }
@@ -224,13 +261,13 @@ class DatapointRegistry {
         // Prime cache (only once per objectId)
         if (needPrime) {
             try {
-                const st = await this.adapter.getForeignStateAsync(objectId);
+                const st = await this.adapter.getForeignStateAsync(srcObjectId);
                 if (st) this.handleStateChange(objectId, st);
             } catch (_e) {
                 // ignore (not all foreign states exist immediately)
             } finally {
                 // Mark as primed even if missing to avoid hammering the states DB.
-                this._primedObjectIds.add(objectId);
+                this._primedObjectIds.add(srcObjectId);
             }
         }
     }
@@ -264,7 +301,7 @@ class DatapointRegistry {
     getRaw(key) {
         const e = this.getEntry(key);
         if (!e) return null;
-        const c = this.cacheByObjectId.get(e.objectId);
+        const c = this.cacheByObjectId.get(e.srcObjectId || e.objectId);
         return c ? c.val : null;
     }
 
@@ -278,7 +315,7 @@ class DatapointRegistry {
     getAgeMs(key) {
         const e = this.getEntry(key);
         if (!e) return Number.POSITIVE_INFINITY;
-        const c = this.cacheByObjectId.get(e.objectId);
+        const c = this.cacheByObjectId.get(e.srcObjectId || e.objectId);
         const ts = c && Number.isFinite(c.ts) ? Number(c.ts) : null;
         if (!ts) return Number.POSITIVE_INFINITY;
         const age = Date.now() - ts;
