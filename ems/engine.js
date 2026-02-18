@@ -575,10 +575,13 @@ class EmsEngine {
       // ignore
     }
 
-    if (gridBuyId) await this.dp.upsert({ key: 'vis.gridBuyW', objectId: gridBuyId, dataType: 'number', direction: 'in', unit: 'W' });
-    if (gridSellId) await this.dp.upsert({ key: 'vis.gridSellW', objectId: gridSellId, dataType: 'number', direction: 'in', unit: 'W' });
+    // NOTE on freshness:
+    // Real-world meters (and especially aliases) may not emit new state.ts values while the measurement is stable.
+    // We therefore enable the "alive prefix" heartbeat for grid metering inputs.
+    if (gridBuyId) await this.dp.upsert({ key: 'vis.gridBuyW', objectId: gridBuyId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
+    if (gridSellId) await this.dp.upsert({ key: 'vis.gridSellW', objectId: gridSellId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
 
-    if (gridNetId) await this.dp.upsert({ key: 'vis.gridNetW', objectId: gridNetId, dataType: 'number', direction: 'in', unit: 'W' });
+    if (gridNetId) await this.dp.upsert({ key: 'vis.gridNetW', objectId: gridNetId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
 
     // Optional: storage capacity (kWh) for time-/risk-based charge strategies
     const capKwhId = (typeof dps.storageCapacityKwh === 'string') ? dps.storageCapacityKwh.trim() : '';

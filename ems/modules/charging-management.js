@@ -1128,7 +1128,11 @@ class ChargingManagementModule extends BaseModule {
         const pauseBehavior = String(cfg.pauseBehavior || 'followPeakBudget'); // rampDownToZero | followPeakBudget
 
         // MU6.8: stale detection (failsafe)
-        const staleTimeoutSec = clamp(num(cfg.staleTimeoutSec, 60), 1, 3600);
+        // IMPORTANT:
+        // Many real-world grid meters/aliases update slowly or only on change.
+        // A too aggressive default triggers false "failsafe stale meter".
+        // The embedded engine sets 300s as its safe default; keep module fallback consistent.
+        const staleTimeoutSec = clamp(num(cfg.staleTimeoutSec, 300), 1, 3600);
         const staleTimeoutMs = staleTimeoutSec * 1000;
 
         // Smart‑Ziel: Preis‑Signal (optional). Wird nur genutzt, wenn entsprechende Datapoints vorhanden sind.
@@ -3038,8 +3042,9 @@ if (components.length) {
                 await this._queueState('chargingManagement.control.gridCapEvcsW', (typeof gridCapEvcsW === 'number' && Number.isFinite(gridCapEvcsW)) ? gridCapEvcsW : 0, true);
                 await this._queueState('chargingManagement.control.gridCapBinding', false, true);
 
-                await this._queueState('chargingManagement.control.worstPhaseA', (typeof worstPhaseA === 'number' && Number.isFinite(worstPhaseA)) ? worstPhaseA : 0, true);
-                await this._queueState('chargingManagement.control.phaseCapEvcsW', (typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)) ? phaseCapEvcsW : 0, true);
+                // Use the current (namespaced) diagnostics states to avoid ioBroker "missing object" warnings.
+                await this._queueState('chargingManagement.control.gridWorstPhaseA', (typeof worstPhaseA === 'number' && Number.isFinite(worstPhaseA)) ? worstPhaseA : 0, true);
+                await this._queueState('chargingManagement.control.gridPhaseCapEvcsW', (typeof phaseCapEvcsW === 'number' && Number.isFinite(phaseCapEvcsW)) ? phaseCapEvcsW : 0, true);
                 await this._queueState('chargingManagement.control.phaseCapBinding', false, true);
             } catch {
                 // ignore

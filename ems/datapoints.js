@@ -56,6 +56,26 @@ class DatapointRegistry {
         /** @type {Map<string, {val:any, ts:number}>} */
         this.lastWriteByObjectId = new Map();
 
+        // -----------------------------------------------------------------
+        // Freshness helpers (anti false-stale)
+        //
+        // Some sources (esp. ioBroker aliases and/or device adapters that only write
+        // on value change) can keep a *valid* measurement constant for minutes.
+        // If we only look at the datapoint's own state.ts, we may trigger false
+        // "failsafe stale meter" although the device is still communicating.
+        //
+        // For selected inputs we therefore allow a "group heartbeat": if *any*
+        // state below a derived prefix updates, the group is considered alive.
+        //
+        // Example:
+        //   nexowatt-devices.0.devices.meter1.r.power   (stable)
+        //   nexowatt-devices.0.devices.meter1.r.voltageL1 (updates)
+        // The group prefix "...devices.meter1." stays fresh and prevents false staleness.
+        // -----------------------------------------------------------------
+
+        /** @type {Map<string, number>} */
+        this._alivePrefixTs = new Map();
+
         // Performance helpers
         // Some modules (e.g. charging management with many EVCS) upsert datapoints
         // on every engine tick. Without caching this can hammer the objects/states DB.
@@ -83,6 +103,33 @@ class DatapointRegistry {
         this._unitRetryMs = 10 * 60 * 1000; // 10 min
 
         this._initEntries = Array.isArray(entries) ? entries : [];
+    }
+
+    /**
+     * Derive a stable "device prefix" from a datapoint id.
+     * If the id matches a known device structure (e.g. nexowatt-devices.*.devices.<name>.*)
+     * we return that device root. Otherwise we fall back to the parent channel prefix.
+     *
+     * Returned prefixes always end with a dot, so they can be used as startsWith() match.
+     *
+     * @param {string} id
+     * @returns {string}
+     */
+    _deriveAlivePrefix(id) {
+        const s = String(id || '').trim();
+        if (!s) return '';
+
+        // NexoWatt device adapter structure
+        //   <adapter>.<inst>.devices.<deviceKey>.<...>
+        // => prefix = <adapter>.<inst>.devices.<deviceKey>.
+        const m = s.match(/^(.*?\.devices\.[^.]+)\./);
+        if (m && m[1]) return `${m[1]}.`;
+
+        // Generic fallback: parent channel
+        const lastDot = s.lastIndexOf('.');
+        if (lastDot > 0) return `${s.slice(0, lastDot + 1)}`;
+
+        return '';
     }
 
     async init() {
@@ -122,6 +169,10 @@ class DatapointRegistry {
             min: (entry.min !== undefined ? Number(entry.min) : prev?.min),
             max: (entry.max !== undefined ? Number(entry.max) : prev?.max),
             note: entry.note || prev?.note || '',
+
+            // Freshness group / heartbeat
+            useAliveForStale: (entry.useAliveForStale !== undefined ? !!entry.useAliveForStale : (prev?.useAliveForStale || false)),
+            alivePrefix: (entry.alivePrefix !== undefined && entry.alivePrefix !== null) ? String(entry.alivePrefix || '') : (prev?.alivePrefix || ''),
         };
 
         if (!Number.isFinite(normalized.scale)) normalized.scale = 1;
@@ -223,6 +274,30 @@ class DatapointRegistry {
         normalized.aliasId = aliasId || '';
         normalized.srcObjectId = normalized.aliasId || normalized.objectId;
 
+        // Derive (or update) alivePrefix if enabled
+        try {
+            if (normalized.useAliveForStale) {
+                const keepPrevPrefix = !!(prev && prev.objectId === normalized.objectId && prev.srcObjectId === normalized.srcObjectId && prev.alivePrefix);
+                if (!normalized.alivePrefix || !keepPrevPrefix) {
+                    normalized.alivePrefix = this._deriveAlivePrefix(normalized.srcObjectId || normalized.objectId);
+                }
+                // Normalize prefix formatting
+                if (normalized.alivePrefix && !normalized.alivePrefix.endsWith('.')) normalized.alivePrefix = `${normalized.alivePrefix}.`;
+            } else {
+                normalized.alivePrefix = '';
+            }
+        } catch (_e) {
+            normalized.alivePrefix = normalized.alivePrefix || '';
+        }
+
+        // Register prefix immediately so future state changes can update the heartbeat,
+        // even if the datapoint itself has not been primed yet.
+        try {
+            if (normalized.useAliveForStale && normalized.alivePrefix && !this._alivePrefixTs.has(normalized.alivePrefix)) {
+                this._alivePrefixTs.set(normalized.alivePrefix, 0);
+            }
+        } catch (_e) {}
+
         // Auto unit scaling based on source object's unit (common.unit)
         // Example: meter reports 0.73 kW but EMS expects W -> multiply by 1000 internally.
         const factor = _computeUnitScale(normalized.unitIn, normalized.unit);
@@ -243,6 +318,10 @@ class DatapointRegistry {
         const needSubscribe = (typeof this.adapter.subscribeForeignStatesAsync === 'function') && !this._subscribedObjectIds.has(srcObjectId);
         const needPrime = (typeof this.adapter.getForeignStateAsync === 'function') && !this._primedObjectIds.has(srcObjectId) && !this.cacheByObjectId.has(srcObjectId);
 
+        // Optional: subscribe to a whole device/channel prefix as heartbeat for freshness.
+        const alivePattern = (normalized.useAliveForStale && normalized.alivePrefix) ? `${normalized.alivePrefix}*` : '';
+        const needAliveSubscribe = !!(alivePattern && typeof this.adapter.subscribeForeignStatesAsync === 'function' && !this._subscribedObjectIds.has(alivePattern));
+
         const mappingUnchanged = !!(prev
             && prev.objectId === normalized.objectId
             && String(prev.dataType || '') === String(normalized.dataType || '')
@@ -261,10 +340,12 @@ class DatapointRegistry {
             && String(prev.name || '') === String(normalized.name || '')
             && String(prev.aliasId || '') === String(normalized.aliasId || '')
             && String(prev.srcObjectId || '') === String(normalized.srcObjectId || '')
+            && !!prev.useAliveForStale === !!normalized.useAliveForStale
+            && String(prev.alivePrefix || '') === String(normalized.alivePrefix || '')
         );
 
         // Fast-path: unchanged mapping and already subscribed/primed -> avoid DB roundtrips.
-        if (mappingUnchanged && !needSubscribe && !needPrime) {
+        if (mappingUnchanged && !needSubscribe && !needPrime && !needAliveSubscribe) {
             this.keyByObjectId.set(objectId, key);
             if (srcObjectId && srcObjectId !== objectId) this.keyByObjectId.set(srcObjectId, key);
             return;
@@ -284,11 +365,23 @@ class DatapointRegistry {
             }
         }
 
+        // Subscribe to the alive/heartbeat prefix pattern (optional)
+        if (needAliveSubscribe) {
+            try {
+                await this.adapter.subscribeForeignStatesAsync(alivePattern);
+                this._subscribedObjectIds.add(alivePattern);
+            } catch (e) {
+                this.adapter.log.warn(`Datapoint alive-prefix subscribe failed for '${alivePattern}': ${e?.message || e}`);
+            }
+        }
+
         // Prime cache (only once per objectId)
         if (needPrime) {
             try {
                 const st = await this.adapter.getForeignStateAsync(srcObjectId);
-                if (st) this.handleStateChange(objectId, st);
+                // IMPORTANT: prime the cache for the *source* objectId (alias target),
+                // otherwise getAgeMs()/isStale() will treat it as missing until the first stateChange event.
+                if (st) this.handleStateChange(srcObjectId, st);
             } catch (_e) {
                 // ignore (not all foreign states exist immediately)
             } finally {
@@ -296,6 +389,15 @@ class DatapointRegistry {
                 this._primedObjectIds.add(srcObjectId);
             }
         }
+
+        // Initialize alive timestamp (best effort) when we have a value.
+        try {
+            if (normalized.useAliveForStale && normalized.alivePrefix && this.cacheByObjectId.has(srcObjectId)) {
+                const c = this.cacheByObjectId.get(srcObjectId);
+                const ts = c && Number.isFinite(Number(c.ts)) ? Number(c.ts) : Date.now();
+                if (!this._alivePrefixTs.has(normalized.alivePrefix)) this._alivePrefixTs.set(normalized.alivePrefix, ts);
+            }
+        } catch (_e) {}
     }
 
     /**
@@ -310,6 +412,20 @@ class DatapointRegistry {
             return;
         }
         this.cacheByObjectId.set(id, { val: state.val, ts: state.ts || Date.now(), ack: !!state.ack });
+
+        // Update alive prefixes (heartbeat) on *any* matching foreign state update.
+        try {
+            if (this._alivePrefixTs && this._alivePrefixTs.size) {
+                const ts = state.ts || Date.now();
+                for (const p of this._alivePrefixTs.keys()) {
+                    if (p && id.startsWith(p)) {
+                        this._alivePrefixTs.set(p, ts);
+                    }
+                }
+            }
+        } catch (_e) {
+            // ignore
+        }
     }
 
     /**
@@ -344,8 +460,25 @@ class DatapointRegistry {
         const c = this.cacheByObjectId.get(e.srcObjectId || e.objectId);
         const ts = c && Number.isFinite(c.ts) ? Number(c.ts) : null;
         if (!ts) return Number.POSITIVE_INFINITY;
-        const age = Date.now() - ts;
-        return age >= 0 ? age : 0;
+        let age = Date.now() - ts;
+        age = age >= 0 ? age : 0;
+
+        // If enabled, use "alive prefix" heartbeat as alternative freshness signal.
+        // This avoids false stale detections for event-driven datapoints.
+        try {
+            if (e.useAliveForStale && e.alivePrefix) {
+                const aliveTs = this._alivePrefixTs.get(e.alivePrefix);
+                if (aliveTs && Number.isFinite(Number(aliveTs))) {
+                    let aliveAge = Date.now() - Number(aliveTs);
+                    aliveAge = aliveAge >= 0 ? aliveAge : 0;
+                    age = Math.min(age, aliveAge);
+                }
+            }
+        } catch (_e) {
+            // ignore
+        }
+
+        return age;
     }
 
     /**
