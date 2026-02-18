@@ -190,7 +190,13 @@ class PeakShavingModule extends BaseModule {
         if (cfg.l3CurrentId) await this.dp.upsert({ key: 'ps.l3A', objectId: cfg.l3CurrentId, dataType: 'number', direction: 'in', unit: 'A' });
 
         // MU6.7: stale meter failsafe (protect against missing/old grid measurements)
-        const staleTimeoutSec = clamp(num(cfg.staleTimeoutSec, 15), 1, 3600);
+        // IMPORTANT: Many real-world meters update slowly or only on change.
+        // A too aggressive legacy default (15s) caused false activation and blocked controlled loads.
+        // Default to 300s; if a persisted legacy default "15" exists, treat it as legacy and keep 300.
+        let staleTimeoutSec = num(cfg.staleTimeoutSec, null);
+        if (!Number.isFinite(staleTimeoutSec)) staleTimeoutSec = 300;
+        staleTimeoutSec = clamp(staleTimeoutSec, 1, 3600);
+        if (Math.round(staleTimeoutSec) === 15) staleTimeoutSec = 300;
         const staleMaxAgeMs = staleTimeoutSec * 1000;
         const wantsPowerLimit = typeof plantLimitW === 'number' && plantLimitW > 0;
         const wantsPhaseLimit = (phaseMode === 'info' || phaseMode === 'enforce') && typeof maxPhaseA === 'number' && maxPhaseA > 0;
