@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-	    "version": "0.6.161",
+	    "version": "0.6.162",
     "news": {
+	      "0.6.162": {
+	        "en": "Fix: Prefer nexowatt-devices alias online/heartbeat for meter watchdog. Stale-meter detection no longer requires both Connected+Watchdog to be configured (prevents false STALE_METER when only one DP is set).",
+	        "de": "Fix: Bevorzugt nexowatt-devices Alias online/heartbeat für den Zähler-Watchdog. Stale-Meter-Erkennung erfordert nicht mehr zwingend Connected+Watchdog (verhindert falsches STALE_METER wenn nur ein DP gesetzt ist)."
+	      },
 	      "0.6.161": {
 	        "en": "Fix: Storage PV-Reserve no longer blocks grid-charging at very low SoC. Added a safe default PV-reserve min SoC (>=20%) and a less aggressive capacity fallback estimate, preventing 'Speicher lädt nicht' in cheap/NT windows.",
 	        "de": "Fix: Speicher PV-Reserve blockiert Netzladung nicht mehr bei sehr niedrigem SoC. Sicherer Default für PV-Reserve-Min-SoC (>=20%) + weniger aggressive Kapazitäts-Fallback-Schätzung. Dadurch verschwindet 'Speicher lädt nicht' in günstig/NT-Fenstern."

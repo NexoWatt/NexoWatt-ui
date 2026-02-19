@@ -2949,29 +2949,54 @@ if (components.length) {
             // Robust STALE_METER handling:
             // If a connected DP + watchdog/heartbeat DP are configured, use them as the source of truth.
             // This avoids false STALE_METER when the power value is stable (setStateChanged -> ts/lc not updated).
-            const hasConn = !!this.dp.getEntry('cm.gridConnected');
-            const hasWd = !!this.dp.getEntry('cm.gridWatchdog');
-            const useConnWd = hasConn || hasWd;
+            const connEntry = this.dp.getEntry('cm.gridConnected');
+            const wdEntry = this.dp.getEntry('cm.gridWatchdog');
+            const connId = connEntry?.srcObjectId;
+            const wdId = wdEntry?.srcObjectId;
+            const hasConn = !!connId;
+            const hasWd = !!wdId;
 
-            if (useConnWd) {
-                if (!(hasConn && hasWd)) {
-                    // Configuration incomplete -> go safe. UI will show STALE_METER until both are configured.
-                    staleMeter = true;
-                } else {
+            if (hasConn || hasWd) {
+                // Connected / Online DP
+                let connected = true;
+                if (hasConn) {
                     const connRaw = this.dp.getRaw('cm.gridConnected');
-                    const connected = (connRaw === true || connRaw === 1 || connRaw === 'true' || connRaw === '1');
+                    connected = (connRaw === true || connRaw === 1 || connRaw === 'true' || connRaw === '1');
+                }
 
-                    // The watchdog should reflect *real meter activity*.
-                    // We intentionally rely on the alivePrefix heartbeat age (ANY state update
-                    // under the same device prefix), not only on the watchdog state's own ts/lc.
-                    // Otherwise we may get false STALE_METER when the chosen watchdog value is stable.
-                    const watchdogAgeMs = typeof this.dp.getAliveAgeMs === 'function'
-                        ? this.dp.getAliveAgeMs('cm.gridWatchdog')
-                        : this.dp.getAgeMs('cm.gridWatchdog');
-                    const watchdogFresh = Number.isFinite(watchdogAgeMs) && watchdogAgeMs <= staleTimeoutMs;
+                // Watchdog / Heartbeat DP
+                let watchdogFresh = true;
+                if (hasWd) {
+                    // If the watchdog is a "lastSeenMs" timestamp we compute age from its *value*.
+                    // Otherwise we use the alivePrefix heartbeat age (ANY state update under the same device prefix).
+                    let watchdogAgeMs = Infinity;
+                    const nowMs = Date.now();
 
-                    // If meter is connected AND watchdog is fresh, we consider the meter OK.
+                    const looksLikeLastSeen = /lastSeenMs$/i.test(String(wdId || ''));
+                    if (looksLikeLastSeen) {
+                        const lastSeenMs = this.dp.getNumber('cm.gridWatchdog', null);
+                        if (typeof lastSeenMs === 'number' && Number.isFinite(lastSeenMs) && lastSeenMs > 0) {
+                            watchdogAgeMs = Math.max(0, nowMs - lastSeenMs);
+                        }
+                    } else {
+                        watchdogAgeMs = typeof this.dp.getAliveAgeMs === 'function'
+                            ? this.dp.getAliveAgeMs('cm.gridWatchdog')
+                            : this.dp.getAgeMs('cm.gridWatchdog');
+                    }
+
+                    watchdogFresh = Number.isFinite(watchdogAgeMs) && watchdogAgeMs <= staleTimeoutMs;
+                }
+
+                // Decision:
+                // - If we have both: require (connected && watchdogFresh)
+                // - If we have only watchdog: require watchdogFresh
+                // - If we have only connected: require connected (do NOT force stale due to missing watchdog)
+                if (hasConn && hasWd) {
                     staleMeter = !(connected && watchdogFresh);
+                } else if (hasWd) {
+                    staleMeter = !watchdogFresh;
+                } else {
+                    staleMeter = !connected;
                 }
             } else if (configuredGridKeys.length === 0) {
                 // No grid power configured -> safe fallback.

@@ -211,14 +211,29 @@ class EmsEngine {
     let gridPointWatchdogId = gridPointWatchdogIdCfg;
 
     // Auto-derive defaults for NexoWatt device-adapter structures: <...devices.<devKey>.*>
+    //
+    // New (nexowatt-devices adapter):
+    //   devices.<id>.aliases.r.heartbeat  (number, increments on real data)  ✅
+    //   devices.<id>.aliases.r.lastSeenMs (number, unix ms of last data)     ✅
+    //   devices.<id>.aliases.r.online     (boolean, heartbeat within timeout)✅
+    //
+    // We prefer these because they reliably change even if power values are constant.
+    // Fallback remains comm.connected + r.frequency.
     try {
       if (gridPointPowerId && (!gridPointConnectedId || !gridPointWatchdogId)) {
-        const m = String(gridPointPowerId).match(/^(.*?\.devices\.[^.]+)\./);
+        const id = String(gridPointPowerId);
+        const m = id.match(/^(.*?\.devices\.[^.]+)\./);
         if (m && m[1]) {
           const prefix = m[1] + '.';
-          if (!gridPointConnectedId) gridPointConnectedId = prefix + 'comm.connected';
-          // Use a measurement-like heartbeat that is typically updated often
-          if (!gridPointWatchdogId) gridPointWatchdogId = prefix + 'r.frequency';
+
+          const looksLikeAliasR = id.includes('.aliases.r.');
+
+          if (!gridPointConnectedId) {
+            gridPointConnectedId = looksLikeAliasR ? (prefix + 'aliases.r.online') : (prefix + 'comm.connected');
+          }
+          if (!gridPointWatchdogId) {
+            gridPointWatchdogId = looksLikeAliasR ? (prefix + 'aliases.r.heartbeat') : (prefix + 'r.frequency');
+          }
         }
       }
     } catch (_e) {
@@ -584,14 +599,21 @@ class EmsEngine {
     let gridPointWatchdogId = gridPointWatchdogIdCfg;
 
     // Auto-derive defaults for NexoWatt device-adapter structures: <...devices.<devKey>.*>
+    // Prefer nexowatt-devices alias watchdog/online when the mapped gridNetId is under .aliases.r.*
     try {
       if (gridNetId && (!gridPointConnectedId || !gridPointWatchdogId)) {
-        const m = String(gridNetId).match(/^(.*?\.devices\.[^.]+)\./);
+        const id = String(gridNetId);
+        const m = id.match(/^(.*?\.devices\.[^.]+)\./);
         if (m && m[1]) {
           const prefix = m[1] + '.';
-          if (!gridPointConnectedId) gridPointConnectedId = prefix + 'comm.connected';
-          // Use a measurement-like heartbeat that is typically updated often
-          if (!gridPointWatchdogId) gridPointWatchdogId = prefix + 'r.frequency';
+          const looksLikeAliasR = id.includes('.aliases.r.');
+
+          if (!gridPointConnectedId) {
+            gridPointConnectedId = looksLikeAliasR ? (prefix + 'aliases.r.online') : (prefix + 'comm.connected');
+          }
+          if (!gridPointWatchdogId) {
+            gridPointWatchdogId = looksLikeAliasR ? (prefix + 'aliases.r.heartbeat') : (prefix + 'r.frequency');
+          }
         }
       }
     } catch (_e) {
