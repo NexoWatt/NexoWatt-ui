@@ -2,6 +2,11 @@
 - EMS/Lademanagement: **STALE_METER blockiert standardmäßig nicht mehr** (Hotfix). Dadurch werden Ladepunkte nicht mehr auf 0 gesetzt, wenn der Watchdog fälschlich „veraltet“ meldet.
 - EMS/Lademanagement: Neue Policy (intern): `chargingManagement.staleFailsafeMode` = `off|warn|block` (Default: `off`).
 
+## 0.6.161
+- EMS/Speicher: **PV‑Reserve Grid‑Charge Block** weniger aggressiv (Fix für „Speicher lädt nicht mehr“ bei niedrigem SoC).
+  - `tariffPvReserveMinSocPct` hat jetzt einen **sicheren Default ≥ 20%** (auch wenn Reserve-Min = 0% gesetzt ist).
+  - Kapazitäts‑Fallback (wenn keine Batterie‑Kapazität konfiguriert/ermittelbar ist) nutzt eine **größere Schätzung**, damit PV‑Reserve nicht fälschlich bei 10% SoC deckelt.
+
 ## 0.6.159
 - EMS/Lademanagement: **STALE_METER** nutzt jetzt einen **Device‑Prefix‑Heartbeat** (irgendein State‑Update unter dem Zähler‑Prefix) als Watchdog‑Quelle, um False‑Positives bei stabilen Messwerten zu reduzieren.
 

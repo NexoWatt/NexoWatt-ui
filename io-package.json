@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.160",
+	    "version": "0.6.161",
     "news": {
+	      "0.6.161": {
+	        "en": "Fix: Storage PV-Reserve no longer blocks grid-charging at very low SoC. Added a safe default PV-reserve min SoC (>=20%) and a less aggressive capacity fallback estimate, preventing 'Speicher lädt nicht' in cheap/NT windows.",
+	        "de": "Fix: Speicher PV-Reserve blockiert Netzladung nicht mehr bei sehr niedrigem SoC. Sicherer Default für PV-Reserve-Min-SoC (>=20%) + weniger aggressive Kapazitäts-Fallback-Schätzung. Dadurch verschwindet 'Speicher lädt nicht' in günstig/NT-Fenstern."
+	      },
       "0.6.160": {
         "en": "Hotfix: STALE_METER no longer blocks charging by default. The EMS keeps running even if a meter watchdog falsely reports stale data. You can re-enable strict blocking later via chargingManagement.staleFailsafeMode='block'.",
         "de": "Hotfix: STALE_METER blockiert Laden standardmäßig nicht mehr. Das EMS läuft weiter, selbst wenn der Watchdog fälschlich 'veraltet' meldet. Striktes Blockieren kann später wieder per chargingManagement.staleFailsafeMode='block' aktiviert werden."

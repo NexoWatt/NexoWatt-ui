@@ -951,12 +951,14 @@ if (typeof soc === 'number') {
 						      const captureFactor = clamp(num(cfg.tariffPvReserveCaptureFactor, 0.6), 0, 1);
 						      const confidence = clamp(num(cfg.tariffPvReserveConfidence, 0.85), 0, 1);
 						
-						      // Wenn SoC sehr niedrig: nicht warten, sondern laden.
-						      const reserveMinEff = reserveEnabled ? reserveMin : 0;
-						      const minSocForWaitCfg = num(cfg.tariffPvReserveMinSocPct, NaN);
-						      const minSocForWait = (Number.isFinite(minSocForWaitCfg))
-						        ? clamp(minSocForWaitCfg, 0, socTarget)
-						        : Math.max(reserveMinEff + 2, 10);
+							      // PV-Reserve: Niemals auf extrem niedrige SoC-Werte deckeln.
+							      // Sonst blockiert sie das Tarif-/NT-Laden schon bei sehr niedrigem SoC (z.B. 10%).
+							      // Default: mindestens 20% (konfigurierbar via tariffPvReserveMinSocPct).
+							      const reserveMinEff = (typeof reserveMin === 'number' && Number.isFinite(reserveMin)) ? reserveMin : 20;
+							      const minSocForWaitCfg = num(cfg.tariffPvReserveMinSocPct, NaN);
+							      const minSocForWait = (Number.isFinite(minSocForWaitCfg))
+							        ? clamp(minSocForWaitCfg, 0, socTarget)
+							        : Math.max(reserveMinEff + 2, 20);
 						
 						      // PV Charge‑Potential (kWh) über den Horizon, limitiert durch maxChargeW (falls gesetzt).
 						      let pvChargePotentialKWh = 0;
@@ -1044,14 +1046,16 @@ if (typeof soc === 'number') {
 						      const pvStorableKWh = pvChargePotentialKWh * captureFactor * confidence * pvSeasonFactor;
 						      // Kapazität: wenn unbekannt, grob aus Tarif‑Ladeleistung schätzen (Fallback)
 						      let capKWhEff = capKWh;
-						      if (!(typeof capKWhEff === 'number' && Number.isFinite(capKWhEff) && capKWhEff > 0)) {
-						        // Schätzung: 0→100% dauert typischerweise ca. 2.5h bei Nennleistung.
-						        const estHours = 2.5;
+							      if (!(typeof capKWhEff === 'number' && Number.isFinite(capKWhEff) && capKWhEff > 0)) {
+							        // Schätzung (Fallback): bewusst eher "zu groß" wählen, damit PV-Reserve nicht zu aggressiv
+							        // wird, wenn die reale Kapazität nicht konfiguriert/ermittelbar ist.
+							        // Praxis: viele Systeme liegen eher bei 4–8h @ Nennleistung.
+							        const estHours = 6;
 						        const reqW = (Number.isFinite(Math.abs(want)) && Math.abs(want) > 0) ? Math.abs(want) : null;
 						        let estKWh = (reqW && Number.isFinite(reqW)) ? (reqW / 1000) * estHours : NaN;
 						        if (Number.isFinite(estKWh) && estKWh > 0) {
 						          // Sane bounds to avoid extreme behaviour on bad configs
-						          estKWh = clamp(estKWh, 1, 200);
+							          estKWh = clamp(estKWh, 10, 500);
 						          capKWhEff = estKWh;
 						          capKWhSource = 'estimated';
 						          capKWhEstimated = true;
