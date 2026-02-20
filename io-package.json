@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.167",
+    "version": "0.6.168",
     "news": {
+      "0.6.168": {
+        "en": "Fix: STALE_METER fail-safe now trusts explicit ONLINE/CONNECTED DP (authoritative) and no longer blocks due to stale budget timestamps.",
+        "de": "Fix: STALE_METER-Failsafe vertraut jetzt dem expliziten ONLINE/CONNECTED-DP (authoritativ) und blockiert nicht mehr wegen stale Budget-Zeitstempeln."
+      },
       "0.6.166": {
         "en": "Fix: chargingManagement rule tick crash (datapoints.getAliveAgeMs used a non-existing cache map).",
         "de": "Fix: chargingManagement Regel-Tick Crash (datapoints.getAliveAgeMs nutzte eine nicht existierende Cache-Map)."

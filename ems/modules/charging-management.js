@@ -3025,16 +3025,19 @@ if (components.length) {
                     watchdogFresh = Number.isFinite(watchdogAgeMs) && watchdogAgeMs <= staleTimeoutMs;
                 }
 
-                // Decision:
-                // - If we have both: require (connected && watchdogFresh)
-                // - If we have only watchdog: require watchdogFresh
-                // - If we have only connected: require connected (do NOT force stale due to missing watchdog)
-                if (hasConn && hasWd) {
-                    staleMeter = !(connected && watchdogFresh);
+                // Decision (STALE_METER):
+                // ✅ If an explicit CONNECTED/ONLINE dp is mapped (e.g. nexowatt-devices … aliases.r.online),
+                //    treat it as authoritative and *only* use it.
+                //    This prevents false STALE_METER when values are stable or written "on change".
+                //
+                // Otherwise (no connected dp):
+                // - If watchdog exists: require watchdogFresh
+                if (hasConn) {
+                    staleMeter = !connected;
                 } else if (hasWd) {
                     staleMeter = !watchdogFresh;
                 } else {
-                    staleMeter = !connected;
+                    staleMeter = true;
                 }
             } else if (configuredGridKeys.length === 0) {
                 // No grid power configured -> safe fallback.
@@ -3115,7 +3118,10 @@ if (components.length) {
             stalePolicy = 'block';
         }
 
-        const staleDetected = (mode !== 'off') && (staleMeter || staleBudget);
+        // Important: only trigger FAILSAFE on *meter* staleness.
+        // Budget signals can stay constant for long periods and may be written "on change",
+        // which would falsely trip a stale detector based on timestamps.
+        const staleDetected = (mode !== 'off') && staleMeter;
         const staleBlocks = staleDetected && (stalePolicy === 'block');
 
         // Publish stale diagnostics for UI transparency (even when not in failsafe)
