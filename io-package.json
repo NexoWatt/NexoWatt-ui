@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-	    "version": "0.6.162",
+    "version": "0.6.163",
     "news": {
+	      "0.6.163": {
+	        "en": "New: Runtime datapoint chargingManagement.control.failsafeEnabled lets you enable/disable the STALE_METER fail-safe without reprogramming or restart. If enabled while config is 'off', the policy defaults to 'block' for safety.",
+	        "de": "Neu: Laufzeit-Datenpunkt chargingManagement.control.failsafeEnabled aktiviert/deaktiviert den STALE_METER-Failsafe ohne Umprogrammieren oder Neustart. Wenn aktiviert und die Konfiguration noch 'off' ist, wird zur Sicherheit automatisch 'block' verwendet."
+	      },
 	      "0.6.162": {
 	        "en": "Fix: Prefer nexowatt-devices alias online/heartbeat for meter watchdog. Stale-meter detection no longer requires both Connected+Watchdog to be configured (prevents false STALE_METER when only one DP is set).",
 	        "de": "Fix: Bevorzugt nexowatt-devices Alias online/heartbeat für den Zähler-Watchdog. Stale-Meter-Erkennung erfordert nicht mehr zwingend Connected+Watchdog (verhindert falsches STALE_METER wenn nur ein DP gesetzt ist)."

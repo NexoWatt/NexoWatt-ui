@@ -646,6 +646,34 @@ class ChargingManagementModule extends BaseModule {
             });
         };
 
+        // Runtime toggle (writable): Enable/disable the STALE_METER fail-safe without reprogramming.
+        // - false: never block charging due to stale metering (still publishes diagnostics)
+        // - true : apply stale policy (default: block if config is 'off')
+        // NOTE: This is intentionally a STATE (not adapter config) so installers can flip it
+        // instantly from scripts/UI without restarting the adapter.
+        await this.adapter.setObjectNotExistsAsync('chargingManagement.control.failsafeEnabled', {
+            type: 'state',
+            common: {
+                name: 'Failsafe enabled (STALE_METER)',
+                type: 'boolean',
+                role: 'switch.enable',
+                read: true,
+                write: true,
+                def: false,
+                states: { true: 'Ein', false: 'Aus' },
+            },
+            native: {},
+        });
+        // Initialize only once (do not overwrite existing user choice)
+        try {
+            const st = await this.adapter.getStateAsync('chargingManagement.control.failsafeEnabled');
+            if (!st || typeof st.val !== 'boolean') {
+                await this.adapter.setStateAsync('chargingManagement.control.failsafeEnabled', { val: false, ack: true });
+            }
+        } catch {
+            // ignore
+        }
+
         await mk('chargingManagement.wallboxCount', 'Ladepunkt count', 'number', 'value');
         await mk('chargingManagement.stationCount', 'Station count', 'number', 'value');
         await mk('chargingManagement.summary.totalPowerW', 'Total power (W)', 'number', 'value.power');
@@ -668,6 +696,7 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.staleMeter', 'Meter stale (failsafe)', 'boolean', 'indicator');
         await mk('chargingManagement.control.staleBudget', 'Budget stale (failsafe)', 'boolean', 'indicator');
         await mk('chargingManagement.control.failsafeDetails', 'Failsafe details', 'string', 'text');
+        await mk('chargingManagement.control.failsafePolicy', 'Failsafe policy (effective)', 'string', 'text');
 
         // Gate T: Tarif-Freigaben (für Transparenz)
         await mk('chargingManagement.control.gridChargeAllowed', 'Grid charge allowed (Tarif)', 'boolean', 'indicator');
@@ -3057,8 +3086,25 @@ if (components.length) {
         //
         // NOTE: 'off' and 'warn' still publish the stale flags in the UI, but will
         // not interrupt charging.
-        const stalePolicyRaw = String(cfg.staleFailsafeMode || cfg.stalePolicy || 'off').trim().toLowerCase();
-        const stalePolicy = (stalePolicyRaw === 'block' || stalePolicyRaw === 'warn' || stalePolicyRaw === 'off') ? stalePolicyRaw : 'off';
+        // Runtime override: allow installers to toggle failsafe on/off via datapoint.
+        // If enabled and config is still 'off', we default to 'block' (safety-first).
+        let failsafeEnabled = false;
+        try {
+            const stFs = await this._getStateCached('chargingManagement.control.failsafeEnabled');
+            if (stFs && typeof stFs.val === 'boolean') failsafeEnabled = !!stFs.val;
+            else if (stFs && (stFs.val === 1 || stFs.val === '1' || stFs.val === 'true')) failsafeEnabled = true;
+        } catch {
+            // ignore
+        }
+
+        let stalePolicyRaw = String(cfg.staleFailsafeMode || cfg.stalePolicy || 'off').trim().toLowerCase();
+        let stalePolicy = (stalePolicyRaw === 'block' || stalePolicyRaw === 'warn' || stalePolicyRaw === 'off') ? stalePolicyRaw : 'off';
+
+        if (!failsafeEnabled) {
+            stalePolicy = 'off';
+        } else if (stalePolicy === 'off') {
+            stalePolicy = 'block';
+        }
 
         const staleDetected = (mode !== 'off') && (staleMeter || staleBudget);
         const staleBlocks = staleDetected && (stalePolicy === 'block');
@@ -3090,6 +3136,7 @@ if (components.length) {
             await this._queueState('chargingManagement.control.staleBudget', !!staleBudget, true);
             // Keep the name for backwards compatibility with the UI.
             await this._queueState('chargingManagement.control.failsafeDetails', staleDetected ? details : '', true);
+            await this._queueState('chargingManagement.control.failsafePolicy', String(stalePolicy || ''), true);
         } catch {
             // ignore
         }
