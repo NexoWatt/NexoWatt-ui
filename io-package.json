@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.164",
+    "version": "0.6.165",
     "news": {
+	      "0.6.165": {
+	        "en": "Fix: Stale-meter watchdog now detects activity even when mapped datapoints are ioBroker aliases (fallback to target ts if prefix-heartbeat is not observed).",
+	        "de": "Fix: Stale‑Meter Watchdog erkennt Aktivität jetzt auch bei gemappten ioBroker‑Alias-DPs (Fallback auf Target‑ts, wenn Prefix‑Heartbeat nicht erkannt wird)."
+	      },
 	      "0.6.164": {
 	        "en": "SmartHome: sidebar pages/navigation presets + config editor; Logic editor: backup/restore buttons; SmartHome devices now include roomId/functionId for stable filtering.",
 	        "de": "SmartHome: Seiten/Navigation (Sidebar + Mobile Drawer) inkl. Konfig-Editor; Logikeditor: Backup/Restore Buttons; SmartHome Geräte liefern jetzt roomId/functionId für stabile Filter."

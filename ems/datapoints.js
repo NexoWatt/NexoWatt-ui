@@ -593,13 +593,38 @@ class DatapointRegistry {
      */
     getAliveAgeMs(key) {
         const e = this.getEntry(key);
-        if (!e || !e.alivePrefix) return Number.POSITIVE_INFINITY;
-        const aliveTs = this._alivePrefixTs.get(e.alivePrefix);
-        const ts = aliveTs && Number.isFinite(Number(aliveTs)) ? Number(aliveTs) : null;
-        if (!ts) return Number.POSITIVE_INFINITY;
-        let age = Date.now() - ts;
-        age = age >= 0 ? age : 0;
-        return age;
+        if (!e) return Number.POSITIVE_INFINITY;
+
+        const now = Date.now();
+        /** @type {number[]} */
+        const ages = [];
+
+        // 1) Prefer the derived alivePrefix heartbeat when available.
+        //    This captures activity under the same device prefix even if the mapped value itself does not change.
+        if (e.alivePrefix) {
+            const aliveTs = this._alivePrefixTs.get(e.alivePrefix);
+            const ts = aliveTs && Number.isFinite(Number(aliveTs)) ? Number(aliveTs) : null;
+            if (ts) {
+                const age = now - ts;
+                ages.push(age >= 0 ? age : 0);
+            }
+        }
+
+        // 2) Fallback to the datapoint's own update timestamp (ts) WITHOUT any "connected" override.
+        //    This is crucial when the mapped datapoint is an ioBroker alias:
+        //    we may subscribe to the alias target (srcObjectId) and therefore never see events under alivePrefix.
+        const id = e.srcObjectId || e.objectId;
+        if (id) {
+            const s = this._cacheByObjectId.get(id);
+            const ts = s && Number.isFinite(Number(s.ts)) ? Number(s.ts) : null;
+            if (ts) {
+                const age = now - ts;
+                ages.push(age >= 0 ? age : 0);
+            }
+        }
+
+        if (!ages.length) return Number.POSITIVE_INFINITY;
+        return Math.min(...ages);
     }
 
     /**
