@@ -2990,7 +2990,10 @@ if (components.length) {
                 let connected = true;
                 if (hasConn) {
                     const connRaw = this.dp.getRaw('cm.gridConnected');
-                    connected = (connRaw === true || connRaw === 1 || connRaw === 'true' || connRaw === '1');
+                    // Be permissive: treat missing/unknown as connected (we primarily rely on watchdog freshness).
+                    // Only explicit false/0 should force disconnect.
+                    const isFalse = (connRaw === false || connRaw === 0 || connRaw === 'false' || connRaw === '0');
+                    connected = !isFalse;
                 }
 
                 // Watchdog / Heartbeat DP
@@ -3008,9 +3011,15 @@ if (components.length) {
                             watchdogAgeMs = Math.max(0, nowMs - lastSeenMs);
                         }
                     } else {
-                        watchdogAgeMs = typeof this.dp.getAliveAgeMs === 'function'
-                            ? this.dp.getAliveAgeMs('cm.gridWatchdog')
-                            : this.dp.getAgeMs('cm.gridWatchdog');
+                        // Use getAgeMs (includes robust alias fallback). getAliveAgeMs can be Infinity for ioBroker alias
+                        // wrappers because alias objects may not emit state-change events under their own ID.
+                        watchdogAgeMs = this.dp.getAgeMs('cm.gridWatchdog');
+
+                        // As a last resort (e.g., state missing), fall back to alive-age if available.
+                        if (!Number.isFinite(watchdogAgeMs) && typeof this.dp.getAliveAgeMs === 'function') {
+                            const a = this.dp.getAliveAgeMs('cm.gridWatchdog');
+                            if (Number.isFinite(a)) watchdogAgeMs = a;
+                        }
                     }
 
                     watchdogFresh = Number.isFinite(watchdogAgeMs) && watchdogAgeMs <= staleTimeoutMs;
