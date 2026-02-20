@@ -615,7 +615,8 @@ class DatapointRegistry {
         //    we may subscribe to the alias target (srcObjectId) and therefore never see events under alivePrefix.
         const id = e.srcObjectId || e.objectId;
         if (id) {
-            const s = this._cacheByObjectId.get(id);
+            // NOTE: cache is stored in cacheByObjectId. (There is no _cacheByObjectId)
+            const s = this.cacheByObjectId.get(id);
             const ts = s && Number.isFinite(Number(s.ts)) ? Number(s.ts) : null;
             if (ts) {
                 const age = now - ts;
