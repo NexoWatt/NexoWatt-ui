@@ -7,6 +7,10 @@ const nwShcState = {
   originalJson: null,
   dirty: false,
   validation: null,
+
+  // Sidebar pages editor (raw JSON)
+  pagesJsonText: '',
+  pagesJsonValid: true,
 };
 
 // Drag&Drop ordering (devices)
@@ -611,11 +615,180 @@ function nwNormalizeImportedSmartHomeConfig(rawCfg) {
   const cfgIn = (rawCfg && typeof rawCfg === 'object') ? rawCfg : {};
   // preserve any future top-level fields, but guarantee the core structure
   const cfg = Object.assign({}, cfgIn);
-  cfg.version = (typeof cfg.version === 'number') ? cfg.version : 1;
+  cfg.version = (typeof cfg.version === 'number') ? cfg.version : 2;
   cfg.rooms = Array.isArray(cfg.rooms) ? cfg.rooms : [];
   cfg.functions = Array.isArray(cfg.functions) ? cfg.functions : [];
   cfg.devices = Array.isArray(cfg.devices) ? cfg.devices : [];
+  cfg.pages = Array.isArray(cfg.pages) ? cfg.pages : [];
   return cfg;
+}
+
+
+/* --- Pages (Sidebar Navigation) --- */
+
+function nwSetPagesStatus(msg, type) {
+  const el = document.getElementById('nw-pages-status');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.classList.remove('ok', 'error', 'dirty');
+  if (type === 'ok') el.classList.add('ok');
+  if (type === 'error') el.classList.add('error');
+  if (type === 'dirty') el.classList.add('dirty');
+}
+
+function nwNormalizePageObject(p, idx) {
+  const id = String((p && p.id) ? p.id : `page_${idx + 1}`).trim();
+  const title = String((p && (p.title || p.name || p.id)) ? (p.title || p.name || p.id) : `Seite ${idx + 1}`).trim();
+  const icon = String((p && p.icon) ? p.icon : '').trim();
+  const viewModeRaw = String((p && p.viewMode) ? p.viewMode : '').trim();
+  const viewMode = (viewModeRaw === 'rooms' || viewModeRaw === 'functions') ? viewModeRaw : '';
+  const roomIds = Array.isArray(p && p.roomIds) ? p.roomIds.map(x => String(x).trim()).filter(Boolean) : [];
+  const funcIds = Array.isArray(p && p.funcIds) ? p.funcIds.map(x => String(x).trim()).filter(Boolean) : [];
+  const types = Array.isArray(p && p.types) ? p.types.map(x => String(x).trim()).filter(Boolean) : [];
+  const favoritesOnly = !!(p && p.favoritesOnly);
+  const href = String((p && p.href) ? p.href : '').trim();
+  const order = Number.isFinite(+((p && p.order) ?? idx)) ? +((p && p.order) ?? idx) : idx;
+  return { id, title, icon, viewMode, roomIds, funcIds, types, favoritesOnly, href, order };
+}
+
+function nwParsePagesJson(text) {
+  try {
+    const raw = (text || '').trim();
+    if (!raw) return { ok: true, pages: [] };
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return { ok: false, error: 'JSON muss ein Array sein: [ {..}, {..} ]' };
+    }
+    const pages = parsed.map((p, idx) => nwNormalizePageObject(p, idx)).filter(p => p.id && p.title);
+    const seen = new Set();
+    for (const p of pages) {
+      if (seen.has(p.id)) {
+        return { ok: false, error: `Doppelte id: ${p.id}` };
+      }
+      seen.add(p.id);
+    }
+    // sort by order for deterministic navigation
+    pages.sort((a, b) => (a.order || 0) - (b.order || 0));
+    return { ok: true, pages };
+  } catch (e) {
+    return { ok: false, error: 'Parse-Fehler: ' + (e && e.message ? e.message : String(e)) };
+  }
+}
+
+function nwBuildDefaultPages(cfg) {
+  const rooms = (cfg && Array.isArray(cfg.rooms)) ? cfg.rooms : [];
+  const pages = [{
+    id: 'home',
+    title: 'Home',
+    icon: '🏠',
+    viewMode: 'rooms',
+    roomIds: [],
+    funcIds: [],
+    types: [],
+    favoritesOnly: false,
+    order: 0,
+  }];
+
+  rooms
+    .slice()
+    .sort((a, b) => {
+      const oa = Number.isFinite(+a.order) ? +a.order : 0;
+      const ob = Number.isFinite(+b.order) ? +b.order : 0;
+      if (oa !== ob) return oa - ob;
+      return String(a.name || '').localeCompare(String(b.name || ''), 'de');
+    })
+    .forEach((r, idx) => {
+      const id = String(r.id || '').trim();
+      const title = String(r.name || '').trim();
+      if (!id || !title) return;
+      pages.push({
+        id: `room_${id}`,
+        title,
+        icon: String(r.icon || '🏷️'),
+        viewMode: 'rooms',
+        roomIds: [id],
+        funcIds: [],
+        types: [],
+        favoritesOnly: false,
+        order: 10 + idx,
+      });
+    });
+
+  return pages;
+}
+
+function nwRenderPagesEditor(force) {
+  const ta = document.getElementById('nw-pages-json');
+  if (ta) {
+    const isFocused = document.activeElement === ta;
+    if (force || !isFocused) {
+      if (ta.value !== (nwShcState.pagesJsonText || '')) ta.value = nwShcState.pagesJsonText || '[]';
+    }
+  }
+
+  if (nwShcState.pagesJsonValid) {
+    nwSetPagesStatus('OK – gültiges JSON', 'ok');
+  } else {
+    nwSetPagesStatus('Fehler – bitte JSON prüfen', 'error');
+  }
+}
+
+
+/* --- Datensicherung (wie App-Center) --- */
+
+function nwSetBackupStatus(msg, type) {
+  const el = document.getElementById('nw-backup-status');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.classList.remove('ok', 'error', 'dirty');
+  if (type === 'ok') el.classList.add('ok');
+  if (type === 'error') el.classList.add('error');
+  if (type === 'dirty') el.classList.add('dirty');
+}
+
+async function nwBackupExport() {
+  nwSetBackupStatus('Exportiere Backup …', null);
+  const res = await fetch('/api/installer/backup/export', { cache: 'no-store' });
+  const data = await res.json();
+  if (!data || !data.ok) throw new Error((data && data.error) ? data.error : 'Backup export fehlgeschlagen');
+  const payload = data.payload || {};
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  nwDownloadTextFile(`nexowatt_backup_${stamp}.json`, JSON.stringify(payload, null, 2), 'application/json');
+  nwSetBackupStatus('Backup exportiert ✅', 'ok');
+}
+
+async function nwBackupImport(file, mode) {
+  if (!file) return;
+  nwSetBackupStatus('Importiere Backup …', null);
+  const txt = await file.text();
+  const payload = JSON.parse(txt);
+
+  const res = await fetch('/api/installer/backup/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: mode || 'merge', payload }),
+  });
+  const data = await res.json();
+  if (!data || !data.ok) throw new Error((data && data.error) ? data.error : 'Backup import fehlgeschlagen');
+  nwSetBackupStatus('Backup importiert ✅ (bitte Seite neu laden)', 'ok');
+}
+
+async function nwBackupRestoreFromUserdata() {
+  if (!confirm('Wirklich Restore aus 0_userdata durchführen? (überschreibt die aktuelle Konfiguration)')) return;
+  nwSetBackupStatus('Lade Backup aus 0_userdata …', null);
+  const res = await fetch('/api/installer/backup/userdata', { cache: 'no-store' });
+  const data = await res.json();
+  if (!data || !data.ok) throw new Error((data && data.error) ? data.error : '0_userdata Restore fehlgeschlagen');
+
+  const payload = data.payload || {};
+  const res2 = await fetch('/api/installer/backup/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'replace', payload }),
+  });
+  const data2 = await res2.json();
+  if (!data2 || !data2.ok) throw new Error((data2 && data2.error) ? data2.error : 'Restore import fehlgeschlagen');
+  nwSetBackupStatus('Restore durchgeführt ✅ (bitte Seite neu laden)', 'ok');
 }
 
 function nwExportSmartHomeConfig() {
@@ -667,10 +840,19 @@ async function nwImportSmartHomeConfigFromFile(file) {
     }
 
     nwShcState.config = normalized;
+    // sync pages editor
+    try {
+      nwShcState.pagesJsonText = JSON.stringify(nwShcState.config.pages || [], null, 2);
+      nwShcState.pagesJsonValid = true;
+    } catch (_e) {
+      nwShcState.pagesJsonText = '[]';
+      nwShcState.pagesJsonValid = false;
+    }
     nwNormalizeRoomFunctionOrder();
     nwNormalizeDeviceOrder();
     nwMarkDirty(true);
     nwRenderAll();
+    nwRenderPagesEditor();
 
     nwSetStatus('Import geladen. Bitte speichern, um ihn zu übernehmen.', 'ok');
 
@@ -687,6 +869,17 @@ async function nwImportSmartHomeConfigFromFile(file) {
 
 async function nwSaveSmartHomeConfig() {
   if (!nwShcState.config) return;
+
+  // Pages JSON must be valid (otherwise SmartHome navigation can break)
+  const pagesRes = nwParsePagesJson(nwShcState.pagesJsonText);
+  if (!pagesRes.ok) {
+    nwShcState.pagesJsonValid = false;
+    nwRenderPagesEditor();
+    nwSetStatus('Speichern abgebrochen: Pages JSON ungültig – ' + pagesRes.error, 'error');
+    return;
+  }
+  nwShcState.pagesJsonValid = true;
+  nwShcState.config.pages = pagesRes.pages;
 
   // Validate immediately before saving (installer feedback)
   nwRunValidationNow();
@@ -723,6 +916,11 @@ async function nwSaveSmartHomeConfig() {
     }
     nwShcState.config = data.config;
     nwShcState.originalJson = JSON.stringify(data.config);
+    // sync pages editor with stored config
+    try {
+      nwShcState.pagesJsonText = JSON.stringify(nwShcState.config.pages || [], null, 2);
+      nwShcState.pagesJsonValid = true;
+    } catch (_e) {}
     nwMarkDirty(false);
     if (data.persisted) {
       nwSetStatus('Konfiguration gespeichert', 'ok');
@@ -731,6 +929,7 @@ async function nwSaveSmartHomeConfig() {
     }
     // Nach dem Speichern neu rendern, um evtl. Normalisierungen abzubilden
     nwRenderAll();
+    nwRenderPagesEditor();
   } catch (e) {
     console.error('SmartHomeConfig save error:', e);
     nwSetStatus('Ausnahme beim Speichern', 'error');
@@ -742,16 +941,29 @@ async function nwReloadSmartHomeConfig() {
   const cfg = await nwFetchSmartHomeConfig();
   if (!cfg) return;
   nwShcState.config = {
-    version: typeof cfg.version === 'number' ? cfg.version : 1,
+    // version 2 adds optional "pages" for SmartHome VIS sidebar
+    version: typeof cfg.version === 'number' ? cfg.version : 2,
     rooms: Array.isArray(cfg.rooms) ? cfg.rooms.map(r => Object.assign({}, r)) : [],
     functions: Array.isArray(cfg.functions) ? cfg.functions.map(f => Object.assign({}, f)) : [],
     devices: Array.isArray(cfg.devices) ? cfg.devices.map(d => Object.assign({}, d)) : [],
+    pages: Array.isArray(cfg.pages) ? cfg.pages.map(p => Object.assign({}, p)) : [],
   };
+
+  // Initialize pages JSON editor
+  try {
+    nwShcState.pagesJsonText = JSON.stringify(nwShcState.config.pages || [], null, 2);
+    nwShcState.pagesJsonValid = true;
+  } catch (_e) {
+    nwShcState.pagesJsonText = '[]';
+    nwShcState.pagesJsonValid = false;
+  }
+
   nwNormalizeRoomFunctionOrder();
   nwNormalizeDeviceOrder();
   nwShcState.originalJson = JSON.stringify(nwShcState.config);
   nwMarkDirty(false);
   nwRenderAll();
+  nwRenderPagesEditor();
   nwRunValidationNow();
   nwSetStatus('Konfiguration geladen', 'ok');
 }
@@ -2878,6 +3090,104 @@ function nwAttachToolbarHandlers() {
     addTplBtn.addEventListener('click', () => {
       const t = tplSelect ? tplSelect.value : '';
       nwAddDeviceFromTemplate(t);
+    });
+  }
+
+  // --- Pages (Sidebar Navigation) ---
+  const pagesTa = document.getElementById('nw-pages-json');
+  if (pagesTa) {
+    pagesTa.addEventListener('input', () => {
+      nwShcState.pagesJsonText = pagesTa.value;
+      nwShcState.pagesJsonValid = true; // unknown until checked
+      nwSetPagesStatus('Änderungen nicht geprüft', 'dirty');
+      nwMarkDirty(true);
+    });
+    // initial sync
+    nwRenderPagesEditor(true);
+  }
+
+  const btnPagesDefault = document.getElementById('nw-pages-default-btn');
+  if (btnPagesDefault) {
+    btnPagesDefault.addEventListener('click', () => {
+      if (!nwShcState.config) return;
+      const pages = nwBuildDefaultPages(nwShcState.config);
+      nwShcState.config.pages = pages;
+      nwShcState.pagesJsonText = JSON.stringify(pages, null, 2);
+      nwShcState.pagesJsonValid = true;
+      nwMarkDirty(true);
+      nwRenderPagesEditor(true);
+      nwSetPagesStatus('Standard-Seiten erzeugt ✅', 'ok');
+    });
+  }
+
+  const btnPagesClear = document.getElementById('nw-pages-clear-btn');
+  if (btnPagesClear) {
+    btnPagesClear.addEventListener('click', () => {
+      if (!nwShcState.config) return;
+      nwShcState.config.pages = [];
+      nwShcState.pagesJsonText = '[]';
+      nwShcState.pagesJsonValid = true;
+      nwMarkDirty(true);
+      nwRenderPagesEditor(true);
+      nwSetPagesStatus('Seiten geleert', 'ok');
+    });
+  }
+
+  const btnPagesValidate = document.getElementById('nw-pages-validate-btn');
+  if (btnPagesValidate) {
+    btnPagesValidate.addEventListener('click', () => {
+      const res = nwParsePagesJson(nwShcState.pagesJsonText);
+      if (!res.ok) {
+        nwShcState.pagesJsonValid = false;
+        nwRenderPagesEditor();
+        nwSetPagesStatus('Fehler: ' + res.error, 'error');
+        return;
+      }
+      nwShcState.pagesJsonValid = true;
+      if (nwShcState.config) nwShcState.config.pages = res.pages;
+      nwShcState.pagesJsonText = JSON.stringify(res.pages, null, 2);
+      nwMarkDirty(true);
+      nwRenderPagesEditor(true);
+      nwSetPagesStatus('Pages JSON ist gültig ✅', 'ok');
+    });
+  }
+
+  // --- Datensicherung (wie App‑Center) ---
+  const btnBackupExport = document.getElementById('nw-backup-export-btn');
+  if (btnBackupExport) {
+    btnBackupExport.addEventListener('click', async () => {
+      try {
+        await nwBackupExport();
+      } catch (e) {
+        nwSetBackupStatus('Fehler: ' + (e && e.message ? e.message : String(e)), 'error');
+      }
+    });
+  }
+
+  const backupImportFile = document.getElementById('nw-backup-import-file');
+  if (backupImportFile) {
+    backupImportFile.addEventListener('change', async (ev) => {
+      const file = ev && ev.target && ev.target.files ? ev.target.files[0] : null;
+      ev.target.value = '';
+      if (!file) return;
+      const modeEl = document.getElementById('nw-backup-import-mode');
+      const mode = modeEl ? modeEl.value : 'merge';
+      try {
+        await nwBackupImport(file, mode);
+      } catch (e) {
+        nwSetBackupStatus('Fehler: ' + (e && e.message ? e.message : String(e)), 'error');
+      }
+    });
+  }
+
+  const btnRestoreUserdata = document.getElementById('nw-backup-restore-userdata-btn');
+  if (btnRestoreUserdata) {
+    btnRestoreUserdata.addEventListener('click', async () => {
+      try {
+        await nwBackupRestoreFromUserdata();
+      } catch (e) {
+        nwSetBackupStatus('Fehler: ' + (e && e.message ? e.message : String(e)), 'error');
+      }
     });
   }
 }

@@ -2036,6 +2036,79 @@ function nwDownloadExport() {
 
 
 // -----------------------------
+// Backup / Restore (wie App-Center)
+// -----------------------------
+
+function nwSetBackupStatus(msg, type) {
+  const el = nwLE.el.backupStatus;
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = (type === 'error') ? '#fca5a5' : '';
+}
+
+function nwOpenBackup() {
+  nwSetBackupStatus('', null);
+  nwOpenModal(nwLE.el.backupModal);
+}
+
+function nwCloseBackup() {
+  nwCloseModal(nwLE.el.backupModal);
+}
+
+async function nwBackupExport() {
+  nwSetBackupStatus('Exportiere Backup …', null);
+  const res = await fetch('/api/installer/backup/export', { cache: 'no-store' });
+  const data = await res.json();
+  if (!data || !data.ok) throw new Error((data && data.error) ? data.error : 'Backup export fehlgeschlagen');
+  const payload = data.payload || {};
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `nexowatt-backup-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1200);
+  nwSetBackupStatus('Backup exportiert ✅', null);
+}
+
+async function nwBackupImportFromFile(file, mode) {
+  if (!file) return;
+  nwSetBackupStatus('Importiere Backup …', null);
+  const txt = await file.text();
+  const payload = JSON.parse(txt);
+  const res = await fetch('/api/installer/backup/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: mode || 'merge', payload }),
+  });
+  const data = await res.json();
+  if (!data || !data.ok) throw new Error((data && data.error) ? data.error : 'Backup import fehlgeschlagen');
+  nwSetBackupStatus('Backup importiert ✅ (bitte Seite neu laden)', null);
+}
+
+async function nwBackupRestoreFromUserdata() {
+  if (!confirm('Wirklich Restore aus 0_userdata durchführen? (überschreibt die aktuelle Konfiguration)')) return;
+  nwSetBackupStatus('Lade Backup aus 0_userdata …', null);
+  const res = await fetch('/api/installer/backup/userdata', { cache: 'no-store' });
+  const data = await res.json();
+  if (!data || !data.ok) throw new Error((data && data.error) ? data.error : '0_userdata Restore fehlgeschlagen');
+
+  const payload = data.payload || {};
+  const res2 = await fetch('/api/installer/backup/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'replace', payload }),
+  });
+  const data2 = await res2.json();
+  if (!data2 || !data2.ok) throw new Error((data2 && data2.error) ? data2.error : 'Restore import fehlgeschlagen');
+  nwSetBackupStatus('Restore durchgeführt ✅ (bitte Seite neu laden)', null);
+}
+
+
+// -----------------------------
 // Normalize
 // -----------------------------
 function nwEnsureGraphDefaults(g) {
@@ -2248,17 +2321,30 @@ async function nwInitLogicEditor() {
   nwLE.el.exportText = document.getElementById('nw-le-export-text');
   nwLE.el.exportDownload = document.getElementById('nw-le-export-download');
 
+  // backup modal
+  nwLE.el.backupModal = document.getElementById('nw-le-backup-modal');
+  nwLE.el.backupClose = document.getElementById('nw-le-backup-close');
+  nwLE.el.backupOk = document.getElementById('nw-le-backup-ok');
+  nwLE.el.backupExport = document.getElementById('nw-le-backup-export');
+  nwLE.el.backupImport = document.getElementById('nw-le-backup-import');
+  nwLE.el.backupMode = document.getElementById('nw-le-backup-mode');
+  nwLE.el.backupRestore = document.getElementById('nw-le-backup-restore');
+  nwLE.el.backupStatus = document.getElementById('nw-le-backup-status');
+  nwLE.el.backupFile = document.getElementById('nw-le-backup-file');
+
   // toolbar buttons
   const btnNew = document.getElementById('nw-le-btn-new');
   const btnSave = document.getElementById('nw-le-btn-save');
   const btnExport = document.getElementById('nw-le-btn-export');
   const btnImport = document.getElementById('nw-le-btn-import');
+  const btnBackup = document.getElementById('nw-le-btn-backup');
   const btnSmarthomeCfg = document.getElementById('nw-le-btn-smarthomecfg');
 
   if (btnNew) btnNew.addEventListener('click', () => nwHandleNew());
   if (btnSave) btnSave.addEventListener('click', () => nwHandleSave());
   if (btnExport) btnExport.addEventListener('click', () => nwOpenExport());
   if (btnImport) btnImport.addEventListener('click', () => nwOpenImport());
+  if (btnBackup) btnBackup.addEventListener('click', () => nwOpenBackup());
   if (btnSmarthomeCfg) btnSmarthomeCfg.addEventListener('click', () => {
     try { window.location.href = 'smarthome-config.html'; } catch (_e) {}
   });
@@ -2297,6 +2383,39 @@ async function nwInitLogicEditor() {
   if (nwLE.el.exportOk) nwLE.el.exportOk.addEventListener('click', () => nwCloseExport());
   if (nwLE.el.exportDownload) nwLE.el.exportDownload.addEventListener('click', () => nwDownloadExport());
   if (nwLE.el.exportModal) nwLE.el.exportModal.addEventListener('click', (e) => { if (e.target === nwLE.el.exportModal) nwCloseExport(); });
+
+  // backup modal
+  if (nwLE.el.backupClose) nwLE.el.backupClose.addEventListener('click', () => nwCloseBackup());
+  if (nwLE.el.backupOk) nwLE.el.backupOk.addEventListener('click', () => nwCloseBackup());
+  if (nwLE.el.backupModal) nwLE.el.backupModal.addEventListener('click', (e) => { if (e.target === nwLE.el.backupModal) nwCloseBackup(); });
+  if (nwLE.el.backupExport) nwLE.el.backupExport.addEventListener('click', async () => {
+    try {
+      await nwBackupExport();
+    } catch (e) {
+      nwSetBackupStatus('Fehler: ' + (e && e.message ? e.message : String(e)), 'error');
+    }
+  });
+  if (nwLE.el.backupImport) nwLE.el.backupImport.addEventListener('click', () => {
+    if (nwLE.el.backupFile) nwLE.el.backupFile.click();
+  });
+  if (nwLE.el.backupFile) nwLE.el.backupFile.addEventListener('change', async (ev) => {
+    const file = ev && ev.target && ev.target.files ? ev.target.files[0] : null;
+    ev.target.value = '';
+    if (!file) return;
+    const mode = nwLE.el.backupMode ? nwLE.el.backupMode.value : 'merge';
+    try {
+      await nwBackupImportFromFile(file, mode);
+    } catch (e) {
+      nwSetBackupStatus('Fehler: ' + (e && e.message ? e.message : String(e)), 'error');
+    }
+  });
+  if (nwLE.el.backupRestore) nwLE.el.backupRestore.addEventListener('click', async () => {
+    try {
+      await nwBackupRestoreFromUserdata();
+    } catch (e) {
+      nwSetBackupStatus('Fehler: ' + (e && e.message ? e.message : String(e)), 'error');
+    }
+  });
 
 
   // logic lib

@@ -4141,6 +4141,9 @@ buildSmartHomeDevicesFromConfig() {
         id: cfgDev.id,
         type,
         ...(typeof order === 'number' ? { order } : {}),
+        // Keep stable IDs for filtering / navigation presets
+        roomId: cfgDev.roomId || '',
+        functionId: cfgDev.functionId || '',
         room: roomName,
         function: fnName,
         alias: cfgDev.alias || cfgDev.id,
@@ -6175,11 +6178,32 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
         }
 
         const out = {
-          version: typeof cfg.version === 'number' ? cfg.version : 1,
+          // version 2 adds optional "pages" for left navigation presets
+          version: typeof cfg.version === 'number' ? cfg.version : 2,
           rooms: Array.isArray(cfg.rooms) ? cfg.rooms : [],
           functions: Array.isArray(cfg.functions) ? cfg.functions : [],
           devices: Array.isArray(cfg.devices) ? cfg.devices : [],
+          pages: Array.isArray(cfg.pages) ? cfg.pages : [],
         };
+
+        // Sanitize pages to avoid runtime issues in the SmartHome UI
+        if (Array.isArray(out.pages)) {
+          out.pages = out.pages
+            .map((p, idx) => {
+              const id = String(p && p.id ? p.id : `page_${idx + 1}`).trim();
+              const title = String(p && (p.title || p.name || p.id) ? (p.title || p.name || p.id) : `Seite ${idx + 1}`).trim();
+              const icon = String(p && p.icon ? p.icon : '').trim();
+              const viewMode = String(p && p.viewMode ? p.viewMode : '').trim();
+              const roomIds = Array.isArray(p && p.roomIds) ? p.roomIds.map((x) => String(x).trim()).filter(Boolean) : [];
+              const funcIds = Array.isArray(p && p.funcIds) ? p.funcIds.map((x) => String(x).trim()).filter(Boolean) : [];
+              const types = Array.isArray(p && p.types) ? p.types.map((x) => String(x).trim()).filter(Boolean) : [];
+              const favoritesOnly = !!(p && p.favoritesOnly);
+              const order = Number.isFinite(+((p && p.order) ?? idx)) ? +((p && p.order) ?? idx) : idx;
+              const href = String(p && p.href ? p.href : '').trim();
+              return { id, title, icon, viewMode, roomIds, funcIds, types, favoritesOnly, order, href };
+            })
+            .filter((p) => p.id && p.title);
+        }
 
         this.config = this.config || {};
         this.config.smartHomeConfig = out;

@@ -53,6 +53,49 @@
 
     <section class="nw-config-section">
       <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">Navigation / Seiten (SmartHome VIS)</h2>
+        <div class="nw-config-row__actions">
+          <button id="nw-pages-default-btn" class="nw-config-btn nw-config-btn--ghost" type="button">Standard-Seiten</button>
+          <button id="nw-pages-clear-btn" class="nw-config-btn nw-config-btn--ghost" type="button">Leeren</button>
+          <button id="nw-pages-validate-btn" class="nw-config-btn nw-config-btn--ghost" type="button">Prüfen</button>
+        </div>
+      </div>
+      <div class="nw-config-hint">
+        Definiert die linke Navigation im <b>SmartHome</b> (Tablet/PC Sidebar, Mobile Drawer).<br>
+        Felder: <code>id</code>, <code>title</code>, optional <code>icon</code>, <code>viewMode</code> (<code>rooms</code>/<code>functions</code>),
+        Filter: <code>roomIds</code>, <code>funcIds</code>, <code>types</code>, optional <code>favoritesOnly</code>, optional <code>href</code> (Link).
+      </div>
+      <textarea id="nw-pages-json" class="nw-config-input" rows="10" style="min-height:220px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;"></textarea>
+      <div id="nw-pages-status" class="nw-config-status" style="margin-top:8px;"></div>
+    </section>
+
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">Datensicherung (wie App‑Center)</h2>
+      </div>
+      <div class="nw-config-hint">
+        Export/Import der gesamten NexoWatt‑Konfiguration (enthält u.a. SmartHome + Logikeditor). So kannst du jederzeit wiederherstellen.
+      </div>
+      <div class="nw-config-form-grid">
+        <div class="nw-config-row">
+          <label class="nw-config-label">Import‑Modus</label>
+          <select id="nw-backup-import-mode" class="nw-config-select">
+            <option value="merge" selected>Merge (zusammenführen)</option>
+            <option value="replace">Replace (ersetzen)</option>
+          </select>
+        </div>
+      </div>
+      <div class="nw-config-row__actions" style="margin-top:8px;">
+        <button id="nw-backup-export-btn" class="nw-config-btn" type="button">Backup exportieren</button>
+        <label class="nw-config-btn nw-config-btn--ghost" for="nw-backup-import-file" style="cursor:pointer;">Backup importieren</label>
+        <input id="nw-backup-import-file" type="file" accept="application/json" style="display:none" />
+        <button id="nw-backup-restore-userdata-btn" class="nw-config-btn nw-config-btn--ghost" type="button">Restore aus 0_userdata</button>
+      </div>
+      <div id="nw-backup-status" class="nw-config-status" style="margin-top:8px;"></div>
+    </section>
+
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
         <h2 class="nw-config-section__title">Räume</h2>
         <button id="nw-config-add-room-btn" class="nw-config-btn nw-config-btn--ghost" type="button">+ Raum</button>
       </div>

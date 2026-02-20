@@ -160,10 +160,36 @@ const nwTextSizeState = {
   size: 'normal',
 };
 
+// Aktive Sidebar-Seite (SmartHome VIS Navigation)
+// Wird pro Browser gespeichert.
+const NW_SH_ACTIVE_PAGE_LS_KEY = 'nw_sh_active_page';
+
+// SmartHome Konfiguration (Räume/Funktionen/Pages) – wird separat geladen
+let nwShConfig = null;
+const nwShMeta = {
+  roomsById: {},
+  funcsById: {},
+  roomIdByName: {},
+  funcIdByName: {},
+};
+
+const nwPageState = {
+  pages: [],
+  activeId: null,
+};
+
 const nwFilterState = {
   func: null,        // string | null
   favoritesOnly: false,
   favoritesFirst: false, // Favoriten in Räumen nach oben sortieren
+
+  // Basis-Filter aus der aktiven Sidebar-Seite (IDs / Types)
+  page: {
+    roomIds: [],   // string[]
+    funcIds: [],   // string[]
+    types: [],     // string[]
+    favoritesOnly: false,
+  },
 };
 
 // ---------- Icons (inline SVG) ----------
@@ -970,6 +996,8 @@ function nwRenderFunctionChips(devices) {
 
   const allFns = nwGetAllFunctions(devices);
   const hasFav = (devices || []).some(d => nwIsFavorite(d));
+  const baseFavOnly = !!(nwFilterState.page && nwFilterState.page.favoritesOnly);
+  const effectiveFavOnly = baseFavOnly || !!nwFilterState.favoritesOnly;
 
   const mkChip = (label, active, onClick, extraClass, disabled, title, iconName) => {
     const btn = document.createElement('button');
@@ -992,19 +1020,22 @@ function nwRenderFunctionChips(devices) {
     wrap.appendChild(btn);
   };
 
-  mkChip('Alle', !nwFilterState.func && !nwFilterState.favoritesOnly, () => {
+  mkChip('Alle', !nwFilterState.func && !effectiveFavOnly, () => {
     nwFilterState.func = null;
     nwFilterState.favoritesOnly = false;
   });
 
   // Favoriten (Schnellzugriff)
-  mkChip('★ Favoriten', !!nwFilterState.favoritesOnly, () => {
+  mkChip('★ Favoriten', !!effectiveFavOnly, () => {
     if (!hasFav) return;
+    if (baseFavOnly) return; // Seite erzwingt Favoriten
     nwFilterState.favoritesOnly = !nwFilterState.favoritesOnly;
     if (nwFilterState.favoritesOnly) nwFilterState.func = null;
-  }, null, !hasFav, hasFav
-    ? 'Nur Favoriten anzeigen'
-    : 'Keine Favoriten gesetzt. Tipp: Stern ★ in einer Kachel anklicken.');
+  }, null, !hasFav || baseFavOnly, baseFavOnly
+    ? 'Diese Seite zeigt nur Favoriten.'
+    : (hasFav
+      ? 'Nur Favoriten anzeigen'
+      : 'Keine Favoriten gesetzt. Tipp: Stern ★ in einer Kachel anklicken.'));
 
   mkChip('★ zuerst', !!nwFilterState.favoritesFirst, () => {
     if (!hasFav) return;
@@ -4115,12 +4146,301 @@ function nwRenderFunctions(devices) {
   });
 }
 
-function nwApplyFiltersAndRender() {
-  const filtered = nwApplyFilters(nwAllDevices);
+// ---------- Sidebar Pages (Navigation Presets) ----------
 
-  // chips always based on all devices (so user can clear filters)
+function nwNormalizeId(s) {
+  return String(s || '').trim();
+}
+
+function nwBuildMetaFromConfig(cfg) {
+  nwShMeta.roomsById = {};
+  nwShMeta.funcsById = {};
+  nwShMeta.roomIdByName = {};
+  nwShMeta.funcIdByName = {};
+
+  const rooms = Array.isArray(cfg && cfg.rooms) ? cfg.rooms : [];
+  const funcs = Array.isArray(cfg && cfg.functions) ? cfg.functions : [];
+
+  rooms.forEach(r => {
+    const id = nwNormalizeId(r.id);
+    const name = nwNormalizeId(r.name);
+    if (!id || !name) return;
+    nwShMeta.roomsById[id] = { ...r, id, name };
+    nwShMeta.roomIdByName[name] = id;
+  });
+
+  funcs.forEach(f => {
+    const id = nwNormalizeId(f.id);
+    const name = nwNormalizeId(f.name);
+    if (!id || !name) return;
+    nwShMeta.funcsById[id] = { ...f, id, name };
+    nwShMeta.funcIdByName[name] = id;
+  });
+}
+
+function nwBuildDefaultPagesFromConfig(cfg) {
+  const pages = [];
+  pages.push({
+    id: 'home',
+    title: 'Home',
+    icon: '🏠',
+    viewMode: 'rooms',
+    roomIds: [],
+    funcIds: [],
+    types: [],
+    favoritesOnly: false,
+    order: 0,
+  });
+
+  const rooms = Array.isArray(cfg && cfg.rooms) ? cfg.rooms : [];
+  rooms
+    .slice()
+    .sort((a, b) => {
+      const oa = (typeof a.order === 'number') ? a.order : 0;
+      const ob = (typeof b.order === 'number') ? b.order : 0;
+      if (oa !== ob) return oa - ob;
+      return nwSortBy(String(a.name || ''), String(b.name || ''));
+    })
+    .forEach((r, idx) => {
+      const id = nwNormalizeId(r.id);
+      const name = nwNormalizeId(r.name);
+      if (!id || !name) return;
+      pages.push({
+        id: `room_${id}`,
+        title: name,
+        icon: r.icon || '🏷️',
+        viewMode: 'rooms',
+        roomIds: [id],
+        funcIds: [],
+        types: [],
+        favoritesOnly: false,
+        order: 10 + idx,
+      });
+    });
+
+  return pages;
+}
+
+function nwGetPagesFromConfig(cfg) {
+  const pages = Array.isArray(cfg && cfg.pages) ? cfg.pages : [];
+  if (pages && pages.length) {
+    return pages
+      .map((p, idx) => ({
+        id: nwNormalizeId(p.id || `page_${idx + 1}`),
+        title: nwNormalizeId(p.title || p.name || p.id || `Seite ${idx + 1}`),
+        icon: nwNormalizeId(p.icon || ''),
+        viewMode: nwNormalizeId(p.viewMode || ''),
+        roomIds: Array.isArray(p.roomIds) ? p.roomIds.map(nwNormalizeId).filter(Boolean) : [],
+        funcIds: Array.isArray(p.funcIds) ? p.funcIds.map(nwNormalizeId).filter(Boolean) : [],
+        types: Array.isArray(p.types) ? p.types.map(nwNormalizeId).filter(Boolean) : [],
+        favoritesOnly: !!p.favoritesOnly,
+        order: (typeof p.order === 'number') ? p.order : idx,
+        href: nwNormalizeId(p.href || ''),
+      }))
+      .filter(p => p.id && p.title)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+  }
+  return nwBuildDefaultPagesFromConfig(cfg);
+}
+
+function nwSetSidebarOpen(open) {
+  const sidebar = document.getElementById('nwShSidebar');
+  const overlay = document.getElementById('nwShOverlay');
+  if (!sidebar || !overlay) return;
+
+  const isOpen = !!open;
+  sidebar.classList.toggle('nw-sh-sidebar--open', isOpen);
+  overlay.style.display = isOpen ? 'block' : 'none';
+}
+
+function nwInitSidebarUi() {
+  const btn = document.getElementById('nwShNavToggle');
+  const overlay = document.getElementById('nwShOverlay');
+  if (btn) {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const sidebar = document.getElementById('nwShSidebar');
+      const isOpen = sidebar ? sidebar.classList.contains('nw-sh-sidebar--open') : false;
+      nwSetSidebarOpen(!isOpen);
+    });
+  }
+  if (overlay) {
+    overlay.addEventListener('click', () => nwSetSidebarOpen(false));
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') nwSetSidebarOpen(false);
+  });
+
+  window.addEventListener('resize', () => {
+    // If we leave mobile breakpoint, ensure overlay/drawer state is reset
+    if (window.innerWidth > 900) nwSetSidebarOpen(false);
+  });
+}
+
+function nwRenderSidebarNav() {
+  const nav = document.getElementById('nwShNav');
+  if (!nav) return;
+  nav.innerHTML = '';
+
+  nwPageState.pages.forEach((p) => {
+    const btn = document.createElement('button');
+    btn.className = 'nw-sh-nav-item' + (p.id === nwPageState.activeId ? ' nw-sh-nav-item--active' : '');
+    btn.type = 'button';
+    btn.dataset.pageId = p.id;
+
+    const icon = document.createElement('div');
+    icon.className = 'nw-sh-nav-item__icon';
+    icon.textContent = p.icon || '•';
+
+    const label = document.createElement('div');
+    label.className = 'nw-sh-nav-item__label';
+    label.textContent = p.title;
+
+    btn.appendChild(icon);
+    btn.appendChild(label);
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (p.href) {
+        window.location.href = p.href;
+        return;
+      }
+      nwActivatePage(p.id);
+      // close drawer on mobile
+      nwSetSidebarOpen(false);
+    });
+
+    nav.appendChild(btn);
+  });
+}
+
+function nwUpdatePageTitle() {
+  const el = document.getElementById('nwShPageTitle');
+  if (!el) return;
+  const page = nwPageState.pages.find(p => p.id === nwPageState.activeId);
+  el.textContent = page ? page.title : 'SmartHome';
+}
+
+function nwActivatePage(pageId) {
+  const id = nwNormalizeId(pageId);
+  const page = nwPageState.pages.find(p => p.id === id);
+  if (!page) return;
+
+  nwPageState.activeId = page.id;
+  try { localStorage.setItem(NW_SH_ACTIVE_PAGE_LS_KEY, page.id); } catch (_e) {}
+
+  // Apply page base filters
+  nwFilterState.page.roomIds = Array.isArray(page.roomIds) ? page.roomIds.slice() : [];
+  nwFilterState.page.funcIds = Array.isArray(page.funcIds) ? page.funcIds.slice() : [];
+  nwFilterState.page.types = Array.isArray(page.types) ? page.types.slice() : [];
+  nwFilterState.page.favoritesOnly = !!page.favoritesOnly;
+
+  // Reset user filters on page change (prevents confusing empty screens)
+  nwFilterState.func = null;
+  nwFilterState.favoritesOnly = false;
+
+  // Optional default grouping
+  if (page.viewMode === 'rooms' || page.viewMode === 'functions') {
+    nwViewState.mode = page.viewMode;
+  }
+
+  nwUpdatePageTitle();
+  nwRenderSidebarNav();
+  nwApplyFiltersAndRender();
+}
+
+async function nwLoadSmartHomeConfig() {
+  try {
+    const data = await fetch('/api/smarthome/config', { cache: 'no-store' }).then(r => r.json());
+    // API returns { ok:true, config:{...} }
+    const cfg = (data && typeof data === 'object' && data.ok && data.config) ? data.config : data;
+    nwShConfig = cfg && typeof cfg === 'object' ? cfg : null;
+  } catch (_e) {
+    nwShConfig = null;
+  }
+
+  nwBuildMetaFromConfig(nwShConfig);
+  nwPageState.pages = nwGetPagesFromConfig(nwShConfig);
+
+  // Restore active page
+  let wanted = null;
+  try { wanted = localStorage.getItem(NW_SH_ACTIVE_PAGE_LS_KEY); } catch (_e) {}
+  if (wanted && nwPageState.pages.some(p => p.id === wanted)) {
+    nwPageState.activeId = wanted;
+  } else {
+    nwPageState.activeId = nwPageState.pages[0] ? nwPageState.pages[0].id : null;
+  }
+
+  nwInitSidebarUi();
+  nwUpdatePageTitle();
+  nwRenderSidebarNav();
+
+  // Apply initial page filters (without forcing a device reload)
+  if (nwPageState.activeId) {
+    const p = nwPageState.pages.find(x => x.id === nwPageState.activeId);
+    if (p) {
+      nwFilterState.page.roomIds = Array.isArray(p.roomIds) ? p.roomIds.slice() : [];
+      nwFilterState.page.funcIds = Array.isArray(p.funcIds) ? p.funcIds.slice() : [];
+      nwFilterState.page.types = Array.isArray(p.types) ? p.types.slice() : [];
+      nwFilterState.page.favoritesOnly = !!p.favoritesOnly;
+      if (p.viewMode === 'rooms' || p.viewMode === 'functions') {
+        nwViewState.mode = p.viewMode;
+      }
+    }
+  }
+}
+
+function nwGetDeviceRoomId(dev) {
+  const id = nwNormalizeId(dev && dev.roomId);
+  if (id) return id;
+  const name = nwNormalizeId(dev && dev.room);
+  return nwShMeta.roomIdByName[name] || '';
+}
+
+function nwGetDeviceFuncId(dev) {
+  const id = nwNormalizeId(dev && dev.functionId);
+  if (id) return id;
+  const name = nwNormalizeId(dev && dev.function);
+  return nwShMeta.funcIdByName[name] || '';
+}
+
+function nwApplyPageFilters(devices) {
+  let out = devices.slice();
+  const p = nwFilterState.page || {};
+
+  if (p.favoritesOnly) {
+    out = out.filter(d => nwIsFavorite(d));
+  }
+
+  if (Array.isArray(p.roomIds) && p.roomIds.length) {
+    const set = new Set(p.roomIds.map(nwNormalizeId));
+    out = out.filter(d => set.has(nwGetDeviceRoomId(d)));
+  }
+
+  if (Array.isArray(p.funcIds) && p.funcIds.length) {
+    const set = new Set(p.funcIds.map(nwNormalizeId));
+    out = out.filter(d => set.has(nwGetDeviceFuncId(d)));
+  }
+
+  if (Array.isArray(p.types) && p.types.length) {
+    const set = new Set(p.types.map(nwNormalizeId));
+    out = out.filter(d => set.has(nwNormalizeId(d && d.type)));
+  }
+
+  return out;
+}
+
+function nwApplyFiltersAndRender() {
+  // 1) Apply base filters from the active page
+  const base = nwApplyPageFilters(nwAllDevices);
+  // 2) Apply user filters (favorites + function chip)
+  const filtered = nwApplyFilters(base);
+
+  // chips based on the base list (page preset), so chips stay relevant in the current section
   nwRenderViewChips();
-  nwRenderFunctionChips(nwAllDevices);
+  nwRenderFunctionChips(base);
   nwRenderTextSizeChips();
 
   if (!filtered.length) {
@@ -4218,6 +4538,9 @@ async function nwBootstrap() {
   nwApplyTextSizeClass(nwTextSizeState.size);
   nwFilterState.favoritesFirst = nwLoadBoolLS(NW_SH_FAVORITES_FIRST_LS_KEY, NW_SH_FAVORITES_FIRST_DEFAULT);
   nwFavoriteOverrides = nwLoadFavoriteOverrides();
+
+  // SmartHome Konfiguration (Räume/Funktionen/Seiten) + Sidebar Navigation
+  await nwLoadSmartHomeConfig();
   await nwLoadUiConfigFlags();
 
   await nwReloadDevices({ force: true });

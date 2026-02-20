@@ -55,6 +55,8 @@
         <button id="nw-le-btn-save" class="nw-config-btn" type="button">Speichern</button>
         <button id="nw-le-btn-export" class="nw-config-btn nw-config-btn--ghost" type="button">Export</button>
         <button id="nw-le-btn-import" class="nw-config-btn nw-config-btn--ghost" type="button">Import</button>
+        <button id="nw-le-btn-backup" class="nw-config-btn nw-config-btn--ghost" type="button">Backup</button>
+        <input id="nw-le-backup-file" type="file" accept="application/json" style="display:none" />
         <button id="nw-le-btn-smarthomecfg" class="nw-config-btn nw-config-btn--ghost" type="button" title="Zur SmartHome‑Konfiguration wechseln">SmartHome‑Config</button>
         <span id="nw-le-status" class="muted" style="font-size:0.8rem;">—</span>
       </div>
@@ -164,6 +166,36 @@
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px;">
         <button id="nw-le-export-download" class="nw-config-btn" type="button">Download</button>
         <button id="nw-le-export-ok" class="nw-config-btn nw-config-btn--ghost" type="button">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Backup Modal (wie App‑Center) -->
+  <div id="nw-le-backup-modal" class="modal hidden" aria-hidden="true">
+    <div class="dialog">
+      <div class="dialog-header">
+        <div style="font-weight:700;">Datensicherung</div>
+        <button id="nw-le-backup-close" class="btn small" type="button">✕</button>
+      </div>
+      <div class="muted" style="font-size:0.85rem;margin-bottom:10px;">
+        Export/Import der gesamten NexoWatt‑Konfiguration (enthält u.a. SmartHome + Logikeditor).
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <button id="nw-le-backup-export" class="nw-config-btn" type="button">Backup exportieren</button>
+        <button id="nw-le-backup-import" class="nw-config-btn nw-config-btn--ghost" type="button">Backup importieren</button>
+        <select id="nw-le-backup-mode" class="nw-config-select" style="min-width: 210px;">
+          <option value="merge" selected>Merge (zusammenführen)</option>
+          <option value="replace">Replace (ersetzen)</option>
+        </select>
+        <button id="nw-le-backup-restore" class="nw-config-btn nw-config-btn--ghost" type="button">Restore aus 0_userdata</button>
+      </div>
+
+      <div id="nw-le-backup-status" class="muted" style="font-size:0.85rem;margin-top:10px;"></div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
+        <button id="nw-le-backup-ok" class="nw-config-btn nw-config-btn--ghost" type="button">Schließen</button>
       </div>
     </div>
   </div>

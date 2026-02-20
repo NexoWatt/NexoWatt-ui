@@ -51,27 +51,44 @@
 
 <main class="content">
   <div id="nw-smarthome-root">
-    
+    <div class="nw-sh-layout">
+      <!-- Left sidebar navigation (desktop/tablet). On mobile it becomes a drawer. -->
+      <aside id="nwShSidebar" class="nw-sh-sidebar" aria-label="SmartHome Navigation">
+        <div class="nw-sh-sidebar-header">
+          <div class="nw-sh-sidebar-title">Smart Home</div>
+        </div>
+        <nav id="nwShNav" class="nw-sh-nav"></nav>
+      </aside>
 
+      <section class="nw-sh-main">
+        <div class="nw-sh-topbar">
+          <button class="nw-sh-nav-toggle" id="nwShNavToggle" aria-label="Navigation öffnen">☰</button>
+          <div class="nw-sh-topbar-title" id="nwShPageTitle">SmartHome</div>
+        </div>
 
-    <div class="nw-sh-filters">
-      <div class="nw-sh-filter-row">
-        <span class="nw-sh-filter-label">Ansicht</span>
-        <div id="nw-filter-view" class="nw-sh-filter-chips"></div>
-      </div>
-      <div class="nw-sh-filter-row">
-        <span class="nw-sh-filter-label">Funktionen</span>
-        <div id="nw-filter-functions" class="nw-sh-filter-chips"></div>
-      </div>
+        <div class="nw-sh-filters">
+          <div class="nw-sh-filter-row">
+            <span class="nw-sh-filter-label">Ansicht</span>
+            <div id="nw-filter-view" class="nw-sh-filter-chips"></div>
+          </div>
+          <div class="nw-sh-filter-row">
+            <span class="nw-sh-filter-label">Funktionen</span>
+            <div id="nw-filter-functions" class="nw-sh-filter-chips"></div>
+          </div>
 
-      <div class="nw-sh-filter-row">
-        <span class="nw-sh-filter-label">Textgröße</span>
-        <div id="nw-filter-textsize" class="nw-sh-filter-chips"></div>
-      </div>
+          <div class="nw-sh-filter-row">
+            <span class="nw-sh-filter-label">Textgröße</span>
+            <div id="nw-filter-textsize" class="nw-sh-filter-chips"></div>
+          </div>
+        </div>
+
+        <div id="nw-smarthome-empty" class="nw-sh-empty" style="display:none;"></div>
+        <div id="nw-smarthome-rooms" class="nw-sh-rooms"></div>
+      </section>
     </div>
 
-    <div id="nw-smarthome-empty" class="nw-sh-empty" style="display:none;"></div>
-    <div id="nw-smarthome-rooms" class="nw-sh-rooms"></div>
+    <!-- Mobile drawer overlay (controlled by JS) -->
+    <div id="nwShOverlay" class="nw-sh-overlay" style="display:none;"></div>
   </div>
 </main>
 
