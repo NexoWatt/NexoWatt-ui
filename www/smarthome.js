@@ -4645,7 +4645,9 @@ function nwBuildPageTree(pages) {
 }
 
 function nwRenderSidebarNav() {
-  const el = document.getElementById('nw-sh-nav');
+  // Backwards compatibility: HTML uses id="nwShNav" while some early page-nav
+  // prototypes referenced id="nw-sh-nav". Render into whichever exists.
+  const el = document.getElementById('nwShNav') || document.getElementById('nw-sh-nav');
   if (!el) return;
 
   nwLoadExpandedIdsFromLs();
