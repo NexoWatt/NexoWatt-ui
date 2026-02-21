@@ -3974,6 +3974,10 @@ getSmartHomeConfig() {
     rooms: Array.isArray(shc.rooms) ? shc.rooms : [],
     functions: Array.isArray(shc.functions) ? shc.functions : [],
     devices: Array.isArray(shc.devices) ? shc.devices : [],
+
+    // SmartHome VIS (optional)
+    pages: Array.isArray(shc.pages) ? shc.pages : [],
+    meta: this._nwIsPlainObject(shc.meta) ? shc.meta : {},
   };
   return out;
 }

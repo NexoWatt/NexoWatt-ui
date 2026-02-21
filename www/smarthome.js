@@ -4936,6 +4936,14 @@ async function nwBootstrap() {
   await nwLoadSmartHomeConfig();
   await nwLoadUiConfigFlags();
 
+  // The views container starts hidden in HTML (avoid a blank SmartHome screen)
+  try {
+    const viewsEl = document.getElementById('nwSmarthomeViews');
+    if (viewsEl) viewsEl.classList.remove('nw-hidden');
+  } catch (_e) {
+    // ignore
+  }
+
   await nwReloadDevices({ force: true });
   nwStartAutoRefresh(5000);
 
