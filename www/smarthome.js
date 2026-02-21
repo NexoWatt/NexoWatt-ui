@@ -4492,6 +4492,35 @@ function nwInitSidebarUi() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// UI helpers (defensive)
+//
+// The SmartHome VIS must never crash due to missing helpers. Earlier builds
+// referenced these functions but did not ship them, which prevented the whole
+// page from rendering.
+
+function nwUpdatePageTitle() {
+  const el = document.getElementById('nwShPageTitle');
+  const pages = Array.isArray(nwPageState.pages) ? nwPageState.pages : [];
+  const activeId = nwPageState.activeId;
+
+  const page = pages.find((p) => p && p.id === activeId) || pages[0] || null;
+  const title = (page && page.title) ? String(page.title) : 'SmartHome';
+
+  if (el) el.textContent = title;
+
+  // Best-effort browser-tab title update.
+  try {
+    document.title = `${title} – SmartHome`;
+  } catch (_) {
+    // ignore
+  }
+}
+
+function nwCloseSidebar() {
+  nwSetSidebarOpen(false);
+}
+
 function nwLoadExpandedIdsFromLs() {
   if (nwPageState.__expandedLoaded) return;
   nwPageState.__expandedLoaded = true;
