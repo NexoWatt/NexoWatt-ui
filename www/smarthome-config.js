@@ -3,7 +3,7 @@
  */
 
 const nwShcState = {
-  config: null,
+  config: { rooms: [], functions: [], devices: [], pages: [], meta: {} },
   originalJson: null,
   dirty: false,
   validation: null,
@@ -22,6 +22,36 @@ const nwShcState = {
   },
 };
 
+function nwNormalizeSmartHomeConfig(cfg) {
+  const c = (cfg && typeof cfg === 'object') ? cfg : {};
+  c.rooms = Array.isArray(c.rooms) ? c.rooms : [];
+  c.functions = Array.isArray(c.functions) ? c.functions : [];
+  c.devices = Array.isArray(c.devices) ? c.devices : [];
+  c.pages = Array.isArray(c.pages) ? c.pages : [];
+  c.meta = (c.meta && typeof c.meta === 'object') ? c.meta : {};
+  return c;
+}
+
+const NW_PAGE_ICON_OPTIONS = [
+  { value: '', label: '(kein Icon)' },
+  { value: '🏠', label: '🏠 Home' },
+  { value: '🛋️', label: '🛋️ Wohnzimmer' },
+  { value: '🛏️', label: '🛏️ Schlafzimmer' },
+  { value: '🍽️', label: '🍽️ Küche' },
+  { value: '🛁', label: '🛁 Bad' },
+  { value: '🌳', label: '🌳 Garten' },
+  { value: '🚗', label: '🚗 Garage/Carport' },
+  { value: '⚡', label: '⚡ Energie' },
+  { value: '🔋', label: '🔋 Speicher' },
+  { value: '🚘', label: '🚘 Laden' },
+  { value: '🌡️', label: '🌡️ Heizung' },
+  { value: '🪟', label: '🪟 Fenster/Türen' },
+  { value: '📷', label: '📷 Kameras' },
+  { value: '☀️', label: '☀️ Wetter' },
+  { value: '⏱️', label: '⏱️ Automationen' },
+  { value: '⚙️', label: '⚙️ Einstellungen' },
+];
+
 // Drag&Drop ordering (devices)
 let nwDragDeviceFromIndex = null;
 
@@ -35,6 +65,8 @@ const NW_SH_ICON_PREVIEW_SVGS = {
   blinds: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M5 4h14v16H5V4Z" stroke="currentColor" stroke-width="2"/><path d="M5 8h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 16h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
   tv: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 7h16v10H4V7Z" stroke="currentColor" stroke-width="2"/><path d="M8 21h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 17v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
   speaker: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 9h4l5-4v18l-5-4H6V9Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M18 10c1 .9 1 3.1 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+  camera: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 7h4l2-2h4l2 2h4v12H4V7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 17a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="2"/></svg>`,
+  grid: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 4h7v7H4V4Z" stroke="currentColor" stroke-width="2"/><path d="M13 4h7v7h-7V4Z" stroke="currentColor" stroke-width="2"/><path d="M4 13h7v7H4v-7Z" stroke="currentColor" stroke-width="2"/><path d="M13 13h7v7h-7v-7Z" stroke="currentColor" stroke-width="2"/></svg>`,
   fire: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 2s4 4 4 8a4 4 0 1 1-8 0c0-4 4-8 4-8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 22a6 6 0 0 0 6-6c0-3-2-5-3-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
   scene: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 2l1.1 3.4L16.5 6.5l-3.4 1.1L12 11l-1.1-3.4L7.5 6.5l3.4-1.1L12 2Z" fill="currentColor"/><path d="M19 13l.7 2.1 2.1.7-2.1.7L19 18.6l-.7-2.1-2.1-.7 2.1-.7.7-2.1Z" fill="currentColor"/><path d="M5 13l.7 2.1 2.1.7-2.1.7L5 18.6l-.7-2.1-2.1-.7 2.1-.7L5 13Z" fill="currentColor"/></svg>`,
   thermometer: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 18a1.2 1.2 0 1 0 0-2.4A1.2 1.2 0 0 0 12 18Z" fill="currentColor"/></svg>`,
@@ -1023,6 +1055,18 @@ function nwPagesRenderEditor() {
 
   // Set primitive fields
   titleEl.value = model.title || '';
+
+  // Icon select options
+  if (iconEl && iconEl.tagName === 'SELECT') {
+    nwSetSelectOptions(iconEl, NW_PAGE_ICON_OPTIONS, [model.icon || ''], false);
+  }
+  // If config contains a custom icon, keep it selectable
+  if (iconEl && iconEl.tagName === 'SELECT' && model.icon && !Array.from(iconEl.options).some(o => o.value === model.icon)) {
+    const opt = document.createElement('option');
+    opt.value = model.icon;
+    opt.textContent = `${model.icon} (Custom)`;
+    iconEl.appendChild(opt);
+  }
   iconEl.value = model.icon || '';
   idEl.value = model.id || '';
   if (viewModeEl) viewModeEl.value = model.viewMode || 'rooms';
@@ -1881,6 +1925,8 @@ function nwAddDeviceFromTemplate(templateType) {
     player: 'player',
     sensor: 'sensor',
     scene: 'szene',
+    camera: 'kamera',
+    widget: 'widget',
   };
   const aliasMap = {
     switch: 'Neuer Schalter',
@@ -1891,6 +1937,8 @@ function nwAddDeviceFromTemplate(templateType) {
     player: 'Audio-Player',
     sensor: 'Neuer Sensor',
     scene: 'Neue Szene',
+    camera: 'Neue Kamera',
+    widget: 'Neues Widget',
   };
   const iconMap = {
     switch: 'bulb',
@@ -1901,6 +1949,8 @@ function nwAddDeviceFromTemplate(templateType) {
     player: 'speaker',
     sensor: 'thermometer',
     scene: 'scene',
+    camera: 'camera',
+    widget: 'grid',
   };
 
   const id = nwEnsureUniqueDeviceId(devices, baseIdMap[t] || 'geraet');
@@ -1912,7 +1962,7 @@ function nwAddDeviceFromTemplate(templateType) {
     roomId: roomId || null,
     functionId: functionId || null,
     icon: iconMap[t] || '',
-    size: (t === 'rtr') ? 'xl' : ((t === 'player') ? 'l' : 'm'),
+    size: (t === 'rtr' || t === 'camera' || t === 'widget') ? 'xl' : ((t === 'player') ? 'l' : 'm'),
     behavior: { favorite: false, readOnly: false },
     io: {},
   };
@@ -1962,6 +2012,23 @@ function nwAddDeviceFromTemplate(templateType) {
     };
     dev.stations = [];
     dev.playlists = [];
+  } else if (t === 'camera') {
+    dev.io.camera = {
+      snapshotUrl: '',
+      liveUrl: '',
+      refreshSec: 5,
+    };
+    dev.behavior.readOnly = true;
+  } else if (t === 'widget') {
+    dev.io.widget = {
+      kind: 'iframe',
+      url: '',
+      openUrl: '',
+      embed: false,
+      height: 260,
+      label: '',
+    };
+    dev.behavior.readOnly = true;
   } else if (t === 'sensor') {
     dev.io.sensor = { readId: null };
     // Sensoren sind in der Regel reine Anzeige (optional anpassbar)
@@ -2440,6 +2507,8 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       { value: 'blind', label: 'Jalousie / Rollladen' },
       { value: 'rtr', label: 'Heizung (RTR)' },
       { value: 'player', label: 'Audio-Player' },
+      { value: 'camera', label: 'Kamera' },
+      { value: 'widget', label: 'Widget (Universal)' },
       { value: 'sensor', label: 'Sensor' },
       { value: 'scene', label: 'Szene' },
       { value: 'logicStatus', label: 'Logik-Status' },
@@ -2468,6 +2537,14 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
         d.io.cover = d.io.cover || { readId: null, upId: null, downId: null, stopId: null, min: 0, max: 100 };
       } else if (t === 'rtr') {
         d.io.climate = d.io.climate || { currentTempId: null, setpointId: null, modeId: null, humidityId: null, minSetpoint: 15, maxSetpoint: 30 };
+      } else if (t === 'camera') {
+        d.io.camera = d.io.camera || { snapshotUrl: '', liveUrl: '', refreshSec: 5 };
+        d.behavior = d.behavior || {};
+        d.behavior.readOnly = true;
+      } else if (t === 'widget') {
+        d.io.widget = d.io.widget || { kind: 'iframe', url: '', openUrl: '', embed: false, height: 260, label: '' };
+        d.behavior = d.behavior || {};
+        d.behavior.readOnly = true;
       } else if (t === 'sensor') {
         d.io.sensor = d.io.sensor || { readId: null };
       } else if (t === 'player') {
@@ -2584,6 +2661,8 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       { value: 'blinds', label: '🪟 Jalousie (blinds)' },
       { value: 'tv', label: '📺 Fernseher (tv)' },
       { value: 'speaker', label: '🔊 Audio (speaker)' },
+      { value: 'camera', label: '📷 Kamera (camera)' },
+      { value: 'grid', label: '🧩 Widget (grid)' },
       { value: 'scene', label: '✨ Szene (scene)' },
       { value: 'sensor', label: '📍 Sensor (sensor)' },
       { value: 'generic', label: '⬜ Allgemein (generic)' },
@@ -2892,6 +2971,163 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       body.appendChild(modeRow);
       body.appendChild(humRow);
       body.appendChild(minMaxRow);
+    }
+
+    if (io.camera) {
+      const c = io.camera;
+
+      const snapInput = document.createElement('input');
+      snapInput.type = 'text';
+      snapInput.className = 'nw-config-input';
+      snapInput.placeholder = 'http://... (Snapshot/MJPEG)';
+      snapInput.value = (typeof c.snapshotUrl === 'string') ? c.snapshotUrl : '';
+      snapInput.addEventListener('input', () => {
+        const v = snapInput.value;
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.camera = nwShcState.config.devices[index].io.camera || {};
+        nwShcState.config.devices[index].io.camera.snapshotUrl = v || '';
+        nwMarkDirty(true);
+      });
+      const snapRow = nwCreateFieldRow('Kamera Snapshot URL', snapInput);
+
+      const liveInput = document.createElement('input');
+      liveInput.type = 'text';
+      liveInput.className = 'nw-config-input';
+      liveInput.placeholder = 'http://... (Live öffnen)';
+      liveInput.value = (typeof c.liveUrl === 'string') ? c.liveUrl : '';
+      liveInput.addEventListener('input', () => {
+        const v = liveInput.value;
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.camera = nwShcState.config.devices[index].io.camera || {};
+        nwShcState.config.devices[index].io.camera.liveUrl = v || '';
+        nwMarkDirty(true);
+      });
+      const liveRow = nwCreateFieldRow('Kamera Live URL', liveInput);
+
+      const refreshInput = document.createElement('input');
+      refreshInput.type = 'number';
+      refreshInput.className = 'nw-config-input';
+      refreshInput.placeholder = 'Sek.';
+      if (typeof c.refreshSec === 'number') refreshInput.value = String(c.refreshSec);
+      refreshInput.addEventListener('change', () => {
+        const v = refreshInput.value.trim();
+        const num = v ? parseFloat(v) : null;
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.camera = nwShcState.config.devices[index].io.camera || {};
+        nwShcState.config.devices[index].io.camera.refreshSec = (Number.isFinite(num) && num > 0) ? num : 5;
+        nwMarkDirty(true);
+      });
+      const refreshRow = nwCreateFieldRow('Snapshot Refresh (Sek.)', refreshInput);
+
+      body.appendChild(snapRow);
+      body.appendChild(liveRow);
+      body.appendChild(refreshRow);
+    }
+
+    if (io.widget) {
+      const w = io.widget;
+
+      const kindSelect = document.createElement('select');
+      kindSelect.className = 'nw-config-select';
+      const kindOptions = [
+        { value: 'iframe', label: 'Iframe' },
+        { value: 'link', label: 'Link' },
+      ];
+      nwSetSelectOptions(kindSelect, kindOptions, [w.kind || 'iframe']);
+      kindSelect.addEventListener('change', () => {
+        const v = kindSelect.value || 'iframe';
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.widget = nwShcState.config.devices[index].io.widget || {};
+        nwShcState.config.devices[index].io.widget.kind = v;
+        nwMarkDirty(true);
+      });
+      const kindRow = nwCreateFieldRow('Widget Typ', kindSelect);
+
+      const urlInput = document.createElement('input');
+      urlInput.type = 'text';
+      urlInput.className = 'nw-config-input';
+      urlInput.placeholder = 'https://...';
+      urlInput.value = (typeof w.url === 'string') ? w.url : '';
+      urlInput.addEventListener('input', () => {
+        const v = urlInput.value;
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.widget = nwShcState.config.devices[index].io.widget || {};
+        nwShcState.config.devices[index].io.widget.url = v || '';
+        nwMarkDirty(true);
+      });
+      const urlRow = nwCreateFieldRow('Widget URL', urlInput);
+
+      const openInput = document.createElement('input');
+      openInput.type = 'text';
+      openInput.className = 'nw-config-input';
+      openInput.placeholder = 'optional (abweichende Öffnen-URL)';
+      openInput.value = (typeof w.openUrl === 'string') ? w.openUrl : '';
+      openInput.addEventListener('input', () => {
+        const v = openInput.value;
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.widget = nwShcState.config.devices[index].io.widget || {};
+        nwShcState.config.devices[index].io.widget.openUrl = v || '';
+        nwMarkDirty(true);
+      });
+      const openRow = nwCreateFieldRow('Öffnen URL', openInput);
+
+      const embedWrap = document.createElement('div');
+      embedWrap.style.display = 'flex';
+      embedWrap.style.alignItems = 'center';
+      embedWrap.style.gap = '8px';
+
+      const embedChk = document.createElement('input');
+      embedChk.type = 'checkbox';
+      embedChk.checked = !!w.embed;
+      embedChk.addEventListener('change', () => {
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.widget = nwShcState.config.devices[index].io.widget || {};
+        nwShcState.config.devices[index].io.widget.embed = !!embedChk.checked;
+        nwMarkDirty(true);
+      });
+
+      const embedLbl = document.createElement('span');
+      embedLbl.textContent = 'Einbetten (Iframe)';
+
+      embedWrap.appendChild(embedChk);
+      embedWrap.appendChild(embedLbl);
+      const embedRow = nwCreateFieldRow('Einbettung', embedWrap);
+
+      const heightInput = document.createElement('input');
+      heightInput.type = 'number';
+      heightInput.className = 'nw-config-input';
+      heightInput.placeholder = 'px';
+      if (typeof w.height === 'number') heightInput.value = String(w.height);
+      heightInput.addEventListener('change', () => {
+        const v = heightInput.value.trim();
+        const num = v ? parseFloat(v) : null;
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.widget = nwShcState.config.devices[index].io.widget || {};
+        nwShcState.config.devices[index].io.widget.height = (Number.isFinite(num) && num > 0) ? num : 260;
+        nwMarkDirty(true);
+      });
+      const heightRow = nwCreateFieldRow('Iframe Höhe', heightInput);
+
+      const labelInput = document.createElement('input');
+      labelInput.type = 'text';
+      labelInput.className = 'nw-config-input';
+      labelInput.placeholder = 'optional (Text im Tile)';
+      labelInput.value = (typeof w.label === 'string') ? w.label : '';
+      labelInput.addEventListener('input', () => {
+        const v = labelInput.value;
+        nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
+        nwShcState.config.devices[index].io.widget = nwShcState.config.devices[index].io.widget || {};
+        nwShcState.config.devices[index].io.widget.label = v || '';
+        nwMarkDirty(true);
+      });
+      const labelRow = nwCreateFieldRow('Widget Label', labelInput);
+
+      body.appendChild(kindRow);
+      body.appendChild(urlRow);
+      body.appendChild(openRow);
+      body.appendChild(embedRow);
+      body.appendChild(heightRow);
+      body.appendChild(labelRow);
     }
 
     if (io.player) {

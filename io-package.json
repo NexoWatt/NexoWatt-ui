@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.168",
+    "version": "0.6.169",
     "news": {
+      "0.6.169": {
+        "en": "SmartHome: fix pages editor null-crash; added Page icon selector; new device types Camera + Universal Widget (iframe/link) with SmartHome media cards.",
+        "de": "SmartHome: Fix für Pages-Editor Null-Crash; Seiten-Icon Auswahlmenü; neue Gerätetypen Kamera + Universal-Widget (iframe/link) inkl. Media-Cards."
+      },
       "0.6.168": {
         "en": "Fix: STALE_METER fail-safe now trusts explicit ONLINE/CONNECTED DP (authoritative) and no longer blocks due to stale budget timestamps.",
         "de": "Fix: STALE_METER-Failsafe vertraut jetzt dem expliziten ONLINE/CONNECTED-DP (authoritativ) und blockiert nicht mehr wegen stale Budget-Zeitstempeln."

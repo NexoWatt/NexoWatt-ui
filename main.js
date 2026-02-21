@@ -4256,16 +4256,16 @@ buildSmartHomeDevicesFromConfig() {
           playlistId: player.playlistId || '',
         };
         // Optional: Radiosender-Liste liegt im Device-Root
-        if (Array.isArray(device.stations)) {
-          dev.stations = device.stations.map((s) => ({
+        if (Array.isArray(cfgDev.stations)) {
+          dev.stations = cfgDev.stations.map((s) => ({
             name: (s && typeof s.name === 'string') ? s.name : '',
             value: (s && (typeof s.value === 'string' || typeof s.value === 'number')) ? s.value : '',
           })).filter((s) => s.name || String(s.value || '').trim());
         }
 
         // Optional: Playlists-Liste liegt im Device-Root
-        if (Array.isArray(device.playlists)) {
-          dev.playlists = device.playlists.map((p) => ({
+        if (Array.isArray(cfgDev.playlists)) {
+          dev.playlists = cfgDev.playlists.map((p) => ({
             name: (p && typeof p.name === 'string') ? p.name : '',
             value: (p && (typeof p.value === 'string' || typeof p.value === 'number')) ? p.value : '',
           })).filter((p) => p.name || String(p.value || '').trim());
@@ -4275,6 +4275,23 @@ buildSmartHomeDevicesFromConfig() {
         if (sensor.readId) {
           dev.io.sensor = { readId: sensor.readId };
         }
+      } else if (type === 'camera') {
+        const cam = ioCfg.camera || {};
+        dev.io.camera = {
+          snapshotUrl: (typeof cam.snapshotUrl === 'string' ? cam.snapshotUrl : (typeof cam.url === 'string' ? cam.url : '')),
+          liveUrl: (typeof cam.liveUrl === 'string' ? cam.liveUrl : ''),
+          // Optional: refresh interval for snapshot cache busting
+          refreshMs: (typeof cam.refreshMs === 'number' ? cam.refreshMs : (typeof cam.refreshSec === 'number' ? cam.refreshSec * 1000 : 5000)),
+        };
+      } else if (type === 'widget') {
+        const w = ioCfg.widget || {};
+        dev.io.widget = {
+          kind: (typeof w.kind === 'string' && w.kind.trim()) ? w.kind.trim() : 'iframe',
+          url: (typeof w.url === 'string') ? w.url : '',
+          openUrl: (typeof w.openUrl === 'string') ? w.openUrl : '',
+          embed: !!w.embed,
+          height: (typeof w.height === 'number') ? w.height : null,
+        };
       }
 
       devices.push(dev);

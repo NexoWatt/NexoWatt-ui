@@ -1366,70 +1366,159 @@ function nwCreateTile(dev, opts) {
 
   tile.appendChild(header);
 
-  // Big content (RTR / large sensors)
-  if (type === 'rtr' || size === 'xl') {
+  // Big content (RTR / large sensors / media widgets)
+  if (type === 'rtr' || size === 'xl' || type === 'camera' || type === 'widget') {
     const big = document.createElement('div');
     big.className = 'nw-sh-tile__big';
 
-    const { value, unit } = nwFormatBigValue(dev);
-    if (value) {
-      const val = document.createElement('div');
-      val.className = 'nw-sh-tile__value';
-      val.textContent = value;
+    if (type === 'camera') {
+      tile.classList.add('nw-sh-tile--media');
+      const cam = (dev.io && dev.io.camera) ? dev.io.camera : {};
+      const snapshotUrl = (typeof cam.snapshotUrl === 'string') ? cam.snapshotUrl : '';
+      const liveUrl = (typeof cam.liveUrl === 'string') ? cam.liveUrl : '';
 
-      const u = document.createElement('span');
-      u.className = 'nw-sh-tile__unit';
-      u.textContent = unit || '';
+      const media = document.createElement('div');
+      media.className = 'nw-sh-media';
 
-      val.appendChild(u);
-      big.appendChild(val);
-    }
+      const img = document.createElement('img');
+      img.className = 'nw-sh-media__img';
+      img.alt = dev.title || 'Kamera';
 
-    // Secondary line for RTR: setpoint/humidity
-    if (type === 'rtr') {
-      const st = dev.state || {};
-      const meta = document.createElement('div');
-      meta.className = 'nw-sh-tile__meta';
-
-      const parts = [];
-      if (typeof st.setpoint === 'number') {
-        parts.push('Soll ' + st.setpoint.toFixed(1).replace('.', ',') + '°C');
+      if (snapshotUrl) {
+        const bust = (snapshotUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
+        img.src = snapshotUrl + bust;
       }
-      if (typeof st.humidity === 'number') {
-        parts.push('RH ' + Math.round(st.humidity) + '%');
-      }
-      meta.textContent = parts.join(' · ') || '';
-      big.appendChild(meta);
 
-      if (canWrite && dev.io && dev.io.climate && dev.io.climate.setpointId) {
-        const controls = document.createElement('div');
-        controls.className = 'nw-sh-controls nw-sh-controls--rtr';
+      media.appendChild(img);
+      big.appendChild(media);
 
-        const btnMinus = document.createElement('button');
-        btnMinus.type = 'button';
-        btnMinus.className = 'nw-sh-btn';
-        btnMinus.textContent = '−';
+      if (liveUrl || snapshotUrl) {
+        const btnRow = document.createElement('div');
+        btnRow.className = 'nw-sh-media__actions';
 
-        const btnPlus = document.createElement('button');
-        btnPlus.type = 'button';
-        btnPlus.className = 'nw-sh-btn';
-        btnPlus.textContent = '+';
-
-        const stop = (ev) => ev.stopPropagation();
-        btnMinus.addEventListener('click', stop);
-        btnPlus.addEventListener('click', stop);
-
-        btnMinus.addEventListener('click', async () => {
-          await nwAdjustRtrSetpoint(dev, -0.5);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'nw-sh-btn';
+        btn.textContent = 'Live öffnen';
+        btn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          const url = liveUrl || snapshotUrl;
+          if (url) window.open(url, '_blank', 'noopener,noreferrer');
         });
 
-        btnPlus.addEventListener('click', async () => {
-          await nwAdjustRtrSetpoint(dev, 0.5);
+        btnRow.appendChild(btn);
+        big.appendChild(btnRow);
+
+        // Click on preview also opens
+        media.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          const url = liveUrl || snapshotUrl;
+          if (url) window.open(url, '_blank', 'noopener,noreferrer');
+        });
+      }
+    } else if (type === 'widget') {
+      tile.classList.add('nw-sh-tile--media');
+      const w = (dev.io && dev.io.widget) ? dev.io.widget : {};
+      const kind = (typeof w.kind === 'string' && w.kind.trim()) ? w.kind.trim() : 'iframe';
+      const url = (typeof w.url === 'string') ? w.url : '';
+      const openUrl = (typeof w.openUrl === 'string') ? w.openUrl : '';
+      const embed = !!w.embed;
+      const height = (typeof w.height === 'number' && w.height > 0) ? w.height : 260;
+
+      if (kind === 'iframe' && url && embed) {
+        const frame = document.createElement('iframe');
+        frame.className = 'nw-sh-media__iframe';
+        frame.src = url;
+        frame.loading = 'lazy';
+        frame.referrerPolicy = 'no-referrer';
+        frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-popups');
+        frame.style.height = height + 'px';
+        big.appendChild(frame);
+      } else {
+        const info = document.createElement('div');
+        info.className = 'nw-sh-media__placeholder';
+        info.textContent = (typeof w.label === 'string' && w.label.trim()) ? w.label.trim() : (url || 'Widget');
+        big.appendChild(info);
+      }
+
+      if (openUrl || url) {
+        const btnRow = document.createElement('div');
+        btnRow.className = 'nw-sh-media__actions';
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'nw-sh-btn';
+        btn.textContent = 'Öffnen';
+        btn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          const u = openUrl || url;
+          if (u) window.open(u, '_blank', 'noopener,noreferrer');
         });
 
-        controls.appendChild(btnMinus);
-        controls.appendChild(btnPlus);
-        big.appendChild(controls);
+        btnRow.appendChild(btn);
+        big.appendChild(btnRow);
+      }
+    } else {
+      const { value, unit } = nwFormatBigValue(dev);
+      if (value) {
+        const val = document.createElement('div');
+        val.className = 'nw-sh-tile__value';
+        val.textContent = value;
+
+        const u = document.createElement('span');
+        u.className = 'nw-sh-tile__unit';
+        u.textContent = unit || '';
+
+        val.appendChild(u);
+        big.appendChild(val);
+      }
+
+      // Secondary line for RTR: setpoint/humidity
+      if (type === 'rtr') {
+        const st = dev.state || {};
+        const meta = document.createElement('div');
+        meta.className = 'nw-sh-tile__meta';
+
+        const parts = [];
+        if (typeof st.setpoint === 'number') {
+          parts.push('Soll ' + st.setpoint.toFixed(1).replace('.', ',') + '°C');
+        }
+        if (typeof st.humidity === 'number') {
+          parts.push('RH ' + Math.round(st.humidity) + '%');
+        }
+        meta.textContent = parts.join(' · ') || '';
+        big.appendChild(meta);
+
+        if (canWrite && dev.io && dev.io.climate && dev.io.climate.setpointId) {
+          const controls = document.createElement('div');
+          controls.className = 'nw-sh-controls nw-sh-controls--rtr';
+
+          const btnMinus = document.createElement('button');
+          btnMinus.type = 'button';
+          btnMinus.className = 'nw-sh-btn';
+          btnMinus.textContent = '−';
+
+          const btnPlus = document.createElement('button');
+          btnPlus.type = 'button';
+          btnPlus.className = 'nw-sh-btn';
+          btnPlus.textContent = '+';
+
+          const stop = (ev) => ev.stopPropagation();
+          btnMinus.addEventListener('click', stop);
+          btnPlus.addEventListener('click', stop);
+
+          btnMinus.addEventListener('click', async () => {
+            await nwAdjustRtrSetpoint(dev, -0.5);
+          });
+
+          btnPlus.addEventListener('click', async () => {
+            await nwAdjustRtrSetpoint(dev, 0.5);
+          });
+
+          controls.appendChild(btnMinus);
+          controls.appendChild(btnPlus);
+          big.appendChild(controls);
+        }
       }
     }
 
@@ -1548,6 +1637,22 @@ function nwCreateTile(dev, opts) {
     }
     if (type === 'blind' || type === 'rtr') {
       nwOpenDevicePopover(dev, tile);
+      return;
+    }
+
+    if (type === 'camera') {
+      const cam = (dev.io && dev.io.camera) ? dev.io.camera : {};
+      const snapshotUrl = (typeof cam.snapshotUrl === 'string') ? cam.snapshotUrl : '';
+      const liveUrl = (typeof cam.liveUrl === 'string') ? cam.liveUrl : '';
+      const url = liveUrl || snapshotUrl;
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    if (type === 'widget') {
+      const w = (dev.io && dev.io.widget) ? dev.io.widget : {};
+      const url = (typeof w.openUrl === 'string' && w.openUrl) ? w.openUrl : ((typeof w.url === 'string') ? w.url : '');
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
       return;
     }
 
