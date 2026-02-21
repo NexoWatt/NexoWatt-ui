@@ -781,7 +781,11 @@ function nwRenderPagesEditor(force = false) {
   nwShcState.pagesJsonValid = parsed.ok;
 
   if (parsed.ok) {
+    // IMPORTANT: keep config.pages in sync with the Builder/JSON editor.
+    // Otherwise pages exist only in the editor draft and will not be saved
+    // to the adapter – the SmartHome VIS would stay empty.
     nwShcState.pagesDraft = parsed.pages;
+    if (nwShcState.config) nwShcState.config.pages = parsed.pages;
 
     // Keep selection if possible
     if (!nwShcState.pagesUi.selectedId && nwShcState.pagesDraft.length) {
