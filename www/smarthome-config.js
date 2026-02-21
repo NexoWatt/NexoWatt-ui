@@ -20,7 +20,33 @@ const nwShcState = {
     isNew: false,
     idManuallyEdited: false,
   },
+
+  // UI shell (Home tiles / GPA editor / Classic editor)
+  ui: null,
 };
+
+function nwEnsureShcfgUiState() {
+  if (!nwShcState.ui) {
+    let mode = 'home';
+    try {
+      const stored = localStorage.getItem('nw-shcfg-ui-mode');
+      if (stored === 'home' || stored === 'gpa' || stored === 'classic') mode = stored;
+    } catch (_) {}
+
+    nwShcState.ui = {
+      mode,
+      gpa: {
+        tab: 'building',
+        view: 'rooms',
+        currentRoomId: null,
+        selected: null, // { kind: 'room'|'device', id }
+      },
+    };
+  }
+  if (!nwShcState.ui.gpa) {
+    nwShcState.ui.gpa = { tab: 'building', view: 'rooms', currentRoomId: null, selected: null };
+  }
+}
 
 function nwNormalizeSmartHomeConfig(cfg) {
   const c = (cfg && typeof cfg === 'object') ? cfg : {};
@@ -1473,8 +1499,793 @@ function nwRenderAll() {
   nwRenderFunctionsEditor(cfg.functions || []);
   nwRenderDevicesEditor(cfg.devices || [], cfg.rooms || [], cfg.functions || []);
 
+  // Home tiles / GPA editor rendering (non-destructive)
+  nwRenderShcfgShell();
+
   // After re-rendering, re-apply validation highlights / list
   nwScheduleValidation();
+}
+
+
+/* ============================================================ */
+/* SmartHome Config – UI Shell (Home tiles / GPA editor / Classic)*/
+/* ============================================================ */
+
+function nwShcfgSetMode(mode, opts = {}) {
+  nwEnsureShcfgUiState();
+  const allowed = ['home', 'gpa', 'classic'];
+  if (!allowed.includes(mode)) return;
+
+  nwShcState.ui.mode = mode;
+  try { localStorage.setItem('nw-shcfg-ui-mode', mode); } catch (_) {}
+
+  // Optional scroll target for Classic
+  if (mode === 'classic' && opts.scrollToId) {
+    // delay to ensure it's visible
+    setTimeout(() => {
+      const el = document.getElementById(opts.scrollToId);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  }
+
+  nwRenderShcfgShell();
+}
+
+function nwShcfgEnterGpa(opts = {}) {
+  nwEnsureShcfgUiState();
+  const gpa = nwShcState.ui.gpa;
+  gpa.view = opts.view || 'rooms';
+  gpa.currentRoomId = opts.currentRoomId || null;
+  gpa.tab = opts.tab || (gpa.view === 'roomDevices' ? 'devices' : 'building');
+
+  // default selection
+  const cfg = nwShcState.config || { rooms: [], devices: [] };
+  const rooms = cfg.rooms || [];
+  const devices = cfg.devices || [];
+  if (gpa.view === 'rooms') {
+    if (!gpa.selected || gpa.selected.kind !== 'room') {
+      if (rooms.length) gpa.selected = { kind: 'room', id: rooms[0].id };
+    }
+  } else if (gpa.view === 'roomDevices') {
+    const roomId = gpa.currentRoomId || (rooms[0] && rooms[0].id) || null;
+    gpa.currentRoomId = roomId;
+    const roomDevs = devices.filter(d => d.roomId === roomId);
+    if (!gpa.selected || gpa.selected.kind !== 'device') {
+      if (roomDevs.length) gpa.selected = { kind: 'device', id: roomDevs[0].id };
+      else gpa.selected = roomId ? { kind: 'room', id: roomId } : null;
+    }
+  }
+
+  nwShcfgSetMode('gpa');
+}
+
+function nwInitShcfgShellUi() {
+  nwEnsureShcfgUiState();
+
+  const btnBuilding = document.getElementById('nw-shcfg-tile-building');
+  const btnLogic = document.getElementById('nw-shcfg-tile-logic');
+  const btnTimers = document.getElementById('nw-shcfg-tile-timers');
+  const btnScenes = document.getElementById('nw-shcfg-tile-scenes');
+  const btnBackup = document.getElementById('nw-shcfg-tile-backup');
+  const btnClassic = document.getElementById('nw-shcfg-tile-classic');
+
+  if (btnBuilding) btnBuilding.addEventListener('click', () => nwShcfgEnterGpa({ view: 'rooms', tab: 'building' }));
+  if (btnLogic) btnLogic.addEventListener('click', () => window.location.href = '/logic.html');
+  if (btnTimers) btnTimers.addEventListener('click', () => nwSetStatus('Zeitschaltuhren: Modul folgt als nächstes ⏱️', 'warn'));
+  if (btnScenes) btnScenes.addEventListener('click', () => nwSetStatus('Szenen: Modul folgt als nächstes 🎬', 'warn'));
+  if (btnBackup) btnBackup.addEventListener('click', () => nwShcfgSetMode('classic', { scrollToId: 'nw-backup-section' }));
+  if (btnClassic) btnClassic.addEventListener('click', () => nwShcfgSetMode('classic'));
+
+  const gpaBack = document.getElementById('nw-shcfg-gpa-back');
+  const gpaSave = document.getElementById('nw-shcfg-gpa-save');
+  const gpaOpenClassic = document.getElementById('nw-shcfg-gpa-open-classic');
+  if (gpaBack) gpaBack.addEventListener('click', () => nwShcfgSetMode('home'));
+  if (gpaOpenClassic) gpaOpenClassic.addEventListener('click', () => nwShcfgSetMode('classic'));
+  if (gpaSave) gpaSave.addEventListener('click', () => nwSaveSmartHomeConfig());
+
+  // Tabs in GPA sidebar
+  const tabBtns = document.querySelectorAll('#nw-shcfg-gpa .nw-shcfg-gpa__tab');
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      nwEnsureShcfgUiState();
+      nwShcState.ui.gpa.tab = btn.dataset.nwTab || btn.getAttribute('data-nw-tab') || 'building';
+      nwRenderShcfgShell();
+    });
+  });
+
+  // Initial visibility
+  nwRenderShcfgShell();
+}
+
+function nwRenderShcfgShell() {
+  nwEnsureShcfgUiState();
+
+  const home = document.getElementById('nw-shcfg-home');
+  const gpa = document.getElementById('nw-shcfg-gpa');
+  const classic = document.getElementById('nw-shcfg-classic');
+
+  if (!home || !gpa || !classic) return;
+
+  const mode = nwShcState.ui.mode;
+  home.style.display = (mode === 'home') ? '' : 'none';
+  gpa.style.display = (mode === 'gpa') ? '' : 'none';
+  classic.style.display = (mode === 'classic') ? '' : 'none';
+
+  if (mode === 'gpa') {
+    nwRenderShcfgGpa();
+  }
+}
+
+const NW_SHCFG_GPA_DEVICE_TEMPLATES = [
+  { type: 'switch', name: 'Schalter', icon: '💡', meta: 'Ein/Aus' },
+  { type: 'dimmer', name: 'Dimmer', icon: '🔆', meta: 'Helligkeit' },
+  { type: 'color', name: 'RGB Licht', icon: '🌈', meta: 'Farbe + Dimmen' },
+  { type: 'blind', name: 'Rollladen / Jalousie', icon: '🪟', meta: 'Up/Down/Stop' },
+  { type: 'rtr', name: 'Heizen & Kühlen', icon: '🌡️', meta: 'Thermostat' },
+  { type: 'scene', name: 'Szene', icon: '🎬', meta: 'Trigger' },
+  { type: 'sensor', name: 'Sensor', icon: '📟', meta: 'Wert anzeigen' },
+  { type: 'camera', name: 'Kamera', icon: '📷', meta: 'Stream/Snapshot' },
+  { type: 'player', name: 'Audio Player', icon: '🎵', meta: 'Medien' },
+  { type: 'widget', name: 'Widget', icon: '🧩', meta: 'Universal' },
+];
+
+function nwShcfgDragSet(e, payload) {
+  try {
+    e.dataTransfer.setData('application/json', JSON.stringify(payload));
+  } catch (_) {}
+  try {
+    e.dataTransfer.setData('text/plain', JSON.stringify(payload));
+  } catch (_) {}
+  e.dataTransfer.effectAllowed = 'copy';
+}
+
+function nwShcfgDragGet(e) {
+  const dt = e.dataTransfer;
+  if (!dt) return null;
+  const raw = dt.getData('application/json') || dt.getData('text/plain');
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch (_) { return null; }
+}
+
+function nwRenderShcfgGpa() {
+  nwEnsureShcfgUiState();
+  const cfg = nwShcState.config;
+
+  const lib = document.getElementById('nw-shcfg-gpa-lib');
+  const work = document.getElementById('nw-shcfg-gpa-work');
+  const props = document.getElementById('nw-shcfg-gpa-props');
+  if (!lib || !work || !props) return;
+
+  // Tabs active state
+  const gpa = nwShcState.ui.gpa;
+  const tabBtns = document.querySelectorAll('#nw-shcfg-gpa .nw-shcfg-gpa__tab');
+  tabBtns.forEach(btn => {
+    const key = btn.dataset.nwTab || btn.getAttribute('data-nw-tab');
+    btn.classList.toggle('is-active', key === gpa.tab);
+  });
+
+  if (!cfg) {
+    lib.textContent = 'Lade Konfiguration…';
+    work.textContent = 'Lade Konfiguration…';
+    props.textContent = 'Lade Konfiguration…';
+    return;
+  }
+
+  nwRenderShcfgGpaLib(lib);
+  nwRenderShcfgGpaWorkspace(work);
+  nwRenderShcfgGpaProps(props);
+}
+
+function nwShcfgLibGroup(titleText, items) {
+  const group = document.createElement('div');
+  group.className = 'nw-shcfg-libgroup';
+  const title = document.createElement('div');
+  title.className = 'nw-shcfg-libgroup__title';
+  title.textContent = titleText;
+  group.appendChild(title);
+  items.forEach(it => group.appendChild(it));
+  return group;
+}
+
+function nwShcfgLibItem({ icon, name, meta, payload }) {
+  const item = document.createElement('div');
+  item.className = 'nw-shcfg-libitem';
+  item.draggable = true;
+
+  const left = document.createElement('div');
+  left.className = 'nw-shcfg-libitem__left';
+
+  const ico = document.createElement('div');
+  ico.className = 'nw-shcfg-libitem__icon';
+  ico.textContent = icon || '➕';
+
+  const textWrap = document.createElement('div');
+  const n = document.createElement('div');
+  n.className = 'nw-shcfg-libitem__name';
+  n.textContent = name;
+  const m = document.createElement('div');
+  m.className = 'nw-shcfg-libitem__meta';
+  m.textContent = meta || '';
+
+  textWrap.appendChild(n);
+  textWrap.appendChild(m);
+  left.appendChild(ico);
+  left.appendChild(textWrap);
+
+  const hint = document.createElement('div');
+  hint.className = 'nw-shcfg-libitem__meta';
+  hint.textContent = '↗ ziehen';
+
+  item.appendChild(left);
+  item.appendChild(hint);
+
+  item.addEventListener('dragstart', (e) => nwShcfgDragSet(e, payload));
+  return item;
+}
+
+function nwRenderShcfgGpaLib(container) {
+  container.innerHTML = '';
+  const gpa = nwShcState.ui.gpa;
+
+  if (gpa.tab === 'building') {
+    const items = [
+      nwShcfgLibItem({
+        icon: '🏠',
+        name: 'Raum',
+        meta: 'In den Arbeitsbereich ziehen',
+        payload: { kind: 'create-room' },
+      }),
+    ];
+    container.appendChild(nwShcfgLibGroup('Standardelemente', items));
+    return;
+  }
+
+  if (gpa.tab === 'devices') {
+    const items = NW_SHCFG_GPA_DEVICE_TEMPLATES.map(tpl =>
+      nwShcfgLibItem({
+        icon: tpl.icon,
+        name: tpl.name,
+        meta: tpl.meta,
+        payload: { kind: 'device-template', templateType: tpl.type },
+      })
+    );
+    container.appendChild(nwShcfgLibGroup('Geräte', items));
+    return;
+  }
+
+  // Visual tab (placeholder)
+  const p = document.createElement('div');
+  p.className = 'nw-config-hint';
+  p.textContent = 'Visual‑Elemente folgen als nächstes (Widgets/Seiten‑Layout).';
+  container.appendChild(p);
+}
+
+function nwShcfgAddRoom(name = 'Neuer Raum') {
+  const cfg = nwShcState.config;
+  if (!cfg) return null;
+  const rooms = cfg.rooms || (cfg.rooms = []);
+  const id = nwEnsureUniqueId(rooms, 'raum', null);
+  const room = { id, name, order: rooms.length + 1 };
+  rooms.push(room);
+  nwNormalizeRoomOrder();
+  nwMarkDirty(true);
+  return room;
+}
+
+function nwRenderShcfgGpaWorkspace(container) {
+  container.innerHTML = '';
+  const cfg = nwShcState.config;
+  const gpa = nwShcState.ui.gpa;
+
+  const rooms = cfg.rooms || [];
+  const devices = cfg.devices || [];
+
+  const crumbs = document.createElement('div');
+  crumbs.className = 'nw-shcfg-work__crumbs';
+
+  const left = document.createElement('div');
+  const right = document.createElement('div');
+
+  if (gpa.view === 'roomDevices') {
+    const room = rooms.find(r => r.id === gpa.currentRoomId) || rooms[0] || null;
+    if (!room) {
+      gpa.view = 'rooms';
+      gpa.currentRoomId = null;
+      return nwRenderShcfgGpaWorkspace(container);
+    }
+
+    const backBtn = document.createElement('button');
+    backBtn.className = 'nw-config-btn nw-config-btn--ghost';
+    backBtn.type = 'button';
+    backBtn.textContent = '← Gebäude';
+    backBtn.addEventListener('click', () => {
+      gpa.view = 'rooms';
+      gpa.currentRoomId = null;
+      gpa.tab = 'building';
+      gpa.selected = { kind: 'room', id: room.id };
+      nwRenderShcfgShell();
+    });
+
+    left.appendChild(backBtn);
+    const title = document.createElement('strong');
+    title.textContent = room.name;
+    left.appendChild(title);
+
+    const hint = document.createElement('div');
+    hint.className = 'nw-config-hint';
+    hint.textContent = 'Ziehe Geräte aus der Bibliothek hier rein.';
+    right.appendChild(hint);
+
+    crumbs.appendChild(left);
+    crumbs.appendChild(right);
+    container.appendChild(crumbs);
+
+    const drop = document.createElement('div');
+    drop.className = 'nw-shcfg-dropzone';
+    drop.textContent = 'Gerät hier ablegen';
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('is-over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
+    drop.addEventListener('drop', (e) => {
+      e.preventDefault();
+      drop.classList.remove('is-over');
+      const payload = nwShcfgDragGet(e);
+      if (!payload) return;
+      if (payload.kind === 'device-template' && payload.templateType) {
+        const dev = nwAddDeviceFromTemplate(payload.templateType, { roomId: room.id, silent: true });
+        if (dev) {
+          gpa.selected = { kind: 'device', id: dev.id };
+          gpa.tab = 'devices';
+          // refresh only GPA shell (device was already added + rendered)
+          nwRenderShcfgShell();
+        }
+      }
+    });
+    container.appendChild(drop);
+
+    const grid = document.createElement('div');
+    grid.className = 'nw-shcfg-grid';
+
+    const roomDevices = devices.filter(d => d.roomId === room.id);
+    if (!roomDevices.length) {
+      const empty = document.createElement('div');
+      empty.className = 'nw-config-hint';
+      empty.textContent = 'Noch keine Geräte in diesem Raum.';
+      container.appendChild(empty);
+    }
+
+    roomDevices.forEach(dev => {
+      const card = document.createElement('div');
+      card.className = 'nw-shcfg-card';
+      if (gpa.selected && gpa.selected.kind === 'device' && gpa.selected.id === dev.id) card.classList.add('is-selected');
+
+      const titleRow = document.createElement('div');
+      titleRow.className = 'nw-shcfg-card__title';
+      const ico = document.createElement('span');
+      ico.textContent = (NW_SHCFG_GPA_DEVICE_TEMPLATES.find(t => t.type === dev.type)?.icon) || '🧩';
+      const t = document.createElement('span');
+      t.textContent = dev.alias || dev.id;
+      titleRow.appendChild(ico);
+      titleRow.appendChild(t);
+
+      const sub = document.createElement('div');
+      sub.className = 'nw-shcfg-card__subtitle';
+      const fn = (cfg.functions || []).find(f => f.id === dev.functionId);
+      sub.textContent = `${dev.type}${fn ? ' • ' + fn.name : ''}`;
+
+      card.appendChild(titleRow);
+      card.appendChild(sub);
+
+      card.addEventListener('click', () => {
+        gpa.selected = { kind: 'device', id: dev.id };
+        nwRenderShcfgShell();
+      });
+
+      grid.appendChild(card);
+    });
+
+    container.appendChild(grid);
+    return;
+  }
+
+  // rooms view
+  left.innerHTML = '';
+  const title = document.createElement('strong');
+  title.textContent = 'Gebäude';
+  left.appendChild(title);
+
+  const addBtn = document.createElement('button');
+  addBtn.className = 'nw-config-btn';
+  addBtn.type = 'button';
+  addBtn.textContent = '+ Raum';
+  addBtn.addEventListener('click', () => {
+    const room = nwShcfgAddRoom();
+    if (room) {
+      gpa.selected = { kind: 'room', id: room.id };
+      nwRenderAll();
+    }
+  });
+  right.appendChild(addBtn);
+
+  crumbs.appendChild(left);
+  crumbs.appendChild(right);
+  container.appendChild(crumbs);
+
+  const drop = document.createElement('div');
+  drop.className = 'nw-shcfg-dropzone';
+  drop.textContent = 'Raum aus der Bibliothek hier ablegen';
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('is-over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('is-over');
+    const payload = nwShcfgDragGet(e);
+    if (!payload) return;
+    if (payload.kind === 'create-room') {
+      const room = nwShcfgAddRoom();
+      if (room) {
+        gpa.selected = { kind: 'room', id: room.id };
+        nwRenderAll();
+      }
+    }
+  });
+  container.appendChild(drop);
+
+  const grid = document.createElement('div');
+  grid.className = 'nw-shcfg-grid';
+
+  if (!rooms.length) {
+    const empty = document.createElement('div');
+    empty.className = 'nw-config-hint';
+    empty.textContent = 'Noch keine Räume. Ziehe „Raum“ aus der Bibliothek oder nutze „+ Raum“. '; 
+    container.appendChild(empty);
+  }
+
+  rooms.slice().sort((a, b) => (a.order || 0) - (b.order || 0)).forEach(room => {
+    const card = document.createElement('div');
+    card.className = 'nw-shcfg-card';
+    if (gpa.selected && gpa.selected.kind === 'room' && gpa.selected.id === room.id) card.classList.add('is-selected');
+
+    const titleRow = document.createElement('div');
+    titleRow.className = 'nw-shcfg-card__title';
+    const ico = document.createElement('span');
+    ico.textContent = '🏠';
+    const t = document.createElement('span');
+    t.textContent = room.name;
+    titleRow.appendChild(ico);
+    titleRow.appendChild(t);
+
+    const sub = document.createElement('div');
+    sub.className = 'nw-shcfg-card__subtitle';
+    const count = devices.filter(d => d.roomId === room.id).length;
+    sub.textContent = `${count} Gerät(e)`;
+
+    card.appendChild(titleRow);
+    card.appendChild(sub);
+
+    // Drop a device template onto a room
+    card.addEventListener('dragover', (e) => { e.preventDefault(); card.classList.add('is-selected'); });
+    card.addEventListener('dragleave', () => {
+      if (!(gpa.selected && gpa.selected.kind === 'room' && gpa.selected.id === room.id)) card.classList.remove('is-selected');
+    });
+    card.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const payload = nwShcfgDragGet(e);
+      if (!payload) return;
+      if (payload.kind === 'device-template' && payload.templateType) {
+        const dev = nwAddDeviceFromTemplate(payload.templateType, { roomId: room.id, silent: true });
+        if (dev) {
+          // jump directly into room view
+          gpa.view = 'roomDevices';
+          gpa.currentRoomId = room.id;
+          gpa.tab = 'devices';
+          gpa.selected = { kind: 'device', id: dev.id };
+          nwRenderShcfgShell();
+        }
+      }
+    });
+
+    card.addEventListener('click', () => {
+      gpa.selected = { kind: 'room', id: room.id };
+      nwRenderShcfgShell();
+    });
+
+    card.addEventListener('dblclick', () => {
+      gpa.view = 'roomDevices';
+      gpa.currentRoomId = room.id;
+      gpa.tab = 'devices';
+      const roomDevs = devices.filter(d => d.roomId === room.id);
+      gpa.selected = roomDevs.length ? { kind: 'device', id: roomDevs[0].id } : { kind: 'room', id: room.id };
+      nwRenderShcfgShell();
+    });
+
+    grid.appendChild(card);
+  });
+
+  container.appendChild(grid);
+}
+
+function nwShcfgCreateSelect(options, value, onChange) {
+  const sel = document.createElement('select');
+  sel.className = 'nw-config-select';
+  options.forEach(opt => {
+    const o = document.createElement('option');
+    o.value = opt.value;
+    o.textContent = opt.label;
+    sel.appendChild(o);
+  });
+  sel.value = value ?? '';
+  sel.addEventListener('change', () => onChange(sel.value));
+  return sel;
+}
+
+function nwShcfgCreateTextInput(value, onChange, { placeholder = '' } = {}) {
+  const input = document.createElement('input');
+  input.className = 'nw-config-input';
+  input.type = 'text';
+  input.placeholder = placeholder;
+  input.value = value ?? '';
+  input.addEventListener('change', () => onChange(input.value));
+  return input;
+}
+
+function nwShcfgNullIfEmpty(v) {
+  const s = (v ?? '').trim();
+  return s ? s : null;
+}
+
+function nwRenderShcfgGpaProps(container) {
+  container.innerHTML = '';
+  const cfg = nwShcState.config;
+  const gpa = nwShcState.ui.gpa;
+  const sel = gpa.selected;
+
+  const rooms = cfg.rooms || [];
+  const funcs = cfg.functions || [];
+  const devices = cfg.devices || [];
+
+  if (!sel) {
+    const h = document.createElement('div');
+    h.className = 'nw-config-hint';
+    h.textContent = 'Wähle links im Arbeitsbereich einen Raum oder ein Gerät aus.';
+    container.appendChild(h);
+    return;
+  }
+
+  if (sel.kind === 'room') {
+    const room = rooms.find(r => r.id === sel.id);
+    if (!room) {
+      container.textContent = 'Auswahl nicht gefunden.';
+      return;
+    }
+
+    const head = document.createElement('div');
+    head.className = 'nw-config-card__head';
+    const title = document.createElement('div');
+    title.className = 'nw-config-card__title';
+    title.textContent = `Raum: ${room.name}`;
+    head.appendChild(title);
+
+    const del = document.createElement('button');
+    del.className = 'nw-config-btn nw-config-btn--danger';
+    del.type = 'button';
+    del.textContent = 'Löschen';
+    del.addEventListener('click', () => {
+      if (!confirm(`Raum „${room.name}“ wirklich löschen?`)) return;
+      const idx = rooms.findIndex(r => r.id === room.id);
+      if (idx >= 0) {
+        rooms.splice(idx, 1);
+        nwNormalizeRoomOrder();
+        nwMarkDirty(true);
+        // Keep selection sane
+        gpa.selected = rooms.length ? { kind: 'room', id: rooms[0].id } : null;
+        gpa.view = 'rooms';
+        gpa.currentRoomId = null;
+        nwRenderAll();
+      }
+    });
+
+    head.appendChild(del);
+    container.appendChild(head);
+
+    // Name
+    container.appendChild(
+      nwCreateFieldRow('Name', nwShcfgCreateTextInput(room.name, (v) => {
+        room.name = v;
+        nwMarkDirty(true);
+        nwRenderShcfgShell();
+      }))
+    );
+
+    // ID
+    const idInput = nwShcfgCreateTextInput(room.id, () => {}, {});
+    idInput.readOnly = true;
+    container.appendChild(nwCreateFieldRow('ID', idInput));
+
+    // Shortcut: open room
+    const openBtn = document.createElement('button');
+    openBtn.className = 'nw-config-btn';
+    openBtn.type = 'button';
+    openBtn.textContent = 'Raum öffnen';
+    openBtn.addEventListener('click', () => {
+      gpa.view = 'roomDevices';
+      gpa.currentRoomId = room.id;
+      gpa.tab = 'devices';
+      const roomDevs = devices.filter(d => d.roomId === room.id);
+      gpa.selected = roomDevs.length ? { kind: 'device', id: roomDevs[0].id } : { kind: 'room', id: room.id };
+      nwRenderShcfgShell();
+    });
+    container.appendChild(openBtn);
+    return;
+  }
+
+  if (sel.kind === 'device') {
+    const dev = devices.find(d => d.id === sel.id);
+    if (!dev) {
+      container.textContent = 'Gerät nicht gefunden.';
+      return;
+    }
+
+    const head = document.createElement('div');
+    head.className = 'nw-config-card__head';
+    const title = document.createElement('div');
+    title.className = 'nw-config-card__title';
+    title.textContent = `Gerät: ${dev.alias || dev.id}`;
+    head.appendChild(title);
+
+    const del = document.createElement('button');
+    del.className = 'nw-config-btn nw-config-btn--danger';
+    del.type = 'button';
+    del.textContent = 'Löschen';
+    del.addEventListener('click', () => {
+      if (!confirm(`Gerät „${dev.alias || dev.id}“ wirklich löschen?`)) return;
+      const idx = devices.findIndex(d => d.id === dev.id);
+      if (idx >= 0) {
+        devices.splice(idx, 1);
+        nwNormalizeDeviceOrder();
+        nwMarkDirty(true);
+        // selection fallback
+        const roomId = dev.roomId;
+        const roomDevs = devices.filter(d => d.roomId === roomId);
+        if (roomDevs.length) gpa.selected = { kind: 'device', id: roomDevs[0].id };
+        else if (roomId) gpa.selected = { kind: 'room', id: roomId };
+        else gpa.selected = rooms.length ? { kind: 'room', id: rooms[0].id } : null;
+        nwRenderAll();
+      }
+    });
+
+    head.appendChild(del);
+    container.appendChild(head);
+
+    // Alias
+    container.appendChild(
+      nwCreateFieldRow('Name', nwShcfgCreateTextInput(dev.alias || '', (v) => {
+        dev.alias = v;
+        nwMarkDirty(true);
+        nwRenderShcfgShell();
+      }, { placeholder: 'z.B. Deckenlicht' }))
+    );
+
+    // ID
+    const idInput = nwShcfgCreateTextInput(dev.id, () => {}, {});
+    idInput.readOnly = true;
+    container.appendChild(nwCreateFieldRow('ID', idInput));
+
+    // Type (read-only for safety)
+    const typeInput = nwShcfgCreateTextInput(dev.type, () => {}, {});
+    typeInput.readOnly = true;
+    container.appendChild(nwCreateFieldRow('Typ', typeInput));
+
+    // Room
+    const roomOptions = [{ value: '', label: '—' }, ...rooms.map(r => ({ value: r.id, label: r.name }))];
+    container.appendChild(
+      nwCreateFieldRow('Raum', nwShcfgCreateSelect(roomOptions, dev.roomId || '', (v) => {
+        dev.roomId = v || null;
+        nwMarkDirty(true);
+        nwRenderAll();
+      }))
+    );
+
+    // Function
+    const fnOptions = [{ value: '', label: '—' }, ...funcs.map(f => ({ value: f.id, label: f.name }))];
+    container.appendChild(
+      nwCreateFieldRow('Funktion', nwShcfgCreateSelect(fnOptions, dev.functionId || '', (v) => {
+        dev.functionId = v || null;
+        nwMarkDirty(true);
+        nwRenderShcfgShell();
+      }))
+    );
+
+    // IO mappings depending on type
+    const ioTitle = document.createElement('div');
+    ioTitle.className = 'nw-config-card__subtitle';
+    ioTitle.style.marginTop = '10px';
+    ioTitle.textContent = 'Datenpunkte (ioBroker)';
+    container.appendChild(ioTitle);
+
+    dev.io = dev.io || {};
+    dev.behavior = dev.behavior || {};
+
+    if (dev.type === 'switch') {
+      dev.io.switch = dev.io.switch || { readId: null, writeId: null };
+      container.appendChild(nwCreateDpInput('Read DP', dev.io.switch.readId || '', (v) => {
+        dev.io.switch.readId = nwShcfgNullIfEmpty(v);
+        nwMarkDirty(true);
+      }));
+      container.appendChild(nwCreateDpInput('Write DP', dev.io.switch.writeId || '', (v) => {
+        dev.io.switch.writeId = nwShcfgNullIfEmpty(v);
+        nwMarkDirty(true);
+      }));
+    } else if (dev.type === 'dimmer') {
+      dev.io.switch = dev.io.switch || { readId: null, writeId: null };
+      dev.io.dimmer = dev.io.dimmer || { levelId: null, min: 0, max: 100, step: 1 };
+      container.appendChild(nwCreateDpInput('Schalten (Read)', dev.io.switch.readId || '', (v) => { dev.io.switch.readId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Schalten (Write)', dev.io.switch.writeId || '', (v) => { dev.io.switch.writeId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Dimmer Level DP', dev.io.dimmer.levelId || '', (v) => { dev.io.dimmer.levelId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+    } else if (dev.type === 'color') {
+      dev.io.switch = dev.io.switch || { readId: null, writeId: null };
+      dev.io.dimmer = dev.io.dimmer || { levelId: null, min: 0, max: 100, step: 1 };
+      dev.io.color = dev.io.color || { rgbId: null, mode: 'hex', supportsWarmWhite: false, supportsColdWhite: false, wwId: null, cwId: null };
+      container.appendChild(nwCreateDpInput('Schalten (Read)', dev.io.switch.readId || '', (v) => { dev.io.switch.readId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Schalten (Write)', dev.io.switch.writeId || '', (v) => { dev.io.switch.writeId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Dimmer Level DP', dev.io.dimmer.levelId || '', (v) => { dev.io.dimmer.levelId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('RGB DP', dev.io.color.rgbId || '', (v) => { dev.io.color.rgbId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+    } else if (dev.type === 'blind') {
+      dev.io.blind = dev.io.blind || { upId: null, downId: null, stopId: null, posId: null, tiltId: null };
+      container.appendChild(nwCreateDpInput('Auf (DP)', dev.io.blind.upId || '', (v) => { dev.io.blind.upId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Ab (DP)', dev.io.blind.downId || '', (v) => { dev.io.blind.downId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Stop (DP)', dev.io.blind.stopId || '', (v) => { dev.io.blind.stopId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Position (DP)', dev.io.blind.posId || '', (v) => { dev.io.blind.posId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Lamelle (DP)', dev.io.blind.tiltId || '', (v) => { dev.io.blind.tiltId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+    } else if (dev.type === 'rtr') {
+      dev.io.rtr = dev.io.rtr || { tempId: null, setId: null, modeId: null, humidityId: null };
+      container.appendChild(nwCreateDpInput('Temperatur (DP)', dev.io.rtr.tempId || '', (v) => { dev.io.rtr.tempId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Sollwert (DP)', dev.io.rtr.setId || '', (v) => { dev.io.rtr.setId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Modus (DP)', dev.io.rtr.modeId || '', (v) => { dev.io.rtr.modeId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Luftfeuchte (DP)', dev.io.rtr.humidityId || '', (v) => { dev.io.rtr.humidityId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+    } else if (dev.type === 'scene') {
+      dev.io.scene = dev.io.scene || { triggerId: null, name: '' };
+      container.appendChild(nwCreateDpInput('Trigger (DP)', dev.io.scene.triggerId || '', (v) => { dev.io.scene.triggerId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateFieldRow('Szenenname', nwShcfgCreateTextInput(dev.io.scene.name || '', (v) => { dev.io.scene.name = v; nwMarkDirty(true); }))); 
+    } else if (dev.type === 'sensor') {
+      dev.io.sensor = dev.io.sensor || { readId: null };
+      container.appendChild(nwCreateDpInput('Wert (Read DP)', dev.io.sensor.readId || '', (v) => { dev.io.sensor.readId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+    } else if (dev.type === 'player') {
+      dev.io.player = dev.io.player || { titleId:null, artistId:null, albumId:null, playingId:null, volumeId:null, muteId:null, nextId:null, prevId:null, playId:null, pauseId:null };
+      container.appendChild(nwCreateDpInput('Titel (DP)', dev.io.player.titleId || '', (v) => { dev.io.player.titleId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Artist (DP)', dev.io.player.artistId || '', (v) => { dev.io.player.artistId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Playing (DP)', dev.io.player.playingId || '', (v) => { dev.io.player.playingId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Volume (DP)', dev.io.player.volumeId || '', (v) => { dev.io.player.volumeId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Mute (DP)', dev.io.player.muteId || '', (v) => { dev.io.player.muteId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Next (DP)', dev.io.player.nextId || '', (v) => { dev.io.player.nextId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Prev (DP)', dev.io.player.prevId || '', (v) => { dev.io.player.prevId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Play (DP)', dev.io.player.playId || '', (v) => { dev.io.player.playId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Pause (DP)', dev.io.player.pauseId || '', (v) => { dev.io.player.pauseId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+    } else if (dev.type === 'camera') {
+      dev.io.camera = dev.io.camera || { url: '', refreshMs: 1000 };
+      container.appendChild(nwCreateFieldRow('URL', nwShcfgCreateTextInput(dev.io.camera.url || '', (v) => { dev.io.camera.url = v; nwMarkDirty(true); }))); 
+      const refresh = document.createElement('input');
+      refresh.className = 'nw-config-input';
+      refresh.type = 'number';
+      refresh.min = '250';
+      refresh.step = '250';
+      refresh.value = dev.io.camera.refreshMs || 1000;
+      refresh.addEventListener('change', () => { dev.io.camera.refreshMs = Number(refresh.value) || 1000; nwMarkDirty(true); });
+      container.appendChild(nwCreateFieldRow('Refresh (ms)', refresh));
+    } else if (dev.type === 'widget') {
+      dev.io.widget = dev.io.widget || { iframeUrl: '', openUrl: '', embed: false, height: 260, label: '' };
+      container.appendChild(nwCreateFieldRow('Label', nwShcfgCreateTextInput(dev.io.widget.label || '', (v) => { dev.io.widget.label = v; nwMarkDirty(true); }))); 
+      container.appendChild(nwCreateFieldRow('Iframe URL', nwShcfgCreateTextInput(dev.io.widget.iframeUrl || '', (v) => { dev.io.widget.iframeUrl = v; nwMarkDirty(true); }))); 
+      container.appendChild(nwCreateFieldRow('Open URL', nwShcfgCreateTextInput(dev.io.widget.openUrl || '', (v) => { dev.io.widget.openUrl = v; nwMarkDirty(true); }))); 
+    }
+
+    // Apply changes without full rerender on every dp change; user can press save.
+    const note = document.createElement('div');
+    note.className = 'nw-config-hint';
+    note.style.marginTop = '8px';
+    note.textContent = 'Hinweis: Änderungen werden lokal gespeichert. Nutze „Speichern“ oben, um sie dauerhaft zu übernehmen.';
+    container.appendChild(note);
+    return;
+  }
 }
 
 /* --- Räume & Funktionen Editor (B7) --- */
@@ -1904,7 +2715,7 @@ function nwAddDevice() {
 
 // Quick templates (installer speed): create a pre-filled device skeleton so the
 // installer only needs to pick the datapoints.
-function nwAddDeviceFromTemplate(templateType) {
+function nwAddDeviceFromTemplate(templateType, opts = {}) {
   if (!nwShcState.config) return;
 
   const t = String(templateType || '').trim();
@@ -1917,8 +2728,8 @@ function nwAddDeviceFromTemplate(templateType) {
   const rooms = Array.isArray(nwShcState.config.rooms) ? nwShcState.config.rooms : [];
   const funcs = Array.isArray(nwShcState.config.functions) ? nwShcState.config.functions : [];
 
-  const roomId = rooms.length ? (rooms[0] && rooms[0].id) : null;
-  const functionId = funcs.length ? (funcs[0] && funcs[0].id) : null;
+  const roomId = (opts && typeof opts.roomId === 'string') ? opts.roomId : (rooms.length ? (rooms[0] && rooms[0].id) : null);
+  const functionId = (opts && typeof opts.functionId === 'string') ? opts.functionId : (funcs.length ? (funcs[0] && funcs[0].id) : null);
 
   const baseIdMap = {
     switch: 'schalter',
@@ -2050,8 +2861,12 @@ function nwAddDeviceFromTemplate(templateType) {
   nwRenderAll();
 
   // Reset template selector (UX)
-  const sel = document.getElementById('nw-config-template-select');
-  if (sel) sel.value = '';
+  if (!opts || !opts.silent) {
+    const sel = document.getElementById('nw-config-template-select');
+    if (sel) sel.value = '';
+  }
+
+  return dev;
 }
 
 function nwCreateFieldRow(labelText, controlElem) {
@@ -4027,6 +4842,7 @@ function nwAttachToolbarHandlers() {
 
 async function nwInitSmartHomeConfig() {
   nwAttachToolbarHandlers();
+  nwInitShcfgShellUi();
   // Hint: SmartHome must be enabled in the adapter settings, otherwise the VIS page stays empty.
   try {
     const hint = document.getElementById('nw-config-enabled-hint');

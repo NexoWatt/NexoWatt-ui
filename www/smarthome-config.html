@@ -47,6 +47,80 @@
       </div>
     </div>
 
+    <!-- Home / Module tiles (Gira GPA inspired) -->
+    <section id="nw-shcfg-home" class="nw-config-section nw-shcfg-home">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">Projekt</h2>
+      </div>
+      <div class="nw-shcfg-home__grid">
+        <button class="nw-shcfg-tile" id="nw-shcfg-tile-building" type="button">
+          <div class="nw-shcfg-tile__icon">🏠</div>
+          <div class="nw-shcfg-tile__title">Gebäude &amp; Geräte</div>
+          <div class="nw-shcfg-tile__desc">Räume/Devices per Drag &amp; Drop konfigurieren (GPA‑Style).</div>
+        </button>
+        <button class="nw-shcfg-tile" id="nw-shcfg-tile-logic" type="button">
+          <div class="nw-shcfg-tile__icon">🧠</div>
+          <div class="nw-shcfg-tile__title">Logik‑Editor</div>
+          <div class="nw-shcfg-tile__desc">Öffnet den NexoWatt Logik‑Editor.</div>
+        </button>
+        <button class="nw-shcfg-tile" id="nw-shcfg-tile-timers" type="button">
+          <div class="nw-shcfg-tile__icon">⏱️</div>
+          <div class="nw-shcfg-tile__title">Zeitschaltuhren</div>
+          <div class="nw-shcfg-tile__desc">(Platzhalter) – folgt als nächstes Modul.</div>
+        </button>
+        <button class="nw-shcfg-tile" id="nw-shcfg-tile-scenes" type="button">
+          <div class="nw-shcfg-tile__icon">🎬</div>
+          <div class="nw-shcfg-tile__title">Szenen</div>
+          <div class="nw-shcfg-tile__desc">(Platzhalter) – folgt als nächstes Modul.</div>
+        </button>
+        <button class="nw-shcfg-tile" id="nw-shcfg-tile-backup" type="button">
+          <div class="nw-shcfg-tile__icon">💾</div>
+          <div class="nw-shcfg-tile__title">Datensicherung</div>
+          <div class="nw-shcfg-tile__desc">Backup/Restore wie im App‑Center.</div>
+        </button>
+      </div>
+      <div class="nw-shcfg-home__hint">
+        Tipp: Starte mit <b>Gebäude &amp; Geräte</b> und richte zuerst Räume und Geräte ein. Danach kannst du im Frontend direkt bedienen ✨
+      </div>
+    </section>
+
+    <!-- Drag & drop editor (Gebäude & Geräte) -->
+    <section id="nw-shcfg-gpa" class="nw-config-section nw-shcfg-gpa" style="display:none;">
+      <div class="nw-shcfg-gpa__topbar">
+        <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-gpa-back" type="button">← Übersicht</button>
+        <div class="nw-shcfg-gpa__title">
+          Gebäude &amp; Geräte (Drag &amp; Drop)
+          <span class="nw-chip" style="margin-left:8px;">BETA</span>
+        </div>
+        <div class="nw-shcfg-gpa__actions">
+          <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-gpa-open-classic" type="button">Classic</button>
+          <button class="nw-config-btn" id="nw-shcfg-gpa-save" type="button">Speichern</button>
+        </div>
+      </div>
+
+      <div class="nw-shcfg-gpa__layout">
+        <div class="nw-shcfg-gpa__panel nw-shcfg-gpa__panel--left">
+          <div class="nw-shcfg-gpa__tabs">
+            <button class="nw-shcfg-gpa__tab" data-nw-tab="building" type="button">Gebäude</button>
+            <button class="nw-shcfg-gpa__tab" data-nw-tab="devices" type="button">Geräte</button>
+            <button class="nw-shcfg-gpa__tab" data-nw-tab="visual" type="button">Visual</button>
+          </div>
+          <div id="nw-shcfg-gpa-lib" class="nw-shcfg-gpa__panelbody"></div>
+        </div>
+
+        <div class="nw-shcfg-gpa__panel nw-shcfg-gpa__panel--center">
+          <div id="nw-shcfg-gpa-work" class="nw-shcfg-gpa__panelbody"></div>
+        </div>
+
+        <div class="nw-shcfg-gpa__panel nw-shcfg-gpa__panel--right">
+          <div id="nw-shcfg-gpa-props" class="nw-shcfg-gpa__panelbody"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Classic editor (fallback / all settings) -->
+    <div id="nw-shcfg-classic" style="display:none;">
+
     <section class="nw-config-section">
       <div id="nw-config-validation" class="nw-validation"></div>
     </section>
@@ -205,7 +279,7 @@
       <div id="nw-pages-status" class="nw-config-status" style="margin-top:8px;"></div>
     </section>
 
-<section class="nw-config-section">
+<section class="nw-config-section" id="nw-backup-section">
       <div class="nw-config-section__head">
         <h2 class="nw-config-section__title">Datensicherung (wie App‑Center)</h2>
       </div>
@@ -275,6 +349,8 @@
       <div id="nw-config-devices-empty" class="nw-config-empty" style="display:none;">
         Keine Geräte/Kacheln definiert. Nutze <strong>„+ Gerät”</strong>, um eine Kachel anzulegen.</div>
     </section>
+
+    </div><!-- /#nw-shcfg-classic -->
   </div>
 </main>
 

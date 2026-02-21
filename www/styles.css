@@ -1936,6 +1936,10 @@ body {
   color: #facc15;
 }
 
+.nw-config-status--warn {
+  color: #facc15;
+}
+
 /* Editor-Felder in Gerätekarten */
 .nw-config-field-row {
   display: flex;
@@ -4954,4 +4958,265 @@ body{ padding-top: var(--topbar-h); }
 .nw-multiselect{
   width: 100%;
 }
+
+
+/* ============================================================ */
+/* SmartHome Config – GPA Style (smarthome-config.html)          */
+/* ============================================================ */
+
+.nw-chip{
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(37, 238, 174, 0.35);
+  color: rgba(37, 238, 174, 0.95);
+  background: rgba(37, 238, 174, 0.08);
+  font-size: 12px;
+  letter-spacing: 0.6px;
+}
+
+.nw-shcfg-home__grid{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.nw-shcfg-home__hint{
+  margin-top: 12px;
+  color: var(--nx-text-muted);
+  font-size: 13px;
+}
+
+.nw-shcfg-tile{
+  text-align: left;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02));
+  padding: 14px 14px 12px;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.nw-shcfg-tile:hover{
+  transform: translateY(-1px);
+  border-color: rgba(37, 238, 174, 0.35);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+}
+
+.nw-shcfg-tile__icon{
+  font-size: 24px;
+  opacity: 0.95;
+}
+
+.nw-shcfg-tile__title{
+  margin-top: 10px;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.nw-shcfg-tile__desc{
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--nx-text-muted);
+  line-height: 1.35;
+}
+
+.nw-shcfg-gpa__topbar{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.nw-shcfg-gpa__title{
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+
+.nw-shcfg-gpa__actions{
+  display: inline-flex;
+  gap: 8px;
+}
+
+.nw-shcfg-gpa__layout{
+  display: grid;
+  grid-template-columns: 280px 1fr 380px;
+  gap: 12px;
+  min-height: 520px;
+}
+
+@media (max-width: 1180px){
+  .nw-shcfg-gpa__layout{
+    grid-template-columns: 1fr;
+  }
+}
+
+.nw-shcfg-gpa__panel{
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02));
+  overflow: hidden;
+  min-height: 200px;
+}
+
+.nw-shcfg-gpa__tabs{
+  display: flex;
+  gap: 6px;
+  padding: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.nw-shcfg-gpa__tab{
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.86);
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.nw-shcfg-gpa__tab.is-active{
+  border-color: rgba(37, 238, 174, 0.45);
+  box-shadow: 0 0 0 2px rgba(37, 238, 174, 0.14) inset;
+  color: rgba(37, 238, 174, 0.95);
+}
+
+.nw-shcfg-gpa__panelbody{
+  padding: 10px;
+  height: 100%;
+  overflow: auto;
+}
+
+.nw-shcfg-libgroup{
+  margin-bottom: 12px;
+}
+
+.nw-shcfg-libgroup__title{
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.6px;
+  color: rgba(255,255,255,0.70);
+  margin: 6px 0 8px;
+  text-transform: uppercase;
+}
+
+.nw-shcfg-libitem{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  border-radius: 12px;
+  padding: 10px;
+  margin-bottom: 8px;
+  cursor: grab;
+}
+
+.nw-shcfg-libitem:active{
+  cursor: grabbing;
+}
+
+.nw-shcfg-libitem__left{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nw-shcfg-libitem__icon{
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: rgba(37, 238, 174, 0.12);
+  border: 1px solid rgba(37, 238, 174, 0.25);
+}
+
+.nw-shcfg-libitem__name{
+  font-weight: 900;
+}
+
+.nw-shcfg-libitem__meta{
+  color: var(--nx-text-muted);
+  font-size: 12px;
+}
+
+.nw-shcfg-work__crumbs{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0 10px;
+}
+
+.nw-shcfg-work__crumbs strong{
+  font-weight: 900;
+}
+
+.nw-shcfg-grid{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.nw-shcfg-card{
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.nw-shcfg-card:hover{
+  transform: translateY(-1px);
+  border-color: rgba(37, 238, 174, 0.28);
+}
+
+.nw-shcfg-card.is-selected{
+  border-color: rgba(37, 238, 174, 0.55);
+  box-shadow: 0 0 0 2px rgba(37, 238, 174, 0.14) inset;
+}
+
+.nw-shcfg-card__title{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 900;
+}
+
+.nw-shcfg-card__subtitle{
+  margin-top: 6px;
+  color: var(--nx-text-muted);
+  font-size: 12px;
+}
+
+.nw-shcfg-dropzone{
+  border: 2px dashed rgba(37, 238, 174, 0.22);
+  border-radius: 16px;
+  padding: 14px;
+  color: rgba(255,255,255,0.70);
+  text-align: center;
+}
+
+.nw-shcfg-dropzone.is-over{
+  border-color: rgba(37, 238, 174, 0.55);
+  background: rgba(37, 238, 174, 0.06);
+}
+
+.nw-config-btn--danger{
+  border-color: rgba(255, 99, 99, 0.35);
+  background: rgba(255, 99, 99, 0.10);
+  color: rgba(255, 210, 210, 0.95);
+}
+
+.nw-config-btn--danger:hover{
+  border-color: rgba(255, 99, 99, 0.55);
+}
+
 
