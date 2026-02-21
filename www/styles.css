@@ -2928,6 +2928,38 @@ body{ padding-top: var(--topbar-h); }
   line-height: 1.15;
 }
 
+/* SmartHome Sidebar: Caret + Badge (Counts) */
+.nw-sh-nav-item__caret,
+.nw-sh-nav-item__caret--spacer{
+  width: 14px;
+  height: 18px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  opacity: 0.75;
+  transition: transform 150ms ease, opacity 150ms ease;
+  flex: 0 0 auto;
+}
+
+.nw-sh-nav-item__caret--spacer{
+  opacity: 0;
+}
+
+.nw-sh-nav-item__caret--open{
+  transform: rotate(90deg);
+  opacity: 1;
+}
+
+.nw-sh-nav-item__badge{
+  margin-left: auto;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  opacity: 0.9;
+  flex: 0 0 auto;
+}
+
 .nw-sh-main{
   flex: 1 1 auto;
   min-width: 0;
@@ -3127,6 +3159,41 @@ body{ padding-top: var(--topbar-h); }
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   grid-auto-flow: dense;
+}
+
+/* SmartHome: Gruppierung nach Gerätetyp */
+.nw-sh-type-group{
+  margin-top: 10px;
+}
+
+.nw-sh-type-group__head{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  margin: 10px 0 8px;
+  padding: 7px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(2, 6, 23, 0.22);
+}
+
+.nw-sh-type-group__icon{
+  width: 20px;
+  text-align:center;
+  opacity: 0.95;
+}
+
+.nw-sh-type-group__title{
+  flex: 1;
+  font-weight: 850;
+}
+
+.nw-sh-type-group__count{
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  opacity: 0.85;
 }
 
 @media (max-width: 1100px) {
@@ -4742,4 +4809,102 @@ body{ padding-top: var(--topbar-h); }
   opacity: 0.95;
 }
 
+
+
+
+/* SmartHome Config: Pages Builder */
+.nw-pages-builder__layout{
+  display:grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 12px;
+}
+
+@media (max-width: 900px){
+  .nw-pages-builder__layout{
+    grid-template-columns: 1fr;
+  }
+}
+
+.nw-pages-list,
+.nw-pages-editor{
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(2, 6, 23, 0.20);
+  border-radius: 16px;
+  padding: 12px;
+}
+
+.nw-pages-list__header{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.nw-pages-list__title{
+  font-weight: 900;
+}
+
+.nw-pages-list__body{
+  margin-top: 10px;
+  display:flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nw-page-row{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(2, 6, 23, 0.22);
+  cursor:pointer;
+}
+
+.nw-page-row:hover{
+  border-color: rgba(129, 230, 217, 0.35);
+}
+
+.nw-page-row--active{
+  border-color: rgba(0, 230, 118, 0.85);
+}
+
+.nw-page-row__icon{
+  width: 22px;
+  text-align:center;
+  opacity: 0.95;
+}
+
+.nw-page-row__meta{
+  flex: 1;
+  min-width: 0;
+}
+
+.nw-page-row__title{
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nw-page-row__sub{
+  font-size: 0.8rem;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nw-page-row__badge{
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  opacity: 0.9;
+}
+
+.nw-multiselect{
+  width: 100%;
+}
 

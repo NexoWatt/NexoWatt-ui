@@ -6200,7 +6200,13 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
               const favoritesOnly = !!(p && p.favoritesOnly);
               const order = Number.isFinite(+((p && p.order) ?? idx)) ? +((p && p.order) ?? idx) : idx;
               const href = String(p && p.href ? p.href : '').trim();
-              return { id, title, icon, viewMode, roomIds, funcIds, types, favoritesOnly, order, href };
+              const parentId = String(p && p.parentId ? p.parentId : '').trim();
+              const cardSizeRaw = String(p && (p.cardSize ?? (p.layout && p.layout.cardSize)) ? (p.cardSize ?? (p.layout && p.layout.cardSize)) : '').trim();
+              const cardSize = ['auto', 's', 'm', 'l', 'xl'].includes(cardSizeRaw) ? cardSizeRaw : 'auto';
+              const sortByRaw = String(p && (p.sortBy ?? (p.layout && p.layout.sortBy)) ? (p.sortBy ?? (p.layout && p.layout.sortBy)) : '').trim();
+              const sortBy = ['order', 'name', 'type'].includes(sortByRaw) ? sortByRaw : 'order';
+              const groupByType = !!(p && ((p.groupByType ?? (p.layout && p.layout.groupByType))));
+              return { id, title, icon, viewMode, roomIds, funcIds, types, favoritesOnly, order, href, parentId, cardSize, sortBy, groupByType };
             })
             .filter((p) => p.id && p.title);
         }

@@ -11,6 +11,15 @@ const nwShcState = {
   // Sidebar pages editor (raw JSON)
   pagesJsonText: '',
   pagesJsonValid: true,
+
+  // Builder UI State für Pages
+  pagesDraft: [],
+  pagesUi: {
+    tab: 'builder',
+    selectedId: null,
+    isNew: false,
+    idManuallyEdited: false,
+  },
 };
 
 // Drag&Drop ordering (devices)
@@ -630,10 +639,9 @@ function nwSetPagesStatus(msg, type) {
   const el = document.getElementById('nw-pages-status');
   if (!el) return;
   el.textContent = msg || '';
-  el.classList.remove('ok', 'error', 'dirty');
-  if (type === 'ok') el.classList.add('ok');
-  if (type === 'error') el.classList.add('error');
-  if (type === 'dirty') el.classList.add('dirty');
+  el.classList.remove('nw-config-status--ok', 'nw-config-status--error', 'nw-config-status--dirty');
+  const cls = (type === 'ok') ? 'nw-config-status--ok' : (type === 'error') ? 'nw-config-status--error' : 'nw-config-status--dirty';
+  el.classList.add(cls);
 }
 
 function nwNormalizePageObject(p, idx) {
@@ -648,7 +656,16 @@ function nwNormalizePageObject(p, idx) {
   const favoritesOnly = !!(p && p.favoritesOnly);
   const href = String((p && p.href) ? p.href : '').trim();
   const order = Number.isFinite(+((p && p.order) ?? idx)) ? +((p && p.order) ?? idx) : idx;
-  return { id, title, icon, viewMode, roomIds, funcIds, types, favoritesOnly, href, order };
+
+  // Multi-Level + Layout-Regeln
+  const parentId = String((p && p.parentId) ? p.parentId : '').trim();
+  const cardSizeRaw = String((p && (p.cardSize ?? (p.layout && p.layout.cardSize))) ? (p.cardSize ?? (p.layout && p.layout.cardSize)) : '').trim();
+  const cardSize = ['auto','s','m','l','xl'].includes(cardSizeRaw) ? cardSizeRaw : 'auto';
+  const sortByRaw = String((p && (p.sortBy ?? (p.layout && p.layout.sortBy))) ? (p.sortBy ?? (p.layout && p.layout.sortBy)) : '').trim();
+  const sortBy = ['order','name','type'].includes(sortByRaw) ? sortByRaw : 'order';
+  const groupByType = !!(p && (p.groupByType ?? (p.layout && p.layout.groupByType)));
+
+  return { id, title, icon, viewMode, roomIds, funcIds, types, favoritesOnly, href, order, parentId, cardSize, sortBy, groupByType };
 }
 
 function nwParsePagesJson(text) {
@@ -717,22 +734,457 @@ function nwBuildDefaultPages(cfg) {
   return pages;
 }
 
-function nwRenderPagesEditor(force) {
+function nwRenderPagesEditor(force = false) {
   const ta = document.getElementById('nw-pages-json');
-  if (ta) {
-    const isFocused = document.activeElement === ta;
-    if (force || !isFocused) {
-      if (ta.value !== (nwShcState.pagesJsonText || '')) ta.value = nwShcState.pagesJsonText || '[]';
+  if (!ta) return;
+
+  // Sync textarea from state only when explicitly requested (e.g. after Builder save)
+  if (force) {
+    ta.value = nwShcState.pagesJsonText || '';
+  }
+
+  // Parse the current text to keep Builder in sync (without rewriting user formatting)
+  const parsed = nwParsePagesJson(ta.value);
+  nwShcState.pagesJsonText = ta.value;
+  nwShcState.pagesJsonValid = parsed.ok;
+
+  if (parsed.ok) {
+    nwShcState.pagesDraft = parsed.pages;
+
+    // Keep selection if possible
+    if (!nwShcState.pagesUi.selectedId && nwShcState.pagesDraft.length) {
+      nwShcState.pagesUi.selectedId = nwShcState.pagesDraft[0].id;
+      nwShcState.pagesUi.isNew = false;
+    }
+
+    if (nwShcState.pagesUi.selectedId && !nwShcState.pagesDraft.some((p) => p.id === nwShcState.pagesUi.selectedId)) {
+      nwShcState.pagesUi.selectedId = nwShcState.pagesDraft.length ? nwShcState.pagesDraft[0].id : null;
+      nwShcState.pagesUi.isNew = false;
     }
   }
 
-  if (nwShcState.pagesJsonValid) {
-    nwSetPagesStatus('OK – gültiges JSON', 'ok');
-  } else {
-    nwSetPagesStatus('Fehler – bitte JSON prüfen', 'error');
-  }
+  nwPagesRenderStatus(parsed);
+  nwPagesRenderTabs();
+  nwPagesRenderList();
+  nwPagesRenderEditor();
 }
 
+
+
+function nwPagesRenderStatus(parsed) {
+  const st = document.getElementById('nw-pages-status');
+  if (!st) return;
+
+  // Always show parser errors
+  if (!parsed || !parsed.ok) {
+    st.classList.remove('nw-config-status--ok', 'nw-config-status--error', 'nw-config-status--dirty');
+    st.classList.add('nw-config-status--error');
+    st.textContent = parsed && parsed.error ? parsed.error : 'Ungültiges JSON';
+    return;
+  }
+
+  // If user explicitly set a message (dirty/ok), keep it.
+  if (st.classList.contains('nw-config-status--dirty') || st.classList.contains('nw-config-status--ok')) {
+    return;
+  }
+
+  // Otherwise show a compact OK hint
+  st.classList.remove('nw-config-status--ok', 'nw-config-status--error', 'nw-config-status--dirty');
+  st.classList.add('nw-config-status--ok');
+  st.textContent = `OK ✅ (${(parsed.pages || []).length} Seiten)`;
+}
+
+function nwPagesRenderTabs() {
+  const tabs = document.getElementById('nw-pages-tabs');
+  const wrapBuilder = document.getElementById('nw-pages-builder');
+  const wrapJson = document.getElementById('nw-pages-json-wrap');
+
+  if (tabs) {
+    tabs.querySelectorAll('button[data-tab]').forEach((btn) => {
+      const tab = btn.getAttribute('data-tab');
+      if (tab === nwShcState.pagesUi.tab) btn.classList.add('nw-tab--active');
+      else btn.classList.remove('nw-tab--active');
+    });
+  }
+
+  if (wrapBuilder) wrapBuilder.style.display = (nwShcState.pagesUi.tab === 'builder') ? '' : 'none';
+  if (wrapJson) wrapJson.style.display = (nwShcState.pagesUi.tab === 'json') ? '' : 'none';
+}
+
+function nwPagesBuildTree(pages) {
+  const byId = new Map((pages || []).map((p) => [p.id, p]));
+  const children = new Map();
+  const roots = [];
+
+  for (const p of pages || []) {
+    const pid = p.parentId && byId.has(p.parentId) && p.parentId !== p.id ? p.parentId : '';
+    if (pid) {
+      if (!children.has(pid)) children.set(pid, []);
+      children.get(pid).push(p);
+    } else {
+      roots.push(p);
+    }
+  }
+
+  const sortFn = (a, b) => (a.order || 0) - (b.order || 0) || String(a.title || '').localeCompare(String(b.title || ''), 'de');
+  roots.sort(sortFn);
+  for (const [k, arr] of children.entries()) arr.sort(sortFn);
+
+  return { byId, children, roots };
+}
+
+function nwPagesFormatFilterSummary(p) {
+  if (!p) return '';
+  const parts = [];
+  if (Array.isArray(p.roomIds) && p.roomIds.length) parts.push(`Rooms:${p.roomIds.length}`);
+  if (Array.isArray(p.funcIds) && p.funcIds.length) parts.push(`Functions:${p.funcIds.length}`);
+  if (Array.isArray(p.types) && p.types.length) parts.push(`Types:${p.types.length}`);
+  if (p.favoritesOnly) parts.push('⭐');
+  parts.push(`Mode:${p.viewMode || 'rooms'}`);
+  if (p.parentId) parts.push(`Parent:${p.parentId}`);
+  return parts.join(' • ');
+}
+
+function nwPagesRenderList() {
+  const listEl = document.getElementById('nw-pages-list');
+  if (!listEl) return;
+
+  listEl.innerHTML = '';
+
+  const pages = Array.isArray(nwShcState.pagesDraft) ? nwShcState.pagesDraft : [];
+  if (!pages.length) {
+    const empty = document.createElement('div');
+    empty.className = 'nw-config-hint';
+    empty.textContent = 'Keine Seiten definiert. Klicke auf „+ Neu“ oder nutze „Standard-Seiten“. '; 
+    listEl.appendChild(empty);
+    return;
+  }
+
+  const { children, roots } = nwPagesBuildTree(pages);
+
+  const render = (arr, depth) => {
+    for (const p of arr) {
+      const row = document.createElement('div');
+      row.className = 'nw-page-row' + (nwShcState.pagesUi.selectedId === p.id && !nwShcState.pagesUi.isNew ? ' nw-page-row--active' : '');
+      row.style.paddingLeft = `${10 + Math.max(0, depth) * 14}px`;
+
+      const icon = document.createElement('div');
+      icon.className = 'nw-page-row__icon';
+      icon.textContent = p.icon || '•';
+
+      const meta = document.createElement('div');
+      meta.className = 'nw-page-row__meta';
+      meta.innerHTML = `<div class="nw-page-row__title">${p.title || p.id}</div><div class="nw-page-row__sub">${p.id} • ${nwPagesFormatFilterSummary(p)}</div>`;
+
+      const badge = document.createElement('div');
+      badge.className = 'nw-page-row__badge';
+      badge.textContent = String(p.order ?? 0);
+      badge.title = 'Order';
+
+      row.appendChild(icon);
+      row.appendChild(meta);
+      row.appendChild(badge);
+
+      row.addEventListener('click', () => {
+        nwShcState.pagesUi.selectedId = p.id;
+        nwShcState.pagesUi.isNew = false;
+        nwShcState.pagesUi.idManuallyEdited = false;
+        nwPagesRenderList();
+        nwPagesRenderEditor();
+      });
+
+      listEl.appendChild(row);
+
+      if (children.has(p.id)) {
+        render(children.get(p.id), depth + 1);
+      }
+    }
+  };
+
+  render(roots, 0);
+}
+
+function nwSetSelectOptions(selectEl, options, selectedValues, includeEmpty = false, emptyLabel = '(keiner)') {
+  if (!selectEl) return;
+  const sel = new Set((selectedValues || []).map(String));
+
+  selectEl.innerHTML = '';
+
+  if (includeEmpty) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = emptyLabel;
+    selectEl.appendChild(opt);
+  }
+
+  (options || []).forEach((o) => {
+    const opt = document.createElement('option');
+    opt.value = String(o.value);
+    opt.textContent = String(o.label);
+    if (sel.has(opt.value)) opt.selected = true;
+    selectEl.appendChild(opt);
+  });
+}
+
+function nwGetMultiSelectValues(selectEl) {
+  if (!selectEl) return [];
+  return Array.from(selectEl.options).filter((o) => o.selected).map((o) => o.value);
+}
+
+function nwPagesGetSelectedPage() {
+  if (nwShcState.pagesUi.isNew) return null;
+  return (nwShcState.pagesDraft || []).find((p) => p.id === nwShcState.pagesUi.selectedId) || null;
+}
+
+function nwPagesGetNewSeed() {
+  // If user clicked “+ Neu” while a page is selected, use that as a starting point
+  const base = nwShcState.pagesUi.newSeed;
+  if (base && typeof base === 'object') return base;
+  return null;
+}
+
+function nwPagesBuildEditorModel() {
+  if (nwShcState.pagesUi.isNew) {
+    const seed = nwPagesGetNewSeed();
+    return nwNormalizePageObject(seed || { id: '', title: '', icon: '', viewMode: 'rooms', order: 0 }, 0, '');
+  }
+
+  const p = nwPagesGetSelectedPage();
+  return p ? nwNormalizePageObject(p, 0, p.id) : nwNormalizePageObject({ id: '', title: '', icon: '', viewMode: 'rooms', order: 0 }, 0, '');
+}
+
+function nwPagesRenderEditor() {
+  const titleEl = document.getElementById('nw-page-title');
+  const iconEl = document.getElementById('nw-page-icon');
+  const idEl = document.getElementById('nw-page-id');
+  const parentEl = document.getElementById('nw-page-parent');
+  const viewModeEl = document.getElementById('nw-page-viewmode');
+  const orderEl = document.getElementById('nw-page-order');
+  const roomsEl = document.getElementById('nw-page-rooms');
+  const funcsEl = document.getElementById('nw-page-functions');
+  const typesEl = document.getElementById('nw-page-types');
+  const sortByEl = document.getElementById('nw-page-sortby');
+  const cardSizeEl = document.getElementById('nw-page-cardsize');
+  const groupByTypeEl = document.getElementById('nw-page-groupbytype');
+  const favOnlyEl = document.getElementById('nw-page-favonly');
+  const hrefEl = document.getElementById('nw-page-href');
+  const delBtn = document.getElementById('nw-page-delete');
+  const editorTitle = document.getElementById('nw-page-editor-title');
+
+  if (!titleEl || !idEl) return;
+
+  const model = nwPagesBuildEditorModel();
+
+  if (editorTitle) {
+    editorTitle.textContent = nwShcState.pagesUi.isNew ? 'Neue Seite' : `Seite: ${model.title || model.id}`;
+  }
+
+  // Parent options
+  const pages = Array.isArray(nwShcState.pagesDraft) ? nwShcState.pagesDraft : [];
+  const flat = [];
+  const { children, roots } = nwPagesBuildTree(pages);
+  const walk = (arr, depth) => {
+    for (const p of arr) {
+      if (!nwShcState.pagesUi.isNew && p.id === nwShcState.pagesUi.selectedId) {
+        // exclude self
+      } else {
+        flat.push({ value: p.id, label: `${'—'.repeat(depth)} ${p.title || p.id} (${p.id})` });
+      }
+      if (children.has(p.id)) walk(children.get(p.id), depth + 1);
+    }
+  };
+  walk(roots, 0);
+  nwSetSelectOptions(parentEl, flat, [model.parentId || ''], true, '(keiner)');
+
+  // Rooms / Functions options
+  const rooms = Array.isArray(nwShcState.config.rooms) ? nwShcState.config.rooms.slice() : [];
+  rooms.sort((a, b) => (a.order || 0) - (b.order || 0) || String(a.title || '').localeCompare(String(b.title || ''), 'de'));
+  nwSetSelectOptions(roomsEl, rooms.map((r) => ({ value: r.id, label: `${r.title || r.id} (${r.id})` })), model.roomIds || []);
+
+  const funcs = Array.isArray(nwShcState.config.functions) ? nwShcState.config.functions.slice() : [];
+  funcs.sort((a, b) => (a.order || 0) - (b.order || 0) || String(a.title || '').localeCompare(String(b.title || ''), 'de'));
+  nwSetSelectOptions(funcsEl, funcs.map((f) => ({ value: f.id, label: `${f.title || f.id} (${f.id})` })), model.funcIds || []);
+
+  // Types options
+  const typeSet = new Set();
+  const common = ['light', 'shutter', 'rtr', 'plug', 'switch', 'sensor', 'camera', 'meter'];
+  common.forEach((t) => typeSet.add(t));
+
+  (nwShcState.config.devices || []).forEach((d) => {
+    if (d && d.type) typeSet.add(String(d.type));
+  });
+
+  (pages || []).forEach((p) => {
+    (p.types || []).forEach((t) => typeSet.add(String(t)));
+  });
+
+  const typeList = Array.from(typeSet).filter(Boolean).sort((a, b) => String(a).localeCompare(String(b), 'de'));
+  nwSetSelectOptions(typesEl, typeList.map((t) => ({ value: t, label: t })), model.types || []);
+
+  // Set primitive fields
+  titleEl.value = model.title || '';
+  iconEl.value = model.icon || '';
+  idEl.value = model.id || '';
+  if (viewModeEl) viewModeEl.value = model.viewMode || 'rooms';
+  if (orderEl) orderEl.value = String(model.order ?? 0);
+
+  if (sortByEl) sortByEl.value = model.sortBy || 'order';
+  if (cardSizeEl) cardSizeEl.value = model.cardSize || 'auto';
+  if (groupByTypeEl) groupByTypeEl.checked = !!model.groupByType;
+  if (favOnlyEl) favOnlyEl.checked = !!model.favoritesOnly;
+  if (hrefEl) hrefEl.value = model.href || '';
+
+  if (delBtn) delBtn.disabled = nwShcState.pagesUi.isNew || !nwShcState.pagesUi.selectedId;
+}
+
+function nwPagesSlugify(s) {
+  return String(s || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9_-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^[-_]+|[-_]+$/g, '');
+}
+
+function nwPagesSetEditorStatus(msg, kind = 'dirty') {
+  const el = document.getElementById('nw-page-editor-status');
+  if (!el) return;
+  el.classList.remove('nw-config-status--ok', 'nw-config-status--error', 'nw-config-status--dirty');
+  if (kind === 'ok') el.classList.add('nw-config-status--ok');
+  else if (kind === 'error') el.classList.add('nw-config-status--error');
+  else el.classList.add('nw-config-status--dirty');
+  el.textContent = msg || '';
+}
+
+function nwPagesSaveFromEditor() {
+  const titleEl = document.getElementById('nw-page-title');
+  const iconEl = document.getElementById('nw-page-icon');
+  const idEl = document.getElementById('nw-page-id');
+  const parentEl = document.getElementById('nw-page-parent');
+  const viewModeEl = document.getElementById('nw-page-viewmode');
+  const orderEl = document.getElementById('nw-page-order');
+  const roomsEl = document.getElementById('nw-page-rooms');
+  const funcsEl = document.getElementById('nw-page-functions');
+  const typesEl = document.getElementById('nw-page-types');
+  const sortByEl = document.getElementById('nw-page-sortby');
+  const cardSizeEl = document.getElementById('nw-page-cardsize');
+  const groupByTypeEl = document.getElementById('nw-page-groupbytype');
+  const favOnlyEl = document.getElementById('nw-page-favonly');
+  const hrefEl = document.getElementById('nw-page-href');
+
+  const raw = {
+    id: String(idEl ? idEl.value : '').trim(),
+    title: String(titleEl ? titleEl.value : '').trim(),
+    icon: String(iconEl ? iconEl.value : '').trim(),
+    parentId: String(parentEl ? parentEl.value : '').trim(),
+    viewMode: String(viewModeEl ? viewModeEl.value : 'rooms').trim(),
+    order: Number.isFinite(+String(orderEl ? orderEl.value : '0')) ? +String(orderEl ? orderEl.value : '0') : 0,
+    roomIds: nwGetMultiSelectValues(roomsEl),
+    funcIds: nwGetMultiSelectValues(funcsEl),
+    types: nwGetMultiSelectValues(typesEl),
+    favoritesOnly: !!(favOnlyEl && favOnlyEl.checked),
+    href: String(hrefEl ? hrefEl.value : '').trim(),
+    sortBy: String(sortByEl ? sortByEl.value : 'order').trim(),
+    cardSize: String(cardSizeEl ? cardSizeEl.value : 'auto').trim(),
+    groupByType: !!(groupByTypeEl && groupByTypeEl.checked),
+  };
+
+  if (!raw.id) {
+    nwPagesSetEditorStatus('ID fehlt 🙈', 'error');
+    return;
+  }
+
+  const pages = Array.isArray(nwShcState.pagesDraft) ? nwShcState.pagesDraft.slice() : [];
+  const prevId = nwShcState.pagesUi.isNew ? null : nwShcState.pagesUi.selectedId;
+
+  // Unique ID
+  const idExists = pages.some((p) => p.id === raw.id && p.id !== prevId);
+  if (idExists) {
+    nwPagesSetEditorStatus('ID ist bereits vergeben.', 'error');
+    return;
+  }
+
+  // Parent validation
+  if (raw.parentId && raw.parentId === raw.id) {
+    nwPagesSetEditorStatus('Parent darf nicht die eigene ID sein.', 'error');
+    return;
+  }
+
+  if (raw.parentId && !pages.some((p) => p.id === raw.parentId)) {
+    nwPagesSetEditorStatus('Parent-ID existiert nicht.', 'error');
+    return;
+  }
+
+  // Cycle check
+  if (raw.parentId) {
+    const byId = new Map(pages.map((p) => [p.id, p]));
+    let cur = byId.get(raw.parentId);
+    let safety = 50;
+    while (cur && safety-- > 0) {
+      if (cur.parentId === raw.id) {
+        nwPagesSetEditorStatus('Cycle erkannt (Parent-Kette führt zurück).', 'error');
+        return;
+      }
+      cur = cur.parentId ? byId.get(cur.parentId) : null;
+    }
+  }
+
+  const normalized = nwNormalizePageObject(raw, 0, raw.id);
+
+  // Upsert
+  let next = pages.filter((p) => p.id !== prevId);
+
+  // If ID changed: update children parentId references
+  if (prevId && prevId !== raw.id) {
+    next = next.map((p) => (p.parentId === prevId ? { ...p, parentId: raw.id } : p));
+  }
+
+  next.push(normalized);
+
+  // Sort for stable JSON
+  next.sort((a, b) => (a.order || 0) - (b.order || 0) || String(a.title || '').localeCompare(String(b.title || ''), 'de'));
+
+  nwShcState.pagesDraft = next;
+  nwShcState.pagesUi.selectedId = normalized.id;
+  nwShcState.pagesUi.isNew = false;
+  nwShcState.pagesUi.newSeed = null;
+
+  // Update JSON text
+  nwShcState.pagesJsonText = JSON.stringify(nwShcState.pagesDraft, null, 2);
+  const ta = document.getElementById('nw-pages-json');
+  if (ta) ta.value = nwShcState.pagesJsonText;
+
+  nwMarkDirty(true);
+  nwPagesSetEditorStatus('Gespeichert ✅ (noch nicht in Adapter übernommen)', 'ok');
+  nwRenderPagesEditor(true);
+}
+
+function nwPagesDeleteSelected() {
+  const id = nwShcState.pagesUi.selectedId;
+  if (!id) return;
+
+  if (!confirm(`Seite „${id}“ wirklich löschen?
+
+Kinder werden automatisch auf Root gehoben.`)) return;
+
+  const pages = Array.isArray(nwShcState.pagesDraft) ? nwShcState.pagesDraft.slice() : [];
+  const next = pages
+    .filter((p) => p.id !== id)
+    .map((p) => (p.parentId === id ? { ...p, parentId: '' } : p));
+
+  nwShcState.pagesDraft = next;
+  nwShcState.pagesUi.selectedId = next.length ? next[0].id : null;
+  nwShcState.pagesUi.isNew = false;
+
+  nwShcState.pagesJsonText = JSON.stringify(nwShcState.pagesDraft, null, 2);
+  const ta = document.getElementById('nw-pages-json');
+  if (ta) ta.value = nwShcState.pagesJsonText;
+
+  nwMarkDirty(true);
+  nwPagesSetEditorStatus('Gelöscht ✅ (noch nicht in Adapter übernommen)', 'ok');
+  nwRenderPagesEditor(true);
+}
 
 /* --- Datensicherung (wie App-Center) --- */
 
@@ -740,10 +1192,9 @@ function nwSetBackupStatus(msg, type) {
   const el = document.getElementById('nw-backup-status');
   if (!el) return;
   el.textContent = msg || '';
-  el.classList.remove('ok', 'error', 'dirty');
-  if (type === 'ok') el.classList.add('ok');
-  if (type === 'error') el.classList.add('error');
-  if (type === 'dirty') el.classList.add('dirty');
+  el.classList.remove('nw-config-status--ok', 'nw-config-status--error', 'nw-config-status--dirty');
+  const cls = (type === 'ok') ? 'nw-config-status--ok' : (type === 'error') ? 'nw-config-status--error' : 'nw-config-status--dirty';
+  el.classList.add(cls);
 }
 
 async function nwBackupExport() {
@@ -3098,9 +3549,9 @@ function nwAttachToolbarHandlers() {
   if (pagesTa) {
     pagesTa.addEventListener('input', () => {
       nwShcState.pagesJsonText = pagesTa.value;
-      nwShcState.pagesJsonValid = true; // unknown until checked
       nwSetPagesStatus('Änderungen nicht geprüft', 'dirty');
       nwMarkDirty(true);
+      nwRenderPagesEditor();
     });
     // initial sync
     nwRenderPagesEditor(true);
@@ -3152,6 +3603,148 @@ function nwAttachToolbarHandlers() {
     });
   }
 
+
+
+  // --- Pages Builder UI ---
+  const pagesTabs = document.getElementById('nw-pages-tabs');
+  if (pagesTabs) {
+    pagesTabs.addEventListener('click', (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest('button[data-tab]') : null;
+      if (!btn) return;
+      const tab = btn.getAttribute('data-tab');
+      if (!tab) return;
+      nwShcState.pagesUi.tab = tab;
+      nwRenderPagesEditor();
+    });
+  }
+
+  const pageAddBtn = document.getElementById('nw-page-add');
+  if (pageAddBtn) {
+    pageAddBtn.addEventListener('click', () => {
+      const prev = nwShcState.pagesUi.selectedId;
+      const pages = Array.isArray(nwShcState.pagesDraft) ? nwShcState.pagesDraft : [];
+      const maxOrder = pages.reduce((m, p) => Math.max(m, Number.isFinite(+p.order) ? +p.order : 0), 0);
+      const base = (pages || []).find((p) => p.id === prev) || null;
+
+      nwShcState.pagesUi.prevSelectedId = prev;
+      nwShcState.pagesUi.isNew = true;
+      nwShcState.pagesUi.selectedId = null;
+      nwShcState.pagesUi.idManuallyEdited = false;
+      nwShcState.pagesUi.newSeed = {
+        id: '',
+        title: '',
+        icon: base ? base.icon : '',
+        parentId: base ? base.id : '',
+        viewMode: base ? base.viewMode : 'rooms',
+        order: maxOrder + 1,
+        roomIds: [],
+        funcIds: [],
+        types: [],
+        favoritesOnly: false,
+        href: '',
+        cardSize: base ? base.cardSize : 'auto',
+        sortBy: base ? base.sortBy : 'order',
+        groupByType: base ? base.groupByType : false,
+      };
+
+      nwPagesSetEditorStatus('Neue Seite …', 'dirty');
+      nwPagesRenderList();
+      nwPagesRenderEditor();
+    });
+  }
+
+  const pageSaveBtn = document.getElementById('nw-page-save');
+  if (pageSaveBtn) pageSaveBtn.addEventListener('click', () => nwPagesSaveFromEditor());
+
+  const pageCancelBtn = document.getElementById('nw-page-cancel');
+  if (pageCancelBtn) {
+    pageCancelBtn.addEventListener('click', () => {
+      if (nwShcState.pagesUi.isNew) {
+        nwShcState.pagesUi.isNew = false;
+        nwShcState.pagesUi.newSeed = null;
+        nwShcState.pagesUi.selectedId = nwShcState.pagesUi.prevSelectedId || (nwShcState.pagesDraft[0] ? nwShcState.pagesDraft[0].id : null);
+      }
+      nwShcState.pagesUi.idManuallyEdited = false;
+      nwPagesSetEditorStatus('', 'dirty');
+      nwPagesRenderList();
+      nwPagesRenderEditor();
+    });
+  }
+
+  const pageDelBtn = document.getElementById('nw-page-delete');
+  if (pageDelBtn) pageDelBtn.addEventListener('click', () => nwPagesDeleteSelected());
+
+  const pageTitleInput = document.getElementById('nw-page-title');
+  const pageIdInput = document.getElementById('nw-page-id');
+  if (pageIdInput) {
+    pageIdInput.addEventListener('input', () => {
+      nwShcState.pagesUi.idManuallyEdited = true;
+    });
+  }
+  if (pageTitleInput && pageIdInput) {
+    pageTitleInput.addEventListener('input', () => {
+      if (!nwShcState.pagesUi.isNew) return;
+      if (nwShcState.pagesUi.idManuallyEdited) return;
+      const slug = nwPagesSlugify(pageTitleInput.value);
+      if (slug) pageIdInput.value = slug;
+    });
+  }
+
+  const typeAddBtn = document.getElementById('nw-page-type-add-btn');
+  if (typeAddBtn) {
+    typeAddBtn.addEventListener('click', () => {
+      const inp = document.getElementById('nw-page-type-add');
+      const sel = document.getElementById('nw-page-types');
+      if (!inp || !sel) return;
+      const v = String(inp.value || '').trim();
+      if (!v) return;
+
+      // add option if missing
+      const exists = Array.from(sel.options).some((o) => o.value === v);
+      if (!exists) {
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v;
+        opt.selected = true;
+        sel.appendChild(opt);
+      } else {
+        Array.from(sel.options).forEach((o) => { if (o.value === v) o.selected = true; });
+      }
+
+      inp.value = '';
+    });
+  }
+
+  const syncFromJsonBtn = document.getElementById('nw-pages-sync-from-json');
+  if (syncFromJsonBtn) {
+    syncFromJsonBtn.addEventListener('click', () => {
+      const ta2 = document.getElementById('nw-pages-json');
+      if (!ta2) return;
+      const parsed = nwParsePagesJson(ta2.value);
+      if (!parsed.ok) {
+        nwPagesSetEditorStatus(parsed.error || 'Ungültiges JSON', 'error');
+        return;
+      }
+      nwShcState.pagesDraft = parsed.pages;
+      nwShcState.pagesJsonText = JSON.stringify(parsed.pages, null, 2);
+      ta2.value = nwShcState.pagesJsonText;
+      nwShcState.pagesUi.tab = 'builder';
+      nwRenderPagesEditor(true);
+      nwPagesSetEditorStatus('JSON übernommen ✅', 'ok');
+    });
+  }
+
+  const syncToJsonBtn = document.getElementById('nw-pages-sync-to-json');
+  if (syncToJsonBtn) {
+    syncToJsonBtn.addEventListener('click', () => {
+      const ta2 = document.getElementById('nw-pages-json');
+      if (!ta2) return;
+      nwShcState.pagesJsonText = JSON.stringify(nwShcState.pagesDraft || [], null, 2);
+      ta2.value = nwShcState.pagesJsonText;
+      nwRenderPagesEditor(true);
+      nwPagesSetEditorStatus('JSON aktualisiert ✅', 'ok');
+    });
+  }
   // --- Datensicherung (wie App‑Center) ---
   const btnBackupExport = document.getElementById('nw-backup-export-btn');
   if (btnBackupExport) {
