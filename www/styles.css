@@ -3023,20 +3023,23 @@ body{ padding-top: var(--topbar-h); }
 
 .nw-sh-filters{
   margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
 }
 
 .nw-sh-filter-row{
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   flex-wrap: wrap;
 }
 
 .nw-sh-filter-label{
-  font-size: 0.75rem;
-  color: #9ca3af;
-  min-width: 90px;
+  /* Labels removed from UI (kept for backwards compatibility in case older templates still render them). */
+  display: none !important;
 }
 
 .nw-sh-filter-chips{
