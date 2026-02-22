@@ -1,8 +1,18 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.184",
+    "version": "0.6.185",
     "news": {
+      "0.6.185": {
+        "en": [
+          "SmartHome: added dynamic brand/model device icons via icon keys (e.g. \"inv:SMA\", \"wb:Tesla\")",
+          "SmartHome: added new 3D icons (inverter + wallbox device) to icon picker"
+        ],
+        "de": [
+          "SmartHome: dynamische Marken-/Modell-Icons per Icon-Key ergänzt (z.B. \"inv:SMA\", \"wb:Tesla\")",
+          "SmartHome: neue 3D Icons ergänzt (Wechselrichter + Wallbox-Gerät) in der Icon-Auswahl"
+        ]
+      },
       "0.6.184": {
         "en": [
           "SmartHome/Config: Added a modern 3D icon pack (PV, battery, wallbox, door/window/lock, motion, alarm, smoke, water, fan, meter, toggle, globe)",
@@ -1511,8 +1521,18 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.184",
+  "version": "0.6.185",
   "news": {
+    "0.6.185": {
+      "en": [
+        "SmartHome: added dynamic brand/model device icons via icon keys (e.g. \"inv:SMA\", \"wb:Tesla\")",
+        "SmartHome: added new 3D icons (inverter + wallbox device) to icon picker"
+      ],
+      "de": [
+        "SmartHome: dynamische Marken-/Modell-Icons per Icon-Key ergänzt (z.B. \"inv:SMA\", \"wb:Tesla\")",
+        "SmartHome: neue 3D Icons ergänzt (Wechselrichter + Wallbox-Gerät) in der Icon-Auswahl"
+      ]
+    },
     "0.6.184": {
       "en": [
         "SmartHome/Config: Added a modern 3D icon pack (PV, battery, wallbox, door/window/lock, motion, alarm, smoke, water, fan, meter, toggle, globe)",

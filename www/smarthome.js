@@ -1492,6 +1492,68 @@ const NW_ICON_SVGS = {
         <path d="M8 12.2c1.2-.9 2.6-1.2 4-1.2" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
       </svg>`,
   },
+  '3d-inverter': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_inv_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.52"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <rect x="5" y="4" width="14" height="16" rx="2" fill="url(#nw3d_inv_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 8h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+        <path d="M8 11h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.45"/>
+        <path d="M8 14h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+        <circle cx="16.5" cy="7.5" r="1.2" fill="currentColor" fill-opacity="0.14"/>
+        <path d="M7.5 6h7" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_inv_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.62"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.14"/>
+          </linearGradient>
+        </defs>
+        <rect x="5" y="4" width="14" height="16" rx="2" fill="url(#nw3d_inv_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 8h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.60"/>
+        <path d="M8 11h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.50"/>
+        <path d="M8 14h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.40"/>
+        <circle cx="16.5" cy="7.5" r="1.2" fill="currentColor" fill-opacity="0.26"/>
+        <path d="M7.5 6h7" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+
+  '3d-wallbox': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_wb_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.52"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <rect x="7" y="3" width="10" height="18" rx="3" fill="url(#nw3d_wb_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 7l-1.5 3h2.2l-0.7 3 3-4.6h-2l0.6-1.4Z" fill="currentColor" fill-opacity="0.16"/>
+        <path d="M17 10h2c1 0 2 1 2 2v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9 5.8h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_wb_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.62"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.14"/>
+          </linearGradient>
+        </defs>
+        <rect x="7" y="3" width="10" height="18" rx="3" fill="url(#nw3d_wb_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 7l-1.5 3h2.2l-0.7 3 3-4.6h-2l0.6-1.4Z" fill="currentColor" fill-opacity="0.26"/>
+        <path d="M17 10h2c1 0 2 1 2 2v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9 5.8h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+
 };
 
 // Helper: return the raw SVG string for a given icon name.
@@ -1521,9 +1583,97 @@ function nwEscapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+
+function nwSafeBadgeText(value) {
+  let s = String(value || '').trim();
+  if (!s) return '';
+  // allow only simple chars (prevents SVG/HTML injection)
+  s = s.replace(/[^a-zA-Z0-9 \-_.+]/g, '').trim();
+  if (s.length > 10) s = s.slice(0, 10);
+  return s;
+}
+
+function nwParseDynamicIcon(rawValue) {
+  const raw = String(rawValue || '').trim();
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+
+  const prefixes = [
+    { kind: 'inverter', keys: ['inv:', 'inverter:', 'wechselrichter:'] },
+    { kind: 'wallbox', keys: ['wb:', 'wallbox:', 'charger:', 'laden:'] },
+  ];
+
+  for (const p of prefixes) {
+    for (const k of p.keys) {
+      if (lower.startsWith(k)) {
+        const label = raw.slice(k.length).trim();
+        return { kind: p.kind, label };
+      }
+    }
+  }
+
+  return null;
+}
+
+function nwDynamicDeviceIconSvg(kind, labelRaw, isOn) {
+  const label = nwSafeBadgeText(labelRaw || '');
+  const txt = nwEscapeHtml(label || '');
+  const on = !!isOn;
+
+  if (kind === 'inverter') {
+    return `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_inv_badge_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="${on ? '0.62' : '0.52'}"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="${on ? '0.14' : '0.12'}"/>
+          </linearGradient>
+        </defs>
+        <rect x="5" y="4" width="14" height="16" rx="2" fill="url(#nw3d_inv_badge_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 8h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="${on ? '0.60' : '0.55'}"/>
+        <path d="M8 11h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="${on ? '0.50' : '0.45'}"/>
+        <path d="M8 14h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="${on ? '0.40' : '0.35'}"/>
+        <circle cx="16.5" cy="7.5" r="1.2" fill="currentColor" fill-opacity="${on ? '0.26' : '0.14'}"/>
+        <rect x="7" y="15" width="10" height="4" rx="1.2" fill="currentColor" fill-opacity="${on ? '0.10' : '0.08'}" stroke="currentColor" stroke-opacity="0.55" stroke-width="1"/>
+        <text x="12" y="17.85" text-anchor="middle" font-size="3" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-weight="700" fill="currentColor" fill-opacity="0.85" style="letter-spacing:0.25px">${txt}</text>
+        <path d="M7.5 6h7" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    `;
+  }
+
+  if (kind === 'wallbox') {
+    return `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_wb_badge_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="${on ? '0.62' : '0.52'}"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="${on ? '0.14' : '0.12'}"/>
+          </linearGradient>
+        </defs>
+        <rect x="7" y="3" width="10" height="18" rx="3" fill="url(#nw3d_wb_badge_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 7l-1.5 3h2.2l-0.7 3 3-4.6h-2l0.6-1.4Z" fill="currentColor" fill-opacity="${on ? '0.26' : '0.16'}"/>
+        <path d="M17 10h2c1 0 2 1 2 2v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <rect x="7.2" y="15.1" width="9.6" height="4" rx="1.2" fill="currentColor" fill-opacity="${on ? '0.10' : '0.08'}" stroke="currentColor" stroke-opacity="0.55" stroke-width="1"/>
+        <text x="12" y="17.95" text-anchor="middle" font-size="3" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-weight="700" fill="currentColor" fill-opacity="0.85" style="letter-spacing:0.25px">${txt}</text>
+        <path d="M9 5.8h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    `;
+  }
+
+  return '';
+}
+
 function nwStaticIconHtml(iconValue) {
   const raw = String(iconValue || '').trim();
   if (!raw) return '';
+
+  // Dynamic brand/model icons (e.g. "inv:SMA", "wb:Tesla")
+  const dyn = nwParseDynamicIcon(raw);
+  if (dyn) {
+    const svg = nwDynamicDeviceIconSvg(dyn.kind, dyn.label, false);
+    if (svg) return svg;
+  }
+
   const key = nwNormalizeIconName(raw);
   if (key && NW_ICON_SVGS[key]) return NW_ICON_SVGS[key].off;
   return nwEscapeHtml(raw);
@@ -1593,6 +1743,11 @@ function nwNormalizeIconName(raw) {
 
     pv: 'solar',
 
+    wechselrichter: '3d-inverter',
+    inverter: '3d-inverter',
+    pvwechselrichter: '3d-inverter',
+    wallbox3d: '3d-wallbox',
+
     wallbox: 'charger',
     laden: 'charger',
 
@@ -1641,6 +1796,12 @@ function nwGuessIconName(dev) {
 function nwGetIconSpec(dev) {
   const raw = (dev && typeof dev.icon !== 'undefined') ? dev.icon : '';
   const iconStr = String(raw || '').trim();
+
+  // Dynamic brand/model icons (e.g. "inv:SMA", "wb:Tesla")
+  const dyn = nwParseDynamicIcon(iconStr);
+  if (dyn) {
+    return { kind: 'dynamic', base: dyn.kind, label: dyn.label };
+  }
 
   // If config contains a known icon keyword -> use it
   const normalized = nwNormalizeIconName(iconStr);
@@ -1880,17 +2041,30 @@ function nwCreateIconElement(dev, isOn, iconSpec, accent) {
     t.className = 'nw-sh-icon__text';
     t.textContent = iconSpec.text;
     wrap.appendChild(t);
+  } else if (iconSpec.kind === 'dynamic') {
+    const svgWrap = document.createElement('div');
+    svgWrap.className = 'nw-sh-icon__svg';
+    wrap.classList.add('nw-sh-icon--3d');
+
+    const svg = nwDynamicDeviceIconSvg(iconSpec.base, iconSpec.label, isOn);
+    const fallback = (NW_ICON_SVGS.generic && NW_ICON_SVGS.generic[isOn ? 'on' : 'off']) || '';
+    svgWrap.innerHTML = svg || fallback;
+
+    wrap.appendChild(svgWrap);
   } else {
     const svgWrap = document.createElement('div');
     svgWrap.className = 'nw-sh-icon__svg';
+
     const name = iconSpec.name;
     if (typeof name === 'string' && name.startsWith('3d-')) {
       wrap.classList.add('nw-sh-icon--3d');
     }
+
     const variant = isOn ? 'on' : 'off';
     const svg = (NW_ICON_SVGS[name] && NW_ICON_SVGS[name][variant])
       ? NW_ICON_SVGS[name][variant]
       : (NW_ICON_SVGS.generic && NW_ICON_SVGS.generic[variant]);
+
     svgWrap.innerHTML = svg;
     wrap.appendChild(svgWrap);
   }
@@ -2550,7 +2724,13 @@ function nwCreateTile(dev, opts) {
   const isFav = nwIsFavorite(dev);
 
   const iconSpec = nwGetIconSpec(dev);
-  const iconName = iconSpec.kind === 'svg' ? iconSpec.name : 'generic';
+  const iconName = (iconSpec.kind === 'svg')
+    ? iconSpec.name
+    : (iconSpec.kind === 'dynamic' && iconSpec.base === 'wallbox')
+      ? 'charger'
+      : (iconSpec.kind === 'dynamic' && iconSpec.base === 'inverter')
+        ? 'solar'
+        : 'generic';
   const accent = nwGetAccentColor(dev, iconName);
 
   const tile = document.createElement('div');
@@ -3496,7 +3676,13 @@ function nwBuildPopoverContent(dev) {
   const canWrite = nwHasWriteAccess(dev);
 
   const iconSpec = nwGetIconSpec(dev);
-  const iconName = iconSpec.kind === 'svg' ? iconSpec.name : 'generic';
+  const iconName = (iconSpec.kind === 'svg')
+    ? iconSpec.name
+    : (iconSpec.kind === 'dynamic' && iconSpec.base === 'wallbox')
+      ? 'charger'
+      : (iconSpec.kind === 'dynamic' && iconSpec.base === 'inverter')
+        ? 'solar'
+        : 'generic';
   const accent = nwGetAccentColor(dev, iconName);
 
   nwPopoverEl.style.setProperty('--sh-accent', accent);

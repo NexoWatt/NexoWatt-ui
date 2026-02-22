@@ -1,3 +1,7 @@
+## 0.6.185
+- SmartHome: **Dynamische Marken-/Modell-Icons** für Geräte ergänzt (Icon-Key z.B. `inv:SMA` oder `wb:Tesla`).
+- SmartHome: Neue **3D Icons** ergänzt: **Wechselrichter** (`3d-inverter`) und **Wallbox-Gerät** (`3d-wallbox`).
+
 ## 0.6.184
 - SmartHome Config & VIS: **Modernes 3D-Icon-Pack erweitert** (PV/Solar, Batterie, Wallbox/Laden, Tür/Fenster/Schloss, Bewegung, Alarm/Sirene, Rauchmelder, Wasser, Lüfter/Klima, Zähler, Schalter/Toggle, Globe/URL).
 - SmartHomeConfig: Geräte-Bibliothek zeigt Icon-Keys jetzt als **SVG-Vorschau** (3D Icons direkt sichtbar).

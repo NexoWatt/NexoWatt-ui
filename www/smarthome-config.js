@@ -279,6 +279,9 @@ const NW_SH_ICON_PREVIEW_SVGS = {
   "3d-water": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><radialGradient id="nw3d_water_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 9) rotate(45) scale(12)"><stop offset="0" stop-color="currentColor" stop-opacity="0.55"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></radialGradient></defs><path d="M12 2s6 6 6 11a6 6 0 1 1-12 0c0-5 6-11 6-11Z" fill="url(#nw3d_water_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 6.5c.8-1.2 1.6-2 2-2.4" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2" stroke-linecap="round"/></svg>`,
   "3d-fan": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><radialGradient id="nw3d_fan_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 10) rotate(45) scale(12)"><stop offset="0" stop-color="currentColor" stop-opacity="0.55"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></radialGradient></defs><circle cx="12" cy="12" r="7" fill="url(#nw3d_fan_g)" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="1.2" fill="currentColor" fill-opacity="0.25"/><path d="M12 11c5-3 7-1 7 1 0 2-2 4-5 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M11 12c-3 5-5 4-6 3-1-1-1-4 1-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.9"/><path d="M13 12c-2-5 0-7 2-7 2 0 4 2 3 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/></svg>`,
   "3d-meter": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_meter_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.45"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><path d="M6 14a6 6 0 0 1 12 0" fill="url(#nw3d_meter_g)" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 14l3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 18h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7"/><path d="M8 12.2c1.2-.9 2.6-1.2 4-1.2" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-inverter": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_inv_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><rect x="5" y="4" width="14" height="16" rx="2" fill="url(#nw3d_inv_g)" stroke="currentColor" stroke-width="2"/><path d="M8 8h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/><path d="M8 11h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.45"/><path d="M8 14h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.35"/><circle cx="16.5" cy="7.5" r="1.2" fill="currentColor" fill-opacity="0.18"/><path d="M7.5 6h7" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-wallbox": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_wb_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><rect x="7" y="3" width="10" height="18" rx="3" fill="url(#nw3d_wb_g)" stroke="currentColor" stroke-width="2"/><path d="M12 7l-1.5 3h2.2l-0.7 3 3-4.6h-2l0.6-1.4Z" fill="currentColor" fill-opacity="0.20"/><path d="M17 10h2c1 0 2 1 2 2v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 5.8h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+
 };
 
 function nwShcNormalizeIconName(value) {
@@ -287,9 +290,100 @@ function nwShcNormalizeIconName(value) {
   return s.toLowerCase();
 }
 
+
+function nwShcSafeBadgeText(value) {
+  let s = String(value || '').trim();
+  if (!s) return '';
+  // allow only simple chars (prevents SVG/HTML injection)
+  s = s.replace(/[^a-zA-Z0-9 \-_.+]/g, '').trim();
+  if (s.length > 10) s = s.slice(0, 10);
+  return s;
+}
+
+function nwShcParseDynamicIcon(rawValue) {
+  const raw = String(rawValue || '').trim();
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+
+  const prefixes = [
+    { kind: 'inverter', keys: ['inv:', 'inverter:', 'wechselrichter:'] },
+    { kind: 'wallbox', keys: ['wb:', 'wallbox:', 'charger:', 'laden:'] },
+  ];
+
+  for (const p of prefixes) {
+    for (const k of p.keys) {
+      if (lower.startsWith(k)) {
+        const label = raw.slice(k.length).trim();
+        return { kind: p.kind, label };
+      }
+    }
+  }
+
+  return null;
+}
+
+function nwShcDynamicDeviceIconSvg(kind, labelRaw) {
+  const label = nwShcSafeBadgeText(labelRaw || '');
+  const txt = nwEscapeHtml(label || '');
+
+  if (kind === 'inverter') {
+    return `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_inv_badge_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.52"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <rect x="5" y="4" width="14" height="16" rx="2" fill="url(#nw3d_inv_badge_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 8h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+        <path d="M8 11h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.45"/>
+        <path d="M8 14h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+        <circle cx="16.5" cy="7.5" r="1.2" fill="currentColor" fill-opacity="0.18"/>
+        <rect x="7" y="15" width="10" height="4" rx="1.2" fill="currentColor" fill-opacity="0.08" stroke="currentColor" stroke-opacity="0.55" stroke-width="1"/>
+        <text x="12" y="17.85" text-anchor="middle" font-size="3" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-weight="700" fill="currentColor" fill-opacity="0.85" style="letter-spacing:0.25px">${txt}</text>
+        <path d="M7.5 6h7" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    `;
+  }
+
+  if (kind === 'wallbox') {
+    return `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_wb_badge_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.52"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <rect x="7" y="3" width="10" height="18" rx="3" fill="url(#nw3d_wb_badge_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 7l-1.5 3h2.2l-0.7 3 3-4.6h-2l0.6-1.4Z" fill="currentColor" fill-opacity="0.20"/>
+        <path d="M17 10h2c1 0 2 1 2 2v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <rect x="7.2" y="15.1" width="9.6" height="4" rx="1.2" fill="currentColor" fill-opacity="0.08" stroke="currentColor" stroke-opacity="0.55" stroke-width="1"/>
+        <text x="12" y="17.95" text-anchor="middle" font-size="3" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-weight="700" fill="currentColor" fill-opacity="0.85" style="letter-spacing:0.25px">${txt}</text>
+        <path d="M9 5.8h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    `;
+  }
+
+  return '';
+}
+
 function nwShcRenderIconPreview(previewEl, iconValue) {
   if (!previewEl) return;
   const raw = String(iconValue || '').trim();
+
+  // Dynamic brand/model icons (e.g. "inv:SMA", "wb:Tesla")
+  const dyn = nwShcParseDynamicIcon(raw);
+  if (dyn) {
+    const svg = nwShcDynamicDeviceIconSvg(dyn.kind, dyn.label);
+    if (svg) {
+      previewEl.innerHTML = svg;
+      previewEl.style.fontSize = '';
+      return;
+    }
+  }
+
   const key = nwShcNormalizeIconName(raw);
   if (key && NW_SH_ICON_PREVIEW_SVGS[key]) {
     previewEl.innerHTML = NW_SH_ICON_PREVIEW_SVGS[key];
@@ -348,6 +442,31 @@ const NW_SHCFG_ICON_OPTIONS = [
   { id: '3d-solar', label: '3D PV / Solar' },
   { id: '3d-battery', label: '3D Batterie' },
   { id: '3d-charger', label: '3D Wallbox / Laden' },
+  { id: '3d-inverter', label: '3D Wechselrichter' },
+  { id: '3d-wallbox', label: '3D Wallbox (Gerät)' },
+
+  // Marken / Modelle (Text-Badge im Icon)
+  { id: 'inv:SMA', label: 'Wechselrichter: SMA' },
+  { id: 'inv:Fronius', label: 'Wechselrichter: Fronius' },
+  { id: 'inv:SolarEdge', label: 'Wechselrichter: SolarEdge' },
+  { id: 'inv:Huawei', label: 'Wechselrichter: Huawei' },
+  { id: 'inv:Victron', label: 'Wechselrichter: Victron' },
+  { id: 'inv:Kostal', label: 'Wechselrichter: Kostal' },
+  { id: 'inv:Sungrow', label: 'Wechselrichter: Sungrow' },
+  { id: 'inv:GoodWe', label: 'Wechselrichter: GoodWe' },
+  { id: 'inv:Growatt', label: 'Wechselrichter: Growatt' },
+  { id: 'inv:Enphase', label: 'Wechselrichter: Enphase' },
+
+  { id: 'wb:Tesla', label: 'Wallbox: Tesla' },
+  { id: 'wb:Easee', label: 'Wallbox: Easee' },
+  { id: 'wb:go-e', label: 'Wallbox: go-e' },
+  { id: 'wb:KEBA', label: 'Wallbox: KEBA' },
+  { id: 'wb:ABB', label: 'Wallbox: ABB' },
+  { id: 'wb:Mennekes', label: 'Wallbox: Mennekes' },
+  { id: 'wb:Heidelberg', label: 'Wallbox: Heidelberg' },
+  { id: 'wb:Wallbox', label: 'Wallbox: Wallbox' },
+  { id: 'wb:openWB', label: 'Wallbox: openWB' },
+
 
   { id: '3d-door', label: '3D Tür' },
   { id: '3d-window', label: '3D Fenster' },
