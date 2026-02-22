@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.176",
+    "version": "0.6.177",
     "news": {
       "0.6.174": {
         "en": "SmartHome VIS: remove filter row labels (cleaner header) and right-align filter chips.",
@@ -1286,6 +1286,10 @@
       "0.6.176": {
         "en": "SmartHome Config: Fix missing helper functions in the Drag & Drop builder (runtime errors).",
         "de": "SmartHome-Konfiguration: Fehlende Helper-Funktionen im Drag-&-Drop Builder ergänzt (Runtime-Errors behoben)."
+      },
+      "0.6.177": {
+        "en": "SmartHome Config: Drag & Drop builder fixed (drop works reliably across browsers) + icon selection for floors/rooms/devices.",
+        "de": "SmartHome-Konfiguration: Drag-&-Drop Builder gefixt (Drop zuverlässig in allen Browsern) + Icon-Auswahl für Geschosse/Räume/Geräte."
       }
     },
     "title": "NexoWatt UI",
