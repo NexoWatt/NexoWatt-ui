@@ -21,21 +21,26 @@ const nwShcState = {
     idManuallyEdited: false,
   },
 
-  // UI shell (Home tiles / GPA editor / Classic editor)
+  // UI shell (Home tiles / Drag&Drop Editor / Classic editor)
   ui: null,
 };
 
 function nwEnsureShcfgUiState() {
   if (!nwShcState.ui) {
+    // Default always to the new home screen. Migrate older stored values.
     let mode = 'home';
     try {
       const stored = localStorage.getItem('nw-shcfg-ui-mode');
-      if (stored === 'home' || stored === 'gpa' || stored === 'classic') mode = stored;
+
+      // Never force users back into legacy UI
+      if (stored === 'home' || stored === 'builder' || stored === 'backup' || stored === 'timers' || stored === 'scenes') {
+        mode = stored;
+      }
     } catch (_) {}
 
     nwShcState.ui = {
       mode,
-      gpa: {
+      builder: {
         tab: 'building',
         view: 'rooms',
         currentRoomId: null,
@@ -43,8 +48,8 @@ function nwEnsureShcfgUiState() {
       },
     };
   }
-  if (!nwShcState.ui.gpa) {
-    nwShcState.ui.gpa = { tab: 'building', view: 'rooms', currentRoomId: null, selected: null };
+  if (!nwShcState.ui.builder) {
+    nwShcState.ui.builder = { tab: 'building', view: 'rooms', currentRoomId: null, selected: null };
   }
 }
 
@@ -1499,7 +1504,7 @@ function nwRenderAll() {
   nwRenderFunctionsEditor(cfg.functions || []);
   nwRenderDevicesEditor(cfg.devices || [], cfg.rooms || [], cfg.functions || []);
 
-  // Home tiles / GPA editor rendering (non-destructive)
+  // Home tiles / editor rendering (non-destructive)
   nwRenderShcfgShell();
 
   // After re-rendering, re-apply validation highlights / list
@@ -1508,16 +1513,21 @@ function nwRenderAll() {
 
 
 /* ============================================================ */
-/* SmartHome Config – UI Shell (Home tiles / GPA editor / Classic)*/
+/* SmartHome Config – UI Shell (Home tiles / Drag&Drop / Classic) */
 /* ============================================================ */
 
 function nwShcfgSetMode(mode, opts = {}) {
   nwEnsureShcfgUiState();
-  const allowed = ['home', 'gpa', 'classic'];
+  const allowed = ['home', 'builder', 'backup', 'timers', 'scenes', 'classic'];
   if (!allowed.includes(mode)) return;
 
   nwShcState.ui.mode = mode;
-  try { localStorage.setItem('nw-shcfg-ui-mode', mode); } catch (_) {}
+  // Persist only the modern modes. Classic is intentionally not persisted.
+  try {
+    if (mode === 'home' || mode === 'builder' || mode === 'backup' || mode === 'timers' || mode === 'scenes') {
+      localStorage.setItem('nw-shcfg-ui-mode', mode);
+    }
+  } catch (_) {}
 
   // Optional scroll target for Classic
   if (mode === 'classic' && opts.scrollToId) {
@@ -1531,32 +1541,32 @@ function nwShcfgSetMode(mode, opts = {}) {
   nwRenderShcfgShell();
 }
 
-function nwShcfgEnterGpa(opts = {}) {
+function nwShcfgEnterBuilder(opts = {}) {
   nwEnsureShcfgUiState();
-  const gpa = nwShcState.ui.gpa;
-  gpa.view = opts.view || 'rooms';
-  gpa.currentRoomId = opts.currentRoomId || null;
-  gpa.tab = opts.tab || (gpa.view === 'roomDevices' ? 'devices' : 'building');
+  const builder = nwShcState.ui.builder;
+  builder.view = opts.view || 'rooms';
+  builder.currentRoomId = opts.currentRoomId || null;
+  builder.tab = opts.tab || (builder.view === 'roomDevices' ? 'devices' : 'building');
 
   // default selection
   const cfg = nwShcState.config || { rooms: [], devices: [] };
   const rooms = cfg.rooms || [];
   const devices = cfg.devices || [];
-  if (gpa.view === 'rooms') {
-    if (!gpa.selected || gpa.selected.kind !== 'room') {
-      if (rooms.length) gpa.selected = { kind: 'room', id: rooms[0].id };
+  if (builder.view === 'rooms') {
+    if (!builder.selected || builder.selected.kind !== 'room') {
+      if (rooms.length) builder.selected = { kind: 'room', id: rooms[0].id };
     }
-  } else if (gpa.view === 'roomDevices') {
-    const roomId = gpa.currentRoomId || (rooms[0] && rooms[0].id) || null;
-    gpa.currentRoomId = roomId;
+  } else if (builder.view === 'roomDevices') {
+    const roomId = builder.currentRoomId || (rooms[0] && rooms[0].id) || null;
+    builder.currentRoomId = roomId;
     const roomDevs = devices.filter(d => d.roomId === roomId);
-    if (!gpa.selected || gpa.selected.kind !== 'device') {
-      if (roomDevs.length) gpa.selected = { kind: 'device', id: roomDevs[0].id };
-      else gpa.selected = roomId ? { kind: 'room', id: roomId } : null;
+    if (!builder.selected || builder.selected.kind !== 'device') {
+      if (roomDevs.length) builder.selected = { kind: 'device', id: roomDevs[0].id };
+      else builder.selected = roomId ? { kind: 'room', id: roomId } : null;
     }
   }
 
-  nwShcfgSetMode('gpa');
+  nwShcfgSetMode('builder');
 }
 
 function nwInitShcfgShellUi() {
@@ -1569,26 +1579,41 @@ function nwInitShcfgShellUi() {
   const btnBackup = document.getElementById('nw-shcfg-tile-backup');
   const btnClassic = document.getElementById('nw-shcfg-tile-classic');
 
-  if (btnBuilding) btnBuilding.addEventListener('click', () => nwShcfgEnterGpa({ view: 'rooms', tab: 'building' }));
+  if (btnBuilding) btnBuilding.addEventListener('click', () => nwShcfgEnterBuilder({ view: 'rooms', tab: 'building' }));
   if (btnLogic) btnLogic.addEventListener('click', () => window.location.href = '/logic.html');
-  if (btnTimers) btnTimers.addEventListener('click', () => nwSetStatus('Zeitschaltuhren: Modul folgt als nächstes ⏱️', 'warn'));
-  if (btnScenes) btnScenes.addEventListener('click', () => nwSetStatus('Szenen: Modul folgt als nächstes 🎬', 'warn'));
-  if (btnBackup) btnBackup.addEventListener('click', () => nwShcfgSetMode('classic', { scrollToId: 'nw-backup-section' }));
+  if (btnTimers) btnTimers.addEventListener('click', () => nwShcfgSetMode('timers'));
+  if (btnScenes) btnScenes.addEventListener('click', () => nwShcfgSetMode('scenes'));
+  if (btnBackup) btnBackup.addEventListener('click', () => nwShcfgSetMode('backup'));
   if (btnClassic) btnClassic.addEventListener('click', () => nwShcfgSetMode('classic'));
 
-  const gpaBack = document.getElementById('nw-shcfg-gpa-back');
-  const gpaSave = document.getElementById('nw-shcfg-gpa-save');
-  const gpaOpenClassic = document.getElementById('nw-shcfg-gpa-open-classic');
-  if (gpaBack) gpaBack.addEventListener('click', () => nwShcfgSetMode('home'));
-  if (gpaOpenClassic) gpaOpenClassic.addEventListener('click', () => nwShcfgSetMode('classic'));
-  if (gpaSave) gpaSave.addEventListener('click', () => nwSaveSmartHomeConfig());
+  const builderBack = document.getElementById('nw-shcfg-builder-back');
+  const builderSave = document.getElementById('nw-shcfg-builder-save');
+  const builderOpenClassic = document.getElementById('nw-shcfg-builder-open-classic');
+  if (builderBack) builderBack.addEventListener('click', () => nwShcfgSetMode('home'));
+  if (builderOpenClassic) builderOpenClassic.addEventListener('click', () => nwShcfgSetMode('classic'));
+  if (builderSave) builderSave.addEventListener('click', () => nwSaveSmartHomeConfig());
 
-  // Tabs in GPA sidebar
-  const tabBtns = document.querySelectorAll('#nw-shcfg-gpa .nw-shcfg-gpa__tab');
+  const backupBack = document.getElementById('nw-shcfg-backup-back');
+  const backupOpenClassic = document.getElementById('nw-shcfg-backup-open-classic');
+  if (backupBack) backupBack.addEventListener('click', () => nwShcfgSetMode('home'));
+  if (backupOpenClassic) backupOpenClassic.addEventListener('click', () => nwShcfgSetMode('classic'));
+
+  const timersBack = document.getElementById('nw-shcfg-timers-back');
+  const timersOpenLogic = document.getElementById('nw-shcfg-timers-open-logic');
+  if (timersBack) timersBack.addEventListener('click', () => nwShcfgSetMode('home'));
+  if (timersOpenLogic) timersOpenLogic.addEventListener('click', () => window.location.href = '/logic.html');
+
+  const scenesBack = document.getElementById('nw-shcfg-scenes-back');
+  const scenesOpenLogic = document.getElementById('nw-shcfg-scenes-open-logic');
+  if (scenesBack) scenesBack.addEventListener('click', () => nwShcfgSetMode('home'));
+  if (scenesOpenLogic) scenesOpenLogic.addEventListener('click', () => window.location.href = '/logic.html');
+
+  // Tabs in editor sidebar
+  const tabBtns = document.querySelectorAll('#nw-shcfg-builder .nw-shcfg-builder__tab');
   tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       nwEnsureShcfgUiState();
-      nwShcState.ui.gpa.tab = btn.dataset.nwTab || btn.getAttribute('data-nw-tab') || 'building';
+      nwShcState.ui.builder.tab = btn.dataset.nwTab || btn.getAttribute('data-nw-tab') || 'building';
       nwRenderShcfgShell();
     });
   });
@@ -1601,22 +1626,28 @@ function nwRenderShcfgShell() {
   nwEnsureShcfgUiState();
 
   const home = document.getElementById('nw-shcfg-home');
-  const gpa = document.getElementById('nw-shcfg-gpa');
+  const builder = document.getElementById('nw-shcfg-builder');
+  const backup = document.getElementById('nw-shcfg-backup');
+  const timers = document.getElementById('nw-shcfg-timers');
+  const scenes = document.getElementById('nw-shcfg-scenes');
   const classic = document.getElementById('nw-shcfg-classic');
 
-  if (!home || !gpa || !classic) return;
+  if (!home || !builder || !backup || !timers || !scenes || !classic) return;
 
   const mode = nwShcState.ui.mode;
   home.style.display = (mode === 'home') ? '' : 'none';
-  gpa.style.display = (mode === 'gpa') ? '' : 'none';
+  builder.style.display = (mode === 'builder') ? '' : 'none';
+  backup.style.display = (mode === 'backup') ? '' : 'none';
+  timers.style.display = (mode === 'timers') ? '' : 'none';
+  scenes.style.display = (mode === 'scenes') ? '' : 'none';
   classic.style.display = (mode === 'classic') ? '' : 'none';
 
-  if (mode === 'gpa') {
-    nwRenderShcfgGpa();
+  if (mode === 'builder') {
+    nwRenderShcfgBuilder();
   }
 }
 
-const NW_SHCFG_GPA_DEVICE_TEMPLATES = [
+const NW_SHCFG_BUILDER_DEVICE_TEMPLATES = [
   { type: 'switch', name: 'Schalter', icon: '💡', meta: 'Ein/Aus' },
   { type: 'dimmer', name: 'Dimmer', icon: '🔆', meta: 'Helligkeit' },
   { type: 'color', name: 'RGB Licht', icon: '🌈', meta: 'Farbe + Dimmen' },
@@ -1647,21 +1678,21 @@ function nwShcfgDragGet(e) {
   try { return JSON.parse(raw); } catch (_) { return null; }
 }
 
-function nwRenderShcfgGpa() {
+function nwRenderShcfgBuilder() {
   nwEnsureShcfgUiState();
   const cfg = nwShcState.config;
 
-  const lib = document.getElementById('nw-shcfg-gpa-lib');
-  const work = document.getElementById('nw-shcfg-gpa-work');
-  const props = document.getElementById('nw-shcfg-gpa-props');
+  const lib = document.getElementById('nw-shcfg-builder-lib');
+  const work = document.getElementById('nw-shcfg-builder-work');
+  const props = document.getElementById('nw-shcfg-builder-props');
   if (!lib || !work || !props) return;
 
   // Tabs active state
-  const gpa = nwShcState.ui.gpa;
-  const tabBtns = document.querySelectorAll('#nw-shcfg-gpa .nw-shcfg-gpa__tab');
+  const builderUi = nwShcState.ui.builder;
+  const tabBtns = document.querySelectorAll('#nw-shcfg-builder .nw-shcfg-builder__tab');
   tabBtns.forEach(btn => {
     const key = btn.dataset.nwTab || btn.getAttribute('data-nw-tab');
-    btn.classList.toggle('is-active', key === gpa.tab);
+    btn.classList.toggle('is-active', key === builderUi.tab);
   });
 
   if (!cfg) {
@@ -1671,9 +1702,9 @@ function nwRenderShcfgGpa() {
     return;
   }
 
-  nwRenderShcfgGpaLib(lib);
-  nwRenderShcfgGpaWorkspace(work);
-  nwRenderShcfgGpaProps(props);
+  nwRenderShcfgBuilderLib(lib);
+  nwRenderShcfgBuilderWorkspace(work);
+  nwRenderShcfgBuilderProps(props);
 }
 
 function nwShcfgLibGroup(titleText, items) {
@@ -1723,11 +1754,11 @@ function nwShcfgLibItem({ icon, name, meta, payload }) {
   return item;
 }
 
-function nwRenderShcfgGpaLib(container) {
+function nwRenderShcfgBuilderLib(container) {
   container.innerHTML = '';
-  const gpa = nwShcState.ui.gpa;
+  const builderUi = nwShcState.ui.builder;
 
-  if (gpa.tab === 'building') {
+  if (builderUi.tab === 'building') {
     const items = [
       nwShcfgLibItem({
         icon: '🏠',
@@ -1740,8 +1771,8 @@ function nwRenderShcfgGpaLib(container) {
     return;
   }
 
-  if (gpa.tab === 'devices') {
-    const items = NW_SHCFG_GPA_DEVICE_TEMPLATES.map(tpl =>
+  if (builderUi.tab === 'devices') {
+    const items = NW_SHCFG_BUILDER_DEVICE_TEMPLATES.map(tpl =>
       nwShcfgLibItem({
         icon: tpl.icon,
         name: tpl.name,
@@ -1772,10 +1803,10 @@ function nwShcfgAddRoom(name = 'Neuer Raum') {
   return room;
 }
 
-function nwRenderShcfgGpaWorkspace(container) {
+function nwRenderShcfgBuilderWorkspace(container) {
   container.innerHTML = '';
   const cfg = nwShcState.config;
-  const gpa = nwShcState.ui.gpa;
+  const builderUi = nwShcState.ui.builder;
 
   const rooms = cfg.rooms || [];
   const devices = cfg.devices || [];
@@ -1786,12 +1817,12 @@ function nwRenderShcfgGpaWorkspace(container) {
   const left = document.createElement('div');
   const right = document.createElement('div');
 
-  if (gpa.view === 'roomDevices') {
-    const room = rooms.find(r => r.id === gpa.currentRoomId) || rooms[0] || null;
+  if (builderUi.view === 'roomDevices') {
+    const room = rooms.find(r => r.id === builderUi.currentRoomId) || rooms[0] || null;
     if (!room) {
-      gpa.view = 'rooms';
-      gpa.currentRoomId = null;
-      return nwRenderShcfgGpaWorkspace(container);
+      builderUi.view = 'rooms';
+      builderUi.currentRoomId = null;
+      return nwRenderShcfgBuilderWorkspace(container);
     }
 
     const backBtn = document.createElement('button');
@@ -1799,10 +1830,10 @@ function nwRenderShcfgGpaWorkspace(container) {
     backBtn.type = 'button';
     backBtn.textContent = '← Gebäude';
     backBtn.addEventListener('click', () => {
-      gpa.view = 'rooms';
-      gpa.currentRoomId = null;
-      gpa.tab = 'building';
-      gpa.selected = { kind: 'room', id: room.id };
+      builderUi.view = 'rooms';
+      builderUi.currentRoomId = null;
+      builderUi.tab = 'building';
+      builderUi.selected = { kind: 'room', id: room.id };
       nwRenderShcfgShell();
     });
 
@@ -1833,9 +1864,9 @@ function nwRenderShcfgGpaWorkspace(container) {
       if (payload.kind === 'device-template' && payload.templateType) {
         const dev = nwAddDeviceFromTemplate(payload.templateType, { roomId: room.id, silent: true });
         if (dev) {
-          gpa.selected = { kind: 'device', id: dev.id };
-          gpa.tab = 'devices';
-          // refresh only GPA shell (device was already added + rendered)
+          builderUi.selected = { kind: 'device', id: dev.id };
+          builderUi.tab = 'devices';
+          // refresh only editor shell (device was already added + rendered)
           nwRenderShcfgShell();
         }
       }
@@ -1856,12 +1887,12 @@ function nwRenderShcfgGpaWorkspace(container) {
     roomDevices.forEach(dev => {
       const card = document.createElement('div');
       card.className = 'nw-shcfg-card';
-      if (gpa.selected && gpa.selected.kind === 'device' && gpa.selected.id === dev.id) card.classList.add('is-selected');
+      if (builderUi.selected && builderUi.selected.kind === 'device' && builderUi.selected.id === dev.id) card.classList.add('is-selected');
 
       const titleRow = document.createElement('div');
       titleRow.className = 'nw-shcfg-card__title';
       const ico = document.createElement('span');
-      ico.textContent = (NW_SHCFG_GPA_DEVICE_TEMPLATES.find(t => t.type === dev.type)?.icon) || '🧩';
+      ico.textContent = (NW_SHCFG_BUILDER_DEVICE_TEMPLATES.find(t => t.type === dev.type)?.icon) || '🧩';
       const t = document.createElement('span');
       t.textContent = dev.alias || dev.id;
       titleRow.appendChild(ico);
@@ -1876,7 +1907,7 @@ function nwRenderShcfgGpaWorkspace(container) {
       card.appendChild(sub);
 
       card.addEventListener('click', () => {
-        gpa.selected = { kind: 'device', id: dev.id };
+        builderUi.selected = { kind: 'device', id: dev.id };
         nwRenderShcfgShell();
       });
 
@@ -1900,7 +1931,7 @@ function nwRenderShcfgGpaWorkspace(container) {
   addBtn.addEventListener('click', () => {
     const room = nwShcfgAddRoom();
     if (room) {
-      gpa.selected = { kind: 'room', id: room.id };
+      builderUi.selected = { kind: 'room', id: room.id };
       nwRenderAll();
     }
   });
@@ -1923,7 +1954,7 @@ function nwRenderShcfgGpaWorkspace(container) {
     if (payload.kind === 'create-room') {
       const room = nwShcfgAddRoom();
       if (room) {
-        gpa.selected = { kind: 'room', id: room.id };
+        builderUi.selected = { kind: 'room', id: room.id };
         nwRenderAll();
       }
     }
@@ -1943,7 +1974,7 @@ function nwRenderShcfgGpaWorkspace(container) {
   rooms.slice().sort((a, b) => (a.order || 0) - (b.order || 0)).forEach(room => {
     const card = document.createElement('div');
     card.className = 'nw-shcfg-card';
-    if (gpa.selected && gpa.selected.kind === 'room' && gpa.selected.id === room.id) card.classList.add('is-selected');
+    if (builderUi.selected && builderUi.selected.kind === 'room' && builderUi.selected.id === room.id) card.classList.add('is-selected');
 
     const titleRow = document.createElement('div');
     titleRow.className = 'nw-shcfg-card__title';
@@ -1965,7 +1996,7 @@ function nwRenderShcfgGpaWorkspace(container) {
     // Drop a device template onto a room
     card.addEventListener('dragover', (e) => { e.preventDefault(); card.classList.add('is-selected'); });
     card.addEventListener('dragleave', () => {
-      if (!(gpa.selected && gpa.selected.kind === 'room' && gpa.selected.id === room.id)) card.classList.remove('is-selected');
+      if (!(builderUi.selected && builderUi.selected.kind === 'room' && builderUi.selected.id === room.id)) card.classList.remove('is-selected');
     });
     card.addEventListener('drop', (e) => {
       e.preventDefault();
@@ -1975,26 +2006,26 @@ function nwRenderShcfgGpaWorkspace(container) {
         const dev = nwAddDeviceFromTemplate(payload.templateType, { roomId: room.id, silent: true });
         if (dev) {
           // jump directly into room view
-          gpa.view = 'roomDevices';
-          gpa.currentRoomId = room.id;
-          gpa.tab = 'devices';
-          gpa.selected = { kind: 'device', id: dev.id };
+          builderUi.view = 'roomDevices';
+          builderUi.currentRoomId = room.id;
+          builderUi.tab = 'devices';
+          builderUi.selected = { kind: 'device', id: dev.id };
           nwRenderShcfgShell();
         }
       }
     });
 
     card.addEventListener('click', () => {
-      gpa.selected = { kind: 'room', id: room.id };
+      builderUi.selected = { kind: 'room', id: room.id };
       nwRenderShcfgShell();
     });
 
     card.addEventListener('dblclick', () => {
-      gpa.view = 'roomDevices';
-      gpa.currentRoomId = room.id;
-      gpa.tab = 'devices';
+      builderUi.view = 'roomDevices';
+      builderUi.currentRoomId = room.id;
+      builderUi.tab = 'devices';
       const roomDevs = devices.filter(d => d.roomId === room.id);
-      gpa.selected = roomDevs.length ? { kind: 'device', id: roomDevs[0].id } : { kind: 'room', id: room.id };
+      builderUi.selected = roomDevs.length ? { kind: 'device', id: roomDevs[0].id } : { kind: 'room', id: room.id };
       nwRenderShcfgShell();
     });
 
@@ -2033,11 +2064,11 @@ function nwShcfgNullIfEmpty(v) {
   return s ? s : null;
 }
 
-function nwRenderShcfgGpaProps(container) {
+function nwRenderShcfgBuilderProps(container) {
   container.innerHTML = '';
   const cfg = nwShcState.config;
-  const gpa = nwShcState.ui.gpa;
-  const sel = gpa.selected;
+  const builderUi = nwShcState.ui.builder;
+  const sel = builderUi.selected;
 
   const rooms = cfg.rooms || [];
   const funcs = cfg.functions || [];
@@ -2077,9 +2108,9 @@ function nwRenderShcfgGpaProps(container) {
         nwNormalizeRoomOrder();
         nwMarkDirty(true);
         // Keep selection sane
-        gpa.selected = rooms.length ? { kind: 'room', id: rooms[0].id } : null;
-        gpa.view = 'rooms';
-        gpa.currentRoomId = null;
+        builderUi.selected = rooms.length ? { kind: 'room', id: rooms[0].id } : null;
+        builderUi.view = 'rooms';
+        builderUi.currentRoomId = null;
         nwRenderAll();
       }
     });
@@ -2107,11 +2138,11 @@ function nwRenderShcfgGpaProps(container) {
     openBtn.type = 'button';
     openBtn.textContent = 'Raum öffnen';
     openBtn.addEventListener('click', () => {
-      gpa.view = 'roomDevices';
-      gpa.currentRoomId = room.id;
-      gpa.tab = 'devices';
+      builderUi.view = 'roomDevices';
+      builderUi.currentRoomId = room.id;
+      builderUi.tab = 'devices';
       const roomDevs = devices.filter(d => d.roomId === room.id);
-      gpa.selected = roomDevs.length ? { kind: 'device', id: roomDevs[0].id } : { kind: 'room', id: room.id };
+      builderUi.selected = roomDevs.length ? { kind: 'device', id: roomDevs[0].id } : { kind: 'room', id: room.id };
       nwRenderShcfgShell();
     });
     container.appendChild(openBtn);
@@ -2146,9 +2177,9 @@ function nwRenderShcfgGpaProps(container) {
         // selection fallback
         const roomId = dev.roomId;
         const roomDevs = devices.filter(d => d.roomId === roomId);
-        if (roomDevs.length) gpa.selected = { kind: 'device', id: roomDevs[0].id };
-        else if (roomId) gpa.selected = { kind: 'room', id: roomId };
-        else gpa.selected = rooms.length ? { kind: 'room', id: rooms[0].id } : null;
+        if (roomDevs.length) builderUi.selected = { kind: 'device', id: roomDevs[0].id };
+        else if (roomId) builderUi.selected = { kind: 'room', id: roomId };
+        else builderUi.selected = rooms.length ? { kind: 'room', id: rooms[0].id } : null;
         nwRenderAll();
       }
     });

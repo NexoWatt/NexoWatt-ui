@@ -4961,7 +4961,7 @@ body{ padding-top: var(--topbar-h); }
 
 
 /* ============================================================ */
-/* SmartHome Config – GPA Style (smarthome-config.html)          */
+/* SmartHome Config – Drag&Drop Editor (smarthome-config.html)   */
 /* ============================================================ */
 
 .nw-chip{
@@ -5022,7 +5022,7 @@ body{ padding-top: var(--topbar-h); }
   line-height: 1.35;
 }
 
-.nw-shcfg-gpa__topbar{
+.nw-shcfg-builder__topbar{
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -5030,17 +5030,17 @@ body{ padding-top: var(--topbar-h); }
   margin-bottom: 10px;
 }
 
-.nw-shcfg-gpa__title{
+.nw-shcfg-builder__title{
   font-weight: 900;
   letter-spacing: 0.2px;
 }
 
-.nw-shcfg-gpa__actions{
+.nw-shcfg-builder__actions{
   display: inline-flex;
   gap: 8px;
 }
 
-.nw-shcfg-gpa__layout{
+.nw-shcfg-builder__layout{
   display: grid;
   grid-template-columns: 280px 1fr 380px;
   gap: 12px;
@@ -5048,12 +5048,12 @@ body{ padding-top: var(--topbar-h); }
 }
 
 @media (max-width: 1180px){
-  .nw-shcfg-gpa__layout{
+  .nw-shcfg-builder__layout{
     grid-template-columns: 1fr;
   }
 }
 
-.nw-shcfg-gpa__panel{
+.nw-shcfg-builder__panel{
   border-radius: 16px;
   border: 1px solid rgba(255,255,255,0.08);
   background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02));
@@ -5061,14 +5061,14 @@ body{ padding-top: var(--topbar-h); }
   min-height: 200px;
 }
 
-.nw-shcfg-gpa__tabs{
+.nw-shcfg-builder__tabs{
   display: flex;
   gap: 6px;
   padding: 10px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
 }
 
-.nw-shcfg-gpa__tab{
+.nw-shcfg-builder__tab{
   border: 1px solid rgba(255,255,255,0.10);
   background: rgba(255,255,255,0.04);
   color: rgba(255,255,255,0.86);
@@ -5079,13 +5079,13 @@ body{ padding-top: var(--topbar-h); }
   cursor: pointer;
 }
 
-.nw-shcfg-gpa__tab.is-active{
+.nw-shcfg-builder__tab.is-active{
   border-color: rgba(37, 238, 174, 0.45);
   box-shadow: 0 0 0 2px rgba(37, 238, 174, 0.14) inset;
   color: rgba(37, 238, 174, 0.95);
 }
 
-.nw-shcfg-gpa__panelbody{
+.nw-shcfg-builder__panelbody{
   padding: 10px;
   height: 100%;
   overflow: auto;

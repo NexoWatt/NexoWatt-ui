@@ -28,7 +28,7 @@
       <div>
         <div class="nw-smarthome-header__title">SmartHome-Konfiguration</div>
         <div class="nw-smarthome-header__subtitle">
-          Bearbeiten von Räumen, Funktionen und Geräten aus dem SmartHomeConfig-Modell. Änderungen werden in der Adapter-Instanz gespeichert (BETA).
+          Gebäude, Räume und Geräte für die SmartHome-Visualisierung konfigurieren.
         </div>
       </div>
       <div class="nw-smarthome-header__right">
@@ -47,7 +47,7 @@
       </div>
     </div>
 
-    <!-- Home / Module tiles (Gira GPA inspired) -->
+    <!-- Home / Module tiles -->
     <section id="nw-shcfg-home" class="nw-config-section nw-shcfg-home">
       <div class="nw-config-section__head">
         <h2 class="nw-config-section__title">Projekt</h2>
@@ -56,7 +56,7 @@
         <button class="nw-shcfg-tile" id="nw-shcfg-tile-building" type="button">
           <div class="nw-shcfg-tile__icon">🏠</div>
           <div class="nw-shcfg-tile__title">Gebäude &amp; Geräte</div>
-          <div class="nw-shcfg-tile__desc">Räume/Devices per Drag &amp; Drop konfigurieren (GPA‑Style).</div>
+          <div class="nw-shcfg-tile__desc">Räume &amp; Geräte per Drag &amp; Drop konfigurieren.</div>
         </button>
         <button class="nw-shcfg-tile" id="nw-shcfg-tile-logic" type="button">
           <div class="nw-shcfg-tile__icon">🧠</div>
@@ -84,36 +84,123 @@
       </div>
     </section>
 
-    <!-- Drag & drop editor (Gebäude & Geräte) -->
-    <section id="nw-shcfg-gpa" class="nw-config-section nw-shcfg-gpa" style="display:none;">
-      <div class="nw-shcfg-gpa__topbar">
-        <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-gpa-back" type="button">← Übersicht</button>
-        <div class="nw-shcfg-gpa__title">
-          Gebäude &amp; Geräte (Drag &amp; Drop)
-          <span class="nw-chip" style="margin-left:8px;">BETA</span>
+<!-- Backup module (Datensicherung) -->
+<section id="nw-shcfg-backup" class="nw-shcfg-shell" style="display:none;">
+  <div class="nw-shcfg-topbar">
+    <div class="nw-shcfg-topbar__left">
+      <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-backup-back" type="button">← Zurück</button>
+      <div class="nw-shcfg-topbar__title">Datensicherung</div>
+    </div>
+    <div class="nw-shcfg-topbar__right">
+      <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-backup-open-classic" type="button">Expertenmodus</button>
+    </div>
+  </div>
+
+  <div class="nw-shcfg-container">
+    <section class="nw-config-section" id="nw-backup-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">Datensicherung (wie App‑Center)</h2>
+      </div>
+      <div class="nw-config-hint">
+        Export/Import der gesamten NexoWatt‑Konfiguration (enthält u.a. SmartHome + Logikeditor). So kannst du jederzeit wiederherstellen.
+      </div>
+      <div class="nw-config-form-grid">
+        <div class="nw-config-row">
+          <label class="nw-config-label">Import‑Modus</label>
+          <select id="nw-backup-import-mode" class="nw-config-select">
+            <option value="merge" selected>Merge (zusammenführen)</option>
+            <option value="replace">Replace (ersetzen)</option>
+          </select>
         </div>
-        <div class="nw-shcfg-gpa__actions">
-          <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-gpa-open-classic" type="button">Classic</button>
-          <button class="nw-config-btn" id="nw-shcfg-gpa-save" type="button">Speichern</button>
+      </div>
+      <div class="nw-config-row__actions" style="margin-top:8px;">
+        <button id="nw-backup-export-btn" class="nw-config-btn" type="button">Backup exportieren</button>
+        <label class="nw-config-btn nw-config-btn--ghost" for="nw-backup-import-file" style="cursor:pointer;">Backup importieren</label>
+        <input id="nw-backup-import-file" type="file" accept="application/json" style="display:none" />
+        <button id="nw-backup-restore-userdata-btn" class="nw-config-btn nw-config-btn--ghost" type="button">Restore aus 0_userdata</button>
+      </div>
+      <div id="nw-backup-status" class="nw-config-status" style="margin-top:8px;"></div>
+    </section>
+  </div>
+</section>
+
+<!-- Timers module (placeholder) -->
+<section id="nw-shcfg-timers" class="nw-shcfg-shell" style="display:none;">
+  <div class="nw-shcfg-topbar">
+    <div class="nw-shcfg-topbar__left">
+      <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-timers-back" type="button">← Zurück</button>
+      <div class="nw-shcfg-topbar__title">Zeitschaltuhren</div>
+    </div>
+    <div class="nw-shcfg-topbar__right">
+      <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-timers-open-logic" type="button">Zum Logikeditor</button>
+    </div>
+  </div>
+
+  <div class="nw-shcfg-container">
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">Zeitschaltuhren</h2>
+      </div>
+      <div class="nw-config-hint">
+        Dieses Modul ist als nächstes dran. Bis dahin kannst du Zeitlogiken über den Logikeditor abbilden.
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- Scenes module (placeholder) -->
+<section id="nw-shcfg-scenes" class="nw-shcfg-shell" style="display:none;">
+  <div class="nw-shcfg-topbar">
+    <div class="nw-shcfg-topbar__left">
+      <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-scenes-back" type="button">← Zurück</button>
+      <div class="nw-shcfg-topbar__title">Szenen</div>
+    </div>
+    <div class="nw-shcfg-topbar__right">
+      <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-scenes-open-logic" type="button">Zum Logikeditor</button>
+    </div>
+  </div>
+
+  <div class="nw-shcfg-container">
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">Szenen</h2>
+      </div>
+      <div class="nw-config-hint">
+        Dieses Modul ist als nächstes dran. Szenen lassen sich aktuell über Geräte vom Typ <b>Szene</b> + Logikeditor abbilden.
+      </div>
+    </section>
+  </div>
+</section>
+
+    <!-- Drag & drop editor (Gebäude & Geräte) -->
+    <section id="nw-shcfg-builder" class="nw-config-section nw-shcfg-builder" style="display:none;">
+      <div class="nw-shcfg-builder__topbar">
+        <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-builder-back" type="button">← Übersicht</button>
+        <div class="nw-shcfg-builder__title">
+          Gebäude &amp; Geräte (Drag &amp; Drop)
+        </div>
+        <div class="nw-shcfg-builder__actions">
+          <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-builder-open-classic" type="button">Expertenmodus</button>
+          <button class="nw-config-btn" id="nw-shcfg-builder-save" type="button">Speichern</button>
         </div>
       </div>
 
-      <div class="nw-shcfg-gpa__layout">
-        <div class="nw-shcfg-gpa__panel nw-shcfg-gpa__panel--left">
-          <div class="nw-shcfg-gpa__tabs">
-            <button class="nw-shcfg-gpa__tab" data-nw-tab="building" type="button">Gebäude</button>
-            <button class="nw-shcfg-gpa__tab" data-nw-tab="devices" type="button">Geräte</button>
-            <button class="nw-shcfg-gpa__tab" data-nw-tab="visual" type="button">Visual</button>
+      <div class="nw-shcfg-builder__layout">
+        <div class="nw-shcfg-builder__panel nw-shcfg-builder__panel--left">
+          <div class="nw-shcfg-builder__tabs">
+            <button class="nw-shcfg-builder__tab" data-nw-tab="building" type="button">Gebäude</button>
+            <button class="nw-shcfg-builder__tab" data-nw-tab="devices" type="button">Geräte</button>
+            <button class="nw-shcfg-builder__tab" data-nw-tab="visual" type="button">Visual</button>
           </div>
-          <div id="nw-shcfg-gpa-lib" class="nw-shcfg-gpa__panelbody"></div>
+          <div id="nw-shcfg-builder-lib" class="nw-shcfg-builder__panelbody"></div>
         </div>
 
-        <div class="nw-shcfg-gpa__panel nw-shcfg-gpa__panel--center">
-          <div id="nw-shcfg-gpa-work" class="nw-shcfg-gpa__panelbody"></div>
+        <div class="nw-shcfg-builder__panel nw-shcfg-builder__panel--center">
+          <div id="nw-shcfg-builder-work" class="nw-shcfg-builder__panelbody"></div>
         </div>
 
-        <div class="nw-shcfg-gpa__panel nw-shcfg-gpa__panel--right">
-          <div id="nw-shcfg-gpa-props" class="nw-shcfg-gpa__panelbody"></div>
+        <div class="nw-shcfg-builder__panel nw-shcfg-builder__panel--right">
+          <div id="nw-shcfg-builder-props" class="nw-shcfg-builder__panelbody"></div>
         </div>
       </div>
     </section>
@@ -277,31 +364,6 @@
       </div>
 
       <div id="nw-pages-status" class="nw-config-status" style="margin-top:8px;"></div>
-    </section>
-
-<section class="nw-config-section" id="nw-backup-section">
-      <div class="nw-config-section__head">
-        <h2 class="nw-config-section__title">Datensicherung (wie App‑Center)</h2>
-      </div>
-      <div class="nw-config-hint">
-        Export/Import der gesamten NexoWatt‑Konfiguration (enthält u.a. SmartHome + Logikeditor). So kannst du jederzeit wiederherstellen.
-      </div>
-      <div class="nw-config-form-grid">
-        <div class="nw-config-row">
-          <label class="nw-config-label">Import‑Modus</label>
-          <select id="nw-backup-import-mode" class="nw-config-select">
-            <option value="merge" selected>Merge (zusammenführen)</option>
-            <option value="replace">Replace (ersetzen)</option>
-          </select>
-        </div>
-      </div>
-      <div class="nw-config-row__actions" style="margin-top:8px;">
-        <button id="nw-backup-export-btn" class="nw-config-btn" type="button">Backup exportieren</button>
-        <label class="nw-config-btn nw-config-btn--ghost" for="nw-backup-import-file" style="cursor:pointer;">Backup importieren</label>
-        <input id="nw-backup-import-file" type="file" accept="application/json" style="display:none" />
-        <button id="nw-backup-restore-userdata-btn" class="nw-config-btn nw-config-btn--ghost" type="button">Restore aus 0_userdata</button>
-      </div>
-      <div id="nw-backup-status" class="nw-config-status" style="margin-top:8px;"></div>
     </section>
 
     <section class="nw-config-section">

@@ -1466,7 +1466,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.174",
+  "version": "0.6.175",
   "news": {
     "0.6.59": {
       "en": "Mobile responsive improvements (iPhone): stable 2-column KPI grid + overflow-safe KPI rows. Weather tile: hide when inactive and show a compact tomorrow line (Open-Meteo daily). Energy totals are seeded with 0 on fresh installs and formatted (kWh/MWh/GWh) in UI.",
