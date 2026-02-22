@@ -1,3 +1,7 @@
+## 0.6.186
+- SmartHome Config & VIS: Icon-Bibliothek für **Geschosse/Bereiche** stark erweitert (Etagen-Stack, Keller, Erdgeschoss, Obergeschoss, Dachgeschoss, Garage, Garten/Außenbereich, Terrasse, Pool, Schaltschrank, Server/Netzwerk, Lager, Büro, Waschküche) inkl. **3D Varianten** (`3d-floors`, `3d-basement`, `3d-upper`, `3d-attic`, `3d-garden`, ...).
+- SmartHome Config: Standard-Elemente für Geschosse nutzen jetzt die neuen Icons (konsistenter Look im Builder).
+
 ## 0.6.185
 - SmartHome: **Dynamische Marken-/Modell-Icons** für Geräte ergänzt (Icon-Key z.B. `inv:SMA` oder `wb:Tesla`).
 - SmartHome: Neue **3D Icons** ergänzt: **Wechselrichter** (`3d-inverter`) und **Wallbox-Gerät** (`3d-wallbox`).

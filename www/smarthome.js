@@ -399,6 +399,228 @@ const NW_ICON_SVGS = {
         <path d="M3 6h7l2 2h9v12H3V6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
       </svg>`,
   },
+  floors: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="5" y="4" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <rect x="5" y="10" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <rect x="5" y="16" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="5" y="4" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <rect x="5" y="10" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <rect x="5" y="16" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+      </svg>`,
+  },
+  basement: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="5" y="4" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <rect x="5" y="10" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <rect x="5" y="16" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 7v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9.5 14.5 12 17l2.5-2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="5" y="4" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <rect x="5" y="10" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <rect x="5" y="16" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 7v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9.5 14.5 12 17l2.5-2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`,
+  },
+  ground: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="5" y="4" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2" opacity="0.55"/>
+        <rect x="5" y="10" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2" opacity="0.55"/>
+        <rect x="5" y="16" width="14" height="4" rx="1.5" fill="currentColor" fill-opacity="0.12" stroke="currentColor" stroke-width="2"/>
+        <path d="M4 21h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.70"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="5" y="4" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2" opacity="0.55"/>
+        <rect x="5" y="10" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2" opacity="0.55"/>
+        <rect x="5" y="16" width="14" height="4" rx="1.5" fill="currentColor" fill-opacity="0.16" stroke="currentColor" stroke-width="2"/>
+        <path d="M4 21h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.70"/>
+      </svg>`,
+  },
+  upper: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="5" y="4" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <rect x="5" y="10" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <rect x="5" y="16" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 17V7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9.5 9.5 12 7l2.5 2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="5" y="4" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <rect x="5" y="10" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <rect x="5" y="16" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 17V7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9.5 9.5 12 7l2.5 2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`,
+  },
+  attic: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M5 11 12 5l7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="7" y="11" width="10" height="9" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M10 20v-4h4v4" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.85"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M5 11 12 5l7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="7" y="11" width="10" height="9" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M10 20v-4h4v4" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.85"/>
+      </svg>`,
+  },
+  garage: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M4 10 12 4l8 6v10H4V10Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 20v-7h10v7" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 16h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M7 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M4 10 12 4l8 6v10H4V10Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 20v-7h10v7" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 16h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M7 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+      </svg>`,
+  },
+  garden: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="12" cy="9" r="5" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 14v7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8 21h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.70"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="12" cy="9" r="5" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 14v7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8 21h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.70"/>
+      </svg>`,
+  },
+  terrace: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="5" y="13" width="14" height="7" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M7 16h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M7 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+        <circle cx="18" cy="6" r="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M18 2v1.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.70"/>
+        <path d="M21.2 3.8l-1.1 1.1" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.70"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="5" y="13" width="14" height="7" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M7 16h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M7 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+        <circle cx="18" cy="6" r="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M18 2v1.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.70"/>
+        <path d="M21.2 3.8l-1.1 1.1" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.70"/>
+      </svg>`,
+  },
+  pool: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="5" y="5" width="14" height="9" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M6 17c2-1 4-1 6 0s4 1 6 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 20c2-1 4-1 6 0s4 1 6 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.75"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="5" y="5" width="14" height="9" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M6 17c2-1 4-1 6 0s4 1 6 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 20c2-1 4-1 6 0s4 1 6 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.75"/>
+      </svg>`,
+  },
+  panel: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="6" y="4" width="12" height="16" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M9 7h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+        <path d="M11 10l-2.2 4h3l-1 4 4.4-6h-3l.8-2Z" fill="currentColor" fill-opacity="0.18"/>
+        <path d="M9 18h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="6" y="4" width="12" height="16" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M9 7h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+        <path d="M11 10l-2.2 4h3l-1 4 4.4-6h-3l.8-2Z" fill="currentColor" fill-opacity="0.20"/>
+        <path d="M9 18h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+      </svg>`,
+  },
+  server: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="6" y="4" width="12" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <rect x="6" y="10" width="12" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <rect x="6" y="16" width="12" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <path d="M9 6h.01M9 12h.01M9 18h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="6" y="4" width="12" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <rect x="6" y="10" width="12" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <rect x="6" y="16" width="12" height="4" rx="1.5" stroke="currentColor" stroke-width="2"/>
+        <path d="M9 6h.01M9 12h.01M9 18h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+      </svg>`,
+  },
+  storage: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M7 8l5-3 5 3v10l-5 3-5-3V8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 8l5 3 5-3" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.85"/>
+        <path d="M12 11v10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M7 8l5-3 5 3v10l-5 3-5-3V8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 8l5 3 5-3" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.85"/>
+        <path d="M12 11v10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+      </svg>`,
+  },
+  office: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="9" y="4" width="6" height="4" rx="1" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 8v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <rect x="6" y="11" width="12" height="6" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 17v3M16 17v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="9" y="4" width="6" height="4" rx="1" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 8v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <rect x="6" y="11" width="12" height="6" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 17v3M16 17v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  laundry: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="6" y="4" width="12" height="16" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 7h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+        <path d="M9 6h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="12" cy="14" r="3.5" stroke="currentColor" stroke-width="2"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="6" y="4" width="12" height="16" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 7h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+        <path d="M9 6h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="12" cy="14" r="3.5" stroke="currentColor" stroke-width="2"/>
+      </svg>`,
+  },
   door: {
     off: `
       <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -1170,7 +1392,59 @@ const NW_ICON_SVGS = {
         <path d="M6 10h6" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/>
       </svg>`,
   },
-  '3d-solar': {
+    '3d-floors': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_floors_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><rect x="5" y="4" width="14" height="4" rx="1.5" fill="url(#nw3d_floors_g)" stroke="currentColor" stroke-width="2"/><rect x="5" y="10" width="14" height="4" rx="1.5" fill="url(#nw3d_floors_g)" stroke="currentColor" stroke-width="2" opacity="0.95"/><rect x="5" y="16" width="14" height="4" rx="1.5" fill="url(#nw3d_floors_g)" stroke="currentColor" stroke-width="2" opacity="0.90"/><path d="M7 6h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_floors_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><rect x="5" y="4" width="14" height="4" rx="1.5" fill="url(#nw3d_floors_g)" stroke="currentColor" stroke-width="2"/><rect x="5" y="10" width="14" height="4" rx="1.5" fill="url(#nw3d_floors_g)" stroke="currentColor" stroke-width="2" opacity="0.95"/><rect x="5" y="16" width="14" height="4" rx="1.5" fill="url(#nw3d_floors_g)" stroke="currentColor" stroke-width="2" opacity="0.90"/><path d="M7 6h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-basement': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_basement_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><rect x="5" y="4" width="14" height="4" rx="1.5" fill="url(#nw3d_basement_g)" stroke="currentColor" stroke-width="2" opacity="0.92"/><rect x="5" y="10" width="14" height="4" rx="1.5" fill="url(#nw3d_basement_g)" stroke="currentColor" stroke-width="2" opacity="0.92"/><rect x="5" y="16" width="14" height="4" rx="1.5" fill="url(#nw3d_basement_g)" stroke="currentColor" stroke-width="2"/><path d="M12 7v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9.5 14.5 12 17l2.5-2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 6h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_basement_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><rect x="5" y="4" width="14" height="4" rx="1.5" fill="url(#nw3d_basement_g)" stroke="currentColor" stroke-width="2" opacity="0.92"/><rect x="5" y="10" width="14" height="4" rx="1.5" fill="url(#nw3d_basement_g)" stroke="currentColor" stroke-width="2" opacity="0.92"/><rect x="5" y="16" width="14" height="4" rx="1.5" fill="url(#nw3d_basement_g)" stroke="currentColor" stroke-width="2"/><path d="M12 7v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9.5 14.5 12 17l2.5-2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 6h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-upper': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_upper_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><rect x="5" y="4" width="14" height="4" rx="1.5" fill="url(#nw3d_upper_g)" stroke="currentColor" stroke-width="2"/><rect x="5" y="10" width="14" height="4" rx="1.5" fill="url(#nw3d_upper_g)" stroke="currentColor" stroke-width="2" opacity="0.92"/><rect x="5" y="16" width="14" height="4" rx="1.5" fill="url(#nw3d_upper_g)" stroke="currentColor" stroke-width="2" opacity="0.90"/><path d="M12 17V7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9.5 9.5 12 7l2.5 2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 6h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_upper_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><rect x="5" y="4" width="14" height="4" rx="1.5" fill="url(#nw3d_upper_g)" stroke="currentColor" stroke-width="2"/><rect x="5" y="10" width="14" height="4" rx="1.5" fill="url(#nw3d_upper_g)" stroke="currentColor" stroke-width="2" opacity="0.92"/><rect x="5" y="16" width="14" height="4" rx="1.5" fill="url(#nw3d_upper_g)" stroke="currentColor" stroke-width="2" opacity="0.90"/><path d="M12 17V7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9.5 9.5 12 7l2.5 2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 6h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-attic': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_attic_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><path d="M5 11 12 5l7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="7" y="11" width="10" height="9" rx="2" fill="url(#nw3d_attic_g)" stroke="currentColor" stroke-width="2"/><path d="M10 20v-4h4v4" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.85"/><path d="M7.6 12h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_attic_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><path d="M5 11 12 5l7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="7" y="11" width="10" height="9" rx="2" fill="url(#nw3d_attic_g)" stroke="currentColor" stroke-width="2"/><path d="M10 20v-4h4v4" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.85"/><path d="M7.6 12h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-garage': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_garage_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><path d="M4 10 12 4l8 6v10H4V10Z" fill="url(#nw3d_garage_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 20v-7h10v7" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 16h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.65"/><path d="M7.5 12h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_garage_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><path d="M4 10 12 4l8 6v10H4V10Z" fill="url(#nw3d_garage_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 20v-7h10v7" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 16h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.65"/><path d="M7.5 12h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-garden': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><radialGradient id="nw3d_garden_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 8) rotate(45) scale(10)"><stop offset="0" stop-color="currentColor" stop-opacity="0.55"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></radialGradient></defs><circle cx="12" cy="9" r="5" fill="url(#nw3d_garden_g)" stroke="currentColor" stroke-width="2"/><path d="M12 14v7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8 21h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.70"/><path d="M10 6.5c.8-.7 1.6-1.1 2-1.3" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><radialGradient id="nw3d_garden_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 8) rotate(45) scale(10)"><stop offset="0" stop-color="currentColor" stop-opacity="0.55"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></radialGradient></defs><circle cx="12" cy="9" r="5" fill="url(#nw3d_garden_g)" stroke="currentColor" stroke-width="2"/><path d="M12 14v7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8 21h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.70"/><path d="M10 6.5c.8-.7 1.6-1.1 2-1.3" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-panel': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_panel_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><rect x="6" y="4" width="12" height="16" rx="2" fill="url(#nw3d_panel_g)" stroke="currentColor" stroke-width="2"/><path d="M9 7h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.80"/><path d="M11 10l-2.2 4h3l-1 4 4.4-6h-3l.8-2Z" fill="currentColor" fill-opacity="0.20"/><path d="M9 18h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/><path d="M8.2 6.2h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_panel_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><rect x="6" y="4" width="12" height="16" rx="2" fill="url(#nw3d_panel_g)" stroke="currentColor" stroke-width="2"/><path d="M9 7h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.80"/><path d="M11 10l-2.2 4h3l-1 4 4.4-6h-3l.8-2Z" fill="currentColor" fill-opacity="0.20"/><path d="M9 18h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/><path d="M8.2 6.2h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-server': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_server_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><rect x="6" y="4" width="12" height="4" rx="1.5" fill="url(#nw3d_server_g)" stroke="currentColor" stroke-width="2"/><rect x="6" y="10" width="12" height="4" rx="1.5" fill="url(#nw3d_server_g)" stroke="currentColor" stroke-width="2" opacity="0.95"/><rect x="6" y="16" width="12" height="4" rx="1.5" fill="url(#nw3d_server_g)" stroke="currentColor" stroke-width="2" opacity="0.90"/><path d="M9 6h.01M9 12h.01M9 18h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M7.5 6h4" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_server_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><rect x="6" y="4" width="12" height="4" rx="1.5" fill="url(#nw3d_server_g)" stroke="currentColor" stroke-width="2"/><rect x="6" y="10" width="12" height="4" rx="1.5" fill="url(#nw3d_server_g)" stroke="currentColor" stroke-width="2" opacity="0.95"/><rect x="6" y="16" width="12" height="4" rx="1.5" fill="url(#nw3d_server_g)" stroke="currentColor" stroke-width="2" opacity="0.90"/><path d="M9 6h.01M9 12h.01M9 18h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M7.5 6h4" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-storage': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_storage_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.48"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><path d="M7 8l5-3 5 3v10l-5 3-5-3V8Z" fill="url(#nw3d_storage_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 8l5 3 5-3" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.85"/><path d="M12 11v10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/><path d="M8.2 8.4h4.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_storage_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.48"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><path d="M7 8l5-3 5 3v10l-5 3-5-3V8Z" fill="url(#nw3d_storage_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 8l5 3 5-3" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.85"/><path d="M12 11v10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/><path d="M8.2 8.4h4.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-office': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_office_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.48"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="9" y="4" width="6" height="4" rx="1" fill="url(#nw3d_office_g)" stroke="currentColor" stroke-width="2"/><path d="M12 8v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="6" y="11" width="12" height="6" rx="2" fill="url(#nw3d_office_g)" stroke="currentColor" stroke-width="2" opacity="0.95"/><path d="M8 17v3M16 17v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.5 12h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_office_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.48"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="9" y="4" width="6" height="4" rx="1" fill="url(#nw3d_office_g)" stroke="currentColor" stroke-width="2"/><path d="M12 8v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="6" y="11" width="12" height="6" rx="2" fill="url(#nw3d_office_g)" stroke="currentColor" stroke-width="2" opacity="0.95"/><path d="M8 17v3M16 17v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.5 12h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-laundry': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_laundry_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.48"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="6" y="4" width="12" height="16" rx="2" fill="url(#nw3d_laundry_g)" stroke="currentColor" stroke-width="2"/><path d="M8 7h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/><path d="M9 6h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><circle cx="12" cy="14" r="3.5" stroke="currentColor" stroke-width="2"/><path d="M8.2 6.2h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_laundry_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.48"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="6" y="4" width="12" height="16" rx="2" fill="url(#nw3d_laundry_g)" stroke="currentColor" stroke-width="2"/><path d="M8 7h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/><path d="M9 6h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><circle cx="12" cy="14" r="3.5" stroke="currentColor" stroke-width="2"/><path d="M8.2 6.2h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-terrace': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_terrace_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.46"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="5" y="13" width="14" height="7" rx="2" fill="url(#nw3d_terrace_g)" stroke="currentColor" stroke-width="2"/><path d="M7 16h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.65"/><circle cx="18" cy="6" r="2" fill="url(#nw3d_terrace_g)" stroke="currentColor" stroke-width="2"/><path d="M18 2v1.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.70"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_terrace_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.46"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="5" y="13" width="14" height="7" rx="2" fill="url(#nw3d_terrace_g)" stroke="currentColor" stroke-width="2"/><path d="M7 16h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.65"/><circle cx="18" cy="6" r="2" fill="url(#nw3d_terrace_g)" stroke="currentColor" stroke-width="2"/><path d="M18 2v1.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.70"/></svg>`,
+  },
+  '3d-pool': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_pool_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.46"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="5" y="5" width="14" height="9" rx="2" fill="url(#nw3d_pool_g)" stroke="currentColor" stroke-width="2"/><path d="M6 17c2-1 4-1 6 0s4 1 6 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6 20c2-1 4-1 6 0s4 1 6 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.75"/><path d="M7.5 6.2h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_pool_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.46"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="5" y="5" width="14" height="9" rx="2" fill="url(#nw3d_pool_g)" stroke="currentColor" stroke-width="2"/><path d="M6 17c2-1 4-1 6 0s4 1 6 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6 20c2-1 4-1 6 0s4 1 6 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.75"/><path d="M7.5 6.2h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+'3d-solar': {
     off: `
       <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <defs>
@@ -1684,6 +1958,39 @@ function nwNormalizeIconName(raw) {
   if (!s) return '';
   // normalize common german terms
   const map = {
+    // Struktur / Bereiche
+    geschoss: 'floors',
+    etage: 'floors',
+    etagen: 'floors',
+    keller: 'basement',
+    untergeschoss: 'basement',
+    ug: 'basement',
+    erdgeschoss: 'ground',
+    eg: 'ground',
+    obergeschoss: 'upper',
+    og: 'upper',
+    dachgeschoss: 'attic',
+    dg: 'attic',
+    aussenbereich: 'garden',
+    außenbereich: 'garden',
+    garten: 'garden',
+    garage: 'garage',
+    terrasse: 'terrace',
+    pool: 'pool',
+    schaltschrank: 'panel',
+    elektro: 'panel',
+    verteilung: 'panel',
+    server: 'server',
+    netzwerk: 'server',
+    lager: 'storage',
+    abstellraum: 'storage',
+    buero: 'office',
+    büro: 'office',
+    waschkueche: 'laundry',
+    waschküche: 'laundry',
+    waesche: 'laundry',
+    wäsche: 'laundry',
+
     licht: 'bulb',
     lampe: 'bulb',
     beleuchtung: 'bulb',

@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.185",
+    "version": "0.6.186",
     "news": {
+      "0.6.186": {
+        "en": "More icon options for floors/areas (basement, attic, outdoor, garage, panel, server, etc.) incl. 3D variants.",
+        "de": "Mehr Icon-Optionen für Geschosse/Bereiche (Keller, Dach, Außenbereich, Garage, Schaltschrank, Server, usw.) inkl. 3D-Varianten."
+      },
       "0.6.185": {
         "en": [
           "SmartHome: added dynamic brand/model device icons via icon keys (e.g. \"inv:SMA\", \"wb:Tesla\")",
@@ -1521,7 +1525,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.185",
+  "version": "0.6.186",
   "news": {
     "0.6.185": {
       "en": [
