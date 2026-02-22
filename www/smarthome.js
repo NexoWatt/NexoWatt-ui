@@ -157,6 +157,10 @@ const nwViewState = {
   groupByType: false,
 };
 
+// SmartHome VIS: Filter-/Chip-Leiste optional.
+// Wenn im HTML nicht vorhanden, wird die Endkunden-UI ohne Filter gerendert (cleaner).
+let nwShFiltersUiEnabled = true;
+
 // Textgröße (Endkunde, persistiert pro Browser)
 // - compact | normal | large
 // Wird als CSS‑Klasse auf #nw-smarthome-root gesetzt.
@@ -4873,8 +4877,11 @@ function nwActivatePage(pageId) {
   nwFilterState.favoritesOnly = false;
 
   // Optional default grouping
-  if (page.viewMode === 'rooms' || page.viewMode === 'functions') {
+  if (nwShFiltersUiEnabled && (page.viewMode === 'rooms' || page.viewMode === 'functions')) {
     nwViewState.mode = page.viewMode;
+  } else if (!nwShFiltersUiEnabled) {
+    // No filter UI → keep rendering in "rooms" mode for a predictable app-like layout.
+    nwViewState.mode = 'rooms';
   }
 
   // Page-spezifische Layout-Regeln
@@ -4925,8 +4932,10 @@ async function nwLoadSmartHomeConfig() {
       nwFilterState.page.funcIds = Array.isArray(eff0.funcIds) ? eff0.funcIds.slice() : [];
       nwFilterState.page.types = Array.isArray(eff0.types) ? eff0.types.slice() : [];
       nwFilterState.page.favoritesOnly = !!eff0.favoritesOnly;
-      if (p.viewMode === 'rooms' || p.viewMode === 'functions') {
+      if (nwShFiltersUiEnabled && (p.viewMode === 'rooms' || p.viewMode === 'functions')) {
         nwViewState.mode = p.viewMode;
+      } else if (!nwShFiltersUiEnabled) {
+        nwViewState.mode = 'rooms';
       }
 
       // Page-spezifische Layout-Regeln
@@ -4987,9 +4996,11 @@ function nwApplyFiltersAndRender() {
   const filtered = nwApplyFilters(base);
 
   // chips based on the base list (page preset), so chips stay relevant in the current section
-  nwRenderViewChips();
-  nwRenderFunctionChips(base);
-  nwRenderTextSizeChips();
+  if (nwShFiltersUiEnabled) {
+    nwRenderViewChips();
+    nwRenderFunctionChips(base);
+    nwRenderTextSizeChips();
+  }
 
   if (!filtered.length) {
     if (!nwAllDevices.length) {
@@ -5001,7 +5012,7 @@ function nwApplyFiltersAndRender() {
   }
 
   nwShowEmptyState(false);
-  if (nwViewState.mode === 'functions') nwRenderFunctions(filtered);
+  if (nwShFiltersUiEnabled && nwViewState.mode === 'functions') nwRenderFunctions(filtered);
   else nwRenderRooms(filtered);
 }
 
@@ -5083,11 +5094,32 @@ async function nwLoadUiConfigFlags() {
 async function nwBootstrap() {
   nwInitMenu();
 
+  // Detect if the filter UI exists in the DOM. If not, we intentionally run in "clean" mode.
+  // (No chips, always rooms view, no hidden/remembered user filters.)
+  nwShFiltersUiEnabled = !!(
+    document.getElementById('nw-filter-view') ||
+    document.getElementById('nw-filter-functions') ||
+    document.getElementById('nw-filter-textsize')
+  );
+
   // UI‑Prefs (persistiert pro Browser)
-  nwViewState.mode = nwLoadViewMode(nwViewState.mode);
-  nwTextSizeState.size = nwLoadTextSize(nwTextSizeState.size);
-  nwApplyTextSizeClass(nwTextSizeState.size);
-  nwFilterState.favoritesFirst = nwLoadBoolLS(NW_SH_FAVORITES_FIRST_LS_KEY, NW_SH_FAVORITES_FIRST_DEFAULT);
+  if (nwShFiltersUiEnabled) {
+    nwViewState.mode = nwLoadViewMode(nwViewState.mode);
+    nwTextSizeState.size = nwLoadTextSize(nwTextSizeState.size);
+    nwApplyTextSizeClass(nwTextSizeState.size);
+    nwFilterState.favoritesFirst = nwLoadBoolLS(NW_SH_FAVORITES_FIRST_LS_KEY, NW_SH_FAVORITES_FIRST_DEFAULT);
+  } else {
+    // Clean mode: do not apply remembered chip settings (otherwise user can get "stuck" in filters)
+    nwViewState.mode = 'rooms';
+    nwTextSizeState.size = 'normal';
+    nwApplyTextSizeClass(nwTextSizeState.size);
+    nwFilterState.favoritesFirst = false;
+    try {
+      localStorage.removeItem(NW_SH_VIEW_MODE_LS_KEY);
+      localStorage.removeItem(NW_SH_TEXT_SIZE_LS_KEY);
+      localStorage.removeItem(NW_SH_FAVORITES_FIRST_LS_KEY);
+    } catch (_e) {}
+  }
   nwFavoriteOverrides = nwLoadFavoriteOverrides();
 
   // SmartHome Konfiguration (Räume/Funktionen/Seiten) + Sidebar Navigation
