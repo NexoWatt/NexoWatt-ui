@@ -4146,6 +4146,7 @@ buildSmartHomeDevicesFromConfig() {
 
   // --- SmartHomeConfig v1: rooms/functions/devices (primary source) ---
   const shc = this.getSmartHomeConfig ? this.getSmartHomeConfig() : null;
+  const floors = (shc && Array.isArray(shc.floors)) ? shc.floors : [];
   const rooms = (shc && Array.isArray(shc.rooms)) ? shc.rooms : [];
   const funcs = (shc && Array.isArray(shc.functions)) ? shc.functions : [];
   const cfgDevices = (shc && Array.isArray(shc.devices)) ? shc.devices : [];
@@ -4155,6 +4156,18 @@ buildSmartHomeDevicesFromConfig() {
     if (!roomId) return '';
     const r = rooms.find(rm => rm && rm.id === roomId);
     return (r && r.name) || roomId;
+  };
+
+  const resolveRoomFloorId = (roomId) => {
+    if (!roomId) return '';
+    const r = rooms.find(rm => rm && rm.id === roomId);
+    return (r && r.floorId) ? String(r.floorId) : '';
+  };
+
+  const resolveFloorName = (floorId) => {
+    if (!floorId) return '';
+    const f = floors.find(fl => fl && String(fl.id) === String(floorId));
+    return (f && f.name) ? String(f.name) : String(floorId);
   };
 
   const resolveFunctionName = (fnId) => {
@@ -4167,7 +4180,12 @@ buildSmartHomeDevicesFromConfig() {
     cfgDevices.forEach(cfgDev => {
       if (!cfgDev || !cfgDev.id) return;
       const type = cfgDev.type || 'switch';
-      const roomName = resolveRoomName(cfgDev.roomId);
+      const roomId = cfgDev.roomId || '';
+      const floorId = roomId
+        ? resolveRoomFloorId(roomId)
+        : String((Object.prototype.hasOwnProperty.call(cfgDev, 'floorId') ? cfgDev.floorId : '') || '').trim();
+      const floorName = resolveFloorName(floorId);
+      const roomName = roomId ? resolveRoomName(roomId) : (floorName || 'Allgemein');
       const fnName = resolveFunctionName(cfgDev.functionId);
       const behavior = cfgDev.behavior || {};
       const ioCfg = cfgDev.io || {};
@@ -4179,7 +4197,8 @@ buildSmartHomeDevicesFromConfig() {
         type,
         ...(typeof order === 'number' ? { order } : {}),
         // Keep stable IDs for filtering / navigation presets
-        roomId: cfgDev.roomId || '',
+        roomId,
+        floorId,
         functionId: cfgDev.functionId || '',
         room: roomName,
         function: fnName,

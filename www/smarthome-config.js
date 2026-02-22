@@ -220,6 +220,26 @@ const NW_SH_ICON_PREVIEW_SVGS = {
   thermometer: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 18a1.2 1.2 0 1 0 0-2.4A1.2 1.2 0 0 0 12 18Z" fill="currentColor"/></svg>`,
   sensor: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 3a7 7 0 0 0-7 7c0 5 7 11 7 11s7-6 7-11a7 7 0 0 0-7-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" fill="currentColor"/></svg>`,
   generic: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 6h12v12H6V6Z" stroke="currentColor" stroke-width="2"/></svg>`,
+
+  // Extra icons (Config usability)
+  home: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 10v10h14V10" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 20v-6h4v6" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`,
+  building: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 3h12v18H6V3Z" stroke="currentColor" stroke-width="2"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+  door: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M7 3h10v18H7V3Z" stroke="currentColor" stroke-width="2"/><path d="M14.5 12h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>`,
+  window: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M5 4h14v16H5V4Z" stroke="currentColor" stroke-width="2"/><path d="M12 4v16" stroke="currentColor" stroke-width="2"/><path d="M5 12h14" stroke="currentColor" stroke-width="2"/></svg>`,
+  lock: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6 11h12v10H6V11Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 16v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+  shield: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 3 20 7v6c0 5-4 8-8 9-4-1-8-4-8-9V7l8-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`,
+  wifi: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 8c5-4 15-4 20 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 12c3.5-3 10.5-3 14 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8.5 15.5c2-1.7 5-1.7 7 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 19h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>`,
+  bolt: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`,
+  battery: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 8h16v8H3V8Z" stroke="currentColor" stroke-width="2"/><path d="M21 10v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+  solar: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 18v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4 12h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18 12h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6.2 6.2l1.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16.4 16.4l1.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M17.8 6.2l-1.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.6 16.4 6.2 17.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" stroke="currentColor" stroke-width="2"/></svg>`,
+  car: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M5 16l1-5c.2-1 1-2 2.2-2h7.6c1.2 0 2 .9 2.2 2l1 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4 16h16v4H4v-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 20h.01M17 20h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>`,
+  charger: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M8 3v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16 3v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 9h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 9v3a3 3 0 0 0 6 0V9" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 14l-2 4h3l-1 4 4-6h-3l1-2Z" fill="currentColor"/></svg>`,
+  water: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 2s6 6 6 11a6 6 0 1 1-12 0c0-5 6-11 6-11Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`,
+  fan: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" fill="currentColor"/><path d="M12 12c6-4 9-2 9 1 0 3-3 5-6 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 12c-6-4-9-2-9 1 0 3 3 5 6 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 12c0 7-3 9-5 7-2-2-2-6 1-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+  bell: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M18 16H6l1-2v-4a5 5 0 0 1 10 0v4l1 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 18a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+  info: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z" stroke="currentColor" stroke-width="2"/><path d="M12 10v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 7h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>`,
+  star: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 2l3 7 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1 3-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`,
+  folder: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 6h7l2 2h9v12H3V6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`,
 };
 
 function nwShcNormalizeIconName(value) {
@@ -239,7 +259,9 @@ function nwShcRenderIconPreview(previewEl, iconValue) {
   }
   // Emoji / short text fallback
   previewEl.innerHTML = '';
-  if (raw && raw.length <= 3) {
+  // Note: some emojis use variation selectors / multi-codepoint sequences.
+  // We still want a preview even if the string is a bit longer.
+  if (raw && raw.length <= 10) {
     previewEl.textContent = raw;
     previewEl.style.fontSize = '0.9rem';
   } else {
@@ -254,19 +276,42 @@ function nwShcRenderIconPreview(previewEl, iconValue) {
 const NW_SHCFG_ICON_OPTIONS = [
   { id: '', label: '(kein Icon)' },
 
-  // SVG Icons
-  { id: 'grid', label: 'Gebäude / Raster' },
-  { id: 'bulb', label: 'Lampe' },
+  // SVG Icons (NexoWatt Style)
+  { id: 'home', label: 'Home' },
+  { id: 'building', label: 'Gebäude' },
+  { id: 'folder', label: 'Ordner / Bereich' },
+  { id: 'grid', label: 'Raster' },
+
+  { id: 'bulb', label: 'Licht / Lampe' },
   { id: 'plug', label: 'Steckdose' },
   { id: 'thermostat', label: 'Thermostat' },
+  { id: 'thermometer', label: 'Temperatur' },
   { id: 'blinds', label: 'Rollo / Jalousie' },
+  { id: 'fan', label: 'Lüfter' },
+  { id: 'water', label: 'Wasser' },
+
+  { id: 'camera', label: 'Kamera' },
   { id: 'tv', label: 'TV' },
   { id: 'speaker', label: 'Audio' },
-  { id: 'camera', label: 'Kamera' },
+
+  { id: 'lock', label: 'Schloss' },
+  { id: 'door', label: 'Tür' },
+  { id: 'window', label: 'Fenster' },
+  { id: 'shield', label: 'Sicherheit' },
+  { id: 'bell', label: 'Klingel' },
+  { id: 'wifi', label: 'WLAN' },
+
+  { id: 'bolt', label: 'Energie' },
+  { id: 'battery', label: 'Batterie' },
+  { id: 'solar', label: 'PV / Sonne' },
+  { id: 'car', label: 'Auto' },
+  { id: 'charger', label: 'Laden' },
+
   { id: 'fire', label: 'Heizen' },
   { id: 'scene', label: 'Szene' },
-  { id: 'thermometer', label: 'Temperatur' },
   { id: 'sensor', label: 'Sensor' },
+  { id: 'info', label: 'Info' },
+  { id: 'star', label: 'Favorit' },
   { id: 'generic', label: 'Allgemein' },
 
   // Emoji Vorschläge
@@ -279,6 +324,21 @@ const NW_SHCFG_ICON_OPTIONS = [
   { id: '🧰', label: '🧰 Technik' },
   { id: '🌳', label: '🌳 Außenbereich' },
   { id: '🚗', label: '🚗 Garage' },
+  { id: '📷', label: '📷 Kamera' },
+  { id: '🎥', label: '🎥 Video' },
+  { id: '🔒', label: '🔒 Schloss' },
+  { id: '🪟', label: '🪟 Fenster' },
+  { id: '🧯', label: '🧯 Sicherheit' },
+  { id: '🔔', label: '🔔 Klingel' },
+  { id: '📡', label: '📡 Netzwerk' },
+  { id: '⚡', label: '⚡ Energie' },
+  { id: '🔋', label: '🔋 Batterie' },
+  { id: '☀️', label: '☀️ Sonne/PV' },
+  { id: '🌡️', label: '🌡️ Klima' },
+  { id: '💧', label: '💧 Wasser' },
+  { id: '🌀', label: '🌀 Lüfter' },
+  { id: '🎛️', label: '🎛️ Steuerung' },
+  { id: '⭐', label: '⭐ Favorit' },
   { id: '❓', label: '❓ Sonstiges' },
 ];
 
@@ -2817,7 +2877,14 @@ function nwRenderShcfgBuilderWorkspace(container) {
       .slice()
       .sort((a, b) => (a.order || 0) - (b.order || 0));
 
-    const devCount = devices.filter(d => roomsInFloor.some(r => r.id === d.roomId)).length;
+    const floorDeviceCount = devices.filter(d => {
+      if (!d) return false;
+      if (d.roomId) return false;
+      if (floor._virtual) return !d.floorId;
+      return d.floorId === floor.id;
+    }).length;
+
+    const devCount = devices.filter(d => roomsInFloor.some(r => r.id === d.roomId)).length + floorDeviceCount;
 
     fCard.innerHTML = `
       <div class="nw-shcfg-floor__head">
@@ -2830,6 +2897,13 @@ function nwRenderShcfgBuilderWorkspace(container) {
       </div>
       <div class="nw-shcfg-dropzone nw-shcfg-floor__drop">Raum aus der Bibliothek hier ablegen</div>
       <div class="nw-shcfg-floor__rooms"></div>
+
+      <div class="nw-shcfg-floor__devhead">
+        <div class="nw-shcfg-floor__devtitle">Geräte (direkt im Geschoss)</div>
+        <div class="nw-shcfg-floor__devmeta">${floorDeviceCount} Gerät(e)</div>
+      </div>
+      <div class="nw-shcfg-dropzone nw-shcfg-floor__devdrop">Gerät aus der Bibliothek hier ablegen</div>
+      <div class="nw-shcfg-floor__devices"></div>
     `;
 
     const floorIconEl = fCard.querySelector('.nw-shcfg-floor__icon');
@@ -2880,6 +2954,63 @@ function nwRenderShcfgBuilderWorkspace(container) {
     });
 
     const roomsWrap = fCard.querySelector('.nw-shcfg-floor__rooms');
+
+    // Dropzone (Gerät direkt ins Geschoss)
+    const fDevDrop = fCard.querySelector('.nw-shcfg-floor__devdrop');
+    fDevDrop?.addEventListener('dragover', (e) => {
+      const payload = nwShcfgDragGet(e);
+      if (!payload || payload.kind !== 'device-template' || !payload.templateId) return;
+      e.preventDefault();
+      fDevDrop.classList.add('is-over');
+    });
+    fDevDrop?.addEventListener('dragleave', () => fDevDrop.classList.remove('is-over'));
+    fDevDrop?.addEventListener('drop', (e) => {
+      e.preventDefault();
+      fDevDrop.classList.remove('is-over');
+      const payload = nwShcfgDragGet(e);
+      if (!payload || payload.kind !== 'device-template' || !payload.templateId) return;
+      const dev = nwAddDeviceFromTemplate(payload.templateId, { floorId: floor._virtual ? null : floor.id, silent: true });
+      if (dev) {
+        builderUi.selected = { kind: 'device', id: dev.id };
+        // Keep the building view – properties panel will show the device mapping
+        nwRenderAll();
+      }
+    });
+
+    // Floor-level devices list
+    const devWrap = fCard.querySelector('.nw-shcfg-floor__devices');
+    const floorDevs = devices
+      .filter(d => {
+        if (!d) return false;
+        if (d.roomId) return false;
+        if (floor._virtual) return !d.floorId;
+        return d.floorId === floor.id;
+      })
+      .slice()
+      .sort(nwSortByOrder);
+
+    floorDevs.forEach((dev) => {
+      const dChip = document.createElement('div');
+      dChip.className = 'nw-shcfg-devchip';
+      if (builderUi.selected && builderUi.selected.kind === 'device' && builderUi.selected.id === dev.id) dChip.classList.add('is-selected');
+
+      const typeLabel = String(dev.type || 'device').toUpperCase();
+      dChip.innerHTML = `
+        <div class="nw-shcfg-devchip__title"><span class="nw-shcfg-devchip__icon"></span>${nwEscapeHtml(dev.alias || dev.name || dev.id)}</div>
+        <div class="nw-shcfg-devchip__meta">${nwEscapeHtml(typeLabel)}</div>
+      `;
+
+      const devIconEl = dChip.querySelector('.nw-shcfg-devchip__icon');
+      if (devIconEl) nwShcRenderIconPreview(devIconEl, dev.icon || 'generic');
+
+      dChip.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        builderUi.selected = { kind: 'device', id: dev.id };
+        nwRenderShcfgShell();
+      });
+
+      devWrap?.appendChild(dChip);
+    });
 
     roomsInFloor.forEach(room => {
       const rChip = document.createElement('div');
@@ -3184,10 +3315,17 @@ function nwRenderShcfgBuilderProps(container) {
         nwMarkDirty(true);
         // selection fallback
         const roomId = dev.roomId;
-        const roomDevs = devices.filter(d => d.roomId === roomId);
-        if (roomDevs.length) builderUi.selected = { kind: 'device', id: roomDevs[0].id };
-        else if (roomId) builderUi.selected = { kind: 'room', id: roomId };
-        else builderUi.selected = rooms.length ? { kind: 'room', id: rooms[0].id } : null;
+        const floorId = dev.floorId;
+        if (roomId) {
+          const roomDevs = devices.filter(d => d.roomId === roomId);
+          if (roomDevs.length) builderUi.selected = { kind: 'device', id: roomDevs[0].id };
+          else builderUi.selected = { kind: 'room', id: roomId };
+        } else {
+          const sameFloorDevs = devices.filter(d => !d.roomId && ((d.floorId || null) === (floorId || null)));
+          if (sameFloorDevs.length) builderUi.selected = { kind: 'device', id: sameFloorDevs[0].id };
+          else if (floorId) builderUi.selected = { kind: 'floor', id: floorId };
+          else builderUi.selected = rooms.length ? { kind: 'room', id: rooms[0].id } : ((cfg.floors && cfg.floors.length) ? { kind: 'floor', id: cfg.floors[0].id } : null);
+        }
         nwRenderAll();
       }
     });
@@ -3223,15 +3361,63 @@ function nwRenderShcfgBuilderProps(container) {
     typeInput.readOnly = true;
     container.appendChild(nwCreateFieldRow('Typ', typeInput));
 
-    // Room
-    const roomOptions = [{ value: '', label: '—' }, ...rooms.map(r => ({ value: r.id, label: r.name }))];
+    // Placement (room vs floor)
+    const floors = Array.isArray(cfg.floors) ? cfg.floors.slice().sort(nwSortByOrder) : [];
+    const hasFloorProp = Object.prototype.hasOwnProperty.call(dev, 'floorId');
+    const placement = dev.roomId ? 'room' : (hasFloorProp ? 'floor' : 'none');
+    const placementOptions = [
+      { value: 'room', label: 'In Raum' },
+      { value: 'floor', label: 'Direkt im Geschoss' },
+      { value: 'none', label: '— (nicht zugeordnet)' },
+    ];
+
     container.appendChild(
-      nwCreateFieldRow('Raum', nwShcfgCreateSelect(roomOptions, dev.roomId || '', (v) => {
-        dev.roomId = v || null;
+      nwCreateFieldRow('Zuordnung', nwShcfgCreateSelect(placementOptions, placement, (v) => {
+        const mode = String(v || 'room');
+        const prevRoomId = dev.roomId;
+        if (mode === 'room') {
+          dev.floorId = null;
+          if (!dev.roomId) dev.roomId = rooms.length ? (rooms[0] && rooms[0].id) : null;
+        } else if (mode === 'floor') {
+          let desiredFloorId = dev.floorId;
+          if (!desiredFloorId && prevRoomId) {
+            const r = rooms.find(x => x && x.id === prevRoomId);
+            desiredFloorId = (r && r.floorId) ? r.floorId : null;
+          }
+          if (!desiredFloorId && floors.length) desiredFloorId = floors[0].id;
+          dev.roomId = null;
+          dev.floorId = desiredFloorId || null;
+        } else {
+          dev.roomId = null;
+          // Remove the property entirely so it is treated as truly "unassigned".
+          delete dev.floorId;
+        }
         nwMarkDirty(true);
         nwRenderAll();
       }))
     );
+
+    if (placement === 'room') {
+      const roomOptions = [{ value: '', label: '—' }, ...rooms.map(r => ({ value: r.id, label: r.name }))];
+      container.appendChild(
+        nwCreateFieldRow('Raum', nwShcfgCreateSelect(roomOptions, dev.roomId || '', (v) => {
+          dev.roomId = v || null;
+          dev.floorId = null;
+          nwMarkDirty(true);
+          nwRenderAll();
+        }))
+      );
+    } else if (placement === 'floor') {
+      const floorOptions = [{ value: '', label: 'Ohne Geschoss' }, ...floors.map(f => ({ value: f.id, label: f.name }))];
+      container.appendChild(
+        nwCreateFieldRow('Geschoss', nwShcfgCreateSelect(floorOptions, dev.floorId || '', (v) => {
+          dev.floorId = v || null;
+          dev.roomId = null;
+          nwMarkDirty(true);
+          nwRenderAll();
+        }))
+      );
+    }
 
     // Function
     const fnOptions = [{ value: '', label: '—' }, ...funcs.map(f => ({ value: f.id, label: f.name }))];
@@ -3845,7 +4031,17 @@ function nwAddDeviceFromTemplate(templateId, opts = {}) {
   const rooms = Array.isArray(nwShcState.config.rooms) ? nwShcState.config.rooms : [];
   const funcs = Array.isArray(nwShcState.config.functions) ? nwShcState.config.functions : [];
 
-  const roomId = (opts && typeof opts.roomId === 'string') ? opts.roomId : (rooms.length ? (rooms[0] && rooms[0].id) : null);
+  const explicitRoomId = (opts && typeof opts.roomId === 'string') ? opts.roomId : null;
+  const hasFloorOpt = !!(opts && Object.prototype.hasOwnProperty.call(opts, 'floorId'));
+  const explicitFloorId = hasFloorOpt ? (opts ? opts.floorId : null) : null;
+
+  // Default behavior: add into the first room (fast setup).
+  // If a floorId is provided (and no explicit room), create a floor-level device instead.
+  const roomId = (explicitRoomId !== null)
+    ? nwShcfgNullIfEmpty(explicitRoomId)
+    : (hasFloorOpt ? null : (rooms.length ? (rooms[0] && rooms[0].id) : null));
+
+  const floorId = (!roomId) ? nwShcfgNullIfEmpty(explicitFloorId) : null;
   const functionId = (opts && typeof opts.functionId === 'string') ? opts.functionId : (funcs.length ? (funcs[0] && funcs[0].id) : null);
 
   const baseIdMap = {
@@ -3892,6 +4088,7 @@ function nwAddDeviceFromTemplate(templateId, opts = {}) {
     alias: (tpl && tpl.name) ? tpl.name : (aliasMap[t] || 'Neues Gerät'),
     type: t,
     roomId: roomId || null,
+    ...(hasFloorOpt ? { floorId: floorId || null } : {}),
     functionId: functionId || null,
     icon: iconMap[t] || '',
     templateId: (tpl && tpl.id) ? tpl.id : undefined,

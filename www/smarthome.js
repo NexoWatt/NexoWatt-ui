@@ -361,6 +361,252 @@ const NW_ICON_SVGS = {
         <path d="M8 12l2.2 2.2L16 8.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>`,
   },
+
+  // Extra icons (used by floors/rooms & custom device icons)
+  home: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M3 10.5 12 3l9 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M5 10v10h14V10" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M10 20v-6h4v6" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M3 10.5 12 3l9 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M5 10v10h14V10" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M10 20v-6h4v6" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+  },
+  building: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M6 3h12v18H6V3Z" stroke="currentColor" stroke-width="2"/>
+        <path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M6 3h12v18H6V3Z" stroke="currentColor" stroke-width="2"/>
+        <path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  folder: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M3 6h7l2 2h9v12H3V6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M3 6h7l2 2h9v12H3V6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+  },
+  door: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M7 3h10v18H7V3Z" stroke="currentColor" stroke-width="2"/>
+        <path d="M14.5 12h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M7 3h10v18H7V3Z" stroke="currentColor" stroke-width="2"/>
+        <path d="M14.5 12h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+      </svg>`,
+  },
+  window: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M5 4h14v16H5V4Z" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 4v16" stroke="currentColor" stroke-width="2"/>
+        <path d="M5 12h14" stroke="currentColor" stroke-width="2"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M5 4h14v16H5V4Z" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 4v16" stroke="currentColor" stroke-width="2"/>
+        <path d="M5 12h14" stroke="currentColor" stroke-width="2"/>
+      </svg>`,
+  },
+  lock: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M7 11V8a5 5 0 0 1 10 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 11h12v10H6V11Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12 16v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M7 11V8a5 5 0 0 1 10 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 11h12v10H6V11Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12 16v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  shield: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 3 20 7v6c0 5-4 8-8 9-4-1-8-4-8-9V7l8-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 3 20 7v6c0 5-4 8-8 9-4-1-8-4-8-9V7l8-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+  },
+  wifi: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M2 8c5-4 15-4 20 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M5 12c3.5-3 10.5-3 14 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8.5 15.5c2-1.7 5-1.7 7 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 19h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M2 8c5-4 15-4 20 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M5 12c3.5-3 10.5-3 14 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8.5 15.5c2-1.7 5-1.7 7 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 19h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+      </svg>`,
+  },
+  bolt: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+  },
+  battery: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M3 8h16v8H3V8Z" stroke="currentColor" stroke-width="2"/>
+        <path d="M21 10v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M3 8h16v8H3V8Z" stroke="currentColor" stroke-width="2"/>
+        <path d="M21 10v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  solar: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 18v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M4 12h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M18 12h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6.2 6.2l1.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M16.4 16.4l1.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M17.8 6.2l-1.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M7.6 16.4 6.2 17.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" stroke="currentColor" stroke-width="2"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 18v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M4 12h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M18 12h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6.2 6.2l1.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M16.4 16.4l1.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M17.8 6.2l-1.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M7.6 16.4 6.2 17.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" stroke="currentColor" stroke-width="2"/>
+      </svg>`,
+  },
+  car: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M5 16l1-5c.2-1 1-2 2.2-2h7.6c1.2 0 2 .9 2.2 2l1 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M4 16h16v4H4v-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 20h.01M17 20h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M5 16l1-5c.2-1 1-2 2.2-2h7.6c1.2 0 2 .9 2.2 2l1 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M4 16h16v4H4v-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 20h.01M17 20h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+      </svg>`,
+  },
+  charger: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M8 3v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M16 3v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M7 9h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9 9v3a3 3 0 0 0 6 0V9" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12 14l-2 4h3l-1 4 4-6h-3l1-2Z" fill="currentColor"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M8 3v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M16 3v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M7 9h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9 9v3a3 3 0 0 0 6 0V9" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12 14l-2 4h3l-1 4 4-6h-3l1-2Z" fill="currentColor"/>
+      </svg>`,
+  },
+  water: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 2s6 6 6 11a6 6 0 1 1-12 0c0-5 6-11 6-11Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 2s6 6 6 11a6 6 0 1 1-12 0c0-5 6-11 6-11Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+  },
+  fan: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" fill="currentColor"/>
+        <path d="M12 12c6-4 9-2 9 1 0 3-3 5-6 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 12c-6-4-9-2-9 1 0 3 3 5 6 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 12c0 7-3 9-5 7-2-2-2-6 1-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" fill="currentColor"/>
+        <path d="M12 12c6-4 9-2 9 1 0 3-3 5-6 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 12c-6-4-9-2-9 1 0 3 3 5 6 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 12c0 7-3 9-5 7-2-2-2-6 1-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  bell: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M18 16H6l1-2v-4a5 5 0 0 1 10 0v4l1 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M10 18a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M18 16H6l1-2v-4a5 5 0 0 1 10 0v4l1 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M10 18a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  info: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 10v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 7h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 10v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 7h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+      </svg>`,
+  },
+  star: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 2l3 7 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1 3-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 2l3 7 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1 3-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+  },
 };
 
 // Helper: return the raw SVG string for a given icon name.
@@ -378,7 +624,24 @@ function nwIsEmojiLike(str) {
   if (!str) return false;
   const s = String(str).trim();
   // emoji are typically > 1 byte, but we accept any short string
-  return s.length > 0 && s.length <= 3;
+  return s.length > 0 && s.length <= 10;
+}
+
+function nwEscapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function nwStaticIconHtml(iconValue) {
+  const raw = String(iconValue || '').trim();
+  if (!raw) return '';
+  const key = nwNormalizeIconName(raw);
+  if (key && NW_ICON_SVGS[key]) return NW_ICON_SVGS[key].off;
+  return nwEscapeHtml(raw);
 }
 
 function nwNormalizeIconName(raw) {
@@ -1163,7 +1426,13 @@ function nwGroupByRoom(devices) {
   const map = new Map();
   (devices || []).forEach((d) => {
     const rid = nwGetDeviceRoomId(d);
-    const key = rid || '__no_room__';
+    // Devices can also live directly on a floor (no roomId) – group them under the
+    // corresponding floor so the visual structure matches the editor.
+    let key = rid;
+    if (!key) {
+      const fid = nwGetDeviceFloorId(d);
+      key = fid ? `__floor__${fid}` : '__no_room__';
+    }
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(d);
   });
@@ -1186,6 +1455,20 @@ function nwGroupByRoom(devices) {
   });
 
   return keys.map((key) => {
+    // Floor device groups
+    if (key.startsWith('__floor__')) {
+      const fid = key.slice('__floor__'.length);
+      return {
+        roomId: key, // virtual group id
+        room: 'Allgemein',
+        floorId: fid,
+        icon: 'folder',
+        order: -1,
+        isFloorDevicesGroup: true,
+        devices: map.get(key) || [],
+      };
+    }
+
     const meta = nwShMeta.roomsById[key];
     const name = (meta && meta.name)
       ? meta.name
@@ -1199,6 +1482,7 @@ function nwGroupByRoom(devices) {
       floorId: meta && meta.floorId ? String(meta.floorId).trim() : '',
       icon: meta && meta.icon ? String(meta.icon) : '',
       order: (meta && Number.isFinite(+meta.order)) ? +meta.order : undefined,
+      isFloorDevicesGroup: false,
       devices: map.get(key) || [],
     };
   });
@@ -4376,8 +4660,9 @@ function nwRenderRooms(devices) {
     title.className = 'nw-sh-room__title';
 
     const roomIcon = String(g && g.icon ? g.icon : '').trim();
-    if (roomIcon) {
-      title.innerHTML = `<span class="nw-sh-room__icon">${roomIcon}</span><span class="nw-sh-room__label"></span>`;
+    const roomIconHtml = nwStaticIconHtml(roomIcon);
+    if (roomIconHtml) {
+      title.innerHTML = `<span class="nw-sh-room__icon">${roomIconHtml}</span><span class="nw-sh-room__label"></span>`;
       const lbl = title.querySelector('.nw-sh-room__label');
       if (lbl) lbl.textContent = g.room;
     } else {
@@ -4387,7 +4672,7 @@ function nwRenderRooms(devices) {
     header.appendChild(title);
 
     // Small room summary (e.g. temperature / humidity) based on all devices in that room.
-    const summaryText = nwComputeRoomSummary(g.roomId, nwAllDevices);
+    const summaryText = (g && g.isFloorDevicesGroup) ? '' : nwComputeRoomSummary(g.roomId, nwAllDevices);
     if (summaryText) {
       const summary = document.createElement('div');
       summary.className = 'nw-sh-room__summary';
@@ -4432,6 +4717,7 @@ function nwRenderRooms(devices) {
     const f = isUnassigned ? null : floorsById[floorId];
     const floorName = isUnassigned ? 'Ohne Geschoss' : (f && (f.name || f.title) ? (f.name || f.title) : floorId);
     const floorIcon = isUnassigned ? '🧩' : String((f && f.icon) ? f.icon : '🏢');
+    const floorIconHtml = nwStaticIconHtml(floorIcon);
 
     const floorSection = document.createElement('section');
     floorSection.className = 'nw-sh-floor' + (isUnassigned ? ' nw-sh-floor--unassigned' : '');
@@ -4441,7 +4727,7 @@ function nwRenderRooms(devices) {
 
     const title = document.createElement('div');
     title.className = 'nw-sh-floor__title';
-    title.innerHTML = `${floorIcon ? `<span class=\"nw-sh-floor__icon\">${floorIcon}</span>` : ''}<span class=\"nw-sh-floor__label\"></span>`;
+    title.innerHTML = `${floorIconHtml ? `<span class=\"nw-sh-floor__icon\">${floorIconHtml}</span>` : ''}<span class=\"nw-sh-floor__label\"></span>`;
     const lbl = title.querySelector('.nw-sh-floor__label');
     if (lbl) lbl.textContent = floorName;
     header.appendChild(title);
@@ -4449,9 +4735,10 @@ function nwRenderRooms(devices) {
     // Optional quick summary (rooms + device count)
     const roomsInFloor = floorMap.get(floorId) || [];
     const devCount = roomsInFloor.reduce((acc, rg) => acc + ((rg && Array.isArray(rg.devices)) ? rg.devices.length : 0), 0);
+    const roomCount = roomsInFloor.filter(rg => rg && rg.roomId && !String(rg.roomId).startsWith('__floor__')).length;
     const sum = document.createElement('div');
     sum.className = 'nw-sh-floor__summary';
-    sum.textContent = `${roomsInFloor.length} Räume · ${devCount} Geräte`;
+    sum.textContent = `${roomCount} Räume · ${devCount} Geräte`;
     header.appendChild(sum);
 
     floorSection.appendChild(header);
@@ -4555,6 +4842,225 @@ function nwRenderFunctions(devices) {
     }
     wrap.appendChild(section);
   });
+}
+
+function nwFindFloorPageId(floorId) {
+  const fid = nwNormalizeId(floorId);
+  const directId = fid ? `floor_${fid}` : 'floor_unassigned';
+  const pages = Array.isArray(nwPageState.pages) ? nwPageState.pages : [];
+  if (pages.some(p => p && p.id === directId)) return directId;
+
+  // Fallback: try to locate a floor page by its derived floor id
+  const match = pages.find(p => p && nwIsFloorPage(p) && nwGetFloorIdFromPage(p) === fid);
+  return match ? match.id : directId;
+}
+
+function nwFindRoomPageId(roomId) {
+  const rid = nwNormalizeId(roomId);
+  const directId = rid ? `room_${rid}` : '';
+  const pages = Array.isArray(nwPageState.pages) ? nwPageState.pages : [];
+  if (directId && pages.some(p => p && p.id === directId)) return directId;
+
+  const match = pages.find(p => p && Array.isArray(p.roomIds) && p.roomIds.length === 1 && nwNormalizeId(p.roomIds[0]) === rid);
+  return match ? match.id : directId;
+}
+
+function nwRenderHome(devices) {
+  const wrap = document.getElementById('nw-smarthome-rooms');
+  if (!wrap) return;
+  nwClear(wrap);
+
+  const root = document.createElement('div');
+  root.className = 'nw-sh-home';
+
+  const all = Array.isArray(devices) ? devices.slice() : [];
+  const favs = all.filter(d => nwIsFavorite(d));
+  const onCount = all.filter(d => nwIsOn(d)).length;
+
+  // --- Info / Summary ---
+  const info = document.createElement('section');
+  info.className = 'nw-sh-home__info';
+  info.innerHTML = `
+    <div class="nw-sh-home__info-title">Übersicht</div>
+    <div class="nw-sh-home__info-grid">
+      <div class="nw-sh-home__stat"><div class="nw-sh-home__stat-val">${all.length}</div><div class="nw-sh-home__stat-lbl">Geräte</div></div>
+      <div class="nw-sh-home__stat"><div class="nw-sh-home__stat-val">${favs.length}</div><div class="nw-sh-home__stat-lbl">Favoriten</div></div>
+      <div class="nw-sh-home__stat"><div class="nw-sh-home__stat-val">${onCount}</div><div class="nw-sh-home__stat-lbl">Aktiv</div></div>
+    </div>
+  `;
+  root.appendChild(info);
+
+  // --- Favorites ---
+  const favSec = document.createElement('section');
+  favSec.className = 'nw-sh-home__section';
+  const favHead = document.createElement('div');
+  favHead.className = 'nw-sh-home__section-head';
+  favHead.textContent = 'Favoriten';
+  favSec.appendChild(favHead);
+
+  if (favs.length) {
+    const grid = document.createElement('div');
+    grid.className = 'nw-sh-grid nw-sh-grid--home';
+    const arr = favs.slice().sort(nwCompareDevices);
+    arr.forEach((dev) => grid.appendChild(nwCreateTile(dev, { showRoom: true })));
+    favSec.appendChild(grid);
+  } else {
+    const empty = document.createElement('div');
+    empty.className = 'nw-sh-home__muted';
+    empty.textContent = 'Noch keine Favoriten gesetzt.';
+    favSec.appendChild(empty);
+  }
+  root.appendChild(favSec);
+
+  // --- Floors overview (tiles) ---
+  const floorSec = document.createElement('section');
+  floorSec.className = 'nw-sh-home__section';
+  const floorHead = document.createElement('div');
+  floorHead.className = 'nw-sh-home__section-head';
+  floorHead.textContent = 'Geschosse';
+  floorSec.appendChild(floorHead);
+
+  const floorsWrap = document.createElement('div');
+  floorsWrap.className = 'nw-sh-home__floors';
+
+  const cfg = nwShConfig || {};
+  const floors = Array.isArray(cfg.floors) ? cfg.floors.slice() : [];
+  const rooms = Array.isArray(cfg.rooms) ? cfg.rooms.slice() : [];
+
+  const sortByOrderName = (a, b) => {
+    const oa = Number.isFinite(+a.order) ? +a.order : 0;
+    const ob = Number.isFinite(+b.order) ? +b.order : 0;
+    if (oa !== ob) return oa - ob;
+    return String(a.name || a.title || a.id || '').toLowerCase().localeCompare(String(b.name || b.title || b.id || '').toLowerCase(), 'de');
+  };
+
+  const sortedFloors = floors
+    .map((f, idx) => ({ ...f, order: (typeof f.order === 'number') ? f.order : (idx + 1) }))
+    .slice()
+    .sort(sortByOrderName);
+
+  const unassignedRooms = rooms.filter(r => !nwNormalizeId(r && r.floorId));
+  const hasUnassignedDevices = all.some(d => nwGetDeviceFloorId(d) === '');
+
+  const floorTiles = [];
+  sortedFloors.forEach((f) => {
+    const fid = nwNormalizeId(f && f.id);
+    if (!fid) return;
+    floorTiles.push({
+      id: fid,
+      name: String(f.name || f.title || f.id || fid),
+      icon: String(f.icon || '🏢'),
+      order: (typeof f.order === 'number') ? f.order : 0,
+    });
+  });
+
+  if (unassignedRooms.length || hasUnassignedDevices) {
+    floorTiles.push({
+      id: '',
+      name: 'Ohne Geschoss',
+      icon: '🧩',
+      order: 99999,
+      _virtual: true,
+    });
+  }
+
+  floorTiles.forEach((fl) => {
+    const fid = nwNormalizeId(fl.id);
+    const roomsInFloor = rooms
+      .filter(r => (fid ? (nwNormalizeId(r && r.floorId) === fid) : !nwNormalizeId(r && r.floorId)))
+      .slice()
+      .sort(sortByOrderName);
+
+    const devCount = all.filter(d => nwGetDeviceFloorId(d) === fid).length;
+    const roomCount = roomsInFloor.length;
+
+    const tile = document.createElement('div');
+    tile.className = 'nw-sh-floor-tile';
+    tile.tabIndex = 0;
+    tile.setAttribute('role', 'button');
+
+    const head = document.createElement('div');
+    head.className = 'nw-sh-floor-tile__head';
+
+    const icon = document.createElement('div');
+    icon.className = 'nw-sh-floor-tile__icon';
+    icon.innerHTML = nwStaticIconHtml(fl.icon);
+
+    const name = document.createElement('div');
+    name.className = 'nw-sh-floor-tile__name';
+    name.textContent = fl.name;
+
+    head.appendChild(icon);
+    head.appendChild(name);
+    tile.appendChild(head);
+
+    const meta = document.createElement('div');
+    meta.className = 'nw-sh-floor-tile__meta';
+    meta.textContent = `${roomCount} Räume · ${devCount} Geräte`;
+    tile.appendChild(meta);
+
+    const roomsRow = document.createElement('div');
+    roomsRow.className = 'nw-sh-floor-tile__rooms';
+
+    const maxChips = 6;
+    roomsInFloor.slice(0, maxChips).forEach((r) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'nw-sh-room-chip';
+      chip.innerHTML = `${r.icon ? `<span class="nw-sh-room-chip__icon">${nwStaticIconHtml(r.icon)}</span>` : ''}<span class="nw-sh-room-chip__label"></span>`;
+      const lbl = chip.querySelector('.nw-sh-room-chip__label');
+      if (lbl) lbl.textContent = String(r.name || r.id);
+      chip.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const pid = nwFindRoomPageId(r.id);
+        if (pid) nwActivatePage(pid);
+      });
+      roomsRow.appendChild(chip);
+    });
+
+    if (roomsInFloor.length > maxChips) {
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'nw-sh-room-chip nw-sh-room-chip--more';
+      more.textContent = `+${roomsInFloor.length - maxChips}`;
+      more.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const pid = nwFindFloorPageId(fid);
+        if (pid) nwActivatePage(pid);
+      });
+      roomsRow.appendChild(more);
+    }
+
+    tile.appendChild(roomsRow);
+
+    const go = () => {
+      const pid = nwFindFloorPageId(fid);
+      if (pid) nwActivatePage(pid);
+    };
+    tile.addEventListener('click', go);
+    tile.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        go();
+      }
+    });
+
+    floorsWrap.appendChild(tile);
+  });
+
+  if (!floorTiles.length) {
+    const empty = document.createElement('div');
+    empty.className = 'nw-sh-home__muted';
+    empty.textContent = 'Noch keine Geschosse angelegt. (Bitte im SmartHome-Editor konfigurieren.)';
+    floorsWrap.appendChild(empty);
+  }
+
+  floorSec.appendChild(floorsWrap);
+  root.appendChild(floorSec);
+
+  wrap.appendChild(root);
 }
 
 // ---------- Sidebar Pages (Navigation Presets) ----------
@@ -5047,22 +5553,60 @@ function nwResolvePageFilters(page) {
   return res;
 }
 
-function nwGetDevicesForPage(page) {
-  if (!page) return Array.isArray(nwAllDevices) ? nwAllDevices.slice() : [];
+function nwIsFloorPage(page) {
+  const id = page && typeof page.id === 'string' ? page.id : '';
+  return id.startsWith('floor_');
+}
 
-  let list = Array.isArray(nwAllDevices) ? nwAllDevices.slice() : [];
+function nwGetFloorIdFromPage(page) {
+  const id = page && typeof page.id === 'string' ? page.id : '';
+  if (!id.startsWith('floor_')) return '';
+  if (id === 'floor_unassigned') return '';
+  return id.slice('floor_'.length);
+}
+
+function nwFilterDevicesForPage(allDevices, page) {
+  const list = Array.isArray(allDevices) ? allDevices.slice() : [];
+  if (!page) return list;
+
   const eff = nwResolvePageFilters(page);
+  const funcIds = Array.isArray(eff.funcIds) ? eff.funcIds.map(nwNormalizeId).filter(Boolean) : [];
+  const types = Array.isArray(eff.types) ? eff.types.map(nwNormalizeId).filter(Boolean) : [];
 
-  const roomIds = Array.isArray(eff.roomIds) ? eff.roomIds.filter(Boolean) : [];
-  const funcIds = Array.isArray(eff.funcIds) ? eff.funcIds.filter(Boolean) : [];
-  const types = Array.isArray(eff.types) ? eff.types.filter(Boolean) : [];
+  let out = list;
 
-  if (roomIds.length) list = list.filter((d) => roomIds.includes(d.roomId));
-  if (funcIds.length) list = list.filter((d) => funcIds.includes(d.funcId));
-  if (types.length) list = list.filter((d) => types.includes(d.type));
-  if (eff.favoritesOnly) list = list.filter((d) => d && d.ui && d.ui.favorite);
+  if (eff.favoritesOnly) {
+    out = out.filter(d => nwIsFavorite(d));
+  }
 
-  return list;
+  // Special case: floor pages should show everything inside the floor,
+  // including devices that live directly on the floor (no roomId).
+  if (nwIsFloorPage(page)) {
+    const fid = nwGetFloorIdFromPage(page);
+    out = out.filter(d => nwGetDeviceFloorId(d) === fid);
+  } else {
+    const roomIds = Array.isArray(eff.roomIds) ? eff.roomIds.map(nwNormalizeId).filter(Boolean) : [];
+    if (roomIds.length) {
+      const set = new Set(roomIds);
+      out = out.filter(d => set.has(nwGetDeviceRoomId(d)));
+    }
+  }
+
+  if (funcIds.length) {
+    const set = new Set(funcIds);
+    out = out.filter(d => set.has(nwGetDeviceFuncId(d)));
+  }
+
+  if (types.length) {
+    const set = new Set(types);
+    out = out.filter(d => set.has(nwNormalizeId(d && d.type)));
+  }
+
+  return out;
+}
+
+function nwGetDevicesForPage(page) {
+  return nwFilterDevicesForPage(nwAllDevices, page);
 }
 
 function nwUpdatePageCounts() {
@@ -5285,6 +5829,16 @@ function nwGetDeviceRoomId(dev) {
   return nwShMeta.roomIdByName[name] || '';
 }
 
+function nwGetDeviceFloorId(dev) {
+  const direct = nwNormalizeId(dev && dev.floorId);
+  if (direct) return direct;
+
+  const rid = nwGetDeviceRoomId(dev);
+  if (!rid) return '';
+  const rm = nwShMeta && nwShMeta.roomsById ? nwShMeta.roomsById[rid] : null;
+  return rm && rm.floorId ? nwNormalizeId(rm.floorId) : '';
+}
+
 function nwGetDeviceFuncId(dev) {
   const id = nwNormalizeId(dev && dev.functionId);
   if (id) return id;
@@ -5300,7 +5854,12 @@ function nwApplyPageFilters(devices) {
     out = out.filter(d => nwIsFavorite(d));
   }
 
-  if (Array.isArray(p.roomIds) && p.roomIds.length) {
+  // Floor pages show everything inside a floor, including floor-level devices.
+  const activePage = (nwPageState.pages || []).find(x => x && x.id === nwPageState.activeId) || null;
+  if (activePage && nwIsFloorPage(activePage)) {
+    const fid = nwGetFloorIdFromPage(activePage);
+    out = out.filter(d => nwGetDeviceFloorId(d) === fid);
+  } else if (Array.isArray(p.roomIds) && p.roomIds.length) {
     const set = new Set(p.roomIds.map(nwNormalizeId));
     out = out.filter(d => set.has(nwGetDeviceRoomId(d)));
   }
@@ -5319,10 +5878,23 @@ function nwApplyPageFilters(devices) {
 }
 
 function nwApplyFiltersAndRender() {
+  const activePage = (nwPageState.pages || []).find(p => p && p.id === nwPageState.activeId) || null;
+
   // 1) Apply base filters from the active page
   const base = nwApplyPageFilters(nwAllDevices);
   // 2) Apply user filters (favorites + function chip)
   const filtered = nwApplyFilters(base);
+
+  // Home uses its own overview layout (floors + favorites). No chip UI here.
+  if (activePage && activePage.id === 'home') {
+    if (!nwAllDevices.length) {
+      nwShowEmptyState(true, { enabled: nwSmartHomeEnabled, reason: 'empty' });
+      return;
+    }
+    nwShowEmptyState(false);
+    nwRenderHome(nwAllDevices);
+    return;
+  }
 
   // chips based on the base list (page preset), so chips stay relevant in the current section
   if (nwShFiltersUiEnabled) {
