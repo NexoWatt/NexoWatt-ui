@@ -69,6 +69,34 @@ function nwNormalizeSmartHomeConfig(cfg) {
   return c;
 }
 
+
+// --- Helpers -----------------------------------------------------------------
+// HTML-escaping for safe rendering (config UI is fed by user-entered text).
+function nwEscapeHtml(value) {
+  const s = (value === null || value === undefined) ? '' : String(value);
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// Generic sort helper: order ASC, then name/alias/id ASC.
+function nwSortByOrder(a, b) {
+  const aoRaw = (a && (a.order ?? a.sortOrder ?? a.idx)) ?? null;
+  const boRaw = (b && (b.order ?? b.sortOrder ?? b.idx)) ?? null;
+
+  const ao = Number.isFinite(Number(aoRaw)) ? Number(aoRaw) : 999999;
+  const bo = Number.isFinite(Number(boRaw)) ? Number(boRaw) : 999999;
+
+  if (ao !== bo) return ao - bo;
+
+  const aKey = String((a && (a.name ?? a.title ?? a.alias ?? a.id)) ?? '').toLowerCase();
+  const bKey = String((b && (b.name ?? b.title ?? b.alias ?? b.id)) ?? '').toLowerCase();
+  return aKey.localeCompare(bKey, 'de', { numeric: true, sensitivity: 'base' });
+}
+
 const NW_PAGE_ICON_OPTIONS = [
   { value: '', label: '(kein Icon)' },
   { value: '🏠', label: '🏠 Home' },

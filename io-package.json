@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.174",
+    "version": "0.6.176",
     "news": {
       "0.6.174": {
         "en": "SmartHome VIS: remove filter row labels (cleaner header) and right-align filter chips.",
@@ -1282,6 +1282,10 @@
       "0.6.105": {
         "en": "NexoLogic: Added advanced heating control blocks (PI room controller with anti-windup + periodic update, Summer/Winter switch, window contact lock, heating curve for flow setpoint, and a 2-point mixer pulse controller).",
         "de": "NexoLogic: Erweiterte Heizungs-/Regelungs-Bausteine ergänzt (PI-Raumregler mit Anti-Windup + zyklischem Update, Sommer/Winter-Umschalter, Fensterkontakt-Sperre, Heizkurve für Vorlauf-Soll sowie 2-Punkt-Mischer (Impuls))."
+      },
+      "0.6.176": {
+        "en": "SmartHome Config: Fix missing helper functions in the Drag & Drop builder (runtime errors).",
+        "de": "SmartHome-Konfiguration: Fehlende Helper-Funktionen im Drag-&-Drop Builder ergänzt (Runtime-Errors behoben)."
       }
     },
     "title": "NexoWatt UI",
