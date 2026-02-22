@@ -1,3 +1,8 @@
+## 0.6.181
+- SmartHome-VIS: Sidebar Navigation jetzt **X1-Style**: **Home → Geschoss → Räume** (verschachtelt). Geschosse sind standardmäßig aufgeklappt, damit Räume ohne Extra-Klick sofort auswählbar sind.
+- SmartHomeConfig: Button **„Standard-Seiten“** erzeugt jetzt automatisch die **Etagen → Räume** Struktur (statt flacher Raum-Liste).
+- Migration: alte, flache Default-Seiten (Home + Räume ohne Etagen) werden in der VIS automatisch auf die neue Etagen-Struktur umgestellt, sobald Geschosse vorhanden sind.
+
 ## 0.6.180
 - SmartHome-VIS: **Chip-/Filter-Leiste oben rechts entfernt** (Räume/Funktionen/Alle/Favoriten/Textgröße) – Endkunden-UI ist jetzt clean.
 - SmartHome-VIS: läuft automatisch im **"Rooms"-Modus** und rendert **Geschoss → Raum → Geräte-Kacheln** wie im Editor (keine versteckten/gespeicherten Filter mehr).

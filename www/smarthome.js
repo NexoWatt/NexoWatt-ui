@@ -4521,6 +4521,8 @@ function nwBuildMetaFromConfig(cfg) {
 
 function nwBuildDefaultPagesFromConfig(cfg) {
   const pages = [];
+
+  // Home = Overview (alle Geschosse + Räume)
   pages.push({
     id: 'home',
     title: 'Home',
@@ -4533,37 +4535,213 @@ function nwBuildDefaultPagesFromConfig(cfg) {
     order: 0,
   });
 
+  const floors = Array.isArray(cfg && cfg.floors) ? cfg.floors : [];
   const rooms = Array.isArray(cfg && cfg.rooms) ? cfg.rooms : [];
-  rooms
+
+  // If no floors exist, keep the legacy flat room navigation.
+  if (!floors.length) {
+    rooms
+      .slice()
+      .sort((a, b) => {
+        const oa = (typeof a.order === 'number') ? a.order : 0;
+        const ob = (typeof b.order === 'number') ? b.order : 0;
+        if (oa !== ob) return oa - ob;
+        return nwSortBy(String(a.name || ''), String(b.name || ''));
+      })
+      .forEach((r, idx) => {
+        const id = nwNormalizeId(r.id);
+        const name = nwNormalizeId(r.name);
+        if (!id || !name) return;
+        pages.push({
+          id: `room_${id}`,
+          title: name,
+          icon: r.icon || '🏷️',
+          viewMode: 'rooms',
+          roomIds: [id],
+          funcIds: [],
+          types: [],
+          favoritesOnly: false,
+          order: 10 + idx,
+        });
+      });
+    return pages;
+  }
+
+  // Rooms by floor
+  const roomsByFloor = new Map();
+  const unassignedRooms = [];
+
+  for (const r of rooms) {
+    const rid = nwNormalizeId(r && r.id);
+    const rname = nwNormalizeId(r && r.name);
+    if (!rid || !rname) continue;
+
+    const fid = nwNormalizeId(r && r.floorId);
+    if (fid) {
+      if (!roomsByFloor.has(fid)) roomsByFloor.set(fid, []);
+      roomsByFloor.get(fid).push(r);
+    } else {
+      unassignedRooms.push(r);
+    }
+  }
+
+  // Sort floors by configured order/name
+  const sortedFloors = floors
     .slice()
+    .map((f, idx) => ({
+      id: nwNormalizeId(f && f.id),
+      name: nwNormalizeId(f && (f.name || f.title || f.id)) || nwNormalizeId(f && f.id),
+      icon: nwNormalizeId(f && f.icon) || '🏢',
+      order: (typeof (f && f.order) === 'number') ? f.order : idx + 1,
+    }))
+    .filter((f) => f && f.id)
     .sort((a, b) => {
       const oa = (typeof a.order === 'number') ? a.order : 0;
       const ob = (typeof b.order === 'number') ? b.order : 0;
       if (oa !== ob) return oa - ob;
-      return nwSortBy(String(a.name || ''), String(b.name || ''));
-    })
-    .forEach((r, idx) => {
-      const id = nwNormalizeId(r.id);
-      const name = nwNormalizeId(r.name);
-      if (!id || !name) return;
+      return String(a.name || '').toLowerCase().localeCompare(String(b.name || '').toLowerCase(), 'de');
+    });
+
+  const NO_MATCH = '__nw_no_match__';
+
+  // Floors as nav parents + rooms as children (X1 style: Räume nach Etage)
+  sortedFloors.forEach((f, fIdx) => {
+    const floorPageId = `floor_${f.id}`;
+    const roomsInFloor = (roomsByFloor.get(f.id) || [])
+      .slice()
+      .sort((a, b) => {
+        const oa = (typeof a.order === 'number') ? a.order : 0;
+        const ob = (typeof b.order === 'number') ? b.order : 0;
+        if (oa !== ob) return oa - ob;
+        return nwSortBy(String(a.name || ''), String(b.name || ''));
+      });
+
+    const roomIds = roomsInFloor
+      .map((r) => nwNormalizeId(r && r.id))
+      .filter(Boolean);
+
+    pages.push({
+      id: floorPageId,
+      title: f.name || f.id,
+      icon: f.icon || '🏢',
+      viewMode: 'rooms',
+      // If there are currently no rooms in that floor, avoid showing "all devices".
+      roomIds: roomIds.length ? roomIds : [NO_MATCH],
+      funcIds: [],
+      types: [],
+      favoritesOnly: false,
+      order: 10 + fIdx,
+    });
+
+    roomsInFloor.forEach((r, rIdx) => {
+      const rid = nwNormalizeId(r && r.id);
+      const rname = nwNormalizeId(r && r.name);
+      if (!rid || !rname) return;
       pages.push({
-        id: `room_${id}`,
-        title: name,
+        id: `room_${rid}`,
+        title: rname,
         icon: r.icon || '🏷️',
         viewMode: 'rooms',
-        roomIds: [id],
+        roomIds: [rid],
         funcIds: [],
         types: [],
         favoritesOnly: false,
-        order: 10 + idx,
+        parentId: floorPageId,
+        order: (typeof r.order === 'number') ? r.order : rIdx,
       });
     });
+  });
+
+  // Unassigned rooms (no floorId) → own group at the end
+  if (unassignedRooms.length) {
+    const floorPageId = 'floor_unassigned';
+    const roomsSorted = unassignedRooms
+      .slice()
+      .sort((a, b) => {
+        const oa = (typeof a.order === 'number') ? a.order : 0;
+        const ob = (typeof b.order === 'number') ? b.order : 0;
+        if (oa !== ob) return oa - ob;
+        return nwSortBy(String(a.name || ''), String(b.name || ''));
+      });
+
+    const roomIds = roomsSorted.map((r) => nwNormalizeId(r && r.id)).filter(Boolean);
+
+    pages.push({
+      id: floorPageId,
+      title: 'Ohne Geschoss',
+      icon: '🧩',
+      viewMode: 'rooms',
+      roomIds: roomIds.length ? roomIds : [NO_MATCH],
+      funcIds: [],
+      types: [],
+      favoritesOnly: false,
+      order: 9999,
+    });
+
+    roomsSorted.forEach((r, rIdx) => {
+      const rid = nwNormalizeId(r && r.id);
+      const rname = nwNormalizeId(r && r.name);
+      if (!rid || !rname) return;
+      pages.push({
+        id: `room_${rid}`,
+        title: rname,
+        icon: r.icon || '🏷️',
+        viewMode: 'rooms',
+        roomIds: [rid],
+        funcIds: [],
+        types: [],
+        favoritesOnly: false,
+        parentId: floorPageId,
+        order: (typeof r.order === 'number') ? r.order : rIdx,
+      });
+    });
+  }
 
   return pages;
 }
 
+function nwIsLegacyFlatRoomPages(pages, cfg) {
+  // Legacy auto-default: Home + one page per room, all at root level.
+  const arr = Array.isArray(pages) ? pages : [];
+  const rooms = Array.isArray(cfg && cfg.rooms) ? cfg.rooms : [];
+  if (!arr.length || !rooms.length) return false;
+
+  const hasHome = arr.some((p) => p && p.id === 'home');
+  if (!hasHome) return false;
+
+  // No nesting, no floors, no other filter presets.
+  if (arr.some((p) => p && p.parentId)) return false;
+  if (arr.some((p) => p && String(p.id || '').startsWith('floor_'))) return false;
+
+  const others = arr.filter((p) => p && p.id !== 'home');
+  if (!others.length) return false;
+
+  // All others look like room pages
+  for (const p of others) {
+    if (!p || !String(p.id || '').startsWith('room_')) return false;
+    if (!Array.isArray(p.roomIds) || p.roomIds.length !== 1) return false;
+    if (Array.isArray(p.funcIds) && p.funcIds.length) return false;
+    if (Array.isArray(p.types) && p.types.length) return false;
+    if (p.favoritesOnly) return false;
+  }
+
+  // Heuristic: if we have floors or rooms reference floorId, we can upgrade safely.
+  const floors = Array.isArray(cfg && cfg.floors) ? cfg.floors : [];
+  const roomsHaveFloors = rooms.some((r) => r && String(r.floorId || '').trim());
+
+  return (floors && floors.length) || roomsHaveFloors;
+}
+
 function nwGetPagesFromConfig(cfg) {
   const pages = Array.isArray(cfg && cfg.pages) ? cfg.pages : [];
+
+  // Auto-upgrade: older configs often saved the legacy flat room navigation.
+  // If floors exist (X1 style), regenerate the default pages to reflect
+  // Geschoss → Raum in the sidebar, matching the editor structure.
+  if (pages && pages.length && nwIsLegacyFlatRoomPages(pages, cfg)) {
+    return nwBuildDefaultPagesFromConfig(cfg);
+  }
+
   if (pages && pages.length) {
     return pages
       .map((p, idx) => ({
@@ -4655,17 +4833,40 @@ function nwCloseSidebar() {
 function nwLoadExpandedIdsFromLs() {
   if (nwPageState.__expandedLoaded) return;
   nwPageState.__expandedLoaded = true;
+
+  let loaded = false;
   try {
     const raw = localStorage.getItem(NW_SH_NAV_EXPANDED_LS_KEY);
-    if (!raw) return;
-    const arr = JSON.parse(raw);
-    if (Array.isArray(arr)) {
-      nwPageState.expandedIds = new Set(arr.filter((x) => typeof x === 'string' && x.trim()));
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        nwPageState.expandedIds = new Set(arr.filter((x) => typeof x === 'string' && x.trim()));
+        loaded = true;
+      }
     }
   } catch (e) {
     // ignore
   }
+
+  // Default (X1-like): show rooms nested under floors without forcing the user
+  // to click "expand" for every floor. We only apply this when no valid state
+  // was loaded OR when the stored state is clearly from an older nav layout.
+  try {
+    const { children, roots } = nwBuildPageTree(nwPageState.pages || []);
+    const rootWithChildren = roots.filter((p) => children.has(p.id) && (children.get(p.id) || []).length);
+
+    // Determine if the stored expandedIds look stale (e.g. upgrade from older version)
+    const hasAnyCurrentRootExpanded = rootWithChildren.some((p) => nwPageState.expandedIds.has(p.id));
+
+    if (!loaded || (!hasAnyCurrentRootExpanded && rootWithChildren.length)) {
+      nwPageState.expandedIds = new Set(rootWithChildren.map((p) => p.id));
+      nwSaveExpandedIdsToLs();
+    }
+  } catch (_e) {
+    // ignore
+  }
 }
+
 
 function nwSaveExpandedIdsToLs() {
   try {
@@ -4877,10 +5078,10 @@ function nwActivatePage(pageId) {
   nwFilterState.favoritesOnly = false;
 
   // Optional default grouping
-  if (nwShFiltersUiEnabled && (page.viewMode === 'rooms' || page.viewMode === 'functions')) {
+  if (page.viewMode === 'rooms' || page.viewMode === 'functions') {
     nwViewState.mode = page.viewMode;
-  } else if (!nwShFiltersUiEnabled) {
-    // No filter UI → keep rendering in "rooms" mode for a predictable app-like layout.
+  } else {
+    // Default (fallback)
     nwViewState.mode = 'rooms';
   }
 
@@ -4932,9 +5133,9 @@ async function nwLoadSmartHomeConfig() {
       nwFilterState.page.funcIds = Array.isArray(eff0.funcIds) ? eff0.funcIds.slice() : [];
       nwFilterState.page.types = Array.isArray(eff0.types) ? eff0.types.slice() : [];
       nwFilterState.page.favoritesOnly = !!eff0.favoritesOnly;
-      if (nwShFiltersUiEnabled && (p.viewMode === 'rooms' || p.viewMode === 'functions')) {
+      if (p.viewMode === 'rooms' || p.viewMode === 'functions') {
         nwViewState.mode = p.viewMode;
-      } else if (!nwShFiltersUiEnabled) {
+      } else {
         nwViewState.mode = 'rooms';
       }
 

@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.180",
+    "version": "0.6.181",
     "news": {
+      "0.6.181": {
+        "en": "SmartHome VIS: sidebar navigation now follows an X1-like building structure (Home → Floors → Rooms). Floors are expanded by default so rooms are always reachable without scrolling back up. Legacy flat room pages are auto-upgraded.",
+        "de": "SmartHome-VIS: Sidebar-Navigation jetzt wie X1 (Home → Geschosse → Räume). Geschosse sind standardmäßig aufgeklappt, damit Räume ohne Umwege erreichbar sind. Legacy flache Raum-Seiten werden automatisch migriert."
+      },
       "0.6.180": {
         "en": "SmartHome VIS: removed the filter chip bar (Rooms/Functions/Favorites/Text size) for a cleaner end-user UI. VIS now always renders the app-like Floors → Rooms → Tiles structure.",
         "de": "SmartHome-VIS: Filter-Chip-Leiste (Räume/Funktionen/Favoriten/Textgröße) entfernt – cleanere Endkunden-UI. VIS rendert jetzt immer die App-Struktur Geschoss → Räume → Kacheln."
@@ -1489,7 +1493,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.180",
+  "version": "0.6.181",
   "news": {
     "0.6.59": {
       "en": "Mobile responsive improvements (iPhone): stable 2-column KPI grid + overflow-safe KPI rows. Weather tile: hide when inactive and show a compact tomorrow line (Open-Meteo daily). Energy totals are seeded with 0 on fresh installs and formatted (kWh/MWh/GWh) in UI.",

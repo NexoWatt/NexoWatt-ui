@@ -1015,7 +1015,9 @@ function nwParsePagesJson(text) {
 }
 
 function nwBuildDefaultPages(cfg) {
+  const floors = (cfg && Array.isArray(cfg.floors)) ? cfg.floors : [];
   const rooms = (cfg && Array.isArray(cfg.rooms)) ? cfg.rooms : [];
+
   const pages = [{
     id: 'home',
     title: 'Home',
@@ -1028,15 +1030,95 @@ function nwBuildDefaultPages(cfg) {
     order: 0,
   }];
 
-  rooms
+  // If there are no floors configured yet, keep the legacy flat room navigation.
+  if (!floors.length) {
+    rooms
+      .slice()
+      .sort((a, b) => {
+        const oa = Number.isFinite(+a.order) ? +a.order : 0;
+        const ob = Number.isFinite(+b.order) ? +b.order : 0;
+        if (oa !== ob) return oa - ob;
+        return String(a.name || '').localeCompare(String(b.name || ''), 'de');
+      })
+      .forEach((r, idx) => {
+        const id = String(r.id || '').trim();
+        const title = String(r.name || '').trim();
+        if (!id || !title) return;
+        pages.push({
+          id: `room_${id}`,
+          title,
+          icon: String(r.icon || '🏷️'),
+          viewMode: 'rooms',
+          roomIds: [id],
+          funcIds: [],
+          types: [],
+          favoritesOnly: false,
+          order: 10 + idx,
+        });
+      });
+
+    return pages;
+  }
+
+  const roomsByFloor = new Map();
+  const unassignedRooms = [];
+
+  for (const r of rooms) {
+    const rid = String((r && r.id) || '').trim();
+    const rname = String((r && r.name) || '').trim();
+    if (!rid || !rname) continue;
+    const fid = String((r && r.floorId) || '').trim();
+    if (fid) {
+      if (!roomsByFloor.has(fid)) roomsByFloor.set(fid, []);
+      roomsByFloor.get(fid).push(r);
+    } else {
+      unassignedRooms.push(r);
+    }
+  }
+
+  const sortedFloors = floors
     .slice()
+    .map((f, idx) => ({
+      id: String((f && f.id) || '').trim(),
+      name: String((f && (f.name || f.title || f.id)) || '').trim(),
+      icon: String((f && f.icon) || '').trim() || '🏢',
+      order: Number.isFinite(+((f && f.order) ?? idx)) ? +((f && f.order) ?? idx) : idx,
+    }))
+    .filter((f) => f && f.id)
     .sort((a, b) => {
-      const oa = Number.isFinite(+a.order) ? +a.order : 0;
-      const ob = Number.isFinite(+b.order) ? +b.order : 0;
-      if (oa !== ob) return oa - ob;
+      if (a.order !== b.order) return a.order - b.order;
       return String(a.name || '').localeCompare(String(b.name || ''), 'de');
-    })
-    .forEach((r, idx) => {
+    });
+
+  const NO_MATCH = '__nw_no_match__';
+
+  sortedFloors.forEach((f, fIdx) => {
+    const floorPageId = `floor_${f.id}`;
+
+    const roomsInFloor = (roomsByFloor.get(f.id) || [])
+      .slice()
+      .sort((a, b) => {
+        const oa = Number.isFinite(+a.order) ? +a.order : 0;
+        const ob = Number.isFinite(+b.order) ? +b.order : 0;
+        if (oa !== ob) return oa - ob;
+        return String(a.name || '').localeCompare(String(b.name || ''), 'de');
+      });
+
+    const roomIds = roomsInFloor.map((r) => String(r.id || '').trim()).filter(Boolean);
+
+    pages.push({
+      id: floorPageId,
+      title: f.name || f.id,
+      icon: f.icon || '🏢',
+      viewMode: 'rooms',
+      roomIds: roomIds.length ? roomIds : [NO_MATCH],
+      funcIds: [],
+      types: [],
+      favoritesOnly: false,
+      order: 10 + fIdx,
+    });
+
+    roomsInFloor.forEach((r, rIdx) => {
       const id = String(r.id || '').trim();
       const title = String(r.name || '').trim();
       if (!id || !title) return;
@@ -1049,9 +1131,56 @@ function nwBuildDefaultPages(cfg) {
         funcIds: [],
         types: [],
         favoritesOnly: false,
-        order: 10 + idx,
+        parentId: floorPageId,
+        order: Number.isFinite(+r.order) ? +r.order : rIdx,
       });
     });
+  });
+
+  if (unassignedRooms.length) {
+    const floorPageId = 'floor_unassigned';
+
+    const roomsSorted = unassignedRooms
+      .slice()
+      .sort((a, b) => {
+        const oa = Number.isFinite(+a.order) ? +a.order : 0;
+        const ob = Number.isFinite(+b.order) ? +b.order : 0;
+        if (oa !== ob) return oa - ob;
+        return String(a.name || '').localeCompare(String(b.name || ''), 'de');
+      });
+
+    const roomIds = roomsSorted.map((r) => String(r.id || '').trim()).filter(Boolean);
+
+    pages.push({
+      id: floorPageId,
+      title: 'Ohne Geschoss',
+      icon: '🧩',
+      viewMode: 'rooms',
+      roomIds: roomIds.length ? roomIds : [NO_MATCH],
+      funcIds: [],
+      types: [],
+      favoritesOnly: false,
+      order: 9999,
+    });
+
+    roomsSorted.forEach((r, rIdx) => {
+      const id = String(r.id || '').trim();
+      const title = String(r.name || '').trim();
+      if (!id || !title) return;
+      pages.push({
+        id: `room_${id}`,
+        title,
+        icon: String(r.icon || '🏷️'),
+        viewMode: 'rooms',
+        roomIds: [id],
+        funcIds: [],
+        types: [],
+        favoritesOnly: false,
+        parentId: floorPageId,
+        order: Number.isFinite(+r.order) ? +r.order : rIdx,
+      });
+    });
+  }
 
   return pages;
 }
