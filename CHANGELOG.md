@@ -1,3 +1,8 @@
+## 0.6.179
+- SmartHomeConfig: **Fix für "Speichern" löscht Gebäude-Struktur** – `floors` + `meta` werden jetzt in `/api/smarthome/config` mitpersistiert.
+- SmartHome-VIS: Räume können jetzt **nach Geschossen gruppiert** werden (gleiche Hierarchie wie im Editor).
+- SmartHome-Builder: Bibliothek **übersichtlicher** (Suche + einklappbare Gruppen) + Drop von Geräte-Templates **im ganzen Arbeitsbereich** möglich.
+
 ## 0.6.160
 - EMS/Lademanagement: **STALE_METER blockiert standardmäßig nicht mehr** (Hotfix). Dadurch werden Ladepunkte nicht mehr auf 0 gesetzt, wenn der Watchdog fälschlich „veraltet“ meldet.
 - EMS/Lademanagement: Neue Policy (intern): `chargingManagement.staleFailsafeMode` = `off|warn|block` (Default: `off`).

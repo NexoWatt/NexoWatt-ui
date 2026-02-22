@@ -3120,6 +3120,48 @@ body{ padding-top: var(--topbar-h); }
   gap: 18px;
 }
 
+/* SmartHome: Gebäude-Hierarchie (Geschoss → Räume → Kacheln) */
+.nw-sh-floor{
+  padding: 12px 12px 14px;
+  border-radius: 22px;
+  border: 1px solid rgba(148,163,184,0.14);
+  background: rgba(2,6,23,0.22);
+}
+
+.nw-sh-floor__header{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.nw-sh-floor__title{
+  display:inline-flex;
+  align-items:center;
+  gap: 10px;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #e5e7eb;
+}
+
+.nw-sh-floor__icon{
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.nw-sh-floor__summary{
+  font-size: 0.78rem;
+  color: rgba(203, 213, 225, 0.8);
+  white-space: nowrap;
+}
+
+.nw-sh-floor__rooms{
+  display:flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
 .nw-sh-room__header{
   display: flex;
   align-items: baseline;
@@ -3128,9 +3170,17 @@ body{ padding-top: var(--topbar-h); }
 }
 
 .nw-sh-room__title{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   font-size: 1.05rem;
   font-weight: 700;
   color: #e5e7eb;
+}
+
+.nw-sh-room__icon{
+  font-size: 1.05rem;
+  line-height: 1;
 }
 
 .nw-sh-room--function .nw-sh-room__title{

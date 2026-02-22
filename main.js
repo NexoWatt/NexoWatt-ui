@@ -1091,8 +1091,9 @@ class NexoWattVis extends utils.Adapter {
     ensurePlainObj('threshold', {});
     ensurePlainObj('relay', {});
     ensurePlainObj('smartHome', {});
-    // SmartHomeConfig (rooms/functions/devices) – stored as installer-managed config
-    ensurePlainObj('smartHomeConfig', { version: 1, rooms: [], functions: [], devices: [] });
+    // SmartHomeConfig (Gebäude/Räume/Funktionen/Geräte + optionale SmartHome-VIS Navigation)
+    // v2 adds optional "floors" + "pages" + "meta".
+    ensurePlainObj('smartHomeConfig', { version: 2, floors: [], rooms: [], functions: [], devices: [], pages: [], meta: {} });
 
     // NexoLogic editor config (node/graph) – stored as installer-managed config
     ensurePlainObj('logicEditor', { version: 1, graphs: [] });
@@ -3969,9 +3970,42 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
 getSmartHomeConfig() {
   const cfg = this.config || {};
   const shc = cfg.smartHomeConfig || {};
-  const out = {
-    version: typeof shc.version === 'number' ? shc.version : 1,
-    rooms: Array.isArray(shc.rooms) ? shc.rooms : [],
+
+  const rooms = Array.isArray(shc.rooms) ? shc.rooms : [];
+  let floors = Array.isArray(shc.floors) ? shc.floors : [];
+
+  // Backward compatibility / recovery:
+  // If floors are missing but rooms reference floorId, derive a minimal floors list
+  // so the editor/runtime can still show the building structure.
+  if (!floors.length && rooms.length) {
+    const seen = new Set();
+    const ids = [];
+    for (const r of rooms) {
+      const fid = (r && r.floorId) ? String(r.floorId).trim() : '';
+      if (!fid) continue;
+      if (fid === '__unassigned__') continue;
+      if (seen.has(fid)) continue;
+      seen.add(fid);
+      ids.push(fid);
+    }
+    if (ids.length) {
+      const pretty = (s) => {
+        const raw = String(s || '').trim();
+        if (!raw) return '';
+        return raw
+          .replace(/[_-]+/g, ' ')
+          .replace(/\s+/g, ' ')
+          .replace(/\b\w/g, (m) => m.toUpperCase());
+      };
+      floors = ids.map((id, idx) => ({ id, name: pretty(id) || id, icon: '🏢', order: idx + 1 }));
+    }
+  }
+
+  return {
+    // version 2 adds optional "floors" + "pages" for SmartHome VIS sidebar
+    version: typeof shc.version === 'number' ? shc.version : 2,
+    floors,
+    rooms,
     functions: Array.isArray(shc.functions) ? shc.functions : [],
     devices: Array.isArray(shc.devices) ? shc.devices : [],
 
@@ -3979,7 +4013,6 @@ getSmartHomeConfig() {
     pages: Array.isArray(shc.pages) ? shc.pages : [],
     meta: this._nwIsPlainObject(shc.meta) ? shc.meta : {},
   };
-  return out;
 }
 
 /**
@@ -6199,13 +6232,54 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
         }
 
         const out = {
-          // version 2 adds optional "pages" for left navigation presets
+          // version 2 adds optional "floors" + "pages" for SmartHome VIS navigation
           version: typeof cfg.version === 'number' ? cfg.version : 2,
+          floors: Array.isArray(cfg.floors) ? cfg.floors : [],
           rooms: Array.isArray(cfg.rooms) ? cfg.rooms : [],
           functions: Array.isArray(cfg.functions) ? cfg.functions : [],
           devices: Array.isArray(cfg.devices) ? cfg.devices : [],
           pages: Array.isArray(cfg.pages) ? cfg.pages : [],
+          meta: this._nwIsPlainObject(cfg.meta) ? cfg.meta : {},
         };
+
+        // Sanitize floors (no virtual/unassigned, stable IDs)
+        if (Array.isArray(out.floors)) {
+          out.floors = out.floors
+            .filter((f) => this._nwIsPlainObject(f))
+            .map((f, idx) => {
+              const id = String((f && f.id) ? f.id : `floor_${idx + 1}`).trim();
+              const name = String((f && (f.name || f.title || f.id)) ? (f.name || f.title || f.id) : id).trim();
+              const icon = String((f && f.icon) ? f.icon : '').trim();
+              const order = Number.isFinite(+((f && f.order) ?? idx)) ? +((f && f.order) ?? idx) : idx;
+              return { id, name: name || id, icon, order };
+            })
+            .filter((f) => f && f.id && f.id !== '__unassigned__');
+        }
+
+        // Recovery: if floors are missing but rooms reference floorId, derive minimal floors.
+        if ((!out.floors || !out.floors.length) && Array.isArray(out.rooms) && out.rooms.length) {
+          const seen = new Set();
+          const ids = [];
+          for (const r of out.rooms) {
+            const fid = (r && r.floorId) ? String(r.floorId).trim() : '';
+            if (!fid) continue;
+            if (fid === '__unassigned__') continue;
+            if (seen.has(fid)) continue;
+            seen.add(fid);
+            ids.push(fid);
+          }
+          if (ids.length) {
+            const pretty = (s) => {
+              const raw = String(s || '').trim();
+              if (!raw) return '';
+              return raw
+                .replace(/[_-]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .replace(/\b\w/g, (m) => m.toUpperCase());
+            };
+            out.floors = ids.map((id, idx) => ({ id, name: pretty(id) || id, icon: '🏢', order: idx + 1 }));
+          }
+        }
 
         // Sanitize pages to avoid runtime issues in the SmartHome UI
         if (Array.isArray(out.pages)) {

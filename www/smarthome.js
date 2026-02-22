@@ -173,6 +173,8 @@ const NW_SH_NAV_EXPANDED_LS_KEY = 'nw_sh_nav_expanded';
 // SmartHome Konfiguration (Räume/Funktionen/Pages) – wird separat geladen
 let nwShConfig = null;
 const nwShMeta = {
+  floorsById: {},
+  floorIdByName: {},
   roomsById: {},
   funcsById: {},
   roomIdByName: {},
@@ -912,11 +914,13 @@ function nwFormatNumberDE(value, precision) {
   return v.toFixed(p).replace('.', ',');
 }
 
-function nwComputeRoomSummary(roomName, allDevices) {
-  const room = String(roomName || '').trim();
-  if (!room) return '';
+function nwComputeRoomSummary(roomId, allDevices) {
+  const rid = nwNormalizeId(roomId);
+  if (!rid) return '';
 
-  const devs = Array.isArray(allDevices) ? allDevices.filter(d => String(d.room || '').trim() === room) : [];
+  const devs = Array.isArray(allDevices)
+    ? allDevices.filter(d => nwNormalizeId(d && d.roomId) === rid)
+    : [];
   if (!devs.length) return '';
 
   const tempCandidates = [];
@@ -1153,14 +1157,47 @@ function nwRenderFunctionChips(devices) {
 
 function nwGroupByRoom(devices) {
   const map = new Map();
-  (devices || []).forEach(d => {
-    const room = String(d.room || '').trim() || 'Ohne Raum';
-    if (!map.has(room)) map.set(room, []);
-    map.get(room).push(d);
+  (devices || []).forEach((d) => {
+    const rid = nwGetDeviceRoomId(d);
+    const key = rid || '__no_room__';
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(d);
   });
 
-  const rooms = Array.from(map.keys()).sort(nwSortBy);
-  return rooms.map(r => ({ room: r, devices: map.get(r) || [] }));
+  const keys = Array.from(map.keys());
+  keys.sort((a, b) => {
+    // put "no room" at the end
+    if (a === '__no_room__' && b !== '__no_room__') return 1;
+    if (b === '__no_room__' && a !== '__no_room__') return -1;
+
+    const ra = nwShMeta.roomsById[a];
+    const rb = nwShMeta.roomsById[b];
+    const oa = (ra && Number.isFinite(+ra.order)) ? +ra.order : 999999;
+    const ob = (rb && Number.isFinite(+rb.order)) ? +rb.order : 999999;
+    if (oa !== ob) return oa - ob;
+
+    const na = (ra && ra.name) ? ra.name : (map.get(a)?.[0]?.room || a);
+    const nb = (rb && rb.name) ? rb.name : (map.get(b)?.[0]?.room || b);
+    return String(na || '').toLowerCase().localeCompare(String(nb || '').toLowerCase());
+  });
+
+  return keys.map((key) => {
+    const meta = nwShMeta.roomsById[key];
+    const name = (meta && meta.name)
+      ? meta.name
+      : (key === '__no_room__'
+        ? 'Ohne Raum'
+        : String(map.get(key)?.[0]?.room || key).trim() || key);
+
+    return {
+      roomId: key === '__no_room__' ? '' : key,
+      room: name,
+      floorId: meta && meta.floorId ? String(meta.floorId).trim() : '',
+      icon: meta && meta.icon ? String(meta.icon) : '',
+      order: (meta && Number.isFinite(+meta.order)) ? +meta.order : undefined,
+      devices: map.get(key) || [],
+    };
+  });
 }
 
 function nwGroupByFunction(devices) {
@@ -4214,9 +4251,36 @@ function nwRenderRooms(devices) {
   if (!wrap) return;
   nwClear(wrap);
 
-  const groups = nwGroupByRoom(devices);
+  const roomGroups = nwGroupByRoom(devices);
 
-  groups.forEach(g => {
+  // Group rooms by floorId (so the runtime matches the editor structure)
+  const floorMap = new Map();
+  roomGroups.forEach((rg) => {
+    const fid = String(rg && rg.floorId ? rg.floorId : '').trim();
+    const key = fid || '__no_floor__';
+    if (!floorMap.has(key)) floorMap.set(key, []);
+    floorMap.get(key).push(rg);
+  });
+
+  const floorsById = nwShMeta.floorsById || {};
+  const floorKeys = Array.from(floorMap.keys());
+  floorKeys.sort((a, b) => {
+    // "no floor" at the end
+    if (a === '__no_floor__' && b !== '__no_floor__') return 1;
+    if (b === '__no_floor__' && a !== '__no_floor__') return -1;
+
+    const fa = floorsById[a];
+    const fb = floorsById[b];
+    const oa = (fa && Number.isFinite(+fa.order)) ? +fa.order : 999998;
+    const ob = (fb && Number.isFinite(+fb.order)) ? +fb.order : 999998;
+    if (oa !== ob) return oa - ob;
+
+    const na = (fa && fa.name) ? fa.name : a;
+    const nb = (fb && fb.name) ? fb.name : b;
+    return String(na || '').toLowerCase().localeCompare(String(nb || '').toLowerCase());
+  });
+
+  const renderRoomSection = (g) => {
     const section = document.createElement('section');
     section.className = 'nw-sh-room';
 
@@ -4225,12 +4289,20 @@ function nwRenderRooms(devices) {
 
     const title = document.createElement('div');
     title.className = 'nw-sh-room__title';
-    title.textContent = g.room;
+
+    const roomIcon = String(g && g.icon ? g.icon : '').trim();
+    if (roomIcon) {
+      title.innerHTML = `<span class="nw-sh-room__icon">${roomIcon}</span><span class="nw-sh-room__label"></span>`;
+      const lbl = title.querySelector('.nw-sh-room__label');
+      if (lbl) lbl.textContent = g.room;
+    } else {
+      title.textContent = g.room;
+    }
 
     header.appendChild(title);
 
     // Small room summary (e.g. temperature / humidity) based on all devices in that room.
-    const summaryText = nwComputeRoomSummary(g.room, nwAllDevices);
+    const summaryText = nwComputeRoomSummary(g.roomId, nwAllDevices);
     if (summaryText) {
       const summary = document.createElement('div');
       summary.className = 'nw-sh-room__summary';
@@ -4267,7 +4339,51 @@ function nwRenderRooms(devices) {
       arr.forEach((dev) => grid.appendChild(nwCreateTile(dev)));
       section.appendChild(grid);
     }
-    wrap.appendChild(section);
+    return section;
+  };
+
+  floorKeys.forEach((floorId) => {
+    const isUnassigned = floorId === '__no_floor__';
+    const f = isUnassigned ? null : floorsById[floorId];
+    const floorName = isUnassigned ? 'Ohne Geschoss' : (f && (f.name || f.title) ? (f.name || f.title) : floorId);
+    const floorIcon = isUnassigned ? '🧩' : String((f && f.icon) ? f.icon : '🏢');
+
+    const floorSection = document.createElement('section');
+    floorSection.className = 'nw-sh-floor' + (isUnassigned ? ' nw-sh-floor--unassigned' : '');
+
+    const header = document.createElement('div');
+    header.className = 'nw-sh-floor__header';
+
+    const title = document.createElement('div');
+    title.className = 'nw-sh-floor__title';
+    title.innerHTML = `${floorIcon ? `<span class=\"nw-sh-floor__icon\">${floorIcon}</span>` : ''}<span class=\"nw-sh-floor__label\"></span>`;
+    const lbl = title.querySelector('.nw-sh-floor__label');
+    if (lbl) lbl.textContent = floorName;
+    header.appendChild(title);
+
+    // Optional quick summary (rooms + device count)
+    const roomsInFloor = floorMap.get(floorId) || [];
+    const devCount = roomsInFloor.reduce((acc, rg) => acc + ((rg && Array.isArray(rg.devices)) ? rg.devices.length : 0), 0);
+    const sum = document.createElement('div');
+    sum.className = 'nw-sh-floor__summary';
+    sum.textContent = `${roomsInFloor.length} Räume · ${devCount} Geräte`;
+    header.appendChild(sum);
+
+    floorSection.appendChild(header);
+
+    const roomsWrap = document.createElement('div');
+    roomsWrap.className = 'nw-sh-floor__rooms';
+
+    roomsInFloor.sort((a, b) => {
+      const oa = (a && Number.isFinite(+a.order)) ? +a.order : 999999;
+      const ob = (b && Number.isFinite(+b.order)) ? +b.order : 999999;
+      if (oa !== ob) return oa - ob;
+      return String(a && a.room ? a.room : '').toLowerCase().localeCompare(String(b && b.room ? b.room : '').toLowerCase());
+    });
+
+    roomsInFloor.forEach((rg) => roomsWrap.appendChild(renderRoomSection(rg)));
+    floorSection.appendChild(roomsWrap);
+    wrap.appendChild(floorSection);
   });
 }
 
@@ -4363,13 +4479,24 @@ function nwNormalizeId(s) {
 }
 
 function nwBuildMetaFromConfig(cfg) {
+  nwShMeta.floorsById = {};
+  nwShMeta.floorIdByName = {};
   nwShMeta.roomsById = {};
   nwShMeta.funcsById = {};
   nwShMeta.roomIdByName = {};
   nwShMeta.funcIdByName = {};
 
+  const floors = Array.isArray(cfg && cfg.floors) ? cfg.floors : [];
   const rooms = Array.isArray(cfg && cfg.rooms) ? cfg.rooms : [];
   const funcs = Array.isArray(cfg && cfg.functions) ? cfg.functions : [];
+
+  floors.forEach(fl => {
+    const id = nwNormalizeId(fl && fl.id);
+    const name = nwNormalizeId(fl && (fl.name || fl.title || fl.id));
+    if (!id) return;
+    nwShMeta.floorsById[id] = { ...fl, id, name: name || id };
+    if (name) nwShMeta.floorIdByName[name] = id;
+  });
 
   rooms.forEach(r => {
     const id = nwNormalizeId(r.id);
