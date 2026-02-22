@@ -1,8 +1,18 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.183",
+    "version": "0.6.184",
     "news": {
+      "0.6.184": {
+        "en": [
+          "SmartHome/Config: Added a modern 3D icon pack (PV, battery, wallbox, door/window/lock, motion, alarm, smoke, water, fan, meter, toggle, globe)",
+          "SmartHome-Config: Device library now renders icon keys as SVG previews (3D icons look great)"
+        ],
+        "de": [
+          "SmartHome/Config: Modernes 3D-Icon-Pack ergänzt (PV, Batterie, Wallbox, Tür/Fenster/Schloss, Bewegung, Alarm, Rauch, Wasser, Lüfter, Zähler, Schalter, Globe)",
+          "SmartHome-Config: Geräte-Bibliothek rendert Icon-Keys jetzt als SVG-Vorschau (3D Icons werden sauber angezeigt)"
+        ]
+      },
       "0.6.183": {
         "en": "Logic editor: added a \"Back to overview\" button. SmartHome Config/VIS: expanded icon library (incl. subtle 3D icons) and added missing icons (camera/thermometer/grid). Sidebar now renders icon keys as SVG instead of showing raw text. Internal prototype references removed.",
         "de": "Logik-Editor: \"Zurück zur Übersicht\" Button ergänzt. SmartHome Config/VIS: Icon-Bibliothek erweitert (inkl. dezenter 3D-Icons) und fehlende Icons ergänzt (Kamera/Thermometer/Raster). Sidebar rendert Icon-Keys jetzt als SVG statt als Text. Interne Prototyp-Referenzen entfernt."
@@ -1501,8 +1511,18 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.183",
+  "version": "0.6.184",
   "news": {
+    "0.6.184": {
+      "en": [
+        "SmartHome/Config: Added a modern 3D icon pack (PV, battery, wallbox, door/window/lock, motion, alarm, smoke, water, fan, meter, toggle, globe)",
+        "SmartHome-Config: Device library now renders icon keys as SVG previews (3D icons look great)"
+      ],
+      "de": [
+        "SmartHome/Config: Modernes 3D-Icon-Pack ergänzt (PV, Batterie, Wallbox, Tür/Fenster/Schloss, Bewegung, Alarm, Rauch, Wasser, Lüfter, Zähler, Schalter, Globe)",
+        "SmartHome-Config: Geräte-Bibliothek rendert Icon-Keys jetzt als SVG-Vorschau (3D Icons werden sauber angezeigt)"
+      ]
+    },
     "0.6.59": {
       "en": "Mobile responsive improvements (iPhone): stable 2-column KPI grid + overflow-safe KPI rows. Weather tile: hide when inactive and show a compact tomorrow line (Open-Meteo daily). Energy totals are seeded with 0 on fresh installs and formatted (kWh/MWh/GWh) in UI.",
       "de": "Mobile Responsive-Verbesserungen (iPhone): stabiles 2-Spalten KPI-Raster + ueberlaufsichere KPI-Zeilen. Wetter-Kachel: nur anzeigen wenn aktiv und mit kompakter Morgen-Zeile (Open-Meteo daily). Energie-Gesamtwerte werden bei Neuinstallationen mit 0 initialisiert und in der UI automatisch formatiert (kWh/MWh/GWh)."

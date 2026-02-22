@@ -1,3 +1,7 @@
+## 0.6.184
+- SmartHome Config & VIS: **Modernes 3D-Icon-Pack erweitert** (PV/Solar, Batterie, Wallbox/Laden, Tür/Fenster/Schloss, Bewegung, Alarm/Sirene, Rauchmelder, Wasser, Lüfter/Klima, Zähler, Schalter/Toggle, Globe/URL).
+- SmartHomeConfig: Geräte-Bibliothek zeigt Icon-Keys jetzt als **SVG-Vorschau** (3D Icons direkt sichtbar).
+
 ## 0.6.183
 - Logik-Editor: **Zurück zur Übersicht** Button ergänzt.
 - SmartHome Config & VIS: **Icon-Bibliothek erweitert** (zusätzliche Raum-/Bereich-Icons + neue **3D-Icon-Varianten** per Icon-Key, z.B. `3d-bulb`, `3d-camera`).

@@ -583,6 +583,96 @@ const NW_ICON_SVGS = {
         <path d="M10 18a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>`,
   },
+
+  toggle: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="4" y="8" width="16" height="8" rx="4" stroke="currentColor" stroke-width="2"/>
+        <circle cx="9" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="4" y="8" width="16" height="8" rx="4" stroke="currentColor" stroke-width="2"/>
+        <circle cx="15" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
+        <path d="M6 12h12" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+      </svg>`,
+  },
+  globe: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2"/>
+        <path d="M4 12h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 4c2.8 2.8 2.8 13.2 0 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+        <path d="M12 4c-2.8 2.8-2.8 13.2 0 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2"/>
+        <path d="M4 12h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 4c2.8 2.8 2.8 13.2 0 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+        <path d="M12 4c-2.8 2.8-2.8 13.2 0 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+        <circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" fill-opacity="0.25"/>
+      </svg>`,
+  },
+  motion: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="7.5" cy="12" r="2.5" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 9c2 2 2 4 0 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M15 7c3 3 3 7 0 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="7.5" cy="12" r="2.5" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 9c2 2 2 4 0 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M15 7c3 3 3 7 0 10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M18 5c4 4 4 10 0 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+      </svg>`,
+  },
+  alarm: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M9 4h6l2 4v5H7V8l2-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 13h10v3a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M9 4h6l2 4v5H7V8l2-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 13h10v3a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12 2v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M4 6l2 1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M20 6l-2 1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  smoke: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="6" y="4" width="12" height="6" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 14c1.5-1 3.5-1 5 0s3.5 1 5 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8 18c1.5-1 3.5-1 5 0s3.5 1 5 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="6" y="4" width="12" height="6" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 14c1.5-1 3.5-1 5 0s3.5 1 5 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8 18c1.5-1 3.5-1 5 0s3.5 1 5 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8 16c1.5-1 3.5-1 5 0s3.5 1 5 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+      </svg>`,
+  },
+  meter: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M6 14a6 6 0 0 1 12 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 14l3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M5 18h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M6 14a6 6 0 0 1 12 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 14l4-2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M5 18h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+      </svg>`,
+  },
   info: {
     off: `
       <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -994,6 +1084,414 @@ const NW_ICON_SVGS = {
         <rect x="13" y="13" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2" fill="url(#nw3d_grid_g)"/>
       </svg>`,
   },
+
+  '3d-toggle': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_toggle_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.45"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.10"/>
+          </linearGradient>
+        </defs>
+        <rect x="4" y="8" width="16" height="8" rx="4" fill="url(#nw3d_toggle_g)" stroke="currentColor" stroke-width="2"/>
+        <circle cx="9" cy="12" r="3" fill="currentColor" fill-opacity="0.20" stroke="currentColor" stroke-width="2"/>
+        <path d="M6 10c2-2 10-2 12 0" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_toggle_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.55"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.14"/>
+          </linearGradient>
+        </defs>
+        <rect x="4" y="8" width="16" height="8" rx="4" fill="url(#nw3d_toggle_g)" stroke="currentColor" stroke-width="2"/>
+        <circle cx="15" cy="12" r="3" fill="currentColor" fill-opacity="0.25" stroke="currentColor" stroke-width="2"/>
+        <path d="M6 12h12" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+        <path d="M6 10c2-2 10-2 12 0" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  '3d-globe': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id="nw3d_globe_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(9 8) rotate(45) scale(12)">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.55"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.10"/>
+          </radialGradient>
+        </defs>
+        <circle cx="12" cy="12" r="8" fill="url(#nw3d_globe_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M4 12h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+        <path d="M12 4c2.8 2.8 2.8 13.2 0 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+        <path d="M12 4c-2.8 2.8-2.8 13.2 0 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+        <path d="M8 6.5c1-.6 2.3-1 4-1" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id="nw3d_globe_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(9 8) rotate(45) scale(12)">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.65"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </radialGradient>
+        </defs>
+        <circle cx="12" cy="12" r="8" fill="url(#nw3d_globe_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M4 12h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
+        <path d="M12 4c2.8 2.8 2.8 13.2 0 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.75"/>
+        <path d="M12 4c-2.8 2.8-2.8 13.2 0 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.75"/>
+        <circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" fill-opacity="0.25"/>
+        <path d="M8 6.5c1-.6 2.3-1 4-1" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  '3d-battery': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_batt_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.52"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <rect x="3" y="8" width="18" height="8" rx="2" fill="url(#nw3d_batt_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M21 10v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 10h6" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_batt_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.55"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.14"/>
+          </linearGradient>
+        </defs>
+        <rect x="3" y="8" width="18" height="8" rx="2" fill="url(#nw3d_batt_g)" stroke="currentColor" stroke-width="2"/>
+        <rect x="5" y="10" width="11" height="4" rx="1" fill="currentColor" fill-opacity="0.18"/>
+        <path d="M21 10v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 10h6" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  '3d-solar': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_solar_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.45"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.10"/>
+          </linearGradient>
+        </defs>
+        <path d="M5 10h14l-2 10H3l2-10Z" fill="url(#nw3d_solar_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7.5 12h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.75"/>
+        <path d="M6.5 16h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+        <path d="M10 10.2l-1.2 9.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+        <path d="M14 10.2l-1.2 9.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+        <circle cx="18" cy="6" r="2" fill="currentColor" fill-opacity="0.16" stroke="currentColor" stroke-width="2"/>
+        <path d="M17.3 5.3c.4-.4.9-.6 1.4-.6" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_solar_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.50"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <path d="M5 10h14l-2 10H3l2-10Z" fill="url(#nw3d_solar_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7.5 12h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+        <path d="M6.5 16h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+        <path d="M10 10.2l-1.2 9.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+        <path d="M14 10.2l-1.2 9.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+        <circle cx="18" cy="6" r="2" fill="currentColor" fill-opacity="0.22" stroke="currentColor" stroke-width="2"/>
+        <path d="M18 2.5v1.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+        <path d="M15.6 3.3l1.1 1.1" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+        <path d="M20.4 3.3l-1.1 1.1" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+        <path d="M17.3 5.3c.4-.4.9-.6 1.4-.6" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  '3d-charger': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_chg_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.50"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <rect x="7" y="4" width="10" height="16" rx="2" fill="url(#nw3d_chg_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 8l-2 4h3l-1 4 4-6h-3l1-2Z" fill="currentColor" fill-opacity="0.18"/>
+        <path d="M17 12h2c1 0 2 1 2 2v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9 6h6" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_chg_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.55"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.14"/>
+          </linearGradient>
+        </defs>
+        <rect x="7" y="4" width="10" height="16" rx="2" fill="url(#nw3d_chg_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 8l-2 4h3l-1 4 4-6h-3l1-2Z" fill="currentColor" fill-opacity="0.24"/>
+        <path d="M17 12h2c1 0 2 1 2 2v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="12" cy="17" r="1" fill="currentColor" fill-opacity="0.25"/>
+        <path d="M9 6h6" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  '3d-door': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_door_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.46"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.10"/>
+          </linearGradient>
+        </defs>
+        <path d="M7 3h10v18H7V3Z" fill="url(#nw3d_door_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M15 12h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        <path d="M8.5 5h7" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_door_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.50"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <path d="M7 3h10v18H7V3Z" fill="url(#nw3d_door_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M15 12h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        <path d="M8.5 5h7" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+        <path d="M10 3v18" stroke="currentColor" stroke-width="2" opacity="0.25"/>
+      </svg>`,
+  },
+  '3d-window': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_win_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.44"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.10"/>
+          </linearGradient>
+        </defs>
+        <rect x="5" y="4" width="14" height="16" rx="2" fill="url(#nw3d_win_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 4v16" stroke="currentColor" stroke-width="2" opacity="0.75"/>
+        <path d="M5 12h14" stroke="currentColor" stroke-width="2" opacity="0.75"/>
+        <path d="M7 6h5" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_win_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.50"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <rect x="5" y="4" width="14" height="16" rx="2" fill="url(#nw3d_win_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 4v16" stroke="currentColor" stroke-width="2" opacity="0.85"/>
+        <path d="M5 12h14" stroke="currentColor" stroke-width="2" opacity="0.85"/>
+        <path d="M7 6h5" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+        <path d="M16 5c1.2 1.2 1.2 12.8 0 14" stroke="currentColor" stroke-width="2" opacity="0.2"/>
+      </svg>`,
+  },
+  '3d-lock': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_lock_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.50"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <path d="M7 11V8a5 5 0 0 1 10 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 11h12v10H6V11Z" fill="url(#nw3d_lock_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12 16v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8 13h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_lock_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.55"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.14"/>
+          </linearGradient>
+        </defs>
+        <path d="M7 11V8a5 5 0 0 1 10 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 11h12v10H6V11Z" fill="url(#nw3d_lock_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12 15.5v2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="12" cy="15" r="1.1" fill="currentColor" fill-opacity="0.22"/>
+        <path d="M8 13h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  '3d-motion': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id="nw3d_motion_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(8 10) rotate(45) scale(10)">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.55"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.10"/>
+          </radialGradient>
+        </defs>
+        <circle cx="7.5" cy="12" r="2.5" fill="url(#nw3d_motion_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 9c2 2 2 4 0 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M15 7c3 3 3 7 0 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+        <path d="M13 10c1.2 1.2 1.2 2.8 0 4" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id="nw3d_motion_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(8 10) rotate(45) scale(10)">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.65"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </radialGradient>
+        </defs>
+        <circle cx="7.5" cy="12" r="2.5" fill="url(#nw3d_motion_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 9c2 2 2 4 0 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M15 7c3 3 3 7 0 10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M18 5c4 4 4 10 0 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+        <path d="M13 10c1.2 1.2 1.2 2.8 0 4" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  '3d-alarm': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_alarm_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.52"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <path d="M9 4h6l2 4v5H7V8l2-4Z" fill="url(#nw3d_alarm_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 13h10v3a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M9.2 6.2h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_alarm_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.58"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.14"/>
+          </linearGradient>
+        </defs>
+        <path d="M9 4h6l2 4v5H7V8l2-4Z" fill="url(#nw3d_alarm_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 13h10v3a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12 2v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M4 6l2 1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M20 6l-2 1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9.2 6.2h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  '3d-smoke': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_smoke_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.48"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.10"/>
+          </linearGradient>
+        </defs>
+        <rect x="6" y="4" width="12" height="6" rx="2" fill="url(#nw3d_smoke_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 14c1.5-1 3.5-1 5 0s3.5 1 5 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8 18c1.5-1 3.5-1 5 0s3.5 1 5 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+        <path d="M8 6h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_smoke_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.55"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <rect x="6" y="4" width="12" height="6" rx="2" fill="url(#nw3d_smoke_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 14c1.5-1 3.5-1 5 0s3.5 1 5 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8 18c1.5-1 3.5-1 5 0s3.5 1 5 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8 16c1.5-1 3.5-1 5 0s3.5 1 5 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+        <path d="M8 6h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  '3d-water': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id="nw3d_water_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 9) rotate(45) scale(12)">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.55"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.10"/>
+          </radialGradient>
+        </defs>
+        <path d="M12 2s6 6 6 11a6 6 0 1 1-12 0c0-5 6-11 6-11Z" fill="url(#nw3d_water_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M10 6.5c.8-1.2 1.6-2 2-2.4" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id="nw3d_water_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 9) rotate(45) scale(12)">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.65"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </radialGradient>
+        </defs>
+        <path d="M12 2s6 6 6 11a6 6 0 1 1-12 0c0-5 6-11 6-11Z" fill="url(#nw3d_water_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M10 6.5c.8-1.2 1.6-2 2-2.4" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8 18c1.5-1 3.5-1 5 0s3.5 1 5 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+      </svg>`,
+  },
+  '3d-fan': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id="nw3d_fan_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 10) rotate(45) scale(12)">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.55"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.10"/>
+          </radialGradient>
+        </defs>
+        <circle cx="12" cy="12" r="7" fill="url(#nw3d_fan_g)" stroke="currentColor" stroke-width="2"/>
+        <circle cx="12" cy="12" r="1.2" fill="currentColor" fill-opacity="0.25"/>
+        <path d="M12 11c5-3 7-1 7 1 0 2-2 4-5 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M11 12c-3 5-5 4-6 3-1-1-1-4 1-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
+        <path d="M13 12c-2-5 0-7 2-7 2 0 4 2 3 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id="nw3d_fan_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 10) rotate(45) scale(12)">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.65"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </radialGradient>
+        </defs>
+        <circle cx="12" cy="12" r="7" fill="url(#nw3d_fan_g)" stroke="currentColor" stroke-width="2"/>
+        <circle cx="12" cy="12" r="1.2" fill="currentColor" fill-opacity="0.25"/>
+        <path d="M12 11c5-3 7-1 7 1 0 2-2 4-5 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M11 12c-3 5-5 4-6 3-1-1-1-4 1-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
+        <path d="M13 12c-2-5 0-7 2-7 2 0 4 2 3 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+        <path d="M7 7c4-2 8-2 10 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+      </svg>`,
+  },
+  '3d-meter': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_meter_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.45"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.10"/>
+          </linearGradient>
+        </defs>
+        <path d="M6 14a6 6 0 0 1 12 0" fill="url(#nw3d_meter_g)" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 14l3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M5 18h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+        <path d="M8 12.2c1.2-.9 2.6-1.2 4-1.2" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_meter_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.52"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <path d="M6 14a6 6 0 0 1 12 0" fill="url(#nw3d_meter_g)" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 14l4-2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M5 18h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+        <path d="M8 12.2c1.2-.9 2.6-1.2 4-1.2" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
 };
 
 // Helper: return the raw SVG string for a given icon name.
@@ -1069,6 +1567,37 @@ function nwNormalizeIconName(raw) {
     temp: 'thermometer',
     grid: 'grid',
     widget: 'grid',
+
+    schalter: 'toggle',
+    taster: 'toggle',
+    toggle: 'toggle',
+
+    url: 'globe',
+    internet: 'globe',
+    web: 'globe',
+    globe: 'globe',
+
+    bewegung: 'motion',
+    motion: 'motion',
+
+    alarm: 'alarm',
+    sirene: 'alarm',
+
+    rauch: 'smoke',
+    rauchmelder: 'smoke',
+    smoke: 'smoke',
+
+    zaehler: 'meter',
+    zähler: 'meter',
+    meter: 'meter',
+
+    pv: 'solar',
+
+    wallbox: 'charger',
+    laden: 'charger',
+
+    batterie: 'battery',
+    akku: 'battery',
   };
   return map[s] || s;
 }
@@ -1146,6 +1675,16 @@ function nwGetAccentColor(dev, iconName) {
   if (iconKey === 'camera') return '#22d3ee';   // cyan
   if (iconKey === 'grid') return '#34d399';     // emerald
   if (iconKey === 'scene') return '#f472b6';    // pink
+  if (iconKey === 'solar') return '#22c55e';    // green (PV)
+  if (iconKey === 'battery') return '#34d399';  // emerald
+  if (iconKey === 'charger' || iconKey === 'car') return '#60a5fa'; // blue
+  if (iconKey === 'water' || iconKey === 'fan') return '#38bdf8';   // sky/cyan
+  if (iconKey === 'alarm' || iconKey === 'smoke') return '#fb7185'; // rose
+  if (iconKey === 'door' || iconKey === 'window' || iconKey === 'lock') return '#a3a3a3'; // neutral
+  if (iconKey === 'meter') return '#34d399';    // emerald
+  if (iconKey === 'globe') return '#60a5fa';    // blue
+  if (iconKey === 'toggle') return '#fbbf24';   // amber
+  if (iconKey === 'motion') return '#22c55e';   // green
   if (type === 'sensor' || iconKey === 'sensor') return '#22c55e'; // green
 
   if (fn.includes('pv') || fn.includes('energie')) return '#22c55e';

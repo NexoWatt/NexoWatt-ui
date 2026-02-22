@@ -5665,6 +5665,12 @@ body{ padding-top: var(--topbar-h); }
   border: 1px solid rgba(37, 238, 174, 0.25);
 }
 
+.nw-shcfg-libitem__icon svg{
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
 .nw-shcfg-libitem__name{
   font-weight: 900;
 }

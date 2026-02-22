@@ -219,6 +219,12 @@ const NW_SH_ICON_PREVIEW_SVGS = {
   scene: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 2l1.1 3.4L16.5 6.5l-3.4 1.1L12 11l-1.1-3.4L7.5 6.5l3.4-1.1L12 2Z" fill="currentColor"/><path d="M19 13l.7 2.1 2.1.7-2.1.7L19 18.6l-.7-2.1-2.1-.7 2.1-.7.7-2.1Z" fill="currentColor"/><path d="M5 13l.7 2.1 2.1.7-2.1.7L5 18.6l-.7-2.1-2.1-.7 2.1-.7L5 13Z" fill="currentColor"/></svg>`,
   thermometer: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 18a1.2 1.2 0 1 0 0-2.4A1.2 1.2 0 0 0 12 18Z" fill="currentColor"/></svg>`,
   sensor: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 3a7 7 0 0 0-7 7c0 5 7 11 7 11s7-6 7-11a7 7 0 0 0-7-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" fill="currentColor"/></svg>`,
+  toggle: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="4" y="8" width="16" height="8" rx="4" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>`,
+  globe: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2"/><path d="M4 12h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 4c2.8 2.8 2.8 13.2 0 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/><path d="M12 4c-2.8 2.8-2.8 13.2 0 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/></svg>`,
+  motion: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="7.5" cy="12" r="2.5" stroke="currentColor" stroke-width="2"/><path d="M12 9c2 2 2 4 0 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M15 7c3 3 3 7 0 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/></svg>`,
+  alarm: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9 4h6l2 4v5H7V8l2-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 13h10v3a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 2v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4 6l2 1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M20 6l-2 1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+  smoke: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="6" y="4" width="12" height="6" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 14c1.5-1 3.5-1 5 0s3.5 1 5 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8 18c1.5-1 3.5-1 5 0s3.5 1 5 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/></svg>`,
+  meter: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 14a6 6 0 0 1 12 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 14l3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 18h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7"/></svg>`,
   generic: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 6h12v12H6V6Z" stroke="currentColor" stroke-width="2"/></svg>`,
 
   // Extra icons (Config usability)
@@ -259,6 +265,20 @@ const NW_SH_ICON_PREVIEW_SVGS = {
   "3d-scene": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_scene_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.55"/><stop offset="1" stop-color="currentColor" stop-opacity="0.14"/></linearGradient></defs><path d="M12 2l1.2 4.2L17.5 8l-4.3 1.8L12 14l-1.2-4.2L6.5 8l4.3-1.8L12 2Z" fill="url(#nw3d_scene_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 5.5h4" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/></svg>`,
   "3d-sensor": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><radialGradient id="nw3d_sensor_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 9) rotate(45) scale(10)"><stop offset="0" stop-color="currentColor" stop-opacity="0.55"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></radialGradient></defs><circle cx="12" cy="12" r="7" fill="url(#nw3d_sensor_g)" stroke="currentColor" stroke-width="2"/><path d="M12 8v4l2 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   "3d-grid": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_grid_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.45"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="4" y="4" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2" fill="url(#nw3d_grid_g)"/><rect x="13" y="4" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2" fill="url(#nw3d_grid_g)"/><rect x="4" y="13" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2" fill="url(#nw3d_grid_g)"/><rect x="13" y="13" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2" fill="url(#nw3d_grid_g)"/></svg>`,
+  "3d-toggle": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_toggle_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.45"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="4" y="8" width="16" height="8" rx="4" fill="url(#nw3d_toggle_g)" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="12" r="3" fill="currentColor" fill-opacity="0.20" stroke="currentColor" stroke-width="2"/><path d="M6 10c2-2 10-2 12 0" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-globe": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><radialGradient id="nw3d_globe_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(9 8) rotate(45) scale(12)"><stop offset="0" stop-color="currentColor" stop-opacity="0.55"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></radialGradient></defs><circle cx="12" cy="12" r="8" fill="url(#nw3d_globe_g)" stroke="currentColor" stroke-width="2"/><path d="M4 12h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/><path d="M12 4c2.8 2.8 2.8 13.2 0 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7"/><path d="M12 4c-2.8 2.8-2.8 13.2 0 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7"/><path d="M8 6.5c1-.6 2.3-1 4-1" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-battery": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_batt_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.52"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><rect x="3" y="8" width="18" height="8" rx="2" fill="url(#nw3d_batt_g)" stroke="currentColor" stroke-width="2"/><path d="M21 10v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6 10h6" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-solar": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_solar_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.45"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><path d="M5 10h14l-2 10H3l2-10Z" fill="url(#nw3d_solar_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7.5 12h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.75"/><path d="M6.5 16h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.6"/><path d="M10 10.2l-1.2 9.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.35"/><path d="M14 10.2l-1.2 9.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.35"/><circle cx="18" cy="6" r="2" fill="currentColor" fill-opacity="0.16" stroke="currentColor" stroke-width="2"/><path d="M17.3 5.3c.4-.4.9-.6 1.4-.6" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-charger": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_chg_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><rect x="7" y="4" width="10" height="16" rx="2" fill="url(#nw3d_chg_g)" stroke="currentColor" stroke-width="2"/><path d="M12 8l-2 4h3l-1 4 4-6h-3l1-2Z" fill="currentColor" fill-opacity="0.22"/><path d="M17 12h2c1 0 2 1 2 2v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 6h6" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-door": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_door_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.46"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><path d="M7 3h10v18H7V3Z" fill="url(#nw3d_door_g)" stroke="currentColor" stroke-width="2"/><path d="M15 12h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M8.5 5h7" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-window": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_win_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.44"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="5" y="4" width="14" height="16" rx="2" fill="url(#nw3d_win_g)" stroke="currentColor" stroke-width="2"/><path d="M12 4v16" stroke="currentColor" stroke-width="2" opacity="0.75"/><path d="M5 12h14" stroke="currentColor" stroke-width="2" opacity="0.75"/><path d="M7 6h5" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-lock": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_lock_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><path d="M7 11V8a5 5 0 0 1 10 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6 11h12v10H6V11Z" fill="url(#nw3d_lock_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 16v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8 13h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-motion": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><radialGradient id="nw3d_motion_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(8 10) rotate(45) scale(10)"><stop offset="0" stop-color="currentColor" stop-opacity="0.55"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></radialGradient></defs><circle cx="7.5" cy="12" r="2.5" fill="url(#nw3d_motion_g)" stroke="currentColor" stroke-width="2"/><path d="M12 9c2 2 2 4 0 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M15 7c3 3 3 7 0 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/><path d="M13 10c1.2 1.2 1.2 2.8 0 4" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-alarm": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_alarm_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.52"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><path d="M9 4h6l2 4v5H7V8l2-4Z" fill="url(#nw3d_alarm_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 13h10v3a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 2v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4 6l2 1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M20 6l-2 1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9.2 6.2h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-smoke": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_smoke_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.48"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="6" y="4" width="12" height="6" rx="2" fill="url(#nw3d_smoke_g)" stroke="currentColor" stroke-width="2"/><path d="M8 14c1.5-1 3.5-1 5 0s3.5 1 5 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8 18c1.5-1 3.5-1 5 0s3.5 1 5 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/><path d="M8 6h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-water": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><radialGradient id="nw3d_water_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 9) rotate(45) scale(12)"><stop offset="0" stop-color="currentColor" stop-opacity="0.55"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></radialGradient></defs><path d="M12 2s6 6 6 11a6 6 0 1 1-12 0c0-5 6-11 6-11Z" fill="url(#nw3d_water_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 6.5c.8-1.2 1.6-2 2-2.4" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-fan": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><radialGradient id="nw3d_fan_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 10) rotate(45) scale(12)"><stop offset="0" stop-color="currentColor" stop-opacity="0.55"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></radialGradient></defs><circle cx="12" cy="12" r="7" fill="url(#nw3d_fan_g)" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="1.2" fill="currentColor" fill-opacity="0.25"/><path d="M12 11c5-3 7-1 7 1 0 2-2 4-5 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M11 12c-3 5-5 4-6 3-1-1-1-4 1-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.9"/><path d="M13 12c-2-5 0-7 2-7 2 0 4 2 3 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/></svg>`,
+  "3d-meter": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_meter_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.45"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><path d="M6 14a6 6 0 0 1 12 0" fill="url(#nw3d_meter_g)" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 14l3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 18h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7"/><path d="M8 12.2c1.2-.9 2.6-1.2 4-1.2" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
 };
 
 function nwShcNormalizeIconName(value) {
@@ -300,6 +320,9 @@ const NW_SHCFG_ICON_OPTIONS = [
   { id: 'building', label: 'Gebäude' },
   { id: 'folder', label: 'Ordner / Bereich' },
   { id: 'grid', label: 'Raster' },
+  { id: 'toggle', label: 'Schalter / Toggle' },
+  { id: 'globe', label: 'Internet / URL' },
+  { id: 'meter', label: 'Zähler / Gauge' },
 
   // Räume / Bereiche
   { id: 'sofa', label: 'Wohnzimmer / Sofa' },
@@ -319,6 +342,23 @@ const NW_SHCFG_ICON_OPTIONS = [
   { id: '3d-scene', label: '3D Szene' },
   { id: '3d-sensor', label: '3D Sensor' },
   { id: '3d-grid', label: '3D Raster' },
+  { id: '3d-toggle', label: '3D Schalter / Toggle' },
+  { id: '3d-globe', label: '3D Internet / URL' },
+
+  { id: '3d-solar', label: '3D PV / Solar' },
+  { id: '3d-battery', label: '3D Batterie' },
+  { id: '3d-charger', label: '3D Wallbox / Laden' },
+
+  { id: '3d-door', label: '3D Tür' },
+  { id: '3d-window', label: '3D Fenster' },
+  { id: '3d-lock', label: '3D Schloss' },
+  { id: '3d-motion', label: '3D Bewegung' },
+  { id: '3d-alarm', label: '3D Alarm / Sirene' },
+  { id: '3d-smoke', label: '3D Rauchmelder' },
+
+  { id: '3d-water', label: '3D Wasser' },
+  { id: '3d-fan', label: '3D Lüfter / Klima' },
+  { id: '3d-meter', label: '3D Zähler' },
 
   { id: 'bulb', label: 'Licht / Lampe' },
   { id: 'plug', label: 'Steckdose' },
@@ -337,6 +377,9 @@ const NW_SHCFG_ICON_OPTIONS = [
   { id: 'window', label: 'Fenster' },
   { id: 'shield', label: 'Sicherheit' },
   { id: 'bell', label: 'Klingel' },
+  { id: 'motion', label: 'Bewegung' },
+  { id: 'alarm', label: 'Alarm / Sirene' },
+  { id: 'smoke', label: 'Rauchmelder' },
   { id: 'wifi', label: 'WLAN' },
 
   { id: 'bolt', label: 'Energie' },
@@ -2160,53 +2203,53 @@ function nwRenderShcfgShell() {
 
 const NW_SHCFG_BUILDER_DEVICE_TEMPLATES = [
   // Licht
-  { id: 'dimmer', type: 'dimmer', group: 'Licht', name: 'Dimmer', icon: '🎚️', meta: 'Helligkeit' },
-  { id: 'dimmer_rgb', type: 'color', group: 'Licht', name: 'Dimmer (RGB / RGBW)', icon: '🌈', meta: 'Farbe + Helligkeit' },
-  { id: 'dimmer_tw', type: 'dimmer', group: 'Licht', name: 'Dimmer (Tunable White)', icon: '⚪', meta: 'Weißton + Helligkeit' },
-  { id: 'hue_lights', type: 'color', group: 'Licht', name: 'Hue Leuchten', icon: '💡', meta: 'Farbe + Helligkeit' },
+  { id: 'dimmer', type: 'dimmer', group: 'Licht', name: 'Dimmer', icon: '3d-bulb', meta: 'Helligkeit' },
+  { id: 'dimmer_rgb', type: 'color', group: 'Licht', name: 'Dimmer (RGB / RGBW)', icon: '3d-bulb', meta: 'Farbe + Helligkeit' },
+  { id: 'dimmer_tw', type: 'dimmer', group: 'Licht', name: 'Dimmer (Tunable White)', icon: '3d-bulb', meta: 'Weißton + Helligkeit' },
+  { id: 'hue_lights', type: 'color', group: 'Licht', name: 'Hue Leuchten', icon: '3d-bulb', meta: 'Farbe + Helligkeit' },
 
   // System
-  { id: 'switch', type: 'switch', group: 'System', name: 'Schalter', icon: '🔘', meta: 'Ein/Aus' },
-  { id: 'button_press_release', type: 'switch', group: 'System', name: 'Taster (Drücken/Loslassen)', icon: '⏺️', meta: 'Momentary' },
-  { id: 'button_toggle', type: 'switch', group: 'System', name: 'Taster (Ein/Aus)', icon: '⏻', meta: 'Toggle' },
-  { id: 'url_call', type: 'scene', group: 'System', name: 'URL-Aufruf', icon: '🌐', meta: 'HTTP/URL Trigger' },
-  { id: 'iot_trigger', type: 'sensor', group: 'System', name: 'Auslöser für IoT', icon: '⚡', meta: 'Trigger / Event' },
-  { id: 'widget', type: 'widget', group: 'System', name: 'Widget', icon: '🧩', meta: 'Freies Element' },
+  { id: 'switch', type: 'switch', group: 'System', name: 'Schalter', icon: '3d-toggle', meta: 'Ein/Aus' },
+  { id: 'button_press_release', type: 'switch', group: 'System', name: 'Taster (Drücken/Loslassen)', icon: '3d-toggle', meta: 'Momentary' },
+  { id: 'button_toggle', type: 'switch', group: 'System', name: 'Taster (Ein/Aus)', icon: '3d-toggle', meta: 'Toggle' },
+  { id: 'url_call', type: 'scene', group: 'System', name: 'URL-Aufruf', icon: '3d-globe', meta: 'HTTP/URL Trigger' },
+  { id: 'iot_trigger', type: 'sensor', group: 'System', name: 'Auslöser für IoT', icon: 'bolt', meta: 'Trigger / Event' },
+  { id: 'widget', type: 'widget', group: 'System', name: 'Widget', icon: '3d-grid', meta: 'Freies Element' },
 
   // Kamera
-  { id: 'ip_camera', type: 'camera', group: 'Kamera', name: 'IP Kamera', icon: '📷', meta: 'Stream / Snapshot' },
+  { id: 'ip_camera', type: 'camera', group: 'Kamera', name: 'IP Kamera', icon: '3d-camera', meta: 'Stream / Snapshot' },
 
   // Audio
-  { id: 'audio', type: 'player', group: 'Audio', name: 'Audiosteuerung', icon: '🎵', meta: 'Play/Pause/Lautstärke' },
-  { id: 'audio_sonos', type: 'player', group: 'Audio', name: 'Audiosteuerung (Sonos)', icon: '🔊', meta: 'Sonos Player' },
-  { id: 'audio_tts', type: 'player', group: 'Audio', name: 'Audiosteuerung mit TTS', icon: '🗣️', meta: 'Text-to-Speech' },
+  { id: 'audio', type: 'player', group: 'Audio', name: 'Audiosteuerung', icon: '3d-speaker', meta: 'Play/Pause/Lautstärke' },
+  { id: 'audio_sonos', type: 'player', group: 'Audio', name: 'Audiosteuerung (Sonos)', icon: '3d-speaker', meta: 'Sonos Player' },
+  { id: 'audio_tts', type: 'player', group: 'Audio', name: 'Audiosteuerung mit TTS', icon: '3d-speaker', meta: 'Text-to-Speech' },
 
   // Beschattung
-  { id: 'blind', type: 'blind', group: 'Beschattung', name: 'Rollladen / Jalousie', icon: '🪟', meta: 'Hoch/Runter/Stop' },
+  { id: 'blind', type: 'blind', group: 'Beschattung', name: 'Rollladen / Jalousie', icon: '3d-blinds', meta: 'Hoch/Runter/Stop' },
 
   // Klima
-  { id: 'heat_cool', type: 'rtr', group: 'Klima', name: 'Heizen und Kühlen', icon: '🌡️', meta: 'Soll/Ist' },
-  { id: 'aircon', type: 'rtr', group: 'Klima', name: 'Klimaanlage', icon: '❄️', meta: 'Kühlen/Heizen' },
-  { id: 'sauna_temp', type: 'sensor', group: 'Klima', name: 'Saunatemperatur', icon: '🧖', meta: 'Temperatur' },
+  { id: 'heat_cool', type: 'rtr', group: 'Klima', name: 'Heizen und Kühlen', icon: '3d-thermostat', meta: 'Soll/Ist' },
+  { id: 'aircon', type: 'rtr', group: 'Klima', name: 'Klimaanlage', icon: '3d-fan', meta: 'Kühlen/Heizen' },
+  { id: 'sauna_temp', type: 'sensor', group: 'Klima', name: 'Saunatemperatur', icon: '3d-thermostat', meta: 'Temperatur' },
 
   // Szenen
-  { id: 'scene_remote', type: 'scene', group: 'Szenen', name: 'Szenennebenstelle', icon: '🎛️', meta: 'Scene Remote' },
-  { id: 'scene_set', type: 'scene', group: 'Szenen', name: 'Szenenset', icon: '🎬', meta: 'Mehrere Szenen' },
-  { id: 'scene_template', type: 'scene', group: 'Szenen', name: 'Szenenvorlage', icon: '📋', meta: 'Vorlage / Button' },
+  { id: 'scene_remote', type: 'scene', group: 'Szenen', name: 'Szenennebenstelle', icon: '3d-scene', meta: 'Scene Remote' },
+  { id: 'scene_set', type: 'scene', group: 'Szenen', name: 'Szenenset', icon: '3d-scene', meta: 'Mehrere Szenen' },
+  { id: 'scene_template', type: 'scene', group: 'Szenen', name: 'Szenenvorlage', icon: '3d-scene', meta: 'Vorlage / Button' },
 
   // Status / Messwerte
-  { id: 'status_binary', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige Binär', icon: '✅', meta: '0/1' },
-  { id: 'status_decimal', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige Dezimal', icon: '🔢', meta: 'Zahl' },
-  { id: 'status_signed', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige mit Vorzeichen', icon: '➕➖', meta: 'Signed' },
-  { id: 'status_unsigned', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige ohne Vorzeichen', icon: '➕', meta: 'Unsigned' },
-  { id: 'status_text', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige Text', icon: '🔤', meta: 'Text' },
-  { id: 'value_32bit_signed', type: 'sensor', group: 'Status / Messwerte', name: '32-Bit Wertgeber mit Vorzeichen', icon: '🧮', meta: 'int32' },
-  { id: 'value_32bit_unsigned', type: 'sensor', group: 'Status / Messwerte', name: '32-Bit Wertgeber ohne Vorzeichen', icon: '🧮', meta: 'uint32' },
-  { id: 'value_8bit_unsigned', type: 'sensor', group: 'Status / Messwerte', name: '8-Bit Wertgeber 0…255', icon: '🧮', meta: 'uint8' },
-  { id: 'value_8bit_signed', type: 'sensor', group: 'Status / Messwerte', name: '8-Bit Wertgeber -128…127', icon: '🧮', meta: 'int8' },
-  { id: 'value_decimal', type: 'sensor', group: 'Status / Messwerte', name: 'Dezimalwertgeber', icon: '🔣', meta: 'float' },
-  { id: 'value_percent', type: 'sensor', group: 'Status / Messwerte', name: 'Prozentwertgeber', icon: '％', meta: '0…100' },
-  { id: 'value_temperature', type: 'sensor', group: 'Status / Messwerte', name: 'Temperaturwertgeber', icon: '🌡️', meta: '°C' },
+  { id: 'status_binary', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige Binär', icon: '3d-sensor', meta: '0/1' },
+  { id: 'status_decimal', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige Dezimal', icon: '3d-sensor', meta: 'Zahl' },
+  { id: 'status_signed', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige mit Vorzeichen', icon: '3d-sensor', meta: 'Signed' },
+  { id: 'status_unsigned', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige ohne Vorzeichen', icon: '3d-sensor', meta: 'Unsigned' },
+  { id: 'status_text', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige Text', icon: '3d-sensor', meta: 'Text' },
+  { id: 'value_32bit_signed', type: 'sensor', group: 'Status / Messwerte', name: '32-Bit Wertgeber mit Vorzeichen', icon: '3d-meter', meta: 'int32' },
+  { id: 'value_32bit_unsigned', type: 'sensor', group: 'Status / Messwerte', name: '32-Bit Wertgeber ohne Vorzeichen', icon: '3d-meter', meta: 'uint32' },
+  { id: 'value_8bit_unsigned', type: 'sensor', group: 'Status / Messwerte', name: '8-Bit Wertgeber 0…255', icon: '3d-meter', meta: 'uint8' },
+  { id: 'value_8bit_signed', type: 'sensor', group: 'Status / Messwerte', name: '8-Bit Wertgeber -128…127', icon: '3d-meter', meta: 'int8' },
+  { id: 'value_decimal', type: 'sensor', group: 'Status / Messwerte', name: 'Dezimalwertgeber', icon: '3d-meter', meta: 'float' },
+  { id: 'value_percent', type: 'sensor', group: 'Status / Messwerte', name: 'Prozentwertgeber', icon: '3d-meter', meta: '0…100' },
+  { id: 'value_temperature', type: 'sensor', group: 'Status / Messwerte', name: 'Temperaturwertgeber', icon: '3d-thermostat', meta: '°C' },
 ];
 
 const NW_SHCFG_DND_MARKER = 'nw-shcfg:';
@@ -2363,7 +2406,7 @@ function nwShcfgLibItem({ icon, name, meta, payload }) {
 
   const ico = document.createElement('div');
   ico.className = 'nw-shcfg-libitem__icon';
-  ico.textContent = icon || '➕';
+  nwShcRenderIconPreview(ico, icon || '➕');
 
   const textWrap = document.createElement('div');
   const n = document.createElement('div');
@@ -4107,13 +4150,13 @@ function nwAddDeviceFromTemplate(templateId, opts = {}) {
     widget: 'Neues Widget',
   };
   const iconMap = {
-    switch: '3d-bulb',
+    switch: '3d-toggle',
     color: '3d-bulb',
     dimmer: '3d-bulb',
     blind: '3d-blinds',
     rtr: '3d-thermostat',
     player: '3d-speaker',
-    sensor: 'thermometer',
+    sensor: '3d-sensor',
     scene: '3d-scene',
     camera: '3d-camera',
     widget: '3d-grid',
@@ -4128,7 +4171,7 @@ function nwAddDeviceFromTemplate(templateId, opts = {}) {
     roomId: roomId || null,
     ...(hasFloorOpt ? { floorId: floorId || null } : {}),
     functionId: functionId || null,
-    icon: iconMap[t] || '',
+    icon: (tpl && tpl.icon) ? tpl.icon : (iconMap[t] || ''),
     templateId: (tpl && tpl.id) ? tpl.id : undefined,
     size: (t === 'rtr' || t === 'camera' || t === 'widget') ? 'xl' : ((t === 'player') ? 'l' : 'm'),
     behavior: { favorite: false, readOnly: false },
