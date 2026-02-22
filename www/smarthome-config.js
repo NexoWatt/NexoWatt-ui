@@ -44,17 +44,23 @@ function nwEnsureShcfgUiState() {
         tab: 'building',
         view: 'rooms',
         currentRoomId: null,
-        selected: null, // { kind: 'room'|'device', id }
+        selected: null, // { kind: 'floor'|'room'|'device', id }
       },
     };
   }
   if (!nwShcState.ui.builder) {
     nwShcState.ui.builder = { tab: 'building', view: 'rooms', currentRoomId: null, selected: null };
   }
+
+  // Clamp to supported tabs (Visual-Tab ist entfernt)
+  if (!['building', 'devices'].includes(nwShcState.ui.builder.tab)) {
+    nwShcState.ui.builder.tab = 'building';
+  }
 }
 
 function nwNormalizeSmartHomeConfig(cfg) {
   const c = (cfg && typeof cfg === 'object') ? cfg : {};
+  c.floors = Array.isArray(c.floors) ? c.floors : [];
   c.rooms = Array.isArray(c.rooms) ? c.rooms : [];
   c.functions = Array.isArray(c.functions) ? c.functions : [];
   c.devices = Array.isArray(c.devices) ? c.devices : [];
@@ -1473,10 +1479,12 @@ async function nwReloadSmartHomeConfig() {
   nwShcState.config = {
     // version 2 adds optional "pages" for SmartHome VIS sidebar
     version: typeof cfg.version === 'number' ? cfg.version : 2,
+    floors: Array.isArray(cfg.floors) ? cfg.floors.map(f => Object.assign({}, f)) : [],
     rooms: Array.isArray(cfg.rooms) ? cfg.rooms.map(r => Object.assign({}, r)) : [],
     functions: Array.isArray(cfg.functions) ? cfg.functions.map(f => Object.assign({}, f)) : [],
     devices: Array.isArray(cfg.devices) ? cfg.devices.map(d => Object.assign({}, d)) : [],
     pages: Array.isArray(cfg.pages) ? cfg.pages.map(p => Object.assign({}, p)) : [],
+    meta: (cfg.meta && typeof cfg.meta === 'object') ? Object.assign({}, cfg.meta) : {},
   };
 
   // Initialize pages JSON editor
@@ -1488,6 +1496,7 @@ async function nwReloadSmartHomeConfig() {
     nwShcState.pagesJsonValid = false;
   }
 
+  nwNormalizeFloorOrder();
   nwNormalizeRoomFunctionOrder();
   nwNormalizeDeviceOrder();
   nwShcState.originalJson = JSON.stringify(nwShcState.config);
@@ -1648,16 +1657,54 @@ function nwRenderShcfgShell() {
 }
 
 const NW_SHCFG_BUILDER_DEVICE_TEMPLATES = [
-  { type: 'switch', name: 'Schalter', icon: '💡', meta: 'Ein/Aus' },
-  { type: 'dimmer', name: 'Dimmer', icon: '🔆', meta: 'Helligkeit' },
-  { type: 'color', name: 'RGB Licht', icon: '🌈', meta: 'Farbe + Dimmen' },
-  { type: 'blind', name: 'Rollladen / Jalousie', icon: '🪟', meta: 'Up/Down/Stop' },
-  { type: 'rtr', name: 'Heizen & Kühlen', icon: '🌡️', meta: 'Thermostat' },
-  { type: 'scene', name: 'Szene', icon: '🎬', meta: 'Trigger' },
-  { type: 'sensor', name: 'Sensor', icon: '📟', meta: 'Wert anzeigen' },
-  { type: 'camera', name: 'Kamera', icon: '📷', meta: 'Stream/Snapshot' },
-  { type: 'player', name: 'Audio Player', icon: '🎵', meta: 'Medien' },
-  { type: 'widget', name: 'Widget', icon: '🧩', meta: 'Universal' },
+  // Licht
+  { id: 'dimmer', type: 'dimmer', group: 'Licht', name: 'Dimmer', icon: '🎚️', meta: 'Helligkeit' },
+  { id: 'dimmer_rgb', type: 'color', group: 'Licht', name: 'Dimmer (RGB / RGBW)', icon: '🌈', meta: 'Farbe + Helligkeit' },
+  { id: 'dimmer_tw', type: 'dimmer', group: 'Licht', name: 'Dimmer (Tunable White)', icon: '⚪', meta: 'Weißton + Helligkeit' },
+  { id: 'hue_lights', type: 'color', group: 'Licht', name: 'Hue Leuchten', icon: '💡', meta: 'Farbe + Helligkeit' },
+
+  // System
+  { id: 'switch', type: 'switch', group: 'System', name: 'Schalter', icon: '🔘', meta: 'Ein/Aus' },
+  { id: 'button_press_release', type: 'switch', group: 'System', name: 'Taster (Drücken/Loslassen)', icon: '⏺️', meta: 'Momentary' },
+  { id: 'button_toggle', type: 'switch', group: 'System', name: 'Taster (Ein/Aus)', icon: '⏻', meta: 'Toggle' },
+  { id: 'url_call', type: 'scene', group: 'System', name: 'URL-Aufruf', icon: '🌐', meta: 'HTTP/URL Trigger' },
+  { id: 'iot_trigger', type: 'sensor', group: 'System', name: 'Auslöser für IoT', icon: '⚡', meta: 'Trigger / Event' },
+  { id: 'widget', type: 'widget', group: 'System', name: 'Widget', icon: '🧩', meta: 'Freies Element' },
+
+  // Kamera
+  { id: 'ip_camera', type: 'camera', group: 'Kamera', name: 'IP Kamera', icon: '📷', meta: 'Stream / Snapshot' },
+
+  // Audio
+  { id: 'audio', type: 'player', group: 'Audio', name: 'Audiosteuerung', icon: '🎵', meta: 'Play/Pause/Lautstärke' },
+  { id: 'audio_sonos', type: 'player', group: 'Audio', name: 'Audiosteuerung (Sonos)', icon: '🔊', meta: 'Sonos Player' },
+  { id: 'audio_tts', type: 'player', group: 'Audio', name: 'Audiosteuerung mit TTS', icon: '🗣️', meta: 'Text-to-Speech' },
+
+  // Beschattung
+  { id: 'blind', type: 'blind', group: 'Beschattung', name: 'Rollladen / Jalousie', icon: '🪟', meta: 'Hoch/Runter/Stop' },
+
+  // Klima
+  { id: 'heat_cool', type: 'rtr', group: 'Klima', name: 'Heizen und Kühlen', icon: '🌡️', meta: 'Soll/Ist' },
+  { id: 'aircon', type: 'rtr', group: 'Klima', name: 'Klimaanlage', icon: '❄️', meta: 'Kühlen/Heizen' },
+  { id: 'sauna_temp', type: 'sensor', group: 'Klima', name: 'Saunatemperatur', icon: '🧖', meta: 'Temperatur' },
+
+  // Szenen
+  { id: 'scene_remote', type: 'scene', group: 'Szenen', name: 'Szenennebenstelle', icon: '🎛️', meta: 'Scene Remote' },
+  { id: 'scene_set', type: 'scene', group: 'Szenen', name: 'Szenenset', icon: '🎬', meta: 'Mehrere Szenen' },
+  { id: 'scene_template', type: 'scene', group: 'Szenen', name: 'Szenenvorlage', icon: '📋', meta: 'Vorlage / Button' },
+
+  // Status / Messwerte
+  { id: 'status_binary', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige Binär', icon: '✅', meta: '0/1' },
+  { id: 'status_decimal', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige Dezimal', icon: '🔢', meta: 'Zahl' },
+  { id: 'status_signed', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige mit Vorzeichen', icon: '➕➖', meta: 'Signed' },
+  { id: 'status_unsigned', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige ohne Vorzeichen', icon: '➕', meta: 'Unsigned' },
+  { id: 'status_text', type: 'sensor', group: 'Status / Messwerte', name: 'Statusanzeige Text', icon: '🔤', meta: 'Text' },
+  { id: 'value_32bit_signed', type: 'sensor', group: 'Status / Messwerte', name: '32-Bit Wertgeber mit Vorzeichen', icon: '🧮', meta: 'int32' },
+  { id: 'value_32bit_unsigned', type: 'sensor', group: 'Status / Messwerte', name: '32-Bit Wertgeber ohne Vorzeichen', icon: '🧮', meta: 'uint32' },
+  { id: 'value_8bit_unsigned', type: 'sensor', group: 'Status / Messwerte', name: '8-Bit Wertgeber 0…255', icon: '🧮', meta: 'uint8' },
+  { id: 'value_8bit_signed', type: 'sensor', group: 'Status / Messwerte', name: '8-Bit Wertgeber -128…127', icon: '🧮', meta: 'int8' },
+  { id: 'value_decimal', type: 'sensor', group: 'Status / Messwerte', name: 'Dezimalwertgeber', icon: '🔣', meta: 'float' },
+  { id: 'value_percent', type: 'sensor', group: 'Status / Messwerte', name: 'Prozentwertgeber', icon: '％', meta: '0…100' },
+  { id: 'value_temperature', type: 'sensor', group: 'Status / Messwerte', name: 'Temperaturwertgeber', icon: '🌡️', meta: '°C' },
 ];
 
 function nwShcfgDragSet(e, payload) {
@@ -1760,47 +1807,145 @@ function nwRenderShcfgBuilderLib(container) {
 
   if (builderUi.tab === 'building') {
     const items = [
-      nwShcfgLibItem({
-        icon: '🏠',
-        name: 'Raum',
-        meta: 'In den Arbeitsbereich ziehen',
-        payload: { kind: 'create-room' },
-      }),
+      // Geschosse / Bereiche
+      nwShcfgLibItem({ icon: '🏢', name: 'Geschoss', meta: 'In den Arbeitsbereich ziehen', payload: { kind: 'create-floor', preset: 'floor' } }),
+      nwShcfgLibItem({ icon: '⬇️', name: 'Keller', meta: 'In den Arbeitsbereich ziehen', payload: { kind: 'create-floor', preset: 'keller' } }),
+      nwShcfgLibItem({ icon: '🏠', name: 'Erdgeschoss', meta: 'In den Arbeitsbereich ziehen', payload: { kind: 'create-floor', preset: 'eg' } }),
+      nwShcfgLibItem({ icon: '⬆️', name: 'Obergeschoss', meta: 'In den Arbeitsbereich ziehen', payload: { kind: 'create-floor', preset: 'og' } }),
+      nwShcfgLibItem({ icon: '🏡', name: 'Dachgeschoss', meta: 'In den Arbeitsbereich ziehen', payload: { kind: 'create-floor', preset: 'dg' } }),
+      nwShcfgLibItem({ icon: '🌳', name: 'Außenbereich', meta: 'In den Arbeitsbereich ziehen', payload: { kind: 'create-floor', preset: 'outdoor' } }),
+      nwShcfgLibItem({ icon: '🗄️', name: 'Schaltschrank', meta: 'In den Arbeitsbereich ziehen', payload: { kind: 'create-floor', preset: 'cabinet' } }),
+
+      // Räume
+      nwShcfgLibItem({ icon: '🚪', name: 'Raum', meta: 'In ein Geschoss ziehen', payload: { kind: 'create-room' } }),
     ];
+
     container.appendChild(nwShcfgLibGroup('Standardelemente', items));
     return;
   }
 
   if (builderUi.tab === 'devices') {
-    const items = NW_SHCFG_BUILDER_DEVICE_TEMPLATES.map(tpl =>
-      nwShcfgLibItem({
-        icon: tpl.icon,
-        name: tpl.name,
-        meta: tpl.meta,
-        payload: { kind: 'device-template', templateType: tpl.type },
-      })
-    );
-    container.appendChild(nwShcfgLibGroup('Geräte', items));
+    const preferredOrder = [
+      'Licht',
+      'Beschattung',
+      'Klima',
+      'Kamera',
+      'Audio',
+      'Szenen',
+      'Status / Messwerte',
+      'System',
+    ];
+
+    const byGroup = new Map();
+    for (const tpl of NW_SHCFG_BUILDER_DEVICE_TEMPLATES) {
+      const g = (tpl.group || 'Weitere').trim();
+      if (!byGroup.has(g)) byGroup.set(g, []);
+      byGroup.get(g).push(tpl);
+    }
+
+    const groups = [
+      ...preferredOrder.filter(g => byGroup.has(g)),
+      ...[...byGroup.keys()].filter(g => !preferredOrder.includes(g)),
+    ];
+
+    groups.forEach(gName => {
+      const items = (byGroup.get(gName) || []).map(tpl =>
+        nwShcfgLibItem({
+          icon: tpl.icon,
+          name: tpl.name,
+          meta: tpl.meta,
+          payload: { kind: 'device-template', templateId: tpl.id },
+        })
+      );
+      container.appendChild(nwShcfgLibGroup(gName, items));
+    });
     return;
   }
 
-  // Visual tab (placeholder)
+  // Fallback
   const p = document.createElement('div');
   p.className = 'nw-config-hint';
-  p.textContent = 'Visual‑Elemente folgen als nächstes (Widgets/Seiten‑Layout).';
+  p.textContent = 'Wähle links eine Bibliothek aus.';
   container.appendChild(p);
 }
 
-function nwShcfgAddRoom(name = 'Neuer Raum') {
+function nwShcfgAddRoom({ name = 'Neuer Raum', floorId = null } = {}) {
   const cfg = nwShcState.config;
   if (!cfg) return null;
+
   const rooms = cfg.rooms || (cfg.rooms = []);
-  const id = nwEnsureUniqueId(rooms, 'raum', null);
-  const room = { id, name, order: rooms.length + 1 };
+  const label = (name || '').trim() || 'Neuer Raum';
+  const fid = (floorId || '').trim() || null;
+
+  const id = nwEnsureUniqueId(rooms, nwPagesSlugify(label), null);
+  const nextOrder = 1 + rooms
+    .filter(r => ((r.floorId || null) === fid))
+    .reduce((m, r) => Math.max(m, Number(r.order) || 0), 0);
+
+  const room = {
+    id,
+    name: label,
+    floorId: fid || undefined,
+    order: nextOrder,
+  };
   rooms.push(room);
   nwNormalizeRoomOrder();
   nwMarkDirty(true);
   return room;
+}
+
+const NW_SHCFG_FLOOR_PRESETS = {
+  floor: { name: 'Neues Geschoss', icon: '🏢' },
+  keller: { name: 'Keller', icon: '⬇️' },
+  eg: { name: 'Erdgeschoss', icon: '🏠' },
+  og: { name: 'Obergeschoss', icon: '⬆️' },
+  dg: { name: 'Dachgeschoss', icon: '🏡' },
+  outdoor: { name: 'Außenbereich', icon: '🌳' },
+  cabinet: { name: 'Schaltschrank', icon: '🗄️' },
+};
+
+function nwShcfgAddFloor(presetId = 'floor') {
+  const cfg = nwShcState.config;
+  if (!cfg) return null;
+
+  const floors = cfg.floors || (cfg.floors = []);
+  const preset = NW_SHCFG_FLOOR_PRESETS[presetId] || NW_SHCFG_FLOOR_PRESETS.floor;
+  const label = (preset.name || '').trim() || `Geschoss ${floors.length + 1}`;
+
+  const id = nwEnsureUniqueId(floors, nwPagesSlugify(label), null);
+  const nextOrder = 1 + floors.reduce((m, f) => Math.max(m, Number(f.order) || 0), 0);
+
+  const floor = {
+    id,
+    name: label,
+    icon: preset.icon || '🏢',
+    order: nextOrder,
+  };
+  floors.push(floor);
+  nwNormalizeFloorOrder();
+  nwMarkDirty(true);
+  return floor;
+}
+
+function nwShcfgMoveRoomToFloor(roomId, floorId) {
+  const cfg = nwShcState.config;
+  if (!cfg) return;
+
+  const rooms = cfg.rooms || [];
+  const room = rooms.find(r => r.id === roomId);
+  if (!room) return;
+
+  const fid = (floorId || '').trim() || null;
+  room.floorId = fid || undefined;
+
+  // Re-order within target floor
+  const nextOrder = 1 + rooms
+    .filter(r => r.id !== roomId && ((r.floorId || null) === fid))
+    .reduce((m, r) => Math.max(m, Number(r.order) || 0), 0);
+  room.order = nextOrder;
+
+  nwNormalizeRoomOrder();
+  nwMarkDirty(true);
 }
 
 function nwRenderShcfgBuilderWorkspace(container) {
@@ -1861,8 +2006,8 @@ function nwRenderShcfgBuilderWorkspace(container) {
       drop.classList.remove('is-over');
       const payload = nwShcfgDragGet(e);
       if (!payload) return;
-      if (payload.kind === 'device-template' && payload.templateType) {
-        const dev = nwAddDeviceFromTemplate(payload.templateType, { roomId: room.id, silent: true });
+      if (payload.kind === 'device-template' && payload.templateId) {
+        const dev = nwAddDeviceFromTemplate(payload.templateId, { roomId: room.id, silent: true });
         if (dev) {
           builderUi.selected = { kind: 'device', id: dev.id };
           builderUi.tab = 'devices';
@@ -1892,7 +2037,11 @@ function nwRenderShcfgBuilderWorkspace(container) {
       const titleRow = document.createElement('div');
       titleRow.className = 'nw-shcfg-card__title';
       const ico = document.createElement('span');
-      ico.textContent = (NW_SHCFG_BUILDER_DEVICE_TEMPLATES.find(t => t.type === dev.type)?.icon) || '🧩';
+      ico.textContent = (
+        (dev.templateId && NW_SHCFG_BUILDER_DEVICE_TEMPLATES.find(t => t.id === dev.templateId)?.icon) ||
+        (NW_SHCFG_BUILDER_DEVICE_TEMPLATES.find(t => t.type === dev.type)?.icon) ||
+        '🧩'
+      );
       const t = document.createElement('span');
       t.textContent = dev.alias || dev.id;
       titleRow.appendChild(ico);
@@ -1918,45 +2067,49 @@ function nwRenderShcfgBuilderWorkspace(container) {
     return;
   }
 
-  // rooms view
+  // rooms view (Gebäude -> Geschosse -> Räume)
   left.innerHTML = '';
   const title = document.createElement('strong');
   title.textContent = 'Gebäude';
   left.appendChild(title);
 
-  const addBtn = document.createElement('button');
-  addBtn.className = 'nw-config-btn';
-  addBtn.type = 'button';
-  addBtn.textContent = '+ Raum';
-  addBtn.addEventListener('click', () => {
-    const room = nwShcfgAddRoom();
-    if (room) {
-      builderUi.selected = { kind: 'room', id: room.id };
+  const addFloorBtn = document.createElement('button');
+  addFloorBtn.className = 'nw-config-btn';
+  addFloorBtn.type = 'button';
+  addFloorBtn.textContent = '+ Geschoss';
+  addFloorBtn.addEventListener('click', () => {
+    const f = nwShcfgAddFloor('floor');
+    if (f) {
+      builderUi.selected = { kind: 'floor', id: f.id };
       nwRenderAll();
     }
   });
-  right.appendChild(addBtn);
+  right.appendChild(addFloorBtn);
 
   crumbs.appendChild(left);
   crumbs.appendChild(right);
   container.appendChild(crumbs);
 
+  // Dropzone: Geschoss erstellen
   const drop = document.createElement('div');
   drop.className = 'nw-shcfg-dropzone';
-  drop.textContent = 'Raum aus der Bibliothek hier ablegen';
-  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('is-over'); });
+  drop.textContent = 'Geschoss aus der Bibliothek hier ablegen';
+  drop.addEventListener('dragover', (e) => {
+    const payload = nwShcfgDragGet(e);
+    if (!payload || payload.kind !== 'create-floor') return;
+    e.preventDefault();
+    drop.classList.add('is-over');
+  });
   drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
   drop.addEventListener('drop', (e) => {
     e.preventDefault();
     drop.classList.remove('is-over');
     const payload = nwShcfgDragGet(e);
-    if (!payload) return;
-    if (payload.kind === 'create-room') {
-      const room = nwShcfgAddRoom();
-      if (room) {
-        builderUi.selected = { kind: 'room', id: room.id };
-        nwRenderAll();
-      }
+    if (!payload || payload.kind !== 'create-floor') return;
+    const f = nwShcfgAddFloor(payload.preset || 'floor');
+    if (f) {
+      builderUi.selected = { kind: 'floor', id: f.id };
+      nwRenderAll();
     }
   });
   container.appendChild(drop);
@@ -1964,72 +2117,160 @@ function nwRenderShcfgBuilderWorkspace(container) {
   const grid = document.createElement('div');
   grid.className = 'nw-shcfg-grid';
 
-  if (!rooms.length) {
+  const floors = (cfg.floors || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+  const roomsAll = (cfg.rooms || []).slice();
+  const hasUnassigned = roomsAll.some(r => r && !r.floorId);
+
+  const floorList = floors.map(f => Object.assign({ _virtual: false }, f));
+  if (hasUnassigned || floorList.length === 0) {
+    floorList.push({ id: '__unassigned__', name: 'Ohne Geschoss', icon: '🧩', order: 9999, _virtual: true });
+  }
+
+  if (!floors.length) {
     const empty = document.createElement('div');
     empty.className = 'nw-config-hint';
-    empty.textContent = 'Noch keine Räume. Ziehe „Raum“ aus der Bibliothek oder nutze „+ Raum“. '; 
+    empty.textContent = 'Noch keine Geschosse. Ziehe „Erdgeschoss/Obergeschoss…“ aus der Bibliothek oder nutze „+ Geschoss“.';
     container.appendChild(empty);
   }
 
-  rooms.slice().sort((a, b) => (a.order || 0) - (b.order || 0)).forEach(room => {
-    const card = document.createElement('div');
-    card.className = 'nw-shcfg-card';
-    if (builderUi.selected && builderUi.selected.kind === 'room' && builderUi.selected.id === room.id) card.classList.add('is-selected');
+  floorList.forEach(floor => {
+    const fCard = document.createElement('div');
+    fCard.className = 'nw-shcfg-card nw-shcfg-floor';
+    if (builderUi.selected && builderUi.selected.kind === 'floor' && builderUi.selected.id === floor.id) fCard.classList.add('is-selected');
 
-    const titleRow = document.createElement('div');
-    titleRow.className = 'nw-shcfg-card__title';
-    const ico = document.createElement('span');
-    ico.textContent = '🏠';
-    const t = document.createElement('span');
-    t.textContent = room.name;
-    titleRow.appendChild(ico);
-    titleRow.appendChild(t);
+    const roomsInFloor = roomsAll
+      .filter(r => {
+        if (!r) return false;
+        if (floor._virtual) return !r.floorId;
+        return r.floorId === floor.id;
+      })
+      .slice()
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
 
-    const sub = document.createElement('div');
-    sub.className = 'nw-shcfg-card__subtitle';
-    const count = devices.filter(d => d.roomId === room.id).length;
-    sub.textContent = `${count} Gerät(e)`;
+    const devCount = devices.filter(d => roomsInFloor.some(r => r.id === d.roomId)).length;
 
-    card.appendChild(titleRow);
-    card.appendChild(sub);
+    fCard.innerHTML = `
+      <div class="nw-shcfg-floor__head">
+        <div class="nw-shcfg-floor__title">
+          <span class="nw-shcfg-floor__icon">${nwEscapeHtml(floor.icon || '🏢')}</span>
+          <span class="nw-shcfg-floor__name">${nwEscapeHtml(floor.name || floor.id)}</span>
+        </div>
+        <div class="nw-shcfg-floor__meta">${roomsInFloor.length} Raum(e) • ${devCount} Gerät(e)</div>
+        <button class="nw-config-btn nw-shcfg-floor__add" type="button">+ Raum</button>
+      </div>
+      <div class="nw-shcfg-dropzone nw-shcfg-floor__drop">Raum aus der Bibliothek hier ablegen</div>
+      <div class="nw-shcfg-floor__rooms"></div>
+    `;
 
-    // Drop a device template onto a room
-    card.addEventListener('dragover', (e) => { e.preventDefault(); card.classList.add('is-selected'); });
-    card.addEventListener('dragleave', () => {
-      if (!(builderUi.selected && builderUi.selected.kind === 'room' && builderUi.selected.id === room.id)) card.classList.remove('is-selected');
+    // Select floor
+    fCard.addEventListener('click', () => {
+      builderUi.selected = { kind: 'floor', id: floor.id };
+      nwRenderShcfgShell();
     });
-    card.addEventListener('drop', (e) => {
-      e.preventDefault();
-      const payload = nwShcfgDragGet(e);
-      if (!payload) return;
-      if (payload.kind === 'device-template' && payload.templateType) {
-        const dev = nwAddDeviceFromTemplate(payload.templateType, { roomId: room.id, silent: true });
-        if (dev) {
-          // jump directly into room view
-          builderUi.view = 'roomDevices';
-          builderUi.currentRoomId = room.id;
-          builderUi.tab = 'devices';
-          builderUi.selected = { kind: 'device', id: dev.id };
-          nwRenderShcfgShell();
-        }
+
+    // + Raum
+    const addRoomBtn = fCard.querySelector('.nw-shcfg-floor__add');
+    addRoomBtn?.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const r = nwShcfgAddRoom({ name: 'Neuer Raum', floorId: floor._virtual ? null : floor.id });
+      if (r) {
+        builderUi.selected = { kind: 'room', id: r.id };
+        nwRenderAll();
       }
     });
 
-    card.addEventListener('click', () => {
-      builderUi.selected = { kind: 'room', id: room.id };
-      nwRenderShcfgShell();
+    // Dropzone (Raum erstellen / Raum verschieben)
+    const fDrop = fCard.querySelector('.nw-shcfg-floor__drop');
+    fDrop?.addEventListener('dragover', (e) => {
+      const payload = nwShcfgDragGet(e);
+      if (!payload) return;
+      if (payload.kind !== 'create-room' && payload.kind !== 'move-room') return;
+      e.preventDefault();
+      fDrop.classList.add('is-over');
+    });
+    fDrop?.addEventListener('dragleave', () => fDrop.classList.remove('is-over'));
+    fDrop?.addEventListener('drop', (e) => {
+      e.preventDefault();
+      fDrop.classList.remove('is-over');
+      const payload = nwShcfgDragGet(e);
+      if (!payload) return;
+      if (payload.kind === 'create-room') {
+        const r = nwShcfgAddRoom({ name: 'Neuer Raum', floorId: floor._virtual ? null : floor.id });
+        if (r) builderUi.selected = { kind: 'room', id: r.id };
+        nwRenderAll();
+      }
+      if (payload.kind === 'move-room' && payload.roomId) {
+        nwShcfgMoveRoomToFloor(payload.roomId, floor._virtual ? null : floor.id);
+        builderUi.selected = { kind: 'room', id: payload.roomId };
+        nwRenderAll();
+      }
     });
 
-    card.addEventListener('dblclick', () => {
-      builderUi.view = 'roomDevices';
-      builderUi.currentRoomId = room.id;
-      builderUi.tab = 'devices';
-      const roomDevs = devices.filter(d => d.roomId === room.id);
-      builderUi.selected = roomDevs.length ? { kind: 'device', id: roomDevs[0].id } : { kind: 'room', id: room.id };
-      nwRenderShcfgShell();
+    const roomsWrap = fCard.querySelector('.nw-shcfg-floor__rooms');
+
+    roomsInFloor.forEach(room => {
+      const rChip = document.createElement('div');
+      rChip.className = 'nw-shcfg-roomchip';
+      if (builderUi.selected && builderUi.selected.kind === 'room' && builderUi.selected.id === room.id) rChip.classList.add('is-selected');
+      const cnt = devices.filter(d => d.roomId === room.id).length;
+      rChip.innerHTML = `
+        <div class="nw-shcfg-roomchip__title">${nwEscapeHtml(room.name || room.id)}</div>
+        <div class="nw-shcfg-roomchip__meta">${cnt} Gerät(e)</div>
+      `;
+
+      // Select room
+      rChip.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        builderUi.selected = { kind: 'room', id: room.id };
+        nwRenderShcfgShell();
+      });
+
+      // Open room (devices)
+      rChip.addEventListener('dblclick', (ev) => {
+        ev.stopPropagation();
+        builderUi.view = 'roomDevices';
+        builderUi.currentRoomId = room.id;
+        builderUi.tab = 'devices';
+        const roomDevs = devices.filter(d => d.roomId === room.id);
+        builderUi.selected = roomDevs.length ? { kind: 'device', id: roomDevs[0].id } : { kind: 'room', id: room.id };
+        nwRenderShcfgShell();
+      });
+
+      // Drag room (move)
+      rChip.setAttribute('draggable', 'true');
+      rChip.addEventListener('dragstart', (e) => {
+        nwShcfgDragSet(e, { kind: 'move-room', roomId: room.id });
+      });
+
+      // Drop a device template onto a room
+      rChip.addEventListener('dragover', (e) => {
+        const payload = nwShcfgDragGet(e);
+        if (!payload || payload.kind !== 'device-template' || !payload.templateId) return;
+        e.preventDefault();
+        rChip.classList.add('is-over');
+      });
+      rChip.addEventListener('dragleave', () => rChip.classList.remove('is-over'));
+      rChip.addEventListener('drop', (e) => {
+        e.preventDefault();
+        rChip.classList.remove('is-over');
+        const payload = nwShcfgDragGet(e);
+        if (!payload) return;
+        if (payload.kind === 'device-template' && payload.templateId) {
+          const dev = nwAddDeviceFromTemplate(payload.templateId, { roomId: room.id, silent: true });
+          if (dev) {
+            builderUi.view = 'roomDevices';
+            builderUi.currentRoomId = room.id;
+            builderUi.tab = 'devices';
+            builderUi.selected = { kind: 'device', id: dev.id };
+            nwRenderShcfgShell();
+          }
+        }
+      });
+
+      roomsWrap?.appendChild(rChip);
     });
 
-    grid.appendChild(card);
+    grid.appendChild(fCard);
   });
 
   container.appendChild(grid);
@@ -2077,8 +2318,75 @@ function nwRenderShcfgBuilderProps(container) {
   if (!sel) {
     const h = document.createElement('div');
     h.className = 'nw-config-hint';
-    h.textContent = 'Wähle links im Arbeitsbereich einen Raum oder ein Gerät aus.';
+    h.textContent = 'Wähle links im Arbeitsbereich ein Geschoss, einen Raum oder ein Gerät aus.';
     container.appendChild(h);
+    return;
+  }
+
+  if (sel.kind === 'floor') {
+    const floor = (cfg.floors || []).find(f => f.id === sel.id) || (sel.id === '__unassigned__' ? { id: '__unassigned__', name: 'Ohne Geschoss', icon: '🧩', _virtual: true } : null);
+    if (!floor) {
+      container.textContent = 'Auswahl nicht gefunden.';
+      return;
+    }
+
+    const head = document.createElement('div');
+    head.className = 'nw-config-card__head';
+    const title = document.createElement('div');
+    title.className = 'nw-config-card__title';
+    title.textContent = `Geschoss: ${floor.name || floor.id}`;
+    head.appendChild(title);
+
+    if (!floor._virtual) {
+      const del = document.createElement('button');
+      del.className = 'nw-config-btn nw-config-btn--danger';
+      del.type = 'button';
+      del.textContent = 'Löschen';
+      del.addEventListener('click', () => {
+        if (!confirm(`Geschoss „${floor.name || floor.id}“ wirklich löschen? Räume werden in „Ohne Geschoss“ verschoben.`)) return;
+        const idx = (cfg.floors || []).findIndex(f => f.id === floor.id);
+        if (idx >= 0) {
+          (cfg.floors || []).splice(idx, 1);
+          (cfg.rooms || []).forEach(r => {
+            if (r && r.floorId === floor.id) delete r.floorId;
+          });
+          nwNormalizeFloorOrder();
+          nwNormalizeRoomOrder();
+          nwMarkDirty(true);
+          builderUi.selected = null;
+          nwRenderAll();
+        }
+      });
+      head.appendChild(del);
+    }
+
+    container.appendChild(head);
+
+    // Name
+    container.appendChild(
+      nwCreateFieldRow('Name', nwShcfgCreateTextInput(floor.name || '', (v) => {
+        if (floor._virtual) return;
+        floor.name = v;
+        nwMarkDirty(true);
+        nwRenderAll();
+      }, { placeholder: 'z.B. Erdgeschoss' }))
+    );
+
+    // ID (read-only for now)
+    const idInput = nwShcfgCreateTextInput(floor.id, () => {}, {});
+    idInput.readOnly = true;
+    container.appendChild(nwCreateFieldRow('ID', idInput));
+
+    // Icon
+    container.appendChild(
+      nwCreateFieldRow('Icon', nwShcfgCreateTextInput(floor.icon || '', (v) => {
+        if (floor._virtual) return;
+        floor.icon = v;
+        nwMarkDirty(true);
+        nwRenderAll();
+      }, { placeholder: 'z.B. 🏠' }))
+    );
+
     return;
   }
 
@@ -2124,6 +2432,20 @@ function nwRenderShcfgBuilderProps(container) {
         room.name = v;
         nwMarkDirty(true);
         nwRenderShcfgShell();
+      }))
+    );
+
+    // Geschoss-Zuordnung
+    const floorOptions = [
+      { value: '', label: 'Ohne Geschoss' },
+      ...(cfg.floors || []).slice().sort(nwSortByOrder).map(f => ({ value: f.id, label: f.name || f.id })),
+    ];
+    container.appendChild(
+      nwCreateFieldRow('Geschoss', nwShcfgCreateSelect(floorOptions, room.floorId || '', (v) => {
+        room.floorId = v || undefined;
+        nwNormalizeRoomOrder();
+        nwMarkDirty(true);
+        nwRenderAll();
       }))
     );
 
@@ -2372,7 +2694,8 @@ function nwNormalizeRoomFunctionOrder() {
     return out;
   };
 
-  nwShcState.config.rooms = normalize(nwShcState.config.rooms, nwGetRoomLabel);
+  // Räume werden pro Geschoss normalisiert (nicht global), damit "Kachel-in-Kachel" sauber bleibt.
+  nwNormalizeRoomOrder();
   nwShcState.config.functions = normalize(nwShcState.config.functions, nwGetFunctionLabel);
 }
 
@@ -2692,6 +3015,69 @@ function nwRenderFunctionsEditor(functions) {
 
 /* --- Geräte/Kacheln Verwaltung (B8) --- */
 
+function nwNormalizeFloorOrder() {
+  if (!nwShcState.config) return;
+  const floors = Array.isArray(nwShcState.config.floors) ? nwShcState.config.floors : (nwShcState.config.floors = []);
+
+  // Ensure IDs + names
+  floors.forEach((f, idx) => {
+    if (!f) return;
+    if (!f.id) {
+      const seed = nwPagesSlugify(String(f.name || `floor-${idx + 1}`));
+      f.id = nwEnsureUniqueId(floors, seed, f);
+    }
+    if (typeof f.name !== 'string' || !f.name.trim()) {
+      f.name = f.id;
+    }
+    if (typeof f.icon !== 'string') {
+      f.icon = '🏢';
+    }
+  });
+
+  floors.sort(nwSortByOrder);
+  floors.forEach((f, idx) => {
+    if (f) f.order = idx + 1;
+  });
+}
+
+function nwNormalizeRoomOrder() {
+  if (!nwShcState.config) return;
+  const rooms = Array.isArray(nwShcState.config.rooms) ? nwShcState.config.rooms : (nwShcState.config.rooms = []);
+
+  // Ensure IDs + names
+  rooms.forEach((r, idx) => {
+    if (!r) return;
+    if (!r.id) {
+      const seed = nwPagesSlugify(String(nwGetRoomLabel(r) || `room-${idx + 1}`));
+      r.id = nwEnsureUniqueId(rooms, seed, r);
+    }
+    if (typeof r.name !== 'string' || !r.name.trim()) {
+      r.name = r.id;
+    }
+  });
+
+  // Group rooms by floorId (null = ohne Geschoss)
+  const buckets = new Map();
+  for (const r of rooms) {
+    if (!r) continue;
+    const fid = r.floorId || null;
+    if (!buckets.has(fid)) buckets.set(fid, []);
+    buckets.get(fid).push(r);
+  }
+
+  const orderedFloorIds = (Array.isArray(nwShcState.config.floors) ? nwShcState.config.floors : [])
+    .slice()
+    .sort(nwSortByOrder)
+    .map(f => f.id);
+  const floorOrder = [...orderedFloorIds, null];
+
+  // Normalize per floor
+  for (const fid of floorOrder) {
+    const list = (buckets.get(fid) || []).sort(nwSortByOrder);
+    list.forEach((r, idx) => r.order = idx + 1);
+  }
+}
+
 function nwNormalizeDeviceOrder() {
   if (!nwShcState.config) return;
   const arr = Array.isArray(nwShcState.config.devices) ? nwShcState.config.devices : [];
@@ -2746,14 +3132,19 @@ function nwAddDevice() {
 
 // Quick templates (installer speed): create a pre-filled device skeleton so the
 // installer only needs to pick the datapoints.
-function nwAddDeviceFromTemplate(templateType, opts = {}) {
+function nwAddDeviceFromTemplate(templateId, opts = {}) {
   if (!nwShcState.config) return;
 
-  const t = String(templateType || '').trim();
-  if (!t) {
+  const tid = String(templateId || '').trim();
+  if (!tid) {
     nwSetStatus('Bitte zuerst eine Vorlage auswählen.', 'error');
     return;
   }
+
+  // Lookup by template id (preferred). Fallback: allow passing a plain type.
+  const tpl = NW_SHCFG_BUILDER_DEVICE_TEMPLATES.find(x => x.id === tid) ||
+    NW_SHCFG_BUILDER_DEVICE_TEMPLATES.find(x => x.type === tid);
+  const t = (tpl && tpl.type) ? tpl.type : tid;
 
   const devices = Array.isArray(nwShcState.config.devices) ? nwShcState.config.devices : [];
   const rooms = Array.isArray(nwShcState.config.rooms) ? nwShcState.config.rooms : [];
@@ -2803,11 +3194,12 @@ function nwAddDeviceFromTemplate(templateType, opts = {}) {
 
   const dev = {
     id,
-    alias: aliasMap[t] || 'Neues Gerät',
+    alias: (tpl && tpl.name) ? tpl.name : (aliasMap[t] || 'Neues Gerät'),
     type: t,
     roomId: roomId || null,
     functionId: functionId || null,
     icon: iconMap[t] || '',
+    templateId: (tpl && tpl.id) ? tpl.id : undefined,
     size: (t === 'rtr' || t === 'camera' || t === 'widget') ? 'xl' : ((t === 'player') ? 'l' : 'm'),
     behavior: { favorite: false, readOnly: false },
     io: {},
