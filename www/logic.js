@@ -2333,12 +2333,31 @@ async function nwInitLogicEditor() {
   nwLE.el.backupFile = document.getElementById('nw-le-backup-file');
 
   // toolbar buttons
+  const btnOverview = document.getElementById('nw-le-btn-overview');
   const btnNew = document.getElementById('nw-le-btn-new');
   const btnSave = document.getElementById('nw-le-btn-save');
   const btnExport = document.getElementById('nw-le-btn-export');
   const btnImport = document.getElementById('nw-le-btn-import');
   const btnBackup = document.getElementById('nw-le-btn-backup');
   const btnSmarthomeCfg = document.getElementById('nw-le-btn-smarthomecfg');
+
+  if (btnOverview) btnOverview.addEventListener('click', () => {
+    // Prefer going back to the last same-origin page (e.g. SmartHome-Config).
+    // If no safe referrer exists, fall back to the SmartHome configuration overview.
+    try {
+      const ref = String(document.referrer || '').trim();
+      if (ref) {
+        const u = new URL(ref, window.location.href);
+        if (u.origin === window.location.origin && !u.pathname.endsWith('/logic.html')) {
+          window.location.href = u.href;
+          return;
+        }
+      }
+    } catch (_e) {
+      // ignore
+    }
+    try { window.location.href = 'smarthome-config.html'; } catch (_e2) {}
+  });
 
   if (btnNew) btnNew.addEventListener('click', () => nwHandleNew());
   if (btnSave) btnSave.addEventListener('click', () => nwHandleSave());

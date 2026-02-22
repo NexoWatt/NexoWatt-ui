@@ -2925,6 +2925,12 @@ body{ padding-top: var(--topbar-h); }
   opacity: 0.95;
 }
 
+.nw-sh-nav-item__icon svg{
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
 .nw-sh-nav-item__label{
   flex: 1;
   font-weight: 800;
@@ -2932,7 +2938,7 @@ body{ padding-top: var(--topbar-h); }
   line-height: 1.15;
 }
 
-/* Nav hierarchy (X1-like): Home / Floors / Rooms */
+/* Nav hierarchy: Home / Floors / Rooms */
 .nw-sh-nav-item--home .nw-sh-nav-item__label{
   font-weight: 900;
 }
@@ -3222,7 +3228,7 @@ body{ padding-top: var(--topbar-h); }
   gap: 18px;
 }
 
-/* Room card inside a floor (clearer hierarchy, closer to X1 folder feeling) */
+/* Room card inside a floor (clearer hierarchy) */
 .nw-sh-room{
   padding: 10px 10px 12px;
   border-radius: 20px;
@@ -3799,6 +3805,18 @@ body{ padding-top: var(--topbar-h); }
   color: rgba(226,232,240,0.88);
 }
 
+/* Slightly more "premium" look for 3D icon variants */
+.nw-sh-icon--3d{
+  background: radial-gradient(circle at 30% 25%, rgba(255,255,255,0.12), rgba(2,6,23,0.55));
+  border-color: rgba(148,163,184,0.22);
+  box-shadow:
+    0 10px 22px rgba(0,0,0,0.35),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.nw-sh-icon--3d .nw-sh-icon__svg svg{
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25));
+}
+
 /* Small color indicator for RGB lights */
 .nw-sh-icon__dot{
   position: absolute;
@@ -3835,7 +3853,7 @@ body{ padding-top: var(--topbar-h); }
   flex-wrap: wrap;
 }
 
-/* SmartHome tiles: X1-like quick controls row */
+/* SmartHome tiles: in-tile quick controls row */
 .nw-sh-tile__footer{
   display: flex;
   align-items: center;

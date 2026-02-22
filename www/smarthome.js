@@ -607,6 +607,393 @@ const NW_ICON_SVGS = {
         <path d="M12 2l3 7 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1 3-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
       </svg>`,
   },
+
+  // Missing basic icons (used by templates / config icon picker)
+  camera: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M4 7h4l2-2h4l2 2h4v12H4V7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <circle cx="12" cy="13" r="3" stroke="currentColor" stroke-width="2"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M4 7h4l2-2h4l2 2h4v12H4V7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <circle cx="12" cy="13" r="3" stroke="currentColor" stroke-width="2"/>
+        <circle cx="12" cy="13" r="1.6" fill="currentColor" fill-opacity="0.25"/>
+      </svg>`,
+  },
+  grid: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="4" y="4" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2"/>
+        <rect x="13" y="4" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2"/>
+        <rect x="4" y="13" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2"/>
+        <rect x="13" y="13" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="4" y="4" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2" fill="currentColor" fill-opacity="0.18"/>
+        <rect x="13" y="4" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2"/>
+        <rect x="4" y="13" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2"/>
+        <rect x="13" y="13" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2" fill="currentColor" fill-opacity="0.18"/>
+      </svg>`,
+  },
+  thermometer: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M10 8h2" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+        <path d="M10 11h2" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+        <path d="M10 14h2" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M10 8h2" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+        <path d="M10 11h2" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+        <path d="M10 14h2" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+        <path d="M12 18a1.3 1.3 0 1 0 0-2.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="12" cy="18" r="2" fill="currentColor" fill-opacity="0.14"/>
+      </svg>`,
+  },
+
+  // Room / area icons (optional)
+  sofa: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M6 11a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M4 13h16v5H4v-5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 18v2M17 18v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M6 11a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M4 13h16v5H4v-5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 18v2M17 18v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 13h12" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+      </svg>`,
+  },
+  bed: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M4 12V9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M4 12h16v6H4v-6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 10h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 18v2M18 18v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M4 12V9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M4 12h16v6H4v-6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 10h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 18v2M18 18v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M4 15h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+      </svg>`,
+  },
+  kitchen: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M6 3v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9 3v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 7h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M15 3v10c0 2 1 3 3 3v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M6 11v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9 11v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M6 3v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9 3v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 7h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M15 3v10c0 2 1 3 3 3v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M6 11v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9 11v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M13 8h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+      </svg>`,
+  },
+  bath: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M7 7V5a2 2 0 0 1 2-2h1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M5 12h14v4a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M3 12h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M7 7V5a2 2 0 0 1 2-2h1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M5 12h14v4a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M3 12h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9 9h.01M12 9h.01M15 9h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.35"/>
+      </svg>`,
+  },
+  wrench: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M14 7a4 4 0 0 0 5 5l-4.5 4.5a2 2 0 0 1-2.8 0L7 21l-4-4 4.5-4.7a2 2 0 0 1 0-2.8L12 5a4 4 0 0 0 2 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M14 7a4 4 0 0 0 5 5l-4.5 4.5a2 2 0 0 1-2.8 0L7 21l-4-4 4.5-4.7a2 2 0 0 1 0-2.8L12 5a4 4 0 0 0 2 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M6 18l2 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+      </svg>`,
+  },
+  stairs: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M4 20h6v-4h4v-4h4V6h2v14" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M4 20h6v-4h4v-4h4V6h2v14" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M10 16h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+      </svg>`,
+  },
+
+  // 3D-style icons (subtle gradient + shine) – selectable via icon key (e.g. "3d-bulb")
+  '3d-bulb': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_bulb_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.55"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <path d="M12 2a7 7 0 0 0-4 12c.8.7 1.3 1.6 1.5 2.6l.1.4h4.8l.1-.4c.2-1 .7-1.9 1.5-2.6A7 7 0 0 0 12 2Z" fill="url(#nw3d_bulb_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M9 18h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M10 22h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9.2 6.2c.6-1.2 1.8-2 3.2-2" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_bulb_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.65"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.16"/>
+          </linearGradient>
+        </defs>
+        <path d="M12 2a7 7 0 0 0-4 12c.8.7 1.3 1.6 1.5 2.6l.1.4h4.8l.1-.4c.2-1 .7-1.9 1.5-2.6A7 7 0 0 0 12 2Z" fill="url(#nw3d_bulb_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12 1v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M4.5 4.5l1.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M19.5 4.5l-1.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9 18h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M10 22h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9.2 6.2c.6-1.2 1.8-2 3.2-2" stroke="#ffffff" stroke-opacity="0.20" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  '3d-plug': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_plug_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.50"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <path d="M9 2v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M15 2v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M7 8h10v4a5 5 0 0 1-5 5h0a5 5 0 0 1-5-5V8Z" fill="url(#nw3d_plug_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12 17v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9 10h6" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_plug_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.60"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.16"/>
+          </linearGradient>
+        </defs>
+        <path d="M9 2v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M15 2v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M7 8h10v4a5 5 0 0 1-5 5h0a5 5 0 0 1-5-5V8Z" fill="url(#nw3d_plug_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12 17v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M11 10l-1 2h2l-1 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`,
+  },
+  '3d-thermostat': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_thermo_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.50"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0Z" fill="url(#nw3d_thermo_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12 17a1 1 0 1 0 0-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M11 6h2" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_thermo_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.60"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.16"/>
+          </linearGradient>
+        </defs>
+        <path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0Z" fill="url(#nw3d_thermo_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12 17a1 1 0 1 0 0-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M18 10c0 1.2-1 2.2-2.2 2.2S13.6 11.2 13.6 10c0-1.5 1.2-2.2 2.2-3.6 1 1.4 2.2 2.1 2.2 3.6Z" fill="currentColor" fill-opacity="0.18"/>
+      </svg>`,
+  },
+  '3d-blinds': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_blinds_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.45"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.10"/>
+          </linearGradient>
+        </defs>
+        <rect x="5" y="4" width="14" height="16" rx="2" fill="url(#nw3d_blinds_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M5 8h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
+        <path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+        <path d="M5 16h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_blinds_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.55"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.14"/>
+          </linearGradient>
+        </defs>
+        <rect x="5" y="4" width="14" height="16" rx="2" fill="url(#nw3d_blinds_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M5 8h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
+        <path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+        <path d="M5 16h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+        <path d="M12 20v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  '3d-camera': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_cam_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.50"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <path d="M4 7h4l2-2h4l2 2h4v12H4V7Z" fill="url(#nw3d_cam_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <circle cx="12" cy="13" r="3" stroke="currentColor" stroke-width="2"/>
+        <path d="M9 9h3" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_cam_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.60"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.16"/>
+          </linearGradient>
+        </defs>
+        <path d="M4 7h4l2-2h4l2 2h4v12H4V7Z" fill="url(#nw3d_cam_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <circle cx="12" cy="13" r="3" stroke="currentColor" stroke-width="2"/>
+        <circle cx="12" cy="13" r="1.6" fill="currentColor" fill-opacity="0.18"/>
+      </svg>`,
+  },
+  '3d-speaker': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_spk_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.52"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.12"/>
+          </linearGradient>
+        </defs>
+        <path d="M11 5 7 9H4v6h3l4 4V5Z" fill="url(#nw3d_spk_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M6 12h.01" stroke="#ffffff" stroke-opacity="0.16" stroke-width="3" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_spk_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.62"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.16"/>
+          </linearGradient>
+        </defs>
+        <path d="M11 5 7 9H4v6h3l4 4V5Z" fill="url(#nw3d_spk_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M15 9a3 3 0 0 1 0 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M17.5 7a6 6 0 0 1 0 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+      </svg>`,
+  },
+  '3d-scene': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_scene_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.55"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.14"/>
+          </linearGradient>
+        </defs>
+        <path d="M12 2l1.2 4.2L17.5 8l-4.3 1.8L12 14l-1.2-4.2L6.5 8l4.3-1.8L12 2Z" fill="url(#nw3d_scene_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M10 5.5h4" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_scene_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.65"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.18"/>
+          </linearGradient>
+        </defs>
+        <path d="M12 2l1.2 4.2L17.5 8l-4.3 1.8L12 14l-1.2-4.2L6.5 8l4.3-1.8L12 2Z" fill="url(#nw3d_scene_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M19 13l.6 2.1L22 16l-2.4.9L19 19l-.6-2.1L16 16l2.4-.9L19 13Z" fill="currentColor" fill-opacity="0.18"/>
+      </svg>`,
+  },
+  '3d-sensor': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id="nw3d_sensor_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 9) rotate(45) scale(10)">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.55"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.10"/>
+          </radialGradient>
+        </defs>
+        <circle cx="12" cy="12" r="7" fill="url(#nw3d_sensor_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 8v4l2 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id="nw3d_sensor_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 9) rotate(45) scale(10)">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.65"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.14"/>
+          </radialGradient>
+        </defs>
+        <circle cx="12" cy="12" r="7" fill="url(#nw3d_sensor_g)" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 8v4l2 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="12" cy="12" r="2" fill="currentColor" fill-opacity="0.18"/>
+      </svg>`,
+  },
+  '3d-grid': {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_grid_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.45"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.10"/>
+          </linearGradient>
+        </defs>
+        <rect x="4" y="4" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2" fill="url(#nw3d_grid_g)"/>
+        <rect x="13" y="4" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2" fill="url(#nw3d_grid_g)"/>
+        <rect x="4" y="13" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2" fill="url(#nw3d_grid_g)"/>
+        <rect x="13" y="13" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2" fill="url(#nw3d_grid_g)"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="nw3d_grid_g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="currentColor" stop-opacity="0.55"/>
+            <stop offset="1" stop-color="currentColor" stop-opacity="0.14"/>
+          </linearGradient>
+        </defs>
+        <rect x="4" y="4" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2" fill="url(#nw3d_grid_g)"/>
+        <rect x="13" y="4" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2"/>
+        <rect x="4" y="13" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2"/>
+        <rect x="13" y="13" width="7" height="7" rx="2" stroke="currentColor" stroke-width="2" fill="url(#nw3d_grid_g)"/>
+      </svg>`,
+  },
 };
 
 // Helper: return the raw SVG string for a given icon name.
@@ -674,6 +1061,14 @@ function nwNormalizeIconName(raw) {
     uhr: 'sensor',
     kamin: 'fire',
     fire: 'fire',
+    kamera: 'camera',
+    camera: 'camera',
+    cam: 'camera',
+    thermometer: 'thermometer',
+    temperatur: 'thermometer',
+    temp: 'thermometer',
+    grid: 'grid',
+    widget: 'grid',
   };
   return map[s] || s;
 }
@@ -687,11 +1082,13 @@ function nwGuessIconName(dev) {
   // type-based defaults
   if (type === 'blind') return 'blinds';
   if (type === 'rtr') return 'thermostat';
+  if (type === 'camera') return 'camera';
+  if (type === 'widget') return 'grid';
   if (type === 'scene') return 'scene';
   if (type === 'player') return 'speaker';
   if (type === 'color') return 'bulb';
   if (type === 'sensor') {
-    if (unit.includes('°c') || alias.includes('temp') || fn.includes('klima')) return 'thermostat';
+    if (unit.includes('°c') || alias.includes('temp') || fn.includes('klima')) return 'thermometer';
     return 'sensor';
   }
 
@@ -703,8 +1100,11 @@ function nwGuessIconName(dev) {
   if (hay.match(/heiz|rtr|therm|klima/)) return 'thermostat';
   if (hay.match(/tv|fernseh|apple tv/)) return 'tv';
   if (hay.match(/sonos|speaker|lautsprech/)) return 'speaker';
+  if (hay.match(/kamera|camera|cam\b/)) return 'camera';
   if (hay.match(/kamin|ofen|fire/)) return 'fire';
   if (hay.match(/szene|scene/)) return 'scene';
+  if (hay.match(/widget|dashboard|grid/)) return 'grid';
+  if (hay.match(/temp|temperatur|°c/)) return 'thermometer';
 
   return 'generic';
 }
@@ -732,15 +1132,21 @@ function nwGetAccentColor(dev, iconName) {
   const type = String(dev.type || '').toLowerCase();
   const fn = String(dev.function || '').toLowerCase();
 
+  // 3D icon variants share the same palette as their base icon
+  let iconKey = String(iconName || '').toLowerCase();
+  if (iconKey.startsWith('3d-')) iconKey = iconKey.slice(3);
+
   // keep palette small and "calm" (works in dark UI)
-  if (iconName === 'bulb') return '#fbbf24';     // amber
-  if (iconName === 'fire') return '#fb7185';     // rose
-  if (iconName === 'plug') return '#60a5fa';     // blue
-  if (iconName === 'thermostat') return '#fb923c'; // orange
-  if (iconName === 'blinds') return '#a78bfa';   // violet
-  if (iconName === 'tv' || iconName === 'speaker') return '#38bdf8'; // sky
-  if (iconName === 'scene') return '#f472b6';    // pink
-  if (type === 'sensor' || iconName === 'sensor') return '#22c55e'; // green
+  if (iconKey === 'bulb') return '#fbbf24';     // amber
+  if (iconKey === 'fire') return '#fb7185';     // rose
+  if (iconKey === 'plug') return '#60a5fa';     // blue
+  if (iconKey === 'thermostat' || iconKey === 'thermometer') return '#fb923c'; // orange
+  if (iconKey === 'blinds') return '#a78bfa';   // violet
+  if (iconKey === 'tv' || iconKey === 'speaker') return '#38bdf8'; // sky
+  if (iconKey === 'camera') return '#22d3ee';   // cyan
+  if (iconKey === 'grid') return '#34d399';     // emerald
+  if (iconKey === 'scene') return '#f472b6';    // pink
+  if (type === 'sensor' || iconKey === 'sensor') return '#22c55e'; // green
 
   if (fn.includes('pv') || fn.includes('energie')) return '#22c55e';
   return '#00e676';
@@ -939,6 +1345,9 @@ function nwCreateIconElement(dev, isOn, iconSpec, accent) {
     const svgWrap = document.createElement('div');
     svgWrap.className = 'nw-sh-icon__svg';
     const name = iconSpec.name;
+    if (typeof name === 'string' && name.startsWith('3d-')) {
+      wrap.classList.add('nw-sh-icon--3d');
+    }
     const variant = isOn ? 'on' : 'off';
     const svg = (NW_ICON_SVGS[name] && NW_ICON_SVGS[name][variant])
       ? NW_ICON_SVGS[name][variant]
@@ -1851,7 +2260,7 @@ function nwCreateTile(dev, opts) {
   }
 
   // Dimmer/Blind: optional slider (if level mapping exists)
-  // We only show the slider on extra-large tiles to keep the default grid close to the X1 tile UX.
+  // We only show the slider on extra-large tiles to keep the default grid close to the standard tile UX.
   if (size === 'xl' && (type === 'dimmer' || type === 'blind') && dev.io && dev.io.level && dev.io.level.readId) {
     const lvlCfg = dev.io.level;
     const min = typeof lvlCfg.min === 'number' ? lvlCfg.min : 0;
@@ -1889,7 +2298,7 @@ function nwCreateTile(dev, opts) {
     tile.appendChild(slider);
   }
 
-  // X1-like quick controls (explicit toggles / +/- inside the tile)
+  // In-tile quick controls (explicit toggles / +/- inside the tile)
   // Note: tile click still acts as a fast action; these controls are for clarity & UX.
   const footer = document.createElement('div');
   footer.className = 'nw-sh-tile__footer';
@@ -5191,7 +5600,7 @@ function nwBuildDefaultPagesFromConfig(cfg) {
 
   const NO_MATCH = '__nw_no_match__';
 
-  // Floors as nav parents + rooms as children (X1 style: Räume nach Etage)
+  // Floors as nav parents + rooms as children (hierarchical: Räume nach Etage)
   sortedFloors.forEach((f, fIdx) => {
     const floorPageId = `floor_${f.id}`;
     const roomsInFloor = (roomsByFloor.get(f.id) || [])
@@ -5287,20 +5696,29 @@ function nwBuildDefaultPagesFromConfig(cfg) {
   return pages;
 }
 
+function nwIsHomePage(page) {
+  if (!page) return false;
+  const id = String(page.id || '').trim().toLowerCase();
+  if (id === 'home') return true;
+  const title = String(page.title || '').trim().toLowerCase();
+  if (title === 'home' || title === 'übersicht' || title === 'uebersicht') return true;
+  return false;
+}
+
 function nwIsLegacyFlatRoomPages(pages, cfg) {
   // Legacy auto-default: Home + one page per room, all at root level.
   const arr = Array.isArray(pages) ? pages : [];
   const rooms = Array.isArray(cfg && cfg.rooms) ? cfg.rooms : [];
   if (!arr.length || !rooms.length) return false;
 
-  const hasHome = arr.some((p) => p && p.id === 'home');
+  const hasHome = arr.some((p) => nwIsHomePage(p));
   if (!hasHome) return false;
 
   // No nesting, no floors, no other filter presets.
   if (arr.some((p) => p && p.parentId)) return false;
   if (arr.some((p) => p && String(p.id || '').startsWith('floor_'))) return false;
 
-  const others = arr.filter((p) => p && p.id !== 'home');
+  const others = arr.filter((p) => p && !nwIsHomePage(p));
   if (!others.length) return false;
 
   // All others look like simple "one room per page" entries.
@@ -5331,7 +5749,7 @@ function nwGetPagesFromConfig(cfg) {
   const pages = Array.isArray(cfg && cfg.pages) ? cfg.pages : [];
 
   // Auto-upgrade: older configs often saved the legacy flat room navigation.
-  // If floors exist (X1 style), regenerate the default pages to reflect
+  // If floors exist (hierarchical mode), regenerate the default pages to reflect
   // Geschoss → Raum in the sidebar, matching the editor structure.
   if (pages && pages.length && nwIsLegacyFlatRoomPages(pages, cfg)) {
     return nwBuildDefaultPagesFromConfig(cfg);
@@ -5412,7 +5830,7 @@ function nwUpdatePageTitle() {
   const page = pages.find((p) => p && p.id === activeId) || pages[0] || null;
   const title = (page && page.title) ? String(page.title) : 'SmartHome';
 
-  // Breadcrumb subtitle (X1-like): show parent page label (e.g. floor name when a room is active)
+  // Breadcrumb subtitle (hierarchy-aware): show parent page label (e.g. floor name when a room is active)
   let subtitle = '';
   try {
     if (page && page.id) {
@@ -5474,7 +5892,7 @@ function nwLoadExpandedIdsFromLs() {
     // ignore
   }
 
-  // Default (X1-like): show rooms nested under floors without forcing the user
+  // Default (hierarchy mode): show rooms nested under floors without forcing the user
   // to click "expand" for every floor. We only apply this when no valid state
   // was loaded OR when the stored state is clearly from an older nav layout.
   try {
@@ -5661,7 +6079,7 @@ function nwRenderSidebarNav() {
 
       const btn = document.createElement('button');
       btn.type = 'button';
-      const roleClass = (p.id === 'home')
+      const roleClass = (nwIsHomePage(p))
         ? ' nw-sh-nav-item--home'
         : (depth === 0 && hasChildren)
           ? ' nw-sh-nav-item--floor'
@@ -5688,7 +6106,7 @@ function nwRenderSidebarNav() {
 
       const icon = document.createElement('span');
       icon.className = 'nw-sh-nav-item__icon';
-      icon.textContent = p.icon || '•';
+    icon.innerHTML = nwStaticIconHtml(p.icon || '•');
 
       const label = document.createElement('span');
       label.className = 'nw-sh-nav-item__label nw-sh-nav-label';
@@ -5886,7 +6304,7 @@ function nwApplyFiltersAndRender() {
   const filtered = nwApplyFilters(base);
 
   // Home uses its own overview layout (floors + favorites). No chip UI here.
-  if (activePage && activePage.id === 'home') {
+  if (nwIsHomePage(activePage)) {
     if (!nwAllDevices.length) {
       nwShowEmptyState(true, { enabled: nwSmartHomeEnabled, reason: 'empty' });
       return;

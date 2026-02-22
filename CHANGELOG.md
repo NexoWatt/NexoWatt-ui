@@ -1,9 +1,15 @@
+## 0.6.183
+- Logik-Editor: **Zurück zur Übersicht** Button ergänzt.
+- SmartHome Config & VIS: **Icon-Bibliothek erweitert** (zusätzliche Raum-/Bereich-Icons + neue **3D-Icon-Varianten** per Icon-Key, z.B. `3d-bulb`, `3d-camera`).
+- SmartHome VIS: fehlende Icons ergänzt (**Kamera**, **Thermometer**, **Raster**) + Sidebar rendert Icon-Keys als **SVG** (kein "camera"-Text mehr).
+- Interne Prototyp-Kommentare bereinigt.
+
 ## 0.6.182
-- SmartHome-VIS: **X1-inspiriertes Feintuning** – Breadcrumb-Subtitle (zeigt bei Raum-Seiten das zugehörige **Geschoss**), klarere **Raum-Karten** und explizite **Quick-Controls direkt in der Kachel** (Toggle + +/-) für ein app-ähnlicheres Bediengefühl.
+- SmartHome-VIS: **Feintuning** – Breadcrumb-Subtitle (zeigt bei Raum-Seiten das zugehörige **Geschoss**), klarere **Raum-Karten** und explizite **Quick-Controls direkt in der Kachel** (Toggle + +/-) für ein app-ähnlicheres Bediengefühl.
 - Migration: Erkennung von Legacy **flacher Raum-Navigation** verbessert (funktioniert jetzt auch bei **custom Page-IDs**).
 
 ## 0.6.181
-- SmartHome-VIS: Sidebar Navigation jetzt **X1-Style**: **Home → Geschoss → Räume** (verschachtelt). Geschosse sind standardmäßig aufgeklappt, damit Räume ohne Extra-Klick sofort auswählbar sind.
+- SmartHome-VIS: Sidebar Navigation jetzt **strukturiert**: **Home → Geschoss → Räume** (verschachtelt). Geschosse sind standardmäßig aufgeklappt, damit Räume ohne Extra-Klick sofort auswählbar sind.
 - SmartHomeConfig: Button **„Standard-Seiten“** erzeugt jetzt automatisch die **Etagen → Räume** Struktur (statt flacher Raum-Liste).
 - Migration: alte, flache Default-Seiten (Home + Räume ohne Etagen) werden in der VIS automatisch auf die neue Etagen-Struktur umgestellt, sobald Geschosse vorhanden sind.
 
