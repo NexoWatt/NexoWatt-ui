@@ -49,7 +49,7 @@ function nwEnsureShcfgUiState() {
     };
   }
   if (!nwShcState.ui.builder) {
-    nwShcState.ui.builder = { tab: 'building', view: 'rooms', currentRoomId: null, selected: null };
+    nwShcState.ui.builder = { tab: 'building', view: 'rooms', currentRoomId: null, selected: null, dragPayload: null };
   }
 
   // Clamp to supported tabs (Visual-Tab ist entfernt)
@@ -164,6 +164,148 @@ function nwShcRenderIconPreview(previewEl, iconValue) {
   }
 }
 
+
+
+/* --- SmartHome Config Builder: Icon-Auswahl (für Geschosse/Räume/Geräte) --- */
+
+const NW_SHCFG_ICON_OPTIONS = [
+  { id: '', label: '(kein Icon)' },
+
+  // SVG Icons
+  { id: 'grid', label: 'Gebäude / Raster' },
+  { id: 'bulb', label: 'Lampe' },
+  { id: 'plug', label: 'Steckdose' },
+  { id: 'thermostat', label: 'Thermostat' },
+  { id: 'blinds', label: 'Rollo / Jalousie' },
+  { id: 'tv', label: 'TV' },
+  { id: 'speaker', label: 'Audio' },
+  { id: 'camera', label: 'Kamera' },
+  { id: 'fire', label: 'Heizen' },
+  { id: 'scene', label: 'Szene' },
+  { id: 'thermometer', label: 'Temperatur' },
+  { id: 'sensor', label: 'Sensor' },
+  { id: 'generic', label: 'Allgemein' },
+
+  // Emoji Vorschläge
+  { id: '🏠', label: '🏠 Haus' },
+  { id: '🛋️', label: '🛋️ Wohnen' },
+  { id: '🛏️', label: '🛏️ Schlafen' },
+  { id: '🍽️', label: '🍽️ Essen' },
+  { id: '🛁', label: '🛁 Bad' },
+  { id: '🚪', label: '🚪 Flur' },
+  { id: '🧰', label: '🧰 Technik' },
+  { id: '🌳', label: '🌳 Außenbereich' },
+  { id: '🚗', label: '🚗 Garage' },
+  { id: '❓', label: '❓ Sonstiges' },
+];
+
+function nwShcfgRenderIconPickerRow(currentValue, onCommit, { showLabel = true, labelText = 'Icon' } = {}) {
+  const iconLine = document.createElement('div');
+  iconLine.className = 'nw-config-icon-row';
+
+  const iconTop = document.createElement('div');
+  iconTop.className = 'nw-config-icon-row__top';
+  iconLine.appendChild(iconTop);  if (showLabel) {
+    const iconLabel = document.createElement('span');
+    iconLabel.className = 'nw-config-icon-row__label';
+    iconLabel.textContent = labelText;
+    iconTop.appendChild(iconLabel);
+  }
+
+  const iconPreview = document.createElement('div');
+  iconPreview.className = 'nw-config-icon-row__preview';
+  iconTop.appendChild(iconPreview);
+
+  const iconSelect = document.createElement('select');
+  iconSelect.className = 'nw-select';
+  iconTop.appendChild(iconSelect);
+
+  const iconCustom = document.createElement('input');
+  iconCustom.type = 'text';
+  iconCustom.className = 'nw-input nw-config-icon-row__custom';
+  iconCustom.placeholder = 'Emoji oder Icon-Key…';
+  iconLine.appendChild(iconCustom);
+
+  // Build options
+  const customId = '__custom__';
+  const options = [...NW_SHCFG_ICON_OPTIONS, { id: customId, label: 'Eigene Eingabe…' }];
+  options.forEach((o) => {
+    const opt = document.createElement('option');
+    opt.value = o.id;
+    opt.textContent = o.label;
+    iconSelect.appendChild(opt);
+  });
+
+  const optionIds = new Set(options.map((o) => String(o.id)));
+
+  function commitIcon(value) {
+    const v = String(value || '').trim();
+    if (typeof onCommit === 'function') onCommit(v);
+  }
+
+  function setPreview(value) {
+    nwShcRenderIconPreview(iconPreview, value);
+  }
+
+  function syncUiFromValue(value) {
+    const v = String(value || '').trim();
+    setPreview(v);
+
+    if (v && optionIds.has(v)) {
+      iconSelect.value = v;
+      iconCustom.value = '';
+      iconCustom.disabled = true;
+      return;
+    }
+
+    // Fall back to custom
+    iconSelect.value = customId;
+    iconCustom.disabled = false;
+    iconCustom.value = v;
+  }
+
+  // Init
+  syncUiFromValue(currentValue);
+
+  // Change via dropdown
+  iconSelect.addEventListener('change', () => {
+    if (iconSelect.value === customId) {
+      iconCustom.disabled = false;
+      iconCustom.focus();
+      // Don't commit yet – user types custom
+      setPreview(iconCustom.value);
+      return;
+    }
+
+    iconCustom.disabled = true;
+    iconCustom.value = '';
+    setPreview(iconSelect.value);
+    commitIcon(iconSelect.value);
+  });
+
+  // Live preview while typing custom
+  iconCustom.addEventListener('input', () => {
+    iconSelect.value = customId;
+    iconCustom.disabled = false;
+    setPreview(iconCustom.value);
+  });
+
+  // Commit custom on blur/change
+  iconCustom.addEventListener('change', () => {
+    iconSelect.value = customId;
+    iconCustom.disabled = false;
+    commitIcon(iconCustom.value);
+  });
+
+  iconCustom.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      iconCustom.blur();
+    }
+  });
+
+  return iconLine;
+}
 /* --- Validator (A10): Fehlerliste für stabile Einrichtung --- */
 
 let nwValidateTimer = null;
@@ -1735,23 +1877,61 @@ const NW_SHCFG_BUILDER_DEVICE_TEMPLATES = [
   { id: 'value_temperature', type: 'sensor', group: 'Status / Messwerte', name: 'Temperaturwertgeber', icon: '🌡️', meta: '°C' },
 ];
 
+const NW_SHCFG_DND_MARKER = 'nw-shcfg:';
+
 function nwShcfgDragSet(e, payload) {
+  // Store payload in-memory as fallback because some browsers don't expose getData() during dragover.
   try {
-    e.dataTransfer.setData('application/json', JSON.stringify(payload));
+    nwEnsureShcfgUiState();
+    if (nwShcState.ui.builder) nwShcState.ui.builder.dragPayload = payload;
   } catch (_) {}
+
+  const dt = e.dataTransfer;
+  if (!dt) return;
+
+  dt.effectAllowed = 'copyMove';
+
+  const raw = NW_SHCFG_DND_MARKER + JSON.stringify(payload);
+  try { dt.setData('text/plain', raw); } catch (_) {}
+  try { dt.setData('application/json', raw); } catch (_) {}
+}
+
+function nwShcfgDragClear() {
   try {
-    e.dataTransfer.setData('text/plain', JSON.stringify(payload));
+    nwEnsureShcfgUiState();
+    if (nwShcState.ui.builder) nwShcState.ui.builder.dragPayload = null;
   } catch (_) {}
-  e.dataTransfer.effectAllowed = 'copy';
 }
 
 function nwShcfgDragGet(e) {
   const dt = e.dataTransfer;
-  if (!dt) return null;
-  const raw = dt.getData('application/json') || dt.getData('text/plain');
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch (_) { return null; }
+  let raw = '';
+
+  if (dt) {
+    try {
+      raw = dt.getData('application/json') || dt.getData('text/plain') || '';
+    } catch (_) {
+      raw = '';
+    }
+  }
+
+  if (raw) {
+    if (raw.startsWith(NW_SHCFG_DND_MARKER)) raw = raw.slice(NW_SHCFG_DND_MARKER.length);
+    try {
+      const p = JSON.parse(raw);
+      if (p && typeof p === 'object' && p.kind) return p;
+    } catch (_) {}
+  }
+
+  // Fallback: in-memory payload (needed for dragover in some browsers)
+  try {
+    nwEnsureShcfgUiState();
+    return (nwShcState.ui.builder && nwShcState.ui.builder.dragPayload) ? nwShcState.ui.builder.dragPayload : null;
+  } catch (_) {
+    return null;
+  }
 }
+
 
 function nwRenderShcfgBuilder() {
   nwEnsureShcfgUiState();
@@ -1826,6 +2006,7 @@ function nwShcfgLibItem({ icon, name, meta, payload }) {
   item.appendChild(hint);
 
   item.addEventListener('dragstart', (e) => nwShcfgDragSet(e, payload));
+  item.addEventListener('dragend', nwShcfgDragClear);
   return item;
 }
 
@@ -1914,6 +2095,7 @@ function nwShcfgAddRoom({ name = 'Neuer Raum', floorId = null } = {}) {
     id,
     name: label,
     floorId: fid || undefined,
+    icon: 'generic',
     order: nextOrder,
   };
   rooms.push(room);
@@ -2180,7 +2362,7 @@ function nwRenderShcfgBuilderWorkspace(container) {
     fCard.innerHTML = `
       <div class="nw-shcfg-floor__head">
         <div class="nw-shcfg-floor__title">
-          <span class="nw-shcfg-floor__icon">${nwEscapeHtml(floor.icon || '🏢')}</span>
+          <span class="nw-shcfg-floor__icon"></span>
           <span class="nw-shcfg-floor__name">${nwEscapeHtml(floor.name || floor.id)}</span>
         </div>
         <div class="nw-shcfg-floor__meta">${roomsInFloor.length} Raum(e) • ${devCount} Gerät(e)</div>
@@ -2189,6 +2371,9 @@ function nwRenderShcfgBuilderWorkspace(container) {
       <div class="nw-shcfg-dropzone nw-shcfg-floor__drop">Raum aus der Bibliothek hier ablegen</div>
       <div class="nw-shcfg-floor__rooms"></div>
     `;
+
+    const floorIconEl = fCard.querySelector('.nw-shcfg-floor__icon');
+    if (floorIconEl) nwShcRenderIconPreview(floorIconEl, floor.icon || '🏢');
 
     // Select floor
     fCard.addEventListener('click', () => {
@@ -2242,9 +2427,12 @@ function nwRenderShcfgBuilderWorkspace(container) {
       if (builderUi.selected && builderUi.selected.kind === 'room' && builderUi.selected.id === room.id) rChip.classList.add('is-selected');
       const cnt = devices.filter(d => d.roomId === room.id).length;
       rChip.innerHTML = `
-        <div class="nw-shcfg-roomchip__title">${nwEscapeHtml(room.name || room.id)}</div>
+        <div class="nw-shcfg-roomchip__title"><span class="nw-shcfg-roomchip__icon"></span>${nwEscapeHtml(room.name || room.id)}</div>
         <div class="nw-shcfg-roomchip__meta">${cnt} Gerät(e)</div>
       `;
+
+      const roomIconEl = rChip.querySelector('.nw-shcfg-roomchip__icon');
+      if (roomIconEl) nwShcRenderIconPreview(roomIconEl, room.icon || 'generic');
 
       // Select room
       rChip.addEventListener('click', (ev) => {
@@ -2269,6 +2457,7 @@ function nwRenderShcfgBuilderWorkspace(container) {
       rChip.addEventListener('dragstart', (e) => {
         nwShcfgDragSet(e, { kind: 'move-room', roomId: room.id });
       });
+      rChip.addEventListener('dragend', nwShcfgDragClear);
 
       // Drop a device template onto a room
       rChip.addEventListener('dragover', (e) => {
@@ -2407,12 +2596,12 @@ function nwRenderShcfgBuilderProps(container) {
 
     // Icon
     container.appendChild(
-      nwCreateFieldRow('Icon', nwShcfgCreateTextInput(floor.icon || '', (v) => {
+      nwCreateFieldRow('Icon', nwShcfgRenderIconPickerRow(floor.icon || '', (v) => {
         if (floor._virtual) return;
         floor.icon = v;
         nwMarkDirty(true);
         nwRenderAll();
-      }, { placeholder: 'z.B. 🏠' }))
+      }, { showLabel: false }))
     );
 
     return;
@@ -2461,6 +2650,15 @@ function nwRenderShcfgBuilderProps(container) {
         nwMarkDirty(true);
         nwRenderShcfgShell();
       }))
+    );
+
+    // Icon
+    container.appendChild(
+      nwCreateFieldRow('Icon', nwShcfgRenderIconPickerRow(room.icon || '', (v) => {
+        room.icon = v;
+        nwMarkDirty(true);
+        nwRenderAll();
+      }, { showLabel: false }))
     );
 
     // Geschoss-Zuordnung
@@ -2544,6 +2742,15 @@ function nwRenderShcfgBuilderProps(container) {
         nwMarkDirty(true);
         nwRenderShcfgShell();
       }, { placeholder: 'z.B. Deckenlicht' }))
+    );
+
+    // Icon
+    container.appendChild(
+      nwCreateFieldRow('Icon', nwShcfgRenderIconPickerRow(dev.icon || '', (v) => {
+        dev.icon = v;
+        nwMarkDirty(true);
+        nwRenderAll();
+      }, { showLabel: false }))
     );
 
     // ID

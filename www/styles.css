@@ -5116,6 +5116,8 @@ body{ padding-top: var(--topbar-h); }
   padding: 10px;
   margin-bottom: 8px;
   cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .nw-shcfg-libitem:active{
@@ -5275,9 +5277,16 @@ body{ padding-top: var(--topbar-h); }
   border: 1px solid rgba(255,255,255,0.10);
   background: rgba(0,0,0,0.14);
   padding: 10px 12px;
-  cursor: pointer;
+  cursor: grab;
   transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+  user-select: none;
+  -webkit-user-select: none;
 }
+
+.nw-shcfg-roomchip:active{
+  cursor: grabbing;
+}
+
 
 .nw-shcfg-roomchip:hover{
   transform: translateY(-1px);
@@ -5292,6 +5301,12 @@ body{ padding-top: var(--topbar-h); }
 .nw-shcfg-roomchip.is-over{
   border-color: rgba(37,238,174,0.55);
   background: rgba(37,238,174,0.07);
+}
+
+.nw-shcfg-roomchip__icon{
+  display: inline-flex;
+  margin-right: 8px;
+  vertical-align: middle;
 }
 
 .nw-shcfg-roomchip__title{
