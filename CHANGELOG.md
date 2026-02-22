@@ -1,3 +1,7 @@
+## 0.6.182
+- SmartHome-VIS: **X1-inspiriertes Feintuning** – Breadcrumb-Subtitle (zeigt bei Raum-Seiten das zugehörige **Geschoss**), klarere **Raum-Karten** und explizite **Quick-Controls direkt in der Kachel** (Toggle + +/-) für ein app-ähnlicheres Bediengefühl.
+- Migration: Erkennung von Legacy **flacher Raum-Navigation** verbessert (funktioniert jetzt auch bei **custom Page-IDs**).
+
 ## 0.6.181
 - SmartHome-VIS: Sidebar Navigation jetzt **X1-Style**: **Home → Geschoss → Räume** (verschachtelt). Geschosse sind standardmäßig aufgeklappt, damit Räume ohne Extra-Klick sofort auswählbar sind.
 - SmartHomeConfig: Button **„Standard-Seiten“** erzeugt jetzt automatisch die **Etagen → Räume** Struktur (statt flacher Raum-Liste).

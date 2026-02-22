@@ -2932,6 +2932,38 @@ body{ padding-top: var(--topbar-h); }
   line-height: 1.15;
 }
 
+/* Nav hierarchy (X1-like): Home / Floors / Rooms */
+.nw-sh-nav-item--home .nw-sh-nav-item__label{
+  font-weight: 900;
+}
+
+.nw-sh-nav-item--floor{
+  background: rgba(2, 6, 23, 0.22);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+.nw-sh-nav-item--floor .nw-sh-nav-item__label{
+  font-weight: 900;
+  font-size: 0.92rem;
+}
+
+.nw-sh-nav-item--room{
+  border-radius: 14px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  background: rgba(2, 6, 23, 0.18);
+}
+.nw-sh-nav-item--room:hover{
+  transform: none;
+}
+.nw-sh-nav-item--room .nw-sh-nav-item__label{
+  font-weight: 750;
+  font-size: 0.86rem;
+  opacity: 0.96;
+}
+.nw-sh-nav-item--room .nw-sh-nav-item__icon{
+  opacity: 0.88;
+}
+
 /* SmartHome Sidebar: Caret + Badge (Counts) */
 .nw-sh-nav-item__caret,
 .nw-sh-nav-item__caret--spacer{
@@ -2973,13 +3005,29 @@ body{ padding-top: var(--topbar-h); }
   display:flex;
   align-items:center;
   gap: 10px;
-  margin: 2px 2px 12px;
+  margin: 2px auto 12px;
+  max-width: 1120px;
+  padding: 0 2px;
 }
 
 .nw-sh-topbar-title{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: #e5e7eb;
+  line-height: 1.1;
+}
+
+#nwShPageTitle{
   font-size: 1.1rem;
   font-weight: 900;
-  color: #e5e7eb;
+  letter-spacing: 0.2px;
+}
+
+.nw-sh-topbar-subtitle{
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: rgba(203, 213, 225, 0.78);
 }
 
 .nw-sh-nav-toggle{
@@ -3118,6 +3166,8 @@ body{ padding-top: var(--topbar-h); }
   display: flex;
   flex-direction: column;
   gap: 18px;
+  max-width: 1120px;
+  margin: 0 auto;
 }
 
 /* SmartHome: Gebäude-Hierarchie (Geschoss → Räume → Kacheln) */
@@ -3160,6 +3210,14 @@ body{ padding-top: var(--topbar-h); }
   display:flex;
   flex-direction: column;
   gap: 18px;
+}
+
+/* Room card inside a floor (clearer hierarchy, closer to X1 folder feeling) */
+.nw-sh-room{
+  padding: 10px 10px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(148,163,184,0.12);
+  background: rgba(2,6,23,0.14);
 }
 
 .nw-sh-room__header{
@@ -3213,9 +3271,15 @@ body{ padding-top: var(--topbar-h); }
 
 .nw-sh-grid{
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   grid-auto-flow: dense;
+}
+
+@media (min-width: 1400px) {
+  .nw-sh-grid{
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 /* SmartHome: Gruppierung nach Gerätetyp */
@@ -3253,11 +3317,7 @@ body{ padding-top: var(--topbar-h); }
   opacity: 0.85;
 }
 
-@media (max-width: 1100px) {
-  .nw-sh-grid{
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
+/* 3 columns is the default; we only step down on smaller screens */
 
 @media (max-width: 820px) {
   .nw-sh-grid{
@@ -3284,7 +3344,7 @@ body{ padding-top: var(--topbar-h); }
   border: 1px solid rgba(148,163,184,0.18);
   background: rgba(17,24,39,0.38);
   backdrop-filter: blur(14px);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.28);
 
   cursor: pointer;
   user-select: none;
@@ -3574,6 +3634,89 @@ body{ padding-top: var(--topbar-h); }
   gap: 8px;
   justify-content: flex-end;
   flex-wrap: wrap;
+}
+
+/* SmartHome tiles: X1-like quick controls row */
+.nw-sh-tile__footer{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.nw-sh-mini-btn{
+  appearance: none;
+  border: 1px solid rgba(148,163,184,0.22);
+  background: rgba(2,6,23,0.22);
+  color: #e5e7eb;
+  border-radius: 12px;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  font-size: 18px;
+  line-height: 1;
+  opacity: 0.95;
+  transition: transform 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+.nw-sh-mini-btn:hover{
+  border-color: rgba(129,230,217,0.35);
+  opacity: 1;
+  transform: translateY(-1px);
+}
+.nw-sh-mini-btn:active{
+  transform: translateY(1px);
+}
+.nw-sh-mini-btn:disabled{
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.nw-sh-mini-toggle{
+  appearance: none;
+  border: 1px solid rgba(148,163,184,0.22);
+  background: rgba(2,6,23,0.22);
+  border-radius: 999px;
+  width: 50px;
+  height: 30px;
+  position: relative;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.nw-sh-mini-toggle::after{
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(203,213,225,0.85);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.32);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.nw-sh-mini-toggle--on{
+  border-color: rgba(0,230,118,0.85);
+  background: rgba(0,230,118,0.18);
+}
+.nw-sh-mini-toggle--on::after{
+  background: var(--sh-accent);
+  transform: translateX(20px);
+}
+.nw-sh-mini-toggle:disabled{
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.nw-sh-mini-toggle:focus-visible{
+  outline: 2px solid rgba(129,230,217,0.55);
+  outline-offset: 2px;
 }
 
 .nw-sh-btn{

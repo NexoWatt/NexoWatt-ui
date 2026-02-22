@@ -1567,7 +1567,8 @@ function nwCreateTile(dev, opts) {
   }
 
   // Dimmer/Blind: optional slider (if level mapping exists)
-  if ((type === 'dimmer' || type === 'blind') && dev.io && dev.io.level && dev.io.level.readId) {
+  // We only show the slider on extra-large tiles to keep the default grid close to the X1 tile UX.
+  if (size === 'xl' && (type === 'dimmer' || type === 'blind') && dev.io && dev.io.level && dev.io.level.readId) {
     const lvlCfg = dev.io.level;
     const min = typeof lvlCfg.min === 'number' ? lvlCfg.min : 0;
     const max = typeof lvlCfg.max === 'number' ? lvlCfg.max : 100;
@@ -1580,6 +1581,13 @@ function nwCreateTile(dev, opts) {
     slider.max = String(max);
     slider.value = String(Math.max(min, Math.min(max, current)));
     slider.className = 'nw-sh-slider nw-sh-slider--tilebig';
+    slider.disabled = !canWrite;
+
+    // Visual progress fill (accent track)
+    try { nwUpdateRangeFill(slider); } catch (_e) {}
+    slider.addEventListener('input', () => {
+      try { nwUpdateRangeFill(slider); } catch (_e) {}
+    }, { passive: true });
 
     const stop = (ev) => ev.stopPropagation();
     slider.addEventListener('mousedown', stop);
@@ -1587,7 +1595,7 @@ function nwCreateTile(dev, opts) {
     slider.addEventListener('click', stop);
 
     slider.addEventListener('change', async (ev) => {
-      if (!hasWrite) return;
+      if (!canWrite) return;
       const raw = Number(ev.target.value);
       if (!Number.isFinite(raw)) return;
       await nwSetLevel(dev.id, raw);
@@ -1595,6 +1603,79 @@ function nwCreateTile(dev, opts) {
     });
 
     tile.appendChild(slider);
+  }
+
+  // X1-like quick controls (explicit toggles / +/- inside the tile)
+  // Note: tile click still acts as a fast action; these controls are for clarity & UX.
+  const footer = document.createElement('div');
+  footer.className = 'nw-sh-tile__footer';
+
+  const addMiniToggle = () => {
+    const t = document.createElement('button');
+    t.type = 'button';
+    t.className = 'nw-sh-mini-toggle' + (isOn ? ' nw-sh-mini-toggle--on' : '');
+    t.setAttribute('aria-pressed', isOn ? 'true' : 'false');
+    t.title = isOn ? 'Ausschalten' : 'Einschalten';
+    t.disabled = !canWrite;
+    t.addEventListener('click', (ev) => ev.stopPropagation());
+    t.addEventListener('click', async () => {
+      if (!canWrite) return;
+      const st = await nwToggleDevice(dev.id);
+      if (!st) return;
+      await nwReloadDevices({ force: true });
+    });
+    footer.appendChild(t);
+  };
+
+  const addMiniBtn = (label, title, onClick) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'nw-sh-mini-btn';
+    b.textContent = label;
+    if (title) b.title = title;
+    b.disabled = !canWrite;
+    b.addEventListener('click', (ev) => ev.stopPropagation());
+    b.addEventListener('click', async () => {
+      if (!canWrite) return;
+      await onClick();
+    });
+    footer.appendChild(b);
+  };
+
+  if (type === 'switch' || type === 'color' || type === 'dimmer') {
+    addMiniToggle();
+  }
+
+  if (type === 'dimmer' && dev.io && dev.io.level && (dev.io.level.writeId || dev.io.level.readId)) {
+    const lvlCfg = dev.io.level;
+    const min = typeof lvlCfg.min === 'number' ? lvlCfg.min : 0;
+    const max = typeof lvlCfg.max === 'number' ? lvlCfg.max : 100;
+    const step = typeof lvlCfg.step === 'number' ? lvlCfg.step : 5;
+    const st = dev.state || {};
+    const current = (typeof st.level === 'number') ? st.level : 0;
+
+    addMiniBtn('−', 'Dimmen −', async () => {
+      const next = Math.max(min, Math.min(max, current - step));
+      await nwSetLevel(dev.id, next);
+      await nwReloadDevices({ force: true });
+    });
+    addMiniBtn('+', 'Dimmen +', async () => {
+      const next = Math.max(min, Math.min(max, current + step));
+      await nwSetLevel(dev.id, next);
+      await nwReloadDevices({ force: true });
+    });
+  }
+
+  if (type === 'scene') {
+    addMiniBtn('▶', 'Szene ausführen', async () => {
+      const st = await nwToggleDevice(dev.id);
+      if (!st) return;
+      await nwReloadDevices({ force: true });
+    });
+  }
+
+  if (footer.childNodes && footer.childNodes.length) {
+    tile.appendChild(footer);
   }
 
   // Blind buttons (up/stop/down)
@@ -4716,10 +4797,18 @@ function nwIsLegacyFlatRoomPages(pages, cfg) {
   const others = arr.filter((p) => p && p.id !== 'home');
   if (!others.length) return false;
 
-  // All others look like room pages
+  // All others look like simple "one room per page" entries.
+  // (Older versions used ids like room_<id>, but some configs used custom ids.
+  // We therefore validate via roomIds and known room IDs.)
+  const roomIdSet = new Set(rooms.map((r) => nwNormalizeId(r && r.id || '')).filter(Boolean));
+  const usedRoomIds = new Set();
   for (const p of others) {
-    if (!p || !String(p.id || '').startsWith('room_')) return false;
+    if (!p) return false;
     if (!Array.isArray(p.roomIds) || p.roomIds.length !== 1) return false;
+    const rid = nwNormalizeId(p.roomIds[0]);
+    if (!rid || !roomIdSet.has(rid)) return false;
+    if (usedRoomIds.has(rid)) return false;
+    usedRoomIds.add(rid);
     if (Array.isArray(p.funcIds) && p.funcIds.length) return false;
     if (Array.isArray(p.types) && p.types.length) return false;
     if (p.favoritesOnly) return false;
@@ -4810,17 +4899,48 @@ function nwInitSidebarUi() {
 
 function nwUpdatePageTitle() {
   const el = document.getElementById('nwShPageTitle');
+  const subEl = document.getElementById('nwShPageSubTitle');
   const pages = Array.isArray(nwPageState.pages) ? nwPageState.pages : [];
   const activeId = nwPageState.activeId;
 
   const page = pages.find((p) => p && p.id === activeId) || pages[0] || null;
   const title = (page && page.title) ? String(page.title) : 'SmartHome';
 
+  // Breadcrumb subtitle (X1-like): show parent page label (e.g. floor name when a room is active)
+  let subtitle = '';
+  try {
+    if (page && page.id) {
+      const byId = new Map(pages.map((p) => [p.id, p]));
+      const chain = [];
+      let cur = page;
+      let safety = 50;
+      while (cur && safety-- > 0) {
+        chain.unshift(cur);
+        if (!cur.parentId) break;
+        const next = byId.get(cur.parentId);
+        if (!next || next.id === cur.id) break;
+        cur = next;
+      }
+      if (chain.length >= 2) {
+        subtitle = String(chain[chain.length - 2].title || '').trim();
+      }
+    }
+  } catch (_e) {
+    subtitle = '';
+  }
+
   if (el) el.textContent = title;
+
+  if (subEl) {
+    subEl.textContent = subtitle;
+    subEl.style.display = subtitle ? 'block' : 'none';
+  }
 
   // Best-effort browser-tab title update.
   try {
-    document.title = `${title} – SmartHome`;
+    document.title = subtitle
+      ? `${title} – ${subtitle} – SmartHome`
+      : `${title} – SmartHome`;
   } catch (_) {
     // ignore
   }
@@ -4997,8 +5117,16 @@ function nwRenderSidebarNav() {
 
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'nw-sh-nav-item' + (isActive ? ' nw-sh-nav-item--active' : '');
+      const roleClass = (p.id === 'home')
+        ? ' nw-sh-nav-item--home'
+        : (depth === 0 && hasChildren)
+          ? ' nw-sh-nav-item--floor'
+          : (depth > 0)
+            ? ' nw-sh-nav-item--room'
+            : ' nw-sh-nav-item--page';
+      btn.className = 'nw-sh-nav-item' + roleClass + (isActive ? ' nw-sh-nav-item--active' : '');
       btn.style.paddingLeft = `${12 + Math.max(0, depth) * 14}px`;
+      btn.dataset.depth = String(depth || 0);
 
       const caret = document.createElement('span');
       caret.className = hasChildren
