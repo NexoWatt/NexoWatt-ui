@@ -5046,6 +5046,9 @@ body{ padding-top: var(--topbar-h); }
   grid-template-columns: 280px 1fr 380px;
   gap: 12px;
   min-height: 520px;
+  /* In Builder-Mode wird diese Höhe per JS passend zur Viewport-Höhe gesetzt.
+     Damit bleibt links die Bibliothek sichtbar und der Arbeitsbereich scrollt intern. */
+  height: var(--nw-shcfg-layout-h, auto);
 }
 
 @media (max-width: 1180px){
@@ -5060,6 +5063,10 @@ body{ padding-top: var(--topbar-h); }
   background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02));
   overflow: hidden;
   min-height: 200px;
+  /* Make panel bodies independently scrollable */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .nw-shcfg-builder__tabs{
@@ -5088,12 +5095,120 @@ body{ padding-top: var(--topbar-h); }
 
 .nw-shcfg-builder__panelbody{
   padding: 10px;
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
 }
 
 .nw-shcfg-libgroup{
   margin-bottom: 12px;
+}
+
+/* Collapsible library groups ("Ordner"-Variante) */
+.nw-shcfg-libgroup > summary{
+  list-style: none;
+}
+
+.nw-shcfg-libgroup > summary::-webkit-details-marker{
+  display: none;
+}
+
+.nw-shcfg-libgroup__summary{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.nw-shcfg-libgroup__summary:hover{
+  border-color: rgba(37,238,174,0.28);
+}
+
+.nw-shcfg-libgroup__sum-left{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nw-shcfg-libgroup__chev{
+  opacity: 0.75;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.nw-shcfg-libgroup[open] .nw-shcfg-libgroup__chev{
+  transform: rotate(90deg);
+  opacity: 1;
+}
+
+.nw-shcfg-libgroup__label{
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.6px;
+  color: rgba(255,255,255,0.78);
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nw-shcfg-libgroup__count{
+  font-size: 12px;
+  color: rgba(255,255,255,0.62);
+  white-space: nowrap;
+}
+
+.nw-shcfg-libgroup__body{
+  margin-top: 8px;
+}
+
+/* Search in device library */
+.nw-shcfg-libsearch{
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding-bottom: 8px;
+  background: linear-gradient(180deg, rgba(12,15,18,0.95), rgba(12,15,18,0));
+}
+
+.nw-shcfg-libsearch__row{
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.nw-shcfg-libsearch__input{
+  width: 100%;
+}
+
+.nw-shcfg-libsearch__mini{
+  font-size: 12px;
+  color: rgba(255,255,255,0.68);
+  margin-top: 6px;
+}
+
+/* Workspace wide drop highlight */
+#nw-shcfg-builder-work.is-work-over{
+  outline: 2px dashed rgba(37, 238, 174, 0.35);
+  outline-offset: -6px;
+  background: rgba(37, 238, 174, 0.03);
+  border-radius: 14px;
+}
+
+/* Sticky dropzone in room-devices view */
+.nw-shcfg-dropzone--sticky{
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  backdrop-filter: blur(10px);
+  background: rgba(12, 15, 18, 0.65);
 }
 
 .nw-shcfg-libgroup__title{

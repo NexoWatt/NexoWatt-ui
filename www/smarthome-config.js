@@ -45,16 +45,99 @@ function nwEnsureShcfgUiState() {
         view: 'rooms',
         currentRoomId: null,
         selected: null, // { kind: 'floor'|'room'|'device', id }
+        dragPayload: null,
+        dragging: false,
+        lib: {
+          filter: '',
+          collapsed: {},
+        },
       },
     };
   }
   if (!nwShcState.ui.builder) {
-    nwShcState.ui.builder = { tab: 'building', view: 'rooms', currentRoomId: null, selected: null, dragPayload: null };
+    nwShcState.ui.builder = {
+      tab: 'building',
+      view: 'rooms',
+      currentRoomId: null,
+      selected: null,
+      dragPayload: null,
+      dragging: false,
+      lib: { filter: '', collapsed: {} },
+    };
   }
+
+  // Ensure nested defaults (older localStorage states)
+  if (!nwShcState.ui.builder.lib) nwShcState.ui.builder.lib = { filter: '', collapsed: {} };
+  if (!nwShcState.ui.builder.lib.collapsed) nwShcState.ui.builder.lib.collapsed = {};
+  if (typeof nwShcState.ui.builder.lib.filter !== 'string') nwShcState.ui.builder.lib.filter = '';
+
+  // Load persisted collapsed groups (best-effort)
+  try {
+    const raw = localStorage.getItem('nw-shcfg-lib-collapsed');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        nwShcState.ui.builder.lib.collapsed = Object.assign({}, parsed);
+      }
+    }
+  } catch (_) {}
 
   // Clamp to supported tabs (Visual-Tab ist entfernt)
   if (!['building', 'devices'].includes(nwShcState.ui.builder.tab)) {
     nwShcState.ui.builder.tab = 'building';
+  }
+}
+
+function nwShcfgPersistLibCollapsed() {
+  try {
+    nwEnsureShcfgUiState();
+    const collapsed = (nwShcState.ui && nwShcState.ui.builder && nwShcState.ui.builder.lib && nwShcState.ui.builder.lib.collapsed) ? nwShcState.ui.builder.lib.collapsed : {};
+    localStorage.setItem('nw-shcfg-lib-collapsed', JSON.stringify(collapsed || {}));
+  } catch (_) {}
+}
+
+function nwShcfgGetTargetRoomIdForAdd() {
+  try {
+    nwEnsureShcfgUiState();
+    const builderUi = nwShcState.ui.builder;
+    if (!builderUi) return null;
+    if (builderUi.view === 'roomDevices') return builderUi.currentRoomId || null;
+    if (builderUi.selected && builderUi.selected.kind === 'room') return builderUi.selected.id || null;
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function nwShcfgGetRoomById(roomId) {
+  const cfg = nwShcState.config || {};
+  const rooms = Array.isArray(cfg.rooms) ? cfg.rooms : [];
+  return rooms.find(r => r && r.id === roomId) || null;
+}
+
+function nwShcfgGetSelectedFloorIdForAddRoom() {
+  try {
+    nwEnsureShcfgUiState();
+    const builderUi = nwShcState.ui.builder;
+    if (!builderUi || !builderUi.selected) return null;
+    const cfg = nwShcState.config || {};
+    const floors = Array.isArray(cfg.floors) ? cfg.floors : [];
+    const rooms = Array.isArray(cfg.rooms) ? cfg.rooms : [];
+
+    if (builderUi.selected.kind === 'floor') {
+      const f = floors.find(fl => fl && fl.id === builderUi.selected.id);
+      if (!f) return null;
+      // virtual "Ohne Geschoss" => null
+      if (builderUi.selected.id === '__unassigned__') return null;
+      return f.id;
+    }
+    if (builderUi.selected.kind === 'room') {
+      const r = rooms.find(ro => ro && ro.id === builderUi.selected.id);
+      return r ? (r.floorId || null) : null;
+    }
+    return null;
+  } catch (_) {
+    return null;
   }
 }
 
@@ -1799,6 +1882,24 @@ function nwInitShcfgShellUi() {
 
   // Initial visibility
   nwRenderShcfgShell();
+
+  // Keep builder layout usable when viewport changes (resizes, devtools, mobile address bar)
+  window.addEventListener('resize', () => {
+    try { nwShcfgApplyBuilderSizing(); } catch (_) {}
+  });
+}
+
+function nwShcfgApplyBuilderSizing() {
+  const builder = document.getElementById('nw-shcfg-builder');
+  if (!builder || builder.style.display === 'none') return;
+  const layout = builder.querySelector('.nw-shcfg-builder__layout');
+  if (!layout) return;
+
+  const rect = layout.getBoundingClientRect();
+  // Extra breathing room at the bottom of the page (matches .content padding)
+  const bottomPad = 16;
+  const h = Math.max(360, Math.floor(window.innerHeight - rect.top - bottomPad));
+  layout.style.setProperty('--nw-shcfg-layout-h', `${h}px`);
 }
 
 function nwRenderShcfgShell() {
@@ -1823,6 +1924,10 @@ function nwRenderShcfgShell() {
 
   if (mode === 'builder') {
     nwRenderShcfgBuilder();
+    // Apply sizing after render so the panels become scrollable (no page scroll needed)
+    setTimeout(() => {
+      try { nwShcfgApplyBuilderSizing(); } catch (_) {}
+    }, 0);
   }
 }
 
@@ -1883,7 +1988,10 @@ function nwShcfgDragSet(e, payload) {
   // Store payload in-memory as fallback because some browsers don't expose getData() during dragover.
   try {
     nwEnsureShcfgUiState();
-    if (nwShcState.ui.builder) nwShcState.ui.builder.dragPayload = payload;
+    if (nwShcState.ui.builder) {
+      nwShcState.ui.builder.dragPayload = payload;
+      nwShcState.ui.builder.dragging = true;
+    }
   } catch (_) {}
 
   const dt = e.dataTransfer;
@@ -1899,7 +2007,10 @@ function nwShcfgDragSet(e, payload) {
 function nwShcfgDragClear() {
   try {
     nwEnsureShcfgUiState();
-    if (nwShcState.ui.builder) nwShcState.ui.builder.dragPayload = null;
+    if (nwShcState.ui.builder) {
+      nwShcState.ui.builder.dragPayload = null;
+      nwShcState.ui.builder.dragging = false;
+    }
   } catch (_) {}
 }
 
@@ -1962,15 +2073,57 @@ function nwRenderShcfgBuilder() {
   nwRenderShcfgBuilderProps(props);
 }
 
-function nwShcfgLibGroup(titleText, items) {
-  const group = document.createElement('div');
-  group.className = 'nw-shcfg-libgroup';
-  const title = document.createElement('div');
-  title.className = 'nw-shcfg-libgroup__title';
-  title.textContent = titleText;
-  group.appendChild(title);
-  items.forEach(it => group.appendChild(it));
-  return group;
+function nwShcfgLibGroup(titleText, items, { forceOpen = false } = {}) {
+  nwEnsureShcfgUiState();
+
+  const details = document.createElement('details');
+  details.className = 'nw-shcfg-libgroup';
+
+  const collapsed = !!(nwShcState.ui && nwShcState.ui.builder && nwShcState.ui.builder.lib && nwShcState.ui.builder.lib.collapsed && nwShcState.ui.builder.lib.collapsed[titleText]);
+  details.open = forceOpen ? true : !collapsed;
+
+  const summary = document.createElement('summary');
+  summary.className = 'nw-shcfg-libgroup__summary';
+
+  const sumLeft = document.createElement('div');
+  sumLeft.className = 'nw-shcfg-libgroup__sum-left';
+
+  const chev = document.createElement('span');
+  chev.className = 'nw-shcfg-libgroup__chev';
+  chev.textContent = '▶';
+
+  const label = document.createElement('span');
+  label.className = 'nw-shcfg-libgroup__label';
+  label.textContent = titleText;
+
+  sumLeft.appendChild(chev);
+  sumLeft.appendChild(label);
+
+  const count = document.createElement('span');
+  count.className = 'nw-shcfg-libgroup__count';
+  count.textContent = `${items.length}`;
+
+  summary.appendChild(sumLeft);
+  summary.appendChild(count);
+
+  details.appendChild(summary);
+
+  const body = document.createElement('div');
+  body.className = 'nw-shcfg-libgroup__body';
+  items.forEach(it => body.appendChild(it));
+  details.appendChild(body);
+
+  details.addEventListener('toggle', () => {
+    try {
+      nwEnsureShcfgUiState();
+      if (!nwShcState.ui.builder.lib) nwShcState.ui.builder.lib = { filter: '', collapsed: {} };
+      if (!nwShcState.ui.builder.lib.collapsed) nwShcState.ui.builder.lib.collapsed = {};
+      nwShcState.ui.builder.lib.collapsed[titleText] = !details.open;
+      nwShcfgPersistLibCollapsed();
+    } catch (_) {}
+  });
+
+  return details;
 }
 
 function nwShcfgLibItem({ icon, name, meta, payload }) {
@@ -2007,6 +2160,64 @@ function nwShcfgLibItem({ icon, name, meta, payload }) {
 
   item.addEventListener('dragstart', (e) => nwShcfgDragSet(e, payload));
   item.addEventListener('dragend', nwShcfgDragClear);
+
+  // Optional: click-to-add (no drag needed)
+  item.addEventListener('click', (e) => {
+    try {
+      nwEnsureShcfgUiState();
+      const builderUi = nwShcState.ui.builder;
+      if (!builderUi || !payload) return;
+      // Avoid click after drag
+      if (builderUi.dragging) return;
+
+      // Floors
+      if (payload.kind === 'create-floor') {
+        const f = nwShcfgAddFloor(payload.preset || 'floor');
+        if (f) {
+          builderUi.view = 'rooms';
+          builderUi.tab = 'building';
+          builderUi.selected = { kind: 'floor', id: f.id };
+          nwRenderAll();
+        }
+        return;
+      }
+
+      // Rooms
+      if (payload.kind === 'create-room') {
+        const floorId = nwShcfgGetSelectedFloorIdForAddRoom();
+        const r = nwShcfgAddRoom({ name: 'Neuer Raum', floorId });
+        if (r) {
+          builderUi.view = 'rooms';
+          builderUi.tab = 'building';
+          builderUi.selected = { kind: 'room', id: r.id };
+          nwRenderAll();
+        }
+        return;
+      }
+
+      // Devices
+      if (payload.kind === 'device-template' && payload.templateId) {
+        const roomId = nwShcfgGetTargetRoomIdForAdd();
+        if (!roomId) {
+          const msg = 'Bitte zuerst einen Raum auswählen (oder Raum öffnen), dann Vorlage klicken.';
+          try { nwSetStatus(msg, 'warn'); } catch (_) {}
+          return;
+        }
+        const dev = nwAddDeviceFromTemplate(payload.templateId, { roomId, silent: true });
+        if (dev) {
+          builderUi.view = 'roomDevices';
+          builderUi.currentRoomId = roomId;
+          builderUi.tab = 'devices';
+          builderUi.selected = { kind: 'device', id: dev.id };
+          nwRenderShcfgShell();
+        }
+        return;
+      }
+    } catch (_err) {
+      // ignore
+    }
+  });
+
   return item;
 }
 
@@ -2034,40 +2245,95 @@ function nwRenderShcfgBuilderLib(container) {
   }
 
   if (builderUi.tab === 'devices') {
-    const preferredOrder = [
-      'Licht',
-      'Beschattung',
-      'Klima',
-      'Kamera',
-      'Audio',
-      'Szenen',
-      'Status / Messwerte',
-      'System',
-    ];
+    // Search + collapsible groups
+    if (!builderUi.lib) builderUi.lib = { filter: '', collapsed: {} };
+    const libUi = builderUi.lib;
 
-    const byGroup = new Map();
-    for (const tpl of NW_SHCFG_BUILDER_DEVICE_TEMPLATES) {
-      const g = (tpl.group || 'Weitere').trim();
-      if (!byGroup.has(g)) byGroup.set(g, []);
-      byGroup.get(g).push(tpl);
-    }
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'nw-shcfg-libsearch';
 
-    const groups = [
-      ...preferredOrder.filter(g => byGroup.has(g)),
-      ...[...byGroup.keys()].filter(g => !preferredOrder.includes(g)),
-    ];
+    const row = document.createElement('div');
+    row.className = 'nw-shcfg-libsearch__row';
 
-    groups.forEach(gName => {
-      const items = (byGroup.get(gName) || []).map(tpl =>
-        nwShcfgLibItem({
-          icon: tpl.icon,
-          name: tpl.name,
-          meta: tpl.meta,
-          payload: { kind: 'device-template', templateId: tpl.id },
-        })
-      );
-      container.appendChild(nwShcfgLibGroup(gName, items));
-    });
+    const input = document.createElement('input');
+    input.className = 'nw-config-input nw-shcfg-libsearch__input';
+    input.type = 'search';
+    input.placeholder = 'Geräte suchen…';
+    input.value = libUi.filter || '';
+
+    row.appendChild(input);
+    searchWrap.appendChild(row);
+
+    const mini = document.createElement('div');
+    mini.className = 'nw-shcfg-libsearch__mini';
+    searchWrap.appendChild(mini);
+
+    container.appendChild(searchWrap);
+
+    const groupsWrap = document.createElement('div');
+    container.appendChild(groupsWrap);
+
+    const renderGroups = () => {
+      const filterRaw = String(input.value || '');
+      libUi.filter = filterRaw;
+
+      const roomId = nwShcfgGetTargetRoomIdForAdd();
+      const room = roomId ? nwShcfgGetRoomById(roomId) : null;
+      if (room) mini.textContent = `Tipp: Klick fügt das Gerät in „${room.name}“ ein (oder per Drag & Drop).`;
+      else mini.textContent = 'Tipp: Raum auswählen oder Raum öffnen → dann Vorlage klicken (oder Drag & Drop).';
+
+      groupsWrap.innerHTML = '';
+
+      const preferredOrder = [
+        'Licht',
+        'Beschattung',
+        'Klima',
+        'Kamera',
+        'Audio',
+        'Szenen',
+        'Status / Messwerte',
+        'System',
+      ];
+
+      const filter = filterRaw.trim().toLowerCase();
+      const byGroup = new Map();
+      for (const tpl of NW_SHCFG_BUILDER_DEVICE_TEMPLATES) {
+        const g = (tpl.group || 'Weitere').trim();
+        const hay = `${tpl.name || ''} ${tpl.meta || ''} ${tpl.type || ''} ${tpl.id || ''} ${tpl.group || ''}`.toLowerCase();
+        if (filter && !hay.includes(filter)) continue;
+        if (!byGroup.has(g)) byGroup.set(g, []);
+        byGroup.get(g).push(tpl);
+      }
+
+      const groups = [
+        ...preferredOrder.filter(g => byGroup.has(g)),
+        ...[...byGroup.keys()].filter(g => !preferredOrder.includes(g)),
+      ];
+
+      if (!groups.length) {
+        const empty = document.createElement('div');
+        empty.className = 'nw-config-hint';
+        empty.textContent = filter ? 'Keine Treffer. Tipp: Suche z.B. nach "dimmer", "kamera" oder "status".' : 'Keine Geräte-Vorlagen verfügbar.';
+        groupsWrap.appendChild(empty);
+        return;
+      }
+
+      groups.forEach(gName => {
+        const items = (byGroup.get(gName) || []).map(tpl =>
+          nwShcfgLibItem({
+            icon: tpl.icon,
+            name: tpl.name,
+            meta: tpl.meta,
+            payload: { kind: 'device-template', templateId: tpl.id },
+          })
+        );
+        // While searching: always show results (open groups)
+        groupsWrap.appendChild(nwShcfgLibGroup(gName, items, { forceOpen: !!filter }));
+      });
+    };
+
+    input.addEventListener('input', () => renderGroups());
+    renderGroups();
     return;
   }
 
@@ -2163,6 +2429,71 @@ function nwRenderShcfgBuilderWorkspace(container) {
   const cfg = nwShcState.config;
   const builderUi = nwShcState.ui.builder;
 
+  // Make the whole workspace a drop area for device templates.
+  // Target room:
+  //  - roomDevices view: currentRoomId
+  //  - rooms view: selected room (single click)
+  // This removes the "tiny drop field" problem when users scrolled down.
+  try {
+    container.classList.remove('is-work-over');
+    container._nwWorkDragCnt = 0;
+
+    container.ondragenter = (e) => {
+      const payload = nwShcfgDragGet(e);
+      if (!payload || payload.kind !== 'device-template' || !payload.templateId) return;
+      const roomId = nwShcfgGetTargetRoomIdForAdd();
+      if (!roomId) return;
+      // If a child dropzone already handled, don't show global highlight.
+      if (e.defaultPrevented && e.target !== container) return;
+      container._nwWorkDragCnt = (container._nwWorkDragCnt || 0) + 1;
+      container.classList.add('is-work-over');
+    };
+
+    container.ondragover = (e) => {
+      const payload = nwShcfgDragGet(e);
+      if (!payload || payload.kind !== 'device-template' || !payload.templateId) return;
+      const roomId = nwShcfgGetTargetRoomIdForAdd();
+      if (!roomId) return;
+      if (e.defaultPrevented && e.target !== container) return;
+      e.preventDefault();
+      container.classList.add('is-work-over');
+    };
+
+    container.ondragleave = (e) => {
+      const payload = nwShcfgDragGet(e);
+      if (!payload || payload.kind !== 'device-template') {
+        // Still clear highlight if user leaves the container entirely.
+        container._nwWorkDragCnt = Math.max(0, (container._nwWorkDragCnt || 0) - 1);
+        if ((container._nwWorkDragCnt || 0) === 0) container.classList.remove('is-work-over');
+        return;
+      }
+      container._nwWorkDragCnt = Math.max(0, (container._nwWorkDragCnt || 0) - 1);
+      if ((container._nwWorkDragCnt || 0) === 0) container.classList.remove('is-work-over');
+    };
+
+    container.ondrop = (e) => {
+      const alreadyHandled = (e.defaultPrevented && e.target !== container);
+      container._nwWorkDragCnt = 0;
+      container.classList.remove('is-work-over');
+      if (alreadyHandled) return;
+
+      const payload = nwShcfgDragGet(e);
+      if (!payload || payload.kind !== 'device-template' || !payload.templateId) return;
+      const roomId = nwShcfgGetTargetRoomIdForAdd();
+      if (!roomId) return;
+      e.preventDefault();
+
+      const dev = nwAddDeviceFromTemplate(payload.templateId, { roomId, silent: true });
+      if (dev) {
+        builderUi.view = 'roomDevices';
+        builderUi.currentRoomId = roomId;
+        builderUi.tab = 'devices';
+        builderUi.selected = { kind: 'device', id: dev.id };
+        nwRenderShcfgShell();
+      }
+    };
+  } catch (_) {}
+
   const rooms = cfg.rooms || [];
   const devices = cfg.devices || [];
 
@@ -2207,8 +2538,8 @@ function nwRenderShcfgBuilderWorkspace(container) {
     container.appendChild(crumbs);
 
     const drop = document.createElement('div');
-    drop.className = 'nw-shcfg-dropzone';
-    drop.textContent = 'Gerät hier ablegen';
+    drop.className = 'nw-shcfg-dropzone nw-shcfg-dropzone--sticky';
+    drop.textContent = 'Gerät hier ablegen (oder irgendwo im Arbeitsbereich)';
     drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('is-over'); });
     drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
     drop.addEventListener('drop', (e) => {
