@@ -14133,6 +14133,9 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
       try { if (this._nwEnergyTotalsTimer) clearInterval(this._nwEnergyTotalsTimer); } catch (_e) {}
       try { if (this._nwHistorieTimer) clearInterval(this._nwHistorieTimer); } catch (_e) {}
+      try { if (this._nwHistorieTimerOnce) clearTimeout(this._nwHistorieTimerOnce); } catch (_e) {}
+      try { if (this._nwStorageFarmTimer) clearInterval(this._nwStorageFarmTimer); } catch (_e) {}
+      try { if (this._rfidApplyTimer) clearTimeout(this._rfidApplyTimer); } catch (_e) {}
       try { this.stopNotificationMonitor(); } catch (_e) {}
       try { if (this._sseFlushTimer) clearTimeout(this._sseFlushTimer); } catch (_e) {}
       try { if (this.emsEngine && typeof this.emsEngine.stop === 'function') this.emsEngine.stop(); } catch (_e2) {}

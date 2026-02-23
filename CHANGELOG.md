@@ -1,3 +1,8 @@
+## 0.6.189
+- Wartung/Repo-Check: README um eine englische Kurzbeschreibung + Mindestanforderungen (Node.js / js-controller) ergänzt.
+- io-package.json: `common.engines` (Node.js >=16), `common.dependencies` (js-controller>=4.0.24) und `protectedNative` für `licenseKey` ergänzt.
+- Adapter: zusätzliche Timer werden beim `unload` sauber beendet (verhindert Nebenläufe bei Stop/Update).
+
 ## 0.6.188
 - Fix: **Update-sichere Installer-Konfiguration** – wenn `installer.configJson` nach einem Update leer/reset aussieht, wird automatisch aus dem **0_userdata Backup** wiederhergestellt (DP-Zuordnungen bleiben erhalten).
 - Backup: vorherige Backup-Version wird zusätzlich als **backupJsonPrev** gespeichert (zusätzliche Sicherheit bei ungewollten Überschreibungen).

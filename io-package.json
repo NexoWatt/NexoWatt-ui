@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.188",
+    "version": "0.6.189",
     "news": {
       "0.6.186": {
         "en": "More icon options for floors/areas (basement, attic, outdoor, garage, panel, server, etc.) incl. 3D variants.",
@@ -1366,6 +1366,10 @@
           "Fix: Update-sichere Installer-Konfiguration (DP-Zuordnungen gehen nach Updates nicht mehr verloren)",
           "Backup verbessert: vorherige Backup-Version wird behalten + Auto-Restore wenn configJson leer/reset aussieht"
         ]
+      },
+      "0.6.189": {
+        "en": "Maintenance: added adapter meta info for repo checks (README EN + requirements, io-package engines/dependencies). Adapter: additional timer cleanup on unload.",
+        "de": "Wartung: Adapter-Metadaten für Repo-Checks ergänzt (README EN + Voraussetzungen, io-package engines/dependencies). Adapter: zusätzliche Timer-Cleanup beim Entladen."
       }
     },
     "title": "NexoWatt UI",
@@ -1425,7 +1429,16 @@
       }
     ],
     "welcomeScreen": "adapter/nexowatt-ui/tab.html",
-    "license": "UNLICENSED"
+    "license": "UNLICENSED",
+    "engines": {
+      "node": ">=16"
+    },
+    "dependencies": [
+      "js-controller>=4.0.24"
+    ],
+    "protectedNative": [
+      "licenseKey"
+    ]
   },
   "native": {
     "port": 8188,
