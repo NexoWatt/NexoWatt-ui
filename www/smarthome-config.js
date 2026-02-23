@@ -278,6 +278,16 @@ const NW_SH_ICON_PREVIEW_SVGS = {
   "3d-terrace": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_terrace_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.46"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="5" y="13" width="14" height="7" rx="2" fill="url(#nw3d_terrace_g)" stroke="currentColor" stroke-width="2"/><path d="M7 16h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.65"/><circle cx="18" cy="6" r="2" fill="url(#nw3d_terrace_g)" stroke="currentColor" stroke-width="2"/><path d="M18 2v1.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.70"/></svg>`,
   "3d-pool": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_pool_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.46"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="5" y="5" width="14" height="9" rx="2" fill="url(#nw3d_pool_g)" stroke="currentColor" stroke-width="2"/><path d="M6 17c2-1 4-1 6 0s4 1 6 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6 20c2-1 4-1 6 0s4 1 6 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.75"/><path d="M7.5 6.2h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
 
+  "3d-kids": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><radialGradient id="nw3d_kids_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 7.5) rotate(45) scale(11)"><stop offset="0" stop-color="currentColor" stop-opacity="0.55"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></radialGradient></defs><circle cx="12" cy="10" r="4" fill="url(#nw3d_kids_g)" stroke="currentColor" stroke-width="2"/><circle cx="8.3" cy="7.3" r="1.6" fill="url(#nw3d_kids_g)" stroke="currentColor" stroke-width="2" opacity="0.95"/><circle cx="15.7" cy="7.3" r="1.6" fill="url(#nw3d_kids_g)" stroke="currentColor" stroke-width="2" opacity="0.95"/><path d="M10.2 10.8h.01M13.8 10.8h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M12 12.6h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.75"/><path d="M8 21c1.4-3 6.6-3 8 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9.2 7.2c.6-.6 1.4-.9 2.3-.9" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-guest": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_guest_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.48"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><path d="M4 12V9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M4 12h16v6H4v-6Z" fill="url(#nw3d_guest_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 10h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6 18v2M18 18v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18.6 4.2l.5 1.4 1.5.1-1.2.9.4 1.5-1.2-.7-1.2.7.3-1.5-1.1-.9 1.5-.1.5-1.4Z" fill="currentColor" fill-opacity="0.22"/><path d="M6.2 13.2h8" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-fireplace": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_fireplace_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.46"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="6" y="8" width="12" height="12" rx="2" fill="url(#nw3d_fireplace_g)" stroke="currentColor" stroke-width="2"/><path d="M5 8h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 11c-1 1.2-2 2.4-2 4a2 2 0 1 0 4 0c0-1.6-1-2.8-2-4Z" fill="currentColor" fill-opacity="0.10" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 20h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/><path d="M7.2 9.6h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-gym": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_gym_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.48"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="3" y="9" width="3" height="6" rx="1.2" fill="url(#nw3d_gym_g)" stroke="currentColor" stroke-width="2"/><rect x="6.5" y="10" width="2.5" height="4" rx="1" fill="url(#nw3d_gym_g)" stroke="currentColor" stroke-width="2" opacity="0.9"/><path d="M9 12h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="15" y="10" width="2.5" height="4" rx="1" fill="url(#nw3d_gym_g)" stroke="currentColor" stroke-width="2" opacity="0.9"/><rect x="18" y="9" width="3" height="6" rx="1.2" fill="url(#nw3d_gym_g)" stroke="currentColor" stroke-width="2"/><path d="M4.2 10.2h1.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-sauna": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_sauna_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.46"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="6" y="10" width="12" height="10" rx="2" fill="url(#nw3d_sauna_g)" stroke="currentColor" stroke-width="2"/><path d="M8 16h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/><path d="M12 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/><path d="M15 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/><path d="M7.2 11.6h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-workshop": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_workshop_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.48"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><path d="M14.8 4.8 19.2 9.2l-2.1 2.1-4.4-4.4 2.1-2.1Z" fill="url(#nw3d_workshop_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12.8 7.2 5.5 14.5l4 4 7.3-7.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.2 15.8 3 17l4 4 1.2-1.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M14.2 6.2l2.4 2.4" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-tech": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><radialGradient id="nw3d_tech_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 9) rotate(45) scale(10)"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></radialGradient></defs><circle cx="12" cy="12" r="6" fill="url(#nw3d_tech_g)" stroke="currentColor" stroke-width="2" opacity="0.95"/><circle cx="12" cy="12" r="2.5" stroke="currentColor" stroke-width="2"/><path d="M12 4.5v2M12 17.5v2M4.5 12h2M17.5 12h2M7 7l1.4 1.4M15.6 15.6 17 17M17 7l-1.4 1.4M7 17l1.4-1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 7.2c.6-.6 1.4-.9 2.3-.9" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-carport": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_carport_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.46"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><path d="M4 10 12 4l8 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 15l2-2h6l2 2v4H7v-4Z" fill="url(#nw3d_carport_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="10" cy="19" r="1" fill="currentColor" fill-opacity="0.22"/><circle cx="14" cy="19" r="1" fill="currentColor" fill-opacity="0.22"/><path d="M8.2 16.2h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "3d-shed": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_shed_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.46"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><path d="M6 11 12 6l6 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="7" y="11" width="10" height="9" rx="2" fill="url(#nw3d_shed_g)" stroke="currentColor" stroke-width="2"/><path d="M11 20v-4h2v4" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.85"/><path d="M8.2 12.2h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+
   // Room / area icons
   sofa: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 11a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4 13h16v5H4v-5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 18v2M17 18v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
   bed: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 12V9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M4 12h16v6H4v-6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 10h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6 18v2M18 18v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
@@ -285,6 +295,16 @@ const NW_SH_ICON_PREVIEW_SVGS = {
   bath: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M7 7V5a2 2 0 0 1 2-2h1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 12h14v4a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M3 12h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
   wrench: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M14 7a4 4 0 0 0 5 5l-4.5 4.5a2 2 0 0 1-2.8 0L7 21l-4-4 4.5-4.7a2 2 0 0 1 0-2.8L12 5a4 4 0 0 0 2 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`,
   stairs: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 20h6v-4h4v-4h4V6h2v14" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`,
+
+  kids: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="10" r="4" stroke="currentColor" stroke-width="2"/><circle cx="8.3" cy="7.3" r="1.6" stroke="currentColor" stroke-width="2"/><circle cx="15.7" cy="7.3" r="1.6" stroke="currentColor" stroke-width="2"/><path d="M10.2 10.8h.01M13.8 10.8h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M12 12.6h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.75"/><path d="M8 21c1.4-3 6.6-3 8 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+  guest: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 12V9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M4 12h16v6H4v-6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 10h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6 18v2M18 18v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18.6 4.2l.5 1.4 1.5.1-1.2.9.4 1.5-1.2-.7-1.2.7.3-1.5-1.1-.9 1.5-.1.5-1.4Z" fill="currentColor" fill-opacity="0.22"/></svg>`,
+  fireplace: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 8h12v12H6V8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M5 8h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 11c-1 1.2-2 2.4-2 4a2 2 0 1 0 4 0c0-1.6-1-2.8-2-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 20h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/></svg>`,
+  gym: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="3" y="9" width="3" height="6" rx="1.2" stroke="currentColor" stroke-width="2"/><rect x="6.5" y="10" width="2.5" height="4" rx="1" stroke="currentColor" stroke-width="2"/><path d="M9 12h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="15" y="10" width="2.5" height="4" rx="1" stroke="currentColor" stroke-width="2"/><rect x="18" y="9" width="3" height="6" rx="1.2" stroke="currentColor" stroke-width="2"/></svg>`,
+  sauna: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="6" y="10" width="12" height="10" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 16h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/><path d="M12 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/><path d="M15 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/></svg>`,
+  workshop: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M14.8 4.8 19.2 9.2l-2.1 2.1-4.4-4.4 2.1-2.1Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12.8 7.2 5.5 14.5l4 4 7.3-7.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.2 15.8 3 17l4 4 1.2-1.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  tech: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="6" stroke="currentColor" stroke-width="2" opacity="0.9"/><circle cx="12" cy="12" r="2.5" stroke="currentColor" stroke-width="2"/><path d="M12 4.5v2M12 17.5v2M4.5 12h2M17.5 12h2M7 7l1.4 1.4M15.6 15.6 17 17M17 7l-1.4 1.4M7 17l1.4-1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+  carport: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 10 12 4l8 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 15l2-2h6l2 2v4H7v-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="10" cy="19" r="1" fill="currentColor" fill-opacity="0.22"/><circle cx="14" cy="19" r="1" fill="currentColor" fill-opacity="0.22"/></svg>`,
+  shed: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 11 12 6l6 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="7" y="11" width="10" height="9" rx="2" stroke="currentColor" stroke-width="2"/><path d="M11 20v-4h2v4" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.8"/></svg>`,
 
   // 3D-style icons
   "3d-bulb": `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_bulb_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.55"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><path d="M12 2a7 7 0 0 0-4 12c.8.7 1.3 1.6 1.5 2.6l.1.4h4.8l.1-.4c.2-1 .7-1.9 1.5-2.6A7 7 0 0 0 12 2Z" fill="url(#nw3d_bulb_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 18h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10 22h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9.2 6.2c.6-1.2 1.8-2 3.2-2" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2" stroke-linecap="round"/></svg>`,
@@ -366,6 +386,35 @@ function nwShcNormalizeIconName(value) {
     waesche: 'laundry',
     wäsche: 'laundry',
     laundry: 'laundry',
+    // Räume
+    wohnzimmer: 'sofa',
+    sofa: 'sofa',
+    living: 'sofa',
+    schlafzimmer: 'bed',
+    bett: 'bed',
+    schlafen: 'bed',
+    kueche: 'kitchen',
+    küche: 'kitchen',
+    bad: 'bath',
+    badezimmer: 'bath',
+    kinderzimmer: 'kids',
+    kinder: 'kids',
+    kind: 'kids',
+    kids: 'kids',
+    gaestezimmer: 'guest',
+    gästezimmer: 'guest',
+    gast: 'guest',
+    kaminzimmer: 'fireplace',
+    fitness: 'gym',
+    sport: 'gym',
+    gym: 'gym',
+    sauna: 'sauna',
+    werkstatt: 'workshop',
+    technikraum: 'tech',
+    haustechnik: 'tech',
+    carport: 'carport',
+    gartenhaus: 'shed',
+    schuppen: 'shed',
   };
 
   return map[key] || key;
@@ -520,6 +569,15 @@ const NW_SHCFG_ICON_OPTIONS = [
   { id: 'bath', label: 'Bad' },
   { id: 'stairs', label: 'Treppe' },
   { id: 'wrench', label: 'Technik / Werkzeug' },
+  { id: 'kids', label: 'Kinderzimmer' },
+  { id: 'guest', label: 'Gästezimmer' },
+  { id: 'fireplace', label: 'Kaminzimmer' },
+  { id: 'gym', label: 'Fitness' },
+  { id: 'sauna', label: 'Sauna' },
+  { id: 'workshop', label: 'Werkstatt' },
+  { id: 'tech', label: 'Technikraum' },
+  { id: 'shed', label: 'Gartenhaus / Schuppen' },
+  { id: 'carport', label: 'Carport' },
 
   // 3D Icons (optisch "plastischer", passend zum Dark‑Design)
   { id: '3d-bulb', label: '3D Licht / Lampe' },
@@ -546,6 +604,15 @@ const NW_SHCFG_ICON_OPTIONS = [
   { id: '3d-laundry', label: '3D Waschküche' },
   { id: '3d-terrace', label: '3D Terrasse' },
   { id: '3d-pool', label: '3D Pool' },
+  { id: '3d-kids', label: '3D Kinderzimmer' },
+  { id: '3d-guest', label: '3D Gästezimmer' },
+  { id: '3d-fireplace', label: '3D Kaminzimmer' },
+  { id: '3d-gym', label: '3D Fitness' },
+  { id: '3d-sauna', label: '3D Sauna' },
+  { id: '3d-workshop', label: '3D Werkstatt' },
+  { id: '3d-tech', label: '3D Technikraum' },
+  { id: '3d-shed', label: '3D Gartenhaus' },
+  { id: '3d-carport', label: '3D Carport' },
 
   { id: '3d-solar', label: '3D PV / Solar' },
   { id: '3d-battery', label: '3D Batterie' },
@@ -2682,7 +2749,8 @@ function nwShcfgLibItem({ icon, name, meta, payload }) {
       // Rooms
       if (payload.kind === 'create-room') {
         const floorId = nwShcfgGetSelectedFloorIdForAddRoom();
-        const r = nwShcfgAddRoom({ name: 'Neuer Raum', floorId });
+        const preset = (payload && payload.preset && NW_SHCFG_ROOM_PRESETS[payload.preset]) ? NW_SHCFG_ROOM_PRESETS[payload.preset] : NW_SHCFG_ROOM_PRESETS.room;
+        const r = nwShcfgAddRoom({ name: (preset && preset.name) || 'Neuer Raum', icon: (preset && preset.icon) || 'generic', floorId });
         if (r) {
           builderUi.view = 'rooms';
           builderUi.tab = 'building';
@@ -2723,21 +2791,38 @@ function nwRenderShcfgBuilderLib(container) {
   const builderUi = nwShcState.ui.builder;
 
   if (builderUi.tab === 'building') {
-    const items = [
+    const floorItems = [
       // Geschosse / Bereiche
       nwShcfgLibItem({ icon: '3d-floors', name: 'Geschoss', meta: 'In den Arbeitsbereich ziehen', payload: { kind: 'create-floor', preset: 'floor' } }),
       nwShcfgLibItem({ icon: '3d-basement', name: 'Keller', meta: 'In den Arbeitsbereich ziehen', payload: { kind: 'create-floor', preset: 'keller' } }),
-      nwShcfgLibItem({ icon: 'ground', name: 'Erdgeschoss', meta: 'In den Arbeitsbereich ziehen', payload: { kind: 'create-floor', preset: 'eg' } }),
+      nwShcfgLibItem({ icon: '3d-ground', name: 'Erdgeschoss', meta: 'In den Arbeitsbereich ziehen', payload: { kind: 'create-floor', preset: 'eg' } }),
       nwShcfgLibItem({ icon: '3d-upper', name: 'Obergeschoss', meta: 'In den Arbeitsbereich ziehen', payload: { kind: 'create-floor', preset: 'og' } }),
       nwShcfgLibItem({ icon: '3d-attic', name: 'Dachgeschoss', meta: 'In den Arbeitsbereich ziehen', payload: { kind: 'create-floor', preset: 'dg' } }),
       nwShcfgLibItem({ icon: '3d-garden', name: 'Außenbereich', meta: 'In den Arbeitsbereich ziehen', payload: { kind: 'create-floor', preset: 'outdoor' } }),
       nwShcfgLibItem({ icon: '3d-panel', name: 'Schaltschrank', meta: 'In den Arbeitsbereich ziehen', payload: { kind: 'create-floor', preset: 'cabinet' } }),
-
-      // Räume
-      nwShcfgLibItem({ icon: 'door', name: 'Raum', meta: 'In ein Geschoss ziehen', payload: { kind: 'create-room' } }),
     ];
 
-    container.appendChild(nwShcfgLibGroup('Standardelemente', items));
+    const roomItems = [
+      // Räume
+      nwShcfgLibItem({ icon: 'door', name: 'Raum', meta: 'In ein Geschoss ziehen', payload: { kind: 'create-room', preset: 'room' } }),
+      nwShcfgLibItem({ icon: 'sofa', name: 'Wohnen', meta: 'In ein Geschoss ziehen', payload: { kind: 'create-room', preset: 'living' } }),
+      nwShcfgLibItem({ icon: 'bed', name: 'Schlafen', meta: 'In ein Geschoss ziehen', payload: { kind: 'create-room', preset: 'sleep' } }),
+      nwShcfgLibItem({ icon: 'kitchen', name: 'Küche', meta: 'In ein Geschoss ziehen', payload: { kind: 'create-room', preset: 'kitchen' } }),
+      nwShcfgLibItem({ icon: 'bath', name: 'Bad', meta: 'In ein Geschoss ziehen', payload: { kind: 'create-room', preset: 'bath' } }),
+      nwShcfgLibItem({ icon: 'kids', name: 'Kinderzimmer', meta: 'In ein Geschoss ziehen', payload: { kind: 'create-room', preset: 'kids' } }),
+      nwShcfgLibItem({ icon: 'guest', name: 'Gästezimmer', meta: 'In ein Geschoss ziehen', payload: { kind: 'create-room', preset: 'guest' } }),
+      nwShcfgLibItem({ icon: 'office', name: 'Büro', meta: 'In ein Geschoss ziehen', payload: { kind: 'create-room', preset: 'office' } }),
+      nwShcfgLibItem({ icon: 'gym', name: 'Fitness', meta: 'In ein Geschoss ziehen', payload: { kind: 'create-room', preset: 'fitness' } }),
+      nwShcfgLibItem({ icon: 'sauna', name: 'Sauna', meta: 'In ein Geschoss ziehen', payload: { kind: 'create-room', preset: 'sauna' } }),
+      nwShcfgLibItem({ icon: 'workshop', name: 'Werkstatt', meta: 'In ein Geschoss ziehen', payload: { kind: 'create-room', preset: 'workshop' } }),
+      nwShcfgLibItem({ icon: 'tech', name: 'Technikraum', meta: 'In ein Geschoss ziehen', payload: { kind: 'create-room', preset: 'tech' } }),
+      nwShcfgLibItem({ icon: 'fireplace', name: 'Kaminzimmer', meta: 'In ein Geschoss ziehen', payload: { kind: 'create-room', preset: 'fireplace' } }),
+      nwShcfgLibItem({ icon: 'storage', name: 'Abstellraum', meta: 'In ein Geschoss ziehen', payload: { kind: 'create-room', preset: 'storage' } }),
+      nwShcfgLibItem({ icon: 'laundry', name: 'Waschküche', meta: 'In ein Geschoss ziehen', payload: { kind: 'create-room', preset: 'laundry' } }),
+    ];
+
+    container.appendChild(nwShcfgLibGroup('Geschosse / Bereiche', floorItems, { forceOpen: true }));
+    container.appendChild(nwShcfgLibGroup('Räume', roomItems, { forceOpen: true }));
     return;
   }
 
@@ -2841,7 +2926,7 @@ function nwRenderShcfgBuilderLib(container) {
   container.appendChild(p);
 }
 
-function nwShcfgAddRoom({ name = 'Neuer Raum', floorId = null } = {}) {
+function nwShcfgAddRoom({ name = 'Neuer Raum', floorId = null, icon = 'generic' } = {}) {
   const cfg = nwShcState.config;
   if (!cfg) return null;
 
@@ -2858,7 +2943,7 @@ function nwShcfgAddRoom({ name = 'Neuer Raum', floorId = null } = {}) {
     id,
     name: label,
     floorId: fid || undefined,
-    icon: 'generic',
+    icon: icon || 'generic',
     order: nextOrder,
   };
   rooms.push(room);
@@ -2876,6 +2961,25 @@ const NW_SHCFG_FLOOR_PRESETS = {
   outdoor: { name: 'Außenbereich', icon: '3d-garden' },
   cabinet: { name: 'Schaltschrank', icon: '3d-panel' },
 };
+const NW_SHCFG_ROOM_PRESETS = {
+  room: { name: 'Neuer Raum', icon: 'generic' },
+  living: { name: 'Wohnen', icon: 'sofa' },
+  sleep: { name: 'Schlafen', icon: 'bed' },
+  kitchen: { name: 'Küche', icon: 'kitchen' },
+  bath: { name: 'Bad', icon: 'bath' },
+  kids: { name: 'Kinderzimmer', icon: 'kids' },
+  guest: { name: 'Gästezimmer', icon: 'guest' },
+  office: { name: 'Büro', icon: '3d-office' },
+  fitness: { name: 'Fitness', icon: 'gym' },
+  sauna: { name: 'Sauna', icon: 'sauna' },
+  workshop: { name: 'Werkstatt', icon: 'workshop' },
+  tech: { name: 'Technikraum', icon: 'tech' },
+  fireplace: { name: 'Kaminzimmer', icon: 'fireplace' },
+  storage: { name: 'Abstellraum', icon: 'storage' },
+  laundry: { name: 'Waschküche', icon: 'laundry' },
+};
+
+
 
 function nwShcfgAddFloor(presetId = 'floor') {
   const cfg = nwShcState.config;
@@ -3250,7 +3354,8 @@ function nwRenderShcfgBuilderWorkspace(container) {
       const payload = nwShcfgDragGet(e);
       if (!payload) return;
       if (payload.kind === 'create-room') {
-        const r = nwShcfgAddRoom({ name: 'Neuer Raum', floorId: floor._virtual ? null : floor.id });
+        const preset = (payload && payload.preset && NW_SHCFG_ROOM_PRESETS[payload.preset]) ? NW_SHCFG_ROOM_PRESETS[payload.preset] : NW_SHCFG_ROOM_PRESETS.room;
+        const r = nwShcfgAddRoom({ name: (preset && preset.name) || 'Neuer Raum', icon: (preset && preset.icon) || 'generic', floorId: floor._virtual ? null : floor.id });
         if (r) builderUi.selected = { kind: 'room', id: r.id };
         nwRenderAll();
       }

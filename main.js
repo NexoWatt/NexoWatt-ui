@@ -1042,6 +1042,43 @@ class NexoWattVis extends utils.Adapter {
     return this.nwDeepMerge(Array.isArray(v) ? [] : {}, v);
   }
 
+  _nwCountNonEmptyStrings(obj) {
+    let c = 0;
+    if (!obj || typeof obj !== 'object') return 0;
+    for (const v of Object.values(obj)) {
+      if (typeof v === 'string' && v.trim()) c++;
+    }
+    return c;
+  }
+
+  _nwPatchScore(patchObj) {
+    const p = this._nwIsPlainObject(patchObj) ? patchObj : {};
+    let score = 0;
+
+    // Base EMS mappings (most critical for values in LIVE/HISTORY views)
+    score += this._nwCountNonEmptyStrings(p.datapoints);
+
+    // History mappings
+    try { score += this._nwCountNonEmptyStrings(p.history && p.history.datapoints); } catch (_e) {}
+
+    // SmartHome legacy datapoints
+    try { score += this._nwCountNonEmptyStrings(p.smartHome && p.smartHome.datapoints); } catch (_e) {}
+
+    // SmartHomeConfig structural weight (helps for VIS navigation restore)
+    try {
+      const shc = p.smartHomeConfig;
+      if (shc && typeof shc === 'object') {
+        score += (Array.isArray(shc.floors) ? shc.floors.length : 0);
+        score += (Array.isArray(shc.rooms) ? shc.rooms.length : 0);
+        score += (Array.isArray(shc.devices) ? shc.devices.length : 0);
+        score += (Array.isArray(shc.pages) ? shc.pages.length : 0);
+      }
+    } catch (_e) {}
+
+    return score;
+  }
+
+
   /**
    * Normalize/complete an installer patch:
    * - Ensure all managed keys exist (filled from base native config or defaults).
@@ -1498,7 +1535,23 @@ class NexoWattVis extends utils.Adapter {
         needPersist = true;
       }
 
-      // Fallback: read uninstall-proof backup from 0_userdata.0 when state is empty/invalid
+      
+      // Extra safety: even if the state contains *valid* JSON (e.g. an empty patch), it may still be
+      // a reset after an update. In that case, prefer the uninstall-proof userdata backup when it
+      // contains a more complete configuration (e.g. mapped datapoints).
+      try {
+        const stateScore = this._nwPatchScore ? this._nwPatchScore(patch) : 0;
+        const b = await this.nwReadUserdataBackup();
+        const bPatch = (b && typeof b === 'object') ? b.configPatch : null;
+        const backupScore = this._nwPatchScore ? this._nwPatchScore(bPatch) : 0;
+        if (backupScore > 0 && stateScore < backupScore && stateScore <= 1) {
+          patch = (bPatch && typeof bPatch === 'object') ? bPatch : patch;
+          needPersist = true;
+          source = 'userdata';
+          try { this.log && this.log.warn && this.log.warn('installer.configJson looks empty – restoring installer config from userdata backup'); } catch (_e) {}
+        }
+      } catch (_e) {}
+// Fallback: read uninstall-proof backup from 0_userdata.0 when state is empty/invalid
       if (needPersist) {
         try {
           const b = await this.nwReadUserdataBackup();
@@ -1598,6 +1651,25 @@ class NexoWattVis extends utils.Adapter {
       def: 0,
     });
 
+    await ensureState(`${base}.backupJsonPrev`, {
+      name: 'NexoWatt UI – Installer Konfiguration (Backup JSON – vorherige Version)',
+      type: 'string',
+      role: 'json',
+      read: true,
+      write: true,
+      def: '{}',
+    });
+
+    await ensureState(`${base}.backupTsPrev`, {
+      name: 'NexoWatt UI – Backup Timestamp (ms) – vorherige Version',
+      type: 'number',
+      role: 'value.time',
+      read: true,
+      write: true,
+      def: 0,
+    });
+
+
     return true;
   }
 
@@ -1607,6 +1679,44 @@ class NexoWattVis extends utils.Adapter {
       if (!ok) return false;
 
       const patch = (patchObj && typeof patchObj === 'object') ? patchObj : {};
+      const newScore = this._nwPatchScore ? this._nwPatchScore(patch) : 0;
+
+      const base = '0_userdata.0.nexowattVis';
+
+      // Read current backup (if any) to protect against accidental overwrites.
+      let curRaw = '';
+      let curScore = 0;
+      try {
+        const stCur = await this.getForeignStateAsync(`${base}.backupJson`);
+        curRaw = (stCur && typeof stCur.val === 'string') ? stCur.val : '';
+        if (curRaw && curRaw.trim()) {
+          const parsed = JSON.parse(curRaw);
+          const curPatch = (parsed && typeof parsed === 'object') ? parsed.configPatch : null;
+          curScore = this._nwPatchScore ? this._nwPatchScore(curPatch) : 0;
+        }
+      } catch (_e) {
+        // ignore
+      }
+
+      // Safety: never overwrite a meaningful backup with an obviously empty/incomplete patch.
+      // This protects against accidental config resets after updates.
+      if (curScore > 0 && newScore === 0) {
+        try { this.log && this.log.warn && this.log.warn('[backup] Skip writing userdata backup: new patch looks empty while an older backup exists.'); } catch (_e) {}
+        return false;
+      }
+
+      // Rotate current -> prev (best-effort)
+      if (curRaw && curRaw.trim()) {
+        try {
+          const stTs = await this.getForeignStateAsync(`${base}.backupTs`).catch(() => null);
+          const tsVal = (stTs && typeof stTs.val === 'number') ? stTs.val : Date.now();
+          await this.setForeignStateAsync(`${base}.backupJsonPrev`, { val: String(curRaw), ack: true });
+          await this.setForeignStateAsync(`${base}.backupTsPrev`, { val: tsVal, ack: true });
+        } catch (_e) {
+          // ignore
+        }
+      }
+
       const backup = {
         backupVersion: 1,
         createdAt: new Date().toISOString(),
@@ -1617,7 +1727,6 @@ class NexoWattVis extends utils.Adapter {
         configPatch: patch,
       };
 
-      const base = '0_userdata.0.nexowattVis';
       await this.setForeignStateAsync(`${base}.backupJson`, { val: JSON.stringify(backup), ack: true });
       await this.setForeignStateAsync(`${base}.backupTs`, { val: Date.now(), ack: true });
 
@@ -1629,16 +1738,32 @@ class NexoWattVis extends utils.Adapter {
 
   async nwReadUserdataBackup() {
     const base = '0_userdata.0.nexowattVis';
-    try {
-      const st = await this.getForeignStateAsync(`${base}.backupJson`);
-      const raw = st && st.val;
-      if (typeof raw === 'string' && raw.trim()) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') return parsed;
-      }
-    } catch (_e) {}
-    return null;
+    const candidates = ['backupJson', 'backupJsonPrev'];
+
+    let best = null;
+    let bestScore = -1;
+
+    for (const k of candidates) {
+      try {
+        const st = await this.getForeignStateAsync(`${base}.${k}`);
+        const raw = st && st.val;
+        if (typeof raw === 'string' && raw.trim()) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            const patch = parsed.configPatch;
+            const score = this._nwPatchScore ? this._nwPatchScore(patch) : 0;
+            if (score > bestScore) {
+              best = parsed;
+              bestScore = score;
+            }
+          }
+        }
+      } catch (_e) {}
+    }
+
+    return best;
   }
+
 
   // ---------------------------------------------------------------------------
   // Simulation helper (nexowatt-sim adapter)

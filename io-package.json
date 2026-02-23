@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.186",
+    "version": "0.6.188",
     "news": {
       "0.6.186": {
         "en": "More icon options for floors/areas (basement, attic, outdoor, garage, panel, server, etc.) incl. 3D variants.",
@@ -1214,14 +1214,22 @@
         "0.5.64": {
           "title": "Hotfix UI",
           "content": "Live view KPI & quick-control tiles consolidated (layout/design), HTML structure fixed."
-        }
+        },
+        "0.6.187": [
+          "✨ More room/area icons: kids room, guest room, fireplace room, gym, sauna, workshop, tech room, shed, carport (incl. 3D variants).",
+          "🧩 Builder library: room presets with name+icon via drag&drop (living room, kids room, etc.)."
+        ]
       },
       "de": {
         "0.5.55": "Phase 5.4: Schwellwertsteuerung als App (Regeln: wenn X>Y dann setze/schalte Z), inkl. Live-Schnellsteuerung und Installateur-Konfiguration.",
         "0.5.64": {
           "title": "Hotfix UI",
           "content": "KPI- und Schnellsteuerungs-Kacheln im Live-View konsolidiert (Layout/Design), HTML-Struktur korrigiert."
-        }
+        },
+        "0.6.187": [
+          "✨ Mehr Raum-/Bereich-Icons: Kinderzimmer, Gästezimmer, Kaminzimmer, Fitness, Sauna, Werkstatt, Technikraum, Gartenhaus/Schuppen, Carport (inkl. 3D-Varianten).",
+          "🧩 Builder-Library: Raum-Presets mit Name+Icon per Drag&Drop (Wohnzimmer, Kinderzimmer, etc.)."
+        ]
       },
       "0.5.58": {
         "en": "Phase 5.7: StorageFarm added to EMS App Center (installer) including pool/groups configuration, plus improved aggregated SoC/flows usage for multi-storage control.",
@@ -1338,6 +1346,26 @@
       "0.6.177": {
         "en": "SmartHome Config: Drag & Drop builder fixed (drop works reliably across browsers) + icon selection for floors/rooms/devices.",
         "de": "SmartHome-Konfiguration: Drag-&-Drop Builder gefixt (Drop zuverlässig in allen Browsern) + Icon-Auswahl für Geschosse/Räume/Geräte."
+      },
+      "0.6.187": {
+        "en": [
+          "✨ More room/area icons: kids room, guest room, fireplace room, gym, sauna, workshop, tech room, shed, carport (incl. 3D variants).",
+          "🧩 Builder library: room presets with name+icon via drag&drop (living room, kids room, etc.)."
+        ],
+        "de": [
+          "✨ Mehr Raum-/Bereich-Icons: Kinderzimmer, Gästezimmer, Kaminzimmer, Fitness, Sauna, Werkstatt, Technikraum, Gartenhaus/Schuppen, Carport (inkl. 3D-Varianten).",
+          "🧩 Builder-Library: Raum-Presets mit Name+Icon per Drag&Drop (Wohnzimmer, Kinderzimmer, etc.)."
+        ]
+      },
+      "0.6.188": {
+        "en": [
+          "Fix: Update-safe installer config persistence (DP mappings no longer vanish after updates)",
+          "Improved uninstall-proof backups: keep previous backup version and auto-restore if config state looks empty"
+        ],
+        "de": [
+          "Fix: Update-sichere Installer-Konfiguration (DP-Zuordnungen gehen nach Updates nicht mehr verloren)",
+          "Backup verbessert: vorherige Backup-Version wird behalten + Auto-Restore wenn configJson leer/reset aussieht"
+        ]
       }
     },
     "title": "NexoWatt UI",
@@ -1525,7 +1553,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.186",
+  "version": "0.6.188",
   "news": {
     "0.6.185": {
       "en": [
@@ -1671,6 +1699,16 @@
       "de": [
         "EVCS-Bericht: Voller NexoWatt-Header (Navigation wie auf allen Seiten)",
         "Historie: EVCS-Bericht öffnet im gleichen Tab (leichter zurück / Navigation)"
+      ]
+    },
+    "0.6.188": {
+      "en": [
+        "Fix: Update-safe installer config persistence (DP mappings no longer vanish after updates)",
+        "Improved uninstall-proof backups: keep previous backup version and auto-restore if config state looks empty"
+      ],
+      "de": [
+        "Fix: Update-sichere Installer-Konfiguration (DP-Zuordnungen gehen nach Updates nicht mehr verloren)",
+        "Backup verbessert: vorherige Backup-Version wird behalten + Auto-Restore wenn configJson leer/reset aussieht"
       ]
     }
   }

@@ -1061,6 +1061,155 @@ const NW_ICON_SVGS = {
       </svg>`,
   },
 
+  kids: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="12" cy="10" r="4" stroke="currentColor" stroke-width="2"/>
+        <circle cx="8.3" cy="7.3" r="1.6" stroke="currentColor" stroke-width="2"/>
+        <circle cx="15.7" cy="7.3" r="1.6" stroke="currentColor" stroke-width="2"/>
+        <path d="M10.2 10.8h.01M13.8 10.8h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        <path d="M12 12.6h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.75"/>
+        <path d="M8 21c1.4-3 6.6-3 8 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="12" cy="10" r="4" stroke="currentColor" stroke-width="2"/>
+        <circle cx="8.3" cy="7.3" r="1.6" stroke="currentColor" stroke-width="2"/>
+        <circle cx="15.7" cy="7.3" r="1.6" stroke="currentColor" stroke-width="2"/>
+        <path d="M10.2 10.8h.01M13.8 10.8h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        <path d="M12 12.6h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.75"/>
+        <path d="M8 21c1.4-3 6.6-3 8 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  guest: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M4 12V9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M4 12h16v6H4v-6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 10h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 18v2M18 18v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M18.6 4.2l.5 1.4 1.5.1-1.2.9.4 1.5-1.2-.7-1.2.7.3-1.5-1.1-.9 1.5-.1.5-1.4Z" fill="currentColor" fill-opacity="0.22"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M4 12V9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M4 12h16v6H4v-6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 10h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 18v2M18 18v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M18.6 4.2l.5 1.4 1.5.1-1.2.9.4 1.5-1.2-.7-1.2.7.3-1.5-1.1-.9 1.5-.1.5-1.4Z" fill="currentColor" fill-opacity="0.22"/>
+      </svg>`,
+  },
+  fireplace: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M6 8h12v12H6V8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M5 8h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 11c-1 1.2-2 2.4-2 4a2 2 0 1 0 4 0c0-1.6-1-2.8-2-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M9 20h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M6 8h12v12H6V8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M5 8h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 11c-1 1.2-2 2.4-2 4a2 2 0 1 0 4 0c0-1.6-1-2.8-2-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M9 20h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+      </svg>`,
+  },
+  gym: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="3" y="9" width="3" height="6" rx="1.2" stroke="currentColor" stroke-width="2"/>
+        <rect x="6.5" y="10" width="2.5" height="4" rx="1" stroke="currentColor" stroke-width="2"/>
+        <path d="M9 12h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <rect x="15" y="10" width="2.5" height="4" rx="1" stroke="currentColor" stroke-width="2"/>
+        <rect x="18" y="9" width="3" height="6" rx="1.2" stroke="currentColor" stroke-width="2"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="3" y="9" width="3" height="6" rx="1.2" stroke="currentColor" stroke-width="2"/>
+        <rect x="6.5" y="10" width="2.5" height="4" rx="1" stroke="currentColor" stroke-width="2"/>
+        <path d="M9 12h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <rect x="15" y="10" width="2.5" height="4" rx="1" stroke="currentColor" stroke-width="2"/>
+        <rect x="18" y="9" width="3" height="6" rx="1.2" stroke="currentColor" stroke-width="2"/>
+      </svg>`,
+  },
+  sauna: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="6" y="10" width="12" height="10" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 16h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+        <path d="M12 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+        <path d="M15 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="6" y="10" width="12" height="10" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 16h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M9 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+        <path d="M12 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+        <path d="M15 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+      </svg>`,
+  },
+  workshop: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M14.8 4.8 19.2 9.2l-2.1 2.1-4.4-4.4 2.1-2.1Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12.8 7.2 5.5 14.5l4 4 7.3-7.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4.2 15.8 3 17l4 4 1.2-1.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M14.8 4.8 19.2 9.2l-2.1 2.1-4.4-4.4 2.1-2.1Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12.8 7.2 5.5 14.5l4 4 7.3-7.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4.2 15.8 3 17l4 4 1.2-1.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`,
+  },
+  tech: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="12" cy="12" r="6" stroke="currentColor" stroke-width="2" opacity="0.9"/>
+        <circle cx="12" cy="12" r="2.5" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 4.5v2M12 17.5v2M4.5 12h2M17.5 12h2M7 7l1.4 1.4M15.6 15.6 17 17M17 7l-1.4 1.4M7 17l1.4-1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="12" cy="12" r="6" stroke="currentColor" stroke-width="2" opacity="0.9"/>
+        <circle cx="12" cy="12" r="2.5" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 4.5v2M12 17.5v2M4.5 12h2M17.5 12h2M7 7l1.4 1.4M15.6 15.6 17 17M17 7l-1.4 1.4M7 17l1.4-1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`,
+  },
+  carport: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M4 10 12 4l8 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M7 15l2-2h6l2 2v4H7v-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <circle cx="10" cy="19" r="1" fill="currentColor" fill-opacity="0.22"/>
+        <circle cx="14" cy="19" r="1" fill="currentColor" fill-opacity="0.22"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M4 10 12 4l8 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M7 15l2-2h6l2 2v4H7v-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <circle cx="10" cy="19" r="1" fill="currentColor" fill-opacity="0.22"/>
+        <circle cx="14" cy="19" r="1" fill="currentColor" fill-opacity="0.22"/>
+      </svg>`,
+  },
+  shed: {
+    off: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M6 11 12 6l6 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="7" y="11" width="10" height="9" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M11 20v-4h2v4" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.8"/>
+      </svg>`,
+    on: `
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M6 11 12 6l6 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="7" y="11" width="10" height="9" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M11 20v-4h2v4" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.8"/>
+      </svg>`,
+  },
+
   // 3D-style icons (subtle gradient + shine) – selectable via icon key (e.g. "3d-bulb")
   '3d-bulb': {
     off: `
@@ -1443,6 +1592,43 @@ const NW_ICON_SVGS = {
   '3d-pool': {
     off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_pool_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.46"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="5" y="5" width="14" height="9" rx="2" fill="url(#nw3d_pool_g)" stroke="currentColor" stroke-width="2"/><path d="M6 17c2-1 4-1 6 0s4 1 6 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6 20c2-1 4-1 6 0s4 1 6 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.75"/><path d="M7.5 6.2h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
     on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_pool_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.46"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="5" y="5" width="14" height="9" rx="2" fill="url(#nw3d_pool_g)" stroke="currentColor" stroke-width="2"/><path d="M6 17c2-1 4-1 6 0s4 1 6 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6 20c2-1 4-1 6 0s4 1 6 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.75"/><path d="M7.5 6.2h6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+
+  '3d-kids': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><radialGradient id="nw3d_kids_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 7.5) rotate(45) scale(11)"><stop offset="0" stop-color="currentColor" stop-opacity="0.55"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></radialGradient></defs><circle cx="12" cy="10" r="4" fill="url(#nw3d_kids_g)" stroke="currentColor" stroke-width="2"/><circle cx="8.3" cy="7.3" r="1.6" fill="url(#nw3d_kids_g)" stroke="currentColor" stroke-width="2" opacity="0.95"/><circle cx="15.7" cy="7.3" r="1.6" fill="url(#nw3d_kids_g)" stroke="currentColor" stroke-width="2" opacity="0.95"/><path d="M10.2 10.8h.01M13.8 10.8h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M12 12.6h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.75"/><path d="M8 21c1.4-3 6.6-3 8 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9.2 7.2c.6-.6 1.4-.9 2.3-.9" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><radialGradient id="nw3d_kids_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 7.5) rotate(45) scale(11)"><stop offset="0" stop-color="currentColor" stop-opacity="0.60"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></radialGradient></defs><circle cx="12" cy="10" r="4" fill="url(#nw3d_kids_g)" stroke="currentColor" stroke-width="2"/><circle cx="8.3" cy="7.3" r="1.6" fill="url(#nw3d_kids_g)" stroke="currentColor" stroke-width="2" opacity="0.95"/><circle cx="15.7" cy="7.3" r="1.6" fill="url(#nw3d_kids_g)" stroke="currentColor" stroke-width="2" opacity="0.95"/><path d="M10.2 10.8h.01M13.8 10.8h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M12 12.6h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.75"/><path d="M8 21c1.4-3 6.6-3 8 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9.2 7.2c.6-.6 1.4-.9 2.3-.9" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-guest': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_guest_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.48"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><path d="M4 12V9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M4 12h16v6H4v-6Z" fill="url(#nw3d_guest_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 10h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6 18v2M18 18v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18.6 4.2l.5 1.4 1.5.1-1.2.9.4 1.5-1.2-.7-1.2.7.3-1.5-1.1-.9 1.5-.1.5-1.4Z" fill="currentColor" fill-opacity="0.22"/><path d="M6.2 13.2h8" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_guest_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.52"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><path d="M4 12V9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M4 12h16v6H4v-6Z" fill="url(#nw3d_guest_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 10h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6 18v2M18 18v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18.6 4.2l.5 1.4 1.5.1-1.2.9.4 1.5-1.2-.7-1.2.7.3-1.5-1.1-.9 1.5-.1.5-1.4Z" fill="currentColor" fill-opacity="0.22"/><path d="M6.2 13.2h8" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-fireplace': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_fireplace_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.46"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="6" y="8" width="12" height="12" rx="2" fill="url(#nw3d_fireplace_g)" stroke="currentColor" stroke-width="2"/><path d="M5 8h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 11c-1 1.2-2 2.4-2 4a2 2 0 1 0 4 0c0-1.6-1-2.8-2-4Z" fill="currentColor" fill-opacity="0.10" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 20h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/><path d="M7.2 9.6h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_fireplace_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><rect x="6" y="8" width="12" height="12" rx="2" fill="url(#nw3d_fireplace_g)" stroke="currentColor" stroke-width="2"/><path d="M5 8h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 11c-1 1.2-2 2.4-2 4a2 2 0 1 0 4 0c0-1.6-1-2.8-2-4Z" fill="currentColor" fill-opacity="0.12" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 20h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55"/><path d="M7.2 9.6h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-gym': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_gym_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.48"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="3" y="9" width="3" height="6" rx="1.2" fill="url(#nw3d_gym_g)" stroke="currentColor" stroke-width="2"/><rect x="6.5" y="10" width="2.5" height="4" rx="1" fill="url(#nw3d_gym_g)" stroke="currentColor" stroke-width="2" opacity="0.9"/><path d="M9 12h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="15" y="10" width="2.5" height="4" rx="1" fill="url(#nw3d_gym_g)" stroke="currentColor" stroke-width="2" opacity="0.9"/><rect x="18" y="9" width="3" height="6" rx="1.2" fill="url(#nw3d_gym_g)" stroke="currentColor" stroke-width="2"/><path d="M4.2 10.2h1.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_gym_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.52"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><rect x="3" y="9" width="3" height="6" rx="1.2" fill="url(#nw3d_gym_g)" stroke="currentColor" stroke-width="2"/><rect x="6.5" y="10" width="2.5" height="4" rx="1" fill="url(#nw3d_gym_g)" stroke="currentColor" stroke-width="2" opacity="0.9"/><path d="M9 12h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="15" y="10" width="2.5" height="4" rx="1" fill="url(#nw3d_gym_g)" stroke="currentColor" stroke-width="2" opacity="0.9"/><rect x="18" y="9" width="3" height="6" rx="1.2" fill="url(#nw3d_gym_g)" stroke="currentColor" stroke-width="2"/><path d="M4.2 10.2h1.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-sauna': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_sauna_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.46"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><rect x="6" y="10" width="12" height="10" rx="2" fill="url(#nw3d_sauna_g)" stroke="currentColor" stroke-width="2"/><path d="M8 16h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/><path d="M12 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/><path d="M15 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/><path d="M7.2 11.6h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_sauna_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><rect x="6" y="10" width="12" height="10" rx="2" fill="url(#nw3d_sauna_g)" stroke="currentColor" stroke-width="2"/><path d="M8 16h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/><path d="M12 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/><path d="M15 4c1.2 1.2 1.2 2.8 0 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.85"/><path d="M7.2 11.6h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-workshop': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_workshop_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.48"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><path d="M14.8 4.8 19.2 9.2l-2.1 2.1-4.4-4.4 2.1-2.1Z" fill="url(#nw3d_workshop_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12.8 7.2 5.5 14.5l4 4 7.3-7.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.2 15.8 3 17l4 4 1.2-1.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M14.2 6.2l2.4 2.4" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_workshop_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.52"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><path d="M14.8 4.8 19.2 9.2l-2.1 2.1-4.4-4.4 2.1-2.1Z" fill="url(#nw3d_workshop_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12.8 7.2 5.5 14.5l4 4 7.3-7.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.2 15.8 3 17l4 4 1.2-1.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M14.2 6.2l2.4 2.4" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-tech': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><radialGradient id="nw3d_tech_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 9) rotate(45) scale(10)"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></radialGradient></defs><circle cx="12" cy="12" r="6" fill="url(#nw3d_tech_g)" stroke="currentColor" stroke-width="2" opacity="0.95"/><circle cx="12" cy="12" r="2.5" stroke="currentColor" stroke-width="2"/><path d="M12 4.5v2M12 17.5v2M4.5 12h2M17.5 12h2M7 7l1.4 1.4M15.6 15.6 17 17M17 7l-1.4 1.4M7 17l1.4-1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 7.2c.6-.6 1.4-.9 2.3-.9" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><radialGradient id="nw3d_tech_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10 9) rotate(45) scale(10)"><stop offset="0" stop-color="currentColor" stop-opacity="0.56"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></radialGradient></defs><circle cx="12" cy="12" r="6" fill="url(#nw3d_tech_g)" stroke="currentColor" stroke-width="2" opacity="0.95"/><circle cx="12" cy="12" r="2.5" stroke="currentColor" stroke-width="2"/><path d="M12 4.5v2M12 17.5v2M4.5 12h2M17.5 12h2M7 7l1.4 1.4M15.6 15.6 17 17M17 7l-1.4 1.4M7 17l1.4-1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 7.2c.6-.6 1.4-.9 2.3-.9" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-carport': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_carport_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.46"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><path d="M4 10 12 4l8 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 15l2-2h6l2 2v4H7v-4Z" fill="url(#nw3d_carport_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="10" cy="19" r="1" fill="currentColor" fill-opacity="0.22"/><circle cx="14" cy="19" r="1" fill="currentColor" fill-opacity="0.22"/><path d="M8.2 16.2h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_carport_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><path d="M4 10 12 4l8 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 15l2-2h6l2 2v4H7v-4Z" fill="url(#nw3d_carport_g)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="10" cy="19" r="1" fill="currentColor" fill-opacity="0.22"/><circle cx="14" cy="19" r="1" fill="currentColor" fill-opacity="0.22"/><path d="M8.2 16.2h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+  },
+  '3d-shed': {
+    off: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_shed_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.46"/><stop offset="1" stop-color="currentColor" stop-opacity="0.10"/></linearGradient></defs><path d="M6 11 12 6l6 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="7" y="11" width="10" height="9" rx="2" fill="url(#nw3d_shed_g)" stroke="currentColor" stroke-width="2"/><path d="M11 20v-4h2v4" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.85"/><path d="M8.2 12.2h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
+    on: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="nw3d_shed_g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.50"/><stop offset="1" stop-color="currentColor" stop-opacity="0.12"/></linearGradient></defs><path d="M6 11 12 6l6 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="7" y="11" width="10" height="9" rx="2" fill="url(#nw3d_shed_g)" stroke="currentColor" stroke-width="2"/><path d="M11 20v-4h2v4" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.85"/><path d="M8.2 12.2h5.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" stroke-linecap="round"/></svg>`,
   },
 '3d-solar': {
     off: `
@@ -1990,6 +2176,29 @@ function nwNormalizeIconName(raw) {
     waschküche: 'laundry',
     waesche: 'laundry',
     wäsche: 'laundry',
+
+    // Räume
+    kinderzimmer: 'kids',
+    kinder: 'kids',
+    kind: 'kids',
+    kids: 'kids',
+    gaestezimmer: 'guest',
+    gästezimmer: 'guest',
+    gast: 'guest',
+    guest: 'guest',
+    kaminzimmer: 'fireplace',
+    fireplace: 'fireplace',
+    fitness: 'gym',
+    sport: 'gym',
+    gym: 'gym',
+    sauna: 'sauna',
+    werkstatt: 'workshop',
+    workshop: 'workshop',
+    technikraum: 'tech',
+    haustechnik: 'tech',
+    carport: 'carport',
+    gartenhaus: 'shed',
+    schuppen: 'shed',
 
     licht: 'bulb',
     lampe: 'bulb',
