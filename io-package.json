@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.189",
+    "version": "0.6.190",
     "news": {
+      "0.6.190": {
+        "en": "SmartHome VIS: improved device tile readability (adaptive auto-fit grid, more title space via dynamic header padding, titles up to 3 lines; tooltip shows full device name).",
+        "de": "SmartHome-VIS: Lesbarkeit der Gerätekacheln verbessert (adaptives Auto-Fit-Grid, mehr Platz für Titel durch dynamisches Header-Padding, Titel bis 3 Zeilen; Tooltip zeigt vollen Gerätenamen)."
+      },
       "0.6.186": {
         "en": "More icon options for floors/areas (basement, attic, outdoor, garage, panel, server, etc.) incl. 3D variants.",
         "de": "Mehr Icon-Optionen für Geschosse/Bereiche (Keller, Dach, Außenbereich, Garage, Schaltschrank, Server, usw.) inkl. 3D-Varianten."

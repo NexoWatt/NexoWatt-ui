@@ -3012,7 +3012,8 @@ body{ padding-top: var(--topbar-h); }
   align-items:center;
   gap: 10px;
   margin: 2px auto 12px;
-  max-width: 1120px;
+  /* Slightly wider on desktop so 4-column device grids remain readable */
+  max-width: 1280px;
   padding: 0 2px;
 }
 
@@ -3172,7 +3173,8 @@ body{ padding-top: var(--topbar-h); }
   display: flex;
   flex-direction: column;
   gap: 18px;
-  max-width: 1120px;
+  /* Slightly wider on desktop so device names fit without truncation */
+  max-width: 1280px;
   margin: 0 auto;
 }
 
@@ -3297,10 +3299,13 @@ body{ padding-top: var(--topbar-h); }
 
 .nw-sh-grid{
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Auto grid: column count is based on available width (important with the left sidebar).
+     This prevents "too many columns" and unreadable device names. */
+  grid-template-columns: repeat(auto-fit, minmax(var(--nw-sh-tile-min-w, 290px), 1fr));
   gap: 12px;
   /* Uniform tiles: fixed row height for consistent overview */
-  grid-auto-rows: var(--nw-sh-tile-h, 132px);
+  /* A bit taller so names can wrap without becoming unreadable */
+  grid-auto-rows: var(--nw-sh-tile-h, 156px);
   grid-auto-flow: row;
 }
 
@@ -3483,11 +3488,7 @@ body{ padding-top: var(--topbar-h); }
   padding-right: 12px;
 }
 
-@media (min-width: 1400px) {
-  .nw-sh-grid{
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
+/* no explicit desktop column override: auto-fit grid adapts to available width */
 
 /* SmartHome: Gruppierung nach Gerätetyp */
 .nw-sh-type-group{
@@ -3524,19 +3525,7 @@ body{ padding-top: var(--topbar-h); }
   opacity: 0.85;
 }
 
-/* 3 columns is the default; we only step down on smaller screens */
-
-@media (max-width: 820px) {
-  .nw-sh-grid{
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 420px) {
-  .nw-sh-grid{
-    grid-template-columns: 1fr;
-  }
-}
+/* Grid columns are handled via auto-fit/minmax on .nw-sh-grid */
 
 .nw-sh-tile{
   --sh-accent: #00e676;
@@ -3544,7 +3533,7 @@ body{ padding-top: var(--topbar-h); }
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 
   padding: 12px;
   border-radius: 22px;
@@ -3627,25 +3616,34 @@ body{ padding-top: var(--topbar-h); }
 .nw-sh-tile__header{
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
 }
 
 /* Right side actions in tile header (favorite + details button) */
 .nw-sh-tile__actions{
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-shrink: 0;
 }
 
 .nw-sh-tile__title{
   flex: 1;
   min-width: 0;
-  /* reserve space for the absolute action buttons (★ / ⋯) */
-  padding-right: 76px;
+  /* reserve space for the absolute action buttons (★ / ⋯)
+     (set via tile class: --nw-sh-title-pad) */
+  padding-right: var(--nw-sh-title-pad, 44px);
+}
+
+/* Dynamic right padding so tiles without a detail button don't waste title space */
+.nw-sh-tile--actions-1{
+  --nw-sh-title-pad: 44px;
+}
+.nw-sh-tile--actions-2{
+  --nw-sh-title-pad: 74px;
 }
 
 .nw-sh-tile__name{
@@ -3654,14 +3652,15 @@ body{ padding-top: var(--topbar-h); }
   font-size: var(--nw-sh-name-size, 0.92rem);
   text-shadow: 0 1px 2px rgba(0,0,0,0.45);
 
-  /* Better readability: allow 2 lines instead of aggressive truncation */
+  /* Better readability: allow more wrapping instead of aggressive truncation */
   white-space: normal;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .nw-sh-tile__state{
@@ -3669,9 +3668,14 @@ body{ padding-top: var(--topbar-h); }
   font-size: var(--nw-sh-state-size, 0.75rem);
   color: rgba(203, 213, 225, 0.88);
   text-shadow: 0 1px 1px rgba(0,0,0,0.35);
-  white-space: nowrap;
+  /* State may include room label or Ist→Soll, so allow wrapping */
+  white-space: normal;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.2;
 }
 
 /* Mobile/Phone: tile names must stay readable (no tiny "Deck...")
@@ -3681,21 +3685,21 @@ body{ padding-top: var(--topbar-h); }
 @media (max-width: 520px) {
   .nw-sh-tile__actions{
     position: absolute;
-    top: 10px;
-    right: 10px;
+    top: 8px;
+    right: 8px;
     gap: 4px;
     margin-left: 0;
   }
   .nw-sh-tile__title{
     /* reserve space for the absolute action buttons (★ / ⋯) */
-    padding-right: 76px;
+    padding-right: var(--nw-sh-title-pad, 44px);
   }
   .nw-sh-tile__name{
     white-space: normal;
     overflow: hidden;
     text-overflow: ellipsis;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     line-height: 1.15;
     font-size: calc(var(--nw-sh-name-size, 0.92rem) + 0.06rem);
@@ -3709,12 +3713,12 @@ body{ padding-top: var(--topbar-h); }
   background: rgba(2,6,23,0.18);
   color: rgba(148,163,184,0.95);
   border-radius: 999px;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 15px;
   cursor: pointer;
   user-select: none;
   flex-shrink: 0;
@@ -3999,12 +4003,12 @@ body{ padding-top: var(--topbar-h); }
   background: rgba(2,6,23,0.25);
   color: rgba(226,232,240,0.9);
   border-radius: 999px;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 16px;
   cursor: pointer;
   user-select: none;
   flex-shrink: 0;
@@ -4046,9 +4050,9 @@ body{ padding-top: var(--topbar-h); }
   color: #e5e7eb;
   font-size: 0.98rem;
   line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* toast should show the full name (no truncation) */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .nw-sh-toast__meta{
   margin-top: 2px;

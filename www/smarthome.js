@@ -3238,6 +3238,9 @@ function nwCreateTile(dev, opts) {
   const canWrite = nwHasWriteAccess(dev);
   const isFav = nwIsFavorite(dev);
 
+  // Device types that have an extra detail button in the header (⋯)
+  const hasDetails = (type === 'dimmer' || type === 'blind' || type === 'rtr' || type === 'player' || type === 'color');
+
   const iconSpec = nwGetIconSpec(dev);
   const iconName = (iconSpec.kind === 'svg')
     ? iconSpec.name
@@ -3257,12 +3260,15 @@ function nwCreateTile(dev, opts) {
     canWrite ? '' : 'nw-sh-tile--readonly',
     isFav ? 'nw-sh-tile--favorite' : '',
     (dev.state && dev.state.error) ? 'nw-sh-tile--error' : '',
+    hasDetails ? 'nw-sh-tile--actions-2' : 'nw-sh-tile--actions-1',
   ].filter(Boolean).join(' ');
 
   tile.style.setProperty('--sh-accent', accent);
 
-  // Tooltip (kurz) – hilft bei der Bedienung
-  tile.title = nwGetTileHint(dev);
+  // Tooltip: always include the full device name first (prevents confusion when the title wraps)
+  const fullName = String(dev.alias || dev.id || '');
+  const hint = nwGetTileHint(dev);
+  tile.title = hint ? `${fullName}\n${hint}` : fullName;
 
   // Header: Icon + Name + State
   const header = document.createElement('div');
@@ -3276,6 +3282,7 @@ function nwCreateTile(dev, opts) {
   const name = document.createElement('div');
   name.className = 'nw-sh-tile__name';
   name.textContent = dev.alias || dev.id;
+  name.title = fullName;
 
   const state = document.createElement('div');
   state.className = 'nw-sh-tile__state';
@@ -3307,7 +3314,6 @@ function nwCreateTile(dev, opts) {
   actions.appendChild(favBtn);
 
   // Detail/Tooltip-Popover (für Dimmer/Jalousie/RTR)
-  const hasDetails = (type === 'dimmer' || type === 'blind' || type === 'rtr' || type === 'player' || type === 'color');
   if (hasDetails) {
     // Klick auf Icon öffnet das Bedienpanel (Tooltip)
     icon.title = 'Bedienung';
