@@ -1,3 +1,7 @@
+## 0.6.191
+- SmartHome-VIS: Gerätekacheln **Premium-Glass Finish**: mehr Tiefe durch **Double-Stroke (inner highlight)** + **dezentes Noise-Grain** (reduziert Banding, wirkt hochwertiger).
+- SmartHome-VIS: **Hover/Active** verfeinert (leichte Elevation + sanfterer Press-Effect) – bleibt ruhig und gut lesbar.
+
 ## 0.6.190
 - SmartHome-VIS: Gerätekacheln: **Titel vollständig lesbarer** – mehr Platz im Header (dynamisches Padding je nach Buttons), **Titel bis 3 Zeilen**, Status bis 2 Zeilen.
 - SmartHome-VIS: Grid ist jetzt **adaptiv (auto-fit)** und richtet die Spalten nach der **real verfügbaren Breite** aus (wichtig mit Sidebar) – verhindert zu schmale Kacheln.

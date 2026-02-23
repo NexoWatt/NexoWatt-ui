@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.190",
+    "version": "0.6.191",
     "news": {
+      "0.6.191": {
+        "en": "SmartHome VIS: premium glass finish for device tiles (double-stroke depth, subtle noise grain, refined hover elevation) while keeping the improved readability and uniform layout.",
+        "de": "SmartHome-VIS: Premium-Glass-Finish für Gerätekacheln (Double-Stroke/mehr Tiefe, dezentes Noise-Grain, verfeinertes Hover) bei weiterhin verbesserter Lesbarkeit und einheitlichem Layout."
+      },
       "0.6.190": {
         "en": "SmartHome VIS: improved device tile readability (adaptive auto-fit grid, more title space via dynamic header padding, titles up to 3 lines; tooltip shows full device name).",
         "de": "SmartHome-VIS: Lesbarkeit der Gerätekacheln verbessert (adaptives Auto-Fit-Grid, mehr Platz für Titel durch dynamisches Header-Padding, Titel bis 3 Zeilen; Tooltip zeigt vollen Gerätenamen)."
