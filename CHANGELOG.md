@@ -1,3 +1,8 @@
+## 0.6.189
+- SmartHome-VIS: **Gerätekacheln jetzt einheitlich gleich groß** (keine XL/Spans mehr) → übersichtlicheres Grid.
+- SmartHome-VIS: **Lesbarkeit verbessert** (höherer Text-Kontrast, dezenter Header-Scrim, Titel bis 2 Zeilen).
+- SmartHome-VIS: RTR-Status kompakter: **Ist/Soll** in der Statuszeile (falls Werte verfügbar).
+
 ## 0.6.188
 - Fix: **Update-sichere Installer-Konfiguration** – wenn `installer.configJson` nach einem Update leer/reset aussieht, wird automatisch aus dem **0_userdata Backup** wiederhergestellt (DP-Zuordnungen bleiben erhalten).
 - Backup: vorherige Backup-Version wird zusätzlich als **backupJsonPrev** gespeichert (zusätzliche Sicherheit bei ungewollten Überschreibungen).

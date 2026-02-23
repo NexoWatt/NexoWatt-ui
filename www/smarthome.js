@@ -2442,13 +2442,24 @@ function nwGetStateText(dev) {
     return line;
   }
   if (type === 'rtr') {
-    if (typeof st.mode !== 'undefined' && st.mode !== null && String(st.mode).trim() !== '') {
-      return String(st.mode);
-    }
-    if (typeof st.setpoint === 'number') {
-      return 'Soll ' + st.setpoint.toFixed(1).replace('.', ',') + '°C';
-    }
-    return 'Heizung';
+    const mode = (typeof st.mode !== 'undefined' && st.mode !== null && String(st.mode).trim() !== '')
+      ? String(st.mode).trim()
+      : '';
+
+    const ct = (typeof st.currentTemp === 'number')
+      ? st.currentTemp.toFixed(1).replace('.', ',') + '°C'
+      : '';
+    const sp = (typeof st.setpoint === 'number')
+      ? st.setpoint.toFixed(1).replace('.', ',') + '°C'
+      : '';
+
+    // Compact: "21,0°C → 22,0°C" (optional with mode prefix)
+    const tempLine = (ct && sp)
+      ? (ct + ' → ' + sp)
+      : (sp ? ('Soll ' + sp) : (ct ? ('Ist ' + ct) : ''));
+
+    const out = [mode, tempLine].filter(Boolean).join(' · ');
+    return out || 'Heizung';
   }
   if (type === 'sensor') {
     // sensor uses value field primarily
@@ -2520,22 +2531,10 @@ function nwFormatBigValue(dev) {
 }
 
 function nwGetTileSize(dev) {
-  // Page-Override: Karte-Größe über Sidebar-Seite
-  const ovr = String((nwViewState && nwViewState.cardSizeOverride) ? nwViewState.cardSizeOverride : '').trim().toLowerCase();
-  if (ovr && ovr !== 'auto') {
-    const v = (ovr === 'small') ? 's' : (ovr === 'medium') ? 'm' : (ovr === 'large') ? 'l' : ovr;
-    if (v === 's' || v === 'm' || v === 'l' || v === 'xl') return v;
-  }
-
-  // Runtime device carries ui.size from config -> allow s/m/l/xl
-  let sz = String((dev && dev.ui && dev.ui.size) ? dev.ui.size : '').trim().toLowerCase();
-  if (!sz) {
-    const type = String(dev.type || '').toLowerCase();
-    if (type === 'rtr') sz = 'xl';
-    else sz = 'm';
-  }
-  if (sz !== 's' && sz !== 'm' && sz !== 'l' && sz !== 'xl') sz = 'm';
-  return sz;
+  // v0.6.189+: Uniform tiles for a cleaner overview.
+  // We keep the size API/classes for backwards compatibility, but the default UI
+  // renders all device tiles in the same size.
+  return 'm';
 }
 
 function nwHasWriteAccess(dev) {
@@ -3335,8 +3334,8 @@ function nwCreateTile(dev, opts) {
 
   tile.appendChild(header);
 
-  // Big content (RTR / large sensors / media widgets)
-  if (type === 'rtr' || size === 'xl' || type === 'camera' || type === 'widget') {
+  // Big content (only for explicit XL tiles – default grid is uniform)
+  if (size === 'xl') {
     const big = document.createElement('div');
     big.className = 'nw-sh-tile__big';
 

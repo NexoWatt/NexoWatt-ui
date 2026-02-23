@@ -3299,7 +3299,9 @@ body{ padding-top: var(--topbar-h); }
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-  grid-auto-flow: dense;
+  /* Uniform tiles: fixed row height for consistent overview */
+  grid-auto-rows: var(--nw-sh-tile-h, 132px);
+  grid-auto-flow: row;
 }
 
 .nw-sh-grid--home{
@@ -3554,7 +3556,27 @@ body{ padding-top: var(--topbar-h); }
   cursor: pointer;
   user-select: none;
 
+  /* Keep all tiles visually consistent (same height via grid-auto-rows) */
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+
   transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+/* Subtle top scrim so text stays readable on glass backgrounds */
+.nw-sh-tile::before{
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(2,6,23,0.55), rgba(2,6,23,0.0) 58%);
+}
+
+.nw-sh-tile > *{
+  position: relative;
+  z-index: 1;
 }
 
 .nw-sh-tile:hover{
@@ -3592,28 +3614,14 @@ body{ padding-top: var(--topbar-h); }
   color: rgba(248, 113, 113, 0.95);
 }
 
-/* Size mapping (grid spans) */
+/* Size mapping (uniform) – keep class API stable but render everything equal */
 .nw-sh-tile--size-s,
-.nw-sh-tile--size-m{
-  min-height: 92px;
-}
-
-.nw-sh-tile--size-l{
-  min-height: 110px;
-  grid-column: span 2;
-}
-
+.nw-sh-tile--size-m,
+.nw-sh-tile--size-l,
 .nw-sh-tile--size-xl{
-  min-height: 180px;
-  grid-column: span 2;
-  grid-row: span 2;
-}
-
-@media (max-width: 420px) {
-  .nw-sh-tile--size-l,
-  .nw-sh-tile--size-xl{
-    grid-column: span 1;
-  }
+  min-height: 0;
+  grid-column: span 1;
+  grid-row: span 1;
 }
 
 .nw-sh-tile__header{
@@ -3624,7 +3632,9 @@ body{ padding-top: var(--topbar-h); }
 
 /* Right side actions in tile header (favorite + details button) */
 .nw-sh-tile__actions{
-  margin-left: auto;
+  position: absolute;
+  top: 10px;
+  right: 10px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -3634,21 +3644,31 @@ body{ padding-top: var(--topbar-h); }
 .nw-sh-tile__title{
   flex: 1;
   min-width: 0;
+  /* reserve space for the absolute action buttons (★ / ⋯) */
+  padding-right: 76px;
 }
 
 .nw-sh-tile__name{
-  font-weight: 700;
-  color: #e5e7eb;
+  font-weight: 750;
+  color: rgba(243, 244, 246, 0.98);
   font-size: var(--nw-sh-name-size, 0.92rem);
-  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+
+  /* Better readability: allow 2 lines instead of aggressive truncation */
+  white-space: normal;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.15;
 }
 
 .nw-sh-tile__state{
   margin-top: 2px;
   font-size: var(--nw-sh-state-size, 0.75rem);
-  color: #9ca3af;
+  color: rgba(203, 213, 225, 0.88);
+  text-shadow: 0 1px 1px rgba(0,0,0,0.35);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
