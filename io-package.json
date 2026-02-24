@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.192",
+    "version": "0.6.193",
     "news": {
+      "0.6.193": {
+        "en": "SmartHome timers: added jalousie/roller-shutter scheduling (open/close) and improved the installer timer configurator to list devices directly from the SmartHome configuration (works even if SmartHome is still disabled).",
+        "de": "SmartHome-Zeitschaltuhren: Jalousie/Rollladen jetzt auch per AUF/ZU-Timer steuerbar + Installer-Konfigurator listet Geräte direkt aus der SmartHome-Konfiguration (funktioniert auch wenn SmartHome noch deaktiviert ist)."
+      },
       "0.6.192": {
         "en": "SmartHome: added configurable timers (per device) incl. end-user editing via tile clock button, plus a new Scenes configurator (adapter-executed scenes with action lists).",
         "de": "SmartHome: Zeitschaltuhren pro Gerät ergänzt (Endkunde kann über Uhr-Button in der Kachel einstellen) + neuer Szenen-Konfigurator (adapter-ausgeführte Szenen mit Aktionsliste)."

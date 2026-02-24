@@ -2549,6 +2549,79 @@ function nwSetTimersStatus(text, kind) {
   if (kind === 'error') el.classList.add('nw-config-status--error');
 }
 
+// Timer-Geräteliste: im Installer-Konfigurator soll das auch funktionieren,
+// wenn SmartHome im Adapter noch deaktiviert ist ("/api/smarthome/devices" wäre dann leer).
+// Daher leiten wir die Geräte direkt aus der SmartHome-Konfiguration ab.
+function nwShcfgCollectTimerDevicesFromConfig(cfg) {
+  const c = cfg || nwShcState.config || {};
+  const rooms = Array.isArray(c.rooms) ? c.rooms : [];
+  const fns = Array.isArray(c.functions) ? c.functions : [];
+  const devicesIn = Array.isArray(c.devices) ? c.devices : [];
+  const scenesIn = Array.isArray(c.scenes) ? c.scenes : [];
+
+  const roomById = Object.create(null);
+  for (const r of rooms) {
+    const id = r && r.id ? String(r.id) : '';
+    if (!id) continue;
+    roomById[id] = r.name || r.alias || id;
+  }
+
+  const fnById = Object.create(null);
+  for (const f of fns) {
+    const id = f && f.id ? String(f.id) : '';
+    if (!id) continue;
+    fnById[id] = f.name || f.alias || id;
+  }
+
+  const out = [];
+  const idSet = new Set();
+
+  for (const d of devicesIn) {
+    if (!d || !d.id) continue;
+    const id = String(d.id).trim();
+    if (!id) continue;
+    idSet.add(id);
+    const roomName = d.room || roomById[String(d.roomId || '').trim()] || '';
+    const fnName = d.function || fnById[String(d.functionId || '').trim()] || '';
+
+    out.push({
+      id,
+      type: String(d.type || '').trim() || 'switch',
+      alias: String(d.alias || d.name || d.title || id).trim() || id,
+      room: roomName,
+      function: fnName,
+      io: (d.io && typeof d.io === 'object') ? d.io : {},
+      ui: (d.ui && typeof d.ui === 'object') ? d.ui : {},
+      behavior: (d.behavior && typeof d.behavior === 'object') ? d.behavior : {},
+    });
+  }
+
+  // Szenen (virtuelle Geräte). Achtung: Device-ID kollidiert ggf. mit echten Geräten → Prefix wie im Backend.
+  for (const sc of scenesIn) {
+    if (!sc || !sc.id) continue;
+    const rawId = String(sc.id).trim();
+    if (!rawId) continue;
+    const id = idSet.has(rawId) ? `scene_${rawId}` : rawId;
+
+    const roomName = sc.room || roomById[String(sc.roomId || '').trim()] || '';
+    const fnName = sc.function || fnById[String(sc.functionId || '').trim()] || '';
+
+    out.push({
+      id,
+      type: 'scene',
+      alias: String(sc.alias || sc.name || sc.title || rawId).trim() || rawId,
+      room: roomName,
+      function: fnName,
+      io: {},
+      ui: (sc.ui && typeof sc.ui === 'object') ? sc.ui : {},
+      behavior: (sc.behavior && typeof sc.behavior === 'object') ? sc.behavior : {},
+      sceneId: rawId,
+    });
+  }
+
+  return out;
+}
+
 async function nwLoadTimersModule(force = false) {
   if (nwShcState.timers.loading) return;
   if (!force && nwShcState.timers.loaded) return;
@@ -2556,23 +2629,27 @@ async function nwLoadTimersModule(force = false) {
   nwShcState.timers.loading = true;
   nwSetTimersStatus('Lade Zeitschaltuhren …');
   try {
-    const [devRes, tRes] = await Promise.all([
-      fetch('/api/smarthome/devices'),
-      fetch('/api/smarthome/timers'),
-    ]);
+    // Ensure config is available (even if SmartHome in adapter is still disabled)
+    if (!nwShcState.config) {
+      const c = await nwFetchSmartHomeConfig();
+      if (c) {
+        nwShcState.config = nwNormalizeImportedSmartHomeConfig(c);
+      }
+    }
 
-    const devJson = devRes.ok ? await devRes.json() : null;
+    const tRes = await fetch('/api/smarthome/timers');
     const tJson = tRes.ok ? await tRes.json() : null;
-
-    const devices = (devJson && devJson.ok && Array.isArray(devJson.devices)) ? devJson.devices : [];
     const cfg = (tJson && tJson.ok && tJson.config && typeof tJson.config === 'object') ? tJson.config : { version: 1, updatedAt: 0, timers: [] };
+
+    const devices = nwShcfgCollectTimerDevicesFromConfig(nwShcState.config);
 
     // Only show devices that support timers
     const supported = devices.filter((d) => {
       const type = String((d && d.type) || '').toLowerCase();
       if (!d || !d.id) return false;
       if (d.behavior && d.behavior.readOnly) return false;
-      return ['switch', 'dimmer', 'color', 'scene'].includes(type);
+      // Added: Jalousie/Rollladen (blind)
+      return ['switch', 'dimmer', 'color', 'scene', 'blind'].includes(type);
     });
 
     const map = {};
@@ -2677,7 +2754,7 @@ function nwRenderShcfgTimers() {
   if (!devices.length) {
     const div = document.createElement('div');
     div.className = 'nw-config-hint';
-    div.textContent = 'Keine passenden Geräte gefunden (Timer unterstützt: Schalter/Dimmer/Farbe/Szene).';
+    div.textContent = 'Keine passenden Geräte gefunden (Timer unterstützt: Schalter/Dimmer/Farbe/Szene/Jalousie).';
     root.appendChild(div);
     return;
   }
@@ -2821,8 +2898,9 @@ function nwRenderShcfgTimers() {
         wrap.appendChild(inp);
         return wrap;
       };
-      grid.appendChild(mk('EIN um', timer.onTime, (v) => { timer.onTime = String(v || ''); }));
-      grid.appendChild(mk('AUS um', timer.offTime, (v) => { timer.offTime = String(v || ''); }));
+      const isBlind = type === 'blind';
+      grid.appendChild(mk(isBlind ? 'AUF um' : 'EIN um', timer.onTime, (v) => { timer.onTime = String(v || ''); }));
+      grid.appendChild(mk(isBlind ? 'ZU um' : 'AUS um', timer.offTime, (v) => { timer.offTime = String(v || ''); }));
       card.appendChild(grid);
     }
 

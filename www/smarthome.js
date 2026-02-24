@@ -2405,7 +2405,9 @@ function nwSupportsTimer(dev) {
   if (!dev) return false;
   if (dev.behavior && dev.behavior.readOnly) return false;
   const type = String(dev.type || '').toLowerCase();
-  return ['switch', 'dimmer', 'color', 'scene'].includes(type);
+  // Timer support is intentionally limited to "simple" actuator types.
+  // Added: blinds/jalousie (open/close schedule)
+  return ['switch', 'dimmer', 'color', 'scene', 'blind'].includes(type);
 }
 
 function nwGetStateText(dev) {
@@ -3990,6 +3992,11 @@ function nwBuildTimerPopoverContent(dev) {
 
   // For dimmer: optional on level
   const type = String(dev.type || '').toLowerCase();
+  const isBlind = type === 'blind';
+  const labelOn = isBlind ? 'AUF' : 'EIN';
+  const labelOff = isBlind ? 'ZU' : 'AUS';
+  const labelOnTime = isBlind ? 'AUF um' : 'EIN um';
+  const labelOffTime = isBlind ? 'ZU um' : 'AUS um';
   const hasLevel = (type === 'dimmer') && dev.io && dev.io.level;
   const minLvl = (hasLevel && typeof dev.io.level.min === 'number') ? dev.io.level.min : 0;
   const maxLvl = (hasLevel && typeof dev.io.level.max === 'number') ? dev.io.level.max : 100;
@@ -4005,7 +4012,7 @@ function nwBuildTimerPopoverContent(dev) {
       const d = new Date(nextAt);
       const hh = String(d.getHours()).padStart(2, '0');
       const mm = String(d.getMinutes()).padStart(2, '0');
-      const label = (nextKind === 'on') ? 'EIN' : (nextKind === 'off' ? 'AUS' : '');
+      const label = (nextKind === 'on') ? labelOn : (nextKind === 'off' ? labelOff : '');
       return `Nächstes Event: ${label} ${hh}:${mm}`.trim();
     }
     return 'Zeitschaltuhr aktiv';
@@ -4105,8 +4112,8 @@ function nwBuildTimerPopoverContent(dev) {
       return wrap;
     };
 
-    grid.appendChild(mkTime('EIN um', onTime, (v) => { onTime = String(v || ''); }));
-    grid.appendChild(mkTime('AUS um', offTime, (v) => { offTime = String(v || ''); }));
+    grid.appendChild(mkTime(labelOnTime, onTime, (v) => { onTime = String(v || ''); }));
+    grid.appendChild(mkTime(labelOffTime, offTime, (v) => { offTime = String(v || ''); }));
 
     body.appendChild(grid);
   }

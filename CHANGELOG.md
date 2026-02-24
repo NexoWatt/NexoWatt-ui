@@ -1,3 +1,14 @@
+## 0.6.193
+- SmartHome Zeitschaltuhren: **Jalousie/Rollladen** jetzt auch mit Timer (**AUF/ZU**)
+  - im Installer-Konfigurator unter **Zeitschaltuhren**
+  - und direkt im SmartHome-Frontend über das **Uhr-Icon** in der Gerätekachel
+- SmartHome Config: Timer-Modul listet Geräte jetzt direkt aus der **SmartHome-Konfiguration** (funktioniert auch wenn SmartHome im Adapter noch deaktiviert ist).
+
+## 0.6.192
+- SmartHome: **Zeitschaltuhren pro Gerät** ergänzt (Wochentage + EIN/AUS, Dimmer inkl. Level).
+- SmartHome: Endkunde kann Zeitschaltuhr **direkt über die Kachel** (Uhr-Icon) einstellen.
+- SmartHome Config: neuer **Szenen-Konfigurator** (Adapter führt Szenen aus, inkl. Aktionsliste).
+
 ## 0.6.191
 - SmartHome-VIS: Gerätekacheln **Premium-Glass Finish**: mehr Tiefe durch **Double-Stroke (inner highlight)** + **dezentes Noise-Grain** (reduziert Banding, wirkt hochwertiger).
 - SmartHome-VIS: **Hover/Active** verfeinert (leichte Elevation + sanfterer Press-Effect) – bleibt ruhig und gut lesbar.

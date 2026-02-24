@@ -539,6 +539,44 @@ class NexoWattVis extends utils.Adapter {
       return true;
     }
 
+    // Jalousie / Rollladen
+    // Semantik im UI:
+    //  - "on"  = AUF
+    //  - "off" = ZU
+    // Bevorzugt: Cover-Buttons (up/down), da unabhängig von der Prozent-Skalierung.
+    if (dev.type === 'blind' && dev.io) {
+      const cover = dev.io.cover || null;
+      const lvlCfg = dev.io.level || null;
+
+      // AUF
+      if (doOn) {
+        if (cover && cover.upId) {
+          await this.setForeignStateAsync(cover.upId, true);
+          return true;
+        }
+        if (lvlCfg && (lvlCfg.writeId || lvlCfg.readId)) {
+          const dpId = lvlCfg.writeId || lvlCfg.readId;
+          const min = (typeof lvlCfg.min === 'number') ? lvlCfg.min : 0;
+          await this.setForeignStateAsync(dpId, min);
+          return true;
+        }
+        return false;
+      }
+
+      // ZU
+      if (cover && cover.downId) {
+        await this.setForeignStateAsync(cover.downId, true);
+        return true;
+      }
+      if (lvlCfg && (lvlCfg.writeId || lvlCfg.readId)) {
+        const dpId = lvlCfg.writeId || lvlCfg.readId;
+        const max = (typeof lvlCfg.max === 'number') ? lvlCfg.max : 100;
+        await this.setForeignStateAsync(dpId, max);
+        return true;
+      }
+      return false;
+    }
+
     // Default: switch-like devices
     if (dev.io && dev.io.switch && (dev.io.switch.writeId || dev.io.switch.readId)) {
       const dpId = dev.io.switch.writeId || dev.io.switch.readId;
