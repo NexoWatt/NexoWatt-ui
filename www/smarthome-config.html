@@ -66,12 +66,12 @@
         <button class="nw-shcfg-tile" id="nw-shcfg-tile-timers" type="button">
           <div class="nw-shcfg-tile__icon">⏱️</div>
           <div class="nw-shcfg-tile__title">Zeitschaltuhren</div>
-          <div class="nw-shcfg-tile__desc">(Platzhalter) – folgt als nächstes Modul.</div>
+          <div class="nw-shcfg-tile__desc">Einfache EIN/AUS‑Timer pro Gerät konfigurieren.</div>
         </button>
         <button class="nw-shcfg-tile" id="nw-shcfg-tile-scenes" type="button">
           <div class="nw-shcfg-tile__icon">🎬</div>
           <div class="nw-shcfg-tile__title">Szenen</div>
-          <div class="nw-shcfg-tile__desc">(Platzhalter) – folgt als nächstes Modul.</div>
+          <div class="nw-shcfg-tile__desc">Virtuelle Szenen mit Aktionsliste (Adapter‑ausgeführt).</div>
         </button>
         <button class="nw-shcfg-tile" id="nw-shcfg-tile-backup" type="button">
           <div class="nw-shcfg-tile__icon">💾</div>
@@ -132,6 +132,8 @@
       <div class="nw-shcfg-topbar__title">Zeitschaltuhren</div>
     </div>
     <div class="nw-shcfg-topbar__right">
+      <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-timers-reload" type="button">Neu laden</button>
+      <button class="nw-config-btn" id="nw-shcfg-timers-save" type="button">Speichern</button>
       <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-timers-open-logic" type="button">Zum Logikeditor</button>
     </div>
   </div>
@@ -142,8 +144,10 @@
         <h2 class="nw-config-section__title">Zeitschaltuhren</h2>
       </div>
       <div class="nw-config-hint">
-        Dieses Modul ist als nächstes dran. Bis dahin kannst du Zeitlogiken über den Logikeditor abbilden.
+        Lege pro Gerät eine einfache EIN-/AUS-Zeit inkl. Wochentage fest. Endkunden können dieselben Zeiten auch direkt im SmartHome-Frontend (Uhr-Icon in der Kachel) einstellen.
       </div>
+      <div id="nw-shcfg-timers-status" class="nw-config-status" style="margin-top:8px;"></div>
+      <div id="nw-shcfg-timers-root" style="margin-top:12px;"></div>
     </section>
   </div>
 </section>
@@ -156,6 +160,8 @@
       <div class="nw-shcfg-topbar__title">Szenen</div>
     </div>
     <div class="nw-shcfg-topbar__right">
+      <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-scenes-add" type="button">+ Neue Szene</button>
+      <button class="nw-config-btn" id="nw-shcfg-scenes-save" type="button">Speichern</button>
       <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-scenes-open-logic" type="button">Zum Logikeditor</button>
     </div>
   </div>
@@ -166,8 +172,10 @@
         <h2 class="nw-config-section__title">Szenen</h2>
       </div>
       <div class="nw-config-hint">
-        Dieses Modul ist als nächstes dran. Szenen lassen sich aktuell über Geräte vom Typ <b>Szene</b> + Logikeditor abbilden.
+        Szenen sind virtuelle Aktionen (z.B. "Abend", "Alles Aus") und werden direkt vom Adapter ausgeführt.
       </div>
+      <div id="nw-shcfg-scenes-status" class="nw-config-status" style="margin-top:8px;"></div>
+      <div id="nw-shcfg-scenes-root" style="margin-top:12px;"></div>
     </section>
   </div>
 </section>

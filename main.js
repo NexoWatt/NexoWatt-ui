@@ -52,6 +52,12 @@ class NexoWattVis extends utils.Adapter {
     this._sseFlushTimer = null;
     this.smartHomeDevices = [];
 
+    // SmartHome: Zeitschaltuhren (Endkunde) – persisted in adapter states (no instance restart)
+    this._nwShTimersCfg = { version: 1, updatedAt: 0, timers: [] };
+    this._nwShTimersNextByDeviceId = Object.create(null);
+    this._nwShTimersNextEvent = null;
+    this._nwShTimersTimeout = null;
+
     // Root-level local UI keys (internal states without a folder prefix)
     // Used e.g. for the integrated Weather tile (Plug&Play, no extra adapter).
     this._nwRootUiKeys = new Set([
@@ -183,6 +189,525 @@ class NexoWattVis extends utils.Adapter {
       const id = `installer.${key}`;
       await this.setObjectNotExistsAsync(id, { type:'state', common:{ name:id, type:c.type, role:c.role, read:true, write:true, def:c.def }, native:{} });
     }
+  }
+
+
+  // --- SmartHome: Zeitschaltuhren (Endkunde) ---
+  async ensureSmartHomeUserStates() {
+    // Keep user-editable SmartHome features (timers) in states so no ioBroker instance restart is required.
+    await this.setObjectNotExistsAsync('smarthome', {
+      type: 'channel',
+      common: { name: 'SmartHome' },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync('smarthome.timersJson', {
+      type: 'state',
+      common: {
+        name: 'SmartHome Zeitschaltuhren (JSON)',
+        type: 'string',
+        role: 'json',
+        read: true,
+        write: true,
+        def: '',
+      },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync('smarthome.timersUpdatedAt', {
+      type: 'state',
+      common: {
+        name: 'SmartHome Zeitschaltuhren – updatedAt',
+        type: 'number',
+        role: 'value.time',
+        read: true,
+        write: true,
+        def: 0,
+      },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync('smarthome.timersNextAt', {
+      type: 'state',
+      common: {
+        name: 'SmartHome Zeitschaltuhren – nächstes Event',
+        type: 'number',
+        role: 'value.time',
+        read: true,
+        write: false,
+        def: 0,
+      },
+      native: {},
+    });
+  }
+
+  _nwParseTimeToMinutes(hhmm) {
+    const s = String(hhmm || '').trim();
+    if (!s) return null;
+    const m = s.match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return null;
+    const hh = parseInt(m[1], 10);
+    const mm = parseInt(m[2], 10);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+    if (hh < 0 || hh > 23) return null;
+    if (mm < 0 || mm > 59) return null;
+    return (hh * 60) + mm;
+  }
+
+  _nwNormalizeDaysArray(days) {
+    const out = [];
+    const seen = new Set();
+    const arr = Array.isArray(days) ? days : [];
+    for (const d of arr) {
+      const n = parseInt(d, 10);
+      if (!Number.isFinite(n)) continue;
+      if (n < 0 || n > 6) continue;
+      if (seen.has(n)) continue;
+      seen.add(n);
+      out.push(n);
+    }
+    // default: all days
+    if (!out.length) return [0, 1, 2, 3, 4, 5, 6];
+    out.sort((a, b) => a - b);
+    return out;
+  }
+
+  _nwNormalizeSmartHomeTimersConfig(rawCfg) {
+    const base = (rawCfg && typeof rawCfg === 'object') ? rawCfg : {};
+    const version = typeof base.version === 'number' ? base.version : 1;
+    const updatedAt = typeof base.updatedAt === 'number' ? base.updatedAt : 0;
+    const timersIn = Array.isArray(base.timers) ? base.timers : [];
+    const timers = [];
+
+    for (const t of timersIn) {
+      if (!t || typeof t !== 'object') continue;
+      const deviceId = String(t.deviceId || t.id || '').trim();
+      if (!deviceId) continue;
+      const enabled = !!t.enabled;
+      const days = this._nwNormalizeDaysArray(t.days);
+      const onTime = String(t.onTime || (t.on && t.on.time) || '').trim();
+      const offTime = String(t.offTime || (t.off && t.off.time) || '').trim();
+
+      // optional: dimmer on-level
+      let onLevel = (Object.prototype.hasOwnProperty.call(t, 'onLevel')) ? t.onLevel : (t.on && Object.prototype.hasOwnProperty.call(t.on, 'level') ? t.on.level : undefined);
+      if (typeof onLevel === 'string') {
+        const num = parseFloat(onLevel.replace(',', '.'));
+        if (Number.isFinite(num)) onLevel = num;
+      }
+      if (typeof onLevel !== 'number' || Number.isNaN(onLevel)) onLevel = undefined;
+
+      // Validate times (allow empty strings)
+      const onMin = this._nwParseTimeToMinutes(onTime);
+      const offMin = this._nwParseTimeToMinutes(offTime);
+
+      timers.push({
+        deviceId,
+        enabled,
+        days,
+        onTime: onMin === null ? '' : onTime,
+        offTime: offMin === null ? '' : offTime,
+        ...(typeof onLevel === 'number' ? { onLevel } : {}),
+      });
+    }
+
+    // Ensure uniqueness by deviceId (keep last entry)
+    const map = Object.create(null);
+    for (const t of timers) map[t.deviceId] = t;
+    const outTimers = Object.keys(map).map((k) => map[k]);
+    outTimers.sort((a, b) => String(a.deviceId).localeCompare(String(b.deviceId)));
+
+    return {
+      version,
+      updatedAt,
+      timers: outTimers,
+    };
+  }
+
+  async loadSmartHomeTimersFromState() {
+    let raw = '';
+    try {
+      const st = await this.getStateAsync('smarthome.timersJson');
+      if (st && typeof st.val === 'string') raw = st.val;
+    } catch (_e) {
+      raw = '';
+    }
+
+    let cfg = null;
+    try {
+      if (raw && raw.trim()) cfg = JSON.parse(raw);
+    } catch (_e) {
+      cfg = null;
+    }
+
+    this._nwShTimersCfg = this._nwNormalizeSmartHomeTimersConfig(cfg);
+    // Ensure updatedAt reflects state if present
+    try {
+      const ts = await this.getStateAsync('smarthome.timersUpdatedAt');
+      if (ts && typeof ts.val === 'number' && ts.val > 0) {
+        this._nwShTimersCfg.updatedAt = ts.val;
+      }
+    } catch (_e) {}
+
+    this._nwScheduleNextSmartHomeTimer('load');
+  }
+
+  getSmartHomeTimersConfig() {
+    return this._nwShTimersCfg || { version: 1, updatedAt: 0, timers: [] };
+  }
+
+  async persistSmartHomeTimersToState(cfg) {
+    const normalized = this._nwNormalizeSmartHomeTimersConfig(cfg);
+    normalized.updatedAt = Date.now();
+    this._nwShTimersCfg = normalized;
+
+    try {
+      await this.setStateAsync('smarthome.timersJson', { val: JSON.stringify(normalized), ack: true });
+      await this.setStateAsync('smarthome.timersUpdatedAt', { val: normalized.updatedAt, ack: true });
+    } catch (e) {
+      this.log.warn('SmartHome timers persist error: ' + (e && e.message ? e.message : e));
+    }
+
+    this._nwScheduleNextSmartHomeTimer('persist');
+    return normalized;
+  }
+
+  _nwComputeNextOccurrence(nowTs, daysArr, timeMinutes) {
+    if (typeof nowTs !== 'number' || !Number.isFinite(nowTs)) nowTs = Date.now();
+    if (typeof timeMinutes !== 'number' || !Number.isFinite(timeMinutes)) return null;
+    const days = Array.isArray(daysArr) ? daysArr : [0, 1, 2, 3, 4, 5, 6];
+    const daySet = new Set(days);
+
+    const now = new Date(nowTs);
+    const base = new Date(now);
+    base.setSeconds(0, 0);
+    base.setHours(0, 0, 0, 0);
+
+    for (let off = 0; off <= 7; off++) {
+      const d = new Date(base.getTime() + off * 86400000);
+      const dow = d.getDay(); // 0=Sun .. 6=Sat
+      if (!daySet.has(dow)) continue;
+      const at = new Date(d.getTime() + timeMinutes * 60000);
+      if (at.getTime() <= nowTs + 500) continue; // avoid immediate re-fire
+      return at.getTime();
+    }
+    return null;
+  }
+
+  _nwComputeNextSmartHomeTimerEvents(nowTs) {
+    const cfg = this.getSmartHomeTimersConfig();
+    const nextByDev = Object.create(null);
+    let earliest = null;
+
+    const timers = Array.isArray(cfg.timers) ? cfg.timers : [];
+    for (const t of timers) {
+      if (!t || !t.deviceId || !t.enabled) continue;
+      const onMin = this._nwParseTimeToMinutes(t.onTime);
+      const offMin = this._nwParseTimeToMinutes(t.offTime);
+
+      let next = null;
+      if (onMin !== null) {
+        const at = this._nwComputeNextOccurrence(nowTs, t.days, onMin);
+        if (typeof at === 'number') {
+          next = { at, kind: 'on' };
+        }
+      }
+      if (offMin !== null) {
+        const at = this._nwComputeNextOccurrence(nowTs, t.days, offMin);
+        if (typeof at === 'number') {
+          if (!next || at < next.at) next = { at, kind: 'off' };
+        }
+      }
+
+      if (next) {
+        nextByDev[t.deviceId] = next;
+        if (!earliest || next.at < earliest.at) {
+          earliest = { deviceId: t.deviceId, at: next.at, kind: next.kind };
+        }
+      }
+    }
+
+    return { earliest, nextByDev };
+  }
+
+  _nwClearSmartHomeTimerSchedule() {
+    if (this._nwShTimersTimeout) {
+      try { clearTimeout(this._nwShTimersTimeout); } catch (_e) {}
+      this._nwShTimersTimeout = null;
+    }
+    this._nwShTimersNextEvent = null;
+  }
+
+  _nwScheduleNextSmartHomeTimer(reason) {
+    this._nwClearSmartHomeTimerSchedule();
+    const now = Date.now();
+    const { earliest, nextByDev } = this._nwComputeNextSmartHomeTimerEvents(now);
+    this._nwShTimersNextByDeviceId = nextByDev;
+    this._nwShTimersNextEvent = earliest;
+
+    // Persist next timestamp (debug/ops)
+    try {
+      const nextAt = earliest && typeof earliest.at === 'number' ? earliest.at : 0;
+      this.setStateAsync('smarthome.timersNextAt', { val: nextAt, ack: true }).catch(() => {});
+    } catch (_e) {}
+
+    if (!earliest || typeof earliest.at !== 'number') return;
+    const delay = Math.max(250, earliest.at - now);
+
+    this._nwShTimersTimeout = setTimeout(() => {
+      this._nwRunDueSmartHomeTimer().catch((e) => {
+        this.log.warn('SmartHome timer run error: ' + (e && e.message ? e.message : e));
+        // best-effort reschedule
+        try { this._nwScheduleNextSmartHomeTimer('error'); } catch (_e2) {}
+      });
+    }, delay);
+
+    if (reason) {
+      this.log.debug && this.log.debug(`SmartHome timers: scheduled next (${reason}) at ${new Date(earliest.at).toISOString()} (${earliest.deviceId}/${earliest.kind})`);
+    }
+  }
+
+  async _nwRunDueSmartHomeTimer() {
+    const ev = this._nwShTimersNextEvent;
+    if (!ev || !ev.deviceId || typeof ev.at !== 'number' || !ev.kind) {
+      this._nwScheduleNextSmartHomeTimer('noop');
+      return;
+    }
+
+    // Reload current timer from cfg (in case it changed)
+    const cfg = this.getSmartHomeTimersConfig();
+    const t = (cfg.timers || []).find((x) => x && x.deviceId === ev.deviceId);
+    if (!t || !t.enabled) {
+      this._nwScheduleNextSmartHomeTimer('disabled');
+      return;
+    }
+
+    // Execute (best-effort)
+    try {
+      await this._nwExecuteSmartHomeTimerAction(t, ev.kind);
+    } catch (e) {
+      this.log.warn('SmartHome timer execute error: ' + (e && e.message ? e.message : e));
+    }
+
+    // Reschedule
+    this._nwScheduleNextSmartHomeTimer('executed');
+  }
+
+  async _nwExecuteSmartHomeTimerAction(timer, kind) {
+    if (!timer || !timer.deviceId) return false;
+    const deviceId = String(timer.deviceId);
+
+    const devices = (this.smartHomeDevices && this.smartHomeDevices.length)
+      ? this.smartHomeDevices
+      : this.buildSmartHomeDevicesFromConfig();
+    const dev = devices.find((d) => d && d.id === deviceId);
+    if (!dev) {
+      this.log.warn(`SmartHome timer: device not found: ${deviceId}`);
+      return false;
+    }
+    if (dev.behavior && dev.behavior.readOnly) {
+      this.log.debug && this.log.debug(`SmartHome timer: device readOnly, skip: ${deviceId}`);
+      return false;
+    }
+
+    const t = String(kind || '').toLowerCase();
+    const doOn = (t === 'on');
+    const doOff = (t === 'off');
+    if (!doOn && !doOff) return false;
+
+    // Virtual scene: trigger scene (for both on/off events)
+    if (dev.type === 'scene' && dev.sceneId) {
+      await this._nwRunSmartHomeSceneById(String(dev.sceneId));
+      return true;
+    }
+
+    // Dimmer (level)
+    if (dev.type === 'dimmer' && dev.io && dev.io.level && (dev.io.level.writeId || dev.io.level.readId)) {
+      const lvlCfg = dev.io.level;
+      const dpId = lvlCfg.writeId || lvlCfg.readId;
+      const min = typeof lvlCfg.min === 'number' ? lvlCfg.min : 0;
+      const max = typeof lvlCfg.max === 'number' ? lvlCfg.max : 100;
+      let target;
+      if (doOn) {
+        target = (typeof timer.onLevel === 'number' && Number.isFinite(timer.onLevel))
+          ? timer.onLevel
+          : max;
+      } else {
+        target = min;
+      }
+      target = Math.max(min, Math.min(max, target));
+      await this.setForeignStateAsync(dpId, target);
+      return true;
+    }
+
+    // Default: switch-like devices
+    if (dev.io && dev.io.switch && (dev.io.switch.writeId || dev.io.switch.readId)) {
+      const dpId = dev.io.switch.writeId || dev.io.switch.readId;
+      const val = doOn ? true : false;
+      await this.setForeignStateAsync(dpId, val);
+      return true;
+    }
+
+    return false;
+  }
+
+
+  // --- SmartHome Scenes (Adapter-executed) ---
+  async _nwRunSmartHomeSceneById(sceneId) {
+    const id = String(sceneId || '').trim();
+    if (!id) return { ok: false, error: 'missing id' };
+
+    const cfg = this.getSmartHomeConfig ? this.getSmartHomeConfig() : (this.config && this.config.smartHomeConfig) || {};
+    const scenes = Array.isArray(cfg.scenes) ? cfg.scenes : [];
+    const scene = scenes.find((s) => s && String(s.id || '').trim() === id);
+    if (!scene) return { ok: false, error: 'scene not found' };
+
+    const actions = Array.isArray(scene.actions) ? scene.actions : [];
+    const devices = (this.smartHomeDevices && this.smartHomeDevices.length)
+      ? this.smartHomeDevices
+      : this.buildSmartHomeDevicesFromConfig();
+
+    let executed = 0;
+    const errors = [];
+
+    for (const a of actions) {
+      if (!a || typeof a !== 'object') continue;
+      const deviceId = String(a.deviceId || a.id || '').trim();
+      if (!deviceId) continue;
+
+      const dev = devices.find((d) => d && d.id === deviceId);
+      if (!dev) {
+        errors.push({ deviceId, error: 'device not found' });
+        continue;
+      }
+      if (dev.behavior && dev.behavior.readOnly) {
+        errors.push({ deviceId, error: 'readOnly' });
+        continue;
+      }
+
+      const kindRaw = String(a.kind || a.type || 'switch').trim();
+      const kind = kindRaw.toLowerCase() === 'rtrsetpoint' ? 'rtrSetpoint' : kindRaw;
+      const valIn = (Object.prototype.hasOwnProperty.call(a, 'value')) ? a.value : (Object.prototype.hasOwnProperty.call(a, 'val') ? a.val : undefined);
+
+      try {
+        const ok = await this._nwExecuteSmartHomeSceneAction(dev, kind, valIn);
+        if (ok) executed++;
+        else errors.push({ deviceId, error: 'unsupported action' });
+      } catch (e) {
+        errors.push({ deviceId, error: (e && e.message) ? e.message : String(e) });
+      }
+    }
+
+    return {
+      ok: true,
+      sceneId: id,
+      executed,
+      errors,
+    };
+  }
+
+  async _nwExecuteSmartHomeSceneAction(dev, kind, value) {
+    if (!dev || !kind) return false;
+    const k = String(kind).trim();
+    const kLower = k.toLowerCase();
+
+    // Nested scene execution
+    if (kLower === 'scene') {
+      const sid = String(value || '').trim();
+      if (!sid) return false;
+      await this._nwRunSmartHomeSceneById(sid);
+      return true;
+    }
+
+    // Switch
+    if (kLower === 'switch' || kLower === 'on' || kLower === 'off') {
+      if (!dev.io || !dev.io.switch || !(dev.io.switch.writeId || dev.io.switch.readId)) return false;
+      const dpId = dev.io.switch.writeId || dev.io.switch.readId;
+
+      let v = value;
+      if (kLower === 'on') v = true;
+      if (kLower === 'off') v = false;
+
+      if (typeof v === 'string') {
+        const t = v.trim().toLowerCase();
+        if (t === '1' || t === 'true' || t === 'on' || t === 'ein') v = true;
+        else if (t === '0' || t === 'false' || t === 'off' || t === 'aus') v = false;
+        else {
+          const num = parseFloat(t.replace(',', '.'));
+          if (Number.isFinite(num)) v = num;
+        }
+      }
+      if (typeof v === 'number') v = v > 0;
+      if (typeof v !== 'boolean') v = true;
+
+      const inv = !!(dev.io.switch && dev.io.switch.invert);
+      const writeVal = inv ? !v : v;
+      await this.setForeignStateAsync(dpId, writeVal);
+      return true;
+    }
+
+    // Level (Dimmer/Jalousie)
+    if (kLower === 'level') {
+      if (!dev.io || !dev.io.level || !(dev.io.level.writeId || dev.io.level.readId)) return false;
+      const lvlCfg = dev.io.level;
+      const dpId = lvlCfg.writeId || lvlCfg.readId;
+      const min = (typeof lvlCfg.min === 'number') ? lvlCfg.min : 0;
+      const max = (typeof lvlCfg.max === 'number') ? lvlCfg.max : 100;
+
+      let v = value;
+      if (typeof v === 'string') {
+        const num = parseFloat(v.replace(',', '.'));
+        if (Number.isFinite(num)) v = num;
+      }
+      if (typeof v === 'boolean') v = v ? max : min;
+      if (typeof v !== 'number' || Number.isNaN(v)) v = max;
+      const target = Math.max(min, Math.min(max, v));
+      await this.setForeignStateAsync(dpId, target);
+      return true;
+    }
+
+    // Cover (blind) actions: up/down/stop OR position (number)
+    if (kLower === 'cover') {
+      const v = (typeof value === 'string') ? value.trim().toLowerCase() : value;
+      // action datapoint
+      if (typeof v === 'string' && (v === 'up' || v === 'down' || v === 'stop')) {
+        const cv = (dev.io && dev.io.cover) ? dev.io.cover : null;
+        if (!cv || !cv.actionId) return false;
+        const map = cv.actionMap || { up: 'up', down: 'down', stop: 'stop' };
+        const payload = map[v] || v;
+        await this.setForeignStateAsync(cv.actionId, payload);
+        return true;
+      }
+      // position via level
+      if (typeof v === 'number' && dev.io && dev.io.level && (dev.io.level.writeId || dev.io.level.readId)) {
+        const lvlCfg = dev.io.level;
+        const dpId = lvlCfg.writeId || lvlCfg.readId;
+        const min = (typeof lvlCfg.min === 'number') ? lvlCfg.min : 0;
+        const max = (typeof lvlCfg.max === 'number') ? lvlCfg.max : 100;
+        const target = Math.max(min, Math.min(max, v));
+        await this.setForeignStateAsync(dpId, target);
+        return true;
+      }
+      return false;
+    }
+
+    // RTR Setpoint
+    if (kLower === 'rtrsetpoint') {
+      const cl = (dev.io && dev.io.climate) ? dev.io.climate : null;
+      if (!cl || !cl.setpointId) return false;
+      let v = value;
+      if (typeof v === 'string') {
+        const num = parseFloat(v.replace(',', '.'));
+        if (Number.isFinite(num)) v = num;
+      }
+      if (typeof v !== 'number' || Number.isNaN(v)) return false;
+      const min = (typeof cl.minSetpoint === 'number') ? cl.minSetpoint : 15;
+      const max = (typeof cl.maxSetpoint === 'number') ? cl.maxSetpoint : 30;
+      const target = Math.max(min, Math.min(max, v));
+      await this.setForeignStateAsync(cl.setpointId, target);
+      return true;
+    }
+
+    return false;
   }
 
 
@@ -4134,6 +4659,9 @@ getSmartHomeConfig() {
     functions: Array.isArray(shc.functions) ? shc.functions : [],
     devices: Array.isArray(shc.devices) ? shc.devices : [],
 
+    // SmartHome Scenes (optional)
+    scenes: Array.isArray(shc.scenes) ? shc.scenes : [],
+
     // SmartHome VIS (optional)
     pages: Array.isArray(shc.pages) ? shc.pages : [],
     meta: this._nwIsPlainObject(shc.meta) ? shc.meta : {},
@@ -4275,6 +4803,7 @@ buildSmartHomeDevicesFromConfig() {
   const rooms = (shc && Array.isArray(shc.rooms)) ? shc.rooms : [];
   const funcs = (shc && Array.isArray(shc.functions)) ? shc.functions : [];
   const cfgDevices = (shc && Array.isArray(shc.devices)) ? shc.devices : [];
+  const cfgScenes = (shc && Array.isArray(shc.scenes)) ? shc.scenes : [];
   const hasConfigDevices = cfgDevices.length > 0;
 
   const resolveRoomName = (roomId) => {
@@ -4477,6 +5006,59 @@ buildSmartHomeDevicesFromConfig() {
 
       devices.push(dev);
     });
+
+    // --- SmartHome Scenes (virtual devices) ---
+    // Scenes are configured in SmartHomeConfig.scenes and are executed by the adapter.
+    // They appear as type "scene" tiles without a switch datapoint.
+    if (Array.isArray(cfgScenes) && cfgScenes.length) {
+      for (const sc of cfgScenes) {
+        if (!sc || !sc.id) continue;
+
+        const rawId = String(sc.id).trim();
+        if (!rawId) continue;
+        // Ensure unique device IDs (avoid collision with real devices)
+        const id = devices.some((d) => d && d.id === rawId) ? `scene_${rawId}` : rawId;
+
+        const roomId = String(sc.roomId || '').trim();
+        const floorId = roomId
+          ? resolveRoomFloorId(roomId)
+          : String((Object.prototype.hasOwnProperty.call(sc, 'floorId') ? sc.floorId : '') || '').trim();
+
+        const floorName = resolveFloorName(floorId);
+        const roomName = roomId ? resolveRoomName(roomId) : (floorName || 'Allgemein');
+        const fnName = resolveFunctionName(String(sc.functionId || '').trim());
+        const size = (sc.ui && sc.ui.size) ? String(sc.ui.size).trim() : (String(sc.size || '').trim() || 'm');
+        const order = (typeof sc.order === 'number') ? sc.order : undefined;
+
+        const dev = {
+          id,
+          type: 'scene',
+          ...(typeof order === 'number' ? { order } : {}),
+          roomId,
+          floorId,
+          functionId: String(sc.functionId || '').trim(),
+          room: roomName,
+          function: fnName,
+          alias: String(sc.alias || sc.name || sc.title || sc.id).trim() || rawId,
+          icon: String(sc.icon || '').trim(),
+          ui: {
+            size,
+            showRoom: true,
+            showValue: true,
+            unit: '',
+            ...(typeof order === 'number' ? { order } : {}),
+          },
+          behavior: {
+            readOnly: false,
+            favorite: !!(sc.behavior && sc.behavior.favorite),
+          },
+          // Scene execution is handled by the adapter (no io.switch)
+          sceneId: rawId,
+          io: {},
+        };
+        devices.push(dev);
+      }
+    }
 
     this.smartHomeDevices = devices;
     return this.smartHomeDevices;
@@ -4798,6 +5380,55 @@ buildSmartHomeDevicesFromConfig() {
     icon: 'S1',
   });
 
+  // SmartHomeConfig.scenes (virtuelle Szenen) zusätzlich einblenden, auch wenn wir
+  // im Fallback-Modus über smartHome.datapoints laufen.
+  try {
+    if (Array.isArray(cfgScenes) && cfgScenes.length) {
+      for (const sc of cfgScenes) {
+        if (!sc || !sc.id) continue;
+        const rawId = String(sc.id).trim();
+        if (!rawId) continue;
+        const id = devices.some((d) => d && d.id === rawId) ? `scene_${rawId}` : rawId;
+
+        const roomId = String(sc.roomId || '').trim();
+        const floorId = roomId
+          ? resolveRoomFloorId(roomId)
+          : String((Object.prototype.hasOwnProperty.call(sc, 'floorId') ? sc.floorId : '') || '').trim();
+        const floorName = resolveFloorName(floorId);
+        const roomName = roomId ? resolveRoomName(roomId) : (floorName || 'Allgemein');
+        const fnName = resolveFunctionName(String(sc.functionId || '').trim());
+        const size = (sc.ui && sc.ui.size) ? String(sc.ui.size).trim() : (String(sc.size || '').trim() || 'm');
+        const order = (typeof sc.order === 'number') ? sc.order : undefined;
+
+        devices.push({
+          id,
+          type: 'scene',
+          ...(typeof order === 'number' ? { order } : {}),
+          roomId,
+          floorId,
+          functionId: String(sc.functionId || '').trim(),
+          room: roomName,
+          function: fnName,
+          alias: String(sc.alias || sc.name || sc.title || sc.id).trim() || rawId,
+          icon: String(sc.icon || '').trim(),
+          ui: {
+            size,
+            showRoom: true,
+            showValue: true,
+            unit: '',
+            ...(typeof order === 'number' ? { order } : {}),
+          },
+          behavior: {
+            readOnly: false,
+            favorite: !!(sc.behavior && sc.behavior.favorite),
+          },
+          sceneId: rawId,
+          io: {},
+        });
+      }
+    }
+  } catch (_e) {}
+
   pushScene(dps.scene2, {
     id: 'scene2',
     alias: 'Szene Alles aus',
@@ -4830,6 +5461,17 @@ async getSmartHomeDevicesWithState() {
   const devices = (this.smartHomeDevices && this.smartHomeDevices.length)
     ? this.smartHomeDevices
     : this.buildSmartHomeDevicesFromConfig();
+
+  // Attach SmartHome timers to device payload (so the UI can show a clock indicator)
+  const timersCfg = (typeof this.getSmartHomeTimersConfig === 'function')
+    ? this.getSmartHomeTimersConfig()
+    : (this._nwShTimersCfg || { version: 1, updatedAt: 0, timers: [] });
+  const timersArr = (timersCfg && Array.isArray(timersCfg.timers)) ? timersCfg.timers : [];
+  const timerByDev = Object.create(null);
+  for (const t of timersArr) {
+    if (t && t.deviceId) timerByDev[String(t.deviceId)] = t;
+  }
+  const nextByDev = this._nwShTimersNextByDeviceId || Object.create(null);
 
   const result = [];
   for (const dev of devices) {
@@ -5116,6 +5758,22 @@ if (copy.type === 'scene' && typeof copy.state.on !== 'undefined') {
       }
     }
 
+    // Zeitschaltuhr info (Endkunde)
+    try {
+      const t = timerByDev[copy.id];
+      if (t) {
+        const next = nextByDev[copy.id];
+        copy.timer = {
+          enabled: !!t.enabled,
+          days: Array.isArray(t.days) ? t.days : [],
+          onTime: String(t.onTime || ''),
+          offTime: String(t.offTime || ''),
+          ...(typeof t.onLevel === 'number' ? { onLevel: t.onLevel } : {}),
+          ...(next && typeof next.at === 'number' ? { nextAt: next.at, nextKind: next.kind } : {}),
+        };
+      }
+    } catch (_e) {}
+
     result.push(copy);
   }
   return result;
@@ -5348,6 +6006,9 @@ async onReady() {
 
       await this.ensureSettingsStates();
 
+      // SmartHome: Endkunden-Zeitschaltuhren (persisted in adapter states)
+      try { await this.ensureSmartHomeUserStates(); } catch (_e) {}
+
       // PV Saisonprofil: KI ist immer aktiv.
       // Ältere Installationen könnten den Schalter noch auf false haben – wir setzen ihn beim Startup wieder auf true.
       try { await this.setStateAsync('settings.tariffPvSeasonAiEnabled', { val: true, ack: true }); } catch (_e) {}
@@ -5460,6 +6121,9 @@ async onReady() {
 
 
       this.buildSmartHomeDevicesFromConfig();
+
+      // SmartHome: Endkunden-Zeitschaltuhren laden + Scheduler starten
+      try { await this.loadSmartHomeTimersFromState(); } catch (_e) {}
 
       // NexoLogic (node/graph) runtime engine
       try { await this.initLogicEngine(); } catch (e) { this.log.warn('NexoLogic init failed: ' + (e && e.message ? e.message : e)); }
@@ -6041,6 +6705,12 @@ app.post('/api/smarthome/toggle', requireAuth, async (req, res) => {
       return res.json({ ok: true, state: { on: nextPlaying, playing: nextPlaying } });
     }
 
+    // Virtual Scene (Adapter-executed): trigger scene and return
+    if (dev.type === 'scene' && dev.sceneId && (!dev.io.switch || !(dev.io.switch.writeId || dev.io.switch.readId))) {
+      await this._nwRunSmartHomeSceneById(String(dev.sceneId));
+      return res.json({ ok: true, state: { info: 'scene', triggered: true } });
+    }
+
     // Default: Switch toggeln
     if (dev.io.switch && dev.io.switch.readId) {
       const dpId = dev.io.switch.writeId || dev.io.switch.readId;
@@ -6355,6 +7025,90 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
 });
 
 
+// --- SmartHome Szenen (Adapter-executed) ---
+app.get('/api/smarthome/scenes', requireAuth, async (_req, res) => {
+  try {
+    const cfg = this.getSmartHomeConfig ? this.getSmartHomeConfig() : (this.config && this.config.smartHomeConfig) || {};
+    const scenes = Array.isArray(cfg.scenes) ? cfg.scenes : [];
+    res.json({ ok: true, scenes });
+  } catch (e) {
+    this.log.warn('SmartHome scenes API error: ' + (e && e.message ? e.message : e));
+    res.status(500).json({ ok: false, error: 'internal error' });
+  }
+});
+
+app.post('/api/smarthome/scene/run', requireAuth, async (req, res) => {
+  try {
+    const id = req.body && (req.body.id || req.body.sceneId);
+    if (!id) return res.status(400).json({ ok: false, error: 'missing scene id' });
+    const result = await this._nwRunSmartHomeSceneById(String(id));
+    return res.json({ ok: true, result });
+  } catch (e) {
+    this.log.warn('SmartHome scene run API error: ' + (e && e.message ? e.message : e));
+    res.status(500).json({ ok: false, error: 'internal error' });
+  }
+});
+
+
+// --- SmartHome Zeitschaltuhren (Endkunde) ---
+app.get('/api/smarthome/timers', requireAuth, async (_req, res) => {
+  try {
+    const cfg = this.getSmartHomeTimersConfig();
+    res.json({ ok: true, config: cfg });
+  } catch (e) {
+    this.log.warn('SmartHome timers API error: ' + (e && e.message ? e.message : e));
+    res.status(500).json({ ok: false, error: 'internal error' });
+  }
+});
+
+app.post('/api/smarthome/timers', requireAuth, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const current = this.getSmartHomeTimersConfig();
+
+    // Accept either a full config or a single-device update
+    let nextCfg = null;
+    if (body && body.config && typeof body.config === 'object') {
+      nextCfg = body.config;
+    } else {
+      const deviceId = String(body.deviceId || body.id || '').trim();
+      if (!deviceId) return res.status(400).json({ ok: false, error: 'missing deviceId' });
+
+      const del = !!body.delete;
+      const timerIn = (body && body.timer && typeof body.timer === 'object') ? body.timer : {};
+
+      const merged = {
+        version: current.version || 1,
+        updatedAt: current.updatedAt || 0,
+        timers: Array.isArray(current.timers) ? current.timers.slice() : [],
+      };
+
+      // Remove old
+      merged.timers = merged.timers.filter((t) => t && t.deviceId !== deviceId);
+
+      if (!del) {
+        merged.timers.push({
+          deviceId,
+          enabled: !!timerIn.enabled,
+          days: Array.isArray(timerIn.days) ? timerIn.days : [],
+          onTime: timerIn.onTime || (timerIn.on && timerIn.on.time) || '',
+          offTime: timerIn.offTime || (timerIn.off && timerIn.off.time) || '',
+          ...(Object.prototype.hasOwnProperty.call(timerIn, 'onLevel') ? { onLevel: timerIn.onLevel } : {}),
+        });
+      }
+
+      nextCfg = merged;
+    }
+
+    const saved = await this.persistSmartHomeTimersToState(nextCfg);
+    res.json({ ok: true, config: saved });
+  } catch (e) {
+    this.log.warn('SmartHome timers save API error: ' + (e && e.message ? e.message : e));
+    res.status(500).json({ ok: false, error: 'internal error' });
+  }
+});
+
+
 
 // --- SmartHomeConfig API (VIS-Konfig & Editor) ---
     app.get('/api/smarthome/config', (req, res) => {
@@ -6382,6 +7136,10 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
           rooms: Array.isArray(cfg.rooms) ? cfg.rooms : [],
           functions: Array.isArray(cfg.functions) ? cfg.functions : [],
           devices: Array.isArray(cfg.devices) ? cfg.devices : [],
+
+          // Scenes (virtual actions executed by adapter)
+          scenes: Array.isArray(cfg.scenes) ? cfg.scenes : [],
+
           pages: Array.isArray(cfg.pages) ? cfg.pages : [],
           meta: this._nwIsPlainObject(cfg.meta) ? cfg.meta : {},
         };
@@ -6448,6 +7206,87 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
               return { id, title, icon, viewMode, roomIds, funcIds, types, favoritesOnly, order, href, parentId, cardSize, sortBy, groupByType };
             })
             .filter((p) => p.id && p.title);
+        }
+
+        // Sanitize scenes to avoid runtime issues in the SmartHome UI
+        // Schema (minimal): { id, alias, roomId, functionId, icon, order, ui:{size}, behavior:{favorite}, actions:[{deviceId, kind, value}] }
+        {
+          const isPlain = (o) => this._nwIsPlainObject(o);
+          const safeStr = (v, maxLen) => {
+            if (v === null || v === undefined) return '';
+            const s = String(v).trim();
+            if (!s) return '';
+            return s.length > maxLen ? s.slice(0, maxLen) : s;
+          };
+
+          if (Array.isArray(out.scenes)) {
+            out.scenes = out.scenes
+              .filter((s) => isPlain(s))
+              .map((s, idx) => {
+                const rawId = safeStr(s.id || `scene_${idx + 1}`, 80) || `scene_${idx + 1}`;
+                const alias = safeStr(s.alias || s.name || s.title || rawId, 120) || rawId;
+                const icon = safeStr(s.icon || '', 32);
+                const roomId = safeStr(s.roomId || '', 64);
+                const functionId = safeStr(s.functionId || '', 64);
+                const floorId = safeStr(s.floorId || '', 64);
+                const order = Number.isFinite(+((s.order) ?? idx)) ? +((s.order) ?? idx) : idx;
+
+                const sizeRaw = safeStr((s.ui && (s.ui.size ?? s.ui.cardSize)) ? (s.ui.size ?? s.ui.cardSize) : (s.size || ''), 12).toLowerCase();
+                const size = ['s', 'm', 'l', 'xl', 'auto'].includes(sizeRaw) ? sizeRaw : 'm';
+
+                const behavior = isPlain(s.behavior) ? s.behavior : {};
+
+                const actionsIn = Array.isArray(s.actions) ? s.actions : [];
+                const actions = [];
+                for (const a of actionsIn) {
+                  if (!isPlain(a)) continue;
+                  const deviceId = safeStr(a.deviceId || a.id || '', 80);
+                  if (!deviceId) continue;
+                  const kindRaw = safeStr(a.kind || a.type || 'switch', 32).toLowerCase();
+                  const kind = ['switch', 'level', 'color', 'cover', 'rtrsetpoint', 'player', 'scene'].includes(kindRaw)
+                    ? (kindRaw === 'rtrsetpoint' ? 'rtrSetpoint' : kindRaw)
+                    : 'switch';
+
+                  // Only primitive values
+                  let value = (Object.prototype.hasOwnProperty.call(a, 'value')) ? a.value : (Object.prototype.hasOwnProperty.call(a, 'val') ? a.val : undefined);
+                  if (typeof value === 'string') {
+                    const t = value.trim();
+                    if (t.toLowerCase() === 'true') value = true;
+                    else if (t.toLowerCase() === 'false') value = false;
+                    else {
+                      const num = parseFloat(t.replace(',', '.'));
+                      if (Number.isFinite(num) && t !== '') value = num;
+                    }
+                  }
+                  if (value !== null && typeof value === 'object') continue;
+
+                  actions.push({ deviceId, kind, value });
+                }
+
+                return {
+                  id: rawId,
+                  alias,
+                  icon,
+                  roomId,
+                  functionId,
+                  floorId,
+                  order,
+                  ui: { size },
+                  behavior: { favorite: !!behavior.favorite },
+                  actions,
+                };
+              })
+              .filter((s) => s && s.id && s.alias);
+
+            // Remove duplicates by id (keep first)
+            const seen = new Set();
+            out.scenes = out.scenes.filter((s) => {
+              if (!s || !s.id) return false;
+              if (seen.has(s.id)) return false;
+              seen.add(s.id);
+              return true;
+            });
+          }
         }
 
         this.config = this.config || {};
@@ -14133,6 +14972,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
       try { if (this._nwEnergyTotalsTimer) clearInterval(this._nwEnergyTotalsTimer); } catch (_e) {}
       try { if (this._nwHistorieTimer) clearInterval(this._nwHistorieTimer); } catch (_e) {}
+      try { if (this._nwShTimersTimeout) clearTimeout(this._nwShTimersTimeout); } catch (_e) {}
       try { this.stopNotificationMonitor(); } catch (_e) {}
       try { if (this._sseFlushTimer) clearTimeout(this._sseFlushTimer); } catch (_e) {}
       try { if (this.emsEngine && typeof this.emsEngine.stop === 'function') this.emsEngine.stop(); } catch (_e2) {}

@@ -2401,6 +2401,13 @@ function nwIsOn(dev) {
   return false;
 }
 
+function nwSupportsTimer(dev) {
+  if (!dev) return false;
+  if (dev.behavior && dev.behavior.readOnly) return false;
+  const type = String(dev.type || '').toLowerCase();
+  return ['switch', 'dimmer', 'color', 'scene'].includes(type);
+}
+
 function nwGetStateText(dev) {
   const st = dev && dev.state ? dev.state : {};
   const type = String(dev.type || '').toLowerCase();
@@ -2695,6 +2702,31 @@ async function nwSetRtrSetpoint(id, setpoint) {
   const data = await res.json();
   if (!data || !data.ok) return null;
   return data.state || null;
+}
+
+// --- Zeitschaltuhren (Endkunde) ---
+async function nwSaveDeviceTimer(deviceId, timer) {
+  const res = await fetch('/api/smarthome/timers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ deviceId, timer }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data || !data.ok) return null;
+  return data.config || null;
+}
+
+async function nwDeleteDeviceTimer(deviceId) {
+  const res = await fetch('/api/smarthome/timers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ deviceId, delete: true }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data || !data.ok) return null;
+  return data.config || null;
 }
 
 async function nwAdjustRtrSetpoint(dev, delta) {
@@ -3240,6 +3272,8 @@ function nwCreateTile(dev, opts) {
 
   // Device types that have an extra detail button in the header (⋯)
   const hasDetails = (type === 'dimmer' || type === 'blind' || type === 'rtr' || type === 'player' || type === 'color');
+  const hasTimer = nwSupportsTimer(dev);
+  const actionsCount = 1 + (hasTimer ? 1 : 0) + (hasDetails ? 1 : 0);
 
   const iconSpec = nwGetIconSpec(dev);
   const iconName = (iconSpec.kind === 'svg')
@@ -3260,7 +3294,7 @@ function nwCreateTile(dev, opts) {
     canWrite ? '' : 'nw-sh-tile--readonly',
     isFav ? 'nw-sh-tile--favorite' : '',
     (dev.state && dev.state.error) ? 'nw-sh-tile--error' : '',
-    hasDetails ? 'nw-sh-tile--actions-2' : 'nw-sh-tile--actions-1',
+    'nw-sh-tile--actions-' + actionsCount,
   ].filter(Boolean).join(' ');
 
   tile.style.setProperty('--sh-accent', accent);
@@ -3312,6 +3346,20 @@ function nwCreateTile(dev, opts) {
     nwApplyFiltersAndRender();
   });
   actions.appendChild(favBtn);
+
+  // Zeitschaltuhr (Endkunde)
+  if (hasTimer) {
+    const tbtn = document.createElement('button');
+    tbtn.type = 'button';
+    tbtn.className = 'nw-sh-timerbtn' + ((dev.timer && dev.timer.enabled) ? ' nw-sh-timerbtn--active' : '');
+    tbtn.textContent = '⏲';
+    tbtn.title = 'Zeitschaltuhr';
+    tbtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      nwOpenTimerPopover(dev, tbtn);
+    });
+    actions.appendChild(tbtn);
+  }
 
   // Detail/Tooltip-Popover (für Dimmer/Jalousie/RTR)
   if (hasDetails) {
@@ -3747,6 +3795,7 @@ let nwPopoverBackdropEl = null;
 let nwPopoverEl = null;
 let nwPopoverOpenId = null;
 let nwPopoverAnchorEl = null;
+let nwPopoverDev = null;
 let nwPopoverDragging = false;
 
 // Prevent background scrolling while a SmartHome popover is open.
@@ -3872,6 +3921,278 @@ function nwOpenDevicePopover(dev, anchorEl) {
 
   // Position after layout
   requestAnimationFrame(() => nwPositionPopover(nwPopoverAnchorEl));
+}
+
+
+// --- Zeitschaltuhr-Popover (pro Gerät) ---
+function nwOpenTimerPopover(dev, anchorEl) {
+  if (!dev || !dev.id) return;
+  nwEnsurePopover();
+
+  const openId = `timer:${dev.id}`;
+  if (nwPopoverOpenId && nwPopoverOpenId === openId && !nwPopoverEl.classList.contains('hidden')) {
+    nwClosePopover();
+    return;
+  }
+
+  nwPopoverOpenId = openId;
+  nwPopoverAnchorEl = anchorEl || null;
+  nwPopoverDev = dev;
+
+  nwPopoverEl.classList.remove('hidden');
+  nwPopoverEl.innerHTML = '';
+  nwBuildTimerPopoverContent(dev);
+
+  requestAnimationFrame(() => nwPositionPopover(anchorEl));
+}
+
+function nwBuildTimerPopoverContent(dev) {
+  // Header
+  const hdr = document.createElement('div');
+  hdr.className = 'nw-sh-popover__hdr';
+  const left = document.createElement('div');
+  left.className = 'nw-sh-popover__hdrleft';
+
+  const icon = document.createElement('div');
+  icon.className = 'nw-sh-popover__icon';
+  icon.textContent = (dev.icon && String(dev.icon).trim()) ? String(dev.icon).trim() : '⏲';
+  left.appendChild(icon);
+
+  const titleWrap = document.createElement('div');
+  titleWrap.className = 'nw-sh-popover__titles';
+  const title = document.createElement('div');
+  title.className = 'nw-sh-popover__title';
+  title.textContent = String(dev.alias || dev.name || dev.id || 'Gerät');
+  const state = document.createElement('div');
+  state.className = 'nw-sh-popover__state';
+  titleWrap.appendChild(title);
+  titleWrap.appendChild(state);
+  left.appendChild(titleWrap);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'nw-sh-popover__close';
+  closeBtn.textContent = '✕';
+  closeBtn.title = 'Schließen';
+  closeBtn.addEventListener('click', (ev) => { ev.stopPropagation(); nwClosePopover(); });
+  hdr.appendChild(left);
+  hdr.appendChild(closeBtn);
+  nwPopoverEl.appendChild(hdr);
+
+  // Body
+  const body = document.createElement('div');
+  body.className = 'nw-sh-popover__body';
+
+  const t = (dev.timer && typeof dev.timer === 'object') ? dev.timer : null;
+  let enabled = !!(t && t.enabled);
+  let days = Array.isArray(t && t.days) ? t.days.slice() : [0, 1, 2, 3, 4, 5, 6];
+  let onTime = (t && t.onTime) ? String(t.onTime) : '';
+  let offTime = (t && t.offTime) ? String(t.offTime) : '';
+
+  // For dimmer: optional on level
+  const type = String(dev.type || '').toLowerCase();
+  const hasLevel = (type === 'dimmer') && dev.io && dev.io.level;
+  const minLvl = (hasLevel && typeof dev.io.level.min === 'number') ? dev.io.level.min : 0;
+  const maxLvl = (hasLevel && typeof dev.io.level.max === 'number') ? dev.io.level.max : 100;
+  let onLevel = (t && typeof t.onLevel === 'number') ? t.onLevel : maxLvl;
+  if (typeof onLevel !== 'number' || Number.isNaN(onLevel)) onLevel = maxLvl;
+  onLevel = Math.max(minLvl, Math.min(maxLvl, onLevel));
+
+  const fmtNext = () => {
+    if (!enabled) return 'Zeitschaltuhr: Aus';
+    const nextAt = t && t.nextAt ? Number(t.nextAt) : null;
+    const nextKind = t && t.nextKind ? String(t.nextKind) : '';
+    if (nextAt && Number.isFinite(nextAt) && nextAt > Date.now()) {
+      const d = new Date(nextAt);
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      const label = (nextKind === 'on') ? 'EIN' : (nextKind === 'off' ? 'AUS' : '');
+      return `Nächstes Event: ${label} ${hh}:${mm}`.trim();
+    }
+    return 'Zeitschaltuhr aktiv';
+  };
+
+  const updateHeaderState = () => { state.textContent = fmtNext(); };
+  updateHeaderState();
+
+  // Enable toggle row
+  {
+    const row = document.createElement('div');
+    row.className = 'nw-sh-popover__row';
+    const label = document.createElement('div');
+    label.className = 'nw-sh-popover__label';
+    label.textContent = 'Aktiv';
+    const right = document.createElement('div');
+    right.className = 'nw-sh-popover__ctrl';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'nw-sh-chip' + (enabled ? ' nw-sh-chip--active' : '');
+    btn.textContent = enabled ? 'Ein' : 'Aus';
+    btn.addEventListener('click', () => {
+      enabled = !enabled;
+      btn.classList.toggle('nw-sh-chip--active', enabled);
+      btn.textContent = enabled ? 'Ein' : 'Aus';
+      updateHeaderState();
+    });
+    right.appendChild(btn);
+    row.appendChild(label);
+    row.appendChild(right);
+    body.appendChild(row);
+  }
+
+  // Days row
+  {
+    const row = document.createElement('div');
+    row.className = 'nw-sh-popover__row';
+    const label = document.createElement('div');
+    label.className = 'nw-sh-popover__label';
+    label.textContent = 'Tage';
+    const right = document.createElement('div');
+    right.className = 'nw-sh-popover__ctrl nw-sh-timer-days';
+
+    const dayLabels = [
+      { d: 1, t: 'Mo' },
+      { d: 2, t: 'Di' },
+      { d: 3, t: 'Mi' },
+      { d: 4, t: 'Do' },
+      { d: 5, t: 'Fr' },
+      { d: 6, t: 'Sa' },
+      { d: 0, t: 'So' },
+    ];
+
+    const set = new Set(days);
+    const rebuildDays = () => {
+      days = Array.from(set);
+      days.sort((a, b) => a - b);
+    };
+    for (const dl of dayLabels) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'nw-sh-chip nw-sh-chip--sm' + (set.has(dl.d) ? ' nw-sh-chip--active' : '');
+      b.textContent = dl.t;
+      b.addEventListener('click', () => {
+        if (set.has(dl.d)) set.delete(dl.d);
+        else set.add(dl.d);
+        b.classList.toggle('nw-sh-chip--active', set.has(dl.d));
+        rebuildDays();
+      });
+      right.appendChild(b);
+    }
+    rebuildDays();
+
+    row.appendChild(label);
+    row.appendChild(right);
+    body.appendChild(row);
+  }
+
+  // On/Off time
+  {
+    const grid = document.createElement('div');
+    grid.className = 'nw-sh-timer-grid';
+
+    const mkTime = (lbl, val, onChange) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'nw-sh-timer-field';
+      const l = document.createElement('div');
+      l.className = 'nw-sh-timer-field__label';
+      l.textContent = lbl;
+      const inp = document.createElement('input');
+      inp.type = 'time';
+      inp.className = 'nw-sh-time';
+      inp.value = val || '';
+      inp.addEventListener('change', () => onChange(inp.value));
+      wrap.appendChild(l);
+      wrap.appendChild(inp);
+      return wrap;
+    };
+
+    grid.appendChild(mkTime('EIN um', onTime, (v) => { onTime = String(v || ''); }));
+    grid.appendChild(mkTime('AUS um', offTime, (v) => { offTime = String(v || ''); }));
+
+    body.appendChild(grid);
+  }
+
+  // Dimmer level
+  if (hasLevel) {
+    const row = document.createElement('div');
+    row.className = 'nw-sh-popover__row';
+    const label = document.createElement('div');
+    label.className = 'nw-sh-popover__label';
+    label.textContent = 'Helligkeit (EIN)';
+    const right = document.createElement('div');
+    right.className = 'nw-sh-popover__ctrl';
+    const val = document.createElement('div');
+    val.className = 'nw-sh-timer-levelval';
+    val.textContent = `${Math.round(onLevel)}%`;
+    const range = document.createElement('input');
+    range.type = 'range';
+    range.min = String(minLvl);
+    range.max = String(maxLvl);
+    range.value = String(onLevel);
+    range.addEventListener('input', () => {
+      onLevel = parseFloat(range.value);
+      if (!Number.isFinite(onLevel)) onLevel = maxLvl;
+      onLevel = Math.max(minLvl, Math.min(maxLvl, onLevel));
+      val.textContent = `${Math.round(onLevel)}%`;
+    });
+    right.appendChild(range);
+    right.appendChild(val);
+    row.appendChild(label);
+    row.appendChild(right);
+    body.appendChild(row);
+  }
+
+  // Footer buttons
+  {
+    const footer = document.createElement('div');
+    footer.className = 'nw-sh-popover__footer';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'nw-sh-btn nw-sh-btn--primary';
+    saveBtn.textContent = 'Speichern';
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.disabled = true;
+      try {
+        const timer = {
+          enabled: !!enabled,
+          days: Array.isArray(days) && days.length ? days : [0, 1, 2, 3, 4, 5, 6],
+          onTime: String(onTime || ''),
+          offTime: String(offTime || ''),
+          ...(hasLevel ? { onLevel } : {}),
+        };
+        const cfg = await nwSaveDeviceTimer(dev.id, timer);
+        if (cfg) {
+          await nwReloadDevices({ force: true });
+          nwClosePopover();
+        }
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'nw-sh-btn';
+    delBtn.textContent = 'Löschen';
+    delBtn.addEventListener('click', async () => {
+      delBtn.disabled = true;
+      try {
+        const cfg = await nwDeleteDeviceTimer(dev.id);
+        if (cfg) {
+          await nwReloadDevices({ force: true });
+          nwClosePopover();
+        }
+      } finally {
+        delBtn.disabled = false;
+      }
+    });
+
+    footer.appendChild(delBtn);
+    footer.appendChild(saveBtn);
+    body.appendChild(footer);
+  }
+
+  nwPopoverEl.appendChild(body);
 }
 
 function nwPositionPopover(anchorEl) {

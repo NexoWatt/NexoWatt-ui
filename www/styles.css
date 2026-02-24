@@ -3699,6 +3699,9 @@ body{ padding-top: var(--topbar-h); }
 .nw-sh-tile--actions-2{
   --nw-sh-title-pad: 74px;
 }
+.nw-sh-tile--actions-3{
+  --nw-sh-title-pad: 104px;
+}
 
 .nw-sh-tile__name{
   font-weight: 750;
@@ -4076,6 +4079,35 @@ body{ padding-top: var(--topbar-h); }
   transform: translateY(1px);
 }
 
+.nw-sh-timerbtn{
+  appearance: none;
+  border: 1px solid rgba(148,163,184,0.22);
+  background: rgba(2,6,23,0.25);
+  color: rgba(226,232,240,0.9);
+  border-radius: 999px;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+.nw-sh-timerbtn:hover{
+  opacity: 1;
+  border-color: rgba(129,230,217,0.35);
+}
+.nw-sh-timerbtn:active{
+  transform: translateY(1px);
+}
+.nw-sh-timerbtn--active{
+  border-color: rgba(129,230,217,0.55);
+  box-shadow: 0 0 0 1px rgba(129,230,217,0.16);
+}
+
 /* SmartHome VIS: Long‑Press Info‑Toast (Mobile – zeigt den vollen Namen/Meta) */
 .nw-sh-toast{
   position: fixed;
@@ -4256,6 +4288,69 @@ body{ padding-top: var(--topbar-h); }
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-start;
+}
+
+/* Popover: Zeitschaltuhr editor */
+.nw-sh-timer-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 10px 0 6px;
+}
+
+@media (max-width: 520px){
+  .nw-sh-timer-grid{
+    grid-template-columns: 1fr;
+  }
+}
+
+.nw-sh-timer-field__label{
+  font-size: 0.76rem;
+  color: rgba(203,213,225,0.85);
+  margin-bottom: 6px;
+}
+
+.nw-sh-time{
+  width: 100%;
+  padding: 10px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(148,163,184,0.22);
+  background: rgba(2,6,23,0.25);
+  color: rgba(226,232,240,0.95);
+  font-size: 0.95rem;
+}
+
+.nw-sh-time:focus{
+  outline: none;
+  border-color: rgba(129,230,217,0.35);
+  box-shadow: 0 0 0 2px rgba(129,230,217,0.12);
+}
+
+.nw-sh-timer-days{
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.nw-sh-timer-levelval{
+  margin-left: 10px;
+  min-width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: rgba(226,232,240,0.92);
+}
+
+.nw-sh-popover__footer{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.nw-sh-btn--primary{
+  border-color: rgba(129,230,217,0.55);
 }
 
 /* Popover: step tuning row (Schritt 1/5/10 + +/-) */
@@ -5474,6 +5569,27 @@ body{ padding-top: var(--topbar-h); }
   margin-top: 12px;
   color: var(--nx-text-muted);
   font-size: 13px;
+}
+
+/* Szenen-Editor: Aktionen-Liste */
+.nw-shcfg-actions{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.nw-shcfg-actionrow{
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.5fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+@media (max-width: 720px){
+  .nw-shcfg-actionrow{
+    grid-template-columns: 1fr;
+  }
 }
 
 .nw-shcfg-tile{

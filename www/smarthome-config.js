@@ -3,7 +3,7 @@
  */
 
 const nwShcState = {
-  config: { rooms: [], functions: [], devices: [], pages: [], meta: {} },
+  config: { rooms: [], functions: [], devices: [], scenes: [], pages: [], meta: {} },
   originalJson: null,
   dirty: false,
   validation: null,
@@ -23,6 +23,16 @@ const nwShcState = {
 
   // UI shell (Home tiles / Drag&Drop Editor / Classic editor)
   ui: null,
+
+  // Zeitschaltuhren (Endkunde / pro Gerät)
+  timers: {
+    loaded: false,
+    loading: false,
+    dirty: false,
+    devices: [],
+    config: { version: 1, updatedAt: 0, timers: [] },
+    map: {},
+  },
 };
 
 function nwEnsureShcfgUiState() {
@@ -1382,10 +1392,13 @@ function nwNormalizeImportedSmartHomeConfig(rawCfg) {
   // preserve any future top-level fields, but guarantee the core structure
   const cfg = Object.assign({}, cfgIn);
   cfg.version = (typeof cfg.version === 'number') ? cfg.version : 2;
+  cfg.floors = Array.isArray(cfg.floors) ? cfg.floors : [];
   cfg.rooms = Array.isArray(cfg.rooms) ? cfg.rooms : [];
   cfg.functions = Array.isArray(cfg.functions) ? cfg.functions : [];
   cfg.devices = Array.isArray(cfg.devices) ? cfg.devices : [];
+  cfg.scenes = Array.isArray(cfg.scenes) ? cfg.scenes : [];
   cfg.pages = Array.isArray(cfg.pages) ? cfg.pages : [];
+  cfg.meta = (cfg.meta && typeof cfg.meta === 'object') ? cfg.meta : {};
   return cfg;
 }
 
@@ -2300,6 +2313,7 @@ async function nwReloadSmartHomeConfig() {
     rooms: Array.isArray(cfg.rooms) ? cfg.rooms.map(r => Object.assign({}, r)) : [],
     functions: Array.isArray(cfg.functions) ? cfg.functions.map(f => Object.assign({}, f)) : [],
     devices: Array.isArray(cfg.devices) ? cfg.devices.map(d => Object.assign({}, d)) : [],
+    scenes: Array.isArray(cfg.scenes) ? cfg.scenes.map(s => Object.assign({}, s)) : [],
     pages: Array.isArray(cfg.pages) ? cfg.pages.map(p => Object.assign({}, p)) : [],
     meta: (cfg.meta && typeof cfg.meta === 'object') ? Object.assign({}, cfg.meta) : {},
   };
@@ -2426,13 +2440,33 @@ function nwInitShcfgShellUi() {
 
   const timersBack = document.getElementById('nw-shcfg-timers-back');
   const timersOpenLogic = document.getElementById('nw-shcfg-timers-open-logic');
+  const timersReload = document.getElementById('nw-shcfg-timers-reload');
+  const timersSave = document.getElementById('nw-shcfg-timers-save');
   if (timersBack) timersBack.addEventListener('click', () => nwShcfgSetMode('home'));
   if (timersOpenLogic) timersOpenLogic.addEventListener('click', () => window.location.href = '/logic.html');
+  if (timersReload) timersReload.addEventListener('click', async () => {
+    await nwLoadTimersModule(true);
+    nwRenderShcfgShell();
+  });
+  if (timersSave) timersSave.addEventListener('click', async () => {
+    await nwSaveTimersModule();
+    nwRenderShcfgShell();
+  });
 
   const scenesBack = document.getElementById('nw-shcfg-scenes-back');
   const scenesOpenLogic = document.getElementById('nw-shcfg-scenes-open-logic');
+  const scenesAdd = document.getElementById('nw-shcfg-scenes-add');
+  const scenesSave = document.getElementById('nw-shcfg-scenes-save');
   if (scenesBack) scenesBack.addEventListener('click', () => nwShcfgSetMode('home'));
   if (scenesOpenLogic) scenesOpenLogic.addEventListener('click', () => window.location.href = '/logic.html');
+  if (scenesAdd) scenesAdd.addEventListener('click', () => {
+    nwAddScene();
+    nwRenderShcfgShell();
+  });
+  if (scenesSave) scenesSave.addEventListener('click', async () => {
+    await nwSaveSmartHomeConfig();
+    nwRenderShcfgShell();
+  });
 
   // Tabs in editor sidebar
   const tabBtns = document.querySelectorAll('#nw-shcfg-builder .nw-shcfg-builder__tab');
@@ -2492,6 +2526,718 @@ function nwRenderShcfgShell() {
     setTimeout(() => {
       try { nwShcfgApplyBuilderSizing(); } catch (_) {}
     }, 0);
+  }
+
+  if (mode === 'timers') {
+    nwRenderShcfgTimers();
+  }
+
+  if (mode === 'scenes') {
+    nwRenderShcfgScenes();
+  }
+}
+
+
+// --- Module: Zeitschaltuhren ---
+function nwSetTimersStatus(text, kind) {
+  const el = byId('nw-shcfg-timers-status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.classList.remove('nw-config-status--ok', 'nw-config-status--warn', 'nw-config-status--error');
+  if (kind === 'ok') el.classList.add('nw-config-status--ok');
+  if (kind === 'warn') el.classList.add('nw-config-status--warn');
+  if (kind === 'error') el.classList.add('nw-config-status--error');
+}
+
+async function nwLoadTimersModule(force = false) {
+  if (nwShcState.timers.loading) return;
+  if (!force && nwShcState.timers.loaded) return;
+
+  nwShcState.timers.loading = true;
+  nwSetTimersStatus('Lade Zeitschaltuhren …');
+  try {
+    const [devRes, tRes] = await Promise.all([
+      fetch('/api/smarthome/devices'),
+      fetch('/api/smarthome/timers'),
+    ]);
+
+    const devJson = devRes.ok ? await devRes.json() : null;
+    const tJson = tRes.ok ? await tRes.json() : null;
+
+    const devices = (devJson && devJson.ok && Array.isArray(devJson.devices)) ? devJson.devices : [];
+    const cfg = (tJson && tJson.ok && tJson.config && typeof tJson.config === 'object') ? tJson.config : { version: 1, updatedAt: 0, timers: [] };
+
+    // Only show devices that support timers
+    const supported = devices.filter((d) => {
+      const type = String((d && d.type) || '').toLowerCase();
+      if (!d || !d.id) return false;
+      if (d.behavior && d.behavior.readOnly) return false;
+      return ['switch', 'dimmer', 'color', 'scene'].includes(type);
+    });
+
+    const map = {};
+    const arr = (cfg && Array.isArray(cfg.timers)) ? cfg.timers : [];
+    for (const t of arr) {
+      if (!t || !t.deviceId) continue;
+      map[String(t.deviceId)] = Object.assign({}, t);
+    }
+
+    nwShcState.timers.devices = supported;
+    nwShcState.timers.config = cfg;
+    nwShcState.timers.map = map;
+    nwShcState.timers.loaded = true;
+    nwShcState.timers.dirty = false;
+    nwSetTimersStatus('Bereit');
+  } catch (e) {
+    console.warn('Timers load error', e);
+    nwSetTimersStatus('Fehler beim Laden der Zeitschaltuhren.', 'error');
+  } finally {
+    nwShcState.timers.loading = false;
+  }
+}
+
+async function nwSaveTimersModule() {
+  if (nwShcState.timers.loading) return;
+  if (!nwShcState.timers.loaded) await nwLoadTimersModule(true);
+
+  nwSetTimersStatus('Speichere …');
+  try {
+    const map = nwShcState.timers.map || {};
+    const timers = Object.keys(map)
+      .map((k) => map[k])
+      .filter((t) => t && t.deviceId)
+      .map((t) => {
+        const out = Object.assign({}, t);
+        // normalize
+        if (!Array.isArray(out.days) || !out.days.length) out.days = [0, 1, 2, 3, 4, 5, 6];
+        out.enabled = !!out.enabled;
+        out.onTime = out.onTime ? String(out.onTime) : '';
+        out.offTime = out.offTime ? String(out.offTime) : '';
+        if (Object.prototype.hasOwnProperty.call(out, 'onLevel')) {
+          const v = parseFloat(out.onLevel);
+          out.onLevel = Number.isFinite(v) ? v : 100;
+        }
+        return out;
+      });
+
+    const outCfg = {
+      version: 1,
+      updatedAt: 0,
+      timers,
+    };
+
+    const res = await fetch('/api/smarthome/timers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config: outCfg }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data || !data.ok) throw new Error('API error');
+
+    nwShcState.timers.config = data.config || outCfg;
+    // re-map
+    const newMap = {};
+    const arr = (nwShcState.timers.config && Array.isArray(nwShcState.timers.config.timers)) ? nwShcState.timers.config.timers : [];
+    for (const t of arr) {
+      if (!t || !t.deviceId) continue;
+      newMap[String(t.deviceId)] = Object.assign({}, t);
+    }
+    nwShcState.timers.map = newMap;
+    nwShcState.timers.dirty = false;
+    nwSetTimersStatus('Gespeichert ✓', 'ok');
+  } catch (e) {
+    console.warn('Timers save error', e);
+    nwSetTimersStatus('Fehler beim Speichern.', 'error');
+  }
+}
+
+function nwRenderShcfgTimers() {
+  const root = byId('nw-shcfg-timers-root');
+  if (!root) return;
+
+  // lazy load
+  if (!nwShcState.timers.loaded && !nwShcState.timers.loading) {
+    nwLoadTimersModule(false).then(() => {
+      nwRenderShcfgShell();
+    });
+  }
+
+  root.innerHTML = '';
+
+  if (nwShcState.timers.loading && !nwShcState.timers.loaded) {
+    const div = document.createElement('div');
+    div.className = 'nw-config-hint';
+    div.textContent = 'Lade …';
+    root.appendChild(div);
+    return;
+  }
+
+  const devices = nwShcState.timers.devices || [];
+  if (!devices.length) {
+    const div = document.createElement('div');
+    div.className = 'nw-config-hint';
+    div.textContent = 'Keine passenden Geräte gefunden (Timer unterstützt: Schalter/Dimmer/Farbe/Szene).';
+    root.appendChild(div);
+    return;
+  }
+
+  // Sort by room + alias
+  const sorted = devices.slice().sort((a, b) => {
+    const ra = String(a.room || '').localeCompare(String(b.room || ''));
+    if (ra !== 0) return ra;
+    return String(a.alias || a.id).localeCompare(String(b.alias || b.id));
+  });
+
+  for (const dev of sorted) {
+    const card = document.createElement('div');
+    card.className = 'nw-config-card';
+
+    const title = document.createElement('div');
+    title.className = 'nw-config-card__title';
+    title.textContent = `${dev.alias || dev.id}`;
+
+    const sub = document.createElement('div');
+    sub.className = 'nw-config-card__hint';
+    const room = dev.room ? ` • ${dev.room}` : '';
+    const fn = dev.function ? ` • ${dev.function}` : '';
+    sub.textContent = `${String(dev.type || '').toUpperCase()}${room}${fn}`;
+
+    card.appendChild(title);
+    card.appendChild(sub);
+
+    // current timer or defaults
+    const existing = (nwShcState.timers.map && nwShcState.timers.map[dev.id]) ? Object.assign({}, nwShcState.timers.map[dev.id]) : null;
+    const type = String(dev.type || '').toLowerCase();
+    const isDimmer = type === 'dimmer';
+    const lvlMin = (isDimmer && dev.io && dev.io.level && typeof dev.io.level.min === 'number') ? dev.io.level.min : 0;
+    const lvlMax = (isDimmer && dev.io && dev.io.level && typeof dev.io.level.max === 'number') ? dev.io.level.max : 100;
+
+    const timer = existing || {
+      deviceId: dev.id,
+      enabled: false,
+      days: [0, 1, 2, 3, 4, 5, 6],
+      onTime: '',
+      offTime: '',
+      ...(isDimmer ? { onLevel: lvlMax } : {}),
+    };
+
+    const markDirty = () => {
+      nwShcState.timers.map[dev.id] = Object.assign({}, timer);
+      nwShcState.timers.dirty = true;
+      nwSetTimersStatus('Änderungen nicht gespeichert', 'warn');
+    };
+
+    // Enabled
+    {
+      const row = document.createElement('div');
+      row.className = 'nw-config-row';
+      const lbl = document.createElement('div');
+      lbl.className = 'nw-config-row__label';
+      lbl.textContent = 'Aktiv';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'nw-config-row__ctrl';
+      const lab = document.createElement('label');
+      lab.className = 'nw-config-checklabel';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'nw-config-checkbox';
+      cb.checked = !!timer.enabled;
+      cb.addEventListener('change', () => { timer.enabled = cb.checked; markDirty(); });
+      const span = document.createElement('span');
+      span.textContent = cb.checked ? 'Ein' : 'Aus';
+      cb.addEventListener('change', () => { span.textContent = cb.checked ? 'Ein' : 'Aus'; });
+      lab.appendChild(cb);
+      lab.appendChild(span);
+      ctrl.appendChild(lab);
+      row.appendChild(lbl);
+      row.appendChild(ctrl);
+      card.appendChild(row);
+    }
+
+    // Days
+    {
+      const row = document.createElement('div');
+      row.className = 'nw-config-row';
+      const lbl = document.createElement('div');
+      lbl.className = 'nw-config-row__label';
+      lbl.textContent = 'Tage';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'nw-config-row__ctrl';
+      const wrap = document.createElement('div');
+      wrap.className = 'nw-sh-timer-days';
+      const dayLabels = [
+        { d: 1, t: 'Mo' },
+        { d: 2, t: 'Di' },
+        { d: 3, t: 'Mi' },
+        { d: 4, t: 'Do' },
+        { d: 5, t: 'Fr' },
+        { d: 6, t: 'Sa' },
+        { d: 0, t: 'So' },
+      ];
+      const set = new Set(Array.isArray(timer.days) ? timer.days : []);
+      const sync = () => {
+        timer.days = Array.from(set);
+        timer.days.sort((a, b) => a - b);
+      };
+      for (const dl of dayLabels) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'nw-sh-chip nw-sh-chip--sm' + (set.has(dl.d) ? ' nw-sh-chip--active' : '');
+        b.textContent = dl.t;
+        b.addEventListener('click', () => {
+          if (set.has(dl.d)) set.delete(dl.d);
+          else set.add(dl.d);
+          b.classList.toggle('nw-sh-chip--active', set.has(dl.d));
+          sync();
+          markDirty();
+        });
+        wrap.appendChild(b);
+      }
+      sync();
+      ctrl.appendChild(wrap);
+      row.appendChild(lbl);
+      row.appendChild(ctrl);
+      card.appendChild(row);
+    }
+
+    // Times
+    {
+      const grid = document.createElement('div');
+      grid.className = 'nw-sh-timer-grid';
+
+      const mk = (labelText, value, onChange) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'nw-sh-timer-field';
+        const l = document.createElement('div');
+        l.className = 'nw-sh-timer-field__label';
+        l.textContent = labelText;
+        const inp = document.createElement('input');
+        inp.type = 'time';
+        inp.className = 'nw-config-input';
+        inp.value = value || '';
+        inp.addEventListener('change', () => { onChange(inp.value); markDirty(); });
+        wrap.appendChild(l);
+        wrap.appendChild(inp);
+        return wrap;
+      };
+      grid.appendChild(mk('EIN um', timer.onTime, (v) => { timer.onTime = String(v || ''); }));
+      grid.appendChild(mk('AUS um', timer.offTime, (v) => { timer.offTime = String(v || ''); }));
+      card.appendChild(grid);
+    }
+
+    // Dimmer level
+    if (isDimmer) {
+      const row = document.createElement('div');
+      row.className = 'nw-config-row';
+      const lbl = document.createElement('div');
+      lbl.className = 'nw-config-row__label';
+      lbl.textContent = 'Helligkeit (EIN)';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'nw-config-row__ctrl';
+      const inp = document.createElement('input');
+      inp.type = 'number';
+      inp.className = 'nw-config-input';
+      inp.min = String(lvlMin);
+      inp.max = String(lvlMax);
+      inp.step = '1';
+      inp.value = String(typeof timer.onLevel === 'number' ? timer.onLevel : lvlMax);
+      inp.addEventListener('change', () => {
+        const v = parseFloat(inp.value);
+        timer.onLevel = Number.isFinite(v) ? Math.max(lvlMin, Math.min(lvlMax, v)) : lvlMax;
+        inp.value = String(timer.onLevel);
+        markDirty();
+      });
+      ctrl.appendChild(inp);
+      row.appendChild(lbl);
+      row.appendChild(ctrl);
+      card.appendChild(row);
+    }
+
+    // Delete entry
+    {
+      const row = document.createElement('div');
+      row.className = 'nw-config-row';
+      const lbl = document.createElement('div');
+      lbl.className = 'nw-config-row__label';
+      lbl.textContent = '';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'nw-config-row__ctrl';
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'nw-config-btn nw-config-btn--ghost';
+      del.textContent = 'Eintrag löschen';
+      del.disabled = !existing;
+      del.addEventListener('click', () => {
+        delete nwShcState.timers.map[dev.id];
+        nwShcState.timers.dirty = true;
+        nwSetTimersStatus('Änderungen nicht gespeichert', 'warn');
+        nwRenderShcfgShell();
+      });
+      ctrl.appendChild(del);
+      row.appendChild(lbl);
+      row.appendChild(ctrl);
+      card.appendChild(row);
+    }
+
+    root.appendChild(card);
+  }
+}
+
+
+// --- Module: Szenen ---
+function nwSetScenesStatus(text, kind) {
+  const el = byId('nw-shcfg-scenes-status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.classList.remove('nw-config-status--ok', 'nw-config-status--warn', 'nw-config-status--error');
+  if (kind === 'ok') el.classList.add('nw-config-status--ok');
+  if (kind === 'warn') el.classList.add('nw-config-status--warn');
+  if (kind === 'error') el.classList.add('nw-config-status--error');
+}
+
+function nwAddScene() {
+  const cfg = nwShcState.config || (nwShcState.config = { rooms: [], functions: [], devices: [], scenes: [], pages: [], meta: {} });
+  cfg.scenes = Array.isArray(cfg.scenes) ? cfg.scenes : [];
+
+  const id = `scene_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const order = cfg.scenes.length;
+  cfg.scenes.push({
+    id,
+    alias: 'Neue Szene',
+    icon: '🎬',
+    roomId: '',
+    functionId: '',
+    floorId: '',
+    order,
+    ui: { size: 'm' },
+    behavior: { favorite: false },
+    actions: [],
+  });
+  nwSetScenesStatus('Änderungen nicht gespeichert', 'warn');
+}
+
+function nwRenderShcfgScenes() {
+  const root = byId('nw-shcfg-scenes-root');
+  if (!root) return;
+
+  const cfg = nwShcState.config || {};
+  const rooms = Array.isArray(cfg.rooms) ? cfg.rooms : [];
+  const funcs = Array.isArray(cfg.functions) ? cfg.functions : [];
+  const devices = Array.isArray(cfg.devices) ? cfg.devices : [];
+  const scenes = Array.isArray(cfg.scenes) ? cfg.scenes : [];
+
+  root.innerHTML = '';
+
+  if (!scenes.length) {
+    const div = document.createElement('div');
+    div.className = 'nw-config-hint';
+    div.textContent = 'Noch keine Szene angelegt. Klicke oben auf "+ Neue Szene".';
+    root.appendChild(div);
+    return;
+  }
+
+  const sorted = scenes.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  for (const sc of sorted) {
+    const card = document.createElement('div');
+    card.className = 'nw-config-card';
+
+    const title = document.createElement('div');
+    title.className = 'nw-config-card__title';
+    title.textContent = sc.alias || sc.id;
+    const hint = document.createElement('div');
+    hint.className = 'nw-config-card__hint';
+    hint.textContent = `ID: ${sc.id}`;
+    card.appendChild(title);
+    card.appendChild(hint);
+
+    const markDirty = () => {
+      nwSetScenesStatus('Änderungen nicht gespeichert', 'warn');
+    };
+
+    // Alias
+    {
+      const row = document.createElement('div');
+      row.className = 'nw-config-row';
+      const lbl = document.createElement('div');
+      lbl.className = 'nw-config-row__label';
+      lbl.textContent = 'Name';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'nw-config-row__ctrl';
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'nw-config-input';
+      inp.value = sc.alias || '';
+      inp.addEventListener('input', () => {
+        sc.alias = inp.value;
+        title.textContent = sc.alias || sc.id;
+        markDirty();
+      });
+      ctrl.appendChild(inp);
+      row.appendChild(lbl);
+      row.appendChild(ctrl);
+      card.appendChild(row);
+    }
+
+    // Icon
+    {
+      const row = document.createElement('div');
+      row.className = 'nw-config-row';
+      const lbl = document.createElement('div');
+      lbl.className = 'nw-config-row__label';
+      lbl.textContent = 'Icon';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'nw-config-row__ctrl';
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'nw-config-input';
+      inp.value = sc.icon || '';
+      inp.addEventListener('input', () => { sc.icon = inp.value; markDirty(); });
+      ctrl.appendChild(inp);
+      row.appendChild(lbl);
+      row.appendChild(ctrl);
+      card.appendChild(row);
+    }
+
+    // Room
+    {
+      const row = document.createElement('div');
+      row.className = 'nw-config-row';
+      const lbl = document.createElement('div');
+      lbl.className = 'nw-config-row__label';
+      lbl.textContent = 'Raum';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'nw-config-row__ctrl';
+      const sel = document.createElement('select');
+      sel.className = 'nw-config-select';
+      const opt0 = document.createElement('option');
+      opt0.value = '';
+      opt0.textContent = '—';
+      sel.appendChild(opt0);
+      for (const r of rooms) {
+        const o = document.createElement('option');
+        o.value = r.id;
+        o.textContent = r.name || r.id;
+        sel.appendChild(o);
+      }
+      sel.value = sc.roomId || '';
+      sel.addEventListener('change', () => { sc.roomId = sel.value; markDirty(); });
+      ctrl.appendChild(sel);
+      row.appendChild(lbl);
+      row.appendChild(ctrl);
+      card.appendChild(row);
+    }
+
+    // Function
+    {
+      const row = document.createElement('div');
+      row.className = 'nw-config-row';
+      const lbl = document.createElement('div');
+      lbl.className = 'nw-config-row__label';
+      lbl.textContent = 'Funktion';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'nw-config-row__ctrl';
+      const sel = document.createElement('select');
+      sel.className = 'nw-config-select';
+      const opt0 = document.createElement('option');
+      opt0.value = '';
+      opt0.textContent = '—';
+      sel.appendChild(opt0);
+      for (const f of funcs) {
+        const o = document.createElement('option');
+        o.value = f.id;
+        o.textContent = f.name || f.id;
+        sel.appendChild(o);
+      }
+      sel.value = sc.functionId || '';
+      sel.addEventListener('change', () => { sc.functionId = sel.value; markDirty(); });
+      ctrl.appendChild(sel);
+      row.appendChild(lbl);
+      row.appendChild(ctrl);
+      card.appendChild(row);
+    }
+
+    // Favorite
+    {
+      const row = document.createElement('div');
+      row.className = 'nw-config-row';
+      const lbl = document.createElement('div');
+      lbl.className = 'nw-config-row__label';
+      lbl.textContent = 'Favorit';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'nw-config-row__ctrl';
+      const lab = document.createElement('label');
+      lab.className = 'nw-config-checklabel';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'nw-config-checkbox';
+      cb.checked = !!(sc.behavior && sc.behavior.favorite);
+      cb.addEventListener('change', () => {
+        sc.behavior = sc.behavior || {};
+        sc.behavior.favorite = cb.checked;
+        markDirty();
+      });
+      const span = document.createElement('span');
+      span.textContent = cb.checked ? 'Ja' : 'Nein';
+      cb.addEventListener('change', () => { span.textContent = cb.checked ? 'Ja' : 'Nein'; });
+      lab.appendChild(cb);
+      lab.appendChild(span);
+      ctrl.appendChild(lab);
+      row.appendChild(lbl);
+      row.appendChild(ctrl);
+      card.appendChild(row);
+    }
+
+    // Actions
+    {
+      const actionsTitle = document.createElement('div');
+      actionsTitle.className = 'nw-config-card__title';
+      actionsTitle.style.marginTop = '10px';
+      actionsTitle.textContent = 'Aktionen';
+      card.appendChild(actionsTitle);
+
+      const wrap = document.createElement('div');
+      wrap.className = 'nw-shcfg-actions';
+
+      sc.actions = Array.isArray(sc.actions) ? sc.actions : [];
+
+      const renderActionRow = (a, idx) => {
+        const row = document.createElement('div');
+        row.className = 'nw-shcfg-actionrow';
+
+        const devSel = document.createElement('select');
+        devSel.className = 'nw-config-select';
+        const opt0 = document.createElement('option');
+        opt0.value = '';
+        opt0.textContent = 'Gerät…';
+        devSel.appendChild(opt0);
+        for (const d of devices) {
+          const o = document.createElement('option');
+          o.value = d.id;
+          o.textContent = d.alias || d.id;
+          devSel.appendChild(o);
+        }
+        devSel.value = a.deviceId || '';
+        devSel.addEventListener('change', () => { a.deviceId = devSel.value; markDirty(); });
+
+        const kindSel = document.createElement('select');
+        kindSel.className = 'nw-config-select';
+        const kinds = [
+          { v: 'switch', t: 'Switch (Ein/Aus)' },
+          { v: 'level', t: 'Level (0-100)' },
+          { v: 'cover', t: 'Cover (up/down/stop/pos)' },
+          { v: 'rtrSetpoint', t: 'RTR Sollwert' },
+          { v: 'scene', t: 'Szene (nested)' },
+        ];
+        for (const k of kinds) {
+          const o = document.createElement('option');
+          o.value = k.v;
+          o.textContent = k.t;
+          kindSel.appendChild(o);
+        }
+        kindSel.value = a.kind || 'switch';
+        kindSel.addEventListener('change', () => { a.kind = kindSel.value; markDirty(); });
+
+        const valInp = document.createElement('input');
+        valInp.type = 'text';
+        valInp.className = 'nw-config-input';
+        valInp.placeholder = 'Wert (true/false, Zahl, up/down/stop, …)';
+        valInp.value = (a.value === undefined || a.value === null) ? '' : String(a.value);
+        valInp.addEventListener('input', () => { a.value = valInp.value; markDirty(); });
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'nw-config-btn nw-config-btn--ghost';
+        delBtn.textContent = '✕';
+        delBtn.title = 'Entfernen';
+        delBtn.addEventListener('click', () => {
+          sc.actions.splice(idx, 1);
+          markDirty();
+          nwRenderShcfgShell();
+        });
+
+        row.appendChild(devSel);
+        row.appendChild(kindSel);
+        row.appendChild(valInp);
+        row.appendChild(delBtn);
+        return row;
+      };
+
+      for (let i = 0; i < sc.actions.length; i++) {
+        wrap.appendChild(renderActionRow(sc.actions[i], i));
+      }
+
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'nw-config-btn nw-config-btn--ghost';
+      addBtn.textContent = '+ Aktion';
+      addBtn.addEventListener('click', () => {
+        sc.actions.push({ deviceId: '', kind: 'switch', value: true });
+        markDirty();
+        nwRenderShcfgShell();
+      });
+
+      const testBtn = document.createElement('button');
+      testBtn.type = 'button';
+      testBtn.className = 'nw-config-btn nw-config-btn--ghost';
+      testBtn.textContent = '▶ Test';
+      testBtn.addEventListener('click', async () => {
+        try {
+          nwSetScenesStatus('Führe Szene aus …');
+          const res = await fetch('/api/smarthome/scene/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: sc.id }),
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          if (!data || !data.ok) throw new Error('API');
+          const ok = data.result && data.result.ok;
+          nwSetScenesStatus(ok ? 'Szene ausgeführt ✓' : 'Szene ausgeführt (mit Fehlern)', ok ? 'ok' : 'warn');
+        } catch (e) {
+          console.warn('Scene test error', e);
+          nwSetScenesStatus('Fehler beim Ausführen.', 'error');
+        }
+      });
+
+      const btnRow = document.createElement('div');
+      btnRow.style.display = 'flex';
+      btnRow.style.gap = '10px';
+      btnRow.style.marginTop = '10px';
+      btnRow.appendChild(addBtn);
+      btnRow.appendChild(testBtn);
+
+      card.appendChild(wrap);
+      card.appendChild(btnRow);
+    }
+
+    // Delete scene
+    {
+      const row = document.createElement('div');
+      row.className = 'nw-config-row';
+      const lbl = document.createElement('div');
+      lbl.className = 'nw-config-row__label';
+      lbl.textContent = '';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'nw-config-row__ctrl';
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'nw-config-btn nw-config-btn--ghost';
+      del.textContent = 'Szene löschen';
+      del.addEventListener('click', () => {
+        const idx = cfg.scenes.indexOf(sc);
+        if (idx >= 0) cfg.scenes.splice(idx, 1);
+        markDirty();
+        nwRenderShcfgShell();
+      });
+      ctrl.appendChild(del);
+      row.appendChild(lbl);
+      row.appendChild(ctrl);
+      card.appendChild(row);
+    }
+
+    root.appendChild(card);
   }
 }
 
