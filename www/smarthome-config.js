@@ -33,7 +33,21 @@ const nwShcState = {
     config: { version: 1, updatedAt: 0, timers: [] },
     map: {},
   },
+
+  // Logik-Uhren (Installer): erzeugen boolean DP smarthome.logicClocks.<id>.active
+  logicClocks: {
+    loaded: false,
+    loading: false,
+    dirty: false,
+    config: { version: 1, updatedAt: 0, clocks: [] },
+    map: {},
+  },
 };
+
+// Small DOM helper (used by new modules). Intentionally tiny and local to this file.
+function byId(id) {
+  return document.getElementById(id);
+}
 
 function nwEnsureShcfgUiState() {
   if (!nwShcState.ui) {
@@ -2446,10 +2460,18 @@ function nwInitShcfgShellUi() {
   if (timersOpenLogic) timersOpenLogic.addEventListener('click', () => window.location.href = '/logic.html');
   if (timersReload) timersReload.addEventListener('click', async () => {
     await nwLoadTimersModule(true);
+    await nwLoadLogicClocksModule(true);
     nwRenderShcfgShell();
   });
   if (timersSave) timersSave.addEventListener('click', async () => {
     await nwSaveTimersModule();
+    await nwSaveLogicClocksModule();
+    nwRenderShcfgShell();
+  });
+
+  const clocksAdd = document.getElementById('nw-shcfg-clocks-add');
+  if (clocksAdd) clocksAdd.addEventListener('click', () => {
+    nwAddLogicClock();
     nwRenderShcfgShell();
   });
 
@@ -2730,6 +2752,9 @@ async function nwSaveTimersModule() {
 }
 
 function nwRenderShcfgTimers() {
+  // 2nd section inside the same tab
+  try { nwRenderShcfgLogicClocks(); } catch (_e) {}
+
   const root = byId('nw-shcfg-timers-root');
   if (!root) return;
 
@@ -2950,6 +2975,324 @@ function nwRenderShcfgTimers() {
         delete nwShcState.timers.map[dev.id];
         nwShcState.timers.dirty = true;
         nwSetTimersStatus('Änderungen nicht gespeichert', 'warn');
+        nwRenderShcfgShell();
+      });
+      ctrl.appendChild(del);
+      row.appendChild(lbl);
+      row.appendChild(ctrl);
+      card.appendChild(row);
+    }
+
+    root.appendChild(card);
+  }
+}
+
+
+// --- Module: Logik-Uhren (Installer) ---
+function nwSetLogicClocksStatus(text, kind) {
+  const el = byId('nw-shcfg-clocks-status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.classList.remove('nw-config-status--ok', 'nw-config-status--warn', 'nw-config-status--error');
+  if (kind === 'ok') el.classList.add('nw-config-status--ok');
+  if (kind === 'warn') el.classList.add('nw-config-status--warn');
+  if (kind === 'error') el.classList.add('nw-config-status--error');
+}
+
+function nwAddLogicClock() {
+  // Ensure module data exists
+  if (!nwShcState.logicClocks) {
+    nwShcState.logicClocks = { loaded: true, loading: false, dirty: false, config: { version: 1, updatedAt: 0, clocks: [] }, map: {} };
+  }
+  if (!nwShcState.logicClocks.map) nwShcState.logicClocks.map = {};
+
+  const id = `clock_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  nwShcState.logicClocks.map[id] = {
+    id,
+    name: 'Neue Uhr',
+    enabled: true,
+    days: [0, 1, 2, 3, 4, 5, 6],
+    fromTime: '06:00',
+    toTime: '22:00',
+  };
+  nwShcState.logicClocks.dirty = true;
+  nwSetLogicClocksStatus('Änderungen nicht gespeichert', 'warn');
+}
+
+async function nwLoadLogicClocksModule(force = false) {
+  if (nwShcState.logicClocks.loading) return;
+  if (!force && nwShcState.logicClocks.loaded) return;
+
+  nwShcState.logicClocks.loading = true;
+  nwSetLogicClocksStatus('Lade Logik‑Uhren …');
+  try {
+    const res = await fetch('/api/smarthome/logic-clocks');
+    const json = res.ok ? await res.json() : null;
+    const cfg = (json && json.ok && json.config && typeof json.config === 'object') ? json.config : { version: 1, updatedAt: 0, clocks: [] };
+
+    const map = {};
+    const arr = (cfg && Array.isArray(cfg.clocks)) ? cfg.clocks : [];
+    for (const c of arr) {
+      if (!c || !c.id) continue;
+      map[String(c.id)] = Object.assign({}, c);
+    }
+
+    nwShcState.logicClocks.config = cfg;
+    nwShcState.logicClocks.map = map;
+    nwShcState.logicClocks.loaded = true;
+    nwShcState.logicClocks.dirty = false;
+    nwSetLogicClocksStatus('Bereit');
+  } catch (e) {
+    console.warn('Logic clocks load error', e);
+    nwSetLogicClocksStatus('Fehler beim Laden der Logik‑Uhren.', 'error');
+  } finally {
+    nwShcState.logicClocks.loading = false;
+  }
+}
+
+async function nwSaveLogicClocksModule() {
+  if (nwShcState.logicClocks.loading) return;
+  if (!nwShcState.logicClocks.loaded) await nwLoadLogicClocksModule(true);
+
+  nwSetLogicClocksStatus('Speichere …');
+  try {
+    const map = nwShcState.logicClocks.map || {};
+    const clocks = Object.keys(map)
+      .map((k) => map[k])
+      .filter((c) => c && c.id)
+      .map((c) => {
+        const out = Object.assign({}, c);
+        out.id = String(out.id);
+        out.name = String(out.name || out.id);
+        out.enabled = !!out.enabled;
+        if (!Array.isArray(out.days) || !out.days.length) out.days = [0, 1, 2, 3, 4, 5, 6];
+        out.fromTime = out.fromTime ? String(out.fromTime) : '';
+        out.toTime = out.toTime ? String(out.toTime) : '';
+        return out;
+      });
+
+    const outCfg = { version: 1, updatedAt: 0, clocks };
+    const res = await fetch('/api/smarthome/logic-clocks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config: outCfg }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data || !data.ok) throw new Error('API error');
+
+    nwShcState.logicClocks.config = data.config || outCfg;
+    const newMap = {};
+    const arr = (nwShcState.logicClocks.config && Array.isArray(nwShcState.logicClocks.config.clocks)) ? nwShcState.logicClocks.config.clocks : [];
+    for (const c of arr) {
+      if (!c || !c.id) continue;
+      newMap[String(c.id)] = Object.assign({}, c);
+    }
+    nwShcState.logicClocks.map = newMap;
+    nwShcState.logicClocks.dirty = false;
+    nwSetLogicClocksStatus('Gespeichert ✓', 'ok');
+  } catch (e) {
+    console.warn('Logic clocks save error', e);
+    nwSetLogicClocksStatus('Fehler beim Speichern.', 'error');
+  }
+}
+
+function nwRenderShcfgLogicClocks() {
+  const root = byId('nw-shcfg-clocks-root');
+  if (!root) return;
+
+  // lazy load
+  if (!nwShcState.logicClocks.loaded && !nwShcState.logicClocks.loading) {
+    nwLoadLogicClocksModule(false).then(() => nwRenderShcfgShell());
+  }
+
+  root.innerHTML = '';
+
+  if (nwShcState.logicClocks.loading && !nwShcState.logicClocks.loaded) {
+    const div = document.createElement('div');
+    div.className = 'nw-config-hint';
+    div.textContent = 'Lade …';
+    root.appendChild(div);
+    return;
+  }
+
+  const map = nwShcState.logicClocks.map || {};
+  const ids = Object.keys(map).sort((a, b) => a.localeCompare(b));
+
+  if (!ids.length) {
+    const div = document.createElement('div');
+    div.className = 'nw-config-hint';
+    div.textContent = 'Noch keine Logik‑Uhr angelegt. Klicke oben auf "+ Neue Uhr".';
+    root.appendChild(div);
+    return;
+  }
+
+  const markDirty = () => {
+    nwShcState.logicClocks.dirty = true;
+    nwSetLogicClocksStatus('Änderungen nicht gespeichert', 'warn');
+  };
+
+  const dayLabels = [
+    { d: 1, t: 'Mo' },
+    { d: 2, t: 'Di' },
+    { d: 3, t: 'Mi' },
+    { d: 4, t: 'Do' },
+    { d: 5, t: 'Fr' },
+    { d: 6, t: 'Sa' },
+    { d: 0, t: 'So' },
+  ];
+
+  for (const id of ids) {
+    const clock = map[id];
+    if (!clock) continue;
+
+    const card = document.createElement('div');
+    card.className = 'nw-config-card';
+
+    const title = document.createElement('div');
+    title.className = 'nw-config-card__title';
+    title.textContent = clock.name || clock.id || id;
+
+    const hint = document.createElement('div');
+    hint.className = 'nw-config-card__hint';
+    hint.textContent = `ID: ${clock.id || id} • DP: …smarthome.logicClocks.${clock.id || id}.active`;
+
+    card.appendChild(title);
+    card.appendChild(hint);
+
+    // Name
+    {
+      const row = document.createElement('div');
+      row.className = 'nw-config-row';
+      const lbl = document.createElement('div');
+      lbl.className = 'nw-config-row__label';
+      lbl.textContent = 'Name';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'nw-config-row__ctrl';
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'nw-config-input';
+      inp.value = clock.name || '';
+      inp.addEventListener('input', () => {
+        clock.name = inp.value;
+        title.textContent = clock.name || clock.id || id;
+        markDirty();
+      });
+      ctrl.appendChild(inp);
+      row.appendChild(lbl);
+      row.appendChild(ctrl);
+      card.appendChild(row);
+    }
+
+    // Enabled
+    {
+      const row = document.createElement('div');
+      row.className = 'nw-config-row';
+      const lbl = document.createElement('div');
+      lbl.className = 'nw-config-row__label';
+      lbl.textContent = 'Aktiv';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'nw-config-row__ctrl';
+      const lab = document.createElement('label');
+      lab.className = 'nw-config-checklabel';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'nw-config-checkbox';
+      cb.checked = (clock.enabled !== false);
+      const span = document.createElement('span');
+      span.textContent = cb.checked ? 'Ein' : 'Aus';
+      cb.addEventListener('change', () => {
+        clock.enabled = cb.checked;
+        span.textContent = cb.checked ? 'Ein' : 'Aus';
+        markDirty();
+      });
+      lab.appendChild(cb);
+      lab.appendChild(span);
+      ctrl.appendChild(lab);
+      row.appendChild(lbl);
+      row.appendChild(ctrl);
+      card.appendChild(row);
+    }
+
+    // Days
+    {
+      const row = document.createElement('div');
+      row.className = 'nw-config-row';
+      const lbl = document.createElement('div');
+      lbl.className = 'nw-config-row__label';
+      lbl.textContent = 'Tage';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'nw-config-row__ctrl';
+      const wrap = document.createElement('div');
+      wrap.className = 'nw-sh-timer-days';
+      const set = new Set(Array.isArray(clock.days) ? clock.days : []);
+      const sync = () => {
+        clock.days = Array.from(set);
+        clock.days.sort((a, b) => a - b);
+      };
+      for (const dl of dayLabels) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'nw-sh-chip nw-sh-chip--sm' + (set.has(dl.d) ? ' nw-sh-chip--active' : '');
+        b.textContent = dl.t;
+        b.addEventListener('click', () => {
+          if (set.has(dl.d)) set.delete(dl.d);
+          else set.add(dl.d);
+          b.classList.toggle('nw-sh-chip--active', set.has(dl.d));
+          sync();
+          markDirty();
+        });
+        wrap.appendChild(b);
+      }
+      sync();
+      ctrl.appendChild(wrap);
+      row.appendChild(lbl);
+      row.appendChild(ctrl);
+      card.appendChild(row);
+    }
+
+    // Time window
+    {
+      const grid = document.createElement('div');
+      grid.className = 'nw-sh-timer-grid';
+      const mk = (labelText, value, onChange) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'nw-sh-timer-field';
+        const l = document.createElement('div');
+        l.className = 'nw-sh-timer-field__label';
+        l.textContent = labelText;
+        const inp = document.createElement('input');
+        inp.type = 'time';
+        inp.className = 'nw-config-input';
+        inp.value = value || '';
+        inp.addEventListener('change', () => { onChange(inp.value); markDirty(); });
+        wrap.appendChild(l);
+        wrap.appendChild(inp);
+        return wrap;
+      };
+
+      grid.appendChild(mk('Ein ab', clock.fromTime, (v) => { clock.fromTime = String(v || ''); }));
+      grid.appendChild(mk('Aus ab', clock.toTime, (v) => { clock.toTime = String(v || ''); }));
+      card.appendChild(grid);
+    }
+
+    // Delete
+    {
+      const row = document.createElement('div');
+      row.className = 'nw-config-row';
+      const lbl = document.createElement('div');
+      lbl.className = 'nw-config-row__label';
+      lbl.textContent = '';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'nw-config-row__ctrl';
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'nw-config-btn nw-config-btn--ghost';
+      del.textContent = 'Eintrag löschen';
+      del.addEventListener('click', () => {
+        delete nwShcState.logicClocks.map[id];
+        nwShcState.logicClocks.dirty = true;
+        nwSetLogicClocksStatus('Änderungen nicht gespeichert', 'warn');
         nwRenderShcfgShell();
       });
       ctrl.appendChild(del);

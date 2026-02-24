@@ -1,3 +1,9 @@
+## 0.6.194
+- Fix: SmartHome Config – ReferenceError **`byId is not defined`** (Szenen/Zeitschaltuhren).
+- SmartHome Config: neuer Bereich **Logik‑Uhren** im Reiter **Zeitschaltuhren**
+  - Installer kann Zeitfenster (Wochentage + Ein/Aus‑Zeit) definieren.
+  - Adapter erzeugt boolean Datenpunkte: **`smarthome.logicClocks.<id>.active`** (für den Logik‑Editor / Flanken‑Auswertung).
+
 ## 0.6.193
 - SmartHome Zeitschaltuhren: **Jalousie/Rollladen** jetzt auch mit Timer (**AUF/ZU**)
   - im Installer-Konfigurator unter **Zeitschaltuhren**

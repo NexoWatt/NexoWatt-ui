@@ -239,6 +239,54 @@ class NexoWattVis extends utils.Adapter {
       },
       native: {},
     });
+
+    // --- SmartHome: Logik-Uhren (Installer / für Logik-Editor) ---
+    // Persisted in adapter states (no restart required). Produces boolean states
+    // smarthome.logicClocks.<id>.active that can be used in the Logic editor.
+    await this.setObjectNotExistsAsync('smarthome.logicClocksJson', {
+      type: 'state',
+      common: {
+        name: 'SmartHome Logik-Uhren (JSON)',
+        type: 'string',
+        role: 'json',
+        read: true,
+        write: true,
+        def: '',
+      },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync('smarthome.logicClocksUpdatedAt', {
+      type: 'state',
+      common: {
+        name: 'SmartHome Logik-Uhren – updatedAt',
+        type: 'number',
+        role: 'value.time',
+        read: true,
+        write: true,
+        def: 0,
+      },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync('smarthome.logicClocksNextAt', {
+      type: 'state',
+      common: {
+        name: 'SmartHome Logik-Uhren – nächster Umschaltzeitpunkt',
+        type: 'number',
+        role: 'value.time',
+        read: true,
+        write: false,
+        def: 0,
+      },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync('smarthome.logicClocks', {
+      type: 'channel',
+      common: { name: 'SmartHome Logik-Uhren' },
+      native: {},
+    });
   }
 
   _nwParseTimeToMinutes(hhmm) {
@@ -586,6 +634,301 @@ class NexoWattVis extends utils.Adapter {
     }
 
     return false;
+  }
+
+
+  // --- SmartHome Logik-Uhren (Installer / Logic editor inputs) ---
+  _nwNormalizeSmartHomeLogicClocksConfig(rawCfg) {
+    const toSafeIdPart = (input) => {
+      const s = String(input || '').trim();
+      if (!s) return '';
+      return s.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64);
+    };
+
+    const base = (rawCfg && typeof rawCfg === 'object') ? rawCfg : {};
+    const version = (typeof base.version === 'number') ? base.version : 1;
+    const updatedAt = (typeof base.updatedAt === 'number') ? base.updatedAt : 0;
+    const clocksIn = Array.isArray(base.clocks) ? base.clocks : [];
+    const clocks = [];
+
+    for (let i = 0; i < clocksIn.length; i++) {
+      const c = clocksIn[i];
+      if (!c || typeof c !== 'object') continue;
+      const rawId = String(c.id || c.clockId || '').trim();
+      const id = toSafeIdPart(rawId || `clock_${i + 1}`);
+      if (!id) continue;
+      const name = String(c.name || c.title || id).trim() || id;
+      const enabled = !!c.enabled;
+      const days = this._nwNormalizeDaysArray(c.days);
+      const fromTime = String(c.fromTime || c.start || c.onTime || '06:00').trim();
+      const toTime = String(c.toTime || c.end || c.offTime || '22:00').trim();
+
+      // Validate (keep empty strings if invalid)
+      const fromMin = this._nwParseTimeToMinutes(fromTime);
+      const toMin = this._nwParseTimeToMinutes(toTime);
+
+      clocks.push({
+        id,
+        name,
+        enabled,
+        days,
+        fromTime: fromMin === null ? '' : fromTime,
+        toTime: toMin === null ? '' : toTime,
+      });
+    }
+
+    // Ensure uniqueness by id (keep last)
+    const map = Object.create(null);
+    for (const c of clocks) map[c.id] = c;
+    const outClocks = Object.keys(map).map((k) => map[k]);
+    outClocks.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+    return { version, updatedAt, clocks: outClocks };
+  }
+
+  getSmartHomeLogicClocksConfig() {
+    return this._nwShLogicClocksCfg || { version: 1, updatedAt: 0, clocks: [] };
+  }
+
+  async loadSmartHomeLogicClocksFromState() {
+    let raw = '';
+    try {
+      const st = await this.getStateAsync('smarthome.logicClocksJson');
+      if (st && typeof st.val === 'string') raw = st.val;
+    } catch (_e) {
+      raw = '';
+    }
+
+    let cfg = null;
+    try {
+      if (raw && raw.trim()) cfg = JSON.parse(raw);
+    } catch (_e) {
+      cfg = null;
+    }
+
+    this._nwShLogicClocksCfg = this._nwNormalizeSmartHomeLogicClocksConfig(cfg);
+    // Ensure updatedAt reflects state if present
+    try {
+      const ts = await this.getStateAsync('smarthome.logicClocksUpdatedAt');
+      if (ts && typeof ts.val === 'number' && ts.val > 0) {
+        this._nwShLogicClocksCfg.updatedAt = ts.val;
+      }
+    } catch (_e2) {}
+
+    // Ensure state objects exist + compute current active states
+    try { await this._nwRefreshLogicClockStatesNow('load'); } catch (_e3) {}
+
+    this._nwScheduleNextSmartHomeLogicClock('load');
+  }
+
+  async persistSmartHomeLogicClocksToState(cfg) {
+    const normalized = this._nwNormalizeSmartHomeLogicClocksConfig(cfg);
+    normalized.updatedAt = Date.now();
+    this._nwShLogicClocksCfg = normalized;
+
+    try {
+      await this.setStateAsync('smarthome.logicClocksJson', { val: JSON.stringify(normalized), ack: true });
+      await this.setStateAsync('smarthome.logicClocksUpdatedAt', { val: normalized.updatedAt, ack: true });
+    } catch (e) {
+      this.log.warn('SmartHome logic clocks persist error: ' + (e && e.message ? e.message : e));
+    }
+
+    // Apply immediately
+    try { await this._nwRefreshLogicClockStatesNow('persist'); } catch (_e) {}
+    this._nwScheduleNextSmartHomeLogicClock('persist');
+    return normalized;
+  }
+
+  _nwShiftDays(daysArr, shift) {
+    const out = [];
+    const seen = new Set();
+    const arr = Array.isArray(daysArr) ? daysArr : [];
+    for (const d of arr) {
+      const n0 = parseInt(d, 10);
+      if (!Number.isFinite(n0)) continue;
+      const n = ((n0 + shift) % 7 + 7) % 7;
+      if (seen.has(n)) continue;
+      seen.add(n);
+      out.push(n);
+    }
+    if (!out.length) return [0, 1, 2, 3, 4, 5, 6];
+    out.sort((a, b) => a - b);
+    return out;
+  }
+
+  _nwIsLogicClockActive(clock, nowTs) {
+    if (!clock || !clock.id || !clock.enabled) return false;
+    const fromMin = this._nwParseTimeToMinutes(clock.fromTime);
+    const toMin = this._nwParseTimeToMinutes(clock.toTime);
+    if (fromMin === null || toMin === null) return false;
+
+    const days = this._nwNormalizeDaysArray(clock.days);
+    const set = new Set(days);
+
+    const now = new Date(typeof nowTs === 'number' ? nowTs : Date.now());
+    const dow = now.getDay();
+    const prevDow = (dow === 0) ? 6 : (dow - 1);
+    const nowMin = (now.getHours() * 60) + now.getMinutes();
+    const cross = fromMin > toMin;
+
+    if (!cross) {
+      return set.has(dow) && nowMin >= fromMin && nowMin < toMin;
+    }
+    // Cross midnight: active late today OR early today from previous day schedule
+    const late = set.has(dow) && nowMin >= fromMin;
+    const early = set.has(prevDow) && nowMin < toMin;
+    return late || early;
+  }
+
+  async _nwEnsureLogicClockObjects(clock) {
+    if (!clock || !clock.id) return;
+    const id = String(clock.id);
+    const name = String(clock.name || id);
+
+    await this.setObjectNotExistsAsync(`smarthome.logicClocks.${id}`, {
+      type: 'channel',
+      common: { name: `Logik-Uhr: ${name}` },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync(`smarthome.logicClocks.${id}.active`, {
+      type: 'state',
+      common: {
+        name: `Active (${name})`,
+        type: 'boolean',
+        role: 'state',
+        read: true,
+        write: false,
+        def: false,
+      },
+      native: {},
+    });
+  }
+
+  async _nwRefreshLogicClockStatesNow(reason) {
+    const cfg = this.getSmartHomeLogicClocksConfig();
+    const clocks = Array.isArray(cfg.clocks) ? cfg.clocks : [];
+    const now = Date.now();
+
+    if (!this._nwShLogicClockActiveById) this._nwShLogicClockActiveById = Object.create(null);
+
+    for (const c of clocks) {
+      if (!c || !c.id) continue;
+      try { await this._nwEnsureLogicClockObjects(c); } catch (_eObj) {}
+
+      const active = this._nwIsLogicClockActive(c, now);
+      const prev = this._nwShLogicClockActiveById[c.id];
+      if (prev === undefined || prev !== active) {
+        try {
+          await this.setStateAsync(`smarthome.logicClocks.${c.id}.active`, { val: active, ack: true });
+        } catch (_eSet) {}
+        this._nwShLogicClockActiveById[c.id] = active;
+      }
+    }
+
+    if (reason) {
+      this.log.debug && this.log.debug(`SmartHome logic clocks: refreshed (${reason})`);
+    }
+  }
+
+  _nwComputeNextSmartHomeLogicClockEvents(nowTs) {
+    const cfg = this.getSmartHomeLogicClocksConfig();
+    const nextById = Object.create(null);
+    let earliest = null;
+    const clocks = Array.isArray(cfg.clocks) ? cfg.clocks : [];
+
+    for (const c of clocks) {
+      if (!c || !c.id || !c.enabled) continue;
+      const fromMin = this._nwParseTimeToMinutes(c.fromTime);
+      const toMin = this._nwParseTimeToMinutes(c.toTime);
+      if (fromMin === null || toMin === null) continue;
+
+      const days = this._nwNormalizeDaysArray(c.days);
+      const cross = fromMin > toMin;
+
+      const nextStart = this._nwComputeNextOccurrence(nowTs, days, fromMin);
+      const endDays = cross ? this._nwShiftDays(days, 1) : days;
+      const nextEnd = this._nwComputeNextOccurrence(nowTs, endDays, toMin);
+
+      let next = null;
+      if (typeof nextStart === 'number') next = { at: nextStart, kind: 'start' };
+      if (typeof nextEnd === 'number') {
+        if (!next || nextEnd < next.at) next = { at: nextEnd, kind: 'end' };
+      }
+
+      if (next) {
+        nextById[c.id] = next;
+        if (!earliest || next.at < earliest.at) earliest = { clockId: c.id, at: next.at, kind: next.kind };
+      }
+    }
+
+    return { earliest, nextById };
+  }
+
+  _nwClearSmartHomeLogicClockSchedule() {
+    if (this._nwShLogicClocksTimeout) {
+      try { clearTimeout(this._nwShLogicClocksTimeout); } catch (_e) {}
+      this._nwShLogicClocksTimeout = null;
+    }
+    this._nwShLogicClocksNextEvent = null;
+  }
+
+  _nwScheduleNextSmartHomeLogicClock(reason) {
+    this._nwClearSmartHomeLogicClockSchedule();
+    const now = Date.now();
+    const { earliest, nextById } = this._nwComputeNextSmartHomeLogicClockEvents(now);
+    this._nwShLogicClocksNextById = nextById;
+    this._nwShLogicClocksNextEvent = earliest;
+
+    try {
+      const nextAt = earliest && typeof earliest.at === 'number' ? earliest.at : 0;
+      this.setStateAsync('smarthome.logicClocksNextAt', { val: nextAt, ack: true }).catch(() => {});
+    } catch (_e) {}
+
+    if (!earliest || typeof earliest.at !== 'number') return;
+    const delay = Math.max(250, earliest.at - now);
+
+    this._nwShLogicClocksTimeout = setTimeout(() => {
+      this._nwRunDueSmartHomeLogicClock().catch((e) => {
+        this.log.warn('SmartHome logic clock run error: ' + (e && e.message ? e.message : e));
+        try { this._nwScheduleNextSmartHomeLogicClock('error'); } catch (_e2) {}
+      });
+    }, delay);
+
+    if (reason) {
+      this.log.debug && this.log.debug(`SmartHome logic clocks: scheduled next (${reason}) at ${new Date(earliest.at).toISOString()} (${earliest.clockId}/${earliest.kind})`);
+    }
+  }
+
+  async _nwRunDueSmartHomeLogicClock() {
+    const ev = this._nwShLogicClocksNextEvent;
+    if (!ev || !ev.clockId || typeof ev.at !== 'number' || !ev.kind) {
+      this._nwScheduleNextSmartHomeLogicClock('noop');
+      return;
+    }
+
+    const cfg = this.getSmartHomeLogicClocksConfig();
+    const c = (cfg.clocks || []).find((x) => x && x.id === ev.clockId);
+    if (!c || !c.enabled) {
+      this._nwScheduleNextSmartHomeLogicClock('disabled');
+      return;
+    }
+
+    // Apply boundary
+    const val = String(ev.kind).toLowerCase() === 'start';
+    try { await this._nwEnsureLogicClockObjects(c); } catch (_e) {}
+    try {
+      await this.setStateAsync(`smarthome.logicClocks.${c.id}.active`, { val, ack: true });
+      if (!this._nwShLogicClockActiveById) this._nwShLogicClockActiveById = Object.create(null);
+      this._nwShLogicClockActiveById[c.id] = val;
+    } catch (e) {
+      this.log.warn('SmartHome logic clock setState error: ' + (e && e.message ? e.message : e));
+    }
+
+    // Reschedule
+    // Also refresh to catch cross-midnight edge cases and ensure correctness
+    try { await this._nwRefreshLogicClockStatesNow('event'); } catch (_e2) {}
+    this._nwScheduleNextSmartHomeLogicClock('executed');
   }
 
 
@@ -6163,6 +6506,9 @@ async onReady() {
       // SmartHome: Endkunden-Zeitschaltuhren laden + Scheduler starten
       try { await this.loadSmartHomeTimersFromState(); } catch (_e) {}
 
+      // SmartHome: Logik-Uhren laden + Scheduler starten
+      try { await this.loadSmartHomeLogicClocksFromState(); } catch (_e) {}
+
       // NexoLogic (node/graph) runtime engine
       try { await this.initLogicEngine(); } catch (e) { this.log.warn('NexoLogic init failed: ' + (e && e.message ? e.message : e)); }
       this.log.info('NexoWatt UI adapter ready.');
@@ -7142,6 +7488,63 @@ app.post('/api/smarthome/timers', requireAuth, async (req, res) => {
     res.json({ ok: true, config: saved });
   } catch (e) {
     this.log.warn('SmartHome timers save API error: ' + (e && e.message ? e.message : e));
+    res.status(500).json({ ok: false, error: 'internal error' });
+  }
+});
+
+
+// --- SmartHome Logik-Uhren (Installer) ---
+app.get('/api/smarthome/logic-clocks', requireInstaller, async (_req, res) => {
+  try {
+    const cfg = this.getSmartHomeLogicClocksConfig();
+    res.json({ ok: true, config: cfg });
+  } catch (e) {
+    this.log.warn('SmartHome logic clocks API error: ' + (e && e.message ? e.message : e));
+    res.status(500).json({ ok: false, error: 'internal error' });
+  }
+});
+
+app.post('/api/smarthome/logic-clocks', requireInstaller, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const current = this.getSmartHomeLogicClocksConfig();
+
+    let nextCfg = null;
+    if (body && body.config && typeof body.config === 'object') {
+      nextCfg = body.config;
+    } else {
+      const idRaw = String(body.id || body.clockId || '').trim();
+      if (!idRaw) return res.status(400).json({ ok: false, error: 'missing id' });
+
+      const del = !!body.delete;
+      const clockIn = (body && body.clock && typeof body.clock === 'object') ? body.clock : {};
+
+      const merged = {
+        version: current.version || 1,
+        updatedAt: current.updatedAt || 0,
+        clocks: Array.isArray(current.clocks) ? current.clocks.slice() : [],
+      };
+
+      merged.clocks = merged.clocks.filter((c) => c && c.id !== idRaw);
+
+      if (!del) {
+        merged.clocks.push({
+          id: idRaw,
+          name: clockIn.name || idRaw,
+          enabled: !!clockIn.enabled,
+          days: Array.isArray(clockIn.days) ? clockIn.days : [],
+          fromTime: clockIn.fromTime || clockIn.start || '06:00',
+          toTime: clockIn.toTime || clockIn.end || '22:00',
+        });
+      }
+
+      nextCfg = merged;
+    }
+
+    const saved = await this.persistSmartHomeLogicClocksToState(nextCfg);
+    res.json({ ok: true, config: saved });
+  } catch (e) {
+    this.log.warn('SmartHome logic clocks save API error: ' + (e && e.message ? e.message : e));
     res.status(500).json({ ok: false, error: 'internal error' });
   }
 });

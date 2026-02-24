@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.193",
+    "version": "0.6.194",
     "news": {
+      "0.6.194": {
+        "en": "SmartHome Config: fixed missing DOM helper (Scenes/Timers ReferenceError) and added installer-managed Logic Clocks (time windows) that create boolean datapoints (smarthome.logicClocks.<id>.active) for the Logic Editor.",
+        "de": "SmartHome Config: Fix für fehlende DOM-Hilfsfunktion (Scenes/Timer ReferenceError) + neue installer-verwaltete Logik-Uhren (Zeitfenster), die boolean Datenpunkte (smarthome.logicClocks.<id>.active) für den Logik-Editor erzeugen."
+      },
       "0.6.193": {
         "en": "SmartHome timers: added jalousie/roller-shutter scheduling (open/close) and improved the installer timer configurator to list devices directly from the SmartHome configuration (works even if SmartHome is still disabled).",
         "de": "SmartHome-Zeitschaltuhren: Jalousie/Rollladen jetzt auch per AUF/ZU-Timer steuerbar + Installer-Konfigurator listet Geräte direkt aus der SmartHome-Konfiguration (funktioniert auch wenn SmartHome noch deaktiviert ist)."
