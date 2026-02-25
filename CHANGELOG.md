@@ -1,3 +1,6 @@
+## 0.6.195
+- Wartung: Unbenutzte Legacy-Admin/Materialize-Dateien entfernt (index_m.* + templates.json) sowie unnötige/duplizierte Assets (www/admin.png, www/icons/building.png.bak) → kleinere Paketgröße.
+
 ## 0.6.194
 - Fix: SmartHome Config – ReferenceError **`byId is not defined`** (Szenen/Zeitschaltuhren).
 - SmartHome Config: neuer Bereich **Logik‑Uhren** im Reiter **Zeitschaltuhren**
