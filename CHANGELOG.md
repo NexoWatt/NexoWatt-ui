@@ -1,3 +1,8 @@
+## 0.6.196
+- EMS/Lademanagement: PV-Überschussladen (reine PV) jetzt sauber berechnet: **PV-Erzeugung - Gebäude-Last (ohne EVCS) - Speicher-Ladung** = Rest für Ladeinfrastruktur.
+  - Verhindert falsches Abschalten bei 3‑phasiger Mindestleistung (~4,2 kW), wenn der Export am NVP durch die EVCS selbst sinkt.
+  - Neue Diagnose‑States: `chargingManagement.control.pvCalc*` (PV, Gebäude‑ohne‑EV, Speicher‑Ladung, Quelle).
+
 ## 0.6.195
 - Wartung: Unbenutzte Legacy-Admin/Materialize-Dateien entfernt (index_m.* + templates.json) sowie unnötige/duplizierte Assets (www/admin.png, www/icons/building.png.bak) → kleinere Paketgröße.
 

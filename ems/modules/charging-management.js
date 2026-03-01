@@ -712,6 +712,12 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.pvSurplusNoEvRawW', 'PV surplus (no EVCS) instant (W)', 'number', 'value.power');
         await mk('chargingManagement.control.pvSurplusNoEvAvg5mW', 'PV surplus (no EVCS) 5min avg (W)', 'number', 'value.power');
 
+        // Debug: PV surplus calculation inputs (pure PV)
+        await mk('chargingManagement.control.pvCalcPvW', 'PV generation used for PV surplus (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvCalcBuildingNoEvW', 'Building load without EVCS used for PV surplus (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvCalcStorageChargeW', 'Storage charge used for PV surplus (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvCalcSource', 'PV surplus source', 'string', 'text');
+
         // Gate A: hard grid safety caps (transparency)
         await mk('chargingManagement.control.gridImportLimitW', 'Grid import limit (W) configured', 'number', 'value.power');
         await mk('chargingManagement.control.gridImportLimitW_effective', 'Grid import limit (W) effective', 'number', 'value.power');
@@ -1206,6 +1212,22 @@ class ChargingManagementModule extends BaseModule {
         }
         if (pvSurplusPowerId && this.dp) {
             await this.dp.upsert({ key: 'cm.pvSurplusW', objectId: pvSurplusPowerId, dataType: 'number', direction: 'in', unit: 'W' });
+        }
+
+        // PV-only surplus: prefer internal flow-derived values (PV / building load / storage)
+        // This enables a clean "pure PV" calculation:
+        //   PV - (Gebäude-Verbrauch ohne EVCS) - Speicher(Laden) = Rest für Ladeinfrastruktur
+        // The derived flow datapoints are always in W and already include unit/invert handling from the adapter config.
+        try {
+            const ns = (this.adapter && this.adapter.namespace) ? String(this.adapter.namespace) : '';
+            if (ns && this.dp) {
+                await this.dp.upsert({ key: 'cm.pvTotalW', objectId: `${ns}.derived.core.pv.totalW`, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
+                await this.dp.upsert({ key: 'cm.buildingLoadTotalW', objectId: `${ns}.derived.core.building.loadTotalW`, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
+                await this.dp.upsert({ key: 'cm.storageChargeW', objectId: `${ns}.storageChargePower`, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
+                await this.dp.upsert({ key: 'cm.storageDischargeW', objectId: `${ns}.storageDischargePower`, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
+            }
+        } catch (_e) {
+            // ignore
         }
 
         // Gate A: reuse PeakShaving meter phase currents (if configured) as optional hard safety caps.
@@ -2489,16 +2511,28 @@ class ChargingManagementModule extends BaseModule {
         let pvSurplusNoEvRawWState = 0;
         let pvSurplusNoEvAvg5mWState = 0;
 
+        // Debug: PV surplus calculation inputs (pure PV)
+        let pvCalcPvWState = 0;
+        let pvCalcBuildingNoEvWState = 0;
+        let pvCalcStorageChargeWState = 0;
+        let pvCalcSourceState = 'none';
+
         if (needPvBudget) {
-            // PV-Überschuss sauber ermitteln:
-            // Problem (vorher): PV-Cap wurde aus dem NVP (grid export) direkt abgeleitet.
-            // Sobald die Wallbox startet, sinkt der Export (weil EVCS selbst verbraucht)
-            // und der Algorithmus hat die Wallbox wieder abgeschaltet.
+            // PV-Überschuss sauber ermitteln (reine PV-Regelung):
+            // Ziel: PV-Verbrauch Gebäude-Speicher = Rest für Ladeinfrastruktur
+            // (ohne dass die EVCS-Leistung sich selbst "wegregelt").
             //
-            // Lösung: PV-Überschuss OHNE EVCS-Verbrauch berechnen:
-            //   pvSurplusNoEv = (-gridW) + evcsW
-            //   gridW: Import + / Export -, evcsW: aktuelle EVCS-Leistung (W)
-            // => entspricht pvW - (Hauslast ohne EVCS)
+            // Bevorzugte Berechnung (Flow-Derivate, in W):
+            //   pvTotalW       = derived.core.pv.totalW
+            //   loadTotalW     = derived.core.building.loadTotalW   (inkl. EVCS)
+            //   buildingNoEvW  = max(0, loadTotalW - evcsNowW)
+            //   storageChargeW = storageChargePower (nur Laden; Entladen wird NICHT als PV gezählt)
+            //   pvSurplusNoEv  = max(0, pvTotalW - buildingNoEvW - storageChargeW)
+            //
+            // Fallbacks:
+            //   1) pvSurplusNoEv = max(0, (-gridW) + evcsNowW)
+            //   2) pvSurplusNoEv = max(0, pvSurplusCfgW)   (falls nur Export-DP vorhanden)
+            //
             // Zusätzlich: 5-Minuten Durchschnitt für stabilere Regelung.
 
             const pvSurplusCfgW = getFirstDpNumber(['cm.pvSurplusW']);
@@ -2506,15 +2540,46 @@ class ChargingManagementModule extends BaseModule {
 
             const evcsNowW = (typeof totalPowerW === 'number' && Number.isFinite(totalPowerW)) ? Math.max(0, totalPowerW) : 0;
 
+            const pvTotalW = getFirstDpNumber(['cm.pvTotalW']);
+            const loadTotalW = getFirstDpNumber(['cm.buildingLoadTotalW']);
+            const storageChargeW = getFirstDpNumber(['cm.storageChargeW']);
+
             let pvSurplusNoEvW = null;
-            if (typeof gridW === 'number' && Number.isFinite(gridW)) {
+            let pvCalcSource = 'none';
+
+            if (
+                typeof pvTotalW === 'number' && Number.isFinite(pvTotalW) &&
+                typeof loadTotalW === 'number' && Number.isFinite(loadTotalW)
+            ) {
+                const buildingNoEvW = Math.max(0, loadTotalW - evcsNowW);
+                const storChgW = (typeof storageChargeW === 'number' && Number.isFinite(storageChargeW)) ? Math.max(0, storageChargeW) : 0;
+
+                pvSurplusNoEvW = Math.max(0, pvTotalW - buildingNoEvW - storChgW);
+                pvCalcSource = 'pv-load-storage';
+
+                // Diagnostics
+                pvCalcPvWState = Math.max(0, pvTotalW);
+                pvCalcBuildingNoEvWState = buildingNoEvW;
+                pvCalcStorageChargeWState = storChgW;
+            } else if (typeof gridW === 'number' && Number.isFinite(gridW)) {
+                // Fallback: reconstruct PV surplus without EVCS from grid power (Import + / Export -)
                 pvSurplusNoEvW = Math.max(0, (-gridW) + evcsNowW);
+                pvCalcSource = 'grid+ev';
+                pvCalcPvWState = 0;
+                pvCalcBuildingNoEvWState = 0;
+                pvCalcStorageChargeWState = 0;
             } else if (typeof pvSurplusCfgW === 'number' && Number.isFinite(pvSurplusCfgW)) {
-                // Fallback wenn kein Grid-DP verfügbar (z. B. nur PV-Surplus DP konfiguriert)
+                // Fallback: PV surplus datapoint only (usually export power)
                 pvSurplusNoEvW = Math.max(0, pvSurplusCfgW);
+                pvCalcSource = 'pvSurplusDp';
+                pvCalcPvWState = 0;
+                pvCalcBuildingNoEvWState = 0;
+                pvCalcStorageChargeWState = 0;
             }
 
-            // Publish raw value (before smoothing) for debugging
+            pvCalcSourceState = pvCalcSource;
+
+// Publish raw value (before smoothing) for debugging
             pvSurplusNoEvRawWState = (typeof pvSurplusNoEvW === 'number' && Number.isFinite(pvSurplusNoEvW)) ? pvSurplusNoEvW : 0;
 
             pvSurplusW = (typeof pvSurplusNoEvW === 'number' && Number.isFinite(pvSurplusNoEvW))
@@ -2585,6 +2650,10 @@ class ChargingManagementModule extends BaseModule {
             pvAvailableState = false;
             pvSurplusNoEvRawWState = 0;
             pvSurplusNoEvAvg5mWState = 0;
+            pvCalcPvWState = 0;
+            pvCalcBuildingNoEvWState = 0;
+            pvCalcStorageChargeWState = 0;
+            pvCalcSourceState = 'none';
         }
 
         // Publish PV diagnostics (even if PV budgeting is not active)
@@ -2594,6 +2663,10 @@ class ChargingManagementModule extends BaseModule {
             await this._queueState('chargingManagement.control.pvAvailable', !!pvAvailableState, true);
             await this._queueState('chargingManagement.control.pvSurplusNoEvRawW', pvSurplusNoEvRawWState || 0, true);
             await this._queueState('chargingManagement.control.pvSurplusNoEvAvg5mW', pvSurplusNoEvAvg5mWState || 0, true);
+            await this._queueState('chargingManagement.control.pvCalcPvW', pvCalcPvWState || 0, true);
+            await this._queueState('chargingManagement.control.pvCalcBuildingNoEvW', pvCalcBuildingNoEvWState || 0, true);
+            await this._queueState('chargingManagement.control.pvCalcStorageChargeW', pvCalcStorageChargeWState || 0, true);
+            await this._queueState('chargingManagement.control.pvCalcSource', String(pvCalcSourceState || 'none'), true);
         } catch {
             // ignore
         }
