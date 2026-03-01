@@ -712,6 +712,12 @@ class ChargingManagementModule extends BaseModule {
         await mk('chargingManagement.control.pvSurplusNoEvRawW', 'PV surplus (no EVCS) instant (W)', 'number', 'value.power');
         await mk('chargingManagement.control.pvSurplusNoEvAvg5mW', 'PV surplus (no EVCS) 5min avg (W)', 'number', 'value.power');
 
+        // PV surplus calc internals: EVCS power used to reconstruct PV surplus without EVCS consumption
+        // (helps diagnosing start/stop "hopping" when meters update delayed)
+        await mk('chargingManagement.control.pvEvcsActualW', 'EVCS actual power sum (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvEvcsCmdW', 'EVCS last commanded power sum (W)', 'number', 'value.power');
+        await mk('chargingManagement.control.pvEvcsUsedW', 'EVCS power used for PV surplus calc (W)', 'number', 'value.power');
+
         // Gate A: hard grid safety caps (transparency)
         await mk('chargingManagement.control.gridImportLimitW', 'Grid import limit (W) configured', 'number', 'value.power');
         await mk('chargingManagement.control.gridImportLimitW_effective', 'Grid import limit (W) effective', 'number', 'value.power');
@@ -2504,11 +2510,66 @@ class ChargingManagementModule extends BaseModule {
             const pvSurplusCfgW = getFirstDpNumber(['cm.pvSurplusW']);
             gridW = getFirstDpNumber(['cm.gridPowerW', 'grid.powerW', 'ps.gridPowerW']);
 
-            const evcsNowW = (typeof totalPowerW === 'number' && Number.isFinite(totalPowerW)) ? Math.max(0, totalPowerW) : 0;
+            // EVCS power estimation for PV surplus reconstruction
+            // Why: Some wallboxes/meter datapoints update delayed. If we derive PV surplus only from the NVP
+            // export (or from grid power + *actual* EVCS power), PV-only charging can "hop" around the AC
+            // 3-phase minimum (~4.2kW): EVCS starts -> NVP export drops -> meter still reports 0W EVCS -> PV
+            // budget collapses -> EVCS stops -> export rises -> ...
+            //
+            // Fix: Estimate EVCS consumption per connector using the last commanded setpoint as a fallback
+            // whenever the measured power is still below the activity threshold (start-up / meter lag).
+            let pvEvcsActualW = 0;
+            let pvEvcsCmdW = 0;
+            let pvEvcsUsedW = 0;
+
+            try {
+                for (const w of wbList) {
+                    if (!w || !w.safe) continue;
+                    if (!w.enabled || !w.online) continue;
+
+                    const a = (typeof w.actualPowerW === 'number' && Number.isFinite(w.actualPowerW))
+                        ? Math.max(0, Math.abs(w.actualPowerW))
+                        : 0;
+                    pvEvcsActualW += a;
+
+                    const prevCmd = (this._lastCmdTargetW && typeof this._lastCmdTargetW.get === 'function')
+                        ? this._lastCmdTargetW.get(w.safe)
+                        : null;
+                    const c = (typeof prevCmd === 'number' && Number.isFinite(prevCmd)) ? Math.max(0, prevCmd) : 0;
+                    pvEvcsCmdW += c;
+
+                    // If we recently commanded charging but the meter still reports ~0W, assume meter lag and
+                    // use the command as the best available estimate for the current EVCS consumption.
+                    let used = a;
+                    if (c >= activityThresholdW && a < activityThresholdW) {
+                        used = c;
+                    }
+                    pvEvcsUsedW += used;
+                }
+            } catch {
+                // ignore
+            }
+
+            // Fallback (should not happen): use measured total power only
+            if (!Number.isFinite(pvEvcsUsedW) || pvEvcsUsedW < 0) pvEvcsUsedW = 0;
+            if (pvEvcsUsedW === 0) {
+                pvEvcsUsedW = (typeof totalPowerW === 'number' && Number.isFinite(totalPowerW)) ? Math.max(0, totalPowerW) : 0;
+                pvEvcsActualW = pvEvcsUsedW;
+                pvEvcsCmdW = pvEvcsUsedW;
+            }
+
+            // Diagnostics (UI)
+            try {
+                await this._queueState('chargingManagement.control.pvEvcsActualW', Math.round(pvEvcsActualW || 0), true);
+                await this._queueState('chargingManagement.control.pvEvcsCmdW', Math.round(pvEvcsCmdW || 0), true);
+                await this._queueState('chargingManagement.control.pvEvcsUsedW', Math.round(pvEvcsUsedW || 0), true);
+            } catch {
+                // ignore
+            }
 
             let pvSurplusNoEvW = null;
             if (typeof gridW === 'number' && Number.isFinite(gridW)) {
-                pvSurplusNoEvW = Math.max(0, (-gridW) + evcsNowW);
+                pvSurplusNoEvW = Math.max(0, (-gridW) + pvEvcsUsedW);
             } else if (typeof pvSurplusCfgW === 'number' && Number.isFinite(pvSurplusCfgW)) {
                 // Fallback wenn kein Grid-DP verfügbar (z. B. nur PV-Surplus DP konfiguriert)
                 pvSurplusNoEvW = Math.max(0, pvSurplusCfgW);
