@@ -1,20 +1,8 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.198",
+    "version": "0.6.195",
     "news": {
-      "0.6.198": {
-        "en": "EMS: restored fast, deterministic 1s engine tick by introducing a non-blocking state publisher (de-dup + queued persistence). Module runtimes are now measured with a monotonic clock and no longer explode due to awaited state IO. PeakShaving/CoreLimits/MultiUse/Storage diagnostics were migrated to the fast path to prevent slowdowns and keep charging control reliable.",
-        "de": "EMS: 1s-Engine-Takt wieder schnell & deterministisch durch neuen non-blocking State-Publisher (De-Dup + queued Persist). Modul-Laufzeiten werden jetzt mit monotonic clock gemessen und explodieren nicht mehr durch awaited State-IO. PeakShaving/CoreLimits/MultiUse/Speicher-Diagnosen auf Fast-Path umgestellt – verhindert Slowdowns und hält das Lademanagement zuverlässig."
-      },
-      "0.6.197": {
-        "en": "EMS/Charging: fixed PV surplus charging reliability when wallbox meters report negative power (sign convention). EVCS power is now normalized to positive magnitudes for budgets, PV surplus calculation and grid caps, preventing false PV cut-offs and broken charge control.",
-        "de": "EMS/Lademanagement: PV-Überschussladen wieder zuverlässig, auch wenn Wallbox-Zähler negative Leistung (Vorzeichen-Konvention) liefern. EVCS-Leistung wird intern auf positive Beträge normalisiert (Budgets, PV-Berechnung, Grid-Caps) – verhindert falsches PV-Abschalten und fehlerhafte Regelung."
-      },
-      "0.6.196": {
-        "en": "EMS: improved PV surplus charging logic for \"pure PV\" mode. PV budget is now calculated as PV generation minus building load (without EVCS) minus storage charging, preventing false shutdowns when NVP export drops below 4.2 kW even though PV is still sufficient. Added PV calculation diagnostics (source + inputs).",
-        "de": "EMS: PV‑Überschussladen (reine PV) verbessert. PV‑Budget wird jetzt als PV‑Erzeugung minus Gebäude‑Last (ohne EVCS) minus Speicher‑Ladung berechnet – verhindert falsches Abschalten, wenn am NVP der Export unter 4,2 kW fällt, obwohl genügend PV vorhanden ist. Zusätzliche PV‑Diagnose‑States (Quelle + Eingänge)."
-      },
       "0.6.194": {
         "en": "SmartHome Config: fixed missing DOM helper (Scenes/Timers ReferenceError) and added installer-managed Logic Clocks (time windows) that create boolean datapoints (smarthome.logicClocks.<id>.active) for the Logic Editor.",
         "de": "SmartHome Config: Fix für fehlende DOM-Hilfsfunktion (Scenes/Timer ReferenceError) + neue installer-verwaltete Logik-Uhren (Zeitfenster), die boolean Datenpunkte (smarthome.logicClocks.<id>.active) für den Logik-Editor erzeugen."
@@ -1589,7 +1577,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.198",
+  "version": "0.6.188",
   "news": {
     "0.6.185": {
       "en": [

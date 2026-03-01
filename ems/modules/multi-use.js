@@ -174,17 +174,7 @@ class MultiUseModule extends BaseModule {
         const prev = this._stateCache.get(id);
         if (prev === v) return;
         this._stateCache.set(id, v);
-
-        // Avoid blocking the EMS tick on state IO.
-        try {
-            if (this.adapter && typeof this.adapter.setStateFast === 'function') {
-                this.adapter.setStateFast(id, v, true);
-            } else {
-                this.adapter.setStateAsync(id, v, true).catch(() => {});
-            }
-        } catch {
-            // ignore
-        }
+        await this.adapter.setStateAsync(id, v, true);
     }
 
     async _seedLastFromStates() {
@@ -740,14 +730,14 @@ class MultiUseModule extends BaseModule {
 
             if (changed) {
                 this._last.set(c.id, next);
-                await this._setStateIfChanged(`${base}.basis`, basis);
-                await this._setStateIfChanged(`${base}.requestW`, next.requestedW);
-                await this._setStateIfChanged(`${base}.allocatedW`, next.allocatedW);
-                await this._setStateIfChanged(`${base}.allocatedA`, Number.isFinite(next.allocatedA) ? Number(next.allocatedA.toFixed(3)) : 0);
-                await this._setStateIfChanged(`${base}.applied`, applied);
-                await this._setStateIfChanged(`${base}.status`, status);
-                await this._setStateIfChanged(`${base}.reason`, reason);
-                await this._setStateIfChanged(`${base}.lastAppliedTs`, now);
+                await this.adapter.setStateAsync(`${base}.basis`, basis, true);
+                await this.adapter.setStateAsync(`${base}.requestW`, next.requestedW, true);
+                await this.adapter.setStateAsync(`${base}.allocatedW`, next.allocatedW, true);
+                await this.adapter.setStateAsync(`${base}.allocatedA`, Number.isFinite(next.allocatedA) ? Number(next.allocatedA.toFixed(3)) : 0, true);
+                await this.adapter.setStateAsync(`${base}.applied`, applied, true);
+                await this.adapter.setStateAsync(`${base}.status`, status, true);
+                await this.adapter.setStateAsync(`${base}.reason`, reason, true);
+                await this.adapter.setStateAsync(`${base}.lastAppliedTs`, now, true);
             }
         }
 

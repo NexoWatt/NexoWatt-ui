@@ -274,19 +274,16 @@ class SpeicherMappingModule extends BaseModule {
     async _setIfChanged(id, val) {
         const v = (val === undefined) ? null : val;
         try {
-            if (this.adapter && typeof this.adapter.setStateFast === 'function') {
-                this.adapter.setStateFast(id, v, true);
-                return;
+            const cur = await this.adapter.getStateAsync(id);
+            const curVal = cur ? cur.val : null;
+            if (cur && curVal === v) return;
+            await this.adapter.setStateAsync(id, v, true);
+        } catch (e) {
+            try {
+                this.adapter.log.debug(`speicher: setState ${id} Fehler: ${e?.message || e}`);
+            } catch {
+                // ignore
             }
-        } catch {
-            // ignore
-        }
-
-        // Fallback (best-effort, non-blocking)
-        try {
-            this.adapter.setStateAsync(id, v, true).catch(() => {});
-        } catch {
-            // ignore
         }
     }
 }

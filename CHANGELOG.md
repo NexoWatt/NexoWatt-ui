@@ -1,19 +1,3 @@
-## 0.6.198
-- EMS: **Engine-Tick wieder schnell & stabil** (1s-Takt wird nicht mehr durch State-IO „zugenagelt“)
-  - Neuer Fast-Path **`adapter.setStateFast()`**: De-Dup + queued Persist + sofortiges SSE/StateCache Update.
-  - Modul-Laufzeiten werden jetzt mit **monotonic clock** gemessen (keine NTP/Zeitsprung-Ausreißer).
-  - PeakShaving/CoreLimits/MultiUse/Speicher-/Tarif/PV-Forecast Diagnosen auf Fast-Path umgestellt → deutlich kleinere Tick-Zeiten, Lademanagement bleibt zuverlässig.
-
-## 0.6.197
-- EMS/Lademanagement: **PV-Überschussladen wieder zuverlässig**, auch wenn Wallbox-Zähler negative Leistung (Vorzeichen-Konvention) liefern.
-  - EVCS-Leistung wird intern als **positiver Betrag** behandelt (Budgets, PV-Berechnung, Grid-/Phasen-Caps) → verhindert, dass sich die Regelung „wegregelt“ oder komplett stoppt.
-  - PV-Diagnose ergänzt: `chargingManagement.control.pvCalcStorageDischargeW` (Transparenz: Speicher-Entladung wird aus dem „reine PV“-Budget ausgeschlossen).
-
-## 0.6.196
-- EMS/Lademanagement: PV-Überschussladen (reine PV) jetzt sauber berechnet: **PV-Erzeugung - Gebäude-Last (ohne EVCS) - Speicher-Ladung** = Rest für Ladeinfrastruktur.
-  - Verhindert falsches Abschalten bei 3‑phasiger Mindestleistung (~4,2 kW), wenn der Export am NVP durch die EVCS selbst sinkt.
-  - Neue Diagnose‑States: `chargingManagement.control.pvCalc*` (PV, Gebäude‑ohne‑EV, Speicher‑Ladung, Quelle).
-
 ## 0.6.195
 - Wartung: Unbenutzte Legacy-Admin/Materialize-Dateien entfernt (index_m.* + templates.json) sowie unnötige/duplizierte Assets (www/admin.png, www/icons/building.png.bak) → kleinere Paketgröße.
 
