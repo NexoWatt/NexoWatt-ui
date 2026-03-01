@@ -2596,7 +2596,7 @@ class ChargingManagementModule extends BaseModule {
             const pvStopThresholdW  = clamp(num(cfg.pvStopThresholdW, 200), 0, 1e12);
             const pvStartDelayMs    = clamp(num(cfg.pvStartDelaySec, 10), 0, 3600) * 1000;
             const pvStopDelayMs     = clamp(num(cfg.pvStopDelaySec, 30), 0, 3600) * 1000;
-            const pvAbortImportW    = clamp(num(cfg.pvAbortImportW, 200), 0, 1e12);
+            const pvAbortImportW    = clamp(num(cfg.pvAbortImportW, 600), 0, 1e12);
 
             // Ensure stop threshold is not above start threshold (avoid inverted hysteresis)
             const startW = pvStartThresholdW;

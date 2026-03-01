@@ -407,7 +407,7 @@ class EmsEngine {
       pvStopThresholdW: 200,
       pvStartDelaySec: 10,
       pvStopDelaySec: 30,
-      pvAbortImportW: 200,
+      pvAbortImportW: 600,
 
       // Global stepping defaults (per wallbox overrides possible)
       stepA: 0.1,

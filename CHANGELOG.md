@@ -1,3 +1,6 @@
+## 0.6.197
+- EMS/Lademanagement: PV-only Import-Toleranz erhöht (Default `pvAbortImportW` von 200W → 600W) – reduziert unnötige Stop/Start‑Zyklen bei kurzzeitigen Hauslast‑Spitzen/Messrauschen.
+
 ## 0.6.196
 - EMS/Lademanagement: PV-Überschussladen (PV-only) stabilisiert – bei verzögerten EVCS-Leistungsmesswerten wird zur PV-Überschuss-Rekonstruktion kurzfristig der letzte Sollwert genutzt (verhindert Start/Stop-Hoppen um die ~4,2kW 3-Phasen-Minimalleistung).
 - EMS/Lademanagement: Neue Diagnose-States `chargingManagement.control.pvEvcsActualW` / `pvEvcsCmdW` / `pvEvcsUsedW`.
