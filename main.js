@@ -52,6 +52,22 @@ class NexoWattVis extends utils.Adapter {
     this._sseFlushTimer = null;
     this.smartHomeDevices = [];
 
+    // ---------------------------------------------------------------------
+    // Fast state publisher (EMS)
+    //
+    // Many EMS modules publish a lot of diagnostics / helper states each tick.
+    // Awaiting adapter.setStateAsync() for each of them can easily blow up the
+    // engine tick time (seconds instead of milliseconds) and break control.
+    //
+    // setStateFast() updates the local stateCache + SSE immediately and queues
+    // the persistent ioBroker state write asynchronously with limited
+    // concurrency.
+    // ---------------------------------------------------------------------
+    this._fastStateCache = new Map(); // id -> { val:any, ts:number }
+    this._fastStateQueue = new Map(); // id -> { val:any, ack:boolean }
+    this._fastStateFlushTimer = null;
+    this._fastStateInflight = 0;
+
     // SmartHome: Zeitschaltuhren (Endkunde) – persisted in adapter states (no instance restart)
     this._nwShTimersCfg = { version: 1, updatedAt: 0, timers: [] };
     this._nwShTimersNextByDeviceId = Object.create(null);
@@ -15405,6 +15421,118 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     } catch (_e) {}
   }
 
+  // ---------------------------------------------------------------------
+  // Fast (non-blocking) state writes for EMS modules
+  // ---------------------------------------------------------------------
+
+  /**
+   * Fast state update helper.
+   *
+   * - Updates adapter.stateCache + SSE immediately via updateValue()
+   * - Persists to ioBroker asynchronously (queued, limited concurrency)
+   * - De-duplicates by id (same value will not be written again)
+   *
+   * This is intentionally used for internal EMS diagnostics/helper states so
+   * the 1s engine tick can stay deterministic and responsive.
+   *
+   * @param {string} id
+   * @param {any} value
+   * @param {boolean} [ack=true]
+   * @param {{deadband?:number}} [opts]
+   * @returns {boolean} true if queued/updated, false if skipped
+   */
+  setStateFast(id, value, ack = true, opts = null) {
+    try {
+      const sid = String(id || '').trim();
+      if (!sid) return false;
+
+      const now = Date.now();
+      const o = (opts && typeof opts === 'object') ? opts : {};
+      const deadband = (typeof o.deadband === 'number' && Number.isFinite(o.deadband) && o.deadband > 0) ? o.deadband : 0;
+
+      // Normalize value
+      let v = value;
+      if (v === undefined) v = null;
+      if (typeof v === 'number' && !Number.isFinite(v)) v = 0;
+      if (v !== null && typeof v === 'object') {
+        try {
+          v = JSON.stringify(v);
+        } catch {
+          v = String(v);
+        }
+      }
+
+      // De-dup (fast in-memory)
+      if (!this._fastStateCache) this._fastStateCache = new Map();
+      const prev = this._fastStateCache.get(sid);
+      if (prev) {
+        if (typeof v === 'number' && typeof prev.val === 'number' && Number.isFinite(v) && Number.isFinite(prev.val)) {
+          if (deadband > 0) {
+            if (Math.abs(v - prev.val) < deadband) return false;
+          } else {
+            if (v === prev.val) return false;
+          }
+        } else {
+          if (v === prev.val) return false;
+        }
+      }
+
+      this._fastStateCache.set(sid, { val: v, ts: now });
+
+      // Immediate local cache + SSE for UI
+      try { this.updateValue(sid, v, now); } catch { /* ignore */ }
+
+      // Queue persistent write
+      if (!this._fastStateQueue) this._fastStateQueue = new Map();
+      this._fastStateQueue.set(sid, { val: v, ack: !!ack });
+      this._scheduleFastStateFlush();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  _scheduleFastStateFlush() {
+    try {
+      if (this._fastStateFlushTimer) return;
+      this._fastStateFlushTimer = setTimeout(() => {
+        this._fastStateFlushTimer = null;
+        this._flushFastStateQueue();
+      }, 0);
+    } catch {
+      // ignore
+    }
+  }
+
+  _flushFastStateQueue() {
+    try {
+      const q = this._fastStateQueue;
+      if (!q || !q.size) return;
+
+      const maxInflight = Math.max(1, Number((this.config && this.config.fastStateConcurrency) || 25) || 25);
+      if (typeof this._fastStateInflight !== 'number' || !Number.isFinite(this._fastStateInflight)) this._fastStateInflight = 0;
+
+      while (this._fastStateInflight < maxInflight && q.size) {
+        const it = q.entries().next();
+        if (!it || it.done) break;
+        const sid = it.value[0];
+        const item = it.value[1] || {};
+        q.delete(sid);
+
+        this._fastStateInflight++;
+        Promise.resolve()
+          .then(() => this.setStateAsync(sid, item.val, item.ack))
+          .catch(() => {})
+          .finally(() => {
+            this._fastStateInflight--;
+            if (this._fastStateQueue && this._fastStateQueue.size) this._scheduleFastStateFlush();
+          });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   onUnload(callback) {
     try {
       // Weather timers
@@ -15416,6 +15544,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       try { if (this._nwShTimersTimeout) clearTimeout(this._nwShTimersTimeout); } catch (_e) {}
       try { this.stopNotificationMonitor(); } catch (_e) {}
       try { if (this._sseFlushTimer) clearTimeout(this._sseFlushTimer); } catch (_e) {}
+      try { if (this._fastStateFlushTimer) clearTimeout(this._fastStateFlushTimer); } catch (_e) {}
       try { if (this.emsEngine && typeof this.emsEngine.stop === 'function') this.emsEngine.stop(); } catch (_e2) {}
       try { if (this.logicEngine && typeof this.logicEngine.stop === 'function') this.logicEngine.stop(); } catch (_e3) {}
       if (this.server) this.server.close();

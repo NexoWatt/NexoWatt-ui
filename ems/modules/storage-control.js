@@ -2021,12 +2021,21 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
     async _setIfChanged(id, val) {
         const v = (val === undefined) ? null : val;
+        // Fast path: do NOT block the EMS tick on getStateAsync/setStateAsync.
+        // We keep a local de-duplication cache in the adapter (setStateFast).
         try {
-            const cur = await this.adapter.getStateAsync(id);
-            const curVal = cur ? cur.val : null;
-            if (cur && curVal === v) return;
-            await this.adapter.setStateAsync(id, v, true);
-        } catch (e) {
+            if (this.adapter && typeof this.adapter.setStateFast === 'function') {
+                this.adapter.setStateFast(id, v, true);
+                return;
+            }
+        } catch {
+            // ignore
+        }
+
+        // Fallback: still avoid the expensive pre-read.
+        try {
+            this.adapter.setStateAsync(id, v, true).catch(() => {});
+        } catch {
             // ignore
         }
     }

@@ -127,6 +127,9 @@ class PeakShavingModule extends BaseModule {
         await mk('peakShaving.control.worstPhaseOverA', 'Worst phase over (A)', 'number', 'value.current');
         await mk('peakShaving.control.lastUpdate', 'Last update', 'number', 'value.time');
 
+        // Mirror: budget for controlled loads (consumed by other EMS modules)
+        await mk('peakShaving.control.availableForControlledW', 'Available for controlled loads (W)', 'number', 'value.power');
+
         await mk('peakShaving.dynamic.allowedPowerW', 'Allowed power (W)', 'number', 'value.power');
         await mk('peakShaving.dynamic.reserveW', 'Reserve (W)', 'number', 'value.power');
         await mk('peakShaving.dynamic.effectiveLimitW', 'Dynamic effective limit (W)', 'number', 'value.power');
@@ -259,8 +262,20 @@ class PeakShavingModule extends BaseModule {
         }
 
         const samples = this._winPower.count();
-        await this.adapter.setStateAsync('peakShaving.calc.avgPowerW', typeof avgPower === 'number' ? avgPower : 0, true);
-        await this.adapter.setStateAsync('peakShaving.calc.samples', samples, true);
+        const set = (id, val) => {
+            try {
+                if (this.adapter && typeof this.adapter.setStateFast === 'function') {
+                    this.adapter.setStateFast(id, val, true);
+                } else {
+                    this.adapter.setStateAsync(id, val, true).catch(() => {});
+                }
+            } catch {
+                // ignore
+            }
+        };
+
+        set('peakShaving.calc.avgPowerW', typeof avgPower === 'number' ? avgPower : 0);
+        set('peakShaving.calc.samples', samples);
 
         // Determine power limit
         let limitW = 0;
@@ -431,40 +446,35 @@ class PeakShavingModule extends BaseModule {
             // We store values as-is and compute a conservative available budget.
             availableForControlledW = Math.max(0, limitW - Math.max(0, baseLoadW - pvW - batteryW));
 
-            await this.adapter.setStateAsync('peakShaving.dynamic.allowedPowerW', typeof allowedPowerW === 'number' ? allowedPowerW : 0, true);
-            await this.adapter.setStateAsync('peakShaving.dynamic.reserveW', reserveW || 0, true);
-            await this.adapter.setStateAsync('peakShaving.dynamic.effectiveLimitW', limitW || 0, true);
-            await this.adapter.setStateAsync('peakShaving.dynamic.baseLoadW', baseLoadW, true);
-            await this.adapter.setStateAsync('peakShaving.dynamic.pvW', pvW, true);
-            await this.adapter.setStateAsync('peakShaving.dynamic.batteryW', batteryW, true);
-            await this.adapter.setStateAsync('peakShaving.dynamic.availableForControlledW', availableForControlledW, true);
+            set('peakShaving.dynamic.allowedPowerW', typeof allowedPowerW === 'number' ? allowedPowerW : 0);
+            set('peakShaving.dynamic.reserveW', reserveW || 0);
+            set('peakShaving.dynamic.effectiveLimitW', limitW || 0);
+            set('peakShaving.dynamic.baseLoadW', baseLoadW);
+            set('peakShaving.dynamic.pvW', pvW);
+            set('peakShaving.dynamic.batteryW', batteryW);
+            set('peakShaving.dynamic.availableForControlledW', availableForControlledW);
 
             // Mirror for easier consumption by other modules
-            await this.adapter.setStateAsync('peakShaving.control.availableForControlledW', availableForControlledW, true).catch(() => {});
+            set('peakShaving.control.availableForControlledW', availableForControlledW);
         } else {
-            // ensure mirror exists
-            await this.adapter.setObjectNotExistsAsync('peakShaving.control.availableForControlledW', {
-                type: 'state',
-                common: { name: 'Available for controlled loads (W)', type: 'number', role: 'value.power', read: true, write: false },
-                native: {},
-            }).catch(() => {});
-            await this.adapter.setStateAsync('peakShaving.control.availableForControlledW', 0, true).catch(() => {});
+            // static mode: keep mirror at 0
+            set('peakShaving.control.availableForControlledW', 0);
         }
 
         // Publish control states
-        await this.adapter.setStateAsync('peakShaving.control.active', active, true);
-        await this.adapter.setStateAsync('peakShaving.control.status', status, true);
-        await this.adapter.setStateAsync('peakShaving.control.reason', reason, true);
-        await this.adapter.setStateAsync('peakShaving.control.reasonText', reasonToGerman(reason), true);
-        await this.adapter.setStateAsync('peakShaving.control.limitW', limitW || 0, true);
-        await this.adapter.setStateAsync('peakShaving.control.effectivePowerW', typeof effPower === 'number' ? effPower : 0, true);
-        await this.adapter.setStateAsync('peakShaving.control.overW', powerViolation ? overW : 0, true);
-        await this.adapter.setStateAsync('peakShaving.control.requiredReductionW', active ? requiredReductionW : 0, true);
-        await this.adapter.setStateAsync('peakShaving.control.requiredReductionA', active ? requiredReductionA : 0, true);
-        await this.adapter.setStateAsync('peakShaving.control.phaseViolation', phaseViolation, true);
-        await this.adapter.setStateAsync('peakShaving.control.worstPhase', worstPhase, true);
-        await this.adapter.setStateAsync('peakShaving.control.worstPhaseOverA', worstPhaseOverA || 0, true);
-        await this.adapter.setStateAsync('peakShaving.control.lastUpdate', now, true);
+        set('peakShaving.control.active', active);
+        set('peakShaving.control.status', status);
+        set('peakShaving.control.reason', reason);
+        set('peakShaving.control.reasonText', reasonToGerman(reason));
+        set('peakShaving.control.limitW', limitW || 0);
+        set('peakShaving.control.effectivePowerW', typeof effPower === 'number' ? effPower : 0);
+        set('peakShaving.control.overW', powerViolation ? overW : 0);
+        set('peakShaving.control.requiredReductionW', active ? requiredReductionW : 0);
+        set('peakShaving.control.requiredReductionA', active ? requiredReductionA : 0);
+        set('peakShaving.control.phaseViolation', phaseViolation);
+        set('peakShaving.control.worstPhase', worstPhase);
+        set('peakShaving.control.worstPhaseOverA', worstPhaseOverA || 0);
+        set('peakShaving.control.lastUpdate', now);
 
         // Actuation (Step 1.5)
         const actEnabled = !!cfg.actuationEnabled;

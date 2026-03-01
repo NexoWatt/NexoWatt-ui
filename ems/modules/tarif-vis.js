@@ -1277,10 +1277,17 @@ await this._setIfChanged('tarif.statusText', statusText);
     async _setIfChanged(id, val) {
         const v = (val === undefined) ? null : val;
         try {
-            const cur = await this.adapter.getStateAsync(id);
-            const curVal = cur ? cur.val : null;
-            if (cur && curVal === v) return;
-            await this.adapter.setStateAsync(id, v, true);
+            if (this.adapter && typeof this.adapter.setStateFast === 'function') {
+                this.adapter.setStateFast(id, v, true);
+                return;
+            }
+        } catch {
+            // ignore
+        }
+
+        // Fallback (non-blocking)
+        try {
+            this.adapter.setStateAsync(id, v, true).catch(() => {});
         } catch {
             // ignore
         }

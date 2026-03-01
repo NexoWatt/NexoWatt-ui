@@ -1,3 +1,9 @@
+## 0.6.198
+- EMS: **Engine-Tick wieder schnell & stabil** (1s-Takt wird nicht mehr durch State-IO „zugenagelt“)
+  - Neuer Fast-Path **`adapter.setStateFast()`**: De-Dup + queued Persist + sofortiges SSE/StateCache Update.
+  - Modul-Laufzeiten werden jetzt mit **monotonic clock** gemessen (keine NTP/Zeitsprung-Ausreißer).
+  - PeakShaving/CoreLimits/MultiUse/Speicher-/Tarif/PV-Forecast Diagnosen auf Fast-Path umgestellt → deutlich kleinere Tick-Zeiten, Lademanagement bleibt zuverlässig.
+
 ## 0.6.197
 - EMS/Lademanagement: **PV-Überschussladen wieder zuverlässig**, auch wenn Wallbox-Zähler negative Leistung (Vorzeichen-Konvention) liefern.
   - EVCS-Leistung wird intern als **positiver Betrag** behandelt (Budgets, PV-Berechnung, Grid-/Phasen-Caps) → verhindert, dass sich die Regelung „wegregelt“ oder komplett stoppt.

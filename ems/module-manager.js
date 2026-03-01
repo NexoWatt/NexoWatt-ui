@@ -240,7 +240,21 @@ class ModuleManager {
     async tick() {
         const diag = this._getDiagCfg();
         const now = Date.now();
-        const t0 = now;
+        const tickStartTs = now;
+
+        // Use monotonic clock for runtime measurement (Date.now() can jump with NTP).
+        const hrNow = () => {
+            try {
+                if (process && process.hrtime && typeof process.hrtime.bigint === 'function') {
+                    return process.hrtime.bigint();
+                }
+            } catch {
+                // ignore
+            }
+            return BigInt(Date.now()) * 1000000n;
+        };
+
+        const t0 = hrNow();
         this._tickCount = (this._tickCount || 0) + 1;
 
         /** @type {Array<{key: string, enabled: boolean, ok: boolean, ms: number, error?: string}>} */
@@ -256,7 +270,7 @@ class ModuleManager {
                 continue;
             }
 
-            const t1 = Date.now();
+            const t1 = hrNow();
             let ok = true;
             let errMsg = '';
             try {
@@ -267,16 +281,16 @@ class ModuleManager {
                 errors.push(`${key}: ${errMsg}`);
                 this.adapter.log.warn(`Modul '${key}': Fehler im Regel-Tick: ${errMsg}`);
             }
-            const ms = Date.now() - t1;
-            results.push({ key, enabled: true, ok, ms, ...(ok ? {} : { error: errMsg }) });
+            const ms = Number(hrNow() - t1) / 1e6;
+            results.push({ key, enabled: true, ok, ms: Math.round(ms), ...(ok ? {} : { error: errMsg }) });
         }
 
-        const totalMs = Date.now() - t0;
+        const totalMs = Math.round(Number(hrNow() - t0) / 1e6);
 
         // Persist last results for UI/Installer APIs
         try {
             this.lastTickDiag = {
-                ts: now,
+                ts: tickStartTs,
                 totalMs,
                 results,
                 errors,
@@ -311,7 +325,7 @@ class ModuleManager {
         if (shouldWrite) {
             this._lastDiagWriteMs = now;
             try {
-                await this.adapter.setStateAsync('diagnostics.lastTick', t0, true);
+                await this.adapter.setStateAsync('diagnostics.lastTick', tickStartTs, true);
                 await this.adapter.setStateAsync('diagnostics.lastTickMs', totalMs, true);
                 await this.adapter.setStateAsync('diagnostics.summary', summary, true);
                 await this.adapter.setStateAsync('diagnostics.tickCount', this._tickCount, true);

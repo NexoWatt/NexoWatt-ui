@@ -307,32 +307,44 @@ class CoreLimitsModule extends BaseModule {
         // Publish states (low overhead, high value for support)
         // ------------------------------------------------------------
         try {
-            await this.adapter.setStateAsync('ems.core.lastUpdate', now, true);
-            await this.adapter.setStateAsync('ems.core.gridConnectionLimitW_cfg', Math.round(gridConnectionLimitW_cfg || 0), true);
-            await this.adapter.setStateAsync('ems.core.gridSafetyMarginW', Math.round(gridSafetyMarginW || 0), true);
-            await this.adapter.setStateAsync('ems.core.gridConstraintsCapW', Math.round((typeof gridConstraintsCapW === 'number') ? gridConstraintsCapW : 0), true);
-            await this.adapter.setStateAsync('ems.core.gridImportLimitW_physical', Math.round(gridImportLimitW_physical || 0), true);
-            await this.adapter.setStateAsync('ems.core.gridImportLimitW_peakShaving', Math.round(gridImportLimitW_peakShaving || 0), true);
-            await this.adapter.setStateAsync('ems.core.gridImportLimitW_source', gridImportLimitW_source || '', true);
-            await this.adapter.setStateAsync('ems.core.gridImportLimitW_effective', Math.round(gridImportLimitW_effective || 0), true);
-            await this.adapter.setStateAsync('ems.core.gridMaxPhaseA_cfg', Math.round(gridMaxPhaseA_cfg || 0), true);
+            const set = (id, val) => {
+                try {
+                    if (this.adapter && typeof this.adapter.setStateFast === 'function') {
+                        this.adapter.setStateFast(id, val, true);
+                    } else {
+                        this.adapter.setStateAsync(id, val, true).catch(() => {});
+                    }
+                } catch {
+                    // ignore
+                }
+            };
 
-            await this.adapter.setStateAsync('ems.core.peakActive', !!peakActive, true);
-            await this.adapter.setStateAsync('ems.core.peakBudgetW', Math.round((typeof peakBudgetW === 'number') ? peakBudgetW : 0), true);
+            set('ems.core.lastUpdate', now);
+            set('ems.core.gridConnectionLimitW_cfg', Math.round(gridConnectionLimitW_cfg || 0));
+            set('ems.core.gridSafetyMarginW', Math.round(gridSafetyMarginW || 0));
+            set('ems.core.gridConstraintsCapW', Math.round((typeof gridConstraintsCapW === 'number') ? gridConstraintsCapW : 0));
+            set('ems.core.gridImportLimitW_physical', Math.round(gridImportLimitW_physical || 0));
+            set('ems.core.gridImportLimitW_peakShaving', Math.round(gridImportLimitW_peakShaving || 0));
+            set('ems.core.gridImportLimitW_source', gridImportLimitW_source || '');
+            set('ems.core.gridImportLimitW_effective', Math.round(gridImportLimitW_effective || 0));
+            set('ems.core.gridMaxPhaseA_cfg', Math.round(gridMaxPhaseA_cfg || 0));
 
-            await this.adapter.setStateAsync('ems.core.tariffBudgetW', Math.round((typeof tariffBudgetW === 'number') ? tariffBudgetW : 0), true);
-            await this.adapter.setStateAsync('ems.core.gridChargeAllowed', !!gridChargeAllowed, true);
-            await this.adapter.setStateAsync('ems.core.dischargeAllowed', !!dischargeAllowed, true);
+            set('ems.core.peakActive', !!peakActive);
+            set('ems.core.peakBudgetW', Math.round((typeof peakBudgetW === 'number') ? peakBudgetW : 0));
 
-            await this.adapter.setStateAsync('ems.core.para14aActive', !!para14aActive, true);
-            await this.adapter.setStateAsync('ems.core.para14aMode', para14aMode || '', true);
-            await this.adapter.setStateAsync('ems.core.para14aEvcsCapW', Math.round((typeof para14aEvcsCapW === 'number') ? para14aEvcsCapW : 0), true);
+            set('ems.core.tariffBudgetW', Math.round((typeof tariffBudgetW === 'number') ? tariffBudgetW : 0));
+            set('ems.core.gridChargeAllowed', !!gridChargeAllowed);
+            set('ems.core.dischargeAllowed', !!dischargeAllowed);
 
-            await this.adapter.setStateAsync('ems.core.evcsHighLevelCapW', Math.round((typeof evcsHighLevelCapW === 'number') ? evcsHighLevelCapW : 0), true);
-            await this.adapter.setStateAsync('ems.core.evcsHighLevelBinding', binding || '', true);
+            set('ems.core.para14aActive', !!para14aActive);
+            set('ems.core.para14aMode', para14aMode || '');
+            set('ems.core.para14aEvcsCapW', Math.round((typeof para14aEvcsCapW === 'number') ? para14aEvcsCapW : 0));
+
+            set('ems.core.evcsHighLevelCapW', Math.round((typeof evcsHighLevelCapW === 'number') ? evcsHighLevelCapW : 0));
+            set('ems.core.evcsHighLevelBinding', binding || '');
 
             // Keep JSON short enough; this is meant for diagnostics.
-            await this.adapter.setStateAsync('ems.core.snapshot', JSON.stringify(snapshot), true);
+            set('ems.core.snapshot', JSON.stringify(snapshot));
         } catch {
             // ignore
         }
