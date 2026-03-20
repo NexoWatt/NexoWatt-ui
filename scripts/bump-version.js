@@ -2,9 +2,10 @@
 /*
   NexoWatt UI – version bump helper
 
-  Updates both:
-    - package.json (npm)
-    - io-package.json (ioBroker)
+  Updates all relevant adapter versions:
+    - package.json.version
+    - io-package.json.common.version
+    - io-package.json.version
 
   Usage:
     node scripts/bump-version.js [patch|minor|major] [--dry-run] [--quiet]
@@ -29,7 +30,6 @@ function writeJson(filePath, obj) {
 
 function parseSemver(v) {
   const s = String(v || '').trim();
-  // Very small semver parser: major.minor.patch (no prerelease/build)
   const m = /^([0-9]+)\.([0-9]+)\.([0-9]+)$/.exec(s);
   if (!m) return null;
   return {
@@ -66,14 +66,23 @@ function main() {
 
   const pkgVer = pkg.json && pkg.json.version ? String(pkg.json.version) : '';
   const ioVer = io.json && io.json.common && io.json.common.version ? String(io.json.common.version) : '';
+  const ioTopVer = io.json && io.json.version ? String(io.json.version) : '';
 
-  // Prefer package.json as the single source of truth, but enforce consistency.
-  const current = pkgVer || ioVer;
-  if (!current) throw new Error('Unable to detect current version (package.json.version / io-package.json.common.version).');
+  const current = pkgVer || ioVer || ioTopVer;
+  if (!current) {
+    throw new Error('Unable to detect current version (package.json.version / io-package.json.common.version / io-package.json.version).');
+  }
 
   if (pkgVer && ioVer && pkgVer !== ioVer) {
     throw new Error(
-      `Version mismatch: package.json=${pkgVer} vs io-package.json=${ioVer}. ` +
+      `Version mismatch: package.json=${pkgVer} vs io-package.json.common.version=${ioVer}. ` +
+        'Please align them first (or fix manually) before bumping.'
+    );
+  }
+
+  if (ioTopVer && ioVer && ioTopVer !== ioVer) {
+    throw new Error(
+      `Version mismatch: io-package.json.version=${ioTopVer} vs io-package.json.common.version=${ioVer}. ` +
         'Please align them first (or fix manually) before bumping.'
     );
   }
@@ -81,16 +90,15 @@ function main() {
   const next = bumpSemver(current, bumpType);
 
   if (!quiet) {
-    // eslint-disable-next-line no-console
     console.log(`[version] ${current} -> ${next}${dryRun ? ' (dry-run)' : ''}`);
   }
 
   if (dryRun) return;
 
-  // Update versions
   pkg.json.version = next;
   io.json.common = io.json.common && typeof io.json.common === 'object' ? io.json.common : {};
   io.json.common.version = next;
+  io.json.version = next;
 
   writeJson(pkgPath, pkg.json);
   writeJson(ioPath, io.json);
@@ -99,7 +107,6 @@ function main() {
 try {
   main();
 } catch (e) {
-  // eslint-disable-next-line no-console
   console.error(e && e.message ? e.message : e);
   process.exit(1);
 }

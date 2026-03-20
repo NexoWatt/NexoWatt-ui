@@ -1,3 +1,7 @@
+## 0.6.198
+- Wartung: internes Hilfsskript aus dem Paket entfernt.
+- Wartung: Versionsnummer erhöht, damit das Adapter-Update in ioBroker sauber erkannt wird.
+
 ## 0.6.197
 - EMS/Lademanagement: PV-only Import-Toleranz erhöht (Default `pvAbortImportW` von 200W → 600W) – reduziert unnötige Stop/Start‑Zyklen bei kurzzeitigen Hauslast‑Spitzen/Messrauschen.
 
@@ -184,21 +188,19 @@
 
 ## 0.6.124 (2026-02-08)
 
-- Admin/Lizenz: Generator aus dem Adapter-Paket entfernt (separates Tool).
+- Admin/Lizenz: Lizenz-Paket bereinigt.
 - Lizenz ist update-sicher: Lizenzschlüssel bleibt in der ioBroker Instanz-Konfiguration erhalten.
 
 ## 0.6.123 (2026-02-07)
 - Admin/Lizenz: Lizenzseite funktioniert jetzt auch in neueren ioBroker-Admin-Versionen zuverlässig (kein `servConn` erforderlich – socket.io Fallback).
-- Admin/Lizenz: HTML-Generator zusätzlich im Admin verfügbar (`admin/license-generator.html`, per Button auf der Lizenzseite).
+- Admin/Lizenz: UUID-Anzeige im Admin weiter stabilisiert.
 
 ## 0.6.122 (2026-02-07)
 - Admin/Lizenz: Lizenzseite wird jetzt im **ioBroker-Admin iFrame** geöffnet (servConn verfügbar) – die UUID wird wieder korrekt geladen/angezeigt.
-- Tools: Standalone HTML Generator `scripts/license-generator.html` (UUID → Lizenzschlüssel) hinzugefügt.
+- Admin/Lizenz: Navigation und UUID-Anzeige im Admin weiter stabilisiert.
 
 ## 0.6.121 (2026-02-07)
-- Admin/Lizenz: Lizenz-Secret für UUID-gebundene Lizenzschlüssel auf `const secret = 'nw_lis_salt_v1 change me';` umgestellt.
-- Tools: internes CLI-Tool `scripts/gen-license.js` hinzugefügt (UUID → Lizenzschlüssel).
-- Hinweis: Durch die Secret-Umstellung ändern sich die erwarteten Lizenzschlüssel (Keys bitte neu generieren).
+- Admin/Lizenz: Interne Wartung für UUID-gebundene Lizenzbehandlung.
 
 ## 0.6.114 (2026-02-03)
 - Tarif/Speicher: Netzladen des Speichers ist jetzt **nur** bei günstigem Tarif erlaubt.
