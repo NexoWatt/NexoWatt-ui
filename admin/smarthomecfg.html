@@ -1,57 +1,51 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="utf-8"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NexoWatt – SmartHome Config</title>
   <style>
-    body{background:#0b0d0f;color:#e7edf2;font-family:system-ui,Segoe UI,Roboto,Ubuntu,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
-    .box{opacity:.95;text-align:center;max-width:720px;padding:24px}
-    .title{font-size:22px;margin:0 0 10px 0}
-    .sub{opacity:.8;margin:0 0 18px 0;font-size:14px;line-height:1.4}
-    code{font-family:ui-monospace,Menlo,Consolas,monospace}
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      display: grid;
+      place-items: center;
+      background: #0b1220;
+      color: rgba(255,255,255,0.92);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif;
+    }
+    .box {
+      max-width: 640px;
+      padding: 24px;
+      text-align: center;
+      border: 1px solid rgba(148,163,184,0.22);
+      border-radius: 18px;
+      background: rgba(2,6,23,0.55);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+    }
+    a { color: #22c55e; }
   </style>
+  <script>
+    (function () {
+      var search = window.location.search || '';
+      var target = 'react/index.html' + search + '#/redirect/smarthome-config';
+      window.__nwReactAdminTarget = target;
+      window.location.replace(target);
+    })();
+  </script>
 </head>
 <body>
   <div class="box">
-    <h2 class="title">NexoWatt – SmartHome Config</h2>
-    <p class="sub">Weiterleitung wird vorbereitet…</p>
-    <div id="msg" class="sub">Port wird geladen…</div>
+    <h1>NexoWatt – SmartHome Config</h1>
+    <p>Die Admin-Oberfläche wurde auf React umgestellt. Falls die Weiterleitung blockiert wird, öffne bitte <a id="manualLink" href="react/index.html#/redirect/smarthome-config">die React-Adminseite</a>.</p>
   </div>
-
   <script>
-  (function(){
-    function getQuery(key){ const m = new URLSearchParams(window.location.search); return m.get(key); }
-    var inst = getQuery('instance') || '0';
-
-    function buildBase(port){
-      var host = window.location.hostname;
-      var proto = window.location.protocol;
-      return proto + '//' + host + ':' + port;
-    }
-
-    function go(port){
-      var base = buildBase(port);
-      var url = base + '/smarthome-config.html';
-      var msg = document.getElementById('msg');
-      if (msg) msg.innerHTML = 'Öffne: <code>' + url + '</code>';
-      try { window.top.location.href = url; } catch(_e) { window.location.href = url; }
-    }
-
-    function fallback(){ go(8188); }
-
-    try {
-      if (window.parent && window.parent.servConn) {
-        window.parent.servConn.getObject('system.adapter.nexowatt-ui.' + inst, function(err, obj){
-          var port = (obj && obj.native && obj.native.port) || 8188;
-          go(port);
-        });
-      } else {
-        fallback();
+    (function () {
+      var link = document.getElementById('manualLink');
+      if (link && window.__nwReactAdminTarget) {
+        link.href = window.__nwReactAdminTarget;
       }
-    } catch(e) {
-      fallback();
-    }
-  })();
+    })();
   </script>
 </body>
 </html>

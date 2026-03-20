@@ -1,415 +1,50 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NexoWatt – Lizenz</title>
   <style>
-    :root{
-      --bg: #0b1220;
-      --panel: rgba(2,6,23,0.55);
-      --border: rgba(148,163,184,0.22);
-      --txt: rgba(255,255,255,0.92);
-      --muted: rgba(255,255,255,0.64);
-      --accent: #22c55e;
-      --danger: #ef4444;
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      display: grid;
+      place-items: center;
+      background: #0b1220;
+      color: rgba(255,255,255,0.92);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif;
     }
-    html, body{ height:100%; }
-    body{
-      margin:0;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
-      background: radial-gradient(1200px 600px at 30% 0%, rgba(30,58,138,0.25), transparent 55%),
-                  radial-gradient(900px 500px at 90% 20%, rgba(14,116,144,0.18), transparent 60%),
-                  var(--bg);
-      color: var(--txt);
-    }
-    .wrap{
-      max-width: 980px;
-      margin: 0 auto;
-      padding: 28px 22px;
-    }
-    h1{
-      margin: 0 0 8px;
-      font-size: 1.25rem;
-      letter-spacing: 0.2px;
-    }
-    .sub{
-      margin: 0 0 18px;
-      color: var(--muted);
-      font-size: 0.95rem;
-      line-height: 1.4;
-    }
-    .card{
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      background: var(--panel);
+    .box {
+      max-width: 640px;
+      padding: 24px;
+      text-align: center;
+      border: 1px solid rgba(148,163,184,0.22);
+      border-radius: 18px;
+      background: rgba(2,6,23,0.55);
       box-shadow: 0 20px 60px rgba(0,0,0,0.35);
-      padding: 18px;
     }
-    .grid{
-      display:grid;
-      grid-template-columns: 1fr;
-      gap: 14px;
-    }
-    @media (min-width: 860px){
-      .grid{ grid-template-columns: 1fr 1fr; }
-    }
-    label{
-      display:block;
-      font-size: 0.85rem;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-    .row{
-      display:flex;
-      gap: 10px;
-      align-items:center;
-    }
-    input{
-      width:100%;
-      border: 1px solid var(--border);
-      background: rgba(2,6,23,0.35);
-      color: var(--txt);
-      border-radius: 12px;
-      padding: 10px 12px;
-      outline: none;
-      font-size: 0.95rem;
-    }
-    input:focus{
-      border-color: rgba(34,197,94,0.65);
-      box-shadow: 0 0 0 3px rgba(34,197,94,0.18);
-    }
-    input[readonly]{
-      opacity: 0.9;
-    }
-    .btn{
-      appearance:none;
-      border: 1px solid var(--border);
-      background: rgba(2,6,23,0.45);
-      color: var(--txt);
-      border-radius: 12px;
-      padding: 10px 14px;
-      cursor:pointer;
-      font-weight: 600;
-    }
-    .btn:hover{ border-color: rgba(34,197,94,0.65); }
-    .btn--primary{
-      border-color: rgba(34,197,94,0.55);
-      background: rgba(34,197,94,0.10);
-    }
-    .hint{
-      margin-top: 10px;
-      font-size: 0.85rem;
-      color: var(--muted);
-      line-height: 1.4;
-    }
-    .status{
-      margin-top: 12px;
-      font-weight: 700;
-      font-size: 0.95rem;
-    }
-    .ok{ color: var(--accent); }
-    .bad{ color: var(--danger); }
-    code{
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      font-size: 0.92rem;
-      color: rgba(255,255,255,0.88);
-    }
+    a { color: #22c55e; }
   </style>
+  <script>
+    (function () {
+      var search = window.location.search || '';
+      var target = 'react/index.html' + search + '#/license';
+      window.__nwReactAdminTarget = target;
+      window.location.replace(target);
+    })();
+  </script>
 </head>
 <body>
-  <div class="wrap">
+  <div class="box">
     <h1>NexoWatt – Lizenz</h1>
-    <p class="sub">
-      Hier wird der Lizenzschlüssel für diese ioBroker‑Instanz hinterlegt. Der Schlüssel ist an die System‑UUID gekoppelt.
-      <br/>Hinweis: Der Lizenzschlüssel ist bewusst nur im Admin verfügbar.
-    </p>
-
-    <div class="card">
-      <div class="grid">
-        <div>
-          <label>System‑UUID (ioBroker)</label>
-          <div class="row">
-            <input id="uuid" type="text" readonly value="Lade…" />
-            <button class="btn" id="copyUuid">Kopieren</button>
-          </div>
-          <div class="hint">
-            Diese UUID bitte beim Support/Vertrieb angeben – daraus wird der Lizenzschlüssel erzeugt. (Update-sicher gespeichert)
-          </div>
-        </div>
-
-        <div>
-          <label>Lizenzschlüssel</label>
-          <input id="licenseKey" type="text" placeholder="z. B. NW1-XXXX-XXXX-…" />
-          <div class="hint">
-            Nach dem Speichern startet ioBroker den Adapter ggf. neu. Bei ungültigem Schlüssel bleibt der Adapter gesperrt.
-          </div>
-        </div>
-      </div>
-
-      <div style="display:flex; gap:10px; margin-top: 16px; flex-wrap: wrap;">
-        <button class="btn btn--primary" id="save">Speichern</button>
-        <button class="btn" id="reload">Neu laden</button>
-      </div>
-
-      <div class="status" id="status"></div>
-    </div>
+    <p>Die Admin-Oberfläche wurde auf React umgestellt. Falls die Weiterleitung blockiert wird, öffne bitte <a id="manualLink" href="react/index.html#/license">die React-Adminseite</a>.</p>
   </div>
-
-  <!-- ioBroker Admin uses socket.io. Some admin versions do not expose "servConn" anymore.
-       We load socket.io and fall back to a direct socket connection if needed. -->
-  <script src="../../lib/js/socket.io.js" onerror="this.onerror=null;this.src='/lib/js/socket.io.js';"></script>
-
   <script>
-    (function(){
-      const qs = new URLSearchParams(window.location.search);
-      const inst = qs.get('instance') || '0';
-      const adapterId = 'system.adapter.nexowatt-ui.' + inst;
-
-      const elUuid = document.getElementById('uuid');
-      const elKey = document.getElementById('licenseKey');
-      const elStatus = document.getElementById('status');
-
-      function setStatus(text, ok){
-        elStatus.textContent = text || '';
-        elStatus.className = 'status ' + (ok ? 'ok' : 'bad');
+    (function () {
+      var link = document.getElementById('manualLink');
+      if (link && window.__nwReactAdminTarget) {
+        link.href = window.__nwReactAdminTarget;
       }
-
-      function extractUuid(obj){
-        if (!obj) return '';
-        if (obj.native && typeof obj.native.uuid === 'string') return obj.native.uuid;
-        if (obj.native && typeof obj.native.UUID === 'string') return obj.native.UUID;
-        if (obj.common && typeof obj.common.uuid === 'string') return obj.common.uuid;
-        if (obj.common && typeof obj.common.UUID === 'string') return obj.common.UUID;
-        return '';
-      }
-
-      // --- Admin connection helper (servConn OR socket.io) ---
-      function _pickExistingSocket(){
-        return (window.socket)
-          || (window.parent && window.parent.socket)
-          || (window.top && window.top.socket)
-          || null;
-      }
-
-      function _pickServConn(){
-        // Older ioBroker Admin versions expose servConn (with getObject/setObject)
-        return (window.servConn)
-          || (window.parent && window.parent.servConn)
-          || (window.top && window.top.servConn)
-          || null;
-      }
-
-      function getAdminConn(){
-        const sc = _pickServConn();
-        if (sc && typeof sc.getObject === 'function' && typeof sc.setObject === 'function'){
-          return {
-            type: 'servConn',
-            getObject: (id, cb) => sc.getObject(id, (err, obj) => cb(err || null, obj || null)),
-            getState: (id, cb) => sc.getState(id, (err, st) => cb(err || null, st || null)),
-            setObject: (id, obj, cb) => sc.setObject(id, obj, (err) => cb(err || null)),
-          };
-        }
-
-        let s = _pickExistingSocket();
-        // Some Admin versions don't expose "socket" to adapter tabs – create our own (and reuse it).
-        if (!s && window.io && typeof window.io.connect === 'function'){
-          try{
-            window.__nwAdminSocket = window.__nwAdminSocket || window.io.connect();
-            s = window.__nwAdminSocket;
-          } catch(_e) {
-            s = null;
-          }
-        }
-        if (s && typeof s.emit === 'function'){
-          return {
-            type: 'socket',
-            getObject: (id, cb) => {
-              try{
-                s.emit('getObject', id, (a, b) => {
-                  // Admin socket callbacks are inconsistent across versions:
-                  // - either (obj)
-                  // - or (err, obj)
-                  const obj = (b !== undefined) ? b : a;
-                  const err = (b !== undefined) ? a : null;
-                  cb(err || null, obj || null);
-                });
-              } catch(e){
-                cb(e, null);
-              }
-            },
-            getState: (id, cb) => {
-              try{
-                s.emit('getState', id, (a, b) => {
-                  const st = (b !== undefined) ? b : a;
-                  const err = (b !== undefined) ? a : null;
-                  cb(err || null, st || null);
-                });
-              } catch(e){
-                cb(e, null);
-              }
-            },
-            setObject: (id, obj, cb) => {
-              try{
-                s.emit('setObject', id, obj, (res) => {
-                  // res might be undefined/null (OK) or an error object/string
-                  if (!res) return cb(null);
-                  if (res === true) return cb(null);
-                  if (typeof res === 'string') return cb(res);
-                  if (typeof res === 'object' && res.error) return cb(res.error);
-                  return cb(null);
-                });
-              } catch(e){
-                cb(e);
-              }
-            },
-          };
-        }
-        return null;
-      }
-
-      
-      function getStateP(conn, id){
-        return new Promise((resolve) => {
-          if (!conn || typeof conn.getState !== 'function') return resolve(null);
-          try{
-            conn.getState(id, (err, st) => {
-              if (err) return resolve(null);
-              resolve(st || null);
-            });
-          } catch(_e){
-            resolve(null);
-          }
-        });
-      }
-
-      async function refreshLicenseStatus(conn){
-        try{
-          const base = `nexowatt-ui.${inst}.license.`;
-          const [stValid, stType, stMsg, stDays, stExp] = await Promise.all([
-            getStateP(conn, base + 'valid'),
-            getStateP(conn, base + 'type'),
-            getStateP(conn, base + 'message'),
-            getStateP(conn, base + 'daysRemaining'),
-            getStateP(conn, base + 'expiresAt'),
-          ]);
-
-          const valid = !!(stValid && stValid.val === true);
-          const type = stType && stType.val !== undefined ? String(stType.val) : '';
-          const msg  = stMsg  && stMsg.val  !== undefined ? String(stMsg.val)  : '';
-          const days = stDays && stDays.val !== undefined ? Number(stDays.val) || 0 : 0;
-          const exp  = stExp  && stExp.val  !== undefined ? Number(stExp.val)  || 0 : 0;
-
-          let text = '';
-          let ok = false;
-
-          if (type === 'trial') {
-            ok = valid && days > 0;
-            text = ok
-              ? `Lizenzstatus: Testlizenz aktiv – noch ${days} Tage ✅`
-              : 'Lizenzstatus: Testlizenz abgelaufen ❌';
-            if (exp) {
-              try {
-                const d = new Date(exp);
-                text += ` (bis ${d.toLocaleDateString()})`;
-              } catch(_e) {}
-            }
-          } else if (valid) {
-            ok = true;
-            text = 'Lizenzstatus: gültig ✅';
-          } else {
-            ok = false;
-            text = `Lizenzstatus: ${msg || 'gesperrt/ungültig'} ❌`;
-          }
-
-          setStatus(text, ok);
-        } catch(e) {
-          setStatus('Bereit.', true);
-        }
-      }
-function loadAll(){
-        setStatus('Lade Daten…', true);
-        const conn = getAdminConn();
-        if (!conn){
-          setStatus('Admin‑Verbindung nicht verfügbar. (Weder servConn noch socket.io gefunden.) Bitte Seite im ioBroker‑Admin öffnen.', false);
-          return;
-        }
-
-        // UUID (prefer object: system.meta.uuid). Some setups expose it as state only.
-        conn.getObject('system.meta.uuid', function(err, obj){
-          if (!err){
-            const u = extractUuid(obj);
-            if (u){
-              elUuid.value = u;
-              return;
-            }
-          }
-
-          // Fallback: try state
-          if (typeof conn.getState === 'function'){
-            conn.getState('system.meta.uuid', function(err2, st){
-              if (err2){
-                elUuid.value = 'Nicht verfügbar';
-                setStatus('UUID konnte nicht gelesen werden: ' + String(err2), false);
-                return;
-              }
-              const v = st && (st.val !== undefined ? String(st.val) : '');
-              elUuid.value = v || 'Nicht verfügbar';
-            });
-          } else {
-            elUuid.value = 'Nicht verfügbar';
-            if (err) setStatus('UUID konnte nicht gelesen werden: ' + String(err), false);
-          }
-        });
-
-        // Adapter object (licenseKey)
-        conn.getObject(adapterId, function(err, obj){
-          if (err || !obj){
-            setStatus('Adapter‑Objekt nicht gefunden: ' + adapterId, false);
-            return;
-          }
-          elKey.value = (obj.native && obj.native.licenseKey) ? String(obj.native.licenseKey) : '';
-          refreshLicenseStatus(conn);
-        });
-      }
-
-      document.getElementById('copyUuid').addEventListener('click', async () => {
-        try{
-          await navigator.clipboard.writeText(elUuid.value);
-          setStatus('UUID kopiert ✅', true);
-        } catch(e){
-          setStatus('Kopieren nicht möglich – bitte manuell markieren.', false);
-        }
-      });
-
-      document.getElementById('reload').addEventListener('click', () => loadAll());
-
-      document.getElementById('save').addEventListener('click', () => {
-        const key = (elKey.value || '').trim();
-
-        const conn = getAdminConn();
-        if (!conn){
-          setStatus('Speichern nicht möglich (Admin‑Verbindung fehlt). Bitte Seite im ioBroker‑Admin öffnen.', false);
-          return;
-        }
-        conn.getObject(adapterId, function(err, obj){
-          if (err || !obj){
-            setStatus('Adapter‑Objekt nicht gefunden: ' + adapterId, false);
-            return;
-          }
-          obj.native = obj.native || {};
-          obj.native.licenseKey = key;
-          conn.setObject(adapterId, obj, function(err2){
-            if (err2){
-              setStatus('Speichern fehlgeschlagen: ' + String(err2), false);
-              return;
-            }
-            setStatus('Gespeichert ✅ Bitte Adapter ggf. neu starten.', true);
-          });
-        });
-      });
-
-      loadAll();
     })();
   </script>
 </body>

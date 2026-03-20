@@ -1,95 +1,51 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="utf-8"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NexoWatt – Installer</title>
   <style>
-    body{background:#0b0d0f;color:#e7edf2;font-family:system-ui,Segoe UI,Roboto,Ubuntu,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
-    .box{opacity:.95;text-align:center;max-width:640px;padding:24px}
-    .title{font-size:22px;margin:0 0 10px 0}
-    .sub{opacity:.8;margin:0 0 18px 0;font-size:14px;line-height:1.4}
-    .actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px}
-    .btn{appearance:none;border:1px solid rgba(231,237,242,0.18);background:rgba(231,237,242,0.06);color:#e7edf2;padding:12px 14px;border-radius:10px;cursor:pointer;font-size:14px}
-    .btn.primary{background:rgba(22,163,74,0.25);border-color:rgba(22,163,74,0.35)}
-    .btn:hover{filter:brightness(1.08)}
-    .hint{margin-top:18px;opacity:.7;font-size:12px}
-    code{font-family:ui-monospace,Menlo,Consolas,monospace}
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      display: grid;
+      place-items: center;
+      background: #0b1220;
+      color: rgba(255,255,255,0.92);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif;
+    }
+    .box {
+      max-width: 640px;
+      padding: 24px;
+      text-align: center;
+      border: 1px solid rgba(148,163,184,0.22);
+      border-radius: 18px;
+      background: rgba(2,6,23,0.55);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+    }
+    a { color: #22c55e; }
   </style>
+  <script>
+    (function () {
+      var search = window.location.search || '';
+      var target = 'react/index.html' + search + '#/installer';
+      window.__nwReactAdminTarget = target;
+      window.location.replace(target);
+    })();
+  </script>
 </head>
 <body>
   <div class="box">
-    <h2 class="title">NexoWatt – Installer</h2>
-    <p class="sub">Wähle, was geöffnet werden soll. Die URL wird aus der Adapter-Instanz ermittelt (Port).<br/>Tipp: Die Installer-Seite ist für Konfiguration/Mapping gedacht.</p>
-
-    <div class="actions">
-      <button id="btnVis" class="btn primary" type="button">VIS öffnen</button>
-      <button id="btnApps" class="btn" type="button">EMS Apps öffnen</button>
-      <button id="btnSim" class="btn" type="button">Simulation</button>
-      <button id="btnLicense" class="btn" type="button">Lizenz</button>
-      <button id="btnShVis" class="btn" type="button">SmartHome VIS</button>
-      <button id="btnShCfg" class="btn" type="button">SmartHome Config</button>
-    </div>
-
-    <!-- Hinweisfeld: bewusst ohne direkte URL-Ausgabe, damit Endkunden nicht verwirrt werden. -->
-    <div class="hint" id="msg">Port wird geladen…</div>
+    <h1>NexoWatt – Installer</h1>
+    <p>Die Admin-Oberfläche wurde auf React umgestellt. Falls die Weiterleitung blockiert wird, öffne bitte <a id="manualLink" href="react/index.html#/installer">die React-Adminseite</a>.</p>
   </div>
-
   <script>
-  (function(){
-    function getQuery(key){ const m = new URLSearchParams(window.location.search); return m.get(key); }
-    var inst = getQuery('instance') || '0';
-
-    function buildBase(port){
-      var host = window.location.hostname;
-      var proto = window.location.protocol;
-      return proto + '//' + host + ':' + port;
-    }
-
-    function bind(base){
-      var msg = document.getElementById('msg');
-      var btnVis = document.getElementById('btnVis');
-      var btnApps = document.getElementById('btnApps');
-      var btnSim = document.getElementById('btnSim');
-      var btnLicense = document.getElementById('btnLicense');
-      var btnShVis = document.getElementById('btnShVis');
-      var btnShCfg = document.getElementById('btnShCfg');
-
-      var visUrl = base + '/';
-      var appsUrl = base + '/ems-apps.html';
-      var simUrl = base + '/simulation.html';
-      var shVisUrl = base + '/smarthome.html';
-      var shCfgUrl = base + '/smarthome-config.html';
-
-      // URLs bewusst NICHT ausgeben (nur per Button öffnen), damit der Installer für Endkunden clean bleibt.
-      msg.textContent = 'Bereit.';
-
-      btnVis.onclick = function(){ window.top.location.href = visUrl; };
-      btnApps.onclick = function(){ window.top.location.href = appsUrl; };
-      btnSim.onclick = function(){ window.top.location.href = simUrl; };
-      if (btnLicense) btnLicense.onclick = function(){
-        // Lizenzverwaltung läuft bewusst nur im ioBroker-Admin.
-        // Wichtig: In der Admin-iFrame bleiben, damit "servConn" verfügbar ist.
-        window.location.href = 'license.html?instance=' + inst;
-      };
-      if (btnShVis) btnShVis.onclick = function(){ window.top.location.href = shVisUrl; };
-      if (btnShCfg) btnShCfg.onclick = function(){ window.top.location.href = shCfgUrl; };
-    }
-
-    function fallback(){ bind(buildBase(8188)); }
-
-    try {
-      if (window.parent && window.parent.servConn) {
-        window.parent.servConn.getObject('system.adapter.nexowatt-ui.' + inst, function(err, obj){
-          var port = (obj && obj.native && obj.native.port) || 8188;
-          bind(buildBase(port));
-        });
-      } else {
-        fallback();
+    (function () {
+      var link = document.getElementById('manualLink');
+      if (link && window.__nwReactAdminTarget) {
+        link.href = window.__nwReactAdminTarget;
       }
-    } catch(e) {
-      fallback();
-    }
-  })();
+    })();
   </script>
 </body>
 </html>

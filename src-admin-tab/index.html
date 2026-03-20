@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NexoWatt Admin</title>
+    <script>
+      (function () {
+        if (window.io || window.socket || (window.parent && window.parent.socket) || (window.top && window.top.socket)) {
+          return;
+        }
+
+        var promise;
+        window.__nwSocketLoader = function () {
+          if (promise) return promise;
+          promise = new Promise(function (resolve, reject) {
+            var candidates = [];
+            var qs = new URLSearchParams(window.location.search || '');
+            var host = qs.get('host') || window.location.hostname;
+            var port = qs.get('port') || '8081';
+
+            if (window.location.port === '5173' || window.location.port === '3000') {
+              candidates.push(window.location.protocol + '//' + host + ':' + port + '/lib/js/socket.io.js');
+            }
+            candidates.push('/lib/js/socket.io.js');
+            candidates.push('../../../lib/js/socket.io.js');
+
+            var index = 0;
+            var tryNext = function () {
+              if (index >= candidates.length) {
+                reject(new Error('socket.io.js konnte nicht geladen werden'));
+                return;
+              }
+
+              var src = candidates[index++];
+              if (document.querySelector('script[data-nw-socket-src="' + src + '"]')) {
+                resolve();
+                return;
+              }
+
+              var script = document.createElement('script');
+              script.async = true;
+              script.dataset.nwSocketSrc = src;
+              script.onload = function () { resolve(); };
+              script.onerror = function () {
+                script.remove();
+                tryNext();
+              };
+              script.src = src;
+              document.head.appendChild(script);
+            };
+
+            tryNext();
+          });
+          return promise;
+        };
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./src/main.jsx"></script>
+  </body>
+</html>

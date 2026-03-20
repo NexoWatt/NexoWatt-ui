@@ -1415,12 +1415,12 @@
     "platform": "Javascript/Node.js",
     "mode": "daemon",
     "compact": true,
-    "materialize": false,
     "enabled": true,
     "loglevel": "info",
     "type": "visualization",
     "adminUI": {
-      "config": "json"
+      "config": "json",
+      "tab": "html"
     },
     "keywords": [
       "visualization",
