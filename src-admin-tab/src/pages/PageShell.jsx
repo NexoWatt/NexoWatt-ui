@@ -25,7 +25,6 @@ export default function PageShell({
           <div className="nw-brand">
             <img className="nw-brand__logo" src="../admin.png" alt="NexoWatt" />
             <div>
-              <div className="nw-brand__eyebrow">ioBroker JSONConfig + React</div>
               <h1>{title}</h1>
             </div>
           </div>

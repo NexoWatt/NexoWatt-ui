@@ -19,12 +19,31 @@ export function buildRuntimeBaseUrl(port = DEFAULT_PORT) {
   return `${protocol}//${host}:${port}`;
 }
 
+function safeWindowAccess(getter) {
+  try {
+    return getter();
+  } catch {
+    return null;
+  }
+}
+
 function pickServConn() {
-  return window.servConn || window.parent?.servConn || window.top?.servConn || null;
+  return (
+    safeWindowAccess(() => window.servConn)
+    || safeWindowAccess(() => window.parent && window.parent.servConn)
+    || safeWindowAccess(() => window.top && window.top.servConn)
+    || null
+  );
 }
 
 function pickSocket() {
-  return window.socket || window.parent?.socket || window.top?.socket || window.__nwAdminSocket || null;
+  return (
+    safeWindowAccess(() => window.socket)
+    || safeWindowAccess(() => window.parent && window.parent.socket)
+    || safeWindowAccess(() => window.top && window.top.socket)
+    || safeWindowAccess(() => window.__nwAdminSocket)
+    || null
+  );
 }
 
 async function ensureSocketIo() {
@@ -216,7 +235,17 @@ export async function readSystemUuid(conn = null) {
 
   try {
     const state = await getState('system.meta.uuid', conn);
-    return state?.val !== undefined && state?.val !== null ? String(state.val) : '';
+    if (state?.val !== undefined && state?.val !== null) {
+      return String(state.val);
+    }
+  } catch {
+    // ignore and continue with adapter fallback
+  }
+
+  try {
+    const systemConfig = await getObject('system.config', conn);
+    const nativeUuid = systemConfig?.native?.uuid || systemConfig?.common?.uuid;
+    return nativeUuid ? String(nativeUuid) : '';
   } catch {
     return '';
   }

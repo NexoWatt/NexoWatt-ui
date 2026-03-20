@@ -3,8 +3,8 @@ import PageShell from './PageShell';
 import {
   getAdminConnection,
   getAdapterObjectId,
-  getInstance,
   getObject,
+  getInstance,
   readLicenseStatus,
   readSystemUuid,
   setObject,
@@ -95,7 +95,7 @@ export default function LicensePage() {
   return (
     <PageShell
       title="Lizenz"
-      subtitle="Der Lizenzschlüssel wird direkt in der Adapter-Instanz gespeichert (native.licenseKey). Die System-UUID dient als Referenz für Vertrieb und Support."
+      subtitle="Hier wird der Lizenzschlüssel für diese ioBroker-Instanz hinterlegt. Der Schlüssel ist an die System-UUID gekoppelt. Hinweis: Der Lizenzschlüssel ist bewusst nur im Admin verfügbar."
     >
       <section className="nw-grid nw-grid--two">
         <article className="nw-card">
@@ -128,7 +128,7 @@ export default function LicensePage() {
             value={licenseKey}
           />
           <p className="nw-text-muted">
-            Nach dem Speichern startet der Adapter je nach Setup neu oder muss manuell neu gestartet werden.
+            Nach dem Speichern startet der Adapter ggf. neu. Bei ungültigem Schlüssel bleibt der Adapter gesperrt.
           </p>
         </article>
       </section>

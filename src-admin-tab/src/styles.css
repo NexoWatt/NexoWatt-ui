@@ -89,14 +89,6 @@ code,
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.nw-brand__eyebrow {
-  color: var(--nw-accent);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.78rem;
-  margin-bottom: 4px;
-}
-
 .nw-hero h1 {
   margin: 0;
   font-size: clamp(1.6rem, 3vw, 2.15rem);
@@ -181,6 +173,10 @@ code,
   margin-bottom: 18px;
 }
 
+.nw-card--centered {
+  text-align: center;
+}
+
 .nw-card h2 {
   margin: 0 0 14px;
   font-size: 1.08rem;
@@ -226,6 +222,12 @@ code,
   color: #f9a8a8;
 }
 
+.nw-install-hint {
+  margin-top: 18px;
+  color: var(--nw-muted);
+  font-size: 0.92rem;
+}
+
 .nw-field-label {
   display: block;
   margin-bottom: 8px;
@@ -255,6 +257,10 @@ code,
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.nw-actions-row--centered {
+  justify-content: center;
 }
 
 .nw-inline-controls .nw-input {

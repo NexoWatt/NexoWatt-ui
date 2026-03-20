@@ -14,7 +14,7 @@ export default function InstallerPage() {
   const navigate = useNavigate();
   const instance = getInstance();
   const [port, setPort] = useState(DEFAULT_PORT);
-  const [status, setStatus] = useState({ ok: true, text: 'Port wird geladen…' });
+  const [hint, setHint] = useState('Port wird geladen…');
 
   useEffect(() => {
     let active = true;
@@ -26,15 +26,7 @@ export default function InstallerPage() {
       }
 
       setPort(resolvedPort);
-      if (resolvedPort === DEFAULT_PORT) {
-        setStatus({
-          ok: true,
-          text: 'Port nicht aus der Instanz lesbar – Fallback auf 8188 aktiv.',
-        });
-        return;
-      }
-
-      setStatus({ ok: true, text: `Port ${resolvedPort} geladen.` });
+      setHint('Bereit.');
     })();
 
     return () => {
@@ -70,19 +62,15 @@ export default function InstallerPage() {
       label: 'SmartHome Config',
       onClick: () => openExternal(`${baseUrl}/smarthome-config.html`),
     },
-    {
-      label: 'Lizenz-Generator',
-      onClick: () => navigate('/license-generator'),
-    },
   ];
 
   return (
     <PageShell
       title="Installer"
-      subtitle="Die Adapter-Einstellungen laufen jetzt über JSONConfig. Diese React-Seite bündelt die Admin-Shortcuts, Redirects und die Lizenzverwaltung ohne Materialize-Legacy."
+      subtitle="Wähle, was geöffnet werden soll. Die URL wird aus der Adapter-Instanz ermittelt (Port). Tipp: Die Installer-Seite ist für Konfiguration und Mapping gedacht."
       showBack={false}
     >
-      <section className="nw-card">
+      <section className="nw-card nw-card--centered">
         <div className="nw-button-grid">
           {actions.map(action => (
             <button
@@ -95,27 +83,7 @@ export default function InstallerPage() {
             </button>
           ))}
         </div>
-        <div className={`nw-status ${status.ok ? 'nw-status--ok' : 'nw-status--bad'}`}>{status.text}</div>
-      </section>
-
-      <section className="nw-grid nw-grid--two">
-        <article className="nw-card">
-          <h2>Admin-Standard</h2>
-          <ul className="nw-list">
-            <li>Instanz-Konfiguration über <code>admin/jsonConfig.json</code>.</li>
-            <li>Admin-Tab und Hilfsseiten als React-SPA.</li>
-            <li>Legacy-Materialize-Dateien werden nicht mehr verwendet.</li>
-          </ul>
-        </article>
-
-        <article className="nw-card">
-          <h2>Aktive Basis-URL</h2>
-          <p className="nw-mono">{baseUrl}</p>
-          <p className="nw-text-muted">
-            Runtime-Seiten werden weiter über den Adapter-Port geöffnet. Die Admin-Oberfläche selbst bleibt im
-            ioBroker-Standard: JSONConfig + React.
-          </p>
-        </article>
+        <div className="nw-install-hint">{hint}</div>
       </section>
     </PageShell>
   );

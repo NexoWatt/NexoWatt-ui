@@ -23,7 +23,12 @@
               candidates.push(window.location.protocol + '//' + host + ':' + port + '/lib/js/socket.io.js');
             }
             candidates.push('/lib/js/socket.io.js');
+            candidates.push('../../lib/js/socket.io.js');
             candidates.push('../../../lib/js/socket.io.js');
+
+            candidates = candidates.filter(function (src, index, arr) {
+              return src && arr.indexOf(src) === index;
+            });
 
             var index = 0;
             var tryNext = function () {

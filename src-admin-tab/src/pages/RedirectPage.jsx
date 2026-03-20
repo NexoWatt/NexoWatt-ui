@@ -44,7 +44,7 @@ export default function RedirectPage({ targetKey }) {
       setPort(resolvedPort);
       const baseUrl = buildRuntimeBaseUrl(resolvedPort);
       const url = `${baseUrl}${target.path}`;
-      setStatus(`Öffne ${url}`);
+      setStatus('Öffne Seite…');
       setTimeout(() => openExternal(url), 50);
     })();
 
@@ -56,18 +56,14 @@ export default function RedirectPage({ targetKey }) {
   const targetUrl = useMemo(() => `${buildRuntimeBaseUrl(port)}${target.path}`, [port, target.path]);
 
   return (
-    <PageShell
-      title={target.title}
-      subtitle="Die Seite lädt den Adapter-Port aus der Instanz und springt dann in die Runtime-Oberfläche."
-    >
-      <section className="nw-card">
+    <PageShell title={target.title} subtitle="Weiterleitung wird vorbereitet…">
+      <section className="nw-card nw-card--centered">
         <div className="nw-status nw-status--ok">{status}</div>
-        <div className="nw-actions-row">
+        <div className="nw-actions-row nw-actions-row--centered">
           <button className="nw-button nw-button--primary" onClick={() => openExternal(targetUrl)} type="button">
             Jetzt öffnen
           </button>
         </div>
-        <p className="nw-mono">{targetUrl}</p>
       </section>
     </PageShell>
   );
