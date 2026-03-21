@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.199",
+    "version": "0.6.200",
     "news": {
+      "0.6.200": {
+        "en": "EMS/Charging: PV-only stop gate now ignores temporary grid import caused by the active EV load itself; PV surplus control reacts via a short 5s control window while the 5min average remains available for diagnostics. VIS live inputs for energy flow / EVCS are refreshed every 5s and the web cache was bumped.",
+        "de": "EMS/Lademanagement: Das PV-Only-Stop-Gate ignoriert jetzt kurzzeitigen Netzbezug, der durch die aktuell aktive EV-Ladung selbst entsteht; die PV-Überschuss-Regelung reagiert über ein kurzes 5s-Regelfenster, während der 5-Minuten-Wert für die Diagnose erhalten bleibt. Live-Eingänge für Energiefluss / EVCS werden jetzt alle 5s aktualisiert und der Web-Cache wurde angehoben."
+      },
       "0.6.199": {
         "en": "History/year report now prefers configured history datapoints again with automatic fallback to internal historie states; yearly energy totals fall back to power history when counter deltas are implausibly small.",
         "de": "Historie/Jahresreport bevorzugt wieder konfigurierte History-Datenpunkte mit automatischem Fallback auf die internen historie-States; Jahresenergien fallen bei unplausibel kleinen Counter-Deltas auf die Leistungs-Historie zurück."
@@ -1593,8 +1597,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.199",
+  "version": "0.6.200",
   "news": {
+    "0.6.200": {
+      "en": "EMS/Charging: PV-only stop gate ignores temporary import caused by the active EV load itself; PV surplus control now uses a short 5s control window while the 5min average remains diagnostic. Energy-flow / EVCS live inputs are refreshed every 5s and the web cache was bumped.",
+      "de": "EMS/Lademanagement: Das PV-Only-Stop-Gate ignoriert kurzzeitigen Netzbezug durch die aktive EV-Ladung selbst; die PV-Überschuss-Regelung nutzt jetzt ein kurzes 5s-Regelfenster, während der 5-Minuten-Wert diagnostisch erhalten bleibt. Live-Eingänge für Energiefluss / EVCS werden jetzt alle 5s aktualisiert und der Web-Cache wurde angehoben."
+    },
     "0.6.199": {
       "en": "History/year report prefers configured history datapoints again with automatic fallback to internal historie states; yearly totals fall back to power history when counter deltas are too small.",
       "de": "Historie/Jahresreport bevorzugt wieder konfigurierte History-Datenpunkte mit automatischem Fallback auf interne historie-States; Jahreswerte fallen bei zu kleinen Counter-Deltas auf die Leistungs-Historie zurück."

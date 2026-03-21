@@ -360,15 +360,15 @@ class ChargingManagementModule extends BaseModule {
         this._pubLastFlushMs = 0;
         this._pubFlushIntervalMs = 50; // do not flush more often than this
 
-        // PV-Überschuss Glättung (5-Minuten Rolling-Mean).
-        // Motivation: Bei reinem PV-Überschussladen darf der EVCS-Verbrauch den
-        // PV-Überschuss nicht "wegdrücken" (sonst fällt die Regelung unter die
-        // 3P-Minimalleistung ~4,2kW und stoppt). Zusätzlich glätten wir den
-        // ermittelten PV-Überschuss (5min), um Wolken-/Messrauschen sauber
-        // abzufangen (stabilere Regelung).
-        this._pvSurplusSamples = [];
-        this._pvSurplusHead = 0;
-        this._pvSurplusSumW = 0;
+        // PV-Überschuss Glättung:
+        // - fast5s: aktive Regelung (reagiert deutlich schneller auf Änderungen)
+        // - slow5m: Diagnose/Referenz (glättet Langzeitverlauf für Transparenz)
+        // Hintergrund: Der 5-Minuten-Mittelwert ist für eine Live-Regelung zu träge
+        // und kann unnötigen Netzbezug bzw. späte Reaktionen verursachen.
+        this._pvSurplusAvg = {
+            fast5s: { windowMs: 5 * 1000, samples: [], head: 0, sumW: 0 },
+            slow5m: { windowMs: 5 * 60 * 1000, samples: [], head: 0, sumW: 0 },
+        };
     }
 
     /**
@@ -394,33 +394,45 @@ class ChargingManagementModule extends BaseModule {
     }
 
     /**
-     * 5-Minuten Rolling-Mean für PV-Überschuss (W).
+     * Rolling-Mean für PV-Überschuss (W) in einem benannten Fenster.
+     * @param {'fast5s'|'slow5m'} bucketKey
      * @param {number} nowMs
      * @param {number} sampleW
      * @returns {number} avgW
      */
-    _pvSurplusAvgPush(nowMs, sampleW) {
+    _pvSurplusAvgPush(bucketKey, nowMs, sampleW) {
+        const buckets = this._pvSurplusAvg || {};
+        const bucket = buckets && Object.prototype.hasOwnProperty.call(buckets, bucketKey) ? buckets[bucketKey] : null;
         const v = (typeof sampleW === 'number' && Number.isFinite(sampleW)) ? sampleW : 0;
         const now = (typeof nowMs === 'number' && Number.isFinite(nowMs)) ? nowMs : Date.now();
-        const windowMs = 5 * 60 * 1000;
 
-        this._pvSurplusSamples.push({ t: now, v });
-        this._pvSurplusSumW += v;
+        if (!bucket || typeof bucket !== 'object') return v;
+        if (!Array.isArray(bucket.samples)) bucket.samples = [];
+        if (!Number.isFinite(bucket.head) || bucket.head < 0) bucket.head = 0;
+        if (!Number.isFinite(bucket.sumW)) bucket.sumW = 0;
+
+        const windowMs = (typeof bucket.windowMs === 'number' && Number.isFinite(bucket.windowMs) && bucket.windowMs > 0)
+            ? bucket.windowMs
+            : 0;
+        if (!windowMs) return v;
+
+        bucket.samples.push({ t: now, v });
+        bucket.sumW += v;
 
         const cutoff = now - windowMs;
-        while (this._pvSurplusHead < this._pvSurplusSamples.length && this._pvSurplusSamples[this._pvSurplusHead].t < cutoff) {
-            this._pvSurplusSumW -= this._pvSurplusSamples[this._pvSurplusHead].v;
-            this._pvSurplusHead++;
+        while (bucket.head < bucket.samples.length && bucket.samples[bucket.head].t < cutoff) {
+            bucket.sumW -= bucket.samples[bucket.head].v;
+            bucket.head++;
         }
 
         // gelegentlich kompaktieren (Performance, kein Array.shift)
-        if (this._pvSurplusHead > 100) {
-            this._pvSurplusSamples = this._pvSurplusSamples.slice(this._pvSurplusHead);
-            this._pvSurplusHead = 0;
+        if (bucket.head > 100) {
+            bucket.samples = bucket.samples.slice(bucket.head);
+            bucket.head = 0;
         }
 
-        const count = Math.max(1, this._pvSurplusSamples.length - this._pvSurplusHead);
-        return this._pvSurplusSumW / count;
+        const count = Math.max(1, bucket.samples.length - bucket.head);
+        return bucket.sumW / count;
     }
 
     /**
@@ -2486,6 +2498,7 @@ class ChargingManagementModule extends BaseModule {
         let pvCapW = null;
         let pvSurplusW = null;
         let gridW = null;
+        let gridImportNoEvW = null;
 
         // Gate B: PV hysteresis diagnostics (defaults)
         let pvCapRawWState = 0;
@@ -2578,13 +2591,18 @@ class ChargingManagementModule extends BaseModule {
             // Publish raw value (before smoothing) for debugging
             pvSurplusNoEvRawWState = (typeof pvSurplusNoEvW === 'number' && Number.isFinite(pvSurplusNoEvW)) ? pvSurplusNoEvW : 0;
 
-            pvSurplusW = (typeof pvSurplusNoEvW === 'number' && Number.isFinite(pvSurplusNoEvW))
-                ? this._pvSurplusAvgPush(now, pvSurplusNoEvW)
+            const pvSurplusFastW = (typeof pvSurplusNoEvW === 'number' && Number.isFinite(pvSurplusNoEvW))
+                ? this._pvSurplusAvgPush('fast5s', now, pvSurplusNoEvW)
+                : 0;
+            const pvSurplusAvg5mW = (typeof pvSurplusNoEvW === 'number' && Number.isFinite(pvSurplusNoEvW))
+                ? this._pvSurplusAvgPush('slow5m', now, pvSurplusNoEvW)
                 : 0;
 
-            pvSurplusNoEvAvg5mWState = (typeof pvSurplusW === 'number' && Number.isFinite(pvSurplusW)) ? pvSurplusW : 0;
+            // Active control uses the short 5s window; the 5min window stays visible for diagnostics.
+            pvSurplusW = pvSurplusFastW;
+            pvSurplusNoEvAvg5mWState = (typeof pvSurplusAvg5mW === 'number' && Number.isFinite(pvSurplusAvg5mW)) ? pvSurplusAvg5mW : 0;
 
-            const pvCapRawW = (typeof pvSurplusW === 'number' && Number.isFinite(pvSurplusW) && pvSurplusW > 0) ? pvSurplusW : 0;
+            const pvCapRawW = (typeof pvSurplusFastW === 'number' && Number.isFinite(pvSurplusFastW) && pvSurplusFastW > 0) ? pvSurplusFastW : 0;
             pvCapW = pvCapRawW;
 
             // -----------------------------------------------------------------
@@ -2603,7 +2621,12 @@ class ChargingManagementModule extends BaseModule {
             const stopW  = Math.min(pvStopThresholdW, (startW > 0 ? startW : pvStopThresholdW));
 
             const gridImportW = (typeof gridW === 'number' && Number.isFinite(gridW)) ? Math.max(0, gridW) : 0;
-            const forcedBelow = (pvAbortImportW > 0 && gridImportW > pvAbortImportW);
+            // Important: do NOT trip the PV stop gate on import that is caused by the active EVCS load itself.
+            // Otherwise PV-only charging can stop although there would still be enough surplus without the EV.
+            gridImportNoEvW = (typeof gridW === 'number' && Number.isFinite(gridW))
+                ? Math.max(0, gridW - pvEvcsUsedW)
+                : 0;
+            const forcedBelow = (pvAbortImportW > 0 && gridImportNoEvW > pvAbortImportW);
 
             const above = (!forcedBelow) && ((startW > 0) ? (pvCapRawW >= startW) : (pvCapRawW > 0));
             const below = forcedBelow || (pvCapRawW <= stopW);
@@ -2754,7 +2777,9 @@ if (components.length) {
                 pvCapEffectiveW: (typeof pvCapEffectiveWState === 'number' && Number.isFinite(pvCapEffectiveWState)) ? pvCapEffectiveWState : null,
                 pvAvailable: !!pvAvailableState,
                 gridW: (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null,
+                gridImportNoEvW: (typeof gridImportNoEvW === 'number' && Number.isFinite(gridImportNoEvW)) ? gridImportNoEvW : null,
                 pvSurplusW: (typeof pvSurplusW === 'number' && Number.isFinite(pvSurplusW)) ? pvSurplusW : null,
+                pvSurplusAvg5mW: (typeof pvSurplusNoEvAvg5mWState === 'number' && Number.isFinite(pvSurplusNoEvAvg5mWState)) ? pvSurplusNoEvAvg5mWState : null,
                 components,
             };
         } else if (budgetMode === 'static') {

@@ -148,6 +148,15 @@ class NexoWattVis extends utils.Adapter {
       },
     };
 
+    // Live refresh for Energiefluss / EVCS input datapoints.
+    // Some field adapters / aliases update sluggishly or miss individual subscription events.
+    // A focused 5s re-read keeps the Energiefluss monitor + charging inputs aligned without
+    // touching unrelated modules.
+    this._nwLiveCoreRefreshTimer = null;
+    this._nwLiveCoreRefreshRunning = false;
+    this._nwLiveCoreRefreshPlan = [];
+    this._nwLiveCoreRefreshIntervalMs = 5000;
+
     // Notifications / Monitoring
     this._notifyTimer = null;
     this._notify = {
@@ -6486,6 +6495,14 @@ async onReady() {
       // Prime + subscribe EMS runtime states for the UI (EVCS page mode buttons, boost status, etc.).
       // Without this, the UI might fall back to legacy or show default values after reload.
       try { await this.subscribeEmsUiStates(); } catch (e) { this.log.debug('EMS UI state subscribe failed: ' + (e && e.message ? e.message : e)); }
+
+      // Focused 5s live refresh for Energiefluss + charging inputs.
+      try {
+        this._nwStartLiveCoreRefresh();
+        await this._nwRefreshLiveCoreDatapoints('startup');
+      } catch (e) {
+        this.log.debug('Live core refresh init failed: ' + (e && e.message ? e.message : e));
+      }
 
       // Cleanup: remove stale/orphaned dynamic objects no longer configured.
       // This keeps the Objects tree tidy when mappings/counts are reduced.
@@ -13066,6 +13083,179 @@ return res.json(out);
     }
   }
 
+  _nwIsOwnStateId(id) {
+    const sid = (typeof id === 'string') ? id.trim() : '';
+    if (!sid || !this.namespace) return false;
+    return sid.startsWith(`${this.namespace}.`);
+  }
+
+  _nwBuildLiveCoreRefreshPlan() {
+    const byId = new Map();
+
+    const add = (id, key = '') => {
+      const sid = (typeof id === 'string') ? id.trim() : '';
+      if (!sid) return;
+      if (this._nwIsOwnStateId(sid)) return;
+
+      let entry = byId.get(sid);
+      if (!entry) {
+        entry = { id: sid, keys: new Set() };
+        byId.set(sid, entry);
+      }
+
+      const k = (typeof key === 'string') ? key.trim() : '';
+      if (k) entry.keys.add(k);
+    };
+
+    try {
+      const dps = (this.config && this.config.datapoints) || {};
+      const flowKeys = [
+        'gridBuyPower',
+        'gridSellPower',
+        'gridPointPower',
+        'pvPower',
+        'productionTotal',
+        'consumptionTotal',
+        'consumptionEvcs',
+        'storageChargePower',
+        'storageDischargePower',
+        'batteryPower'
+      ];
+      for (const key of flowKeys) add(dps[key], key);
+    } catch (_e) {}
+
+    try {
+      const slots = this.prepareFlowSlots((this.config && this.config.flowSlots) || {});
+      for (const slot of slots) {
+        add(slot && slot.objectId, slot && slot.stateKey);
+      }
+    } catch (_e) {}
+
+    try {
+      const psCfg = (this.config && this.config.peakShaving && typeof this.config.peakShaving === 'object') ? this.config.peakShaving : {};
+      add(psCfg.l1CurrentId);
+      add(psCfg.l2CurrentId);
+      add(psCfg.l3CurrentId);
+    } catch (_e) {}
+
+    try {
+      const cm = (this.config && this.config.chargingManagement && typeof this.config.chargingManagement === 'object') ? this.config.chargingManagement : {};
+      add(cm.gridPowerId);
+      add(cm.pvSurplusPowerId);
+      add(cm.budgetPowerId);
+
+      const wallboxes = Array.isArray(cm.wallboxes) ? cm.wallboxes : [];
+      for (const wb of wallboxes) {
+        if (!wb || typeof wb !== 'object') continue;
+        add(wb.actualPowerWId, this.evcsIdToKey && wb.actualPowerWId ? this.evcsIdToKey[wb.actualPowerWId] : '');
+        add(wb.actualCurrentAId);
+        add(wb.statusId, this.evcsIdToKey && wb.statusId ? this.evcsIdToKey[wb.statusId] : '');
+        add(wb.phaseL1AId);
+        add(wb.phaseL2AId);
+        add(wb.phaseL3AId);
+      }
+    } catch (_e) {}
+
+    try {
+      const list = Array.isArray(this.evcsList) ? this.evcsList : [];
+      for (const wb of list) {
+        if (!wb || typeof wb !== 'object') continue;
+        add(wb.powerId, this.evcsIdToKey && wb.powerId ? this.evcsIdToKey[wb.powerId] : '');
+        add(wb.statusId, this.evcsIdToKey && wb.statusId ? this.evcsIdToKey[wb.statusId] : '');
+        add(wb.activeId, this.evcsIdToKey && wb.activeId ? this.evcsIdToKey[wb.activeId] : '');
+      }
+    } catch (_e) {}
+
+    this._nwLiveCoreRefreshPlan = Array.from(byId.values()).map((entry) => ({
+      id: entry.id,
+      keys: Array.from(entry.keys),
+    }));
+
+    return this._nwLiveCoreRefreshPlan;
+  }
+
+  async _nwRefreshLiveCoreDatapoints(reason = 'interval') {
+    if (this._nwLiveCoreRefreshRunning) return;
+
+    const plan = (Array.isArray(this._nwLiveCoreRefreshPlan) && this._nwLiveCoreRefreshPlan.length)
+      ? this._nwLiveCoreRefreshPlan
+      : this._nwBuildLiveCoreRefreshPlan();
+
+    if (!Array.isArray(plan) || !plan.length) return;
+
+    this._nwLiveCoreRefreshRunning = true;
+    try {
+      const now = Date.now();
+      const emsDp = (this.emsEngine && this.emsEngine.dp && typeof this.emsEngine.dp.handleStateChange === 'function')
+        ? this.emsEngine.dp
+        : null;
+
+      const applyState = async (entry) => {
+        if (!entry || !entry.id) return;
+
+        let st = null;
+        try {
+          st = await this.getForeignStateAsync(entry.id);
+        } catch (_e) {
+          return;
+        }
+        if (!st || st.val === undefined) return;
+
+        const ts = (typeof st.ts === 'number' && Number.isFinite(st.ts))
+          ? st.ts
+          : ((typeof st.lc === 'number' && Number.isFinite(st.lc)) ? st.lc : now);
+
+        if (emsDp) {
+          try {
+            const prev = (emsDp.cacheByObjectId && typeof emsDp.cacheByObjectId.get === 'function')
+              ? emsDp.cacheByObjectId.get(entry.id)
+              : null;
+            const sameRaw = !!(prev && prev.ts === ts && Object.is(prev.val, st.val));
+            if (!sameRaw) emsDp.handleStateChange(entry.id, st);
+          } catch (_e) {}
+        }
+
+        const keys = Array.isArray(entry.keys) ? entry.keys : [];
+        for (const key of keys) {
+          if (!key) continue;
+          const scaled = this._nwScaleMappedValue(key, entry.id, st.val);
+          const prev = (this.stateCache && this.stateCache[key]) ? this.stateCache[key] : null;
+          const sameScaled = !!(prev && prev.ts === ts && Object.is(prev.value, scaled));
+          if (sameScaled) continue;
+          this.updateValue(key, scaled, ts);
+        }
+      };
+
+      const concurrency = 8;
+      for (let i = 0; i < plan.length; i += concurrency) {
+        const slice = plan.slice(i, i + concurrency);
+        await Promise.all(slice.map((entry) => applyState(entry)));
+      }
+    } finally {
+      this._nwLiveCoreRefreshRunning = false;
+    }
+  }
+
+  _nwStopLiveCoreRefresh() {
+    if (this._nwLiveCoreRefreshTimer) {
+      try { clearInterval(this._nwLiveCoreRefreshTimer); } catch (_e) {}
+      this._nwLiveCoreRefreshTimer = null;
+    }
+    this._nwLiveCoreRefreshRunning = false;
+  }
+
+  _nwStartLiveCoreRefresh() {
+    const plan = this._nwBuildLiveCoreRefreshPlan();
+
+    this._nwStopLiveCoreRefresh();
+    if (!Array.isArray(plan) || !plan.length) return;
+
+    const intervalMs = Math.max(5000, Number(this._nwLiveCoreRefreshIntervalMs) || 5000);
+    this._nwLiveCoreRefreshTimer = setInterval(() => {
+      this._nwRefreshLiveCoreDatapoints('interval').catch(() => {});
+    }, intervalMs);
+  }
+
   async subscribeConfiguredStates() {
     // Safety: ensure caches exist (older builds might miss these initializations).
     if (!this._nwForeignUnitCache || typeof this._nwForeignUnitCache.clear !== 'function') {
@@ -13211,6 +13401,12 @@ return res.json(out);
       this.flowIdToKey = this.flowIdToKey || {};
       this.log.warn(`subscribeConfiguredStates: flowSlots subscribe failed: ${e.message}`);
     }
+
+    // Keep the focused 5s live refresh in sync with the current mapping/EVCS setup.
+    try {
+      this._nwStartLiveCoreRefresh();
+      this._nwRefreshLiveCoreDatapoints('subscribe').catch(() => {});
+    } catch (_e) {}
   }
 
   onStateChange(id, state) {
@@ -15472,6 +15668,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
       try { if (this._nwEnergyTotalsTimer) clearInterval(this._nwEnergyTotalsTimer); } catch (_e) {}
       try { if (this._nwHistorieTimer) clearInterval(this._nwHistorieTimer); } catch (_e) {}
+      try { this._nwStopLiveCoreRefresh(); } catch (_e) {}
       try { if (this._nwShTimersTimeout) clearTimeout(this._nwShTimersTimeout); } catch (_e) {}
       try { this.stopNotificationMonitor(); } catch (_e) {}
       try { if (this._sseFlushTimer) clearTimeout(this._sseFlushTimer); } catch (_e) {}
