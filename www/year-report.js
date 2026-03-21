@@ -41,6 +41,21 @@
     return Number.isFinite(Number(n));
   }
 
+  function pickEnergyKwh(counterVal, integratedVal){
+    const counter = Number(counterVal);
+    const integrated = Number(integratedVal);
+    const counterOk = Number.isFinite(counter) && counter >= 0;
+    const integratedOk = Number.isFinite(integrated) && integrated >= 0;
+    if (!counterOk) return integratedOk ? integrated : 0;
+    if (!integratedOk) return counter;
+
+    // Robust fallback: if the kWh counter delta is 0 / near 0 but the integrated
+    // power series clearly contains energy, trust the time series for the report.
+    const counterTooSmall = counter <= Math.max(0.05, integrated * 0.1);
+    if (integrated > 0.25 && counterTooSmall) return integrated;
+    return counter;
+  }
+
   // Integrate a power series (W) to energy (kWh).
   // Input: [[ts, W], ...] where ts can be ms/seconds/string.
   function toTsMs(t){
@@ -175,29 +190,42 @@
       .filter(c => c.idx > 0)
       .sort((a,b) => a.idx - b.idx);
 
-    // Core totals (prefer counters if available)
-    const gridImportKwh = isFiniteNum(energy.gridImportKwh) ? Number(energy.gridImportKwh) : sumEnergyKWh(series.buy && series.buy.values);
-    const gridExportKwh = isFiniteNum(energy.gridExportKwh) ? Number(energy.gridExportKwh) : sumEnergyKWh(series.sell && series.sell.values);
+    const integratedGridImportKwh = sumEnergyKWh(series.buy && series.buy.values);
+    const integratedGridExportKwh = sumEnergyKWh(series.sell && series.sell.values);
+    const integratedChargeKwh = sumEnergyKWh(series.chg && series.chg.values);
+    const integratedDischargeKwh = sumEnergyKWh(series.dchg && series.dchg.values);
+    const integratedEvKwh = sumEnergyKWh(series.evcs && series.evcs.values);
+    const integratedPvKwh = sumEnergyKWh(series.pv && series.pv.values);
+    const integratedLoadKwh = sumEnergyKWh(series.load && series.load.values);
 
-    const chargeKwh = isFiniteNum(energy.storageChargeKwh) ? Number(energy.storageChargeKwh) : sumEnergyKWh(series.chg && series.chg.values);
-    const dischargeKwh = isFiniteNum(energy.storageDischargeKwh) ? Number(energy.storageDischargeKwh) : sumEnergyKWh(series.dchg && series.dchg.values);
+    // Core totals (prefer counters, but fall back to the time series if the counter delta
+    // is implausibly small for the selected year)
+    const gridImportKwh = pickEnergyKwh(energy.gridImportKwh, integratedGridImportKwh);
+    const gridExportKwh = pickEnergyKwh(energy.gridExportKwh, integratedGridExportKwh);
+
+    const chargeKwh = pickEnergyKwh(energy.storageChargeKwh, integratedChargeKwh);
+    const dischargeKwh = pickEnergyKwh(energy.storageDischargeKwh, integratedDischargeKwh);
     const batteryLossKwh = Math.max(0, (Number.isFinite(chargeKwh) ? chargeKwh : 0) - (Number.isFinite(dischargeKwh) ? dischargeKwh : 0));
 
     // EV energy (optional)
-    const evKwh = isFiniteNum(energy.evKwh) ? Number(energy.evKwh) : sumEnergyKWh(series.evcs && series.evcs.values);
+    const evKwh = pickEnergyKwh(energy.evKwh, integratedEvKwh);
 
     // Production: if producers are configured, prefer the breakdown sum so the totals match.
     const sumProducers = producers.reduce((s,p)=> s + (Number.isFinite(p.kwh) ? p.kwh : 0), 0);
-    let productionKwh = 0;
-    if (sumProducers > 0.01) productionKwh = sumProducers;
-    else if (isFiniteNum(energy.productionKwh)) productionKwh = Number(energy.productionKwh);
-    else productionKwh = sumEnergyKWh(series.pv && series.pv.values);
+    const productionRefKwh = sumProducers > 0.01 ? sumProducers : integratedPvKwh;
+    const productionKwh = pickEnergyKwh(energy.productionKwh, productionRefKwh);
 
-    // Consumption
-    let consumptionKwh = 0;
-    if (isFiniteNum(energy.consumptionKwh)) consumptionKwh = Number(energy.consumptionKwh);
-    else if (series.load && Array.isArray(series.load.values)) consumptionKwh = sumEnergyKWh(series.load.values);
-    else consumptionKwh = (Number.isFinite(gridImportKwh) ? gridImportKwh : 0) + productionKwh - (Number.isFinite(gridExportKwh) ? gridExportKwh : 0);
+    // Consumption: prefer the measured yearly total, otherwise the integrated load history,
+    // otherwise fall back to the physical energy balance (inkl. Batterie).
+    const balanceConsumptionKwh = Math.max(0,
+      (Number.isFinite(productionKwh) ? productionKwh : 0) +
+      (Number.isFinite(gridImportKwh) ? gridImportKwh : 0) +
+      (Number.isFinite(dischargeKwh) ? dischargeKwh : 0) -
+      (Number.isFinite(chargeKwh) ? chargeKwh : 0) -
+      (Number.isFinite(gridExportKwh) ? gridExportKwh : 0)
+    );
+    const consumptionRefKwh = integratedLoadKwh > 0.01 ? integratedLoadKwh : balanceConsumptionKwh;
+    const consumptionKwh = pickEnergyKwh(energy.consumptionKwh, consumptionRefKwh);
 
     // Quotes
     const selfConsumedKwh = Math.max(0, productionKwh - (Number.isFinite(gridExportKwh) ? gridExportKwh : 0));
@@ -404,11 +432,10 @@
       const yr = byYear[y];
       const sumC = (yr && Array.isArray(yr.consumers)) ? yr.consumers.reduce((s,c)=> s + (Number.isFinite(c.kwh) ? c.kwh : 0), 0) : 0;
       const ev = includeEvRow ? getYearVal(yr, 'evKwh') : 0;
-      const loss = getYearVal(yr, 'batteryLossKwh');
       const total = getYearVal(yr, 'consumptionKwh');
-      return total - sumC - ev - loss;
+      return Math.max(0, total - sumC - ev);
     });
-    const restMax = Math.max(...restByYear.map(v => Math.abs(v)));
+    const restMax = Math.max(...restByYear);
     if (Number.isFinite(restMax) && restMax > 1.0) {
       consumerRows.push({
         label: 'Sonstiges',

@@ -578,6 +578,18 @@ function draw(){
     return eWh / 1000;
   }
 
+  function pickEnergyKwh(counterVal, integratedVal){
+    const counter = Number(counterVal);
+    const integrated = Number(integratedVal);
+    const counterOk = Number.isFinite(counter) && counter >= 0;
+    const integratedOk = Number.isFinite(integrated) && integrated >= 0;
+    if (!counterOk) return integratedOk ? integrated : 0;
+    if (!integratedOk) return counter;
+    const counterTooSmall = counter <= Math.max(0.05, integrated * 0.1);
+    if (integrated > 0.25 && counterTooSmall) return integrated;
+    return counter;
+  }
+
 async function load(){
     const from = new Date(document.getElementById('from').value || new Date(Date.now()-24*3600*1000).toISOString().slice(0,16));
     const to   = new Date(document.getElementById('to').value   || new Date().toISOString().slice(0,16));
@@ -699,13 +711,23 @@ async function load(){
     const cards = document.getElementById('cards');
     function card(title, val){ const el=document.createElement('div'); el.className='card'; el.innerHTML = `<small>${title}</small><b>${val}</b>`; cards.appendChild(el); }
     cards.innerHTML='';
-    card('Erzeugung',  (Number.isFinite(e.productionKwh) ? e.productionKwh : sumEnergyKWh(s.pv.values)).toFixed(1) + ' kWh');
-    card('Beladung',   (Number.isFinite(e.storageChargeKwh) ? e.storageChargeKwh : sumEnergyKWh(s.chg.values)).toFixed(1) + ' kWh');
-    card('Entladung',  (Number.isFinite(e.storageDischargeKwh) ? e.storageDischargeKwh : sumEnergyKWh(s.dchg.values)).toFixed(1) + ' kWh');
-    card('Einspeisung',(Number.isFinite(e.gridExportKwh) ? e.gridExportKwh : sumEnergyKWh(s.sell.values)).toFixed(1) + ' kWh');
-    card('Bezug',      (Number.isFinite(e.gridImportKwh) ? e.gridImportKwh : sumEnergyKWh(s.buy.values)).toFixed(1) + ' kWh');
-    if (s.evcs) card('E‑Mobilität', (Number.isFinite(e.evKwh) ? e.evKwh : sumEnergyKWh(s.evcs.values)).toFixed(1) + ' kWh');
-    card('Verbrauch',  (Number.isFinite(e.consumptionKwh) ? e.consumptionKwh : sumEnergyKWh(s.load.values)).toFixed(1) + ' kWh');
+    const pvKwh = pickEnergyKwh(e.productionKwh, sumEnergyKWh(s.pv && s.pv.values));
+    const chargeKwh = pickEnergyKwh(e.storageChargeKwh, sumEnergyKWh(s.chg && s.chg.values));
+    const dischargeKwh = pickEnergyKwh(e.storageDischargeKwh, sumEnergyKWh(s.dchg && s.dchg.values));
+    const exportKwh = pickEnergyKwh(e.gridExportKwh, sumEnergyKWh(s.sell && s.sell.values));
+    const importKwh = pickEnergyKwh(e.gridImportKwh, sumEnergyKWh(s.buy && s.buy.values));
+    const evKwh = pickEnergyKwh(e.evKwh, sumEnergyKWh(s.evcs && s.evcs.values));
+    const loadIntegratedKwh = sumEnergyKWh(s.load && s.load.values);
+    const loadBalanceKwh = Math.max(0, pvKwh + importKwh + dischargeKwh - chargeKwh - exportKwh);
+    const loadKwh = pickEnergyKwh(e.consumptionKwh, loadIntegratedKwh > 0.01 ? loadIntegratedKwh : loadBalanceKwh);
+
+    card('Erzeugung',  pvKwh.toFixed(1) + ' kWh');
+    card('Beladung',   chargeKwh.toFixed(1) + ' kWh');
+    card('Entladung',  dischargeKwh.toFixed(1) + ' kWh');
+    card('Einspeisung',exportKwh.toFixed(1) + ' kWh');
+    card('Bezug',      importKwh.toFixed(1) + ' kWh');
+    if (s.evcs) card('E‑Mobilität', evKwh.toFixed(1) + ' kWh');
+    card('Verbrauch',  loadKwh.toFixed(1) + ' kWh');
 
     // Extras (optional): Verbraucher/Erzeuger aus Energiefluss
     const ex = (res.extras && typeof res.extras === 'object') ? res.extras : { consumers: [], producers: [] };

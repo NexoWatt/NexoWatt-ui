@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.198",
+    "version": "0.6.199",
     "news": {
+      "0.6.199": {
+        "en": "History/year report now prefers configured history datapoints again with automatic fallback to internal historie states; yearly energy totals fall back to power history when counter deltas are implausibly small.",
+        "de": "Historie/Jahresreport bevorzugt wieder konfigurierte History-Datenpunkte mit automatischem Fallback auf die internen historie-States; Jahresenergien fallen bei unplausibel kleinen Counter-Deltas auf die Leistungs-Historie zurück."
+      },
       "0.6.198": {
         "en": "Maintenance: React/JSONConfig admin package updated.",
         "de": "Wartung: React/JSONConfig-Adminpaket aktualisiert."
@@ -1589,8 +1593,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.198",
+  "version": "0.6.199",
   "news": {
+    "0.6.199": {
+      "en": "History/year report prefers configured history datapoints again with automatic fallback to internal historie states; yearly totals fall back to power history when counter deltas are too small.",
+      "de": "Historie/Jahresreport bevorzugt wieder konfigurierte History-Datenpunkte mit automatischem Fallback auf interne historie-States; Jahreswerte fallen bei zu kleinen Counter-Deltas auf die Leistungs-Historie zurück."
+    },
     "0.6.198": {
       "en": "Maintenance: React/JSONConfig admin package updated.",
       "de": "Wartung: React/JSONConfig-Adminpaket aktualisiert."

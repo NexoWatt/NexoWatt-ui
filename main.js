@@ -10031,17 +10031,19 @@ app.get('/api/history', async (req, res) => {
           return out;
         };
 
-        // Prefer explicit mapping from config.history.datapoints;
-        // if absent, fall back to the adapter's canonical 'historie.*' states.
-        const ids = {
-          pv: this._nwGetHistoryDpId('pvPower'),
-          load: this._nwGetHistoryDpId('consumptionTotal'),
-          buy: this._nwGetHistoryDpId('gridBuyPower'),
-          sell: this._nwGetHistoryDpId('gridSellPower'),
-          chg: this._nwGetHistoryDpId('storageChargePower'),
-          dchg: this._nwGetHistoryDpId('storageDischargePower'),
-          soc: this._nwGetHistoryDpId('storageSoc'),
-          evcs: this._nwGetHistoryDpId('evcsPower')
+        // History series should keep backward compatibility with legacy mapped
+        // helper states, but also work out of the box with the adapter's canonical
+        // historie.* states. Therefore we try configured mappings first and fall back
+        // automatically to the canonical adapter Historie IDs.
+        const idCandidates = {
+          pv: this._nwGetHistoryDpCandidates('pvPower'),
+          load: this._nwGetHistoryDpCandidates('consumptionTotal'),
+          buy: this._nwGetHistoryDpCandidates('gridBuyPower'),
+          sell: this._nwGetHistoryDpCandidates('gridSellPower'),
+          chg: this._nwGetHistoryDpCandidates('storageChargePower'),
+          dchg: this._nwGetHistoryDpCandidates('storageDischargePower'),
+          soc: this._nwGetHistoryDpCandidates('storageSoc'),
+          evcs: this._nwGetHistoryDpCandidates('evcsPower')
         };
 
         // Optional series (Energiefluss: Verbraucher/Erzeuger)
@@ -10062,8 +10064,8 @@ app.get('/api/history', async (req, res) => {
           if (!mapped) continue;
           const slotCfg = (Array.isArray(fs.consumers) && fs.consumers[i - 1]) ? fs.consumers[i - 1] : null;
           const name = (slotCfg && slotCfg.name) ? String(slotCfg.name) : `Verbraucher ${i}`;
-          const id = `${this.namespace}.historie.consumers.c${i}.powerW`;
-          extraConsumerReq.push({ idx: i, name, id });
+          const candidates = this._nwGetHistoryDpCandidates(dpKey);
+          extraConsumerReq.push({ idx: i, name, candidates });
         }
 
         for (let i = 1; i <= MAX_PRODUCERS; i++) {
@@ -10072,8 +10074,8 @@ app.get('/api/history', async (req, res) => {
           if (!mapped) continue;
           const slotCfg = (Array.isArray(fs.producers) && fs.producers[i - 1]) ? fs.producers[i - 1] : null;
           const name = (slotCfg && slotCfg.name) ? String(slotCfg.name) : `Erzeuger ${i}`;
-          const id = `${this.namespace}.historie.producers.p${i}.powerW`;
-          extraProducerReq.push({ idx: i, name, id });
+          const candidates = this._nwGetHistoryDpCandidates(dpKey);
+          extraProducerReq.push({ idx: i, name, candidates });
         }
 
         const normTsMs = (ts) => {
@@ -10132,18 +10134,18 @@ app.get('/api/history', async (req, res) => {
               } else if (resu && Array.isArray(resu.data)) {
                 outArr = resu.data;
               }
-                            const norm = (outArr || [])
-                              .map(p => {
-                                const tRaw = Array.isArray(p) ? p[0] : (p.ts ?? p.time ?? p.t ?? p[0]);
-                                const vRaw = Array.isArray(p) ? p[1] : (p.val ?? p.value ?? p[1]);
-                                const t = normTsMs(tRaw);
-                                const v = Number(vRaw);
-                                if (t == null || Number.isNaN(v)) return null;
-                                return [t, v];
-                              })
-                              .filter(Boolean)
-                              .sort((a, b) => a[0] - b[0]);
-                            resolve({ id, values: densifyHoldLast(norm) });
+              const norm = (outArr || [])
+                .map(p => {
+                  const tRaw = Array.isArray(p) ? p[0] : (p.ts ?? p.time ?? p.t ?? p[0]);
+                  const vRaw = Array.isArray(p) ? p[1] : (p.val ?? p.value ?? p[1]);
+                  const t = normTsMs(tRaw);
+                  const v = Number(vRaw);
+                  if (t == null || Number.isNaN(v)) return null;
+                  return [t, v];
+                })
+                .filter(Boolean)
+                .sort((a, b) => a[0] - b[0]);
+              resolve({ id, values: densifyHoldLast(norm) });
             });
           } catch (e) {
             if (!done) {
@@ -10154,15 +10156,28 @@ app.get('/api/history', async (req, res) => {
           }
         });
 
+        const askCandidates = async (candidates) => {
+          const list = Array.isArray(candidates) ? candidates : [candidates];
+          let first = null;
+          for (const candidate of list) {
+            const sid = this._nwTrimId(candidate);
+            if (!sid) continue;
+            const resu = await ask(sid);
+            if (!first) first = resu;
+            if (Array.isArray(resu && resu.values) && resu.values.length >= 2) return resu;
+          }
+          return first || { id: '', values: [] };
+        };
+
         const [pv, load, buy, sell, chg, dchg, soc, evcs] = await Promise.all([
-          ask(ids.pv),
-          ask(ids.load),
-          ask(ids.buy),
-          ask(ids.sell),
-          ask(ids.chg),
-          ask(ids.dchg),
-          ask(ids.soc),
-          ask(ids.evcs)
+          askCandidates(idCandidates.pv),
+          askCandidates(idCandidates.load),
+          askCandidates(idCandidates.buy),
+          askCandidates(idCandidates.sell),
+          askCandidates(idCandidates.chg),
+          askCandidates(idCandidates.dchg),
+          askCandidates(idCandidates.soc),
+          askCandidates(idCandidates.evcs)
         ]);
 
         // --- Robustness for E‑Mobilität (EVCS) ---
@@ -10174,8 +10189,8 @@ app.get('/api/history', async (req, res) => {
         // Historie-Datenpunkten lesen, ohne dass der Kunde manuell nacharbeiten muss.
         //
         // Fallback-Strategie:
-        //  1) Wenn die Abfrage für ids.evcs leer ist, versuche den kanonischen DP
-        //     `${namespace}.historie.core.ev.totalW`.
+        //  1) Wenn weder explizite History-Mappings noch Auto-Fallback Daten liefern,
+        //     versuche den kanonischen DP `${namespace}.historie.core.ev.totalW`.
         //  2) Wenn weiterhin leer: aggregiere aus den pro Ladepunkt angelegten
         //     Historie-DPs `${namespace}.historie.evcs.lpX.powerW`.
         //
@@ -10183,7 +10198,7 @@ app.get('/api/history', async (req, res) => {
         const evcsHasData = (s) => Array.isArray(s?.values) && s.values.length >= 2;
         if (!evcsHasData(evcs)) {
           const canonicalEvcsId = `${this.namespace}.historie.core.ev.totalW`;
-          if (ids.evcs && ids.evcs !== canonicalEvcsId) {
+          if (evcs.id !== canonicalEvcsId) {
             const alt = await ask(canonicalEvcsId);
             if (evcsHasData(alt)) {
               evcs.id = canonicalEvcsId;
@@ -10224,11 +10239,11 @@ app.get('/api/history', async (req, res) => {
 
         const [extraConsumers, extraProducers] = await Promise.all([
           Promise.all(extraConsumerReq.map(async (c) => {
-            const r = await ask(c.id);
+            const r = await askCandidates(c.candidates);
             return { idx: c.idx, name: c.name, id: r.id, values: r.values };
           })),
           Promise.all(extraProducerReq.map(async (p) => {
-            const r = await ask(p.id);
+            const r = await askCandidates(p.candidates);
             return { idx: p.idx, name: p.name, id: r.id, values: r.values };
           }))
         ]);
@@ -10250,7 +10265,10 @@ const readCounterPoint = (id, newest) => new Promise(resolve => {
     ignoreNull: true,
     count: 1,
     returnNewestEntries: !!newest,
-    removeBorderValues: true,
+    // For cumulative kWh counters we explicitly want the nearest border values.
+    // Otherwise range deltas can become 0 or too small when the first/last raw sample
+    // is outside the exact query window.
+    removeBorderValues: false,
   };
   let done = false;
   const timer = setTimeout(() => {
@@ -10296,9 +10314,26 @@ const readCounterPoint = (id, newest) => new Promise(resolve => {
   }
 });
 
+const readCurrentCounterPoint = async (id) => {
+  try {
+    const st = await this.getForeignStateAsync(id);
+    const val = Number(st && st.val);
+    if (!Number.isFinite(val)) return null;
+    const ts = this._nwNormTsMs(st && st.ts) || energyEnd;
+    return { ts, val };
+  } catch (_e) {
+    return null;
+  }
+};
+
 const counterDelta = async (id) => {
   const a = await readCounterPoint(id, false);
-  const b = await readCounterPoint(id, true);
+  let b = null;
+  const endIsNearNow = Math.abs(Date.now() - energyEnd) <= (12 * 60 * 60 * 1000);
+  if (endIsNearNow) {
+    b = await readCurrentCounterPoint(id);
+  }
+  if (!b) b = await readCounterPoint(id, true);
   if (!a || !b) return null;
   const d = Number(b.val) - Number(a.val);
   if (!Number.isFinite(d) || d < 0) return null;
@@ -14519,35 +14554,46 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       case 'storageDischargePower': return ns + '.historie.core.storage.dischargeW';
       case 'storageSoc': return ns + '.historie.core.storage.socPct';
       case 'evcsPower': return ns + '.historie.core.ev.totalW';
-      default: return '';
+      default: {
+        const mConsumer = k.match(/^consumer(\d+)Power$/);
+        if (mConsumer) return `${ns}.historie.consumers.c${mConsumer[1]}.powerW`;
+        const mProducer = k.match(/^producer(\d+)Power$/);
+        if (mProducer) return `${ns}.historie.producers.p${mProducer[1]}.powerW`;
+        return '';
+      }
     }
   }
 
-  _nwGetHistoryDpId(name) {
+  _nwGetHistoryDpCandidates(name) {
     const hcfg = (this.config && this.config.history) || {};
     const dp = Object.assign({}, hcfg.datapoints || {}, hcfg.dp || {});
-    // History should NOT depend on the live/EMS datapoint mapping.
-    // Otherwise users would need to enable Influx logging for *device* datapoints
-    // in addition to the canonical nexowatt-ui.0.historie.* states (double mapping).
-    //
-    // NOTE: Earlier versions allowed overriding the Historie input states via
-    // config.history.datapoints. In practice this led to many installations still
-    // referencing legacy helper states (e.g. 0_userdata.* / "Leistung_Visu_Historie"),
-    // even though the adapter already auto-creates and historizes canonical states
-    // under `${this.namespace}.historie.*`.
-    //
-    // For a predictable, low-maintenance setup we therefore *default* to the canonical
-    // adapter states. Explicit mappings are only honored if they also point into the
-    // adapter's own historized namespace. (Advanced users can still force any ID by
-    // prefixing it with '!'.)
-    const canon = this._nwTrimId(this._nwGetCanonicalHistorieId(name));
     const raw = (dp && typeof dp[name] === 'string') ? dp[name].trim() : '';
     const explicitForced = raw.startsWith('!') ? this._nwTrimId(raw.slice(1)) : '';
-    if (explicitForced) return explicitForced;
-
     const explicit = this._nwTrimId(raw);
-    const allowExplicit = !!(explicit && explicit.startsWith(`${this.namespace}.historie.`));
-    return (allowExplicit ? explicit : canon) || explicit || '';
+    const canon = this._nwTrimId(this._nwGetCanonicalHistorieId(name));
+
+    const out = [];
+    const add = (id) => {
+      const sid = this._nwTrimId(id);
+      if (sid && !out.includes(sid)) out.push(sid);
+    };
+
+    if (explicitForced) {
+      add(explicitForced);
+      return out;
+    }
+
+    // Backward compatible: if the customer configured an explicit history mapping,
+    // prefer it first, but keep the canonical adapter Historie state as automatic
+    // fallback so legacy installs and new installs both continue to work.
+    add(explicit);
+    add(canon);
+    return out;
+  }
+
+  _nwGetHistoryDpId(name) {
+    const list = this._nwGetHistoryDpCandidates(name);
+    return list[0] || '';
   }
 
 
@@ -15137,6 +15183,19 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     });
   }
 
+  async _nwGetHistoryAvgSeriesAny(candidates, startMs, endMs, stepMs) {
+    const list = Array.isArray(candidates) ? candidates : [candidates];
+    let first = [];
+    for (const id of list) {
+      const sid = this._nwTrimId(id);
+      if (!sid) continue;
+      const series = await this._nwGetHistoryAvgSeries(sid, startMs, endMs, stepMs);
+      if (!first.length) first = series;
+      if (Array.isArray(series) && series.length >= 2) return series;
+    }
+    return first;
+  }
+
   _nwIntegrateKwh(series, endMs, defaultStepMs, positiveOnly = true) {
     if (!Array.isArray(series) || !series.length) return null;
     let kwh = 0;
@@ -15178,10 +15237,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const tasks = [];
 
     if (!this._nwHasMappedDatapoint('productionEnergyKwh')) {
-      const id = this._nwGetHistoryDpId('pvPower');
-      if (id) tasks.push((async () => {
+      const ids = this._nwGetHistoryDpCandidates('pvPower');
+      if (ids.length) tasks.push((async () => {
         const stepMs = this._nwChooseStepMs(spanMs, 3500, 5 * 60 * 1000);
-        const series = await this._nwGetHistoryAvgSeries(id, startMs, now, stepMs);
+        const series = await this._nwGetHistoryAvgSeriesAny(ids, startMs, now, stepMs);
         const kwh = this._nwIntegrateKwh(series, now, stepMs, true);
         if (kwh != null) {
           this.updateValue('productionEnergyKwh', kwh, now);
@@ -15191,10 +15250,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
 
     if (!this._nwHasMappedDatapoint('consumptionEnergyKwh')) {
-      const id = this._nwGetHistoryDpId('consumptionTotal');
-      if (id) tasks.push((async () => {
+      const ids = this._nwGetHistoryDpCandidates('consumptionTotal');
+      if (ids.length) tasks.push((async () => {
         const stepMs = this._nwChooseStepMs(spanMs, 3500, 5 * 60 * 1000);
-        const series = await this._nwGetHistoryAvgSeries(id, startMs, now, stepMs);
+        const series = await this._nwGetHistoryAvgSeriesAny(ids, startMs, now, stepMs);
         const kwh = this._nwIntegrateKwh(series, now, stepMs, true);
         if (kwh != null) {
           this.updateValue('consumptionEnergyKwh', kwh, now);
@@ -15204,10 +15263,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
 
     if (!this._nwHasMappedDatapoint('gridEnergyKwh')) {
-      const id = this._nwGetHistoryDpId('gridBuyPower');
-      if (id) tasks.push((async () => {
+      const ids = this._nwGetHistoryDpCandidates('gridBuyPower');
+      if (ids.length) tasks.push((async () => {
         const stepMs = this._nwChooseStepMs(spanMs, 3500, 5 * 60 * 1000);
-        const series = await this._nwGetHistoryAvgSeries(id, startMs, now, stepMs);
+        const series = await this._nwGetHistoryAvgSeriesAny(ids, startMs, now, stepMs);
         const kwh = this._nwIntegrateKwh(series, now, stepMs, true);
         if (kwh != null) {
           this.updateValue('gridEnergyKwh', kwh, now);
@@ -15220,10 +15279,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     // (Nur notwendig, wenn kein externer CO₂‑DP gemappt ist.)
     const needCo2Calc = !this._nwHasMappedDatapoint('co2Savings');
     if (needCo2Calc) {
-      const id = this._nwGetHistoryDpId('evcsPower');
-      if (id) tasks.push((async () => {
+      const ids = this._nwGetHistoryDpCandidates('evcsPower');
+      if (ids.length) tasks.push((async () => {
         const stepMs = this._nwChooseStepMs(spanMs, 3500, 5 * 60 * 1000);
-        const series = await this._nwGetHistoryAvgSeries(id, startMs, now, stepMs);
+        const series = await this._nwGetHistoryAvgSeriesAny(ids, startMs, now, stepMs);
         const kwh = this._nwIntegrateKwh(series, now, stepMs, true);
         if (kwh != null) {
           this.updateValue('evEnergyKwh', kwh, now);
@@ -15234,12 +15293,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
     // "Letzte Ladung" (EVCS): fallback from history if not mapped
     if (!this._nwHasMappedDatapoint('evcsLastChargeKwh')) {
-      const evcsId = this._nwGetHistoryDpId('evcsPower');
-      if (evcsId) tasks.push((async () => {
+      const evcsIds = this._nwGetHistoryDpCandidates('evcsPower');
+      if (evcsIds.length) tasks.push((async () => {
         const days = 14;
         const start = now - days * 24 * 3600 * 1000;
         const stepMs = 60 * 1000;
-        const series = await this._nwGetHistoryAvgSeries(evcsId, start, now, stepMs);
+        const series = await this._nwGetHistoryAvgSeriesAny(evcsIds, start, now, stepMs);
 
         const thrW = 200; // ignore noise
         let endIdx = -1;

@@ -1,3 +1,8 @@
+## 0.6.199
+- Historie/Jahresreport: liest konfigurierte History-Datenpunkte wieder bevorzugt mit automatischem Fallback auf die internen `historie.*` States – alte Verlaufsdaten bleiben damit im Report nutzbar.
+- Historie/Jahresreport: kWh-Summen fallen bei 0/zu kleinen Counter-Deltas jetzt auf die Leistungs-Historie zurück; Verbrauch wird zusätzlich über Energiebilanz abgesichert.
+- Jahresreport: Restverbrauch (`Sonstiges`) berechnet ohne Batterie-Verluste und wird nicht mehr negativ angezeigt.
+
 ## 0.6.198
 - Wartung: internes Hilfsskript aus dem Paket entfernt.
 - Wartung: Versionsnummer erhöht, damit das Adapter-Update in ioBroker sauber erkannt wird.
