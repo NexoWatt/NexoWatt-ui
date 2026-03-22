@@ -15,6 +15,8 @@ const nwLE = {
   selectedNodeId: null,
   dragging: null,
   connecting: null,
+  paletteDragType: null,
+  lastPaletteDropAt: 0,
   dirty: false,
   lastSaveOk: true,
 
@@ -57,6 +59,45 @@ const nwNum = (v, def = 0) => {
 const nwJsonClone = (o) => {
   try { return JSON.parse(JSON.stringify(o)); } catch (_e) { return null; }
 };
+
+const NW_LE_NODE_W = 240;
+const NW_LE_NODE_DROP_OFFSET_Y = 24;
+
+function nwGetBoardPointFromClient(clientX, clientY) {
+  const board = nwLE.el.board;
+  if (!board) return null;
+  const boardRect = board.getBoundingClientRect();
+  const z = nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5);
+  return {
+    x: (clientX - boardRect.left) / z,
+    y: (clientY - boardRect.top) / z,
+  };
+}
+
+function nwClampNodePosition(x, y, g = nwLE.graph) {
+  const boardW = Math.max(800, Number(g && g.board && g.board.w) || 2400);
+  const boardH = Math.max(600, Number(g && g.board && g.board.h) || 1400);
+  return {
+    x: nwClamp(nwNum(x, 0), 0, Math.max(0, boardW - NW_LE_NODE_W)),
+    y: nwClamp(nwNum(y, 0), 0, Math.max(0, boardH - 40)),
+  };
+}
+
+function nwReadPaletteBlockType(ev) {
+  try {
+    const dt = ev && ev.dataTransfer;
+    const raw = dt ? (dt.getData('application/x-nexologic-block') || dt.getData('text/plain') || '') : '';
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.type) return String(parsed.type);
+      } catch (_e) {
+        return String(raw);
+      }
+    }
+  } catch (_e) {}
+  return nwSafeStr(nwLE.paletteDragType || '');
+}
 
 function nwSetStatus(text, ok = true) {
   const el = nwLE.el.status;
@@ -1253,8 +1294,31 @@ function nwRenderPalette() {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'nw-le__palette-item';
+      btn.draggable = true;
+      btn.dataset.blockType = it.type;
       btn.innerHTML = `<span class="nw-le__palette-icon">${it.icon || ''}</span><span>${it.name}</span>`;
-      btn.addEventListener('click', () => nwAddNode(it.type));
+      btn.addEventListener('click', (e) => {
+        if ((nwNow() - nwNum(nwLE.lastPaletteDropAt, 0)) < 250) {
+          e.preventDefault();
+          return;
+        }
+        nwAddNode(it.type);
+      });
+      btn.addEventListener('dragstart', (e) => {
+        const payload = JSON.stringify({ type: it.type });
+        nwLE.paletteDragType = it.type;
+        btn.classList.add('is-dragging');
+        try {
+          e.dataTransfer.effectAllowed = 'copy';
+          e.dataTransfer.setData('application/x-nexologic-block', payload);
+          e.dataTransfer.setData('text/plain', payload);
+        } catch (_e) {}
+      });
+      btn.addEventListener('dragend', () => {
+        btn.classList.remove('is-dragging');
+        nwLE.paletteDragType = null;
+        if (nwLE.el.boardWrap) nwLE.el.boardWrap.classList.remove('is-drag-over');
+      });
       groupWrap.appendChild(btn);
     }
 
@@ -1381,6 +1445,12 @@ function nwRenderNode(node) {
         e.preventDefault();
         e.stopPropagation();
         nwFinishConnect(node.id, p.key);
+      });
+      d.addEventListener('contextmenu', (e) => {
+        const removed = nwRemoveLinksToInput(node.id, p.key);
+        if (!removed) return;
+        e.preventDefault();
+        e.stopPropagation();
       });
     }
     return d;
@@ -1753,7 +1823,7 @@ function nwRenderInspector() {
 // -----------------------------
 // Node operations
 // -----------------------------
-function nwAddNode(type) {
+function nwAddNode(type, opts = {}) {
   const def = nwLE.lib.byType[type];
   if (!def) return;
   const g = nwLE.graph;
@@ -1762,14 +1832,24 @@ function nwAddNode(type) {
   const wrap = nwLE.el.boardWrap;
   const scrollL = wrap ? wrap.scrollLeft : 0;
   const scrollT = wrap ? wrap.scrollTop : 0;
+  const z = nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5);
+
+  let pos = {
+    x: (scrollL + 140) / z,
+    y: (scrollT + 100) / z,
+  };
+
+  if (Number.isFinite(Number(opts && opts.x)) && Number.isFinite(Number(opts && opts.y))) {
+    pos = nwClampNodePosition(Number(opts.x), Number(opts.y), g);
+  }
 
   const node = {
     id: nwUuid('n'),
     type,
     label: def.name,
     enabled: true,
-    x: (scrollL + 140) / nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5),
-    y: (scrollT + 100) / nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5),
+    x: pos.x,
+    y: pos.y,
     params: nwJsonClone(def.defaults) || {},
   };
   g.nodes = Array.isArray(g.nodes) ? g.nodes : [];
@@ -1807,6 +1887,80 @@ function nwDeleteNode(nodeId) {
 // -----------------------------
 // Connections
 // -----------------------------
+function nwRemoveLinksWhere(predicate) {
+  const g = nwLE.graph;
+  if (!g) return 0;
+
+  g.links = Array.isArray(g.links) ? g.links : [];
+  const before = g.links.length;
+  g.links = g.links.filter(l => !predicate(l));
+  const removed = before - g.links.length;
+  if (removed > 0) {
+    nwRenderAllWires();
+    nwMarkDirty();
+  }
+  return removed;
+}
+
+function nwRemoveLinkById(linkId) {
+  if (!linkId) return 0;
+  return nwRemoveLinksWhere(l => l && l.id === linkId);
+}
+
+function nwRemoveLinksToInput(nodeId, portKey) {
+  if (!nodeId || !portKey) return 0;
+  return nwRemoveLinksWhere(l => l && l.to && l.to.node === nodeId && l.to.port === portKey);
+}
+
+function nwFindLinkIdNearClientPoint(clientX, clientY) {
+  const svg = nwLE.el.wires;
+  if (!svg) return null;
+  const point = nwGetBoardPointFromClient(clientX, clientY);
+  if (!point) return null;
+
+  const z = nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5);
+  const threshold = 12 / z;
+  let bestId = null;
+  let bestDistSq = threshold * threshold;
+
+  const paths = svg.querySelectorAll('path[data-link-id]');
+  for (const path of paths) {
+    const linkId = path.dataset && path.dataset.linkId;
+    if (!linkId) continue;
+
+    let total = 0;
+    try {
+      total = path.getTotalLength();
+    } catch (_e) {
+      total = 0;
+    }
+    if (!Number.isFinite(total) || total <= 0) continue;
+
+    const step = Math.max(8, Math.min(18, total / 24));
+    for (let pos = 0; pos <= total; pos += step) {
+      const sample = path.getPointAtLength(Math.min(pos, total));
+      const dx = sample.x - point.x;
+      const dy = sample.y - point.y;
+      const d2 = (dx * dx) + (dy * dy);
+      if (d2 < bestDistSq) {
+        bestDistSq = d2;
+        bestId = linkId;
+      }
+    }
+
+    const tail = path.getPointAtLength(total);
+    const dx = tail.x - point.x;
+    const dy = tail.y - point.y;
+    const d2 = (dx * dx) + (dy * dy);
+    if (d2 < bestDistSq) {
+      bestDistSq = d2;
+      bestId = linkId;
+    }
+  }
+
+  return bestId;
+}
+
 function nwStartConnect(fromNodeId, fromPortKey) {
   const svg = nwLE.el.wires;
   if (!svg) return;
@@ -2163,11 +2317,12 @@ function nwInstallGlobalHandlers() {
       const z = nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5);
       const x = (e.clientX - boardRect.left - d.offsetX) / z;
       const y = (e.clientY - boardRect.top - d.offsetY) / z;
+      const pos = nwClampNodePosition(x, y, g);
 
-      node.x = Math.max(0, Math.min(x, (g.board.w || 2400) - 40));
-      node.y = Math.max(0, Math.min(y, (g.board.h || 1400) - 40));
+      node.x = pos.x;
+      node.y = pos.y;
 
-      const el = document.querySelector(`[data-node-id="${node.id}"]`);
+      const el = document.querySelector(`.nw-le-node[data-node-id="${CSS.escape(node.id)}"]`);
       if (el) {
         el.style.left = `${Math.round(node.x)}px`;
         el.style.top = `${Math.round(node.y)}px`;
@@ -2179,20 +2334,20 @@ function nwInstallGlobalHandlers() {
 
     // connecting preview
     if (nwLE.connecting) {
-      const board = nwLE.el.board;
-      if (!board) return;
-      const boardRect = board.getBoundingClientRect();
-      const z = nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5);
-      nwLE.connecting.mouse = {
-        x: (e.clientX - boardRect.left) / z,
-        y: (e.clientY - boardRect.top) / z,
-      };
+      const point = nwGetBoardPointFromClient(e.clientX, e.clientY);
+      if (!point) return;
+      nwLE.connecting.mouse = point;
       nwUpdateAllWirePaths();
     }
   });
 
   document.addEventListener('mouseup', () => {
     if (nwLE.dragging) nwLE.dragging = null;
+  });
+
+  document.addEventListener('dragend', () => {
+    if (nwLE.el.boardWrap) nwLE.el.boardWrap.classList.remove('is-drag-over');
+    nwLE.paletteDragType = null;
   });
 
   document.addEventListener('keydown', (e) => {
@@ -2227,9 +2382,37 @@ function nwInstallGlobalHandlers() {
         nwZoomIn();
       }
     }, { passive: false });
+
+    wrap.addEventListener('dragover', (e) => {
+      const type = nwReadPaletteBlockType(e);
+      if (!type || !nwLE.lib || !nwLE.lib.byType || !nwLE.lib.byType[type]) return;
+      e.preventDefault();
+      try { if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'; } catch (_e) {}
+      wrap.classList.add('is-drag-over');
+    });
+
+    wrap.addEventListener('drop', (e) => {
+      const type = nwReadPaletteBlockType(e);
+      wrap.classList.remove('is-drag-over');
+      if (!type || !nwLE.lib || !nwLE.lib.byType || !nwLE.lib.byType[type]) return;
+      e.preventDefault();
+      const point = nwGetBoardPointFromClient(e.clientX, e.clientY);
+      if (!point) return;
+      nwLE.lastPaletteDropAt = nwNow();
+      nwAddNode(type, {
+        x: point.x - (NW_LE_NODE_W / 2),
+        y: point.y - NW_LE_NODE_DROP_OFFSET_Y,
+      });
+    });
+
+    wrap.addEventListener('contextmenu', (e) => {
+      const linkId = nwFindLinkIdNearClientPoint(e.clientX, e.clientY);
+      if (!linkId) return;
+      e.preventDefault();
+      nwRemoveLinkById(linkId);
+    });
   }
 }
-
 
 
 // -----------------------------

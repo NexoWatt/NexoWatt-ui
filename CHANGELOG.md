@@ -1,3 +1,8 @@
+## 0.6.201
+- Logik-Editor: Verbindungen lassen sich wieder ohne Löschen eines Blocks trennen – per Rechtsklick auf Leitung oder Zieleingang.
+- Logik-Editor: Bausteine aus der Palette können jetzt per Drag & Drop direkt an der gewünschten Position im Arbeitsbereich abgelegt werden.
+- Web/PWA: Cache-Version angehoben, damit das Update zuverlässig beim Feldtest ankommt.
+
 ## 0.6.200
 - EMS/Charging: PV-only stop gate now ignores temporary grid import caused by the active EV load itself; PV surplus control reacts via a short 5s control window while the 5min average remains available for diagnostics.
 - Energiefluss / EVCS live inputs are refreshed every 5s and the web cache version was bumped.
