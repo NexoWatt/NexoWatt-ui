@@ -11,6 +11,18 @@ const crypto = require('crypto');
 const https = require('https');
 const pkg = require('./package.json');
 
+let nwTypeDetectorModule = null;
+try {
+  nwTypeDetectorModule = require('@iobroker/type-detector');
+} catch (_e) {
+  nwTypeDetectorModule = null;
+}
+const NwChannelDetector =
+  (nwTypeDetectorModule && nwTypeDetectorModule.ChannelDetector) ||
+  (nwTypeDetectorModule && nwTypeDetectorModule.default && nwTypeDetectorModule.default.ChannelDetector) ||
+  (nwTypeDetectorModule && nwTypeDetectorModule.default) ||
+  nwTypeDetectorModule;
+
 // Embedded EMS engine (Charging Management from nexowatt-multiuse)
 const { EmsEngine } = require('./ems/engine');
 
@@ -7568,6 +7580,541 @@ app.post('/api/smarthome/logic-clocks', requireInstaller, async (req, res) => {
 
 
 
+const NW_SHCFG_TD_TYPE_MAP = Object.freeze({
+  light: 'switch',
+  socket: 'switch',
+  buttonSensor: 'sensor',
+  dimmer: 'dimmer',
+  rgbSingle: 'color',
+  rgbwSingle: 'color',
+  blind: 'blind',
+  blinds: 'blind',
+  blindButtons: 'blind',
+  gate: 'blind',
+  thermostat: 'rtr',
+  airCondition: 'rtr',
+  mediaPlayer: 'player',
+  camera: 'camera',
+  temperature: 'sensor',
+  humidity: 'sensor',
+  illuminance: 'sensor',
+  brightness: 'sensor',
+  motion: 'sensor',
+  door: 'sensor',
+  window: 'sensor',
+  windowTilt: 'sensor',
+  fireAlarm: 'sensor',
+  floodAlarm: 'sensor',
+  info: 'sensor',
+  warning: 'sensor',
+});
+
+const NW_SHCFG_TD_ICON_MAP = Object.freeze({
+  switch: '3d-toggle',
+  color: '3d-bulb',
+  dimmer: '3d-bulb',
+  blind: '3d-blinds',
+  rtr: '3d-thermostat',
+  player: '3d-speaker',
+  camera: '3d-camera',
+  sensor: '3d-sensor',
+});
+
+const nwShcfgTdIsPlainObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
+
+const nwShcfgTdNormName = (value) => {
+  try {
+    if (typeof value === 'string') return value.trim();
+    if (value && typeof value === 'object') {
+      const direct = value.de || value.en || value.text || value.value;
+      if (typeof direct === 'string' && direct.trim()) return direct.trim();
+      const first = Object.values(value).find((entry) => typeof entry === 'string' && entry.trim());
+      if (typeof first === 'string') return first.trim();
+    }
+  } catch (_e) {}
+  return '';
+};
+
+const nwShcfgTdParentId = (id) => {
+  const parts = String(id || '').trim().split('.').filter(Boolean);
+  if (parts.length <= 1) return '';
+  parts.pop();
+  return parts.join('.');
+};
+
+const nwShcfgTdHash = (value) => crypto.createHash('sha1').update(String(value || '')).digest('hex').slice(0, 16);
+
+const nwShcfgTdStateEntry = (objects, state, keyOverride) => {
+  if (!state || !state.id) return null;
+  const id = String(state.id || '').trim();
+  if (!id) return null;
+  const obj = objects && objects[id] ? objects[id] : null;
+  const common = obj && obj.common && typeof obj.common === 'object' ? obj.common : {};
+  return {
+    key: String(keyOverride || state.name || 'STATE').trim() || 'STATE',
+    id,
+    label: nwShcfgTdNormName(common.name) || String(state.name || '').trim() || id.split('.').slice(-1)[0],
+    role: String(common.role || '').trim(),
+    type: String(common.type || '').trim(),
+    unit: String(common.unit || '').trim(),
+    read: common.read !== false,
+    write: !!common.write,
+  };
+};
+
+const nwShcfgTdFindState = (control, names, predicate) => {
+  const list = Array.isArray(control && control.states) ? control.states : [];
+  const wanted = (Array.isArray(names) ? names : [names])
+    .map((name) => String(name || '').trim().toUpperCase())
+    .filter(Boolean);
+  if (!wanted.length) return null;
+  for (const want of wanted) {
+    const hit = list.find((state) => state && state.id && String(state.name || '').trim().toUpperCase() === want && (!predicate || predicate(state)));
+    if (hit) return hit;
+  }
+  for (const want of wanted) {
+    const hit = list.find((state) => state && state.id && String(state.name || '').trim().toUpperCase() === want);
+    if (hit) return hit;
+  }
+  return null;
+};
+
+const nwShcfgTdCollectConfiguredDpIds = (cfg) => {
+  const out = new Set();
+  const visit = (value, keyName) => {
+    if (typeof value === 'string') {
+      const str = value.trim();
+      if (str && /(?:^|[_\-.])id$/i.test(String(keyName || ''))) out.add(str);
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((entry) => visit(entry, ''));
+      return;
+    }
+    if (!nwShcfgTdIsPlainObject(value)) return;
+    Object.entries(value).forEach(([key, entry]) => visit(entry, key));
+  };
+
+  const devices = Array.isArray(cfg && cfg.devices) ? cfg.devices : [];
+  devices.forEach((device) => visit(device && device.io ? device.io : null, ''));
+  return out;
+};
+
+const nwShcfgTdGetObjectsCache = async (force = false) => {
+  const ttlMs = 30000;
+  const now = Date.now();
+  if (!force && this._nwTypeDetectorObjectsCache && this._nwTypeDetectorObjectsCache.ts && (now - this._nwTypeDetectorObjectsCache.ts) < ttlMs) {
+    return this._nwTypeDetectorObjectsCache;
+  }
+  const objects = await this.getForeignObjectsAsync('*');
+  const keys = Object.keys(objects || {}).sort((a, b) => a.localeCompare(b));
+  this._nwTypeDetectorObjectsCache = { ts: now, objects: objects || {}, keys };
+  return this._nwTypeDetectorObjectsCache;
+};
+
+const nwShcfgTdCollectCandidateRoots = (objects) => {
+  const out = [];
+  const ownPrefix = this.namespace ? `${this.namespace}.` : '';
+  const skip = (id) => {
+    const sid = String(id || '').trim();
+    if (!sid) return true;
+    if (sid.startsWith('system.')) return true;
+    if (sid.startsWith('admin.')) return true;
+    if (ownPrefix && sid.startsWith(ownPrefix)) return true;
+    return false;
+  };
+
+  Object.keys(objects || {}).forEach((id) => {
+    if (skip(id)) return;
+    const obj = objects[id];
+    if (!obj || !obj.type) return;
+    if (obj.type === 'device' || obj.type === 'channel') out.push(id);
+  });
+
+  Object.keys(objects || {}).forEach((id) => {
+    if (skip(id)) return;
+    const obj = objects[id];
+    if (!obj || obj.type !== 'state') return;
+    const parentId = nwShcfgTdParentId(id);
+    const parentObj = parentId ? objects[parentId] : null;
+    if (parentObj && (parentObj.type === 'channel' || parentObj.type === 'device')) return;
+    out.push(id);
+  });
+
+  out.sort((a, b) => a.localeCompare(b));
+  return out;
+};
+
+const nwShcfgTdBestSourceId = (objects, rootId, control) => {
+  const root = String(rootId || '').trim();
+  const rootObj = root ? objects[root] : null;
+  if (rootObj && (rootObj.type === 'channel' || rootObj.type === 'device')) return root;
+
+  const list = Array.isArray(control && control.states) ? control.states : [];
+  for (const state of list) {
+    if (!state || !state.id) continue;
+    let parentId = nwShcfgTdParentId(state.id);
+    while (parentId) {
+      const parentObj = objects[parentId];
+      if (parentObj && (parentObj.type === 'channel' || parentObj.type === 'device')) return parentId;
+      parentId = nwShcfgTdParentId(parentId);
+    }
+  }
+  return root;
+};
+
+const nwShcfgTdSuggestionScore = (item) => {
+  const typeWeight = item && item.sourceType === 'device' ? 3 : (item && item.sourceType === 'channel' ? 2 : 1);
+  const importableWeight = item && item.importable ? 8 : 0;
+  const configuredPenalty = item && item.alreadyConfigured ? -3 : 0;
+  return (typeWeight * 1000) + (Number(item && item.matchCount || 0) * 10) + importableWeight + configuredPenalty;
+};
+
+const nwShcfgTdMergeSuggestion = (current, next) => {
+  if (!current) return next;
+  if (!next) return current;
+  const merged = nwShcfgTdSuggestionScore(next) > nwShcfgTdSuggestionScore(current) ? next : current;
+  const other = merged === next ? current : next;
+  if (Array.isArray(other.notes) && other.notes.length) {
+    const set = new Set(Array.isArray(merged.notes) ? merged.notes : []);
+    other.notes.forEach((note) => { if (note) set.add(note); });
+    merged.notes = Array.from(set);
+  }
+  if (Array.isArray(other.configuredOverlap) && other.configuredOverlap.length) {
+    const set = new Set(Array.isArray(merged.configuredOverlap) ? merged.configuredOverlap : []);
+    other.configuredOverlap.forEach((id) => { if (id) set.add(id); });
+    merged.configuredOverlap = Array.from(set);
+    merged.alreadyConfigured = merged.configuredOverlap.length > 0;
+  }
+  return merged;
+};
+
+const nwShcfgTdBuildSuggestion = async ({ control, rootId, objects, configuredIds }) => {
+  if (!control || !control.type) return null;
+  const detectorType = String(control.type || '').trim();
+  const targetType = NW_SHCFG_TD_TYPE_MAP[detectorType];
+  if (!targetType) return null;
+
+  const rawEntries = Array.isArray(control.states) ? control.states : [];
+  const stateMap = new Map();
+  rawEntries.forEach((state) => {
+    const entry = nwShcfgTdStateEntry(objects, state);
+    if (!entry || !entry.id) return;
+    const key = `${entry.key}|${entry.id}`;
+    if (!stateMap.has(key)) stateMap.set(key, entry);
+  });
+  const states = Array.from(stateMap.values());
+  if (!states.length) return null;
+
+  const sourceId = nwShcfgTdBestSourceId(objects, rootId, control) || String(rootId || '').trim();
+  const sourceObj = sourceId ? objects[sourceId] : null;
+  const sourceType = String((sourceObj && sourceObj.type) || (objects[rootId] && objects[rootId].type) || 'state').trim() || 'state';
+  const sourceName = nwShcfgTdNormName(sourceObj && sourceObj.common && sourceObj.common.name) || (sourceId ? sourceId.split('.').slice(-1)[0] : 'Gerät');
+  const notes = [];
+
+  const getMeta = (state) => nwShcfgTdStateEntry(objects, state, state && state.name);
+  const pick = (names, predicate) => getMeta(nwShcfgTdFindState(control, names, predicate));
+  const numberOr = (value, fallback) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : fallback;
+  };
+
+  let proposal = {
+    type: targetType,
+    alias: sourceName,
+    icon: NW_SHCFG_TD_ICON_MAP[targetType] || '',
+    behavior: { favorite: false, readOnly: false },
+    io: {},
+  };
+  let importable = true;
+
+  if (targetType === 'switch') {
+    const set = pick(['SET', 'ON']);
+    const actual = pick(['ON_ACTUAL', 'ACTUAL', 'STATE']);
+    const writeId = set && set.write ? set.id : null;
+    const readId = (actual && actual.id) || (set && set.read ? set.id : null) || writeId || null;
+    proposal.io.switch = { readId: readId || null, writeId: writeId || null };
+    proposal.behavior.readOnly = !writeId;
+    importable = !!(readId || writeId);
+    if (!writeId && readId) {
+      notes.push('Kein schreibbarer Schalt-DP erkannt – Vorschlag wäre aktuell nur lesend nutzbar.');
+    }
+  } else if (targetType === 'dimmer') {
+    const set = pick('SET');
+    const actual = pick('ACTUAL');
+    const writeId = set && set.write ? set.id : null;
+    const readId = (actual && actual.id) || (set && set.read ? set.id : null) || writeId || null;
+    const setObj = set && set.id ? objects[set.id] : null;
+    const common = setObj && setObj.common && typeof setObj.common === 'object' ? setObj.common : {};
+    proposal.io.level = {
+      readId: readId || null,
+      writeId: writeId || null,
+      min: numberOr(common.min, 0),
+      max: numberOr(common.max, 100),
+    };
+    proposal.behavior.readOnly = !writeId;
+    importable = !!(readId || writeId);
+  } else if (targetType === 'color') {
+    const color = pick(['RGB', 'RGBW']);
+    const on = pick('ON');
+    const onActual = pick(['ON_ACTUAL', 'ACTUAL']);
+    const colorObj = color && color.id ? objects[color.id] : null;
+    const colorCommon = colorObj && colorObj.common && typeof colorObj.common === 'object' ? colorObj.common : {};
+    const switchWriteId = on && on.write ? on.id : null;
+    const switchReadId = (onActual && onActual.id) || (on && on.read ? on.id : null) || switchWriteId || null;
+    const colorWriteId = color && color.write ? color.id : null;
+    const colorReadId = (color && color.id) || null;
+    proposal.io.switch = { readId: switchReadId || null, writeId: switchWriteId || null };
+    proposal.io.color = {
+      readId: colorReadId,
+      writeId: colorWriteId || null,
+      format: String(colorCommon.type || '').trim() === 'number' ? 'int' : 'hex',
+    };
+    proposal.behavior.readOnly = !colorWriteId && !switchWriteId;
+    importable = !!(colorReadId || colorWriteId || switchReadId || switchWriteId);
+    if (detectorType === 'rgbwSingle') {
+      notes.push('RGBW-Farbwert erkannt und als gemeinsamer Farb-DP übernommen.');
+    }
+  } else if (targetType === 'blind') {
+    const set = pick('SET');
+    const actual = pick('ACTUAL');
+    const open = pick('OPEN');
+    const close = pick('CLOSE');
+    const stop = pick('STOP');
+    const setType = String((set && set.type) || '').trim();
+    const writeId = set && set.write && setType === 'number' ? set.id : null;
+    const readId = (actual && actual.id) || (set && set.read && setType === 'number' ? set.id : null) || null;
+    proposal.io.level = { readId: readId || null, writeId: writeId || null, min: 0, max: 100 };
+    proposal.io.cover = {
+      upId: open && open.write ? open.id : null,
+      downId: close && close.write ? close.id : null,
+      stopId: stop && stop.write ? stop.id : null,
+    };
+    proposal.behavior.readOnly = !(proposal.io.level.writeId || proposal.io.cover.upId || proposal.io.cover.downId || proposal.io.cover.stopId);
+    importable = !!(proposal.io.level.readId || proposal.io.level.writeId || proposal.io.cover.upId || proposal.io.cover.downId || proposal.io.cover.stopId);
+    if (detectorType === 'gate' && set && setType === 'boolean' && !proposal.io.cover.upId && !proposal.io.cover.downId) {
+      importable = false;
+      notes.push('Tor erkannt: einzelner OPEN/CLOSE-Schalt-DP lässt sich nicht sicher automatisch auf die Jalousie-Steuerung abbilden.');
+    }
+  } else if (targetType === 'rtr') {
+    const set = pick('SET');
+    const actual = pick('ACTUAL');
+    const mode = pick('MODE');
+    const humidity = pick('HUMIDITY');
+    const setObj = set && set.id ? objects[set.id] : null;
+    const common = setObj && setObj.common && typeof setObj.common === 'object' ? setObj.common : {};
+    const setpointId = set && set.write ? set.id : (set && set.id ? set.id : null);
+    proposal.io.climate = {
+      currentTempId: actual && actual.id ? actual.id : null,
+      setpointId: setpointId || null,
+      modeId: mode && mode.id ? mode.id : null,
+      humidityId: humidity && humidity.id ? humidity.id : null,
+      minSetpoint: numberOr(common.min, 15),
+      maxSetpoint: numberOr(common.max, 30),
+    };
+    proposal.behavior.readOnly = !(set && set.write);
+    importable = !!(proposal.io.climate.currentTempId || proposal.io.climate.setpointId || proposal.io.climate.modeId || proposal.io.climate.humidityId);
+    if (detectorType === 'airCondition') {
+      notes.push('Klimagerät erkannt und als Heizungs-/Klima-Regler vorgeschlagen.');
+    }
+  } else if (targetType === 'player') {
+    const state = pick('STATE');
+    const title = pick('TITLE');
+    const artist = pick('ARTIST');
+    const album = pick('ALBUM');
+    const track = pick('TRACK');
+    const cover = pick('COVER');
+    const volume = pick('VOLUME');
+    const volumeActual = pick('VOLUME_ACTUAL');
+    const play = pick('PLAY');
+    const pause = pick('PAUSE');
+    const stop = pick('STOP');
+    const next = pick('NEXT');
+    const prev = pick('PREV');
+    const volumeObj = volume && volume.id ? objects[volume.id] : null;
+    const volumeCommon = volumeObj && volumeObj.common && typeof volumeObj.common === 'object' ? volumeObj.common : {};
+    proposal.io.player = {
+      playingId: state && state.id ? state.id : null,
+      titleId: title && title.id ? title.id : null,
+      artistId: artist && artist.id ? artist.id : null,
+      sourceId: album && album.id ? album.id : (track && track.id ? track.id : null),
+      coverId: cover && cover.id ? cover.id : null,
+      volumeReadId: volumeActual && volumeActual.id ? volumeActual.id : (volume && volume.read ? volume.id : null),
+      volumeWriteId: volume && volume.write ? volume.id : null,
+      volumeMin: numberOr(volumeCommon.min, 0),
+      volumeMax: numberOr(volumeCommon.max, 100),
+      toggleId: null,
+      playId: play && play.write ? play.id : null,
+      pauseId: pause && pause.write ? pause.id : null,
+      stopId: stop && stop.write ? stop.id : null,
+      nextId: next && next.write ? next.id : null,
+      prevId: prev && prev.write ? prev.id : null,
+      stationId: null,
+      playlistId: null,
+    };
+    proposal.stations = [];
+    proposal.playlists = [];
+    proposal.behavior.readOnly = !(proposal.io.player.volumeWriteId || proposal.io.player.playId || proposal.io.player.pauseId || proposal.io.player.stopId || proposal.io.player.nextId || proposal.io.player.prevId);
+    importable = !!(proposal.io.player.playingId || proposal.io.player.titleId || proposal.io.player.artistId || proposal.io.player.coverId || proposal.io.player.volumeReadId || proposal.io.player.volumeWriteId || proposal.io.player.playId || proposal.io.player.pauseId || proposal.io.player.stopId || proposal.io.player.nextId || proposal.io.player.prevId);
+  } else if (targetType === 'camera') {
+    const url = pick('URL');
+    let cameraUrl = '';
+    if (url && url.id) {
+      try {
+        const state = await this.getForeignStateAsync(url.id);
+        if (state && typeof state.val === 'string' && state.val.trim()) {
+          cameraUrl = state.val.trim();
+        }
+      } catch (_e) {}
+    }
+    proposal.io.camera = {
+      snapshotUrl: cameraUrl,
+      liveUrl: cameraUrl,
+      refreshSec: 5,
+    };
+    proposal.behavior.readOnly = true;
+    importable = !!cameraUrl;
+    if (!cameraUrl) {
+      notes.push('Kamera erkannt, aber im URL-Datenpunkt liegt aktuell keine direkte URL als String an – bitte manuell prüfen.');
+    }
+  } else if (targetType === 'sensor') {
+    const preferred = pick(['ACTUAL', 'STATE', 'SET', 'SECOND']);
+    let readId = preferred && preferred.id ? preferred.id : null;
+    if (!readId) {
+      const fallback = states.find((entry) => entry && entry.id && entry.read);
+      readId = fallback ? fallback.id : null;
+    }
+    proposal.io.sensor = { readId: readId || null };
+    proposal.behavior.readOnly = true;
+    importable = !!readId;
+    const secondary = pick('SECOND');
+    if (secondary && secondary.id && secondary.id !== readId) {
+      notes.push('Zusätzlicher SECOND-Wert erkannt; der Vorschlag übernimmt nur den primären Anzeige-DP.');
+    }
+  }
+
+  if (detectorType !== targetType) {
+    notes.push(`Erkannt als ${detectorType} und für die SmartHome-Oberfläche als ${targetType} vorgeschlagen.`);
+  }
+
+  const configuredOverlap = states.filter((entry) => entry && entry.id && configuredIds && configuredIds.has(entry.id)).map((entry) => entry.id);
+  if (configuredOverlap.length) {
+    notes.push('Mindestens ein gemappter Datenpunkt ist bereits einem bestehenden SmartHome-Gerät zugeordnet.');
+  }
+
+  const confidence = states.length >= 3 ? 'high' : (states.length >= 2 ? 'medium' : 'base');
+  const signature = `${targetType}|${states.map((entry) => entry.id).sort().join('|')}`;
+
+  return {
+    id: `td_${nwShcfgTdHash(`${sourceId}|${signature}`)}`,
+    signature,
+    displayName: sourceName || sourceId || 'Vorschlag',
+    sourceId,
+    sourceType,
+    sourceName,
+    detectorType,
+    targetType,
+    matchCount: states.length,
+    confidence,
+    notes,
+    states,
+    alreadyConfigured: configuredOverlap.length > 0,
+    configuredOverlap,
+    importable: !!importable,
+    proposal,
+  };
+};
+
+app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
+  try {
+    if (!NwChannelDetector || typeof NwChannelDetector !== 'function') {
+      return res.status(503).json({ ok: false, error: '@iobroker/type-detector ist aktuell nicht verfügbar.' });
+    }
+    if (typeof this.getForeignObjectsAsync !== 'function') {
+      return res.status(500).json({ ok: false, error: 'Objektzugriff nicht verfügbar.' });
+    }
+
+    const forceRaw = (req.query && (req.query.force ?? req.query.reload)) || '';
+    const force = String(forceRaw || '').trim() === '1' || String(forceRaw || '').trim().toLowerCase() === 'true';
+    const ttlMs = 30000;
+    const now = Date.now();
+    if (!force && this._nwShcfgDetectCache && this._nwShcfgDetectCache.ts && (now - this._nwShcfgDetectCache.ts) < ttlMs) {
+      return res.json(this._nwShcfgDetectCache.payload);
+    }
+
+    const cfg = this.getSmartHomeConfig ? this.getSmartHomeConfig() : ((this.config && this.config.smartHomeConfig) || {});
+    const configuredIds = nwShcfgTdCollectConfiguredDpIds(cfg);
+    const { objects, keys } = await nwShcfgTdGetObjectsCache(force);
+    const roots = nwShcfgTdCollectCandidateRoots(objects);
+    const detector = new NwChannelDetector();
+    const suggestionsBySignature = new Map();
+    let matchedRoots = 0;
+
+    for (const rootId of roots) {
+      let detected = null;
+      try {
+        detected = detector.detect({
+          objects,
+          id: rootId,
+          _keysOptional: keys,
+          _keysOptionalSorted: true,
+          ignoreIndicators: ['UNREACH_STICKY'],
+          allowedTypes: Object.keys(NW_SHCFG_TD_TYPE_MAP),
+        });
+      } catch (_e) {
+        detected = null;
+      }
+      if (!Array.isArray(detected) || !detected.length) continue;
+
+      const control = detected.find((entry) => entry && entry.type && NW_SHCFG_TD_TYPE_MAP[String(entry.type || '').trim()]);
+      if (!control) continue;
+      matchedRoots += 1;
+
+      const suggestion = await nwShcfgTdBuildSuggestion({ control, rootId, objects, configuredIds });
+      if (!suggestion) continue;
+      const signature = suggestion.signature || suggestion.id;
+      const merged = nwShcfgTdMergeSuggestion(suggestionsBySignature.get(signature), suggestion);
+      suggestionsBySignature.set(signature, merged);
+    }
+
+    const suggestions = Array.from(suggestionsBySignature.values())
+      .map((entry) => {
+        if (entry && entry.signature) delete entry.signature;
+        return entry;
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        const configuredDiff = (a.alreadyConfigured ? 1 : 0) - (b.alreadyConfigured ? 1 : 0);
+        if (configuredDiff !== 0) return configuredDiff;
+        const importableDiff = (b.importable ? 1 : 0) - (a.importable ? 1 : 0);
+        if (importableDiff !== 0) return importableDiff;
+        const matchDiff = Number(b.matchCount || 0) - Number(a.matchCount || 0);
+        if (matchDiff !== 0) return matchDiff;
+        return String(a.displayName || '').localeCompare(String(b.displayName || ''), 'de', { sensitivity: 'base', numeric: true });
+      });
+
+    const payload = {
+      ok: true,
+      scannedAt: now,
+      stats: {
+        total: suggestions.length,
+        importable: suggestions.filter((entry) => entry && entry.importable).length,
+        configured: suggestions.filter((entry) => entry && entry.alreadyConfigured).length,
+        scannedRoots: roots.length,
+        matchedRoots,
+      },
+      suggestions,
+    };
+
+    this._nwShcfgDetectCache = { ts: now, payload };
+    res.json(payload);
+  } catch (e) {
+    try { this.log.warn('SmartHomeConfig type-detect API error: ' + (e && e.message ? e.message : e)); } catch (_e2) {}
+    res.status(500).json({ ok: false, error: 'internal error' });
+  }
+});
+
+
 // --- SmartHomeConfig API (VIS-Konfig & Editor) ---
     app.get('/api/smarthome/config', (req, res) => {
       try {
@@ -7749,6 +8296,7 @@ app.post('/api/smarthome/logic-clocks', requireInstaller, async (req, res) => {
 
         this.config = this.config || {};
         this.config.smartHomeConfig = out;
+        this._nwShcfgDetectCache = null;
 
         // Persist inside adapter states (same mechanism as App‑Center installer config)
         // to avoid triggering an ioBroker instance restart.

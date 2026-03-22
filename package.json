@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.6.202",
+  "version": "0.6.203",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "Proprietary License (NPL) v1.0",
@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.0.0",
+    "@iobroker/type-detector": "5.0.10",
     "express": "^4.18.2"
   },
   "keywords": [

@@ -42,6 +42,19 @@ const nwShcState = {
     config: { version: 1, updatedAt: 0, clocks: [] },
     map: {},
   },
+
+  // ioBroker Type-Detector Vorschläge (assistierte Auto-Erkennung, kein Autosave)
+  detector: {
+    loaded: false,
+    loading: false,
+    error: '',
+    filterText: '',
+    showConfigured: false,
+    stats: null,
+    scannedAt: 0,
+    results: [],
+    assignments: {},
+  },
 };
 
 // Small DOM helper (used by new modules). Intentionally tiny and local to this file.
@@ -57,7 +70,7 @@ function nwEnsureShcfgUiState() {
       const stored = localStorage.getItem('nw-shcfg-ui-mode');
 
       // Never force users back into legacy UI
-      if (stored === 'home' || stored === 'builder' || stored === 'backup' || stored === 'timers' || stored === 'scenes') {
+      if (stored === 'home' || stored === 'builder' || stored === 'backup' || stored === 'timers' || stored === 'scenes' || stored === 'detect') {
         mode = stored;
       }
     } catch (_) {}
@@ -2372,13 +2385,13 @@ function nwRenderAll() {
 
 function nwShcfgSetMode(mode, opts = {}) {
   nwEnsureShcfgUiState();
-  const allowed = ['home', 'builder', 'backup', 'timers', 'scenes', 'classic'];
+  const allowed = ['home', 'builder', 'backup', 'timers', 'scenes', 'detect', 'classic'];
   if (!allowed.includes(mode)) return;
 
   nwShcState.ui.mode = mode;
   // Persist only the modern modes. Classic is intentionally not persisted.
   try {
-    if (mode === 'home' || mode === 'builder' || mode === 'backup' || mode === 'timers' || mode === 'scenes') {
+    if (mode === 'home' || mode === 'builder' || mode === 'backup' || mode === 'timers' || mode === 'scenes' || mode === 'detect') {
       localStorage.setItem('nw-shcfg-ui-mode', mode);
     }
   } catch (_) {}
@@ -2427,6 +2440,7 @@ function nwInitShcfgShellUi() {
   nwEnsureShcfgUiState();
 
   const btnBuilding = document.getElementById('nw-shcfg-tile-building');
+  const btnDetect = document.getElementById('nw-shcfg-tile-detect');
   const btnLogic = document.getElementById('nw-shcfg-tile-logic');
   const btnTimers = document.getElementById('nw-shcfg-tile-timers');
   const btnScenes = document.getElementById('nw-shcfg-tile-scenes');
@@ -2434,6 +2448,13 @@ function nwInitShcfgShellUi() {
   const btnClassic = document.getElementById('nw-shcfg-tile-classic');
 
   if (btnBuilding) btnBuilding.addEventListener('click', () => nwShcfgEnterBuilder({ view: 'rooms', tab: 'building' }));
+  if (btnDetect) btnDetect.addEventListener('click', async () => {
+    nwShcfgSetMode('detect');
+    if (!nwShcState.detector.loaded && !nwShcState.detector.loading) {
+      await nwLoadTypeDetectorSuggestions(false);
+      nwRenderShcfgShell();
+    }
+  });
   if (btnLogic) btnLogic.addEventListener('click', () => window.location.href = '/logic.html');
   if (btnTimers) btnTimers.addEventListener('click', () => nwShcfgSetMode('timers'));
   if (btnScenes) btnScenes.addEventListener('click', () => nwShcfgSetMode('scenes'));
@@ -2451,6 +2472,21 @@ function nwInitShcfgShellUi() {
   const backupOpenClassic = document.getElementById('nw-shcfg-backup-open-classic');
   if (backupBack) backupBack.addEventListener('click', () => nwShcfgSetMode('home'));
   if (backupOpenClassic) backupOpenClassic.addEventListener('click', () => nwShcfgSetMode('classic'));
+
+  const detectBack = document.getElementById('nw-shcfg-detect-back');
+  const detectReload = document.getElementById('nw-shcfg-detect-reload');
+  const detectSave = document.getElementById('nw-shcfg-detect-save');
+  const detectOpenClassic = document.getElementById('nw-shcfg-detect-open-classic');
+  if (detectBack) detectBack.addEventListener('click', () => nwShcfgSetMode('home'));
+  if (detectOpenClassic) detectOpenClassic.addEventListener('click', () => nwShcfgSetMode('classic'));
+  if (detectReload) detectReload.addEventListener('click', async () => {
+    await nwLoadTypeDetectorSuggestions(true);
+    nwRenderShcfgShell();
+  });
+  if (detectSave) detectSave.addEventListener('click', async () => {
+    await nwSaveSmartHomeConfig();
+    nwRenderShcfgShell();
+  });
 
   const timersBack = document.getElementById('nw-shcfg-timers-back');
   const timersOpenLogic = document.getElementById('nw-shcfg-timers-open-logic');
@@ -2528,16 +2564,18 @@ function nwRenderShcfgShell() {
   const home = document.getElementById('nw-shcfg-home');
   const builder = document.getElementById('nw-shcfg-builder');
   const backup = document.getElementById('nw-shcfg-backup');
+  const detect = document.getElementById('nw-shcfg-detect');
   const timers = document.getElementById('nw-shcfg-timers');
   const scenes = document.getElementById('nw-shcfg-scenes');
   const classic = document.getElementById('nw-shcfg-classic');
 
-  if (!home || !builder || !backup || !timers || !scenes || !classic) return;
+  if (!home || !builder || !backup || !detect || !timers || !scenes || !classic) return;
 
   const mode = nwShcState.ui.mode;
   home.style.display = (mode === 'home') ? '' : 'none';
   builder.style.display = (mode === 'builder') ? '' : 'none';
   backup.style.display = (mode === 'backup') ? '' : 'none';
+  detect.style.display = (mode === 'detect') ? '' : 'none';
   timers.style.display = (mode === 'timers') ? '' : 'none';
   scenes.style.display = (mode === 'scenes') ? '' : 'none';
   classic.style.display = (mode === 'classic') ? '' : 'none';
@@ -2550,6 +2588,15 @@ function nwRenderShcfgShell() {
     }, 0);
   }
 
+  if (mode === 'detect') {
+    nwRenderShcfgDetector();
+    if (!nwShcState.detector.loaded && !nwShcState.detector.loading) {
+      nwLoadTypeDetectorSuggestions(false)
+        .then(() => nwRenderShcfgShell())
+        .catch(() => {});
+    }
+  }
+
   if (mode === 'timers') {
     nwRenderShcfgTimers();
   }
@@ -2557,6 +2604,406 @@ function nwRenderShcfgShell() {
   if (mode === 'scenes') {
     nwRenderShcfgScenes();
   }
+}
+
+
+/* --- Module: Auto-Erkennung / Vorschläge --- */
+
+function nwSetDetectorStatus(text, kind) {
+  const el = byId('nw-shcfg-detect-status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.classList.remove('nw-config-status--ok', 'nw-config-status--warn', 'nw-config-status--error');
+  if (kind === 'ok') el.classList.add('nw-config-status--ok');
+  if (kind === 'warn') el.classList.add('nw-config-status--warn');
+  if (kind === 'error') el.classList.add('nw-config-status--error');
+}
+
+async function nwLoadTypeDetectorSuggestions(force = false) {
+  const det = nwShcState.detector || (nwShcState.detector = {});
+  det.loading = true;
+  det.error = '';
+  nwSetDetectorStatus('Gerätevorschläge werden gelesen…', null);
+  try {
+    const url = '/api/smarthome/type-detect' + (force ? '?force=1' : '');
+    const res = await fetch(url, { cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data || data.ok !== true) {
+      throw new Error((data && data.error) ? data.error : ('HTTP ' + res.status));
+    }
+    det.results = Array.isArray(data.suggestions) ? data.suggestions : [];
+    det.stats = (data && data.stats && typeof data.stats === 'object') ? data.stats : null;
+    det.scannedAt = Number(data && data.scannedAt) || Date.now();
+    det.loaded = true;
+    det.loading = false;
+    const total = (det.stats && Number.isFinite(Number(det.stats.total))) ? Number(det.stats.total) : det.results.length;
+    if (total > 0) {
+      nwSetDetectorStatus(`${total} Vorschläge geladen. Bitte prüfen und gezielt übernehmen.`, 'ok');
+    } else {
+      nwSetDetectorStatus('Keine passenden Vorschläge gefunden.', 'warn');
+    }
+    return det.results;
+  } catch (e) {
+    det.loading = false;
+    det.loaded = true;
+    det.error = (e && e.message) ? e.message : String(e);
+    nwSetDetectorStatus('Fehler bei der Auto-Erkennung: ' + det.error, 'error');
+    return [];
+  }
+}
+
+function nwShcfgGetDetectorAssignment(suggestionId) {
+  const det = nwShcState.detector || (nwShcState.detector = {});
+  det.assignments = det.assignments || {};
+  if (!det.assignments[suggestionId]) {
+    const cfg = nwShcState.config || {};
+    const rooms = Array.isArray(cfg.rooms) ? cfg.rooms : [];
+    const functions = Array.isArray(cfg.functions) ? cfg.functions : [];
+    det.assignments[suggestionId] = {
+      roomId: (rooms.length === 1 && rooms[0] && rooms[0].id) ? rooms[0].id : '',
+      functionId: (functions.length === 1 && functions[0] && functions[0].id) ? functions[0].id : '',
+    };
+  }
+  return det.assignments[suggestionId];
+}
+
+function nwShcfgCloneJson(value, fallback) {
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch (_e) {
+    return fallback;
+  }
+}
+
+function nwShcfgDetectorMatchesFilter(suggestion, term) {
+  const q = String(term || '').trim().toLowerCase();
+  if (!q) return true;
+  const parts = [];
+  if (suggestion) {
+    parts.push(String(suggestion.displayName || ''));
+    parts.push(String(suggestion.sourceId || ''));
+    parts.push(String(suggestion.sourceName || ''));
+    parts.push(String(suggestion.detectorType || ''));
+    parts.push(String(suggestion.targetType || ''));
+    const states = Array.isArray(suggestion.states) ? suggestion.states : [];
+    states.forEach((st) => {
+      parts.push(String(st && st.key ? st.key : ''));
+      parts.push(String(st && st.id ? st.id : ''));
+      parts.push(String(st && st.label ? st.label : ''));
+      parts.push(String(st && st.role ? st.role : ''));
+    });
+  }
+  return parts.join(' ').toLowerCase().includes(q);
+}
+
+function nwImportTypeDetectedSuggestion(suggestionId) {
+  const det = nwShcState.detector || {};
+  const suggestion = Array.isArray(det.results) ? det.results.find((x) => x && x.id === suggestionId) : null;
+  if (!suggestion) return;
+  if (suggestion.imported) {
+    nwSetDetectorStatus('Der Vorschlag wurde bereits übernommen.', 'warn');
+    return;
+  }
+  if (suggestion.alreadyConfigured) {
+    nwSetDetectorStatus('Dieser Vorschlag ist bereits im Projekt vorhanden.', 'warn');
+    return;
+  }
+  if (!suggestion.importable || !suggestion.proposal || !suggestion.proposal.type) {
+    nwSetDetectorStatus('Dieser Vorschlag kann nicht automatisch übernommen werden und sollte manuell geprüft werden.', 'warn');
+    return;
+  }
+
+  const assignment = nwShcfgGetDetectorAssignment(suggestionId);
+  const proposal = nwShcfgCloneJson(suggestion.proposal || {}, {});
+  const type = String(proposal.type || '').trim();
+  if (!type) {
+    nwSetDetectorStatus('Vorschlag enthält keinen unterstützten Zieltyp.', 'error');
+    return;
+  }
+
+  const dev = nwAddDeviceFromTemplate(type, {
+    roomId: assignment.roomId || '',
+    functionId: assignment.functionId || '',
+    silent: true,
+  });
+  if (!dev) {
+    nwSetDetectorStatus('Gerät konnte nicht angelegt werden.', 'error');
+    return;
+  }
+
+  dev.alias = proposal.alias || suggestion.displayName || dev.alias || dev.id;
+  dev.roomId = assignment.roomId || null;
+  dev.functionId = assignment.functionId || null;
+  if (proposal.icon) dev.icon = proposal.icon;
+  if (proposal.behavior && typeof proposal.behavior === 'object') {
+    dev.behavior = Object.assign({}, dev.behavior || {}, proposal.behavior);
+  }
+  if (proposal.ui && typeof proposal.ui === 'object') {
+    dev.ui = Object.assign({}, dev.ui || {}, proposal.ui);
+  }
+  if (proposal.io && typeof proposal.io === 'object') {
+    dev.io = proposal.io;
+  }
+  if (Array.isArray(proposal.stations)) dev.stations = proposal.stations;
+  if (Array.isArray(proposal.playlists)) dev.playlists = proposal.playlists;
+
+  suggestion.imported = true;
+  suggestion.alreadyConfigured = true;
+  nwNormalizeDeviceOrder();
+  nwMarkDirty(true);
+  nwSetDetectorStatus(`„${dev.alias || dev.id}“ als Vorschlag übernommen – bitte speichern.`, 'ok');
+  nwRenderAll();
+}
+
+function nwRenderShcfgDetector() {
+  const root = byId('nw-shcfg-detect-root');
+  if (!root) return;
+
+  const det = nwShcState.detector || (nwShcState.detector = {});
+  const cfg = nwShcState.config || {};
+  const rooms = (Array.isArray(cfg.rooms) ? cfg.rooms.slice() : []).sort(nwSortByOrder);
+  const functions = (Array.isArray(cfg.functions) ? cfg.functions.slice() : []).sort(nwSortByOrder);
+  const results = Array.isArray(det.results) ? det.results.slice() : [];
+
+  root.innerHTML = '';
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'nw-shcfg-detect__toolbar';
+
+  const filterInput = document.createElement('input');
+  filterInput.type = 'text';
+  filterInput.className = 'nw-config-input';
+  filterInput.placeholder = 'Nach Name, Pfad oder Datenpunkt suchen…';
+  filterInput.value = det.filterText || '';
+  filterInput.addEventListener('input', () => {
+    det.filterText = filterInput.value || '';
+    nwRenderShcfgDetector();
+  });
+  toolbar.appendChild(filterInput);
+
+  const showConfiguredLabel = document.createElement('label');
+  showConfiguredLabel.className = 'nw-shcfg-detect__toggle';
+  const showConfigured = document.createElement('input');
+  showConfigured.type = 'checkbox';
+  showConfigured.checked = !!det.showConfigured;
+  showConfigured.addEventListener('change', () => {
+    det.showConfigured = !!showConfigured.checked;
+    nwRenderShcfgDetector();
+  });
+  const showConfiguredText = document.createElement('span');
+  showConfiguredText.textContent = 'Bereits zugeordnete Vorschläge anzeigen';
+  showConfiguredLabel.appendChild(showConfigured);
+  showConfiguredLabel.appendChild(showConfiguredText);
+  toolbar.appendChild(showConfiguredLabel);
+
+  root.appendChild(toolbar);
+
+  const summary = document.createElement('div');
+  summary.className = 'nw-shcfg-detect__summary';
+  const stats = det.stats || {};
+  const total = Number.isFinite(Number(stats.total)) ? Number(stats.total) : results.length;
+  const importable = Number.isFinite(Number(stats.importable)) ? Number(stats.importable) : results.filter((r) => r && r.importable).length;
+  const configured = Number.isFinite(Number(stats.configured)) ? Number(stats.configured) : results.filter((r) => r && r.alreadyConfigured).length;
+  const filteredResults = results.filter((r) => {
+    if (!r) return false;
+    if (!det.showConfigured && (r.alreadyConfigured || r.imported)) return false;
+    return nwShcfgDetectorMatchesFilter(r, det.filterText || '');
+  });
+
+  const mkBadge = (cls, text) => {
+    const span = document.createElement('span');
+    span.className = 'nw-config-badge ' + cls;
+    span.textContent = text;
+    return span;
+  };
+  summary.appendChild(mkBadge('nw-config-badge--auto', `${total} Vorschläge`));
+  summary.appendChild(mkBadge('nw-config-badge--ok', `${importable} direkt übernehmbar`));
+  if (configured > 0) summary.appendChild(mkBadge('nw-config-badge--warn', `${configured} bereits zugeordnet`));
+  if (det.scannedAt) {
+    const stamp = new Date(det.scannedAt);
+    summary.appendChild(mkBadge('nw-config-badge--idle', `Scan: ${stamp.toLocaleDateString('de-DE')} ${stamp.toLocaleTimeString('de-DE')}`));
+  }
+  root.appendChild(summary);
+
+  if (det.loading && !results.length) {
+    const loading = document.createElement('div');
+    loading.className = 'nw-config-empty';
+    loading.textContent = 'Gerätevorschläge werden geladen…';
+    root.appendChild(loading);
+    return;
+  }
+
+  if (!filteredResults.length) {
+    const empty = document.createElement('div');
+    empty.className = 'nw-config-empty';
+    empty.textContent = results.length
+      ? 'Keine Vorschläge für den aktuellen Filter.'
+      : (det.error ? ('Fehler: ' + det.error) : 'Keine passenden Vorschläge gefunden.');
+    root.appendChild(empty);
+    return;
+  }
+
+  const list = document.createElement('div');
+  list.className = 'nw-shcfg-detect__list';
+
+  filteredResults
+    .sort((a, b) => {
+      const aConfigured = (a.alreadyConfigured || a.imported) ? 1 : 0;
+      const bConfigured = (b.alreadyConfigured || b.imported) ? 1 : 0;
+      if (aConfigured !== bConfigured) return aConfigured - bConfigured;
+      const aImportable = a.importable ? 1 : 0;
+      const bImportable = b.importable ? 1 : 0;
+      if (aImportable !== bImportable) return bImportable - aImportable;
+      const aCount = Number(a.matchCount || 0);
+      const bCount = Number(b.matchCount || 0);
+      if (aCount !== bCount) return bCount - aCount;
+      return String(a.displayName || '').localeCompare(String(b.displayName || ''), 'de', { sensitivity: 'base', numeric: true });
+    })
+    .forEach((suggestion) => {
+      const card = document.createElement('div');
+      card.className = 'nw-config-card nw-shcfg-detect-card';
+
+      const head = document.createElement('div');
+      head.className = 'nw-shcfg-detect-card__head';
+
+      const headLeft = document.createElement('div');
+      headLeft.className = 'nw-shcfg-detect-card__head-left';
+
+      const title = document.createElement('div');
+      title.className = 'nw-config-card__title';
+      title.textContent = suggestion.displayName || suggestion.sourceName || suggestion.sourceId || 'Vorschlag';
+      headLeft.appendChild(title);
+
+      const path = document.createElement('div');
+      path.className = 'nw-shcfg-detect-card__path';
+      path.textContent = suggestion.sourceId || '';
+      headLeft.appendChild(path);
+
+      const headRight = document.createElement('div');
+      headRight.className = 'nw-shcfg-detect-card__badges';
+      headRight.appendChild(mkBadge('nw-config-badge--auto', `${nwShTypeLabel(suggestion.targetType || '')} · ${suggestion.detectorType || '?'}`));
+      if (suggestion.imported) headRight.appendChild(mkBadge('nw-config-badge--ok', 'übernommen'));
+      else if (suggestion.alreadyConfigured) headRight.appendChild(mkBadge('nw-config-badge--warn', 'bereits im Projekt'));
+      else if (!suggestion.importable) headRight.appendChild(mkBadge('nw-config-badge--warn', 'manuell prüfen'));
+      if (suggestion.confidence) {
+        const confText = suggestion.confidence === 'high' ? 'Passung hoch' : (suggestion.confidence === 'medium' ? 'Passung mittel' : 'Passung basis');
+        headRight.appendChild(mkBadge('nw-config-badge--idle', confText));
+      }
+
+      head.appendChild(headLeft);
+      head.appendChild(headRight);
+      card.appendChild(head);
+
+      const meta = document.createElement('div');
+      meta.className = 'nw-shcfg-detect-card__meta';
+      meta.textContent = `Quelle: ${suggestion.sourceType || 'objekt'} • Gemappte Zustände: ${Number(suggestion.matchCount || 0)}`;
+      card.appendChild(meta);
+
+      if (Array.isArray(suggestion.notes) && suggestion.notes.length) {
+        const notes = document.createElement('div');
+        notes.className = 'nw-shcfg-detect-card__notes';
+        suggestion.notes.forEach((note) => {
+          const row = document.createElement('div');
+          row.className = 'nw-shcfg-detect-card__note';
+          row.textContent = '• ' + String(note || '');
+          notes.appendChild(row);
+        });
+        card.appendChild(notes);
+      }
+
+      const stateGrid = document.createElement('div');
+      stateGrid.className = 'nw-shcfg-detect-card__states';
+      (Array.isArray(suggestion.states) ? suggestion.states : []).forEach((st) => {
+        if (!st || !st.id) return;
+        const cell = document.createElement('div');
+        cell.className = 'nw-shcfg-detect-state';
+
+        const k = document.createElement('div');
+        k.className = 'nw-shcfg-detect-state__key';
+        k.textContent = st.key || 'STATE';
+        cell.appendChild(k);
+
+        const sid = document.createElement('div');
+        sid.className = 'nw-shcfg-detect-state__id';
+        sid.textContent = st.id || '';
+        cell.appendChild(sid);
+
+        const smeta = document.createElement('div');
+        smeta.className = 'nw-shcfg-detect-state__meta';
+        const bits = [];
+        if (st.label) bits.push(String(st.label));
+        if (st.role) bits.push(String(st.role));
+        if (st.type) bits.push(String(st.type));
+        if (st.unit) bits.push('[' + String(st.unit) + ']');
+        smeta.textContent = bits.join(' • ');
+        cell.appendChild(smeta);
+
+        stateGrid.appendChild(cell);
+      });
+      if (stateGrid.childElementCount) card.appendChild(stateGrid);
+
+      const actions = document.createElement('div');
+      actions.className = 'nw-shcfg-detect-card__actions';
+
+      const assignment = nwShcfgGetDetectorAssignment(suggestion.id);
+
+      const mkSelect = (labelText, items, value, onChange) => {
+        const wrap = document.createElement('label');
+        wrap.className = 'nw-shcfg-detect-card__select';
+
+        const label = document.createElement('span');
+        label.textContent = labelText;
+        wrap.appendChild(label);
+
+        const sel = document.createElement('select');
+        sel.className = 'nw-config-select';
+        const emptyOpt = document.createElement('option');
+        emptyOpt.value = '';
+        emptyOpt.textContent = '(später zuordnen)';
+        sel.appendChild(emptyOpt);
+        items.forEach((it) => {
+          if (!it || !it.id) return;
+          const opt = document.createElement('option');
+          opt.value = it.id;
+          opt.textContent = it.name || it.alias || it.id;
+          sel.appendChild(opt);
+        });
+        sel.value = value || '';
+        sel.addEventListener('change', () => onChange(sel.value || ''));
+        wrap.appendChild(sel);
+        return wrap;
+      };
+
+      actions.appendChild(mkSelect('Raum', rooms, assignment.roomId || '', (next) => {
+        assignment.roomId = next || '';
+      }));
+      actions.appendChild(mkSelect('Funktion', functions, assignment.functionId || '', (next) => {
+        assignment.functionId = next || '';
+      }));
+
+      const importBtn = document.createElement('button');
+      importBtn.type = 'button';
+      importBtn.className = 'nw-config-btn';
+      if (suggestion.imported) {
+        importBtn.textContent = 'Übernommen';
+        importBtn.disabled = true;
+      } else if (suggestion.alreadyConfigured) {
+        importBtn.textContent = 'Bereits im Projekt';
+        importBtn.disabled = true;
+      } else if (!suggestion.importable) {
+        importBtn.textContent = 'Manuell prüfen';
+        importBtn.disabled = true;
+      } else {
+        importBtn.textContent = 'Übernehmen';
+        importBtn.addEventListener('click', () => nwImportTypeDetectedSuggestion(suggestion.id));
+      }
+      actions.appendChild(importBtn);
+
+      card.appendChild(actions);
+      list.appendChild(card);
+    });
+
+  root.appendChild(list);
 }
 
 
@@ -7216,6 +7663,116 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
 let nwDpDialogEl = null;
 let nwDpDialogCurrent = null;
 
+function nwDpSafeStr(value) {
+  return String(value == null ? '' : value).trim();
+}
+
+async function nwDpFetchJson(url) {
+  const res = await fetch(url, { cache: 'no-store' });
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json || json.ok !== true) {
+    throw new Error((json && json.error) ? json.error : ('HTTP ' + res.status));
+  }
+  return json;
+}
+
+async function nwDpSearch(q) {
+  const qs = encodeURIComponent(nwDpSafeStr(q));
+  const json = await nwDpFetchJson('/api/smarthome/dpsearch?q=' + qs + '&limit=500');
+  return Array.isArray(json.results) ? json.results : [];
+}
+
+async function nwDpTree(prefix) {
+  const pre = encodeURIComponent(nwDpSafeStr(prefix));
+  const json = await nwDpFetchJson('/api/object/tree?prefix=' + pre);
+  return Array.isArray(json.children) ? json.children : [];
+}
+
+function nwDpParentPrefix(id) {
+  const parts = nwDpSafeStr(id).split('.').filter(Boolean);
+  if (parts.length <= 1) return '';
+  parts.pop();
+  return parts.join('.');
+}
+
+function nwDpMetaText(it) {
+  const parts = [];
+  if (it && it.name) parts.push(String(it.name));
+  if (it && it.role) parts.push(String(it.role));
+  if (it && it.type) parts.push(String(it.type));
+  if (it && it.unit) parts.push(String(it.unit));
+  return parts.join(' • ');
+}
+
+function nwCreateDpResultRow(primary, meta, onActivate) {
+  const row = document.createElement('div');
+  row.className = 'nw-dp-result';
+  row.tabIndex = (typeof onActivate === 'function') ? 0 : -1;
+
+  const idEl = document.createElement('div');
+  idEl.className = 'nw-dp-result__id';
+  idEl.textContent = nwDpSafeStr(primary);
+  row.appendChild(idEl);
+
+  const metaEl = document.createElement('div');
+  metaEl.className = 'nw-dp-result__meta';
+  metaEl.textContent = nwDpSafeStr(meta || '');
+  row.appendChild(metaEl);
+
+  if (typeof onActivate === 'function') {
+    const activate = (ev) => {
+      if (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+      onActivate();
+    };
+    row.addEventListener('click', activate);
+    row.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') activate(ev);
+    });
+  }
+
+  return row;
+}
+
+function nwRenderDpBreadcrumb(prefix, wrap, onNavigate) {
+  if (!wrap) return;
+  wrap.innerHTML = '';
+
+  const parts = nwDpSafeStr(prefix).split('.').filter(Boolean);
+
+  const mkCrumb = (label, nextPrefix, clickable) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'nw-dp-crumb' + (clickable ? '' : ' nw-dp-crumb--active');
+    btn.textContent = label;
+    if (!clickable) {
+      btn.disabled = true;
+      return btn;
+    }
+    btn.addEventListener('click', () => onNavigate(nextPrefix));
+    return btn;
+  };
+
+  const mkSep = () => {
+    const sep = document.createElement('span');
+    sep.className = 'nw-dp-sep';
+    sep.textContent = '›';
+    return sep;
+  };
+
+  wrap.appendChild(mkCrumb('Start', '', parts.length > 0));
+
+  let acc = '';
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    acc = acc ? (acc + '.' + part) : part;
+    wrap.appendChild(mkSep());
+    wrap.appendChild(mkCrumb(part, acc, i < (parts.length - 1)));
+  }
+}
+
 function nwEnsureDpDialog() {
   if (nwDpDialogEl) return nwDpDialogEl;
 
@@ -7236,9 +7793,6 @@ function nwEnsureDpDialog() {
   btnClose.type = 'button';
   btnClose.className = 'nw-dp-dialog__close';
   btnClose.textContent = 'Schließen';
-  btnClose.addEventListener('click', () => {
-    nwCloseDatapointDialog();
-  });
 
   header.appendChild(title);
   header.appendChild(btnClose);
@@ -7259,161 +7813,282 @@ function nwEnsureDpDialog() {
   searchBtn.className = 'nw-config-btn nw-config-btn--ghost';
   searchBtn.textContent = 'Suchen';
 
-  const results = document.createElement('div');
-  results.className = 'nw-dp-dialog__results';
-
   searchRow.appendChild(input);
   searchRow.appendChild(searchBtn);
 
+  const toolsRow = document.createElement('div');
+  toolsRow.className = 'nw-dp-dialog__tools';
+
+  const rootBtn = document.createElement('button');
+  rootBtn.type = 'button';
+  rootBtn.className = 'nw-config-btn nw-config-btn--ghost';
+  rootBtn.textContent = 'Start';
+
+  const upBtn = document.createElement('button');
+  upBtn.type = 'button';
+  upBtn.className = 'nw-config-btn nw-config-btn--ghost';
+  upBtn.textContent = 'Zurück';
+
+  toolsRow.appendChild(rootBtn);
+  toolsRow.appendChild(upBtn);
+
+  const breadcrumb = document.createElement('div');
+  breadcrumb.className = 'nw-dp-breadcrumb';
+
+  const columns = document.createElement('div');
+  columns.className = 'nw-dp-dialog__columns';
+
+  const treeCol = document.createElement('div');
+  treeCol.className = 'nw-dp-dialog__col';
+  const treeTitle = document.createElement('div');
+  treeTitle.className = 'nw-dp-col-title';
+  treeTitle.textContent = 'Objektstruktur';
+  const treeWrap = document.createElement('div');
+  treeWrap.className = 'nw-dp-dialog__results';
+  treeCol.appendChild(treeTitle);
+  treeCol.appendChild(treeWrap);
+
+  const resultsCol = document.createElement('div');
+  resultsCol.className = 'nw-dp-dialog__col';
+  const resultsTitle = document.createElement('div');
+  resultsTitle.className = 'nw-dp-col-title';
+  resultsTitle.textContent = 'Suche';
+  const resultsWrap = document.createElement('div');
+  resultsWrap.className = 'nw-dp-dialog__results';
+  resultsCol.appendChild(resultsTitle);
+  resultsCol.appendChild(resultsWrap);
+
+  columns.appendChild(treeCol);
+  columns.appendChild(resultsCol);
+
   body.appendChild(searchRow);
-  body.appendChild(results);
+  body.appendChild(toolsRow);
+  body.appendChild(breadcrumb);
+  body.appendChild(columns);
 
   dlg.appendChild(header);
   dlg.appendChild(body);
   backdrop.appendChild(dlg);
-
   document.body.appendChild(backdrop);
 
-  const state = {
+  nwDpDialogEl = {
     backdrop,
     dialog: dlg,
     title,
+    closeBtn: btnClose,
     input,
     searchBtn,
-    results,
+    rootBtn,
+    upBtn,
+    breadcrumb,
+    treeWrap,
+    resultsWrap,
+    searchTimer: null,
+    treePrefix: '',
+    token: 0,
   };
-  nwDpDialogEl = state;
 
-  function triggerSearch() {
-    const term = input.value.trim();
-    nwRunDatapointSearch(term, state);
-  }
-
-  searchBtn.addEventListener('click', () => {
-    triggerSearch();
+  btnClose.addEventListener('click', () => nwCloseDatapointDialog());
+  searchBtn.addEventListener('click', () => { nwRunDatapointDialogSearch().catch(() => {}); });
+  rootBtn.addEventListener('click', () => { nwOpenDpDialogPrefix(''); });
+  upBtn.addEventListener('click', () => {
+    const state = nwEnsureDpDialog();
+    nwOpenDpDialogPrefix(nwDpParentPrefix(state.treePrefix || ''));
   });
 
   input.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter') {
       ev.preventDefault();
-      triggerSearch();
+      nwRunDatapointDialogSearch().catch(() => {});
     } else if (ev.key === 'Escape') {
       ev.preventDefault();
       nwCloseDatapointDialog();
     }
   });
 
-  // Live-Suche (wie im Admin): tippen = Ergebnisse aktualisieren
-  let dpTypingTimer = null;
   input.addEventListener('input', () => {
-    if (dpTypingTimer) clearTimeout(dpTypingTimer);
-    dpTypingTimer = setTimeout(() => {
-      triggerSearch();
-    }, 200);
+    const state = nwEnsureDpDialog();
+    if (state.searchTimer) clearTimeout(state.searchTimer);
+    state.searchTimer = setTimeout(() => {
+      nwRunDatapointDialogSearch().catch(() => {});
+    }, 220);
   });
 
   backdrop.addEventListener('click', (ev) => {
-    if (ev.target === backdrop) {
-      nwCloseDatapointDialog();
-    }
+    if (ev.target === backdrop) nwCloseDatapointDialog();
   });
 
-  return state;
+  return nwDpDialogEl;
 }
 
-async function nwRunDatapointSearch(term, state) {
-  const { results } = state;
-  results.innerHTML = '';
+function nwSetDpDialogTreeMessage(text, kind) {
+  const state = nwEnsureDpDialog();
+  if (!state.treeWrap) return;
+  const color = kind === 'error' ? '#ff6b6b' : '';
+  state.treeWrap.innerHTML = '<div class="nw-config-empty"' + (color ? (' style="color:' + color + ';"') : '') + '>' + String(text || '') + '</div>';
+}
 
-  // Leerer Suchbegriff = Browse-Modus (zeigt eine initiale Liste)
-  term = (term || '').trim();
+function nwSetDpDialogResultsMessage(text, kind) {
+  const state = nwEnsureDpDialog();
+  if (!state.resultsWrap) return;
+  const color = kind === 'error' ? '#ff6b6b' : '';
+  state.resultsWrap.innerHTML = '<div class="nw-config-empty"' + (color ? (' style="color:' + color + ';"') : '') + '>' + String(text || '') + '</div>';
+}
 
-
-  const info = document.createElement('div');
-  info.className = 'nw-dp-result__meta';
-  info.textContent = 'Suche…';
-  results.appendChild(info);
-
-  try {
-    const url = '/api/smarthome/dpsearch?q=' + encodeURIComponent(term) + '&limit=100';
-    const res = await fetch(url);
-    const data = await res.json().catch(() => ({}));
-    results.innerHTML = '';
-    if (!data || !data.ok || !Array.isArray(data.results)) {
-      const err = document.createElement('div');
-      err.className = 'nw-dp-result__meta';
-      err.textContent = 'Fehler bei der Suche.';
-      results.appendChild(err);
-      return;
-    }
-    if (!data.results.length) {
-      const empty = document.createElement('div');
-      empty.className = 'nw-dp-result__meta';
-      empty.textContent = 'Keine passenden Datenpunkte gefunden.';
-      results.appendChild(empty);
-      return;
-    }
-
-    data.results.forEach((r) => {
-      const row = document.createElement('div');
-      row.className = 'nw-dp-result';
-
-      const idEl = document.createElement('div');
-      idEl.className = 'nw-dp-result__id';
-      idEl.textContent = r.id;
-
-      const metaEl = document.createElement('div');
-      metaEl.className = 'nw-dp-result__meta';
-      const parts = [];
-      if (r.name) parts.push(r.name);
-      if (r.role) parts.push('role=' + r.role);
-      if (r.type) parts.push('type=' + r.type);
-      if (r.unit) parts.push('[' + r.unit + ']');
-      metaEl.textContent = parts.join(' · ');
-
-      row.appendChild(idEl);
-      row.appendChild(metaEl);
-
-      row.addEventListener('click', () => {
-        if (nwDpDialogCurrent && typeof nwDpDialogCurrent.onSelect === 'function') {
-          nwDpDialogCurrent.onSelect(r.id);
-        }
-        nwCloseDatapointDialog();
-      });
-
-      results.appendChild(row);
-    });
-  } catch (e) {
-    console.error('Datapoint search error:', e);
-    results.innerHTML = '';
-    const err = document.createElement('div');
-    err.className = 'nw-dp-result__meta';
-    err.textContent = 'Fehler bei der Suche.';
-    results.appendChild(err);
+function nwDpDialogPick(id) {
+  const value = nwDpSafeStr(id);
+  if (!value) return;
+  if (nwDpDialogCurrent && typeof nwDpDialogCurrent.onSelect === 'function') {
+    nwDpDialogCurrent.onSelect(value);
   }
+  nwCloseDatapointDialog();
+}
+
+function nwRenderDpDialogTree(children) {
+  const state = nwEnsureDpDialog();
+  const wrap = state.treeWrap;
+  if (!wrap) return;
+  wrap.innerHTML = '';
+
+  state.upBtn.disabled = !state.treePrefix;
+  state.rootBtn.disabled = !state.treePrefix;
+
+  if (state.treePrefix) {
+    wrap.appendChild(nwCreateDpResultRow('..', 'Eine Ebene zurück', () => {
+      nwOpenDpDialogPrefix(nwDpParentPrefix(state.treePrefix || ''));
+    }));
+  }
+
+  if (!Array.isArray(children) || !children.length) {
+    if (!wrap.children.length) wrap.innerHTML = '<div class="nw-config-empty">Keine Einträge.</div>';
+    return;
+  }
+
+  children.forEach((child) => {
+    if (!child) return;
+    const id = nwDpSafeStr(child.id || child.label);
+    if (!id) return;
+
+    if (child.hasChildren) {
+      const metaParts = [];
+      metaParts.push(child.isState ? 'Ordner + Datenpunkt' : 'Ordner');
+      if (child.name) metaParts.push(String(child.name));
+      wrap.appendChild(nwCreateDpResultRow(id, metaParts.join(' • '), () => nwOpenDpDialogPrefix(id)));
+      return;
+    }
+
+    if (child.isState) {
+      wrap.appendChild(nwCreateDpResultRow(id, nwDpMetaText(child) || 'Datenpunkt', () => nwDpDialogPick(id)));
+      return;
+    }
+
+    wrap.appendChild(nwCreateDpResultRow(id, '', null));
+  });
+
+  if (!wrap.children.length) {
+    wrap.innerHTML = '<div class="nw-config-empty">Keine Einträge.</div>';
+  }
+}
+
+function nwRenderDpDialogResults(list) {
+  const state = nwEnsureDpDialog();
+  const wrap = state.resultsWrap;
+  if (!wrap) return;
+  wrap.innerHTML = '';
+
+  if (!Array.isArray(list) || !list.length) {
+    wrap.innerHTML = '<div class="nw-config-empty">Keine Treffer.</div>';
+    return;
+  }
+
+  list.forEach((it) => {
+    const id = nwDpSafeStr(it && it.id);
+    if (!id) return;
+    wrap.appendChild(nwCreateDpResultRow(id, nwDpMetaText(it), () => nwDpDialogPick(id)));
+  });
+
+  if (!wrap.children.length) {
+    wrap.innerHTML = '<div class="nw-config-empty">Keine Treffer.</div>';
+  }
+}
+
+async function nwRefreshDpDialogTree() {
+  const state = nwEnsureDpDialog();
+  const token = state.token;
+  nwRenderDpBreadcrumb(state.treePrefix || '', state.breadcrumb, nwOpenDpDialogPrefix);
+  nwSetDpDialogTreeMessage('Ordner werden geladen…');
+  try {
+    const children = await nwDpTree(state.treePrefix || '');
+    if (!nwDpDialogEl || nwDpDialogEl.token !== token || nwDpDialogEl.backdrop.style.display === 'none') return;
+    nwRenderDpBreadcrumb(state.treePrefix || '', state.breadcrumb, nwOpenDpDialogPrefix);
+    nwRenderDpDialogTree(children);
+  } catch (e) {
+    if (!nwDpDialogEl || nwDpDialogEl.token !== token || nwDpDialogEl.backdrop.style.display === 'none') return;
+    nwRenderDpBreadcrumb(state.treePrefix || '', state.breadcrumb, nwOpenDpDialogPrefix);
+    nwSetDpDialogTreeMessage('Fehler: ' + (e && e.message ? e.message : e), 'error');
+    state.upBtn.disabled = !state.treePrefix;
+    state.rootBtn.disabled = !state.treePrefix;
+  }
+}
+
+async function nwRunDatapointDialogSearch() {
+  const state = nwEnsureDpDialog();
+  const token = state.token;
+  const q = nwDpSafeStr(state.input.value || '');
+  if (!q) {
+    nwSetDpDialogResultsMessage('Suchbegriff eingeben…');
+    return;
+  }
+  nwSetDpDialogResultsMessage('Suche läuft…');
+  try {
+    const list = await nwDpSearch(q);
+    if (!nwDpDialogEl || nwDpDialogEl.token !== token || nwDpDialogEl.backdrop.style.display === 'none') return;
+    nwRenderDpDialogResults(list);
+  } catch (e) {
+    if (!nwDpDialogEl || nwDpDialogEl.token !== token || nwDpDialogEl.backdrop.style.display === 'none') return;
+    nwSetDpDialogResultsMessage('Fehler: ' + (e && e.message ? e.message : e), 'error');
+  }
+}
+
+function nwOpenDpDialogPrefix(prefix) {
+  const state = nwEnsureDpDialog();
+  state.treePrefix = nwDpSafeStr(prefix || '');
+  nwRefreshDpDialogTree().catch(() => {});
 }
 
 function nwOpenDatapointDialog(options) {
   const state = nwEnsureDpDialog();
+  state.token += 1;
   nwDpDialogCurrent = {
     onSelect: options && options.onSelect,
   };
 
-  state.title.textContent = options && options.title ? options.title : 'Datenpunkt auswählen';
-  state.input.value = (options && options.initial) || '';
-  state.results.innerHTML = '';
-
+  state.title.textContent = (options && options.title) ? options.title : 'Datenpunkt auswählen';
+  state.input.value = (options && options.initial) ? String(options.initial) : '';
+  state.treePrefix = nwDpParentPrefix(state.input.value || '');
   state.backdrop.style.display = 'flex';
 
-  // Initiale Suche (leerer Suchbegriff = Browse-Modus)
-  nwRunDatapointSearch(state.input.value.trim(), state);
+  nwRenderDpBreadcrumb(state.treePrefix || '', state.breadcrumb, nwOpenDpDialogPrefix);
+  nwSetDpDialogTreeMessage('Ordner werden geladen…');
+  if (state.input.value.trim()) nwSetDpDialogResultsMessage('Suche wird vorbereitet…');
+  else nwSetDpDialogResultsMessage('Suchbegriff eingeben…');
 
-  state.input.focus();
-  state.input.select();
+  nwRefreshDpDialogTree().catch(() => {});
+  if (state.input.value.trim().length >= 2) {
+    nwRunDatapointDialogSearch().catch(() => {});
+  }
+
+  setTimeout(() => {
+    try {
+      state.input.focus();
+      state.input.select();
+    } catch (_e) {}
+  }, 0);
 }
 
 function nwCloseDatapointDialog() {
   if (!nwDpDialogEl) return;
+  nwDpDialogEl.token += 1;
   nwDpDialogEl.backdrop.style.display = 'none';
   nwDpDialogCurrent = null;
 }

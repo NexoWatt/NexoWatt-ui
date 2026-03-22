@@ -58,6 +58,11 @@
           <div class="nw-shcfg-tile__title">Gebäude &amp; Geräte</div>
           <div class="nw-shcfg-tile__desc">Räume &amp; Geräte per Drag &amp; Drop konfigurieren.</div>
         </button>
+        <button class="nw-shcfg-tile" id="nw-shcfg-tile-detect" type="button">
+          <div class="nw-shcfg-tile__icon">🪄</div>
+          <div class="nw-shcfg-tile__title">Auto‑Erkennung</div>
+          <div class="nw-shcfg-tile__desc">Type‑Detector Vorschläge prüfen und Geräte gezielt übernehmen.</div>
+        </button>
         <button class="nw-shcfg-tile" id="nw-shcfg-tile-logic" type="button">
           <div class="nw-shcfg-tile__icon">🧠</div>
           <div class="nw-shcfg-tile__title">Logik‑Editor</div>
@@ -83,6 +88,35 @@
         Tipp: Starte mit <b>Gebäude &amp; Geräte</b> und richte zuerst Räume und Geräte ein. Danach kannst du im Frontend direkt bedienen ✨
       </div>
     </section>
+
+<!-- Auto detection / suggestions -->
+<section id="nw-shcfg-detect" class="nw-shcfg-shell" style="display:none;">
+  <div class="nw-shcfg-topbar">
+    <div class="nw-shcfg-topbar__left">
+      <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-detect-back" type="button">← Zurück</button>
+      <div class="nw-shcfg-topbar__title">Auto‑Erkennung / Vorschläge</div>
+    </div>
+    <div class="nw-shcfg-topbar__right">
+      <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-detect-reload" type="button">Neu scannen</button>
+      <button class="nw-config-btn" id="nw-shcfg-detect-save" type="button">Speichern</button>
+      <button class="nw-config-btn nw-config-btn--ghost" id="nw-shcfg-detect-open-classic" type="button">Expertenmodus</button>
+    </div>
+  </div>
+
+  <div class="nw-shcfg-container">
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">Gerätevorschläge aus ioBroker</h2>
+      </div>
+      <div class="nw-config-hint">
+        Erkennt passende Geräte aus der ioBroker‑Objektstruktur und zeigt nur Vorschläge zur Übernahme an.
+        Es wird nichts automatisch überschrieben oder gespeichert.
+      </div>
+      <div id="nw-shcfg-detect-status" class="nw-config-status" style="margin-top:8px;"></div>
+      <div id="nw-shcfg-detect-root" style="margin-top:12px;"></div>
+    </section>
+  </div>
+</section>
 
 <!-- Backup module (Datensicherung) -->
 <section id="nw-shcfg-backup" class="nw-shcfg-shell" style="display:none;">
