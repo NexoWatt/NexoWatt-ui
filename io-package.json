@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.201",
+    "version": "0.6.202",
     "news": {
+      "0.6.202": {
+        "en": "Logic editor: the datapoint picker now offers ioBroker object-tree browsing with folders, breadcrumb, start/back navigation and parallel search by ID or name. Existing datapoints open directly in their parent path. Web cache version bumped.",
+        "de": "Logik-Editor: Der Datenpunkt-Picker bietet jetzt zusätzlich das Browsen durch die ioBroker-Objektstruktur mit Ordnern, Breadcrumb, Start/Zurück-Navigation und paralleler Suche nach ID oder Name. Bereits gesetzte Datenpunkte öffnen direkt im passenden Elternpfad. Web-Cache-Version angehoben."
+      },
       "0.6.201": {
         "en": "Logic editor: connections can now be disconnected again via right-click (wire or target input). Logic blocks from the palette can be dragged directly into the workspace and dropped at the desired position. Web cache version bumped.",
         "de": "Logik-Editor: Verbindungen lassen sich jetzt wieder per Rechtsklick trennen (auf Leitung oder Zieleingang). Logik-Bausteine können aus der Palette direkt in den Arbeitsbereich gezogen und an der gewünschten Position abgelegt werden. Web-Cache-Version angehoben."
@@ -1601,8 +1605,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.201",
+  "version": "0.6.202",
   "news": {
+    "0.6.202": {
+      "en": "Logic editor: datapoint picker now supports browsing the ioBroker object tree with folders plus breadcrumb, start/back navigation and parallel search. Existing IDs open directly in their parent path. Web cache version bumped.",
+      "de": "Logik-Editor: Der Datenpunkt-Picker unterstützt jetzt das Browsen durch die ioBroker-Objektstruktur mit Ordnern sowie Breadcrumb, Start/Zurück-Navigation und paralleler Suche. Bereits gesetzte IDs öffnen direkt im passenden Elternpfad. Web-Cache-Version angehoben."
+    },
     "0.6.201": {
       "en": "Logic editor: right-click disconnect for wires/inputs and palette drag & drop with exact drop position in the workspace. Web cache version bumped.",
       "de": "Logik-Editor: Rechtsklick trennt Verbindungen auf Leitungen/Eingängen; Bausteine aus der Palette lassen sich per Drag & Drop exakt im Arbeitsbereich platzieren. Web-Cache-Version angehoben."

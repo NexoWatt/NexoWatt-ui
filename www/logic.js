@@ -2015,7 +2015,7 @@ function nwCancelConnect() {
 
 
 // -----------------------------
-// DP Picker (uses SmartHome dpsearch API)
+// DP Picker (Suche + ioBroker-Objektstruktur)
 // -----------------------------
 function nwOpenModal(modalEl) {
   if (!modalEl) return;
@@ -2029,13 +2029,75 @@ function nwCloseModal(modalEl) {
   modalEl.setAttribute('aria-hidden', 'true');
 }
 
+async function nwFetchJson(url) {
+  const res = await fetch(url, { cache: 'no-store' });
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json || json.ok !== true) {
+    throw new Error(json && json.error ? json.error : `HTTP ${res.status}`);
+  }
+  return json;
+}
+
 async function nwDpSearch(q) {
   const qs = encodeURIComponent(nwSafeStr(q || '').trim());
-  const url = `/api/smarthome/dpsearch?q=${qs}`;
-  const res = await fetch(url);
-  const json = await res.json();
-  if (!json || json.ok !== true) throw new Error(json && json.error ? json.error : 'dpsearch failed');
+  const url = `/api/smarthome/dpsearch?q=${qs}&limit=500`;
+  const json = await nwFetchJson(url);
   return Array.isArray(json.results) ? json.results : [];
+}
+
+async function nwDpTree(prefix) {
+  const pre = encodeURIComponent(nwSafeStr(prefix || '').trim());
+  const url = `/api/object/tree?prefix=${pre}`;
+  const json = await nwFetchJson(url);
+  return Array.isArray(json.children) ? json.children : [];
+}
+
+function nwDpParentPrefix(id) {
+  const parts = nwSafeStr(id || '').trim().split('.').filter(Boolean);
+  if (parts.length <= 1) return '';
+  parts.pop();
+  return parts.join('.');
+}
+
+function nwDpMetaText(it) {
+  const metaBits = [];
+  if (it && it.name) metaBits.push(String(it.name));
+  if (it && it.role) metaBits.push(String(it.role));
+  if (it && it.type) metaBits.push(String(it.type));
+  if (it && it.unit) metaBits.push(String(it.unit));
+  return metaBits.join(' • ');
+}
+
+function nwCreateDpResultRow(primary, meta, onActivate) {
+  const row = document.createElement('div');
+  row.className = 'nw-dp-result';
+  row.tabIndex = (typeof onActivate === 'function') ? 0 : -1;
+
+  const idEl = document.createElement('div');
+  idEl.className = 'nw-dp-result__id';
+  idEl.textContent = nwSafeStr(primary);
+  row.appendChild(idEl);
+
+  const metaEl = document.createElement('div');
+  metaEl.className = 'nw-dp-result__meta';
+  metaEl.textContent = nwSafeStr(meta || '');
+  row.appendChild(metaEl);
+
+  if (typeof onActivate === 'function') {
+    const activate = (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      onActivate();
+    };
+    row.addEventListener('click', activate);
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') activate(e);
+    });
+  }
+
+  return row;
 }
 
 function nwRenderDpResults(list, onPick) {
@@ -2043,25 +2105,59 @@ function nwRenderDpResults(list, onPick) {
   if (!wrap) return;
   wrap.innerHTML = '';
 
-  if (!list || !list.length) {
-    wrap.innerHTML = `<div class="muted" style="font-size:0.85rem;">Keine Treffer.</div>`;
+  if (!Array.isArray(list) || list.length <= 0) {
+    wrap.innerHTML = '<div class="nw-config-empty">Keine Treffer.</div>';
     return;
   }
 
-  const tbl = document.createElement('div');
-  tbl.className = 'nw-le__dp-list';
   for (const it of list) {
-    const row = document.createElement('button');
-    row.type = 'button';
-    row.className = 'nw-le__dp-row';
-    row.innerHTML = `
-      <div class="nw-le__dp-id">${nwSafeStr(it.id)}</div>
-      <div class="nw-le__dp-meta">${nwSafeStr(it.name)}<span class="muted" style="margin-left:8px;">${nwSafeStr(it.role)} ${nwSafeStr(it.type)} ${nwSafeStr(it.unit)}</span></div>
-    `;
-    row.addEventListener('click', () => onPick(it.id));
-    tbl.appendChild(row);
+    const id = nwSafeStr(it && it.id);
+    if (!id) continue;
+    const meta = nwDpMetaText(it);
+    wrap.appendChild(nwCreateDpResultRow(id, meta, () => onPick(id)));
   }
-  wrap.appendChild(tbl);
+
+  if (!wrap.children.length) {
+    wrap.innerHTML = '<div class="nw-config-empty">Keine Treffer.</div>';
+  }
+}
+
+function nwRenderDpBreadcrumb(prefix, onNavigate) {
+  const wrap = nwLE.el.dpBreadcrumb;
+  if (!wrap) return;
+  wrap.innerHTML = '';
+
+  const parts = nwSafeStr(prefix || '').split('.').filter(Boolean);
+
+  const mkCrumb = (label, nextPrefix, clickable) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'nw-dp-crumb' + (clickable ? '' : ' nw-dp-crumb--active');
+    btn.textContent = label;
+    if (!clickable) {
+      btn.disabled = true;
+      return btn;
+    }
+    btn.addEventListener('click', () => onNavigate(nextPrefix));
+    return btn;
+  };
+
+  const mkSep = () => {
+    const sep = document.createElement('span');
+    sep.className = 'nw-dp-sep';
+    sep.textContent = '›';
+    return sep;
+  };
+
+  wrap.appendChild(mkCrumb('Start', '', parts.length > 0));
+
+  let acc = '';
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    acc = acc ? `${acc}.${part}` : part;
+    wrap.appendChild(mkSep());
+    wrap.appendChild(mkCrumb(part, acc, i < (parts.length - 1)));
+  }
 }
 
 function nwOpenDpPicker(initialQuery) {
@@ -2070,54 +2166,182 @@ function nwOpenDpPicker(initialQuery) {
     const qInp = nwLE.el.dpQ;
     const btn = nwLE.el.dpSearch;
     const closeBtn = nwLE.el.dpClose;
-    if (!modal || !qInp || !btn || !closeBtn) return resolve(null);
+    const rootBtn = nwLE.el.dpRoot;
+    const upBtn = nwLE.el.dpUp;
+    const treeWrap = nwLE.el.dpTree;
+    const resultsWrap = nwLE.el.dpResults;
+    const breadcrumbWrap = nwLE.el.dpBreadcrumb;
+    if (!modal || !qInp || !btn || !closeBtn || !rootBtn || !upBtn || !treeWrap || !resultsWrap || !breadcrumbWrap) {
+      return resolve(null);
+    }
 
     let done = false;
+    let treePrefix = nwDpParentPrefix(initialQuery);
+    const pickerToken = nwUuid('dp_picker');
+    nwLE.dpPickerToken = pickerToken;
+
+    const isAlive = () => !done && nwLE.dpPickerToken === pickerToken;
+
     const finish = (val) => {
       if (done) return;
       done = true;
+      if (nwLE.dpPickerToken === pickerToken) nwLE.dpPickerToken = null;
       nwCloseModal(modal);
       cleanup();
       resolve(val);
     };
 
-    const cleanup = () => {
-      try { btn.removeEventListener('click', onSearch); } catch (_e) {}
-      try { closeBtn.removeEventListener('click', onClose); } catch (_e2) {}
-      try { modal.removeEventListener('click', onBg); } catch (_e3) {}
-      try { qInp.removeEventListener('keydown', onKey); } catch (_e4) {}
+    const setTreeMessage = (html) => {
+      if (!treeWrap || !isAlive()) return;
+      treeWrap.innerHTML = html;
+    };
+
+    const setResultsMessage = (html) => {
+      if (!resultsWrap || !isAlive()) return;
+      resultsWrap.innerHTML = html;
+    };
+
+    const openPrefix = (nextPrefix) => {
+      treePrefix = nwSafeStr(nextPrefix || '').trim();
+      refreshTree().catch(() => {});
     };
 
     const onPick = (id) => finish(id);
 
+    const upOne = () => {
+      if (!treePrefix) return;
+      const parts = treePrefix.split('.').filter(Boolean);
+      parts.pop();
+      treePrefix = parts.join('.');
+    };
+
+    const renderTree = (children) => {
+      if (!treeWrap || !isAlive()) return;
+      treeWrap.innerHTML = '';
+      if (upBtn) upBtn.disabled = !treePrefix;
+      if (rootBtn) rootBtn.disabled = !treePrefix;
+
+      if (treePrefix) {
+        treeWrap.appendChild(nwCreateDpResultRow('..', 'Eine Ebene zurück', () => {
+          upOne();
+          refreshTree().catch(() => {});
+        }));
+      }
+
+      if (!Array.isArray(children) || children.length <= 0) {
+        if (treeWrap.children.length <= 0) {
+          treeWrap.innerHTML = '<div class="nw-config-empty">Keine Einträge.</div>';
+        }
+        return;
+      }
+
+      for (const ch of children) {
+        if (!ch) continue;
+        const id = nwSafeStr(ch.id || ch.label);
+        if (!id) continue;
+
+        if (ch.hasChildren) {
+          const metaBits = [];
+          metaBits.push(ch.isState ? 'Ordner + Datenpunkt' : 'Ordner');
+          if (ch.name) metaBits.push(String(ch.name));
+          const meta = metaBits.join(' • ');
+          treeWrap.appendChild(nwCreateDpResultRow(id, meta, () => openPrefix(id)));
+          continue;
+        }
+
+        if (ch.isState) {
+          const meta = nwDpMetaText(ch) || 'Datenpunkt';
+          treeWrap.appendChild(nwCreateDpResultRow(id, meta, () => onPick(id)));
+          continue;
+        }
+
+        treeWrap.appendChild(nwCreateDpResultRow(id, '', null));
+      }
+
+      if (!treeWrap.children.length) {
+        treeWrap.innerHTML = '<div class="nw-config-empty">Keine Einträge.</div>';
+      }
+    };
+
+    const refreshTree = async () => {
+      nwRenderDpBreadcrumb(treePrefix, openPrefix);
+      setTreeMessage('<div class="nw-config-empty">Ordner werden geladen…</div>');
+      try {
+        const children = await nwDpTree(treePrefix);
+        if (!isAlive()) return;
+        nwRenderDpBreadcrumb(treePrefix, openPrefix);
+        renderTree(children);
+      } catch (e) {
+        if (!isAlive()) return;
+        nwRenderDpBreadcrumb(treePrefix, openPrefix);
+        setTreeMessage(`<div class="nw-config-empty" style="color:#ff6b6b;">Fehler: ${nwSafeStr(e && e.message)}</div>`);
+        if (upBtn) upBtn.disabled = !treePrefix;
+        if (rootBtn) rootBtn.disabled = !treePrefix;
+      }
+    };
+
     const onSearch = async () => {
-      const q = qInp.value;
-      nwLE.el.dpResults.innerHTML = `<div class="muted" style="font-size:0.85rem;">Suche…</div>`;
+      const q = nwSafeStr(qInp.value || '').trim();
+      if (!q) {
+        setResultsMessage('<div class="nw-config-empty">Suchbegriff eingeben…</div>');
+        return;
+      }
+      setResultsMessage('<div class="nw-config-empty">Suche läuft…</div>');
       try {
         const list = await nwDpSearch(q);
+        if (!isAlive()) return;
         nwRenderDpResults(list, onPick);
       } catch (e) {
-        nwLE.el.dpResults.innerHTML = `<div class="muted" style="font-size:0.85rem;color:#ff6b6b;">Fehler: ${nwSafeStr(e && e.message)}</div>`;
+        if (!isAlive()) return;
+        setResultsMessage(`<div class="nw-config-empty" style="color:#ff6b6b;">Fehler: ${nwSafeStr(e && e.message)}</div>`);
       }
     };
 
     const onClose = () => finish(null);
     const onBg = (e) => { if (e.target === modal) finish(null); };
-    const onKey = (e) => { if (e.key === 'Enter') onSearch(); if (e.key === 'Escape') finish(null); };
+    const onKey = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        onSearch().catch(() => {});
+      }
+      if (e.key === 'Escape') finish(null);
+    };
+    const onRoot = () => openPrefix('');
+    const onUp = () => {
+      upOne();
+      refreshTree().catch(() => {});
+    };
+
+    const cleanup = () => {
+      try { btn.removeEventListener('click', onSearch); } catch (_e) {}
+      try { closeBtn.removeEventListener('click', onClose); } catch (_e2) {}
+      try { rootBtn.removeEventListener('click', onRoot); } catch (_e3) {}
+      try { upBtn.removeEventListener('click', onUp); } catch (_e4) {}
+      try { modal.removeEventListener('click', onBg); } catch (_e5) {}
+      try { qInp.removeEventListener('keydown', onKey); } catch (_e6) {}
+    };
 
     btn.addEventListener('click', onSearch);
     closeBtn.addEventListener('click', onClose);
+    rootBtn.addEventListener('click', onRoot);
+    upBtn.addEventListener('click', onUp);
     modal.addEventListener('click', onBg);
     qInp.addEventListener('keydown', onKey);
 
     qInp.value = nwSafeStr(initialQuery || '');
-    nwLE.el.dpResults.innerHTML = `<div class="muted" style="font-size:0.85rem;">Suchen…</div>`;
+    setResultsMessage(qInp.value.trim() ? '<div class="nw-config-empty">Suche wird vorbereitet…</div>' : '<div class="nw-config-empty">Suchbegriff eingeben…</div>');
+    setTreeMessage('<div class="nw-config-empty">Ordner werden geladen…</div>');
+    nwRenderDpBreadcrumb(treePrefix, openPrefix);
+    if (upBtn) upBtn.disabled = !treePrefix;
+    if (rootBtn) rootBtn.disabled = !treePrefix;
+
     nwOpenModal(modal);
     setTimeout(() => { try { qInp.focus(); qInp.select(); } catch (_e) {} }, 0);
 
-    // auto search if query seems useful
+    refreshTree().catch(() => {});
+
     if (qInp.value && qInp.value.trim().length >= 2) {
-      onSearch();
+      onSearch().catch(() => {});
     }
   });
 }
@@ -2490,6 +2714,10 @@ async function nwInitLogicEditor() {
   nwLE.el.dpClose = document.getElementById('nw-le-dp-close');
   nwLE.el.dpQ = document.getElementById('nw-le-dp-q');
   nwLE.el.dpSearch = document.getElementById('nw-le-dp-search');
+  nwLE.el.dpRoot = document.getElementById('nw-le-dp-root');
+  nwLE.el.dpUp = document.getElementById('nw-le-dp-up');
+  nwLE.el.dpBreadcrumb = document.getElementById('nw-le-dp-breadcrumb');
+  nwLE.el.dpTree = document.getElementById('nw-le-dp-tree');
   nwLE.el.dpResults = document.getElementById('nw-le-dp-results');
 
   nwLE.el.importModal = document.getElementById('nw-le-import-modal');

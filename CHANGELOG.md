@@ -1,3 +1,8 @@
+## 0.6.202
+- Logik-Editor: Datenpunkt-Auswahl nutzt jetzt zusätzlich die ioBroker-Objektstruktur mit Ordner-Navigation, Breadcrumb, Start/Zurück und paralleler Suche nach ID oder Name.
+- Logik-Editor: DP-Picker öffnet bei bereits gesetzten IDs direkt im zugehörigen Elternpfad und erleichtert damit das schnelle Auffinden vorhandener Datenpunkte.
+- Web/PWA: Cache-Version angehoben, damit die neue DP-Auswahl zuverlässig geladen wird.
+
 ## 0.6.201
 - Logik-Editor: Verbindungen lassen sich wieder ohne Löschen eines Blocks trennen – per Rechtsklick auf Leitung oder Zieleingang.
 - Logik-Editor: Bausteine aus der Palette können jetzt per Drag & Drop direkt an der gewünschten Position im Arbeitsbereich abgelegt werden.
