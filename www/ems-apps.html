@@ -922,6 +922,18 @@
           Tipp: Für die Verbraucher-Steuerung kannst du entweder einen <b>Leistungs-Setpoint (W)</b> oder ein <b>Enable/Disable</b> anbinden. Falls beides gesetzt ist, wird Setpoint bevorzugt.
         </div>
       </div>
+
+      <div class="nw-card">
+        <div class="nw-card__title">Nachweislog / Historie</div>
+        <div class="nw-card__subtitle">Das §14a-Modul schreibt ein leichtgewichtiges Ereignis- und Verlaufslog in <code>para14a.audit.*</code> und <code>para14a.trace.*</code>. Bei erkannter Influx-History wird die Historisierung automatisch aktiviert.</div>
+
+        <div class="nw-help" style="margin-top:10px;">
+          Performance: Es wird nur bei §14a-Schalt-/Limit-Ereignissen sowie im 1-Minuten-Raster während einer aktiven Begrenzung geschrieben.
+        </div>
+        <div class="nw-help" style="margin-top:10px;">
+          Wichtig: Für die gesetzliche Aufbewahrung von 2 Jahren muss die Retention des verwendeten Influx-Buckets bzw. der Influx-Instanz auf mindestens <b>730 Tage</b> gesetzt sein. Der Adapter setzt das Ziel intern als Hinweis, ändert aber keine globale Influx-Retention automatisch.
+        </div>
+      </div>
     </div>
   </div>
 

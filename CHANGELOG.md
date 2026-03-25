@@ -1,3 +1,8 @@
+## 0.6.204
+- §14a: Neues leichtgewichtiges Nachweis-/Audit-Logging mit Ereignissnapshots unter `para14a.audit.*` und 1-Minuten-Verlauf unter `para14a.trace.*` – optimiert für minimale Laufzeitlast.
+- §14a: Erkennt eine Influx-History-Instanz automatisch und aktiviert die Historisierung der Nachweis-States ohne zusätzliche Polling-Last. Für die 2-Jahres-Aufbewahrung bleibt die Retention in Influx separat zu konfigurieren.
+- Web/PWA: Cache-Version angehoben, damit die neue §14a-Hinweiskarte im App-Center zuverlässig geladen wird.
+
 ## 0.6.203
 - SmartHome Config: Neue assistierte Auto-Erkennung über den ioBroker Type-Detector mit Gerätevorschlägen inkl. Quellpfad, gemappten Zuständen und gezielter Übernahme in die SmartHome-Konfiguration.
 - SmartHome Config: Der Datenpunkt-Picker kann jetzt zusätzlich die ioBroker-Objektstruktur mit Ordnern, Breadcrumb sowie Start/Zurück browsen und parallel nach ID oder Name suchen.

@@ -1,2 +1,972 @@
 'use strict';
-require('../../scripts/secure-loader').load(module, __filename, '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');
+
+const { BaseModule } = require('./base');
+const { applySetpoint } = require('../consumers');
+
+function num(v, dflt = 0) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : dflt;
+}
+
+function clamp(v, minV, maxV) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return minV;
+    if (n < minV) return minV;
+    if (n > maxV) return maxV;
+    return n;
+}
+
+function safeIdPart(s) {
+    const v = String(s || '').trim();
+    if (!v) return '';
+    // Keep in sync with Charging-Management's toSafeIdPart()
+    return v.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64);
+}
+
+function normalizeConsumerType(t) {
+    const s = String(t || '').trim().toLowerCase();
+    if (s === 'wärmepumpe' || s === 'waermepumpe' || s === 'heatpump' || s === 'hp' || s === 'wp') return 'heatPump';
+    if (s === 'heizstab' || s === 'heaterrod' || s === 'rod') return 'heatingRod';
+    if (s === 'klima' || s === 'klimageraet' || s === 'klimagerät' || s === 'aircondition' || s === 'ac') return 'airCondition';
+    if (s === 'speicher' || s === 'storage' || s === 'battery') return 'storage';
+    return 'custom';
+}
+
+function normalizeControlType(t) {
+    const s = String(t || '').trim().toLowerCase();
+    if (s === 'onoff' || s === 'on/off' || s === 'switch' || s === 'enable' || s === 'aus' || s === 'sperren') return 'onOff';
+    return 'limitW';
+}
+
+function getGzf(nSteuVE) {
+    const n = Math.max(1, Math.round(Number(nSteuVE) || 1));
+    if (n <= 1) return 1;
+    if (n === 2) return 0.8;
+    if (n === 3) return 0.75;
+    if (n === 4) return 0.7;
+    if (n === 5) return 0.65;
+    if (n === 6) return 0.6;
+    if (n === 7) return 0.55;
+    if (n === 8) return 0.5;
+    return 0.45; // >=9
+}
+
+/**
+ * §14a EnWG helper module.
+ *
+ * Goals:
+ * - Provide a central, adapter-wide §14a state (active/mode)
+ * - Compute minimum power distribution (Pmin,14a) for EMS mode
+ * - Expose per-wallbox caps via adapter._para14a for Charging-Management
+ * - Optionally write setpoints to additional "steuerbare Verbrauchseinrichtungen" (e.g. WP/Heizstab/Klima)
+ */
+class Para14aModule extends BaseModule {
+    constructor(adapter, dpRegistry) {
+        super(adapter, dpRegistry);
+
+        /** @type {Array<any>} */
+        this._loads = [];
+        /** @type {Map<string, any>} */
+        this._stateCache = new Map();
+        this._activeDpKey = '';
+        this._emsSetpointDpKey = '';
+        this._audit = {
+            historyInstance: '',
+            historyReady: false,
+            retentionTargetDays: 730,
+            eventSeq: 0,
+            traceSeq: 0,
+            sessionId: '',
+            sessionStartedAt: 0,
+            lastTraceAt: 0,
+            lastControlSnapshot: null,
+            lastControlSignature: '',
+        };
+    }
+
+    _isEnabled() {
+        return !!this.adapter?.config?.installerConfig?.para14a;
+    }
+
+    _getCfg() {
+        const cfg = this.adapter?.config?.installerConfig || {};
+        return cfg && typeof cfg === 'object' ? cfg : {};
+    }
+
+    async _setState(id, val, options = {}) {
+        const force = !!options.force;
+        const ts = Number(options.ts) || Date.now();
+        const v = (typeof val === 'number' && !Number.isFinite(val)) ? null : val;
+        const prev = this._stateCache.get(id);
+        if (!force && prev === v) return false;
+        this._stateCache.set(id, v);
+        await this.adapter.setStateAsync(id, { val: v, ack: true, ts });
+        try {
+            if (this.adapter && typeof this.adapter.updateValue === 'function') {
+                this.adapter.updateValue(id, v, ts);
+            }
+        } catch {
+            // ignore
+        }
+        return true;
+    }
+
+    async _setStateIfChanged(id, val) {
+        return this._setState(id, val, { force: false });
+    }
+
+    async _setStateForced(id, val, ts) {
+        return this._setState(id, val, { force: true, ts });
+    }
+
+    _roundW(v, dflt = 0) {
+        const n = Number(v);
+        return Number.isFinite(n) ? Math.round(n) : dflt;
+    }
+
+    _limitJsonText(v, maxLen = 6000) {
+        let s = '';
+        try {
+            s = (typeof v === 'string') ? v : JSON.stringify(v);
+        } catch {
+            s = '';
+        }
+        if (!maxLen || !Number.isFinite(maxLen) || maxLen < 256) maxLen = 6000;
+        return s.length > maxLen ? `${s.slice(0, maxLen)}...` : s;
+    }
+
+    _getAdapterNumberFromCache(key, dflt = 0) {
+        try {
+            if (this.adapter && typeof this.adapter._nwGetNumberFromCache === 'function') {
+                const n = this.adapter._nwGetNumberFromCache(key);
+                if (typeof n === 'number' && Number.isFinite(n)) return n;
+            }
+        } catch {
+            // ignore
+        }
+
+        try {
+            const rec = this.adapter && this.adapter.stateCache ? this.adapter.stateCache[key] : null;
+            const n = Number(rec && rec.value);
+            if (Number.isFinite(n)) return n;
+        } catch {
+            // ignore
+        }
+
+        return dflt;
+    }
+
+    _newAuditSessionId(ts = Date.now()) {
+        return `p14a-${Math.round(ts).toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    _getAuditControlSignature(snapshot) {
+        const s = snapshot && typeof snapshot === 'object' ? snapshot : {};
+        return JSON.stringify({
+            active: !!s.active,
+            source: String(s.source || ''),
+            mode: String(s.mode || ''),
+            requestedTotalBudgetW: this._roundW(s.requestedTotalBudgetW, 0),
+            effectiveEvcsCapW: this._roundW(s.effectiveEvcsCapW, 0),
+            minPerDeviceW: this._roundW(s.minPerDeviceW, 0),
+            pMinW: this._roundW(s.pMinW, 0),
+            nSteuVE: Math.max(0, Math.round(num(s.nSteuVE, 0))),
+            evcsCount: Math.max(0, Math.round(num(s.evcsCount, 0))),
+        });
+    }
+
+    _buildAuditSnapshot(data) {
+        const s = data && typeof data === 'object' ? data : {};
+        const active = !!s.active;
+        const failedConsumers = Array.isArray(s.failedConsumers)
+            ? s.failedConsumers.map((x) => String(x || '').trim()).filter(Boolean).slice(0, 10)
+            : [];
+
+        return {
+            active,
+            source: String(s.source || ''),
+            mode: String(s.mode || ''),
+            requestedTotalBudgetW: active ? this._roundW(s.requestedTotalBudgetW, 0) : 0,
+            effectiveEvcsCapW: active ? this._roundW(s.effectiveEvcsCapW, 0) : 0,
+            minPerDeviceW: active ? this._roundW(s.minPerDeviceW, 0) : 0,
+            pMinW: active ? this._roundW(s.pMinW, 0) : 0,
+            nSteuVE: active ? Math.max(0, Math.round(num(s.nSteuVE, 0))) : 0,
+            evcsCount: active ? Math.max(0, Math.round(num(s.evcsCount, 0))) : 0,
+            evPowerW: this._roundW(s.evPowerW, 0),
+            gridPowerW: this._roundW(s.gridPowerW, 0),
+            consumerAppliedCount: Math.max(0, Math.round(num(s.consumerAppliedCount, 0))),
+            consumerFailedCount: Math.max(0, Math.round(num(s.consumerFailedCount, 0))),
+            consumerSkippedCount: Math.max(0, Math.round(num(s.consumerSkippedCount, 0))),
+            consumerWriteFailedCount: Math.max(0, Math.round(num(s.consumerWriteFailedCount, 0))),
+            failedConsumers,
+        };
+    }
+
+    _getAuditChangeReason(prev, next, fallback = 'update') {
+        const p = prev && typeof prev === 'object' ? prev : null;
+        const n = next && typeof next === 'object' ? next : {};
+
+        if (!p) return fallback;
+        if (!p.active && n.active) return 'activate';
+        if (p.active && !n.active) return 'release';
+
+        const reasons = [];
+        if (p.source !== n.source) reasons.push('source');
+        if (p.mode !== n.mode) reasons.push('mode');
+        if (p.requestedTotalBudgetW !== n.requestedTotalBudgetW) reasons.push('budget');
+        if (p.effectiveEvcsCapW !== n.effectiveEvcsCapW) reasons.push('evcs_cap');
+        if (p.minPerDeviceW !== n.minPerDeviceW) reasons.push('min_per_device');
+        if (p.pMinW !== n.pMinW) reasons.push('pmin');
+        if (p.nSteuVE !== n.nSteuVE) reasons.push('nsteuve');
+        if (p.evcsCount !== n.evcsCount) reasons.push('evcs_count');
+        return reasons.length ? reasons.slice(0, 3).join('+') : fallback;
+    }
+
+    async _initAuditLoggingStates(mk) {
+        await this.adapter.setObjectNotExistsAsync('para14a.audit', {
+            type: 'channel',
+            common: { name: '§14a Nachweislog' },
+            native: {},
+        });
+
+        await this.adapter.setObjectNotExistsAsync('para14a.trace', {
+            type: 'channel',
+            common: { name: '§14a Verlauf' },
+            native: {},
+        });
+
+        await mk('para14a.audit.historyEnabled', 'Historisierung erkannt', 'boolean', 'indicator', false);
+        await mk('para14a.audit.historyInstance', 'Historien-Instanz', 'string', 'text', false);
+        await mk('para14a.audit.retentionTargetDays', 'Retention-Ziel (Tage)', 'number', 'value.interval', false, 'd');
+        await mk('para14a.audit.sessionActive', '§14a Sitzung aktiv', 'boolean', 'indicator', false);
+        await mk('para14a.audit.currentSessionId', 'Aktuelle/letzte Sitzungs-ID', 'string', 'text', false);
+        await mk('para14a.audit.eventSeq', 'Ereignis-Sequenz', 'number', 'value', false);
+        await mk('para14a.audit.lastEventTs', 'Letztes Ereignis (ts)', 'number', 'value.time', false);
+        await mk('para14a.audit.lastEventType', 'Letzter Ereignistyp', 'string', 'text', false);
+        await mk('para14a.audit.lastReason', 'Letzter Grund', 'string', 'text', false);
+        await mk('para14a.audit.lastSource', 'Letzte Quelle', 'string', 'text', false);
+        await mk('para14a.audit.lastMode', 'Letzter Modus', 'string', 'text', false);
+        await mk('para14a.audit.lastRequestedTotalBudgetW', 'Letztes Gesamtbudget (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.audit.lastEffectiveEvcsCapW', 'Letztes EVCS-Limit (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.audit.lastMinPerDeviceW', 'Letzte Mindestleistung je Verbraucher (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.audit.lastPMinW', 'Letztes Pmin,14a (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.audit.lastNSteuVE', 'Letzte nSteuVE', 'number', 'value', false);
+        await mk('para14a.audit.lastEvcsCount', 'Letzte EVCS-Anzahl', 'number', 'value', false);
+        await mk('para14a.audit.lastEvPowerW', 'Letzte EV-Leistung (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.audit.lastGridPowerW', 'Letzte Netzleistung (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.audit.lastConsumerAppliedCount', 'Letzte erfolgreich angewendete Verbraucher', 'number', 'value', false);
+        await mk('para14a.audit.lastConsumerFailedCount', 'Letzte fehlgeschlagene Verbraucher', 'number', 'value', false);
+        await mk('para14a.audit.lastConsumerSkippedCount', 'Letzte übersprungene Verbraucher', 'number', 'value', false);
+        await mk('para14a.audit.lastConsumerWriteFailedCount', 'Letzte Schreibfehler Verbraucher', 'number', 'value', false);
+        await mk('para14a.audit.lastResult', 'Letztes Ergebnis', 'string', 'text', false);
+        await mk('para14a.audit.lastJson', 'Letztes Ereignis (JSON)', 'string', 'json', false);
+
+        await mk('para14a.trace.seq', 'Trace-Sequenz', 'number', 'value', false);
+        await mk('para14a.trace.sampleTs', 'Trace-Zeitstempel', 'number', 'value.time', false);
+        await mk('para14a.trace.active', '§14a aktiv', 'boolean', 'indicator', false);
+        await mk('para14a.trace.sessionId', 'Sitzungs-ID', 'string', 'text', false);
+        await mk('para14a.trace.source', 'Quelle', 'string', 'text', false);
+        await mk('para14a.trace.mode', 'Modus', 'string', 'text', false);
+        await mk('para14a.trace.requestedTotalBudgetW', 'Gesamtbudget (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.trace.effectiveEvcsCapW', 'Effektives EVCS-Limit (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.trace.minPerDeviceW', 'Mindestleistung je Verbraucher (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.trace.pMinW', 'Pmin,14a (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.trace.nSteuVE', 'nSteuVE', 'number', 'value', false);
+        await mk('para14a.trace.evcsCount', 'EVCS-Anzahl', 'number', 'value', false);
+        await mk('para14a.trace.evPowerW', 'EV-Leistung (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.trace.gridPowerW', 'Netzleistung (W)', 'number', 'value.power', false, 'W');
+    }
+
+    async _setupAuditHistory() {
+        let historyInstance = '';
+        try {
+            if (this.adapter && typeof this.adapter._nwDetectInfluxInstance === 'function') {
+                historyInstance = String((await this.adapter._nwDetectInfluxInstance()) || '').trim();
+            }
+        } catch {
+            historyInstance = '';
+        }
+
+        const historyReady = !!historyInstance && !!(this.adapter && typeof this.adapter._nwEnsureInfluxCustom === 'function');
+        this._audit.historyInstance = historyInstance;
+        this._audit.historyReady = historyReady;
+
+        await this._setStateIfChanged('para14a.audit.historyEnabled', historyReady);
+        await this._setStateIfChanged('para14a.audit.historyInstance', historyInstance);
+        await this._setStateIfChanged('para14a.audit.retentionTargetDays', this._audit.retentionTargetDays);
+
+        if (!historyReady) return;
+
+        const metaIds = [
+            'para14a.audit.historyEnabled',
+            'para14a.audit.historyInstance',
+            'para14a.audit.retentionTargetDays',
+        ];
+
+        const eventIds = [
+            'para14a.audit.sessionActive',
+            'para14a.audit.currentSessionId',
+            'para14a.audit.eventSeq',
+            'para14a.audit.lastEventTs',
+            'para14a.audit.lastEventType',
+            'para14a.audit.lastReason',
+            'para14a.audit.lastSource',
+            'para14a.audit.lastMode',
+            'para14a.audit.lastRequestedTotalBudgetW',
+            'para14a.audit.lastEffectiveEvcsCapW',
+            'para14a.audit.lastMinPerDeviceW',
+            'para14a.audit.lastPMinW',
+            'para14a.audit.lastNSteuVE',
+            'para14a.audit.lastEvcsCount',
+            'para14a.audit.lastEvPowerW',
+            'para14a.audit.lastGridPowerW',
+            'para14a.audit.lastConsumerAppliedCount',
+            'para14a.audit.lastConsumerFailedCount',
+            'para14a.audit.lastConsumerSkippedCount',
+            'para14a.audit.lastConsumerWriteFailedCount',
+            'para14a.audit.lastResult',
+        ];
+
+        const traceIds = [
+            'para14a.trace.seq',
+            'para14a.trace.sampleTs',
+            'para14a.trace.active',
+            'para14a.trace.sessionId',
+            'para14a.trace.source',
+            'para14a.trace.mode',
+            'para14a.trace.requestedTotalBudgetW',
+            'para14a.trace.effectiveEvcsCapW',
+            'para14a.trace.minPerDeviceW',
+            'para14a.trace.pMinW',
+            'para14a.trace.nSteuVE',
+            'para14a.trace.evcsCount',
+            'para14a.trace.evPowerW',
+            'para14a.trace.gridPowerW',
+        ];
+
+        for (const id of metaIds) {
+            await this.adapter._nwEnsureInfluxCustom(id, historyInstance, { changesOnly: true });
+        }
+        for (const id of [...eventIds, ...traceIds]) {
+            await this.adapter._nwEnsureInfluxCustom(id, historyInstance, { changesOnly: false });
+        }
+    }
+
+    async _emitAuditEvent(snapshot, eventType, reason, result) {
+        const ts = Date.now();
+        const eventSeq = Math.max(1, Math.round(num(this._audit.eventSeq, 0)) + 1);
+        this._audit.eventSeq = eventSeq;
+
+        const payload = {
+            seq: eventSeq,
+            ts,
+            eventType,
+            reason,
+            result,
+            sessionId: this._audit.sessionId || '',
+            active: !!snapshot.active,
+            source: String(snapshot.source || ''),
+            mode: String(snapshot.mode || ''),
+            requestedTotalBudgetW: this._roundW(snapshot.requestedTotalBudgetW, 0),
+            effectiveEvcsCapW: this._roundW(snapshot.effectiveEvcsCapW, 0),
+            minPerDeviceW: this._roundW(snapshot.minPerDeviceW, 0),
+            pMinW: this._roundW(snapshot.pMinW, 0),
+            nSteuVE: Math.max(0, Math.round(num(snapshot.nSteuVE, 0))),
+            evcsCount: Math.max(0, Math.round(num(snapshot.evcsCount, 0))),
+            evPowerW: this._roundW(snapshot.evPowerW, 0),
+            gridPowerW: this._roundW(snapshot.gridPowerW, 0),
+            consumerAppliedCount: Math.max(0, Math.round(num(snapshot.consumerAppliedCount, 0))),
+            consumerFailedCount: Math.max(0, Math.round(num(snapshot.consumerFailedCount, 0))),
+            consumerSkippedCount: Math.max(0, Math.round(num(snapshot.consumerSkippedCount, 0))),
+            consumerWriteFailedCount: Math.max(0, Math.round(num(snapshot.consumerWriteFailedCount, 0))),
+            failedConsumers: Array.isArray(snapshot.failedConsumers) ? snapshot.failedConsumers.slice(0, 10) : [],
+        };
+
+        await this._setStateForced('para14a.audit.sessionActive', !!payload.active, ts);
+        await this._setStateForced('para14a.audit.currentSessionId', payload.sessionId, ts);
+        await this._setStateForced('para14a.audit.eventSeq', payload.seq, ts);
+        await this._setStateForced('para14a.audit.lastEventTs', payload.ts, ts);
+        await this._setStateForced('para14a.audit.lastEventType', payload.eventType, ts);
+        await this._setStateForced('para14a.audit.lastReason', payload.reason, ts);
+        await this._setStateForced('para14a.audit.lastSource', payload.source, ts);
+        await this._setStateForced('para14a.audit.lastMode', payload.mode, ts);
+        await this._setStateForced('para14a.audit.lastRequestedTotalBudgetW', payload.requestedTotalBudgetW, ts);
+        await this._setStateForced('para14a.audit.lastEffectiveEvcsCapW', payload.effectiveEvcsCapW, ts);
+        await this._setStateForced('para14a.audit.lastMinPerDeviceW', payload.minPerDeviceW, ts);
+        await this._setStateForced('para14a.audit.lastPMinW', payload.pMinW, ts);
+        await this._setStateForced('para14a.audit.lastNSteuVE', payload.nSteuVE, ts);
+        await this._setStateForced('para14a.audit.lastEvcsCount', payload.evcsCount, ts);
+        await this._setStateForced('para14a.audit.lastEvPowerW', payload.evPowerW, ts);
+        await this._setStateForced('para14a.audit.lastGridPowerW', payload.gridPowerW, ts);
+        await this._setStateForced('para14a.audit.lastConsumerAppliedCount', payload.consumerAppliedCount, ts);
+        await this._setStateForced('para14a.audit.lastConsumerFailedCount', payload.consumerFailedCount, ts);
+        await this._setStateForced('para14a.audit.lastConsumerSkippedCount', payload.consumerSkippedCount, ts);
+        await this._setStateForced('para14a.audit.lastConsumerWriteFailedCount', payload.consumerWriteFailedCount, ts);
+        await this._setStateForced('para14a.audit.lastResult', payload.result, ts);
+        await this._setStateForced('para14a.audit.lastJson', this._limitJsonText(payload, 7000), ts);
+
+        try {
+            if (this.adapter && this.adapter.log && typeof this.adapter.log.info === 'function') {
+                this.adapter.log.info(`[§14a/audit] ${eventType} (${reason}) session=${payload.sessionId || '-'} cap=${payload.effectiveEvcsCapW}W budget=${payload.requestedTotalBudgetW}W result=${payload.result}`);
+            }
+        } catch {
+            // ignore
+        }
+    }
+
+    async _writeAuditTrace(snapshot, force = false) {
+        const now = Date.now();
+        const shouldWrite = !!force || (!!snapshot.active && (now - Number(this._audit.lastTraceAt || 0) >= 60000));
+        if (!shouldWrite) return;
+
+        this._audit.lastTraceAt = now;
+        const seq = Math.max(1, Math.round(num(this._audit.traceSeq, 0)) + 1);
+        this._audit.traceSeq = seq;
+
+        const ts = now;
+        await this._setStateForced('para14a.trace.seq', seq, ts);
+        await this._setStateForced('para14a.trace.sampleTs', ts, ts);
+        await this._setStateForced('para14a.trace.active', !!snapshot.active, ts);
+        await this._setStateForced('para14a.trace.sessionId', this._audit.sessionId || '', ts);
+        await this._setStateForced('para14a.trace.source', String(snapshot.source || ''), ts);
+        await this._setStateForced('para14a.trace.mode', String(snapshot.mode || ''), ts);
+        await this._setStateForced('para14a.trace.requestedTotalBudgetW', this._roundW(snapshot.requestedTotalBudgetW, 0), ts);
+        await this._setStateForced('para14a.trace.effectiveEvcsCapW', this._roundW(snapshot.effectiveEvcsCapW, 0), ts);
+        await this._setStateForced('para14a.trace.minPerDeviceW', this._roundW(snapshot.minPerDeviceW, 0), ts);
+        await this._setStateForced('para14a.trace.pMinW', this._roundW(snapshot.pMinW, 0), ts);
+        await this._setStateForced('para14a.trace.nSteuVE', Math.max(0, Math.round(num(snapshot.nSteuVE, 0))), ts);
+        await this._setStateForced('para14a.trace.evcsCount', Math.max(0, Math.round(num(snapshot.evcsCount, 0))), ts);
+        await this._setStateForced('para14a.trace.evPowerW', this._roundW(snapshot.evPowerW, 0), ts);
+        await this._setStateForced('para14a.trace.gridPowerW', this._roundW(snapshot.gridPowerW, 0), ts);
+    }
+
+    async _handleAuditLogging(snapshot) {
+        const prev = this._audit.lastControlSnapshot;
+        const sig = this._getAuditControlSignature(snapshot);
+        const prevSig = this._audit.lastControlSignature || '';
+
+        let eventType = '';
+        let reason = '';
+
+        if (snapshot.active && !(prev && prev.active)) {
+            this._audit.sessionId = this._newAuditSessionId();
+            this._audit.sessionStartedAt = Date.now();
+            eventType = 'activate';
+            reason = this._getAuditChangeReason(prev, snapshot, 'activate');
+        } else if (!snapshot.active && prev && prev.active) {
+            eventType = 'release';
+            reason = this._getAuditChangeReason(prev, snapshot, 'release');
+        } else if (snapshot.active && sig !== prevSig) {
+            if (!this._audit.sessionId) {
+                this._audit.sessionId = this._newAuditSessionId();
+                this._audit.sessionStartedAt = Date.now();
+            }
+            eventType = 'update';
+            reason = this._getAuditChangeReason(prev, snapshot, 'update');
+        }
+
+        if (eventType) {
+            const result = (eventType === 'release')
+                ? 'released'
+                : (snapshot.consumerFailedCount > 0 || snapshot.consumerWriteFailedCount > 0)
+                    ? 'write_failed'
+                    : (snapshot.consumerAppliedCount > 0 || snapshot.effectiveEvcsCapW > 0)
+                        ? 'applied'
+                        : 'ok';
+            await this._emitAuditEvent(snapshot, eventType, reason, result);
+            await this._writeAuditTrace(snapshot, true);
+            if (eventType === 'release') {
+                this._audit.sessionId = '';
+                this._audit.sessionStartedAt = 0;
+            }
+        } else {
+            await this._writeAuditTrace(snapshot, false);
+        }
+
+        this._audit.lastControlSnapshot = Object.assign({}, snapshot);
+        this._audit.lastControlSignature = sig;
+    }
+
+    _buildLoadsFromConfig() {
+        const cfg = this._getCfg();
+        const rows = Array.isArray(cfg.para14aConsumers) ? cfg.para14aConsumers : [];
+
+        /** @type {Array<any>} */
+        const loads = [];
+        const usedIds = new Set();
+
+        for (let i = 0; i < rows.length; i++) {
+            const r = rows[i] || {};
+            if (r.enabled === false) continue;
+
+            const name = String(r.name || '').trim();
+            const type = normalizeConsumerType(r.type);
+            const ctrl = normalizeControlType(r.controlType);
+
+            const setWId = String(r.setPowerWId || r.setWId || '').trim();
+            const enableId = String(r.enableId || r.enableWriteId || '').trim();
+
+            if (!setWId && !enableId) continue;
+
+            const baseId = safeIdPart(r.key || name || `${type}_${i + 1}`) || `c${i + 1}`;
+            let id = baseId;
+            let n = 2;
+            while (usedIds.has(id)) id = `${baseId}_${n++}`;
+            usedIds.add(id);
+
+            const installedPowerW = clamp(num(r.installedPowerW || r.powerW || r.ratedW || 0, 0), 0, 1e12);
+            const priority = clamp(num(r.priority || 100, 100), 1, 999);
+
+            loads.push({
+                id,
+                key: String(r.key || id),
+                name: name || id,
+                type,
+                controlType: ctrl,
+                installedPowerW,
+                priority,
+                setWId,
+                enableId,
+                // internal dp keys (filled in init)
+                setWKey: '',
+                enableKey: '',
+            });
+        }
+
+        // deterministic: priority asc, then name
+        loads.sort((a, b) => {
+            const pa = num(a.priority, 100);
+            const pb = num(b.priority, 100);
+            if (pa !== pb) return pa - pb;
+            return String(a.name || '').localeCompare(String(b.name || ''));
+        });
+
+        this._loads = loads;
+    }
+
+    async init() {
+        // Create states always (even if the module is disabled) to make troubleshooting easier.
+        await this.adapter.setObjectNotExistsAsync('para14a', {
+            type: 'channel',
+            common: { name: '§14a EnWG' },
+            native: {},
+        });
+
+        const mk = async (id, name, type, role, writable = false, unit = undefined) => {
+            await this.adapter.setObjectNotExistsAsync(id, {
+                type: 'state',
+                common: {
+                    name,
+                    type,
+                    role,
+                    read: true,
+                    write: !!writable,
+                    ...(unit ? { unit } : {}),
+                },
+                native: {},
+            });
+        };
+
+        await mk('para14a.active', '§14a aktiv (wirksam)', 'boolean', 'indicator', false);
+        await mk('para14a.mode', '§14a Modus', 'string', 'text', false);
+        await mk('para14a.controlSource', '§14a Quelle', 'string', 'text', false);
+        await mk('para14a.minPerDeviceW', 'Mindestleistung je Verbraucher (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.nSteuVE', 'Anzahl steuerbare Verbrauchseinrichtungen (nSteuVE)', 'number', 'value', false);
+        await mk('para14a.gzf', 'Gleichzeitigkeitsfaktor (GZF)', 'number', 'value', false);
+        await mk('para14a.pMinW', 'Mindestleistung gesamt Pmin,14a (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.emsSetpointW', 'Sollwert EMS (W) (optional)', 'number', 'value.power', false, 'W');
+        await mk('para14a.evcsTotalCapW', 'EVCS Gesamtlimit (W)', 'number', 'value.power', false, 'W');
+        await mk('para14a.debug', 'Debug (JSON)', 'string', 'text', false);
+        await this._initAuditLoggingStates(mk);
+
+        // Load config and upsert dp mappings
+        this._buildLoadsFromConfig();
+
+        const cfg = this._getCfg();
+
+        // Optional activation datapoint
+        const activeId = String(cfg.para14aActiveId || '').trim();
+        if (activeId && this.dp) {
+            this._activeDpKey = 'p14a.active';
+            await this.dp.upsert({ key: this._activeDpKey, objectId: activeId, dataType: 'mixed', direction: 'in' });
+        } else {
+            this._activeDpKey = '';
+        }
+
+        // Optional EMS setpoint datapoint (total allowed max net power for all steuVE)
+        const spId = String(cfg.para14aEmsSetpointWId || '').trim();
+        if (spId && this.dp) {
+            this._emsSetpointDpKey = 'p14a.emsSetpointW';
+            await this.dp.upsert({ key: this._emsSetpointDpKey, objectId: spId, dataType: 'number', direction: 'in', unit: 'W' });
+        } else {
+            this._emsSetpointDpKey = '';
+        }
+
+        // Upsert datapoints for load actuation
+        for (const l of this._loads) {
+            const baseKey = `p14a.${l.id}`;
+            try {
+                if (l.setWId) {
+                    const k = `${baseKey}.setW`;
+                    await this.dp?.upsert({ key: k, objectId: l.setWId, dataType: 'number', direction: 'out', unit: 'W', deadband: 25 });
+                    l.setWKey = k;
+                }
+                if (l.enableId) {
+                    const k = `${baseKey}.enable`;
+                    await this.dp?.upsert({ key: k, objectId: l.enableId, dataType: 'boolean', direction: 'out' });
+                    l.enableKey = k;
+                }
+
+                // Visible states for last applied target
+                await this.adapter.setObjectNotExistsAsync(`para14a.consumers.${l.id}`, {
+                    type: 'channel',
+                    common: { name: l.name },
+                    native: {},
+                });
+                await mk(`para14a.consumers.${l.id}.type`, 'Typ', 'string', 'text', false);
+                await mk(`para14a.consumers.${l.id}.targetW`, 'Sollwert (W)', 'number', 'value.power', false, 'W');
+                await mk(`para14a.consumers.${l.id}.applied`, 'Angewendet', 'boolean', 'indicator', false);
+                await mk(`para14a.consumers.${l.id}.status`, 'Status', 'string', 'text', false);
+            } catch (e) {
+                this.adapter.log.warn(`[§14a] datapoint init failed for '${l.name}': ${e?.message || e}`);
+            }
+        }
+
+        await this._setupAuditHistory();
+    }
+
+    _readActiveSignal() {
+        const cfg = this._getCfg();
+
+        // Feature must be enabled.
+        if (!cfg.para14a) return { active: false, source: 'disabled' };
+
+        // If a dedicated activation datapoint is mapped, it takes precedence.
+        if (this._activeDpKey && this.dp) {
+            const raw = this.dp.getRaw(this._activeDpKey);
+            if (raw === null || raw === undefined) return { active: false, source: 'dp_missing' };
+            if (typeof raw === 'boolean') return { active: raw, source: 'dp' };
+            if (typeof raw === 'number') return { active: raw !== 0, source: 'dp' };
+            if (typeof raw === 'string') {
+                const s = raw.trim().toLowerCase();
+                if (s === '' || s === '0' || s === 'false' || s === 'off' || s === 'inactive') return { active: false, source: 'dp' };
+                if (s === '1' || s === 'true' || s === 'on' || s === 'active') return { active: true, source: 'dp' };
+            }
+            // fallback: truthy
+            return { active: !!raw, source: 'dp' };
+        }
+
+        // No activation DP configured.
+        // Default: assume inactive (no limitation) because we cannot know if the Netzbetreiber
+        // is currently limiting. Optional fallback can force always-on behaviour.
+        const assumeActive = !!cfg.para14aAssumeActiveWithoutSignal;
+        return { active: assumeActive, source: assumeActive ? 'config' : 'no_signal' };
+    }
+
+    _computeDistribution({ mode, minPerDeviceW, evcsCount, hasWP, hasKlima, pSumWP, pSumKlima, externalTotalSetpointW }) {
+        const baseW = Math.max(0, minPerDeviceW);
+        const nSteuVE = Math.max(0, Math.round(evcsCount)) + (hasWP ? 1 : 0) + (hasKlima ? 1 : 0);
+        const n = Math.max(1, nSteuVE);
+        const gzf = getGzf(n);
+
+        const big = (pSumWP > 11000) || (pSumKlima > 11000);
+        const primaryW = (mode === 'ems' && big)
+            ? Math.max(0, Math.max(0.4 * pSumWP, 0.4 * pSumKlima))
+            : baseW;
+
+        const secondaryW = (n > 1) ? (gzf * baseW) : 0;
+
+        const pMinW = primaryW + (n - 1) * secondaryW;
+
+        // In EMS mode, a Netzbetreiber/Steuerbox may provide an explicit total setpoint.
+        // If present, we use it as the effective total budget. Otherwise we use the computed minimum.
+        const totalBudgetW = (mode === 'ems' && typeof externalTotalSetpointW === 'number' && Number.isFinite(externalTotalSetpointW) && externalTotalSetpointW > 0)
+            ? Math.max(0, externalTotalSetpointW)
+            : pMinW;
+
+        return { nSteuVE: n, gzf, pMinW, primaryW, secondaryW, totalBudgetW };
+    }
+
+    async tick() {
+        // Always keep adapter._para14a up to date, so other modules can safely read it.
+        if (!this.adapter) return;
+
+        const cfg = this._getCfg();
+        const { active, source } = this._readActiveSignal();
+
+        const modeRaw = String(cfg.para14aMode || cfg.para14aControlMode || 'direct').trim().toLowerCase();
+        const mode = (modeRaw === 'ems' || modeRaw === 'formula') ? 'ems' : 'direct';
+
+        const minPerDeviceW = clamp(num(cfg.para14aMinPerDeviceW, 4200), 0, 1e12);
+
+        // EVCS are always part of §14a (Fallgruppe 2.4.1.a)
+        const evcsList = Array.isArray(this.adapter.evcsList) ? this.adapter.evcsList : [];
+        const controllableEvcs = evcsList.filter(wb => wb && (String(wb.setCurrentAId || '').trim() || String(wb.setPowerWId || '').trim()));
+        const evcsCount = controllableEvcs.length;
+
+        // Additional consumers from table
+        const hpRows = this._loads.filter(l => l.type === 'heatPump' || l.type === 'heatingRod');
+        const klimaRows = this._loads.filter(l => l.type === 'airCondition');
+        const hasWP = hpRows.length > 0;
+        const hasKlima = klimaRows.length > 0;
+        const pSumWP = hpRows.reduce((s, r) => s + num(r.installedPowerW, 0), 0);
+        const pSumKlima = klimaRows.reduce((s, r) => s + num(r.installedPowerW, 0), 0);
+
+        // Optional external EMS setpoint (W)
+        const externalTotalSetpointW = (active && mode === 'ems' && this._emsSetpointDpKey && this.dp)
+            ? this.dp.getNumber(this._emsSetpointDpKey, null)
+            : null;
+
+        const dist = this._computeDistribution({
+            mode,
+            minPerDeviceW,
+            evcsCount,
+            hasWP,
+            hasKlima,
+            pSumWP,
+            pSumKlima,
+            externalTotalSetpointW,
+        });
+
+        // Determine which group is primary (for EMS distribution)
+        let primaryGroup = null;
+        if (mode === 'ems') {
+            const big = (pSumWP > 11000) || (pSumKlima > 11000);
+            if (big) {
+                primaryGroup = (0.4 * pSumWP >= 0.4 * pSumKlima) ? (hasWP ? 'wp' : (hasKlima ? 'klima' : 'evcs')) : (hasKlima ? 'klima' : (hasWP ? 'wp' : 'evcs'));
+            } else {
+                // Prefer heat pump for comfort, then climate, then EVCS
+                primaryGroup = hasWP ? 'wp' : (hasKlima ? 'klima' : 'evcs');
+            }
+        }
+
+        // Build EVCS caps
+        /** @type {Record<string, number>} */
+        const evcsCapsBySafe = {};
+        let evcsTotalCapW = 0;
+
+        if (active) {
+            if (mode === 'direct') {
+                // Direktansteuerung: 4,2kW je Verbraucher
+                for (const wb of controllableEvcs) {
+                    const safe = safeIdPart(wb.key || wb.name || wb.index || '');
+                    const capW = minPerDeviceW > 0 ? minPerDeviceW : 0;
+                    evcsCapsBySafe[safe] = capW;
+                    evcsTotalCapW += capW;
+                }
+            } else {
+                // EMS: allocate primaryW once, secondaryW for the remaining steuVE
+                // EVCS are counted individually.
+                const caps = [];
+                for (let i = 0; i < controllableEvcs.length; i++) {
+                    caps.push(dist.secondaryW);
+                }
+                // If EVCS is the primary group, promote the first EVCS to primaryW.
+                if (primaryGroup === 'evcs' && caps.length) caps[0] = dist.primaryW;
+                for (let i = 0; i < controllableEvcs.length; i++) {
+                    const wb = controllableEvcs[i];
+                    const safe = safeIdPart(wb.key || wb.name || wb.index || '');
+                    const capW = clamp(num(caps[i], 0), 0, 1e12);
+                    evcsCapsBySafe[safe] = capW;
+                    evcsTotalCapW += capW;
+                }
+            }
+        }
+
+        // Persist adapter-wide snapshot for other modules (Charging-Management)
+        this.adapter._para14a = {
+            enabled: !!cfg.para14a,
+            active: !!active,
+            source,
+            mode,
+            minPerDeviceW,
+            nSteuVE: dist.nSteuVE,
+            gzf: dist.gzf,
+            pMinW: dist.pMinW,
+            totalBudgetW: dist.totalBudgetW,
+            emsSetpointW: (typeof externalTotalSetpointW === 'number' && Number.isFinite(externalTotalSetpointW)) ? externalTotalSetpointW : 0,
+            evcsCapsBySafe,
+            evcsTotalCapW,
+        };
+
+        // Publish states
+        await this._setStateIfChanged('para14a.active', !!active);
+        await this._setStateIfChanged('para14a.mode', mode);
+        await this._setStateIfChanged('para14a.controlSource', String(source || ''));
+        await this._setStateIfChanged('para14a.minPerDeviceW', Math.round(minPerDeviceW));
+        await this._setStateIfChanged('para14a.nSteuVE', dist.nSteuVE);
+        await this._setStateIfChanged('para14a.gzf', dist.gzf);
+        await this._setStateIfChanged('para14a.pMinW', Math.round(dist.pMinW));
+        await this._setStateIfChanged('para14a.emsSetpointW', Math.round(num(externalTotalSetpointW, 0)));
+        await this._setStateIfChanged('para14a.evcsTotalCapW', Math.round(evcsTotalCapW));
+
+        // For non-EVCS consumers: write targets only when §14a is active; when inactive, restore to installed power (if provided).
+        const debug = {
+            active,
+            source,
+            mode,
+            primaryGroup,
+            evcsCount,
+            hasWP,
+            hasKlima,
+            pSumWP,
+            pSumKlima,
+            dist,
+        };
+
+        const consumerAudit = {
+            appliedCount: 0,
+            failedCount: 0,
+            skippedCount: 0,
+            writeFailedCount: 0,
+            failedConsumers: [],
+        };
+
+        // Group budgets for EMS mode
+        let wpGroupBudgetW = 0;
+        let klimaGroupBudgetW = 0;
+
+        if (active && mode === 'ems') {
+            // First determine how many non-EVCS groups we have and their default budgets
+            const nonEvcsBudgets = [];
+            if (hasWP) nonEvcsBudgets.push({ group: 'wp', budgetW: dist.secondaryW });
+            if (hasKlima) nonEvcsBudgets.push({ group: 'klima', budgetW: dist.secondaryW });
+
+            // Promote primary group if it is not EVCS
+            if (primaryGroup === 'wp') {
+                const e = nonEvcsBudgets.find(x => x.group === 'wp');
+                if (e) e.budgetW = dist.primaryW;
+            } else if (primaryGroup === 'klima') {
+                const e = nonEvcsBudgets.find(x => x.group === 'klima');
+                if (e) e.budgetW = dist.primaryW;
+            }
+
+            // Assign budgets
+            wpGroupBudgetW = (nonEvcsBudgets.find(x => x.group === 'wp')?.budgetW) || 0;
+            klimaGroupBudgetW = (nonEvcsBudgets.find(x => x.group === 'klima')?.budgetW) || 0;
+        }
+
+        // Direct-mode group budgets (Wärmepumpe/Klima > 11kW): use scaling factor * sum of connected power.
+        // This follows the BNetzA minimum power rule for Fallgruppe 2.4.1.b / 2.4.1.c.
+        const scalingFactor = 0.4;
+        const wpGroupDirectW = (active && mode === 'direct' && pSumWP > 11000) ? Math.round(Math.max(minPerDeviceW, pSumWP * scalingFactor)) : Math.round(minPerDeviceW);
+        const klimaGroupDirectW = (active && mode === 'direct' && pSumKlima > 11000) ? Math.round(Math.max(minPerDeviceW, pSumKlima * scalingFactor)) : Math.round(minPerDeviceW);
+
+        for (const l of this._loads) {
+            const base = `para14a.consumers.${l.id}`;
+            await this._setStateIfChanged(`${base}.type`, l.type);
+
+            // Determine target
+            let targetW = 0;
+
+            if (!active) {
+                // restore
+                if (l.controlType === 'limitW' && l.installedPowerW > 0) {
+                    targetW = l.installedPowerW;
+                } else {
+                    // If we cannot restore deterministically, we do not write.
+                    targetW = NaN;
+                }
+            } else if (mode === 'direct') {
+                if (l.type === 'heatPump' || l.type === 'heatingRod') targetW = wpGroupDirectW;
+                else if (l.type === 'airCondition') targetW = klimaGroupDirectW;
+                else targetW = minPerDeviceW;
+            } else {
+                // EMS distribution
+                if (l.type === 'heatPump' || l.type === 'heatingRod') targetW = wpGroupBudgetW;
+                else if (l.type === 'airCondition') targetW = klimaGroupBudgetW;
+                else targetW = dist.secondaryW;
+            }
+
+            // Clamp to installed
+            if (active && l.installedPowerW > 0 && Number.isFinite(targetW)) {
+                targetW = Math.min(targetW, l.installedPowerW);
+            }
+
+            // If this is a grouped category, distribute budget proportionally across group members.
+            let perDeviceTargetW = targetW;
+            if (active && (mode === 'ems' || mode === 'direct')) {
+                if (l.type === 'heatPump' || l.type === 'heatingRod') {
+                    const sum = hpRows.reduce((s, r) => s + (r.installedPowerW > 0 ? r.installedPowerW : 0), 0);
+                    if (hpRows.length > 1 && sum > 0 && l.installedPowerW > 0) {
+                        perDeviceTargetW = targetW * (l.installedPowerW / sum);
+                    } else if (hpRows.length > 1) {
+                        perDeviceTargetW = targetW / hpRows.length;
+                    }
+                } else if (l.type === 'airCondition') {
+                    const sum = klimaRows.reduce((s, r) => s + (r.installedPowerW > 0 ? r.installedPowerW : 0), 0);
+                    if (klimaRows.length > 1 && sum > 0 && l.installedPowerW > 0) {
+                        perDeviceTargetW = targetW * (l.installedPowerW / sum);
+                    } else if (klimaRows.length > 1) {
+                        perDeviceTargetW = targetW / klimaRows.length;
+                    }
+                }
+            }
+
+            if (!Number.isFinite(perDeviceTargetW)) {
+                // Skip writing (unknown restore)
+                consumerAudit.skippedCount += 1;
+                await this._setStateIfChanged(`${base}.targetW`, 0);
+                await this._setStateIfChanged(`${base}.applied`, false);
+                await this._setStateIfChanged(`${base}.status`, 'skipped');
+                continue;
+            }
+
+            // Write
+            const ctx = { dp: this.dp, adapter: this.adapter };
+            const consumer = {
+                type: 'load',
+                key: l.id,
+                name: l.name,
+                setWKey: l.setWKey,
+                enableKey: l.enableKey,
+            };
+
+            // onOff mode: interpret targetW > 0 => enabled, 0 => disabled
+            const effectiveTargetW = (l.controlType === 'onOff') ? (active ? 0 : 1) : perDeviceTargetW;
+
+            const res = await applySetpoint(ctx, consumer, { targetW: Math.round(effectiveTargetW) });
+            const resStatus = String(res.status || '');
+            if (res.applied && resStatus !== 'skipped') {
+                consumerAudit.appliedCount += 1;
+            } else if (!res.applied) {
+                consumerAudit.failedCount += 1;
+                if (resStatus === 'write_failed' || resStatus === 'applied_partial') consumerAudit.writeFailedCount += 1;
+                if (consumerAudit.failedConsumers.length < 10) consumerAudit.failedConsumers.push(l.name || l.id);
+            }
+            await this._setStateIfChanged(`${base}.targetW`, Math.round(perDeviceTargetW > 0 ? perDeviceTargetW : 0));
+            await this._setStateIfChanged(`${base}.applied`, !!res.applied);
+            await this._setStateIfChanged(`${base}.status`, resStatus);
+        }
+
+        debug.consumerAudit = Object.assign({}, consumerAudit);
+
+        try {
+            await this._setStateIfChanged('para14a.debug', JSON.stringify(debug));
+        } catch {
+            // ignore
+        }
+
+        const auditSnapshot = this._buildAuditSnapshot({
+            active,
+            source,
+            mode,
+            requestedTotalBudgetW: dist.totalBudgetW,
+            effectiveEvcsCapW: evcsTotalCapW,
+            minPerDeviceW,
+            pMinW: dist.pMinW,
+            nSteuVE: dist.nSteuVE,
+            evcsCount,
+            evPowerW: this._getAdapterNumberFromCache('evcs.totalPowerW', 0),
+            gridPowerW: this._getAdapterNumberFromCache('ems.gridPowerW', 0),
+            consumerAppliedCount: consumerAudit.appliedCount,
+            consumerFailedCount: consumerAudit.failedCount,
+            consumerSkippedCount: consumerAudit.skippedCount,
+            consumerWriteFailedCount: consumerAudit.writeFailedCount,
+            failedConsumers: consumerAudit.failedConsumers,
+        });
+        await this._handleAuditLogging(auditSnapshot);
+    }
+}
+
+module.exports = { Para14aModule };

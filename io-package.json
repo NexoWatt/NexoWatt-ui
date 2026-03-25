@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.203",
+    "version": "0.6.204",
     "news": {
+      "0.6.204": {
+        "en": "§14a: lightweight proof/audit logging added with event snapshots under para14a.audit.* and 1-minute trace samples under para14a.trace.*. If an Influx history instance is detected, history is enabled automatically for these states. Added a note in the §14a config that 730-day retention must be configured in Influx itself. Web cache version bumped.",
+        "de": "§14a: leichtgewichtiges Nachweis-/Audit-Logging ergänzt – Ereignissnapshots unter para14a.audit.* und 1-Minuten-Verlauf unter para14a.trace.*. Wenn eine Influx-History-Instanz erkannt wird, wird die Historisierung für diese States automatisch aktiviert. Hinweis in der §14a-Konfiguration ergänzt, dass die 730-Tage-Retention in Influx selbst eingestellt werden muss. Web-Cache-Version angehoben."
+      },
       "0.6.203": {
         "en": "SmartHome Config: assisted auto-detection via the ioBroker type detector with device suggestions including source path, mapped states and targeted import. The datapoint picker in the SmartHome configuration can now also browse the ioBroker object tree with folders, breadcrumb and root/back navigation. Web cache version bumped.",
         "de": "SmartHome Config: assistierte Auto-Erkennung über den ioBroker Type-Detector mit Gerätevorschlägen inkl. Quellpfad, gemappten Zuständen und gezielter Übernahme. Der Datenpunkt-Picker in der SmartHome-Konfiguration kann jetzt zusätzlich die ioBroker-Objektstruktur mit Ordnern, Breadcrumb und Start/Zurück browsen. Web-Cache-Version angehoben."
@@ -1609,8 +1613,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.203",
+  "version": "0.6.204",
   "news": {
+    "0.6.204": {
+      "en": "§14a: lightweight proof/audit logging added with event snapshots under para14a.audit.* and 1-minute trace samples under para14a.trace.*. If an Influx history instance is detected, history is enabled automatically for these states. Added a note in the §14a config that 730-day retention must be configured in Influx itself. Web cache version bumped.",
+      "de": "§14a: leichtgewichtiges Nachweis-/Audit-Logging ergänzt – Ereignissnapshots unter para14a.audit.* und 1-Minuten-Verlauf unter para14a.trace.*. Wenn eine Influx-History-Instanz erkannt wird, wird die Historisierung für diese States automatisch aktiviert. Hinweis in der §14a-Konfiguration ergänzt, dass die 730-Tage-Retention in Influx selbst eingestellt werden muss. Web-Cache-Version angehoben."
+    },
     "0.6.203": {
       "en": "SmartHome Config: assisted auto-detection via the ioBroker type detector with device suggestions including source path, mapped states and targeted import. The datapoint picker in the SmartHome configuration can now also browse the ioBroker object tree with folders, breadcrumb and root/back navigation. Web cache version bumped.",
       "de": "SmartHome Config: assistierte Auto-Erkennung über den ioBroker Type-Detector mit Gerätevorschlägen inkl. Quellpfad, gemappten Zuständen und gezielter Übernahme. Der Datenpunkt-Picker in der SmartHome-Konfiguration kann jetzt zusätzlich die ioBroker-Objektstruktur mit Ordnern, Breadcrumb und Start/Zurück browsen. Web-Cache-Version angehoben."
