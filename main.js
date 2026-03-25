@@ -15422,110 +15422,85 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       return out;
     };
 
+    const isManagedPara14aInstance = (it) => {
+      const native = (it && it.obj && it.obj.native && typeof it.obj.native === 'object') ? it.obj.native : {};
+      return native.nexowattDedicatedPara14a === true
+        && String(native.nexowattManagedFor || '') === 'para14a'
+        && String(native.nexowattManagedBy || '') === this.namespace;
+    };
+
+    const pickSharedInfluxInstance = (instances) => {
+      const arr = Array.isArray(instances)
+        ? instances.filter((it) => !isManagedPara14aInstance(it))
+        : [];
+      if (!arr.length) return null;
+
+      const enabled = arr.filter((it) => !!(it && it.obj && it.obj.common && it.obj.common.enabled));
+      return enabled.find((it) => it.num === 0)
+        || enabled[0]
+        || arr.find((it) => it.num === 0)
+        || arr[0]
+        || null;
+    };
+
+    const disableManagedDedicatedInstances = async (instances, keepInstanceId = '') => {
+      const keep = this._nwTrimId(keepInstanceId);
+      for (const it of Array.isArray(instances) ? instances : []) {
+        if (!isManagedPara14aInstance(it)) continue;
+        if (String(it.instanceId || '') === keep) continue;
+        try {
+          await this.nwSimSetInstanceEnabled(it.instanceId, false);
+          this.log.info(`[§14a/audit] Deaktivierte dedizierte ${it.instanceId}; Nachweislogging nutzt jetzt ${keep || 'die gemeinsame Historie'}.`);
+        } catch (e) {
+          this.log.debug(`[§14a/audit] Konnte dedizierte Instanz ${it.instanceId} nicht deaktivieren: ${e && e.message ? e.message : e}`);
+        }
+      }
+    };
+
     try {
-      const existingInstances = await this._nwListAdapterInstances('influxdb');
-      const dedicated = existingInstances.find((it) => {
-        const native = (it && it.obj && it.obj.native && typeof it.obj.native === 'object') ? it.obj.native : {};
-        return native.nexowattDedicatedPara14a === true
-          && String(native.nexowattManagedFor || '') === 'para14a'
-          && String(native.nexowattManagedBy || '') === this.namespace;
-      });
+      const configured = this._nwTrimId(this.config && this.config.history && this.config.history.instance);
+      const existingInfluxInstances = await this._nwListAdapterInstances('influxdb');
+      const sharedInflux = pickSharedInfluxInstance(existingInfluxInstances);
 
-      if (dedicated) {
-        try {
-          if (!(dedicated.obj && dedicated.obj.common && dedicated.obj.common.enabled)) {
-            await this.nwSimSetInstanceEnabled(dedicated.instanceId, true);
-          }
-        } catch (_e) {}
-        return finish({
-          instance: dedicated.instanceId,
-          dedicated: true,
-          autoProvisioned: true,
-          provisionState: 'reused',
-        });
-      }
+      let instance = '';
+      let provisionState = 'missing';
+      let provisionError = '';
 
-      const adapterObj = await this.getForeignObjectAsync('system.adapter.influxdb').catch(() => null);
-      const preferredConfigured = this._nwTrimId(this.config && this.config.history && this.config.history.instance);
-
-      let templateObj = null;
-      let templateInstance = '';
-      if (preferredConfigured) {
-        try {
-          const obj = await this.getForeignObjectAsync(`system.adapter.${preferredConfigured}`);
-          if (obj && typeof obj === 'object') {
-            templateObj = obj;
-            templateInstance = preferredConfigured;
-          }
-        } catch (_e) {}
-      }
-
-      if (!templateObj && existingInstances.length) {
-        const preferredExisting = existingInstances.find((it) => {
-          const native = (it && it.obj && it.obj.native && typeof it.obj.native === 'object') ? it.obj.native : {};
-          return native.nexowattDedicatedPara14a !== true;
-        }) || existingInstances[0];
-        if (preferredExisting) {
-          templateObj = preferredExisting.obj;
-          templateInstance = preferredExisting.instanceId;
+      if (configured) {
+        const configuredObj = await this.getForeignObjectAsync(`system.adapter.${configured}`).catch(() => null);
+        if (configuredObj && typeof configuredObj === 'object') {
+          instance = configured;
+          provisionState = configured.startsWith('influxdb.') ? 'shared_configured' : 'shared_configured_external';
+        } else if (sharedInflux) {
+          instance = sharedInflux.instanceId;
+          provisionState = 'configured_missing_fallback_shared';
+          provisionError = `Konfigurierte History-Instanz nicht gefunden: ${configured}`;
+        } else {
+          provisionState = 'configured_missing';
+          provisionError = `Konfigurierte History-Instanz nicht gefunden: ${configured}`;
         }
+      } else if (sharedInflux) {
+        instance = sharedInflux.instanceId;
+        provisionState = instance === 'influxdb.0' ? 'shared_influxdb_0' : 'shared_detected';
       }
 
-      if (!adapterObj && !templateObj) {
-        const detected = String((await this._nwDetectInfluxInstance()) || '').trim();
-        if (detected) {
-          return finish({ instance: detected, provisionState: 'fallback_existing' });
-        }
-        return finish({ provisionState: 'adapter_missing' });
+      if (instance) {
+        await disableManagedDedicatedInstances(existingInfluxInstances, instance);
       }
-
-      const ownHost = await this._nwGetOwnHostName();
-      const preferredBase = 20 + (Number.isFinite(Number(this.instance)) ? Math.max(0, Math.round(Number(this.instance))) : 0);
-      const freeNum = this._nwPickFreeAdapterInstanceNumber(existingInstances.map((it) => it.num), preferredBase);
-      if (freeNum < 0) {
-        const fallback = preferredConfigured || (existingInstances[0] && existingInstances[0].instanceId) || '';
-        return finish({
-          instance: fallback,
-          dedicated: false,
-          autoProvisioned: false,
-          provisionState: fallback ? 'no_free_slot_fallback' : 'no_free_slot',
-        });
-      }
-
-      const baseCommon = (templateObj && templateObj.common && typeof templateObj.common === 'object')
-        ? templateObj.common
-        : (adapterObj && adapterObj.common && typeof adapterObj.common === 'object') ? adapterObj.common : {};
-      const baseNative = (templateObj && templateObj.native && typeof templateObj.native === 'object')
-        ? templateObj.native
-        : (adapterObj && adapterObj.native && typeof adapterObj.native === 'object') ? adapterObj.native : {};
-
-      const newInstanceId = `influxdb.${freeNum}`;
-      const newObjId = `system.adapter.${newInstanceId}`;
-      const newObj = {
-        type: 'instance',
-        common: this._nwBuildPara14aInfluxCommon(baseCommon, ownHost),
-        native: this._nwBuildPara14aInfluxNative(baseNative, {
-          templateInstance,
-          provisionedFrom: templateInstance ? 'existing_instance' : 'adapter_defaults',
-        }),
-      };
-
-      await this.setForeignObjectAsync(newObjId, newObj);
-      try { await this.nwSimSetInstanceEnabled(newInstanceId, true); } catch (_e) {}
 
       return finish({
-        instance: newInstanceId,
-        dedicated: true,
-        autoProvisioned: true,
-        provisionState: templateInstance ? 'created_from_template' : 'created_defaults',
-      });
-    } catch (e) {
-      const fallback = String((await this._nwDetectInfluxInstance()) || '').trim();
-      return finish({
-        instance: fallback,
+        instance,
         dedicated: false,
         autoProvisioned: false,
-        provisionState: fallback ? 'error_fallback_existing' : 'error',
+        provisionState,
+        provisionError,
+      });
+    } catch (e) {
+      return finish({
+        instance: '',
+        dedicated: false,
+        autoProvisioned: false,
+        provisionState: 'error',
         provisionError: e && e.message ? e.message : String(e),
       });
     }

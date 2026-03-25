@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.205",
+    "version": "0.6.206",
     "news": {
+      "0.6.206": {
+        "de": "§14a-Log/Nachweis nutzt jetzt bewusst die bestehende Historie/Influx-Instanz (standardmäßig influxdb.0) statt eine separate §14a-Instanz anzulegen. Bereits von NexoWatt angelegte dedizierte §14a-Influx-Instanzen werden deaktiviert, damit alles sauber auf einer Historie bleibt. Einstellungen/Log-Hinweise entsprechend angepasst. Web-Cache-Version angehoben.",
+        "en": "§14a proof/audit logging now intentionally uses the existing history/Influx instance (by default influxdb.0) instead of provisioning a separate §14a instance. Dedicated §14a Influx instances previously created by NexoWatt are disabled so everything stays on one shared history. Settings/log hints updated accordingly. Web cache version bumped."
+      },
       "0.6.205": {
         "de": "Einstellungen: Neue Unterseite „Log / Nachweis“ mit §14a-Status, Historisierung und Nachweisdaten. §14a: Dedizierte InfluxDB-Instanz kann jetzt automatisch für den Nachweis bereitgestellt werden, inklusive 730-Tage-Retention, Status- und Fehleranzeige im Frontend. Web-Cache-Version angehoben.",
         "en": "Settings: new “Log / Proof” subpage with §14a status, history and audit data. §14a: a dedicated InfluxDB instance can now be auto-provisioned for proof logging, including 730-day retention plus frontend status and error display. Web cache version bumped."
@@ -1617,8 +1621,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.205",
+  "version": "0.6.206",
   "news": {
+    "0.6.206": {
+      "de": "§14a-Log/Nachweis nutzt jetzt bewusst die bestehende Historie/Influx-Instanz (standardmäßig influxdb.0) statt eine separate §14a-Instanz anzulegen. Bereits von NexoWatt angelegte dedizierte §14a-Influx-Instanzen werden deaktiviert, damit alles sauber auf einer Historie bleibt. Einstellungen/Log-Hinweise entsprechend angepasst. Web-Cache-Version angehoben.",
+      "en": "§14a proof/audit logging now intentionally uses the existing history/Influx instance (by default influxdb.0) instead of provisioning a separate §14a instance. Dedicated §14a Influx instances previously created by NexoWatt are disabled so everything stays on one shared history. Settings/log hints updated accordingly. Web cache version bumped."
+    },
     "0.6.204": {
       "en": "§14a: lightweight proof/audit logging added with event snapshots under para14a.audit.* and 1-minute trace samples under para14a.trace.*. If an Influx history instance is detected, history is enabled automatically for these states. Added a note in the §14a config that 730-day retention must be configured in Influx itself. Web cache version bumped.",
       "de": "§14a: leichtgewichtiges Nachweis-/Audit-Logging ergänzt – Ereignissnapshots unter para14a.audit.* und 1-Minuten-Verlauf unter para14a.trace.*. Wenn eine Influx-History-Instanz erkannt wird, wird die Historisierung für diese States automatisch aktiviert. Hinweis in der §14a-Konfiguration ergänzt, dass die 730-Tage-Retention in Influx selbst eingestellt werden muss. Web-Cache-Version angehoben."

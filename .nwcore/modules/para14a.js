@@ -235,12 +235,12 @@ class Para14aModule extends BaseModule {
             native: {},
         });
 
-        await mk('para14a.audit.historyEnabled', 'Historisierung erkannt', 'boolean', 'indicator', false);
+        await mk('para14a.audit.historyEnabled', 'Historie/Influx erkannt', 'boolean', 'indicator', false);
         await mk('para14a.audit.historyInstance', 'Historien-Instanz', 'string', 'text', false);
-        await mk('para14a.audit.historyDedicated', 'Dedizierte §14a Historie', 'boolean', 'indicator', false);
-        await mk('para14a.audit.historyAutoProvisioned', 'Historie automatisch bereitgestellt', 'boolean', 'indicator', false);
-        await mk('para14a.audit.historyProvisionState', 'Historie Bereitstellungsstatus', 'string', 'text', false);
-        await mk('para14a.audit.historyProvisionError', 'Historie Bereitstellungsfehler', 'string', 'text', false);
+        await mk('para14a.audit.historyDedicated', 'Eigene §14a Influx-Instanz', 'boolean', 'indicator', false);
+        await mk('para14a.audit.historyAutoProvisioned', 'Separate Influx-Bereitstellung', 'boolean', 'indicator', false);
+        await mk('para14a.audit.historyProvisionState', 'Historien-Bindungsstatus', 'string', 'text', false);
+        await mk('para14a.audit.historyProvisionError', 'Historien-Hinweis/Fehler', 'string', 'text', false);
         await mk('para14a.audit.retentionTargetDays', 'Retention-Ziel (Tage)', 'number', 'value.interval', false, 'd');
         await mk('para14a.audit.sessionActive', '§14a Sitzung aktiv', 'boolean', 'indicator', false);
         await mk('para14a.audit.currentSessionId', 'Aktuelle/letzte Sitzungs-ID', 'string', 'text', false);

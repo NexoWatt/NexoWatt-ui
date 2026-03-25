@@ -1,3 +1,10 @@
+## 0.6.206
+
+- §14a Nachweis-/Audit-Logging nutzt jetzt bewusst die bestehende Historie/Influx-Instanz (standardmäßig `influxdb.0`) statt eine separate §14a-Instanz anzulegen.
+- Bereits von NexoWatt automatisch angelegte dedizierte §14a-Influx-Instanzen werden deaktiviert, damit alle Logs sauber auf einer gemeinsamen Historie bleiben.
+- Einstellungen → Log / Nachweis: Hinweise und Beschriftungen auf gemeinsame Historie angepasst.
+- Web-Cache-Version angehoben.
+
 ## 0.6.205
 - Einstellungen: Bereich in Seiten aufgeteilt und eine eigene Unterseite `Log / Nachweis` für §14a-Status, Historisierung und Auditdaten ergänzt.
 - §14a: Dedizierte InfluxDB-Instanz wird bei Bedarf automatisch bereitgestellt bzw. wiederverwendet; 730-Tage-Retention wird direkt vorbelegt und der Bereitstellungsstatus im Frontend angezeigt.

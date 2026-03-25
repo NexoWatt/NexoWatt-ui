@@ -2598,7 +2598,18 @@ function renderSettingsLogPanel(){
   set('settingsPara14aHistoryInstance', _nwSettingsText(_nwSettingsStateValue('para14a.audit.historyInstance')));
   set('settingsPara14aHistoryDedicated', _nwSettingsBool(_nwSettingsStateValue('para14a.audit.historyDedicated')));
   set('settingsPara14aHistoryAutoProvisioned', _nwSettingsBool(_nwSettingsStateValue('para14a.audit.historyAutoProvisioned')));
-  set('settingsPara14aHistoryProvisionState', _nwSettingsText(_nwSettingsStateValue('para14a.audit.historyProvisionState')));
+  const rawHistoryProvisionState = String(_nwSettingsStateValue('para14a.audit.historyProvisionState') ?? '').trim();
+  const historyProvisionStateText = ({
+    shared_influxdb_0: 'gemeinsame Historie (influxdb.0)',
+    shared_detected: 'gemeinsame Historie (erkannte Influx-Instanz)',
+    shared_configured: 'gemeinsame Historie (konfiguriert)',
+    shared_configured_external: 'gemeinsame Historie (konfigurierte History-Instanz)',
+    configured_missing_fallback_shared: 'Fallback auf gemeinsame Historie',
+    configured_missing: 'konfigurierte Historie fehlt',
+    missing: 'keine Historie erkannt',
+    error: 'Fehler',
+  }[rawHistoryProvisionState] || _nwSettingsText(rawHistoryProvisionState));
+  set('settingsPara14aHistoryProvisionState', historyProvisionStateText);
   set('settingsPara14aRetentionDays', _nwSettingsDays(_nwSettingsStateValue('para14a.audit.retentionTargetDays')));
   set('settingsPara14aSessionActive', _nwSettingsBool(_nwSettingsStateValue('para14a.audit.sessionActive')));
   set('settingsPara14aSessionId', _nwSettingsText(_nwSettingsStateValue('para14a.audit.currentSessionId')));
@@ -2639,7 +2650,7 @@ function renderSettingsLogPanel(){
   const historyErrorEl = document.getElementById('settingsPara14aHistoryProvisionError');
   if (historyErrorEl) {
     const errTxt = _nwSettingsText(_nwSettingsStateValue('para14a.audit.historyProvisionError'), '');
-    historyErrorEl.textContent = errTxt ? ('Bereitstellungsfehler: ' + errTxt) : '';
+    historyErrorEl.textContent = errTxt ? ('Historienhinweis: ' + errTxt) : '';
     historyErrorEl.style.display = errTxt ? '' : 'none';
   }
 
