@@ -4,6 +4,7 @@
 const utils = require('@iobroker/adapter-core');
 const express = require('express');
 const path = require('path');
+const os = require('os');
 // NOTE: Installer/App-Center configurations can become large (e.g. many EVCS/Ladepunkte).
 // The default Express JSON limit (100kb) is too small and causes "Payload Too Large" and failed saves.
 const bodyParser = express.json({ limit: '5mb' });
@@ -15283,6 +15284,251 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const hcfg = (this.config && this.config.history) || {};
     const inst = this._nwTrimId(hcfg.instance) || this._nwTrimId(this._nwDetectedInfluxInstance) || 'influxdb.0';
     return inst;
+  }
+
+  _nwGetPara14aInfluxTargetDays() {
+    return 730;
+  }
+
+  _nwGetPara14aInfluxTargetRetentionSeconds() {
+    return this._nwGetPara14aInfluxTargetDays() * 24 * 60 * 60;
+  }
+
+  _nwGetPara14aInfluxDbName() {
+    const inst = Number.isFinite(Number(this.instance)) ? Math.max(0, Math.round(Number(this.instance))) : 0;
+    return `nexowatt_para14a_${inst}`;
+  }
+
+  async _nwGetOwnHostName() {
+    try {
+      const direct = this._nwTrimId(this.host || '');
+      if (direct) return direct;
+    } catch (_e) {}
+
+    try {
+      const obj = await this.getForeignObjectAsync(`system.adapter.${this.name}.${this.instance}`);
+      const fromObj = this._nwTrimId(obj && obj.common && obj.common.host);
+      if (fromObj) return fromObj;
+    } catch (_e) {}
+
+    try {
+      const localHost = this._nwTrimId(os.hostname());
+      if (localHost) return localHost;
+    } catch (_e) {}
+
+    return '';
+  }
+
+  async _nwListAdapterInstances(adapterName) {
+    const out = [];
+    try {
+      const name = this._nwTrimId(adapterName);
+      if (!name) return out;
+      const objs = await this.getForeignObjectsAsync(`system.adapter.${name}.*`, 'instance').catch(() => ({}));
+      const prefix = `${name}.`;
+      for (const [id, obj] of Object.entries(objs || {})) {
+        if (!obj || typeof obj !== 'object') continue;
+        const inst = String(id || '').replace(/^system\.adapter\./, '').trim();
+        if (!inst.startsWith(prefix)) continue;
+        const suffix = inst.slice(prefix.length);
+        const num = Number(suffix);
+        if (!Number.isInteger(num) || num < 0) continue;
+        out.push({ id, instanceId: inst, num, obj });
+      }
+      out.sort((a, b) => a.num - b.num);
+    } catch (_e) {}
+    return out;
+  }
+
+  _nwPickFreeAdapterInstanceNumber(existingNums, preferred = 20) {
+    const used = new Set(
+      (Array.isArray(existingNums) ? existingNums : [])
+        .map((n) => Number(n))
+        .filter((n) => Number.isInteger(n) && n >= 0)
+    );
+
+    const start = Number.isInteger(Number(preferred)) && Number(preferred) >= 0
+      ? Math.round(Number(preferred))
+      : 20;
+
+    for (let n = start; n <= 199; n++) {
+      if (!used.has(n)) return n;
+    }
+    for (let n = 0; n < start; n++) {
+      if (!used.has(n)) return n;
+    }
+    return -1;
+  }
+
+  _nwBuildPara14aInfluxNative(baseNative = {}, meta = {}) {
+    const native = JSON.parse(JSON.stringify((baseNative && typeof baseNative === 'object') ? baseNative : {}));
+    const targetDays = this._nwGetPara14aInfluxTargetDays();
+
+    native.dbname = this._nwGetPara14aInfluxDbName();
+    native.retention = this._nwGetPara14aInfluxTargetRetentionSeconds();
+    native.customRetentionDuration = targetDays;
+    native.enableLogging = false;
+    native.nexowattDedicatedPara14a = true;
+    native.nexowattManagedFor = 'para14a';
+    native.nexowattManagedBy = this.namespace;
+    native.nexowattCreatedAt = Date.now();
+    native.nexowattTemplateInstance = this._nwTrimId(meta && meta.templateInstance);
+    native.nexowattProvisionedFrom = this._nwTrimId(meta && meta.provisionedFrom) || 'adapter_defaults';
+
+    const dockerInflux = (native.dockerInflux && typeof native.dockerInflux === 'object') ? native.dockerInflux : {};
+    native.dockerInflux = Object.assign({}, dockerInflux, { enabled: false });
+
+    const dockerGrafana = (native.dockerGrafana && typeof native.dockerGrafana === 'object') ? native.dockerGrafana : {};
+    native.dockerGrafana = Object.assign({}, dockerGrafana, { enabled: false });
+
+    return native;
+  }
+
+  _nwBuildPara14aInfluxCommon(baseCommon = {}, host = '') {
+    const common = JSON.parse(JSON.stringify((baseCommon && typeof baseCommon === 'object') ? baseCommon : {}));
+    common.name = 'influxdb';
+    common.enabled = true;
+    if (this._nwTrimId(host)) common.host = this._nwTrimId(host);
+    if (!this._nwTrimId(common.mode)) common.mode = 'daemon';
+    if (!this._nwTrimId(common.loglevel)) common.loglevel = 'info';
+    common.title = 'InfluxDB (§14a)';
+    const titleLang = (common.titleLang && typeof common.titleLang === 'object') ? common.titleLang : {};
+    common.titleLang = Object.assign({}, titleLang, {
+      en: 'InfluxDB (§14a)',
+      de: 'InfluxDB (§14a)',
+    });
+    return common;
+  }
+
+  async _nwEnsurePara14aInfluxInstance(force = false) {
+    const now = Date.now();
+    const cached = this._nwPara14aInfluxProvision;
+    if (!force && cached && cached.result && (now - Number(cached.ts || 0) < 10 * 60 * 1000)) {
+      return cached.result;
+    }
+
+    const finish = (partial = {}) => {
+      const out = Object.assign({
+        instance: '',
+        ready: false,
+        dedicated: false,
+        autoProvisioned: false,
+        provisionState: 'missing',
+        provisionError: '',
+      }, partial || {});
+      out.instance = this._nwTrimId(out.instance);
+      out.ready = !!out.instance && typeof this._nwEnsureInfluxCustom === 'function';
+      this._nwPara14aInfluxProvision = { ts: Date.now(), result: out };
+      return out;
+    };
+
+    try {
+      const existingInstances = await this._nwListAdapterInstances('influxdb');
+      const dedicated = existingInstances.find((it) => {
+        const native = (it && it.obj && it.obj.native && typeof it.obj.native === 'object') ? it.obj.native : {};
+        return native.nexowattDedicatedPara14a === true
+          && String(native.nexowattManagedFor || '') === 'para14a'
+          && String(native.nexowattManagedBy || '') === this.namespace;
+      });
+
+      if (dedicated) {
+        try {
+          if (!(dedicated.obj && dedicated.obj.common && dedicated.obj.common.enabled)) {
+            await this.nwSimSetInstanceEnabled(dedicated.instanceId, true);
+          }
+        } catch (_e) {}
+        return finish({
+          instance: dedicated.instanceId,
+          dedicated: true,
+          autoProvisioned: true,
+          provisionState: 'reused',
+        });
+      }
+
+      const adapterObj = await this.getForeignObjectAsync('system.adapter.influxdb').catch(() => null);
+      const preferredConfigured = this._nwTrimId(this.config && this.config.history && this.config.history.instance);
+
+      let templateObj = null;
+      let templateInstance = '';
+      if (preferredConfigured) {
+        try {
+          const obj = await this.getForeignObjectAsync(`system.adapter.${preferredConfigured}`);
+          if (obj && typeof obj === 'object') {
+            templateObj = obj;
+            templateInstance = preferredConfigured;
+          }
+        } catch (_e) {}
+      }
+
+      if (!templateObj && existingInstances.length) {
+        const preferredExisting = existingInstances.find((it) => {
+          const native = (it && it.obj && it.obj.native && typeof it.obj.native === 'object') ? it.obj.native : {};
+          return native.nexowattDedicatedPara14a !== true;
+        }) || existingInstances[0];
+        if (preferredExisting) {
+          templateObj = preferredExisting.obj;
+          templateInstance = preferredExisting.instanceId;
+        }
+      }
+
+      if (!adapterObj && !templateObj) {
+        const detected = String((await this._nwDetectInfluxInstance()) || '').trim();
+        if (detected) {
+          return finish({ instance: detected, provisionState: 'fallback_existing' });
+        }
+        return finish({ provisionState: 'adapter_missing' });
+      }
+
+      const ownHost = await this._nwGetOwnHostName();
+      const preferredBase = 20 + (Number.isFinite(Number(this.instance)) ? Math.max(0, Math.round(Number(this.instance))) : 0);
+      const freeNum = this._nwPickFreeAdapterInstanceNumber(existingInstances.map((it) => it.num), preferredBase);
+      if (freeNum < 0) {
+        const fallback = preferredConfigured || (existingInstances[0] && existingInstances[0].instanceId) || '';
+        return finish({
+          instance: fallback,
+          dedicated: false,
+          autoProvisioned: false,
+          provisionState: fallback ? 'no_free_slot_fallback' : 'no_free_slot',
+        });
+      }
+
+      const baseCommon = (templateObj && templateObj.common && typeof templateObj.common === 'object')
+        ? templateObj.common
+        : (adapterObj && adapterObj.common && typeof adapterObj.common === 'object') ? adapterObj.common : {};
+      const baseNative = (templateObj && templateObj.native && typeof templateObj.native === 'object')
+        ? templateObj.native
+        : (adapterObj && adapterObj.native && typeof adapterObj.native === 'object') ? adapterObj.native : {};
+
+      const newInstanceId = `influxdb.${freeNum}`;
+      const newObjId = `system.adapter.${newInstanceId}`;
+      const newObj = {
+        type: 'instance',
+        common: this._nwBuildPara14aInfluxCommon(baseCommon, ownHost),
+        native: this._nwBuildPara14aInfluxNative(baseNative, {
+          templateInstance,
+          provisionedFrom: templateInstance ? 'existing_instance' : 'adapter_defaults',
+        }),
+      };
+
+      await this.setForeignObjectAsync(newObjId, newObj);
+      try { await this.nwSimSetInstanceEnabled(newInstanceId, true); } catch (_e) {}
+
+      return finish({
+        instance: newInstanceId,
+        dedicated: true,
+        autoProvisioned: true,
+        provisionState: templateInstance ? 'created_from_template' : 'created_defaults',
+      });
+    } catch (e) {
+      const fallback = String((await this._nwDetectInfluxInstance()) || '').trim();
+      return finish({
+        instance: fallback,
+        dedicated: false,
+        autoProvisioned: false,
+        provisionState: fallback ? 'error_fallback_existing' : 'error',
+        provisionError: e && e.message ? e.message : String(e),
+      });
+    }
   }
 
   _nwGetCanonicalHistorieId(legacyKey) {

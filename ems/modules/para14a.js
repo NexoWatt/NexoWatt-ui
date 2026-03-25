@@ -237,6 +237,10 @@ class Para14aModule extends BaseModule {
 
         await mk('para14a.audit.historyEnabled', 'Historisierung erkannt', 'boolean', 'indicator', false);
         await mk('para14a.audit.historyInstance', 'Historien-Instanz', 'string', 'text', false);
+        await mk('para14a.audit.historyDedicated', 'Dedizierte §14a Historie', 'boolean', 'indicator', false);
+        await mk('para14a.audit.historyAutoProvisioned', 'Historie automatisch bereitgestellt', 'boolean', 'indicator', false);
+        await mk('para14a.audit.historyProvisionState', 'Historie Bereitstellungsstatus', 'string', 'text', false);
+        await mk('para14a.audit.historyProvisionError', 'Historie Bereitstellungsfehler', 'string', 'text', false);
         await mk('para14a.audit.retentionTargetDays', 'Retention-Ziel (Tage)', 'number', 'value.interval', false, 'd');
         await mk('para14a.audit.sessionActive', '§14a Sitzung aktiv', 'boolean', 'indicator', false);
         await mk('para14a.audit.currentSessionId', 'Aktuelle/letzte Sitzungs-ID', 'string', 'text', false);
@@ -279,12 +283,36 @@ class Para14aModule extends BaseModule {
 
     async _setupAuditHistory() {
         let historyInstance = '';
+        let dedicatedHistory = false;
+        let autoProvisioned = false;
+        let provisionState = '';
+        let provisionError = '';
+
         try {
-            if (this.adapter && typeof this.adapter._nwDetectInfluxInstance === 'function') {
-                historyInstance = String((await this.adapter._nwDetectInfluxInstance()) || '').trim();
+            if (this.adapter && typeof this.adapter._nwEnsurePara14aInfluxInstance === 'function') {
+                const historyInfo = await this.adapter._nwEnsurePara14aInfluxInstance();
+                if (historyInfo && typeof historyInfo === 'object') {
+                    historyInstance = String(historyInfo.instance || '').trim();
+                    dedicatedHistory = historyInfo.dedicated === true;
+                    autoProvisioned = historyInfo.autoProvisioned === true;
+                    provisionState = String(historyInfo.provisionState || '').trim();
+                    provisionError = String(historyInfo.provisionError || '').trim();
+                }
             }
-        } catch {
-            historyInstance = '';
+        } catch (e) {
+            provisionState = provisionState || 'provision_error';
+            provisionError = String(e?.message || e || '').trim();
+        }
+
+        if (!historyInstance) {
+            try {
+                if (this.adapter && typeof this.adapter._nwDetectInfluxInstance === 'function') {
+                    historyInstance = String((await this.adapter._nwDetectInfluxInstance()) || '').trim();
+                    if (historyInstance && !provisionState) provisionState = 'fallback_existing';
+                }
+            } catch {
+                historyInstance = '';
+            }
         }
 
         const historyReady = !!historyInstance && !!(this.adapter && typeof this.adapter._nwEnsureInfluxCustom === 'function');
@@ -293,6 +321,10 @@ class Para14aModule extends BaseModule {
 
         await this._setStateIfChanged('para14a.audit.historyEnabled', historyReady);
         await this._setStateIfChanged('para14a.audit.historyInstance', historyInstance);
+        await this._setStateIfChanged('para14a.audit.historyDedicated', dedicatedHistory);
+        await this._setStateIfChanged('para14a.audit.historyAutoProvisioned', autoProvisioned);
+        await this._setStateIfChanged('para14a.audit.historyProvisionState', provisionState);
+        await this._setStateIfChanged('para14a.audit.historyProvisionError', provisionError);
         await this._setStateIfChanged('para14a.audit.retentionTargetDays', this._audit.retentionTargetDays);
 
         if (!historyReady) return;
@@ -300,6 +332,10 @@ class Para14aModule extends BaseModule {
         const metaIds = [
             'para14a.audit.historyEnabled',
             'para14a.audit.historyInstance',
+            'para14a.audit.historyDedicated',
+            'para14a.audit.historyAutoProvisioned',
+            'para14a.audit.historyProvisionState',
+            'para14a.audit.historyProvisionError',
             'para14a.audit.retentionTargetDays',
         ];
 

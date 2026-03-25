@@ -39,9 +39,38 @@
 
 <script src="/static/app.js"></script>
 
-<section class="settings-wrap" data-tab-content="settings">
-  <section class="card">
-    <div class="card-header"><span>Allgemeine Einstellungen</span></div>
+<section class="settings-wrap" data-tab-content="settings" data-settings-page="general">
+  <div class="nw-settings-layout">
+    <aside class="card nw-settings-nav-card">
+      <div class="card-header"><span>Seiten</span></div>
+      <div class="nw-settings-nav">
+        <button class="nw-settings-nav__item is-active" type="button" data-settings-page-target="general">
+          <span class="nw-settings-nav__title">Allgemein</span>
+          <small>Installateur &amp; Wetter</small>
+        </button>
+        <button class="nw-settings-nav__item" type="button" data-settings-page-target="notify">
+          <span class="nw-settings-nav__title">Benachrichtigungen</span>
+          <small>E-Mail, Überwachung, Tests</small>
+        </button>
+        <button class="nw-settings-nav__item" type="button" data-settings-page-target="tariff">
+          <span class="nw-settings-nav__title">Dynamische Zeittarife</span>
+          <small>Tarif, Netzentgelt, Saisonprofil</small>
+        </button>
+        <button class="nw-settings-nav__item" type="button" data-settings-page-target="rfid">
+          <span class="nw-settings-nav__title">RFID</span>
+          <small>Whitelist, Lernen, Abrechnung</small>
+        </button>
+        <button class="nw-settings-nav__item" type="button" data-settings-page-target="log">
+          <span class="nw-settings-nav__title">Log / §14a</span>
+          <small>Nachweis, Historie, Ereignisse</small>
+        </button>
+      </div>
+    </aside>
+
+    <div class="nw-settings-main">
+      <section class="card nw-settings-page" data-settings-panel="general">
+        <div class="card-header"><span>Allgemein</span></div>
+        <div class="form">
     <div class="row" style="align-items:center; margin-top:10px;">
       <span>Installateur</span>
       <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex:1 1 auto">
@@ -49,7 +78,55 @@
       </div>
     </div>
 
-    <div class="form">
+          <div class="nw-settings-note">
+            Hier liegen allgemeine Frontend-Einstellungen und die Wetter-App. Weitere Themen findest du links sauber in eigenen Seiten.
+          </div>
+
+          <div class="nw-settings-section-title">Wetter</div>
+      <label class="row"><span>Wetter-App</span>
+        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_weather_enabled">
+          <button type="button" data-value="false">Aus</button>
+          <button type="button" data-value="true">An</button>
+        </div>
+        <input type="checkbox" class="nw-toggle-hidden" id="s_weather_enabled" data-scope="settings" data-key="weatherEnabled">
+      </label>
+
+      <div id="weather_settings_block" class="nw-weather-settings" style="display:none">
+        <div class="row" style="align-items:center">
+          <span>Nutzungsart</span>
+          <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-weather-mode" id="weatherUsageButtons" style="justify-content:flex-end;gap:8px">
+            <button type="button" data-value="private">Privat</button>
+            <button type="button" data-value="commercial">Gewerblich</button>
+          </div>
+          <input type="hidden" id="s_weather_usage" data-scope="settings" data-key="weatherUsageMode" value="private">
+        </div>
+
+        <small id="weatherHintPrivate" style="display:block;margin-top:6px;color:var(--muted)">Für private Nutzung kostenlos. Standort wird automatisch aus der Anlagen-/Systemkonfiguration übernommen.</small>
+        <small id="weatherHintCommercial" style="display:none;margin-top:6px;color:var(--muted)">Für gewerbliche/betriebliche Nutzung ist ein eigener API-Schlüssel erforderlich. Standort wird automatisch aus der Anlagen-/Systemkonfiguration übernommen. Die Verantwortung für die rechtmäßige Nutzung liegt beim Betreiber.</small>
+
+        <div id="weatherApiKeyRow" style="display:none;margin-top:10px">
+          <label class="row"><span>API-Schlüssel</span>
+            <input type="password" id="s_weather_apiKey" data-scope="settings" data-key="weatherApiKey" placeholder="API-Key">
+          </label>
+          <small id="weatherApiKeyMissing" style="display:none;margin-top:6px;color:var(--muted)">Kein API-Schlüssel gesetzt – Wetterdaten werden nicht abgefragt.</small>
+        </div>
+
+        <small class="muted" style="display:block;margin-top:8px;color:var(--muted)">
+          Hinweis &amp; Informationen: Wetterdaten werden vom externen Dienst Open‑Meteo bereitgestellt. Weitere Details finden Sie unter
+          <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">open-meteo.com</a>.
+        </small>
+      </div>
+
+      <!-- Installateur-/Admin-Konfiguration erfolgt außerhalb des Endkunden-Dashboards -->
+        </div>
+      </section>
+
+      <section class="card nw-settings-page hidden" data-settings-panel="notify">
+        <div class="card-header"><span>Benachrichtigungen</span></div>
+        <div class="form">
+          <div class="nw-settings-note">
+            E-Mail-Benachrichtigungen, Überwachung und Testversand für den laufenden Betrieb.
+          </div>
       <label class="row"><span>Benachrichtigungen</span>
         <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_notify"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
         <input type="checkbox" class="nw-toggle-hidden" id="s_notify" data-scope="settings" data-key="notifyEnabled">
@@ -91,7 +168,15 @@
         </div>
       </div>
       <small id="notifyTestMsg" style="opacity:.75; display:block; margin-top:-6px;"></small>
+        </div>
+      </section>
 
+      <section class="card nw-settings-page hidden" data-settings-panel="tariff">
+        <div class="card-header"><span>Dynamische Zeittarife</span></div>
+        <div class="form">
+          <div class="nw-settings-note">
+            Tarif-Optimierung, zeitvariables Netzentgelt und das PV-Saisonprofil sind hier gebündelt, damit die Regelung schneller auffindbar bleibt.
+          </div>
       <label class="row"><span>Dynamischer Zeittarif</span>
         <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_dyn_toggle"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
         <input type="checkbox" class="nw-toggle-hidden" id="s_dyn_toggle" data-scope="settings" data-key="dynamicTariff">
@@ -297,48 +382,10 @@
           </div>
         </div>
       </div>
-<hr style="margin:14px 0;border:0;border-top:1px solid rgba(255,255,255,.08)"/>
-
-      <div class="subhead">Wetter</div>
-
-      <label class="row"><span>Wetter-App</span>
-        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_weather_enabled">
-          <button type="button" data-value="false">Aus</button>
-          <button type="button" data-value="true">An</button>
         </div>
-        <input type="checkbox" class="nw-toggle-hidden" id="s_weather_enabled" data-scope="settings" data-key="weatherEnabled">
-      </label>
+      </section>
 
-      <div id="weather_settings_block" class="nw-weather-settings" style="display:none">
-        <div class="row" style="align-items:center">
-          <span>Nutzungsart</span>
-          <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-weather-mode" id="weatherUsageButtons" style="justify-content:flex-end;gap:8px">
-            <button type="button" data-value="private">Privat</button>
-            <button type="button" data-value="commercial">Gewerblich</button>
-          </div>
-          <input type="hidden" id="s_weather_usage" data-scope="settings" data-key="weatherUsageMode" value="private">
-        </div>
-
-        <small id="weatherHintPrivate" style="display:block;margin-top:6px;color:var(--muted)">Für private Nutzung kostenlos. Standort wird automatisch aus der Anlagen-/Systemkonfiguration übernommen.</small>
-        <small id="weatherHintCommercial" style="display:none;margin-top:6px;color:var(--muted)">Für gewerbliche/betriebliche Nutzung ist ein eigener API-Schlüssel erforderlich. Standort wird automatisch aus der Anlagen-/Systemkonfiguration übernommen. Die Verantwortung für die rechtmäßige Nutzung liegt beim Betreiber.</small>
-
-        <div id="weatherApiKeyRow" style="display:none;margin-top:10px">
-          <label class="row"><span>API-Schlüssel</span>
-            <input type="password" id="s_weather_apiKey" data-scope="settings" data-key="weatherApiKey" placeholder="API-Key">
-          </label>
-          <small id="weatherApiKeyMissing" style="display:none;margin-top:6px;color:var(--muted)">Kein API-Schlüssel gesetzt – Wetterdaten werden nicht abgefragt.</small>
-        </div>
-
-        <small class="muted" style="display:block;margin-top:8px;color:var(--muted)">
-          Hinweis &amp; Informationen: Wetterdaten werden vom externen Dienst Open‑Meteo bereitgestellt. Weitere Details finden Sie unter
-          <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">open-meteo.com</a>.
-        </small>
-      </div>
-
-      <!-- Installateur-/Admin-Konfiguration erfolgt außerhalb des Endkunden-Dashboards -->
-    </div>
-  </section>
-  <section class="card">
+  <section class="card nw-settings-page hidden" data-settings-panel="rfid">
     <div class="card-header"><span>RFID / Ladepark</span></div>
     <div class="form">
       <label class="row"><span>RFID-Freigabe aktiv</span>
@@ -437,9 +484,96 @@
     </div>
   </section>
 
+      <section class="card nw-settings-page hidden" data-settings-panel="log">
+        <div class="card-header"><span>Log / Nachweis</span></div>
+        <div class="form">
+          <div class="nw-settings-note">
+            Hier siehst du die Frontend-Sicht auf das §14a Nachweislog. Die Langzeit-Aufbewahrung selbst läuft über die aktivierte Historie/Influx.
+          </div>
+          <div class="nw-settings-note nw-settings-note--warn" id="settingsPara14aMissing" style="display:none">
+            §14a ist aktuell nicht aktiv oder noch nicht im System eingebunden. Sobald das Modul aktiv ist, erscheinen hier Status und Nachweisdaten.
+          </div>
 
-  
+          <div class="nw-settings-log-grid">
+            <section class="nw-settings-log-card">
+              <div class="nw-settings-log-card__title">§14a Status</div>
+              <div class="nw-settings-log-kv">
+                <div class="nw-settings-log-row"><span>Aktiv</span><b id="settingsPara14aStatusActive">—</b></div>
+                <div class="nw-settings-log-row"><span>Modus</span><b id="settingsPara14aStatusMode">—</b></div>
+                <div class="nw-settings-log-row"><span>Quelle</span><b id="settingsPara14aStatusSource">—</b></div>
+                <div class="nw-settings-log-row"><span>Mindestleistung je Verbraucher</span><b id="settingsPara14aStatusMinPerDevice">—</b></div>
+                <div class="nw-settings-log-row"><span>Pmin,14a gesamt</span><b id="settingsPara14aStatusPmin">—</b></div>
+                <div class="nw-settings-log-row"><span>EVCS Gesamtlimit</span><b id="settingsPara14aStatusEvcsCap">—</b></div>
+                <div class="nw-settings-log-row"><span>EMS Sollwert</span><b id="settingsPara14aStatusEmsSetpoint">—</b></div>
+                <div class="nw-settings-log-row"><span>nSteuVE</span><b id="settingsPara14aStatusNSteuVE">—</b></div>
+              </div>
+            </section>
+
+            <section class="nw-settings-log-card">
+              <div class="nw-settings-log-card__title">Historisierung</div>
+              <div class="nw-settings-log-kv">
+                <div class="nw-settings-log-row"><span>Historie erkannt</span><b id="settingsPara14aHistoryEnabled">—</b></div>
+                <div class="nw-settings-log-row"><span>Historien-Instanz</span><b id="settingsPara14aHistoryInstance">—</b></div>
+                <div class="nw-settings-log-row"><span>Dedizierte §14a Instanz</span><b id="settingsPara14aHistoryDedicated">—</b></div>
+                <div class="nw-settings-log-row"><span>Automatisch bereitgestellt</span><b id="settingsPara14aHistoryAutoProvisioned">—</b></div>
+                <div class="nw-settings-log-row"><span>Bereitstellungsstatus</span><b id="settingsPara14aHistoryProvisionState">—</b></div>
+                <div class="nw-settings-log-row"><span>Retention-Ziel</span><b id="settingsPara14aRetentionDays">—</b></div>
+                <div class="nw-settings-log-row"><span>Sitzung aktiv</span><b id="settingsPara14aSessionActive">—</b></div>
+                <div class="nw-settings-log-row"><span>Sitzungs-ID</span><b id="settingsPara14aSessionId">—</b></div>
+                <div class="nw-settings-log-row"><span>Ereignis-Sequenz</span><b id="settingsPara14aEventSeq">—</b></div>
+                <div class="nw-settings-log-row"><span>Letztes Ereignis</span><b id="settingsPara14aLastEventTs">—</b></div>
+              </div>
+              <small class="nw-settings-log-hint">Bei automatisch bereitgestellter §14a-Instanz wird die 730-Tage-Retention direkt gesetzt. Bei Fallback auf eine bestehende Historien-Instanz bitte die Retention dort prüfen.</small>
+              <small class="nw-settings-log-hint nw-settings-log-hint--warn" id="settingsPara14aHistoryProvisionError" style="display:none"></small>
+            </section>
+
+            <section class="nw-settings-log-card">
+              <div class="nw-settings-log-card__title">Letztes Ereignis</div>
+              <div class="nw-settings-log-kv">
+                <div class="nw-settings-log-row"><span>Typ</span><b id="settingsPara14aLastEventType">—</b></div>
+                <div class="nw-settings-log-row"><span>Ergebnis</span><b id="settingsPara14aLastResult">—</b></div>
+                <div class="nw-settings-log-row"><span>Grund</span><b id="settingsPara14aLastReason">—</b></div>
+                <div class="nw-settings-log-row"><span>Quelle</span><b id="settingsPara14aLastSource">—</b></div>
+                <div class="nw-settings-log-row"><span>Modus</span><b id="settingsPara14aLastMode">—</b></div>
+                <div class="nw-settings-log-row"><span>Gesamtbudget</span><b id="settingsPara14aLastBudget">—</b></div>
+                <div class="nw-settings-log-row"><span>EVCS Limit</span><b id="settingsPara14aLastCap">—</b></div>
+                <div class="nw-settings-log-row"><span>Pmin,14a</span><b id="settingsPara14aLastPmin">—</b></div>
+                <div class="nw-settings-log-row"><span>EV-Leistung</span><b id="settingsPara14aLastEvPower">—</b></div>
+                <div class="nw-settings-log-row"><span>Netzleistung</span><b id="settingsPara14aLastGridPower">—</b></div>
+                <div class="nw-settings-log-row"><span>Verbraucher angewendet</span><b id="settingsPara14aLastApplied">—</b></div>
+                <div class="nw-settings-log-row"><span>Verbraucher Fehler</span><b id="settingsPara14aLastFailed">—</b></div>
+              </div>
+            </section>
+
+            <section class="nw-settings-log-card">
+              <div class="nw-settings-log-card__title">Aktueller Trace</div>
+              <div class="nw-settings-log-kv">
+                <div class="nw-settings-log-row"><span>Trace Zeitstempel</span><b id="settingsPara14aTraceTs">—</b></div>
+                <div class="nw-settings-log-row"><span>Aktiv</span><b id="settingsPara14aTraceActive">—</b></div>
+                <div class="nw-settings-log-row"><span>Sitzung</span><b id="settingsPara14aTraceSession">—</b></div>
+                <div class="nw-settings-log-row"><span>Quelle</span><b id="settingsPara14aTraceSource">—</b></div>
+                <div class="nw-settings-log-row"><span>Modus</span><b id="settingsPara14aTraceMode">—</b></div>
+                <div class="nw-settings-log-row"><span>Budget</span><b id="settingsPara14aTraceBudget">—</b></div>
+                <div class="nw-settings-log-row"><span>EVCS Limit</span><b id="settingsPara14aTraceCap">—</b></div>
+                <div class="nw-settings-log-row"><span>Mindestleistung je Verbraucher</span><b id="settingsPara14aTraceMinPerDevice">—</b></div>
+                <div class="nw-settings-log-row"><span>Pmin,14a</span><b id="settingsPara14aTracePmin">—</b></div>
+                <div class="nw-settings-log-row"><span>EVCS Anzahl</span><b id="settingsPara14aTraceEvcsCount">—</b></div>
+                <div class="nw-settings-log-row"><span>EV-Leistung</span><b id="settingsPara14aTraceEvPower">—</b></div>
+                <div class="nw-settings-log-row"><span>Netzleistung</span><b id="settingsPara14aTraceGridPower">—</b></div>
+              </div>
+            </section>
+
+            <section class="nw-settings-log-card nw-settings-log-card--wide">
+              <div class="nw-settings-log-card__title">Letztes Ereignis (JSON)</div>
+              <pre class="nw-settings-json" id="settingsPara14aLastJson">—</pre>
+            </section>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
 </section>
+
 
 <script>
 // Installer/Admin shortcut: always open the local Admin UI on port 8081.

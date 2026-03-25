@@ -1686,6 +1686,8 @@ function render() {
     if (typeof window.__nwApplyRfidLearningUi === 'function') window.__nwApplyRfidLearningUi();
   } catch (_e) {}
 
+  try { renderSettingsLogPanel(); } catch (_e) {}
+
   // Speicherfarm Übersicht (read-only, Endnutzer)
   try { if (typeof storageFarmApply === 'function') storageFarmApply(); } catch (_e) {}
 }
@@ -2474,12 +2476,185 @@ function bindInputValue(el, stateKey) {
     } catch (e) { /* ignore */ }
   });
 }
+
+function initSettingsPageTabs(){
+  const wrap = document.querySelector('.settings-wrap[data-tab-content="settings"]');
+  if (!wrap) return;
+  const buttons = Array.from(wrap.querySelectorAll('[data-settings-page-target]'));
+  if (!buttons.length) return;
+
+  const normalizePage = (value) => {
+    const wanted = String(value || '').trim().toLowerCase();
+    const allowed = buttons.map(btn => String(btn.dataset.settingsPageTarget || '').trim().toLowerCase()).filter(Boolean);
+    if (wanted && allowed.includes(wanted)) return wanted;
+    return allowed[0] || 'general';
+  };
+
+  const activatePage = (value) => {
+    const page = normalizePage(value);
+    wrap.dataset.settingsPage = page;
+    buttons.forEach((btn) => {
+      const target = String(btn.dataset.settingsPageTarget || '').trim().toLowerCase();
+      btn.classList.toggle('is-active', target === page);
+    });
+    wrap.querySelectorAll('[data-settings-panel]').forEach((panel) => {
+      const target = String(panel.dataset.settingsPanel || '').trim().toLowerCase();
+      panel.classList.toggle('hidden', target !== page);
+    });
+    try { sessionStorage.setItem('nexowatt.settings.page', page); } catch (_e) {}
+    try { renderSettingsLogPanel(); } catch (_e) {}
+  };
+
+  buttons.forEach((btn) => {
+    if (btn.dataset.nwPageBound === '1') return;
+    btn.dataset.nwPageBound = '1';
+    btn.addEventListener('click', () => activatePage(btn.dataset.settingsPageTarget));
+  });
+
+  try { window.__nwActivateSettingsPage = activatePage; } catch (_e) {}
+  activatePage(wrap.dataset.settingsPage || (() => {
+    try { return sessionStorage.getItem('nexowatt.settings.page') || 'general'; } catch (_e) { return 'general'; }
+  })());
+}
+
+function _nwSettingsStateValue(key){
+  const st = window.latestState || {};
+  return st[key] ? st[key].value : undefined;
+}
+
+function _nwSettingsText(value, fallback = '—'){
+  if (value === undefined || value === null) return fallback;
+  const txt = String(value).trim();
+  return txt ? txt : fallback;
+}
+
+function _nwSettingsBool(value){
+  if (value === undefined || value === null) return '—';
+  if (value === true || value === 1 || value === '1') return 'Ja';
+  const txt = String(value).trim().toLowerCase();
+  if (txt === 'true' || txt === 'on' || txt === 'yes' || txt === 'ja') return 'Ja';
+  if (txt === 'false' || txt === 'off' || txt === 'no' || txt === 'nein' || txt === '0') return 'Nein';
+  return value ? 'Ja' : 'Nein';
+}
+
+function _nwSettingsCount(value){
+  const num = Number(value);
+  return Number.isFinite(num) ? String(Math.round(num)) : '—';
+}
+
+function _nwSettingsTs(value){
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return '—';
+  try { return new Date(num).toLocaleString('de-DE'); } catch (_e) { return '—'; }
+}
+
+function _nwSettingsPower(value){
+  const num = Number(value);
+  return Number.isFinite(num) ? formatPower(num) : '—';
+}
+
+function _nwSettingsDays(value){
+  const num = Number(value);
+  return Number.isFinite(num) && num > 0 ? (Math.round(num) + ' Tage') : '—';
+}
+
+function _nwSettingsJson(value){
+  const raw = _nwSettingsText(value, '');
+  if (!raw) return '—';
+  try { return JSON.stringify(JSON.parse(raw), null, 2); } catch (_e) { return raw; }
+}
+
+function renderSettingsLogPanel(){
+  const panel = document.querySelector('[data-settings-panel="log"]');
+  if (!panel) return;
+
+  const emsCfg = window.__nwEmsCfg || {};
+  const hasData = [
+    'para14a.active',
+    'para14a.audit.eventSeq',
+    'para14a.trace.seq',
+    'para14a.audit.lastJson'
+  ].some((key) => _nwSettingsStateValue(key) !== undefined);
+  const installed = !!emsCfg.para14aEnabled;
+  const missing = document.getElementById('settingsPara14aMissing');
+  if (missing) missing.style.display = (!installed && !hasData) ? '' : 'none';
+
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = value;
+  };
+
+  set('settingsPara14aStatusActive', _nwSettingsBool(_nwSettingsStateValue('para14a.active')));
+  set('settingsPara14aStatusMode', _nwSettingsText(_nwSettingsStateValue('para14a.mode')));
+  set('settingsPara14aStatusSource', _nwSettingsText(_nwSettingsStateValue('para14a.controlSource')));
+  set('settingsPara14aStatusMinPerDevice', _nwSettingsPower(_nwSettingsStateValue('para14a.minPerDeviceW')));
+  set('settingsPara14aStatusPmin', _nwSettingsPower(_nwSettingsStateValue('para14a.pMinW')));
+  set('settingsPara14aStatusEvcsCap', _nwSettingsPower(_nwSettingsStateValue('para14a.evcsTotalCapW')));
+  set('settingsPara14aStatusEmsSetpoint', _nwSettingsPower(_nwSettingsStateValue('para14a.emsSetpointW')));
+  set('settingsPara14aStatusNSteuVE', _nwSettingsCount(_nwSettingsStateValue('para14a.nSteuVE')));
+
+  set('settingsPara14aHistoryEnabled', _nwSettingsBool(_nwSettingsStateValue('para14a.audit.historyEnabled')));
+  set('settingsPara14aHistoryInstance', _nwSettingsText(_nwSettingsStateValue('para14a.audit.historyInstance')));
+  set('settingsPara14aHistoryDedicated', _nwSettingsBool(_nwSettingsStateValue('para14a.audit.historyDedicated')));
+  set('settingsPara14aHistoryAutoProvisioned', _nwSettingsBool(_nwSettingsStateValue('para14a.audit.historyAutoProvisioned')));
+  set('settingsPara14aHistoryProvisionState', _nwSettingsText(_nwSettingsStateValue('para14a.audit.historyProvisionState')));
+  set('settingsPara14aRetentionDays', _nwSettingsDays(_nwSettingsStateValue('para14a.audit.retentionTargetDays')));
+  set('settingsPara14aSessionActive', _nwSettingsBool(_nwSettingsStateValue('para14a.audit.sessionActive')));
+  set('settingsPara14aSessionId', _nwSettingsText(_nwSettingsStateValue('para14a.audit.currentSessionId')));
+  set('settingsPara14aEventSeq', _nwSettingsCount(_nwSettingsStateValue('para14a.audit.eventSeq')));
+  set('settingsPara14aLastEventTs', _nwSettingsTs(_nwSettingsStateValue('para14a.audit.lastEventTs')));
+
+  set('settingsPara14aLastEventType', _nwSettingsText(_nwSettingsStateValue('para14a.audit.lastEventType')));
+  set('settingsPara14aLastResult', _nwSettingsText(_nwSettingsStateValue('para14a.audit.lastResult')));
+  set('settingsPara14aLastReason', _nwSettingsText(_nwSettingsStateValue('para14a.audit.lastReason')));
+  set('settingsPara14aLastSource', _nwSettingsText(_nwSettingsStateValue('para14a.audit.lastSource')));
+  set('settingsPara14aLastMode', _nwSettingsText(_nwSettingsStateValue('para14a.audit.lastMode')));
+  set('settingsPara14aLastBudget', _nwSettingsPower(_nwSettingsStateValue('para14a.audit.lastRequestedTotalBudgetW')));
+  set('settingsPara14aLastCap', _nwSettingsPower(_nwSettingsStateValue('para14a.audit.lastEffectiveEvcsCapW')));
+  set('settingsPara14aLastPmin', _nwSettingsPower(_nwSettingsStateValue('para14a.audit.lastPMinW')));
+  set('settingsPara14aLastEvPower', _nwSettingsPower(_nwSettingsStateValue('para14a.audit.lastEvPowerW')));
+  set('settingsPara14aLastGridPower', _nwSettingsPower(_nwSettingsStateValue('para14a.audit.lastGridPowerW')));
+  set('settingsPara14aLastApplied', _nwSettingsCount(_nwSettingsStateValue('para14a.audit.lastConsumerAppliedCount')));
+  const failTxt = [
+    'Fehler ' + _nwSettingsCount(_nwSettingsStateValue('para14a.audit.lastConsumerFailedCount')),
+    'Übersprungen ' + _nwSettingsCount(_nwSettingsStateValue('para14a.audit.lastConsumerSkippedCount')),
+    'Schreibfehler ' + _nwSettingsCount(_nwSettingsStateValue('para14a.audit.lastConsumerWriteFailedCount'))
+  ].join(' • ');
+  set('settingsPara14aLastFailed', failTxt);
+
+  set('settingsPara14aTraceTs', _nwSettingsTs(_nwSettingsStateValue('para14a.trace.sampleTs')));
+  set('settingsPara14aTraceActive', _nwSettingsBool(_nwSettingsStateValue('para14a.trace.active')));
+  set('settingsPara14aTraceSession', _nwSettingsText(_nwSettingsStateValue('para14a.trace.sessionId')));
+  set('settingsPara14aTraceSource', _nwSettingsText(_nwSettingsStateValue('para14a.trace.source')));
+  set('settingsPara14aTraceMode', _nwSettingsText(_nwSettingsStateValue('para14a.trace.mode')));
+  set('settingsPara14aTraceBudget', _nwSettingsPower(_nwSettingsStateValue('para14a.trace.requestedTotalBudgetW')));
+  set('settingsPara14aTraceCap', _nwSettingsPower(_nwSettingsStateValue('para14a.trace.effectiveEvcsCapW')));
+  set('settingsPara14aTraceMinPerDevice', _nwSettingsPower(_nwSettingsStateValue('para14a.trace.minPerDeviceW')));
+  set('settingsPara14aTracePmin', _nwSettingsPower(_nwSettingsStateValue('para14a.trace.pMinW')));
+  set('settingsPara14aTraceEvcsCount', _nwSettingsCount(_nwSettingsStateValue('para14a.trace.evcsCount')));
+  set('settingsPara14aTraceEvPower', _nwSettingsPower(_nwSettingsStateValue('para14a.trace.evPowerW')));
+  set('settingsPara14aTraceGridPower', _nwSettingsPower(_nwSettingsStateValue('para14a.trace.gridPowerW')));
+
+  const historyErrorEl = document.getElementById('settingsPara14aHistoryProvisionError');
+  if (historyErrorEl) {
+    const errTxt = _nwSettingsText(_nwSettingsStateValue('para14a.audit.historyProvisionError'), '');
+    historyErrorEl.textContent = errTxt ? ('Bereitstellungsfehler: ' + errTxt) : '';
+    historyErrorEl.style.display = errTxt ? '' : 'none';
+  }
+
+  const jsonEl = document.getElementById('settingsPara14aLastJson');
+  if (jsonEl) jsonEl.textContent = _nwSettingsJson(_nwSettingsStateValue('para14a.audit.lastJson'));
+}
+
 function setupSettings(){
   document.querySelectorAll('[data-scope="settings"]').forEach(el=> bindInputValue(el, 'settings.'+el.dataset.key));
   document.querySelectorAll('[data-scope="rfid"]').forEach(el=> bindInputValue(el, 'evcs.rfid.'+el.dataset.key));
   try { setupRfidWhitelistUi(); } catch (e) {}
   try { setupRfidLearningUi(); } catch (e) {}
   try { setupRfidBillingUi(); } catch (e) {}
+  try { initSettingsPageTabs(); } catch (e) {}
+  try { renderSettingsLogPanel(); } catch (e) {}
 }
 
 // --- Speicherfarm (VIS read-only) ---
