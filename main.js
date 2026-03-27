@@ -6260,6 +6260,7 @@ async migrateNativeConfig() {
       ensureObject('peakShaving');
       ensureObject('storageFarm');
       ensureObject('storage');
+      ensureObject('chargingManagement');
 
       // Peak Shaving (EMS – Peak Shaving)
       setNumber('peakShaving.maxPowerW', 0);
@@ -6275,6 +6276,9 @@ async migrateNativeConfig() {
 
       // Global scheduler tick
       setNumber('schedulerIntervalMs', 1000);
+
+      // Charging Management defaults
+      setNumber('chargingManagement.pvChargeReserveW', 500);
 
       // Storage reserve defaults (avoid NaN/blank blocking Admin save)
       setBoolean('storage.reserveEnabled', false);

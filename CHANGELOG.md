@@ -1,3 +1,8 @@
+## 0.6.208
+
+- EMS/Lademanagement: PV-Überschussladen nutzt jetzt standardmäßig einen 500-W-Reservepuffer auf dem effektiven PV-Budget. Dadurch bleibt die Überschussladung ruhiger und regelt nicht mehr so hart auf 0 W Netzbezug.
+- Runtime-Konfiguration normiert den neuen Charging-Management-Wert `chargingManagement.pvChargeReserveW` automatisch auf 500 W, wenn noch kein Wert gesetzt ist.
+
 ## 0.6.207
 
 - Energiefluss: Anzeige mit leichter clientseitiger Hysterese beruhigt – kleine Messwertsprünge und kurze Richtungswechsel flackern in der VIS nicht mehr so stark.

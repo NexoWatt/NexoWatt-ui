@@ -2603,7 +2603,13 @@ class ChargingManagementModule extends BaseModule {
             pvSurplusNoEvAvg5mWState = (typeof pvSurplusAvg5mW === 'number' && Number.isFinite(pvSurplusAvg5mW)) ? pvSurplusAvg5mW : 0;
 
             const pvCapRawW = (typeof pvSurplusFastW === 'number' && Number.isFinite(pvSurplusFastW) && pvSurplusFastW > 0) ? pvSurplusFastW : 0;
-            pvCapW = pvCapRawW;
+            // PV-Überschussladen soll etwas ruhiger laufen und nicht auf Kante 0 W Netzbezug regeln.
+            // Deshalb rechnen wir standardmäßig eine kleine Reserve auf die EV-Ladeleistung drauf.
+            // Effektiv bleibt dadurch im PV-Budget ein Puffer (Default 500 W), der kurze Messwertsprünge,
+            // Rundungsfehler und minimale Hauslaständerungen abfedert, ohne die restliche Logik zu ändern.
+            const pvChargeReserveW = clamp(num(cfg.pvChargeReserveW, 500), 0, 1e12);
+            const pvCapBudgetW = Math.max(0, pvCapRawW - pvChargeReserveW);
+            pvCapW = pvCapBudgetW;
 
             // -----------------------------------------------------------------
             // Gate B: PV hysteresis / start-stop protection
@@ -2628,8 +2634,8 @@ class ChargingManagementModule extends BaseModule {
                 : 0;
             const forcedBelow = (pvAbortImportW > 0 && gridImportNoEvW > pvAbortImportW);
 
-            const above = (!forcedBelow) && ((startW > 0) ? (pvCapRawW >= startW) : (pvCapRawW > 0));
-            const below = forcedBelow || (pvCapRawW <= stopW);
+            const above = (!forcedBelow) && ((startW > 0) ? (pvCapBudgetW >= startW) : (pvCapBudgetW > 0));
+            const below = forcedBelow || (pvCapBudgetW <= stopW);
 
             let pvAvail = !!this._pvAvailable;
 
@@ -2652,7 +2658,7 @@ class ChargingManagementModule extends BaseModule {
             }
 
             this._pvAvailable = pvAvail;
-            pvCapW = pvAvail ? pvCapRawW : 0;
+            pvCapW = pvAvail ? pvCapBudgetW : 0;
 
             pvCapRawWState = pvCapRawW;
             pvCapEffectiveWState = (typeof pvCapW === 'number' && Number.isFinite(pvCapW)) ? pvCapW : 0;
