@@ -1,3 +1,9 @@
+## 0.6.207
+
+- Energiefluss: Anzeige mit leichter clientseitiger Hysterese beruhigt – kleine Messwertsprünge und kurze Richtungswechsel flackern in der VIS nicht mehr so stark.
+- Energiefluss: Leistungswerte im Monitor werden jetzt durchgängig mit nur noch einer Nachkommastelle angezeigt.
+- Web/PWA: Cache-Version angehoben, damit die aktualisierte Energiefluss-Logik sicher geladen wird.
+
 ## 0.6.206
 
 - §14a Nachweis-/Audit-Logging nutzt jetzt bewusst die bestehende Historie/Influx-Instanz (standardmäßig `influxdb.0`) statt eine separate §14a-Instanz anzulegen.

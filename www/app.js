@@ -80,6 +80,70 @@ let units = { power: 'W', energy: 'kWh' };
 let flowSlotsCfg = null; // comes from /config
 let flowExtras = { consumers: [], producers: [], special: [], meta: { evcsAvailable: true } };
 
+// Energiefluss-Anzeige: leichte Hysterese nur für die VIS.
+// Ziel: kleine Messwertsprünge und Richtungsflackern beruhigen,
+// ohne die eigentliche Regelung oder Backend-Performance zu beeinflussen.
+const FLOW_UI_STABILITY = Object.freeze({
+  decimals: 1,
+  zeroOnW: 120,
+  zeroOffW: 60,
+  deltaHoldW: 60,
+  signSwitchW: 180,
+});
+const _flowUiStable = Object.create(null);
+
+function _flowUiNum(v, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function stabilizeFlowSigned(key, rawW, opts) {
+  const cfg = {
+    zeroOnW: _flowUiNum(opts && opts.zeroOnW, FLOW_UI_STABILITY.zeroOnW),
+    zeroOffW: _flowUiNum(opts && opts.zeroOffW, FLOW_UI_STABILITY.zeroOffW),
+    deltaHoldW: _flowUiNum(opts && opts.deltaHoldW, FLOW_UI_STABILITY.deltaHoldW),
+    signSwitchW: _flowUiNum(opts && opts.signSwitchW, FLOW_UI_STABILITY.signSwitchW),
+  };
+
+  const raw = _flowUiNum(rawW, 0);
+  const prevValue = _flowUiNum(_flowUiStable[key] && _flowUiStable[key].value, 0);
+  const prevAbs = Math.abs(prevValue);
+  const rawAbs = Math.abs(raw);
+
+  let next = raw;
+
+  // Zero-Hysterese: kleine Werte nicht sofort ein-/ausblenden.
+  if (prevAbs > cfg.zeroOffW) {
+    if (rawAbs <= cfg.zeroOffW) next = 0;
+  } else if (rawAbs < cfg.zeroOnW) {
+    next = 0;
+  }
+
+  if (next !== 0 && prevValue !== 0) {
+    const prevSign = Math.sign(prevValue);
+    const nextSign = Math.sign(next);
+
+    // Richtungswechsel erst zulassen, wenn der Gegenfluss wirklich klar ist.
+    if (prevSign !== 0 && nextSign !== 0 && prevSign !== nextSign && Math.abs(next) < cfg.signSwitchW) {
+      next = prevValue;
+    }
+
+    // Kleine Änderungen innerhalb des Deadbands halten wir bewusst fest.
+    if (Math.sign(next) === Math.sign(prevValue) && Math.abs(next - prevValue) < cfg.deltaHoldW) {
+      next = prevValue;
+    }
+  }
+
+  _flowUiStable[key] = { value: next, ts: Date.now() };
+  return next;
+}
+
+function stabilizeFlowAbs(key, rawW, opts) {
+  const absRaw = Math.max(0, _flowUiNum(rawW, 0));
+  const absOpts = Object.assign({}, opts, { signSwitchW: Number.MAX_SAFE_INTEGER });
+  return Math.max(0, Math.abs(stabilizeFlowSigned(`abs:${key}`, absRaw, absOpts)));
+}
+
 function applyFlowCoreLabels() {
   // Optional PV name override from App-Center (Energiefluss-Monitor -> Basis).
   // If not provided, we keep the default label "PV".
@@ -152,7 +216,7 @@ function formatFlowPower(v, decimals){
   // Energy-flow monitor: always show power values in kW (input is expected in W)
   if (v === undefined || v === null || isNaN(v)) return '--';
   const n = Number(v);
-  const d = (decimals === undefined || decimals === null || isNaN(decimals)) ? 2 : Number(decimals);
+  const d = (decimals === undefined || decimals === null || isNaN(decimals)) ? FLOW_UI_STABILITY.decimals : Number(decimals);
   return (n / 1000).toFixed(d) + ' kW';
 }
 
@@ -1063,7 +1127,7 @@ function initEnergyWebExtras(flowSlots){
 
     // value above
     const valEl = _svgEl('text', { id: valId, class: 'val', y: -(rNode + 8), 'text-anchor': 'middle' });
-    valEl.textContent = '0.00 kW';
+    valEl.textContent = formatFlowPower(0);
     g.appendChild(valEl);
 
     // label below
@@ -1167,7 +1231,7 @@ const placeSpecialProducer = (item, x, y, role, rNode) => {
 
   // value above
   const valEl = _svgEl('text', { id: valId, class: 'val', y: -(rNode + 8), 'text-anchor': 'middle' });
-  valEl.textContent = '0.00 kW';
+  valEl.textContent = formatFlowPower(0);
   g.appendChild(valEl);
 
   // label below
@@ -1358,14 +1422,14 @@ function updateEnergyWebExtras(d){
   // Produzenten
   if (flowExtras && Array.isArray(flowExtras.producers)) {
     for (const it of flowExtras.producers) {
-      const val = Number(d(it.stateKey)) || 0;
-      const abs = Math.abs(val);
-      setText(it.valId, formatFlowPower(Math.round(abs)));
+      const raw = Number(d(it.stateKey)) || 0;
+      const abs = stabilizeFlowAbs(`extra:producer:${it.stateKey || it.lineId || it.nodeId}`, Math.abs(raw));
+      setText(it.valId, formatFlowPower(abs));
       show(it.lineId, abs);
       // Erzeugung soll optisch immer "zum Gebäude" laufen (keine Richtungsumschaltung).
       // Das verhindert Flackern durch Vorzeichen-Schwankungen um 0W oder uneinheitliche Vorzeichenkonventionen.
       setRev(it.lineId, false);
-      setNodeActive(it.nodeId, abs > 1);
+      setNodeActive(it.nodeId, abs > 0);
     }
   }
 
@@ -1388,26 +1452,27 @@ const sumSpecialPower = (role, devices) => {
 
 if (flowExtras && Array.isArray(flowExtras.special)) {
   for (const it of flowExtras.special) {
-    const val = sumSpecialPower(it.role, it.devices);
-    const abs = Math.abs(val);
-    setText(it.valId, formatFlowPower(Math.round(abs)));
+    const raw = sumSpecialPower(it.role, it.devices);
+    const abs = stabilizeFlowAbs(`extra:special:${it.role}:${it.lineId || it.nodeId}`, Math.abs(raw));
+    setText(it.valId, formatFlowPower(abs));
     show(it.lineId, abs);
     // BHKW/Generator: Erzeugung immer zum Gebäude (keine Richtungsumschaltung)
     setRev(it.lineId, false);
-    setNodeActive(it.nodeId, abs > 1);
+    setNodeActive(it.nodeId, abs > 0);
   }
 }
 
   // Verbraucher
   if (flowExtras && Array.isArray(flowExtras.consumers)) {
     for (const it of flowExtras.consumers) {
-      const val = Number(d(it.stateKey)) || 0;
+      const raw = Number(d(it.stateKey)) || 0;
+      const val = stabilizeFlowSigned(`extra:consumer:${it.stateKey || it.lineId || it.nodeId}`, raw);
       const abs = Math.abs(val);
       consumersSum += abs;
-      setText(it.valId, formatFlowPower(Math.round(abs)));
+      setText(it.valId, formatFlowPower(abs));
       show(it.lineId, abs);
       setRev(it.lineId, val < 0);
-      setNodeActive(it.nodeId, abs > 1);
+      setNodeActive(it.nodeId, abs > 0);
     }
   }
 
@@ -5244,16 +5309,18 @@ function updateEnergyWeb() {
   // PV: immer Richtung Gebäude (keine Richtungsumschaltung); Wert = |pv|
   // Hintergrund: Einige Zähler/Adapter liefern Vorzeichen-Schwankungen um 0W oder invertierte Vorzeichen.
   // Für die VIS soll die Erzeugung optisch immer "zum Gebäude" laufen.
-  const pvValNum = Math.abs(pv);
+  const pvValNum = stabilizeFlowAbs('pv', Math.abs(pv));
   const pvRev = false;
 
   // GRID: bevorzugt Bezug (buy). Nur wenn buy==0 und sell>0, zeige Einspeisung.
-  let gridShowVal = 0;
-  let gridRev = false; // rev = vom Gebäude weg
-  let gridSellMode = false;
-  if (buy > 0) { gridShowVal = buy; gridRev = false; gridSellMode = false; }
-  else if (sell !== 0 && !isNaN(sell)) { gridShowVal = Math.abs(sell); gridRev = true; gridSellMode = true; }
-  else { gridShowVal = 0; gridRev = false; gridSellMode = false; }
+  let gridSignedRaw = 0;
+  if (buy > 0) gridSignedRaw = Math.abs(buy);
+  else if (sell !== 0 && !isNaN(sell)) gridSignedRaw = -Math.abs(sell);
+
+  const gridSigned = stabilizeFlowSigned('grid', gridSignedRaw, { signSwitchW: 220 });
+  let gridShowVal = Math.abs(gridSigned);
+  let gridRev = gridSigned < 0; // rev = vom Gebäude weg
+  let gridSellMode = gridSigned < 0;
 // removed stray block
 // removed stray block
 // removed stray block
@@ -5284,38 +5351,42 @@ function updateEnergyWeb() {
     }
   }
 
+  const evSigned = stabilizeFlowSigned('ev', evAvail ? c2 : 0, { signSwitchW: 220 });
+  const evShowVal = Math.abs(evSigned);
+
+  const batSignedRaw = batRev ? -Math.abs(batShowVal) : Math.abs(batShowVal);
+  const batSigned = stabilizeFlowSigned('battery', batSignedRaw, { signSwitchW: 220 });
+  batShowVal = Math.abs(batSigned);
+  batRev = batSigned < 0;
+
+  loadDisplay = stabilizeFlowAbs('building', Math.max(0, loadDisplay));
+
 
 // ---------- Ausgabe ----------
   const T = (id, t) => { const el=document.getElementById(id); if (el) el.textContent=t; };
-  const signed = (num, negIsMinus=false)=>{
-    const n = Number(num)||0;
-    if (n===0) return '0.00 kW';
-    const abs = Math.abs(n);
-    const prefix = negIsMinus ? '-' : (n<0 ? '-' : '+');
-    return prefix + (abs/1000).toFixed(2) + ' kW';
-  };
 
   T('pvVal', formatFlowPower(pvValNum));
   // grid text: +Bezug, -Einspeisung
-  T('gridVal', gridShowVal ? (gridSellMode ? ('-'+formatFlowPower(gridShowVal)) : formatFlowPower(gridShowVal)) : '0.00 kW');
+  T('gridVal', gridShowVal ? (gridSellMode ? ('-'+formatFlowPower(gridShowVal)) : formatFlowPower(gridShowVal)) : formatFlowPower(0));
   // EV & Batterie Texte
-  T('c2Val', formatFlowPower(Math.max(0, Math.abs(c2))));
-  T('restVal', batShowVal ? (batRev ? ('-'+formatFlowPower(batShowVal)) : formatFlowPower(batShowVal)) : '0.00 kW');
+  T('c2Val', formatFlowPower(evShowVal));
+  T('restVal', batShowVal ? (batRev ? ('-'+formatFlowPower(batShowVal)) : formatFlowPower(batShowVal)) : formatFlowPower(0));
   T('centerPower', formatFlowPower(Math.max(0, loadDisplay)));
   if (soc===undefined || isNaN(Number(soc))) { T('batterySocIn','-- %'); } else { T('batterySocIn', Number(soc).toFixed(0)+' %'); }
 
   // Sichtbarkeit
   const show = (id, on)=>{ const el=document.getElementById(id); if(el) el.style.opacity = on ? 1 : 0.15; };
-  show('linePV', pvValNum>1);
-  show('lineGrid', gridShowVal>1);
-  show('lineC2', Math.abs(c2)>1);
-  show('lineRest', batShowVal>1);
+  show('linePV', pvValNum>0);
+  show('lineGrid', gridShowVal>0);
+  show('lineC2', evShowVal>0);
+  show('lineRest', batShowVal>0);
 
   // Richtung
   const toggleRev = (id, on)=>{ const el=document.getElementById(id); if (el) el.classList.toggle('rev', !!on); };
   toggleRev('linePV', pvRev);
   toggleRev('lineGrid', gridRev);
-  toggleRev('lineC2', Math.abs(c2)>1 ? (invEv ? true : false) : false);toggleRev('lineRest', !batRev);
+  toggleRev('lineC2', evShowVal>0 ? (evSigned < 0) : false);
+  toggleRev('lineRest', !batRev);
 
   // Grid Farbe (Einspeisung grün)
   const lg = document.getElementById('lineGrid');

@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.206",
+    "version": "0.6.207",
     "news": {
       "0.6.206": {
         "de": "§14a-Log/Nachweis nutzt jetzt bewusst die bestehende Historie/Influx-Instanz (standardmäßig influxdb.0) statt eine separate §14a-Instanz anzulegen. Bereits von NexoWatt angelegte dedizierte §14a-Influx-Instanzen werden deaktiviert, damit alles sauber auf einer Historie bleibt. Einstellungen/Log-Hinweise entsprechend angepasst. Web-Cache-Version angehoben.",
@@ -1434,6 +1434,10 @@
       "0.6.196": {
         "en": "EMS Charging Management: stabilized PV-only surplus charging by compensating delayed EVCS power metering with last commanded setpoints (prevents start/stop hopping around the ~4.2kW 3-phase minimum). Added diagnostics states pvEvcsActualW/pvEvcsCmdW/pvEvcsUsedW.",
         "de": "EMS Charging Management: PV-Überschussladen (PV-only) stabilisiert, indem bei verzögerten EVCS-Leistungsmesswerten kurzfristig die letzten Sollwerte zur PV-Überschuss-Rekonstruktion genutzt werden (verhindert Start/Stop-Hoppen um die ~4,2kW 3-Phasen-Minimalleistung). Neue Diagnose-States pvEvcsActualW/pvEvcsCmdW/pvEvcsUsedW."
+      },
+      "0.6.207": {
+        "de": "Energiefluss-Monitor mit leichter clientseitiger Hysterese beruhigt, damit kleine Messwertsprünge und kurze Richtungswechsel nicht mehr so stark flackern. Leistungswerte werden dort jetzt mit nur noch einer Nachkommastelle angezeigt. Web-Cache-Version angehoben.",
+        "en": "Energy-flow monitor now uses a light client-side hysteresis so small measurement jumps and short direction changes no longer flicker as much. Power values in that monitor are now shown with one decimal place only. Web cache version bumped."
       }
     },
     "title": "NexoWatt UI",
@@ -1621,7 +1625,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.206",
+  "version": "0.6.207",
   "news": {
     "0.6.206": {
       "de": "§14a-Log/Nachweis nutzt jetzt bewusst die bestehende Historie/Influx-Instanz (standardmäßig influxdb.0) statt eine separate §14a-Instanz anzulegen. Bereits von NexoWatt angelegte dedizierte §14a-Influx-Instanzen werden deaktiviert, damit alles sauber auf einer Historie bleibt. Einstellungen/Log-Hinweise entsprechend angepasst. Web-Cache-Version angehoben.",
@@ -1810,6 +1814,10 @@
         "Fix: Update-sichere Installer-Konfiguration (DP-Zuordnungen gehen nach Updates nicht mehr verloren)",
         "Backup verbessert: vorherige Backup-Version wird behalten + Auto-Restore wenn configJson leer/reset aussieht"
       ]
+    },
+    "0.6.207": {
+      "de": "Energiefluss-Monitor mit leichter clientseitiger Hysterese beruhigt, damit kleine Messwertsprünge und kurze Richtungswechsel nicht mehr so stark flackern. Leistungswerte werden dort jetzt mit nur noch einer Nachkommastelle angezeigt. Web-Cache-Version angehoben.",
+      "en": "Energy-flow monitor now uses a light client-side hysteresis so small measurement jumps and short direction changes no longer flicker as much. Power values in that monitor are now shown with one decimal place only. Web cache version bumped."
     }
   }
 }
