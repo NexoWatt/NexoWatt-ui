@@ -1247,6 +1247,30 @@ class ChargingManagementModule extends BaseModule {
         await this._queueState('chargingManagement.debug.lastRun', now, true);
         await this._queueState('chargingManagement.debug.sortedOrder', '', true);
         await this._queueState('chargingManagement.debug.allocations', '[]', true);
+
+        const publishEvPriorityCaps = (patch) => {
+            try {
+                const caps = (this.adapter && this.adapter._emsCaps && typeof this.adapter._emsCaps === 'object') ? this.adapter._emsCaps : {};
+                const prev = (caps && caps.evPriority && typeof caps.evPriority === 'object') ? caps.evPriority : {};
+                this.adapter._emsCaps = Object.assign({}, caps, {
+                    evPriority: Object.assign({}, prev, patch || {}, { ts: now }),
+                });
+            } catch {
+                // ignore
+            }
+        };
+
+        // Reset the shared EV-priority snapshot on every tick so Storage-Control never sees stale flags
+        // when Charging-Management is off or returns early in this cycle.
+        publishEvPriorityCaps({
+            active: false,
+            blockStorageCharge: false,
+            requestedCount: 0,
+            limitedWallboxes: 0,
+            starvedW: 0,
+            storageYieldW: 0,
+            storageSource: '',
+        });
         for (let wbIndex = 0; wbIndex < wallboxes.length; wbIndex++) {
             const wb = wallboxes[wbIndex];
             const key = String(wb.key || '').trim();
@@ -2488,6 +2512,23 @@ class ChargingManagementModule extends BaseModule {
             }
         }
 
+        const wallboxHasEvPriorityDemand = (w) => {
+            if (!w || !w.enabled || !w.online) return false;
+            const eff = String(w.effectiveMode || 'normal');
+            if (eff !== 'pv' && eff !== 'minpv') return false;
+            if (w.charging === true) return true;
+            if (w.vehiclePlugged === true) return true;
+            if (w.goalActive === true && w.vehiclePlugged !== false) return true;
+            return false;
+        };
+
+        const evPriorityWallboxes = wbList.filter(w => wallboxHasEvPriorityDemand(w));
+        const evPriorityRequested = evPriorityWallboxes.length > 0;
+        let evPriorityStorageYieldW = 0;
+        let evPriorityStorageSource = '';
+        let evPriorityLimitedWallboxes = 0;
+        let evPriorityStarvedW = 0;
+
         // For backwards compatibility: only cap the *total* budget by PV when
         // (a) PV-only is globally active (config or tariff) AND
         // (b) no active wallbox is in a grid-allowed mode (normal/minpv/boost).
@@ -2580,9 +2621,37 @@ class ChargingManagementModule extends BaseModule {
                 // ignore
             }
 
+            if (evPriorityRequested) {
+                const battSignedW = getFirstDpNumber(['st.batteryPowerW', 'ps.batteryW']);
+                const storageChargeNowW = (typeof battSignedW === 'number' && Number.isFinite(battSignedW))
+                    ? Math.max(0, -battSignedW)
+                    : 0;
+
+                if (storageChargeNowW > 0) {
+                    try {
+                        const stStorageSource = await this._getStateCached('speicher.regelung.quelle');
+                        evPriorityStorageSource = stStorageSource && stStorageSource.val !== null && stStorageSource.val !== undefined
+                            ? String(stStorageSource.val || '')
+                            : '';
+                    } catch {
+                        evPriorityStorageSource = '';
+                    }
+
+                    const storageSourceNorm = String(evPriorityStorageSource || '').trim().toLowerCase();
+                    const storageChargingFromPv = storageSourceNorm === 'pv'
+                        || (storageSourceNorm === '' && typeof gridW === 'number' && Number.isFinite(gridW) && gridW <= 150);
+
+                    if (storageChargingFromPv) {
+                        evPriorityStorageYieldW = storageChargeNowW;
+                    }
+                }
+            }
+
             let pvSurplusNoEvW = null;
             if (typeof gridW === 'number' && Number.isFinite(gridW)) {
-                pvSurplusNoEvW = Math.max(0, (-gridW) + pvEvcsUsedW);
+                // EV priority over storage: when a PV-driven wallbox is active, reclaim current
+                // PV storage charging in the surplus reconstruction so EVCS can take over the same PV.
+                pvSurplusNoEvW = Math.max(0, (-gridW) + pvEvcsUsedW + evPriorityStorageYieldW);
             } else if (typeof pvSurplusCfgW === 'number' && Number.isFinite(pvSurplusCfgW)) {
                 // Fallback wenn kein Grid-DP verfügbar (z. B. nur PV-Surplus DP konfiguriert)
                 pvSurplusNoEvW = Math.max(0, pvSurplusCfgW);
@@ -2630,7 +2699,7 @@ class ChargingManagementModule extends BaseModule {
             // Important: do NOT trip the PV stop gate on import that is caused by the active EVCS load itself.
             // Otherwise PV-only charging can stop although there would still be enough surplus without the EV.
             gridImportNoEvW = (typeof gridW === 'number' && Number.isFinite(gridW))
-                ? Math.max(0, gridW - pvEvcsUsedW)
+                ? Math.max(0, gridW - pvEvcsUsedW - evPriorityStorageYieldW)
                 : 0;
             const forcedBelow = (pvAbortImportW > 0 && gridImportNoEvW > pvAbortImportW);
 
@@ -3365,6 +3434,16 @@ if (components.length) {
             }
 
     
+        publishEvPriorityCaps({
+            active: !!evPriorityRequested,
+            blockStorageCharge: !!(evPriorityRequested && (evPriorityLimitedWallboxes > 0 || evPriorityStorageYieldW > 0)),
+            requestedCount: evPriorityWallboxes.length,
+            limitedWallboxes: evPriorityLimitedWallboxes,
+            starvedW: Math.round(evPriorityStarvedW || 0),
+            storageYieldW: Math.round(evPriorityStorageYieldW || 0),
+            storageSource: String(evPriorityStorageSource || ''),
+        });
+
         // ---- Stations (DC multi-connector) diagnostics ----
         try {
             const stationKeys = Array.from(stationCapW.keys());
@@ -4101,6 +4180,32 @@ if (components.length) {
                 } else {
                     cmdA = 0;
                 }
+            }
+
+            try {
+                if (wallboxHasEvPriorityDemand(w)) {
+                    const tolW = Math.max(50, (typeof w.maxPW === 'number' && Number.isFinite(w.maxPW) && w.maxPW > 0) ? (w.maxPW * 0.01) : 50);
+
+                    if (isPvOnly) {
+                        const pvShortage = reason === ReasonCodes.NO_PV_SURPLUS || limiter === 'pv';
+                        if (pvShortage && cmdW < (w.maxPW - tolW)) {
+                            evPriorityLimitedWallboxes += 1;
+                            evPriorityStarvedW += Math.max(0, w.maxPW - cmdW);
+                        }
+                    } else if (isMinPv) {
+                        const minBaseW = (w.minPW > 0) ? w.minPW : 0;
+                        const maxTotalW = (typeof minpvMaxTotal === 'number' && Number.isFinite(minpvMaxTotal)) ? Math.max(0, minpvMaxTotal) : 0;
+                        const extraPossibleW = Math.max(0, Math.min(w.maxPW, maxTotalW) - Math.min(minBaseW, maxTotalW));
+                        const extraDeliveredW = Math.max(0, cmdW - Math.min(minBaseW, cmdW));
+                        const pvShortage = Number.isFinite(pvAvailW) && (pvAvailW + tolW) < extraPossibleW;
+                        if (pvShortage && (extraDeliveredW + tolW) < extraPossibleW) {
+                            evPriorityLimitedWallboxes += 1;
+                            evPriorityStarvedW += Math.max(0, extraPossibleW - extraDeliveredW);
+                        }
+                    }
+                }
+            } catch {
+                // ignore
             }
 
             // Station diagnostics: sum commanded power per station

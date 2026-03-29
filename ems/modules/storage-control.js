@@ -501,6 +501,9 @@ class SpeicherRegelungModule extends BaseModule {
         // Phase 4: Gemeinsame Netzbezug-Caps (Grid-Constraints / Peak-Shaving / Installer)
         // ------------------------------------------------------------
         const coreCaps = (this.adapter && this.adapter._emsCaps && typeof this.adapter._emsCaps === 'object') ? this.adapter._emsCaps : null;
+        const evPriorityCaps = (coreCaps && coreCaps.evPriority && typeof coreCaps.evPriority === 'object') ? coreCaps.evPriority : null;
+        const evPriorityBlockStorageCharge = !!(evPriorityCaps && evPriorityCaps.blockStorageCharge === true);
+        const evPriorityStarvedW = (evPriorityCaps && Number.isFinite(Number(evPriorityCaps.starvedW))) ? Math.max(0, Number(evPriorityCaps.starvedW)) : 0;
         let importLimitW = null;
         let importLimitQuelle = '';
 
@@ -1375,7 +1378,14 @@ if (targetW === 0 && selfDischargeEnabled) {
                 }
             }
 
-            if (exportRawW >= thr && canChargeBySoc && chargeLimitW > 0) {
+            const pvChargeWouldBeActive = exportRawW >= thr && canChargeBySoc && chargeLimitW > 0;
+            if (pvChargeWouldBeActive && evPriorityBlockStorageCharge) {
+                targetW = 0;
+                reason = evPriorityStarvedW > 0
+                    ? `EV-Priorität: PV zuerst an Ladepunkte (${Math.round(evPriorityStarvedW)} W offen)`
+                    : 'EV-Priorität: PV zuerst an Ladepunkte';
+                source = 'pv';
+            } else if (pvChargeWouldBeActive) {
                 // Für die eigentliche Sollwert-Berechnung nutzen wir den geglätteten Export,
                 // damit die Ladeleistung bei wolkigem Himmel nicht "zittert".
                 const exportCtrlW = (typeof exportW === 'number') ? exportW : exportRawW;
@@ -1726,6 +1736,14 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                 evcs: {
                     storageAssistReqW: (typeof evcsAssistReqW === 'number' && Number.isFinite(evcsAssistReqW)) ? Math.round(evcsAssistReqW) : 0,
                 },
+                evPriority: evPriorityCaps ? {
+                    active: !!evPriorityCaps.active,
+                    blockStorageCharge: !!evPriorityBlockStorageCharge,
+                    starvedW: Math.round(evPriorityStarvedW || 0),
+                    storageYieldW: (Number.isFinite(Number(evPriorityCaps.storageYieldW))) ? Math.round(Number(evPriorityCaps.storageYieldW)) : 0,
+                    requestedCount: (Number.isFinite(Number(evPriorityCaps.requestedCount))) ? Math.round(Number(evPriorityCaps.requestedCount)) : 0,
+                    limitedWallboxes: (Number.isFinite(Number(evPriorityCaps.limitedWallboxes))) ? Math.round(Number(evPriorityCaps.limitedWallboxes)) : 0,
+                } : null,
                 limits: {
                     importLimitW: (typeof importLimitW === 'number' && Number.isFinite(importLimitW)) ? Math.round(importLimitW) : null,
                     importHeadroomW: (typeof importHeadroomEffW === 'number' && Number.isFinite(importHeadroomEffW)) ? Math.round(importHeadroomEffW) : null,

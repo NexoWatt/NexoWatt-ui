@@ -1,3 +1,9 @@
+## 0.6.209
+
+- EMS/Lademanagement: PV-geführte Wallboxen erhalten jetzt sauber Vorrang vor PV-Speicherladung. Aktive Speicherladung aus PV wird im PV-Budget der Wallboxen wieder freigestellt, damit kleine Hausanlagen die verfügbare PV zuerst an die Ladepunkte geben.
+- Speicher-Regelung: PV-Überschussladen des Speichers wird automatisch blockiert, sobald eine PV-geführte Wallbox aktuell durch PV-Mangel begrenzt ist. Dadurch lädt der Speicher keinen relevanten EV-Überschuss mehr weg.
+- Diagnose: Die gemeinsame EMS-Laufzeitsicht enthält jetzt einen EV-Prioritäts-Snapshot für Ladepunkte vs. Speicher, damit das Verhalten im Feldtest nachvollziehbar bleibt.
+
 ## 0.6.208
 
 - EMS/Lademanagement: PV-Überschussladen nutzt jetzt standardmäßig einen 500-W-Reservepuffer auf dem effektiven PV-Budget. Dadurch bleibt die Überschussladung ruhiger und regelt nicht mehr so hart auf 0 W Netzbezug.
