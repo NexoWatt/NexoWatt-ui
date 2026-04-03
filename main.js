@@ -120,6 +120,7 @@ class NexoWattVis extends utils.Adapter {
     // Storagefarm: remember last commanded setpoints to reduce write spam
     this._sfLastSetpoints = new Map(); // objectId -> last numeric value
     this._sfLastSetpointsTs = new Map(); // objectId -> last write timestamp (ms)
+    this._sfDispatchState = new Map(); // storageKey -> last requested/observed dispatch snapshot
 
     // Foreign datapoint unit caches (kW/kWh sources):
     // Used to automatically scale mapped power values into W without requiring
@@ -3537,7 +3538,8 @@ class NexoWattVis extends utils.Adapter {
       let totalCharge = 0;
       let totalDischarge = 0;
       let totalPv = 0;
-      let online = 0;
+      let onlineFresh = 0;
+      let available = 0;
       let degraded = 0;
       let configured = 0;
 
@@ -3781,7 +3783,7 @@ class NexoWattVis extends utils.Adapter {
         }
 
         // Count storages
-        if (health === 'online') online++;
+        if (health === 'online') onlineFresh++;
         else if (health === 'degraded') degraded++;
 
         // Offline storages: keep row but skip power aggregation
@@ -3849,7 +3851,7 @@ class NexoWattVis extends utils.Adapter {
         }
 
         statusRows.push(status);
-        online++;
+        available++;
       }
       const medianSoc = (() => {
         if (!socListAll || !socListAll.length) return 0;
@@ -3861,7 +3863,7 @@ class NexoWattVis extends utils.Adapter {
 
       const totalSoc = socWeightAll > 0 ? (socWeightedAll / socWeightAll) : 0;
       const totalSocOnline = socWeightOnline > 0 ? (socWeightedOnline / socWeightOnline) : 0;
-      const socDegraded = (degraded > 0) || (socSourcesTotal > 0 && socSourcesOnline >= 0 && socSourcesOnline < socSourcesTotal) || (online < configured);
+      const socDegraded = (degraded > 0) || (socSourcesTotal > 0 && socSourcesOnline >= 0 && socSourcesOnline < socSourcesTotal) || (available < configured);
 
       await this.setStateAsync('storageFarm.totalSoc', { val: Math.round(totalSoc * 10) / 10, ack: true });
       await this.setStateAsync('storageFarm.medianSoc', { val: Math.round(medianSoc * 10) / 10, ack: true });
@@ -3872,7 +3874,7 @@ class NexoWattVis extends utils.Adapter {
       await this.setStateAsync('storageFarm.totalChargePowerW', { val: Math.round(totalCharge), ack: true });
       await this.setStateAsync('storageFarm.totalDischargePowerW', { val: Math.round(totalDischarge), ack: true });
       await this.setStateAsync('storageFarm.totalPvPowerW', { val: Math.round(totalPv), ack: true });
-      await this.setStateAsync('storageFarm.storagesOnline', { val: online, ack: true });
+      await this.setStateAsync('storageFarm.storagesOnline', { val: available, ack: true });
       await this.setStateAsync('storageFarm.storagesDegraded', { val: degraded, ack: true });
       await this.setStateAsync('storageFarm.storagesTotal', { val: configured, ack: true });
       await this.setStateAsync('storageFarm.storagesStatusJson', { val: JSON.stringify(statusRows), ack: true });
@@ -3889,7 +3891,7 @@ class NexoWattVis extends utils.Adapter {
         this.updateValue('storageFarm.totalChargePowerW', Math.round(totalCharge), now);
         this.updateValue('storageFarm.totalDischargePowerW', Math.round(totalDischarge), now);
         this.updateValue('storageFarm.totalPvPowerW', Math.round(totalPv), now);
-        this.updateValue('storageFarm.storagesOnline', online, now);
+        this.updateValue('storageFarm.storagesOnline', available, now);
         this.updateValue('storageFarm.storagesDegraded', degraded, now);
         this.updateValue('storageFarm.storagesTotal', configured, now);
         this.updateValue('storageFarm.storagesStatusJson', JSON.stringify(statusRows), now);
@@ -3961,6 +3963,106 @@ try {
 
     return { enabled, mode, storages, groups };
   }
+
+  _sfGetStorageDispatchKey(storage, index = 0) {
+    const s = (storage && typeof storage === 'object') ? storage : {};
+    const parts = [
+      String(s.setSignedPowerId || '').trim(),
+      String(s.setChargePowerId || '').trim(),
+      String(s.setDischargePowerId || '').trim(),
+      String(s.signedPowerId || '').trim(),
+      String(s.chargePowerId || '').trim(),
+      String(s.dischargePowerId || '').trim(),
+      String(s.socId || '').trim(),
+      String(s.name || '').trim(),
+      String(index),
+    ].filter(Boolean);
+    return parts.join('|');
+  }
+
+  _sfGetDischargeFloorSocPct(source = '') {
+    const storageCfg = (this.config && this.config.storage && typeof this.config.storage === 'object') ? this.config.storage : {};
+    const src = String(source || '').toLowerCase().trim();
+
+    const reserveEnabled = !!storageCfg.reserveEnabled;
+    const reserveMin = Number(storageCfg.reserveMinSocPct);
+    const reserveFloor = (reserveEnabled && Number.isFinite(reserveMin)) ? reserveMin : 0;
+
+    const selfEnabled = storageCfg.selfDischargeEnabled === true;
+    const selfMin = Number(storageCfg.selfMinSocPct);
+    const selfFloor = (selfEnabled && Number.isFinite(selfMin)) ? selfMin : 0;
+
+    const lskEnabled = (storageCfg.lskDischargeEnabled !== false) && (storageCfg.lskEnabled !== false);
+    const lskMin = Number(storageCfg.lskMinSocPct);
+    const lskFloor = (lskEnabled && Number.isFinite(lskMin)) ? lskMin : 0;
+
+    if (src === 'eigenverbrauch' || src === 'evcs' || src === 'tarif') return Math.max(0, Math.min(100, Math.max(reserveFloor, selfFloor)));
+    if (src === 'lastspitze') return Math.max(0, Math.min(100, Math.max(reserveFloor, lskFloor)));
+    if (src === 'reserve') return Math.max(0, Math.min(100, reserveFloor));
+
+    return Math.max(0, Math.min(100, Math.max(reserveFloor, selfFloor, lskFloor)));
+  }
+
+  _sfGetResponseLimitFactor(storage, direction, now = Date.now()) {
+    if (!storage || direction !== 'discharge') return 1;
+    if (!(this._sfDispatchState instanceof Map)) return 1;
+
+    const key = storage._sfKey || this._sfGetStorageDispatchKey(storage);
+    if (!key) return 1;
+
+    const prev = this._sfDispatchState.get(key);
+    if (!prev || prev.direction !== 'discharge') return 1;
+
+    const cooldownUntil = Number(prev.cooldownUntil || 0);
+    const prevReq = Number(prev.requestW);
+    const age = now - Number(prev.ts || 0);
+    const actual = Number(storage.dischargePowerW);
+
+    // Compare only after the command had enough time to settle.
+    if (Number.isFinite(prevReq) && prevReq >= 250 && age >= 1500 && age <= 20000 && Number.isFinite(actual)) {
+      const minExpected = Math.max(100, Math.round(prevReq * 0.35));
+      if (actual >= minExpected) {
+        if (cooldownUntil > 0) {
+          prev.cooldownUntil = 0;
+          prev.lastActualW = actual;
+          this._sfDispatchState.set(key, prev);
+        }
+        return 1;
+      }
+
+      if (cooldownUntil > now) return 0.05;
+
+      prev.cooldownUntil = now + 15000;
+      prev.lastActualW = actual;
+      this._sfDispatchState.set(key, prev);
+      return 0.05;
+    }
+
+    if (cooldownUntil > now) return 0.05;
+    return 1;
+  }
+
+  _sfRememberDispatchSnapshot(storage, direction, requestW) {
+    if (!storage || !(this._sfDispatchState instanceof Map)) return;
+
+    const key = storage._sfKey || this._sfGetStorageDispatchKey(storage);
+    if (!key) return;
+
+    const now = Date.now();
+    const prev = this._sfDispatchState.get(key);
+    const keepCooldown = !!(prev && prev.direction === 'discharge' && direction === 'discharge' && Number(prev.cooldownUntil || 0) > now);
+
+    this._sfDispatchState.set(key, {
+      ts: now,
+      direction: String(direction || 'idle'),
+      requestW: Number.isFinite(Number(requestW)) ? Math.round(Number(requestW)) : 0,
+      actualChargeW: Number.isFinite(Number(storage.chargePowerW)) ? Number(storage.chargePowerW) : null,
+      actualDischargeW: Number.isFinite(Number(storage.dischargePowerW)) ? Number(storage.dischargePowerW) : null,
+      soc: Number.isFinite(Number(storage.soc)) ? Number(storage.soc) : null,
+      cooldownUntil: keepCooldown ? Number(prev.cooldownUntil) : 0,
+    });
+  }
+
   async _sfWriteIfChanged(objectId, value) {
     // Writes a setpoint only when it changed OR a keepalive interval has elapsed.
     // Returns an object so callers can reliably detect success/failure.
@@ -4011,6 +4113,9 @@ try {
 
     const direction = (w < 0) ? 'charge' : ((w > 0) ? 'discharge' : 'idle');
     const absW = Math.abs(w);
+    const now = Date.now();
+    const src = meta && meta.source ? String(meta.source).toLowerCase() : '';
+    const dischargeFloorSoc = this._sfGetDischargeFloorSocPct(src);
 
     // Determine SoC values from derived status (preferred)
     let status = [];
@@ -4028,32 +4133,90 @@ try {
       const soc = (st && Number.isFinite(Number(st.soc))) ? Number(st.soc) : null;
       const online = (st && typeof st.online === 'boolean') ? st.online : undefined;
       const offlineReason = (st && typeof st.offlineReason === 'string') ? st.offlineReason : '';
-      return { ...s, soc, online, offlineReason };
+      const chargePowerW = (st && Number.isFinite(Number(st.chargePowerW))) ? Number(st.chargePowerW) : null;
+      const dischargePowerW = (st && Number.isFinite(Number(st.dischargePowerW))) ? Number(st.dischargePowerW) : null;
+      return {
+        ...s,
+        soc,
+        online,
+        offlineReason,
+        state: (st && typeof st.state === 'string') ? st.state : '',
+        degraded: !!(st && st.degraded),
+        chargePowerW,
+        dischargePowerW,
+        _sfKey: this._sfGetStorageDispatchKey(s, i),
+      };
     });
 
-    // Helper: weighted allocation with rounding to ensure sum == total
-    const allocateWeighted = (total, items, dir) => {
+    const buildWeights = (items, dir) => {
       const list = (items || []).slice();
-      if (total <= 0 || list.length === 0) return new Map();
+      const finiteSocs = list
+        .map(it => Number.isFinite(it.soc) ? Number(it.soc) : NaN)
+        .filter(v => Number.isFinite(v));
+      const minSoc = finiteSocs.length ? Math.min(...finiteSocs) : NaN;
+      const maxSoc = finiteSocs.length ? Math.max(...finiteSocs) : NaN;
+      const socSpread = (Number.isFinite(minSoc) && Number.isFinite(maxSoc)) ? (maxSoc - minSoc) : 0;
 
-      const weights = list.map(it => {
+      return list.map(it => {
         const cap = (Number.isFinite(it.capacityKWh) && it.capacityKWh > 0) ? it.capacityKWh : 1;
-        const soc = Number.isFinite(it.soc) ? it.soc : null;
+        const soc = Number.isFinite(it.soc) ? Number(it.soc) : null;
         let base = 1;
-        if (typeof soc === 'number') {
-          if (dir === 'charge') base = Math.max(0, 100 - soc);
-          else if (dir === 'discharge') base = Math.max(0, soc);
-          else base = 1;
-          // Avoid hard zeros for mid-range SoC
-          if (base <= 0.0001) base = 0;
+
+        if (dir === 'charge') {
+          base = (typeof soc === 'number') ? Math.max(0, 100 - soc) : 1;
+        } else if (dir === 'discharge') {
+          if (typeof soc === 'number') {
+            const aboveFloor = Math.max(0, soc - dischargeFloorSoc);
+            base = aboveFloor * aboveFloor;
+
+            // In Eigenverbrauch soll der Speicher mit höherem SoC sichtbar mehr tragen.
+            // Die niedrigste Batterie wird daher bei deutlicher Spreizung fast entlastet.
+            if (socSpread >= 1) {
+              const deltaToMin = soc - minSoc;
+              if (deltaToMin <= 0.35) base *= 0.02;
+              else base *= (1 + deltaToMin);
+            }
+          } else {
+            base = 1;
+          }
+
+          base *= this._sfGetResponseLimitFactor(it, 'discharge', now);
+        } else {
+          base = 1;
         }
+
+        if (!Number.isFinite(base) || base < 0) base = 0;
         return base * cap;
       });
+    };
 
+    const allocateWeighted = (total, items, dir) => {
+      const list = (items || []).slice();
+      if (total <= 0 || list.length === 0) return { allocMap: new Map(), weightMap: new Map() };
+
+      let weights = buildWeights(list, dir);
       let sumW = weights.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
+
       if (!(sumW > 0)) {
-        // fallback: equal weights
-        for (let i = 0; i < weights.length; i++) weights[i] = 1;
+        if (dir === 'discharge') {
+          const socEntries = list
+            .map((it, idx) => ({ idx, soc: Number.isFinite(it.soc) ? Number(it.soc) : NaN }))
+            .filter(x => Number.isFinite(x.soc))
+            .sort((a, b) => b.soc - a.soc);
+
+          if (socEntries.length) {
+            const topSoc = socEntries[0].soc;
+            weights = new Array(list.length).fill(0);
+            for (const entry of socEntries) {
+              if ((topSoc - entry.soc) <= 0.25) weights[entry.idx] = 1;
+            }
+            sumW = weights.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
+          }
+        }
+      }
+
+      if (!(sumW > 0)) {
+        weights = new Array(list.length).fill(1);
         sumW = weights.length;
       }
 
@@ -4064,8 +4227,8 @@ try {
         alloc[i] = Number.isFinite(a) ? a : 0;
         used += alloc[i];
       }
+
       let rem = Math.max(0, total - used);
-      // distribute remainder to highest weights
       const order = [...alloc.keys()].sort((i, j) => (weights[j] || 0) - (weights[i] || 0));
       let oi = 0;
       while (rem > 0 && order.length > 0) {
@@ -4074,9 +4237,35 @@ try {
         oi = (oi + 1) % order.length;
       }
 
-      const map = new Map();
-      for (let i = 0; i < list.length; i++) map.set(list[i], alloc[i]);
-      return map;
+      // Kleine Entladeanteile an sehr niedrige SoCs bringen in der Praxis oft nichts.
+      // Solche Mini-Sollwerte werden auf stärkere Speicher umverteilt.
+      if (dir === 'discharge' && list.length > 1) {
+        const minAllocW = 150;
+        const recipients = order.filter(i => alloc[i] >= minAllocW && (weights[i] || 0) > 0);
+        if (recipients.length > 0) {
+          let reclaimed = 0;
+          for (let i = 0; i < alloc.length; i++) {
+            if (alloc[i] > 0 && alloc[i] < minAllocW) {
+              reclaimed += alloc[i];
+              alloc[i] = 0;
+            }
+          }
+          let ri = 0;
+          while (reclaimed > 0 && recipients.length > 0) {
+            alloc[recipients[ri]] += 1;
+            reclaimed -= 1;
+            ri = (ri + 1) % recipients.length;
+          }
+        }
+      }
+
+      const allocMap = new Map();
+      const weightMap = new Map();
+      for (let i = 0; i < list.length; i++) {
+        allocMap.set(list[i], alloc[i]);
+        weightMap.set(list[i], weights[i]);
+      }
+      return { allocMap, weightMap };
     };
 
     // Build eligible storages for direction (only those with mapped setpoint dp)
@@ -4122,38 +4311,38 @@ try {
       // Remove empty groups
       const activeGroups = groups.filter(g => (groupBuckets.get(g.name) || []).length > 0);
       if (activeGroups.length === 0) {
-        allocMap = allocateWeighted(absW, eligible, direction);
+        allocMap = allocateWeighted(absW, eligible, direction).allocMap;
       } else {
         const gWeights = activeGroups.map(g => {
           const items = groupBuckets.get(g.name) || [];
           return items.reduce((sum, s) => sum + ((Number.isFinite(s.capacityKWh) && s.capacityKWh > 0) ? s.capacityKWh : 1), 0);
         });
         let gSum = gWeights.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
-        if (!(gSum > 0)) { gSum = activeGroups.length; for (let i=0;i<gWeights.length;i++) gWeights[i]=1; }
+        if (!(gSum > 0)) { gSum = activeGroups.length; for (let i = 0; i < gWeights.length; i++) gWeights[i] = 1; }
 
         // First pass: floor allocations
         const gAlloc = new Array(activeGroups.length).fill(0);
         let used = 0;
-        for (let i=0;i<activeGroups.length;i++) {
+        for (let i = 0; i < activeGroups.length; i++) {
           const a = Math.floor(absW * (gWeights[i] / gSum));
           gAlloc[i] = Number.isFinite(a) ? a : 0;
           used += gAlloc[i];
         }
         let rem = Math.max(0, absW - used);
-        const order = [...gAlloc.keys()].sort((i,j)=> (gWeights[j]||0)-(gWeights[i]||0));
-        let oi=0;
-        while (rem>0 && order.length>0){ gAlloc[order[oi]] += 1; rem -= 1; oi=(oi+1)%order.length; }
+        const order = [...gAlloc.keys()].sort((i, j) => (gWeights[j] || 0) - (gWeights[i] || 0));
+        let oi = 0;
+        while (rem > 0 && order.length > 0) { gAlloc[order[oi]] += 1; rem -= 1; oi = (oi + 1) % order.length; }
 
         // Within each group: weighted allocation
-        for (let i=0;i<activeGroups.length;i++) {
+        for (let i = 0; i < activeGroups.length; i++) {
           const g = activeGroups[i];
           const items = groupBuckets.get(g.name) || [];
-          const m = allocateWeighted(gAlloc[i], items, direction);
+          const { allocMap: m } = allocateWeighted(gAlloc[i], items, direction);
           for (const [s, a] of m.entries()) allocMap.set(s, (allocMap.get(s) || 0) + a);
         }
       }
     } else {
-      allocMap = allocateWeighted(absW, eligible, direction);
+      allocMap = allocateWeighted(absW, eligible, direction).allocMap;
     }
 
     // Apply writes: always zero the opposite direction to avoid stale values
@@ -4182,7 +4371,16 @@ try {
         if (direction === 'discharge' && s.invertDischargeSign) outSignedW = -outSignedW;
       }
 
-      const r = { name: s.name || '', chargeW, dischargeW, ok: true, writes: {} };
+      const r = {
+        name: s.name || '',
+        soc: Number.isFinite(Number(s.soc)) ? Number(s.soc) : null,
+        actualChargeW: Number.isFinite(Number(s.chargePowerW)) ? Number(s.chargePowerW) : null,
+        actualDischargeW: Number.isFinite(Number(s.dischargePowerW)) ? Number(s.dischargePowerW) : null,
+        chargeW,
+        dischargeW,
+        ok: true,
+        writes: {},
+      };
       if (s.setSignedPowerId) {
         const wr = await this._sfWriteIfChanged(s.setSignedPowerId, outSignedW);
         r.writes.signed = wr;
@@ -4208,13 +4406,13 @@ try {
         if (direction === 'idle' && wr.ok) anyOkRelevant = true;
       }
 
+      this._sfRememberDispatchSnapshot(s, direction, alloc);
       results.push(r);
     }
 
     // Log only on debug to avoid noise
     try {
       if (this.log && typeof this.log.debug === 'function') {
-        const src = meta && meta.source ? String(meta.source) : '';
         this.log.debug(`[storageFarm] apply targetW=${w} dir=${direction} storages=${storages.length} src=${src}`);
       }
     } catch (_eLog) {}

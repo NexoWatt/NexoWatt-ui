@@ -1,3 +1,9 @@
+## 0.6.210
+
+- Speicherfarm: Die Entladeverteilung priorisiert im Eigenverbrauch jetzt den Speicher mit höherem SoC deutlich stärker. Der jeweils niedrigste SoC wird bei erkennbarer Spreizung gezielt entlastet, sodass ein stärker geladener Speicher die fehlende Leistung übernimmt.
+- Speicherfarm: Reagiert ein Speicher auf einen Entlade-Sollwert nicht oder nur stark begrenzt, wird er für die laufende Verteilung automatisch heruntergewichtet und die Leistung auf verfügbare Speicher umgelegt.
+- Speicherfarm: Der Übersichts-Zähler `Online x/y` wurde korrigiert und zählt wieder sauber die verfügbaren Speicher statt Doppelzählungen.
+
 ## 0.6.209
 
 - EMS/Lademanagement: PV-geführte Wallboxen erhalten jetzt sauber Vorrang vor PV-Speicherladung. Aktive Speicherladung aus PV wird im PV-Budget der Wallboxen wieder freigestellt, damit kleine Hausanlagen die verfügbare PV zuerst an die Ladepunkte geben.

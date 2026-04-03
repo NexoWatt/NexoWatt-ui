@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.209",
+    "version": "0.6.210",
     "news": {
+      "0.6.210": {
+        "de": "Speicherfarm: In der Entladeverteilung übernimmt jetzt der Speicher mit höherem SoC deutlich mehr Leistung, während sehr niedrige oder sichtbar begrenzte Speicher automatisch entlastet werden. Damit bleibt die Regelung im Eigenverbrauch stabiler am Einspeisepunkt. Zusätzlich wurde der Farm-Statuszähler „Online x/y“ korrigiert.",
+        "en": "Storage farm: discharge dispatch now shifts noticeably more power to storages with the higher SoC, while very low or visibly limited storages are automatically relieved. This keeps self-consumption balancing steadier at the point of common coupling. Also fixed the farm status counter shown as “Online x/y”."
+      },
       "0.6.208": {
         "de": "EMS/Lademanagement: Das PV-Überschussladen nutzt jetzt standardmäßig einen 500-W-Reservepuffer auf dem effektiven PV-Budget. Dadurch läuft die Überschussladung ruhiger und regelt nicht mehr so hart auf 0 W Netzbezug. Die Runtime-Konfiguration normiert den neuen Wert automatisch mit.",
         "en": "EMS/Charging management: PV surplus charging now applies a default 500 W reserve buffer to the effective PV budget. This makes surplus charging calmer and avoids regulating too tightly against 0 W grid import. Runtime config now normalizes the new value as well."
@@ -1629,7 +1633,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.209",
+  "version": "0.6.210",
   "news": {
     "0.6.208": {
       "de": "EMS/Lademanagement: Das PV-Überschussladen nutzt jetzt standardmäßig einen 500-W-Reservepuffer auf dem effektiven PV-Budget. Dadurch läuft die Überschussladung ruhiger und regelt nicht mehr so hart auf 0 W Netzbezug. Die Runtime-Konfiguration normiert den neuen Wert automatisch mit.",
