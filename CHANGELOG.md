@@ -1,3 +1,10 @@
+## 0.6.211
+
+- Update/Installation: ioBroker wird jetzt per `stopBeforeUpdate` zu einem sauberen Stop vor dem Update angewiesen; zusätzlich ist ein kurzer `stopTimeout` gesetzt, damit der Adapter mit eigenem Webserver geordnet herunterfahren kann.
+- Update/Installation: Das lokale `www`-Verzeichnis wird nicht mehr unnötig in die ioBroker-Datenbank hochgeladen (`wwwDontUpload`), weil die VIS direkt aus dem eingebetteten Express-Server ausgeliefert wird. Das reduziert Reibung im GitHub-Updatepfad deutlich.
+- Runtime/Shutdown: Der eingebettete HTTP-/SSE-Server schließt beim Entladen jetzt aktiv offene Clients, räumt zusätzliche Timer auf und wartet sauber auf das Server-Close – damit Updates und Neustarts nicht mehr an offenen Verbindungen hängen bleiben.
+- Metadaten: GitHub-Repository/Issues/Homepage sowie `extIcon`/`readme` wurden auf die echten NexoWatt-Pfade korrigiert.
+
 ## 0.6.210
 
 - Speicherfarm: Die Entladeverteilung priorisiert im Eigenverbrauch jetzt den Speicher mit höherem SoC deutlich stärker. Der jeweils niedrigste SoC wird bei erkennbarer Spreizung gezielt entlastet, sodass ein stärker geladener Speicher die fehlende Leistung übernimmt.

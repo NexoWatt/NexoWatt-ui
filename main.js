@@ -63,6 +63,8 @@ class NexoWattVis extends utils.Adapter {
     // Batch SSE updates to prevent UI freezes on frequent state updates
     this._ssePendingPayload = {};
     this._sseFlushTimer = null;
+    this._serverSockets = new Set();
+    this._serverClosing = false;
     this.smartHomeDevices = [];
 
     // SmartHome: Zeitschaltuhren (Endkunde) – persisted in adapter states (no instance restart)
@@ -13677,7 +13679,7 @@ return res.json(out);
       });
       res.flushHeaders();
 
-      const client = { res };
+      const client = { req, res };
       this.sseClients.add(client);
 
       // send initial payload
@@ -13696,6 +13698,17 @@ return res.json(out);
         this.log.info(`Dashboard available at http://${bind}:${port}`);
         resolve();
       });
+
+      try {
+        this.server.on('connection', (socket) => {
+          try { this._serverSockets.add(socket); } catch (_e0) {}
+          try {
+            socket.on('close', () => {
+              try { this._serverSockets.delete(socket); } catch (_e1) {}
+            });
+          } catch (_e2) {}
+        });
+      } catch (_e3) {}
     });
   }
 
@@ -16631,24 +16644,128 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     } catch (_e) {}
   }
 
-  onUnload(callback) {
-    try {
-      // Weather timers
-      try { if (this._nwWeatherStartupTimer) clearTimeout(this._nwWeatherStartupTimer); } catch (_e) {}
-      try { if (this._nwWeatherTimer) clearInterval(this._nwWeatherTimer); } catch (_e) {}
 
-      try { if (this._nwEnergyTotalsTimer) clearInterval(this._nwEnergyTotalsTimer); } catch (_e) {}
-      try { if (this._nwHistorieTimer) clearInterval(this._nwHistorieTimer); } catch (_e) {}
-      try { this._nwStopLiveCoreRefresh(); } catch (_e) {}
-      try { if (this._nwShTimersTimeout) clearTimeout(this._nwShTimersTimeout); } catch (_e) {}
-      try { this.stopNotificationMonitor(); } catch (_e) {}
-      try { if (this._sseFlushTimer) clearTimeout(this._sseFlushTimer); } catch (_e) {}
-      try { if (this.emsEngine && typeof this.emsEngine.stop === 'function') this.emsEngine.stop(); } catch (_e2) {}
-      try { if (this.logicEngine && typeof this.logicEngine.stop === 'function') this.logicEngine.stop(); } catch (_e3) {}
-      if (this.server) this.server.close();
-      callback();
-    } catch (e) {
-      callback();
+  _nwClearTimer(refName) {
+    try {
+      if (!this[refName]) return;
+      try { clearTimeout(this[refName]); } catch (_e0) {}
+      try { clearInterval(this[refName]); } catch (_e1) {}
+      this[refName] = null;
+    } catch (_e2) {}
+  }
+
+  _nwCloseSseClients() {
+    try {
+      for (const client of Array.from(this.sseClients || [])) {
+        if (!client) continue;
+        try { client.res && client.res.write("event: shutdown\ndata: {}\n\n"); } catch (_e0) {}
+        try { client.res && client.res.end(); } catch (_e1) {}
+        try {
+          const socket = (client.req && client.req.socket) || (client.res && client.res.socket) || null;
+          if (socket && typeof socket.destroy === 'function') socket.destroy();
+        } catch (_e2) {}
+      }
+    } catch (_e3) {}
+
+    try { this.sseClients.clear(); } catch (_e4) {}
+    try { this._ssePendingPayload = {}; } catch (_e5) {}
+  }
+
+  _nwCloseServer(callback) {
+    const done = (() => {
+      let called = false;
+      return () => {
+        if (called) return;
+        called = true;
+        try { callback(); } catch (_e0) {}
+      };
+    })();
+
+    try { this._nwCloseSseClients(); } catch (_e1) {}
+
+    const server = this.server;
+    this.server = null;
+
+    if (!server || this._serverClosing) {
+      done();
+      return;
+    }
+
+    this._serverClosing = true;
+    const sockets = this._serverSockets || new Set();
+
+    let destroyTimer = null;
+    let guardTimer = null;
+    const clearTimers = () => {
+      try { if (destroyTimer) clearTimeout(destroyTimer); } catch (_e2) {}
+      try { if (guardTimer) clearTimeout(guardTimer); } catch (_e3) {}
+      destroyTimer = null;
+      guardTimer = null;
+    };
+    const finish = () => {
+      clearTimers();
+      try { this._serverClosing = false; } catch (_e4) {}
+      try { this._serverSockets.clear(); } catch (_e5) {}
+      done();
+    };
+
+    try {
+      server.close(() => finish());
+    } catch (_e6) {
+      finish();
+      return;
+    }
+
+    destroyTimer = setTimeout(() => {
+      for (const socket of Array.from(sockets)) {
+        try { if (socket && !socket.destroyed && typeof socket.end === 'function') socket.end(); } catch (_e7) {}
+      }
+      setTimeout(() => {
+        for (const socket of Array.from(sockets)) {
+          try { if (socket && !socket.destroyed && typeof socket.destroy === 'function') socket.destroy(); } catch (_e8) {}
+        }
+      }, 150);
+    }, 25);
+
+    guardTimer = setTimeout(() => finish(), 1200);
+  }
+
+  onUnload(callback) {
+    const done = (() => {
+      let called = false;
+      return () => {
+        if (called) return;
+        called = true;
+        try { callback(); } catch (_e0) {}
+      };
+    })();
+
+    try {
+      for (const refName of [
+        '_nwWeatherStartupTimer',
+        '_nwWeatherTimer',
+        '_nwEnergyTotalsTimer',
+        '_nwHistorieTimer',
+        '_nwHistorieTimerOnce',
+        '_nwStorageFarmTimer',
+        '_nwShTimersTimeout',
+        '_nwShLogicClocksTimeout',
+        '_notifyTimer',
+        '_rfidApplyTimer',
+        '_sseFlushTimer',
+      ]) {
+        this._nwClearTimer(refName);
+      }
+
+      try { this.stopNotificationMonitor(); } catch (_e1) {}
+      try { this._nwStopLiveCoreRefresh(); } catch (_e2) {}
+      try { if (this.emsEngine && typeof this.emsEngine.stop === 'function') this.emsEngine.stop(); } catch (_e3) {}
+      try { if (this.logicEngine && typeof this.logicEngine.stop === 'function') this.logicEngine.stop(); } catch (_e4) {}
+      try { this._nwCloseSseClients(); } catch (_e5) {}
+
+      this._nwCloseServer(done);
+    } catch (_e6) {
+      done();
     }
   }
 }

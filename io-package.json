@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.210",
+    "version": "0.6.211",
     "news": {
+      "0.6.211": {
+        "de": "Update- und Installationspfad gehärtet: Der Adapter fordert jetzt ein sauberes Stoppen vor Updates an, setzt einen kurzen Stop-Timeout und überspringt das unnötige Uploaden des lokalen www-Ordners in die ioBroker-Datenbank. Zusätzlich wurde der Shutdown des eingebetteten HTTP/SSE-Servers bereinigt, damit GitHub-Updates ohne manuellen Adapter-Neustart sauber durchlaufen.",
+        "en": "Hardened update/install path: the adapter now requests a clean stop before updates, uses a short stop timeout and skips the unnecessary upload of the local www folder into the ioBroker database. The embedded HTTP/SSE server shutdown was also cleaned up so GitHub-based updates can complete cleanly without a manual adapter restart."
+      },
       "0.6.210": {
         "de": "Speicherfarm: In der Entladeverteilung übernimmt jetzt der Speicher mit höherem SoC deutlich mehr Leistung, während sehr niedrige oder sichtbar begrenzte Speicher automatisch entlastet werden. Damit bleibt die Regelung im Eigenverbrauch stabiler am Einspeisepunkt. Zusätzlich wurde der Farm-Statuszähler „Online x/y“ korrigiert.",
         "en": "Storage farm: discharge dispatch now shifts noticeably more power to storages with the higher SoC, while very low or visibly limited storages are automatically relieved. This keeps self-consumption balancing steadier at the point of common coupling. Also fixed the farm status counter shown as “Online x/y”."
@@ -1505,7 +1509,12 @@
       }
     ],
     "welcomeScreen": "adapter/nexowatt-ui/tab.html",
-    "license": "UNLICENSED"
+    "license": "UNLICENSED",
+    "stopBeforeUpdate": true,
+    "stopTimeout": 2500,
+    "wwwDontUpload": true,
+    "extIcon": "https://raw.githubusercontent.com/NexoWatt/NexoWatt-ui/main/admin/admin.png",
+    "readme": "https://github.com/NexoWatt/NexoWatt-ui/blob/main/README.md"
   },
   "native": {
     "port": 8188,
