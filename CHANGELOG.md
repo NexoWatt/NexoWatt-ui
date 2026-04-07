@@ -1,3 +1,8 @@
+## 0.6.212
+
+- charging-management: Reiner PV-Überschuss wird jetzt bevorzugt direkt als `PV - Verbrauch ohne EV - Speicherladung` berechnet; Fallback-Rekonstruktion berücksichtigt Batterie-Entladung und überhöht den PV-Cap nicht mehr künstlich.
+- charging-management: Kurze PV-Start-Einschwingzeit für Wallboxen/Fahrzeuge ergänzt, damit frische PV-Starts nicht sofort wieder auf 0 W fallen.
+
 ## 0.6.211
 
 - Update/Installation: ioBroker wird jetzt per `stopBeforeUpdate` zu einem sauberen Stop vor dem Update angewiesen; zusätzlich ist ein kurzer `stopTimeout` gesetzt, damit der Adapter mit eigenem Webserver geordnet herunterfahren kann.

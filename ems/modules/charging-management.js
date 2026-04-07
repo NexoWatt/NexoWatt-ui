@@ -369,6 +369,7 @@ class ChargingManagementModule extends BaseModule {
             fast5s: { windowMs: 5 * 1000, samples: [], head: 0, sumW: 0 },
             slow5m: { windowMs: 5 * 60 * 1000, samples: [], head: 0, sumW: 0 },
         };
+        this._pvStartupUntilMs = new Map(); // safeKey -> ms until PV start settle hold is active
     }
 
     /**
@@ -433,6 +434,30 @@ class ChargingManagementModule extends BaseModule {
 
         const count = Math.max(1, bucket.samples.length - bucket.head);
         return bucket.sumW / count;
+    }
+
+    _getAdapterNumberFromCache(key, fallback = null) {
+        const sid = String(key || '').trim();
+        if (!sid) return fallback;
+
+        try {
+            if (this.adapter && typeof this.adapter._nwGetNumberFromCache === 'function') {
+                const n = this.adapter._nwGetNumberFromCache(sid);
+                if (typeof n === 'number' && Number.isFinite(n)) return n;
+            }
+        } catch {
+            // ignore
+        }
+
+        try {
+            const rec = this.adapter && this.adapter.stateCache ? this.adapter.stateCache[sid] : null;
+            const n = Number(rec && rec.value);
+            if (Number.isFinite(n)) return n;
+        } catch {
+            // ignore
+        }
+
+        return fallback;
     }
 
     /**
@@ -1515,6 +1540,15 @@ class ChargingManagementModule extends BaseModule {
             const inGrace = !!(chargingSince && lastActive && (now - lastActive) <= stopGraceMs);
             const isCharging = !!(online && enabled && (isChargingRaw || inGrace));
             const chargingSinceForState = isCharging ? chargingSince : 0;
+
+            let pvStartupHoldUntilMs = this._pvStartupUntilMs.get(safe) || 0;
+            if (!enabled || !online || vehiclePlugged === false) {
+                this._pvStartupUntilMs.delete(safe);
+                pvStartupHoldUntilMs = 0;
+            } else if (pvStartupHoldUntilMs > 0 && now >= pvStartupHoldUntilMs) {
+                this._pvStartupUntilMs.delete(safe);
+                pvStartupHoldUntilMs = 0;
+            }
             
             // Determine effective control basis for this device
             const hasSetA = !!setCurrentAId;
@@ -1994,6 +2028,7 @@ class ChargingManagementModule extends BaseModule {
                 charging: isCharging,
                 chargingSinceMs: chargingSinceForState,
                 actualPowerW: pWNum,
+                pvStartupHoldUntilMs,
                 userMode,
                 evcsIndex: (Number.isFinite(evcsIndex) && evcsIndex > 0) ? Math.round(evcsIndex) : 0,
                 vehiclePlugged,
@@ -2621,37 +2656,72 @@ class ChargingManagementModule extends BaseModule {
                 // ignore
             }
 
-            if (evPriorityRequested) {
-                const battSignedW = getFirstDpNumber(['st.batteryPowerW', 'ps.batteryW']);
-                const storageChargeNowW = (typeof battSignedW === 'number' && Number.isFinite(battSignedW))
-                    ? Math.max(0, -battSignedW)
-                    : 0;
+            const battSignedW = getFirstDpNumber(['st.batteryPowerW', 'ps.batteryW']);
+            const storageChargeNowW = (typeof battSignedW === 'number' && Number.isFinite(battSignedW))
+                ? Math.max(0, -battSignedW)
+                : 0;
+            const storageDischargeNowW = (typeof battSignedW === 'number' && Number.isFinite(battSignedW))
+                ? Math.max(0, battSignedW)
+                : 0;
 
-                if (storageChargeNowW > 0) {
-                    try {
-                        const stStorageSource = await this._getStateCached('speicher.regelung.quelle');
-                        evPriorityStorageSource = stStorageSource && stStorageSource.val !== null && stStorageSource.val !== undefined
-                            ? String(stStorageSource.val || '')
-                            : '';
-                    } catch {
-                        evPriorityStorageSource = '';
-                    }
+            if (evPriorityRequested && storageChargeNowW > 0) {
+                try {
+                    const stStorageSource = await this._getStateCached('speicher.regelung.quelle');
+                    evPriorityStorageSource = stStorageSource && stStorageSource.val !== null && stStorageSource.val !== undefined
+                        ? String(stStorageSource.val || '')
+                        : '';
+                } catch {
+                    evPriorityStorageSource = '';
+                }
 
-                    const storageSourceNorm = String(evPriorityStorageSource || '').trim().toLowerCase();
-                    const storageChargingFromPv = storageSourceNorm === 'pv'
-                        || (storageSourceNorm === '' && typeof gridW === 'number' && Number.isFinite(gridW) && gridW <= 150);
+                const storageSourceNorm = String(evPriorityStorageSource || '').trim().toLowerCase();
+                const storageChargingFromPv = storageSourceNorm === 'pv'
+                    || (storageSourceNorm === '' && typeof gridW === 'number' && Number.isFinite(gridW) && gridW <= 150);
 
-                    if (storageChargingFromPv) {
-                        evPriorityStorageYieldW = storageChargeNowW;
-                    }
+                if (storageChargingFromPv) {
+                    evPriorityStorageYieldW = storageChargeNowW;
                 }
             }
 
+            const pvDirectW = (() => {
+                const dpPv = getFirstDpNumber(['ps.pvW']);
+                if (typeof dpPv === 'number' && Number.isFinite(dpPv)) return Math.max(0, dpPv);
+
+                const cachePv = this._getAdapterNumberFromCache('derived.core.pv.totalW', null);
+                if (typeof cachePv === 'number' && Number.isFinite(cachePv)) return Math.max(0, cachePv);
+
+                const cachePvRaw = this._getAdapterNumberFromCache('pvPower', null);
+                if (typeof cachePvRaw === 'number' && Number.isFinite(cachePvRaw)) return Math.max(0, cachePvRaw);
+
+                return null;
+            })();
+
+            const loadTotalDirectW = (() => {
+                const loadDerived = this._getAdapterNumberFromCache('derived.core.building.loadTotalW', null);
+                if (typeof loadDerived === 'number' && Number.isFinite(loadDerived)) return Math.max(0, loadDerived);
+
+                const loadMapped = this._getAdapterNumberFromCache('consumptionTotal', null);
+                if (typeof loadMapped === 'number' && Number.isFinite(loadMapped)) return Math.max(0, loadMapped);
+
+                return null;
+            })();
+
             let pvSurplusNoEvW = null;
-            if (typeof gridW === 'number' && Number.isFinite(gridW)) {
-                // EV priority over storage: when a PV-driven wallbox is active, reclaim current
-                // PV storage charging in the surplus reconstruction so EVCS can take over the same PV.
-                pvSurplusNoEvW = Math.max(0, (-gridW) + pvEvcsUsedW + evPriorityStorageYieldW);
+            if (typeof pvDirectW === 'number' && Number.isFinite(pvDirectW)
+                && typeof loadTotalDirectW === 'number' && Number.isFinite(loadTotalDirectW)) {
+                // Bevorzugte direkte Berechnung für reinen PV-Überschuss:
+                //   PV - (Verbrauch ohne EV) - Speicherladung
+                // Das vermeidet Überhöhung durch Speicher-Entladung oder durch eine angenommene,
+                // aber noch nicht wirksame Rücknahme der Speicherladung.
+                const baseLoadNoEvW = Math.max(0, loadTotalDirectW - pvEvcsActualW);
+                pvSurplusNoEvW = Math.max(0, pvDirectW - baseLoadNoEvW - storageChargeNowW);
+                gridImportNoEvW = Math.max(0, baseLoadNoEvW + storageChargeNowW - pvDirectW);
+            } else if (typeof gridW === 'number' && Number.isFinite(gridW)) {
+                // Fallback-Rekonstruktion ohne direkte PV-/Verbrauchs-DPs.
+                // WICHTIG: Speicher-Entladung darf PV-Only NICHT künstlich vergrößern.
+                // Deshalb ziehen wir aktive Batterie-Entladung hier ab.
+                pvSurplusNoEvW = Math.max(0, (-gridW) + pvEvcsUsedW - storageDischargeNowW);
+                gridImportNoEvW = Math.max(0, gridW - pvEvcsUsedW + storageDischargeNowW);
             } else if (typeof pvSurplusCfgW === 'number' && Number.isFinite(pvSurplusCfgW)) {
                 // Fallback wenn kein Grid-DP verfügbar (z. B. nur PV-Surplus DP konfiguriert)
                 pvSurplusNoEvW = Math.max(0, pvSurplusCfgW);
@@ -2695,16 +2765,27 @@ class ChargingManagementModule extends BaseModule {
             const startW = pvStartThresholdW;
             const stopW  = Math.min(pvStopThresholdW, (startW > 0 ? startW : pvStopThresholdW));
 
+            const pvStartSettleMs = clamp(num(cfg.pvStartSettleSec, 20), 0, 3600) * 1000;
+            const pvStartupHoldActive = (pvStartSettleMs > 0)
+                && wbList.some((w) => w && w.enabled && w.online
+                    && (w.effectiveMode === 'pv' || w.effectiveMode === 'minpv')
+                    && Number.isFinite(Number(w.pvStartupHoldUntilMs))
+                    && Number(w.pvStartupHoldUntilMs) > now);
+
             const gridImportW = (typeof gridW === 'number' && Number.isFinite(gridW)) ? Math.max(0, gridW) : 0;
-            // Important: do NOT trip the PV stop gate on import that is caused by the active EVCS load itself.
-            // Otherwise PV-only charging can stop although there would still be enough surplus without the EV.
-            gridImportNoEvW = (typeof gridW === 'number' && Number.isFinite(gridW))
-                ? Math.max(0, gridW - pvEvcsUsedW - evPriorityStorageYieldW)
-                : 0;
-            const forcedBelow = (pvAbortImportW > 0 && gridImportNoEvW > pvAbortImportW);
+            // Wichtig: Den Stop-Gate nicht auf EV-eigenen Start-/Hochlauf-Import triggern.
+            // Während der Start-Einschwingzeit tolerieren wir kurze Übergänge, damit die Wallbox
+            // sauber am Fahrzeug ankommt und nicht sofort wieder auf 0 fällt.
+            if (!(typeof gridImportNoEvW === 'number' && Number.isFinite(gridImportNoEvW))) {
+                gridImportNoEvW = (typeof gridW === 'number' && Number.isFinite(gridW))
+                    ? Math.max(0, gridW - pvEvcsUsedW + storageDischargeNowW)
+                    : 0;
+            }
+            const forcedBelow = !pvStartupHoldActive && (pvAbortImportW > 0 && gridImportNoEvW > pvAbortImportW);
+            const suppressStopGate = pvStartupHoldActive && pvCapBudgetW > 0;
 
             const above = (!forcedBelow) && ((startW > 0) ? (pvCapBudgetW >= startW) : (pvCapBudgetW > 0));
-            const below = forcedBelow || (pvCapBudgetW <= stopW);
+            const below = !suppressStopGate && (forcedBelow || (pvCapBudgetW <= stopW));
 
             let pvAvail = !!this._pvAvailable;
 
@@ -4274,6 +4355,37 @@ if (components.length) {
             // MU6.11: Remember last commanded setpoints for ramp limiting
             this._lastCmdTargetW.set(w.safe, cmdW);
             this._lastCmdTargetA.set(w.safe, cmdA);
+
+            // PV-Start Einschwingzeit:
+            // Einige Wallboxen/Fahrzeuge übernehmen nach der Freigabe die neue Leistung verzögert.
+            // Damit wir direkt nach dem Start nicht wieder auf 0 regeln, halten wir eine kurze
+            // Settling-Phase offen, in der der PV-Stop-Gate nicht sofort zuschlägt.
+            try {
+                const pvStartSettleMs = clamp(num(cfg.pvStartSettleSec, 20), 0, 3600) * 1000;
+                const actualNowW = (typeof w.actualPowerW === 'number' && Number.isFinite(w.actualPowerW))
+                    ? Math.max(0, Math.abs(w.actualPowerW))
+                    : 0;
+                const prevCmdWasActive = typeof prevCmdW === 'number' && Number.isFinite(prevCmdW) && prevCmdW >= activityThresholdW;
+                const cmdStartsNow = (String(w.effectiveMode || '') === 'pv' || String(w.effectiveMode || '') === 'minpv')
+                    && pvStartSettleMs > 0
+                    && w.enabled
+                    && w.online
+                    && w.vehiclePlugged !== false
+                    && !prevCmdWasActive
+                    && cmdW >= activityThresholdW;
+
+                if (cmdStartsNow) {
+                    this._pvStartupUntilMs.set(w.safe, now + pvStartSettleMs);
+                } else if (actualNowW >= activityThresholdW || cmdW < activityThresholdW || w.vehiclePlugged === false
+                    || !w.enabled || !w.online || (String(w.effectiveMode || '') !== 'pv' && String(w.effectiveMode || '') !== 'minpv')) {
+                    this._pvStartupUntilMs.delete(w.safe);
+                } else {
+                    const holdUntil = this._pvStartupUntilMs.get(w.safe) || 0;
+                    if (holdUntil > 0 && now >= holdUntil) this._pvStartupUntilMs.delete(w.safe);
+                }
+            } catch {
+                // ignore
+            }
 
             // Ziel-Laden: Shortfall & Status Update (nach Quantisierung/Ramp)
             try {
