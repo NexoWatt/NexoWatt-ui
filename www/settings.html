@@ -266,6 +266,27 @@
             <b>Standard (ST)</b>: keine zusätzliche Sperre/Erzwingung – dynamischer Tarif regelt wie zuvor.
           </small>
 
+          <div class="row" style="margin-top:10px;align-items:flex-start">
+            <span>Netzentgelt-Zusatz (€/kWh)</span>
+            <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+              <label style="display:flex;align-items:center;gap:6px">
+                <span style="opacity:.8">ST</span>
+                <input type="number" id="s_netFeePriceSt" step="0.01" min="0" data-scope="settings" data-key="netFeePriceSt" style="width:110px">
+              </label>
+              <label style="display:flex;align-items:center;gap:6px">
+                <span style="opacity:.8">NT</span>
+                <input type="number" id="s_netFeePriceNt" step="0.01" min="0" data-scope="settings" data-key="netFeePriceNt" style="width:110px">
+              </label>
+              <label style="display:flex;align-items:center;gap:6px">
+                <span style="opacity:.8">HT</span>
+                <input type="number" id="s_netFeePriceHt" step="0.01" min="0" data-scope="settings" data-key="netFeePriceHt" style="width:110px">
+              </label>
+            </div>
+          </div>
+          <small style="opacity:.75; display:block; margin-top:6px;">
+            Diese Werte werden als <b>zusätzlicher Netzentgelt-Anteil</b> zum Strompreis verwendet und im Historienbereich separat sowie als Gesamtpreis protokolliert.
+          </small>
+
           <label class="row" style="margin-top:10px"><span>Modell</span>
             <select id="s_netFeeModel" data-scope="settings" data-key="netFeeModel" style="min-width:260px;max-width:100%;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.08);background:#a7c400;color:#000;">
               <option value="1">Einfach (HT/NT, ganzjährig)</option>

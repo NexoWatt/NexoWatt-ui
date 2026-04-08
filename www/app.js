@@ -2014,8 +2014,11 @@ function initSettingsPanel(){
     tmLabel.textContent = (v === 2) ? 'Automatisch' : 'Manuell';
   };
   const updateDynVisibility = ()=>{
-    if (!dynToggle || !dynBlock) return;
-    dynBlock.hidden = !dynToggle.checked;
+    if (!dynBlock) return;
+    // Netzentgelt / Tarifhistorie must remain configurable even if the dynamic tariff toggle is off.
+    // Therefore we keep the shared settings block visible and only sync the custom toggle buttons.
+    dynBlock.hidden = false;
+    try { if (dynToggle) syncToggleButtonsForInputId('s_dyn_toggle'); } catch (_e) {}
   };
 
   const normalizePriorityValue = ()=>{

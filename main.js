@@ -1388,6 +1388,9 @@ class NexoWattVis extends utils.Adapter {
       netFeeNtEnd: { type: 'string', role: 'text', def: '06:00' },
       netFeeHtStart: { type: 'string', role: 'text', def: '06:00' },
       netFeeHtEnd: { type: 'string', role: 'text', def: '22:00' },
+      netFeePriceNt: { type: 'number', role: 'value', def: 0 },
+      netFeePriceHt: { type: 'number', role: 'value', def: 0 },
+      netFeePriceSt: { type: 'number', role: 'value', def: 0 },
 
       // Quartalszeiten (nur wenn netFeeModel=2 aktiv ist)
       // Q1 = Jan–Mär, Q2 = Apr–Jun, Q3 = Jul–Sep, Q4 = Okt–Dez
@@ -10814,7 +10817,10 @@ app.get('/api/history', async (req, res) => {
           chg: this._nwGetHistoryDpCandidates('storageChargePower'),
           dchg: this._nwGetHistoryDpCandidates('storageDischargePower'),
           soc: this._nwGetHistoryDpCandidates('storageSoc'),
-          evcs: this._nwGetHistoryDpCandidates('evcsPower')
+          evcs: this._nwGetHistoryDpCandidates('evcsPower'),
+          priceBase: this._nwGetHistoryDpCandidates('priceBase'),
+          priceNetFee: this._nwGetHistoryDpCandidates('priceNetFee'),
+          priceTotal: this._nwGetHistoryDpCandidates('priceTotal')
         };
 
         // Optional series (Energiefluss: Verbraucher/Erzeuger)
@@ -10940,7 +10946,7 @@ app.get('/api/history', async (req, res) => {
           return first || { id: '', values: [] };
         };
 
-        const [pv, load, buy, sell, chg, dchg, soc, evcs] = await Promise.all([
+        const [pv, load, buy, sell, chg, dchg, soc, evcs, priceBase, priceNetFee, priceTotal] = await Promise.all([
           askCandidates(idCandidates.pv),
           askCandidates(idCandidates.load),
           askCandidates(idCandidates.buy),
@@ -10948,7 +10954,10 @@ app.get('/api/history', async (req, res) => {
           askCandidates(idCandidates.chg),
           askCandidates(idCandidates.dchg),
           askCandidates(idCandidates.soc),
-          askCandidates(idCandidates.evcs)
+          askCandidates(idCandidates.evcs),
+          askCandidates(idCandidates.priceBase),
+          askCandidates(idCandidates.priceNetFee),
+          askCandidates(idCandidates.priceTotal)
         ]);
 
         // --- Robustness for E‑Mobilität (EVCS) ---
@@ -11134,7 +11143,14 @@ if (energyIds.ev) energy.evKwh = await counterDelta(energyIds.ev);
 energy.__endMs = energyEnd;
 
         const out = { pv, load, buy, sell, chg, dchg, soc, evcs };
-        res.json({ ok:true, start, end, step: stepS, series: out, extras: { consumers: extraConsumers, producers: extraProducers }, energy });
+        const pricing = {
+          active: !!((this.stateCache && this.stateCache['settings.dynamicTariff'] && this.stateCache['settings.dynamicTariff'].value) || (this.stateCache && this.stateCache['settings.netFeeEnabled'] && this.stateCache['settings.netFeeEnabled'].value)),
+          dynamicTariff: !!(this.stateCache && this.stateCache['settings.dynamicTariff'] && this.stateCache['settings.dynamicTariff'].value),
+          netFeeEnabled: !!(this.stateCache && this.stateCache['settings.netFeeEnabled'] && this.stateCache['settings.netFeeEnabled'].value),
+          historyReady: [priceBase, priceNetFee, priceTotal].some(s => Array.isArray(s && s.values) && s.values.length >= 2),
+          series: { base: priceBase, netFee: priceNetFee, total: priceTotal },
+        };
+        res.json({ ok:true, start, end, step: stepS, series: out, extras: { consumers: extraConsumers, producers: extraProducers }, energy, pricing });
       } catch (e) {
         res.json({ ok:false, error: String(e) });
       }
@@ -14050,6 +14066,7 @@ return res.json(out);
       'tariffPvSeasonEnabled','tariffPvSeasonAiEnabled','tariffPvSeasonQ1Factor','tariffPvSeasonQ2Factor','tariffPvSeasonQ3Factor','tariffPvSeasonQ4Factor',
       // Zeitvariables Netzentgelt (HT/NT)
       'netFeeEnabled','netFeeModel','netFeeNtStart','netFeeNtEnd','netFeeHtStart','netFeeHtEnd',
+      'netFeePriceNt','netFeePriceHt','netFeePriceSt',
       'netFeeQ1NtStart','netFeeQ1NtEnd','netFeeQ1HtStart','netFeeQ1HtEnd',
       'netFeeQ2NtStart','netFeeQ2NtEnd','netFeeQ2HtStart','netFeeQ2HtEnd',
       'netFeeQ3NtStart','netFeeQ3NtEnd','netFeeQ3HtStart','netFeeQ3HtEnd',
@@ -14067,6 +14084,9 @@ return res.json(out);
     const localUiKeys = [
       'tarif.statusText',
       'tarif.state',
+      'tarif.preisAktuellEurProKwh',
+      'tarif.netFeeEnabled',
+      'tarif.netFeeMode',
 
       // Weather tile (Plug&Play): local root-level states
       'weatherTempC',
@@ -15045,6 +15065,11 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     await ensureChannel('historie.core.ev', 'E-Mobilität');
     await ensureState('historie.core.ev.totalW', 'E-Mobilität (gesamt)', 'value.power', 'W');
 
+    await ensureChannel('historie.tariff', 'Preis / Kosten');
+    await ensureState('historie.tariff.baseEurPerKwh', 'Strompreis Basis', 'value', '€/kWh');
+    await ensureState('historie.tariff.netFeeEurPerKwh', 'Netzentgelt Aufschlag', 'value', '€/kWh');
+    await ensureState('historie.tariff.totalEurPerKwh', 'Strompreis gesamt', 'value', '€/kWh');
+
     // EVCS per Ladepunkt (für Abrechnung/Detailanalyse)
     // Diese States werden aus den internen EVCS-Leistungswerten befüllt und
     // (optional) automatisch für InfluxDB aktiviert.
@@ -15326,6 +15351,115 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
     const loadRest = Math.max(0, (loadTotal || 0) - evAbs - extrasConsumersSum);
 
+    const _rawCacheValue = (key) => {
+      try {
+        const rec = this.stateCache && this.stateCache[key];
+        return rec ? rec.value : null;
+      } catch (_e) {
+        return null;
+      }
+    };
+    const _numOr = (key, fallback = null) => {
+      try {
+        const n = Number(_rawCacheValue(key));
+        return Number.isFinite(n) ? n : fallback;
+      } catch (_e) {
+        return fallback;
+      }
+    };
+    const _boolOr = (key, fallback = false) => {
+      const raw = _rawCacheValue(key);
+      if (raw === true || raw === 1 || raw === '1') return true;
+      if (raw === false || raw === 0 || raw === '0') return false;
+      const s = String(raw == null ? '' : raw).trim().toLowerCase();
+      if (s === 'true' || s === 'on' || s === 'yes') return true;
+      if (s === 'false' || s === 'off' || s === 'no') return false;
+      return !!fallback;
+    };
+    const _strOr = (key, fallback = '') => {
+      const raw = _rawCacheValue(key);
+      if (raw === null || raw === undefined) return fallback;
+      return String(raw);
+    };
+    const _parseTimeMinutes = (raw, defMinutes) => {
+      const s = String(raw == null ? '' : raw).trim();
+      if (!s) return Number.isFinite(defMinutes) ? defMinutes : null;
+      const m = s.match(/^(\d{1,2}):(\d{2})$/);
+      if (!m) return Number.isFinite(defMinutes) ? defMinutes : null;
+      const hh = Math.max(0, Math.min(23, Number(m[1]) || 0));
+      const mm = Math.max(0, Math.min(59, Number(m[2]) || 0));
+      return hh * 60 + mm;
+    };
+    const _isInWindow = (nowMin, startMin, endMin) => {
+      if (!Number.isFinite(nowMin) || !Number.isFinite(startMin) || !Number.isFinite(endMin)) return false;
+      if (startMin === endMin) return false;
+      if (startMin < endMin) return nowMin >= startMin && nowMin < endMin;
+      return nowMin >= startMin || nowMin < endMin;
+    };
+    const _quarterOf = (tsMs) => {
+      try {
+        const d = new Date(Number(tsMs) || Date.now());
+        return Math.min(4, Math.max(1, Math.floor(d.getMonth() / 3) + 1));
+      } catch (_e) {
+        return 1;
+      }
+    };
+    const _nowMinutesLocal = (tsMs) => {
+      try {
+        const d = new Date(Number(tsMs) || Date.now());
+        return d.getHours() * 60 + d.getMinutes();
+      } catch (_e) {
+        return 0;
+      }
+    };
+    const _computeNetFeeModeNow = () => {
+      if (!_boolOr('settings.netFeeEnabled', false)) return 'off';
+      const cachedMode = _strOr('tarif.netFeeMode', '').trim();
+      if (cachedMode) {
+        const m = cachedMode.toLowerCase();
+        if (m === 'nt') return 'NT';
+        if (m === 'ht') return 'HT';
+        if (m === 'standard' || m === 'st') return 'Standard';
+      }
+      const model = Math.round(Number(_numOr('settings.netFeeModel', 1)) || 1) === 2 ? 2 : 1;
+      const nowMinLocal = _nowMinutesLocal(now);
+      let ntStartRaw = _strOr('settings.netFeeNtStart', '22:00');
+      let ntEndRaw = _strOr('settings.netFeeNtEnd', '06:00');
+      let htStartRaw = _strOr('settings.netFeeHtStart', '06:00');
+      let htEndRaw = _strOr('settings.netFeeHtEnd', '22:00');
+      if (model === 2) {
+        const qq = `Q${_quarterOf(now)}`;
+        ntStartRaw = _strOr(`settings.netFee${qq}NtStart`, ntStartRaw);
+        ntEndRaw = _strOr(`settings.netFee${qq}NtEnd`, ntEndRaw);
+        htStartRaw = _strOr(`settings.netFee${qq}HtStart`, htStartRaw);
+        htEndRaw = _strOr(`settings.netFee${qq}HtEnd`, htEndRaw);
+      }
+      const ntStartMin = _parseTimeMinutes(ntStartRaw, 22 * 60);
+      const ntEndMin = _parseTimeMinutes(ntEndRaw, 6 * 60);
+      const htStartMin = _parseTimeMinutes(htStartRaw, 6 * 60);
+      const htEndMin = _parseTimeMinutes(htEndRaw, 22 * 60);
+      const inNt = _isInWindow(nowMinLocal, ntStartMin, ntEndMin);
+      const inHt = (!inNt) && _isInWindow(nowMinLocal, htStartMin, htEndMin);
+      return inNt ? 'NT' : inHt ? 'HT' : 'Standard';
+    };
+
+    const dynamicTariffActive = _boolOr('settings.dynamicTariff', false);
+    const providerPrice = _numOr('tarif.preisAktuellEurProKwh', null);
+    const manualPrice = _numOr('settings.price', 0.25);
+    let tariffBasePrice = Number.isFinite(providerPrice) && dynamicTariffActive ? providerPrice : manualPrice;
+    if (!Number.isFinite(tariffBasePrice)) tariffBasePrice = Number.isFinite(providerPrice) ? providerPrice : 0;
+    tariffBasePrice = Math.max(-5, tariffBasePrice);
+
+    const netFeeModeNow = _computeNetFeeModeNow();
+    const netFeePriceNt = Math.max(0, Number(_numOr('settings.netFeePriceNt', 0)) || 0);
+    const netFeePriceHt = Math.max(0, Number(_numOr('settings.netFeePriceHt', 0)) || 0);
+    const netFeePriceSt = Math.max(0, Number(_numOr('settings.netFeePriceSt', 0)) || 0);
+    let tariffNetFeePrice = 0;
+    if (_boolOr('settings.netFeeEnabled', false)) {
+      tariffNetFeePrice = (netFeeModeNow === 'NT') ? netFeePriceNt : (netFeeModeNow === 'HT') ? netFeePriceHt : netFeePriceSt;
+    }
+    const tariffTotalPrice = tariffBasePrice + tariffNetFeePrice;
+
     // Core series
     this._nwSetHistorieValue('historie.core.grid.buyW', gridBuy, now, 0);
     this._nwSetHistorieValue('historie.core.grid.sellW', gridSell, now, 0);
@@ -15340,6 +15474,9 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     if (Number.isFinite(soc)) this._nwSetHistorieValue('historie.core.storage.socPct', soc, now, 0);
 
     this._nwSetHistorieValue('historie.core.ev.totalW', evAbs, now, 0);
+    this._nwSetHistorieValue('historie.tariff.baseEurPerKwh', tariffBasePrice, now, 0.0001);
+    this._nwSetHistorieValue('historie.tariff.netFeeEurPerKwh', tariffNetFeePrice, now, 0.0001);
+    this._nwSetHistorieValue('historie.tariff.totalEurPerKwh', tariffTotalPrice, now, 0.0001);
 
     // EVCS per Ladepunkt (Leistung) – für detaillierte Abrechnung
     const evcsCount = Number(this.evcsCount || 0);
@@ -15735,6 +15872,9 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       case 'storageDischargePower': return ns + '.historie.core.storage.dischargeW';
       case 'storageSoc': return ns + '.historie.core.storage.socPct';
       case 'evcsPower': return ns + '.historie.core.ev.totalW';
+      case 'priceBase': return ns + '.historie.tariff.baseEurPerKwh';
+      case 'priceNetFee': return ns + '.historie.tariff.netFeeEurPerKwh';
+      case 'priceTotal': return ns + '.historie.tariff.totalEurPerKwh';
       default: {
         const mConsumer = k.match(/^consumer(\d+)Power$/);
         if (mConsumer) return `${ns}.historie.consumers.c${mConsumer[1]}.powerW`;

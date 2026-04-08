@@ -2,8 +2,17 @@
   // simple line chart renderer on canvas
   const canvas = document.getElementById('chart');
   const ctx = canvas.getContext('2d');
-  function resize(){ canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
-  window.addEventListener('resize', ()=>{ resize(); draw(); });
+  const priceCanvas = document.getElementById('priceChart');
+  const priceCtx = priceCanvas ? priceCanvas.getContext('2d') : null;
+  function resize(){
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+    if (priceCanvas) {
+      priceCanvas.width = priceCanvas.clientWidth;
+      priceCanvas.height = priceCanvas.clientHeight;
+    }
+  }
+  window.addEventListener('resize', ()=>{ resize(); draw(); drawPricingHistoryChart(); });
   function fmt(ts){ const d=new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
 
   let data=null;
@@ -16,6 +25,49 @@
 
   
   let barState = null;
+  let pricingState = { visible:false, ready:false, rawIntervals:[], points:[], summary:null, note:'', meta:{} };
+  let pricingChartState = null;
+  let priceCrossX = null;
+  const hiddenPriceSeries = new Set();
+
+  function isPriceSeriesVisible(key){ return !hiddenPriceSeries.has(String(key || '')); }
+  function setPriceSeriesVisible(key, visible){
+    const k = String(key || '');
+    if (!k) return;
+    if (visible) hiddenPriceSeries.delete(k); else hiddenPriceSeries.add(k);
+  }
+  function applyPriceLegendState(){
+    const items = Array.from(document.querySelectorAll('#priceLegend .lg[data-series]'));
+    items.forEach((el)=>{
+      const key = String(el.dataset.series || '');
+      const visible = isPriceSeriesVisible(key);
+      el.classList.toggle('inactive', !visible);
+      el.setAttribute('aria-pressed', visible ? 'true' : 'false');
+      const label = String(el.dataset.label || (el.textContent || '').trim() || key);
+      el.title = `${label}: ${visible ? 'sichtbar' : 'ausgeblendet'} — klicken zum Umschalten`;
+    });
+  }
+  function bindPriceLegendItem(el){
+    if (!el || el.dataset.bound === '1') return;
+    el.dataset.bound = '1';
+    if (!el.hasAttribute('tabindex')) el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.addEventListener('click', (ev)=>{
+      ev.preventDefault();
+      ev.stopPropagation();
+      const key = String(el.dataset.series || '');
+      if (!key) return;
+      setPriceSeriesVisible(key, hiddenPriceSeries.has(key));
+      try { if (typeof window.__nxHistoryHidePriceTip === 'function') window.__nxHistoryHidePriceTip(true); } catch(_e){}
+      applyPriceLegendState();
+      drawPricingHistoryChart();
+    });
+    el.addEventListener('keydown', (ev)=>{
+      if (ev.key !== 'Enter' && ev.key !== ' ') return;
+      ev.preventDefault();
+      el.click();
+    });
+  }
 
   // --- Legend / series visibility ---
   const hiddenSeries = new Set();
@@ -26,7 +78,7 @@
     if (visible) hiddenSeries.delete(k); else hiddenSeries.add(k);
   }
   function applyLegendState(){
-    const items = Array.from(document.querySelectorAll('.legend .lg[data-series]'));
+    const items = Array.from(document.querySelectorAll('#mainLegend .lg[data-series]'));
     items.forEach((el)=>{
       const key = String(el.dataset.series || '');
       const visible = isSeriesVisible(key);
@@ -117,7 +169,7 @@
   }
 
   function updateLegend(){
-    const legend = document.querySelector('.legend');
+    const legend = document.getElementById('mainLegend');
     if (!legend) return;
     Array.from(legend.querySelectorAll('.lg-extra')).forEach(el=>{ try{ el.remove(); }catch(_e){} });
     Array.from(legend.querySelectorAll('.lg[data-series]')).forEach(bindLegendItem);
@@ -641,6 +693,513 @@ function draw(){
     return counter;
   }
 
+  function formatMoney2(v){ return Number.isFinite(Number(v)) ? (Number(v).toFixed(2) + ' €') : '--'; }
+  function formatPrice2(v){ return Number.isFinite(Number(v)) ? (Number(v).toFixed(2) + ' €/kWh') : '--'; }
+  function formatKwh2(v){ return Number.isFinite(Number(v)) ? (Number(v).toFixed(2) + ' kWh') : '--'; }
+
+  function normalizeNumericSeries(vals){
+    const arr = (Array.isArray(vals) ? vals : [])
+      .map(p => [toTsMs(p && p[0]), Number(p && p[1])])
+      .filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1]))
+      .sort((a, b) => a[0] - b[0]);
+    const out = [];
+    for (const p of arr){
+      if (out.length && out[out.length - 1][0] === p[0]) out[out.length - 1] = p;
+      else out.push(p);
+    }
+    return out;
+  }
+
+  function valueAtHold(points, ts){
+    if (!Array.isArray(points) || !points.length || !Number.isFinite(ts)) return NaN;
+    if (ts <= points[0][0]) return Number(points[0][1]);
+    let lo = 0, hi = points.length - 1;
+    while (lo < hi){
+      const mid = Math.floor((lo + hi + 1) / 2);
+      if (points[mid][0] <= ts) lo = mid; else hi = mid - 1;
+    }
+    return Number(points[lo] && points[lo][1]);
+  }
+
+  function buildPricingIntervals(res){
+    const start = Number(res && res.start);
+    const end = Number(res && res.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || !(end > start)) return [];
+
+    const pricing = (res && res.pricing && typeof res.pricing === 'object') ? res.pricing : {};
+    const series = (pricing && pricing.series && typeof pricing.series === 'object') ? pricing.series : {};
+    const baseVals = normalizeNumericSeries(series.base && series.base.values);
+    const netFeeVals = normalizeNumericSeries(series.netFee && series.netFee.values);
+    const totalVals = normalizeNumericSeries(series.total && series.total.values);
+    const buyVals = normalizeNumericSeries(res && res.series && res.series.buy && res.series.buy.values);
+
+    if (!baseVals.length && !netFeeVals.length && !totalVals.length && !buyVals.length) return [];
+
+    const tset = new Set([start, end]);
+    [baseVals, netFeeVals, totalVals, buyVals].forEach(arr => {
+      arr.forEach(p => {
+        const ts = Number(p && p[0]);
+        if (Number.isFinite(ts) && ts > start && ts < end) tset.add(ts);
+      });
+    });
+    const times = Array.from(tset).filter(Number.isFinite).sort((a, b) => a - b);
+    if (times.length < 2) return [];
+
+    const buckets = [];
+    for (let i = 0; i < times.length - 1; i++){
+      const s = Number(times[i]);
+      const e = Number(times[i + 1]);
+      if (Number.isFinite(s) && Number.isFinite(e) && e > s) buckets.push({ start: s, end: e });
+    }
+    if (!buckets.length) return [];
+
+    const importAgg = aggregateEnergyKWh(buyVals, buckets);
+    return buckets.map((b, idx) => {
+      const mid = (b.start + b.end) / 2;
+      let base = valueAtHold(baseVals, mid);
+      let netFee = valueAtHold(netFeeVals, mid);
+      let total = valueAtHold(totalVals, mid);
+      if (!Number.isFinite(total)) {
+        const safeBase = Number.isFinite(base) ? base : 0;
+        const safeNet = Number.isFinite(netFee) ? netFee : 0;
+        total = safeBase + safeNet;
+      }
+      if (!Number.isFinite(base)) base = Math.max(0, total - (Number.isFinite(netFee) ? netFee : 0));
+      if (!Number.isFinite(netFee)) netFee = Math.max(0, total - (Number.isFinite(base) ? base : total));
+      const importKwh = Math.max(0, Number(importAgg[idx] && importAgg[idx].kwh) || 0);
+      const costEur = importKwh * Math.max(0, Number(total) || 0);
+      return {
+        start: b.start,
+        end: b.end,
+        ts: mid,
+        base: Math.max(0, Number(base) || 0),
+        netFee: Math.max(0, Number(netFee) || 0),
+        total: Math.max(0, Number(total) || 0),
+        importKwh,
+        costEur,
+      };
+    });
+  }
+
+  function aggregatePricingIntervals(intervals, fromMs, toMs, mode){
+    const src = Array.isArray(intervals) ? intervals : [];
+    if (!src.length) return [];
+    if (mode === 'day') return src.map(iv => Object.assign({}, iv));
+    const buckets = bucketizeRange(fromMs, toMs, mode);
+    return buckets.map((b) => {
+      let durAcc = 0;
+      let baseAcc = 0;
+      let netAcc = 0;
+      let totalAcc = 0;
+      let importKwh = 0;
+      let costEur = 0;
+      src.forEach((iv) => {
+        const overlap = Math.min(b.end, iv.end) - Math.max(b.start, iv.start);
+        const ivDur = iv.end - iv.start;
+        if (!(overlap > 0) || !(ivDur > 0)) return;
+        const factor = overlap / ivDur;
+        durAcc += overlap;
+        baseAcc += Number(iv.base || 0) * overlap;
+        netAcc += Number(iv.netFee || 0) * overlap;
+        totalAcc += Number(iv.total || 0) * overlap;
+        importKwh += Number(iv.importKwh || 0) * factor;
+        costEur += Number(iv.costEur || 0) * factor;
+      });
+      const ts = (b.start + b.end) / 2;
+      return {
+        start: b.start,
+        end: b.end,
+        ts,
+        base: durAcc > 0 ? (baseAcc / durAcc) : 0,
+        netFee: durAcc > 0 ? (netAcc / durAcc) : 0,
+        total: durAcc > 0 ? (totalAcc / durAcc) : 0,
+        importKwh: Math.max(0, importKwh),
+        costEur: Math.max(0, costEur),
+      };
+    });
+  }
+
+  function summarizePricingIntervals(intervals){
+    const src = Array.isArray(intervals) ? intervals : [];
+    if (!src.length) {
+      return {
+        minPrice: null,
+        maxPrice: null,
+        avgPrice: null,
+        importKwh: null,
+        totalCost: null,
+        netFeeCost: null,
+      };
+    }
+    const prices = src.map(iv => Number(iv.total)).filter(Number.isFinite);
+    const importKwh = src.reduce((sum, iv) => sum + (Number(iv.importKwh) || 0), 0);
+    const totalCost = src.reduce((sum, iv) => sum + (Number(iv.costEur) || 0), 0);
+    const netFeeCost = src.reduce((sum, iv) => sum + ((Number(iv.importKwh) || 0) * (Number(iv.netFee) || 0)), 0);
+    let avgPrice = null;
+    if (importKwh > 0.0001) avgPrice = totalCost / importKwh;
+    else if (prices.length) avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
+    return {
+      minPrice: prices.length ? Math.min(...prices) : null,
+      maxPrice: prices.length ? Math.max(...prices) : null,
+      avgPrice,
+      importKwh,
+      totalCost,
+      netFeeCost,
+    };
+  }
+
+  function renderPricingCards(summary){
+    const cards = document.getElementById('priceCards');
+    if (!cards) return;
+    cards.innerHTML = '';
+    function card(title, val){
+      const el = document.createElement('div');
+      el.className = 'card';
+      el.innerHTML = `<small>${title}</small><b>${val}</b>`;
+      cards.appendChild(el);
+    }
+    const s = summary || {};
+    card('Preis min', formatPrice2(s.minPrice));
+    card('Preis max', formatPrice2(s.maxPrice));
+    card('Ø Preis', formatPrice2(s.avgPrice));
+    card('Bezug', formatKwh2(s.importKwh));
+    card('Kosten', formatMoney2(s.totalCost));
+    card('Netzentgelt-Anteil', formatMoney2(s.netFeeCost));
+  }
+
+  function buildPricingNote(pricing, intervals){
+    const src = (pricing && typeof pricing === 'object') ? pricing : {};
+    const parts = [];
+    if (src.dynamicTariff) parts.push('dynamischer Strompreis aktiv');
+    else parts.push('Basispreis aus Einstellungen');
+    if (src.netFeeEnabled) parts.push('variables Netzentgelt aktiv');
+    if (Array.isArray(intervals) && intervals.length) parts.push('Kosten werden aus historischem Preis × Bezug berechnet');
+    else parts.push('Preis-Historie füllt sich ab diesem Update und dient später zum Gegenprüfen der Abrechnung');
+    return parts.join(' · ');
+  }
+
+  function syncPricingLegend(){
+    Array.from(document.querySelectorAll('#priceLegend .lg[data-series]')).forEach(bindPriceLegendItem);
+    applyPriceLegendState();
+  }
+
+  function renderPricingHistory(res){
+    const section = document.getElementById('pricingSection');
+    const noticeEl = document.getElementById('pricingNotice');
+    const legendEl = document.getElementById('priceLegend');
+    if (!section) return;
+
+    const pricing = (res && res.pricing && typeof res.pricing === 'object') ? res.pricing : {};
+    const rawIntervals = buildPricingIntervals(res);
+    const shouldShow = !!((pricing && pricing.active) || rawIntervals.length);
+
+    if (!shouldShow) {
+      pricingState = { visible:false, ready:false, rawIntervals:[], points:[], summary:null, note:'', meta:{} };
+      section.classList.add('hidden');
+      if (legendEl) legendEl.style.display = 'none';
+      renderPricingCards(null);
+      try { if (typeof window.__nxHistoryHidePriceTip === 'function') window.__nxHistoryHidePriceTip(true); } catch(_e){}
+      drawPricingHistoryChart();
+      return;
+    }
+
+    const points = aggregatePricingIntervals(rawIntervals, Number(res.start), Number(res.end), chartMode);
+    const summary = summarizePricingIntervals(rawIntervals);
+    const note = buildPricingNote(pricing, rawIntervals);
+    pricingState = {
+      visible: true,
+      ready: rawIntervals.length > 0,
+      rawIntervals,
+      points,
+      summary,
+      note,
+      meta: {
+        start: Number(res.start),
+        end: Number(res.end),
+        dynamicTariff: !!pricing.dynamicTariff,
+        netFeeEnabled: !!pricing.netFeeEnabled,
+      }
+    };
+
+    section.classList.remove('hidden');
+    if (noticeEl) noticeEl.textContent = note;
+    if (legendEl) legendEl.style.display = rawIntervals.length ? '' : 'none';
+    renderPricingCards(summary);
+    syncPricingLegend();
+    resize();
+    try { if (typeof window.__nxHistoryHidePriceTip === 'function') window.__nxHistoryHidePriceTip(true); } catch(_e){}
+    drawPricingHistoryChart();
+  }
+
+  function drawPricingHistoryChart(){
+    if (!priceCanvas || !priceCtx) return;
+    const W = priceCanvas.width || 0;
+    const H = priceCanvas.height || 0;
+    priceCtx.clearRect(0, 0, W, H);
+    if (!W || !H) return;
+
+    priceCtx.fillStyle = '#0e1216';
+    priceCtx.fillRect(0, 0, W, H);
+
+    const section = document.getElementById('pricingSection');
+    if (!section || section.classList.contains('hidden') || !pricingState || !pricingState.visible) {
+      pricingChartState = null;
+      return;
+    }
+
+    const points = Array.isArray(pricingState.points) ? pricingState.points : [];
+    if (!points.length) {
+      priceCtx.save();
+      priceCtx.fillStyle = '#9aa4ad';
+      priceCtx.font = '13px system-ui, sans-serif';
+      priceCtx.textAlign = 'center';
+      priceCtx.fillText('Preis-Historie wird mit diesem Update aufgebaut.', W / 2, Math.max(24, H / 2));
+      priceCtx.restore();
+      pricingChartState = null;
+      return;
+    }
+
+    const start = Number(pricingState.meta && pricingState.meta.start);
+    const end = Number(pricingState.meta && pricingState.meta.end);
+    const L = (W < 520) ? 56 : 68;
+    const R = (W < 520) ? 58 : 72;
+    const T = 24;
+    const B = 42;
+
+    const leftVals = [];
+    if (isPriceSeriesVisible('total')) leftVals.push(...points.map(p => Number(p.total)).filter(Number.isFinite));
+    if (isPriceSeriesVisible('base')) leftVals.push(...points.map(p => Number(p.base)).filter(Number.isFinite));
+    if (isPriceSeriesVisible('netfee')) leftVals.push(...points.map(p => Number(p.netFee)).filter(Number.isFinite));
+    let leftMin = leftVals.length ? Math.min(...leftVals) : 0;
+    let leftMax = leftVals.length ? Math.max(...leftVals) : 1;
+    if (!(leftMax > leftMin)) {
+      leftMin = Math.max(0, leftMin - 0.05);
+      leftMax = leftMin + 0.10;
+    } else {
+      const pad = Math.max(0.01, (leftMax - leftMin) * 0.12);
+      leftMin = Math.max(0, leftMin - pad);
+      leftMax += pad;
+    }
+
+    const rightVals = [];
+    if (isPriceSeriesVisible('import')) rightVals.push(...points.map(p => Number(p.importKwh)).filter(Number.isFinite));
+    if (isPriceSeriesVisible('cost')) rightVals.push(...points.map(p => Number(p.costEur)).filter(Number.isFinite));
+    let rightMax = rightVals.length ? Math.max(...rightVals) : 1;
+    rightMax = Math.max(0.05, rightMax * 1.15);
+
+    const x = (ts) => {
+      const frac = (ts - start) / Math.max(1, (end - start));
+      return L + Math.max(0, Math.min(1, frac)) * (W - L - R);
+    };
+    const yLeft = (val) => T + (H - B - T) * (1 - ((Number(val) - leftMin) / Math.max(0.00001, (leftMax - leftMin))));
+    const yRight = (val) => T + (H - B - T) * (1 - (Math.max(0, Number(val) || 0) / rightMax));
+
+    // grid
+    priceCtx.save();
+    priceCtx.strokeStyle = 'rgba(255,255,255,.08)';
+    priceCtx.lineWidth = 1;
+    for (let i = 0; i < 5; i++) {
+      const yy = T + i * (H - B - T) / 4;
+      priceCtx.beginPath();
+      priceCtx.moveTo(L, yy);
+      priceCtx.lineTo(W - R, yy);
+      priceCtx.stroke();
+    }
+    priceCtx.restore();
+
+    // left axis labels
+    priceCtx.save();
+    priceCtx.fillStyle = '#aeb7bf';
+    priceCtx.font = '11px system-ui, sans-serif';
+    priceCtx.textAlign = 'right';
+    for (let i = 0; i < 5; i++) {
+      const frac = 1 - (i / 4);
+      const yy = T + i * (H - B - T) / 4 + 4;
+      const val = leftMin + (leftMax - leftMin) * frac;
+      priceCtx.fillText(val.toFixed(2), L - 8, yy);
+    }
+    priceCtx.textAlign = 'left';
+    for (let i = 0; i < 5; i++) {
+      const frac = 1 - (i / 4);
+      const yy = T + i * (H - B - T) / 4 + 4;
+      const val = rightMax * frac;
+      priceCtx.fillText(val.toFixed(2), W - R + 8, yy);
+    }
+    priceCtx.textAlign = 'right';
+    priceCtx.fillText('€/kWh', L - 8, Math.max(12, T - 8));
+    priceCtx.textAlign = 'left';
+    priceCtx.fillText('kWh / €', W - R + 8, Math.max(12, T - 8));
+    priceCtx.restore();
+
+    // x labels
+    priceCtx.save();
+    priceCtx.fillStyle = '#cbd3db';
+    priceCtx.font = '12px system-ui, sans-serif';
+    priceCtx.textAlign = 'center';
+    if (chartMode === 'day') {
+      for (let i = 0; i < 6; i++) {
+        const ts = start + i * (end - start) / 5;
+        priceCtx.fillText(fmt(ts), x(ts), H - 6);
+      }
+    } else {
+      points.forEach((p, idx) => {
+        if (points.length > 12 && (idx % Math.ceil(points.length / 8) !== 0) && idx !== points.length - 1) return;
+        const d = new Date(p.ts);
+        const lbl = (chartMode === 'year') ? d.toLocaleDateString([], { month:'short' }) : d.toLocaleDateString([], { day:'2-digit', month:'2-digit' });
+        priceCtx.fillText(lbl, x(p.ts), H - 6);
+      });
+    }
+    priceCtx.restore();
+
+    // import bars (right axis)
+    if (isPriceSeriesVisible('import')) {
+      const barW = Math.max(4, Math.min(26, (W - L - R) / Math.max(1, points.length) * (chartMode === 'day' ? 0.75 : 0.55)));
+      priceCtx.save();
+      priceCtx.fillStyle = 'rgba(52, 152, 219, 0.35)';
+      points.forEach((p) => {
+        const xx = x(p.ts);
+        const y0 = yRight(0);
+        const yv = yRight(p.importKwh);
+        priceCtx.fillRect(xx - barW / 2, yv, barW, Math.max(1, y0 - yv));
+      });
+      priceCtx.restore();
+    }
+
+    function drawLine(key, accessor, color, dash){
+      if (!isPriceSeriesVisible(key)) return;
+      const vals = points.map(accessor).filter(Number.isFinite);
+      if (!vals.length) return;
+      priceCtx.save();
+      priceCtx.strokeStyle = color;
+      priceCtx.lineWidth = (key === 'total') ? 2.2 : 1.7;
+      priceCtx.setLineDash(Array.isArray(dash) ? dash : []);
+      priceCtx.beginPath();
+      let started = false;
+      points.forEach((p) => {
+        const val = Number(accessor(p));
+        if (!Number.isFinite(val)) return;
+        const xx = x(p.ts);
+        const yy = (key === 'cost') ? yRight(val) : yLeft(val);
+        if (!started) {
+          priceCtx.moveTo(xx, yy);
+          started = true;
+        } else {
+          priceCtx.lineTo(xx, yy);
+        }
+      });
+      priceCtx.stroke();
+      priceCtx.restore();
+    }
+
+    drawLine('cost', p => p.costEur, '#ef4444', []);
+    drawLine('base', p => p.base, '#cbd5e1', [5, 4]);
+    drawLine('netfee', p => p.netFee, '#10b981', [3, 4]);
+    drawLine('total', p => p.total, '#f59e0b', []);
+
+    if (priceCrossX != null) {
+      priceCtx.save();
+      priceCtx.strokeStyle = 'rgba(200,200,200,.35)';
+      priceCtx.lineWidth = 1;
+      priceCtx.beginPath();
+      priceCtx.moveTo(priceCrossX, 0);
+      priceCtx.lineTo(priceCrossX, H - B);
+      priceCtx.stroke();
+      priceCtx.restore();
+    }
+
+    pricingChartState = { points, start, end, L, R, T, B, x, yLeft, yRight, leftMin, leftMax, rightMax };
+  }
+
+  (function initPricingTooltip(){
+    if (!priceCanvas || !priceCtx) return;
+    const wrap = document.getElementById('pricingSection') || priceCanvas.parentElement || document.body;
+    let tip = document.createElement('div');
+    tip.className = 'nx-tip nx-price-tip';
+    tip.style.position = 'absolute';
+    tip.style.pointerEvents = 'none';
+    tip.style.background = 'rgba(20,24,28,.95)';
+    tip.style.border = '1px solid #2a323b';
+    tip.style.borderRadius = '10px';
+    tip.style.padding = '8px 10px';
+    tip.style.fontSize = '12px';
+    tip.style.color = '#c8d1d9';
+    tip.style.boxShadow = '0 8px 22px rgba(0,0,0,.35)';
+    tip.style.display = 'none';
+    tip.style.zIndex = '5';
+    wrap.style.position = 'relative';
+    wrap.appendChild(tip);
+
+    function hidePriceTip(silent){
+      const wasVisible = tip.style.display !== 'none';
+      tip.style.display = 'none';
+      priceCrossX = null;
+      if (!silent && wasVisible) drawPricingHistoryChart();
+    }
+    window.__nxHistoryHidePriceTip = hidePriceTip;
+
+    function formatHeader(ts){
+      const d = new Date(ts);
+      if (chartMode === 'day') return d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+      if (chartMode === 'year') return d.toLocaleDateString([], { month:'long' });
+      return d.toLocaleDateString([], { day:'2-digit', month:'2-digit' });
+    }
+
+    function row(label, val){
+      return `<div style="display:flex;justify-content:space-between;gap:8px"><span>${label}</span><b>${val}</b></div>`;
+    }
+
+    function showPriceTipFromEvent(ev){
+      if (!pricingChartState || !Array.isArray(pricingChartState.points) || !pricingChartState.points.length) return;
+      const rect = priceCanvas.getBoundingClientRect();
+      const t = (ev.touches && ev.touches[0]) ? ev.touches[0]
+              : (ev.changedTouches && ev.changedTouches[0]) ? ev.changedTouches[0]
+              : null;
+      const cx = t ? t.clientX : ev.clientX;
+      const cy = t ? t.clientY : ev.clientY;
+      const xPos = cx - rect.left;
+      const yPos = cy - rect.top;
+      const state = pricingChartState;
+      if (xPos < state.L || xPos > (priceCanvas.width - state.R) || yPos < state.T || yPos > (priceCanvas.height - state.B)) {
+        hidePriceTip();
+        return;
+      }
+      const targetTs = state.start + ((xPos - state.L) / Math.max(1, (priceCanvas.width - state.L - state.R))) * (state.end - state.start);
+      let best = state.points[0];
+      let minDist = Math.abs((best && best.ts) - targetTs);
+      state.points.forEach((p) => {
+        const d = Math.abs(Number(p && p.ts) - targetTs);
+        if (d < minDist) { minDist = d; best = p; }
+      });
+      if (!best) return;
+      const rows = [];
+      if (isPriceSeriesVisible('total')) rows.push(row('Gesamtpreis', formatPrice2(best.total)));
+      if (isPriceSeriesVisible('base')) rows.push(row('Basispreis', formatPrice2(best.base)));
+      if (isPriceSeriesVisible('netfee')) rows.push(row('Netzentgelt', formatPrice2(best.netFee)));
+      if (isPriceSeriesVisible('import')) rows.push(row('Bezug', formatKwh2(best.importKwh)));
+      if (isPriceSeriesVisible('cost')) rows.push(row('Kosten', formatMoney2(best.costEur)));
+      if (!rows.length) { hidePriceTip(); return; }
+      tip.innerHTML = `<div style="margin-bottom:6px;opacity:.9">${formatHeader(best.ts)}</div>` + rows.join('');
+      tip.style.display = 'block';
+      priceCrossX = state.x(best.ts);
+      const left = Math.min(Math.max(priceCrossX + 12, 8), Math.max(8, priceCanvas.width - 240));
+      const top = Math.min(Math.max(yPos - 70, 8), Math.max(8, priceCanvas.height - 150));
+      tip.style.left = left + 'px';
+      tip.style.top = top + 'px';
+      drawPricingHistoryChart();
+    }
+
+    document.addEventListener('pointerdown', (ev)=>{
+      if (tip.style.display === 'none') return;
+      const target = ev.target;
+      if (target === priceCanvas) return;
+      hidePriceTip();
+    }, true);
+    document.addEventListener('keydown', (ev)=>{ if (ev.key === 'Escape') hidePriceTip(); });
+    priceCanvas.addEventListener('mouseleave', ()=> hidePriceTip());
+    priceCanvas.addEventListener('click', (ev)=> showPriceTipFromEvent(ev));
+    priceCanvas.addEventListener('touchend', (ev)=> showPriceTipFromEvent(ev), { passive:true });
+  })();
+
 async function load(){
     const from = new Date(document.getElementById('from').value || new Date(Date.now()-24*3600*1000).toISOString().slice(0,16));
     const to   = new Date(document.getElementById('to').value   || new Date().toISOString().slice(0,16));
@@ -705,6 +1264,14 @@ async function load(){
           list.forEach(item => {
             if (item && Array.isArray(item.values)) item.values = clipArr(item.values);
           });
+        });
+      }
+
+      // pricing series
+      if (res.pricing && typeof res.pricing === 'object' && res.pricing.series && typeof res.pricing.series === 'object') {
+        Object.keys(res.pricing.series).forEach(k => {
+          const s = res.pricing.series[k];
+          if (s && Array.isArray(s.values)) s.values = clipArr(s.values);
         });
       }
       res.__cutoffNowMs = cutoff;
@@ -800,6 +1367,7 @@ async function load(){
       card(`Verbraucher: ${name}`, kwh.toFixed(1) + ' kWh');
     });
 
+    renderPricingHistory(res);
   }
 
   // --- Date handling ---

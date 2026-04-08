@@ -1,3 +1,11 @@
+## 0.6.215
+
+- Historie: Zusätzlichen Preis-/Kostenbereich ergänzt. Wenn dynamischer Tarif oder variables Netzentgelt aktiv sind, zeigt die Historie jetzt den Preisverlauf, den Netzbezug und die daraus berechneten Kosten für Tag, Woche, Monat und Jahr.
+- Historie: Neue Preis-Legende ist klickbar, Tooltip lässt sich per Klick außerhalb des Charts oder per ESC schließen, und alle Preis-/Kostenwerte werden mit zwei Nachkommastellen dargestellt.
+- Einstellungen: Variables Netzentgelt kann jetzt mit separaten Zuschlägen für ST / NT / HT gepflegt werden; diese Werte fließen in die Preis-Historie und spätere Gegenprüfung der Abrechnung ein.
+- Einstellungen/UI: Tarif-/Netzentgelt-Bereich bleibt sichtbar, damit das variable Netzentgelt auch unabhängig vom dynamischen Strompreis sauber konfiguriert werden kann.
+
+
 ## 0.6.214
 
 - charging-management: Initialisierungsfehler `Cannot access 'vehiclePlugged' before initialization` behoben. Der PV-Startup-Hold wird jetzt erst ausgewertet, nachdem der Fahrzeug-/Steckzustand sicher bestimmt wurde.

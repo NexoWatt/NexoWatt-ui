@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.214",
+    "version": "0.6.215",
     "news": {
+      "0.6.215": {
+        "de": "Historie: zusätzlicher Preis-/Kostenbereich für dynamischen Tarif und variables Netzentgelt ergänzt – mit Preisverlauf, Bezug und berechneten Kosten je Zeitraum sowie separater Gegenprüfung der Abrechnung. Einstellungen: Netzentgelt-Zusatzpreise für ST/NT/HT können jetzt gepflegt werden; Web-Cache-Version angehoben.",
+        "en": "History: added an extra price/cost section for dynamic tariffs and variable grid fees – including price progression, import and calculated costs per period for bill cross-checking. Settings: net fee add-on prices for ST/NT/HT can now be configured; web cache version bumped."
+      },
       "0.6.211": {
         "de": "Update- und Installationspfad gehärtet: Der Adapter fordert jetzt ein sauberes Stoppen vor Updates an, setzt einen kurzen Stop-Timeout und überspringt das unnötige Uploaden des lokalen www-Ordners in die ioBroker-Datenbank. Zusätzlich wurde der Shutdown des eingebetteten HTTP/SSE-Servers bereinigt, damit GitHub-Updates ohne manuellen Adapter-Neustart sauber durchlaufen.",
         "en": "Hardened update/install path: the adapter now requests a clean stop before updates, uses a short stop timeout and skips the unnecessary upload of the local www folder into the ioBroker database. The embedded HTTP/SSE server shutdown was also cleaned up so GitHub-based updates can complete cleanly without a manual adapter restart."
