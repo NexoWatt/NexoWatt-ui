@@ -1,3 +1,9 @@
+## 0.6.214
+
+- charging-management: Initialisierungsfehler `Cannot access 'vehiclePlugged' before initialization` behoben. Der PV-Startup-Hold wird jetzt erst ausgewertet, nachdem der Fahrzeug-/Steckzustand sicher bestimmt wurde.
+- charging-management: Dadurch läuft das Modul wieder ohne Fehlerzähler an, und PV-Start-Haltesperren für Wallboxen bleiben funktional erhalten.
+
+
 ## 0.6.213
 
 - Historie: Die Legende unter dem Chart ist jetzt interaktiv. Serien können per Klick direkt im Diagramm ein- und ausgeblendet werden, damit Tages-, Wochen-, Monats- und Jahresansichten besser lesbar bleiben.

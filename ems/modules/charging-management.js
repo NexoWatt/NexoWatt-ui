@@ -1540,16 +1540,6 @@ class ChargingManagementModule extends BaseModule {
             const inGrace = !!(chargingSince && lastActive && (now - lastActive) <= stopGraceMs);
             const isCharging = !!(online && enabled && (isChargingRaw || inGrace));
             const chargingSinceForState = isCharging ? chargingSince : 0;
-
-            let pvStartupHoldUntilMs = this._pvStartupUntilMs.get(safe) || 0;
-            if (!enabled || !online || vehiclePlugged === false) {
-                this._pvStartupUntilMs.delete(safe);
-                pvStartupHoldUntilMs = 0;
-            } else if (pvStartupHoldUntilMs > 0 && now >= pvStartupHoldUntilMs) {
-                this._pvStartupUntilMs.delete(safe);
-                pvStartupHoldUntilMs = 0;
-            }
-            
             // Determine effective control basis for this device
             const hasSetA = !!setCurrentAId;
             const hasSetW = !!setPowerWId;
@@ -1849,6 +1839,15 @@ class ChargingManagementModule extends BaseModule {
             }
 
             vehiclePluggedSinceMs = this._vehiclePluggedSinceMs.get(safe) || 0;
+
+            let pvStartupHoldUntilMs = this._pvStartupUntilMs.get(safe) || 0;
+            if (!enabled || !online || vehiclePlugged === false) {
+                this._pvStartupUntilMs.delete(safe);
+                pvStartupHoldUntilMs = 0;
+            } else if (pvStartupHoldUntilMs > 0 && now >= pvStartupHoldUntilMs) {
+                this._pvStartupUntilMs.delete(safe);
+                pvStartupHoldUntilMs = 0;
+            }
 
             try {
                 await this._queueState(`${ch}.vehiclePlugged`, vehiclePlugged === true, true);
