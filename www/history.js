@@ -17,6 +17,47 @@
   
   let barState = null;
 
+  // --- Legend / series visibility ---
+  const hiddenSeries = new Set();
+  function isSeriesVisible(key){ return !hiddenSeries.has(String(key || '')); }
+  function setSeriesVisible(key, visible){
+    const k = String(key || '');
+    if (!k) return;
+    if (visible) hiddenSeries.delete(k); else hiddenSeries.add(k);
+  }
+  function applyLegendState(){
+    const items = Array.from(document.querySelectorAll('.legend .lg[data-series]'));
+    items.forEach((el)=>{
+      const key = String(el.dataset.series || '');
+      const visible = isSeriesVisible(key);
+      el.classList.toggle('inactive', !visible);
+      el.setAttribute('aria-pressed', visible ? 'true' : 'false');
+      const label = String(el.dataset.label || (el.textContent || '').trim() || key);
+      el.title = `${label}: ${visible ? 'sichtbar' : 'ausgeblendet'} — klicken zum Umschalten`;
+    });
+  }
+  function bindLegendItem(el){
+    if (!el || el.dataset.bound === '1') return;
+    el.dataset.bound = '1';
+    if (!el.hasAttribute('tabindex')) el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.addEventListener('click', (ev)=>{
+      ev.preventDefault();
+      ev.stopPropagation();
+      const key = String(el.dataset.series || '');
+      if (!key) return;
+      setSeriesVisible(key, hiddenSeries.has(key));
+      try { if (typeof window.__nxHistoryHideTip === 'function') window.__nxHistoryHideTip(true); } catch(_e){}
+      applyLegendState();
+      draw();
+    });
+    el.addEventListener('keydown', (ev)=>{
+      if (ev.key !== 'Enter' && ev.key !== ' ') return;
+      ev.preventDefault();
+      el.click();
+    });
+  }
+
   // --- Zoom & Navigation (History) ---
   // Zoom is implemented for the day chart (line mode) via drag-selection.
   // The date inputs remain as a detailed search tool.
@@ -78,39 +119,43 @@
   function updateLegend(){
     const legend = document.querySelector('.legend');
     if (!legend) return;
-    // remove old extra legend items
     Array.from(legend.querySelectorAll('.lg-extra')).forEach(el=>{ try{ el.remove(); }catch(_e){} });
+    Array.from(legend.querySelectorAll('.lg[data-series]')).forEach(bindLegendItem);
 
-    // Only show extras in line mode to avoid confusion with bar view.
-    if (chartMode !== 'day') return;
+    if (chartMode === 'day') {
+      const ex = getExtras();
 
-    const ex = getExtras();
+      function addItem(label, color, key){
+        const el = document.createElement('div');
+        el.className = 'lg lg-extra';
+        el.dataset.series = key;
+        el.dataset.label = label;
+        const sw = document.createElement('div');
+        sw.className = 'sw';
+        sw.style.background = color;
+        const sp = document.createElement('span');
+        sp.textContent = label;
+        el.appendChild(sw);
+        el.appendChild(sp);
+        legend.appendChild(el);
+        bindLegendItem(el);
+      }
 
-    function addItem(label, color){
-      const el = document.createElement('div');
-      el.className = 'lg lg-extra';
-      const sw = document.createElement('div');
-      sw.className = 'sw';
-      sw.style.background = color;
-      const sp = document.createElement('span');
-      sp.textContent = label;
-      el.appendChild(sw);
-      el.appendChild(sp);
-      legend.appendChild(el);
+      ex.producers.forEach(p=>{
+        const idx = Number(p && p.idx) || 0;
+        if (!idx) return;
+        const name = (p && p.name) ? String(p.name) : `Erzeuger ${idx}`;
+        addItem(name, colorForExtra('producer', idx), `p${idx}`);
+      });
+      ex.consumers.forEach(c=>{
+        const idx = Number(c && c.idx) || 0;
+        if (!idx) return;
+        const name = (c && c.name) ? String(c.name) : `Verbraucher ${idx}`;
+        addItem(name, colorForExtra('consumer', idx), `c${idx}`);
+      });
     }
 
-    ex.producers.forEach(p=>{
-      const idx = Number(p && p.idx) || 0;
-      if (!idx) return;
-      const name = (p && p.name) ? String(p.name) : `Erzeuger ${idx}`;
-      addItem(name, colorForExtra('producer', idx));
-    });
-    ex.consumers.forEach(c=>{
-      const idx = Number(c && c.idx) || 0;
-      if (!idx) return;
-      const name = (c && c.name) ? String(c.name) : `Verbraucher ${idx}`;
-      addItem(name, colorForExtra('consumer', idx));
-    });
+    applyLegendState();
   }
   
   function drawBars(){
@@ -121,10 +166,11 @@
     ctx.fillStyle='#0e1216'; ctx.fillRect(0,0,W,H);
 
     const buckets = bucketizeRange(start, end, chartMode);
-    const keys=['pv','chg','dchg','sell','buy','evcs','load'];
+    const allKeys=['pv','chg','dchg','sell','buy','evcs','load'];
+    const keys = allKeys.filter(isSeriesVisible);
     const colors={'pv':'#f1c40f','chg':'#27ae60','dchg':'#e67e22','sell':'#3498db','buy':'#e74c3c','evcs':'#ff6bd6','load':'#9b59b6'};
     const seriesAgg = {};
-    keys.forEach(k=>{ seriesAgg[k] = aggregateEnergyKWh(series[k]?.values||[], buckets); });
+    allKeys.forEach(k=>{ seriesAgg[k] = aggregateEnergyKWh(series[k]?.values||[], buckets); });
 
     const totals = buckets.map((_,i)=> keys.reduce((sum,k)=> sum + (seriesAgg[k][i]?.kwh||0), 0));
     let maxKWh = Math.max(1, ...totals);
@@ -165,7 +211,7 @@
       }
     }
 
-    barState = { buckets, chartMode, L, R, T, B, groupW, barW, seriesAgg };
+    barState = { buckets, chartMode, L, R, T, B, groupW, barW, seriesAgg, visibleKeys: keys.slice() };
   }
 function draw(){
     if(!data){ ctx.clearRect(0,0,canvas.width,canvas.height); return; }
@@ -194,9 +240,10 @@ function draw(){
     // compute min/max (kW) across power series using mapped signs
     const ex = getExtras();
     const keysBase=['pv','chg','dchg','sell','buy','evcs','load'];
-    const keysExtraProd = ex.producers.map(p=> 'p' + String(p && p.idx || '')).filter(k=>k && k!=='p' && series[k]);
-    const keysExtraCons = ex.consumers.map(c=> 'c' + String(c && c.idx || '')).filter(k=>k && k!=='c' && series[k]);
-    const keys = keysBase.concat(keysExtraProd, keysExtraCons);
+    const visibleBaseKeys = keysBase.filter(isSeriesVisible);
+    const keysExtraProd = ex.producers.map(p=> 'p' + String(p && p.idx || '')).filter(k=>k && k!=='p' && series[k] && isSeriesVisible(k));
+    const keysExtraCons = ex.consumers.map(c=> 'c' + String(c && c.idx || '')).filter(k=>k && k!=='c' && series[k] && isSeriesVisible(k));
+    const keys = visibleBaseKeys.concat(keysExtraProd, keysExtraCons);
     let minKW=0, maxKW=0;
 
     // When enabled, render the day chart as a stacked area chart (OpenEMS-like).
@@ -204,7 +251,7 @@ function draw(){
     // consumer/producer series (those are shown as dashed overlay lines).
     let stackCtx = null;
     if (stackMode) {
-      const stackKeys = keysBase.slice();
+      const stackKeys = visibleBaseKeys.slice();
       const valMap = {};
       stackKeys.forEach(k=>{
         const m = new Map();
@@ -232,6 +279,8 @@ function draw(){
         if (neg < minKW) minKW = neg;
       });
 
+      const overlayKeys = keysExtraProd.concat(keysExtraCons);
+      overlayKeys.forEach(k=>{ const vals=(series[k]?.values)||[]; vals.forEach(p=>{ const v=mapKW(k, p[1]); if(v<minKW) minKW=v; if(v>maxKW) maxKW=v; }); });
       if (minKW===0 && maxKW===0) { maxKW = 1; }
       stackCtx = { stackKeys, valMap, posKeys, negKeys };
     } else {
@@ -389,13 +438,13 @@ function draw(){
     if (stackMode && stackCtx) {
       drawStackedAreas();
     } else {
-      line('pv',  CORE_COLORS.pv);
-      line('chg', CORE_COLORS.chg);
-      line('dchg',CORE_COLORS.dchg);
-      line('sell',CORE_COLORS.sell);
-      line('buy', CORE_COLORS.buy);
-      line('evcs',CORE_COLORS.evcs);
-      line('load',CORE_COLORS.load);
+      if (isSeriesVisible('pv')) line('pv',  CORE_COLORS.pv);
+      if (isSeriesVisible('chg')) line('chg', CORE_COLORS.chg);
+      if (isSeriesVisible('dchg')) line('dchg',CORE_COLORS.dchg);
+      if (isSeriesVisible('sell')) line('sell',CORE_COLORS.sell);
+      if (isSeriesVisible('buy')) line('buy', CORE_COLORS.buy);
+      if (isSeriesVisible('evcs')) line('evcs',CORE_COLORS.evcs);
+      if (isSeriesVisible('load')) line('load',CORE_COLORS.load);
     }
 
     // Extras (Energiefluss-Monitor): Erzeuger/Verbraucher
@@ -403,16 +452,18 @@ function draw(){
       const idx = Number(p && p.idx) || 0;
       if (!idx) return;
       const key = 'p' + idx;
+      if (!isSeriesVisible(key)) return;
       line(key, colorForExtra('producer', idx), 'val', [4,4], 1.6);
     });
     ex.consumers.forEach(c=>{
       const idx = Number(c && c.idx) || 0;
       if (!idx) return;
       const key = 'c' + idx;
+      if (!isSeriesVisible(key)) return;
       line(key, colorForExtra('consumer', idx), 'val', [4,4], 1.6);
     });
 
-    line('soc', '#95a5a6', 'val', [6,6]);
+    if (isSeriesVisible('soc')) line('soc', '#95a5a6', 'val', [6,6]);
 
     // ------------------------------
     // Axes: labels + tick values
@@ -701,6 +752,7 @@ async function load(){
     // Backward compatible default (older backends won't include extras)
     if (!data.extras) data.extras = { consumers: [], producers: [] };
     updateLegend();
+    try { if (typeof window.__nxHistoryHideTip === 'function') window.__nxHistoryHideTip(true); } catch(_e){}
     draw();
     // cards
     const stepSec = res.step; // legacy info
@@ -720,6 +772,8 @@ async function load(){
     const loadIntegratedKwh = sumEnergyKWh(s.load && s.load.values);
     const loadBalanceKwh = Math.max(0, pvKwh + importKwh + dischargeKwh - chargeKwh - exportKwh);
     const loadKwh = pickEnergyKwh(e.consumptionKwh, loadIntegratedKwh > 0.01 ? loadIntegratedKwh : loadBalanceKwh);
+    const autarkyLocalKwh = Math.max(0, loadKwh - importKwh);
+    const autarkyPct = loadKwh > 0.0001 ? Math.max(0, Math.min(100, (autarkyLocalKwh / loadKwh) * 100)) : null;
 
     card('Erzeugung',  pvKwh.toFixed(1) + ' kWh');
     card('Beladung',   chargeKwh.toFixed(1) + ' kWh');
@@ -728,6 +782,7 @@ async function load(){
     card('Bezug',      importKwh.toFixed(1) + ' kWh');
     if (s.evcs) card('E‑Mobilität', evKwh.toFixed(1) + ' kWh');
     card('Verbrauch',  loadKwh.toFixed(1) + ' kWh');
+    card('Autarkie', autarkyPct == null ? '-- %' : (autarkyPct.toFixed(1) + ' %'));
 
     // Extras (optional): Verbraucher/Erzeuger aus Energiefluss
     const ex = (res.extras && typeof res.extras === 'object') ? res.extras : { consumers: [], producers: [] };
@@ -920,6 +975,14 @@ async function load(){
 
     let crossX = null;
 
+    function hideTip(silent){
+      const wasVisible = tip.style.display !== 'none';
+      tip.style.display = 'none';
+      crossX = null;
+      if (!silent && wasVisible) draw();
+    }
+    window.__nxHistoryHideTip = hideTip;
+
     function xToTs(x, start, end, L, R, W){
       const frac = (x - L) / (W - L - R);
       return start + Math.max(0, Math.min(1, frac)) * (end - start);
@@ -959,6 +1022,8 @@ async function load(){
 
       // --- BAR TOOLTIP (week/month/year) ---
       if (chartMode !== 'day' && typeof barState === 'object' && barState){
+        const visibleKeys = Array.isArray(barState.visibleKeys) ? barState.visibleKeys : ['pv','chg','dchg','sell','buy','evcs','load'].filter(isSeriesVisible);
+        if (!visibleKeys.length) { hideTip(true); draw(); return; }
         const buckets = barState.buckets || [];
         const n = buckets.length || 1;
         const groupW = barState.groupW || ( (W-L-R)/n );
@@ -982,14 +1047,16 @@ async function load(){
         const load = agg.load?.[idx]?.kwh ?? 0;
         const evcs = agg.evcs?.[idx]?.kwh ?? 0;
 
-        let html = `<div style="margin-bottom:6px;opacity:.9">${header}</div>`;
-        html += kv('Erzeugung', pv);
-        html += kv('Beladung', chg);
-        html += kv('Entladung', dchg);
-        html += kv('Bezug', buy);
-        html += kv('Einspeisung', sell);
-        html += kv('E‑Mobilität', evcs);
-        html += kv('Verbrauch', load);
+        const rows = [];
+        if (isSeriesVisible('pv')) rows.push(kv('Erzeugung', pv));
+        if (isSeriesVisible('chg')) rows.push(kv('Beladung', chg));
+        if (isSeriesVisible('dchg')) rows.push(kv('Entladung', dchg));
+        if (isSeriesVisible('buy')) rows.push(kv('Bezug', buy));
+        if (isSeriesVisible('sell')) rows.push(kv('Einspeisung', sell));
+        if (isSeriesVisible('evcs')) rows.push(kv('E‑Mobilität', evcs));
+        if (isSeriesVisible('load')) rows.push(kv('Verbrauch', load));
+        if (!rows.length) { hideTip(true); draw(); return; }
+        let html = `<div style="margin-bottom:6px;opacity:.9">${header}</div>` + rows.join('');
         tip.innerHTML = html;
         tip.style.display = 'block';
         const px = L + idx*groupW + groupW/2;
@@ -1039,14 +1106,15 @@ async function load(){
       const evcs = collect.evcs?.[1] ?? 0;
       const soc = collect.soc?.[1] ?? null;
 
-      let html = `<div style="margin-bottom:6px;opacity:.9">${hh}</div>`;
-      html += kv2('Erzeugung', pv/1000);
-      html += kv2('Beladung', -(Math.abs(chg)||0)/1000);
-      html += kv2('Entladung', (Math.abs(dchg)||0)/1000);
-      html += kv2('Bezug', buy/1000);
-      html += kv2('Einspeisung', sell/1000);
-      html += kv2('E‑Mobilität', (Math.abs(evcs)||0)/1000);
-      html += kv2('Verbrauch', load/1000);
+      const rows = [];
+      if (isSeriesVisible('pv')) rows.push(kv2('Erzeugung', pv/1000));
+      if (isSeriesVisible('chg')) rows.push(kv2('Beladung', -(Math.abs(chg)||0)/1000));
+      if (isSeriesVisible('dchg')) rows.push(kv2('Entladung', (Math.abs(dchg)||0)/1000));
+      if (isSeriesVisible('buy')) rows.push(kv2('Bezug', buy/1000));
+      if (isSeriesVisible('sell')) rows.push(kv2('Einspeisung', sell/1000));
+      if (isSeriesVisible('evcs')) rows.push(kv2('E‑Mobilität', (Math.abs(evcs)||0)/1000));
+      if (isSeriesVisible('load')) rows.push(kv2('Verbrauch', load/1000));
+      let html = `<div style="margin-bottom:6px;opacity:.9">${hh}</div>` + rows.join('');
 
       // Optional: Energiefluss Verbraucher/Erzeuger (nur anzeigen wenn vorhanden)
       const ex = getExtras();
@@ -1055,6 +1123,7 @@ async function load(){
         const idx = Number(p && p.idx) || 0;
         if (!idx) return;
         const key = 'p' + idx;
+        if (!isSeriesVisible(key)) return;
         const raw = collect[key]?.[1];
         if (raw==null) return;
         const kw = (Math.abs(raw)||0) / 1000;
@@ -1065,6 +1134,7 @@ async function load(){
         const idx = Number(c && c.idx) || 0;
         if (!idx) return;
         const key = 'c' + idx;
+        if (!isSeriesVisible(key)) return;
         const raw = collect[key]?.[1];
         if (raw==null) return;
         const kw = (Math.abs(raw)||0) / 1000;
@@ -1075,7 +1145,8 @@ async function load(){
         html += `<div style="margin-top:6px;border-top:1px dashed #2a323b;padding-top:6px;opacity:.9">Energiefluss</div>`;
         extraLines.forEach(it=>{ html += kv2(it.label, it.kw); });
       }
-      if (soc!=null) html += `<div style="margin-top:6px;border-top:1px dashed #2a323b;padding-top:6px">SoC <b>${soc.toFixed(0)} %</b></div>`;
+      if (soc!=null && isSeriesVisible('soc')) html += `<div style="margin-top:6px;border-top:1px dashed #2a323b;padding-top:6px">SoC <b>${soc.toFixed(0)} %</b></div>`;
+      if (!rows.length && !extraLines.length && !(soc!=null && isSeriesVisible('soc'))) { hideTip(true); draw(); return; }
 
       tip.innerHTML = html;
       tip.style.display = 'block';
@@ -1093,9 +1164,18 @@ async function load(){
     // expose for touch drag/tap handling (used by drag-to-zoom on mobile)
     window.__nxHistoryShowTipFromEvent = showTipFromEvent;
 
-    canvas.addEventListener('mouseleave', ()=>{ tip.style.display='none'; crossX=null; draw(); });
+    document.addEventListener('pointerdown', (ev)=>{
+      if (tip.style.display === 'none') return;
+      const target = ev.target;
+      if (target === canvas) return;
+      hideTip();
+    }, true);
+    document.addEventListener('keydown', (ev)=>{
+      if (ev.key === 'Escape') hideTip();
+    });
+
+    canvas.addEventListener('mouseleave', ()=>{ hideTip(); });
     canvas.addEventListener('click', (ev)=>{ 
-      // If a drag-zoom just happened, suppress the click-to-inspect tooltip.
       if (Date.now() < zoomSuppressClickUntil) return;
       showTipFromEvent(ev);
     });

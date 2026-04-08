@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.212",
+    "version": "0.6.213",
     "news": {
       "0.6.211": {
         "de": "Update- und Installationspfad gehärtet: Der Adapter fordert jetzt ein sauberes Stoppen vor Updates an, setzt einen kurzen Stop-Timeout und überspringt das unnötige Uploaden des lokalen www-Ordners in die ioBroker-Datenbank. Zusätzlich wurde der Shutdown des eingebetteten HTTP/SSE-Servers bereinigt, damit GitHub-Updates ohne manuellen Adapter-Neustart sauber durchlaufen.",

@@ -1,3 +1,14 @@
+## 0.6.213
+
+- Historie: Die Legende unter dem Chart ist jetzt interaktiv. Serien können per Klick direkt im Diagramm ein- und ausgeblendet werden, damit Tages-, Wochen-, Monats- und Jahresansichten besser lesbar bleiben.
+
+- Historie: Tooltip/Marker werden beim Klick außerhalb des Charts wieder geschlossen; zusätzlich werden in Tooltip und Diagramm nur die aktuell sichtbaren Serien berücksichtigt.
+
+- Historie: Neue Kachel `Autarkie` für Tag, Woche, Monat und Jahr ergänzt. Der Wert wird aus Verbrauch und Netzbezug für den gewählten Zeitraum berechnet.
+
+- Web/PWA: Cache-Version angehoben, damit die aktualisierte Historie sicher neu geladen wird.
+
+
 ## 0.6.212
 
 - charging-management: Reiner PV-Überschuss wird jetzt bevorzugt direkt als `PV - Verbrauch ohne EV - Speicherladung` berechnet; Fallback-Rekonstruktion berücksichtigt Batterie-Entladung und überhöht den PV-Cap nicht mehr künstlich.

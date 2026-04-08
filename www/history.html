@@ -29,8 +29,12 @@
       margin-bottom: 18px;
       box-shadow: 0 18px 40px rgba(0,0,0,0.35);
     }
-    .legend{ display:flex; flex-wrap:wrap; gap:16px; margin:12px 0 12px; color:#c8d1d9; position:relative; z-index:2; }
-    .lg{ display:flex; align-items:center; gap:6px; }
+    .legend{ display:flex; flex-wrap:wrap; gap:12px; margin:12px 0 12px; color:#c8d1d9; position:relative; z-index:2; }
+    .lg{ display:flex; align-items:center; gap:6px; cursor:pointer; padding:6px 10px; border-radius:999px; border:1px solid rgba(148, 163, 184, 0.12); background: rgba(2, 6, 23, 0.18); transition: opacity .12s ease, border-color .12s ease, background .12s ease, transform .06s ease; }
+    .lg:hover{ border-color: rgba(16, 185, 129, 0.35); background: rgba(16, 185, 129, 0.10); }
+    .lg:active{ transform: translateY(1px); }
+    .lg.inactive{ opacity:.38; border-color: rgba(148, 163, 184, 0.08); background: rgba(2, 6, 23, 0.08); }
+    .lg.inactive span{ text-decoration: line-through; }
     .lg .sw{ width:12px; height:3px; background:#7aa; }
     .lg .sw.pv{ background:#f1c40f; } .lg .sw.load{ background:#9b59b6; }
     .lg .sw.buy{ background:#e74c3c; } .lg .sw.sell{ background:#3498db; } .lg .sw.evcs{ background:#ff6bd6; }
@@ -172,14 +176,14 @@
     </div>
     <canvas id="chart"></canvas>
     <div class="legend">
-      <div class="lg"><div class="sw pv"></div><span>Erzeugung</span></div>
-      <div class="lg"><div class="sw chg"></div><span>Beladung</span></div>
-      <div class="lg"><div class="sw dchg"></div><span>Entladung</span></div>
-      <div class="lg"><div class="sw sell"></div><span>Einspeisung</span></div>
-      <div class="lg"><div class="sw buy"></div><span>Bezug</span></div>
-      <div class="lg"><div class="sw evcs"></div><span>E‑Mobilität</span></div>
-      <div class="lg"><div class="sw load"></div><span>Verbrauch</span></div>
-      <div class="lg"><div class="sw soc"></div><span>Ladezustand</span></div>
+      <div class="lg" data-series="pv" data-label="Erzeugung"><div class="sw pv"></div><span>Erzeugung</span></div>
+      <div class="lg" data-series="chg" data-label="Beladung"><div class="sw chg"></div><span>Beladung</span></div>
+      <div class="lg" data-series="dchg" data-label="Entladung"><div class="sw dchg"></div><span>Entladung</span></div>
+      <div class="lg" data-series="sell" data-label="Einspeisung"><div class="sw sell"></div><span>Einspeisung</span></div>
+      <div class="lg" data-series="buy" data-label="Bezug"><div class="sw buy"></div><span>Bezug</span></div>
+      <div class="lg" data-series="evcs" data-label="E‑Mobilität"><div class="sw evcs"></div><span>E‑Mobilität</span></div>
+      <div class="lg" data-series="load" data-label="Verbrauch"><div class="sw load"></div><span>Verbrauch</span></div>
+      <div class="lg" data-series="soc" data-label="Ladezustand"><div class="sw soc"></div><span>Ladezustand</span></div>
     </div>
     <div class="cards" id="cards"></div>
   </div>
