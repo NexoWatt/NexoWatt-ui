@@ -1,3 +1,9 @@
+## 0.6.216
+
+- Historie: Chart-Initialisierung gehärtet. Die Historie rendert jetzt beim Öffnen wieder automatisch, zieht nach dem ersten Paint ein Re-Render nach und macht bei noch fehlenden Zeitreihen selbstständig einen kurzen Auto-Retry statt erst auf einen Klick zu warten.
+- Historie/Tarif: Zusätzliche historisierte Tarif-Provider-States unter `historie.tariff.providerCurrentEurPerKwh` und `historie.tariff.providerAverageEurPerKwh` ergänzt. Außerdem werden die lokalen Tarif-States direkt an die gemeinsame Influx-Historie gebunden, damit der Preisverlauf sauber über die im EMS zugeordneten Tarif-DPs aufgebaut wird.
+
+
 ## 0.6.215
 
 - Historie: Zusätzlichen Preis-/Kostenbereich ergänzt. Wenn dynamischer Tarif oder variables Netzentgelt aktiv sind, zeigt die Historie jetzt den Preisverlauf, den Netzbezug und die daraus berechneten Kosten für Tag, Woche, Monat und Jahr.

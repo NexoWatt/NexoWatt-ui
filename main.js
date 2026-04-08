@@ -15069,6 +15069,14 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     await ensureState('historie.tariff.baseEurPerKwh', 'Strompreis Basis', 'value', '€/kWh');
     await ensureState('historie.tariff.netFeeEurPerKwh', 'Netzentgelt Aufschlag', 'value', '€/kWh');
     await ensureState('historie.tariff.totalEurPerKwh', 'Strompreis gesamt', 'value', '€/kWh');
+    await ensureState('historie.tariff.providerCurrentEurPerKwh', 'Tarifpreis Provider aktuell', 'value', '€/kWh');
+    await ensureState('historie.tariff.providerAverageEurPerKwh', 'Tarifpreis Provider Durchschnitt', 'value', '€/kWh');
+
+    // Preis-DPs aus der Tarif-/Provider-Zuordnung ebenfalls direkt an die gemeinsame
+    // Historie hängen. Damit kann die Preis-Historie sofort mit den im EMS zugeordneten
+    // Tarifwerten arbeiten, auch wenn der kanonische Historie-Export gerade erst anläuft.
+    try { if (enableInfluxCustom && inst) await this._nwEnsureInfluxCustom('tarif.preisAktuellEurProKwh', inst); } catch (_e) {}
+    try { if (enableInfluxCustom && inst) await this._nwEnsureInfluxCustom('tarif.preisDurchschnittEurProKwh', inst); } catch (_e) {}
 
     // EVCS per Ladepunkt (für Abrechnung/Detailanalyse)
     // Diese States werden aus den internen EVCS-Leistungswerten befüllt und
@@ -15445,6 +15453,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
     const dynamicTariffActive = _boolOr('settings.dynamicTariff', false);
     const providerPrice = _numOr('tarif.preisAktuellEurProKwh', null);
+    const providerAveragePrice = _numOr('tarif.preisDurchschnittEurProKwh', null);
     const manualPrice = _numOr('settings.price', 0.25);
     let tariffBasePrice = Number.isFinite(providerPrice) && dynamicTariffActive ? providerPrice : manualPrice;
     if (!Number.isFinite(tariffBasePrice)) tariffBasePrice = Number.isFinite(providerPrice) ? providerPrice : 0;
@@ -15477,6 +15486,8 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     this._nwSetHistorieValue('historie.tariff.baseEurPerKwh', tariffBasePrice, now, 0.0001);
     this._nwSetHistorieValue('historie.tariff.netFeeEurPerKwh', tariffNetFeePrice, now, 0.0001);
     this._nwSetHistorieValue('historie.tariff.totalEurPerKwh', tariffTotalPrice, now, 0.0001);
+    if (Number.isFinite(providerPrice)) this._nwSetHistorieValue('historie.tariff.providerCurrentEurPerKwh', providerPrice, now, 0.0001);
+    if (Number.isFinite(providerAveragePrice)) this._nwSetHistorieValue('historie.tariff.providerAverageEurPerKwh', providerAveragePrice, now, 0.0001);
 
     // EVCS per Ladepunkt (Leistung) – für detaillierte Abrechnung
     const evcsCount = Number(this.evcsCount || 0);
@@ -15892,6 +15903,8 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const explicitForced = raw.startsWith('!') ? this._nwTrimId(raw.slice(1)) : '';
     const explicit = this._nwTrimId(raw);
     const canon = this._nwTrimId(this._nwGetCanonicalHistorieId(name));
+    const ns = this.namespace;
+    const dynamicTariffActive = !!(this.stateCache && this.stateCache['settings.dynamicTariff'] && this.stateCache['settings.dynamicTariff'].value);
 
     const out = [];
     const add = (id) => {
@@ -15908,6 +15921,31 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     // prefer it first, but keep the canonical adapter Historie state as automatic
     // fallback so legacy installs and new installs both continue to work.
     add(explicit);
+
+    if (String(name || '') === 'priceBase') {
+      // Bei dynamischen Tarifen bevorzugen wir zuerst den direkt zugeordneten Provider-
+      // Preis (lokal gespiegelt) und fallen dann auf den kanonischen Effektivpreis zurück.
+      // Damit erscheint die Preis-Historie zuverlässig auch dann, wenn der Historie-Export
+      // gerade erst frisch aufgebaut wird.
+      if (dynamicTariffActive) {
+        add(`${ns}.tarif.preisAktuellEurProKwh`);
+        add(`${ns}.historie.tariff.providerCurrentEurPerKwh`);
+      }
+      add(canon);
+      if (!dynamicTariffActive) {
+        add(`${ns}.historie.tariff.providerCurrentEurPerKwh`);
+        add(`${ns}.tarif.preisAktuellEurProKwh`);
+      }
+      return out;
+    }
+
+    if (String(name || '') === 'priceAverage') {
+      add(`${ns}.historie.tariff.providerAverageEurPerKwh`);
+      add(`${ns}.tarif.preisDurchschnittEurProKwh`);
+      add(canon);
+      return out;
+    }
+
     add(canon);
     return out;
   }

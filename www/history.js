@@ -17,6 +17,61 @@
 
   let data=null;
   let chartMode='day'; // 'day' | 'week' | 'month' | 'year'
+  let historyBooted = false;
+  let historyRetryTimer = null;
+  let historyRetryCount = 0;
+
+  function scheduleHistoryRenderBurst(){
+    const doRender = ()=>{
+      try { resize(); } catch(_e){}
+      try { draw(); } catch(_e){}
+      try { drawPricingHistoryChart(); } catch(_e){}
+    };
+    try { requestAnimationFrame(doRender); } catch(_e) { doRender(); }
+    setTimeout(doRender, 80);
+    setTimeout(doRender, 260);
+  }
+
+  function countRenderableHistoryPoints(res){
+    let count = 0;
+    const scan = (arr)=>{
+      if (!Array.isArray(arr)) return;
+      for (const p of arr){
+        const ts = toTsMs(p && p[0]);
+        const val = Number(p && p[1]);
+        if (Number.isFinite(ts) && Number.isFinite(val)) {
+          count += 1;
+          if (count >= 2) return;
+        }
+      }
+    };
+    const core = (res && res.series && typeof res.series === 'object') ? res.series : {};
+    Object.keys(core).forEach((k)=>{ if (count < 2) scan(core[k] && core[k].values); });
+    const ex = (res && res.extras && typeof res.extras === 'object') ? res.extras : null;
+    ['consumers','producers'].forEach((kind)=>{
+      if (count >= 2) return;
+      const list = Array.isArray(ex && ex[kind]) ? ex[kind] : [];
+      list.forEach((entry)=>{ if (count < 2) scan(entry && entry.values); });
+    });
+    return count;
+  }
+
+  function scheduleHistoryRetry(delayMs = 900){
+    if (historyRetryTimer || historyRetryCount >= 2) return;
+    historyRetryCount += 1;
+    historyRetryTimer = setTimeout(()=>{
+      historyRetryTimer = null;
+      load();
+    }, Math.max(250, Number(delayMs) || 900));
+  }
+
+  function bootHistoryOnce(){
+    if (historyBooted) return;
+    historyBooted = true;
+    try { resize(); } catch(_e){}
+    load();
+    scheduleHistoryRenderBurst();
+  }
 
   // Day chart rendering style
   // - true  => stacked area (OpenEMS-like) on dark background
@@ -1368,6 +1423,12 @@ async function load(){
     });
 
     renderPricingHistory(res);
+    scheduleHistoryRenderBurst();
+    if (countRenderableHistoryPoints(res) >= 2) {
+      historyRetryCount = 0;
+    } else {
+      scheduleHistoryRetry(1100);
+    }
   }
 
   // --- Date handling ---
@@ -2069,7 +2130,14 @@ async function load(){
 
     canvas.addEventListener('mouseleave', ()=>{ if (zoomDragging) clearSel(); });
   })();
-  resize(); load();
+  bootHistoryOnce();
+  window.addEventListener('load', ()=>{ scheduleHistoryRenderBurst(); if (!data) load(); }, { once: true });
+  window.addEventListener('pageshow', ()=>{ scheduleHistoryRenderBurst(); if (!data) load(); });
+  document.addEventListener('visibilitychange', ()=>{
+    if (document.hidden) return;
+    scheduleHistoryRenderBurst();
+    if (!data) load();
+  });
   // --- Auto-advance when 'Bis'≈Jetzt (no UI) ---
   let __autoTimer = null;
   let __autoLive = false;
