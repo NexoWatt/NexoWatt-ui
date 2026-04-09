@@ -281,6 +281,16 @@ function rampUp(prevValue, targetValue, maxDeltaUp) {
     return (t > (p + d)) ? (p + d) : t;
 }
 
+function choosePositiveMin(...values) {
+    let best = 0;
+    for (const raw of values) {
+        const n = Number(raw);
+        if (!Number.isFinite(n) || n <= 0) continue;
+        if (!(best > 0) || n < best) best = n;
+    }
+    return best > 0 ? best : 0;
+}
+
 function availabilityReason(cfgEnabled, userEnabled, online) {
     if (!cfgEnabled) return ReasonCodes.DISABLED;
     if (!userEnabled) return ReasonCodes.CONTROL_DISABLED;
@@ -370,6 +380,9 @@ class ChargingManagementModule extends BaseModule {
             slow5m: { windowMs: 5 * 60 * 1000, samples: [], head: 0, sumW: 0 },
         };
         this._pvStartupUntilMs = new Map(); // safeKey -> ms until PV start settle hold is active
+        this._pvStartReadySinceMs = new Map(); // safeKey -> ms since PV-only start conditions are continuously satisfied
+        this._pvBelowMinSinceMs = new Map(); // safeKey -> ms since a running PV-only session is continuously below the technical minimum
+        this._pvMinRunUntilMs = new Map(); // safeKey -> ms until a freshly started PV-only session should be kept stable
     }
 
     /**
@@ -1239,6 +1252,17 @@ class ChargingManagementModule extends BaseModule {
         const stepW = clamp(num(cfg.stepW, 0), 0, 1e12); // 0 = no stepping
         const stepA = clamp(num(cfg.stepA, 0.1), 0, 1e6); // 0 = no stepping
 
+        // PV-only Start / Ramp / Stop profile:
+        // - require a stable 3-phase capable start budget before enabling charging
+        // - start at the technical minimum (6 A / ~4.2 kW three-phase) and ramp up softly
+        // - keep a short minimum run / stop debounce so slow wallboxes & vehicles do not flap
+        const pvStartStableMs = clamp(num(cfg.pvStartStableSec, 10), 0, 3600) * 1000;
+        const pvConnectorStopDelayMs = clamp(num(cfg.pvConnectorStopDelaySec, Math.max(num(cfg.pvStopDelaySec, 30), 45)), 0, 3600) * 1000;
+        const pvMinRunMs = clamp(num(cfg.pvMinRunSec, 45), 0, 3600) * 1000;
+        const pvRunDeficitToleranceW = clamp(num(cfg.pvRunDeficitToleranceW, 600), 0, 1e12);
+        const pvRampUpAperTick = clamp(num(cfg.pvRampUpAperTick, 0.5), 0, 1e6);
+        const pvRampUpWPerTick = clamp(num(cfg.pvRampUpWPerTick, 350), 0, 1e12);
+
         if (budgetPowerId && this.dp) {
             await this.dp.upsert({ key: 'cm.budgetPowerW', objectId: budgetPowerId, dataType: 'number', direction: 'in', unit: 'W' });
         }
@@ -1841,12 +1865,23 @@ class ChargingManagementModule extends BaseModule {
             vehiclePluggedSinceMs = this._vehiclePluggedSinceMs.get(safe) || 0;
 
             let pvStartupHoldUntilMs = this._pvStartupUntilMs.get(safe) || 0;
+            let pvMinRunUntilMs = this._pvMinRunUntilMs.get(safe) || 0;
             if (!enabled || !online || vehiclePlugged === false) {
                 this._pvStartupUntilMs.delete(safe);
+                this._pvStartReadySinceMs.delete(safe);
+                this._pvBelowMinSinceMs.delete(safe);
+                this._pvMinRunUntilMs.delete(safe);
                 pvStartupHoldUntilMs = 0;
-            } else if (pvStartupHoldUntilMs > 0 && now >= pvStartupHoldUntilMs) {
-                this._pvStartupUntilMs.delete(safe);
-                pvStartupHoldUntilMs = 0;
+                pvMinRunUntilMs = 0;
+            } else {
+                if (pvStartupHoldUntilMs > 0 && now >= pvStartupHoldUntilMs) {
+                    this._pvStartupUntilMs.delete(safe);
+                    pvStartupHoldUntilMs = 0;
+                }
+                if (pvMinRunUntilMs > 0 && now >= pvMinRunUntilMs) {
+                    this._pvMinRunUntilMs.delete(safe);
+                    pvMinRunUntilMs = 0;
+                }
             }
 
             try {
@@ -2028,6 +2063,7 @@ class ChargingManagementModule extends BaseModule {
                 chargingSinceMs: chargingSinceForState,
                 actualPowerW: pWNum,
                 pvStartupHoldUntilMs,
+                pvMinRunUntilMs,
                 userMode,
                 evcsIndex: (Number.isFinite(evcsIndex) && evcsIndex > 0) ? Math.round(evcsIndex) : 0,
                 vehiclePlugged,
@@ -3978,6 +4014,26 @@ if (components.length) {
             const isPvOnly = effMode === 'pv';
             const isMinPv = effMode === 'minpv';
             const isBoost = effMode === 'boost';
+            const isPvManaged = isPvOnly || isMinPv;
+
+            const prevCmdW = this._lastCmdTargetW.get(w.safe);
+            const prevCmdA = this._lastCmdTargetA.get(w.safe);
+            const prevCmdWNorm = (typeof prevCmdW === 'number' && Number.isFinite(prevCmdW)) ? Math.max(0, prevCmdW) : 0;
+            const prevCmdANorm = (typeof prevCmdA === 'number' && Number.isFinite(prevCmdA)) ? Math.max(0, prevCmdA) : 0;
+            const prevCmdWasActive = prevCmdWNorm >= activityThresholdW || (w.vFactor > 0 && (prevCmdANorm * w.vFactor) >= activityThresholdW);
+            const actualNowW = (typeof w.actualPowerW === 'number' && Number.isFinite(w.actualPowerW)) ? Math.max(0, Math.abs(w.actualPowerW)) : 0;
+            const actualOrCmdActive = !!w.charging || actualNowW >= activityThresholdW || prevCmdWasActive;
+            const startupHoldActive = isPvManaged && Number.isFinite(Number(w.pvStartupHoldUntilMs)) && Number(w.pvStartupHoldUntilMs) > now;
+            const minRunActive = isPvOnly && Number.isFinite(Number(w.pvMinRunUntilMs)) && Number(w.pvMinRunUntilMs) > now;
+            const pvTechnicalMinW = (w.chargerType === 'AC' && Number(w.phases || 0) === 3)
+                ? Math.max(0, Math.max(num(w.minPW, 0), acMinPower3pW))
+                : Math.max(0, num(w.minPW, 0));
+            const pvStartCommandA = (w.controlBasis === 'currentA' && w.setAKey)
+                ? Math.max(0, num(w.minA, 0))
+                : 0;
+            const pvStartCommandW = (w.controlBasis === 'currentA' && w.setAKey)
+                ? ((pvStartCommandA > 0 && w.vFactor > 0) ? (pvStartCommandA * w.vFactor) : 0)
+                : pvTechnicalMinW;
 
             // Station diagnostics: count active connectors per station (only if station group has a cap)
             const _sk = (w.stationKey && stationCapW && stationCapW.has(w.stationKey)) ? String(w.stationKey) : '';
@@ -4172,6 +4228,87 @@ if (components.length) {
                 reason = ReasonCodes.NO_VEHICLE;
             }
 
+            // PV-only Start / Ramp / Stop state machine
+            // Goal:
+            // - do not start a 3-phase session until the technical minimum is stably available
+            // - after start, keep the session alive briefly so slow wallboxes / vehicles can ramp up
+            // - only stop after a sustained deficit (small shortfalls may be bridged briefly)
+            if (isPvOnly) {
+                const startReadyKey = String(w.safe || '');
+                const needStartW = Math.max(0, pvTechnicalMinW || pvStartCommandW || 0);
+                const startBudgetW = Math.max(0, Math.min(totalAvailW, stationAvailW, pvAvailW, Number.isFinite(w.maxPW) ? w.maxPW : Number.POSITIVE_INFINITY));
+                const holdBudgetW = Math.max(0, Math.min(totalAvailW, stationAvailW, Number.isFinite(w.maxPW) ? w.maxPW : Number.POSITIVE_INFINITY));
+                let startReadySince = this._pvStartReadySinceMs.get(startReadyKey) || 0;
+                let belowMinSince = this._pvBelowMinSinceMs.get(startReadyKey) || 0;
+                const canTrackPvRun = w.vehiclePlugged !== false && w.enabled && w.online && w.controlBasis !== 'none';
+
+                if (!canTrackPvRun) {
+                    this._pvStartReadySinceMs.delete(startReadyKey);
+                    this._pvBelowMinSinceMs.delete(startReadyKey);
+                } else {
+                    if (!actualOrCmdActive) {
+                        if (needStartW <= 0 || startBudgetW >= needStartW) {
+                            if (!startReadySince) {
+                                startReadySince = now;
+                                this._pvStartReadySinceMs.set(startReadyKey, startReadySince);
+                            }
+                        } else {
+                            this._pvStartReadySinceMs.delete(startReadyKey);
+                            startReadySince = 0;
+                        }
+                    } else {
+                        this._pvStartReadySinceMs.delete(startReadyKey);
+                        startReadySince = 0;
+                    }
+
+                    const startStable = actualOrCmdActive
+                        || needStartW <= 0
+                        || (startReadySince > 0 && (pvStartStableMs <= 0 || (now - startReadySince) >= pvStartStableMs));
+
+                    if (!actualOrCmdActive && targetW > 0 && !startStable) {
+                        targetW = 0;
+                        targetA = 0;
+                        reason = ReasonCodes.NO_PV_SURPLUS;
+                    }
+
+                    if (actualOrCmdActive && needStartW > 0) {
+                        const deficitW = Math.max(0, needStartW - startBudgetW);
+                        const belowMinNow = deficitW > 1;
+                        if (belowMinNow) {
+                            if (!belowMinSince) {
+                                belowMinSince = now;
+                                this._pvBelowMinSinceMs.set(startReadyKey, belowMinSince);
+                            }
+                        } else {
+                            this._pvBelowMinSinceMs.delete(startReadyKey);
+                            belowMinSince = 0;
+                        }
+
+                        const stopDelayElapsed = belowMinSince > 0
+                            && (pvConnectorStopDelayMs <= 0 || (now - belowMinSince) >= pvConnectorStopDelayMs);
+                        const canHoldAtMin = holdBudgetW >= Math.max(1, needStartW)
+                            && deficitW <= pvRunDeficitToleranceW;
+                        const shouldKeepAlive = (startupHoldActive || minRunActive || !stopDelayElapsed) && canHoldAtMin;
+
+                        if ((targetW <= 0 || targetW < needStartW) && belowMinNow && shouldKeepAlive) {
+                            targetW = Math.min(Math.max(needStartW, 0), holdBudgetW);
+                            targetA = 0;
+                            reason = ReasonCodes.ALLOCATED;
+                        } else if ((targetW <= 0 || targetW < needStartW) && belowMinNow && stopDelayElapsed) {
+                            targetW = 0;
+                            targetA = 0;
+                            reason = ReasonCodes.NO_PV_SURPLUS;
+                        }
+                    } else if (!actualOrCmdActive) {
+                        this._pvBelowMinSinceMs.delete(startReadyKey);
+                    }
+                }
+            } else {
+                this._pvStartReadySinceMs.delete(String(w.safe || ''));
+                this._pvBelowMinSinceMs.delete(String(w.safe || ''));
+                if (!isPvManaged) this._pvMinRunUntilMs.delete(String(w.safe || ''));
+            }
+
             // Convert to A for AC current-based control
             if (w.controlBasis === 'currentA' && w.setAKey) {
                 const vFactor = w.vFactor;
@@ -4226,24 +4363,33 @@ if (components.length) {
                 targetA = 0;
             }
 
-            // MU6.11: Apply stepping + ramp limiting (limit ramp-up only; never limit ramp-down for safety)
-            const wbMaxDeltaW = clamp(num(w.maxDeltaWPerTick, maxDeltaWPerTick), 0, 1e12);
-            const wbMaxDeltaA = clamp(num(w.maxDeltaAPerTick, maxDeltaAPerTick), 0, 1e6);
+            // MU6.11 + PV-only soft-start:
+            // - respect global/per-wallbox ramp limits
+            // - for PV / Min+PV prefer a soft ramp profile
+            // - on a fresh start jump directly to the technical minimum, then ramp upwards slowly
+            let wbMaxDeltaW = clamp(num(w.maxDeltaWPerTick, maxDeltaWPerTick), 0, 1e12);
+            let wbMaxDeltaA = clamp(num(w.maxDeltaAPerTick, maxDeltaAPerTick), 0, 1e6);
+            if (isPvManaged) {
+                wbMaxDeltaW = choosePositiveMin(wbMaxDeltaW, num(w.pvRampUpWPerTick, 0), pvRampUpWPerTick);
+                wbMaxDeltaA = choosePositiveMin(wbMaxDeltaA, num(w.pvRampUpAperTick, 0), pvRampUpAperTick);
+            }
             const wbStepW = clamp(num(w.stepW, stepW), 0, 1e12);
             const wbStepA = clamp(num(w.stepA, stepA), 0, 1e6);
 
             let cmdW = targetW;
             let cmdA = targetA;
-
-            const prevCmdW = this._lastCmdTargetW.get(w.safe);
-            const prevCmdA = this._lastCmdTargetA.get(w.safe);
+            const pvManagedStartNow = isPvManaged && !prevCmdWasActive && cmdW > 0 && w.enabled && w.online && w.vehiclePlugged !== false;
 
             if (w.controlBasis === 'currentA' && w.setAKey) {
                 cmdA = floorToStep(cmdA, wbStepA);
                 cmdA = clamp(cmdA, 0, w.maxA);
                 if (cmdA > 0 && w.minA > 0 && cmdA < w.minA) cmdA = 0;
 
-                cmdA = rampUp(prevCmdA, cmdA, wbMaxDeltaA);
+                if (pvManagedStartNow) {
+                    cmdA = clamp(Math.max(pvStartCommandA || w.minA || 0, w.minA || 0), 0, w.maxA);
+                } else {
+                    cmdA = rampUp(prevCmdA, cmdA, wbMaxDeltaA);
+                }
 
                 if (cmdA > 0 && w.minA > 0 && cmdA < w.minA) cmdA = 0;
                 cmdW = (cmdA > 0 && w.vFactor > 0) ? (cmdA * w.vFactor) : 0;
@@ -4251,7 +4397,12 @@ if (components.length) {
                 cmdW = floorToStep(cmdW, wbStepW);
                 if (cmdW > 0 && w.minPW > 0 && cmdW < w.minPW) cmdW = 0;
 
-                cmdW = rampUp(prevCmdW, cmdW, wbMaxDeltaW);
+                if (pvManagedStartNow) {
+                    const minStartW = Math.max(pvStartCommandW || w.minPW || 0, w.minPW || 0);
+                    cmdW = clamp(minStartW, 0, w.maxPW);
+                } else {
+                    cmdW = rampUp(prevCmdW, cmdW, wbMaxDeltaW);
+                }
 
                 if (cmdW > 0 && w.minPW > 0 && cmdW < w.minPW) cmdW = 0;
 
@@ -4355,18 +4506,14 @@ if (components.length) {
             this._lastCmdTargetW.set(w.safe, cmdW);
             this._lastCmdTargetA.set(w.safe, cmdA);
 
-            // PV-Start Einschwingzeit:
+            // PV-Start Einschwingzeit + Mindestlaufzeit:
             // Einige Wallboxen/Fahrzeuge übernehmen nach der Freigabe die neue Leistung verzögert.
             // Damit wir direkt nach dem Start nicht wieder auf 0 regeln, halten wir eine kurze
-            // Settling-Phase offen, in der der PV-Stop-Gate nicht sofort zuschlägt.
+            // Settling-Phase offen und merken uns zusätzlich eine kleine Mindestlaufzeit.
             try {
                 const pvStartSettleMs = clamp(num(cfg.pvStartSettleSec, 20), 0, 3600) * 1000;
-                const actualNowW = (typeof w.actualPowerW === 'number' && Number.isFinite(w.actualPowerW))
-                    ? Math.max(0, Math.abs(w.actualPowerW))
-                    : 0;
-                const prevCmdWasActive = typeof prevCmdW === 'number' && Number.isFinite(prevCmdW) && prevCmdW >= activityThresholdW;
-                const cmdStartsNow = (String(w.effectiveMode || '') === 'pv' || String(w.effectiveMode || '') === 'minpv')
-                    && pvStartSettleMs > 0
+                const cmdStartsNow = isPvManaged
+                    && pvStartSettleMs >= 0
                     && w.enabled
                     && w.online
                     && w.vehiclePlugged !== false
@@ -4374,13 +4521,22 @@ if (components.length) {
                     && cmdW >= activityThresholdW;
 
                 if (cmdStartsNow) {
-                    this._pvStartupUntilMs.set(w.safe, now + pvStartSettleMs);
+                    if (pvStartSettleMs > 0) this._pvStartupUntilMs.set(w.safe, now + pvStartSettleMs);
+                    else this._pvStartupUntilMs.delete(w.safe);
+                    if (isPvOnly && pvMinRunMs > 0) this._pvMinRunUntilMs.set(w.safe, now + pvMinRunMs);
+                    else if (!isPvOnly) this._pvMinRunUntilMs.delete(w.safe);
+                    this._pvStartReadySinceMs.delete(w.safe);
+                    this._pvBelowMinSinceMs.delete(w.safe);
                 } else if (actualNowW >= activityThresholdW || cmdW < activityThresholdW || w.vehiclePlugged === false
-                    || !w.enabled || !w.online || (String(w.effectiveMode || '') !== 'pv' && String(w.effectiveMode || '') !== 'minpv')) {
+                    || !w.enabled || !w.online || !isPvManaged) {
                     this._pvStartupUntilMs.delete(w.safe);
+                    if (cmdW < activityThresholdW || !isPvOnly) this._pvMinRunUntilMs.delete(w.safe);
+                    if (cmdW < activityThresholdW) this._pvBelowMinSinceMs.delete(w.safe);
                 } else {
                     const holdUntil = this._pvStartupUntilMs.get(w.safe) || 0;
                     if (holdUntil > 0 && now >= holdUntil) this._pvStartupUntilMs.delete(w.safe);
+                    const minRunUntil = this._pvMinRunUntilMs.get(w.safe) || 0;
+                    if (minRunUntil > 0 && now >= minRunUntil) this._pvMinRunUntilMs.delete(w.safe);
                 }
             } catch {
                 // ignore

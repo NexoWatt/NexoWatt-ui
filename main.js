@@ -6483,6 +6483,12 @@ async migrateNativeConfig() {
       // Charging Management defaults
       setNumber('chargingManagement.pvChargeReserveW', 500);
       setNumber('chargingManagement.pvStartSettleSec', 20);
+      setNumber('chargingManagement.pvStartStableSec', 10);
+      setNumber('chargingManagement.pvConnectorStopDelaySec', 45);
+      setNumber('chargingManagement.pvMinRunSec', 45);
+      setNumber('chargingManagement.pvRunDeficitToleranceW', 600);
+      setNumber('chargingManagement.pvRampUpAperTick', 0.5);
+      setNumber('chargingManagement.pvRampUpWPerTick', 350);
 
       // Storage reserve defaults (avoid NaN/blank blocking Admin save)
       setBoolean('storage.reserveEnabled', false);

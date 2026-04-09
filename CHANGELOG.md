@@ -1,3 +1,10 @@
+## 0.6.217
+
+- charging-management: Reines PV-Überschussladen hat jetzt eine eigene Start-/Ramp-/Stop-Logik. 3-phasige Wallboxen starten erst, wenn das technische Minimum stabil verfügbar ist, starten dann sauber auf 6 A / ~4,2 kW und rampen im PV-Betrieb weich nach oben.
+- charging-management: Laufende PV-only-Sitzungen bekommen eine kurze Mindestlaufzeit und Stop-Entprellung. Kleine kurzfristige Defizite führen dadurch nicht mehr sofort zu An/Aus-Flattern, langsame Wallbox-/Fahrzeug-Hochläufe bleiben stabiler.
+- runtime/config: Neue sichere Standardwerte für PV-Start-Stabilität, PV-MinRun, PV-Defizit-Toleranz und sanfte PV-Rampen ergänzt.
+
+
 ## 0.6.216
 
 - Historie: Chart-Initialisierung gehärtet. Die Historie rendert jetzt beim Öffnen wieder automatisch, zieht nach dem ersten Paint ein Re-Render nach und macht bei noch fehlenden Zeitreihen selbstständig einen kurzen Auto-Retry statt erst auf einen Klick zu warten.

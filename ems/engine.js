@@ -408,6 +408,12 @@ class EmsEngine {
       pvStartDelaySec: 10,
       pvStopDelaySec: 30,
       pvAbortImportW: 600,
+      pvStartStableSec: 10,
+      pvConnectorStopDelaySec: 45,
+      pvMinRunSec: 45,
+      pvRunDeficitToleranceW: 600,
+      pvRampUpAperTick: 0.5,
+      pvRampUpWPerTick: 350,
 
       // Global stepping defaults (per wallbox overrides possible)
       stepA: 0.1,
@@ -495,6 +501,24 @@ class EmsEngine {
 
       const pvAbortImport_ = Number(userCm.pvAbortImportW);
       if (Number.isFinite(pvAbortImport_) && pvAbortImport_ >= 0) chargingCfg.pvAbortImportW = Math.round(pvAbortImport_);
+
+      const pvStartStable_ = Number(userCm.pvStartStableSec);
+      if (Number.isFinite(pvStartStable_) && pvStartStable_ >= 0) chargingCfg.pvStartStableSec = pvStartStable_;
+
+      const pvConnectorStopDelay_ = Number(userCm.pvConnectorStopDelaySec);
+      if (Number.isFinite(pvConnectorStopDelay_) && pvConnectorStopDelay_ >= 0) chargingCfg.pvConnectorStopDelaySec = pvConnectorStopDelay_;
+
+      const pvMinRun_ = Number(userCm.pvMinRunSec);
+      if (Number.isFinite(pvMinRun_) && pvMinRun_ >= 0) chargingCfg.pvMinRunSec = pvMinRun_;
+
+      const pvRunDeficitTolerance_ = Number(userCm.pvRunDeficitToleranceW);
+      if (Number.isFinite(pvRunDeficitTolerance_) && pvRunDeficitTolerance_ >= 0) chargingCfg.pvRunDeficitToleranceW = Math.round(pvRunDeficitTolerance_);
+
+      const pvRampUpA_ = Number(userCm.pvRampUpAperTick);
+      if (Number.isFinite(pvRampUpA_) && pvRampUpA_ >= 0) chargingCfg.pvRampUpAperTick = pvRampUpA_;
+
+      const pvRampUpW_ = Number(userCm.pvRampUpWPerTick);
+      if (Number.isFinite(pvRampUpW_) && pvRampUpW_ >= 0) chargingCfg.pvRampUpWPerTick = Math.round(pvRampUpW_);
 
       const sg_ = Number(userCm.stopGraceSec);
       if (Number.isFinite(sg_) && sg_ >= 0 && sg_ <= 3600) chargingCfg.stopGraceSec = sg_;
