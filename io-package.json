@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.217",
+    "version": "0.6.218",
     "news": {
+      "0.6.218": {
+        "de": "Historie: Neuer Tarif-/Netzentgelt-Nachweis mit 15-Minuten-Ausdruck, Datum/Uhrzeit, Preis, Bezug und Kosten zur Gegenprüfung der Abrechnung. Einstellungen/§14a: eigener Ausdruck für historisierte Schalt-Ereignisse mit exakten Zeitstempeln ergänzt. Web-Cache-Version angehoben.",
+        "en": "History: added a new tariff/grid-fee proof report with 15-minute printout including date/time, price, import and costs for bill cross-checking. Settings/§14a: added a dedicated print report for historized switching events with exact timestamps. Web cache version bumped."
+      },
       "0.6.215": {
         "de": "Historie: zusätzlicher Preis-/Kostenbereich für dynamischen Tarif und variables Netzentgelt ergänzt – mit Preisverlauf, Bezug und berechneten Kosten je Zeitraum sowie separater Gegenprüfung der Abrechnung. Einstellungen: Netzentgelt-Zusatzpreise für ST/NT/HT können jetzt gepflegt werden; Web-Cache-Version angehoben.",
         "en": "History: added an extra price/cost section for dynamic tariffs and variable grid fees – including price progression, import and calculated costs per period for bill cross-checking. Settings: net fee add-on prices for ST/NT/HT can now be configured; web cache version bumped."
@@ -1650,8 +1654,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.210",
+  "version": "0.6.218",
   "news": {
+    "0.6.218": {
+      "de": "Historie: Neuer Tarif-/Netzentgelt-Nachweis mit 15-Minuten-Ausdruck, Datum/Uhrzeit, Preis, Bezug und Kosten zur Gegenprüfung der Abrechnung. Einstellungen/§14a: eigener Ausdruck für historisierte Schalt-Ereignisse mit exakten Zeitstempeln ergänzt. Web-Cache-Version angehoben.",
+      "en": "History: added a new tariff/grid-fee proof report with 15-minute printout including date/time, price, import and costs for bill cross-checking. Settings/§14a: added a dedicated print report for historized switching events with exact timestamps. Web cache version bumped."
+    },
     "0.6.208": {
       "de": "EMS/Lademanagement: Das PV-Überschussladen nutzt jetzt standardmäßig einen 500-W-Reservepuffer auf dem effektiven PV-Budget. Dadurch läuft die Überschussladung ruhiger und regelt nicht mehr so hart auf 0 W Netzbezug. Die Runtime-Konfiguration normiert den neuen Wert automatisch mit.",
       "en": "EMS/Charging management: PV surplus charging now applies a default 500 W reserve buffer to the effective PV budget. This makes surplus charging calmer and avoids regulating too tightly against 0 W grid import. Runtime config now normalizes the new value as well."

@@ -1546,6 +1546,18 @@ async function load(){
     });
   }
 
+  const tariffReportBtn = document.getElementById('tariffReportBtn');
+  if (tariffReportBtn) {
+    tariffReportBtn.addEventListener('click', ()=>{
+      const fromEl = document.getElementById('from');
+      const toEl = document.getElementById('to');
+      const fromMs = fromEl && fromEl.value ? +new Date(fromEl.value) : (Date.now() - 24*3600*1000);
+      const toMs = toEl && toEl.value ? +new Date(toEl.value) : Date.now();
+      const url = `/tariff-report?from=${encodeURIComponent(fromMs)}&to=${encodeURIComponent(toMs)}`;
+      window.location.href = url;
+    });
+  }
+
   // Jahresreport (Mehrjahresübersicht) – öffnet eine Tabelle ähnlich EVCS-Abrechnung
   const yearReportBtn = document.getElementById('yearReportBtn');
   if (yearReportBtn) {

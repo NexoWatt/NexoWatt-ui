@@ -10749,6 +10749,18 @@ app.get(['/logic.html','/logic'], (req, res) => {
       res.redirect('/static/year-report.html' + qs);
     });
 
+    // --- Tariff / net fee report page ---
+    app.get(['/tariff-report.html','/tariff-report','/history/tariff-report','/history/tariff-report.html'], (req, res) => {
+      const qs = (req && req.url && req.url.includes('?')) ? req.url.slice(req.url.indexOf('?')) : '';
+      res.redirect('/static/tariff-report.html' + qs);
+    });
+
+    // --- §14a report page ---
+    app.get(['/para14a-report.html','/para14a-report','/settings/para14a-report','/settings/para14a-report.html'], (req, res) => {
+      const qs = (req && req.url && req.url.includes('?')) ? req.url.slice(req.url.indexOf('?')) : '';
+      res.redirect('/static/para14a-report.html' + qs);
+    });
+
 app.get('/api/history', async (req, res) => {
       try {
         const inst = this._nwGetHistoryInstance();
@@ -11163,6 +11175,306 @@ energy.__endMs = energyEnd;
     });
 
     
+    app.get('/api/tariff/report', async (req, res) => {
+      try {
+        const intervalMs = 15 * 60 * 1000;
+        const parseTs = (raw, { endOfDay = false } = {}) => {
+          if (raw === null || raw === undefined || raw === '') return null;
+          if (typeof raw === 'number' && Number.isFinite(raw)) return raw < 1e12 ? raw * 1000 : raw;
+          const s = String(raw).trim();
+          if (!s) return null;
+          if (/^\d+$/.test(s)) {
+            const n = Number(s);
+            if (!Number.isFinite(n)) return null;
+            return n < 1e12 ? n * 1000 : n;
+          }
+          if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+            const [y, m, d] = s.split('-').map((n) => Number(n));
+            const dt = new Date(y, m - 1, d, 0, 0, 0, 0);
+            if (endOfDay) dt.setHours(23, 59, 59, 999);
+            return dt.getTime();
+          }
+          const p = Date.parse(s);
+          return Number.isNaN(p) ? null : p;
+        };
+        const alignDown = (ts) => Math.floor(Number(ts) / intervalMs) * intervalMs;
+        const alignUp = (ts) => Math.ceil(Number(ts) / intervalMs) * intervalMs;
+        const now = Date.now();
+        const defaultFrom = (() => { const d = new Date(now); d.setHours(0, 0, 0, 0); return d.getTime(); })();
+        const requestedFrom = parseTs(req.query.from) ?? defaultFrom;
+        const requestedTo = parseTs(req.query.to, { endOfDay: true }) ?? now;
+        const start = alignDown(requestedFrom);
+        const end = Math.max(start + intervalMs, alignUp(requestedTo));
+
+        const densifyHoldLast = (series) => {
+          const src = Array.isArray(series) ? series : [];
+          const count = Math.max(1, Math.ceil((end - start) / intervalMs));
+          const byIdx = new Map();
+          let havePrev = false;
+          let prev = null;
+          for (const p of src) {
+            const ts = this._nwNormTsMs(p && p.ts);
+            const val = Number(p && p.val);
+            if (!Number.isFinite(ts) || !Number.isFinite(val)) continue;
+            if (ts < start) {
+              prev = val;
+              havePrev = true;
+              continue;
+            }
+            const idx = Math.round((ts - start) / intervalMs);
+            if (idx < 0 || idx >= count) continue;
+            byIdx.set(idx, val);
+          }
+          const out = [];
+          for (let i = 0; i < count; i++) {
+            if (byIdx.has(i)) {
+              prev = byIdx.get(i);
+              havePrev = true;
+            }
+            out.push({ ts: start + (i * intervalMs), val: havePrev ? prev : null });
+          }
+          return out;
+        };
+
+        const seriesFor = async (name) => densifyHoldLast(await this._nwGetHistoryAvgSeriesAny(this._nwGetHistoryDpCandidates(name), Math.max(0, start - intervalMs), end, intervalMs));
+        const [baseSeries, netFeeSeries, totalSeries, buySeries] = await Promise.all([
+          seriesFor('priceBase'),
+          seriesFor('priceNetFee'),
+          seriesFor('priceTotal'),
+          seriesFor('gridBuyPower'),
+        ]);
+
+        const bucketCount = Math.max(1, Math.ceil((end - start) / intervalMs));
+        const intervals = [];
+        for (let i = 0; i < bucketCount; i++) {
+          const rowStart = start + (i * intervalMs);
+          const rowEnd = rowStart + intervalMs;
+          const rawBase = Number(baseSeries[i] && baseSeries[i].val);
+          const rawNet = Number(netFeeSeries[i] && netFeeSeries[i].val);
+          const rawTotal = Number(totalSeries[i] && totalSeries[i].val);
+          const rawBuy = Number(buySeries[i] && buySeries[i].val);
+
+          let total = Number.isFinite(rawTotal) ? Math.max(0, rawTotal) : NaN;
+          let base = Number.isFinite(rawBase) ? Math.max(0, rawBase) : NaN;
+          let netFee = Number.isFinite(rawNet) ? Math.max(0, rawNet) : NaN;
+
+          if (!Number.isFinite(total)) total = Math.max(0, (Number.isFinite(base) ? base : 0) + (Number.isFinite(netFee) ? netFee : 0));
+          if (!Number.isFinite(base)) base = Math.max(0, total - (Number.isFinite(netFee) ? netFee : 0));
+          if (!Number.isFinite(netFee)) netFee = Math.max(0, total - base);
+
+          const importAvgW = Number.isFinite(rawBuy) ? Math.max(0, rawBuy) : 0;
+          const importKwh = (importAvgW * intervalMs) / 3600000000;
+          const baseCostEur = importKwh * base;
+          const netFeeCostEur = importKwh * netFee;
+          const totalCostEur = importKwh * total;
+
+          intervals.push({
+            startTs: rowStart,
+            endTs: rowEnd,
+            baseEurPerKwh: base,
+            netFeeEurPerKwh: netFee,
+            totalEurPerKwh: total,
+            importAvgW,
+            importKwh,
+            baseCostEur,
+            netFeeCostEur,
+            totalCostEur,
+          });
+        }
+
+        const prices = intervals.map((row) => Number(row.totalEurPerKwh)).filter(Number.isFinite);
+        const totalImportKwh = intervals.reduce((sum, row) => sum + (Number(row.importKwh) || 0), 0);
+        const totalBaseCost = intervals.reduce((sum, row) => sum + (Number(row.baseCostEur) || 0), 0);
+        const totalNetFeeCost = intervals.reduce((sum, row) => sum + (Number(row.netFeeCostEur) || 0), 0);
+        const totalCost = intervals.reduce((sum, row) => sum + (Number(row.totalCostEur) || 0), 0);
+        const avgPrice = totalImportKwh > 0.0001
+          ? (totalCost / totalImportKwh)
+          : (prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : null);
+
+        const historyInstance = String(this._nwGetHistoryInstance() || '').trim();
+        res.json({
+          ok: true,
+          meta: {
+            requestedFrom,
+            requestedTo,
+            start,
+            end,
+            intervalMs,
+            dynamicTariff: !!(this.stateCache?.['settings.dynamicTariff']?.value),
+            netFeeEnabled: !!(this.stateCache?.['settings.netFeeEnabled']?.value),
+            historyInstance,
+            historyReady: !!historyInstance,
+            retentionTargetDays: 730,
+          },
+          summary: {
+            minPrice: prices.length ? Math.min(...prices) : null,
+            maxPrice: prices.length ? Math.max(...prices) : null,
+            avgPrice,
+            importKwh: totalImportKwh,
+            baseCost: totalBaseCost,
+            netFeeCost: totalNetFeeCost,
+            totalCost,
+            intervals: intervals.length,
+          },
+          intervals,
+        });
+      } catch (e) {
+        res.json({ ok: false, error: String(e) });
+      }
+    });
+
+    app.get('/api/para14a/report', async (req, res) => {
+      try {
+        const parseTs = (raw, { endOfDay = false } = {}) => {
+          if (raw === null || raw === undefined || raw === '') return null;
+          if (typeof raw === 'number' && Number.isFinite(raw)) return raw < 1e12 ? raw * 1000 : raw;
+          const s = String(raw).trim();
+          if (!s) return null;
+          if (/^\d+$/.test(s)) {
+            const n = Number(s);
+            if (!Number.isFinite(n)) return null;
+            return n < 1e12 ? n * 1000 : n;
+          }
+          if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+            const [y, m, d] = s.split('-').map((n) => Number(n));
+            const dt = new Date(y, m - 1, d, 0, 0, 0, 0);
+            if (endOfDay) dt.setHours(23, 59, 59, 999);
+            return dt.getTime();
+          }
+          const p = Date.parse(s);
+          return Number.isNaN(p) ? null : p;
+        };
+
+        const now = Date.now();
+        const requestedFrom = parseTs(req.query.from) ?? (now - (30 * 24 * 3600 * 1000));
+        const requestedTo = parseTs(req.query.to, { endOfDay: true }) ?? now;
+        const start = requestedFrom;
+        const end = Math.max(start + 60000, requestedTo);
+        const historyInstance = String(this._nwGetHistoryInstance() || '').trim();
+
+        const getRawHistory = (id) => new Promise((resolve) => {
+          const sid = this._nwTrimId(id);
+          if (!historyInstance || !sid) return resolve([]);
+          const spanMs = Math.max(1, end - start);
+          const approxCount = Math.max(200, Math.min(50000, Math.ceil(spanMs / 60000) + 500));
+          const options = {
+            start,
+            end,
+            aggregate: 'none',
+            addId: false,
+            ignoreNull: false,
+            count: approxCount,
+            returnNewestEntries: true,
+            removeBorderValues: false,
+          };
+          let done = false;
+          const timer = setTimeout(() => {
+            if (done) return;
+            done = true;
+            resolve([]);
+          }, 8000);
+          try {
+            this.sendTo(historyInstance, 'getHistory', { id: sid, options }, (resu) => {
+              if (done) return;
+              done = true;
+              clearTimeout(timer);
+              let outArr = [];
+              if (Array.isArray(resu)) outArr = resu;
+              else if (resu && Array.isArray(resu.result)) {
+                if (resu.result.length && Array.isArray(resu.result[0]?.data)) outArr = resu.result[0].data;
+                else outArr = resu.result;
+              } else if (resu && Array.isArray(resu.series) && resu.series[0]?.values) {
+                outArr = resu.series[0].values.map((v) => ({ ts: v[0], val: v[1] }));
+              } else if (resu && Array.isArray(resu.data)) {
+                outArr = resu.data;
+              }
+              const norm = (outArr || []).map((p) => {
+                const tRaw = Array.isArray(p) ? p[0] : (p.ts ?? p.time ?? p.t ?? p[0]);
+                const vRaw = Array.isArray(p) ? p[1] : (p.val ?? p.value ?? p[1]);
+                const ts = this._nwNormTsMs(tRaw);
+                if (ts == null) return null;
+                return { ts, value: vRaw };
+              }).filter(Boolean).sort((a, b) => a.ts - b.ts);
+              resolve(norm);
+            });
+          } catch (_e) {
+            clearTimeout(timer);
+            resolve([]);
+          }
+        });
+
+        const rawEvents = await getRawHistory(`${this.namespace}.para14a.audit.lastJson`);
+        const seen = new Set();
+        const events = rawEvents.map((entry) => {
+          let payload = entry && entry.value;
+          if (typeof payload === 'string') {
+            try { payload = JSON.parse(payload); } catch (_e) {}
+          }
+          if (!payload || typeof payload !== 'object') return null;
+          const ts = this._nwNormTsMs(payload.ts) || Number(entry && entry.ts) || 0;
+          if (!Number.isFinite(ts) || ts < start || ts > end) return null;
+          const seq = Number(payload.seq);
+          const key = [Number.isFinite(seq) ? seq : '', ts, String(payload.eventType || ''), String(payload.result || '')].join('|');
+          if (seen.has(key)) return null;
+          seen.add(key);
+          return {
+            seq: Number.isFinite(seq) ? seq : null,
+            ts,
+            eventType: String(payload.eventType || ''),
+            reason: String(payload.reason || ''),
+            result: String(payload.result || ''),
+            sessionId: String(payload.sessionId || ''),
+            active: !!payload.active,
+            source: String(payload.source || ''),
+            mode: String(payload.mode || ''),
+            requestedTotalBudgetW: Number(payload.requestedTotalBudgetW) || 0,
+            effectiveEvcsCapW: Number(payload.effectiveEvcsCapW) || 0,
+            minPerDeviceW: Number(payload.minPerDeviceW) || 0,
+            pMinW: Number(payload.pMinW) || 0,
+            nSteuVE: Number(payload.nSteuVE) || 0,
+            evcsCount: Number(payload.evcsCount) || 0,
+            evPowerW: Number(payload.evPowerW) || 0,
+            gridPowerW: Number(payload.gridPowerW) || 0,
+            consumerAppliedCount: Number(payload.consumerAppliedCount) || 0,
+            consumerFailedCount: Number(payload.consumerFailedCount) || 0,
+            consumerSkippedCount: Number(payload.consumerSkippedCount) || 0,
+            consumerWriteFailedCount: Number(payload.consumerWriteFailedCount) || 0,
+            failedConsumers: Array.isArray(payload.failedConsumers) ? payload.failedConsumers.slice(0, 10) : [],
+          };
+        }).filter(Boolean).sort((a, b) => a.ts - b.ts);
+
+        const summary = {
+          totalEvents: events.length,
+          activations: events.filter((row) => row.eventType === 'activate').length,
+          updates: events.filter((row) => row.eventType === 'update').length,
+          releases: events.filter((row) => row.eventType === 'release').length,
+          writeFailedEvents: events.filter((row) => String(row.result || '') === 'write_failed').length,
+          firstTs: events.length ? events[0].ts : null,
+          lastTs: events.length ? events[events.length - 1].ts : null,
+        };
+
+        res.json({
+          ok: true,
+          meta: {
+            requestedFrom,
+            requestedTo,
+            start,
+            end,
+            historyInstance,
+            historyReady: !!historyInstance,
+            historyEnabled: !!(this.stateCache?.['para14a.audit.historyEnabled']?.value),
+            historyProvisionState: String(this.stateCache?.['para14a.audit.historyProvisionState']?.value || ''),
+            retentionTargetDays: Number(this.stateCache?.['para14a.audit.retentionTargetDays']?.value) || 730,
+          },
+          summary,
+          events,
+        });
+      } catch (e) {
+        res.json({ ok: false, error: String(e) });
+      }
+    });
+
+
 
 // --- EVCS Report Builder (shared for JSON + CSV) ---
 const nwBuildEvcsReport = async (query = {}) => {

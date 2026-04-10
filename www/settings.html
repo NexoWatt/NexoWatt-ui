@@ -508,8 +508,13 @@
       <section class="card nw-settings-page hidden" data-settings-panel="log">
         <div class="card-header"><span>Log / Nachweis</span></div>
         <div class="form">
-          <div class="nw-settings-note">
-            Hier siehst du die Frontend-Sicht auf das §14a Nachweislog. Die Langzeit-Aufbewahrung selbst läuft über die aktivierte Historie/Influx.
+          <div class="nw-settings-note nw-settings-note--actionbar">
+            <div>
+              Hier siehst du die Frontend-Sicht auf das §14a Nachweislog. Die Langzeit-Aufbewahrung selbst läuft über die aktivierte Historie/Influx.
+            </div>
+            <div>
+              <button type="button" class="btn sm" id="settingsPara14aReportBtn">§14a Ausdruck</button>
+            </div>
           </div>
           <div class="nw-settings-note nw-settings-note--warn" id="settingsPara14aMissing" style="display:none">
             §14a ist aktuell nicht aktiv oder noch nicht im System eingebunden. Sobald das Modul aktiv ist, erscheinen hier Status und Nachweisdaten.

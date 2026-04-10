@@ -2726,6 +2726,17 @@ function renderSettingsLogPanel(){
   if (jsonEl) jsonEl.textContent = _nwSettingsJson(_nwSettingsStateValue('para14a.audit.lastJson'));
 }
 
+function setupSettingsReportButtons(){
+  const btn = document.getElementById('settingsPara14aReportBtn');
+  if (!btn || btn.dataset.bound === '1') return;
+  btn.dataset.bound = '1';
+  btn.addEventListener('click', () => {
+    const toMs = Date.now();
+    const fromMs = toMs - (30 * 24 * 3600 * 1000);
+    window.location.href = `/para14a-report?from=${encodeURIComponent(fromMs)}&to=${encodeURIComponent(toMs)}`;
+  });
+}
+
 function setupSettings(){
   document.querySelectorAll('[data-scope="settings"]').forEach(el=> bindInputValue(el, 'settings.'+el.dataset.key));
   document.querySelectorAll('[data-scope="rfid"]').forEach(el=> bindInputValue(el, 'evcs.rfid.'+el.dataset.key));
@@ -2734,6 +2745,7 @@ function setupSettings(){
   try { setupRfidBillingUi(); } catch (e) {}
   try { initSettingsPageTabs(); } catch (e) {}
   try { renderSettingsLogPanel(); } catch (e) {}
+  try { setupSettingsReportButtons(); } catch (e) {}
 }
 
 // --- Speicherfarm (VIS read-only) ---

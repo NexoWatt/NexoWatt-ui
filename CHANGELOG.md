@@ -1,3 +1,10 @@
+## 0.6.218
+
+- Historie/Tarif: Neuer Tarif-/Netzentgelt-Nachweis als eigener Ausdruck ergänzt. Der Bericht arbeitet im 15-Minuten-Raster und listet Datum/Uhrzeit, Basispreis, variables Netzentgelt, Gesamtpreis, Netzbezug sowie Basis-/Netzentgelt-/Gesamtkosten zur Gegenprüfung der Stromanbieter-Abrechnung.
+- Einstellungen/§14a: Neuer §14a-Ausdruck ergänzt. Der Bericht liest die historisierten Ereignissnapshots aus `para14a.audit.lastJson` und zeigt exakte Zeitstempel, Quelle, Modus, Budget, EVCS-Limit, EV-/Netzleistung und Ergebnis für Nachweiszwecke an.
+- UI/Web: Neue Druck-/Nachweis-Buttons in Historie und §14a-Einstellungen ergänzt, gemeinsame Report-Hilfsdateien angelegt und Web-Cache-Version angehoben.
+
+
 ## 0.6.217
 
 - charging-management: Reines PV-Überschussladen hat jetzt eine eigene Start-/Ramp-/Stop-Logik. 3-phasige Wallboxen starten erst, wenn das technische Minimum stabil verfügbar ist, starten dann sauber auf 6 A / ~4,2 kW und rampen im PV-Betrieb weich nach oben.
