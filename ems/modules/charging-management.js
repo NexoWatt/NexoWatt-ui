@@ -383,6 +383,7 @@ class ChargingManagementModule extends BaseModule {
         this._pvStartReadySinceMs = new Map(); // safeKey -> ms since PV-only start conditions are continuously satisfied
         this._pvBelowMinSinceMs = new Map(); // safeKey -> ms since a running PV-only session is continuously below the technical minimum
         this._pvMinRunUntilMs = new Map(); // safeKey -> ms until a freshly started PV-only session should be kept stable
+        this._forcedTariffPauseEnable = new Map(); // safeKey -> true when EMS temporarily disabled the EVCS via enableKey because tariff blocked grid charging
     }
 
     /**
@@ -2426,6 +2427,15 @@ class ChargingManagementModule extends BaseModule {
                         if (deliverableWh + 1e-6 >= needWh) {
                             return { override: false, reason: 'forecast_ok' };
                         }
+
+                        // Ohne Fahrzeug-SoC ist die Energiemenge nur eine konservative Schätzung
+                        // (typisch: Ziel-% auf Basis der hinterlegten Akku-Kapazität). In diesem Fall
+                        // soll der Tarif nachts weiter den Vorrang behalten und wir warten bis zum
+                        // echten Latest-Start, statt schon tagsüber teuer zu laden.
+                        if (w.goalSocAvailable !== true) {
+                            return { override: false, reason: 'forecast_wait_no_soc' };
+                        }
+
                         return { override: true, reason: 'forecast_insufficient' };
                     }
                     // Forecast exists but doesn't cover the full horizon reliably → fall back to latest-start.
@@ -2557,6 +2567,9 @@ class ChargingManagementModule extends BaseModule {
             }
 
             w.effectiveMode = eff;
+            w._forcePvForW = forcePvForW;
+            w._goalTariffOverrideActive = goalTariffOverrideActive;
+            w._goalTariffOverrideReason = goalTariffOverrideReason;
             w._boostTimedOut = boostTimedOut;
             w._boostNotAllowed = boostNotAllowed;
             w._boostTimeoutMinEffective = effBoostTimeoutMin;
@@ -4483,6 +4496,27 @@ if (components.length) {
             /** @type {any|null} */
             let applyWrites = null;
 
+            const previouslyForcedTariffPause = this._forcedTariffPauseEnable.get(w.safe) === true;
+            const forcedTariffPause = !!(
+                w.enableKey
+                && forcePvSurplusOnly
+                && !pvSurplusOnlyCfg
+                && String(w.userMode || 'auto').trim().toLowerCase() === 'auto'
+                && isPvOnly
+                && cmdW < activityThresholdW
+                && w._goalTariffOverrideActive !== true
+                && (reason === ReasonCodes.NO_PV_SURPLUS || reason === ReasonCodes.NO_BUDGET || reason === ReasonCodes.BELOW_MIN)
+            );
+            let enableOverride = null;
+            if (forcedTariffPause) {
+                // Teurer Tarif / Netzladen gesperrt: einige Wallboxen ignorieren einen 0-Sollwert
+                // und laden mit dem letzten Wert weiter. In diesem Fall pausieren wir den Ladepunkt
+                // explizit über das Enable-DP, bis wieder Budget/Freigabe vorhanden ist.
+                enableOverride = false;
+            } else if (previouslyForcedTariffPause && w.enabled && w.online) {
+                enableOverride = true;
+            }
+
             if (this.dp) {
                 const consumer = w.consumer || {
                     type: 'evcs',
@@ -4494,10 +4528,16 @@ if (components.length) {
                     enableKey: w.enableKey || '',
                 };
 
-                const res = await applySetpoint({ adapter: this.adapter, dp: this.dp }, consumer, { targetW: cmdW, targetA: cmdA, basis: w.controlBasis });
+                const applyTarget = { targetW: cmdW, targetA: cmdA, basis: w.controlBasis };
+                if (enableOverride !== null) applyTarget.enable = enableOverride;
+
+                const res = await applySetpoint({ adapter: this.adapter, dp: this.dp }, consumer, applyTarget);
                 applied = !!res?.applied;
                 applyStatus = String(res?.status || (applied ? 'applied' : 'write_failed'));
                 applyWrites = res?.writes || null;
+
+                if (forcedTariffPause && applied) this._forcedTariffPauseEnable.set(w.safe, true);
+                else if (!forcedTariffPause && previouslyForcedTariffPause && applied) this._forcedTariffPauseEnable.delete(w.safe);
             } else {
                 applyStatus = 'no_dp_registry';
             }
@@ -4619,6 +4659,8 @@ if (components.length) {
                 applyStatus,
                 applyWrites,
                 reason,
+                forcedTariffPause,
+                enableOverride,
                 boost: isBoost,
             });
         }

@@ -1,3 +1,8 @@
+## 0.6.219
+
+- charging-management / Tarif: Auto-Zielladen respektiert teure Tarif-Sperren jetzt sauberer. Wenn kein Fahrzeug-SoC verfügbar ist, löst der Forecast das Netzladen nicht mehr vorschnell aus; stattdessen wartet die Logik bis zum echten Latest-Start.
+- charging-management / EVCS-Pause: Bei tarifbedingter Netzlade-Sperre wird ein Auto-Ladepunkt ohne PV-Budget jetzt zusätzlich über das Enable-DP pausiert, damit Wallboxen mit trägem oder ignoriertem 0-Sollwert nicht weiterladen. Beim Freigeben wird der Ladepunkt wieder sauber aktiviert.
+
 ## 0.6.218
 
 - Historie/Tarif: Neuer Tarif-/Netzentgelt-Nachweis als eigener Ausdruck ergänzt. Der Bericht arbeitet im 15-Minuten-Raster und listet Datum/Uhrzeit, Basispreis, variables Netzentgelt, Gesamtpreis, Netzbezug sowie Basis-/Netzentgelt-/Gesamtkosten zur Gegenprüfung der Stromanbieter-Abrechnung.

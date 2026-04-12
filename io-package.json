@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.218",
+    "version": "0.6.219",
     "news": {
       "0.6.218": {
         "de": "Historie: Neuer Tarif-/Netzentgelt-Nachweis mit 15-Minuten-Ausdruck, Datum/Uhrzeit, Preis, Bezug und Kosten zur Gegenprüfung der Abrechnung. Einstellungen/§14a: eigener Ausdruck für historisierte Schalt-Ereignisse mit exakten Zeitstempeln ergänzt. Web-Cache-Version angehoben.",
