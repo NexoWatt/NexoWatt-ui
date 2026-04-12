@@ -383,7 +383,6 @@ class ChargingManagementModule extends BaseModule {
         this._pvStartReadySinceMs = new Map(); // safeKey -> ms since PV-only start conditions are continuously satisfied
         this._pvBelowMinSinceMs = new Map(); // safeKey -> ms since a running PV-only session is continuously below the technical minimum
         this._pvMinRunUntilMs = new Map(); // safeKey -> ms until a freshly started PV-only session should be kept stable
-        this._forcedTariffPauseEnable = new Map(); // safeKey -> true when EMS temporarily disabled the EVCS via enableKey because tariff blocked grid charging
     }
 
     /**
@@ -2567,9 +2566,6 @@ class ChargingManagementModule extends BaseModule {
             }
 
             w.effectiveMode = eff;
-            w._forcePvForW = forcePvForW;
-            w._goalTariffOverrideActive = goalTariffOverrideActive;
-            w._goalTariffOverrideReason = goalTariffOverrideReason;
             w._boostTimedOut = boostTimedOut;
             w._boostNotAllowed = boostNotAllowed;
             w._boostTimeoutMinEffective = effBoostTimeoutMin;
@@ -2623,6 +2619,7 @@ class ChargingManagementModule extends BaseModule {
         let pvSurplusW = null;
         let gridW = null;
         let gridImportNoEvW = null;
+        let pvStartReadyBudgetW = null;
 
         // Gate B: PV hysteresis diagnostics (defaults)
         let pvCapRawWState = 0;
@@ -2785,17 +2782,28 @@ class ChargingManagementModule extends BaseModule {
                 ? this._pvSurplusAvgPush('slow5m', now, pvSurplusNoEvW)
                 : 0;
 
-            // Active control uses the short 5s window; the 5min window stays visible for diagnostics.
-            pvSurplusW = pvSurplusFastW;
+            // Active control must fall FAST when PV collapses, but may rise more smoothly.
+            // Therefore we use an asymmetric control value:
+            // - rising edge: short rolling mean (avoids start/stop noise)
+            // - falling edge: raw surplus immediately clamps the budget
+            const pvSurplusControlW = (() => {
+                const raw = (typeof pvSurplusNoEvW === 'number' && Number.isFinite(pvSurplusNoEvW)) ? pvSurplusNoEvW : 0;
+                const fast = (typeof pvSurplusFastW === 'number' && Number.isFinite(pvSurplusFastW)) ? pvSurplusFastW : raw;
+                return Math.max(0, Math.min(raw, fast));
+            })();
+
+            // Active control uses the asymmetric fast window; the 5min window stays visible for diagnostics.
+            pvSurplusW = pvSurplusControlW;
             pvSurplusNoEvAvg5mWState = (typeof pvSurplusAvg5mW === 'number' && Number.isFinite(pvSurplusAvg5mW)) ? pvSurplusAvg5mW : 0;
 
-            const pvCapRawW = (typeof pvSurplusFastW === 'number' && Number.isFinite(pvSurplusFastW) && pvSurplusFastW > 0) ? pvSurplusFastW : 0;
+            const pvCapRawW = (typeof pvSurplusControlW === 'number' && Number.isFinite(pvSurplusControlW) && pvSurplusControlW > 0) ? pvSurplusControlW : 0;
             // PV-Überschussladen soll etwas ruhiger laufen und nicht auf Kante 0 W Netzbezug regeln.
             // Deshalb rechnen wir standardmäßig eine kleine Reserve auf die EV-Ladeleistung drauf.
             // Effektiv bleibt dadurch im PV-Budget ein Puffer (Default 500 W), der kurze Messwertsprünge,
             // Rundungsfehler und minimale Hauslaständerungen abfedert, ohne die restliche Logik zu ändern.
             const pvChargeReserveW = clamp(num(cfg.pvChargeReserveW, 500), 0, 1e12);
             const pvCapBudgetW = Math.max(0, pvCapRawW - pvChargeReserveW);
+            pvStartReadyBudgetW = pvCapBudgetW;
             pvCapW = pvCapBudgetW;
 
             // -----------------------------------------------------------------
@@ -4249,6 +4257,11 @@ if (components.length) {
             if (isPvOnly) {
                 const startReadyKey = String(w.safe || '');
                 const needStartW = Math.max(0, pvTechnicalMinW || pvStartCommandW || 0);
+                const startReadyBudgetW = Math.max(0, Math.min(
+                    stationAvailW,
+                    (typeof pvStartReadyBudgetW === 'number' && Number.isFinite(pvStartReadyBudgetW)) ? pvStartReadyBudgetW : pvAvailW,
+                    Number.isFinite(w.maxPW) ? w.maxPW : Number.POSITIVE_INFINITY,
+                ));
                 const startBudgetW = Math.max(0, Math.min(totalAvailW, stationAvailW, pvAvailW, Number.isFinite(w.maxPW) ? w.maxPW : Number.POSITIVE_INFINITY));
                 const holdBudgetW = Math.max(0, Math.min(totalAvailW, stationAvailW, Number.isFinite(w.maxPW) ? w.maxPW : Number.POSITIVE_INFINITY));
                 let startReadySince = this._pvStartReadySinceMs.get(startReadyKey) || 0;
@@ -4260,7 +4273,7 @@ if (components.length) {
                     this._pvBelowMinSinceMs.delete(startReadyKey);
                 } else {
                     if (!actualOrCmdActive) {
-                        if (needStartW <= 0 || startBudgetW >= needStartW) {
+                        if (needStartW <= 0 || startReadyBudgetW >= needStartW) {
                             if (!startReadySince) {
                                 startReadySince = now;
                                 this._pvStartReadySinceMs.set(startReadyKey, startReadySince);
@@ -4496,27 +4509,6 @@ if (components.length) {
             /** @type {any|null} */
             let applyWrites = null;
 
-            const previouslyForcedTariffPause = this._forcedTariffPauseEnable.get(w.safe) === true;
-            const forcedTariffPause = !!(
-                w.enableKey
-                && forcePvSurplusOnly
-                && !pvSurplusOnlyCfg
-                && String(w.userMode || 'auto').trim().toLowerCase() === 'auto'
-                && isPvOnly
-                && cmdW < activityThresholdW
-                && w._goalTariffOverrideActive !== true
-                && (reason === ReasonCodes.NO_PV_SURPLUS || reason === ReasonCodes.NO_BUDGET || reason === ReasonCodes.BELOW_MIN)
-            );
-            let enableOverride = null;
-            if (forcedTariffPause) {
-                // Teurer Tarif / Netzladen gesperrt: einige Wallboxen ignorieren einen 0-Sollwert
-                // und laden mit dem letzten Wert weiter. In diesem Fall pausieren wir den Ladepunkt
-                // explizit über das Enable-DP, bis wieder Budget/Freigabe vorhanden ist.
-                enableOverride = false;
-            } else if (previouslyForcedTariffPause && w.enabled && w.online) {
-                enableOverride = true;
-            }
-
             if (this.dp) {
                 const consumer = w.consumer || {
                     type: 'evcs',
@@ -4528,16 +4520,14 @@ if (components.length) {
                     enableKey: w.enableKey || '',
                 };
 
-                const applyTarget = { targetW: cmdW, targetA: cmdA, basis: w.controlBasis };
-                if (enableOverride !== null) applyTarget.enable = enableOverride;
-
-                const res = await applySetpoint({ adapter: this.adapter, dp: this.dp }, consumer, applyTarget);
+                const res = await applySetpoint(
+                    { adapter: this.adapter, dp: this.dp },
+                    consumer,
+                    { targetW: cmdW, targetA: cmdA, basis: w.controlBasis },
+                );
                 applied = !!res?.applied;
                 applyStatus = String(res?.status || (applied ? 'applied' : 'write_failed'));
                 applyWrites = res?.writes || null;
-
-                if (forcedTariffPause && applied) this._forcedTariffPauseEnable.set(w.safe, true);
-                else if (!forcedTariffPause && previouslyForcedTariffPause && applied) this._forcedTariffPauseEnable.delete(w.safe);
             } else {
                 applyStatus = 'no_dp_registry';
             }
@@ -4659,17 +4649,15 @@ if (components.length) {
                 applyStatus,
                 applyWrites,
                 reason,
-                forcedTariffPause,
-                enableOverride,
                 boost: isBoost,
             });
         }
 
         // wallboxes that are disabled/offline: expose targets as 0
         // Special case: if the installer enabled the chargepoint, but the end-customer
-        // switched off the EMS regulation (userEnabled=false), we actively write a 0-setpoint
-        // (and disable via enableKey, if present). This releases any previous commanded setpoint
-        // and guarantees a safe "Regelung AUS" behavior.
+        // switched off the EMS regulation (userEnabled=false), we actively write a 0-setpoint.
+        // Automatic EMS control must not toggle the wallbox enable/freigabe during normal
+        // regulation, because many EVCS/vehicles react badly to repeated enable flapping.
         for (const w of wbList) {
             if (w.enabled && w.online) continue;
 
@@ -4693,7 +4681,7 @@ if (components.length) {
                     const res = await applySetpoint(
                         { adapter: this.adapter, dp: this.dp },
                         consumer,
-                        { targetW: 0, targetA: 0, basis: w.controlBasis, enable: false },
+                        { targetW: 0, targetA: 0, basis: w.controlBasis },
                     );
                     applied = !!res?.applied;
                     applyStatus = String(res?.status || (applied ? 'applied' : 'write_failed'));

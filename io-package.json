@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.219",
+    "version": "0.6.221",
     "news": {
+      "0.6.221": {
+        "en": "Charging management audit/hardening: fixed PV-only control so sudden PV drops clamp immediately instead of continuing to allocate from a smoothed average. Also removed the extra startup delay after the PV gate opens by letting the PV start-ready timer build during the gate delay. Static scenario tests covered Auto, PV, Min+PV, Boost, tariff/goal blocking, no-vehicle and regulation-off behaviour. No automatic EVCS enable toggling is used anymore; control remains current/power only.",
+        "de": "Lademanagement geprüft und gehärtet: PV-Only reagiert bei plötzlichem PV-Einbruch jetzt sofort und regelt nicht mehr fälschlich aus einem geglätteten Mittelwert weiter. Zusätzlich entfällt die unnötige Zusatzwartezeit nach dem Öffnen des PV-Gates, weil die PV-Startbereitschaft bereits während der Gate-Verzögerung aufgebaut wird. Getestet wurden die Modi Auto, PV, Min+PV, Boost sowie Tarif-/Zielladen-Sperre, Kein-Fahrzeug und Regelung AUS. Die EVCS-Freigabe wird nicht mehr automatisch getoggelt; geregelt wird nur noch über Strom/Leistung."
+      },
+      "0.6.220": {
+        "de": "Lademanagement-Regressionsfix: Die EVCS-Regelung toggelt die Wallbox-Freigabe nicht mehr automatisch bei Tarif-/PV-Sperren oder bei deaktivierter EMS-Regelung. Stattdessen wird sauber nur noch über Strom-/Leistungssollwerte geregelt, wodurch das An/Aus-Flattern nach dem letzten Update verschwindet.",
+        "en": "Charging-management regression fix: EVCS control no longer toggles the wallbox enable/freigabe automatically for tariff/PV locks or when EMS regulation is disabled. Control now stays on current/power setpoints only, removing the on/off flapping introduced by the last update."
+      },
       "0.6.218": {
         "de": "Historie: Neuer Tarif-/Netzentgelt-Nachweis mit 15-Minuten-Ausdruck, Datum/Uhrzeit, Preis, Bezug und Kosten zur Gegenprüfung der Abrechnung. Einstellungen/§14a: eigener Ausdruck für historisierte Schalt-Ereignisse mit exakten Zeitstempeln ergänzt. Web-Cache-Version angehoben.",
         "en": "History: added a new tariff/grid-fee proof report with 15-minute printout including date/time, price, import and costs for bill cross-checking. Settings/§14a: added a dedicated print report for historized switching events with exact timestamps. Web cache version bumped."
@@ -1654,8 +1662,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.218",
+  "version": "0.6.220",
   "news": {
+    "0.6.220": {
+      "de": "Lademanagement-Regressionsfix: Die EVCS-Regelung toggelt die Wallbox-Freigabe nicht mehr automatisch bei Tarif-/PV-Sperren oder bei deaktivierter EMS-Regelung. Stattdessen wird sauber nur noch über Strom-/Leistungssollwerte geregelt, wodurch das An/Aus-Flattern nach dem letzten Update verschwindet.",
+      "en": "Charging-management regression fix: EVCS control no longer toggles the wallbox enable/freigabe automatically for tariff/PV locks or when EMS regulation is disabled. Control now stays on current/power setpoints only, removing the on/off flapping introduced by the last update."
+    },
     "0.6.218": {
       "de": "Historie: Neuer Tarif-/Netzentgelt-Nachweis mit 15-Minuten-Ausdruck, Datum/Uhrzeit, Preis, Bezug und Kosten zur Gegenprüfung der Abrechnung. Einstellungen/§14a: eigener Ausdruck für historisierte Schalt-Ereignisse mit exakten Zeitstempeln ergänzt. Web-Cache-Version angehoben.",
       "en": "History: added a new tariff/grid-fee proof report with 15-minute printout including date/time, price, import and costs for bill cross-checking. Settings/§14a: added a dedicated print report for historized switching events with exact timestamps. Web cache version bumped."

@@ -1,3 +1,15 @@
+## 0.6.221
+- Charging management audited and hardened.
+- Fixed PV-only control so sudden PV drops clamp immediately instead of continuing from a short moving average.
+- Removed the extra startup delay after the PV gate opens by allowing the PV start-ready timer to build during the gate delay.
+- Scenario-tested Auto, PV, Min+PV, Boost, tariff/goal blocking, no-vehicle and regulation-off behaviour.
+- Confirmed that normal EMS regulation no longer toggles the EVCS enable/freigabe datapoint automatically.
+
+## 0.6.220
+
+- charging-management / Regression: Die EVCS-Regelung toggelt die Wallbox-Freigabe nicht mehr automatisch bei Tarif-/PV-Sperren. Auto, PV, Min+PV und Tarif-Sperren bleiben jetzt auf Strom-/Leistungssollwerten, damit die Wallbox nicht mehr an/aus flattert.
+- charging-management / Regelung AUS: Auch bei deaktivierter EMS-Regelung wird die Wallbox nicht mehr automatisch über das Enable-DP geschaltet. Stattdessen setzt das EMS den Sollstrom/Sollwert sauber auf 0 und überlässt die eigentliche Freigabe der Wallbox-/Benutzerebene.
+
 ## 0.6.219
 
 - charging-management / Tarif: Auto-Zielladen respektiert teure Tarif-Sperren jetzt sauberer. Wenn kein Fahrzeug-SoC verfügbar ist, löst der Forecast das Netzladen nicht mehr vorschnell aus; stattdessen wartet die Logik bis zum echten Latest-Start.
