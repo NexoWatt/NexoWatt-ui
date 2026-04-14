@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.221",
+    "version": "0.6.222",
     "news": {
+      "0.6.222": {
+        "de": "Historie: Der Bereich „Preis / Bezug / Kosten“ wird jetzt nur noch eingeblendet, wenn dynamischer Tarif oder variables Netzentgelt aktuell aktiv sind. Reine Basispreis-Historie ohne aktivierte Tarif-/Netzentgeltfunktion blendet den Bereich nicht mehr fälschlich ein. Web-Cache-Version angehoben.",
+        "en": "History: the “Price / Import / Costs” section is now only shown when dynamic tariff or variable grid fee is currently enabled. Plain base-price history without an active tariff/grid-fee feature no longer shows the section incorrectly. Web cache version bumped."
+      },
       "0.6.221": {
         "en": "Charging management audit/hardening: fixed PV-only control so sudden PV drops clamp immediately instead of continuing to allocate from a smoothed average. Also removed the extra startup delay after the PV gate opens by letting the PV start-ready timer build during the gate delay. Static scenario tests covered Auto, PV, Min+PV, Boost, tariff/goal blocking, no-vehicle and regulation-off behaviour. No automatic EVCS enable toggling is used anymore; control remains current/power only.",
         "de": "Lademanagement geprüft und gehärtet: PV-Only reagiert bei plötzlichem PV-Einbruch jetzt sofort und regelt nicht mehr fälschlich aus einem geglätteten Mittelwert weiter. Zusätzlich entfällt die unnötige Zusatzwartezeit nach dem Öffnen des PV-Gates, weil die PV-Startbereitschaft bereits während der Gate-Verzögerung aufgebaut wird. Getestet wurden die Modi Auto, PV, Min+PV, Boost sowie Tarif-/Zielladen-Sperre, Kein-Fahrzeug und Regelung AUS. Die EVCS-Freigabe wird nicht mehr automatisch getoggelt; geregelt wird nur noch über Strom/Leistung."
@@ -1662,8 +1666,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.220",
+  "version": "0.6.222",
   "news": {
+    "0.6.222": {
+      "de": "Historie: Der Bereich „Preis / Bezug / Kosten“ wird jetzt nur noch eingeblendet, wenn dynamischer Tarif oder variables Netzentgelt aktuell aktiv sind. Reine Basispreis-Historie ohne aktivierte Tarif-/Netzentgeltfunktion blendet den Bereich nicht mehr fälschlich ein. Web-Cache-Version angehoben.",
+      "en": "History: the “Price / Import / Costs” section is now only shown when dynamic tariff or variable grid fee is currently enabled. Plain base-price history without an active tariff/grid-fee feature no longer shows the section incorrectly. Web cache version bumped."
+    },
     "0.6.220": {
       "de": "Lademanagement-Regressionsfix: Die EVCS-Regelung toggelt die Wallbox-Freigabe nicht mehr automatisch bei Tarif-/PV-Sperren oder bei deaktivierter EMS-Regelung. Stattdessen wird sauber nur noch über Strom-/Leistungssollwerte geregelt, wodurch das An/Aus-Flattern nach dem letzten Update verschwindet.",
       "en": "Charging-management regression fix: EVCS control no longer toggles the wallbox enable/freigabe automatically for tariff/PV locks or when EMS regulation is disabled. Control now stays on current/power setpoints only, removing the on/off flapping introduced by the last update."

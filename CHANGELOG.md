@@ -1,3 +1,7 @@
+## 0.6.222
+- Historie/Tarif: Der Bereich `Preis / Bezug / Kosten` wird jetzt nur noch angezeigt, wenn dynamischer Tarif oder variables Netzentgelt aktuell aktiv sind. Reine Basispreis-Historie ohne aktivierte Tarif-/Netzentgeltfunktion blendet den Abschnitt nicht mehr fälschlich ein.
+- Web/PWA: Cache-Version angehoben, damit die korrigierte Historienansicht sicher neu geladen wird.
+
 ## 0.6.221
 - Charging management audited and hardened.
 - Fixed PV-only control so sudden PV drops clamp immediately instead of continuing from a short moving average.

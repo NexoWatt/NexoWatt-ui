@@ -946,7 +946,9 @@ function draw(){
 
     const pricing = (res && res.pricing && typeof res.pricing === 'object') ? res.pricing : {};
     const rawIntervals = buildPricingIntervals(res);
-    const shouldShow = !!((pricing && pricing.active) || rawIntervals.length);
+    // Preis-/Netzentgelt-Historie nur anzeigen, wenn aktuell mindestens eine der beiden Funktionen aktiv ist.
+    // Bereits historisierte Basispreis-Punkte allein dürfen den Bereich nicht einblenden.
+    const shouldShow = !!(pricing && (pricing.active || pricing.dynamicTariff || pricing.netFeeEnabled));
 
     if (!shouldShow) {
       pricingState = { visible:false, ready:false, rawIntervals:[], points:[], summary:null, note:'', meta:{} };
