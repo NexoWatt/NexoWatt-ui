@@ -1492,8 +1492,7 @@ function computeDerived() {
   // derive some percentages if not provided
   const pv = pick('pvPower', 'productionTotal');
   const load = pick('consumptionTotal');
-  const buy = pick('gridBuyPower');
-  const sell = pick('gridSellPower');
+  const { buy, sell } = getGridImportExport((k) => get(k));
 
   const autarky = get('autarky');
   const selfc = get('selfConsumption');
@@ -1535,6 +1534,24 @@ function clamp01(v, lo, hi){
   return Math.max(lo, Math.min(hi, v));
 }
 
+function getGridImportExport(read) {
+  const getter = (typeof read === 'function') ? read : (k) => read?.[k]?.value;
+  let buy = coerceNumber(getter('gridBuyPower'));
+  let sell = coerceNumber(getter('gridSellPower'));
+  const net = coerceNumber(getter('gridPointPower'));
+
+  if (net !== null) {
+    if (buy === null) buy = Math.max(0, net);
+    if (sell === null) sell = Math.max(0, -net);
+  }
+
+  return {
+    buy: Math.max(0, buy ?? 0),
+    sell: Math.max(0, sell ?? 0),
+    net: net !== null ? net : (Math.max(0, buy ?? 0) - Math.max(0, sell ?? 0)),
+  };
+}
+
 function render() {
   const s = state;
 
@@ -1567,8 +1584,7 @@ function render() {
   }
 
   const load = d('consumptionTotal');
-  const buy = d('gridBuyPower');
-  const sell = d('gridSellPower');
+  const { buy, sell } = getGridImportExport(d);
   let charge = d('storageChargePower');
   let discharge = d('storageDischargePower');
   let soc = d('storageSoc');
@@ -3402,7 +3418,7 @@ render = function(){
     const d = (k) => state[k]?.value;
     const pv = +(d('pvPower') ?? 0);
     const load = +(d('consumptionTotal') ?? 0);
-    const buy = +(d('gridBuyPower') ?? 0);
+    const { buy } = getGridImportExport(d);
     const chg = +(d('storageChargePower') ?? 0);
     const dchg = +(d('storageDischargePower') ?? 0);
     const soc = d('storageSoc');
@@ -3449,8 +3465,7 @@ render = function(){
     const d = (k) => state[k]?.value;
     const pv = +(d('pvPower') ?? 0);
     const load = +(d('consumptionTotal') ?? 0);
-    const buy = +(d('gridBuyPower') ?? 0);
-    const sell = +(d('gridSellPower') ?? 0);
+    const { buy, sell } = getGridImportExport(d);
     const charge = +(d('storageChargePower') ?? 0);
     const discharge = +(d('storageDischargePower') ?? 0);
     const soc = d('storageSoc');
@@ -3505,7 +3520,7 @@ render = function(){
     const d = (k) => state[k]?.value;
     const pv = +(d('pvPower') ?? 0);
     const load = +(d('consumptionTotal') ?? 0);
-    const buy = +(d('gridBuyPower') ?? 0);
+    const { buy } = getGridImportExport(d);
     const chg = +(d('storageChargePower') ?? 0);
     const dchg = +(d('storageDischargePower') ?? 0);
     const soc = d('storageSoc');
@@ -3552,8 +3567,7 @@ render = function(){
     const d = (k) => state[k]?.value;
     const pv = +(d('pvPower') ?? 0);
     const load = +(d('consumptionTotal') ?? 0);
-    const buy = +(d('gridBuyPower') ?? 0);
-    const sell = +(d('gridSellPower') ?? 0);
+    const { buy, sell } = getGridImportExport(d);
     const charge = +(d('storageChargePower') ?? 0);
     const discharge = +(d('storageDischargePower') ?? 0);
     const soc = d('storageSoc');
@@ -5246,8 +5260,7 @@ function updateEnergyWeb() {
       }
     }
   }
-  let buy = +(d('gridBuyPower') ?? 0);
-  let sell = +(d('gridSellPower') ?? 0);
+  let { buy, sell } = getGridImportExport(d);
   let load = +(d('consumptionTotal') ?? 0);
   let c2 = +(d('evcs.totalPowerW') ?? d('consumptionEvcs') ?? 0); // Wallbox (sum)
   let batCharge = +(d('storageChargePower') ?? 0);

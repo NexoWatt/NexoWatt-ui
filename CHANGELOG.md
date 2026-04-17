@@ -1,3 +1,8 @@
+## 0.6.223
+- Energiefluss/Mapping: Der Energiefluss-Monitor unterstützt jetzt auch einen Signed-NVP-Fallback (`gridPointPower`) direkt im Basis-Mapping. Anlagen mit nur einem Netz-Datenpunkt (+ Bezug / - Einspeisung) können damit ohne separate Import-/Export-DPs sauber arbeiten.
+- Energiefluss/Live + Historie: Netzbezug und Einspeisung werden bei fehlenden Einzel-DPs automatisch aus dem Signed-NVP-Datenpunkt abgeleitet und für Monitor, Historie und Debug-/Fallback-States sauber weiterverwendet.
+- App-Center/UI: Pflichtanzeige für Netz Bezug / Netz Einspeisung berücksichtigt jetzt auch den Signed-Fallback, und doppelte W/kW-Umschalter für denselben Datenpunkt bleiben synchron.
+
 ## 0.6.222
 - Historie/Tarif: Der Bereich `Preis / Bezug / Kosten` wird jetzt nur noch angezeigt, wenn dynamischer Tarif oder variables Netzentgelt aktuell aktiv sind. Reine Basispreis-Historie ohne aktivierte Tarif-/Netzentgeltfunktion blendet den Abschnitt nicht mehr fälschlich ein.
 - Web/PWA: Cache-Version angehoben, damit die korrigierte Historienansicht sicher neu geladen wird.

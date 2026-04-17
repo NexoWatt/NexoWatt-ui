@@ -175,10 +175,12 @@
 
   // Energiefluss-Monitor: Basis-Datapoints (VIS & Algorithmen)
   const FLOW_BASE_DP_FIELDS = [
-    { key: 'gridBuyPower', label: 'Netz Bezug (W/kW)', placeholder: '… (Import)', required: true, power: true,
-      hint: 'Pflicht: Import-Leistung am Netzverknüpfungspunkt (NVP).' },
-    { key: 'gridSellPower', label: 'Netz Einspeisung (W/kW)', placeholder: '… (Export)', required: true, power: true,
-      hint: 'Pflicht: Export-Leistung am Netzverknüpfungspunkt (NVP).' },
+    { key: 'gridBuyPower', label: 'Netz Bezug (W/kW)', placeholder: '… (Import)', required: true, requiredGroup: 'gridPairOrSigned', power: true,
+      hint: 'Pflicht: Import-Leistung am Netzverknüpfungspunkt (NVP). Alternativ unten den Fallback „Netz Leistung (Vorzeichen)“ nutzen.' },
+    { key: 'gridSellPower', label: 'Netz Einspeisung (W/kW)', placeholder: '… (Export)', required: true, requiredGroup: 'gridPairOrSigned', power: true,
+      hint: 'Pflicht: Export-Leistung am Netzverknüpfungspunkt (NVP). Alternativ unten den Fallback „Netz Leistung (Vorzeichen)“ nutzen.' },
+    { key: 'gridPointPower', label: 'Netz Leistung (W/kW) (Fallback, Vorzeichen)', placeholder: 'optional – Signed (+Bezug/-Einspeisung)', power: true,
+      hint: 'Fallback: Einen einzelnen NVP-Datenpunkt mit + Bezug / - Einspeisung verwenden, wenn kein separater Import-/Export-Datenpunkt vorhanden ist.' },
 
     // PV: Optional – wenn leer wird automatisch summiert (Devices + optional DC-PV aus Speicherfarm)
     { key: 'pvPower', label: 'PV Leistung (W/kW)', placeholder: 'leer lassen für Auto‑Summe', auto: true, power: true,
@@ -337,6 +339,11 @@ function _getFlowPowerDpIsW(key) {
 function _setFlowPowerDpIsW(key, isW) {
   const map = _ensureFlowPowerDpIsW();
   map[key] = !!isW;
+  document.querySelectorAll('input[data-flow-power-unit-key]').forEach((el) => {
+    if (el.getAttribute('data-flow-power-unit-key') === String(key)) {
+      el.checked = !!isW;
+    }
+  });
 }
 
 function _collectFlowPowerDpIsWFromUI() {
@@ -756,6 +763,25 @@ function _collectFlowPowerDpIsWFromUI() {
   function buildDpTable(container, fields, getter, setter, options) {
     container.innerHTML = '';
 
+    const fieldInputs = new Map();
+    const metaUpdaters = [];
+    const isRequiredGroupSatisfied = (groupName) => {
+      if (!groupName) return false;
+      const getVal = (key) => String(fieldInputs.get(key)?.value || '').trim();
+      if (groupName === 'gridPairOrSigned') {
+        const signed = getVal('gridPointPower');
+        const buy = getVal('gridBuyPower');
+        const sell = getVal('gridSellPower');
+        return !!signed || (!!buy && !!sell);
+      }
+      return false;
+    };
+    const refreshAllMeta = () => {
+      metaUpdaters.forEach((fn) => {
+        try { fn(); } catch (_e) {}
+      });
+    };
+
     const makeRow = (field) => {
       const row = document.createElement('div');
       row.className = 'nw-config-item';
@@ -798,6 +824,7 @@ function _collectFlowPowerDpIsWFromUI() {
       input.placeholder = field.placeholder || '';
       input.value = valueOrEmpty(getter(field.key));
       input.id = inputId;
+      fieldInputs.set(field.key, input);
 
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -859,8 +886,10 @@ function _collectFlowPowerDpIsWFromUI() {
 
         if (modeBadge) {
           if (field.required) {
+            const groupSatisfied = field.requiredGroup ? isRequiredGroupSatisfied(field.requiredGroup) : null;
+            const requiredOk = (groupSatisfied !== null) ? groupSatisfied : isSet;
             modeBadge.textContent = 'PFLICHT';
-            modeBadge.className = 'nw-config-badge ' + (isSet ? 'nw-config-badge--ok' : 'nw-config-badge--error');
+            modeBadge.className = 'nw-config-badge ' + (requiredOk ? 'nw-config-badge--ok' : 'nw-config-badge--error');
           } else if (field.auto) {
             if (isSet) {
               modeBadge.textContent = 'OVERRIDE';
@@ -886,9 +915,10 @@ function _collectFlowPowerDpIsWFromUI() {
       };
 
       input.dataset.dpInput = '1';
-      input.addEventListener('input', () => { updateMeta(); });
-      input.addEventListener('change', () => { setter(field.key, input.value.trim()); updateMeta(); scheduleValidation(200); });
+      input.addEventListener('input', () => { updateMeta(); refreshAllMeta(); });
+      input.addEventListener('change', () => { setter(field.key, input.value.trim()); updateMeta(); refreshAllMeta(); scheduleValidation(200); });
 
+      metaUpdaters.push(updateMeta);
       updateMeta();
       return row;
     };
@@ -905,6 +935,8 @@ function _collectFlowPowerDpIsWFromUI() {
         }
       }
     }
+
+    refreshAllMeta();
   }
 
   // ------------------------------
@@ -5438,14 +5470,33 @@ function _collectFlowPowerDpIsWFromUI() {
       );
 
 
-      // Hinweis: Minimal erforderlich sind nur Netz Bezug + Netz Einspeisung.
-      // PV/Verbrauch/Batterie können automatisch abgeleitet werden (Override möglich).
+      // Hinweis: Minimal erforderlich sind entweder separate Import/Export-Datenpunkte
+      // oder ein einzelner Signed-NVP-Datenpunkt (Import + / Export -).
       try {
         const info = document.createElement('div');
         info.className = 'nw-config-empty';
         info.style.margin = '0 0 6px 0';
-        info.textContent = 'Minimal erforderlich: Netz Bezug + Netz Einspeisung. PV/Verbrauch/Batterie werden automatisch abgeleitet, wenn leer (Override möglich).';
+        info.textContent = 'Minimal erforderlich: entweder Netz Bezug + Netz Einspeisung oder der Fallback „Netz Leistung (Vorzeichen)“. PV/Verbrauch/Batterie werden automatisch abgeleitet, wenn leer (Override möglich).';
         els.dpFlow.prepend(info);
+      } catch (_e) {}
+
+      try {
+        const flowGridPointInput = document.getElementById('flow_gridPointPower');
+        if (flowGridPointInput) {
+          flowGridPointInput.value = valueOrEmpty(dps.gridPointPower);
+          if (!flowGridPointInput.dataset.syncGeneral) {
+            flowGridPointInput.dataset.syncGeneral = '1';
+            flowGridPointInput.addEventListener('change', () => {
+              const v = String(flowGridPointInput.value || '').trim();
+              if (els.gridPointPowerId && els.gridPointPowerId.value !== v) {
+                els.gridPointPowerId.value = v;
+              }
+              if (els.gridPointPowerIdDisplay) {
+                els.gridPointPowerIdDisplay.textContent = v ? ('Aktuell: ' + v) : 'Aktuell: nicht gesetzt';
+              }
+            });
+          }
+        }
       } catch (_e) {}
     }
 
@@ -6980,6 +7031,11 @@ function _collectFlowPowerDpIsWFromUI() {
 
       if (els.gridPointPowerIdDisplay) {
         els.gridPointPowerIdDisplay.textContent = v ? ('Aktuell: ' + v) : 'Aktuell: nicht gesetzt';
+      }
+      const flowGridPointInput = document.getElementById('flow_gridPointPower');
+      if (flowGridPointInput && flowGridPointInput.value !== v) {
+        flowGridPointInput.value = v;
+        try { flowGridPointInput.dispatchEvent(new Event('input', { bubbles: true })); } catch (_e) {}
       }
 
       scheduleValidation(200);

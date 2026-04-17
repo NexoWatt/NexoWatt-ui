@@ -15476,6 +15476,37 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
   }
 
+  _nwResolveGridImportExportFromCache() {
+    let gridBuyRaw = this._nwGetNumberFromCache('gridBuyPower');
+    let gridSellRaw = this._nwGetNumberFromCache('gridSellPower');
+    const gridNetRaw = this._nwGetNumberFromCache('gridPointPower');
+
+    let src = 'mapped';
+    if (gridBuyRaw === null && gridSellRaw === null && gridNetRaw !== null) {
+      gridBuyRaw = Math.max(0, gridNetRaw);
+      gridSellRaw = Math.max(0, -gridNetRaw);
+      src = 'net';
+    } else if (gridNetRaw !== null && (gridBuyRaw === null || gridSellRaw === null)) {
+      if (gridBuyRaw === null) gridBuyRaw = Math.max(0, gridNetRaw);
+      if (gridSellRaw === null) gridSellRaw = Math.max(0, -gridNetRaw);
+      src = 'mapped+net';
+    }
+
+    const gridBuyW = Math.max(0, Math.abs(gridBuyRaw ?? 0));
+    const gridSellW = Math.max(0, Math.abs(gridSellRaw ?? 0));
+    const hasGrid = (gridBuyRaw !== null || gridSellRaw !== null || gridNetRaw !== null);
+
+    return {
+      gridBuyRaw,
+      gridSellRaw,
+      gridNetRaw,
+      gridBuyW,
+      gridSellW,
+      hasGrid,
+      src,
+    };
+  }
+
   _nwSetHistorieValue(localId, val, ts, tolAbs = 1) {
     try {
       const n = Number(val);
@@ -15611,8 +15642,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
   async updateHistorieExportStates(reason = 'timer') {
     const now = Date.now();
 
-    const gridBuyW = this._nwGetNumberFromCache('gridBuyPower');
-    const gridSellW = this._nwGetNumberFromCache('gridSellPower');
+    const {
+      gridBuyW,
+      gridSellW,
+    } = this._nwResolveGridImportExportFromCache();
     const pvW = this._nwGetNumberFromCache('pvPower');
     const loadW = this._nwGetNumberFromCache('consumptionTotal');
     let chgW = this._nwGetNumberFromCache('storageChargePower');
@@ -16428,24 +16461,15 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const consumptionMapped = this._nwHasMappedDatapoint('consumptionTotal');
 
     // --- Grid ---
-    let gridBuyRaw = this._nwGetNumberFromCache('gridBuyPower');
-    let gridSellRaw = this._nwGetNumberFromCache('gridSellPower');
-    const gridNetRaw = this._nwGetNumberFromCache('gridPointPower');
-
-    let gridSrc = 'mapped';
-    if (gridBuyRaw === null && gridSellRaw === null && gridNetRaw !== null) {
-      gridBuyRaw = Math.max(0, gridNetRaw);
-      gridSellRaw = Math.max(0, -gridNetRaw);
-      gridSrc = 'net';
-    } else if (gridNetRaw !== null && (gridBuyRaw === null || gridSellRaw === null)) {
-      if (gridBuyRaw === null) gridBuyRaw = Math.max(0, gridNetRaw);
-      if (gridSellRaw === null) gridSellRaw = Math.max(0, -gridNetRaw);
-      gridSrc = 'mapped+net';
-    }
-
-    const gridBuyW = Math.max(0, Math.abs(gridBuyRaw ?? 0));
-    const gridSellW = Math.max(0, Math.abs(gridSellRaw ?? 0));
-    const hasGrid = (gridBuyRaw !== null || gridSellRaw !== null || gridNetRaw !== null);
+    const {
+      gridBuyRaw,
+      gridSellRaw,
+      gridNetRaw,
+      gridBuyW,
+      gridSellW,
+      hasGrid,
+      src: gridSrc,
+    } = this._nwResolveGridImportExportFromCache();
 
     // --- Storage ---
     let chargeRaw = this._nwGetNumberFromCache('storageChargePower');
@@ -16482,6 +16506,8 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
     const chargeW = Math.max(0, Math.abs(chargeRaw ?? 0));
     const dischargeW = Math.max(0, Math.abs(dischargeRaw ?? 0));
+    const gridBuyRound = Math.round(gridBuyW);
+    const gridSellRound = Math.round(gridSellW);
 
     // --- Producer slots (optional extra production) ---
     let producerSumW = 0;
@@ -16766,12 +16792,29 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     } catch (_e) {}
 
     // --- Fallbacks for UI (stateCache keys) ---
-    // 1) If no direct house meter is mapped, publish as "consumptionTotal" so the energyflow can render it.
+    // 1) If no separate import/export datapoints are mapped, or one side is missing,
+    //    derive them from the signed NVP datapoint (Import + / Export -).
+    const gridBuyMapped = this._nwHasMappedDatapoint('gridBuyPower');
+    const gridSellMapped = this._nwHasMappedDatapoint('gridSellPower');
+    if (gridNetRaw !== null && (!gridBuyMapped || gridBuyRaw === null)) {
+      const cur = Number(this.stateCache?.gridBuyPower?.value);
+      if (!Number.isFinite(cur) || cur !== gridBuyRound) {
+        this.updateValue('gridBuyPower', gridBuyRound, ts);
+      }
+    }
+    if (gridNetRaw !== null && (!gridSellMapped || gridSellRaw === null)) {
+      const cur = Number(this.stateCache?.gridSellPower?.value);
+      if (!Number.isFinite(cur) || cur !== gridSellRound) {
+        this.updateValue('gridSellPower', gridSellRound, ts);
+      }
+    }
+
+    // 2) If no direct house meter is mapped, publish as "consumptionTotal" so the energyflow can render it.
     if (!consumptionMapped) {
       this.updateValue('consumptionTotal', loadTotalRound, ts);
     }
 
-    // 2) If PV is not mapped, publish PV total as "pvPower" so the energyflow can render PV without mapping.
+    // 3) If PV is not mapped, publish PV total as "pvPower" so the energyflow can render PV without mapping.
     if (!pvPowerMapped && !prodTotalMapped) {
       const cur = this.stateCache?.pvPower?.value;
       if (cur !== pvTotalRound) {
