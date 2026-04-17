@@ -5853,6 +5853,250 @@ function _collectFlowPowerDpIsWFromUI() {
     return 0;
   }
 
+  function _isNwMeterCategory(cat) {
+    const c = _nwNormCat(cat);
+    return (c === 'METER' || c === 'GRID_METER' || c === 'SMART_METER');
+  }
+
+  function _isNwStorageCategory(cat) {
+    const c = _nwNormCat(cat);
+    return (c === 'ESS' || c === 'BATTERY' || c === 'BATTERY_INVERTER');
+  }
+
+  function _nwDevHaystack(dev) {
+    return [
+      String((dev && dev.name) || ''),
+      String((dev && dev.templateId) || ''),
+      String((dev && dev.devId) || ''),
+      String((dev && dev.baseId) || ''),
+      String((dev && dev.manufacturer) || ''),
+    ].join(' ').toLowerCase();
+  }
+
+  function _nwHasAlias(dev, key) {
+    return !!String(_nwGetAlias(dev, key) || '').trim();
+  }
+
+  function _nwScoreGridMeter(dev) {
+    const cat = _nwNormCat(dev && dev.category);
+    const hay = _nwDevHaystack(dev);
+    let score = 0;
+    if (_isNwMeterCategory(cat)) score += 8;
+    if (_nwHasAlias(dev, 'r.powerImport')) score += 5;
+    if (_nwHasAlias(dev, 'r.powerExport')) score += 5;
+    if (_nwHasAlias(dev, 'r.power')) score += 2;
+    if (/gridmeter|grid meter|grid\b|netz|nvp|verknuepf|verknüpf|mains/.test(hay)) score += 9;
+    if (/pvmeter|pv meter|solar|wechselrichter|inverter|wr\b/.test(hay)) score -= 8;
+    if (/loadmeter|lastmeter|verbrauch|consumption|house\s*load|gebäude|gebaeude|building/.test(hay)) score -= 6;
+    if (_isNwPvInverterCategory(cat) || _isNwStorageCategory(cat)) score -= 10;
+    return score;
+  }
+
+  function _nwScorePvSource(dev) {
+    const cat = _nwNormCat(dev && dev.category);
+    const hay = _nwDevHaystack(dev);
+    let score = 0;
+    if (_isNwPvInverterCategory(cat)) score += 10;
+    if (_isNwMeterCategory(cat)) score += 2;
+    if (_nwHasAlias(dev, 'r.power')) score += 3;
+    if (/pvmeter|pv meter|pv\b|solar|wechselrichter|inverter|wr\b/.test(hay)) score += 8;
+    if (/gridmeter|grid meter|grid\b|netz|nvp|verbrauch|consumption|loadmeter|lastmeter|ess|battery|akku|speicher/.test(hay)) score -= 7;
+    return score;
+  }
+
+  function _nwScoreStorage(dev) {
+    const cat = _nwNormCat(dev && dev.category);
+    const hay = _nwDevHaystack(dev);
+    let score = 0;
+    if (_isNwStorageCategory(cat)) score += 10;
+    if (_nwHasAlias(dev, 'r.soc')) score += 5;
+    if (_nwHasAlias(dev, 'r.powerCharge')) score += 3;
+    if (_nwHasAlias(dev, 'r.powerDischarge')) score += 3;
+    if (_nwHasAlias(dev, 'r.power')) score += 2;
+    if (/ess|battery|akku|speicher|bms/.test(hay)) score += 7;
+    if (/gridmeter|grid meter|grid\b|netz|pvmeter|pv meter|pv\b|solar|loadmeter|lastmeter|verbrauch|consumption/.test(hay)) score -= 6;
+    return score;
+  }
+
+  function _nwPickBestDevice(devices, scorer, opts) {
+    const minScore = Number.isFinite(Number(opts && opts.minScore)) ? Number(opts.minScore) : 1;
+    const minGap = Number.isFinite(Number(opts && opts.minGap)) ? Number(opts.minGap) : 0;
+    const requireUnique = !!(opts && opts.requireUnique);
+    const scored = (Array.isArray(devices) ? devices : [])
+      .map((dev) => ({ dev, score: Number(scorer ? scorer(dev) : 0) || 0 }))
+      .filter((it) => it && it.score >= minScore)
+      .sort((a, b) => b.score - a.score);
+
+    if (!scored.length) return null;
+    if (requireUnique && scored.length > 1 && scored[0].score === scored[1].score) return null;
+    if (scored.length > 1 && minGap > 0 && (scored[0].score - scored[1].score) < minGap) return null;
+    return scored[0].dev || null;
+  }
+
+  function _nwApplyFlowDpIfEmpty(key, value, opts) {
+    const val = String(value || '').trim();
+    if (!val) return false;
+
+    currentConfig = currentConfig && typeof currentConfig === 'object' ? currentConfig : {};
+    currentConfig.datapoints = (currentConfig.datapoints && typeof currentConfig.datapoints === 'object') ? currentConfig.datapoints : {};
+
+    const cur = String(currentConfig.datapoints[key] || '').trim();
+    if (cur) return false;
+
+    currentConfig.datapoints[key] = val;
+
+    const inp = document.getElementById('flow_' + key);
+    if (inp) {
+      inp.value = val;
+      try { inp.dispatchEvent(new Event('input', { bubbles: true })); } catch (_e) {}
+      try { inp.dispatchEvent(new Event('change', { bubbles: true })); } catch (_e) {}
+    }
+
+    if (opts && opts.powerIsW) {
+      try { _setFlowPowerDpIsW(key, true); } catch (_e) {}
+    }
+    return true;
+  }
+
+  function _nwApplyGeneralDpIfEmpty(key, value) {
+    const val = String(value || '').trim();
+    if (!val) return false;
+
+    currentConfig = currentConfig && typeof currentConfig === 'object' ? currentConfig : {};
+    currentConfig.datapoints = (currentConfig.datapoints && typeof currentConfig.datapoints === 'object') ? currentConfig.datapoints : {};
+
+    const cur = String(currentConfig.datapoints[key] || '').trim();
+    if (cur) return false;
+
+    currentConfig.datapoints[key] = val;
+
+    if (key === 'gridPointConnected' && els.gridPointConnectedId) {
+      els.gridPointConnectedId.value = val;
+      try { els.gridPointConnectedId.dispatchEvent(new Event('change', { bubbles: true })); } catch (_e) {}
+      if (els.gridPointConnectedIdDisplay) {
+        const base = els.gridPointConnectedIdDisplay.dataset.baseHint || els.gridPointConnectedIdDisplay.textContent || '';
+        if (!els.gridPointConnectedIdDisplay.dataset.baseHint) els.gridPointConnectedIdDisplay.dataset.baseHint = base;
+        els.gridPointConnectedIdDisplay.innerHTML = 'Aktuell: <code>' + val + '</code><br/>' + (els.gridPointConnectedIdDisplay.dataset.baseHint || '');
+      }
+      return true;
+    }
+
+    if (key === 'gridPointWatchdog' && els.gridPointWatchdogId) {
+      els.gridPointWatchdogId.value = val;
+      try { els.gridPointWatchdogId.dispatchEvent(new Event('change', { bubbles: true })); } catch (_e) {}
+      if (els.gridPointWatchdogIdDisplay) {
+        const base = els.gridPointWatchdogIdDisplay.dataset.baseHint || els.gridPointWatchdogIdDisplay.textContent || '';
+        if (!els.gridPointWatchdogIdDisplay.dataset.baseHint) els.gridPointWatchdogIdDisplay.dataset.baseHint = base;
+        els.gridPointWatchdogIdDisplay.innerHTML = 'Aktuell: <code>' + val + '</code><br/>' + (els.gridPointWatchdogIdDisplay.dataset.baseHint || '');
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  function _nwAutoMapEnergyFlowFromDevices(devices) {
+    const out = {
+      changed: false,
+      mapped: {
+        grid: false,
+        gridConnected: false,
+        gridWatchdog: false,
+        pv: false,
+        storage: false,
+      },
+      notes: []
+    };
+
+    const list = Array.isArray(devices) ? devices : [];
+    if (!list.length) return out;
+
+    // --- Netz / NVP ---
+    const gridCandidates = list.filter((dev) => _nwScoreGridMeter(dev) >= 6);
+    const gridDev = _nwPickBestDevice(gridCandidates, _nwScoreGridMeter, { minScore: 6, minGap: 2 });
+    if (gridDev) {
+      const buyId = _nwGetAlias(gridDev, 'r.powerImport');
+      const sellId = _nwGetAlias(gridDev, 'r.powerExport');
+      const signedId = _nwGetAlias(gridDev, 'r.power');
+      let gridMode = '';
+      if (buyId && sellId) {
+        if (_nwApplyFlowDpIfEmpty('gridBuyPower', buyId, { powerIsW: true })) out.changed = true;
+        if (_nwApplyFlowDpIfEmpty('gridSellPower', sellId, { powerIsW: true })) out.changed = true;
+        gridMode = 'Import/Export';
+      } else if (signedId) {
+        if (_nwApplyFlowDpIfEmpty('gridPointPower', signedId, { powerIsW: true })) out.changed = true;
+        gridMode = 'Signed';
+      }
+      if (gridMode) {
+        out.mapped.grid = true;
+        const onlineId = _nwGetAlias(gridDev, 'r.online') || _nwGetAlias(gridDev, 'comm.connected');
+        const hbId = _nwGetAlias(gridDev, 'r.heartbeat') || _nwGetAlias(gridDev, 'r.lastSeenMs') || _nwGetAlias(gridDev, 'r.frequency');
+        if (_nwApplyGeneralDpIfEmpty('gridPointConnected', onlineId)) { out.changed = true; out.mapped.gridConnected = true; }
+        if (_nwApplyGeneralDpIfEmpty('gridPointWatchdog', hbId)) { out.changed = true; out.mapped.gridWatchdog = true; }
+        out.notes.push(`Netz: ${String((gridDev && gridDev.name) || (gridDev && gridDev.devId) || 'Meter').trim()} (${gridMode})`);
+      }
+    }
+
+    // --- PV ---
+    const pvCandidates = list.filter((dev) => _nwScorePvSource(dev) >= 7);
+    if (pvCandidates.length === 1) {
+      const pvDev = pvCandidates[0];
+      const pvId = _nwGetAlias(pvDev, 'r.power');
+      if (_nwApplyFlowDpIfEmpty('pvPower', pvId, { powerIsW: true })) out.changed = true;
+      if (pvId) {
+        out.mapped.pv = true;
+        const fs = _ensureFlowSlots();
+        fs.core = (fs.core && typeof fs.core === 'object') ? fs.core : {};
+        if (!String(fs.core.pvName || '').trim()) {
+          fs.core.pvName = String((pvDev && pvDev.name) || '').trim().slice(0, 24);
+          const pvNameInput = document.getElementById('flow_pvName');
+          if (pvNameInput) pvNameInput.value = fs.core.pvName;
+        }
+        out.notes.push(`PV: ${String((pvDev && pvDev.name) || (pvDev && pvDev.devId) || 'PV').trim()}`);
+      }
+    } else if (pvCandidates.length > 1) {
+      out.notes.push(`PV: Auto-Summe (${pvCandidates.length} Quellen)`);
+    }
+
+    // --- Speicher ---
+    const storageCandidates = list.filter((dev) => _nwScoreStorage(dev) >= 7);
+    if (storageCandidates.length === 1) {
+      const stDev = storageCandidates[0];
+      const chargeId = _nwGetAlias(stDev, 'r.powerCharge');
+      const dischargeId = _nwGetAlias(stDev, 'r.powerDischarge');
+      const signedId = _nwGetAlias(stDev, 'r.power');
+      const socId = _nwGetAlias(stDev, 'r.soc');
+
+      let storageMapped = false;
+      if (chargeId && dischargeId) {
+        if (_nwApplyFlowDpIfEmpty('storageChargePower', chargeId, { powerIsW: true })) out.changed = true;
+        if (_nwApplyFlowDpIfEmpty('storageDischargePower', dischargeId, { powerIsW: true })) out.changed = true;
+        storageMapped = true;
+      } else if (signedId) {
+        if (_nwApplyFlowDpIfEmpty('batteryPower', signedId, { powerIsW: true })) out.changed = true;
+        storageMapped = true;
+      }
+      if (socId) {
+        if (_nwApplyFlowDpIfEmpty('storageSoc', socId)) out.changed = true;
+        storageMapped = true;
+      }
+      if (storageMapped) {
+        out.mapped.storage = true;
+        out.notes.push(`Speicher: ${String((stDev && stDev.name) || (stDev && stDev.devId) || 'ESS').trim()}`);
+      }
+    } else if (storageCandidates.length > 1) {
+      out.notes.push(`Speicher: Auto (${storageCandidates.length} ESS/BATTERY erkannt)`);
+    }
+
+    // EVCS und Gebäudeverbrauch bleiben bewusst auf Auto, damit Summen/Bilanz konsistent bleiben.
+    if (list.some((dev) => _isNwEvcsCategory(dev && dev.category))) {
+      out.notes.push('EV: Auto-Summe aus Ladepunkten');
+    }
+    out.notes.push('Gebäude: Auto-Bilanz');
+
+    return out;
+  }
+
   async function nwDevicesQuickSetup() {
     try {
       setStatus('Schnell‑Inbetriebnahme: Suche Geräte…');
@@ -5871,6 +6115,10 @@ function _collectFlowPowerDpIsWFromUI() {
       const heatDevs = devices.filter(d => _isNwHeatCategory(d && d.category));
 
       let changed = false;
+
+      // --- 0) Energiefluss-Basis automatisch aus stabilen Alias-DPs füllen ---
+      const flowAuto = _nwAutoMapEnergyFlowFromDevices(devices);
+      if (flowAuto && flowAuto.changed) changed = true;
 
       // --- 1) Ladepunkte (EVCS) ---
       let evcsMapped = 0;
@@ -6076,6 +6324,7 @@ function _collectFlowPowerDpIsWFromUI() {
       if (evcsDevs.length) msgParts.push(`Ladepunkte: ${evcsDevs.length} (zugeordnet: ${evcsMapped})`);
       if (pvDevs.length) msgParts.push(`Wechselrichter: ${pvDevs.length} (+${pvAdded}/${pvUpdated})`);
       if (heatDevs.length) msgParts.push(`Thermik: ${heatDevs.length} (Slots: ${heatSlotsMapped}, §14a: +${heatPara14aAdded}/${heatPara14aUpdated})`);
+      if (flowAuto && Array.isArray(flowAuto.notes) && flowAuto.notes.length) msgParts.push('Energiefluss: ' + flowAuto.notes.join(', '));
 
       if (!changed) {
         setStatus('Schnell‑Inbetriebnahme: keine Änderungen (alles bereits belegt).', 'ok');

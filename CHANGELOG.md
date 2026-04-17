@@ -1,3 +1,15 @@
+## 0.6.225
+
+- Schnell-Inbetriebnahme erweitert: sichere Standard-DPs im Energiefluss werden jetzt per Ein-Klick aus `nexowatt-devices`-Aliasen vorbelegt. Automatisch erkannt werden Netz (Import/Export oder Signed-Fallback), Netz-Online/Heartbeat, PV (bei eindeutiger Quelle) sowie Speicher-SoC/-Leistung (bei eindeutigem ESS/BATTERY). EV und Gebäudeverbrauch bleiben bewusst auf Auto-Summe/Auto-Bilanz, damit Mehrfachgeräte konsistent bleiben.
+- Buttontext/Hinweis für die Schnell-Inbetriebnahme aktualisiert.
+- PWA/Web-Cache-Version angehoben.
+
+## 0.6.224
+- Historie/Energieabgleich: Historienkarten und Energiebalken nutzen jetzt konsequent dieselben kanonischen `historie.*`-Influx-Datenpunkte wie der Live-Bereich.
+- Präzise 10-Minuten-Energieintegration für die History-Karten ergänzt, damit Tag/Woche/Monat/Jahr nicht mehr durch grobe Schrittweiten auseinanderlaufen.
+- Jahresansicht der Historie auf feinere 1h-Auflösung angehoben; Tag/Woche/Monat lesen wieder im 10-Minuten-Raster.
+- Live-Gesamtenergie-Fallbacks (`productionEnergyKwh`, `consumptionEnergyKwh`, `gridEnergyKwh`, `evEnergyKwh`) werden aus der Historie jetzt mit feinerer Integrationsauflösung berechnet.
+
 ## 0.6.223
 - Energiefluss/Mapping: Der Energiefluss-Monitor unterstützt jetzt auch einen Signed-NVP-Fallback (`gridPointPower`) direkt im Basis-Mapping. Anlagen mit nur einem Netz-Datenpunkt (+ Bezug / - Einspeisung) können damit ohne separate Import-/Export-DPs sauber arbeiten.
 - Energiefluss/Live + Historie: Netzbezug und Einspeisung werden bei fehlenden Einzel-DPs automatisch aus dem Signed-NVP-Datenpunkt abgeleitet und für Monitor, Historie und Debug-/Fallback-States sauber weiterverwendet.

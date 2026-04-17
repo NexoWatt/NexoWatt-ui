@@ -10902,9 +10902,12 @@ app.get('/api/history', async (req, res) => {
           return null;
         };
 
-        const ask = (id) => new Promise(resolve => {
+        const ask = (id, query = {}) => new Promise(resolve => {
           if (!id) return resolve({ id, values: [] });
-          const options = { start, end, step: stepS * 1000, aggregate: 'average', addId: false, ignoreNull: true };
+          const queryStart = Number.isFinite(Number(query.start)) ? Number(query.start) : start;
+          const queryEnd = Number.isFinite(Number(query.end)) ? Number(query.end) : end;
+          const queryStepMs = Math.max(60 * 1000, Number.isFinite(Number(query.stepMs)) ? Number(query.stepMs) : (stepS * 1000));
+          const options = { start: queryStart, end: queryEnd, step: queryStepMs, aggregate: 'average', addId: false, ignoreNull: true };
           let done = false;
           const timer = setTimeout(() => {
             if (done) return;
@@ -10951,13 +10954,13 @@ app.get('/api/history', async (req, res) => {
           }
         });
 
-        const askCandidates = async (candidates) => {
+        const askCandidates = async (candidates, query = {}) => {
           const list = Array.isArray(candidates) ? candidates : [candidates];
           let first = null;
           for (const candidate of list) {
             const sid = this._nwTrimId(candidate);
             if (!sid) continue;
-            const resu = await ask(sid);
+            const resu = await ask(sid, query);
             if (!first) first = resu;
             if (Array.isArray(resu && resu.values) && resu.values.length >= 2) return resu;
           }
@@ -11160,6 +11163,87 @@ if (energyIds.ev) energy.evKwh = await counterDelta(energyIds.ev);
 
 energy.__endMs = energyEnd;
 
+// Precise energy totals from the *same* canonical Historie source DPs that feed the
+// charts. This keeps day/week/month/year cards consistent even when the visual chart
+// itself uses a coarser step for performance.
+const energyExact = {};
+const energyExactEnd = Math.min(end, Date.now());
+const energyExactStepMs = 10 * 60 * 1000;
+const integrateSeriesKwh = (series, defaultEndMs, stepMs, positiveOnly = true) => {
+  const vals = Array.isArray(series?.values) ? series.values : [];
+  if (!vals.length) return null;
+  let kwh = 0;
+  const endTs = Number.isFinite(Number(defaultEndMs)) ? Number(defaultEndMs) : Date.now();
+  const fallbackStep = Math.max(60 * 1000, Number(stepMs) || (10 * 60 * 1000));
+  for (let i = 0; i < vals.length; i++) {
+    const cur = vals[i];
+    if (!Array.isArray(cur) || cur.length < 2) continue;
+    const ts = Number(cur[0]);
+    let v = Number(cur[1]);
+    if (!Number.isFinite(ts) || !Number.isFinite(v)) continue;
+    const nextTs = (i + 1 < vals.length && Array.isArray(vals[i + 1]) && Number.isFinite(Number(vals[i + 1][0])))
+      ? Number(vals[i + 1][0])
+      : endTs;
+    let dt = nextTs - ts;
+    if (!Number.isFinite(dt) || dt <= 0) dt = fallbackStep;
+    dt = Math.min(dt, fallbackStep * 2);
+    v = positiveOnly ? Math.max(0, v) : Math.abs(v);
+    kwh += (v * dt) / 3600000000;
+  }
+  return kwh;
+};
+const buildEnergyExact = async () => {
+  const query = { start, end: energyExactEnd, stepMs: energyExactStepMs };
+  const [pvExact, loadExact, buyExact, sellExact, chgExact, dchgExact, evExactRaw] = await Promise.all([
+    askCandidates(idCandidates.pv, query),
+    askCandidates(idCandidates.load, query),
+    askCandidates(idCandidates.buy, query),
+    askCandidates(idCandidates.sell, query),
+    askCandidates(idCandidates.chg, query),
+    askCandidates(idCandidates.dchg, query),
+    askCandidates(idCandidates.evcs, query),
+  ]);
+  let evExact = evExactRaw;
+  if (!(Array.isArray(evExact?.values) && evExact.values.length >= 2)) {
+    const count = Number(this.evcsCount || 0);
+    if (count > 0) {
+      const lpSeries = await Promise.all(Array.from({ length: count }, (_v, idx) => ask(`${this.namespace}.historie.evcs.lp${idx + 1}.powerW`, query)));
+      const sumByTs = new Map();
+      for (const s of lpSeries) {
+        if (!Array.isArray(s?.values)) continue;
+        for (const row of s.values) {
+          if (!Array.isArray(row) || row.length < 2) continue;
+          const ts = Number(row[0]);
+          const v = Number(row[1]);
+          if (!Number.isFinite(ts) || !Number.isFinite(v)) continue;
+          sumByTs.set(ts, (sumByTs.get(ts) || 0) + v);
+        }
+      }
+      const vals = Array.from(sumByTs.entries()).sort((a, b) => a[0] - b[0]).map(([ts, v]) => [ts, v]);
+      if (vals.length >= 2) evExact = { id: `${this.namespace}.historie.evcs.sum.powerW`, values: vals };
+    }
+  }
+  energyExact.productionKwh = integrateSeriesKwh(pvExact, energyExactEnd, energyExactStepMs, true);
+  energyExact.storageChargeKwh = integrateSeriesKwh(chgExact, energyExactEnd, energyExactStepMs, true);
+  energyExact.storageDischargeKwh = integrateSeriesKwh(dchgExact, energyExactEnd, energyExactStepMs, true);
+  energyExact.gridImportKwh = integrateSeriesKwh(buyExact, energyExactEnd, energyExactStepMs, true);
+  energyExact.gridExportKwh = integrateSeriesKwh(sellExact, energyExactEnd, energyExactStepMs, true);
+  energyExact.evKwh = integrateSeriesKwh(evExact, energyExactEnd, energyExactStepMs, true);
+  const loadDirect = integrateSeriesKwh(loadExact, energyExactEnd, energyExactStepMs, true);
+  const loadBalance = Math.max(0,
+    Number(energyExact.productionKwh || 0)
+    + Number(energyExact.gridImportKwh || 0)
+    + Number(energyExact.storageDischargeKwh || 0)
+    - Number(energyExact.storageChargeKwh || 0)
+    - Number(energyExact.gridExportKwh || 0)
+  );
+  energyExact.consumptionKwh = Number.isFinite(loadDirect) && loadDirect > 0.01 ? loadDirect : loadBalance;
+  energyExact.__endMs = energyExactEnd;
+  energyExact.__stepMs = energyExactStepMs;
+  energyExact.__source = 'canonicalHistorie';
+};
+try { await buildEnergyExact(); } catch (_e) {}
+
         const out = { pv, load, buy, sell, chg, dchg, soc, evcs };
         const pricing = {
           active: !!((this.stateCache && this.stateCache['settings.dynamicTariff'] && this.stateCache['settings.dynamicTariff'].value) || (this.stateCache && this.stateCache['settings.netFeeEnabled'] && this.stateCache['settings.netFeeEnabled'].value)),
@@ -11168,7 +11252,7 @@ energy.__endMs = energyEnd;
           historyReady: [priceBase, priceNetFee, priceTotal].some(s => Array.isArray(s && s.values) && s.values.length >= 2),
           series: { base: priceBase, netFee: priceNetFee, total: priceTotal },
         };
-        res.json({ ok:true, start, end, step: stepS, series: out, extras: { consumers: extraConsumers, producers: extraProducers }, energy, pricing });
+        res.json({ ok:true, start, end, step: stepS, series: out, extras: { consumers: extraConsumers, producers: extraProducers }, energy, energyExact, pricing });
       } catch (e) {
         res.json({ ok:false, error: String(e) });
       }
@@ -16268,25 +16352,37 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       return out;
     }
 
-    // Backward compatible: if the customer configured an explicit history mapping,
-    // prefer it first, but keep the canonical adapter Historie state as automatic
-    // fallback so legacy installs and new installs both continue to work.
-    add(explicit);
+    // Consistency first: prefer the adapter's canonical historie.* states whenever
+    // they exist. Those states are written from the currently mapped live datapoints
+    // and are the single source of truth for charts, cards and derived totals.
+    // Explicit legacy history mappings remain as fallback so older installs keep
+    // working, but a user can still force an external source via the "!dp.id" syntax.
+    const preferCanonical = [
+      'pvPower',
+      'consumptionTotal',
+      'gridBuyPower',
+      'gridSellPower',
+      'storageChargePower',
+      'storageDischargePower',
+      'storageSoc',
+      'evcsPower',
+    ].includes(String(name || ''))
+      || /^consumer\d+Power$/.test(String(name || ''))
+      || /^producer\d+Power$/.test(String(name || ''));
 
     if (String(name || '') === 'priceBase') {
-      // Bei dynamischen Tarifen bevorzugen wir zuerst den direkt zugeordneten Provider-
-      // Preis (lokal gespiegelt) und fallen dann auf den kanonischen Effektivpreis zurück.
-      // Damit erscheint die Preis-Historie zuverlässig auch dann, wenn der Historie-Export
-      // gerade erst frisch aufgebaut wird.
-      if (dynamicTariffActive) {
-        add(`${ns}.tarif.preisAktuellEurProKwh`);
-        add(`${ns}.historie.tariff.providerCurrentEurPerKwh`);
-      }
+      // Bei dynamischen Tarifen bevorzugen wir weiterhin die kanonischen Historie-
+      // Zustände. Der lokal gespiegelte Provider-Preis bleibt als Fallback erhalten,
+      // falls die Historisierung frisch aufgebaut wird oder noch Anlauf braucht.
       add(canon);
-      if (!dynamicTariffActive) {
+      if (dynamicTariffActive) {
         add(`${ns}.historie.tariff.providerCurrentEurPerKwh`);
         add(`${ns}.tarif.preisAktuellEurProKwh`);
+      } else {
+        add(`${ns}.tarif.preisAktuellEurProKwh`);
+        add(`${ns}.historie.tariff.providerCurrentEurPerKwh`);
       }
+      add(explicit);
       return out;
     }
 
@@ -16294,10 +16390,17 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       add(`${ns}.historie.tariff.providerAverageEurPerKwh`);
       add(`${ns}.tarif.preisDurchschnittEurProKwh`);
       add(canon);
+      add(explicit);
       return out;
     }
 
-    add(canon);
+    if (preferCanonical) {
+      add(canon);
+      add(explicit);
+    } else {
+      add(explicit);
+      add(canon);
+    }
     return out;
   }
 
@@ -16858,6 +16961,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     return Math.ceil(step / hour) * hour;
   }
 
+  _nwChooseEnergyIntegrationStepMs(spanMs, minStepMs = 10 * 60 * 1000, maxStepMs = 60 * 60 * 1000) {
+    const chosen = this._nwChooseStepMs(spanMs, 50000, minStepMs);
+    const maxStep = Math.max(minStepMs, Number(maxStepMs) || maxStepMs);
+    return Math.max(minStepMs, Math.min(chosen, maxStep));
+  }
+
   _nwNormalizeHistoryResult(resu) {
     let arr = [];
     if (!resu) return arr;
@@ -16959,7 +17068,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     if (!this._nwHasMappedDatapoint('productionEnergyKwh')) {
       const ids = this._nwGetHistoryDpCandidates('pvPower');
       if (ids.length) tasks.push((async () => {
-        const stepMs = this._nwChooseStepMs(spanMs, 3500, 5 * 60 * 1000);
+        const stepMs = this._nwChooseEnergyIntegrationStepMs(spanMs, 10 * 60 * 1000, 60 * 60 * 1000);
         const series = await this._nwGetHistoryAvgSeriesAny(ids, startMs, now, stepMs);
         const kwh = this._nwIntegrateKwh(series, now, stepMs, true);
         if (kwh != null) {
@@ -16972,7 +17081,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     if (!this._nwHasMappedDatapoint('consumptionEnergyKwh')) {
       const ids = this._nwGetHistoryDpCandidates('consumptionTotal');
       if (ids.length) tasks.push((async () => {
-        const stepMs = this._nwChooseStepMs(spanMs, 3500, 5 * 60 * 1000);
+        const stepMs = this._nwChooseEnergyIntegrationStepMs(spanMs, 10 * 60 * 1000, 60 * 60 * 1000);
         const series = await this._nwGetHistoryAvgSeriesAny(ids, startMs, now, stepMs);
         const kwh = this._nwIntegrateKwh(series, now, stepMs, true);
         if (kwh != null) {
@@ -16985,7 +17094,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     if (!this._nwHasMappedDatapoint('gridEnergyKwh')) {
       const ids = this._nwGetHistoryDpCandidates('gridBuyPower');
       if (ids.length) tasks.push((async () => {
-        const stepMs = this._nwChooseStepMs(spanMs, 3500, 5 * 60 * 1000);
+        const stepMs = this._nwChooseEnergyIntegrationStepMs(spanMs, 10 * 60 * 1000, 60 * 60 * 1000);
         const series = await this._nwGetHistoryAvgSeriesAny(ids, startMs, now, stepMs);
         const kwh = this._nwIntegrateKwh(series, now, stepMs, true);
         if (kwh != null) {
@@ -17001,7 +17110,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     if (needCo2Calc) {
       const ids = this._nwGetHistoryDpCandidates('evcsPower');
       if (ids.length) tasks.push((async () => {
-        const stepMs = this._nwChooseStepMs(spanMs, 3500, 5 * 60 * 1000);
+        const stepMs = this._nwChooseEnergyIntegrationStepMs(spanMs, 10 * 60 * 1000, 60 * 60 * 1000);
         const series = await this._nwGetHistoryAvgSeriesAny(ids, startMs, now, stepMs);
         const kwh = this._nwIntegrateKwh(series, now, stepMs, true);
         if (kwh != null) {

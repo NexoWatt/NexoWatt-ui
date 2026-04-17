@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.223",
+    "version": "0.6.225",
     "news": {
+      "0.6.225": {
+        "de": "Schnell-Inbetriebnahme erweitert: Beim Ein-Klick-Setup werden jetzt auch sichere Standard-Datenpunkte für den Energiefluss automatisch aus nexowatt-devices-Aliasen vorbelegt – inkl. Netz (Import/Export oder Signed-Fallback), Netz-Online/Heartbeat, PV (wenn eindeutig) sowie Speicher-SoC/-Leistung (wenn eindeutig). EV- und Gebäudeverbrauch bleiben bewusst auf Auto-Summe/Auto-Bilanz. Web-Cache-Version angehoben.",
+        "en": "Quick commissioning extended: the one-click setup now also pre-fills safe standard datapoints for the energy-flow tab from nexowatt-devices aliases – including grid (import/export or signed fallback), grid online/heartbeat, PV when unambiguous and storage SoC/power when unambiguous. EV and building load intentionally stay on auto-sum/auto-balance. Web cache version bumped."
+      },
+      "0.6.224": {
+        "de": "Historie/Energieabgleich: Historienkarten und Energiebalken nutzen jetzt konsequent dieselben kanonischen historie.*-Influx-Datenpunkte wie der Live-Bereich. Die Verlaufskarten werden zusätzlich mit einer präzisen 10-Minuten-Energieintegration berechnet, damit Tag/Woche/Monat/Jahr nicht mehr gegeneinander abweichen. Für den Live-Gesamtverbrauch/-Erzeugung werden die Historie-Integrationen ebenfalls feiner berechnet. Web-Cache-Version angehoben.",
+        "en": "History/energy consistency: history cards and energy bars now consistently use the same canonical historie.* Influx datapoints as the live area. History energy cards are additionally calculated with a precise 10-minute integration so day/week/month/year no longer drift apart. Live total energy fallbacks are also integrated with a finer step. Web cache version bumped."
+      },
       "0.6.223": {
         "de": "Historie: Der Bereich „Preis / Bezug / Kosten“ wird jetzt nur noch eingeblendet, wenn dynamischer Tarif oder variables Netzentgelt aktuell aktiv sind. Reine Basispreis-Historie ohne aktivierte Tarif-/Netzentgeltfunktion blendet den Bereich nicht mehr fälschlich ein. Web-Cache-Version angehoben.",
         "en": "History: the “Price / Import / Costs” section is now only shown when dynamic tariff or variable grid fee is currently enabled. Plain base-price history without an active tariff/grid-fee feature no longer shows the section incorrectly. Web cache version bumped."

@@ -1264,9 +1264,10 @@ async function load(){
     const toMs   = to.getTime();
     const nowMs  = Date.now();
     // NOTE: Historie wird im 10-Minuten-Raster nach Influx geschrieben.
-    // Für die Tagesansicht verwenden wir ebenfalls 10 Minuten (keine "Treppen" durch Hold‑Last).
-    // Für Woche/Monat/Jahr reicht eine gröbere Auflösung; dadurch vermeiden wir zudem getHistory-Limits.
-    const step = (chartMode==='day') ? 600 : (chartMode==='week' ? 600 : (chartMode==='month' ? 1800 : 21600));
+    // Für Tag/Woche/Monat lesen wir deshalb ebenfalls in 10 Minuten, damit Karten,
+    // Balken und Verlauf dieselbe Datenbasis nutzen. Für das Jahr reicht 1 Stunde,
+    // bleibt aber deutlich genauer als die frühere Grobaggregation.
+    const step = (chartMode === 'year') ? 3600 : 600;
     const url = `/api/history?from=${fromMs}&to=${toMs}&step=${step}`;
     const res = await fetch(url).then(r=>r.json()).catch(()=>null);
     if(!res || !res.ok){ alert('History kann nicht geladen werden'); return; }
@@ -1384,18 +1385,23 @@ async function load(){
     // If we clipped "future" buckets, ignore backend totals (they may still include
     // fill=previous artefacts) and sum only from the clipped series.
     const e = (!res.__cutoffNowMs && res && res.energy && typeof res.energy === 'object') ? res.energy : {};
+    const exact = (res && res.energyExact && typeof res.energyExact === 'object') ? res.energyExact : {};
+    const exactNum = (key) => {
+      const n = Number(exact && exact[key]);
+      return Number.isFinite(n) && n >= 0 ? n : null;
+    };
     const cards = document.getElementById('cards');
     function card(title, val){ const el=document.createElement('div'); el.className='card'; el.innerHTML = `<small>${title}</small><b>${val}</b>`; cards.appendChild(el); }
     cards.innerHTML='';
-    const pvKwh = pickEnergyKwh(e.productionKwh, sumEnergyKWh(s.pv && s.pv.values));
-    const chargeKwh = pickEnergyKwh(e.storageChargeKwh, sumEnergyKWh(s.chg && s.chg.values));
-    const dischargeKwh = pickEnergyKwh(e.storageDischargeKwh, sumEnergyKWh(s.dchg && s.dchg.values));
-    const exportKwh = pickEnergyKwh(e.gridExportKwh, sumEnergyKWh(s.sell && s.sell.values));
-    const importKwh = pickEnergyKwh(e.gridImportKwh, sumEnergyKWh(s.buy && s.buy.values));
-    const evKwh = pickEnergyKwh(e.evKwh, sumEnergyKWh(s.evcs && s.evcs.values));
+    const pvKwh = exactNum('productionKwh') ?? pickEnergyKwh(e.productionKwh, sumEnergyKWh(s.pv && s.pv.values));
+    const chargeKwh = exactNum('storageChargeKwh') ?? pickEnergyKwh(e.storageChargeKwh, sumEnergyKWh(s.chg && s.chg.values));
+    const dischargeKwh = exactNum('storageDischargeKwh') ?? pickEnergyKwh(e.storageDischargeKwh, sumEnergyKWh(s.dchg && s.dchg.values));
+    const exportKwh = exactNum('gridExportKwh') ?? pickEnergyKwh(e.gridExportKwh, sumEnergyKWh(s.sell && s.sell.values));
+    const importKwh = exactNum('gridImportKwh') ?? pickEnergyKwh(e.gridImportKwh, sumEnergyKWh(s.buy && s.buy.values));
+    const evKwh = exactNum('evKwh') ?? pickEnergyKwh(e.evKwh, sumEnergyKWh(s.evcs && s.evcs.values));
     const loadIntegratedKwh = sumEnergyKWh(s.load && s.load.values);
     const loadBalanceKwh = Math.max(0, pvKwh + importKwh + dischargeKwh - chargeKwh - exportKwh);
-    const loadKwh = pickEnergyKwh(e.consumptionKwh, loadIntegratedKwh > 0.01 ? loadIntegratedKwh : loadBalanceKwh);
+    const loadKwh = exactNum('consumptionKwh') ?? pickEnergyKwh(e.consumptionKwh, loadIntegratedKwh > 0.01 ? loadIntegratedKwh : loadBalanceKwh);
     const autarkyLocalKwh = Math.max(0, loadKwh - importKwh);
     const autarkyPct = loadKwh > 0.0001 ? Math.max(0, Math.min(100, (autarkyLocalKwh / loadKwh) * 100)) : null;
 
