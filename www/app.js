@@ -1492,18 +1492,35 @@ function computeDerived() {
   // derive some percentages if not provided
   const pv = pick('pvPower', 'productionTotal');
   const load = pick('consumptionTotal');
+  const charge = pick('storageChargePower');
+  const discharge = pick('storageDischargePower');
+
+  const rawBuy = coerceNumber(get('gridBuyPower'));
+  const rawSell = coerceNumber(get('gridSellPower'));
+  const rawNet = coerceNumber(get('gridPointPower'));
+  const haveGridInfo = (rawBuy != null) || (rawSell != null) || (rawNet != null);
   const { buy, sell } = getGridImportExport((k) => get(k));
 
-  const autarky = get('autarky');
-  const selfc = get('selfConsumption');
 
   const res = {};
-  if (autarky == null && pv != null && load != null) {
-    // simple heuristic: share of load supplied by PV + battery (ignore battery for simplicity)
-    const suppliedByPv = Math.max(0, Math.min(100, (pv / Math.max(1, load)) * 100));
-    res.autarky = Math.max(0, Math.min(100, suppliedByPv));
+  if (load != null) {
+    let pct = null;
+    if (haveGridInfo) {
+      // Live-Autarkie physikalisch aus Verbrauch vs. Netzbezug ableiten.
+      // Dadurch läuft die Kachel korrekt mit, wenn Batterie oder PV den
+      // Verbrauch decken und am Netzanschlusspunkt 0 W Bezug anliegt.
+      const localSupply = Math.max(0, load - Math.max(0, buy || 0));
+      pct = load > 0 ? (localSupply / load) * 100 : 0;
+    } else {
+      // Fallback nur dann verwenden, wenn noch kein Netz-DP eingetroffen ist.
+      const localPv = pv != null ? Math.max(0, pv - Math.max(0, sell || 0)) : 0;
+      const batterySupport = Math.max(0, (discharge || 0) - (charge || 0));
+      const localSupply = Math.max(0, Math.min(load, localPv + batterySupport));
+      pct = load > 0 ? (localSupply / load) * 100 : 0;
+    }
+    res.autarky = Math.max(0, Math.min(100, pct || 0));
   }
-  if (selfc == null && pv != null) {
+  if (pv != null) {
     // share of production used locally (pv - sell)/pv
     const local = Math.max(0, pv - (sell || 0));
     const pct = pv > 0 ? (local / pv) * 100 : 0;
@@ -1513,7 +1530,10 @@ function computeDerived() {
 
   function get(k){ return state[k]?.value; }
   function pick(...keys){
-    for (const k of keys) { const v = get(k); if (v != null && !isNaN(v)) return Number(v); }
+    for (const k of keys) {
+      const n = coerceNumber(get(k));
+      if (n != null) return n;
+    }
     return null;
   }
 }
@@ -1618,8 +1638,8 @@ function render() {
 
   // Cards
   const derived = computeDerived();
-  const autarky = d('autarky') ?? derived.autarky;
-  const selfc = d('selfConsumption') ?? derived.selfConsumption;
+  const autarky = derived.autarky ?? d('autarky');
+  const selfc = derived.selfConsumption ?? d('selfConsumption');
 
   const autarkyN = clamp01(coerceNumber(autarky), 0, 100);
   const selfcN = clamp01(coerceNumber(selfc), 0, 100);

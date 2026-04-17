@@ -1,3 +1,9 @@
+## 0.6.226
+
+- Live-Status/KPI: Die Autarkie-Kachel wird jetzt konsistent aus Verbrauch und Netzbezug berechnet und folgt damit auch korrekt, wenn nachts der Speicher den Verbrauch deckt oder der Netzanschlusspunkt bei 0 W bleibt.
+- VIS-Fallback: Falls ein Netz-Datenpunkt beim ersten Rendern noch nicht angekommen ist, nutzt die Oberfläche nur temporär eine lokale Abschätzung aus PV- und Batterie-Leistung, statt dauerhaft auf einer unpassenden PV-only-Heuristik zu bleiben.
+- PWA/Web-Cache-Version angehoben.
+
 ## 0.6.225
 
 - Schnell-Inbetriebnahme erweitert: sichere Standard-DPs im Energiefluss werden jetzt per Ein-Klick aus `nexowatt-devices`-Aliasen vorbelegt. Automatisch erkannt werden Netz (Import/Export oder Signed-Fallback), Netz-Online/Heartbeat, PV (bei eindeutiger Quelle) sowie Speicher-SoC/-Leistung (bei eindeutigem ESS/BATTERY). EV und Gebäudeverbrauch bleiben bewusst auf Auto-Summe/Auto-Bilanz, damit Mehrfachgeräte konsistent bleiben.
