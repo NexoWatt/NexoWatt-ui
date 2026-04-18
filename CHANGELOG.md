@@ -1,3 +1,8 @@
+## 0.6.227
+- fix(history): korrigiert überhöhte kWh-Werte in Tag/Woche/Monat/Jahr
+- Ursache behoben: exakte Historien-Integration nutzte fälschlich die volle UI-Endzeit statt die tatsächliche Query-Endzeit
+- dadurch werden für heutige/teilweise zukünftige Zeiträume keine letzten Leistungswerte mehr bis Tagesende/Monatsende hochintegriert
+
 ## 0.6.226
 
 - Live-Status/KPI: Die Autarkie-Kachel wird jetzt konsistent aus Verbrauch und Netzbezug berechnet und folgt damit auch korrekt, wenn nachts der Speicher den Verbrauch deckt oder der Netzanschlusspunkt bei 0 W bleibt.

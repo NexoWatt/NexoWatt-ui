@@ -10780,12 +10780,15 @@ app.get('/api/history', async (req, res) => {
         // forward-fill (hold last) values. This yields clean plots and also improves the
         // kWh integration in the frontend.
         const stepMs = (Number.isFinite(stepS) && stepS > 0) ? (stepS * 1000) : 60_000;
-        const densifyHoldLast = (values) => {
-          if (!Array.isArray(values) || values.length === 0 || !Number.isFinite(stepMs) || stepMs <= 0) {
+        const densifyHoldLast = (values, rangeStart = start, rangeEnd = end, rangeStepMs = stepMs) => {
+          const rStart = Number(rangeStart);
+          const rEnd = Number(rangeEnd);
+          const rStep = Number(rangeStepMs);
+          if (!Array.isArray(values) || values.length === 0 || !Number.isFinite(rStart) || !Number.isFinite(rEnd) || !Number.isFinite(rStep) || rStep <= 0) {
             return Array.isArray(values) ? values : [];
           }
 
-          const n = Math.max(0, Math.floor((end - start) / stepMs));
+          const n = Math.max(0, Math.floor((rEnd - rStart) / rStep));
           const byIdx = new Map();
 
           for (const row of values) {
@@ -10793,7 +10796,7 @@ app.get('/api/history', async (req, res) => {
             const val = Number(row?.[1]);
             if (!Number.isFinite(ts)) continue;
 
-            const idx = Math.round((ts - start) / stepMs);
+            const idx = Math.round((ts - rStart) / rStep);
             if (idx < 0 || idx > n) continue;
             if (!Number.isFinite(val)) continue;
 
@@ -10808,16 +10811,16 @@ app.get('/api/history', async (req, res) => {
               prev = byIdx.get(i);
               havePrev = true;
             }
-            out.push([start + i * stepMs, havePrev ? prev : null]);
+            out.push([rStart + i * rStep, havePrev ? prev : null]);
           }
 
-          // Ensure the series reaches exactly `end` so the chart does not visually "stop"
-          // before the right edge when `end` is not aligned to the step grid.
+          // Ensure the series reaches exactly `rangeEnd` so the chart does not visually "stop"
+          // before the right edge when the end is not aligned to the step grid.
           // This also improves kWh integration for the last partial bucket.
           if (out.length) {
             const lastTs = out[out.length - 1][0];
-            if (Number.isFinite(lastTs) && lastTs < end) {
-              out.push([end, havePrev ? prev : null]);
+            if (Number.isFinite(lastTs) && lastTs < rEnd) {
+              out.push([rEnd, havePrev ? prev : null]);
             }
           }
           return out;
@@ -10943,7 +10946,7 @@ app.get('/api/history', async (req, res) => {
                 })
                 .filter(Boolean)
                 .sort((a, b) => a[0] - b[0]);
-              resolve({ id, values: densifyHoldLast(norm) });
+              resolve({ id, values: densifyHoldLast(norm, queryStart, queryEnd, queryStepMs) });
             });
           } catch (e) {
             if (!done) {
