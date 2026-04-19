@@ -1267,11 +1267,15 @@ async function load(force = false){
     const fromMs = from.getTime();
     const toMs   = to.getTime();
     const nowMs  = Date.now();
-    // NOTE: Historie wird im 10-Minuten-Raster nach Influx geschrieben.
-    // Für Tag/Woche/Monat lesen wir deshalb ebenfalls in 10 Minuten, damit Karten,
-    // Balken und Verlauf dieselbe Datenbasis nutzen. Für das Jahr reicht 1 Stunde,
-    // bleibt aber deutlich genauer als die frühere Grobaggregation.
-    const step = (chartMode === 'year') ? 3600 : 600;
+    // Performance-tuned sampling per range:
+    // - Tag: 10 Minuten für den Detailverlauf
+    // - Woche: 30 Minuten reichen für Tagestrends
+    // - Monat: 1 Stunde hält Tagesbalken sauber und spart viel Last
+    // - Jahr: 1 Tag reicht für Monatsbalken und bleibt sehr schnell
+    let step = 600;
+    if (chartMode === 'week') step = 1800;
+    else if (chartMode === 'month') step = 3600;
+    else if (chartMode === 'year') step = 86400;
     const url = `/api/history?from=${fromMs}&to=${toMs}&step=${step}`;
     const requestKey = `${chartMode}|${fromMs}|${toMs}|${step}`;
 

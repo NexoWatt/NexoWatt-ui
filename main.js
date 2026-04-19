@@ -11008,11 +11008,15 @@ app.get('/api/history', async (req, res) => {
         };
 
         const dynamicTariffActiveNow = !!(this.stateCache && this.stateCache['settings.dynamicTariff'] && this.stateCache['settings.dynamicTariff'].value);
+        const netFeeActiveNow = !!(this.stateCache && this.stateCache['settings.netFeeEnabled'] && this.stateCache['settings.netFeeEnabled'].value);
+        const pricingActiveNow = !!(dynamicTariffActiveNow || netFeeActiveNow);
+        const wantSocSeries = stepMs <= (10 * 60 * 1000);
         const manualGrossPriceNow = Number(this.stateCache?.['settings.price']?.value);
         const grossPriceCandidates = [
           `${this.namespace}.historie.tariff.providerCurrentEurPerKwh`,
           `${this.namespace}.tarif.preisAktuellEurProKwh`,
         ];
+        const emptySeries = { id: '', values: [] };
 
         const [pv, load, buy, sell, chg, dchg, soc, evcs, priceBase, priceNetFee, priceTotal, priceGross] = await Promise.all([
           askCandidates(idCandidates.pv),
@@ -11021,12 +11025,12 @@ app.get('/api/history', async (req, res) => {
           askCandidates(idCandidates.sell),
           askCandidates(idCandidates.chg),
           askCandidates(idCandidates.dchg),
-          askCandidates(idCandidates.soc),
+          wantSocSeries ? askCandidates(idCandidates.soc) : Promise.resolve(emptySeries),
           askCandidates(idCandidates.evcs),
-          askCandidates(idCandidates.priceBase),
-          askCandidates(idCandidates.priceNetFee),
-          askCandidates(idCandidates.priceTotal),
-          askCandidates(grossPriceCandidates)
+          pricingActiveNow ? askCandidates(idCandidates.priceBase) : Promise.resolve(emptySeries),
+          pricingActiveNow ? askCandidates(idCandidates.priceNetFee) : Promise.resolve(emptySeries),
+          pricingActiveNow ? askCandidates(idCandidates.priceTotal) : Promise.resolve(emptySeries),
+          pricingActiveNow ? askCandidates(grossPriceCandidates) : Promise.resolve(emptySeries)
         ]);
 
         const _normalizeHistoryPairs = (values) => {
@@ -11297,18 +11301,18 @@ if (energyCounterTasks.length) {
 
 energy.__endMs = energyEnd;
 
-// Precise energy totals from the *same* canonical Historie source DPs that feed the
-// charts. This keeps day/week/month/year cards consistent even when the visual chart
-// itself uses a coarser step for performance.
+// Fast energy totals derived from the already loaded chart series.
+// This keeps cards and chart on the same source while avoiding a second heavy
+// round-trip to Influx for month/year ranges.
 const energyExact = {};
 const energyExactEnd = Math.min(end, Date.now());
-const energyExactStepMs = 10 * 60 * 1000;
-const integrateSeriesKwh = (series, defaultEndMs, stepMs, positiveOnly = true) => {
+const energyExactStepMs = Math.max(60 * 1000, stepMs);
+const integrateSeriesKwh = (series, defaultEndMs, stepMsForSeries, positiveOnly = true) => {
   const vals = Array.isArray(series?.values) ? series.values : [];
   if (!vals.length) return null;
   let kwh = 0;
   const endTs = Number.isFinite(Number(defaultEndMs)) ? Number(defaultEndMs) : Date.now();
-  const fallbackStep = Math.max(60 * 1000, Number(stepMs) || (10 * 60 * 1000));
+  const fallbackStep = Math.max(60 * 1000, Number(stepMsForSeries) || energyExactStepMs);
   for (let i = 0; i < vals.length; i++) {
     const cur = vals[i];
     if (!Array.isArray(cur) || cur.length < 2) continue;
@@ -11319,8 +11323,7 @@ const integrateSeriesKwh = (series, defaultEndMs, stepMs, positiveOnly = true) =
       ? Number(vals[i + 1][0])
       : endTs;
     let dt = Math.min(nextTs, endTs) - ts;
-    if (!Number.isFinite(dt)) continue;
-    if (dt <= 0) continue;
+    if (!Number.isFinite(dt) || dt <= 0) continue;
     dt = Math.min(dt, fallbackStep * 2);
     v = positiveOnly ? Math.max(0, v) : Math.abs(v);
     kwh += (v * dt) / 3600000000;
@@ -11349,18 +11352,17 @@ const clipSeriesForIntegration = (series, clipEndMs) => {
   return { id: series?.id || '', values: out };
 };
 const buildEnergyExact = async () => {
-  const query = { start, end: energyExactEnd, stepMs: energyExactStepMs };
-  const canReuseBaseSeries = (stepMs === energyExactStepMs);
-  const pvExact = canReuseBaseSeries ? clipSeriesForIntegration(pv, energyExactEnd) : await askCandidates(idCandidates.pv, query);
-  const loadExact = canReuseBaseSeries ? clipSeriesForIntegration(load, energyExactEnd) : await askCandidates(idCandidates.load, query);
-  const buyExact = canReuseBaseSeries ? clipSeriesForIntegration(buy, energyExactEnd) : await askCandidates(idCandidates.buy, query);
-  const sellExact = canReuseBaseSeries ? clipSeriesForIntegration(sell, energyExactEnd) : await askCandidates(idCandidates.sell, query);
-  const chgExact = canReuseBaseSeries ? clipSeriesForIntegration(chg, energyExactEnd) : await askCandidates(idCandidates.chg, query);
-  const dchgExact = canReuseBaseSeries ? clipSeriesForIntegration(dchg, energyExactEnd) : await askCandidates(idCandidates.dchg, query);
-  let evExact = canReuseBaseSeries ? clipSeriesForIntegration(evcs, energyExactEnd) : await askCandidates(idCandidates.evcs, query);
+  const pvExact = clipSeriesForIntegration(pv, energyExactEnd);
+  const loadExact = clipSeriesForIntegration(load, energyExactEnd);
+  const buyExact = clipSeriesForIntegration(buy, energyExactEnd);
+  const sellExact = clipSeriesForIntegration(sell, energyExactEnd);
+  const chgExact = clipSeriesForIntegration(chg, energyExactEnd);
+  const dchgExact = clipSeriesForIntegration(dchg, energyExactEnd);
+  let evExact = clipSeriesForIntegration(evcs, energyExactEnd);
   if (!(Array.isArray(evExact?.values) && evExact.values.length >= 2)) {
     const count = Number(this.evcsCount || 0);
     if (count > 0) {
+      const query = { start, end: energyExactEnd, stepMs: energyExactStepMs };
       const lpSeries = await Promise.all(Array.from({ length: count }, (_v, idx) => ask(`${this.namespace}.historie.evcs.lp${idx + 1}.powerW`, query)));
       const sumByTs = new Map();
       for (const s of lpSeries) {
@@ -11394,7 +11396,7 @@ const buildEnergyExact = async () => {
   energyExact.consumptionKwh = Number.isFinite(loadDirect) && loadDirect > 0.01 ? loadDirect : loadBalance;
   energyExact.__endMs = energyExactEnd;
   energyExact.__stepMs = energyExactStepMs;
-  energyExact.__source = canReuseBaseSeries ? 'chartSeriesReuse' : 'canonicalHistorie';
+  energyExact.__source = 'chartSeriesReuse';
 };
 try { await buildEnergyExact(); } catch (_e) {}
 
