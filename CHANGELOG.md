@@ -1,3 +1,9 @@
+## 0.6.229
+- PERF(history): doppelte Initial-Ladevorgänge im Frontend werden jetzt zusammengeführt, damit die Historie beim Öffnen nicht mehrfach denselben Request startet.
+- PERF(api/history): Kurzzeit-Cache + Inflight-Deduplizierung eingebaut, damit identische Historien-Abfragen nicht mehrfach parallel gegen Influx laufen.
+- PERF(history): kWh-Zählerabfragen werden parallelisiert und die exakte Energie-Berechnung verwendet wenn möglich direkt die bereits geladenen Chart-Serien statt dieselben Historien-DPs erneut abzufragen.
+- FIX(history): Integrations-Helper bricht am echten Zeitraumende sauber ab und zählt den letzten Randpunkt nicht mehr unnötig als Zusatzintervall.
+
 ## 0.6.228
 - FIX: Preis-/Netzentgelt-Historie auf Bruttopreislogik umgestellt. Gesamtpreis entspricht jetzt dem angezeigten Live-/Providerpreis; der Basispreis wird aus Gesamtpreis minus Netzentgeltanteil abgeleitet.
 - FIX: Tarif-/Netzentgelt-Nachweisbericht verwendet dieselbe Preislogik wie die Historie, damit LIVE, Historie und Report konsistent bleiben.

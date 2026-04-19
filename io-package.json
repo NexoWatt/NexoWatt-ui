@@ -1,8 +1,13 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.228",
+    "version": "0.6.229",
     "news": {
+    "0.6.229": {
+      "en": "History performance improved: duplicate initial loads are deduplicated, /api/history now uses short-lived caching, counter/history queries run with less duplication, and exact energy totals reuse the chart series whenever possible.",
+      "de": "Historien-Performance verbessert: doppelte Initial-Ladevorgänge werden zusammengeführt, /api/history nutzt jetzt einen Kurzzeit-Cache, Zähler-/Historienabfragen laufen mit weniger Duplikaten und exakte Energie-Werte verwenden wenn möglich direkt die bereits geladenen Chart-Serien.",
+      "ru": "Повышена производительность истории: дублирующиеся начальные загрузки объединяются, /api/history использует кратковременный кэш, запросы к счётчикам/истории выполняются с меньшим количеством дублей, а точные энергетические значения по возможности берутся из уже загруженных серий графика."
+    },
     "0.6.228": {
       "de": "Historie: Regression behoben, bei der kWh-Karten für laufende Tage/Zeiträume zu hoch wurden. Die exakte Historien-Integration nutzt jetzt konsequent die tatsächliche Query-Endzeit statt fälschlich bis zur vollen UI-Endzeit weiter zu integrieren.",
       "en": "History: fixed a regression where kWh cards became too high for ongoing days/ranges. Exact history integration now consistently uses the actual query end time instead of integrating to the full UI end time."
@@ -1683,7 +1688,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.228",
+  "version": "0.6.229",
   "news": {
     "0.6.223": {
       "de": "Historie: Der Bereich „Preis / Bezug / Kosten“ wird jetzt nur noch eingeblendet, wenn dynamischer Tarif oder variables Netzentgelt aktuell aktiv sind. Reine Basispreis-Historie ohne aktivierte Tarif-/Netzentgeltfunktion blendet den Bereich nicht mehr fälschlich ein. Web-Cache-Version angehoben.",

@@ -20,6 +20,10 @@
   let historyBooted = false;
   let historyRetryTimer = null;
   let historyRetryCount = 0;
+  let historyInFlightKey = '';
+  let historyInFlightPromise = null;
+  let historyLastLoadedKey = '';
+  let historyLastLoadedAt = 0;
 
   function scheduleHistoryRenderBurst(){
     const doRender = ()=>{
@@ -1257,7 +1261,7 @@ function draw(){
     priceCanvas.addEventListener('touchend', (ev)=> showPriceTipFromEvent(ev), { passive:true });
   })();
 
-async function load(){
+async function load(force = false){
     const from = new Date(document.getElementById('from').value || new Date(Date.now()-24*3600*1000).toISOString().slice(0,16));
     const to   = new Date(document.getElementById('to').value   || new Date().toISOString().slice(0,16));
     const fromMs = from.getTime();
@@ -1269,8 +1273,19 @@ async function load(){
     // bleibt aber deutlich genauer als die frühere Grobaggregation.
     const step = (chartMode === 'year') ? 3600 : 600;
     const url = `/api/history?from=${fromMs}&to=${toMs}&step=${step}`;
-    const res = await fetch(url).then(r=>r.json()).catch(()=>null);
-    if(!res || !res.ok){ alert('History kann nicht geladen werden'); return; }
+    const requestKey = `${chartMode}|${fromMs}|${toMs}|${step}`;
+
+    if (!force && historyInFlightPromise && historyInFlightKey === requestKey) {
+      return historyInFlightPromise;
+    }
+    if (!force && data && historyLastLoadedKey === requestKey && (Date.now() - historyLastLoadedAt) < 1200) {
+      scheduleHistoryRenderBurst();
+      return data;
+    }
+
+    const reqPromise = (async()=>{
+      const res = await fetch(url).then(r=>r.json()).catch(()=>null);
+      if(!res || !res.ok){ alert('History kann nicht geladen werden'); return null; }
 
     // capture backend-aligned start/end before we normalize the UI range
     const backendInfo = { start: res.start, end: res.end, step: res.step };
@@ -1437,6 +1452,19 @@ async function load(){
     } else {
       scheduleHistoryRetry(1100);
     }
+    historyLastLoadedKey = requestKey;
+    historyLastLoadedAt = Date.now();
+    return res;
+  })();
+
+    historyInFlightKey = requestKey;
+    historyInFlightPromise = reqPromise.finally(()=>{
+      if (historyInFlightKey === requestKey) {
+        historyInFlightKey = '';
+        historyInFlightPromise = null;
+      }
+    });
+    return historyInFlightPromise;
   }
 
   // --- Date handling ---

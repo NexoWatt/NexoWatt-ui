@@ -130,6 +130,12 @@ class NexoWattVis extends utils.Adapter {
     this._nwForeignUnitCache = new Map();        // objectId -> normalized unit (e.g. "w", "kw")
     this._nwForeignPowerScaleCache = new Map();  // objectId -> factor to W
 
+    // History/API performance: short-lived response cache + in-flight dedupe.
+    // The history page can trigger multiple near-identical loads during first paint
+    // (boot/pageshow/re-render bursts). Reusing the same backend result keeps the UI
+    // responsive and avoids unnecessary InfluxDB round-trips.
+    this._nwHistoryApiCache = new Map();
+    this._nwHistoryApiInflight = new Map();
 
     // Derived / calculated live values (e.g. energy flow helper KPIs)
     this._derivedFlow = {
@@ -10762,13 +10768,33 @@ app.get(['/logic.html','/logic'], (req, res) => {
     });
 
 app.get('/api/history', async (req, res) => {
+      const start = Number(req.query.from || (Date.now() - 24*3600*1000));
+      const end   = Number(req.query.to   || Date.now());
+      // Historie wird im 10‑Minuten‑Raster nach Influx geschrieben.
+      // Default daher ebenfalls 10 Minuten (Frontend kann weiterhin explizit steuern).
+      const stepS = Number(req.query.step || 600);
+      const historyCfgSig = JSON.stringify({
+        h: (this.config && this.config.history) || {},
+        d: (this.config && this.config.datapoints) || {},
+        v: (this.config && this.config.vis && this.config.vis.flowSlots) || {},
+        evcsCount: Number(this.evcsCount || 0),
+        dyn: !!(this.stateCache?.['settings.dynamicTariff']?.value),
+        fee: !!(this.stateCache?.['settings.netFeeEnabled']?.value),
+        price: Number(this.stateCache?.['settings.price']?.value || 0),
+      });
+      const cacheKey = `${start}|${end}|${stepS}|${historyCfgSig}`;
+      const cachedPayload = this._nwGetHistoryApiCached(cacheKey, 5000);
+      if (cachedPayload) return res.json(cachedPayload);
+      if (this._nwHistoryApiInflight instanceof Map && this._nwHistoryApiInflight.has(cacheKey)) {
+        try {
+          const inflightPayload = await this._nwHistoryApiInflight.get(cacheKey);
+          if (inflightPayload) return res.json(inflightPayload);
+        } catch (_e) {}
+      }
+
+      const computeHistoryPayload = (async () => {
       try {
         const inst = this._nwGetHistoryInstance();
-        const start = Number(req.query.from || (Date.now() - 24*3600*1000));
-        const end   = Number(req.query.to   || Date.now());
-        // Historie wird im 10‑Minuten‑Raster nach Influx geschrieben.
-        // Default daher ebenfalls 10 Minuten (Frontend kann weiterhin explizit steuern).
-        const stepS = Number(req.query.step || 600);
 
         // For many states we log data sparsely (e.g. only "on change").
         // In that case the aggregated history query only returns values for time-buckets
@@ -10780,6 +10806,7 @@ app.get('/api/history', async (req, res) => {
         // forward-fill (hold last) values. This yields clean plots and also improves the
         // kWh integration in the frontend.
         const stepMs = (Number.isFinite(stepS) && stepS > 0) ? (stepS * 1000) : 60_000;
+        const requestSeriesCache = new Map();
         const densifyHoldLast = (values, rangeStart = start, rangeEnd = end, rangeStepMs = stepMs) => {
           const rStart = Number(rangeStart);
           const rEnd = Number(rangeEnd);
@@ -10905,57 +10932,67 @@ app.get('/api/history', async (req, res) => {
           return null;
         };
 
-        const ask = (id, query = {}) => new Promise(resolve => {
-          if (!id) return resolve({ id, values: [] });
+        const ask = (id, query = {}) => {
+          const sid = this._nwTrimId(id);
           const queryStart = Number.isFinite(Number(query.start)) ? Number(query.start) : start;
           const queryEnd = Number.isFinite(Number(query.end)) ? Number(query.end) : end;
           const queryStepMs = Math.max(60 * 1000, Number.isFinite(Number(query.stepMs)) ? Number(query.stepMs) : (stepS * 1000));
-          const options = { start: queryStart, end: queryEnd, step: queryStepMs, aggregate: 'average', addId: false, ignoreNull: true };
-          let done = false;
-          const timer = setTimeout(() => {
-            if (done) return;
-            done = true;
-            resolve({ id, values: [] });
-          }, 8000);
-          try {
-            this.sendTo(inst, 'getHistory', { id, options }, (resu) => {
+          const cacheId = sid || String(id || '');
+          const cacheKey = `${cacheId}|${queryStart}|${queryEnd}|${queryStepMs}`;
+          if (requestSeriesCache.has(cacheKey)) return requestSeriesCache.get(cacheKey);
+
+          const promise = new Promise(resolve => {
+            if (!sid) return resolve({ id: sid || id, values: [] });
+            const options = { start: queryStart, end: queryEnd, step: queryStepMs, aggregate: 'average', addId: false, ignoreNull: true };
+            let done = false;
+            const timer = setTimeout(() => {
               if (done) return;
               done = true;
-              clearTimeout(timer);
-              let outArr = [];
-              if (Array.isArray(resu)) outArr = resu;
-              else if (resu && Array.isArray(resu.result)) {
-                if (resu.result.length && Array.isArray(resu.result[0]?.data)) {
-                  outArr = resu.result[0].data;
-                } else {
-                  outArr = resu.result;
+              resolve({ id: sid, values: [] });
+            }, 8000);
+            try {
+              this.sendTo(inst, 'getHistory', { id: sid, options }, (resu) => {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                let outArr = [];
+                if (Array.isArray(resu)) outArr = resu;
+                else if (resu && Array.isArray(resu.result)) {
+                  if (resu.result.length && Array.isArray(resu.result[0]?.data)) {
+                    outArr = resu.result[0].data;
+                  } else {
+                    outArr = resu.result;
+                  }
+                } else if (resu && Array.isArray(resu.series) && resu.series[0]?.values) {
+                  outArr = resu.series[0].values.map(v => ({ ts: v[0], val: v[1] }));
+                } else if (resu && Array.isArray(resu.data)) {
+                  outArr = resu.data;
                 }
-              } else if (resu && Array.isArray(resu.series) && resu.series[0]?.values) {
-                outArr = resu.series[0].values.map(v => ({ ts: v[0], val: v[1] }));
-              } else if (resu && Array.isArray(resu.data)) {
-                outArr = resu.data;
+                const norm = (outArr || [])
+                  .map(p => {
+                    const tRaw = Array.isArray(p) ? p[0] : (p.ts ?? p.time ?? p.t ?? p[0]);
+                    const vRaw = Array.isArray(p) ? p[1] : (p.val ?? p.value ?? p[1]);
+                    const t = normTsMs(tRaw);
+                    const v = Number(vRaw);
+                    if (t == null || Number.isNaN(v)) return null;
+                    return [t, v];
+                  })
+                  .filter(Boolean)
+                  .sort((a, b) => a[0] - b[0]);
+                resolve({ id: sid, values: densifyHoldLast(norm, queryStart, queryEnd, queryStepMs) });
+              });
+            } catch (e) {
+              if (!done) {
+                done = true;
+                clearTimeout(timer);
+                resolve({ id: sid, values: [] });
               }
-              const norm = (outArr || [])
-                .map(p => {
-                  const tRaw = Array.isArray(p) ? p[0] : (p.ts ?? p.time ?? p.t ?? p[0]);
-                  const vRaw = Array.isArray(p) ? p[1] : (p.val ?? p.value ?? p[1]);
-                  const t = normTsMs(tRaw);
-                  const v = Number(vRaw);
-                  if (t == null || Number.isNaN(v)) return null;
-                  return [t, v];
-                })
-                .filter(Boolean)
-                .sort((a, b) => a[0] - b[0]);
-              resolve({ id, values: densifyHoldLast(norm, queryStart, queryEnd, queryStepMs) });
-            });
-          } catch (e) {
-            if (!done) {
-              done = true;
-              clearTimeout(timer);
-              resolve({ id, values: [] });
             }
-          }
-        });
+          });
+
+          requestSeriesCache.set(cacheKey, promise);
+          return promise;
+        };
 
         const askCandidates = async (candidates, query = {}) => {
           const list = Array.isArray(candidates) ? candidates : [candidates];
@@ -11243,13 +11280,20 @@ const energyIds = {
   ev: this._nwTrimId(String(dps.evEnergyKwh || dps.evcsEnergyKwh || '')),
 };
 
-if (energyIds.production) energy.productionKwh = await counterDelta(energyIds.production);
-if (energyIds.consumption) energy.consumptionKwh = await counterDelta(energyIds.consumption);
-if (energyIds.gridImport) energy.gridImportKwh = await counterDelta(energyIds.gridImport);
-if (energyIds.gridExport) energy.gridExportKwh = await counterDelta(energyIds.gridExport);
-if (energyIds.storageCharge) energy.storageChargeKwh = await counterDelta(energyIds.storageCharge);
-if (energyIds.storageDischarge) energy.storageDischargeKwh = await counterDelta(energyIds.storageDischarge);
-if (energyIds.ev) energy.evKwh = await counterDelta(energyIds.ev);
+const energyCounterTasks = [];
+if (energyIds.production) energyCounterTasks.push(counterDelta(energyIds.production).then((val) => ['productionKwh', val]));
+if (energyIds.consumption) energyCounterTasks.push(counterDelta(energyIds.consumption).then((val) => ['consumptionKwh', val]));
+if (energyIds.gridImport) energyCounterTasks.push(counterDelta(energyIds.gridImport).then((val) => ['gridImportKwh', val]));
+if (energyIds.gridExport) energyCounterTasks.push(counterDelta(energyIds.gridExport).then((val) => ['gridExportKwh', val]));
+if (energyIds.storageCharge) energyCounterTasks.push(counterDelta(energyIds.storageCharge).then((val) => ['storageChargeKwh', val]));
+if (energyIds.storageDischarge) energyCounterTasks.push(counterDelta(energyIds.storageDischarge).then((val) => ['storageDischargeKwh', val]));
+if (energyIds.ev) energyCounterTasks.push(counterDelta(energyIds.ev).then((val) => ['evKwh', val]));
+if (energyCounterTasks.length) {
+  const resolvedEnergyCounters = await Promise.all(energyCounterTasks);
+  for (const [key, val] of resolvedEnergyCounters) {
+    if (val != null) energy[key] = val;
+  }
+}
 
 energy.__endMs = energyEnd;
 
@@ -11270,30 +11314,50 @@ const integrateSeriesKwh = (series, defaultEndMs, stepMs, positiveOnly = true) =
     if (!Array.isArray(cur) || cur.length < 2) continue;
     const ts = Number(cur[0]);
     let v = Number(cur[1]);
-    if (!Number.isFinite(ts) || !Number.isFinite(v)) continue;
+    if (!Number.isFinite(ts) || !Number.isFinite(v) || ts >= endTs) continue;
     const nextTs = (i + 1 < vals.length && Array.isArray(vals[i + 1]) && Number.isFinite(Number(vals[i + 1][0])))
       ? Number(vals[i + 1][0])
       : endTs;
-    let dt = nextTs - ts;
-    if (!Number.isFinite(dt) || dt <= 0) dt = fallbackStep;
+    let dt = Math.min(nextTs, endTs) - ts;
+    if (!Number.isFinite(dt)) continue;
+    if (dt <= 0) continue;
     dt = Math.min(dt, fallbackStep * 2);
     v = positiveOnly ? Math.max(0, v) : Math.abs(v);
     kwh += (v * dt) / 3600000000;
   }
   return kwh;
 };
+const clipSeriesForIntegration = (series, clipEndMs) => {
+  const vals = Array.isArray(series?.values) ? series.values : [];
+  if (!vals.length || !Number.isFinite(Number(clipEndMs))) return { id: series?.id || '', values: [] };
+  const clipEnd = Number(clipEndMs);
+  const out = [];
+  let lastVal = null;
+  for (const row of vals) {
+    if (!Array.isArray(row) || row.length < 2) continue;
+    const ts = Number(row[0]);
+    const v = Number(row[1]);
+    if (!Number.isFinite(ts) || !Number.isFinite(v)) continue;
+    if (ts > clipEnd) break;
+    out.push([ts, v]);
+    lastVal = v;
+    if (ts === clipEnd) return { id: series?.id || '', values: out };
+  }
+  if (out.length && out[out.length - 1][0] < clipEnd && Number.isFinite(lastVal)) {
+    out.push([clipEnd, lastVal]);
+  }
+  return { id: series?.id || '', values: out };
+};
 const buildEnergyExact = async () => {
   const query = { start, end: energyExactEnd, stepMs: energyExactStepMs };
-  const [pvExact, loadExact, buyExact, sellExact, chgExact, dchgExact, evExactRaw] = await Promise.all([
-    askCandidates(idCandidates.pv, query),
-    askCandidates(idCandidates.load, query),
-    askCandidates(idCandidates.buy, query),
-    askCandidates(idCandidates.sell, query),
-    askCandidates(idCandidates.chg, query),
-    askCandidates(idCandidates.dchg, query),
-    askCandidates(idCandidates.evcs, query),
-  ]);
-  let evExact = evExactRaw;
+  const canReuseBaseSeries = (stepMs === energyExactStepMs);
+  const pvExact = canReuseBaseSeries ? clipSeriesForIntegration(pv, energyExactEnd) : await askCandidates(idCandidates.pv, query);
+  const loadExact = canReuseBaseSeries ? clipSeriesForIntegration(load, energyExactEnd) : await askCandidates(idCandidates.load, query);
+  const buyExact = canReuseBaseSeries ? clipSeriesForIntegration(buy, energyExactEnd) : await askCandidates(idCandidates.buy, query);
+  const sellExact = canReuseBaseSeries ? clipSeriesForIntegration(sell, energyExactEnd) : await askCandidates(idCandidates.sell, query);
+  const chgExact = canReuseBaseSeries ? clipSeriesForIntegration(chg, energyExactEnd) : await askCandidates(idCandidates.chg, query);
+  const dchgExact = canReuseBaseSeries ? clipSeriesForIntegration(dchg, energyExactEnd) : await askCandidates(idCandidates.dchg, query);
+  let evExact = canReuseBaseSeries ? clipSeriesForIntegration(evcs, energyExactEnd) : await askCandidates(idCandidates.evcs, query);
   if (!(Array.isArray(evExact?.values) && evExact.values.length >= 2)) {
     const count = Number(this.evcsCount || 0);
     if (count > 0) {
@@ -11305,12 +11369,12 @@ const buildEnergyExact = async () => {
           if (!Array.isArray(row) || row.length < 2) continue;
           const ts = Number(row[0]);
           const v = Number(row[1]);
-          if (!Number.isFinite(ts) || !Number.isFinite(v)) continue;
+          if (!Number.isFinite(ts) || !Number.isFinite(v) || ts > energyExactEnd) continue;
           sumByTs.set(ts, (sumByTs.get(ts) || 0) + v);
         }
       }
       const vals = Array.from(sumByTs.entries()).sort((a, b) => a[0] - b[0]).map(([ts, v]) => [ts, v]);
-      if (vals.length >= 2) evExact = { id: `${this.namespace}.historie.evcs.sum.powerW`, values: vals };
+      if (vals.length >= 2) evExact = clipSeriesForIntegration({ id: `${this.namespace}.historie.evcs.sum.powerW`, values: vals }, energyExactEnd);
     }
   }
   energyExact.productionKwh = integrateSeriesKwh(pvExact, energyExactEnd, energyExactStepMs, true);
@@ -11330,7 +11394,7 @@ const buildEnergyExact = async () => {
   energyExact.consumptionKwh = Number.isFinite(loadDirect) && loadDirect > 0.01 ? loadDirect : loadBalance;
   energyExact.__endMs = energyExactEnd;
   energyExact.__stepMs = energyExactStepMs;
-  energyExact.__source = 'canonicalHistorie';
+  energyExact.__source = canReuseBaseSeries ? 'chartSeriesReuse' : 'canonicalHistorie';
 };
 try { await buildEnergyExact(); } catch (_e) {}
 
@@ -11342,10 +11406,24 @@ try { await buildEnergyExact(); } catch (_e) {}
           historyReady: [normalizedPricingSeries.base, priceNetFee, normalizedPricingSeries.total].some(s => Array.isArray(s && s.values) && s.values.length >= 2),
           series: { base: normalizedPricingSeries.base, netFee: priceNetFee, total: normalizedPricingSeries.total },
         };
-        res.json({ ok:true, start, end, step: stepS, series: out, extras: { consumers: extraConsumers, producers: extraProducers }, energy, energyExact, pricing });
+        return { ok:true, start, end, step: stepS, series: out, extras: { consumers: extraConsumers, producers: extraProducers }, energy, energyExact, pricing };
       } catch (e) {
-        res.json({ ok:false, error: String(e) });
+        return { ok:false, error: String(e) };
       }
+    })();
+
+      if (!(this._nwHistoryApiInflight instanceof Map)) this._nwHistoryApiInflight = new Map();
+      this._nwHistoryApiInflight.set(cacheKey, computeHistoryPayload);
+      let payload = null;
+      try {
+        payload = await computeHistoryPayload;
+      } finally {
+        if (this._nwHistoryApiInflight.get(cacheKey) === computeHistoryPayload) {
+          this._nwHistoryApiInflight.delete(cacheKey);
+        }
+      }
+      if (payload && payload.ok) this._nwSetHistoryApiCached(cacheKey, payload);
+      return res.json(payload || { ok:false, error: 'history_empty' });
     });
 
     
@@ -16522,6 +16600,37 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
   _nwGetHistoryDpId(name) {
     const list = this._nwGetHistoryDpCandidates(name);
     return list[0] || '';
+  }
+
+  _nwGetHistoryApiCached(key, maxAgeMs = 5000) {
+    try {
+      const cache = this._nwHistoryApiCache;
+      if (!(cache instanceof Map) || !key) return null;
+      const now = Date.now();
+      for (const [entryKey, entry] of cache.entries()) {
+        if (!entry || !Number.isFinite(Number(entry.ts)) || (now - Number(entry.ts)) > Math.max(1000, Number(maxAgeMs) * 2)) {
+          cache.delete(entryKey);
+        }
+      }
+      const hit = cache.get(key);
+      if (!hit) return null;
+      if ((now - Number(hit.ts || 0)) > Math.max(250, Number(maxAgeMs) || 5000)) return null;
+      return hit.payload || null;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  _nwSetHistoryApiCached(key, payload) {
+    try {
+      if (!(this._nwHistoryApiCache instanceof Map)) this._nwHistoryApiCache = new Map();
+      if (!key || !payload) return;
+      this._nwHistoryApiCache.set(key, { ts: Date.now(), payload });
+      if (this._nwHistoryApiCache.size > 24) {
+        const oldestKey = this._nwHistoryApiCache.keys().next().value;
+        if (oldestKey) this._nwHistoryApiCache.delete(oldestKey);
+      }
+    } catch (_e) {}
   }
 
 
