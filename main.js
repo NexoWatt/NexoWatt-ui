@@ -3633,9 +3633,44 @@ class NexoWattVis extends utils.Adapter {
           return { id: '', st: null };
         };
 
-        const { id: connectedId, st: stConn } = await pickFirstState(devBases.map((b) => `${b}.comm.connected`));
-        const { id: offlineId, st: stOff } = await pickFirstState(devBases.map((b) => `${b}.alarm.offline`));
-        const { id: lastErrorId, st: stErr } = await pickFirstState(devBases.map((b) => `${b}.comm.lastError`));
+        const aliasBases = devBases.filter((b) => String(b || '').endsWith('.aliases'));
+        const rootBases = devBases.filter((b) => !String(b || '').endsWith('.aliases'));
+        const uniq = (arr) => [...new Set((arr || []).filter(Boolean))];
+
+        const connectedCandidates = uniq([
+          ...aliasBases.map((b) => `${b}.comm.connected`),
+          ...rootBases.map((b) => `${b}.aliases.comm.connected`),
+          ...rootBases.map((b) => `${b}.comm.connected`),
+        ]);
+        const offlineCandidates = uniq([
+          ...aliasBases.map((b) => `${b}.alarm.offline`),
+          ...rootBases.map((b) => `${b}.aliases.alarm.offline`),
+          ...rootBases.map((b) => `${b}.alarm.offline`),
+        ]);
+        const lastErrorCandidates = uniq([
+          ...aliasBases.map((b) => `${b}.comm.lastError`),
+          ...rootBases.map((b) => `${b}.aliases.comm.lastError`),
+          ...rootBases.map((b) => `${b}.comm.lastError`),
+        ]);
+        const onlineCandidates = uniq([
+          ...aliasBases.map((b) => `${b}.r.online`),
+          ...rootBases.map((b) => `${b}.aliases.r.online`),
+        ]);
+        const heartbeatCandidates = uniq([
+          ...aliasBases.map((b) => `${b}.r.heartbeat`),
+          ...rootBases.map((b) => `${b}.aliases.r.heartbeat`),
+        ]);
+        const lastSeenCandidates = uniq([
+          ...aliasBases.map((b) => `${b}.r.lastSeenMs`),
+          ...rootBases.map((b) => `${b}.aliases.r.lastSeenMs`),
+        ]);
+
+        const { id: connectedId, st: stConn } = await pickFirstState(connectedCandidates);
+        const { id: offlineId, st: stOff } = await pickFirstState(offlineCandidates);
+        const { id: lastErrorId, st: stErr } = await pickFirstState(lastErrorCandidates);
+        const { id: onlineId, st: stOnline } = await pickFirstState(onlineCandidates);
+        const { id: heartbeatId, st: stHeartbeat } = await pickFirstState(heartbeatCandidates);
+        const { id: lastSeenId, st: stLastSeen } = await pickFirstState(lastSeenCandidates);
 
         // Auto-PV detection (DC-coupled storages):
         // If pvPowerId is not configured OR does not resolve to a state (e.g. a channel was selected),
@@ -3665,11 +3700,13 @@ class NexoWattVis extends utils.Adapter {
 
         const connB = stConn ? toBool(stConn.val) : null;
         const offB = stOff ? toBool(stOff.val) : null;
+        const onlineB = stOnline ? toBool(stOnline.val) : null;
 
-        const explicitOffline = (offB === true) || (connB === false);
+        const explicitOffline = (offB === true) || (connB === false) || (onlineB === false);
 
-        // Heartbeat ts: prefer device adapter status + power states.
-        // NOTE: We intentionally exclude SoC as primary heartbeat because it may update slowly.
+        // Heartbeat ts: prefer dedicated per-device heartbeat aliases from nexowatt-devices.
+        // If those exist, they are the source of truth and we do NOT fall back to power-state timestamps,
+        // because quiet devices (0 W / unchanged values) would otherwise become falsely "degraded".
         let heartbeatTs = NaN;
         const considerTs = (st) => {
           if (st && typeof st.ts === 'number' && Number.isFinite(st.ts)) {
@@ -3677,15 +3714,23 @@ class NexoWattVis extends utils.Adapter {
           }
         };
 
+        const hasDedicatedHeartbeat = !!(stHeartbeat || stLastSeen || stOnline || stConn || stOff || stErr);
+
+        considerTs(stHeartbeat);
+        considerTs(stLastSeen);
+        considerTs(stOnline);
         considerTs(stConn);
         considerTs(stOff);
         considerTs(stErr);
-        if (signedId) considerTs(await getState(signedId));
-        if (chgId) considerTs(await getState(chgId));
-        if (dchgId) considerTs(await getState(dchgId));
-        if (pvId) considerTs(await getState(pvId));
-        // Fallback: if nothing else exists, use SoC ts so minimal configs still work.
-        if (!Number.isFinite(heartbeatTs) && socId) considerTs(await getState(socId));
+
+        if (!Number.isFinite(heartbeatTs) || !hasDedicatedHeartbeat) {
+          if (signedId) considerTs(await getState(signedId));
+          if (chgId) considerTs(await getState(chgId));
+          if (dchgId) considerTs(await getState(dchgId));
+          if (pvId) considerTs(await getState(pvId));
+          // Fallback: if nothing else exists, use SoC ts so minimal configs still work.
+          if (!Number.isFinite(heartbeatTs) && socId) considerTs(await getState(socId));
+        }
 
         const stale = Number.isFinite(heartbeatTs) ? ((now - heartbeatTs) > staleMs) : false;
 
@@ -3728,6 +3773,9 @@ class NexoWattVis extends utils.Adapter {
         status.online = !!isAvailable;
         if (!isAvailable) status.offlineReason = stateReason;
         if (isDegraded) status.degradedReason = stateReason;
+        if (onlineId) status.onlineId = onlineId;
+        if (heartbeatId) status.heartbeatId = heartbeatId;
+        if (lastSeenId) status.lastSeenId = lastSeenId;
 
         // ---------------------------------------------------------------------
         // SoC read (stable aggregation)
