@@ -1,9 +1,9 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.227",
+    "version": "0.6.228",
     "news": {
-    "0.6.227": {
+    "0.6.228": {
       "de": "Historie: Regression behoben, bei der kWh-Karten für laufende Tage/Zeiträume zu hoch wurden. Die exakte Historien-Integration nutzt jetzt konsequent die tatsächliche Query-Endzeit statt fälschlich bis zur vollen UI-Endzeit weiter zu integrieren.",
       "en": "History: fixed a regression where kWh cards became too high for ongoing days/ranges. Exact history integration now consistently uses the actual query end time instead of integrating to the full UI end time."
     },
@@ -1683,7 +1683,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.227",
+  "version": "0.6.228",
   "news": {
     "0.6.223": {
       "de": "Historie: Der Bereich „Preis / Bezug / Kosten“ wird jetzt nur noch eingeblendet, wenn dynamischer Tarif oder variables Netzentgelt aktuell aktiv sind. Reine Basispreis-Historie ohne aktivierte Tarif-/Netzentgeltfunktion blendet den Bereich nicht mehr fälschlich ein. Web-Cache-Version angehoben.",

@@ -10970,7 +10970,14 @@ app.get('/api/history', async (req, res) => {
           return first || { id: '', values: [] };
         };
 
-        const [pv, load, buy, sell, chg, dchg, soc, evcs, priceBase, priceNetFee, priceTotal] = await Promise.all([
+        const dynamicTariffActiveNow = !!(this.stateCache && this.stateCache['settings.dynamicTariff'] && this.stateCache['settings.dynamicTariff'].value);
+        const manualGrossPriceNow = Number(this.stateCache?.['settings.price']?.value);
+        const grossPriceCandidates = [
+          `${this.namespace}.historie.tariff.providerCurrentEurPerKwh`,
+          `${this.namespace}.tarif.preisAktuellEurProKwh`,
+        ];
+
+        const [pv, load, buy, sell, chg, dchg, soc, evcs, priceBase, priceNetFee, priceTotal, priceGross] = await Promise.all([
           askCandidates(idCandidates.pv),
           askCandidates(idCandidates.load),
           askCandidates(idCandidates.buy),
@@ -10981,8 +10988,88 @@ app.get('/api/history', async (req, res) => {
           askCandidates(idCandidates.evcs),
           askCandidates(idCandidates.priceBase),
           askCandidates(idCandidates.priceNetFee),
-          askCandidates(idCandidates.priceTotal)
+          askCandidates(idCandidates.priceTotal),
+          askCandidates(grossPriceCandidates)
         ]);
+
+        const _normalizeHistoryPairs = (values) => {
+          const out = [];
+          const src = Array.isArray(values) ? values : [];
+          for (const row of src) {
+            if (!Array.isArray(row) || row.length < 2) continue;
+            const ts = normTsMs(row[0]);
+            const val = Number(row[1]);
+            if (!Number.isFinite(ts) || !Number.isFinite(val)) continue;
+            out.push([ts, val]);
+          }
+          out.sort((a, b) => a[0] - b[0]);
+          return out;
+        };
+        const _valueAtHold = (pairs, ts) => {
+          const src = Array.isArray(pairs) ? pairs : [];
+          let last = null;
+          for (const row of src) {
+            const t = Number(row && row[0]);
+            const v = Number(row && row[1]);
+            if (!Number.isFinite(t) || !Number.isFinite(v)) continue;
+            if (t > ts) break;
+            last = v;
+          }
+          return last;
+        };
+        const _buildNormalizedPricingSeries = ({ startTs, endTs, grossSeries, baseSeries, totalSeries, netFeeSeries, manualGrossPrice, dynamicTariffActive }) => {
+          const grossVals = _normalizeHistoryPairs(grossSeries?.values);
+          const baseVals = _normalizeHistoryPairs(baseSeries?.values);
+          const totalVals = _normalizeHistoryPairs(totalSeries?.values);
+          const netVals = _normalizeHistoryPairs(netFeeSeries?.values);
+          const times = new Set([startTs, endTs]);
+          [grossVals, baseVals, totalVals, netVals].forEach((arr) => {
+            arr.forEach(([ts]) => {
+              if (Number.isFinite(ts) && ts >= startTs && ts <= endTs) times.add(ts);
+            });
+          });
+          const sortedTimes = Array.from(times).filter(Number.isFinite).sort((a, b) => a - b);
+          const useTimes = sortedTimes.length >= 2 ? sortedTimes : [startTs, endTs];
+          const baseOut = [];
+          const totalOut = [];
+          for (const ts of useTimes) {
+            let netFee = _valueAtHold(netVals, ts);
+            netFee = Number.isFinite(netFee) ? Math.max(0, netFee) : 0;
+            const rawGross = _valueAtHold(grossVals, ts);
+            const rawBase = _valueAtHold(baseVals, ts);
+            const rawTotal = _valueAtHold(totalVals, ts);
+
+            let total = Number.isFinite(rawGross)
+              ? rawGross
+              : ((!dynamicTariffActive && Number.isFinite(manualGrossPrice)) ? manualGrossPrice : rawTotal);
+            if (!Number.isFinite(total) && Number.isFinite(rawBase)) total = rawBase + netFee;
+            if (!Number.isFinite(total) && Number.isFinite(manualGrossPrice)) total = manualGrossPrice;
+            if (!Number.isFinite(total)) total = 0;
+            total = Math.max(-5, total);
+
+            let base = total - netFee;
+            if (!Number.isFinite(base) && Number.isFinite(rawBase)) base = rawBase;
+            if (!Number.isFinite(base)) base = total;
+            base = Math.max(-5, base);
+
+            baseOut.push([ts, base]);
+            totalOut.push([ts, total]);
+          }
+          return {
+            base: { id: (baseSeries && baseSeries.id) || 'derived:priceBase', values: baseOut, derived: true },
+            total: { id: (grossSeries && grossSeries.id) || (totalSeries && totalSeries.id) || 'derived:priceTotal', values: totalOut, derived: true },
+          };
+        };
+        const normalizedPricingSeries = _buildNormalizedPricingSeries({
+          startTs: start,
+          endTs: end,
+          grossSeries: priceGross,
+          baseSeries: priceBase,
+          totalSeries: priceTotal,
+          netFeeSeries: priceNetFee,
+          manualGrossPrice: manualGrossPriceNow,
+          dynamicTariffActive: dynamicTariffActiveNow,
+        });
 
         // --- Robustness for E‑Mobilität (EVCS) ---
         // In der Praxis kann es vorkommen, dass die Historie-Abfrage für den
@@ -11250,10 +11337,10 @@ try { await buildEnergyExact(); } catch (_e) {}
         const out = { pv, load, buy, sell, chg, dchg, soc, evcs };
         const pricing = {
           active: !!((this.stateCache && this.stateCache['settings.dynamicTariff'] && this.stateCache['settings.dynamicTariff'].value) || (this.stateCache && this.stateCache['settings.netFeeEnabled'] && this.stateCache['settings.netFeeEnabled'].value)),
-          dynamicTariff: !!(this.stateCache && this.stateCache['settings.dynamicTariff'] && this.stateCache['settings.dynamicTariff'].value),
+          dynamicTariff: dynamicTariffActiveNow,
           netFeeEnabled: !!(this.stateCache && this.stateCache['settings.netFeeEnabled'] && this.stateCache['settings.netFeeEnabled'].value),
-          historyReady: [priceBase, priceNetFee, priceTotal].some(s => Array.isArray(s && s.values) && s.values.length >= 2),
-          series: { base: priceBase, netFee: priceNetFee, total: priceTotal },
+          historyReady: [normalizedPricingSeries.base, priceNetFee, normalizedPricingSeries.total].some(s => Array.isArray(s && s.values) && s.values.length >= 2),
+          series: { base: normalizedPricingSeries.base, netFee: priceNetFee, total: normalizedPricingSeries.total },
         };
         res.json({ ok:true, start, end, step: stepS, series: out, extras: { consumers: extraConsumers, producers: extraProducers }, energy, energyExact, pricing });
       } catch (e) {
@@ -11323,11 +11410,19 @@ try { await buildEnergyExact(); } catch (_e) {}
           return out;
         };
 
+        const dynamicTariffActive = !!(this.stateCache?.['settings.dynamicTariff']?.value);
+        const manualGrossPrice = Number(this.stateCache?.['settings.price']?.value);
+        const grossPriceCandidates = [
+          `${this.namespace}.historie.tariff.providerCurrentEurPerKwh`,
+          `${this.namespace}.tarif.preisAktuellEurProKwh`,
+        ];
         const seriesFor = async (name) => densifyHoldLast(await this._nwGetHistoryAvgSeriesAny(this._nwGetHistoryDpCandidates(name), Math.max(0, start - intervalMs), end, intervalMs));
-        const [baseSeries, netFeeSeries, totalSeries, buySeries] = await Promise.all([
+        const seriesForIds = async (ids) => densifyHoldLast(await this._nwGetHistoryAvgSeriesAny(ids, Math.max(0, start - intervalMs), end, intervalMs));
+        const [baseSeries, netFeeSeries, totalSeries, grossSeries, buySeries] = await Promise.all([
           seriesFor('priceBase'),
           seriesFor('priceNetFee'),
           seriesFor('priceTotal'),
+          seriesForIds(grossPriceCandidates),
           seriesFor('gridBuyPower'),
         ]);
 
@@ -11339,15 +11434,22 @@ try { await buildEnergyExact(); } catch (_e) {}
           const rawBase = Number(baseSeries[i] && baseSeries[i].val);
           const rawNet = Number(netFeeSeries[i] && netFeeSeries[i].val);
           const rawTotal = Number(totalSeries[i] && totalSeries[i].val);
+          const rawGross = Number(grossSeries[i] && grossSeries[i].val);
           const rawBuy = Number(buySeries[i] && buySeries[i].val);
 
-          let total = Number.isFinite(rawTotal) ? Math.max(0, rawTotal) : NaN;
-          let base = Number.isFinite(rawBase) ? Math.max(0, rawBase) : NaN;
-          let netFee = Number.isFinite(rawNet) ? Math.max(0, rawNet) : NaN;
+          let netFee = Number.isFinite(rawNet) ? Math.max(0, rawNet) : 0;
+          let total = Number.isFinite(rawGross)
+            ? rawGross
+            : ((!dynamicTariffActive && Number.isFinite(manualGrossPrice)) ? manualGrossPrice : rawTotal);
+          if (!Number.isFinite(total) && Number.isFinite(rawBase)) total = rawBase + netFee;
+          if (!Number.isFinite(total) && Number.isFinite(manualGrossPrice)) total = manualGrossPrice;
+          if (!Number.isFinite(total)) total = 0;
+          total = Math.max(-5, total);
 
-          if (!Number.isFinite(total)) total = Math.max(0, (Number.isFinite(base) ? base : 0) + (Number.isFinite(netFee) ? netFee : 0));
-          if (!Number.isFinite(base)) base = Math.max(0, total - (Number.isFinite(netFee) ? netFee : 0));
-          if (!Number.isFinite(netFee)) netFee = Math.max(0, total - base);
+          let base = total - netFee;
+          if (!Number.isFinite(base) && Number.isFinite(rawBase)) base = rawBase;
+          if (!Number.isFinite(base)) base = total;
+          base = Math.max(-5, base);
 
           const importAvgW = Number.isFinite(rawBuy) ? Math.max(0, rawBuy) : 0;
           const importKwh = (importAvgW * intervalMs) / 3600000000;
@@ -15893,9 +15995,16 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const providerPrice = _numOr('tarif.preisAktuellEurProKwh', null);
     const providerAveragePrice = _numOr('tarif.preisDurchschnittEurProKwh', null);
     const manualPrice = _numOr('settings.price', 0.25);
-    let tariffBasePrice = Number.isFinite(providerPrice) && dynamicTariffActive ? providerPrice : manualPrice;
-    if (!Number.isFinite(tariffBasePrice)) tariffBasePrice = Number.isFinite(providerPrice) ? providerPrice : 0;
-    tariffBasePrice = Math.max(-5, tariffBasePrice);
+
+    // Die in LIVE und vom Provider gelieferten Strompreise werden als Bruttopreise
+    // behandelt: Das zeitvariable Netzentgelt ist dort bereits enthalten. Für die
+    // Historie und Reports zerlegen wir den Preis deshalb in:
+    //   Gesamtpreis = angezeigter Bruttopreis
+    //   Basispreis  = Gesamtpreis - Netzentgeltanteil
+    // So bleiben LIVE-Sicht und Historie konsistent.
+    let tariffDisplayedGrossPrice = Number.isFinite(providerPrice) && dynamicTariffActive ? providerPrice : manualPrice;
+    if (!Number.isFinite(tariffDisplayedGrossPrice)) tariffDisplayedGrossPrice = Number.isFinite(providerPrice) ? providerPrice : 0;
+    tariffDisplayedGrossPrice = Math.max(-5, tariffDisplayedGrossPrice);
 
     const netFeeModeNow = _computeNetFeeModeNow();
     const netFeePriceNt = Math.max(0, Number(_numOr('settings.netFeePriceNt', 0)) || 0);
@@ -15905,7 +16014,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     if (_boolOr('settings.netFeeEnabled', false)) {
       tariffNetFeePrice = (netFeeModeNow === 'NT') ? netFeePriceNt : (netFeeModeNow === 'HT') ? netFeePriceHt : netFeePriceSt;
     }
-    const tariffTotalPrice = tariffBasePrice + tariffNetFeePrice;
+    const tariffTotalPrice = Math.max(-5, tariffDisplayedGrossPrice);
+    let tariffBasePrice = tariffTotalPrice - tariffNetFeePrice;
+    if (!Number.isFinite(tariffBasePrice)) tariffBasePrice = tariffTotalPrice;
+    tariffBasePrice = Math.max(-5, tariffBasePrice);
 
     // Core series
     this._nwSetHistorieValue('historie.core.grid.buyW', gridBuy, now, 0);

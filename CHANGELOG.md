@@ -1,3 +1,7 @@
+## 0.6.228
+- FIX: Preis-/Netzentgelt-Historie auf Bruttopreislogik umgestellt. Gesamtpreis entspricht jetzt dem angezeigten Live-/Providerpreis; der Basispreis wird aus Gesamtpreis minus Netzentgeltanteil abgeleitet.
+- FIX: Tarif-/Netzentgelt-Nachweisbericht verwendet dieselbe Preislogik wie die Historie, damit LIVE, Historie und Report konsistent bleiben.
+
 ## 0.6.227
 - fix(history): korrigiert überhöhte kWh-Werte in Tag/Woche/Monat/Jahr
 - Ursache behoben: exakte Historien-Integration nutzte fälschlich die volle UI-Endzeit statt die tatsächliche Query-Endzeit
