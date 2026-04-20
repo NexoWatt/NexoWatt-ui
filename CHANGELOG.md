@@ -1,7 +1,3 @@
-## 0.6.231
-- storageFarm: nutze `aliases.r.online` / `aliases.r.heartbeat` / `aliases.r.lastSeenMs` als bevorzugte Heartbeat-Quelle, damit ruhige Speicher nicht fälschlich als `degraded` markiert werden.
-- storageFarm: dedizierte Geräte-Heartbeat-Signale haben Vorrang vor stillen Leistungs-DPs.
-
 ## 0.6.229
 - PERF(history): doppelte Initial-Ladevorgänge im Frontend werden jetzt zusammengeführt, damit die Historie beim Öffnen nicht mehrfach denselben Request startet.
 - PERF(api/history): Kurzzeit-Cache + Inflight-Deduplizierung eingebaut, damit identische Historien-Abfragen nicht mehrfach parallel gegen Influx laufen.
