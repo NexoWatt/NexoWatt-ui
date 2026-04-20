@@ -1495,11 +1495,12 @@ function computeDerived() {
   const charge = pick('storageChargePower');
   const discharge = pick('storageDischargePower');
 
-  const rawBuy = coerceNumber(get('gridBuyPower'));
-  const rawSell = coerceNumber(get('gridSellPower'));
-  const rawNet = coerceNumber(get('gridPointPower'));
-  const haveGridInfo = (rawBuy != null) || (rawSell != null) || (rawNet != null);
-  const { buy, sell } = getGridImportExport((k) => get(k));
+  const gridMeta = getGridImportExport((k) => get(k));
+  const rawBuy = gridMeta.rawBuy;
+  const rawSell = gridMeta.rawSell;
+  const rawNet = gridMeta.rawNet;
+  const haveGridInfo = !!gridMeta.hasGridInfo;
+  const { buy, sell } = gridMeta;
 
 
   const res = {};
@@ -1556,16 +1557,31 @@ function clamp01(v, lo, hi){
 
 function getGridImportExport(read) {
   const getter = (typeof read === 'function') ? read : (k) => read?.[k]?.value;
-  let buy = coerceNumber(getter('gridBuyPower'));
-  let sell = coerceNumber(getter('gridSellPower'));
-  const net = coerceNumber(getter('gridPointPower'));
+  const dpCfg = (window.__nwCfg && window.__nwCfg.datapoints) ? window.__nwCfg.datapoints : {};
+  const trim = (v) => String(v == null ? '' : v).trim();
+  const buyMapped = !!trim(dpCfg.gridBuyPower);
+  const sellMapped = !!trim(dpCfg.gridSellPower);
+  const netMapped = !!trim(dpCfg.gridPointPower);
+
+  // IMPORTANT:
+  // gridBuyPower/gridSellPower can be mirrored fallback values from a previous tick.
+  // When only the signed NVP datapoint is configured, prefer the current signed net
+  // value. Also ignore stale gridPointPower state values when the NVP override is not
+  // mapped anymore.
+  let buy = buyMapped ? coerceNumber(getter('gridBuyPower')) : null;
+  let sell = sellMapped ? coerceNumber(getter('gridSellPower')) : null;
+  const net = netMapped ? coerceNumber(getter('gridPointPower')) : null;
 
   if (net !== null) {
-    if (buy === null) buy = Math.max(0, net);
-    if (sell === null) sell = Math.max(0, -net);
+    if (!buyMapped || buy === null) buy = Math.max(0, net);
+    if (!sellMapped || sell === null) sell = Math.max(0, -net);
   }
 
   return {
+    rawBuy: buy,
+    rawSell: sell,
+    rawNet: net,
+    hasGridInfo: (buy !== null) || (sell !== null) || (net !== null) || buyMapped || sellMapped || netMapped,
     buy: Math.max(0, buy ?? 0),
     sell: Math.max(0, sell ?? 0),
     net: net !== null ? net : (Math.max(0, buy ?? 0) - Math.max(0, sell ?? 0)),

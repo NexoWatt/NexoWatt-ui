@@ -1,3 +1,11 @@
+## 0.6.233
+- fix(energyflow): signed NVP override (gridPointPower) is now honored strictly by the current mapping; stale mirrored grid values no longer override the active net point in live flow and Historie
+- fix(ui): frontend grid resolver now ignores stale NVP values when the override is not mapped and uses the active signed net point immediately for live KPIs
+
+## 0.6.232
+- Energiefluss Live-Core-Refresh auf 3s erhöht (statt 5s) für schnellere Nachlese von Netz/PV/Speicher/EVCS-Datenpunkten.
+- Basierend auf 0.6.230, ohne weitere Eingriffe in Energiefluss- oder Historienlogik.
+
 ## 0.6.229
 - PERF(history): doppelte Initial-Ladevorgänge im Frontend werden jetzt zusammengeführt, damit die Historie beim Öffnen nicht mehrfach denselben Request startet.
 - PERF(api/history): Kurzzeit-Cache + Inflight-Deduplizierung eingebaut, damit identische Historien-Abfragen nicht mehrfach parallel gegen Influx laufen.

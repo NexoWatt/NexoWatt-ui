@@ -172,12 +172,12 @@ class NexoWattVis extends utils.Adapter {
 
     // Live refresh for Energiefluss / EVCS input datapoints.
     // Some field adapters / aliases update sluggishly or miss individual subscription events.
-    // A focused 5s re-read keeps the Energiefluss monitor + charging inputs aligned without
+    // A focused 3s re-read keeps the Energiefluss monitor + charging inputs aligned without
     // touching unrelated modules.
     this._nwLiveCoreRefreshTimer = null;
     this._nwLiveCoreRefreshRunning = false;
     this._nwLiveCoreRefreshPlan = [];
-    this._nwLiveCoreRefreshIntervalMs = 5000;
+    this._nwLiveCoreRefreshIntervalMs = 3000;
 
     // Notifications / Monitoring
     this._notifyTimer = null;
@@ -14618,7 +14618,7 @@ return res.json(out);
     this._nwStopLiveCoreRefresh();
     if (!Array.isArray(plan) || !plan.length) return;
 
-    const intervalMs = Math.max(5000, Number(this._nwLiveCoreRefreshIntervalMs) || 5000);
+    const intervalMs = Math.max(3000, Number(this._nwLiveCoreRefreshIntervalMs) || 3000);
     this._nwLiveCoreRefreshTimer = setInterval(() => {
       this._nwRefreshLiveCoreDatapoints('interval').catch(() => {});
     }, intervalMs);
@@ -15746,24 +15746,31 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
   }
 
   _nwResolveGridImportExportFromCache() {
-    let gridBuyRaw = this._nwGetNumberFromCache('gridBuyPower');
-    let gridSellRaw = this._nwGetNumberFromCache('gridSellPower');
-    const gridNetRaw = this._nwGetNumberFromCache('gridPointPower');
+    const gridBuyMapped = this._nwHasMappedDatapoint('gridBuyPower');
+    const gridSellMapped = this._nwHasMappedDatapoint('gridSellPower');
+    const gridNetMapped = this._nwHasMappedDatapoint('gridPointPower');
 
-    let src = 'mapped';
-    if (gridBuyRaw === null && gridSellRaw === null && gridNetRaw !== null) {
-      gridBuyRaw = Math.max(0, gridNetRaw);
-      gridSellRaw = Math.max(0, -gridNetRaw);
-      src = 'net';
-    } else if (gridNetRaw !== null && (gridBuyRaw === null || gridSellRaw === null)) {
-      if (gridBuyRaw === null) gridBuyRaw = Math.max(0, gridNetRaw);
-      if (gridSellRaw === null) gridSellRaw = Math.max(0, -gridNetRaw);
-      src = 'mapped+net';
+    // IMPORTANT:
+    // gridBuyPower/gridSellPower may exist as mirrored fallback values when only the
+    // signed NVP datapoint is configured. Those fallback cache values must not win
+    // over the currently mapped NVP override, otherwise the energy flow runs one
+    // cycle behind or keeps stale values from a previous mapping.
+    let gridBuyRaw = gridBuyMapped ? this._nwGetNumberFromCache('gridBuyPower') : null;
+    let gridSellRaw = gridSellMapped ? this._nwGetNumberFromCache('gridSellPower') : null;
+    const gridNetRaw = gridNetMapped ? this._nwGetNumberFromCache('gridPointPower') : null;
+
+    let src = 'missing';
+    if (gridNetRaw !== null) {
+      if (!gridBuyMapped || gridBuyRaw === null) gridBuyRaw = Math.max(0, gridNetRaw);
+      if (!gridSellMapped || gridSellRaw === null) gridSellRaw = Math.max(0, -gridNetRaw);
+      src = (!gridBuyMapped && !gridSellMapped) ? 'net' : ((gridBuyMapped && gridSellMapped) ? 'mapped' : 'mapped+net');
+    } else if (gridBuyMapped || gridSellMapped) {
+      src = 'mapped';
     }
 
     const gridBuyW = Math.max(0, Math.abs(gridBuyRaw ?? 0));
     const gridSellW = Math.max(0, Math.abs(gridSellRaw ?? 0));
-    const hasGrid = (gridBuyRaw !== null || gridSellRaw !== null || gridNetRaw !== null);
+    const hasGrid = (gridBuyRaw !== null || gridSellRaw !== null || gridNetRaw !== null || gridNetMapped);
 
     return {
       gridBuyRaw,
@@ -15773,6 +15780,9 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       gridSellW,
       hasGrid,
       src,
+      gridBuyMapped,
+      gridSellMapped,
+      gridNetMapped,
     };
   }
 

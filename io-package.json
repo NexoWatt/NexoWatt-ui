@@ -1,9 +1,9 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.230",
+    "version": "0.6.233",
     "news": {
-    "0.6.230": {
+    "0.6.232": {
       "en": "History performance tuned: month/year now load much faster. Energy cards no longer trigger an additional dense Influx pass; they derive from the already loaded chart series. Sampling is now range-based (week 30 min, month 1 h, year 1 day). Web cache version bumped.",
       "de": "Historie-Performance optimiert: Monat/Jahr laden jetzt deutlich schneller. Die Energiekarten lösen keinen zusätzlichen dichten Influx-Durchlauf mehr aus, sondern werden aus den bereits geladenen Chart-Serien berechnet. Das Sampling ist jetzt bereichsabhängig (Woche 30 Min, Monat 1 h, Jahr 1 Tag). Web-Cache-Version erhöht."
     },
@@ -1692,7 +1692,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.230",
+  "version": "0.6.233",
   "news": {
     "0.6.223": {
       "de": "Historie: Der Bereich „Preis / Bezug / Kosten“ wird jetzt nur noch eingeblendet, wenn dynamischer Tarif oder variables Netzentgelt aktuell aktiv sind. Reine Basispreis-Historie ohne aktivierte Tarif-/Netzentgeltfunktion blendet den Bereich nicht mehr fälschlich ein. Web-Cache-Version angehoben.",
