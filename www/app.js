@@ -1555,13 +1555,26 @@ function clamp01(v, lo, hi){
   return Math.max(lo, Math.min(hi, v));
 }
 
+function isMappedDatapoint(key) {
+  try {
+    const cfg = window.__nwCfg || {};
+    const flags = (cfg && cfg.datapointFlags && typeof cfg.datapointFlags === 'object') ? cfg.datapointFlags : null;
+    if (flags && Object.prototype.hasOwnProperty.call(flags, key)) {
+      return !!flags[key];
+    }
+    const dps = (cfg && cfg.datapoints && typeof cfg.datapoints === 'object') ? cfg.datapoints : null;
+    if (dps && Object.prototype.hasOwnProperty.call(dps, key)) {
+      return !!String(dps[key] == null ? '' : dps[key]).trim();
+    }
+  } catch (_e) {}
+  return false;
+}
+
 function getGridImportExport(read) {
   const getter = (typeof read === 'function') ? read : (k) => read?.[k]?.value;
-  const dpCfg = (window.__nwCfg && window.__nwCfg.datapoints) ? window.__nwCfg.datapoints : {};
-  const trim = (v) => String(v == null ? '' : v).trim();
-  const buyMapped = !!trim(dpCfg.gridBuyPower);
-  const sellMapped = !!trim(dpCfg.gridSellPower);
-  const netMapped = !!trim(dpCfg.gridPointPower);
+  const buyMapped = isMappedDatapoint('gridBuyPower');
+  const sellMapped = isMappedDatapoint('gridSellPower');
+  const netMapped = isMappedDatapoint('gridPointPower');
 
   // IMPORTANT:
   // gridBuyPower/gridSellPower can be mirrored fallback values from a previous tick.
@@ -1595,8 +1608,7 @@ function render() {
 
   // Top ring values: map PV, Grid, Load, Bat flows to percent of max for visualization
   const sfEnabled = !!(s['storageFarm.enabled']?.value);
-  const dpCfg = (window.__nwCfg && window.__nwCfg.datapoints) ? window.__nwCfg.datapoints : {};
-  const pvMapped = !!(dpCfg && (dpCfg.pvPower || dpCfg.productionTotal));
+  const pvMapped = isMappedDatapoint('pvPower') || isMappedDatapoint('productionTotal');
 
   // PV (W): primary from mapped PV datapoint; fallback to productionTotal if used as power DP.
   let pv = d('pvPower') ?? d('productionTotal');
@@ -5271,8 +5283,7 @@ function updateEnergyWeb() {
 
   // Raw datapoints (1:1)
   const sfEnabled = !!(s['storageFarm.enabled']?.value);
-  const dpCfg = (window.__nwCfg && window.__nwCfg.datapoints) ? window.__nwCfg.datapoints : {};
-  const pvMapped = !!(dpCfg && (dpCfg.pvPower || dpCfg.productionTotal));
+  const pvMapped = isMappedDatapoint('pvPower') || isMappedDatapoint('productionTotal');
 
   // PV (W): primary from mapped PV datapoint; fallback to productionTotal if used as power DP.
   let pv = +(d('pvPower') ?? d('productionTotal') ?? 0);

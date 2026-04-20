@@ -1,3 +1,7 @@
+## 0.6.234
+- Fix: Energiefluss / NVP-Override im Frontend wieder korrekt. /config liefert jetzt Datapoint-Mapping-Flags (und kompatibel die Datapoint-IDs), damit der Live-Energiefluss den gemappten signed NVP-DP wieder als autoritative Quelle verwendet.
+- Fix: Grid/PV-Mapping-Prüfung in der VIS verwendet jetzt robuste Mapping-Flags statt leerer /config.datapoints-Fallbacks.
+
 ## 0.6.233
 - fix(energyflow): signed NVP override (gridPointPower) is now honored strictly by the current mapping; stale mirrored grid values no longer override the active net point in live flow and Historie
 - fix(ui): frontend grid resolver now ignores stale NVP values when the override is not mapped and uses the active signed net point immediately for live KPIs

@@ -12579,9 +12579,16 @@ app.get('/config', (req, res) => {
       const boolOr = (val, def) => (typeof val === 'boolean' ? val : !!def);
 
       const sess = getSession(req);
+      const datapoints = (cfg && cfg.datapoints && typeof cfg.datapoints === 'object') ? cfg.datapoints : {};
+      const datapointFlags = Object.fromEntries(Object.entries(datapoints).map(([k, v]) => [k, !!String(v == null ? '' : v).trim()]));
+
       res.json({
         units: cfg.units || { power: 'W', energy: 'kWh' },
         settings: cfg.settings || {},
+        datapointFlags,
+        // Legacy compatibility for older/front-end helper code: exposing the raw mapping here
+        // allows the VIS to decide which live values are authoritative.
+        datapoints,
         // Energiefluss-Monitor: optionale Verbraucher/Erzeuger (VIS)
         // Wir geben bewusst nur Metadaten (Name + Slot + gemappt?) zurück – keine Fremd-State-IDs.
 	        flowSlots: (() => {
