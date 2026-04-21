@@ -1,22 +1,25 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.234",
+    "version": "0.6.235",
     "news": {
-    "0.6.232": {
-      "en": "History performance tuned: month/year now load much faster. Energy cards no longer trigger an additional dense Influx pass; they derive from the already loaded chart series. Sampling is now range-based (week 30 min, month 1 h, year 1 day). Web cache version bumped.",
-      "de": "Historie-Performance optimiert: Monat/Jahr laden jetzt deutlich schneller. Die Energiekarten lösen keinen zusätzlichen dichten Influx-Durchlauf mehr aus, sondern werden aus den bereits geladenen Chart-Serien berechnet. Das Sampling ist jetzt bereichsabhängig (Woche 30 Min, Monat 1 h, Jahr 1 Tag). Web-Cache-Version erhöht."
-    },
-    "0.6.229": {
-      "en": "History performance improved: duplicate initial loads are deduplicated, /api/history now uses short-lived caching, counter/history queries run with less duplication, and exact energy totals reuse the chart series whenever possible.",
-      "de": "Historien-Performance verbessert: doppelte Initial-Ladevorgänge werden zusammengeführt, /api/history nutzt jetzt einen Kurzzeit-Cache, Zähler-/Historienabfragen laufen mit weniger Duplikaten und exakte Energie-Werte verwenden wenn möglich direkt die bereits geladenen Chart-Serien.",
-      "ru": "Повышена производительность истории: дублирующиеся начальные загрузки объединяются, /api/history использует кратковременный кэш, запросы к счётчикам/истории выполняются с меньшим количеством дублей, а точные энергетические значения по возможности берутся из уже загруженных серий графика."
-    },
-    "0.6.228": {
-      "de": "Historie: Regression behoben, bei der kWh-Karten für laufende Tage/Zeiträume zu hoch wurden. Die exakte Historien-Integration nutzt jetzt konsequent die tatsächliche Query-Endzeit statt fälschlich bis zur vollen UI-Endzeit weiter zu integrieren.",
-      "en": "History: fixed a regression where kWh cards became too high for ongoing days/ranges. Exact history integration now consistently uses the actual query end time instead of integrating to the full UI end time."
-    },
-
+      "0.6.235": {
+        "en": "Storage: added a new FENECON mode in the App-Center. For single-storage setups without StorageFarm it enables self-consumption discharge even without MultiUse, so the AC inverter part keeps balancing house load at the grid point while the DC side may still charge from PV. Default self-consumption target import is 0 W unless configured otherwise. Web cache version bumped.",
+        "de": "Speicher: Neuer FENECON-Modus im App-Center. Bei Single-Storage ohne Speicherfarm aktiviert er die Eigenverbrauchs-Entladung auch ohne MultiUse, damit der AC-Teil des Wechselrichters den Hausverbrauch am Netzverknüpfungspunkt weiter ausregelt, während die DC-Seite parallel aus PV laden kann. Standard-Ziel im Eigenverbrauch ist 0 W Netzbezug, sofern nichts anderes konfiguriert ist. Web-Cache-Version angehoben."
+      },
+      "0.6.232": {
+        "en": "History performance tuned: month/year now load much faster. Energy cards no longer trigger an additional dense Influx pass; they derive from the already loaded chart series. Sampling is now range-based (week 30 min, month 1 h, year 1 day). Web cache version bumped.",
+        "de": "Historie-Performance optimiert: Monat/Jahr laden jetzt deutlich schneller. Die Energiekarten lösen keinen zusätzlichen dichten Influx-Durchlauf mehr aus, sondern werden aus den bereits geladenen Chart-Serien berechnet. Das Sampling ist jetzt bereichsabhängig (Woche 30 Min, Monat 1 h, Jahr 1 Tag). Web-Cache-Version erhöht."
+      },
+      "0.6.229": {
+        "en": "History performance improved: duplicate initial loads are deduplicated, /api/history now uses short-lived caching, counter/history queries run with less duplication, and exact energy totals reuse the chart series whenever possible.",
+        "de": "Historien-Performance verbessert: doppelte Initial-Ladevorgänge werden zusammengeführt, /api/history nutzt jetzt einen Kurzzeit-Cache, Zähler-/Historienabfragen laufen mit weniger Duplikaten und exakte Energie-Werte verwenden wenn möglich direkt die bereits geladenen Chart-Serien.",
+        "ru": "Повышена производительность истории: дублирующиеся начальные загрузки объединяются, /api/history использует кратковременный кэш, запросы к счётчикам/истории выполняются с меньшим количеством дублей, а точные энергетические значения по возможности берутся из уже загруженных серий графика."
+      },
+      "0.6.228": {
+        "de": "Historie: Regression behoben, bei der kWh-Karten für laufende Tage/Zeiträume zu hoch wurden. Die exakte Historien-Integration nutzt jetzt konsequent die tatsächliche Query-Endzeit statt fälschlich bis zur vollen UI-Endzeit weiter zu integrieren.",
+        "en": "History: fixed a regression where kWh cards became too high for ongoing days/ranges. Exact history integration now consistently uses the actual query end time instead of integrating to the full UI end time."
+      },
       "0.6.226": {
         "de": "Live-Status: Die Autarkie-Kachel wird jetzt physikalisch korrekt aus Verbrauch und Netzbezug abgeleitet und läuft damit auch dann sauber mit, wenn der Speicher den Verbrauch deckt. Wenn noch kein Netz-DP eingetroffen ist, nutzt die VIS nur als Fallback eine lokale Abschätzung aus PV und Batterie. Web-Cache-Version angehoben.",
         "en": "Live status: the autonomy card is now derived physically correctly from load and grid import, so it also updates properly when the battery covers the load. If no grid datapoint has arrived yet, the UI only uses a local PV/battery estimate as a fallback. Web cache version bumped."
@@ -1692,8 +1695,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.234",
+  "version": "0.6.235",
   "news": {
+    "0.6.235": {
+      "en": "Storage: added a new FENECON mode in the App-Center. For single-storage setups without StorageFarm it enables self-consumption discharge even without MultiUse, so the AC inverter part keeps balancing house load at the grid point while the DC side may still charge from PV. Default self-consumption target import is 0 W unless configured otherwise. Web cache version bumped.",
+      "de": "Speicher: Neuer FENECON-Modus im App-Center. Bei Single-Storage ohne Speicherfarm aktiviert er die Eigenverbrauchs-Entladung auch ohne MultiUse, damit der AC-Teil des Wechselrichters den Hausverbrauch am Netzverknüpfungspunkt weiter ausregelt, während die DC-Seite parallel aus PV laden kann. Standard-Ziel im Eigenverbrauch ist 0 W Netzbezug, sofern nichts anderes konfiguriert ist. Web-Cache-Version angehoben."
+    },
     "0.6.223": {
       "de": "Historie: Der Bereich „Preis / Bezug / Kosten“ wird jetzt nur noch eingeblendet, wenn dynamischer Tarif oder variables Netzentgelt aktuell aktiv sind. Reine Basispreis-Historie ohne aktivierte Tarif-/Netzentgeltfunktion blendet den Bereich nicht mehr fälschlich ein. Web-Cache-Version angehoben.",
       "en": "History: the “Price / Import / Costs” section is now only shown when dynamic tariff or variable grid fee is currently enabled. Plain base-price history without an active tariff/grid-fee feature no longer shows the section incorrectly. Web cache version bumped."

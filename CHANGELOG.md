@@ -1,3 +1,8 @@
+## 0.6.235
+- Speicher: Neuer FENECON-Modus im App-Center. Aktiviert bei Single-Storage ohne Speicherfarm die Eigenverbrauchs-Entladung auch ohne MultiUse, damit der AC-Teil des Wechselrichters den Hausverbrauch weiter am NVP ausregelt.
+- Speicher: FENECON-Modus verwendet standardmäßig 0 W Ziel-Netzbezug, sofern kein eigener Eigenverbrauchs-Zielwert gesetzt ist.
+- PWA/Web-Cache-Version angehoben.
+
 ## 0.6.234
 - Fix: Energiefluss / NVP-Override im Frontend wieder korrekt. /config liefert jetzt Datapoint-Mapping-Flags (und kompatibel die Datapoint-IDs), damit der Live-Energiefluss den gemappten signed NVP-DP wieder als autoritative Quelle verwendet.
 - Fix: Grid/PV-Mapping-Prüfung in der VIS verwendet jetzt robuste Mapping-Flags statt leerer /config.datapoints-Fallbacks.

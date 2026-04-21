@@ -43,6 +43,7 @@
 
     storageControlMode: document.getElementById('storageControlMode'),
     storageCapacityKWh: document.getElementById('storageCapacityKWh'),
+    storageFeneconAcMode: document.getElementById('storageFeneconAcMode'),
 
     // Speicherfarm
     storageFarmMode: document.getElementById('storageFarmMode'),
@@ -5586,6 +5587,9 @@ function _collectFlowPowerDpIsWFromUI() {
       const cap = Number(currentConfig.storage && currentConfig.storage.capacityKWh);
       els.storageCapacityKWh.value = (Number.isFinite(cap) && cap > 0) ? String(cap) : '';
     }
+    if (els.storageFeneconAcMode) {
+      els.storageFeneconAcMode.checked = !!(currentConfig.storage && currentConfig.storage.feneconAcMode);
+    }
     rebuildStorageTable();
     try { buildStorageFarmUI(); } catch (_e) {}
     try { buildStorageMultiUseUI(); } catch (_e) {}
@@ -6463,6 +6467,7 @@ function _collectFlowPowerDpIsWFromUI() {
     patch.storage = deepMerge({}, currentConfig.storage || {});
     patch.storage.controlMode = getStorageMode();
     patch.storage.datapoints = deepMerge({}, (currentConfig.storage && currentConfig.storage.datapoints) ? currentConfig.storage.datapoints : {});
+    patch.storage.feneconAcMode = !!(els.storageFeneconAcMode && els.storageFeneconAcMode.checked);
 
     // Optional raw patch
     const raw = String(els.rawPatch.value || '').trim();
@@ -7256,6 +7261,16 @@ function _collectFlowPowerDpIsWFromUI() {
     };
     els.storageCapacityKWh.addEventListener('change', _update);
     els.storageCapacityKWh.addEventListener('input', _update);
+  }
+
+  if (els.storageFeneconAcMode) {
+    const _update = () => {
+      currentConfig = currentConfig || {};
+      currentConfig.storage = currentConfig.storage || {};
+      currentConfig.storage.feneconAcMode = !!els.storageFeneconAcMode.checked;
+    };
+    els.storageFeneconAcMode.addEventListener('change', _update);
+    els.storageFeneconAcMode.addEventListener('input', _update);
   }
 
   // Browse buttons (event delegation) – works for dynamically created fields too

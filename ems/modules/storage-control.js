@@ -664,14 +664,23 @@ if (typeof soc === 'number') {
         const lskMaxSoc = clamp(num(cfg.lskMaxSocPct, 100), 0, 100);
 
         // Eigenverbrauch (Entladen optional)
-        const selfDischargeEnabled = cfg.selfDischargeEnabled === true;
+        // FENECON-Hybrid-/AC-Regelung:
+        // Wenn kein MultiUse-Self-Flag gesetzt ist, darf der Installateur den
+        // FENECON-Modus aktivieren. Dann bleibt die Eigenverbrauchs-Entladung
+        // auch bei einfachem Single-Storage aktiv, damit der AC-Teil des WR den
+        // Hausverbrauch ausregeln kann, während der DC-Teil parallel PV in den
+        // Speicher schiebt.
+        const feneconAcMode = cfg.feneconAcMode === true;
+        const hasExplicitSelfFlag = (cfg.selfDischargeEnabled === true || cfg.selfDischargeEnabled === false);
+        const selfDischargeEnabled = hasExplicitSelfFlag ? (cfg.selfDischargeEnabled === true) : feneconAcMode;
         const selfMinSoc = clamp(num(cfg.selfMinSocPct, reserveMin), 0, 100);
         const selfMaxSoc = clamp(num(cfg.selfMaxSocPct, 100), 0, 100);
         // Eigenverbrauchs-Optimierung: Ziel-Netzbezug am NVP.
         // Praxis: ein kleiner Bezug (z. B. 50–150 W) ist oft stabiler als exakt 0 W
         // (Messrauschen, Totzeiten, Geräte-Rampen).
-        // Default ab Phase 6.4: Ziel 50 W Import, Deadband ±50 W.
-        const selfTargetGridW = Math.max(0, num(cfg.selfTargetGridImportW, 50));
+        // FENECON-Mode defaultet auf 0 W Import, sofern nichts eigenes gesetzt wurde,
+        // damit der AC-Teil auch während PV-Ladung aktiv gegen den Hausverbrauch regelt.
+        const selfTargetGridW = Math.max(0, num(cfg.selfTargetGridImportW, feneconAcMode ? 0 : 50));
         const selfImportThresholdW = Math.max(0, num(cfg.selfImportThresholdW, 50));
 
         await this._setIfChanged('speicher.regelung.lskMinSocPct', lskMinSoc);
@@ -1831,6 +1840,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
 
             selfDischargeEnabled: storage.selfDischargeEnabled,
+            feneconAcMode: storage.feneconAcMode,
             selfMinSocPct: storage.selfMinSocPct,
             selfMaxSocPct: storage.selfMaxSocPct,
             selfTargetGridImportW: storage.selfTargetGridImportW,
