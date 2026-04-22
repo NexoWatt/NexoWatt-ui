@@ -1442,9 +1442,11 @@ try {
   placeSpecialLowerLeftArc(specials);
 } catch(_e) {}
 
-  // Hide EVCS node if not available
+  // Hide EVCS visuals if not available
   const nodeEvcs = document.getElementById('nodeEvcs');
   if (nodeEvcs) nodeEvcs.style.display = flowExtras.meta.evcsAvailable ? '' : 'none';
+  const lineEvcs = document.getElementById('lineC2');
+  if (lineEvcs) lineEvcs.style.display = flowExtras.meta.evcsAvailable ? '' : 'none';
 
   scheduleEnergyWebResponsiveLayout({
     consumers: nCons,
@@ -5540,9 +5542,13 @@ function updateEnergyWeb() {
 
   // Sichtbarkeit
   const show = (id, on)=>{ const el=document.getElementById(id); if(el) el.style.opacity = on ? 1 : 0.15; };
+  const evcsNode = document.getElementById('nodeEvcs');
+  if (evcsNode) evcsNode.style.display = evAvail ? '' : 'none';
+  const evcsLine = document.getElementById('lineC2');
+  if (evcsLine) evcsLine.style.display = evAvail ? '' : 'none';
   show('linePV', pvValNum>0);
   show('lineGrid', gridShowVal>0);
-  show('lineC2', evShowVal>0);
+  show('lineC2', evAvail && evShowVal>0);
   show('lineRest', batShowVal>0);
 
   // Richtung
