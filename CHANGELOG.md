@@ -1,3 +1,8 @@
+## 0.6.238
+- Heizstab: Stage-DP-Zuordnung aus dem Energiefluss in die Heizstab-App verschoben; pro Stufe jetzt direkte Write/Read-DP-Pflege im Heizstab-Tab.
+- Energiefluss: Verbraucher-Steuerung ist jetzt typabhängig (Allgemein / Wärmepumpe / Heizstab) und blendet nur noch passende Bereiche ein.
+- Heizstab-Backend und Quick-Control lesen Stage-DPs jetzt primär aus der Heizstab-App, behalten aber Legacy-Fallbacks aus dem Energiefluss bei.
+
 ## 0.6.237
 - Heizstab: Endkunden-Schnellsteuerung im Energiefluss-Monitor / in der Steuerungskachel ergänzt. Enthält Regelung Ein/Aus, manuelle Stufen 1/2/3 sowie einen 100%-Boost für 60 Minuten.
 - Quick-Control / Live-Kacheln erkennen Heizstab-Verbraucher direkt über den Energiefluss-Slot und zeigen Betriebsart, aktive Stufen und Boost-Status passend an.

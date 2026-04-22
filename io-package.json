@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.237",
+    "version": "0.6.238",
     "news": {
+      "0.6.238": {
+        "en": "Heating rod: stage Write/Read datapoints are now assigned directly inside the Heating Rod app per stage instead of in the energy-flow control section. Energy-flow consumer control is now type-aware (generic / heat pump / heating rod) and only shows relevant fields. Heating-rod backend and quick-control primarily read stage datapoints from the Heating Rod app while keeping legacy fallbacks from energy flow. Web cache version bumped.",
+        "de": "Heizstab: Stage-Write/Read-Datenpunkte werden jetzt pro Stufe direkt in der Heizstab-App zugeordnet statt im Steuerungsbereich des Energieflusses. Die Verbraucher-Steuerung im Energiefluss ist nun typabhängig (Allgemein / Wärmepumpe / Heizstab) und zeigt nur noch passende Felder an. Heizstab-Backend und Schnellsteuerung lesen die Stage-DPs jetzt primär aus der Heizstab-App, behalten aber Legacy-Fallbacks aus dem Energiefluss bei. Web-Cache-Version angehoben."
+      },
       "0.6.237": {
         "en": "Heating rod quick control for end customers: native quick control via energy-flow monitor / control tile with regulation on/off, manual levels 1/2/3 and a 100% boost mode for 60 minutes. Heating rod live tiles and flow quick-control now recognize heating-rod consumer slots directly. Web cache version bumped.",
         "de": "Heizstab-Schnellfunktion für Endkunden: native Schnellsteuerung im Energiefluss-Monitor / in der Steuerungskachel mit Regelung Ein/Aus, manuellen Stufen 1/2/3 sowie einem 100%-Boost für 60 Minuten. Heizstab-Live-Kacheln und Flow-Quick-Control erkennen Heizstab-Verbraucher jetzt direkt. Web-Cache-Version angehoben.",
@@ -1712,8 +1716,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.236",
+  "version": "0.6.238",
   "news": {
+    "0.6.238": {
+      "en": "Heating rod: stage Write/Read datapoints are now assigned directly inside the Heating Rod app per stage instead of in the energy-flow control section. Energy-flow consumer control is now type-aware (generic / heat pump / heating rod) and only shows relevant fields. Heating-rod backend and quick-control primarily read stage datapoints from the Heating Rod app while keeping legacy fallbacks from energy flow. Web cache version bumped.",
+      "de": "Heizstab: Stage-Write/Read-Datenpunkte werden jetzt pro Stufe direkt in der Heizstab-App zugeordnet statt im Steuerungsbereich des Energieflusses. Die Verbraucher-Steuerung im Energiefluss ist nun typabhängig (Allgemein / Wärmepumpe / Heizstab) und zeigt nur noch passende Felder an. Heizstab-Backend und Schnellsteuerung lesen die Stage-DPs jetzt primär aus der Heizstab-App, behalten aber Legacy-Fallbacks aus dem Energiefluss bei. Web-Cache-Version angehoben."
+    },
     "0.6.236": {
       "en": "New native Heating Rod app: separate staged 1..12 level control linked to energy-flow consumer slots with configurable stage power and on/off thresholds. Energy-flow consumers now support a device type (generic / heat pump / heating rod) and Stage 1..12 relay/KNX datapoints. Thermal app is focused on heat pumps/climate, skips heating-rod slots, and uses improved hysteresis/budget handling. Web cache version bumped.",
       "de": "Neue native Heizstab-App: separate gestufte 1..12-Stufen-Regelung, verknüpft mit den Verbraucher-Slots im Energiefluss, inklusive konfigurierbarer Stufenleistung sowie Ein-/Aus-Grenzen je Stufe. Energiefluss-Verbraucher unterstützen jetzt einen Gerätetyp (allgemein / Wärmepumpe / Heizstab) und Stage 1..12 Relais-/KNX-Datenpunkte. Die Thermik-App ist jetzt auf Wärmepumpe/Klima fokussiert, überspringt Heizstab-Slots und nutzt eine verbesserte Hysterese-/Budgetbehandlung. Web-Cache-Version angehoben."

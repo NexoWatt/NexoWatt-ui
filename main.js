@@ -12645,10 +12645,26 @@ app.get('/config', (req, res) => {
             // Optional SG-Ready actuation (2 relays)
             const sgAW = String(ctrl.sgReadyAWriteId || ctrl.sgReady1WriteId || '').trim();
             const sgBW = String(ctrl.sgReadyBWriteId || ctrl.sgReady2WriteId || '').trim();
+
+            const resolveHeatingRodDev = () => {
+              const h = (cfg && cfg.heatingRod && typeof cfg.heatingRod === 'object') ? cfg.heatingRod : {};
+              const hlist = Array.isArray(h.devices) ? h.devices : [];
+              let dev = null;
+              if (hlist[idx - 1] && typeof hlist[idx - 1] === 'object') {
+                const s = Number(hlist[idx - 1].slot ?? hlist[idx - 1].consumerSlot ?? idx);
+                if (Math.round(s) === idx) dev = hlist[idx - 1];
+              }
+              if (!dev) dev = hlist.find(r => r && Math.round(Number(r.slot ?? r.consumerSlot ?? 0)) === idx) || null;
+              return dev;
+            };
+
             const stageWriteCount = (() => {
+              const dev = resolveHeatingRodDev();
+              const stages = Array.isArray(dev && dev.stages) ? dev.stages : [];
               let cnt = 0;
               for (let s = 1; s <= 12; s++) {
-                const id = String(ctrl[`stage${s}WriteId`] || ctrl[`heatingStage${s}WriteId`] || '').trim();
+                const st = (stages[s - 1] && typeof stages[s - 1] === 'object') ? stages[s - 1] : {};
+                const id = String(st.writeId || st.dpWriteId || st.writeDp || ctrl[`stage${s}WriteId`] || ctrl[`heatingStage${s}WriteId`] || ((s === 1) ? (ctrl.switchWriteId || '') : '') || '').trim();
                 if (id) cnt = s;
               }
               return cnt;

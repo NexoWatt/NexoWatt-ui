@@ -629,12 +629,12 @@
 
   <div id="nw-tabpanel-heatingrod" data-tabpanel="heatingrod" style="display:none;">
     <h2>Heizstab</h2>
-    <div class="nw-subtitle">Native 1-12 Stufen Heizstab-Regelung. Leistungsmessung und Relais-/KNX-Datenpunkte werden über den verknüpften Verbraucher-Slot im Energiefluss angebunden.</div>
+    <div class="nw-subtitle">Native 1-12 Stufen Heizstab-Regelung. Die Leistungsmessung bleibt am verknüpften Verbraucher-Slot im Energiefluss; die Relais-/KNX-Datenpunkte werden direkt hier in der Heizstab-App pro Stufe zugeordnet.</div>
 
     <div class="nw-grid">
       <div class="nw-card">
         <div class="nw-card__title">Heizstab-Geräte</div>
-        <div class="nw-card__subtitle">Pro Verbraucher-Slot: maximale Leistung, Stufenzahl und obere/untere Schaltschwellen pro Stufe festlegen. Die Relais-DPs werden im Energiefluss unter „Verbraucher → Steuerung“ zugeordnet.</div>
+        <div class="nw-card__subtitle">Pro Verbraucher-Slot: maximale Leistung, Stufenzahl, Write-/Read-Datenpunkte und obere/untere Schaltschwellen pro Stufe direkt hier festlegen. So bleibt der Energiefluss im Steuerungsbereich übersichtlich.</div>
         <div id="heatingRodDevices"></div>
       </div>
 
@@ -642,7 +642,7 @@
         <div class="nw-card__title">Hinweis</div>
         <div class="nw-card__subtitle">Saubere Trennung für Installateure</div>
         <div class="nw-help">
-          Vorgehen: <b>1.</b> Verbraucher-Slot im Energiefluss anlegen, <b>2.</b> Typ auf <b>Heizstab</b> stellen, <b>3.</b> Stage 1..12 Write/Read zuordnen, <b>4.</b> hier Stufenleistung und Schaltschwellen parametrieren. Die Regelung läuft danach komplett nativ ohne zusätzliches JavaScript.
+          Vorgehen: <b>1.</b> Verbraucher-Slot im Energiefluss anlegen, <b>2.</b> Typ auf <b>Heizstab</b> stellen, <b>3.</b> hier Stufenzahl auswählen und pro Stufe Write-/Read-DPs zuordnen, <b>4.</b> Stufenleistung und Schaltschwellen parametrieren. Die Regelung läuft danach komplett nativ ohne zusätzliches JavaScript.
         </div>
       </div>
     </div>

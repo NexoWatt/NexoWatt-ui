@@ -154,9 +154,11 @@ class HeatingRodControlModule extends BaseModule {
 
             const configuredStageCount = (() => {
                 let cnt = 0;
+                const prevStages = Array.isArray(r.stages) ? r.stages : [];
                 for (let s = 1; s <= 12; s++) {
-                    const wId = String(ctrl[`stage${s}WriteId`] || ctrl[`heatingStage${s}WriteId`] || '').trim();
-                    const rId = String(ctrl[`stage${s}ReadId`] || ctrl[`heatingStage${s}ReadId`] || '').trim();
+                    const prev = (prevStages[s - 1] && typeof prevStages[s - 1] === 'object') ? prevStages[s - 1] : {};
+                    const wId = String(prev.writeId || prev.dpWriteId || prev.writeDp || ctrl[`stage${s}WriteId`] || ctrl[`heatingStage${s}WriteId`] || ((s === 1) ? (ctrl.switchWriteId || '') : '') || '').trim();
+                    const rId = String(prev.readId || prev.dpReadId || prev.readDp || ctrl[`stage${s}ReadId`] || ctrl[`heatingStage${s}ReadId`] || ((s === 1) ? (ctrl.switchReadId || '') : '') || '').trim();
                     if (wId || rId) cnt = s;
                 }
                 return cnt;
@@ -172,8 +174,8 @@ class HeatingRodControlModule extends BaseModule {
             const boostDurationMin = clamp(num(r.boostDurationMin, cfg.boostDurationMin ?? 60), 0, 1440);
             const name = String(r.name || slotCfg.name || '').trim() || `Heizstab ${slot}`;
             const powerId = String(dps[`consumer${slot}Power`] || '').trim();
-            const switchWriteFallback = (stageCount === 1) ? String(ctrl.switchWriteId || '').trim() : '';
-            const switchReadFallback = (stageCount === 1) ? String(ctrl.switchReadId || '').trim() : '';
+            const switchWriteFallback = String(ctrl.switchWriteId || '').trim();
+            const switchReadFallback = String(ctrl.switchReadId || '').trim();
 
             const defaults = computeStageDefaults(maxPowerW, stageCount);
             const stages = [];
@@ -183,12 +185,18 @@ class HeatingRodControlModule extends BaseModule {
                 const prevStages = Array.isArray(r.stages) ? r.stages : [];
                 const prev = (prevStages[s - 1] && typeof prevStages[s - 1] === 'object') ? prevStages[s - 1] : {};
                 const writeId = String(
+                    prev.writeId ||
+                    prev.dpWriteId ||
+                    prev.writeDp ||
                     ctrl[`stage${s}WriteId`] ||
                     ctrl[`heatingStage${s}WriteId`] ||
                     ((s === 1) ? switchWriteFallback : '') ||
                     ''
                 ).trim();
                 const readId = String(
+                    prev.readId ||
+                    prev.dpReadId ||
+                    prev.readDp ||
                     ctrl[`stage${s}ReadId`] ||
                     ctrl[`heatingStage${s}ReadId`] ||
                     ((s === 1) ? switchReadFallback : '') ||
