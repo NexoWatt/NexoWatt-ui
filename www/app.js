@@ -5200,12 +5200,17 @@ function _ensureThermalConsumerTiles(){
 
 function _labelThermalMode(mode){
   const m = String(mode || '').trim();
+  const k = m.toLowerCase();
   if (!m) return '—';
-  if (m === 'inherit') return 'Auto';
-  if (m === 'pvAuto') return 'PV‑Auto';
-  if (m === 'sgReady' || m === 'sgready') return 'SG‑Ready';
-  if (m === 'manual') return 'Manuell';
-  if (m === 'off') return 'Aus';
+  if (k === 'inherit') return 'Auto';
+  if (k === 'pvauto') return 'PV‑Auto';
+  if (k === 'sgready') return 'SG‑Ready';
+  if (k === 'manual') return 'Manuell';
+  if (k === 'manual1') return 'Stufe 1';
+  if (k === 'manual2') return 'Stufe 2';
+  if (k === 'manual3') return 'Stufe 3';
+  if (k === 'boost') return 'Boost';
+  if (k === 'off') return 'Aus';
   return m;
 }
 
@@ -5214,13 +5219,23 @@ function updateThermalConsumerUi(){
 
   const apps = (window.__nwEmsApps && window.__nwEmsApps.apps) ? window.__nwEmsApps.apps : {};
   const thermApp = apps.thermal || {};
-  const appInstalled = (thermApp.installed === true);
-  const appEnabled = (thermApp.enabled === true);
-  const appActive = appInstalled && appEnabled;
+  const rodApp = apps.heatingRod || apps.heatingrod || {};
+  const thermActive = (thermApp.installed === true) && (thermApp.enabled === true);
+  const rodActive = (rodApp.installed === true) && (rodApp.enabled === true);
 
   const slots = (flowSlotsCfg && Array.isArray(flowSlotsCfg.consumers)) ? flowSlotsCfg.consumers : [];
   const thermalCfg = (window.__nwEmsApps && window.__nwEmsApps.thermal) ? window.__nwEmsApps.thermal : {};
-  const devices = Array.isArray(thermalCfg.devices) ? thermalCfg.devices : [];
+  const rodCfg = (window.__nwEmsApps && window.__nwEmsApps.heatingRod) ? window.__nwEmsApps.heatingRod : {};
+  const thermalDevices = Array.isArray(thermalCfg.devices) ? thermalCfg.devices : [];
+  const rodDevices = Array.isArray(rodCfg.devices) ? rodCfg.devices : [];
+
+  const normalizeConsumerType = (raw) => {
+    const s = String(raw || '').trim().toLowerCase();
+    if (!s) return 'generic';
+    if (s === 'heatingrod' || s === 'heating_rod' || s === 'heating-rod' || s === 'heizstab' || s === 'rod' || s === 'immersion') return 'heatingRod';
+    if (s === 'heatpump' || s === 'heat_pump' || s === 'heat-pump' || s === 'waermepumpe' || s === 'wärmepumpe' || s === 'hvac' || s === 'klima') return 'heatPump';
+    return 'generic';
+  };
 
   const st = window.latestState || {};
   const sv = (k) => (st && st[k] && st[k].value !== undefined) ? st[k].value : undefined;
@@ -5230,30 +5245,50 @@ function updateThermalConsumerUi(){
     if (!refs) continue;
 
     const slot = slots[idx - 1];
+    const slotType = normalizeConsumerType(slot && (slot.consumerType || slot.type || slot.category));
+    const isRod = slotType === 'heatingRod';
     const qcEnabled = !!(slot && slot.qc && slot.qc.enabled);
+    const show = qcEnabled && ((isRod && rodActive) || (!isRod && thermActive));
 
-    const show = appInstalled && qcEnabled;
     refs.tile.style.display = show ? '' : 'none';
     if (!show) continue;
 
-    const dev = devices[idx - 1] || {};
+    const dev = isRod ? (rodDevices[idx - 1] || {}) : (thermalDevices[idx - 1] || {});
     const name = (dev && dev.name) ? String(dev.name) : (slot && slot.name ? String(slot.name) : `Verbraucher ${idx}`);
 
-    // Titel/Sub
     if (refs.title) refs.title.textContent = name;
-    if (refs.sub) refs.sub.textContent = 'Thermik';
+    if (refs.sub) refs.sub.textContent = isRod ? 'Heizstab' : 'Thermik';
+    const iconEl = document.getElementById(`thermalConsumerIcon${idx}`);
+    if (iconEl) iconEl.textContent = isRod ? '🔥' : '♨';
 
-    // Leistung (W)
     const pKey = (slot && slot.stateKey) ? String(slot.stateKey) : `consumer${idx}Power`;
     const pW = Number(sv(pKey) ?? 0);
     if (refs.power) refs.power.textContent = formatPower(pW);
 
-    // Modus (User Override, default: PV-Auto)
+    if (refs.metaM) refs.metaM.textContent = `Slot ${idx}`;
+
+    if (isRod) {
+      const effMode = String(sv(`heatingRod.devices.c${idx}.effectiveMode`) || 'pvAuto');
+      const boost = !!sv(`heatingRod.devices.c${idx}.boostActive`);
+      const currentStage = Number(sv(`heatingRod.devices.c${idx}.currentStage`) ?? 0);
+      const stageCount = Number(sv(`heatingRod.devices.c${idx}.stageCount`) ?? dev.stageCount ?? 0);
+      const wiredStages = Number(sv(`heatingRod.devices.c${idx}.wiredStages`) ?? 0);
+      const effectiveEnabled = !!sv(`heatingRod.devices.c${idx}.effectiveEnabled`);
+
+      if (refs.mode) refs.mode.textContent = boost ? 'Boost' : _labelThermalMode(effMode);
+      if (refs.metaL) {
+        if (boost) refs.metaL.textContent = 'Volllast';
+        else if ((wiredStages || stageCount) > 0) refs.metaL.textContent = `${Math.max(0, currentStage)}/${Math.max(wiredStages || 0, stageCount || 0)} Stufen`;
+        else refs.metaL.textContent = 'Heizstab';
+      }
+      if (refs.metaR) refs.metaR.textContent = effectiveEnabled ? 'aktiv' : 'aus';
+      continue;
+    }
+
     const userMode = sv(`th.user.c${idx}.mode`);
     const effMode = (!userMode || userMode === 'inherit') ? 'pvAuto' : userMode;
     if (refs.mode) refs.mode.textContent = _labelThermalMode(effMode);
 
-    // Meta: capability + slot + aktiv/aus
     let cap = '—';
     if (slot && slot.qc){
       if (slot.qc.hasSgReady) cap = 'SG‑Ready';
@@ -5261,13 +5296,11 @@ function updateThermalConsumerUi(){
       else if (slot.qc.hasSwitch) cap = 'Schalten';
     }
     if (refs.metaL) refs.metaL.textContent = cap;
-    if (refs.metaM) refs.metaM.textContent = `Slot ${idx}`;
 
     const userReg = sv(`th.user.c${idx}.regEnabled`);
     const regEnabled = (typeof userReg === 'boolean') ? userReg : true;
     const cfgEnabled = (typeof dev.enabled === 'boolean') ? dev.enabled : true;
     const isActive = cfgEnabled && regEnabled;
-
     if (refs.metaR) refs.metaR.textContent = isActive ? 'aktiv' : 'aus';
   }
 }
@@ -6218,6 +6251,8 @@ function openFlowQc(kind, idx){
   let pendingSwitch = null;
   let pendingSetpoint = null;
   let pendingBoost = null;
+  let pendingReg = null;
+  let pendingMode = null;
 
   const showMsg = (t, kind) => {
     if (!msgEl) return;
@@ -6231,11 +6266,13 @@ function openFlowQc(kind, idx){
     if (k === 'inherit' || k === 'system') return 'System';
     if (k === 'pvauto' || k === 'auto' || k === 'pv') return 'Auto (PV)';
     if (k === 'manual' || k === 'manuell') return 'Manuell';
+    if (k === 'manual1') return 'Stufe 1';
+    if (k === 'manual2') return 'Stufe 2';
+    if (k === 'manual3') return 'Stufe 3';
     if (k === 'off' || k === 'aus') return 'Aus';
+    if (k === 'boost') return 'Boost';
     return s || '—';
   };
-
-
 
   const getSlotMeta = (k, i) => {
     const cfg = flowSlotsCfg || {};
@@ -6256,6 +6293,22 @@ function openFlowQc(kind, idx){
     const stateKey = entry ? entry.stateKey : null;
     const v = stateKey ? state[stateKey] : null;
     powerEl.textContent = formatPowerSigned(v ?? 0);
+  };
+
+  const renderModeButtons = (modes, activeMode) => {
+    if (!modeButtons) return;
+    const list = Array.isArray(modes) ? modes : [];
+    modeButtons.innerHTML = '';
+    modeButtons.className = 'nw-evcs-mode-buttons nw-evcs-mode-buttons-4';
+    list.forEach((it) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = String(it && it.label ? it.label : it && it.value ? it.value : '');
+      btn.setAttribute('data-mode', String(it && it.value ? it.value : ''));
+      btn.classList.toggle('active', String(it && it.value ? it.value : '') === String(activeMode || ''));
+      btn.onclick = () => setMode(String(it && it.value ? it.value : ''));
+      modeButtons.appendChild(btn);
+    });
   };
 
   const readback = async () => {
@@ -6280,78 +6333,97 @@ function openFlowQc(kind, idx){
       if (ctx.qc && ctx.qc.hasSetpoint && spValue){
         if (data.setpoint !== null && data.setpoint !== undefined){
           const n = Number(data.setpoint);
-          if (Number.isFinite(n)){
-            if (pendingSetpoint === null){
-              spValue.value = String(n);
-              if (spRange && spRange.style.display !== 'none') spRange.value = String(n);
+          if (Number.isFinite(n) && pendingSetpoint === null){
+            spValue.value = String(n);
+            if (spRange && spRange.style.display !== 'none') spRange.value = String(n);
+          }
+        }
+      }
+
+      const rod = (data && data.heatingRod && data.heatingRod.available) ? data.heatingRod : null;
+      const therm = (!rod && data && data.thermal && data.thermal.available) ? data.thermal : null;
+      const ctl = rod || therm;
+      const isRod = !!rod;
+
+      if (regWrap) regWrap.style.display = ctl ? '' : 'none';
+      if (modeWrap) modeWrap.style.display = ctl ? '' : 'none';
+
+      if (ctl) {
+        const uEn = (ctl.userEnabled !== undefined && ctl.userEnabled !== null) ? !!ctl.userEnabled : true;
+        const rawUserMode = String(ctl.userMode || (isRod ? 'pvAuto' : 'inherit'));
+        const effMode = String(ctl.effectiveMode || ctl.cfgMode || 'pvAuto');
+        const activeButtonMode = (pendingMode !== null)
+          ? pendingMode
+          : ((rawUserMode && rawUserMode !== 'inherit') ? rawUserMode : (isRod ? ((effMode === 'boost') ? 'pvAuto' : effMode) : 'inherit'));
+
+        if (regStatus) regStatus.textContent = uEn ? 'Aktiv' : 'Aus';
+        if (regHint) {
+          regHint.textContent = isRod
+            ? (uEn
+                ? 'PV-Regelung aktiv. Manuelle Stufen und Boost bleiben zusätzlich verfügbar.'
+                : 'PV-Regelung aus. Manuelle Stufen und Boost bleiben verfügbar.')
+            : (uEn
+                ? 'Automatik aktiv. Manuelle Bedienung bleibt möglich.'
+                : 'Regelung deaktiviert – manuelle Bedienung bleibt möglich.');
+        }
+        if (regEnable && pendingReg === null) regEnable.checked = uEn;
+        try { if (window.nwSyncToggleButtons) window.nwSyncToggleButtons('flowQcRegEnable'); } catch(_e) {}
+
+        renderModeButtons(ctl.modes, activeButtonMode);
+
+        if (modeHint) {
+          if (isRod) {
+            const stageMax = Math.max(Number(ctl.wiredStages || 0), Number(ctl.stageCount || 0));
+            const stageInfo = stageMax > 0 ? ` • ${Number(ctl.currentStage || 0)}/${stageMax} Stufen` : '';
+            const backMode = (rawUserMode && rawUserMode !== 'inherit') ? rawUserMode : (String(ctl.cfgMode || 'pvAuto'));
+            if (ctl.boostActive) {
+              modeHint.textContent = `Boost aktiv (${Number(ctl.boostRemainingMin || 0)} min) – danach ${modeLabel(backMode)}${stageInfo}`;
+            } else if (rawUserMode === 'inherit') {
+              modeHint.textContent = `System: ${modeLabel(ctl.cfgMode)} (aktiv: ${modeLabel(effMode)})${stageInfo}`;
+            } else {
+              modeHint.textContent = `Aktiv: ${modeLabel(effMode)}${stageInfo}`;
             }
-          }
-        }
-      }
-
-      // Boost/Override info (nur, wenn vom Backend angeboten)
-      if (ctx.qc && ctx.qc.hasBoost && boostWrap) {
-        const now = Date.now();
-        const active = !!data.boostActive;
-        const rem = Number(data.boostRemainingMin || 0);
-        if (boostStatus) boostStatus.textContent = active ? `Aktiv (${rem} min)` : 'Inaktiv';
-        if (boostBtn) boostBtn.style.display = active ? 'none' : '';
-        if (boostStopBtn) boostStopBtn.style.display = active ? '' : 'none';
-        if (boostHint) {
-          const minsCfg = Number(ctx.qc.boostMinutes || 0);
-          const mins = Number.isFinite(minsCfg) && minsCfg > 0 ? minsCfg : 30;
-          boostHint.textContent = active
-            ? 'Boost läuft – Automatik wird vorübergehend nicht überschrieben.'
-            : `Boost startet für ${mins} Minuten (z.B. Schnellaufheizen/Kühlen).`;
-        }
-
-        // Optionaler Hinweis, wenn ein Manual‑Hold aktiv ist
-        if (!!data.manualActive && data.manualUntil && msgEl && !msgEl.textContent) {
-          const until = Number(data.manualUntil);
-          const mRem = Number.isFinite(until) && until > now ? Math.max(0, Math.ceil((until - now) / 60000)) : 0;
-          if (mRem > 0) showMsg(`Manuelle Vorgabe aktiv (noch ${mRem} min)`, '');
-        }
-      }
-    
-
-      // Betriebsmodus/Regelung (Thermik): optional vom Backend angeboten
-      try {
-        const t = data && data.thermal ? data.thermal : null;
-        const avail = !!(t && t.available);
-
-        if (regWrap) regWrap.style.display = avail ? '' : 'none';
-        if (modeWrap) modeWrap.style.display = avail ? '' : 'none';
-
-        if (avail) {
-          const uEn = (t.userEnabled !== undefined && t.userEnabled !== null) ? !!t.userEnabled : true;
-          const uMode = String(t.userMode || 'inherit');
-          const effMode = String(t.effectiveMode || t.cfgMode || 'pvAuto');
-
-          if (regStatus) regStatus.textContent = uEn ? 'Aktiv' : 'Aus';
-          if (regHint) regHint.textContent = uEn
-            ? 'Automatik aktiv. Manuelle Bedienung bleibt möglich.'
-            : 'Regelung deaktiviert – manuelle Bedienung bleibt möglich.';
-          if (regEnable && pendingReg === null) regEnable.checked = uEn;
-          try { if (window.nwSyncToggleButtons) window.nwSyncToggleButtons('flowQcRegEnable'); } catch(_e) {}
-
-          if (modeButtons && pendingMode === null) {
-            const btns = Array.from(modeButtons.querySelectorAll('button'));
-            btns.forEach(b => {
-              const mm = String(b.getAttribute('data-mode') || '');
-              b.classList.toggle('active', mm === uMode);
-            });
-          }
-          if (modeHint) {
-            if (String(uMode || '').toLowerCase() === 'inherit') {
-              modeHint.textContent = `System: ${modeLabel(t.cfgMode)} (aktiv: ${modeLabel(effMode)})`;
+          } else {
+            if (String(rawUserMode || '').toLowerCase() === 'inherit') {
+              modeHint.textContent = `System: ${modeLabel(ctl.cfgMode)} (aktiv: ${modeLabel(effMode)})`;
             } else {
               modeHint.textContent = `Aktiv: ${modeLabel(effMode)}`;
             }
           }
         }
-      } catch(_e2) {}
+      }
 
-} catch(_e) {}
+      if (ctx.qc && ctx.qc.hasBoost && boostWrap) {
+        const active = !!data.boostActive;
+        const rem = Number(data.boostRemainingMin || 0);
+        if (boostStatus) boostStatus.textContent = active ? `Aktiv (${rem} min)` : 'Inaktiv';
+        if (boostBtn) {
+          boostBtn.style.display = active ? 'none' : '';
+          const minsCfg = Number(ctx.qc.boostMinutes || 0);
+          const mins = Number.isFinite(minsCfg) && minsCfg > 0 ? minsCfg : (isRod ? 60 : 30);
+          boostBtn.textContent = isRod ? `Boost ${mins} min` : 'Boost starten';
+        }
+        if (boostStopBtn) boostStopBtn.style.display = active ? '' : 'none';
+        if (boostHint) {
+          const minsCfg = Number(ctx.qc.boostMinutes || 0);
+          const mins = Number.isFinite(minsCfg) && minsCfg > 0 ? minsCfg : (isRod ? 60 : 30);
+          boostHint.textContent = active
+            ? (isRod
+                ? 'Boost läuft – der Heizstab arbeitet vorübergehend mit 100% und fällt danach auf den gewählten Modus zurück.'
+                : 'Boost läuft – Automatik wird vorübergehend nicht überschrieben.')
+            : (isRod
+                ? `Boost schaltet den Heizstab für ${mins} Minuten auf 100% Leistung.`
+                : `Boost startet für ${mins} Minuten (z.B. Schnellaufheizen/Kühlen).`);
+        }
+
+        if (!isRod && !!data.manualActive && data.manualUntil && msgEl && !msgEl.textContent) {
+          const now = Date.now();
+          const until = Number(data.manualUntil);
+          const mRem = Number.isFinite(until) && until > now ? Math.max(0, Math.ceil((until - now) / 60000)) : 0;
+          if (mRem > 0) showMsg(`Manuelle Vorgabe aktiv (noch ${mRem} min)`, '');
+        }
+      }
+    } catch(_e) {}
   };
 
   const setSwitch = async (v) => {
@@ -6394,8 +6466,6 @@ function openFlowQc(kind, idx){
     }
   };
 
-  
-
   const setRegEnabled = async (enable) => {
     if (!ctx) return;
     pendingReg = !!enable;
@@ -6408,6 +6478,7 @@ function openFlowQc(kind, idx){
       });
       showMsg('OK', 'ok');
       setTimeout(() => showMsg('', ''), 900);
+      setTimeout(() => readback(), 250);
     } catch(_e) {
       showMsg('Fehler beim Schreiben', 'error');
     } finally {
@@ -6429,6 +6500,7 @@ function openFlowQc(kind, idx){
       });
       showMsg('OK', 'ok');
       setTimeout(() => showMsg('', ''), 900);
+      setTimeout(() => readback(), 250);
     } catch(_e) {
       showMsg('Fehler beim Schreiben', 'error');
     } finally {
@@ -6436,7 +6508,7 @@ function openFlowQc(kind, idx){
     }
   };
 
-const setBoost = async (enable) => {
+  const setBoost = async (enable) => {
     if (!ctx) return;
     pendingBoost = !!enable;
     showMsg(enable ? 'Boost starte…' : 'Boost stoppe…', '');
@@ -6466,9 +6538,12 @@ const setBoost = async (enable) => {
     ctx = { kind: k, idx: Number(idx) || 0, name: String(meta.name || ''), qc };
 
     if (title) title.textContent = ctx.name || 'Schnellsteuerung';
-    if (subtitle) subtitle.textContent = (k === 'producer') ? 'Erzeuger' : 'Verbraucher';
+    if (subtitle) {
+      subtitle.textContent = (qc.controlKind === 'heatingRod')
+        ? 'Heizstab'
+        : ((k === 'producer') ? 'Erzeuger' : 'Verbraucher');
+    }
 
-    // Switch
     if (swWrap) swWrap.style.display = qc.hasSwitch ? '' : 'none';
     if (swStatus) swStatus.textContent = '--';
     if (sw) {
@@ -6477,7 +6552,6 @@ const setBoost = async (enable) => {
       sw.onchange = () => { setSwitch(sw.checked); };
     }
 
-    // Setpoint
     if (spWrap) spWrap.style.display = qc.hasSetpoint ? '' : 'none';
     if (qc.hasSetpoint) {
       if (spLabel) spLabel.textContent = qc.label || 'Sollwert';
@@ -6499,29 +6573,32 @@ const setBoost = async (enable) => {
       if (spApply) spApply.onclick = () => { if (spValue) setSetpoint(spValue.value); };
     }
 
-    // Thermik: Betriebsmodus + Regelung (initial versteckt; Readback schaltet sichtbar)
     if (regWrap) {
       regWrap.style.display = 'none';
       if (regStatus) regStatus.textContent = '—';
       if (regHint) regHint.textContent = '';
-      if (regEnable) {
-        regEnable.onchange = () => setRegEnabled(!!regEnable.checked);
-      }
+      if (regEnable) regEnable.onchange = () => setRegEnabled(!!regEnable.checked);
     }
     if (modeWrap) {
       modeWrap.style.display = 'none';
       if (modeHint) modeHint.textContent = '';
-      if (modeButtons) {
-        const btns = Array.from(modeButtons.querySelectorAll('button'));
-        btns.forEach(b => {
-          b.onclick = () => setMode(String(b.getAttribute('data-mode') || ''));
-        });
+      if (qc.controlKind === 'heatingRod') {
+        renderModeButtons([
+          { value: 'pvAuto', label: 'Auto (PV)' },
+          { value: 'manual1', label: 'Stufe 1' },
+          { value: 'manual2', label: 'Stufe 2' },
+          { value: 'manual3', label: 'Stufe 3' },
+        ], 'pvAuto');
+      } else {
+        renderModeButtons([
+          { value: 'pvAuto', label: 'Auto (PV)' },
+          { value: 'manual', label: 'Manuell' },
+          { value: 'off', label: 'Aus' },
+          { value: 'inherit', label: 'System' },
+        ], 'inherit');
       }
     }
 
-
-
-    // Boost
     if (boostWrap) boostWrap.style.display = qc.hasBoost ? '' : 'none';
     if (qc.hasBoost) {
       if (boostStatus) boostStatus.textContent = '—';
@@ -6545,6 +6622,8 @@ const setBoost = async (enable) => {
     pendingSwitch = null;
     pendingSetpoint = null;
     pendingBoost = null;
+    pendingReg = null;
+    pendingMode = null;
     showMsg('', '');
     modal.classList.add('hidden');
   };
@@ -6552,10 +6631,8 @@ const setBoost = async (enable) => {
   if (closeBtn) closeBtn.addEventListener('click', close);
   modal.addEventListener('click', (e) => { if (e && e.target === modal) close(); });
 
-  // Expose
   window.__nwFlowQcOpen = open;
 })();
-
 
 // open EVCS on node click as well
 (function(){

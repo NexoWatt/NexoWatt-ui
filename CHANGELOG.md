@@ -1,3 +1,16 @@
+## 0.6.237
+- Heizstab: Endkunden-Schnellsteuerung im Energiefluss-Monitor / in der Steuerungskachel ergänzt. Enthält Regelung Ein/Aus, manuelle Stufen 1/2/3 sowie einen 100%-Boost für 60 Minuten.
+- Quick-Control / Live-Kacheln erkennen Heizstab-Verbraucher direkt über den Energiefluss-Slot und zeigen Betriebsart, aktive Stufen und Boost-Status passend an.
+- Heizstab-Backend erweitert: User-Override-Modi, Boost-Timer und native Zuordnung für Flow-Quick-Control ohne Zusatz-Script.
+- PWA/Web-Cache-Version angehoben.
+
+## 0.6.236
+- Neue native Heizstab-App im App-Center: 1..12 Stufen, frei konfigurierbare Stufenleistung sowie Ein-/Aus-Grenzen pro Stufe, direkt verknüpft mit den Verbraucher-Slots im Energiefluss.
+- Energiefluss-Verbraucher haben jetzt einen Gerätetyp (Allgemein / Wärmepumpe / Heizstab) und zusätzliche Stage 1..12 Write/Read-Datenpunkte für Relais- oder KNX-Kanäle.
+- Thermik-App fachlich getrennt: Fokus auf Wärmepumpe/Klima; Heizstab-Slots werden dort nur noch als Hinweis dargestellt und nicht mehr automatisch geregelt.
+- Regelkern verbessert: native Stufen-Hysterese für Heizstäbe, Thermik mit sauberer Band-Hysterese/Budgetierung und Fallback auf Ist-Leistung.
+- PWA/Web-Cache-Version angehoben.
+
 ## 0.6.235
 - Speicher: Neuer FENECON-Modus im App-Center. Aktiviert bei Single-Storage ohne Speicherfarm die Eigenverbrauchs-Entladung auch ohne MultiUse, damit der AC-Teil des Wechselrichters den Hausverbrauch weiter am NVP ausregelt.
 - Speicher: FENECON-Modus verwendet standardmäßig 0 W Ziel-Netzbezug, sofern kein eigener Eigenverbrauchs-Zielwert gesetzt ist.

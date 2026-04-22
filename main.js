@@ -1958,6 +1958,7 @@ class NexoWattVis extends utils.Adapter {
       'storage',
       'storageFarm',
       'thermal',
+      'heatingRod',
       'bhkw',
       'generator',
       'threshold',
@@ -2063,6 +2064,7 @@ class NexoWattVis extends utils.Adapter {
     ensurePlainObj('storage', {});
     ensurePlainObj('storageFarm', {});
     ensurePlainObj('thermal', {});
+    ensurePlainObj('heatingRod', {});
     ensurePlainObj('bhkw', {});
     ensurePlainObj('generator', {});
     ensurePlainObj('threshold', {});
@@ -2189,6 +2191,7 @@ class NexoWattVis extends utils.Adapter {
       { id: 'storage',     enableFlag: 'enableStorageControl' },
       { id: 'storagefarm', enableFlag: 'enableStorageFarm' },
       { id: 'thermal',     enableFlag: 'enableThermalControl' },
+      { id: 'heatingrod',  enableFlag: 'enableHeatingRodControl' },
       { id: 'bhkw',        enableFlag: 'enableBhkwControl' },
       { id: 'generator',   enableFlag: 'enableGeneratorControl' },
       { id: 'threshold',   enableFlag: 'enableThresholdControl' },
@@ -2208,6 +2211,7 @@ class NexoWattVis extends utils.Adapter {
     const KEY_ALIASES = {
       peak:        ['peak', 'peakShaving', 'peakshaving'],
       storagefarm: ['storagefarm', 'storageFarm', 'storage_farm'],
+      heatingrod:  ['heatingrod', 'heatingRod', 'heating_rod', 'heizstab'],
     };
 
     const out = {
@@ -2291,6 +2295,7 @@ class NexoWattVis extends utils.Adapter {
       { id: 'storage',     enableFlag: 'enableStorageControl' },
       { id: 'storagefarm', enableFlag: 'enableStorageFarm' },
       { id: 'thermal',     enableFlag: 'enableThermalControl' },
+      { id: 'heatingrod',  enableFlag: 'enableHeatingRodControl' },
       { id: 'bhkw',        enableFlag: 'enableBhkwControl' },
       { id: 'generator',   enableFlag: 'enableGeneratorControl' },
       { id: 'threshold',   enableFlag: 'enableThresholdControl' },
@@ -8858,6 +8863,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       { id: 'storage', label: 'Speicherregelung', desc: 'Eigenverbrauch / Speicher-Setpoints (herstellerunabhängig)', enableFlag: 'enableStorageControl', mandatory: false },
       { id: 'storagefarm', label: 'Speicherfarm', desc: 'Mehrere Speichersysteme als Pool/Gruppen', enableFlag: 'enableStorageFarm', mandatory: false },
       { id: 'thermal', label: 'Wärmepumpe & Klima', desc: 'PV-Überschuss-Steuerung (Setpoint, On/Off oder SG-Ready) mit Schnellsteuerung', enableFlag: 'enableThermalControl', mandatory: false },
+      { id: 'heatingrod', label: 'Heizstab', desc: 'Native 1..12 Stufen Heizstab-Regelung über Relais / KNX-Aktoren', enableFlag: 'enableHeatingRodControl', mandatory: false },
       { id: 'bhkw', label: 'BHKW', desc: 'BHKW-Steuerung (Start/Stop, SoC-geführt) mit Schnellsteuerung', enableFlag: 'enableBhkwControl', mandatory: false },
       { id: 'generator', label: 'Generator', desc: 'Generator-Steuerung (Notstrom/Netzparallelbetrieb, SoC-geführt) mit Schnellsteuerung', enableFlag: 'enableGeneratorControl', mandatory: false },
       { id: 'threshold', label: 'Schwellwertsteuerung', desc: 'Regeln (Wenn X > Y dann Schalten/Setzen) – optional mit Endkunden-Anpassung', enableFlag: 'enableThresholdControl', mandatory: false },
@@ -8972,6 +8978,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         enableStorageControl: (typeof n.enableStorageControl === 'boolean') ? n.enableStorageControl : undefined,
         enableStorageFarm: (typeof n.enableStorageFarm === 'boolean') ? n.enableStorageFarm : undefined,
         enableThermalControl: (typeof n.enableThermalControl === 'boolean') ? n.enableThermalControl : undefined,
+        enableHeatingRodControl: (typeof n.enableHeatingRodControl === 'boolean') ? n.enableHeatingRodControl : undefined,
         enableBhkwControl: (typeof n.enableBhkwControl === 'boolean') ? n.enableBhkwControl : undefined,
         enableGeneratorControl: (typeof n.enableGeneratorControl === 'boolean') ? n.enableGeneratorControl : undefined,
         enableThresholdControl: (typeof n.enableThresholdControl === 'boolean') ? n.enableThresholdControl : undefined,
@@ -9004,6 +9011,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         storageFarm: (n.storageFarm && typeof n.storageFarm === 'object') ? n.storageFarm : {},
         storage: (n.storage && typeof n.storage === 'object') ? n.storage : {},
         thermal: (n.thermal && typeof n.thermal === 'object') ? n.thermal : {},
+        heatingRod: (n.heatingRod && typeof n.heatingRod === 'object') ? n.heatingRod : {},
         bhkw: (n.bhkw && typeof n.bhkw === 'object') ? n.bhkw : {},
         generator: (n.generator && typeof n.generator === 'object') ? n.generator : {},
         threshold: (n.threshold && typeof n.threshold === 'object') ? n.threshold : {},
@@ -9041,7 +9049,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         const allowedRoot = new Set([
           // Legacy enable flags (kept for backwards compatibility)
-          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableMultiUse',
+          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableMultiUse',
 
           // Phase 2: App Center state
           'emsApps',
@@ -9050,7 +9058,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           'schedulerIntervalMs','installerConfig','datapoints','vis','settings',
 
           // App/module configs
-          'peakShaving','gridConstraints','storageFarm','storage','thermal','bhkw','generator','threshold','relay','chargingManagement',
+          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','chargingManagement',
 
           // VIS configuration that is required to configure chargepoints/stations in the installer page
           'settingsConfig',
@@ -9220,7 +9228,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         const allowedRoot = new Set([
           // Legacy enable flags (kept for backwards compatibility)
-          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableMultiUse',
+          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableMultiUse',
 
           // Phase 2: App Center state
           'emsApps',
@@ -9229,7 +9237,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           'schedulerIntervalMs','installerConfig','datapoints','vis','settings',
 
           // App/module configs
-          'peakShaving','gridConstraints','storageFarm','storage','thermal','bhkw','generator','threshold','relay','chargingManagement',
+          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','chargingManagement',
 
           // VIS configuration that is required to configure chargepoints/stations in the installer page
           'settingsConfig',
@@ -12637,8 +12645,27 @@ app.get('/config', (req, res) => {
             // Optional SG-Ready actuation (2 relays)
             const sgAW = String(ctrl.sgReadyAWriteId || ctrl.sgReady1WriteId || '').trim();
             const sgBW = String(ctrl.sgReadyBWriteId || ctrl.sgReady2WriteId || '').trim();
+            const stageWriteCount = (() => {
+              let cnt = 0;
+              for (let s = 1; s <= 12; s++) {
+                const id = String(ctrl[`stage${s}WriteId`] || ctrl[`heatingStage${s}WriteId`] || '').trim();
+                if (id) cnt = s;
+              }
+              return cnt;
+            })();
 
-            const enabled = !!(swW || spW || sgAW || sgBW);
+            const normalizeConsumerType = (raw) => {
+              const s = String(raw || '').trim().toLowerCase();
+              if (!s) return 'generic';
+              if (s === 'heatingrod' || s === 'heating_rod' || s === 'heating-rod' || s === 'heizstab' || s === 'rod' || s === 'immersion') return 'heatingRod';
+              if (s === 'heatpump' || s === 'heat_pump' || s === 'heat-pump' || s === 'waermepumpe' || s === 'wärmepumpe' || s === 'hvac' || s === 'klima') return 'heatPump';
+              return 'generic';
+            };
+
+            const slotType = normalizeConsumerType(it && typeof it === 'object' ? (it.consumerType || it.type || it.category) : '');
+            const rodActuation = !!(stageWriteCount || swW);
+            let enabled = !!(swW || spW || sgAW || sgBW);
+            if (kind === 'consumers' && slotType === 'heatingRod' && cfg && cfg.enableHeatingRodControl && rodActuation) enabled = true;
 
             const numOrNull = (v) => {
               const n = Number(v);
@@ -12654,7 +12681,8 @@ app.get('/config', (req, res) => {
               unit: String(ctrl.setpointUnit || '').trim() || 'W',
               min: numOrNull(ctrl.setpointMin),
               max: numOrNull(ctrl.setpointMax),
-              step: numOrNull(ctrl.setpointStep)
+              step: numOrNull(ctrl.setpointStep),
+              controlKind: (kind === 'consumers' && slotType === 'heatingRod') ? 'heatingRod' : 'generic',
             };
 
             // Default label only if a setpoint exists
@@ -12667,11 +12695,39 @@ app.get('/config', (req, res) => {
               meta.step = null;
             }
 
-            // Optional: Boost for thermische Verbraucher (nur, wenn thermische Steuerung aktiviert ist)
             meta.hasBoost = false;
             meta.boostMinutes = null;
             meta.manualHoldMin = null;
+
             try {
+              if (kind === 'consumers' && slotType === 'heatingRod') {
+                meta.controlKind = 'heatingRod';
+                meta.hasSwitch = false;
+                meta.hasSetpoint = false;
+                meta.hasSgReady = false;
+                meta.label = '';
+                meta.unit = 'W';
+                meta.min = null;
+                meta.max = null;
+                meta.step = null;
+
+                if (cfg && cfg.enableHeatingRodControl && rodActuation) {
+                  const h = (cfg.heatingRod && typeof cfg.heatingRod === 'object') ? cfg.heatingRod : {};
+                  const hlist = Array.isArray(h.devices) ? h.devices : [];
+                  let dev = null;
+                  if (hlist[idx - 1] && typeof hlist[idx - 1] === 'object') {
+                    const s = Number(hlist[idx - 1].slot ?? hlist[idx - 1].consumerSlot ?? idx);
+                    if (Math.round(s) === idx) dev = hlist[idx - 1];
+                  }
+                  if (!dev) dev = hlist.find(r => r && Math.round(Number(r.slot ?? r.consumerSlot ?? 0)) === idx) || null;
+                  const mins = Math.max(0, Math.round(Number((dev && dev.boostDurationMin) ?? h.boostDurationMin ?? 60)));
+                  meta.hasBoost = true;
+                  meta.boostMinutes = mins || 60;
+                }
+                return meta;
+              }
+
+              // Optional: Boost for thermische Verbraucher (nur, wenn thermische Steuerung aktiviert ist)
               if (kind === 'consumers' && cfg && cfg.enableThermalControl) {
                 const t = (cfg.thermal && typeof cfg.thermal === 'object') ? cfg.thermal : {};
                 const tlist = Array.isArray(t.devices) ? t.devices : [];
@@ -12687,6 +12743,7 @@ app.get('/config', (req, res) => {
                   meta.hasBoost = true;
                   const mins = Math.max(0, Math.round(Number(dev.boostDurationMin ?? 30)));
                   meta.boostMinutes = mins || 30;
+                  meta.controlKind = 'thermal';
                 }
               }
             } catch (_e) {
@@ -13613,76 +13670,162 @@ settingsConfig: {
           if (idx < 1 || idx > 10) return res.status(400).json({ ok: false, error: 'bad request' });
 
           const prop = String(m[3] || '').toLowerCase();
+          const cfg = this.config || {};
+          const vis = (cfg.vis && typeof cfg.vis === 'object') ? cfg.vis : {};
+          const fs = (vis.flowSlots && typeof vis.flowSlots === 'object') ? vis.flowSlots : {};
+          const arr = Array.isArray(fs[kind]) ? fs[kind] : [];
+          const slot = (arr[idx - 1] && typeof arr[idx - 1] === 'object') ? arr[idx - 1] : {};
+          const ctrl = (slot.ctrl && typeof slot.ctrl === 'object') ? slot.ctrl : {};
 
-          // Boost override (thermische Verbraucher) – rein lokal, keine Fremd-DPs.
-          if (prop === 'boost') {
-            if (kind !== 'consumers') return res.status(400).json({ ok: false, error: 'bad request' });
+          const normalizeConsumerType = (raw) => {
+            const s = String(raw || '').trim().toLowerCase();
+            if (!s) return 'generic';
+            if (s === 'heatingrod' || s === 'heating_rod' || s === 'heating-rod' || s === 'heizstab' || s === 'rod' || s === 'immersion') return 'heatingRod';
+            if (s === 'heatpump' || s === 'heat_pump' || s === 'heat-pump' || s === 'waermepumpe' || s === 'wärmepumpe' || s === 'hvac' || s === 'klima') return 'heatPump';
+            return 'generic';
+          };
 
-            const cfg = this.config || {};
+          const slotType = (kind === 'consumers') ? normalizeConsumerType(slot.consumerType || slot.type || slot.category) : 'generic';
+
+          const resolveThermalDev = () => {
             const t = (cfg.thermal && typeof cfg.thermal === 'object') ? cfg.thermal : {};
             const tlist = Array.isArray(t.devices) ? t.devices : [];
-
-            // resolve device config for this slot
             let dev = null;
             if (tlist[idx - 1] && typeof tlist[idx - 1] === 'object') {
               const s = Number(tlist[idx - 1].slot ?? tlist[idx - 1].consumerSlot ?? idx);
               if (Math.round(s) === idx) dev = tlist[idx - 1];
             }
             if (!dev) dev = tlist.find(r => r && Math.round(Number(r.slot ?? r.consumerSlot ?? 0)) === idx) || null;
+            return dev;
+          };
 
-            // If thermische Steuerung isn't enabled or no device exists, do not accept boost.
+          const resolveHeatingRodDev = () => {
+            const h = (cfg.heatingRod && typeof cfg.heatingRod === 'object') ? cfg.heatingRod : {};
+            const hlist = Array.isArray(h.devices) ? h.devices : [];
+            let dev = null;
+            if (hlist[idx - 1] && typeof hlist[idx - 1] === 'object') {
+              const s = Number(hlist[idx - 1].slot ?? hlist[idx - 1].consumerSlot ?? idx);
+              if (Math.round(s) === idx) dev = hlist[idx - 1];
+            }
+            if (!dev) dev = hlist.find(r => r && Math.round(Number(r.slot ?? r.consumerSlot ?? 0)) === idx) || null;
+            return dev;
+          };
+
+          // Boost override – local runtime override, no direct foreign DP.
+          if (prop === 'boost') {
+            if (kind !== 'consumers') return res.status(400).json({ ok: false, error: 'bad request' });
+            const idLocal = `c${idx}`;
+            const now = Date.now();
+
+            if (slotType === 'heatingRod') {
+              const dev = resolveHeatingRodDev();
+              if (!cfg.enableHeatingRodControl || !dev) return res.status(409).json({ ok: false, error: 'not_ready' });
+              const mins = Math.max(0, Math.round(Number(dev.boostDurationMin ?? (cfg.heatingRod && cfg.heatingRod.boostDurationMin) ?? 60)));
+              if (!this._heatingRodOverrides || typeof this._heatingRodOverrides !== 'object') this._heatingRodOverrides = {};
+              const ov = (this._heatingRodOverrides[idLocal] && typeof this._heatingRodOverrides[idLocal] === 'object') ? this._heatingRodOverrides[idLocal] : {};
+              if (!!value && mins > 0) ov.boostUntilMs = now + mins * 60 * 1000;
+              else ov.boostUntilMs = 0;
+              this._heatingRodOverrides[idLocal] = ov;
+              try {
+                await this.setStateAsync(`heatingRod.devices.${idLocal}.boostUntil`, ov.boostUntilMs || 0, true);
+                await this.setStateAsync(`heatingRod.devices.${idLocal}.boostActive`, (ov.boostUntilMs || 0) > now, true);
+                await this.setStateAsync(`heatingRod.devices.${idLocal}.override`, (ov.boostUntilMs || 0) > now ? 'boost' : '', true);
+              } catch (_e) {}
+              return res.json({ ok: true, boostUntil: ov.boostUntilMs || 0 });
+            }
+
+            const dev = resolveThermalDev();
             if (!cfg.enableThermalControl || !dev) return res.status(409).json({ ok: false, error: 'not_ready' });
             if (dev.boostEnabled === false) return res.status(403).json({ ok: false, error: 'forbidden' });
 
             const mins = Math.max(0, Math.round(Number(dev.boostDurationMin ?? 30)));
-            const now = Date.now();
-            const idLocal = `c${idx}`;
-
             if (!this._thermalOverrides || typeof this._thermalOverrides !== 'object') this._thermalOverrides = {};
             const ov = (this._thermalOverrides[idLocal] && typeof this._thermalOverrides[idLocal] === 'object') ? this._thermalOverrides[idLocal] : {};
-
             const enableBoost = !!value;
             if (enableBoost && mins > 0) {
               ov.boostUntilMs = now + mins * 60 * 1000;
-              // manual hold is no longer relevant once boost is explicitly activated
               ov.manualUntilMs = 0;
             } else {
               ov.boostUntilMs = 0;
             }
             this._thermalOverrides[idLocal] = ov;
 
-            // Best effort: publish immediate UX states (thermal module will keep them updated).
             try {
               await this.setStateAsync(`thermal.devices.${idLocal}.boostUntil`, ov.boostUntilMs || 0, true);
               await this.setStateAsync(`thermal.devices.${idLocal}.boostActive`, (ov.boostUntilMs || 0) > now, true);
               await this.setStateAsync(`thermal.devices.${idLocal}.override`, (ov.boostUntilMs || 0) > now ? 'boost' : '', true);
-            } catch (_e) {
-              // ignore
-            }
+            } catch (_e) {}
 
             return res.json({ ok: true, boostUntil: ov.boostUntilMs || 0 });
           }
 
-
-          // Thermik: Endkunden-Bedienung (Mode + Regelung an/aus) als lokale States.
-          // Diese Writes beeinflussen nur die Automatik (nicht die manuelle Schnellsteuerung via switch/setpoint).
+          // End-customer mode/regulation writes for thermal and heating rods.
           if (prop === 'mode' || prop === 'regenabled') {
             if (kind !== 'consumers') return res.status(400).json({ ok: false, error: 'bad request' });
+            const idLocal = `c${idx}`;
 
-            const cfg = this.config || {};
+            if (slotType === 'heatingRod') {
+              if (!cfg.enableHeatingRodControl) return res.status(409).json({ ok: false, error: 'not_ready' });
+              try {
+                await this.setObjectNotExistsAsync('heatingRod.user', { type: 'channel', common: { name: 'User' }, native: {} });
+                await this.setObjectNotExistsAsync(`heatingRod.user.c${idx}`, { type: 'channel', common: { name: `Consumer ${idx}` }, native: {} });
+                await this.setObjectNotExistsAsync(`heatingRod.user.c${idx}.regEnabled`, { type: 'state', common: { name: 'Regelung aktiv', type: 'boolean', role: 'switch.enable', read: true, write: true, def: true }, native: {} });
+                await this.setObjectNotExistsAsync(`heatingRod.user.c${idx}.mode`, { type: 'state', common: { name: 'Betriebsmodus', type: 'string', role: 'text', read: true, write: true, def: 'inherit' }, native: {} });
+              } catch (_e) {}
+
+              const clearBoost = async () => {
+                try {
+                  if (!this._heatingRodOverrides || typeof this._heatingRodOverrides !== 'object') this._heatingRodOverrides = {};
+                  const ov = (this._heatingRodOverrides[idLocal] && typeof this._heatingRodOverrides[idLocal] === 'object') ? this._heatingRodOverrides[idLocal] : {};
+                  ov.boostUntilMs = 0;
+                  this._heatingRodOverrides[idLocal] = ov;
+                } catch (_e) {}
+                try {
+                  await this.setStateAsync(`heatingRod.devices.${idLocal}.boostUntil`, 0, true);
+                  await this.setStateAsync(`heatingRod.devices.${idLocal}.boostActive`, false, true);
+                  await this.setStateAsync(`heatingRod.devices.${idLocal}.override`, '', true);
+                } catch (_e) {}
+              };
+
+              if (prop === 'regenabled') {
+                const b = !!value;
+                try {
+                  await this.setStateAsync(`heatingRod.user.c${idx}.regEnabled`, b, false);
+                  try { this.updateValue(`heatingRod.user.c${idx}.regEnabled`, b, Date.now()); } catch (_e) {}
+                } catch (_e) {
+                  return res.status(409).json({ ok: false, error: 'not_ready' });
+                }
+                return res.json({ ok: true });
+              }
+
+              let mVal = String(value === null || value === undefined ? 'inherit' : value).trim();
+              const ml = mVal.toLowerCase();
+              if (!mVal || ml === 'system') mVal = 'inherit';
+              else if (ml === 'auto' || ml === 'pvauto' || ml === 'pv') mVal = 'pvAuto';
+              else if (ml === 'stufe1' || ml === 'level1') mVal = 'manual1';
+              else if (ml === 'stufe2' || ml === 'level2') mVal = 'manual2';
+              else if (ml === 'stufe3' || ml === 'level3') mVal = 'manual3';
+              else if (ml === 'aus') mVal = 'off';
+              if (!['inherit', 'pvAuto', 'manual1', 'manual2', 'manual3', 'off'].includes(mVal)) mVal = 'inherit';
+
+              try {
+                await this.setStateAsync(`heatingRod.user.c${idx}.mode`, mVal, false);
+                try { this.updateValue(`heatingRod.user.c${idx}.mode`, mVal, Date.now()); } catch (_e) {}
+              } catch (_e) {
+                return res.status(409).json({ ok: false, error: 'not_ready' });
+              }
+              await clearBoost();
+              return res.json({ ok: true });
+            }
+
             if (!cfg.enableThermalControl) return res.status(409).json({ ok: false, error: 'not_ready' });
 
-            const slot = idx;
-
-            // Best effort: ensure objects exist (robust against partial upgrades)
             try {
               await this.setObjectNotExistsAsync('thermal.user', { type: 'channel', common: { name: 'User' }, native: {} });
-              await this.setObjectNotExistsAsync(`thermal.user.c${slot}`, { type: 'channel', common: { name: `Consumer ${slot}` }, native: {} });
-              await this.setObjectNotExistsAsync(`thermal.user.c${slot}.regEnabled`, { type: 'state', common: { name: 'Regelung aktiv', type: 'boolean', role: 'switch.enable', read: true, write: true, def: true }, native: {} });
-              await this.setObjectNotExistsAsync(`thermal.user.c${slot}.mode`, { type: 'state', common: { name: 'Betriebsmodus', type: 'string', role: 'text', read: true, write: true, def: 'inherit' }, native: {} });
+              await this.setObjectNotExistsAsync(`thermal.user.c${idx}`, { type: 'channel', common: { name: `Consumer ${idx}` }, native: {} });
+              await this.setObjectNotExistsAsync(`thermal.user.c${idx}.regEnabled`, { type: 'state', common: { name: 'Regelung aktiv', type: 'boolean', role: 'switch.enable', read: true, write: true, def: true }, native: {} });
+              await this.setObjectNotExistsAsync(`thermal.user.c${idx}.mode`, { type: 'state', common: { name: 'Betriebsmodus', type: 'string', role: 'text', read: true, write: true, def: 'inherit' }, native: {} });
             } catch (_e) {}
-
-            const idLocal = `c${slot}`;
 
             const clearOverrides = async () => {
               try {
@@ -13692,8 +13835,6 @@ settingsConfig: {
                 ov.manualUntilMs = 0;
                 this._thermalOverrides[idLocal] = ov;
               } catch (_e) {}
-
-              // publish immediate UX states (optional)
               try {
                 await this.setStateAsync(`thermal.devices.${idLocal}.boostUntil`, 0, true);
                 await this.setStateAsync(`thermal.devices.${idLocal}.boostActive`, false, true);
@@ -13705,7 +13846,8 @@ settingsConfig: {
             if (prop === 'regenabled') {
               const b = !!value;
               try {
-                await this.setStateAsync(`thermal.user.c${slot}.regEnabled`, b, false);
+                await this.setStateAsync(`thermal.user.c${idx}.regEnabled`, b, false);
+                try { this.updateValue(`thermal.user.c${idx}.regEnabled`, b, Date.now()); } catch (_e) {}
               } catch (_e) {
                 return res.status(409).json({ ok: false, error: 'not_ready' });
               }
@@ -13713,32 +13855,23 @@ settingsConfig: {
               return res.json({ ok: true });
             }
 
-            // mode
-            let m = String(value === null || value === undefined ? 'inherit' : value).trim();
-            const ml = m.toLowerCase();
-            if (!m || ml === 'system') m = 'inherit';
-            if (ml === 'auto' || ml === 'pvauto' || ml === 'pv') m = 'pvAuto';
-            if (ml === 'manuell') m = 'manual';
-            if (ml === 'aus') m = 'off';
-            if (!['inherit', 'pvAuto', 'manual', 'off'].includes(m)) m = 'inherit';
+            let mVal = String(value === null || value === undefined ? 'inherit' : value).trim();
+            const ml = mVal.toLowerCase();
+            if (!mVal || ml === 'system') mVal = 'inherit';
+            if (ml === 'auto' || ml === 'pvauto' || ml === 'pv') mVal = 'pvAuto';
+            if (ml === 'manuell') mVal = 'manual';
+            if (ml === 'aus') mVal = 'off';
+            if (!['inherit', 'pvAuto', 'manual', 'off'].includes(mVal)) mVal = 'inherit';
 
             try {
-              await this.setStateAsync(`thermal.user.c${slot}.mode`, m, false);
+              await this.setStateAsync(`thermal.user.c${idx}.mode`, mVal, false);
+              try { this.updateValue(`thermal.user.c${idx}.mode`, mVal, Date.now()); } catch (_e) {}
             } catch (_e) {
               return res.status(409).json({ ok: false, error: 'not_ready' });
             }
-
-            // Mode change cancels boost/manual holds to avoid "stuck" UX.
             await clearOverrides();
-
             return res.json({ ok: true });
           }
-
-          const vis = (this.config && this.config.vis && typeof this.config.vis === 'object') ? this.config.vis : {};
-          const fs = (vis.flowSlots && typeof vis.flowSlots === 'object') ? vis.flowSlots : {};
-          const arr = Array.isArray(fs[kind]) ? fs[kind] : [];
-          const slot = (arr[idx - 1] && typeof arr[idx - 1] === 'object') ? arr[idx - 1] : {};
-          const ctrl = (slot.ctrl && typeof slot.ctrl === 'object') ? slot.ctrl : {};
 
           // Write mapping
           const swW = String(ctrl.switchWriteId || '').trim();
@@ -13757,18 +13890,11 @@ settingsConfig: {
             v = n;
           }
 
-          // Manual-hold for thermische Verbraucher: prevent immediate override by PV-auto after a manual quick action.
+          // Manual-hold for thermische Verbraucher only: prevent immediate override by PV-auto after a manual quick action.
           try {
-            const cfg = this.config || {};
-            if (cfg.enableThermalControl && kind === 'consumers') {
+            if (slotType !== 'heatingRod' && cfg.enableThermalControl && kind === 'consumers') {
+              const dev = resolveThermalDev();
               const t = (cfg.thermal && typeof cfg.thermal === 'object') ? cfg.thermal : {};
-              const tlist = Array.isArray(t.devices) ? t.devices : [];
-              let dev = null;
-              if (tlist[idx - 1] && typeof tlist[idx - 1] === 'object') {
-                const s = Number(tlist[idx - 1].slot ?? tlist[idx - 1].consumerSlot ?? idx);
-                if (Math.round(s) === idx) dev = tlist[idx - 1];
-              }
-              if (!dev) dev = tlist.find(r => r && Math.round(Number(r.slot ?? r.consumerSlot ?? 0)) === idx) || null;
               const holdMin = Math.max(0, Math.round(Number(t.manualHoldMin ?? 20)));
               if (dev && holdMin > 0) {
                 const now = Date.now();
@@ -13776,7 +13902,6 @@ settingsConfig: {
                 if (!this._thermalOverrides || typeof this._thermalOverrides !== 'object') this._thermalOverrides = {};
                 const ov = (this._thermalOverrides[idLocal] && typeof this._thermalOverrides[idLocal] === 'object') ? this._thermalOverrides[idLocal] : {};
                 ov.manualUntilMs = now + holdMin * 60 * 1000;
-                // A manual action implicitly cancels boost.
                 ov.boostUntilMs = 0;
                 this._thermalOverrides[idLocal] = ov;
                 try {
@@ -13784,9 +13909,7 @@ settingsConfig: {
                   await this.setStateAsync(`thermal.devices.${idLocal}.override`, 'manual_hold', true);
                   await this.setStateAsync(`thermal.devices.${idLocal}.boostUntil`, 0, true);
                   await this.setStateAsync(`thermal.devices.${idLocal}.boostActive`, false, true);
-                } catch (_e2) {
-                  // ignore
-                }
+                } catch (_e2) {}
               }
             }
           } catch (_e) {
@@ -13797,15 +13920,11 @@ settingsConfig: {
           if (prop === 'switch' && (sgAW || sgBW) && kind === 'consumers') {
             const wantOn = !!v;
             const aVal = sgAInv ? !wantOn : wantOn;
-            // default mapping: relay B stays false for on/off; boost is handled separately by the thermal module override
             const bVal = sgBInv ? !false : false;
             if (!sgAW && !sgBW) return res.status(400).json({ ok: false, error: 'unmapped' });
             if (sgAW) await this.setForeignStateAsync(sgAW, aVal);
             if (sgBW) await this.setForeignStateAsync(sgBW, bVal);
-            // Optional additional enable output
-            if (swW) {
-              await this.setForeignStateAsync(swW, wantOn);
-            }
+            if (swW) await this.setForeignStateAsync(swW, wantOn);
             return res.json({ ok: true });
           }
 
@@ -13815,6 +13934,7 @@ settingsConfig: {
           await this.setForeignStateAsync(id, v);
           return res.json({ ok: true });
         }
+
 
 
         // Speicherfarm: Konfiguration ist Installateur-/Admin-Sache (Admin / jsonConfig).
@@ -13913,10 +14033,61 @@ settingsConfig: {
           }
         }
 
-        // Optional: thermal override info for consumers (boost/manual-hold).
+        const normalizeConsumerType = (raw) => {
+          const s = String(raw || '').trim().toLowerCase();
+          if (!s) return 'generic';
+          if (s === 'heatingrod' || s === 'heating_rod' || s === 'heating-rod' || s === 'heizstab' || s === 'rod' || s === 'immersion') return 'heatingRod';
+          if (s === 'heatpump' || s === 'heat_pump' || s === 'heat-pump' || s === 'waermepumpe' || s === 'wärmepumpe' || s === 'hvac' || s === 'klima') return 'heatPump';
+          return 'generic';
+        };
+
+        const slotType = (kind === 'consumers') ? normalizeConsumerType(slot.consumerType || slot.type || slot.category) : 'generic';
+
+        const resolveThermalDev = () => {
+          const cfg = this.config || {};
+          const t = (cfg.thermal && typeof cfg.thermal === 'object') ? cfg.thermal : {};
+          const tlist = Array.isArray(t.devices) ? t.devices : [];
+          let dev = null;
+          try {
+            if (tlist[idx - 1] && typeof tlist[idx - 1] === 'object') {
+              const s = Math.round(Number(tlist[idx - 1].slot ?? tlist[idx - 1].consumerSlot ?? idx));
+              if (s === idx) dev = tlist[idx - 1];
+            }
+          } catch (_e) {}
+          if (!dev) dev = tlist.find(r => r && Math.round(Number(r.slot ?? r.consumerSlot ?? 0)) === idx) || null;
+          return dev;
+        };
+
+        const resolveHeatingRodDev = () => {
+          const cfg = this.config || {};
+          const h = (cfg.heatingRod && typeof cfg.heatingRod === 'object') ? cfg.heatingRod : {};
+          const hlist = Array.isArray(h.devices) ? h.devices : [];
+          let dev = null;
+          try {
+            if (hlist[idx - 1] && typeof hlist[idx - 1] === 'object') {
+              const s = Math.round(Number(hlist[idx - 1].slot ?? hlist[idx - 1].consumerSlot ?? idx));
+              if (s === idx) dev = hlist[idx - 1];
+            }
+          } catch (_e) {}
+          if (!dev) dev = hlist.find(r => r && Math.round(Number(r.slot ?? r.consumerSlot ?? 0)) === idx) || null;
+          return dev;
+        };
+
+        // Optional: override info for consumers (thermal + heatingRod).
         try {
           const cfg = this.config || {};
-          if (cfg.enableThermalControl && kind === 'consumers') {
+          if (kind === 'consumers' && slotType === 'heatingRod' && cfg.enableHeatingRodControl) {
+            const idLocal = `c${idx}`;
+            const ovAll = (this._heatingRodOverrides && typeof this._heatingRodOverrides === 'object') ? this._heatingRodOverrides : {};
+            const ov = (ovAll[idLocal] && typeof ovAll[idLocal] === 'object') ? ovAll[idLocal] : {};
+            const now = Date.now();
+            const boostUntil = Number(ov.boostUntilMs || 0);
+            out.boostUntil = (Number.isFinite(boostUntil) && boostUntil > 0) ? boostUntil : 0;
+            out.boostActive = out.boostUntil > now;
+            out.boostRemainingMin = out.boostActive ? Math.max(0, Math.ceil((out.boostUntil - now) / 60000)) : 0;
+            out.manualUntil = 0;
+            out.manualActive = false;
+          } else if (cfg.enableThermalControl && kind === 'consumers') {
             const idLocal = `c${idx}`;
             const ovAll = (this._thermalOverrides && typeof this._thermalOverrides === 'object') ? this._thermalOverrides : {};
             const ov = (ovAll[idLocal] && typeof ovAll[idLocal] === 'object') ? ovAll[idLocal] : {};
@@ -13933,29 +14104,110 @@ settingsConfig: {
           // ignore
         }
 
-        
+        // Optional: Heizstab – User-Mode + Regelung (lokale States).
+        try {
+          const cfg = this.config || {};
+          if (cfg.enableHeatingRodControl && kind === 'consumers' && slotType === 'heatingRod') {
+            const dev = resolveHeatingRodDev();
+            if (dev) {
+              const cfgEnabled = (typeof dev.enabled === 'boolean') ? !!dev.enabled : false;
+              const modeRaw = String(dev.mode || 'pvAuto').trim().toLowerCase();
+              const cfgMode = (modeRaw === 'manual' || modeRaw === 'off') ? modeRaw : 'pvAuto';
+
+              let userEnabled = true;
+              let userMode = 'inherit';
+              try {
+                const s = await this.getStateAsync(`heatingRod.user.c${idx}.regEnabled`);
+                if (s && s.val !== undefined && s.val !== null) userEnabled = !!s.val;
+              } catch (_e) {}
+              try {
+                const s = await this.getStateAsync(`heatingRod.user.c${idx}.mode`);
+                if (s && s.val !== undefined && s.val !== null) userMode = String(s.val || '').trim() || 'inherit';
+              } catch (_e) {}
+
+              const normMode = (m) => {
+                const s = String(m || '').trim().toLowerCase();
+                if (!s || s === 'inherit' || s === 'system') return 'inherit';
+                if (s === 'auto' || s === 'pvauto' || s === 'pv') return 'pvAuto';
+                if (s === 'manual1' || s === 'stufe1' || s === 'level1') return 'manual1';
+                if (s === 'manual2' || s === 'stufe2' || s === 'level2') return 'manual2';
+                if (s === 'manual3' || s === 'stufe3' || s === 'level3') return 'manual3';
+                if (s === 'off' || s === 'aus' || s === '0') return 'off';
+                return 'inherit';
+              };
+              userMode = normMode(userMode);
+
+              let currentStage = 0;
+              let targetStage = 0;
+              let stageCount = Math.max(1, Math.round(Number(dev.stageCount ?? 1) || 1));
+              let wiredStages = 0;
+              let effectiveMode = (userMode !== 'inherit') ? userMode : cfgMode;
+              try {
+                const s = await this.getStateAsync(`heatingRod.devices.c${idx}.currentStage`);
+                const n = Number(s && s.val);
+                if (Number.isFinite(n)) currentStage = Math.max(0, Math.round(n));
+              } catch (_e) {}
+              try {
+                const s = await this.getStateAsync(`heatingRod.devices.c${idx}.targetStage`);
+                const n = Number(s && s.val);
+                if (Number.isFinite(n)) targetStage = Math.max(0, Math.round(n));
+              } catch (_e) {}
+              try {
+                const s = await this.getStateAsync(`heatingRod.devices.c${idx}.stageCount`);
+                const n = Number(s && s.val);
+                if (Number.isFinite(n) && n > 0) stageCount = Math.max(1, Math.round(n));
+              } catch (_e) {}
+              try {
+                const s = await this.getStateAsync(`heatingRod.devices.c${idx}.wiredStages`);
+                const n = Number(s && s.val);
+                if (Number.isFinite(n) && n >= 0) wiredStages = Math.max(0, Math.round(n));
+              } catch (_e) {}
+              try {
+                const s = await this.getStateAsync(`heatingRod.devices.c${idx}.effectiveMode`);
+                if (s && s.val !== undefined && s.val !== null) effectiveMode = String(s.val || '').trim() || effectiveMode;
+              } catch (_e) {}
+
+              const manualMode = ['manual1', 'manual2', 'manual3'].includes(userMode);
+              const effectiveEnabled = !!cfgEnabled && (!!out.boostActive || manualMode || (!!userEnabled && effectiveMode !== 'off'));
+
+              out.heatingRod = {
+                available: true,
+                cfgEnabled: !!cfgEnabled,
+                cfgMode,
+                userEnabled: !!userEnabled,
+                userMode,
+                effectiveEnabled,
+                effectiveMode,
+                currentStage,
+                targetStage,
+                stageCount,
+                wiredStages,
+                boostActive: !!out.boostActive,
+                boostUntil: out.boostUntil || 0,
+                boostRemainingMin: out.boostRemainingMin || 0,
+                modes: [
+                  { value: 'pvAuto', label: 'Auto (PV)' },
+                  { value: 'manual1', label: 'Stufe 1' },
+                  { value: 'manual2', label: 'Stufe 2' },
+                  { value: 'manual3', label: 'Stufe 3' },
+                ],
+              };
+            }
+          }
+        } catch (_e) {
+          // ignore
+        }
+
         // Optional: Thermik – User-Mode + Regelung (lokale States).
         try {
           const cfg = this.config || {};
-          if (cfg.enableThermalControl && kind === 'consumers') {
-            const t = (cfg.thermal && typeof cfg.thermal === 'object') ? cfg.thermal : {};
-            const tlist = Array.isArray(t.devices) ? t.devices : [];
-            let dev = null;
-            // try index position first, otherwise search by slot
-            try {
-              if (tlist[idx - 1] && typeof tlist[idx - 1] === 'object') {
-                const s = Math.round(Number(tlist[idx - 1].slot ?? tlist[idx - 1].consumerSlot ?? idx));
-                if (s === idx) dev = tlist[idx - 1];
-              }
-            } catch (_e) {}
-            if (!dev) dev = tlist.find(r => r && Math.round(Number(r.slot ?? r.consumerSlot ?? 0)) === idx) || null;
-
+          if (cfg.enableThermalControl && kind === 'consumers' && slotType !== 'heatingRod') {
+            const dev = resolveThermalDev();
             if (dev) {
               const cfgEnabled = (typeof dev.enabled === 'boolean') ? dev.enabled : false;
               const modeRaw = String(dev.mode || 'pvAuto').trim().toLowerCase();
               const cfgMode = (modeRaw === 'manual' || modeRaw === 'off') ? modeRaw : 'pvAuto';
 
-              // read user states (persisted)
               let userEnabled = true;
               let userMode = 'inherit';
               try {
@@ -14893,6 +15145,7 @@ return res.json(out);
     const prefPS = this.namespace + '.peakShaving.';
     const prefSP = this.namespace + '.speicher.';
     const prefTH = this.namespace + '.thermal.';
+    const prefHR = this.namespace + '.heatingRod.';
     const prefTR = this.namespace + '.threshold.';
     const prefGC = this.namespace + '.gridConstraints.';
     if (id && id.startsWith(prefS)) return 'settings.' + id.slice(prefS.length);
@@ -14903,6 +15156,7 @@ return res.json(out);
     if (id && id.startsWith(prefPS)) return 'peakShaving.' + id.slice(prefPS.length);
     if (id && id.startsWith(prefSP)) return 'speicher.' + id.slice(prefSP.length);
     if (id && id.startsWith(prefTH)) return 'thermal.' + id.slice(prefTH.length);
+    if (id && id.startsWith(prefHR)) return 'heatingRod.' + id.slice(prefHR.length);
     if (id && id.startsWith(prefTR)) return 'threshold.' + id.slice(prefTR.length);
     if (id && id.startsWith(prefGC)) return 'gridConstraints.' + id.slice(prefGC.length);
 

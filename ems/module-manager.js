@@ -11,6 +11,7 @@ const { MultiUseModule } = require('./modules/multi-use');
 const { Para14aModule } = require('./modules/para14a');
 const { CoreLimitsModule } = require('./modules/core-limits');
 const { ThermalControlModule } = require('./modules/thermal-control');
+const { HeatingRodControlModule } = require('./modules/heating-rod-control');
 const { BhkwControlModule } = require('./modules/bhkw-control');
 const { GeneratorControlModule } = require('./modules/generator-control');
 const { ThresholdControlModule } = require('./modules/threshold-control');
@@ -181,13 +182,22 @@ class ModuleManager {
             enabledFn: () => true,
         });
 
-        // Thermische Steuerung (Wärmepumpe/Heizung/Klima)
+        // Thermische Steuerung (Wärmepumpe/Klima)
         // Läuft NACH dem Lademanagement, damit PV‑Restbudget (pvCapEffective - EVCS used)
         // innerhalb des gleichen Ticks genutzt werden kann.
         this.modules.push({
             key: 'thermalControl',
             instance: new ThermalControlModule(this.adapter, this.dp),
             enabledFn: () => !!this.adapter.config.enableThermalControl,
+        });
+
+        // Gestufte Heizstäbe (native 1..12 Stufen)
+        // Läuft NACH der Thermik. Damit bekommen Wärmepumpen/Klima zuerst das PV‑Budget,
+        // Heizstäbe nutzen anschließend den verbleibenden Restüberschuss.
+        this.modules.push({
+            key: 'heatingRodControl',
+            instance: new HeatingRodControlModule(this.adapter, this.dp),
+            enabledFn: () => !!this.adapter.config.enableHeatingRodControl,
         });
 
         // BHKW Steuerung (Start/Stop, SoC-geführt)

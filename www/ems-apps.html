@@ -51,6 +51,7 @@
       <button type="button" class="nw-tab" data-tab="multiuse">MultiUse</button>
       <button type="button" class="nw-tab" data-tab="flow">Energiefluss</button>
       <button type="button" class="nw-tab" data-tab="thermal">Thermik</button>
+      <button type="button" class="nw-tab" data-tab="heatingrod">Heizstab</button>
       <button type="button" class="nw-tab" data-tab="bhkw">BHKW</button>
       <button type="button" class="nw-tab" data-tab="generator">Generator</button>
       <button type="button" class="nw-tab" data-tab="threshold">Schwellwerte</button>
@@ -598,17 +599,17 @@
 
   <div id="nw-tabpanel-thermal" data-tabpanel="thermal" style="display:none;">
     <h2>Wärmepumpe &amp; Klima</h2>
-    <div class="nw-subtitle">Wärmepumpe/Heizung/Klima: PV‑Überschuss intelligent nutzen. Die Geräte selbst werden über die optionalen Verbraucher‑Slots im Energiefluss angebunden.</div>
+    <div class="nw-subtitle">Setpoint-/SG-Ready-Regelung für Wärmepumpe, Heizung oder Klima. Die Geräte werden über die Verbraucher-Slots im Energiefluss angebunden. Für gestufte Heizstäbe bitte die separate Heizstab-App verwenden.</div>
 
     <div class="nw-grid">
       <div class="nw-card">
         <div class="nw-card__title">Thermische Geräte</div>
-        <div class="nw-card__subtitle">Aktiviere PV‑Auto je Slot und setze Leistungs-/Hysterese‑Parameter. Slots ohne Steuer‑Datenpunkte werden automatisch als "nicht steuerbar" markiert.</div>
+        <div class="nw-card__subtitle">Aktiviere PV-Auto je Slot und setze Sollwert-/Hysterese-Parameter. Slots, die im Energiefluss als Heizstab markiert sind, werden hier nur noch als Hinweis angezeigt.</div>
         <div class="nw-config-field-row" style="margin:12px 0 10px 0;">
-          <div class="nw-config-field-label">Manuell‑Hold (Schnellsteuerung)</div>
+          <div class="nw-config-field-label">Manuell-Hold (Schnellsteuerung)</div>
           <div class="nw-config-field-control">
             <input id="thermalHoldMinutes" class="nw-config-input" type="number" min="0" step="1" style="max-width:120px;" />
-            <div class="nw-config-field-hint">Minuten – wenn in der VIS per Schnellsteuerung ein Sollwert/Switch gesetzt wird, pausiert PV‑Auto für diese Zeit (damit die Automatik nicht sofort überschreibt).</div>
+            <div class="nw-config-field-hint">Minuten – wenn in der VIS per Schnellsteuerung ein Sollwert/Switch gesetzt wird, pausiert PV-Auto für diese Zeit, damit die Automatik nicht sofort überschreibt.</div>
           </div>
         </div>
         <div id="thermalDevices"></div>
@@ -617,10 +618,31 @@
       <div class="nw-card">
         <div class="nw-card__title">Hinweis</div>
         <div class="nw-card__subtitle">
-          Die Thermik‑Regelung nutzt bevorzugt das verbleibende PV‑Budget aus dem Lademanagement (PV‑Cap minus EVCS‑Ist). Falls kein Lademanagement aktiv ist, wird der Netz‑Import/Export als Fallback verwendet.
+          Die Thermik-Regelung nutzt bevorzugt das verbleibende PV-Budget aus dem Lademanagement (PV-Cap minus EVCS-Ist). Falls kein Lademanagement aktiv ist, wird der Netz-Import/Export als Fallback verwendet.
         </div>
         <div class="nw-help">
-          Empfehlung: Verbraucher‑Slots im Energiefluss mit Name + Leistung + (optional) Switch/Setpoint anbinden. Anschließend hier PV‑Auto aktivieren.
+          Empfehlung: Verbraucher-Slots im Energiefluss mit Name + Leistung + (optional) Switch/Setpoint oder SG-Ready anbinden. Gestufte Heizstäbe bitte im Tab <b>Heizstab</b> parametrieren.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="nw-tabpanel-heatingrod" data-tabpanel="heatingrod" style="display:none;">
+    <h2>Heizstab</h2>
+    <div class="nw-subtitle">Native 1-12 Stufen Heizstab-Regelung. Leistungsmessung und Relais-/KNX-Datenpunkte werden über den verknüpften Verbraucher-Slot im Energiefluss angebunden.</div>
+
+    <div class="nw-grid">
+      <div class="nw-card">
+        <div class="nw-card__title">Heizstab-Geräte</div>
+        <div class="nw-card__subtitle">Pro Verbraucher-Slot: maximale Leistung, Stufenzahl und obere/untere Schaltschwellen pro Stufe festlegen. Die Relais-DPs werden im Energiefluss unter „Verbraucher → Steuerung“ zugeordnet.</div>
+        <div id="heatingRodDevices"></div>
+      </div>
+
+      <div class="nw-card">
+        <div class="nw-card__title">Hinweis</div>
+        <div class="nw-card__subtitle">Saubere Trennung für Installateure</div>
+        <div class="nw-help">
+          Vorgehen: <b>1.</b> Verbraucher-Slot im Energiefluss anlegen, <b>2.</b> Typ auf <b>Heizstab</b> stellen, <b>3.</b> Stage 1..12 Write/Read zuordnen, <b>4.</b> hier Stufenleistung und Schaltschwellen parametrieren. Die Regelung läuft danach komplett nativ ohne zusätzliches JavaScript.
         </div>
       </div>
     </div>

@@ -124,6 +124,7 @@
     // Thermal control
     thermalHoldMinutes: document.getElementById('thermalHoldMinutes'),
     thermalDevices: document.getElementById('thermalDevices'),
+    heatingRodDevices: document.getElementById('heatingRodDevices'),
     bhkwDevices: document.getElementById('bhkwDevices'),
     generatorDevices: document.getElementById('generatorDevices'),
 
@@ -163,7 +164,8 @@
     { id: 'peak', label: 'Peak-Shaving', desc: 'Lastspitzenkappung / Import-Limit', mandatory: false },
     { id: 'storage', label: 'Speicherregelung', desc: 'Eigenverbrauch / Speicher-Setpoints (herstellerunabhängig)', mandatory: false },
     { id: 'storagefarm', label: 'Speicherfarm', desc: 'Mehrere Speichersysteme als Pool/Gruppen', mandatory: false },
-    { id: 'thermal', label: 'Thermik & Power-to-Heat', desc: 'PV-Überschuss-Steuerung für Wärmepumpe/Klima/Heizstab (Setpoint, On/Off oder SG-Ready) inkl. Schnellsteuerung', mandatory: false },
+    { id: 'thermal', label: 'Wärmepumpe & Klima', desc: 'PV-Überschuss-Steuerung für Wärmepumpe/Klima (Setpoint, On/Off oder SG-Ready) inkl. Schnellsteuerung', mandatory: false },
+    { id: 'heatingrod', label: 'Heizstab', desc: 'Native 1..12 Stufen Heizstab-Regelung über Relais / KNX-Aktoren', mandatory: false },
     { id: 'bhkw', label: 'BHKW', desc: 'BHKW-Steuerung (Start/Stop, SoC-geführt) mit Schnellsteuerung', mandatory: false },
     { id: 'generator', label: 'Generator', desc: 'Generator-Steuerung (Notstrom/Netzparallelbetrieb, SoC-geführt) mit Schnellsteuerung', mandatory: false },
     { id: 'threshold', label: 'Schwellwertsteuerung', desc: 'Regeln (Wenn X > Y dann Schalten/Setzen) – optional mit Endkunden-Anpassung', mandatory: false },
@@ -735,6 +737,7 @@ function _collectFlowPowerDpIsWFromUI() {
     // Tabs: optional ein-/ausblenden (App-Center)
     const tabMap = [
       { tab: 'thermal', app: 'thermal' },
+      { tab: 'heatingrod', app: 'heatingrod' },
       { tab: 'bhkw', app: 'bhkw' },
       { tab: 'generator', app: 'generator' },
       { tab: 'threshold', app: 'threshold' },
@@ -950,6 +953,21 @@ function _collectFlowPowerDpIsWFromUI() {
     return currentConfig.vis;
   }
 
+  function _normalizeFlowConsumerType(raw) {
+    const s = String(raw || '').trim().toLowerCase();
+    if (!s) return 'generic';
+    if (s === 'heatpump' || s === 'heat_pump' || s === 'heat-pump' || s === 'waermepumpe' || s === 'wärmepumpe' || s === 'hvac' || s === 'klima') return 'heatPump';
+    if (s === 'heatingrod' || s === 'heating_rod' || s === 'heating-rod' || s === 'heizstab' || s === 'rod' || s === 'immersion') return 'heatingRod';
+    return 'generic';
+  }
+
+  function _getFlowConsumerTypeLabel(raw) {
+    const t = _normalizeFlowConsumerType(raw);
+    if (t === 'heatPump') return 'Wärmepumpe / Klima';
+    if (t === 'heatingRod') return 'Heizstab';
+    return 'Allgemein';
+  }
+
   function _ensureFlowSlots() {
     const vis = _ensureVis();
     vis.flowSlots = (vis.flowSlots && typeof vis.flowSlots === 'object') ? vis.flowSlots : {};
@@ -958,35 +976,64 @@ function _collectFlowPowerDpIsWFromUI() {
     fs.consumers = Array.isArray(fs.consumers) ? fs.consumers : [];
     fs.producers = Array.isArray(fs.producers) ? fs.producers : [];
 
-    const norm = (arr, count) => {
+    const norm = (arr, count, kind) => {
       const out = [];
       for (let i = 0; i < count; i++) {
         const it = arr[i] && typeof arr[i] === 'object' ? arr[i] : {};
-        const ctrl = (it.ctrl && typeof it.ctrl === 'object') ? it.ctrl : {};
-        out.push({
+        const rawCtrl = (it.ctrl && typeof it.ctrl === 'object') ? { ...it.ctrl } : {};
+        const ctrl = { ...rawCtrl };
+
+        const ensureString = (key, def = '') => {
+          if (ctrl[key] === undefined || ctrl[key] === null) ctrl[key] = def;
+          else ctrl[key] = String(ctrl[key]);
+        };
+        const ensureValue = (key, def = '') => {
+          if (ctrl[key] === undefined || ctrl[key] === null) ctrl[key] = def;
+        };
+        const ensureBool = (key, def = false) => {
+          if (ctrl[key] === undefined || ctrl[key] === null) ctrl[key] = def;
+          else ctrl[key] = !!ctrl[key];
+        };
+
+        ensureString('switchWriteId');
+        ensureString('switchReadId');
+        ensureString('setpointWriteId');
+        ensureString('setpointReadId');
+        ensureString('setpointLabel');
+        ensureString('setpointUnit', 'W');
+        ensureValue('setpointMin', '');
+        ensureValue('setpointMax', '');
+        ensureValue('setpointStep', '');
+        ensureString('sgReadyAWriteId');
+        ensureString('sgReadyAReadId');
+        ensureString('sgReadyBWriteId');
+        ensureString('sgReadyBReadId');
+        ensureBool('sgReadyAInvert', false);
+        ensureBool('sgReadyBInvert', false);
+
+        for (let s = 1; s <= 12; s++) {
+          ensureString(`stage${s}WriteId`);
+          ensureString(`stage${s}ReadId`);
+        }
+
+        const slot = {
           name: (it.name !== undefined && it.name !== null) ? String(it.name) : '',
           icon: (it.icon !== undefined && it.icon !== null) ? String(it.icon) : '',
-          ctrl: {
-            // Schnellsteuerung (optional) – keine Pflichtfelder
-            switchWriteId: (ctrl.switchWriteId !== undefined && ctrl.switchWriteId !== null) ? String(ctrl.switchWriteId) : '',
-            switchReadId: (ctrl.switchReadId !== undefined && ctrl.switchReadId !== null) ? String(ctrl.switchReadId) : '',
-            setpointWriteId: (ctrl.setpointWriteId !== undefined && ctrl.setpointWriteId !== null) ? String(ctrl.setpointWriteId) : '',
-            setpointReadId: (ctrl.setpointReadId !== undefined && ctrl.setpointReadId !== null) ? String(ctrl.setpointReadId) : '',
-            setpointLabel: (ctrl.setpointLabel !== undefined && ctrl.setpointLabel !== null) ? String(ctrl.setpointLabel) : '',
-            setpointUnit: (ctrl.setpointUnit !== undefined && ctrl.setpointUnit !== null) ? String(ctrl.setpointUnit) : 'W',
-            setpointMin: (ctrl.setpointMin !== undefined && ctrl.setpointMin !== null) ? ctrl.setpointMin : '',
-            setpointMax: (ctrl.setpointMax !== undefined && ctrl.setpointMax !== null) ? ctrl.setpointMax : '',
-            setpointStep: (ctrl.setpointStep !== undefined && ctrl.setpointStep !== null) ? ctrl.setpointStep : ''
-          }
-        });
+          ctrl,
+        };
+
+        if (kind === 'consumers') {
+          slot.consumerType = _normalizeFlowConsumerType(it.consumerType || it.type || it.category);
+        }
+
+        out.push(slot);
       }
       return out;
     };
 
-    fs.consumers = norm(fs.consumers, FLOW_CONSUMER_SLOT_COUNT);
-    fs.producers = norm(fs.producers, FLOW_PRODUCER_SLOT_COUNT);
+    fs.consumers = norm(fs.consumers, FLOW_CONSUMER_SLOT_COUNT, 'consumers');
+    fs.producers = norm(fs.producers, FLOW_PRODUCER_SLOT_COUNT, 'producers');
 
-    // Optional core labels (fixed nodes) for the Energiefluss visualization.
     fs.core = (fs.core && typeof fs.core === 'object') ? fs.core : {};
     fs.core.pvName = (fs.core.pvName !== undefined && fs.core.pvName !== null) ? String(fs.core.pvName) : '';
     return fs;
@@ -1086,6 +1133,40 @@ function _collectFlowPowerDpIsWFromUI() {
         target[i].icon = String(iconSelect.value || '').trim();
       });
 
+      let consumerTypeSelect = null;
+      if (kind === 'consumers') {
+        consumerTypeSelect = document.createElement('select');
+        consumerTypeSelect.className = 'nw-config-input nw-flow-slot__icon';
+        consumerTypeSelect.id = `flow_${kind}_type_${idx}`;
+        consumerTypeSelect.title = 'Verbraucher-Typ';
+        [
+          { value: 'generic', label: 'Allgemein' },
+          { value: 'heatPump', label: 'Wärmepumpe / Klima' },
+          { value: 'heatingRod', label: 'Heizstab' },
+        ].forEach(opt => {
+          const o = document.createElement('option');
+          o.value = opt.value;
+          o.textContent = opt.label;
+          consumerTypeSelect.appendChild(o);
+        });
+        consumerTypeSelect.value = _normalizeFlowConsumerType(slots[i] && slots[i].consumerType);
+        consumerTypeSelect.addEventListener('change', () => {
+          const fs2 = _ensureFlowSlots();
+          const target = fs2.consumers;
+          target[i] = target[i] || { name: '', icon: '', ctrl: {}, consumerType: 'generic' };
+          target[i].consumerType = _normalizeFlowConsumerType(consumerTypeSelect.value);
+          if (!String(target[i].icon || '').trim()) {
+            if (target[i].consumerType === 'heatingRod') {
+              target[i].icon = '🔥';
+              iconSelect.value = '🔥';
+            } else if (target[i].consumerType === 'heatPump') {
+              target[i].icon = '♨️';
+              iconSelect.value = '♨️';
+            }
+          }
+        });
+      }
+
       const dpInput = document.createElement('input');
       dpInput.className = 'nw-config-input nw-flow-slot__dp';
       dpInput.type = 'text';
@@ -1136,6 +1217,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
       fields.appendChild(nameInput);
       fields.appendChild(iconSelect);
+      if (consumerTypeSelect) fields.appendChild(consumerTypeSelect);
       fields.appendChild(dpWrap);
       fields.appendChild(btn);
       fields.appendChild(badge);
@@ -1275,6 +1357,13 @@ function _collectFlowPowerDpIsWFromUI() {
       ctrlGrid.appendChild(mkCheckField('SG‑Ready Invert Relais A', `${baseId}_sg1_inv`, !!ctrl.sgReadyAInvert, (b) => { const c = ensureCtrl(); c.sgReadyAInvert = !!b; }));
       ctrlGrid.appendChild(mkCheckField('SG‑Ready Invert Relais B', `${baseId}_sg2_inv`, !!ctrl.sgReadyBInvert, (b) => { const c = ensureCtrl(); c.sgReadyBInvert = !!b; }));
 
+      if (kind === 'consumers') {
+        for (let stageIdx = 1; stageIdx <= 12; stageIdx++) {
+          ctrlGrid.appendChild(mkDpField(`Heizstab Stufe ${stageIdx} (Write, bool)`, `${baseId}_stage${stageIdx}_w`, ctrl[`stage${stageIdx}WriteId`], (v) => { const c = ensureCtrl(); c[`stage${stageIdx}WriteId`] = v; }));
+          ctrlGrid.appendChild(mkDpField(`Heizstab Stufe ${stageIdx} (Read, bool)`, `${baseId}_stage${stageIdx}_r`, ctrl[`stage${stageIdx}ReadId`], (v) => { const c = ensureCtrl(); c[`stage${stageIdx}ReadId`] = v; }));
+        }
+      }
+
       ctrlGrid.appendChild(mkSimpleField('Sollwert‑Bezeichnung', `${baseId}_sp_lbl`, 'text', ctrl.setpointLabel, 'z.B. Sollleistung / Solltemperatur', (v) => { const c = ensureCtrl(); c.setpointLabel = String(v || '').trim(); }));
       ctrlGrid.appendChild(mkSimpleField('Sollwert‑Einheit', `${baseId}_sp_unit`, 'text', ctrl.setpointUnit || 'W', 'z.B. W / °C', (v) => { const c = ensureCtrl(); const t = String(v || '').trim(); c.setpointUnit = t || 'W'; }));
       ctrlGrid.appendChild(mkSimpleField('Sollwert Min', `${baseId}_sp_min`, 'number', ctrl.setpointMin, 'optional', (v) => { const c = ensureCtrl(); const n = Number(v); c.setpointMin = Number.isFinite(n) ? n : ''; }));
@@ -1284,7 +1373,7 @@ function _collectFlowPowerDpIsWFromUI() {
       const hint = document.createElement('div');
       hint.className = 'nw-config-field-hint';
       hint.style.marginTop = '6px';
-      hint.textContent = 'Wenn Write‑Datenpunkte gesetzt sind, wird der Kreis im Energiefluss klickbar (Schnellsteuerung). Read‑Datenpunkte sind optional für Status/Feedback. SG‑Ready benötigt zwei Relais (A/B).';
+      hint.textContent = 'Wenn Write-Datenpunkte gesetzt sind, wird der Kreis im Energiefluss klickbar (Schnellsteuerung). Read-Datenpunkte sind optional für Status/Feedback. SG-Ready benötigt zwei Relais (A/B). Für die native Heizstab-App können hier zusätzlich Stage 1..12 als boolsche Relais-/KNX-Kanäle zugeordnet werden.';
       advanced.appendChild(ctrlGrid);
       advanced.appendChild(hint);
 
@@ -1345,61 +1434,151 @@ function _collectFlowPowerDpIsWFromUI() {
   }
 
   // ------------------------------
-  // Thermik: PV‑Überschuss‑Regelung für optionale Verbraucher‑Slots
+  // Thermik / Heizstab: PV‑Überschuss‑Regelung für Verbraucher‑Slots
   // ------------------------------
+
+  function _getFlowConsumerSlotCfg(slot) {
+    const fs = _ensureFlowSlots();
+    const arr = Array.isArray(fs.consumers) ? fs.consumers : [];
+    return (arr[slot - 1] && typeof arr[slot - 1] === 'object') ? arr[slot - 1] : { name: '', icon: '', ctrl: {}, consumerType: 'generic' };
+  }
+
+  function _getFlowConsumerName(slot) {
+    const slotCfg = _getFlowConsumerSlotCfg(slot);
+    return String(slotCfg.name || '').trim() || `Verbraucher ${slot}`;
+  }
+
+  function _getFlowConsumerTypeForSlot(slot) {
+    const slotCfg = _getFlowConsumerSlotCfg(slot);
+    return _normalizeFlowConsumerType(slotCfg.consumerType || slotCfg.type || slotCfg.category);
+  }
+
+  function _countHeatingRodWiredStages(slot) {
+    const slotCfg = _getFlowConsumerSlotCfg(slot);
+    const ctrl = (slotCfg.ctrl && typeof slotCfg.ctrl === 'object') ? slotCfg.ctrl : {};
+    let cnt = 0;
+    for (let s = 1; s <= 12; s++) {
+      const w = String(ctrl[`stage${s}WriteId`] || ctrl[`heatingStage${s}WriteId`] || '').trim();
+      const r = String(ctrl[`stage${s}ReadId`] || ctrl[`heatingStage${s}ReadId`] || '').trim();
+      if (w || r) cnt = s;
+    }
+    if (!cnt && String(ctrl.switchWriteId || '').trim()) cnt = 1;
+    return cnt;
+  }
+
+  function _thermalDefaultSetpoints(profile) {
+    const p = String(profile || 'heating').trim().toLowerCase();
+    if (p === 'cooling' || p === 'cool') return { on: 20, off: 24, boost: 18 };
+    if (p === 'neutral') return { on: 22, off: 22, boost: 22 };
+    return { on: 55, off: 45, boost: 60 };
+  }
+
+  function _defaultHeatingRodStagePower(maxPowerW, stageCount, index) {
+    const cnt = _clampInt(stageCount, 1, 12, 1);
+    const maxW = Math.max(0, Math.round(Number(maxPowerW) || 0));
+    if (!maxW) return 0;
+    const base = Math.floor(maxW / cnt);
+    const rest = maxW - (base * cnt);
+    return base + (index === (cnt - 1) ? rest : 0);
+  }
+
+  function _computeHeatingRodStageDefaults(maxPowerW, stageCount) {
+    const cnt = _clampInt(stageCount, 1, 12, 1);
+    const out = [];
+    let cumulative = 0;
+    for (let i = 0; i < cnt; i++) {
+      const powerW = _defaultHeatingRodStagePower(maxPowerW, cnt, i);
+      cumulative += powerW;
+      const margin = Math.max(100, Math.round(powerW * 0.4));
+      out.push({
+        index: i + 1,
+        powerW,
+        onAboveW: cumulative,
+        offBelowW: Math.max(0, cumulative - margin),
+      });
+    }
+    return out;
+  }
+
+  function _syncHeatingRodDeviceStages(dev, opts = {}) {
+    if (!dev || typeof dev !== 'object') return dev;
+    const count = _clampInt(dev.stageCount, 1, 12, 1);
+    const maxPowerW = Math.max(0, Math.round(Number(dev.maxPowerW) || 0));
+    const prev = Array.isArray(dev.stages) ? dev.stages : [];
+    const defs = _computeHeatingRodStageDefaults(maxPowerW, count);
+    const next = [];
+
+    for (let i = 0; i < count; i++) {
+      const p = (prev[i] && typeof prev[i] === 'object') ? prev[i] : {};
+      const d = defs[i];
+      const resetAll = !!opts.resetAll;
+      const powerW = resetAll ? d.powerW : (Number.isFinite(Number(p.powerW)) ? Number(p.powerW) : d.powerW);
+      const onAboveW = resetAll ? d.onAboveW : (Number.isFinite(Number(p.onAboveW)) ? Number(p.onAboveW) : d.onAboveW);
+      let offBelowW = resetAll ? d.offBelowW : (Number.isFinite(Number(p.offBelowW)) ? Number(p.offBelowW) : d.offBelowW);
+      if (!Number.isFinite(offBelowW)) offBelowW = d.offBelowW;
+      offBelowW = Math.max(0, Math.min(offBelowW, onAboveW));
+      next.push({
+        index: i + 1,
+        powerW: Math.max(0, Math.round(powerW)),
+        onAboveW: Math.max(0, Math.round(onAboveW)),
+        offBelowW: Math.max(0, Math.round(offBelowW)),
+      });
+    }
+
+    dev.stageCount = count;
+    dev.maxPowerW = maxPowerW;
+    dev.stages = next;
+    return dev;
+  }
 
   function _ensureThermalCfg() {
     currentConfig = currentConfig || {};
     currentConfig.thermal = (currentConfig.thermal && typeof currentConfig.thermal === 'object') ? currentConfig.thermal : {};
     const t = currentConfig.thermal;
-    // Minutes to hold manual quick-controls before PV-auto overwrites again
-    const hold = Number(t.manualHoldMin);
-    t.manualHoldMin = (Number.isFinite(hold) && hold >= 0) ? Math.round(hold) : 20;
     t.devices = Array.isArray(t.devices) ? t.devices : [];
+    t.manualHoldMin = _clampInt(t.manualHoldMin, 0, 24 * 60, 20);
 
     const bySlot = new Map();
-    for (const d of t.devices) {
-      if (!d || typeof d !== 'object') continue;
-      const s = Number(d.slot ?? d.consumerSlot);
-      if (!Number.isFinite(s)) continue;
-      const slot = Math.max(1, Math.min(FLOW_CONSUMER_SLOT_COUNT, Math.round(s)));
-      bySlot.set(slot, d);
+    for (const raw of t.devices) {
+      if (!raw || typeof raw !== 'object') continue;
+      const slot = _clampInt(raw.slot ?? raw.consumerSlot, 1, FLOW_CONSUMER_SLOT_COUNT, 0);
+      if (!slot) continue;
+      bySlot.set(slot, raw);
     }
 
     const out = [];
     for (let slot = 1; slot <= FLOW_CONSUMER_SLOT_COUNT; slot++) {
       const prev = bySlot.get(slot) || {};
-      const mode = (typeof prev.mode === 'string') ? String(prev.mode) : 'pvAuto';
-      const typeRaw = (typeof prev.type === 'string') ? String(prev.type) : (typeof prev.deviceType === 'string' ? String(prev.deviceType) : '');
-      const typeNorm = String(typeRaw || '').trim().toLowerCase();
-      const type = (typeNorm === 'sgready' || typeNorm === 'sg-ready' || typeNorm === 'sg_ready' || typeNorm === 'sg')
+      const profileRaw = String(prev.profile || '').trim().toLowerCase();
+      const profile = (profileRaw === 'cooling' || profileRaw === 'cool') ? 'cooling' : (profileRaw === 'neutral' ? 'neutral' : 'heating');
+      const defSp = _thermalDefaultSetpoints(profile);
+      const typeRaw = String(prev.type || prev.deviceType || prev.kind || '').trim().toLowerCase();
+      const type = (typeRaw === 'sgready' || typeRaw === 'sg-ready' || typeRaw === 'sg_ready' || typeRaw === 'sg')
         ? 'sgready'
-        : ((typeNorm === 'setpoint' || typeNorm === 'temp' || typeNorm === 'temperature')
-          ? 'setpoint'
-          : (typeNorm === 'power' ? 'power' : (slot === 1 ? 'setpoint' : 'power')));
-      const profileRaw = (typeof prev.profile === 'string') ? String(prev.profile) : 'heating';
-      const profile = (['heating','cooling','neutral'].includes(profileRaw)) ? profileRaw : 'heating';
-      const defSp = (profile === 'cooling') ? { on: 20, off: 24, boost: 18 } : (profile === 'neutral' ? { on: 22, off: 22, boost: 22 } : { on: 55, off: 45, boost: 60 });
+        : ((typeRaw === 'setpoint' || typeRaw === 'temp' || typeRaw === 'temperature') ? 'setpoint' : 'power');
+      const modeRaw = String(prev.mode || 'pvAuto').trim().toLowerCase();
+      const mode = (modeRaw === 'manual' || modeRaw === 'off') ? modeRaw : 'pvAuto';
       out.push({
         slot,
-        // enabled => PV‑Auto aktiv
         enabled: (typeof prev.enabled === 'boolean') ? !!prev.enabled : false,
-        mode: (['pvAuto','manual','off'].includes(mode)) ? mode : 'pvAuto',
+        mode,
+        name: String(prev.name || '').trim(),
         type,
         profile,
-        maxPowerW: (prev.maxPowerW !== undefined) ? prev.maxPowerW : 2500,
-        estimatedPowerW: (prev.estimatedPowerW !== undefined) ? prev.estimatedPowerW : 1500,
-        startSurplusW: (prev.startSurplusW !== undefined) ? prev.startSurplusW : 800,
-        stopSurplusW: (prev.stopSurplusW !== undefined) ? prev.stopSurplusW : 300,
-        minOnSec: (prev.minOnSec !== undefined) ? prev.minOnSec : 300,
-        minOffSec: (prev.minOffSec !== undefined) ? prev.minOffSec : 300,
-        autoOnSetpoint: (prev.autoOnSetpoint !== undefined) ? prev.autoOnSetpoint : defSp.on,
-        autoOffSetpoint: (prev.autoOffSetpoint !== undefined) ? prev.autoOffSetpoint : defSp.off,
-        boostSetpoint: (prev.boostSetpoint !== undefined) ? prev.boostSetpoint : defSp.boost,
+        priority: _clampInt(prev.priority, 1, 999, 100 + slot),
+        maxPowerW: Math.max(0, Math.round(Number(prev.maxPowerW ?? 2500) || 2500)),
+        estimatedPowerW: Math.max(0, Math.round(Number(prev.estimatedPowerW ?? 1500) || 1500)),
+        startSurplusW: Math.max(0, Math.round(Number(prev.startSurplusW ?? 800) || 800)),
+        stopSurplusW: Math.max(0, Math.round(Number(prev.stopSurplusW ?? 300) || 300)),
+        minOnSec: Math.max(0, Math.round(Number(prev.minOnSec ?? 300) || 300)),
+        minOffSec: Math.max(0, Math.round(Number(prev.minOffSec ?? 300) || 300)),
+        autoOnSetpoint: Number.isFinite(Number(prev.autoOnSetpoint)) ? Number(prev.autoOnSetpoint) : defSp.on,
+        autoOffSetpoint: Number.isFinite(Number(prev.autoOffSetpoint)) ? Number(prev.autoOffSetpoint) : defSp.off,
+        boostSetpoint: Number.isFinite(Number(prev.boostSetpoint)) ? Number(prev.boostSetpoint) : defSp.boost,
         boostEnabled: (typeof prev.boostEnabled === 'boolean') ? !!prev.boostEnabled : true,
-        boostDurationMin: (prev.boostDurationMin !== undefined) ? prev.boostDurationMin : 30,
-        boostPowerW: (prev.boostPowerW !== undefined) ? prev.boostPowerW : ((prev.maxPowerW !== undefined) ? prev.maxPowerW : 2500),
-        priority: (prev.priority !== undefined) ? prev.priority : (100 + slot)
+        boostDurationMin: Math.max(0, Math.round(Number(prev.boostDurationMin ?? 30) || 30)),
+        boostPowerW: Math.max(0, Math.round(Number(prev.boostPowerW ?? prev.maxPowerW ?? 2500) || 2500)),
+        maxSgStage: _clampInt(prev.maxSgStage, 1, 4, 4),
       });
     }
 
@@ -1407,80 +1586,130 @@ function _collectFlowPowerDpIsWFromUI() {
     return t;
   }
 
-  function buildThermalUI() {
-  // Thermik (Wärmepumpe/Heizung/Klima): PV-Überschuss intelligent nutzen.
-  // NOTE: This UI lives in App-Center and works on the *currentConfig* object.
-  // A previous refactor accidentally referenced a non-existent global "config" which
-  // broke the complete Thermik tab (rendering stopped with a ReferenceError).
-  const cfg = (currentConfig.thermal || (currentConfig.thermal = { devices: [], manualHoldMinutes: 20 }));
+  function _ensureHeatingRodCfg() {
+    currentConfig = currentConfig || {};
+    currentConfig.heatingRod = (currentConfig.heatingRod && typeof currentConfig.heatingRod === 'object') ? currentConfig.heatingRod : {};
+    const h = currentConfig.heatingRod;
+    h.devices = Array.isArray(h.devices) ? h.devices : [];
 
-  // App toggle lives under currentConfig.emsApps.apps.* (like all other apps)
-  currentConfig.emsApps = currentConfig.emsApps || { apps: {} };
-  currentConfig.emsApps.apps = currentConfig.emsApps.apps || {};
-  const apps = currentConfig.emsApps.apps;
-  const app = apps.thermal || (apps.thermal = { installed: false, enabled: false });
+    const bySlot = new Map();
+    for (const raw of h.devices) {
+      if (!raw || typeof raw !== 'object') continue;
+      const slot = _clampInt(raw.slot ?? raw.consumerSlot, 1, FLOW_CONSUMER_SLOT_COUNT, 0);
+      if (!slot) continue;
+      bySlot.set(slot, raw);
+    }
 
-  // Keep app.enabled in sync with App-Center toggle
-  cfg.enabled = !!app.enabled;
+    const out = [];
+    for (let slot = 1; slot <= FLOW_CONSUMER_SLOT_COUNT; slot++) {
+      const prev = bySlot.get(slot) || {};
+      const stageCountDefault = (() => {
+        const wired = _countHeatingRodWiredStages(slot);
+        if (wired > 0) return wired;
+        if (Array.isArray(prev.stages) && prev.stages.length) return prev.stages.length;
+        return 3;
+      })();
+      const dev = {
+        slot,
+        enabled: (typeof prev.enabled === 'boolean') ? !!prev.enabled : false,
+        mode: (String(prev.mode || '').trim().toLowerCase() === 'manual') ? 'manual' : (String(prev.mode || '').trim().toLowerCase() === 'off' ? 'off' : 'pvAuto'),
+        name: String(prev.name || '').trim(),
+        maxPowerW: Math.max(0, Math.round(Number(prev.maxPowerW ?? (stageCountDefault * 2000)) || (stageCountDefault * 2000))),
+        stageCount: _clampInt(prev.stageCount ?? stageCountDefault, 1, 12, stageCountDefault),
+        priority: _clampInt(prev.priority, 1, 999, 200 + slot),
+        minOnSec: Math.max(0, Math.round(Number(prev.minOnSec ?? 60) || 60)),
+        minOffSec: Math.max(0, Math.round(Number(prev.minOffSec ?? 60) || 60)),
+        stages: Array.isArray(prev.stages) ? prev.stages : [],
+      };
+      _syncHeatingRodDeviceStages(dev);
+      out.push(dev);
+    }
 
-  // Ensure 8 device slots
-  cfg.devices = Array.isArray(cfg.devices) ? cfg.devices : [];
-  while (cfg.devices.length < 8) {
-    cfg.devices.push({
-      enabled: false,
-      name: '',
-      // variant: 'power' (Leistung), 'setpoint' (Sollwert), 'sgready' (SG-Ready)
-      type: 'power',
-      // profile: 'heat'/'cool' (used for labels in UI)
-      profile: 'heat',
-      // PV-auto thresholds
-      startSurplusW: 800,
-      stopSurplusW: 300,
-      // anti-flutter
-      minOnSec: 300,
-      minOffSec: 300,
-      // boost
-      boostEnabled: false,
-      boostPowerW: 2500,
-      boostDurationMin: 30,
-      // setpoint-specific
-      autoOnSetpoint: 55,
-      autoOffSetpoint: 45,
-      // power/setpoint estimation
-      estimatedPowerW: 1500,
-      // power-specific
-      maxPowerW: 2500,
-      // sgready-specific
-      maxSgStage: 4,
-    });
+    h.devices = out;
+    return h;
   }
 
-  // Manual-hold (Schnellsteuerung)
-  els.thermalHoldMinutes.value = (cfg.manualHoldMinutes ?? 20);
-  els.thermalHoldMinutes.onchange = () => {
-    cfg.manualHoldMinutes = parseInt(els.thermalHoldMinutes.value, 10) || 0;
-    setDirty();
-  };
+  function _mkCfgInput(type, value, onChange, opts = {}) {
+    const inp = document.createElement('input');
+    inp.type = type || 'text';
+    inp.className = (type === 'checkbox') ? '' : ((opts.className) ? opts.className : 'nw-config-input');
+    if (type !== 'checkbox') inp.value = (value ?? '') === null ? '' : String(value ?? '');
+    if (opts.placeholder) inp.placeholder = opts.placeholder;
+    if (opts.min != null) inp.min = String(opts.min);
+    if (opts.max != null) inp.max = String(opts.max);
+    if (opts.step != null) inp.step = String(opts.step);
+    if (opts.width) inp.style.width = opts.width;
+    if (opts.disabled) inp.disabled = true;
+    inp.addEventListener('change', () => {
+      const v = (type === 'number') ? Number(inp.value) : (type === 'checkbox' ? !!inp.checked : inp.value);
+      onChange(v, inp);
+    });
+    return inp;
+  }
 
-  // Render devices
-  els.thermalDevices.innerHTML = '';
+  function _mkCfgSelect(value, options, onChange, opts = {}) {
+    const sel = document.createElement('select');
+    sel.className = opts.className || 'nw-config-select';
+    if (opts.width) sel.style.width = opts.width;
+    if (opts.disabled) sel.disabled = true;
+    (options || []).forEach((o) => {
+      const opt = document.createElement('option');
+      opt.value = o.value;
+      opt.textContent = o.label;
+      sel.appendChild(opt);
+    });
+    sel.value = value;
+    sel.addEventListener('change', () => onChange(sel.value, sel));
+    return sel;
+  }
 
-  // Helpers
-  const mkGroup = (title, children) => {
-    const g = document.createElement('div');
-    g.style.display = 'flex';
-    g.style.flexDirection = 'column';
-    g.style.gap = '6px';
-    g.style.padding = '10px 12px';
-    g.style.border = '1px solid rgba(255,255,255,0.08)';
-    g.style.borderRadius = '12px';
-    g.style.background = 'rgba(255,255,255,0.02)';
+  function _mkCfgToggle(checked, onChange, opts = {}) {
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!checked;
+    if (opts.disabled) cb.disabled = true;
+    cb.addEventListener('change', () => onChange(!!cb.checked, cb));
+    return cb;
+  }
 
-    const h = document.createElement('div');
-    h.textContent = title;
-    h.style.fontSize = '0.78rem';
-    h.style.opacity = '0.85';
-    h.style.fontWeight = '600';
+  function _mkCfgField(label, control, hint) {
+    const wrap = document.createElement('div');
+    wrap.style.display = 'flex';
+    wrap.style.flexDirection = 'column';
+    wrap.style.gap = '4px';
+    wrap.style.minWidth = '130px';
+    const lab = document.createElement('div');
+    lab.textContent = label;
+    lab.style.fontSize = '0.72rem';
+    lab.style.opacity = '0.75';
+    wrap.appendChild(lab);
+    wrap.appendChild(control);
+    if (hint) {
+      const h = document.createElement('div');
+      h.className = 'nw-config-field-hint';
+      h.style.margin = '0';
+      h.textContent = hint;
+      wrap.appendChild(h);
+    }
+    return wrap;
+  }
+
+  function _mkCfgGroup(title) {
+    const wrap = document.createElement('div');
+    wrap.style.display = 'flex';
+    wrap.style.flexDirection = 'column';
+    wrap.style.gap = '8px';
+    wrap.style.padding = '10px 12px';
+    wrap.style.border = '1px solid rgba(255,255,255,0.08)';
+    wrap.style.borderRadius = '12px';
+    wrap.style.background = 'rgba(255,255,255,0.02)';
+    wrap.style.flex = '1 1 320px';
+
+    const head = document.createElement('div');
+    head.textContent = title;
+    head.style.fontWeight = '600';
+    head.style.fontSize = '0.82rem';
+    head.style.opacity = '0.92';
 
     const body = document.createElement('div');
     body.style.display = 'flex';
@@ -1488,236 +1717,373 @@ function _collectFlowPowerDpIsWFromUI() {
     body.style.gap = '10px';
     body.style.alignItems = 'flex-end';
 
-    children.forEach((c) => body.appendChild(c));
-    g.appendChild(h);
-    g.appendChild(body);
-    return g;
-  };
+    wrap.appendChild(head);
+    wrap.appendChild(body);
+    return { wrap, body };
+  }
 
-  const mkField = (label, inputEl, help) => {
-    const w = document.createElement('div');
-    w.style.display = 'flex';
-    w.style.flexDirection = 'column';
-    w.style.gap = '4px';
-    w.style.minWidth = '140px';
-
-    const l = document.createElement('div');
-    l.textContent = label;
-    l.style.fontSize = '0.72rem';
-    l.style.opacity = '0.75';
-
-    if (help) {
-      w.title = help;
-      inputEl.title = help;
-    } else {
-      inputEl.title = label;
+  function _mkCfgBadge(text, tone = 'default') {
+    const span = document.createElement('span');
+    span.textContent = text;
+    span.style.display = 'inline-flex';
+    span.style.alignItems = 'center';
+    span.style.padding = '3px 8px';
+    span.style.borderRadius = '999px';
+    span.style.fontSize = '0.72rem';
+    span.style.fontWeight = '600';
+    span.style.border = '1px solid rgba(255,255,255,0.12)';
+    span.style.background = 'rgba(255,255,255,0.04)';
+    if (tone === 'warn') {
+      span.style.background = 'rgba(255,180,0,0.10)';
+      span.style.borderColor = 'rgba(255,180,0,0.35)';
+    } else if (tone === 'ok') {
+      span.style.background = 'rgba(56,189,104,0.10)';
+      span.style.borderColor = 'rgba(56,189,104,0.35)';
     }
+    return span;
+  }
 
-    w.appendChild(l);
-    w.appendChild(inputEl);
-    return w;
-  };
-
-  const mkNum = (value, onChange, opts = {}) => {
-    const inp = document.createElement('input');
-    inp.type = 'number';
-    inp.value = (value ?? '');
-	  // Make inputs visually consistent with the rest of the App-Center.
-	  inp.className = 'nw-config-input';
-    if (opts.min != null) inp.min = String(opts.min);
-    if (opts.max != null) inp.max = String(opts.max);
-    if (opts.step != null) inp.step = String(opts.step);
-    if (opts.placeholder) inp.placeholder = opts.placeholder;
-    inp.style.width = (opts.width || '140px');
-    inp.onchange = () => onChange(parseFloat(inp.value));
-    return inp;
-  };
-
-  const mkSelect = (value, options, onChange, opts = {}) => {
-    const sel = document.createElement('select');
-	  // Make selects visually consistent with the rest of the App-Center.
-	  sel.className = 'nw-config-select';
-    sel.style.width = (opts.width || '180px');
-    options.forEach((o) => {
-      const opt = document.createElement('option');
-      opt.value = o.value;
-      opt.textContent = o.label;
-      sel.appendChild(opt);
-    });
-    sel.value = value;
-    sel.onchange = () => onChange(sel.value);
-    return sel;
-  };
-
-  const mkToggle = (checked, onChange, opts = {}) => {
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = !!checked;
-    cb.onchange = () => onChange(cb.checked);
-    if (opts.disabled) cb.disabled = true;
-    return cb;
-  };
-
-  const typeOptions = [
-    { value: 'power', label: 'Leistung (W) – modulierend' },
-    { value: 'setpoint', label: 'Sollwert (z.B. °C) – Setpoint' },
-    { value: 'sgready', label: 'SG-Ready – Stufe/Relais' },
-  ];
-
-  const profileOptions = [
-    { value: 'heat', label: 'Heizen' },
-    { value: 'cool', label: 'Kühlen' },
-  ];
-
-  cfg.devices.forEach((dev, i) => {
-    const idx = i + 1;
-
-    // Row layout
+  function _mkDeviceRow(title, subtitle, badges = []) {
     const row = document.createElement('div');
-    row.className = 'row thermalRow';
-    row.style.display = 'grid';
-    row.style.gridTemplateColumns = '240px 1fr';
-    row.style.gap = '14px';
+    row.className = 'nw-config-item';
     row.style.alignItems = 'start';
 
-    // Left: basic
     const left = document.createElement('div');
-    left.style.display = 'flex';
-    left.style.flexDirection = 'column';
-    left.style.gap = '8px';
+    left.className = 'nw-config-item__left';
+    left.style.maxWidth = '280px';
 
-    const title = document.createElement('div');
-    title.style.display = 'flex';
-    title.style.alignItems = 'center';
-    title.style.gap = '10px';
+    const ttl = document.createElement('div');
+    ttl.className = 'nw-config-item__title';
+    ttl.textContent = title;
 
-    const en = mkToggle(dev.enabled, (v) => { dev.enabled = !!v; setDirty(); });
-    title.appendChild(en);
+    const sub = document.createElement('div');
+    sub.className = 'nw-config-item__subtitle';
+    sub.textContent = subtitle || '';
 
-    const t = document.createElement('div');
-    t.textContent = `Slot ${idx} – Verbraucher ${idx}`;
-    t.style.fontWeight = '600';
-    title.appendChild(t);
+    const badgeWrap = document.createElement('div');
+    badgeWrap.style.display = 'flex';
+    badgeWrap.style.flexWrap = 'wrap';
+    badgeWrap.style.gap = '6px';
+    badgeWrap.style.marginTop = '8px';
+    (badges || []).forEach((b) => badgeWrap.appendChild(b));
 
-    left.appendChild(title);
+    left.appendChild(ttl);
+    if (subtitle) left.appendChild(sub);
+    if ((badges || []).length) left.appendChild(badgeWrap);
 
-    const nameInp = document.createElement('input');
-    nameInp.type = 'text';
-    nameInp.value = dev.name || '';
-	  nameInp.className = 'nw-config-input';
-    nameInp.placeholder = 'Name (z.B. Wärmepumpe, Heizstab, Klima ...)';
-    nameInp.style.width = '220px';
-    nameInp.onchange = () => { dev.name = nameInp.value; setDirty(); };
-    left.appendChild(mkField('Name', nameInp, 'Freier Anzeigename für VIS & AppCenter.'));
-
-    // Right: parameters
     const right = document.createElement('div');
+    right.className = 'nw-config-item__right';
     right.style.display = 'flex';
-    right.style.flexWrap = 'wrap';
+    right.style.flexDirection = 'column';
     right.style.gap = '12px';
-
-    // Variant / profile
-    const selType = mkSelect(dev.type || 'power', typeOptions, (v) => { dev.type = v; setDirty(); syncVisibility(); }, { width: '260px' });
-    const selProfile = mkSelect(dev.profile || 'heat', profileOptions, (v) => { dev.profile = v; setDirty(); }, { width: '160px' });
-
-    // PV-auto thresholds
-    const inpStart = mkNum(dev.startSurplusW, (v) => { dev.startSurplusW = isFinite(v) ? v : 0; setDirty(); }, { min: 0, step: 10, placeholder: 'z.B. 800', width: '130px' });
-    const inpStop = mkNum(dev.stopSurplusW, (v) => { dev.stopSurplusW = isFinite(v) ? v : 0; setDirty(); }, { min: 0, step: 10, placeholder: 'z.B. 300', width: '130px' });
-
-    // Timing (anti-flutter)
-    const inpMinOn = mkNum(dev.minOnSec, (v) => { dev.minOnSec = isFinite(v) ? v : 0; setDirty(); }, { min: 0, step: 1, placeholder: 'Sek.', width: '110px' });
-    const inpMinOff = mkNum(dev.minOffSec, (v) => { dev.minOffSec = isFinite(v) ? v : 0; setDirty(); }, { min: 0, step: 1, placeholder: 'Sek.', width: '110px' });
-
-    // Boost
-    const inpBoostEn = mkToggle(dev.boostEnabled, (v) => { dev.boostEnabled = !!v; setDirty(); syncVisibility(); });
-    const inpBoostW = mkNum(dev.boostPowerW, (v) => { dev.boostPowerW = isFinite(v) ? v : 0; setDirty(); }, { min: 0, step: 10, placeholder: 'W', width: '120px' });
-    const inpBoostMin = mkNum(dev.boostDurationMin, (v) => { dev.boostDurationMin = isFinite(v) ? v : 0; setDirty(); }, { min: 0, step: 1, placeholder: 'Min.', width: '120px' });
-
-    // Setpoint
-    const inpAutoOn = mkNum(dev.autoOnSetpoint, (v) => { dev.autoOnSetpoint = isFinite(v) ? v : 0; setDirty(); }, { step: 1, placeholder: 'z.B. 55', width: '120px' });
-    const inpAutoOff = mkNum(dev.autoOffSetpoint, (v) => { dev.autoOffSetpoint = isFinite(v) ? v : 0; setDirty(); }, { step: 1, placeholder: 'z.B. 45', width: '120px' });
-
-    // Power estimation / limits
-    const inpEstW = mkNum(dev.estimatedPowerW, (v) => { dev.estimatedPowerW = isFinite(v) ? v : 0; setDirty(); }, { min: 0, step: 10, placeholder: 'W', width: '120px' });
-    const inpMaxW = mkNum(dev.maxPowerW, (v) => { dev.maxPowerW = isFinite(v) ? v : 0; setDirty(); }, { min: 0, step: 10, placeholder: 'W', width: '120px' });
-
-    // SG-Ready
-    const inpMaxStage = mkNum(dev.maxSgStage, (v) => { dev.maxSgStage = isFinite(v) ? v : 0; setDirty(); }, { min: 1, step: 1, placeholder: '1-4', width: '110px' });
-
-    // Assemble groups
-    right.appendChild(mkGroup('Variante & Modus', [
-      mkField('Regelvariante', selType, 'Wählen, wie der Verbraucher geregelt wird (Leistung, Sollwert oder SG‑Ready).'),
-      mkField('Profil', selProfile, 'Nur Anzeige/Label (z.B. Heizen/Kühlen).'),
-    ]));
-
-    right.appendChild(mkGroup('PV‑Auto Schwellwerte', [
-      mkField('Start Überschuss (W)', inpStart, 'Ab diesem PV‑Überschuss wird der Verbraucher eingeschaltet/angehoben.'),
-      mkField('Stop Überschuss (W)', inpStop, 'Unterhalb dieses Überschusses wird der Verbraucher wieder reduziert/ausgeschaltet.'),
-    ]));
-
-    right.appendChild(mkGroup('Timing (Anti‑Flattern)', [
-      mkField('Min. Ein‑Zeit (s)', inpMinOn, 'Verhindert häufiges Ein/Aus (Mindestlaufzeit).'),
-      mkField('Min. Aus‑Zeit (s)', inpMinOff, 'Verhindert häufiges Ein/Aus (Mindestruhezeit).'),
-    ]));
-
-    // Variant-specific
-    const grpSetpoint = mkGroup('Sollwert (Setpoint)', [
-      mkField('Auto‑On Sollwert', inpAutoOn, 'Sollwert der bei PV‑Auto gesetzt wird (z.B. °C).'),
-      mkField('Auto‑Off Sollwert', inpAutoOff, 'Sollwert der bei PV‑Auto gesetzt wird (z.B. °C).'),
-      mkField('Leistungs‑Schätzung (W)', inpEstW, 'Für Regelung/Anzeige – typische Leistungsaufnahme bei aktivem Setpoint.'),
-    ]);
-
-    const grpPower = mkGroup('Leistung (W)', [
-      mkField('Leistungs‑Schätzung (W)', inpEstW, 'Für Regelung/Anzeige – typische Leistungsaufnahme bei aktivem Verbraucher.'),
-      mkField('Max. Leistung (W)', inpMaxW, 'Obergrenze für modulierende Leistungs‑Ansteuerung.'),
-    ]);
-
-    const grpSg = mkGroup('SG‑Ready', [
-      mkField('Leistungs‑Schätzung (W)', inpEstW, 'Für Regelung/Anzeige – typische Leistungsaufnahme bei SG‑Ready Stufe.'),
-      mkField('Max. SG‑Stufe', inpMaxStage, 'Maximale Stufe (z.B. 4).'),
-    ]);
-
-    right.appendChild(grpSetpoint);
-    right.appendChild(grpPower);
-    right.appendChild(grpSg);
-
-    // Boost group
-    const boostWrap = document.createElement('div');
-    boostWrap.style.display = 'flex';
-    boostWrap.style.alignItems = 'center';
-    boostWrap.style.gap = '8px';
-    boostWrap.appendChild(inpBoostEn);
-    const boostEnLabel = document.createElement('div');
-    boostEnLabel.textContent = 'Boost aktiv';
-    boostEnLabel.style.fontSize = '0.9rem';
-    boostWrap.appendChild(boostEnLabel);
-
-    const grpBoost = mkGroup('Boost (Schnellsteuerung)', [
-      mkField('Boost Ein/Aus', boostWrap, 'Erlaubt dem Endkunden einen zeitlich begrenzten Boost über die VIS.'),
-      mkField('Boost Wert (W)', inpBoostW, 'Bei Boost: Ziel‑Leistung oder Schaltwert.'),
-      mkField('Boost Dauer (min)', inpBoostMin, 'Wie lange Boost aktiv bleibt.'),
-    ]);
-    right.appendChild(grpBoost);
-
-    // Visibility logic
-    function syncVisibility() {
-      const t = String(dev.type || 'power');
-      grpSetpoint.style.display = (t === 'setpoint') ? '' : 'none';
-      grpPower.style.display = (t === 'power') ? '' : 'none';
-      grpSg.style.display = (t === 'sgready') ? '' : 'none';
-
-      inpBoostW.disabled = !dev.boostEnabled;
-      inpBoostMin.disabled = !dev.boostEnabled;
-    }
-    syncVisibility();
+    right.style.flex = '1';
 
     row.appendChild(left);
     row.appendChild(right);
-    els.thermalDevices.appendChild(row);
-  });
+    return { row, left, right, badgeWrap };
+  }
 
-  updateAppActive();
-}
+  function buildThermalUI() {
+    if (!els.thermalDevices) return;
+    const cfg = _ensureThermalCfg();
+    const apps = (currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps) ? currentConfig.emsApps.apps : {};
+    const app = (apps && apps.thermal) ? apps.thermal : { installed: false, enabled: false };
+
+    if (els.thermalHoldMinutes) {
+      els.thermalHoldMinutes.value = String(cfg.manualHoldMin ?? 20);
+      els.thermalHoldMinutes.onchange = () => {
+        const tcfg = _ensureThermalCfg();
+        tcfg.manualHoldMin = _clampInt(els.thermalHoldMinutes.value, 0, 24 * 60, 20);
+        els.thermalHoldMinutes.value = String(tcfg.manualHoldMin);
+        setDirty();
+      };
+      els.thermalHoldMinutes.disabled = !app.enabled;
+    }
+
+    els.thermalDevices.innerHTML = '';
+
+    const modeOptions = [
+      { value: 'pvAuto', label: 'PV-Auto' },
+      { value: 'manual', label: 'Manuell' },
+      { value: 'off', label: 'Aus' },
+    ];
+    const typeOptions = [
+      { value: 'setpoint', label: 'Sollwert / Setpoint' },
+      { value: 'sgready', label: 'SG-Ready' },
+      { value: 'power', label: 'Leistung (modulierend)' },
+    ];
+    const profileOptions = [
+      { value: 'heating', label: 'Heizen' },
+      { value: 'cooling', label: 'Kühlen' },
+      { value: 'neutral', label: 'Neutral' },
+    ];
+
+    cfg.devices.forEach((dev, idx) => {
+      const slot = idx + 1;
+      const slotCfg = _getFlowConsumerSlotCfg(slot);
+      const ctrl = (slotCfg.ctrl && typeof slotCfg.ctrl === 'object') ? slotCfg.ctrl : {};
+      const slotType = _getFlowConsumerTypeForSlot(slot);
+      const title = `Slot ${slot} – ${_getFlowConsumerName(slot)}`;
+      const badges = [
+        _mkCfgBadge(slotType === 'heatingRod' ? 'Heizstab-Slot' : (slotType === 'heatPump' ? 'Wärmepumpe/Klima' : 'Allgemeiner Verbraucher'), slotType === 'heatingRod' ? 'warn' : 'ok'),
+        _mkCfgBadge(app.enabled ? 'App aktiv' : 'App deaktiviert'),
+      ];
+      const { row, right } = _mkDeviceRow(title, 'Thermik-Regelung für Wärmepumpe, Klima oder thermische Setpoint-/SG-Ready-Geräte.', badges);
+
+      const info = document.createElement('div');
+      info.className = 'nw-config-field-hint';
+      info.style.margin = '0';
+      info.textContent = [
+        `Leistung: ${String((currentConfig.datapoints && currentConfig.datapoints[`consumer${slot}Power`]) || '').trim() ? '✓' : 'fehlt'}`,
+        `Switch: ${String(ctrl.switchWriteId || '').trim() ? '✓' : '–'}`,
+        `Setpoint: ${String(ctrl.setpointWriteId || '').trim() ? '✓' : '–'}`,
+        `SG-Ready: ${(String(ctrl.sgReadyAWriteId || ctrl.sgReady1WriteId || '').trim() && String(ctrl.sgReadyBWriteId || ctrl.sgReady2WriteId || '').trim()) ? '✓' : '–'}`,
+      ].join(' • ');
+      right.appendChild(info);
+
+      if (slotType === 'heatingRod') {
+        const warn = document.createElement('div');
+        warn.className = 'nw-help';
+        warn.textContent = 'Dieser Verbraucher-Slot ist im Energiefluss als Heizstab markiert und wird deshalb nicht mehr von der Thermik-App geregelt. Bitte im Tab „Heizstab“ parametrieren.';
+        right.appendChild(warn);
+        els.thermalDevices.appendChild(row);
+        return;
+      }
+
+      const grpBasic = _mkCfgGroup('Grunddaten');
+      grpBasic.body.appendChild(_mkCfgField('PV-Auto aktiv', _mkCfgToggle(dev.enabled, (v) => { dev.enabled = !!v; setDirty(); }), 'Aktiviert die automatische Überschuss-Regelung für diesen Slot.'));
+      grpBasic.body.appendChild(_mkCfgField('Name (optional)', _mkCfgInput('text', dev.name || '', (v) => { dev.name = String(v || '').trim(); setDirty(); }, { width: '220px', placeholder: 'Anzeige-Name' }), 'Leer lassen = Name aus Energiefluss-Slot verwenden.'));
+      grpBasic.body.appendChild(_mkCfgField('Modus', _mkCfgSelect(dev.mode || 'pvAuto', modeOptions, (v) => { dev.mode = v; setDirty(); }, { width: '160px' }), 'PV-Auto = EMS regelt, Manuell = nur Ist-Leistung bilanzieren, Aus = immer aus.'));
+      grpBasic.body.appendChild(_mkCfgField('Regelart', _mkCfgSelect(dev.type || 'setpoint', typeOptions, (v) => { dev.type = v; syncVisibility(); setDirty(); }, { width: '220px' }), 'Setpoint / SG-Ready / modulierende Leistungsansteuerung.'));
+      grpBasic.body.appendChild(_mkCfgField('Profil', _mkCfgSelect(dev.profile || 'heating', profileOptions, (v) => { dev.profile = v; const defs = _thermalDefaultSetpoints(v); if (!Number.isFinite(Number(dev.autoOnSetpoint))) dev.autoOnSetpoint = defs.on; if (!Number.isFinite(Number(dev.autoOffSetpoint))) dev.autoOffSetpoint = defs.off; if (!Number.isFinite(Number(dev.boostSetpoint))) dev.boostSetpoint = defs.boost; buildThermalUI(); setDirty(); }, { width: '150px' }), 'Bestimmt nur sinnvolle Default-Sollwerte für Setpoint-Geräte.'));
+      grpBasic.body.appendChild(_mkCfgField('Priorität', _mkCfgInput('number', dev.priority, (v) => { dev.priority = _clampInt(v, 1, 999, 100 + slot); setDirty(); }, { min: 1, max: 999, step: 1, width: '110px' }), 'Kleinere Zahl = wird früher bedient.'));
+      right.appendChild(grpBasic.wrap);
+
+      const grpThresholds = _mkCfgGroup('PV-Auto & Hysterese');
+      grpThresholds.body.appendChild(_mkCfgField('Start Überschuss (W)', _mkCfgInput('number', dev.startSurplusW, (v) => { dev.startSurplusW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '130px' }), 'Ab hier wird zugeschaltet bzw. angehoben.'));
+      grpThresholds.body.appendChild(_mkCfgField('Stop Überschuss (W)', _mkCfgInput('number', dev.stopSurplusW, (v) => { dev.stopSurplusW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '130px' }), 'Unterhalb dieser Schwelle wird wieder reduziert/abgeschaltet.'));
+      grpThresholds.body.appendChild(_mkCfgField('Min. Ein-Zeit (s)', _mkCfgInput('number', dev.minOnSec, (v) => { dev.minOnSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '120px' }), 'Verhindert Flattern.'));
+      grpThresholds.body.appendChild(_mkCfgField('Min. Aus-Zeit (s)', _mkCfgInput('number', dev.minOffSec, (v) => { dev.minOffSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '120px' }), 'Verhindert Flattern.'));
+      right.appendChild(grpThresholds.wrap);
+
+      const grpSetpoint = _mkCfgGroup('Setpoint / Sollwert');
+      grpSetpoint.body.appendChild(_mkCfgField('Auto-On Sollwert', _mkCfgInput('number', dev.autoOnSetpoint, (v) => { dev.autoOnSetpoint = Number.isFinite(v) ? v : dev.autoOnSetpoint; setDirty(); }, { step: 0.1, width: '130px' }), 'Sollwert während PV-Auto.'));
+      grpSetpoint.body.appendChild(_mkCfgField('Auto-Off Sollwert', _mkCfgInput('number', dev.autoOffSetpoint, (v) => { dev.autoOffSetpoint = Number.isFinite(v) ? v : dev.autoOffSetpoint; setDirty(); }, { step: 0.1, width: '130px' }), 'Sollwert im reduzierten Zustand.'));
+      grpSetpoint.body.appendChild(_mkCfgField('Boost Sollwert', _mkCfgInput('number', dev.boostSetpoint, (v) => { dev.boostSetpoint = Number.isFinite(v) ? v : dev.boostSetpoint; setDirty(); }, { step: 0.1, width: '130px' }), 'Sollwert bei Schnellsteuerung/Boost.'));
+      grpSetpoint.body.appendChild(_mkCfgField('Leistungs-Schätzung (W)', _mkCfgInput('number', dev.estimatedPowerW, (v) => { dev.estimatedPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '140px' }), 'Nur für PV-Budgetierung und Anzeige.'));
+      right.appendChild(grpSetpoint.wrap);
+
+      const grpPower = _mkCfgGroup('Leistungsregelung');
+      grpPower.body.appendChild(_mkCfgField('Max. Leistung (W)', _mkCfgInput('number', dev.maxPowerW, (v) => { dev.maxPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '140px' }), 'Für modulierende Leistungsgeräte.'));
+      grpPower.body.appendChild(_mkCfgField('Boost Leistung (W)', _mkCfgInput('number', dev.boostPowerW, (v) => { dev.boostPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '140px' }), 'Wert für Schnellsteuerung/Boost.'));
+      right.appendChild(grpPower.wrap);
+
+      const grpSg = _mkCfgGroup('SG-Ready');
+      grpSg.body.appendChild(_mkCfgField('Leistungs-Schätzung (W)', _mkCfgInput('number', dev.estimatedPowerW, (v) => { dev.estimatedPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '140px' }), 'Typischer Verbrauch im aktiven SG-Ready-Zustand.'));
+      grpSg.body.appendChild(_mkCfgField('Max. SG-Stufe', _mkCfgInput('number', dev.maxSgStage, (v) => { dev.maxSgStage = _clampInt(v, 1, 4, 4); setDirty(); }, { min: 1, max: 4, step: 1, width: '120px' }), 'Zur Dokumentation; SG-Ready nutzt Relais A/B aus dem Energiefluss-Slot.'));
+      right.appendChild(grpSg.wrap);
+
+      const grpBoost = _mkCfgGroup('Schnellsteuerung');
+      const boostToggleWrap = document.createElement('div');
+      boostToggleWrap.style.display = 'flex';
+      boostToggleWrap.style.alignItems = 'center';
+      boostToggleWrap.style.gap = '8px';
+      boostToggleWrap.appendChild(_mkCfgToggle(dev.boostEnabled, (v) => { dev.boostEnabled = !!v; syncVisibility(); setDirty(); }));
+      const boostLbl = document.createElement('span');
+      boostLbl.textContent = 'Boost erlauben';
+      boostToggleWrap.appendChild(boostLbl);
+      grpBoost.body.appendChild(_mkCfgField('Boost', boostToggleWrap, 'Erlaubt zeitlich begrenzte manuelle Übersteuerung aus der VIS.'));
+      grpBoost.body.appendChild(_mkCfgField('Boost Dauer (min)', _mkCfgInput('number', dev.boostDurationMin, (v) => { dev.boostDurationMin = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '130px' }), 'Wie lange Boost aktiv bleibt.'));
+      right.appendChild(grpBoost.wrap);
+
+      function syncVisibility() {
+        const type = String(dev.type || 'setpoint');
+        grpSetpoint.wrap.style.display = (type === 'setpoint') ? '' : 'none';
+        grpPower.wrap.style.display = (type === 'power') ? '' : 'none';
+        grpSg.wrap.style.display = (type === 'sgready') ? '' : 'none';
+        grpBoost.wrap.style.opacity = dev.boostEnabled ? '1' : '0.9';
+      }
+      syncVisibility();
+
+      els.thermalDevices.appendChild(row);
+    });
+  }
+
+  function buildHeatingRodUI() {
+    if (!els.heatingRodDevices) return;
+    const cfg = _ensureHeatingRodCfg();
+    els.heatingRodDevices.innerHTML = '';
+
+    const visibleSlots = [];
+    for (let slot = 1; slot <= FLOW_CONSUMER_SLOT_COUNT; slot++) {
+      if (_getFlowConsumerTypeForSlot(slot) === 'heatingRod') visibleSlots.push(slot);
+    }
+
+    if (!visibleSlots.length) {
+      const empty = document.createElement('div');
+      empty.className = 'nw-help';
+      empty.textContent = 'Noch kein Verbraucher-Slot als Heizstab markiert. Bitte zuerst im Energiefluss beim gewünschten Verbraucher-Typ „Heizstab“ auswählen und dort die Stage 1..12 Write/Read-Datenpunkte hinterlegen.';
+      els.heatingRodDevices.appendChild(empty);
+      return;
+    }
+
+    const modeOptions = [
+      { value: 'pvAuto', label: 'PV-Auto' },
+      { value: 'manual', label: 'Manuell' },
+      { value: 'off', label: 'Aus' },
+    ];
+    const stageCountOptions = Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}` }));
+
+    visibleSlots.forEach((slot) => {
+      const dev = cfg.devices[slot - 1];
+      const slotCfg = _getFlowConsumerSlotCfg(slot);
+      const ctrl = (slotCfg.ctrl && typeof slotCfg.ctrl === 'object') ? slotCfg.ctrl : {};
+      const wiredStages = _countHeatingRodWiredStages(slot);
+      const badges = [
+        _mkCfgBadge(`Verdrahtet: ${wiredStages}/${dev.stageCount} Stufen`, wiredStages >= dev.stageCount ? 'ok' : 'warn'),
+        _mkCfgBadge(`Max: ${dev.maxPowerW} W`),
+      ];
+      const { row, right } = _mkDeviceRow(`Slot ${slot} – ${_getFlowConsumerName(slot)}`, 'Native gestufte Heizstab-Regelung über die im Energiefluss hinterlegten Relais-/KNX-Kanäle.', badges);
+
+      const info = document.createElement('div');
+      info.className = 'nw-config-field-hint';
+      info.style.margin = '0';
+      info.textContent = `Leistungs-DP: ${String((currentConfig.datapoints && currentConfig.datapoints[`consumer${slot}Power`]) || '').trim() ? '✓' : 'fehlt'} • Switch-Fallback: ${String(ctrl.switchWriteId || '').trim() ? '✓' : '–'} • Stage-Write-DPs bitte im Energiefluss pflegen.`;
+      right.appendChild(info);
+
+      const grpBasic = _mkCfgGroup('Grunddaten');
+      grpBasic.body.appendChild(_mkCfgField('PV-Auto aktiv', _mkCfgToggle(dev.enabled, (v) => { dev.enabled = !!v; setDirty(); }), 'Aktiviert die native Heizstab-Regelung für diesen Slot.'));
+      grpBasic.body.appendChild(_mkCfgField('Name (optional)', _mkCfgInput('text', dev.name || '', (v) => { dev.name = String(v || '').trim(); setDirty(); }, { width: '220px', placeholder: 'Anzeige-Name' }), 'Leer lassen = Name aus Energiefluss-Slot.'));
+      grpBasic.body.appendChild(_mkCfgField('Modus', _mkCfgSelect(dev.mode || 'pvAuto', modeOptions, (v) => { dev.mode = v; setDirty(); }, { width: '160px' }), 'PV-Auto = native Stufenregelung, Manuell = nur bilanzieren, Aus = alles aus.'));
+      grpBasic.body.appendChild(_mkCfgField('Priorität', _mkCfgInput('number', dev.priority, (v) => { dev.priority = _clampInt(v, 1, 999, 200 + slot); setDirty(); }, { min: 1, max: 999, step: 1, width: '110px' }), 'Kleinere Zahl = wird früher aus PV versorgt.'));
+      grpBasic.body.appendChild(_mkCfgField('Max. Leistung (W)', _mkCfgInput('number', dev.maxPowerW, (v) => { dev.maxPowerW = Math.max(0, Math.round(Number(v) || 0)); _syncHeatingRodDeviceStages(dev); buildHeatingRodUI(); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Gesamtleistung des Heizstabs / Verbunds.'));
+      grpBasic.body.appendChild(_mkCfgField('Stufen', _mkCfgSelect(String(dev.stageCount || 1), stageCountOptions, (v) => { dev.stageCount = _clampInt(v, 1, 12, 1); _syncHeatingRodDeviceStages(dev); buildHeatingRodUI(); setDirty(); }, { width: '110px' }), 'Anzahl nativer Heizstab-Stufen.'));
+      right.appendChild(grpBasic.wrap);
+
+      const grpTiming = _mkCfgGroup('Timing');
+      grpTiming.body.appendChild(_mkCfgField('Min. Ein-Zeit (s)', _mkCfgInput('number', dev.minOnSec, (v) => { dev.minOnSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '130px' }), 'Verhindert schnelles Rückschalten.'));
+      grpTiming.body.appendChild(_mkCfgField('Min. Aus-Zeit (s)', _mkCfgInput('number', dev.minOffSec, (v) => { dev.minOffSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '130px' }), 'Verhindert zu frühes Wiederzuschalten.'));
+      const resetBtn = document.createElement('button');
+      resetBtn.type = 'button';
+      resetBtn.className = 'nw-config-btn nw-config-btn--ghost';
+      resetBtn.textContent = 'Stufen aus Max.-Leistung neu verteilen';
+      resetBtn.addEventListener('click', () => {
+        _syncHeatingRodDeviceStages(dev, { resetAll: true });
+        buildHeatingRodUI();
+        setDirty();
+      });
+      grpTiming.body.appendChild(_mkCfgField('Stufenhilfe', resetBtn, 'Verteilt die Gesamtleistung gleichmäßig über alle aktuell konfigurierten Stufen und setzt passende Default-Grenzen.'));
+      right.appendChild(grpTiming.wrap);
+
+      const stageWrap = document.createElement('div');
+      stageWrap.style.display = 'flex';
+      stageWrap.style.flexDirection = 'column';
+      stageWrap.style.gap = '8px';
+      stageWrap.style.padding = '10px 12px';
+      stageWrap.style.border = '1px solid rgba(255,255,255,0.08)';
+      stageWrap.style.borderRadius = '12px';
+      stageWrap.style.background = 'rgba(255,255,255,0.02)';
+
+      const stageHead = document.createElement('div');
+      stageHead.style.display = 'flex';
+      stageHead.style.flexWrap = 'wrap';
+      stageHead.style.justifyContent = 'space-between';
+      stageHead.style.gap = '8px';
+      const stageTitle = document.createElement('div');
+      stageTitle.textContent = 'Stufenparameter';
+      stageTitle.style.fontWeight = '600';
+      stageTitle.style.fontSize = '0.82rem';
+      const stageHint = document.createElement('div');
+      stageHint.className = 'nw-config-field-hint';
+      stageHint.style.margin = '0';
+      stageHint.textContent = 'Pro Stufe: Leistung sowie obere/untere Überschuss-Grenze definieren. So entsteht eine echte native Hysterese ohne zusätzliches JavaScript.';
+      stageHead.appendChild(stageTitle);
+      stageHead.appendChild(stageHint);
+      stageWrap.appendChild(stageHead);
+
+      const headRow = document.createElement('div');
+      headRow.style.display = 'grid';
+      headRow.style.gridTemplateColumns = '100px repeat(3, minmax(120px, 1fr))';
+      headRow.style.gap = '10px';
+      headRow.style.alignItems = 'end';
+      ['Stufe', 'Leistung (W)', 'Ein ab (W)', 'Aus unter (W)'].forEach((txt) => {
+        const h = document.createElement('div');
+        h.textContent = txt;
+        h.style.fontSize = '0.72rem';
+        h.style.opacity = '0.75';
+        h.style.fontWeight = '600';
+        headRow.appendChild(h);
+      });
+      stageWrap.appendChild(headRow);
+
+      (dev.stages || []).forEach((stage, index) => {
+        const s = index + 1;
+        const sRow = document.createElement('div');
+        sRow.style.display = 'grid';
+        sRow.style.gridTemplateColumns = '100px repeat(3, minmax(120px, 1fr))';
+        sRow.style.gap = '10px';
+        sRow.style.alignItems = 'end';
+
+        const label = document.createElement('div');
+        label.style.display = 'flex';
+        label.style.flexDirection = 'column';
+        label.style.gap = '4px';
+        const labelMain = document.createElement('div');
+        labelMain.textContent = `Stufe ${s}`;
+        labelMain.style.fontWeight = '600';
+        const labelSub = document.createElement('div');
+        labelSub.className = 'nw-config-field-hint';
+        labelSub.style.margin = '0';
+        const stageWriteId = String(ctrl[`stage${s}WriteId`] || ctrl[`heatingStage${s}WriteId`] || ((s === 1) ? (ctrl.switchWriteId || '') : '') || '').trim();
+        const stageReadId = String(ctrl[`stage${s}ReadId`] || ctrl[`heatingStage${s}ReadId`] || ((s === 1) ? (ctrl.switchReadId || '') : '') || '').trim();
+        labelSub.textContent = stageWriteId ? 'DP ✓' : 'DP fehlt';
+        labelSub.title = `Write: ${stageWriteId || '—'} • Read: ${stageReadId || '—'}`;
+        label.appendChild(labelMain);
+        label.appendChild(labelSub);
+        sRow.appendChild(label);
+
+        sRow.appendChild(_mkCfgInput('number', stage.powerW, (v) => {
+          stage.powerW = Math.max(0, Math.round(Number(v) || 0));
+          dev.maxPowerW = Math.max(0, (dev.stages || []).reduce((sum, it) => sum + Math.max(0, Math.round(Number(it.powerW) || 0)), 0));
+          buildHeatingRodUI();
+          setDirty();
+        }, { min: 0, step: 10, width: '100%' }));
+
+        sRow.appendChild(_mkCfgInput('number', stage.onAboveW, (v) => {
+          stage.onAboveW = Math.max(0, Math.round(Number(v) || 0));
+          if (stage.offBelowW > stage.onAboveW) stage.offBelowW = stage.onAboveW;
+          buildHeatingRodUI();
+          setDirty();
+        }, { min: 0, step: 10, width: '100%' }));
+
+        sRow.appendChild(_mkCfgInput('number', stage.offBelowW, (v) => {
+          stage.offBelowW = Math.max(0, Math.round(Number(v) || 0));
+          if (stage.offBelowW > stage.onAboveW) stage.offBelowW = stage.onAboveW;
+          buildHeatingRodUI();
+          setDirty();
+        }, { min: 0, step: 10, width: '100%' }));
+
+        stageWrap.appendChild(sRow);
+      });
+
+      const sumInfo = document.createElement('div');
+      sumInfo.className = 'nw-config-field-hint';
+      sumInfo.style.margin = '0';
+      const sumW = (dev.stages || []).reduce((sum, st) => sum + Math.max(0, Math.round(Number(st.powerW) || 0)), 0);
+      sumInfo.textContent = `Summe konfigurierte Stufenleistung: ${sumW} W${sumW !== dev.maxPowerW ? ` (abweichend von Max. Leistung ${dev.maxPowerW} W)` : ''}.`;
+      stageWrap.appendChild(sumInfo);
+
+      if (wiredStages < dev.stageCount) {
+        const warn = document.createElement('div');
+        warn.className = 'nw-help';
+        warn.textContent = `Achtung: Es sind aktuell nur ${wiredStages} von ${dev.stageCount} Stufen im Energiefluss mit Write-/Read-DPs verdrahtet. Der native Heizstab regelt nur die wirklich angeschlossenen Kanäle.`;
+        stageWrap.appendChild(warn);
+      }
+
+      right.appendChild(stageWrap);
+      els.heatingRodDevices.appendChild(row);
+    });
+  }
 
 
 
@@ -5507,6 +5873,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
     // Thermik (Wärmepumpe/Heizung/Klima) – nutzt Verbraucher‑Slots
     try { buildThermalUI(); } catch (_e) {}
+    try { buildHeatingRodUI(); } catch (_e) {}
 
     // BHKW (Start/Stop, SoC-geführt)
     try { buildBhkwUI(); } catch (_e) {}
@@ -6214,6 +6581,7 @@ function _collectFlowPowerDpIsWFromUI() {
         const fs = _ensureFlowSlots();
 
         const tcfg = _ensureThermalCfg();
+        const hcfg = _ensureHeatingRodCfg();
         const icfg = _ensurePara14aCfg();
         icfg.para14aConsumers = Array.isArray(icfg.para14aConsumers) ? icfg.para14aConsumers : [];
 
@@ -6235,9 +6603,16 @@ function _collectFlowPowerDpIsWFromUI() {
           const powerId = _nwGetAlias(dev, 'r.power') || (dev && dev.dp && dev.dp.powerW) || _nwGetDpFallback(dev, 'aCTIVE_POWER');
           if (!String(powerId || '').trim()) continue;
 
-          // Find free slot (prefer first 8, so Thermik slots stay aligned)
-          let slot = _findFreeConsumerSlot({ from: 1, to: 8 });
-          if (!slot) slot = _findFreeConsumerSlot({ from: 9, to: FLOW_CONSUMER_SLOT_COUNT });
+          let slot = 0;
+          for (let i = 1; i <= FLOW_CONSUMER_SLOT_COUNT; i++) {
+            if (String(dps[`consumer${i}Power`] || '').trim() === String(powerId).trim()) {
+              slot = i;
+              break;
+            }
+          }
+          if (!slot) {
+            slot = _findFreeConsumerSlot({ from: 1, to: FLOW_CONSUMER_SLOT_COUNT });
+          }
           if (!slot) break;
 
           const dpKey = `consumer${slot}Power`;
@@ -6245,9 +6620,11 @@ function _collectFlowPowerDpIsWFromUI() {
 
           // Slot meta
           const c = _classifyHeatDevice(dev);
-          fs.consumers[slot - 1] = fs.consumers[slot - 1] || { name: '', icon: '', ctrl: {} };
+          const consumerType = (c.type === 'heatingRod') ? 'heatingRod' : 'heatPump';
+          fs.consumers[slot - 1] = fs.consumers[slot - 1] || { name: '', icon: '', ctrl: {}, consumerType: 'generic' };
           fs.consumers[slot - 1].name = String((dev && dev.name) || '').trim() || fs.consumers[slot - 1].name;
           fs.consumers[slot - 1].icon = c.icon;
+          fs.consumers[slot - 1].consumerType = consumerType;
 
           // Optional control aliases (will be filled automatically once your adapter provides them)
           const ctrlRun = _nwGetAlias(dev, 'ctrl.run') || (dev && dev.dp && dev.dp.ctrlRun) || '';
@@ -6265,12 +6642,19 @@ function _collectFlowPowerDpIsWFromUI() {
             if (!String(fs.consumers[slot - 1].ctrl.setpointLabel || '').trim()) fs.consumers[slot - 1].ctrl.setpointLabel = 'Sollwert (W)';
           }
 
-          // Thermik slot (aligned for slots 1..8)
-          if (slot >= 1 && slot <= 8) {
-            const td = tcfg.devices[slot - 1] || {};
+          if (consumerType === 'heatingRod') {
+            const hd = hcfg.devices[slot - 1] || { slot };
+            if (!String(hd.name || '').trim()) hd.name = String((dev && dev.name) || '').trim();
+            if (!Number.isFinite(Number(hd.maxPowerW)) || Number(hd.maxPowerW) <= 0) {
+              const wired = _countHeatingRodWiredStages(slot);
+              hd.maxPowerW = Math.max(2000, (wired || 3) * 2000);
+            }
+            if (!Number.isFinite(Number(hd.stageCount)) || Number(hd.stageCount) < 1) hd.stageCount = Math.max(1, _countHeatingRodWiredStages(slot) || 3);
+            hcfg.devices[slot - 1] = _syncHeatingRodDeviceStages(hd);
+          } else {
+            const td = tcfg.devices[slot - 1] || { slot };
             if (!String(td.name || '').trim()) td.name = String((dev && dev.name) || '').trim();
             if (!String(td.type || '').trim()) td.type = c.thermalType;
-            if (td.enabled === undefined) td.enabled = true;
             tcfg.devices[slot - 1] = td;
           }
 
@@ -6320,6 +6704,7 @@ function _collectFlowPowerDpIsWFromUI() {
       try { buildGridConstraintsUI(); } catch (_e) {}
       try { buildFlowSlotsUI('consumers', FLOW_CONSUMER_SLOT_COUNT); } catch (_e) {}
       try { buildThermalUI(); } catch (_e) {}
+      try { buildHeatingRodUI(); } catch (_e) {}
       try { buildPara14aUI(); } catch (_e) {}
       scheduleValidation(250);
 
@@ -6327,7 +6712,7 @@ function _collectFlowPowerDpIsWFromUI() {
       msgParts.push(`Geräte gefunden: ${devices.length}`);
       if (evcsDevs.length) msgParts.push(`Ladepunkte: ${evcsDevs.length} (zugeordnet: ${evcsMapped})`);
       if (pvDevs.length) msgParts.push(`Wechselrichter: ${pvDevs.length} (+${pvAdded}/${pvUpdated})`);
-      if (heatDevs.length) msgParts.push(`Thermik: ${heatDevs.length} (Slots: ${heatSlotsMapped}, §14a: +${heatPara14aAdded}/${heatPara14aUpdated})`);
+      if (heatDevs.length) msgParts.push(`Wärmegeräte: ${heatDevs.length} (Slots: ${heatSlotsMapped}, §14a: +${heatPara14aAdded}/${heatPara14aUpdated})`);
       if (flowAuto && Array.isArray(flowAuto.notes) && flowAuto.notes.length) msgParts.push('Energiefluss: ' + flowAuto.notes.join(', '));
 
       if (!changed) {
@@ -6443,8 +6828,9 @@ function _collectFlowPowerDpIsWFromUI() {
       // ignore
     }
 
-    // Thermik (PV‑Auto für Verbraucher‑Slots)
+    // Thermik / Heizstab (PV‑Auto für Verbraucher‑Slots)
     patch.thermal = deepMerge({}, currentConfig.thermal || {});
+    patch.heatingRod = deepMerge({}, currentConfig.heatingRod || {});
     patch.bhkw = deepMerge({}, currentConfig.bhkw || {});
     patch.generator = deepMerge({}, currentConfig.generator || {});
 

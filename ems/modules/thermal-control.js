@@ -159,6 +159,10 @@ class ThermalControlModule extends BaseModule {
             const priority = clamp(num(r.priority, 100 + slot), 1, 999);
 
             const slotCfg = (flowConsumers[slot - 1] && typeof flowConsumers[slot - 1] === 'object') ? flowConsumers[slot - 1] : {};
+            const slotTypeRaw = String(slotCfg.consumerType || slotCfg.type || slotCfg.category || '').trim().toLowerCase();
+            if (slotTypeRaw === 'heatingrod' || slotTypeRaw === 'heating_rod' || slotTypeRaw === 'heating-rod' || slotTypeRaw === 'heizstab' || slotTypeRaw === 'rod' || slotTypeRaw === 'immersion') {
+                continue;
+            }
             const ctrl = (slotCfg.ctrl && typeof slotCfg.ctrl === 'object') ? slotCfg.ctrl : {};
 
             const name = String(r.name || slotCfg.name || '').trim() || `Thermal ${slot}`;
@@ -352,6 +356,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
         await mk('thermal.summary.evcsUsedW', 'EVCS used (W)', 'number', 'value.power', 'W');
         await mk('thermal.summary.pvAvailableW', 'PV available for thermal (W)', 'number', 'value.power', 'W');
         await mk('thermal.summary.appliedTotalW', 'Applied total (W)', 'number', 'value.power', 'W');
+        await mk('thermal.summary.budgetUsedW', 'Budget used (W)', 'number', 'value.power', 'W');
         await mk('thermal.summary.lastUpdate', 'Last update', 'number', 'value.time');
         await mk('thermal.summary.status', 'Status', 'string', 'text');
 
@@ -481,29 +486,33 @@ const mk = async (id, name, type, role, unit = undefined) => {
     }
 
     _hysteresisOnOff(id, desiredOn, minOnSec, minOffSec) {
-        const h = this._hyst.get(id) || { on: false, lastOnMs: 0, lastOffMs: 0 };
+        const h = this._hyst.get(id) || { on: false, lastOnMs: 0, lastOffMs: 0, initialized: false };
         const now = nowMs();
-
-        // Initialize timestamps when first used
-        if (!h.lastOnMs && h.on) h.lastOnMs = now;
-        if (!h.lastOffMs && !h.on) h.lastOffMs = now;
 
         const minOnMs = Math.max(0, Math.round(num(minOnSec, 0) * 1000));
         const minOffMs = Math.max(0, Math.round(num(minOffSec, 0) * 1000));
 
+        // First use: do not artificially block the initial transition from OFF -> ON.
+        if (!h.initialized) {
+            h.initialized = true;
+            if (h.on) {
+                if (!h.lastOnMs) h.lastOnMs = Math.max(0, now - minOnMs);
+            } else {
+                if (!h.lastOffMs) h.lastOffMs = 0;
+            }
+        }
+
         let on = !!h.on;
 
         if (desiredOn && !on) {
-            // respect minimum off time
-            if (minOffMs > 0 && (now - (h.lastOffMs || 0)) < minOffMs) {
+            if (minOffMs > 0 && h.lastOffMs > 0 && (now - h.lastOffMs) < minOffMs) {
                 on = false;
             } else {
                 on = true;
                 h.lastOnMs = now;
             }
         } else if (!desiredOn && on) {
-            // respect minimum on time
-            if (minOnMs > 0 && (now - (h.lastOnMs || 0)) < minOnMs) {
+            if (minOnMs > 0 && h.lastOnMs > 0 && (now - h.lastOnMs) < minOnMs) {
                 on = true;
             } else {
                 on = false;
@@ -514,6 +523,16 @@ const mk = async (id, name, type, role, unit = undefined) => {
         h.on = on;
         this._hyst.set(id, h);
         return on;
+    }
+
+    _computeBandDesiredOn(id, availableW, startW, stopW) {
+        const h = this._hyst.get(id) || { on: false };
+        const wasOn = !!h.on;
+        const start = Math.max(0, Math.max(num(startW, 0), num(stopW, 0)));
+        const stop = Math.max(0, Math.min(num(startW, 0), num(stopW, 0)));
+        const avail = Math.max(0, num(availableW, 0));
+        if (wasOn) return avail > stop;
+        return avail >= start && avail > 0;
     }
 
     _readOverrideForDevice(d, now) {
@@ -538,7 +557,9 @@ const mk = async (id, name, type, role, unit = undefined) => {
         try {
             const p14a = (this.adapter && this.adapter._para14a && typeof this.adapter._para14a === 'object') ? this.adapter._para14a : null;
             if (p14a && p14a.active) {
+                this.adapter._thermalBudgetUsedW = 0;
                 await this._setStateIfChanged('thermal.summary.status', 'paused_by_14a');
+                await this._setStateIfChanged('thermal.summary.budgetUsedW', 0);
                 await this._setStateIfChanged('thermal.summary.lastUpdate', now);
                 return;
             }
@@ -550,6 +571,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
         let remainingW = Math.max(0, num(pv.availableW, 0));
 
         let appliedTotalW = 0;
+        let budgetUsedW = 0;
         const ctx = { dp: this.dp, adapter: this.adapter };
 
         for (const d of this._devices) {
@@ -627,7 +649,9 @@ const mk = async (id, name, type, role, unit = undefined) => {
             if (!effectiveEnabled) {
                 // subtract measured usage from remaining budget to avoid over-allocating PV to other consumers
                 if (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0) {
-                    remainingW = Math.max(0, remainingW - Math.max(0, measuredW));
+                    const used = Math.max(0, measuredW);
+                    remainingW = Math.max(0, remainingW - used);
+                    budgetUsedW += Math.round(used);
                 }
 
                 await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 0);
@@ -641,7 +665,9 @@ const mk = async (id, name, type, role, unit = undefined) => {
             if (ov.manualActive && !ov.boostActive) {
                 // subtract measured usage from remaining budget to avoid over-allocating PV
                 if (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0) {
-                    remainingW = Math.max(0, remainingW - Math.max(0, measuredW));
+                    const used = Math.max(0, measuredW);
+                    remainingW = Math.max(0, remainingW - used);
+                    budgetUsedW += Math.round(used);
                 }
                 await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 0);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, false);
@@ -705,6 +731,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
                 }
 
                 appliedTotalW += Math.max(0, Math.round(usedW));
+                budgetUsedW += Math.max(0, Math.round(usedW));
                 remainingW = Math.max(0, remainingW - usedW);
                 continue;
             }
@@ -712,7 +739,9 @@ const mk = async (id, name, type, role, unit = undefined) => {
             // Manual mode -> no writes (but account measured load)
             if (effectiveMode === 'manual') {
                 if (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0) {
-                    remainingW = Math.max(0, remainingW - Math.max(0, measuredW));
+                    const used = Math.max(0, measuredW);
+                    remainingW = Math.max(0, remainingW - used);
+                    budgetUsedW += Math.round(used);
                 }
                 await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 0);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, false);
@@ -761,6 +790,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
                 // While ramping down, we still account measured usage.
                 if (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0) usedW = measuredW;
                 appliedTotalW += Math.max(0, Math.round(usedW));
+                budgetUsedW += Math.max(0, Math.round(usedW));
                 remainingW = Math.max(0, remainingW - usedW);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.override`, '');
                 continue;
@@ -772,10 +802,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
             const startW = Math.max(0, num(d.startSurplusW, 0));
             const stopW = Math.max(0, num(d.stopSurplusW, 0));
 
-            let desiredOn = false;
-            if (remainingW >= startW && remainingW > 0) desiredOn = true;
-            if (remainingW <= stopW) desiredOn = false;
-
+            const desiredOn = this._computeBandDesiredOn(d.id, remainingW, startW, stopW);
             const on = this._hysteresisOnOff(d.id, desiredOn, d.minOnSec, d.minOffSec);
 
             if (actType === 'setpoint') {
@@ -834,17 +861,23 @@ const mk = async (id, name, type, role, unit = undefined) => {
                 await this._setStateIfChanged(`thermal.devices.${d.id}.status`, String(res.status || ''));
                 await this._setStateIfChanged(`thermal.devices.${d.id}.override`, '');
 
-                usedW = Math.max(0, Math.round(desiredW));
+                usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
+                    ? Math.max(0, measuredW)
+                    : Math.max(0, Math.round(desiredW));
             }
 
             appliedTotalW += Math.max(0, Math.round(usedW));
+            budgetUsedW += Math.max(0, Math.round(usedW));
             remainingW = Math.max(0, remainingW - usedW);
         }
+
+        this.adapter._thermalBudgetUsedW = Math.round(budgetUsedW);
 
         await this._setStateIfChanged('thermal.summary.pvCapW', Math.round(num(pv.pvCapW, 0)));
         await this._setStateIfChanged('thermal.summary.evcsUsedW', Math.round(num(pv.evcsUsedW, 0)));
         await this._setStateIfChanged('thermal.summary.pvAvailableW', Math.round(num(pv.availableW, 0)));
         await this._setStateIfChanged('thermal.summary.appliedTotalW', Math.round(appliedTotalW));
+        await this._setStateIfChanged('thermal.summary.budgetUsedW', Math.round(budgetUsedW));
         await this._setStateIfChanged('thermal.summary.lastUpdate', now);
         await this._setStateIfChanged('thermal.summary.status', (this._devices && this._devices.length) ? `ok_${pv.source}` : 'no_devices');
     }

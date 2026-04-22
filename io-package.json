@@ -1,8 +1,25 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.235",
+    "version": "0.6.237",
     "news": {
+      "0.6.237": {
+        "en": "Heating rod quick control for end customers: native quick control via energy-flow monitor / control tile with regulation on/off, manual levels 1/2/3 and a 100% boost mode for 60 minutes. Heating rod live tiles and flow quick-control now recognize heating-rod consumer slots directly. Web cache version bumped.",
+        "de": "Heizstab-Schnellfunktion für Endkunden: native Schnellsteuerung im Energiefluss-Monitor / in der Steuerungskachel mit Regelung Ein/Aus, manuellen Stufen 1/2/3 sowie einem 100%-Boost für 60 Minuten. Heizstab-Live-Kacheln und Flow-Quick-Control erkennen Heizstab-Verbraucher jetzt direkt. Web-Cache-Version angehoben.",
+        "ru": "Быстрое управление ТЭНом для конечных клиентов: нативное управление из монитора потоков энергии / плитки управления с включением/отключением регулирования, ручными уровнями 1/2/3 и режимом Boost на 100% на 60 минут. Плитки и quick-control теперь напрямую распознают потребители типа heating rod. Версия веб-кэша повышена.",
+        "pt": "Função rápida para resistência elétrica para o cliente final: controlo rápido nativo no monitor de fluxo de energia / mosaico de controlo com regulação ligar/desligar, níveis manuais 1/2/3 e modo boost a 100% durante 60 minutos. Os mosaicos e o quick-control reconhecem agora diretamente consumidores do tipo resistência elétrica. Versão da cache web aumentada.",
+        "nl": "Snelfunctie voor verwarmingselementen voor eindgebruikers: native snelbediening in de energiestroommonitor / bedieningskaart met regeling aan/uit, handmatige niveaus 1/2/3 en een 100%-boostmodus voor 60 minuten. Live-tegels en flow quick-control herkennen nu direct heating-rod-verbruikers. Webcacheversie verhoogd.",
+        "fr": "Fonction rapide pour résistance chauffante côté client final : commande rapide native dans le moniteur de flux d’énergie / la tuile de commande avec régulation marche/arrêt, niveaux manuels 1/2/3 et mode boost à 100 % pendant 60 minutes. Les tuiles et le quick-control reconnaissent maintenant directement les consommateurs de type résistance chauffante. Version du cache web augmentée.",
+        "it": "Funzione rapida per la resistenza elettrica per il cliente finale: controllo rapido nativo nel monitor del flusso energetico / riquadro di controllo con regolazione on/off, livelli manuali 1/2/3 e modalità boost al 100% per 60 minuti. Le tile e il quick-control riconoscono ora direttamente i consumatori di tipo heating rod. Versione della cache web aumentata.",
+        "es": "Función rápida para resistencia eléctrica para el cliente final: control rápido nativo en el monitor de flujo de energía / tarjeta de control con regulación on/off, niveles manuales 1/2/3 y modo boost al 100 % durante 60 minutos. Las tarjetas y el quick-control reconocen ahora directamente los consumidores de tipo heating rod. Versión de caché web aumentada.",
+        "pl": "Szybkie sterowanie grzałką dla klienta końcowego: natywne sterowanie z monitora przepływu energii / kafelka sterowania z włączaniem/wyłączaniem regulacji, ręcznymi poziomami 1/2/3 oraz trybem boost 100% przez 60 minut. Kafelki i quick-control rozpoznają teraz bezpośrednio odbiorniki typu heating rod. Zwiększono wersję pamięci podręcznej web.",
+        "uk": "Швидке керування нагрівальним стрижнем для кінцевого клієнта: нативне керування з монітора енергопотоку / плитки керування з увімкненням/вимкненням регулювання, ручними рівнями 1/2/3 та режимом boost 100% на 60 хвилин. Плитки та quick-control тепер напряму розпізнають споживачі типу heating rod. Версію веб-кешу збільшено.",
+        "zh-cn": "面向终端客户的加热棒快捷控制：在能流监控/控制卡片中提供原生快捷控制，可开启/关闭调节，支持手动 1/2/3 档以及 60 分钟的 100% Boost 模式。加热棒实时卡片和流向快捷控制现在可直接识别加热棒类型负载。网页缓存版本已提升。"
+      },
+      "0.6.236": {
+        "en": "New native Heating Rod app: separate staged 1..12 level control linked to energy-flow consumer slots with configurable stage power and on/off thresholds. Energy-flow consumers now support a device type (generic / heat pump / heating rod) and Stage 1..12 relay/KNX datapoints. Thermal app is focused on heat pumps/climate, skips heating-rod slots, and uses improved hysteresis/budget handling. Web cache version bumped.",
+        "de": "Neue native Heizstab-App: separate gestufte 1..12-Stufen-Regelung, verknüpft mit den Verbraucher-Slots im Energiefluss, inklusive konfigurierbarer Stufenleistung sowie Ein-/Aus-Grenzen je Stufe. Energiefluss-Verbraucher unterstützen jetzt einen Gerätetyp (allgemein / Wärmepumpe / Heizstab) und Stage 1..12 Relais-/KNX-Datenpunkte. Die Thermik-App ist jetzt auf Wärmepumpe/Klima fokussiert, überspringt Heizstab-Slots und nutzt eine verbesserte Hysterese-/Budgetbehandlung. Web-Cache-Version angehoben."
+      },
       "0.6.235": {
         "en": "Storage: added a new FENECON mode in the App-Center. For single-storage setups without StorageFarm it enables self-consumption discharge even without MultiUse, so the AC inverter part keeps balancing house load at the grid point while the DC side may still charge from PV. Default self-consumption target import is 0 W unless configured otherwise. Web cache version bumped.",
         "de": "Speicher: Neuer FENECON-Modus im App-Center. Bei Single-Storage ohne Speicherfarm aktiviert er die Eigenverbrauchs-Entladung auch ohne MultiUse, damit der AC-Teil des Wechselrichters den Hausverbrauch am Netzverknüpfungspunkt weiter ausregelt, während die DC-Seite parallel aus PV laden kann. Standard-Ziel im Eigenverbrauch ist 0 W Netzbezug, sofern nichts anderes konfiguriert ist. Web-Cache-Version angehoben."
@@ -1695,8 +1712,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.235",
+  "version": "0.6.236",
   "news": {
+    "0.6.236": {
+      "en": "New native Heating Rod app: separate staged 1..12 level control linked to energy-flow consumer slots with configurable stage power and on/off thresholds. Energy-flow consumers now support a device type (generic / heat pump / heating rod) and Stage 1..12 relay/KNX datapoints. Thermal app is focused on heat pumps/climate, skips heating-rod slots, and uses improved hysteresis/budget handling. Web cache version bumped.",
+      "de": "Neue native Heizstab-App: separate gestufte 1..12-Stufen-Regelung, verknüpft mit den Verbraucher-Slots im Energiefluss, inklusive konfigurierbarer Stufenleistung sowie Ein-/Aus-Grenzen je Stufe. Energiefluss-Verbraucher unterstützen jetzt einen Gerätetyp (allgemein / Wärmepumpe / Heizstab) und Stage 1..12 Relais-/KNX-Datenpunkte. Die Thermik-App ist jetzt auf Wärmepumpe/Klima fokussiert, überspringt Heizstab-Slots und nutzt eine verbesserte Hysterese-/Budgetbehandlung. Web-Cache-Version angehoben."
+    },
     "0.6.235": {
       "en": "Storage: added a new FENECON mode in the App-Center. For single-storage setups without StorageFarm it enables self-consumption discharge even without MultiUse, so the AC inverter part keeps balancing house load at the grid point while the DC side may still charge from PV. Default self-consumption target import is 0 W unless configured otherwise. Web cache version bumped.",
       "de": "Speicher: Neuer FENECON-Modus im App-Center. Bei Single-Storage ohne Speicherfarm aktiviert er die Eigenverbrauchs-Entladung auch ohne MultiUse, damit der AC-Teil des Wechselrichters den Hausverbrauch am Netzverknüpfungspunkt weiter ausregelt, während die DC-Seite parallel aus PV laden kann. Standard-Ziel im Eigenverbrauch ist 0 W Netzbezug, sofern nichts anderes konfiguriert ist. Web-Cache-Version angehoben."
