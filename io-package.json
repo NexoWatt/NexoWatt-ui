@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.238",
+    "version": "0.6.239",
     "news": {
+      "0.6.239": {
+        "en": "Energy-flow monitor in the live tile is now rendered larger by default and scales down step by step as more consumers/producers are shown. The SVG viewport and responsive width/height handling were tuned so the flow uses the card space better on desktop while staying responsive on tablets and phones. Web cache version bumped.",
+        "de": "Energiefluss-Monitor in der Live-Kachel wird jetzt standardmäßig größer dargestellt und skaliert stufenweise kleiner, sobald mehr Verbraucher/Erzeuger eingeblendet werden. SVG-Viewport sowie responsive Breiten-/Höhenlogik wurden so angepasst, dass der Energiefluss den Platz in der Kachel auf Desktop besser nutzt und auf Tablet/Smartphone trotzdem sauber responsiv bleibt. Web-Cache-Version angehoben."
+      },
       "0.6.238": {
         "en": "Heating rod: stage Write/Read datapoints are now assigned directly inside the Heating Rod app per stage instead of in the energy-flow control section. Energy-flow consumer control is now type-aware (generic / heat pump / heating rod) and only shows relevant fields. Heating-rod backend and quick-control primarily read stage datapoints from the Heating Rod app while keeping legacy fallbacks from energy flow. Web cache version bumped.",
         "de": "Heizstab: Stage-Write/Read-Datenpunkte werden jetzt pro Stufe direkt in der Heizstab-App zugeordnet statt im Steuerungsbereich des Energieflusses. Die Verbraucher-Steuerung im Energiefluss ist nun typabhängig (Allgemein / Wärmepumpe / Heizstab) und zeigt nur noch passende Felder an. Heizstab-Backend und Schnellsteuerung lesen die Stage-DPs jetzt primär aus der Heizstab-App, behalten aber Legacy-Fallbacks aus dem Energiefluss bei. Web-Cache-Version angehoben."
@@ -1716,8 +1720,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.238",
+  "version": "0.6.239",
   "news": {
+    "0.6.239": {
+      "en": "Energy-flow monitor in the live tile is now rendered larger by default and scales down step by step as more consumers/producers are shown. The SVG viewport and responsive width/height handling were tuned so the flow uses the card space better on desktop while staying responsive on tablets and phones. Web cache version bumped.",
+      "de": "Energiefluss-Monitor in der Live-Kachel wird jetzt standardmäßig größer dargestellt und skaliert stufenweise kleiner, sobald mehr Verbraucher/Erzeuger eingeblendet werden. SVG-Viewport sowie responsive Breiten-/Höhenlogik wurden so angepasst, dass der Energiefluss den Platz in der Kachel auf Desktop besser nutzt und auf Tablet/Smartphone trotzdem sauber responsiv bleibt. Web-Cache-Version angehoben."
+    },
     "0.6.238": {
       "en": "Heating rod: stage Write/Read datapoints are now assigned directly inside the Heating Rod app per stage instead of in the energy-flow control section. Energy-flow consumer control is now type-aware (generic / heat pump / heating rod) and only shows relevant fields. Heating-rod backend and quick-control primarily read stage datapoints from the Heating Rod app while keeping legacy fallbacks from energy flow. Web cache version bumped.",
       "de": "Heizstab: Stage-Write/Read-Datenpunkte werden jetzt pro Stufe direkt in der Heizstab-App zugeordnet statt im Steuerungsbereich des Energieflusses. Die Verbraucher-Steuerung im Energiefluss ist nun typabhängig (Allgemein / Wärmepumpe / Heizstab) und zeigt nur noch passende Felder an. Heizstab-Backend und Schnellsteuerung lesen die Stage-DPs jetzt primär aus der Heizstab-App, behalten aber Legacy-Fallbacks aus dem Energiefluss bei. Web-Cache-Version angehoben."

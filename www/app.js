@@ -79,6 +79,70 @@ let units = { power: 'W', energy: 'kWh' };
 // Energiefluss-Monitor: optionale Verbraucher/Erzeuger (Slots)
 let flowSlotsCfg = null; // comes from /config
 let flowExtras = { consumers: [], producers: [], special: [], meta: { evcsAvailable: true } };
+let _flowResponsiveCfg = { consumers: 0, producers: 0, special: 0, evcsVisible: true };
+let _flowResponsiveRaf = 0;
+
+function applyEnergyWebResponsiveLayout(nextCfg) {
+  if (nextCfg && typeof nextCfg === 'object') {
+    _flowResponsiveCfg = Object.assign({}, _flowResponsiveCfg, nextCfg);
+  }
+
+  const wrap = document.querySelector('.card.energy-web .web-wrap');
+  if (!wrap) return;
+
+  const nCons = Math.max(0, Math.floor(_flowUiNum(_flowResponsiveCfg.consumers, 0)));
+  const nProd = Math.max(0, Math.floor(_flowUiNum(_flowResponsiveCfg.producers, 0)));
+  const nSpec = Math.max(0, Math.floor(_flowUiNum(_flowResponsiveCfg.special, 0)));
+  const evcsVisible = _flowResponsiveCfg.evcsVisible !== false;
+  const visibleSlots = nCons + nProd + nSpec + (evcsVisible ? 1 : 0);
+
+  const viewportW = Math.max(
+    _flowUiNum(window.innerWidth, 0),
+    _flowUiNum(document.documentElement && document.documentElement.clientWidth, 0),
+    _flowUiNum(wrap.clientWidth, 0)
+  );
+  const wrapW = Math.max(0, _flowUiNum(wrap.clientWidth, 0));
+
+  let svgMaxW = null;
+  if (viewportW >= 820) {
+    const base = (viewportW >= 1500) ? 940 : (viewportW >= 1260) ? 900 : 840;
+    const penalty = (visibleSlots * 22)
+      + (Math.max(0, nCons - 4) * 8)
+      + (Math.max(0, nProd - 2) * 10)
+      + (Math.max(0, nSpec - 1) * 10);
+
+    svgMaxW = Math.max(760, Math.round(base - penalty));
+    wrap.style.setProperty('--flowSvgMaxW', `${svgMaxW}px`);
+    wrap.style.setProperty('--flowStatusMaxW', `${Math.max(640, svgMaxW - 36)}px`);
+  } else {
+    wrap.style.removeProperty('--flowSvgMaxW');
+    wrap.style.removeProperty('--flowStatusMaxW');
+  }
+
+  const fallbackW = wrapW || Math.min(Math.max(0, viewportW - 32), 900);
+  const effectiveSvgW = Math.max(0, Math.min(svgMaxW || fallbackW || 760, wrapW || svgMaxW || fallbackW || 760));
+  const estSvgH = Math.round(effectiveSvgW * (520 / 760));
+
+  let minH = Math.max(360, estSvgH + 54);
+  if (viewportW < 680) minH = Math.max(360, Math.min(460, estSvgH + 72));
+  if (visibleSlots >= 6) minH += 16;
+  if (visibleSlots >= 9) minH += 24;
+  wrap.style.setProperty('--flowMinH', `${Math.round(minH)}px`);
+}
+
+function scheduleEnergyWebResponsiveLayout(nextCfg) {
+  if (nextCfg && typeof nextCfg === 'object') {
+    _flowResponsiveCfg = Object.assign({}, _flowResponsiveCfg, nextCfg);
+  }
+
+  try { if (_flowResponsiveRaf) cancelAnimationFrame(_flowResponsiveRaf); } catch (_e) {}
+  _flowResponsiveRaf = requestAnimationFrame(() => {
+    _flowResponsiveRaf = 0;
+    applyEnergyWebResponsiveLayout();
+  });
+}
+
+window.addEventListener('resize', () => scheduleEnergyWebResponsiveLayout(), { passive: true });
 
 // Energiefluss-Anzeige: leichte Hysterese nur für die VIS.
 // Ziel: kleine Messwertsprünge und Richtungsflackern beruhigen,
@@ -1000,30 +1064,15 @@ function initEnergyWebExtras(flowSlots){
   const nCons = consumers.length;
   const nProd = producers.length;
 
-  // --- dynamic tile height (more nodes => more vertical room for labels + status line) ---
-  // Default height is responsive via CSS. Only if the user configures many optional nodes
-  // we increase the minimum height a little so labels and the status line never feel cramped.
-  try {
-    const wrap = document.querySelector('.card.energy-web .web-wrap');
-    if (wrap) {
-      const extraCons = (nCons >= 9) ? 120 : (nCons >= 8) ? 80 : (nCons >= 7) ? 40 : 0;
-      const extraProd = (nProd >= 5) ? 40 : (nProd >= 4) ? 20 : 0;
-      const extra = extraCons + extraProd;
-
-      if (extra > 0) {
-        const base = 600;
-        const minH = Math.min(780, base + extra);
-        wrap.style.setProperty('--flowMinH', `${minH}px`);
-      } else {
-        wrap.style.removeProperty('--flowMinH');
-      }
-    }
-  } catch(_e) {}
+  // The monitor should use more of the tile when only a few nodes are visible,
+  // but scale down step by step once additional consumers/producers are added.
+  // The actual CSS vars are applied at the end after specials + EVCS visibility are known.
 
   // Circle sizing:
   // Keep optional nodes readable while reserving more whitespace for labels.
   // Producers in particular tend to have longer labels (e.g. "Erzeuger X").
-  const rConsumer = (nCons >= 9) ? 26 : (nCons >= 7) ? 28 : (nCons >= 5) ? 30 : 32;
+  const optionalDensity = Math.max(nCons, nProd);
+  const rConsumer = (optionalDensity >= 9) ? 26 : (optionalDensity >= 7) ? 28 : (optionalDensity >= 5) ? 30 : 34;
   const rProducer = rConsumer; // same size as consumers (optically consistent)
 
   // anchor points (must match SVG positions)
@@ -1396,6 +1445,13 @@ try {
   // Hide EVCS node if not available
   const nodeEvcs = document.getElementById('nodeEvcs');
   if (nodeEvcs) nodeEvcs.style.display = flowExtras.meta.evcsAvailable ? '' : 'none';
+
+  scheduleEnergyWebResponsiveLayout({
+    consumers: nCons,
+    producers: nProd,
+    special: Array.isArray(flowExtras.special) ? flowExtras.special.length : 0,
+    evcsVisible: !!flowExtras.meta.evcsAvailable
+  });
 }
 
 function updateEnergyWebExtras(d){

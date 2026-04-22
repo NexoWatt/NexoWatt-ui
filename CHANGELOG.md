@@ -1,3 +1,9 @@
+## 0.6.239
+- Energiefluss-Monitor in der Live-Kachel standardmäßig größer dargestellt und nutzt den Platz in der Kachel auf Desktop besser aus.
+- Responsive Größenlogik ergänzt: Mit jedem zusätzlichen Verbraucher/Erzeuger skaliert der Energiefluss stufenweise kleiner, damit die Darstellung auf Desktop, Tablet und Smartphone sauber bleibt.
+- SVG-Viewport und Statusbreite für den Energiefluss überarbeitet, damit die Live-Ansicht trotz größerer Darstellung stabil und übersichtlich bleibt.
+- PWA/Web-Cache-Version angehoben.
+
 ## 0.6.238
 - Heizstab: Stage-DP-Zuordnung aus dem Energiefluss in die Heizstab-App verschoben; pro Stufe jetzt direkte Write/Read-DP-Pflege im Heizstab-Tab.
 - Energiefluss: Verbraucher-Steuerung ist jetzt typabhängig (Allgemein / Wärmepumpe / Heizstab) und blendet nur noch passende Bereiche ein.

@@ -263,19 +263,21 @@ body {
 
 /* Energy Web (radial) */
 .card.energy-web .web-wrap{
+  --flowSvgMaxW: 900px;
+  --flowStatusMaxW: 864px;
   width:100%;
   display:flex;
   flex-direction:column;
   justify-content:center;
   align-items:center;
-  /* default: responsive height; can be increased by JS via --flowMinH when many nodes are configured */
-  min-height: var(--flowMinH, clamp(360px, 40vw, 600px));
+  /* default: responsive height; JS tunes this per visible node count */
+  min-height: var(--flowMinH, clamp(380px, 44vw, 640px));
   overflow:hidden;
 }
 
 /* Status line inside Energiefluss-Kachel (Tarif / Peak / §14a etc.) */
 .card.energy-web .ems-status{
-  width:min(760px,92vw);
+  width:min(100%, var(--flowStatusMaxW, calc(var(--flowSvgMaxW, 900px) - 36px)));
   margin:12px auto 0;
   text-align:center;
   font-weight:700;
@@ -289,7 +291,15 @@ body {
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
 }
 
-.web{ width:min(760px,92vw); height:auto; max-width:100%; }
+.web{ width:min(100%, var(--flowSvgMaxW, 900px)); height:auto; max-width:100%; display:block; }
+@media (max-width: 819px){
+  .card.energy-web .web-wrap{
+    min-height: var(--flowMinH, clamp(360px, 78vw, 470px));
+  }
+  .card.energy-web .ems-status{
+    width:100%;
+  }
+}
 .web .bg-glow{ fill: url(#gradBg); opacity:.38; }
 
 /* Modern node look */
