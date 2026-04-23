@@ -497,6 +497,72 @@ class SpeicherRegelungModule extends BaseModule {
         const importRawW = Math.max(0, nvpRawW);
         const exportRawW = Math.max(0, -nvpRawW);
 
+        // FENECON AC: Im Sondermodus soll der AC-Teil des Speichers der gesamten AC-Last folgen.
+        // Priorität der Lastquelle:
+        // 1) derived.core.building.loadTotalW (enthält Haus + EV + Zusatzverbraucher)
+        // 2) consumptionTotal (direkter Haus-/Gesamtverbrauch)
+        // 3) derived.loadRestW + EV + Verbraucher-Slots
+        // 4) Fallback aus aktuellem Netzimport + laufender Speicher-Entladung
+        const readCacheNumber = (key, fallback = null) => {
+            const sid = String(key || '').trim();
+            if (!sid) return fallback;
+            try {
+                if (this.adapter && typeof this.adapter._nwGetNumberFromCache === 'function') {
+                    const n = this.adapter._nwGetNumberFromCache(sid);
+                    if (typeof n === 'number' && Number.isFinite(n)) return n;
+                }
+            } catch {
+                // ignore
+            }
+            try {
+                const rec = this.adapter && this.adapter.stateCache ? this.adapter.stateCache[sid] : null;
+                const n = Number(rec && rec.value);
+                if (Number.isFinite(n)) return n;
+            } catch {
+                // ignore
+            }
+            return fallback;
+        };
+
+        let feneconAcLoadMemo = null;
+        const getFeneconAcLoadTargetW = () => {
+            if (feneconAcLoadMemo) return feneconAcLoadMemo;
+
+            const loadTotalDerivedW = readCacheNumber('derived.core.building.loadTotalW', null);
+            if (typeof loadTotalDerivedW === 'number' && Number.isFinite(loadTotalDerivedW) && loadTotalDerivedW >= 0) {
+                feneconAcLoadMemo = { w: Math.max(0, loadTotalDerivedW), source: 'derived.loadTotalW' };
+                return feneconAcLoadMemo;
+            }
+
+            const loadTotalMappedW = readCacheNumber('consumptionTotal', null);
+            if (typeof loadTotalMappedW === 'number' && Number.isFinite(loadTotalMappedW) && loadTotalMappedW >= 0) {
+                feneconAcLoadMemo = { w: Math.max(0, loadTotalMappedW), source: 'consumptionTotal' };
+                return feneconAcLoadMemo;
+            }
+
+            const loadRestDerivedW = readCacheNumber('derived.core.building.loadRestW', null);
+            if (typeof loadRestDerivedW === 'number' && Number.isFinite(loadRestDerivedW) && loadRestDerivedW >= 0) {
+                const evTotalW = Math.max(0, Math.abs(num(readCacheNumber('evcs.totalPowerW', 0), 0)));
+                let consumersTotalW = 0;
+                for (let i = 1; i <= 10; i++) {
+                    const c = readCacheNumber(`consumer${i}Power`, null);
+                    if (typeof c === 'number' && Number.isFinite(c)) consumersTotalW += Math.abs(c);
+                }
+                feneconAcLoadMemo = {
+                    w: Math.max(0, loadRestDerivedW + evTotalW + consumersTotalW),
+                    source: 'derived.loadRestW+slots',
+                };
+                return feneconAcLoadMemo;
+            }
+
+            const dischargeNowW = (typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Math.max(0, battPowerW) : 0;
+            feneconAcLoadMemo = {
+                w: Math.max(0, importRawW + dischargeNowW),
+                source: 'approx.import+battery',
+            };
+            return feneconAcLoadMemo;
+        };
+
         // ------------------------------------------------------------
         // Phase 4: Gemeinsame Netzbezug-Caps (Grid-Constraints / Peak-Shaving / Installer)
         // ------------------------------------------------------------
@@ -790,7 +856,7 @@ if (typeof soc === 'number') {
 
         // 2) Gate C: Ladepark-Unterstützung (EVCS Boost/Auto) via Speicher-Entladung,
         // sofern keine Lastspitzenkappung aktiv ist.
-        if (targetW === 0) {
+        if (targetW === 0 && !feneconAcMode) {
             const assistW = await this._readOwnNumber('chargingManagement.control.storageAssistW');
             evcsAssistReqW = (typeof assistW === 'number' && Number.isFinite(assistW)) ? assistW : 0;
             if (typeof assistW === 'number' && assistW > 0) {
@@ -1259,7 +1325,43 @@ if (targetW === 0 && selfDischargeEnabled) {
         reasonTxt.toLowerCase().includes('pv forecast')
     );
 
-    if (tariffBlocksDischarge && !pvReserveBlocked) {
+    if (feneconAcMode) {
+        let socOk = true;
+        if (typeof soc === 'number') {
+            this._socSelfDischargeEnabled = hystAbove(
+                this._socSelfDischargeEnabled,
+                soc,
+                selfMinSoc,
+                selfMinSoc + this._socHystPct,
+            );
+            socOk = this._socSelfDischargeEnabled;
+        }
+
+        const allow = (!reserveActive && !reserveChargeWanted && socOk);
+        const acLoad = getFeneconAcLoadTargetW();
+        const acLoadW = (acLoad && typeof acLoad.w === 'number' && Number.isFinite(acLoad.w)) ? Math.max(0, acLoad.w) : 0;
+
+        if (allow && acLoadW > 0) {
+            const nextSetW = clamp(acLoadW, 0, selfMaxDischargeEff);
+            if (nextSetW > 0) {
+                targetW = nextSetW;
+                reason = `FENECON AC: Lastfolge (${Math.round(targetW)} W, Quelle ${String(acLoad && acLoad.source ? acLoad.source : 'unbekannt')})`;
+                source = 'fenecon';
+                hardDischargeMinSoc = Math.max(hardDischargeMinSoc, selfMinSoc);
+            }
+        } else if (acLoadW > 0 && (source === 'idle' || reason === 'Keine Aktion')) {
+            if (reserveActive) {
+                reason = 'FENECON AC: Lastfolge blockiert (Reserve aktiv)';
+                source = 'reserve';
+            } else if (reserveChargeWanted) {
+                reason = 'FENECON AC: Lastfolge blockiert (Reserve soll aufgefüllt werden)';
+                source = 'reserve';
+            } else if (!socOk) {
+                reason = `FENECON AC: Lastfolge blockiert (SoC <= ${selfMinSoc}%)`;
+                source = 'reserve';
+            }
+        }
+    } else if (tariffBlocksDischarge && !pvReserveBlocked) {
         if (source === 'idle' || reason === 'Keine Aktion') {
             reason = 'Tarif: günstig – Eigenverbrauchs-Entladung gesperrt';
             source = 'tarif';
@@ -1289,11 +1391,11 @@ if (targetW === 0 && selfDischargeEnabled) {
         ? this._lastTargetW
         : 0;
 
-	    // Ist-Batterieleistung (positiv = Entladung). Falls verfügbar nutzen wir eine
-	    // OpenEMS-ähnliche Balancing-Regelung: Soll = battIst + (gridIst - gridZiel).
-	    // Ohne Istleistung bleibt der bisherige Fallback (inkrementell über letzten Sollwert).
-	    const battWRaw = (typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Number(battPowerW) : null;
-	    const battW = (typeof battWRaw === 'number') ? Math.max(0, battWRaw) : null;
+        // Ist-Batterieleistung (positiv = Entladung). Falls verfügbar nutzen wir eine
+        // OpenEMS-ähnliche Balancing-Regelung: Soll = battIst + (gridIst - gridZiel).
+        // Ohne Istleistung bleibt der bisherige Fallback (inkrementell über letzten Sollwert).
+        const battWRaw = (typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Number(battPowerW) : null;
+        const battW = (typeof battWRaw === 'number') ? Math.max(0, battWRaw) : null;
 
     // Fehler: positiver Fehler => zu viel Import => mehr entladen.
     // negativer Fehler => Export/zu wenig Import => Entladung reduzieren.
@@ -1307,9 +1409,9 @@ if (targetW === 0 && selfDischargeEnabled) {
         errAdjW = errW;
     }
 
-	    // OpenEMS-Balancing (Vorbild): battIst + (gridIst - gridZiel)
-	    // Fallback: letzter Sollwert + Fehler
-	    let nextSetW = (typeof battW === 'number') ? (battW + errAdjW) : (curSetW + errAdjW);
+        // OpenEMS-Balancing (Vorbild): battIst + (gridIst - gridZiel)
+        // Fallback: letzter Sollwert + Fehler
+        let nextSetW = (typeof battW === 'number') ? (battW + errAdjW) : (curSetW + errAdjW);
 
     // Safety-Clamp gegen Überschwingen:
     // Wenn battW nicht gemappt ist (oder NVP kurzfristig "alt" ist), kann die inkrementelle Regelung
@@ -1349,7 +1451,7 @@ if (targetW === 0 && selfDischargeEnabled) {
 
     if (allow && startCond && nextSetW > 0) {
         targetW = nextSetW;
-	        reason = `Eigenverbrauch: entladen (${Math.round(targetW)} W${(typeof battW === 'number') ? ', Balancing' : ''})`;
+            reason = `Eigenverbrauch: entladen (${Math.round(targetW)} W${(typeof battW === 'number') ? ', Balancing' : ''})`;
         source = 'eigenverbrauch';
         hardDischargeMinSoc = Math.max(hardDischargeMinSoc, selfMinSoc);
     }
@@ -1357,7 +1459,7 @@ if (targetW === 0 && selfDischargeEnabled) {
 }
 
 // 4) Eigenverbrauch: PV-Überschuss laden (wenn keine Lastspitze/Tarif/EV-Entladung aktiv)
-        if (targetW === 0 && cfg.pvEnabled !== false) {
+        if (targetW === 0 && cfg.pvEnabled !== false && !feneconAcMode) {
             // Zero-Export (Nulleinspeisung): bei Export möglichst früh (Schwellwert) in den Speicher laden.
             // Hinweis: Extra-Bias nur, wenn Netzladen erlaubt ist (sonst würde der Bias u.U. Netzenergie in den Speicher ziehen).
             const zeCfg = (this.adapter.config && this.adapter.config.enableGridConstraints) ? (this.adapter.config.gridConstraints || {}) : {};
@@ -1571,8 +1673,8 @@ if (targetW === 0 && selfDischargeEnabled) {
             const psHystW = psRelevant ? Math.max(0, num(psCfg.hysteresisW, 0)) : 0;
             // NVP-Balancing (Eigenverbrauch-/Tarif-Entladung): hier wollen wir auch kleine Leistungen zulassen,
             // sonst bleibt ein Rest-Netzbezug (z. B. 30–90 W) dauerhaft stehen.
-            // Erkennung: Quelle eigenverbrauch oder tarif UND wir entladen (targetW > 0).
-            const isNvpBalancing = (targetW > 0) && (source === 'eigenverbrauch' || source === 'tarif');
+            // Erkennung: Quellen mit feiner Entlade-Regelung (Eigenverbrauch, Tarif, FENECON AC).
+            const isNvpBalancing = (targetW > 0) && (source === 'eigenverbrauch' || source === 'tarif' || source === 'fenecon');
             const zeroBandW = Math.max(psHystW, stepW, isNvpBalancing ? 20 : 100);
 
             // Optional: Expert-Parameter. Wenn nicht gesetzt, Default 5s.
@@ -1657,6 +1759,10 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 	            targetW = _prevRampW + Math.sign(d) * maxDelta;
 	            reason = `${reason} (LSK‑Rampe)`;
 	        }
+    } else if (source === 'fenecon' || this._lastSource === 'fenecon') {
+        // FENECON AC-Lastfolger: Lastsprünge müssen in beide Richtungen schnell übernommen werden,
+        // sonst bleibt kurz Netzbezug stehen oder es entsteht beim Lastabwurf unnötige Einspeisung.
+        // Deshalb hier bewusst keine zusätzliche Rampe.
     } else {
         // Standard: symmetrische Rampe
         if (maxDelta > 0 && Math.abs(d) > maxDelta) {
@@ -1753,6 +1859,14 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     requestedCount: (Number.isFinite(Number(evPriorityCaps.requestedCount))) ? Math.round(Number(evPriorityCaps.requestedCount)) : 0,
                     limitedWallboxes: (Number.isFinite(Number(evPriorityCaps.limitedWallboxes))) ? Math.round(Number(evPriorityCaps.limitedWallboxes)) : 0,
                 } : null,
+                fenecon: feneconAcMode ? (() => {
+                    const acLoad = getFeneconAcLoadTargetW();
+                    return {
+                        acMode: true,
+                        loadTargetW: (acLoad && typeof acLoad.w === 'number' && Number.isFinite(acLoad.w)) ? Math.round(acLoad.w) : null,
+                        loadSource: (acLoad && acLoad.source) ? String(acLoad.source) : null,
+                    };
+                })() : { acMode: false, loadTargetW: null, loadSource: null },
                 limits: {
                     importLimitW: (typeof importLimitW === 'number' && Number.isFinite(importLimitW)) ? Math.round(importLimitW) : null,
                     importHeadroomW: (typeof importHeadroomEffW === 'number' && Number.isFinite(importHeadroomEffW)) ? Math.round(importHeadroomEffW) : null,

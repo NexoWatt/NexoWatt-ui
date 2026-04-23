@@ -1,3 +1,9 @@
+## 0.6.245
+- Speicher/FENECON: AC-Sonderlogik neu aufgebaut. Wenn der FENECON-Haken aktiv ist, folgt der Speicher im Eigenverbrauch jetzt der gesamten AC-Last (derived loadTotalW bzw. Fallbacks inkl. EV und Zusatzverbraucher) statt wie der Standardspeicher am NVP zu regeln.
+- Speicher/FENECON: Günstiges Tarif-Netzladen behält Vorrang. Tarif-Entladen, EVCS-Assist und PV-Überschuss-Laden greifen im FENECON-AC-Modus nicht mehr parallel dazwischen, damit die Regelung sauber auf einem Pfad bleibt.
+- Diagnose erweitert: policyJson enthält jetzt auch die herangezogene FENECON-Lastquelle und den daraus gebildeten Lastfolger-Sollwert.
+- PWA/Web-Cache-Version angehoben.
+
 ## 0.6.244
 - Rollback: Speicher/FENECON wieder auf das Verhalten aus 0.6.240 zurückgesetzt. Die späteren AC-Hybrid-/PV-Formeln aus 0.6.241 bis 0.6.243 sind nicht mehr aktiv.
 - Version und PWA/Web-Cache angehoben, damit das Zurückrollen sauber als Update eingespielt werden kann.
