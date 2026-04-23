@@ -1,12 +1,8 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.241",
+    "version": "0.6.242",
     "news": {
-      "0.6.241": {
-        "en": "Storage/FENECON: the AC-mode storage setpoint is now derived from the direct site balance (total load incl. internal extra consumers minus PV/extra producers). This prevents unwanted grid charging while the battery is being charged from PV and adds dedicated diagnostic states for the calculated balance.",
-        "de": "Speicher/FENECON: Die Sollwertbildung im AC-Modus basiert jetzt auf der direkten Anlagenbilanz (Gesamtverbrauch inkl. interner Zusatzverbraucher minus PV/zusätzliche Erzeuger). Damit wird unnötiger Netzbezug während PV-Ladung vermieden; zusätzlich gibt es neue Diagnosezustände für die berechnete Bilanz."
-      },
       "0.6.241": {
         "en": "Storage/FENECON: the AC-mode storage setpoint is now derived from the direct site balance (total load incl. internal extra consumers minus PV/extra producers). This prevents unwanted grid charging while the battery is being charged from PV and adds dedicated diagnostic states for the calculated balance.",
         "de": "Speicher/FENECON: Die Sollwertbildung im AC-Modus basiert jetzt auf der direkten Anlagenbilanz (Gesamtverbrauch inkl. interner Zusatzverbraucher minus PV/zusätzliche Erzeuger). Damit wird unnötiger Netzbezug während PV-Ladung vermieden; zusätzlich gibt es neue Diagnosezustände für die berechnete Bilanz."
