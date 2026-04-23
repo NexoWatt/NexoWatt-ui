@@ -490,6 +490,8 @@ class SpeicherRegelungModule extends BaseModule {
         let hardChargeMaxSoc = 100;
         let reason = 'Keine Aktion';
         let source = 'idle';
+        let feneconBalanceHandled = false;
+        let feneconBalanceInfo = null;
 
         const exportW = Math.max(0, -gridW); // negative Netzleistung = Einspeisung (geglättet)
         const importW = Math.max(0, gridW);  // positive Netzleistung = Bezug (geglättet)
@@ -1242,8 +1244,102 @@ if (typeof soc === 'number') {
 				}
 			}
 		}
+// 3) FENECON-Hybrid-/AC-Modus: direkte Leistungsbilanz aus Gesamtverbrauch minus PV
+if (targetW === 0 && feneconAcMode) {
+    try {
+        feneconBalanceInfo = await this._readFeneconAcBalanceInputs(staleMs);
+    } catch (_eFeneconBalance) {
+        feneconBalanceInfo = null;
+    }
+}
+
+if (targetW === 0 && feneconAcMode && feneconBalanceInfo && typeof feneconBalanceInfo.loadW === 'number' && typeof feneconBalanceInfo.pvW === 'number') {
+    feneconBalanceHandled = true;
+
+    const loadW = Math.max(0, Number(feneconBalanceInfo.loadW) || 0);
+    const pvW = Math.max(0, Number(feneconBalanceInfo.pvW) || 0);
+    const balanceW = loadW - pvW; // + => entladen, - => laden
+    const directDeadbandW = Math.max(20, stepW, selfImportThresholdW);
+
+    if (Math.abs(balanceW) <= directDeadbandW) {
+        targetW = 0;
+        reason = `FENECON: Bilanz im Zielband (${Math.round(loadW)} - ${Math.round(pvW)} = ${Math.round(balanceW)} W)`;
+        source = 'fenecon';
+    } else if (balanceW > 0) {
+        let socOk = true;
+        if (typeof soc === 'number') {
+            this._socSelfDischargeEnabled = hystAbove(
+                this._socSelfDischargeEnabled,
+                soc,
+                selfMinSoc,
+                selfMinSoc + this._socHystPct,
+            );
+            socOk = this._socSelfDischargeEnabled;
+        }
+
+        const allow = (!reserveActive && !reserveChargeWanted && socOk && dischargeAllowed !== false);
+        if (allow) {
+            targetW = clamp(balanceW, 0, selfMaxDischargeEff);
+            reason = `FENECON: Verbraucher ${Math.round(loadW)} W - PV ${Math.round(pvW)} W = ${Math.round(targetW)} W Entladung`;
+            source = 'fenecon';
+            hardDischargeMinSoc = Math.max(hardDischargeMinSoc, selfMinSoc);
+        } else {
+            targetW = 0;
+            reason = (dischargeAllowed === false)
+                ? 'FENECON: Entladen durch Tarif/Freigabe gesperrt'
+                : (reserveActive || reserveChargeWanted)
+                    ? 'FENECON: Entladen blockiert (Reserve aktiv)'
+                    : `FENECON: Entladen blockiert (SoC <= ${selfMinSoc}%)`;
+            source = 'fenecon';
+        }
+    } else if (cfg.pvEnabled !== false) {
+        const lskMaxSocForCharge = (cfg.lskChargeEnabled !== false) ? lskMaxSoc : selfMaxSoc;
+        const maxSocForCharge = clamp(Math.max(selfMaxSoc, lskMaxSocForCharge, reserveTarget), 0, 100);
+        hardChargeMaxSoc = maxSocForCharge;
+
+        const canChargeBySoc = (typeof soc !== 'number') ? true : (soc < maxSocForCharge);
+        let chargeLimitW = maxChargeW;
+        if (typeof soc === 'number') {
+            if (soc < selfMaxSoc) {
+                chargeLimitW = selfMaxChargeEff;
+            } else if (soc < lskMaxSoc) {
+                chargeLimitW = lskMaxChargeEff;
+            } else {
+                chargeLimitW = 0;
+            }
+        }
+
+        if (evPriorityBlockStorageCharge) {
+            targetW = 0;
+            reason = evPriorityStarvedW > 0
+                ? `EV-Priorität: PV zuerst an Ladepunkte (${Math.round(evPriorityStarvedW)} W offen)`
+                : 'EV-Priorität: PV zuerst an Ladepunkte';
+            source = 'fenecon';
+        } else if (canChargeBySoc && chargeLimitW > 0) {
+            const wantChargeW = clamp(-balanceW, 0, chargeLimitW);
+            if (wantChargeW > directDeadbandW) {
+                targetW = -wantChargeW;
+                reason = `FENECON: Verbraucher ${Math.round(loadW)} W - PV ${Math.round(pvW)} W = -${Math.round(wantChargeW)} W Ladung`;
+                source = 'fenecon';
+            } else {
+                targetW = 0;
+                reason = `FENECON: Kein Ladebedarf (${Math.round(loadW)} - ${Math.round(pvW)} = ${Math.round(balanceW)} W)`;
+                source = 'fenecon';
+            }
+        } else {
+            targetW = 0;
+            reason = `FENECON: Laden blockiert (SoC >= ${Math.round(maxSocForCharge)}%)`;
+            source = 'fenecon';
+        }
+    } else {
+        targetW = 0;
+        reason = 'FENECON: PV-Laden deaktiviert';
+        source = 'fenecon';
+    }
+}
+
 // 3) Eigenverbrauch: Entladen zur Netzbezug-Reduktion (optional)
-if (targetW === 0 && selfDischargeEnabled) {
+if (targetW === 0 && !feneconBalanceHandled && selfDischargeEnabled) {
     // Wenn der dynamische Tarif im "günstig"-Fenster ist, kann es gewünscht sein,
     // die Eigenverbrauchs-Entladung zu sperren (z.B. während aktivem Netzladen).
     //
@@ -1357,7 +1453,7 @@ if (targetW === 0 && selfDischargeEnabled) {
 }
 
 // 4) Eigenverbrauch: PV-Überschuss laden (wenn keine Lastspitze/Tarif/EV-Entladung aktiv)
-        if (targetW === 0 && cfg.pvEnabled !== false) {
+        if (targetW === 0 && !feneconBalanceHandled && cfg.pvEnabled !== false) {
             // Zero-Export (Nulleinspeisung): bei Export möglichst früh (Schwellwert) in den Speicher laden.
             // Hinweis: Extra-Bias nur, wenn Netzladen erlaubt ist (sonst würde der Bias u.U. Netzenergie in den Speicher ziehen).
             const zeCfg = (this.adapter.config && this.adapter.config.enableGridConstraints) ? (this.adapter.config.gridConstraints || {}) : {};
@@ -1573,7 +1669,8 @@ if (targetW === 0 && selfDischargeEnabled) {
             // sonst bleibt ein Rest-Netzbezug (z. B. 30–90 W) dauerhaft stehen.
             // Erkennung: Quelle eigenverbrauch oder tarif UND wir entladen (targetW > 0).
             const isNvpBalancing = (targetW > 0) && (source === 'eigenverbrauch' || source === 'tarif');
-            const zeroBandW = Math.max(psHystW, stepW, isNvpBalancing ? 20 : 100);
+            const isDirectBalance = (source === 'fenecon');
+            const zeroBandW = Math.max(psHystW, stepW, (isNvpBalancing || isDirectBalance) ? 20 : 100);
 
             // Optional: Expert-Parameter. Wenn nicht gesetzt, Default 5s.
             const cfgHoldSec = Math.max(0, num(cfg.modeHoldSec, 0));
@@ -1640,7 +1737,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
     const d = targetW - _prevRampW;
 
     // PV-Überschuss-Laden: schneller hochfahren (mehr Laden), aber schnell zurücknehmen (sicher gegen Netzbezug)
-    if (source === 'pv' && targetW < 0) {
+    if ((source === 'pv' || source === 'fenecon') && targetW < 0) {
         const pvMaxDelta = (pvMaxDeltaCfg > 0) ? pvMaxDeltaCfg : maxDelta;
 
         if (pvMaxDelta > 0 && d < 0 && Math.abs(d) > pvMaxDelta) {
@@ -1720,6 +1817,17 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 					ageMs: (typeof battPowerAge === 'number' && Number.isFinite(battPowerAge)) ? Math.round(battPowerAge) : null,
 					invalidReason: (battPowerInvalidReason && String(battPowerInvalidReason).trim()) ? String(battPowerInvalidReason).trim() : null,
 				},
+                fenecon: feneconAcMode ? {
+                    active: true,
+                    handled: !!feneconBalanceHandled,
+                    loadW: (feneconBalanceInfo && typeof feneconBalanceInfo.loadW === 'number' && Number.isFinite(feneconBalanceInfo.loadW)) ? Math.round(feneconBalanceInfo.loadW) : null,
+                    pvW: (feneconBalanceInfo && typeof feneconBalanceInfo.pvW === 'number' && Number.isFinite(feneconBalanceInfo.pvW)) ? Math.round(feneconBalanceInfo.pvW) : null,
+                    balanceW: (feneconBalanceInfo && typeof feneconBalanceInfo.loadW === 'number' && typeof feneconBalanceInfo.pvW === 'number' && Number.isFinite(feneconBalanceInfo.loadW) && Number.isFinite(feneconBalanceInfo.pvW)) ? Math.round(feneconBalanceInfo.loadW - feneconBalanceInfo.pvW) : null,
+                    loadSource: (feneconBalanceInfo && feneconBalanceInfo.loadSource) ? String(feneconBalanceInfo.loadSource) : null,
+                    pvSource: (feneconBalanceInfo && feneconBalanceInfo.pvSource) ? String(feneconBalanceInfo.pvSource) : null,
+                    extraConsumersW: (feneconBalanceInfo && typeof feneconBalanceInfo.consumerExtraW === 'number' && Number.isFinite(feneconBalanceInfo.consumerExtraW)) ? Math.round(feneconBalanceInfo.consumerExtraW) : 0,
+                    evcsW: (feneconBalanceInfo && typeof feneconBalanceInfo.evcsW === 'number' && Number.isFinite(feneconBalanceInfo.evcsW)) ? Math.round(feneconBalanceInfo.evcsW) : 0,
+                } : null,
                 soc: (typeof soc === 'number' && Number.isFinite(soc)) ? soc : null,
                 permissions: {
                     gridChargeAllowed: (typeof gridChargeAllowed === 'boolean') ? gridChargeAllowed : null,
@@ -2067,6 +2175,119 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         } catch {
             return null;
         }
+    }
+
+    _getAdapterNumberFromCache(key, fallback = null) {
+        const sid = String(key || '').trim();
+        if (!sid) return fallback;
+
+        try {
+            if (this.adapter && typeof this.adapter._nwGetNumberFromCache === 'function') {
+                const n = this.adapter._nwGetNumberFromCache(sid);
+                if (typeof n === 'number' && Number.isFinite(n)) return n;
+            }
+        } catch {
+            // ignore
+        }
+
+        try {
+            const rec = this.adapter && this.adapter.stateCache ? this.adapter.stateCache[sid] : null;
+            const n = Number(rec && rec.value);
+            if (Number.isFinite(n)) return n;
+        } catch {
+            // ignore
+        }
+
+        return fallback;
+    }
+
+    async _readOwnFreshNumber(id, staleMs, fallback = null) {
+        const sid = String(id || '').trim();
+        if (!sid) return fallback;
+
+        try {
+            const st = await this.adapter.getStateAsync(sid);
+            if (st && st.val !== undefined && st.val !== null) {
+                const n = Number(st.val);
+                const age = (typeof st.ts === 'number' && Number.isFinite(st.ts)) ? (Date.now() - Number(st.ts)) : null;
+                if (Number.isFinite(n) && (age === null || age <= staleMs)) return n;
+            }
+        } catch {
+            // ignore
+        }
+
+        return fallback;
+    }
+
+    _sumFlowSlotPower(prefix, maxCount) {
+        const base = String(prefix || '').trim();
+        const cnt = Math.max(0, Number(maxCount) || 0);
+        let sum = 0;
+        for (let i = 1; i <= cnt; i++) {
+            const n = this._getAdapterNumberFromCache(`${base}${i}Power`, null);
+            if (typeof n === 'number' && Number.isFinite(n)) sum += Math.max(0, Math.abs(n));
+        }
+        return sum;
+    }
+
+    async _readFeneconAcBalanceInputs(staleMs) {
+        const freshMs = Math.max(5000, Math.round(Number(staleMs) || 15000) * 2);
+        const consumerExtraW = this._sumFlowSlotPower('consumer', 10);
+        const evcsW = Math.max(0, Math.abs(this._getAdapterNumberFromCache('evcs.totalPowerW', 0) || 0));
+
+        let loadW = await this._readOwnFreshNumber('derived.core.building.loadTotalW', freshMs, null);
+        let loadSource = '';
+        if (typeof loadW === 'number' && Number.isFinite(loadW)) {
+            loadW = Math.max(0, loadW);
+            loadSource = 'derived.loadTotal';
+        } else {
+            const loadRestW = await this._readOwnFreshNumber('derived.core.building.loadRestW', freshMs, null);
+            if (typeof loadRestW === 'number' && Number.isFinite(loadRestW)) {
+                loadW = Math.max(0, loadRestW + consumerExtraW + evcsW);
+                loadSource = 'derived.loadRest+extras';
+            } else {
+                const mappedLoadW = this._getAdapterNumberFromCache('consumptionTotal', null);
+                if (typeof mappedLoadW === 'number' && Number.isFinite(mappedLoadW)) {
+                    loadW = Math.max(0, mappedLoadW);
+                    loadSource = 'mapped.consumptionTotal';
+                } else {
+                    loadW = null;
+                }
+            }
+        }
+
+        let pvW = await this._readOwnFreshNumber('derived.core.pv.totalW', freshMs, null);
+        let pvSource = '';
+        if (typeof pvW === 'number' && Number.isFinite(pvW)) {
+            pvW = Math.max(0, pvW);
+            pvSource = 'derived.pvTotal';
+        } else {
+            let pvMappedW = this._getAdapterNumberFromCache('pvPower', null);
+            if (!(typeof pvMappedW === 'number' && Number.isFinite(pvMappedW)) && this.dp) {
+                pvMappedW = this.dp.getNumberFresh('ps.pvW', staleMs, null);
+            }
+            if (typeof pvMappedW === 'number' && Number.isFinite(pvMappedW)) {
+                pvW = Math.max(0, pvMappedW);
+                pvSource = 'mapped.pvPower';
+            } else {
+                const prodTotalW = this._getAdapterNumberFromCache('productionTotal', null);
+                if (typeof prodTotalW === 'number' && Number.isFinite(prodTotalW)) {
+                    pvW = Math.max(0, prodTotalW);
+                    pvSource = 'mapped.productionTotal';
+                } else {
+                    pvW = null;
+                }
+            }
+        }
+
+        return {
+            loadW: (typeof loadW === 'number' && Number.isFinite(loadW)) ? loadW : null,
+            loadSource,
+            pvW: (typeof pvW === 'number' && Number.isFinite(pvW)) ? pvW : null,
+            pvSource,
+            consumerExtraW,
+            evcsW,
+        };
     }
 
     async _readOwnString(id) {

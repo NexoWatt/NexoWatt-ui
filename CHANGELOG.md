@@ -1,3 +1,8 @@
+## 0.6.243
+- Speicher/FENECON: AC-Modus rechnet jetzt explizit mit `Gesamtverbrauch inkl. interner Verbraucher - PV-Erzeugung` und verwendet dieses Ergebnis direkt als Speicher-Sollwert. Positive Werte entladen, negative Werte laden.
+- Zusätzliche Verbraucher aus der internen Flow-/Verbraucherbilanz bleiben damit im FENECON-AC-Sollwert enthalten; die breiteren 0.6.241-Erzeuger-Bilanzänderungen bleiben weiterhin zurückgenommen.
+- Policy/Audit-JSON enthält wieder Debug-Infos zur verwendeten FENECON-Last-/PV-Basis.
+
 ## 0.6.242
 - Speicher/FENECON: Die 0.6.241-Direktbilanz wurde zurückgenommen. Im FENECON-AC-Modus regelt der Speicher wieder wie in 0.6.240 am AC-/NVP-Hausverbrauch, damit die Last sauber abgedeckt wird und der Speicher nicht aus dem Netz lädt.
 - Speicher/FENECON: PV-Leistung wird nicht mehr in den AC-Sollwert hineingezogen. Überschuss kann dadurch wieder über den FENECON-/DC-Pfad in den Speicher gehen, während der AC-Teil den Hausverbrauch ausregelt.
