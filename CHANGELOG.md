@@ -1,3 +1,8 @@
+## 0.6.241
+- Speicher/FENECON: Sollwertbildung im FENECON-AC-Modus auf direkte Anlagenbilanz umgestellt. Verwendet jetzt Verbrauch gesamt inkl. interner Zusatzverbraucher minus PV/Erzeuger, damit der Speicher bei PV-Beladung keinen unnötigen Netzbezug mehr zieht.
+- Speicher/FENECON: zusätzliche Verbraucher aus den Energiefluss-Slots werden in der Bilanz berücksichtigt; zusätzliche Erzeuger-Slots fließen ebenfalls sauber in die Gegenseite ein.
+- Speicher/FENECON: neue Diagnosezustände für Last, Erzeugung, Zusatzverbraucher und berechnete Bilanz ergänzt.
+
 ## 0.6.240
 - Energiefluss: Die rechte EVCS-/Wallbox-Linie wird jetzt komplett ausgeblendet, solange keine Wallbox wirklich konfiguriert oder gemappt ist. So verschwindet die Geister-Verbindung in Anlagen ohne Wallbox.
 - Sobald eine Wallbox vorhanden ist, erscheint die Linie automatisch wieder und verhält sich wie bisher.

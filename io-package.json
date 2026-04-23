@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.240",
+    "version": "0.6.241",
     "news": {
+      "0.6.241": {
+        "en": "Storage/FENECON: the AC-mode storage setpoint is now derived from the direct site balance (total load incl. internal extra consumers minus PV/extra producers). This prevents unwanted grid charging while the battery is being charged from PV and adds dedicated diagnostic states for the calculated balance.",
+        "de": "Speicher/FENECON: Die Sollwertbildung im AC-Modus basiert jetzt auf der direkten Anlagenbilanz (Gesamtverbrauch inkl. interner Zusatzverbraucher minus PV/zusätzliche Erzeuger). Damit wird unnötiger Netzbezug während PV-Ladung vermieden; zusätzlich gibt es neue Diagnosezustände für die berechnete Bilanz."
+      },
+      "0.6.241": {
+        "en": "Storage/FENECON: the AC-mode storage setpoint is now derived from the direct site balance (total load incl. internal extra consumers minus PV/extra producers). This prevents unwanted grid charging while the battery is being charged from PV and adds dedicated diagnostic states for the calculated balance.",
+        "de": "Speicher/FENECON: Die Sollwertbildung im AC-Modus basiert jetzt auf der direkten Anlagenbilanz (Gesamtverbrauch inkl. interner Zusatzverbraucher minus PV/zusätzliche Erzeuger). Damit wird unnötiger Netzbezug während PV-Ladung vermieden; zusätzlich gibt es neue Diagnosezustände für die berechnete Bilanz."
+      },
       "0.6.240": {
         "en": "Energy-flow: the EVCS line to the right is now hidden completely until a wallbox is actually configured/mapped. This removes the ghost connection in installations without a wallbox while keeping the line visible automatically as soon as EVCS is available. Web cache version bumped.",
         "de": "Energiefluss: Die EVCS-/Wallbox-Linie rechts wird jetzt vollständig ausgeblendet, solange keine Wallbox wirklich konfiguriert/gemappt ist. Damit verschwindet die Geister-Verbindung in Anlagen ohne Wallbox; sobald EVCS verfügbar ist, erscheint die Linie automatisch wieder. Web-Cache-Version angehoben."
@@ -1724,7 +1732,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.240",
+  "version": "0.6.241",
   "news": {
     "0.6.240": {
       "en": "Energy-flow: the EVCS line to the right is now hidden completely until a wallbox is actually configured/mapped. This removes the ghost connection in installations without a wallbox while keeping the line visible automatically as soon as EVCS is available. Web cache version bumped.",
