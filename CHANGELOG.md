@@ -1,7 +1,12 @@
+## 0.6.244
+- Rollback: Speicher/FENECON wieder auf das Verhalten aus 0.6.240 zurückgesetzt. Die späteren AC-Hybrid-/PV-Formeln aus 0.6.241 bis 0.6.243 sind nicht mehr aktiv.
+- Version und PWA/Web-Cache angehoben, damit das Zurückrollen sauber als Update eingespielt werden kann.
+
 ## 0.6.243
-- Speicher/FENECON: AC-Modus rechnet jetzt explizit mit `Gesamtverbrauch inkl. interner Verbraucher - PV-Erzeugung` und verwendet dieses Ergebnis direkt als Speicher-Sollwert. Positive Werte entladen, negative Werte laden.
-- Zusätzliche Verbraucher aus der internen Flow-/Verbraucherbilanz bleiben damit im FENECON-AC-Sollwert enthalten; die breiteren 0.6.241-Erzeuger-Bilanzänderungen bleiben weiterhin zurückgenommen.
-- Policy/Audit-JSON enthält wieder Debug-Infos zur verwendeten FENECON-Last-/PV-Basis.
+- Speicher/FENECON: Im AC-Modus wird die Sollleistung jetzt aus der Hybrid-Bilanz `Verbrauch gesamt - PV-Erzeugung - Ziel-Netzbezug` gebildet. Positiver Rest führt zu Entladung, PV-Überschuss zu Ladung.
+- Zusätzliche Verbraucher aus dem Energiefluss werden dabei über die abgeleitete Gesamtlast automatisch mit berücksichtigt; als Fallback werden Hauslast + Verbraucher-/EV-Slots verwendet.
+- Die FENECON-Sonderlogik übersteuert im AC-Modus jetzt sauber die klassische Eigenverbrauch-/PV-Teilregelung, damit keine widersprüchlichen Sollwerte mehr entstehen.
+- PWA/Web-Cache-Version angehoben.
 
 ## 0.6.242
 - Speicher/FENECON: Die 0.6.241-Direktbilanz wurde zurückgenommen. Im FENECON-AC-Modus regelt der Speicher wieder wie in 0.6.240 am AC-/NVP-Hausverbrauch, damit die Last sauber abgedeckt wird und der Speicher nicht aus dem Netz lädt.
