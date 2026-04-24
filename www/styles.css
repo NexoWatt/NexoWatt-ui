@@ -681,14 +681,16 @@ body {
 
 #nw-smarthome-root {
   box-sizing: border-box;
-  padding: 12px 12px 16px;
+  padding: 10px 10px 14px;
   width: 100%;
   min-height: calc(100vh - 56px);
   /* SmartHome text sizing (Endkunden‑Einstellung)
      Default ist „Normal“. Per UI kann zwischen Kompakt/Normal/Groß umgeschaltet werden.
   */
-  --nw-sh-name-size: 0.92rem;
-  --nw-sh-state-size: 0.75rem;
+  --nw-sh-name-size: 0.90rem;
+  --nw-sh-state-size: 0.72rem;
+  --nw-sh-tile-min-w: 240px;
+  --nw-sh-tile-h: 128px;
   /* Use the standard VIS background (body) so the SmartHome page blends in.
      Older versions used a dedicated blue-ish backdrop which looked like a large panel. */
   background: transparent;
@@ -698,18 +700,18 @@ body {
 
 /* Textgrößen-Profile (Root-Klasse wird durch die SmartHome-UI gesetzt) */
 #nw-smarthome-root.nw-sh-text-compact {
-  --nw-sh-name-size: 0.90rem;
-  --nw-sh-state-size: 0.73rem;
+  --nw-sh-name-size: 0.86rem;
+  --nw-sh-state-size: 0.70rem;
 }
 
 #nw-smarthome-root.nw-sh-text-normal {
-  --nw-sh-name-size: 1.00rem;
-  --nw-sh-state-size: 0.78rem;
+  --nw-sh-name-size: 0.94rem;
+  --nw-sh-state-size: 0.74rem;
 }
 
 #nw-smarthome-root.nw-sh-text-large {
-  --nw-sh-name-size: 1.14rem;
-  --nw-sh-state-size: 0.86rem;
+  --nw-sh-name-size: 1.06rem;
+  --nw-sh-state-size: 0.82rem;
 }
 
 .nw-smarthome-header {
@@ -3010,7 +3012,7 @@ body{ padding-top: var(--topbar-h); }
 
 .nw-sh-layout{
   display:flex;
-  gap: 14px;
+  gap: 10px;
   align-items: flex-start;
 }
 
@@ -3165,8 +3167,8 @@ body{ padding-top: var(--topbar-h); }
 .nw-sh-topbar{
   display:flex;
   align-items:center;
-  gap: 10px;
-  margin: 2px auto 12px;
+  gap: 8px;
+  margin: 0 auto 8px;
   /* Slightly wider on desktop so 4-column device grids remain readable */
   max-width: 1280px;
   padding: 0 2px;
@@ -3327,7 +3329,7 @@ body{ padding-top: var(--topbar-h); }
 .nw-sh-rooms{
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   /* Slightly wider on desktop so device names fit without truncation */
   max-width: 1280px;
   margin: 0 auto;
@@ -3335,8 +3337,8 @@ body{ padding-top: var(--topbar-h); }
 
 /* SmartHome: Gebäude-Hierarchie (Geschoss → Räume → Kacheln) */
 .nw-sh-floor{
-  padding: 12px 12px 14px;
-  border-radius: 22px;
+  padding: 10px 10px 12px;
+  border-radius: 20px;
   border: 1px solid rgba(148,163,184,0.14);
   background: rgba(2,6,23,0.22);
 }
@@ -3345,8 +3347,8 @@ body{ padding-top: var(--topbar-h); }
   display:flex;
   align-items:center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
 .nw-sh-floor__title{
@@ -3382,13 +3384,13 @@ body{ padding-top: var(--topbar-h); }
 .nw-sh-floor__rooms{
   display:flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 10px;
 }
 
 /* Room card inside a floor (clearer hierarchy) */
 .nw-sh-room{
-  padding: 10px 10px 12px;
-  border-radius: 20px;
+  padding: 8px;
+  border-radius: 18px;
   border: 1px solid rgba(148,163,184,0.12);
   background: rgba(2,6,23,0.14);
 }
@@ -3397,14 +3399,14 @@ body{ padding-top: var(--topbar-h); }
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 7px;
 }
 
 .nw-sh-room__title{
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-size: 1.05rem;
+  gap: 8px;
+  font-size: 1.0rem;
   font-weight: 700;
   color: #e5e7eb;
 }
@@ -3454,15 +3456,13 @@ body{ padding-top: var(--topbar-h); }
 
 .nw-sh-grid{
   display: grid;
-  /* Auto grid: column count is based on available width (important with the left sidebar).
-     This prevents "too many columns" and unreadable device names. */
-  grid-template-columns: repeat(auto-fit, minmax(var(--nw-sh-tile-min-w, 290px), 1fr));
-  gap: 12px;
-  /* Uniform tiles: fixed row height for consistent overview */
-  /* A bit taller so names can wrap without becoming unreadable */
-  grid-auto-rows: var(--nw-sh-tile-h, 156px);
+  /* Compact auto grid: more columns, shorter rows and smaller gaps for a clearer overview. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--nw-sh-tile-min-w, 240px)), 1fr));
+  gap: 9px;
+  grid-auto-rows: var(--nw-sh-tile-h, clamp(118px, 11vw, 132px));
   grid-auto-flow: row;
 }
+
 
 .nw-sh-grid--home{
   margin-top: 10px;
@@ -3472,7 +3472,7 @@ body{ padding-top: var(--topbar-h); }
 .nw-sh-home{
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
 }
 
 .nw-sh-home__info{
@@ -3688,10 +3688,10 @@ body{ padding-top: var(--topbar-h); }
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 
-  padding: 12px;
-  border-radius: 22px;
+  padding: 10px;
+  border-radius: 18px;
   border: 1px solid rgba(148,163,184,0.16);
 
   /* Premium glass surface (clean + calm) */
@@ -3701,7 +3701,7 @@ body{ padding-top: var(--topbar-h); }
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
   box-shadow:
-    0 12px 32px rgba(0,0,0,0.32),
+    0 9px 24px rgba(0,0,0,0.30),
     inset 0 1px 0 rgba(255,255,255,0.07),
     inset 0 0 0 1px rgba(255,255,255,0.035),
     inset 0 -1px 0 rgba(0,0,0,0.45);
@@ -3758,7 +3758,7 @@ body{ padding-top: var(--topbar-h); }
 .nw-sh-tile:hover{
   transform: translateY(-1px);
   box-shadow:
-    0 16px 40px rgba(0,0,0,0.36),
+    0 12px 30px rgba(0,0,0,0.34),
     inset 0 1px 0 rgba(255,255,255,0.08),
     inset 0 0 0 1px rgba(255,255,255,0.045),
     inset 0 -1px 0 rgba(0,0,0,0.48);
@@ -3825,17 +3825,17 @@ body{ padding-top: var(--topbar-h); }
 .nw-sh-tile__header{
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 7px;
 }
 
 /* Right side actions in tile header (favorite + details button) */
 .nw-sh-tile__actions{
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 7px;
+  right: 7px;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
@@ -3849,19 +3849,19 @@ body{ padding-top: var(--topbar-h); }
 
 /* Dynamic right padding so tiles without a detail button don't waste title space */
 .nw-sh-tile--actions-1{
-  --nw-sh-title-pad: 44px;
+  --nw-sh-title-pad: 38px;
 }
 .nw-sh-tile--actions-2{
-  --nw-sh-title-pad: 74px;
+  --nw-sh-title-pad: 66px;
 }
 .nw-sh-tile--actions-3{
-  --nw-sh-title-pad: 104px;
+  --nw-sh-title-pad: 94px;
 }
 
 .nw-sh-tile__name{
   font-weight: 750;
   color: rgba(243, 244, 246, 0.98);
-  font-size: var(--nw-sh-name-size, 0.92rem);
+  font-size: var(--nw-sh-name-size, 0.88rem);
   text-shadow: 0 1px 2px rgba(0,0,0,0.45);
 
   /* Better readability: allow more wrapping instead of aggressive truncation */
@@ -3876,8 +3876,8 @@ body{ padding-top: var(--topbar-h); }
 }
 
 .nw-sh-tile__state{
-  margin-top: 2px;
-  font-size: var(--nw-sh-state-size, 0.75rem);
+  margin-top: 1px;
+  font-size: var(--nw-sh-state-size, 0.72rem);
   color: rgba(203, 213, 225, 0.88);
   text-shadow: 0 1px 1px rgba(0,0,0,0.35);
   /* State may include room label or Ist→Soll, so allow wrapping */
@@ -3925,12 +3925,12 @@ body{ padding-top: var(--topbar-h); }
   background: rgba(2,6,23,0.18);
   color: rgba(148,163,184,0.95);
   border-radius: 999px;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: 14px;
   cursor: pointer;
   user-select: none;
   flex-shrink: 0;
@@ -4027,9 +4027,48 @@ body{ padding-top: var(--topbar-h); }
   gap: 10px;
 }
 
+
+/* SmartHome: temperature readings are the focal point of sensor tiles. */
+.nw-sh-tile__state--empty{
+  display: none;
+}
+
+.nw-sh-tile--temperature{
+  justify-content: flex-start;
+}
+
+.nw-sh-tile__big--temperature{
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  flex-wrap: nowrap;
+  text-align: center;
+  margin-top: 0;
+  padding: 0 4px 6px;
+}
+
+.nw-sh-tile--temperature .nw-sh-tile__value{
+  font-size: clamp(2.15rem, 4.2vw, 3rem);
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: -0.045em;
+  color: rgba(248, 250, 252, 0.98);
+}
+
+.nw-sh-tile--temperature .nw-sh-tile__unit{
+  margin-left: 5px;
+  font-size: clamp(0.95rem, 1.5vw, 1.2rem);
+  font-weight: 850;
+  vertical-align: 0.22em;
+}
+
 .nw-sh-icon{
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   border-radius: 999px;
   position: relative;
   display: flex;
@@ -4072,8 +4111,8 @@ body{ padding-top: var(--topbar-h); }
 }
 
 .nw-sh-icon__svg{
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   display: block;
 }
 
@@ -4094,8 +4133,8 @@ body{ padding-top: var(--topbar-h); }
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 2px;
+  gap: 6px;
+  margin-top: 0;
 }
 
 .nw-sh-mini-btn{
@@ -4103,9 +4142,9 @@ body{ padding-top: var(--topbar-h); }
   border: 1px solid rgba(148,163,184,0.22);
   background: rgba(2,6,23,0.22);
   color: #e5e7eb;
-  border-radius: 12px;
-  width: 34px;
-  height: 34px;
+  border-radius: 11px;
+  width: 30px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4135,8 +4174,8 @@ body{ padding-top: var(--topbar-h); }
   border: 1px solid rgba(148,163,184,0.22);
   background: rgba(2,6,23,0.22);
   border-radius: 999px;
-  width: 50px;
-  height: 30px;
+  width: 46px;
+  height: 28px;
   position: relative;
   cursor: pointer;
   padding: 0;
@@ -4148,8 +4187,8 @@ body{ padding-top: var(--topbar-h); }
   position: absolute;
   top: 3px;
   left: 3px;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
   background: rgba(203,213,225,0.85);
   box-shadow: 0 6px 14px rgba(0,0,0,0.32);
@@ -4161,7 +4200,7 @@ body{ padding-top: var(--topbar-h); }
 }
 .nw-sh-mini-toggle--on::after{
   background: var(--sh-accent);
-  transform: translateX(20px);
+  transform: translateX(18px);
 }
 .nw-sh-mini-toggle:disabled{
   opacity: 0.55;
@@ -4215,8 +4254,8 @@ body{ padding-top: var(--topbar-h); }
   background: rgba(2,6,23,0.25);
   color: rgba(226,232,240,0.9);
   border-radius: 999px;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4240,12 +4279,12 @@ body{ padding-top: var(--topbar-h); }
   background: rgba(2,6,23,0.25);
   color: rgba(226,232,240,0.9);
   border-radius: 999px;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: 13px;
   cursor: pointer;
   user-select: none;
   flex-shrink: 0;
@@ -6459,3 +6498,85 @@ body{ padding-top: var(--topbar-h); }
 }
 
 
+/* SmartHome compact responsive tuning */
+@media (max-width: 900px){
+  #nw-smarthome-root{
+    --nw-sh-tile-min-w: 210px;
+    --nw-sh-tile-h: 122px;
+    padding: 8px;
+  }
+  .nw-sh-rooms,
+  .nw-sh-floor__rooms,
+  .nw-sh-home{
+    gap: 10px;
+  }
+}
+
+@media (max-width: 560px){
+  #nw-smarthome-root{
+    --nw-sh-tile-min-w: 160px;
+    --nw-sh-tile-h: 116px;
+    --nw-sh-name-size: 0.84rem;
+    --nw-sh-state-size: 0.68rem;
+  }
+  .nw-sh-floor,
+  .nw-sh-room{
+    padding: 7px;
+    border-radius: 16px;
+  }
+  .nw-sh-grid{
+    --nw-sh-tile-min-w: 160px;
+    --nw-sh-tile-h: 116px;
+    gap: 8px;
+  }
+  .nw-sh-tile{
+    padding: 8px;
+    border-radius: 16px;
+  }
+  .nw-sh-icon{
+    width: 30px;
+    height: 30px;
+  }
+  .nw-sh-icon__svg{
+    width: 18px;
+    height: 18px;
+  }
+  .nw-sh-favbtn,
+  .nw-sh-detailbtn,
+  .nw-sh-timerbtn{
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+  .nw-sh-tile--actions-1{
+    --nw-sh-title-pad: 34px;
+  }
+  .nw-sh-tile--actions-2{
+    --nw-sh-title-pad: 60px;
+  }
+  .nw-sh-tile--actions-3{
+    --nw-sh-title-pad: 86px;
+  }
+  .nw-sh-mini-toggle{
+    width: 42px;
+    height: 26px;
+  }
+  .nw-sh-mini-toggle::after{
+    width: 20px;
+    height: 20px;
+  }
+  .nw-sh-mini-toggle--on::after{
+    transform: translateX(16px);
+  }
+  .nw-sh-mini-btn{
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 380px){
+  #nw-smarthome-root{
+    --nw-sh-tile-min-w: 100%;
+  }
+}

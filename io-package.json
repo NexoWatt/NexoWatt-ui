@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.245",
+    "version": "0.6.246",
     "news": {
       "0.6.245": {
         "en": "Storage/FENECON: reverted the 0.6.243 AC setpoint formula and restored the proven behavior from 0.6.240/0.6.242. In FENECON AC mode the storage again regulates like before without the additional direct-balance override. Web cache version bumped.",
@@ -1732,7 +1732,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.245",
+  "version": "0.6.246",
   "news": {
     "0.6.245": {
       "en": "Storage/FENECON: reverted the 0.6.243 AC setpoint formula and restored the proven behavior from 0.6.240/0.6.242. In FENECON AC mode the storage again regulates like before without the additional direct-balance override. Web cache version bumped.",

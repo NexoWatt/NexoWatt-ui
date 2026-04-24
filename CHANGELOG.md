@@ -1,3 +1,9 @@
+## 0.6.246
+- SmartHome VIS: Funktions-/Gerätekacheln kompakter und responsiver aufgebaut; kleinere Abstände, schmalere Grid-Spalten und reduzierte Kachelhöhen für bessere Übersicht.
+- SmartHome VIS: Temperatur-Kacheln zeigen den Messwert jetzt groß und mittig in der Kachel.
+- SmartHome VIS: Temperatur-Sensoren erhalten automatisch die Einheit °C, wenn die Einheit in der Konfiguration fehlt und Name/Funktion als Temperatur erkannt wird.
+- PWA/Web-Cache-Version angehoben.
+
 ## 0.6.245
 - Speicher/FENECON: AC-Sonderlogik neu aufgebaut. Wenn der FENECON-Haken aktiv ist, folgt der Speicher im Eigenverbrauch jetzt der gesamten AC-Last (derived loadTotalW bzw. Fallbacks inkl. EV und Zusatzverbraucher) statt wie der Standardspeicher am NVP zu regeln.
 - Speicher/FENECON: Günstiges Tarif-Netzladen behält Vorrang. Tarif-Entladen, EVCS-Assist und PV-Überschuss-Laden greifen im FENECON-AC-Modus nicht mehr parallel dazwischen, damit die Regelung sauber auf einem Pfad bleibt.

@@ -2273,11 +2273,50 @@ function nwNormalizeIconName(raw) {
   return map[s] || s;
 }
 
+
+function nwLooksLikeTemperatureDevice(dev) {
+  if (!dev) return false;
+  const type = String(dev.type || '').toLowerCase();
+  if (type === 'rtr') return true;
+  if (type !== 'sensor') return false;
+
+  const ui = dev.ui || {};
+  const unit = String(ui.unit || '').trim().toLowerCase().replace(/\s+/g, '');
+  const hay = [
+    dev.alias,
+    dev.id,
+    dev.title,
+    dev.name,
+    dev.function,
+    dev.room,
+    ui.label,
+    ui.role,
+    ui.unit,
+  ].filter(v => typeof v !== 'undefined' && v !== null).join(' ').toLowerCase();
+
+  if (unit === '°c' || unit === 'c' || unit.includes('celsius') || unit.includes('gradc')) return true;
+  if (/temp|temperatur|temperature|speicher\s*(oben|mitte|unten|top|mid|bottom)|puffer|boiler|warmwasser|vorlauf|rücklauf|ruecklauf|thermo|klima/.test(hay)) return true;
+
+  // Numeric sensor values without a unit are not automatically treated as temperature.
+  // The alias/function must indicate it, otherwise e.g. power/energy sensors would get °C.
+  return false;
+}
+
+function nwNormalizeTemperatureUnit(dev, unit) {
+  const raw = String(unit || '').trim();
+  if (!nwLooksLikeTemperatureDevice(dev)) return raw;
+
+  const compact = raw.toLowerCase().replace(/\s+/g, '');
+  if (!compact || compact === 'c' || compact === '°c' || compact === 'gradc' || compact === 'celsius') {
+    return '°C';
+  }
+  return raw;
+}
+
 function nwGuessIconName(dev) {
   const type = String(dev.type || '').toLowerCase();
   const fn = String(dev.function || '').toLowerCase();
   const alias = String(dev.alias || dev.id || '').toLowerCase();
-  const unit = String(dev.ui && dev.ui.unit ? dev.ui.unit : '').toLowerCase();
 
   // type-based defaults
   if (type === 'blind') return 'blinds';
@@ -2288,7 +2327,7 @@ function nwGuessIconName(dev) {
   if (type === 'player') return 'speaker';
   if (type === 'color') return 'bulb';
   if (type === 'sensor') {
-    if (unit.includes('°c') || alias.includes('temp') || fn.includes('klima')) return 'thermometer';
+    if (nwLooksLikeTemperatureDevice(dev)) return 'thermometer';
     return 'sensor';
   }
 
@@ -2476,7 +2515,7 @@ function nwGetStateText(dev) {
       const ui = dev.ui || {};
       if (typeof st.value === 'number') {
         const prec = (typeof ui.precision === 'number') ? ui.precision : 1;
-        const unit = ui.unit || '';
+        const unit = nwNormalizeTemperatureUnit(dev, ui.unit || '');
         return st.value.toFixed(prec).replace('.', ',') + (unit ? ' ' + unit : '');
       }
       return String(st.value);
@@ -2514,14 +2553,14 @@ function nwFormatBigValue(dev) {
       const prec = (typeof ui.precision === 'number') ? ui.precision : 1;
       return {
         value: st.currentTemp.toFixed(prec).replace('.', ','),
-        unit: ui.unit || '°C',
+        unit: nwNormalizeTemperatureUnit(dev, ui.unit || '°C'),
       };
     }
     if (typeof st.setpoint === 'number') {
       const prec = (typeof ui.precision === 'number') ? ui.precision : 1;
       return {
         value: st.setpoint.toFixed(prec).replace('.', ','),
-        unit: ui.unit || '°C',
+        unit: nwNormalizeTemperatureUnit(dev, ui.unit || '°C'),
       };
     }
   }
@@ -2531,7 +2570,7 @@ function nwFormatBigValue(dev) {
       const prec = (typeof ui.precision === 'number') ? ui.precision : 1;
       return {
         value: st.value.toFixed(prec).replace('.', ','),
-        unit: ui.unit || '',
+        unit: nwNormalizeTemperatureUnit(dev, ui.unit || ''),
       };
     }
   }
@@ -3267,6 +3306,8 @@ function nwShowShToastForTile(dev) {
 
 function nwCreateTile(dev, opts) {
   const type = String(dev.type || '').toLowerCase();
+  const temperatureValue = nwFormatBigValue(dev);
+  const isTemperatureTile = nwLooksLikeTemperatureDevice(dev) && !!(temperatureValue && temperatureValue.value);
   const size = nwGetTileSize(dev);
   const isOn = nwIsOn(dev);
   const canWrite = nwHasWriteAccess(dev);
@@ -3291,6 +3332,7 @@ function nwCreateTile(dev, opts) {
   tile.className = [
     'nw-sh-tile',
     'nw-sh-tile--type-' + (type || 'unknown'),
+    isTemperatureTile ? 'nw-sh-tile--temperature' : '',
     'nw-sh-tile--size-' + size,
     isOn ? 'nw-sh-tile--on' : 'nw-sh-tile--off',
     canWrite ? '' : 'nw-sh-tile--readonly',
@@ -3324,7 +3366,16 @@ function nwCreateTile(dev, opts) {
   state.className = 'nw-sh-tile__state';
   const baseStateText = nwGetStateText(dev);
   const roomLabel = (opts && opts.showRoom) ? String(dev.room || '').trim() : '';
-  state.textContent = roomLabel ? `${roomLabel} · ${baseStateText}` : baseStateText;
+  let stateText = '';
+  if (isTemperatureTile) {
+    // Temperaturwerte werden groß und zentriert in der Kachel gezeigt.
+    // In Übersichten mit Raumanzeige bleibt der Raum als Kontext erhalten.
+    stateText = roomLabel || '';
+  } else {
+    stateText = roomLabel ? `${roomLabel} · ${baseStateText}` : baseStateText;
+  }
+  state.textContent = stateText;
+  if (!stateText) state.classList.add('nw-sh-tile__state--empty');
 
   titleWrap.appendChild(name);
   titleWrap.appendChild(state);
@@ -3390,12 +3441,14 @@ function nwCreateTile(dev, opts) {
 
   tile.appendChild(header);
 
-  // Big content (only for explicit XL tiles – default grid is uniform)
-  if (size === 'xl') {
+  // Big content: explicit XL tiles keep their rich content; temperature tiles
+  // always get a compact, centered value so readings are readable at a glance.
+  const showCenteredTemperatureValue = isTemperatureTile && (type === 'sensor' || type === 'rtr');
+  if (size === 'xl' || showCenteredTemperatureValue) {
     const big = document.createElement('div');
-    big.className = 'nw-sh-tile__big';
+    big.className = 'nw-sh-tile__big' + (showCenteredTemperatureValue ? ' nw-sh-tile__big--temperature' : '');
 
-    if (type === 'camera') {
+    if (size === 'xl' && type === 'camera') {
       tile.classList.add('nw-sh-tile--media');
       const cam = (dev.io && dev.io.camera) ? dev.io.camera : {};
       const snapshotUrl = (typeof cam.snapshotUrl === 'string') ? cam.snapshotUrl : '';
@@ -3440,7 +3493,7 @@ function nwCreateTile(dev, opts) {
           if (url) window.open(url, '_blank', 'noopener,noreferrer');
         });
       }
-    } else if (type === 'widget') {
+    } else if (size === 'xl' && type === 'widget') {
       tile.classList.add('nw-sh-tile--media');
       const w = (dev.io && dev.io.widget) ? dev.io.widget : {};
       const kind = (typeof w.kind === 'string' && w.kind.trim()) ? w.kind.trim() : 'iframe';
@@ -3483,7 +3536,7 @@ function nwCreateTile(dev, opts) {
         big.appendChild(btnRow);
       }
     } else {
-      const { value, unit } = nwFormatBigValue(dev);
+      const { value, unit } = (showCenteredTemperatureValue && temperatureValue) ? temperatureValue : nwFormatBigValue(dev);
       if (value) {
         const val = document.createElement('div');
         val.className = 'nw-sh-tile__value';
@@ -3498,7 +3551,7 @@ function nwCreateTile(dev, opts) {
       }
 
       // Secondary line for RTR: setpoint/humidity
-      if (type === 'rtr') {
+      if (size === 'xl' && type === 'rtr') {
         const st = dev.state || {};
         const meta = document.createElement('div');
         meta.className = 'nw-sh-tile__meta';
