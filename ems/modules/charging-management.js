@@ -1317,6 +1317,7 @@ class ChargingManagementModule extends BaseModule {
             requestedCount: 0,
             limitedWallboxes: 0,
             starvedW: 0,
+            pendingW: 0,
             storageYieldW: 0,
             storageSource: '',
         });
@@ -2607,6 +2608,7 @@ class ChargingManagementModule extends BaseModule {
         let evPriorityStorageSource = '';
         let evPriorityLimitedWallboxes = 0;
         let evPriorityStarvedW = 0;
+        let evPriorityPendingW = 0;
 
         // For backwards compatibility: only cap the *total* budget by PV when
         // (a) PV-only is globally active (config or tariff) AND
@@ -2720,10 +2722,22 @@ class ChargingManagementModule extends BaseModule {
                 }
 
                 const storageSourceNorm = String(evPriorityStorageSource || '').trim().toLowerCase();
-                const storageChargingFromPv = storageSourceNorm === 'pv'
-                    || (storageSourceNorm === '' && typeof gridW === 'number' && Number.isFinite(gridW) && gridW <= 150);
+                const nvpNoImport = (typeof gridW === 'number' && Number.isFinite(gridW) && gridW <= 150);
+                const sourceLooksLikePvCharge = storageSourceNorm === 'pv'
+                    || storageSourceNorm.includes('pv')
+                    || storageSourceNorm.includes('überschuss')
+                    || storageSourceNorm.includes('ueberschuss')
+                    || storageSourceNorm.includes('nulleinspeisung')
+                    || storageSourceNorm.includes('zero')
+                    || storageSourceNorm === ''
+                    || storageSourceNorm === 'idle'
+                    || storageSourceNorm === 'fenecon';
 
-                if (storageChargingFromPv) {
+                // EV-Priorität: Wenn ein PV-/Min+PV-Ladepunkt Bedarf hat und der Speicher gerade
+                // PV-Überschuss aufnimmt, wird diese Leistung im EVCS-PV-Budget freigegeben.
+                // Der Speicher-Regler bekommt im selben Tick das Block-Flag und nimmt seine
+                // PV-Ladung zurück, sodass Wallboxen den Überschuss zuerst bekommen.
+                if (nvpNoImport && sourceLooksLikePvCharge) {
                     evPriorityStorageYieldW = storageChargeNowW;
                 }
             }
@@ -2756,17 +2770,18 @@ class ChargingManagementModule extends BaseModule {
                 && typeof loadTotalDirectW === 'number' && Number.isFinite(loadTotalDirectW)) {
                 // Bevorzugte direkte Berechnung für reinen PV-Überschuss:
                 //   PV - (Verbrauch ohne EV) - Speicherladung
-                // Das vermeidet Überhöhung durch Speicher-Entladung oder durch eine angenommene,
-                // aber noch nicht wirksame Rücknahme der Speicherladung.
+                // Bei aktiver EV-Priorität wird PV-Speicherladung, die gerade den Überschuss bindet,
+                // nicht abgezogen. Diese Leistung soll zuerst der Wallbox angeboten werden.
                 const baseLoadNoEvW = Math.max(0, loadTotalDirectW - pvEvcsActualW);
-                pvSurplusNoEvW = Math.max(0, pvDirectW - baseLoadNoEvW - storageChargeNowW);
-                gridImportNoEvW = Math.max(0, baseLoadNoEvW + storageChargeNowW - pvDirectW);
+                const storageChargeBlockingPvW = Math.max(0, storageChargeNowW - evPriorityStorageYieldW);
+                pvSurplusNoEvW = Math.max(0, pvDirectW - baseLoadNoEvW - storageChargeBlockingPvW);
+                gridImportNoEvW = Math.max(0, baseLoadNoEvW + storageChargeBlockingPvW - pvDirectW);
             } else if (typeof gridW === 'number' && Number.isFinite(gridW)) {
                 // Fallback-Rekonstruktion ohne direkte PV-/Verbrauchs-DPs.
                 // WICHTIG: Speicher-Entladung darf PV-Only NICHT künstlich vergrößern.
                 // Deshalb ziehen wir aktive Batterie-Entladung hier ab.
-                pvSurplusNoEvW = Math.max(0, (-gridW) + pvEvcsUsedW - storageDischargeNowW);
-                gridImportNoEvW = Math.max(0, gridW - pvEvcsUsedW + storageDischargeNowW);
+                pvSurplusNoEvW = Math.max(0, (-gridW) + pvEvcsUsedW - storageDischargeNowW + evPriorityStorageYieldW);
+                gridImportNoEvW = Math.max(0, gridW - pvEvcsUsedW + storageDischargeNowW - evPriorityStorageYieldW);
             } else if (typeof pvSurplusCfgW === 'number' && Number.isFinite(pvSurplusCfgW)) {
                 // Fallback wenn kein Grid-DP verfügbar (z. B. nur PV-Surplus DP konfiguriert)
                 pvSurplusNoEvW = Math.max(0, pvSurplusCfgW);
@@ -2992,6 +3007,7 @@ if (components.length) {
                 gridImportNoEvW: (typeof gridImportNoEvW === 'number' && Number.isFinite(gridImportNoEvW)) ? gridImportNoEvW : null,
                 pvSurplusW: (typeof pvSurplusW === 'number' && Number.isFinite(pvSurplusW)) ? pvSurplusW : null,
                 pvSurplusAvg5mW: (typeof pvSurplusNoEvAvg5mWState === 'number' && Number.isFinite(pvSurplusNoEvAvg5mWState)) ? pvSurplusNoEvAvg5mWState : null,
+                evPriorityStorageYieldW: Math.round(evPriorityStorageYieldW || 0),
                 components,
             };
         } else if (budgetMode === 'static') {
@@ -3573,10 +3589,11 @@ if (components.length) {
     
         publishEvPriorityCaps({
             active: !!evPriorityRequested,
-            blockStorageCharge: !!(evPriorityRequested && (evPriorityLimitedWallboxes > 0 || evPriorityStorageYieldW > 0)),
+            blockStorageCharge: !!(evPriorityRequested && (evPriorityLimitedWallboxes > 0 || evPriorityPendingW > 0)),
             requestedCount: evPriorityWallboxes.length,
             limitedWallboxes: evPriorityLimitedWallboxes,
-            starvedW: Math.round(evPriorityStarvedW || 0),
+            starvedW: Math.round(Math.max(evPriorityStarvedW || 0, evPriorityPendingW || 0)),
+            pendingW: Math.round(evPriorityPendingW || 0),
             storageYieldW: Math.round(evPriorityStorageYieldW || 0),
             storageSource: String(evPriorityStorageSource || ''),
         });
@@ -4460,6 +4477,23 @@ if (components.length) {
                             evPriorityStarvedW += Math.max(0, extraPossibleW - extraDeliveredW);
                         }
                     }
+
+                    // Prioritätslücke unabhängig vom aktuellen PV-Limiter:
+                    // Wenn ein PV-/Min+PV-Ladepunkt noch nicht bis zur nicht-PV-begrenzten
+                    // technischen/harten Grenze hochgeregelt ist, darf der Speicher den PV-Überschuss
+                    // nicht parallel wegfangen. Erst wenn die Wallbox ihr mögliches Ziel erreicht hat,
+                    // darf Rest-PV in den Speicher gehen.
+                    const nonPvAvailW = Math.min(
+                        w.maxPW,
+                        Number.isFinite(totalAvailW) ? totalAvailW : Number.POSITIVE_INFINITY,
+                        Number.isFinite(stationAvailW) ? stationAvailW : Number.POSITIVE_INFINITY,
+                    );
+                    const nonPvTargetW = Number.isFinite(nonPvAvailW) ? Math.max(0, nonPvAvailW) : Math.max(0, w.maxPW || 0);
+                    const evPriorityCanUseNow = (targetW > tolW) || (cmdW > tolW) || actualOrCmdActive;
+                    const openW = Math.max(0, nonPvTargetW - Math.max(0, cmdW));
+                    if (evPriorityCanUseNow && openW > tolW) {
+                        evPriorityPendingW += openW;
+                    }
                 }
             } catch {
                 // ignore
@@ -4707,6 +4741,17 @@ if (components.length) {
             await this._queueState(`${w.ch}.reason`, availabilityReason(!!w.cfgEnabled, !!w.userEnabled, !!w.online), true);
         }
 
+
+        publishEvPriorityCaps({
+            active: !!evPriorityRequested,
+            blockStorageCharge: !!(evPriorityRequested && (evPriorityLimitedWallboxes > 0 || evPriorityPendingW > 0)),
+            requestedCount: evPriorityWallboxes.length,
+            limitedWallboxes: evPriorityLimitedWallboxes,
+            starvedW: Math.round(Math.max(evPriorityStarvedW || 0, evPriorityPendingW || 0)),
+            pendingW: Math.round(evPriorityPendingW || 0),
+            storageYieldW: Math.round(evPriorityStorageYieldW || 0),
+            storageSource: String(evPriorityStorageSource || ''),
+        });
 
         // MU6.1: diagnostics logging (compact, decision-leading)
         const diagCfg = (this.adapter && this.adapter.config && this.adapter.config.diagnostics) ? this.adapter.config.diagnostics : null;

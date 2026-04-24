@@ -497,7 +497,9 @@ class SpeicherRegelungModule extends BaseModule {
         const importRawW = Math.max(0, nvpRawW);
         const exportRawW = Math.max(0, -nvpRawW);
 
-        // FENECON AC: Im Sondermodus soll der AC-Teil des Speichers der gesamten AC-Last folgen.
+        // FENECON AC: Lastreferenz für den AC-Teil des Speichers.
+        // Wichtig: Die eigentliche Sollleistung wird weiter unten am NVP bilanziert,
+        // damit PV-Überschuss-/EVCS-Situationen nicht zu Batterieentladung in die Einspeisung führen.
         // Priorität der Lastquelle:
         // 1) derived.core.building.loadTotalW (enthält Haus + EV + Zusatzverbraucher)
         // 2) consumptionTotal (direkter Haus-/Gesamtverbrauch)
@@ -1341,24 +1343,54 @@ if (targetW === 0 && selfDischargeEnabled) {
         const acLoad = getFeneconAcLoadTargetW();
         const acLoadW = (acLoad && typeof acLoad.w === 'number' && Number.isFinite(acLoad.w)) ? Math.max(0, acLoad.w) : 0;
 
-        if (allow && acLoadW > 0) {
-            const nextSetW = clamp(acLoadW, 0, selfMaxDischargeEff);
-            if (nextSetW > 0) {
-                targetW = nextSetW;
-                reason = `FENECON AC: Lastfolge (${Math.round(targetW)} W, Quelle ${String(acLoad && acLoad.source ? acLoad.source : 'unbekannt')})`;
-                source = 'fenecon';
-                hardDischargeMinSoc = Math.max(hardDischargeMinSoc, selfMinSoc);
-            }
+        // FENECON AC darf nicht blind der kompletten AC-Last folgen.
+        // Beispiel: PV 10,6 kW, Haus+EVCS 10,3 kW, Speicher entlädt 3,5 kW =>
+        // am NVP entstehen ~3,8 kW Export. In diesem Fall muss die AC-Entladung
+        // zurückgenommen werden. Deshalb wird der Lastfolger am NVP bilanziert:
+        // neue Entladung = aktuelle Entladung + (NVP-Ist - NVP-Ziel).
+        const feneconNvpW = (typeof nvpRawW === 'number' && Number.isFinite(nvpRawW))
+            ? nvpRawW
+            : ((typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null);
+        const lastWasFenecon = this._lastSource === 'fenecon';
+        const currentDischargeW = (typeof battPowerW === 'number' && Number.isFinite(battPowerW))
+            ? Math.max(0, battPowerW)
+            : (lastWasFenecon && typeof this._lastTargetW === 'number' && Number.isFinite(this._lastTargetW)
+                ? Math.max(0, this._lastTargetW)
+                : 0);
+        const feneconErrW = (typeof feneconNvpW === 'number') ? (feneconNvpW - selfTargetGridW) : 0;
+        const feneconLoadLimitW = acLoadW > 0
+            ? acLoadW
+            : Math.max(0, importRawW + currentDischargeW);
+
+        let nextSetW = currentDischargeW + feneconErrW;
+
+        // Nicht aus dem Stand auf Messrauschen reagieren. Wenn die FENECON-Regelung
+        // bereits aktiv war, darf sie aber weiter fein nachregeln bzw. bei Export
+        // schnell zurückfahren.
+        if (!lastWasFenecon && feneconErrW < selfImportThresholdW) {
+            nextSetW = 0;
+        }
+
+        nextSetW = clamp(nextSetW, 0, Math.min(feneconLoadLimitW, selfMaxDischargeEff));
+
+        if (allow && nextSetW > 0) {
+            targetW = nextSetW;
+            reason = `FENECON AC: NVP-Balancing (${Math.round(targetW)} W, NVP ${Math.round(feneconNvpW || 0)} W, Ziel ${Math.round(selfTargetGridW)} W, Last ${Math.round(acLoadW)} W, Quelle ${String(acLoad && acLoad.source ? acLoad.source : 'unbekannt')})`;
+            source = 'fenecon';
+            hardDischargeMinSoc = Math.max(hardDischargeMinSoc, selfMinSoc);
         } else if (acLoadW > 0 && (source === 'idle' || reason === 'Keine Aktion')) {
             if (reserveActive) {
-                reason = 'FENECON AC: Lastfolge blockiert (Reserve aktiv)';
+                reason = 'FENECON AC: NVP-Balancing blockiert (Reserve aktiv)';
                 source = 'reserve';
             } else if (reserveChargeWanted) {
-                reason = 'FENECON AC: Lastfolge blockiert (Reserve soll aufgefüllt werden)';
+                reason = 'FENECON AC: NVP-Balancing blockiert (Reserve soll aufgefüllt werden)';
                 source = 'reserve';
             } else if (!socOk) {
-                reason = `FENECON AC: Lastfolge blockiert (SoC <= ${selfMinSoc}%)`;
+                reason = `FENECON AC: NVP-Balancing blockiert (SoC <= ${selfMinSoc}%)`;
                 source = 'reserve';
+            } else if (typeof feneconNvpW === 'number' && feneconNvpW <= selfTargetGridW) {
+                reason = `FENECON AC: keine Entladung nötig (NVP ${Math.round(feneconNvpW)} W <= Ziel ${Math.round(selfTargetGridW)} W)`;
+                source = 'idle';
             }
         }
     } else if (tariffBlocksDischarge && !pvReserveBlocked) {
@@ -1855,6 +1887,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     active: !!evPriorityCaps.active,
                     blockStorageCharge: !!evPriorityBlockStorageCharge,
                     starvedW: Math.round(evPriorityStarvedW || 0),
+                    pendingW: (Number.isFinite(Number(evPriorityCaps.pendingW))) ? Math.round(Number(evPriorityCaps.pendingW)) : 0,
                     storageYieldW: (Number.isFinite(Number(evPriorityCaps.storageYieldW))) ? Math.round(Number(evPriorityCaps.storageYieldW)) : 0,
                     requestedCount: (Number.isFinite(Number(evPriorityCaps.requestedCount))) ? Math.round(Number(evPriorityCaps.requestedCount)) : 0,
                     limitedWallboxes: (Number.isFinite(Number(evPriorityCaps.limitedWallboxes))) ? Math.round(Number(evPriorityCaps.limitedWallboxes)) : 0,
@@ -1863,8 +1896,12 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     const acLoad = getFeneconAcLoadTargetW();
                     return {
                         acMode: true,
+                        mode: 'nvp-balanced',
                         loadTargetW: (acLoad && typeof acLoad.w === 'number' && Number.isFinite(acLoad.w)) ? Math.round(acLoad.w) : null,
                         loadSource: (acLoad && acLoad.source) ? String(acLoad.source) : null,
+                        nvpW: (typeof gridRawW === 'number' && Number.isFinite(gridRawW)) ? Math.round(gridRawW)
+                            : ((typeof gridW === 'number' && Number.isFinite(gridW)) ? Math.round(gridW) : null),
+                        targetGridImportW: Math.round(selfTargetGridW),
                     };
                 })() : { acMode: false, loadTargetW: null, loadSource: null },
                 limits: {

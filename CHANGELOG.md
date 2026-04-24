@@ -1,3 +1,11 @@
+## 0.6.247
+- EVCS/Speicher-Priorität: PV-Überschussladen für PV- und Min+PV-Wallboxen hat jetzt Vorrang vor Speicherladung.
+- Charging-Management: Wenn eine PV-limitierte Wallbox Bedarf hat, wird aktuell laufende PV-Speicherladung dem EVCS-PV-Budget zugerechnet. Dadurch kann die Wallbox den Überschuss übernehmen, statt dass der Speicher den Überschuss zuerst wegfängt.
+- Speicher-Regelung: PV-Überschuss-Laden des Speichers wird blockiert, solange Ladepunkte den PV-Überschuss noch nutzen können; erst Rest-PV nach Erreichen der Wallbox-/Stationsgrenzen darf wieder in den Speicher.
+- Speicher/FENECON: Der AC-Modus bilanziert die Entladung jetzt am Netzverknüpfungspunkt. Bei PV-Überschuss bzw. EVCS-PV-Überschussladen wird die Entladung reduziert oder gestoppt, statt blind der kompletten AC-Last zu folgen.
+- Diagnose erweitert: EV-Priorität zeigt jetzt offene Leistung (`pendingW`) und übergebbare Speicherladung (`storageYieldW`); FENECON meldet `nvp-balanced`.
+- PWA/Web-Cache-Version angehoben.
+
 ## 0.6.246
 - SmartHome VIS: Funktions-/Gerätekacheln kompakter und responsiver aufgebaut; kleinere Abstände, schmalere Grid-Spalten und reduzierte Kachelhöhen für bessere Übersicht.
 - SmartHome VIS: Temperatur-Kacheln zeigen den Messwert jetzt groß und mittig in der Kachel.
