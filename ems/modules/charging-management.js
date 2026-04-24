@@ -1074,6 +1074,17 @@ class ChargingManagementModule extends BaseModule {
         if (!this._isEnabled()) return;
 
         const cfg = this.adapter.config.chargingManagement || {};
+        const storageCfgForEvPriority = (this.adapter && this.adapter.config && this.adapter.config.storage)
+            ? this.adapter.config.storage
+            : {};
+        const storageControlEnabledForEvPriority = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageControl !== false);
+        const storageFarmActiveForEvPriority = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm === true);
+        // Die mit 0.6.247 eingeführte EVCS-vor-Speicher-Priorität ist ein FENECON-Sonderpfad.
+        // Für alle herkömmlichen Speicher und für SpeicherFarm-Setups bleibt das bisherige
+        // PV-/Speicher-/Wallbox-Verhalten unverändert.
+        const feneconEvPriorityActive = !!(storageControlEnabledForEvPriority
+            && !storageFarmActiveForEvPriority
+            && storageCfgForEvPriority.feneconAcMode === true);
 
         // NOTE:
         // "off" is not intended to be a user-facing operating mode. On/Off is handled
@@ -2602,8 +2613,10 @@ class ChargingManagementModule extends BaseModule {
             return false;
         };
 
-        const evPriorityWallboxes = wbList.filter(w => wallboxHasEvPriorityDemand(w));
-        const evPriorityRequested = evPriorityWallboxes.length > 0;
+        const evPriorityWallboxes = feneconEvPriorityActive
+            ? wbList.filter(w => wallboxHasEvPriorityDemand(w))
+            : [];
+        const evPriorityRequested = !!(feneconEvPriorityActive && evPriorityWallboxes.length > 0);
         let evPriorityStorageYieldW = 0;
         let evPriorityStorageSource = '';
         let evPriorityLimitedWallboxes = 0;
@@ -4457,7 +4470,7 @@ if (components.length) {
             }
 
             try {
-                if (wallboxHasEvPriorityDemand(w)) {
+                if (feneconEvPriorityActive && wallboxHasEvPriorityDemand(w)) {
                     const tolW = Math.max(50, (typeof w.maxPW === 'number' && Number.isFinite(w.maxPW) && w.maxPW > 0) ? (w.maxPW * 0.01) : 50);
 
                     if (isPvOnly) {

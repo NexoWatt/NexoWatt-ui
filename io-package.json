@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.247",
+    "version": "0.6.248",
     "news": {
+      "0.6.248": {
+        "en": "EVCS/storage priority from 0.6.247 is now limited to active FENECON AC mode and is disabled for StorageFarm setups. Conventional storage systems and multi-storage farms keep the previous PV/storage/wallbox behavior. The storage controller also ignores EV-priority caps unless FENECON AC mode is active. Web cache version bumped.",
+        "de": "EVCS/Speicher-Priorität aus 0.6.247 ist jetzt auf den aktiven FENECON-AC-Modus begrenzt und bei SpeicherFarm-Setups deaktiviert. Herkömmliche Speicher und Multi-Speicher-Farmen behalten das bisherige PV-/Speicher-/Wallbox-Verhalten. Die Speicherregelung ignoriert EV-Prioritäts-Caps zusätzlich, solange der FENECON-AC-Modus nicht aktiv ist. Web-Cache-Version angehoben."
+      },
       "0.6.247": {
         "en": "EVCS/Storage priority: PV surplus charging for PV-only or Min+PV wallboxes now has priority over battery charging. Storage PV charge is blocked while PV-limited wallboxes can still use the surplus, and current battery charging is exposed to the EVCS PV budget for faster handover. FENECON AC mode now balances discharge at the grid connection point to avoid discharging into export. Web cache version bumped.",
         "de": "EVCS/Speicher-Priorität: PV-Überschussladen für PV- bzw. Min+PV-Wallboxen hat jetzt Vorrang vor Speicherladung. Die PV-Speicherladung wird blockiert, solange PV-limitierte Ladepunkte den Überschuss noch nutzen können; aktuell laufende Speicherladung wird dem EVCS-PV-Budget für eine schnellere Übergabe zugerechnet. Der FENECON-AC-Modus bilanziert Entladung jetzt am Netzverknüpfungspunkt, damit nicht in die Einspeisung entladen wird. Web-Cache-Version angehoben."
@@ -1740,8 +1744,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.247",
+  "version": "0.6.248",
   "news": {
+    "0.6.248": {
+      "en": "EVCS/storage priority from 0.6.247 is now limited to active FENECON AC mode and is disabled for StorageFarm setups. Conventional storage systems and multi-storage farms keep the previous PV/storage/wallbox behavior. The storage controller also ignores EV-priority caps unless FENECON AC mode is active. Web cache version bumped.",
+      "de": "EVCS/Speicher-Priorität aus 0.6.247 ist jetzt auf den aktiven FENECON-AC-Modus begrenzt und bei SpeicherFarm-Setups deaktiviert. Herkömmliche Speicher und Multi-Speicher-Farmen behalten das bisherige PV-/Speicher-/Wallbox-Verhalten. Die Speicherregelung ignoriert EV-Prioritäts-Caps zusätzlich, solange der FENECON-AC-Modus nicht aktiv ist. Web-Cache-Version angehoben."
+    },
     "0.6.247": {
       "en": "EVCS/Storage priority: PV surplus charging for PV-only or Min+PV wallboxes now has priority over battery charging. Storage PV charge is blocked while PV-limited wallboxes can still use the surplus, and current battery charging is exposed to the EVCS PV budget for faster handover. FENECON AC mode now balances discharge at the grid connection point to avoid discharging into export. Web cache version bumped.",
       "de": "EVCS/Speicher-Priorität: PV-Überschussladen für PV- bzw. Min+PV-Wallboxen hat jetzt Vorrang vor Speicherladung. Die PV-Speicherladung wird blockiert, solange PV-limitierte Ladepunkte den Überschuss noch nutzen können; aktuell laufende Speicherladung wird dem EVCS-PV-Budget für eine schnellere Übergabe zugerechnet. Der FENECON-AC-Modus bilanziert Entladung jetzt am Netzverknüpfungspunkt, damit nicht in die Einspeisung entladen wird. Web-Cache-Version angehoben."

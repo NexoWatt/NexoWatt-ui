@@ -1,3 +1,10 @@
+## 0.6.248
+- EVCS/Speicher-Priorität aus 0.6.247 auf den aktiven FENECON-AC-Modus begrenzt. Herkömmliche Speicher behalten damit das bisherige PV-/Speicher-/Wallbox-Verhalten.
+- Charging-Management: PV-/Min+PV-Wallboxen lösen die neue Speicher-Vorranglogik nur noch aus, wenn `storage.feneconAcMode` aktiv und keine Speicherfarm eingeschaltet ist.
+- Speicher-Regelung: zusätzliches Sicherheits-Gate ergänzt, damit EV-Prioritäts-Caps ohne FENECON-AC-Modus ignoriert werden.
+- Speicherfarm: FENECON-Sonderpfad wird bei aktiver Speicherfarm automatisch deaktiviert; dadurch bleibt die Zwei-Speicher-/Farm-Regelung wieder vollständig im bewährten Legacy-Pfad.
+- PWA/Web-Cache-Version angehoben.
+
 ## 0.6.247
 - EVCS/Speicher-Priorität: PV-Überschussladen für PV- und Min+PV-Wallboxen hat jetzt Vorrang vor Speicherladung.
 - Charging-Management: Wenn eine PV-limitierte Wallbox Bedarf hat, wird aktuell laufende PV-Speicherladung dem EVCS-PV-Budget zugerechnet. Dadurch kann die Wallbox den Überschuss übernehmen, statt dass der Speicher den Überschuss zuerst wegfängt.

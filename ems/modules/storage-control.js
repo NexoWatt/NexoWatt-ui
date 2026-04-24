@@ -570,8 +570,8 @@ class SpeicherRegelungModule extends BaseModule {
         // ------------------------------------------------------------
         const coreCaps = (this.adapter && this.adapter._emsCaps && typeof this.adapter._emsCaps === 'object') ? this.adapter._emsCaps : null;
         const evPriorityCaps = (coreCaps && coreCaps.evPriority && typeof coreCaps.evPriority === 'object') ? coreCaps.evPriority : null;
-        const evPriorityBlockStorageCharge = !!(evPriorityCaps && evPriorityCaps.blockStorageCharge === true);
-        const evPriorityStarvedW = (evPriorityCaps && Number.isFinite(Number(evPriorityCaps.starvedW))) ? Math.max(0, Number(evPriorityCaps.starvedW)) : 0;
+        const evPriorityBlockStorageChargeRaw = !!(evPriorityCaps && evPriorityCaps.blockStorageCharge === true);
+        const evPriorityStarvedWRaw = (evPriorityCaps && Number.isFinite(Number(evPriorityCaps.starvedW))) ? Math.max(0, Number(evPriorityCaps.starvedW)) : 0;
         let importLimitW = null;
         let importLimitQuelle = '';
 
@@ -738,7 +738,15 @@ if (typeof soc === 'number') {
         // auch bei einfachem Single-Storage aktiv, damit der AC-Teil des WR den
         // Hausverbrauch ausregeln kann, während der DC-Teil parallel PV in den
         // Speicher schiebt.
-        const feneconAcMode = cfg.feneconAcMode === true;
+        const feneconAcModeConfigured = cfg.feneconAcMode === true;
+        // FENECON-AC ist ein Sonderpfad für Einzel-Speicher. Bei aktiver SpeicherFarm
+        // bleibt die bewährte Farm-/Multi-Storage-Regelung vollständig im Legacy-Pfad.
+        const feneconAcMode = !!(feneconAcModeConfigured && !farmEnabled);
+        // Sicherheits-Gate: Die EVCS-vor-Speicher-Priorität darf ausschließlich im
+        // aktiven FENECON-AC-Modus wirken. Alle herkömmlichen Speicher und Farm-Setups
+        // ignorieren diese Caps.
+        const evPriorityBlockStorageCharge = !!(feneconAcMode && evPriorityBlockStorageChargeRaw);
+        const evPriorityStarvedW = feneconAcMode ? evPriorityStarvedWRaw : 0;
         const hasExplicitSelfFlag = (cfg.selfDischargeEnabled === true || cfg.selfDischargeEnabled === false);
         const selfDischargeEnabled = hasExplicitSelfFlag ? (cfg.selfDischargeEnabled === true) : feneconAcMode;
         const selfMinSoc = clamp(num(cfg.selfMinSocPct, reserveMin), 0, 100);
@@ -1884,13 +1892,13 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     storageAssistReqW: (typeof evcsAssistReqW === 'number' && Number.isFinite(evcsAssistReqW)) ? Math.round(evcsAssistReqW) : 0,
                 },
                 evPriority: evPriorityCaps ? {
-                    active: !!evPriorityCaps.active,
+                    active: !!(feneconAcMode && evPriorityCaps.active),
                     blockStorageCharge: !!evPriorityBlockStorageCharge,
                     starvedW: Math.round(evPriorityStarvedW || 0),
-                    pendingW: (Number.isFinite(Number(evPriorityCaps.pendingW))) ? Math.round(Number(evPriorityCaps.pendingW)) : 0,
-                    storageYieldW: (Number.isFinite(Number(evPriorityCaps.storageYieldW))) ? Math.round(Number(evPriorityCaps.storageYieldW)) : 0,
-                    requestedCount: (Number.isFinite(Number(evPriorityCaps.requestedCount))) ? Math.round(Number(evPriorityCaps.requestedCount)) : 0,
-                    limitedWallboxes: (Number.isFinite(Number(evPriorityCaps.limitedWallboxes))) ? Math.round(Number(evPriorityCaps.limitedWallboxes)) : 0,
+                    pendingW: (feneconAcMode && Number.isFinite(Number(evPriorityCaps.pendingW))) ? Math.round(Number(evPriorityCaps.pendingW)) : 0,
+                    storageYieldW: (feneconAcMode && Number.isFinite(Number(evPriorityCaps.storageYieldW))) ? Math.round(Number(evPriorityCaps.storageYieldW)) : 0,
+                    requestedCount: (feneconAcMode && Number.isFinite(Number(evPriorityCaps.requestedCount))) ? Math.round(Number(evPriorityCaps.requestedCount)) : 0,
+                    limitedWallboxes: (feneconAcMode && Number.isFinite(Number(evPriorityCaps.limitedWallboxes))) ? Math.round(Number(evPriorityCaps.limitedWallboxes)) : 0,
                 } : null,
                 fenecon: feneconAcMode ? (() => {
                     const acLoad = getFeneconAcLoadTargetW();
@@ -1903,7 +1911,13 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                             : ((typeof gridW === 'number' && Number.isFinite(gridW)) ? Math.round(gridW) : null),
                         targetGridImportW: Math.round(selfTargetGridW),
                     };
-                })() : { acMode: false, loadTargetW: null, loadSource: null },
+                })() : {
+                    acMode: false,
+                    configured: !!feneconAcModeConfigured,
+                    disabledReason: (feneconAcModeConfigured && farmEnabled) ? 'storageFarm-active' : null,
+                    loadTargetW: null,
+                    loadSource: null,
+                },
                 limits: {
                     importLimitW: (typeof importLimitW === 'number' && Number.isFinite(importLimitW)) ? Math.round(importLimitW) : null,
                     importHeadroomW: (typeof importHeadroomEffW === 'number' && Number.isFinite(importHeadroomEffW)) ? Math.round(importHeadroomEffW) : null,
