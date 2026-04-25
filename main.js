@@ -12821,12 +12821,23 @@ app.get('/config', (req, res) => {
                 }
               }
 
+              const slotCfg = (arr[i - 1] && typeof arr[i - 1] === 'object') ? arr[i - 1] : {};
+              const slotConsumerType = (kind === 'consumers')
+                ? (() => {
+                    const raw = String(slotCfg.consumerType || slotCfg.type || slotCfg.category || '').trim().toLowerCase();
+                    if (raw === 'heatingrod' || raw === 'heating_rod' || raw === 'heating-rod' || raw === 'heizstab' || raw === 'rod' || raw === 'immersion') return 'heatingRod';
+                    if (raw === 'heatpump' || raw === 'heat_pump' || raw === 'heat-pump' || raw === 'waermepumpe' || raw === 'wärmepumpe' || raw === 'hvac' || raw === 'klima') return 'heatPump';
+                    return raw ? 'generic' : '';
+                  })()
+                : '';
+
               out.push({
                 idx: i,
                 key,
                 stateKey,
                 name: pickName(arr, i, kind),
                 icon: pickIcon(arr, i),
+                consumerType: slotConsumerType,
                 mapped,
                 qc: pickQuick(arr, i, kind)
               });
@@ -12861,6 +12872,7 @@ settingsConfig: {
           gridConstraintsEnabled: boolOr(cfg.enableGridConstraints, false),
           storageEnabled: boolOr(cfg.enableStorageControl, false),
           storageFarmEnabled: boolOr(cfg.enableStorageFarm, false),
+          heatingRodEnabled: boolOr(cfg.enableHeatingRodControl, false),
           thresholdEnabled: boolOr(cfg.enableThresholdControl, false),
           relayEnabled: boolOr(cfg.enableRelayControl, false),
           bhkwEnabled: boolOr(cfg.enableBhkwControl, false),

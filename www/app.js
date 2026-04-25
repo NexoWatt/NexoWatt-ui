@@ -1203,10 +1203,13 @@ function initEnergyWebExtras(flowSlots){
     } catch(_e) {}
 
     const slot = {
+      idx: (item && item.idx != null) ? Number(item.idx) : (idx + 1),
       key: item && item.key != null ? item.key : undefined,
       stateKey,
       name: item && item.name != null ? item.name : undefined,
       icon: item && item.icon != null ? item.icon : undefined,
+      consumerType: item && item.consumerType != null ? item.consumerType : undefined,
+      qc: item && item.qc ? item.qc : undefined,
       nodeId,
       valId,
       lineId,
@@ -5197,8 +5200,8 @@ function _ensureThermalConsumerTiles(){
   const grid = document.getElementById('liveQuickTiles');
   if (!grid) return;
 
-  // Wir erstellen feste Platzhalter für bis zu 8 Verbraucher-Slots.
-  for (let idx = 1; idx <= 8; idx++) {
+  // Wir erstellen feste Platzhalter für bis zu 9 Verbraucher-Slots.
+  for (let idx = 1; idx <= 9; idx++) {
     const id = `thermalConsumerCard${idx}`;
     if (document.getElementById(id)) continue;
 
@@ -5279,7 +5282,7 @@ function updateThermalConsumerUi(){
   const thermApp = apps.thermal || {};
   const rodApp = apps.heatingRod || apps.heatingrod || {};
   const thermActive = (thermApp.installed === true) && (thermApp.enabled === true);
-  const rodActive = (rodApp.installed === true) && (rodApp.enabled === true);
+  const rodActive = ((rodApp.installed === true) && (rodApp.enabled === true)) || !!(window.__nwCfg && window.__nwCfg.ems && window.__nwCfg.ems.heatingRodEnabled);
 
   const slots = (flowSlotsCfg && Array.isArray(flowSlotsCfg.consumers)) ? flowSlotsCfg.consumers : [];
   const thermalCfg = (window.__nwEmsApps && window.__nwEmsApps.thermal) ? window.__nwEmsApps.thermal : {};
@@ -5298,13 +5301,14 @@ function updateThermalConsumerUi(){
   const st = window.latestState || {};
   const sv = (k) => (st && st[k] && st[k].value !== undefined) ? st[k].value : undefined;
 
-  for (let idx = 1; idx <= 8; idx++) {
+  for (let idx = 1; idx <= 9; idx++) {
     const refs = _thermalConsTiles.get(idx);
     if (!refs) continue;
 
     const slot = slots[idx - 1];
     const slotType = normalizeConsumerType(slot && (slot.consumerType || slot.type || slot.category));
-    const isRod = slotType === 'heatingRod';
+    const qcKind = String(slot && slot.qc && slot.qc.controlKind ? slot.qc.controlKind : '').trim().toLowerCase();
+    const isRod = slotType === 'heatingRod' || qcKind === 'heatingrod';
     const qcEnabled = !!(slot && slot.qc && slot.qc.enabled);
     const show = qcEnabled && ((isRod && rodActive) || (!isRod && thermActive));
 
@@ -5320,8 +5324,12 @@ function updateThermalConsumerUi(){
     if (iconEl) iconEl.textContent = isRod ? '🔥' : '♨';
 
     const pKey = (slot && slot.stateKey) ? String(slot.stateKey) : `consumer${idx}Power`;
-    const pW = Number(sv(pKey) ?? 0);
-    if (refs.power) refs.power.textContent = formatPower(pW);
+    let pW = Number(sv(pKey));
+    if (!Number.isFinite(pW) && isRod) {
+      pW = Number(sv(`heatingRod.devices.c${idx}.appliedW`) ?? sv(`heatingRod.devices.c${idx}.targetW`) ?? 0);
+    }
+    if (!Number.isFinite(pW)) pW = 0;
+    if (refs.power) refs.power.textContent = formatPower(Math.abs(pW));
 
     if (refs.metaM) refs.metaM.textContent = `Slot ${idx}`;
 
@@ -6352,9 +6360,23 @@ function openFlowQc(kind, idx){
   const updatePower = () => {
     if (!ctx || !powerEl) return;
     const entry = getEntry(ctx.kind, ctx.idx);
-    const stateKey = entry ? entry.stateKey : null;
-    const v = stateKey ? state[stateKey] : null;
-    powerEl.textContent = formatPowerSigned(v ?? 0);
+    const meta = getSlotMeta(ctx.kind, ctx.idx);
+    const fallbackKey = (ctx.kind === 'producer') ? `producer${ctx.idx}Power` : `consumer${ctx.idx}Power`;
+    const stateKey = (entry && entry.stateKey) || (meta && meta.stateKey) || fallbackKey;
+    const rec = stateKey ? state[stateKey] : null;
+    const raw = (rec && typeof rec === 'object' && rec.value !== undefined) ? rec.value : rec;
+    let n = Number(raw);
+
+    // Heizstab / Verbraucher sollen hier die gleiche Gesamtleistung zeigen wie der Energiefluss-Knoten.
+    // Ältere Builds haben versehentlich das komplette State-Objekt formatiert und dadurch 0 W angezeigt.
+    if (!Number.isFinite(n)) {
+      const live = window.latestState || {};
+      const rec2 = stateKey ? live[stateKey] : null;
+      const raw2 = (rec2 && typeof rec2 === 'object' && rec2.value !== undefined) ? rec2.value : rec2;
+      n = Number(raw2);
+    }
+    if (!Number.isFinite(n)) n = 0;
+    powerEl.textContent = (ctx.kind === 'consumer') ? formatPower(Math.abs(n)) : formatPowerSigned(n);
   };
 
   const renderModeButtons = (modes, activeMode) => {

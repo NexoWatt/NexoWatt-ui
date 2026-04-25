@@ -345,10 +345,15 @@ class HeatingRodControlModule extends BaseModule {
         await mk('heatingRod.summary.pvCapW', 'PV cap (W)', 'number', 'value.power', 'W');
         await mk('heatingRod.summary.evcsUsedW', 'EVCS used (W)', 'number', 'value.power', 'W');
         await mk('heatingRod.summary.thermalUsedW', 'Thermal budget used (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.currentHeatingRodW', 'Current heating rod load (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.storageReserveW', 'Reserved storage charge power (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.storageChargeW', 'Storage charge power used for coordination (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.storageDischargeW', 'Storage discharge power used for coordination (W)', 'number', 'value.power', 'W');
         await mk('heatingRod.summary.pvAvailableRawW', 'PV available raw (W)', 'number', 'value.power', 'W');
         await mk('heatingRod.summary.pvAvailableW', 'PV available after thermal (W)', 'number', 'value.power', 'W');
         await mk('heatingRod.summary.appliedTotalW', 'Applied total (W)', 'number', 'value.power', 'W');
         await mk('heatingRod.summary.budgetUsedW', 'Budget used (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.debugJson', 'Debug JSON', 'string', 'json');
         await mk('heatingRod.summary.lastUpdate', 'Last update', 'number', 'value.time');
         await mk('heatingRod.summary.status', 'Status', 'string', 'text');
 
@@ -359,6 +364,7 @@ class HeatingRodControlModule extends BaseModule {
             if (ns && this.dp) {
                 await this.dp.upsert({ key: 'hr.cm.pvCapW', objectId: `${ns}.chargingManagement.control.pvCapEffectiveW`, dataType: 'number', direction: 'in', unit: 'W' });
                 await this.dp.upsert({ key: 'hr.cm.usedW', objectId: `${ns}.chargingManagement.control.usedW`, dataType: 'number', direction: 'in', unit: 'W' });
+                await this.dp.upsert({ key: 'hr.cm.pvSurplusNoEvRawW', objectId: `${ns}.chargingManagement.control.pvSurplusNoEvRawW`, dataType: 'number', direction: 'in', unit: 'W' });
                 for (let i = 1; i <= 10; i++) {
                     await this.dp.upsert({ key: `hr.user.c${i}.regEnabled`, objectId: `${ns}.heatingRod.user.c${i}.regEnabled`, dataType: 'boolean', direction: 'in' });
                     await this.dp.upsert({ key: `hr.user.c${i}.mode`, objectId: `${ns}.heatingRod.user.c${i}.mode`, dataType: 'string', direction: 'in' });
@@ -421,25 +427,129 @@ class HeatingRodControlModule extends BaseModule {
         }
     }
 
-    _computeBasePvAvailableW() {
+    _readCacheNumber(key, fallback = null) {
+        if (!key) return fallback;
+        try {
+            if (this.adapter && typeof this.adapter._nwGetNumberFromCache === 'function') {
+                const v = this.adapter._nwGetNumberFromCache(String(key), null);
+                if (typeof v === 'number' && Number.isFinite(v)) return v;
+            }
+        } catch (_e) {
+            // ignore
+        }
+        try {
+            const cache = this.adapter && this.adapter.stateCache;
+            const rec = cache && cache[String(key)];
+            const raw = (rec && typeof rec === 'object' && rec.value !== undefined) ? rec.value : rec;
+            const n = Number(raw);
+            if (Number.isFinite(n)) return n;
+        } catch (_e) {
+            // ignore
+        }
+        return fallback;
+    }
+
+    _readNumberAny(keys, staleMs, fallback = null) {
+        const list = Array.isArray(keys) ? keys : [keys];
+        for (const key of list) {
+            if (!key) continue;
+            try {
+                if (this.dp && this.dp.getEntry && this.dp.getEntry(key)) {
+                    const v = this.dp.getNumberFresh ? this.dp.getNumberFresh(key, staleMs, null) : this.dp.getNumber(key, null);
+                    if (typeof v === 'number' && Number.isFinite(v)) return v;
+                }
+            } catch (_e) {
+                // ignore
+            }
+            const c = this._readCacheNumber(key, null);
+            if (typeof c === 'number' && Number.isFinite(c)) return c;
+        }
+        return fallback;
+    }
+
+    _readStorageSnapshot(staleMs) {
+        let chargeW = Math.max(0, num(this._readNumberAny([
+            'storageFarm.totalChargePowerW',
+            'storageChargePower'
+        ], staleMs, null), 0));
+
+        let dischargeW = Math.max(0, num(this._readNumberAny([
+            'storageFarm.totalDischargePowerW',
+            'storageDischargePower'
+        ], staleMs, null), 0));
+
+        const batteryPowerW = this._readNumberAny(['batteryPower'], staleMs, null);
+        if (typeof batteryPowerW === 'number' && Number.isFinite(batteryPowerW)) {
+            if (batteryPowerW < 0 && chargeW <= 0) chargeW = Math.max(0, Math.abs(batteryPowerW));
+            if (batteryPowerW > 0 && dischargeW <= 0) dischargeW = Math.max(0, Math.abs(batteryPowerW));
+        }
+
+        const socPct = this._readNumberAny([
+            'storageFarm.totalSoc',
+            'storageFarm.medianSoc',
+            'storageSoc'
+        ], staleMs, null);
+
+        return {
+            chargeW: Math.round(chargeW),
+            dischargeW: Math.round(dischargeW),
+            socPct: (typeof socPct === 'number' && Number.isFinite(socPct)) ? socPct : null,
+        };
+    }
+
+    _computeBasePvAvailableW(currentHeatingRodW = 0) {
         const cfg = this._getCfg();
         const staleTimeoutSec = clamp(num(cfg.staleTimeoutSec, 15), 1, 3600);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
 
-        const pvCapW = this.dp ? this.dp.getNumberFresh('hr.cm.pvCapW', staleMs, null) : null;
-        const usedW = this.dp ? this.dp.getNumberFresh('hr.cm.usedW', staleMs, null) : null;
+        const pvCapWRaw = this._readNumberAny(['hr.cm.pvCapW', 'chargingManagement.control.pvCapEffectiveW'], staleMs, null);
+        const usedWRaw = this._readNumberAny(['hr.cm.usedW', 'chargingManagement.control.usedW'], staleMs, null);
+        const pvCapW = (typeof pvCapWRaw === 'number' && Number.isFinite(pvCapWRaw)) ? Math.max(0, pvCapWRaw) : 0;
+        const evcsUsedW = (typeof usedWRaw === 'number' && Number.isFinite(usedWRaw)) ? Math.max(0, usedWRaw) : 0;
 
-        if (typeof pvCapW === 'number' && Number.isFinite(pvCapW) && pvCapW > 0) {
-            const u = (typeof usedW === 'number' && Number.isFinite(usedW)) ? Math.max(0, usedW) : 0;
-            return { pvCapW, evcsUsedW: u, availableW: Math.max(0, pvCapW - u), source: 'cm' };
-        }
+        const gridW = this._readNumberAny(['grid.powerRawW', 'grid.powerW', 'ps.gridPowerW'], staleMs, null);
+        const exportW = (typeof gridW === 'number' && Number.isFinite(gridW)) ? Math.max(0, -gridW) : 0;
+        const currentW = Math.max(0, num(currentHeatingRodW, 0));
+        const storage = this._readStorageSnapshot(staleMs);
 
-        let gridW = this.dp ? this.dp.getNumberFresh('grid.powerW', staleMs, null) : null;
-        if (typeof gridW !== 'number') gridW = this.dp ? this.dp.getNumberFresh('grid.powerRawW', staleMs, null) : null;
-        if (typeof gridW !== 'number') gridW = this.dp ? this.dp.getNumberFresh('ps.gridPowerW', staleMs, null) : null;
+        const storageTargetSocPct = clamp(num(cfg.storageTargetSocPct, 90), 0, 100);
+        const storageReserveCfgW = Math.max(0, Math.round(num(cfg.storageReserveW, 1000)));
+        const storageKnown = storage.chargeW > 0
+            || storage.dischargeW > 0
+            || (typeof storage.socPct === 'number' && Number.isFinite(storage.socPct))
+            || !!(this.adapter && this.adapter.config && (this.adapter.config.enableStorageControl || this.adapter.config.enableStorageFarm));
+        const storageReserveW = (storageKnown && !(typeof storage.socPct === 'number' && storage.socPct >= storageTargetSocPct))
+            ? storageReserveCfgW
+            : 0;
 
-        const avail = Math.max(0, -Number(gridW || 0));
-        return { pvCapW: avail, evcsUsedW: 0, availableW: avail, source: 'grid' };
+        // NVP-Bilanz: Export + bereits laufende Heizstablast + Speicherladung bilden den PV-Überschuss
+        // VOR flexiblen Verbrauchern. Speicherentladung darf nicht als PV-Überschuss zählen.
+        const nvpSurplusBeforeFlexW = Math.max(0, exportW + currentW + storage.chargeW - storage.dischargeW);
+        const nvpAvailableW = Math.max(0, nvpSurplusBeforeFlexW - storageReserveW);
+
+        const cmAvailableW = (pvCapW > 0) ? Math.max(0, pvCapW - evcsUsedW - storageReserveW) : 0;
+        const availableW = Math.max(nvpAvailableW, cmAvailableW);
+        const source = (cmAvailableW > nvpAvailableW + 25) ? 'cm-storage-reserve' : 'nvp-storage-reserve';
+        const forceOff = storage.dischargeW > 100 && availableW <= 50;
+
+        return {
+            pvCapW: Math.max(pvCapW, nvpSurplusBeforeFlexW),
+            evcsUsedW,
+            availableW,
+            source,
+            gridW: (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null,
+            exportW,
+            currentHeatingRodW: currentW,
+            storageChargeW: storage.chargeW,
+            storageDischargeW: storage.dischargeW,
+            storageSocPct: storage.socPct,
+            storageReserveW,
+            storageTargetSocPct,
+            nvpSurplusBeforeFlexW,
+            cmAvailableW,
+            nvpAvailableW,
+            forceOff,
+        };
     }
 
     _sumStagePower(d, stageCount) {
@@ -647,7 +757,23 @@ class HeatingRodControlModule extends BaseModule {
             // ignore
         }
 
-        const pvBase = this._computeBasePvAvailableW();
+        const preFeedbackById = new Map();
+        let currentHeatingRodW = 0;
+        try {
+            for (const d of this._devices) {
+                const measuredW = this._readMeasuredW(d);
+                const feedback = this._readStageFeedback(d);
+                const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
+                    ? Math.max(0, measuredW)
+                    : Math.max(0, feedback && feedback.appliedPowerW ? feedback.appliedPowerW : 0);
+                currentHeatingRodW += usedW;
+                preFeedbackById.set(d.id, { measuredW, feedback });
+            }
+        } catch (_e) {
+            currentHeatingRodW = 0;
+        }
+
+        const pvBase = this._computeBasePvAvailableW(currentHeatingRodW);
         const thermalUsedW = Math.max(0, num(this.adapter && this.adapter._thermalBudgetUsedW, 0));
         let remainingW = Math.max(0, num(pvBase.availableW, 0) - thermalUsedW);
         let appliedTotalW = 0;
@@ -683,12 +809,13 @@ class HeatingRodControlModule extends BaseModule {
             }
             userMode = normalizeUserMode(userMode);
 
-            const measuredW = this._readMeasuredW(d);
+            const pre = preFeedbackById.get(d.id) || {};
+            const measuredW = (typeof pre.measuredW === 'number' && Number.isFinite(pre.measuredW)) ? pre.measuredW : this._readMeasuredW(d);
             if (typeof measuredW === 'number' && Number.isFinite(measuredW)) {
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.measuredW`, Math.round(measuredW));
             }
 
-            const feedback = this._readStageFeedback(d);
+            const feedback = pre.feedback || this._readStageFeedback(d);
             const observedStage = feedback.anyKnown ? feedback.currentStage : (this._stageCtl.get(d.id)?.targetStage || 0);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.currentStage`, observedStage);
 
@@ -847,7 +974,9 @@ class HeatingRodControlModule extends BaseModule {
             }
 
             const desiredStage = this._computeDesiredStage(d, remainingW, observedStage);
-            const targetStage = this._applyTiming(d, desiredStage, observedStage);
+            const forceStorageProtectOff = !!(pvBase.forceOff && desiredStage <= 0);
+            const targetStage = forceStorageProtectOff ? 0 : this._applyTiming(d, desiredStage, observedStage);
+            if (forceStorageProtectOff) this._setStageCtlTarget(d.id, 0, observedStage);
             const res = await this._applyStageState(d, targetStage, feedback);
             const effectiveTargetStage = Math.max(0, Math.min(num(res.targetStage, targetStage), d.wiredStages));
             const targetW = this._sumStagePower(d, effectiveTargetStage);
@@ -862,7 +991,7 @@ class HeatingRodControlModule extends BaseModule {
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, effectiveTargetStage);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, Math.round(targetW));
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.appliedW`, Math.round(usedW));
-            await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, String(res.status || 'pv_auto'));
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, forceStorageProtectOff ? `storage_protect_${String(res.status || '')}` : String(res.status || 'pv_auto'));
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, '');
         }
 
@@ -871,12 +1000,33 @@ class HeatingRodControlModule extends BaseModule {
         await this._setStateIfChanged('heatingRod.summary.pvCapW', Math.round(num(pvBase.pvCapW, 0)));
         await this._setStateIfChanged('heatingRod.summary.evcsUsedW', Math.round(num(pvBase.evcsUsedW, 0)));
         await this._setStateIfChanged('heatingRod.summary.thermalUsedW', Math.round(thermalUsedW));
+        await this._setStateIfChanged('heatingRod.summary.currentHeatingRodW', Math.round(num(pvBase.currentHeatingRodW, currentHeatingRodW)));
+        await this._setStateIfChanged('heatingRod.summary.storageReserveW', Math.round(num(pvBase.storageReserveW, 0)));
+        await this._setStateIfChanged('heatingRod.summary.storageChargeW', Math.round(num(pvBase.storageChargeW, 0)));
+        await this._setStateIfChanged('heatingRod.summary.storageDischargeW', Math.round(num(pvBase.storageDischargeW, 0)));
         await this._setStateIfChanged('heatingRod.summary.pvAvailableRawW', Math.round(num(pvBase.availableW, 0)));
         await this._setStateIfChanged('heatingRod.summary.pvAvailableW', Math.round(Math.max(0, num(pvBase.availableW, 0) - thermalUsedW)));
         await this._setStateIfChanged('heatingRod.summary.appliedTotalW', Math.round(appliedTotalW));
         await this._setStateIfChanged('heatingRod.summary.budgetUsedW', Math.round(budgetUsedW));
+        await this._setStateIfChanged('heatingRod.summary.debugJson', JSON.stringify({
+            source: pvBase.source,
+            gridW: pvBase.gridW,
+            exportW: Math.round(num(pvBase.exportW, 0)),
+            currentHeatingRodW: Math.round(num(pvBase.currentHeatingRodW, 0)),
+            storageChargeW: Math.round(num(pvBase.storageChargeW, 0)),
+            storageDischargeW: Math.round(num(pvBase.storageDischargeW, 0)),
+            storageSocPct: pvBase.storageSocPct,
+            storageReserveW: Math.round(num(pvBase.storageReserveW, 0)),
+            storageTargetSocPct: pvBase.storageTargetSocPct,
+            nvpSurplusBeforeFlexW: Math.round(num(pvBase.nvpSurplusBeforeFlexW, 0)),
+            nvpAvailableW: Math.round(num(pvBase.nvpAvailableW, 0)),
+            cmAvailableW: Math.round(num(pvBase.cmAvailableW, 0)),
+            availableW: Math.round(num(pvBase.availableW, 0)),
+            thermalUsedW: Math.round(thermalUsedW),
+            forceOff: !!pvBase.forceOff,
+        }));
         await this._setStateIfChanged('heatingRod.summary.lastUpdate', now);
-        await this._setStateIfChanged('heatingRod.summary.status', (this._devices && this._devices.length) ? `ok_${pvBase.source}` : 'no_devices');
+        await this._setStateIfChanged('heatingRod.summary.status', (this._devices && this._devices.length) ? `ok_${pvBase.source}${pvBase.forceOff ? '_storage_protect' : ''}` : 'no_devices');
     }
 }
 

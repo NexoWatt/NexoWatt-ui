@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.249",
+    "version": "0.6.250",
     "news": {
+      "0.6.250": {
+        "en": "Heating rod PV-auto coordination improved: the controller now reconstructs PV surplus at the grid connection point, accounts for already-running heating rod load, storage charge/discharge and a storage reserve so heating rods and batteries can work in parallel without draining the battery. Energy-flow quick control now shows the same power datapoint as the flow monitor and heating rod quick tiles are shown on the Live page.",
+        "de": "Heizstab PV-Auto verbessert: Die Regelung rekonstruiert den PV-Überschuss jetzt am Netzverknüpfungspunkt und berücksichtigt laufende Heizstableistung, Speicherladung/-entladung sowie eine Speicherreserve. Dadurch können Heizstäbe und Speicher parallel arbeiten, ohne den Speicher leerzuziehen. Die Energiefluss-Schnellsteuerung zeigt nun denselben Leistungs-DP wie der Energieflussmonitor und Heizstab-Kacheln erscheinen auf der Live-Seite."
+      },
       "0.6.249": {
         "en": "StorageFarm regression fix: FENECON EV priority remains disabled for farms, but older farm setups that used the FENECON checkbox as implicit self-consumption enable now keep normal NVP self-discharge. Farm dispatch was softened so healthy online storages above their SoC floor receive proportional setpoints again; added lastDispatchJson diagnostics. Web cache bumped.",
         "de": "SpeicherFarm-Regressionsfix: Die FENECON-EV-Priorität bleibt für Farmen deaktiviert, aber ältere Farm-Setups, die den FENECON-Haken als implizite Eigenverbrauchs-Freigabe genutzt haben, behalten jetzt die normale NVP-Eigenverbrauchs-Entladung. Die Farm-Verteilung wurde entschärft, sodass gesunde Online-Speicher oberhalb ihrer SoC-Untergrenze wieder proportionale Sollwerte erhalten; neues lastDispatchJson zur Diagnose. Web-Cache erhöht."

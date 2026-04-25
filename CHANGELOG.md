@@ -1,3 +1,11 @@
+## 0.6.250
+- Heizstab PV-Auto: PV-Überschuss wird jetzt robuster am Netzverknüpfungspunkt rekonstruiert. Bereits laufende Heizstableistung, Speicherladung und Speicherentladung werden berücksichtigt, damit der Heizstab nicht aus Speicherentladung weiterläuft.
+- Heizstab/Speicher-Koordination: neue Speicherreserve für PV-Auto ergänzt. Solange der Speicher unter Ziel-SoC liegt, bleibt ein PV-Anteil für die Speicherladung reserviert; überschüssige PV kann parallel in den Heizstab gehen.
+- Energiefluss-Schnellsteuerung: Leistungsanzeige im Heizstab-Modal nutzt jetzt denselben Verbraucher-Leistungs-DP wie der Energieflussmonitor und zeigt nicht mehr fälschlich 0 W.
+- Live-Schnellsteuerung: Heizstab-Verbraucher werden als eigene Schnellsteuerungs-Kachel angezeigt, sobald die Heizstab-App aktiv und der Verbraucher-Slot quick-control-fähig ist.
+- Diagnose erweitert: neue Heizstab-Summary-Werte für Speicherreserve, Speicherladung/-entladung, aktuelle Heizstableistung und Debug-JSON.
+- PWA/Web-Cache-Version angehoben.
+
 ## 0.6.249
 - SpeicherFarm-Regressionsfix: FENECON-EV-Priorität bleibt für Farmen aus, aber Farm-Setups mit gesetztem FENECON-Haken verlieren nicht mehr automatisch die normale Eigenverbrauchs-Entladung.
 - SpeicherFarm-Verteilung entschärft: keine harte 0-W-Verteilung mehr durch quadratische SoC-Gewichtung; Online-Speicher oberhalb ihrer SoC-Untergrenze erhalten wieder proportionale Sollwerte.

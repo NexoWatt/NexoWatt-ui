@@ -1671,6 +1671,8 @@ function _collectFlowPowerDpIsWFromUI() {
     currentConfig.heatingRod = (currentConfig.heatingRod && typeof currentConfig.heatingRod === 'object') ? currentConfig.heatingRod : {};
     const h = currentConfig.heatingRod;
     h.devices = Array.isArray(h.devices) ? h.devices : [];
+    h.storageReserveW = Math.max(0, Math.round(Number(h.storageReserveW ?? 1000) || 1000));
+    h.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number(h.storageTargetSocPct ?? 90) || 90)));
 
     const bySlot = new Map();
     for (const raw of h.devices) {
@@ -2032,6 +2034,15 @@ function _collectFlowPowerDpIsWFromUI() {
       { value: 'off', label: 'Aus' },
     ];
     const stageCountOptions = Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}` }));
+
+    const grpCoord = _mkCfgGroup('Speicher-Koordination');
+    grpCoord.body.appendChild(_mkCfgField('Speicher-Reserve (W)', _mkCfgInput('number', cfg.storageReserveW, (v) => { cfg.storageReserveW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'PV-Auto lässt diese Leistung für die Speicherladung frei, solange der Speicher unter dem Ziel-SoC liegt.'));
+    grpCoord.body.appendChild(_mkCfgField('Reserve bis SoC (%)', _mkCfgInput('number', cfg.storageTargetSocPct, (v) => { cfg.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '130px' }), 'Ab diesem Speicher-SoC darf der Heizstab den PV-Überschuss ohne Reserve nutzen.'));
+    const coordHint = document.createElement('div');
+    coordHint.className = 'nw-config-field-hint';
+    coordHint.textContent = 'Damit Heizstab und Speicher parallel arbeiten, wird zuerst der Überschuss am Netzanschlusspunkt bilanziert. Speicherentladung zählt nicht als PV-Überschuss; Speicherladung oberhalb der Reserve kann vom Heizstab genutzt werden.';
+    grpCoord.body.appendChild(coordHint);
+    els.heatingRodDevices.appendChild(grpCoord.wrap);
 
     const mkStageDpField = (labelText, inputId, value, onChange, placeholder = 'optional') => {
       const wrap = document.createElement('div');
