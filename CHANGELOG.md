@@ -1,3 +1,10 @@
+## 0.6.251
+
+- Heizstab PV-Auto korrigiert: Netzbezug wird bei der Überschussrekonstruktion abgezogen, damit laufende Heizstäbe nachts bzw. bei Import nicht künstlich als PV-Überschuss weiterlaufen.
+- Heizstab-Stufenausgänge robuster: doppelt verwendete Write-DPs werden pro Tick zusammengefasst, sodass keine widersprüchlichen EIN/AUS-Schreibbefehle mehr auf denselben KNX-/Relais-DP gehen.
+- Schnellsteuerung Heizstab: Ringfüllung und Leistungsanzeige nutzen jetzt die konfigurierte Gesamtleistung des Heizstab-Verbunds sowie Max-/Ist-/Sollwerte aus dem Heizstab-Readback.
+- io-package-Versionen und News-Blöcke vereinheitlicht.
+
 ## 0.6.250
 - Heizstab PV-Auto: PV-Überschuss wird jetzt robuster am Netzverknüpfungspunkt rekonstruiert. Bereits laufende Heizstableistung, Speicherladung und Speicherentladung werden berücksichtigt, damit der Heizstab nicht aus Speicherentladung weiterläuft.
 - Heizstab/Speicher-Koordination: neue Speicherreserve für PV-Auto ergänzt. Solange der Speicher unter Ziel-SoC liegt, bleibt ein PV-Anteil für die Speicherladung reserviert; überschüssige PV kann parallel in den Heizstab gehen.

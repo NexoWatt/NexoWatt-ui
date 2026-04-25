@@ -14198,35 +14198,43 @@ settingsConfig: {
               };
               userMode = normMode(userMode);
 
+              const readNumState = async (id, fallback = 0) => {
+                try {
+                  const s = await this.getStateAsync(id);
+                  const n = Number(s && s.val);
+                  if (Number.isFinite(n)) return n;
+                } catch (_e) {}
+                return fallback;
+              };
+
               let currentStage = 0;
               let targetStage = 0;
               let stageCount = Math.max(1, Math.round(Number(dev.stageCount ?? 1) || 1));
               let wiredStages = 0;
+              let maxPowerW = Math.max(0, Math.round(Number(dev.maxPowerW ?? 0) || 0));
+              let targetW = 0;
+              let appliedW = 0;
+              let measuredW = 0;
               let effectiveMode = (userMode !== 'inherit') ? userMode : cfgMode;
-              try {
-                const s = await this.getStateAsync(`heatingRod.devices.c${idx}.currentStage`);
-                const n = Number(s && s.val);
-                if (Number.isFinite(n)) currentStage = Math.max(0, Math.round(n));
-              } catch (_e) {}
-              try {
-                const s = await this.getStateAsync(`heatingRod.devices.c${idx}.targetStage`);
-                const n = Number(s && s.val);
-                if (Number.isFinite(n)) targetStage = Math.max(0, Math.round(n));
-              } catch (_e) {}
-              try {
-                const s = await this.getStateAsync(`heatingRod.devices.c${idx}.stageCount`);
-                const n = Number(s && s.val);
-                if (Number.isFinite(n) && n > 0) stageCount = Math.max(1, Math.round(n));
-              } catch (_e) {}
-              try {
-                const s = await this.getStateAsync(`heatingRod.devices.c${idx}.wiredStages`);
-                const n = Number(s && s.val);
-                if (Number.isFinite(n) && n >= 0) wiredStages = Math.max(0, Math.round(n));
-              } catch (_e) {}
+
+              currentStage = Math.max(0, Math.round(await readNumState(`heatingRod.devices.c${idx}.currentStage`, currentStage)));
+              targetStage = Math.max(0, Math.round(await readNumState(`heatingRod.devices.c${idx}.targetStage`, targetStage)));
+              stageCount = Math.max(1, Math.round(await readNumState(`heatingRod.devices.c${idx}.stageCount`, stageCount)));
+              wiredStages = Math.max(0, Math.round(await readNumState(`heatingRod.devices.c${idx}.wiredStages`, wiredStages)));
+              maxPowerW = Math.max(0, Math.round(await readNumState(`heatingRod.devices.c${idx}.maxPowerW`, maxPowerW)));
+              targetW = Math.max(0, Math.round(await readNumState(`heatingRod.devices.c${idx}.targetW`, 0)));
+              appliedW = Math.max(0, Math.round(await readNumState(`heatingRod.devices.c${idx}.appliedW`, 0)));
+              measuredW = Math.max(0, Math.round(await readNumState(`heatingRod.devices.c${idx}.measuredW`, 0)));
               try {
                 const s = await this.getStateAsync(`heatingRod.devices.c${idx}.effectiveMode`);
                 if (s && s.val !== undefined && s.val !== null) effectiveMode = String(s.val || '').trim() || effectiveMode;
               } catch (_e) {}
+
+              const stages = Array.isArray(dev.stages) ? dev.stages : [];
+              const configuredStagePowerSumW = stages.reduce((sum, st) => sum + Math.max(0, Math.round(Number(st && st.powerW) || 0)), 0);
+              const writeIds = stages.map(st => String(st && (st.writeId || st.dpWriteId || st.writeDp) || '').trim()).filter(Boolean);
+              const duplicateWriteIds = Array.from(new Set(writeIds.filter((id, i) => writeIds.indexOf(id) !== i)));
+              const powerW = measuredW > 0 ? measuredW : (appliedW > 0 ? appliedW : targetW);
 
               const manualMode = ['manual1', 'manual2', 'manual3'].includes(userMode);
               const effectiveEnabled = !!cfgEnabled && (!!out.boostActive || manualMode || (!!userEnabled && effectiveMode !== 'off'));
@@ -14243,6 +14251,13 @@ settingsConfig: {
                 targetStage,
                 stageCount,
                 wiredStages,
+                maxPowerW,
+                targetW,
+                appliedW,
+                measuredW,
+                powerW,
+                configuredStagePowerSumW,
+                duplicateWriteIds,
                 boostActive: !!out.boostActive,
                 boostUntil: out.boostUntil || 0,
                 boostRemainingMin: out.boostRemainingMin || 0,

@@ -2150,7 +2150,7 @@ function _collectFlowPowerDpIsWFromUI() {
       const stageHint = document.createElement('div');
       stageHint.className = 'nw-config-field-hint';
       stageHint.style.margin = '0';
-      stageHint.textContent = 'Pro Stufe: Leistung, obere/untere Überschuss-Grenze sowie Write-/Read-DP direkt hier hinterlegen. So bleibt der Energiefluss übersichtlich und der Installateur arbeitet alles an einer Stelle.';
+      stageHint.textContent = 'Pro Stufe: zusätzliche Leistung dieser physisch schaltbaren Stufe, obere/untere Überschuss-Grenze sowie eigener Write-/Read-DP. Die Summe der Stufenleistungen sollte der Max.-Leistung entsprechen.';
       stageHead.appendChild(stageTitle);
       stageHead.appendChild(stageHint);
       stageWrap.appendChild(stageHead);
@@ -2252,6 +2252,21 @@ function _collectFlowPowerDpIsWFromUI() {
       const sumW = (dev.stages || []).reduce((sum, st) => sum + Math.max(0, Math.round(Number(st.powerW) || 0)), 0);
       sumInfo.textContent = `Summe konfigurierte Stufenleistung: ${sumW} W${sumW !== dev.maxPowerW ? ` (abweichend von Max. Leistung ${dev.maxPowerW} W)` : ''}.`;
       stageWrap.appendChild(sumInfo);
+
+      const writeIdCounts = new Map();
+      (dev.stages || []).forEach((st) => {
+        const id = String(st && st.writeId || '').trim();
+        if (!id) return;
+        const key = id.toLowerCase();
+        writeIdCounts.set(key, { id, count: ((writeIdCounts.get(key) || {}).count || 0) + 1 });
+      });
+      const duplicateWriteIds = Array.from(writeIdCounts.values()).filter((it) => it.count > 1).map((it) => it.id);
+      if (duplicateWriteIds.length) {
+        const warnDup = document.createElement('div');
+        warnDup.className = 'nw-help';
+        warnDup.textContent = `Achtung: Derselbe Write-DP ist mehreren Stufen zugeordnet (${duplicateWriteIds.join(', ')}). Für echte Stufen braucht jede Stufe einen eigenen Ausgang. Bei zwei Relais bitte nur zwei Stufen konfigurieren und die Leistung je Relais eintragen.`;
+        stageWrap.appendChild(warnDup);
+      }
 
       if (wiredStages < dev.stageCount) {
         const warn = document.createElement('div');

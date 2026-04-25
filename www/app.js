@@ -6286,6 +6286,7 @@ function openFlowQc(kind, idx){
   const title = document.getElementById('flowQcTitle');
   const subtitle = document.getElementById('flowQcSubtitle');
   const powerEl = document.getElementById('flowQcPower');
+  const flowGauge = modal.querySelector('.flow-qc-gauge .evcs-gauge');
   const msgEl = document.getElementById('flowQcMsg');
 
   const swWrap = document.getElementById('flowQcSwitchWrap');
@@ -6357,26 +6358,78 @@ function openFlowQc(kind, idx){
     return arr.find(x => Number(x && x.idx) === n) || null;
   };
 
-  const updatePower = () => {
-    if (!ctx || !powerEl) return;
+  const readStateNumber = (key, fallback = NaN) => {
+    if (!key) return fallback;
+    const stores = [state, window.latestState || {}];
+    for (const store of stores) {
+      const rec = store ? store[key] : null;
+      const raw = (rec && typeof rec === 'object' && rec.value !== undefined) ? rec.value : rec;
+      const n = Number(raw);
+      if (Number.isFinite(n)) return n;
+    }
+    return fallback;
+  };
+
+  const getHeatingRodDeviceCfg = (idx) => {
+    const rodCfg = (window.__nwEmsApps && window.__nwEmsApps.heatingRod) ? window.__nwEmsApps.heatingRod : {};
+    const devices = Array.isArray(rodCfg.devices) ? rodCfg.devices : [];
+    const n = Number(idx) || 0;
+    let dev = devices[n - 1] && typeof devices[n - 1] === 'object' ? devices[n - 1] : null;
+    if (dev && Math.round(Number(dev.slot ?? dev.consumerSlot ?? n)) !== n) dev = null;
+    if (!dev) dev = devices.find(d => d && Math.round(Number(d.slot ?? d.consumerSlot ?? 0)) === n) || null;
+    return dev || {};
+  };
+
+  const setFlowGaugeFill = (valueW, maxW) => {
+    if (!flowGauge) return;
+    const val = Math.max(0, Math.abs(Number(valueW) || 0));
+    const max = Math.max(0, Number(maxW) || 0);
+    const pct = Math.max(0, Math.min(1, max > 0 ? (val / max) : 0));
+    const deg = (pct * 100).toFixed(1) + '%';
+    flowGauge.style.background = 'radial-gradient(closest-side, #121416 60%, transparent 61% 100%),' +
+                                 'conic-gradient(#6c5ce7 0% ' + deg + ', #2a2f35 ' + deg + ' 100%)';
+    flowGauge.title = max > 0 ? `${formatPower(val)} von ${formatPower(max)}` : formatPower(val);
+  };
+
+  const resolveFlowPower = (readbackData = null) => {
+    if (!ctx) return { valueW: 0, maxW: 0 };
     const entry = getEntry(ctx.kind, ctx.idx);
     const meta = getSlotMeta(ctx.kind, ctx.idx);
     const fallbackKey = (ctx.kind === 'producer') ? `producer${ctx.idx}Power` : `consumer${ctx.idx}Power`;
     const stateKey = (entry && entry.stateKey) || (meta && meta.stateKey) || fallbackKey;
-    const rec = stateKey ? state[stateKey] : null;
-    const raw = (rec && typeof rec === 'object' && rec.value !== undefined) ? rec.value : rec;
-    let n = Number(raw);
+    let n = readStateNumber(stateKey, NaN);
+    let maxW = Number(ctx && ctx.qc && ctx.qc.max);
 
-    // Heizstab / Verbraucher sollen hier die gleiche Gesamtleistung zeigen wie der Energiefluss-Knoten.
-    // Ältere Builds haben versehentlich das komplette State-Objekt formatiert und dadurch 0 W angezeigt.
-    if (!Number.isFinite(n)) {
-      const live = window.latestState || {};
-      const rec2 = stateKey ? live[stateKey] : null;
-      const raw2 = (rec2 && typeof rec2 === 'object' && rec2.value !== undefined) ? rec2.value : rec2;
-      n = Number(raw2);
+    const rod = (readbackData && readbackData.heatingRod && readbackData.heatingRod.available) ? readbackData.heatingRod : null;
+    const isRod = !!(rod || (ctx && ctx.qc && String(ctx.qc.controlKind || '').toLowerCase() === 'heatingrod'));
+    if (ctx.kind === 'consumer' && isRod) {
+      const dev = getHeatingRodDeviceCfg(ctx.idx);
+      const measured = rod ? Number(rod.measuredW) : readStateNumber(`heatingRod.devices.c${ctx.idx}.measuredW`, NaN);
+      const applied = rod ? Number(rod.appliedW) : readStateNumber(`heatingRod.devices.c${ctx.idx}.appliedW`, NaN);
+      const target = rod ? Number(rod.targetW) : readStateNumber(`heatingRod.devices.c${ctx.idx}.targetW`, NaN);
+      if (Number.isFinite(measured) && measured > 0) n = measured;
+      else if (Number.isFinite(applied) && applied > 0) n = applied;
+      else if (Number.isFinite(target)) n = target;
+      const maxFromReadback = rod ? Number(rod.maxPowerW) : NaN;
+      const maxFromState = readStateNumber(`heatingRod.devices.c${ctx.idx}.maxPowerW`, NaN);
+      const maxFromCfg = Number(dev && dev.maxPowerW);
+      maxW = [maxFromReadback, maxFromState, maxFromCfg].find(v => Number.isFinite(v) && v > 0) || 0;
     }
+
     if (!Number.isFinite(n)) n = 0;
+    if (!Number.isFinite(maxW) || maxW <= 0) {
+      const metaMax = Number(meta && meta.qc && meta.qc.max);
+      maxW = Number.isFinite(metaMax) && metaMax > 0 ? metaMax : Math.max(0, Math.abs(n));
+    }
+    return { valueW: n, maxW };
+  };
+
+  const updatePower = (readbackData = null) => {
+    if (!ctx || !powerEl) return;
+    const resolved = resolveFlowPower(readbackData);
+    const n = Number(resolved.valueW) || 0;
     powerEl.textContent = (ctx.kind === 'consumer') ? formatPower(Math.abs(n)) : formatPowerSigned(n);
+    setFlowGaugeFill(n, resolved.maxW);
   };
 
   const renderModeButtons = (modes, activeMode) => {
@@ -6402,6 +6455,7 @@ function openFlowQc(kind, idx){
       const r = await fetch('/api/flow/qc/read?' + qp.toString());
       const data = await r.json();
       if (!data || !data.ok) return;
+      updatePower(data);
 
       if (ctx.qc && ctx.qc.hasSwitch && sw){
         if (data.switch !== null && data.switch !== undefined){
@@ -6458,7 +6512,9 @@ function openFlowQc(kind, idx){
         if (modeHint) {
           if (isRod) {
             const stageMax = Math.max(Number(ctl.wiredStages || 0), Number(ctl.stageCount || 0));
-            const stageInfo = stageMax > 0 ? ` • ${Number(ctl.currentStage || 0)}/${stageMax} Stufen` : '';
+            const maxPowerInfo = Number(ctl.maxPowerW || 0) > 0 ? ` • max. ${formatPower(Number(ctl.maxPowerW || 0))}` : '';
+            const dupInfo = Array.isArray(ctl.duplicateWriteIds) && ctl.duplicateWriteIds.length ? ' • DP doppelt' : '';
+            const stageInfo = stageMax > 0 ? ` • ${Number(ctl.currentStage || 0)}/${stageMax} Stufen${maxPowerInfo}${dupInfo}` : maxPowerInfo;
             const backMode = (rawUserMode && rawUserMode !== 'inherit') ? rawUserMode : (String(ctl.cfgMode || 'pvAuto'));
             if (ctl.boostActive) {
               modeHint.textContent = `Boost aktiv (${Number(ctl.boostRemainingMin || 0)} min) – danach ${modeLabel(backMode)}${stageInfo}`;

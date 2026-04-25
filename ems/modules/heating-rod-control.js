@@ -393,6 +393,7 @@ class HeatingRodControlModule extends BaseModule {
             await mk(`heatingRod.devices.${d.id}.boostUntil`, 'Boost until (ts)', 'number', 'value.time');
             await mk(`heatingRod.devices.${d.id}.override`, 'Override', 'string', 'text');
             await mk(`heatingRod.devices.${d.id}.consumerType`, 'Consumer type', 'string', 'text');
+            await mk(`heatingRod.devices.${d.id}.maxPowerW`, 'Max power (W)', 'number', 'value.power', 'W');
             await mk(`heatingRod.devices.${d.id}.stageCount`, 'Configured stages', 'number', 'value');
             await mk(`heatingRod.devices.${d.id}.wiredStages`, 'Wired stages', 'number', 'value');
             await mk(`heatingRod.devices.${d.id}.targetStage`, 'Target stage', 'number', 'value');
@@ -508,7 +509,9 @@ class HeatingRodControlModule extends BaseModule {
         const evcsUsedW = (typeof usedWRaw === 'number' && Number.isFinite(usedWRaw)) ? Math.max(0, usedWRaw) : 0;
 
         const gridW = this._readNumberAny(['grid.powerRawW', 'grid.powerW', 'ps.gridPowerW'], staleMs, null);
-        const exportW = (typeof gridW === 'number' && Number.isFinite(gridW)) ? Math.max(0, -gridW) : 0;
+        const gridKnown = (typeof gridW === 'number' && Number.isFinite(gridW));
+        const exportW = gridKnown ? Math.max(0, -gridW) : 0;
+        const importW = gridKnown ? Math.max(0, gridW) : 0;
         const currentW = Math.max(0, num(currentHeatingRodW, 0));
         const storage = this._readStorageSnapshot(staleMs);
 
@@ -522,22 +525,32 @@ class HeatingRodControlModule extends BaseModule {
             ? storageReserveCfgW
             : 0;
 
-        // NVP-Bilanz: Export + bereits laufende Heizstablast + Speicherladung bilden den PV-Überschuss
-        // VOR flexiblen Verbrauchern. Speicherentladung darf nicht als PV-Überschuss zählen.
-        const nvpSurplusBeforeFlexW = Math.max(0, exportW + currentW + storage.chargeW - storage.dischargeW);
+        // NVP-Bilanz vor flexiblen Heizstäben:
+        //   Export/Import am Netzpunkt + bereits laufende Heizstableistung + Speicherladung - Speicherentladung.
+        // Wichtig: Netzbezug muss abgezogen werden. Sonst hält eine bereits laufende Heizstableistung
+        // nachts ihren eigenen vermeintlichen PV-Überschuss künstlich am Leben.
+        // Ohne frischen Netzpunktwert darf die aktuelle Heizstableistung NICHT als Überschuss-Fallback
+        // verwendet werden; sonst schaltet ein laufender Heizstab bei Dunkelheit nie sauber aus.
+        const nvpSurplusBeforeFlexW = gridKnown
+            ? Math.max(0, exportW - importW + currentW + storage.chargeW - storage.dischargeW)
+            : 0;
         const nvpAvailableW = Math.max(0, nvpSurplusBeforeFlexW - storageReserveW);
 
         const cmAvailableW = (pvCapW > 0) ? Math.max(0, pvCapW - evcsUsedW - storageReserveW) : 0;
-        const availableW = Math.max(nvpAvailableW, cmAvailableW);
-        const source = (cmAvailableW > nvpAvailableW + 25) ? 'cm-storage-reserve' : 'nvp-storage-reserve';
-        const forceOff = storage.dischargeW > 100 && availableW <= 50;
+        // Wenn ein frischer Netzpunktwert vorhanden ist, ist er für Heizstäbe die härtere Wahrheit.
+        // Ohne Netzpunktwert wird ausschließlich das Charging-Management-Cap genutzt; wenn auch das
+        // fehlt, ist die sichere Vorgabe 0 W verfügbar.
+        const availableW = gridKnown ? nvpAvailableW : cmAvailableW;
+        const source = gridKnown ? 'nvp-storage-reserve' : (pvCapW > 0 ? 'cm-storage-reserve' : 'no-fresh-nvp');
+        const forceOff = availableW <= 50 && (storage.dischargeW > 100 || (gridKnown && importW > 150) || (!gridKnown && currentW > 0 && pvCapW <= 0));
 
         return {
             pvCapW: Math.max(pvCapW, nvpSurplusBeforeFlexW),
             evcsUsedW,
             availableW,
             source,
-            gridW: (typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null,
+            gridW: gridKnown ? gridW : null,
+            importW,
             exportW,
             currentHeatingRodW: currentW,
             storageChargeW: storage.chargeW,
@@ -552,11 +565,42 @@ class HeatingRodControlModule extends BaseModule {
         };
     }
 
+    _stageActuatorKey(stage, idx) {
+        if (!stage || typeof stage !== 'object') return `stage:${idx + 1}`;
+        const keyCandidates = [stage.writeKey, stage.readKey];
+        for (const key of keyCandidates) {
+            const k = String(key || '').trim();
+            if (!k) continue;
+            try {
+                const entry = this.dp && this.dp.getEntry ? this.dp.getEntry(k) : null;
+                const objectId = String(entry && entry.objectId ? entry.objectId : '').trim();
+                if (objectId) return objectId;
+            } catch (_e) {
+                // ignore
+            }
+        }
+        const id = String(stage.writeId || stage.readId || '').trim();
+        return id || `stage:${idx + 1}`;
+    }
+
+    _capDevicePower(d, valueW) {
+        const v = Math.max(0, Math.round(num(valueW, 0)));
+        const maxW = Math.max(0, Math.round(num(d && d.maxPowerW, 0)));
+        return maxW > 0 ? Math.min(v, maxW) : v;
+    }
+
     _sumStagePower(d, stageCount) {
-        let sum = 0;
         const cnt = Math.max(0, Math.min(Math.round(Number(stageCount) || 0), d.stages.length));
-        for (let i = 0; i < cnt; i++) sum += Math.max(0, num(d.stages[i].powerW, 0));
-        return Math.round(sum);
+        const byActuator = new Map();
+        for (let i = 0; i < cnt; i++) {
+            const stage = d.stages[i];
+            const key = this._stageActuatorKey(stage, i);
+            const powerW = Math.max(0, num(stage && stage.powerW, 0));
+            byActuator.set(key, Math.max(byActuator.get(key) || 0, powerW));
+        }
+        let sum = 0;
+        for (const powerW of byActuator.values()) sum += powerW;
+        return this._capDevicePower(d, sum);
     }
 
     _readMeasuredW(d) {
@@ -568,10 +612,11 @@ class HeatingRodControlModule extends BaseModule {
     _readStageFeedback(d) {
         /** @type {Array<boolean|null>} */
         const states = [];
+        const powerByActuator = new Map();
         let contiguous = 0;
         let anyKnown = false;
-        let appliedPowerW = 0;
-        for (const stage of d.stages) {
+        for (let i = 0; i < d.stages.length; i++) {
+            const stage = d.stages[i];
             let val = null;
             if (this.dp && stage.readKey && this.dp.getEntry && this.dp.getEntry(stage.readKey)) {
                 val = this.dp.getBoolean(stage.readKey, null);
@@ -580,18 +625,24 @@ class HeatingRodControlModule extends BaseModule {
             }
             states.push(val);
             if (val !== null && val !== undefined) anyKnown = true;
-            if (val === true) appliedPowerW += Math.max(0, num(stage.powerW, 0));
+            if (val === true) {
+                const key = this._stageActuatorKey(stage, i);
+                const powerW = Math.max(0, num(stage.powerW, 0));
+                powerByActuator.set(key, Math.max(powerByActuator.get(key) || 0, powerW));
+            }
         }
         for (let i = 0; i < states.length; i++) {
             if (states[i] === true) contiguous = i + 1;
             else if (states[i] === false) break;
             else break;
         }
+        let appliedPowerW = 0;
+        for (const powerW of powerByActuator.values()) appliedPowerW += powerW;
         return {
             states,
             anyKnown,
             currentStage: contiguous,
-            appliedPowerW: Math.round(appliedPowerW),
+            appliedPowerW: this._capDevicePower(d, appliedPowerW),
         };
     }
 
@@ -687,13 +738,33 @@ class HeatingRodControlModule extends BaseModule {
         let anyTrue = false;
         let anyFalse = false;
 
+        // One KNX/relay object may be reused in more than one virtual stage. Writing every row in
+        // sequence would otherwise send ON and then OFF to the same datapoint in a single tick.
+        // Coalesce by writeKey and write the OR-result exactly once.
+        const grouped = new Map();
         for (let i = 0; i < d.stages.length; i++) {
             const stage = d.stages[i];
             if (!stage.writeKey) continue;
+            const writeKey = String(stage.writeKey).trim();
+            if (!writeKey) continue;
+            const actuatorKey = this._stageActuatorKey(stage, i);
             const shouldOn = i < effectiveStage;
             const observed = Array.isArray(feedback && feedback.states) ? feedback.states[i] : null;
-            const force = observed !== null && observed !== shouldOn;
-            const res = await this._writeBoolForce(stage.writeKey, shouldOn, force);
+            const g = grouped.get(actuatorKey) || { writeKey, shouldOn: false, observedKnown: false, observed: null };
+            g.writeKey = g.writeKey || writeKey;
+            g.shouldOn = g.shouldOn || shouldOn;
+            if (observed !== null && observed !== undefined) {
+                g.observedKnown = true;
+                // For duplicated rows the read value should be identical. If not, prefer true so
+                // an OFF target is still forced, while an ON target is not suppressed accidentally.
+                g.observed = (g.observed === true || observed === true) ? true : !!observed;
+            }
+            grouped.set(actuatorKey, g);
+        }
+
+        for (const g of grouped.values()) {
+            const force = !!g.observedKnown && g.observed !== g.shouldOn;
+            const res = await this._writeBoolForce(g.writeKey, g.shouldOn, force);
             if (res === true) anyTrue = true;
             if (res === false) anyFalse = true;
         }
@@ -785,6 +856,7 @@ class HeatingRodControlModule extends BaseModule {
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.enabled`, !!d.enabled);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.mode`, String(d.mode));
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.consumerType`, String(d.consumerType));
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.maxPowerW`, Math.round(num(d.maxPowerW, 0)));
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.stageCount`, d.stageCount);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.wiredStages`, d.wiredStages);
 
@@ -851,6 +923,10 @@ class HeatingRodControlModule extends BaseModule {
             }
 
             if (!d.enabled) {
+                const res = (d.consumerType === 'heatingRod' && d.wiredStages > 0)
+                    ? await this._applyStageState(d, 0, feedback)
+                    : { status: 'disabled' };
+                this._setStageCtlTarget(d.id, 0, observedStage);
                 const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                     ? Math.max(0, measuredW)
                     : Math.max(0, feedback.appliedPowerW);
@@ -859,7 +935,7 @@ class HeatingRodControlModule extends BaseModule {
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, 0);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, 0);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.appliedW`, Math.round(usedW));
-                await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, 'disabled');
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, `disabled_${String(res.status || '')}`);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, '');
                 continue;
             }
@@ -1011,6 +1087,7 @@ class HeatingRodControlModule extends BaseModule {
         await this._setStateIfChanged('heatingRod.summary.debugJson', JSON.stringify({
             source: pvBase.source,
             gridW: pvBase.gridW,
+            importW: Math.round(num(pvBase.importW, 0)),
             exportW: Math.round(num(pvBase.exportW, 0)),
             currentHeatingRodW: Math.round(num(pvBase.currentHeatingRodW, 0)),
             storageChargeW: Math.round(num(pvBase.storageChargeW, 0)),

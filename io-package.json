@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.250",
+    "version": "0.6.251",
     "news": {
+      "0.6.251": {
+        "en": "Heating rod PV-auto and quick control fixes: the PV surplus calculation now subtracts grid import before adding already-running heating rod load, so heating rods are actively reduced/off at night or when importing from the grid. Duplicate stage write datapoints are coalesced to avoid contradictory ON/OFF writes. Heating rod quick-control gauges now fill against the configured total heating rod power and expose max/applied/measured power in readback.",
+        "de": "Heizstab PV-Auto und Schnellsteuerung korrigiert: Die PV-Überschussberechnung zieht Netzbezug ab, bevor bereits laufende Heizstableistung wieder addiert wird. Dadurch werden Heizstäbe nachts bzw. bei Netzbezug aktiv reduziert/ausgeschaltet. Doppelte Stufen-Schreib-Datenpunkte werden zusammengefasst, damit keine widersprüchlichen EIN/AUS-Schreibbefehle entstehen. Der Ring der Heizstab-Schnellsteuerung wird jetzt gegen die konfigurierte Gesamtleistung befüllt und der Readback liefert Max-/Ist-/Sollleistung."
+      },
       "0.6.250": {
         "en": "Heating rod PV-auto coordination improved: the controller now reconstructs PV surplus at the grid connection point, accounts for already-running heating rod load, storage charge/discharge and a storage reserve so heating rods and batteries can work in parallel without draining the battery. Energy-flow quick control now shows the same power datapoint as the flow monitor and heating rod quick tiles are shown on the Live page.",
         "de": "Heizstab PV-Auto verbessert: Die Regelung rekonstruiert den PV-Überschuss jetzt am Netzverknüpfungspunkt und berücksichtigt laufende Heizstableistung, Speicherladung/-entladung sowie eine Speicherreserve. Dadurch können Heizstäbe und Speicher parallel arbeiten, ohne den Speicher leerzuziehen. Die Energiefluss-Schnellsteuerung zeigt nun denselben Leistungs-DP wie der Energieflussmonitor und Heizstab-Kacheln erscheinen auf der Live-Seite."
@@ -1752,8 +1756,20 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.248",
+  "version": "0.6.251",
   "news": {
+    "0.6.251": {
+      "en": "Heating rod PV-auto and quick control fixes: the PV surplus calculation now subtracts grid import before adding already-running heating rod load, so heating rods are actively reduced/off at night or when importing from the grid. Duplicate stage write datapoints are coalesced to avoid contradictory ON/OFF writes. Heating rod quick-control gauges now fill against the configured total heating rod power and expose max/applied/measured power in readback.",
+      "de": "Heizstab PV-Auto und Schnellsteuerung korrigiert: Die PV-Überschussberechnung zieht Netzbezug ab, bevor bereits laufende Heizstableistung wieder addiert wird. Dadurch werden Heizstäbe nachts bzw. bei Netzbezug aktiv reduziert/ausgeschaltet. Doppelte Stufen-Schreib-Datenpunkte werden zusammengefasst, damit keine widersprüchlichen EIN/AUS-Schreibbefehle entstehen. Der Ring der Heizstab-Schnellsteuerung wird jetzt gegen die konfigurierte Gesamtleistung befüllt und der Readback liefert Max-/Ist-/Sollleistung."
+    },
+    "0.6.250": {
+      "en": "Heating rod PV-auto coordination improved: the controller now reconstructs PV surplus at the grid connection point, accounts for already-running heating rod load, storage charge/discharge and a storage reserve so heating rods and batteries can work in parallel without draining the battery. Energy-flow quick control now shows the same power datapoint as the flow monitor and heating rod quick tiles are shown on the Live page.",
+      "de": "Heizstab PV-Auto verbessert: Die Regelung rekonstruiert den PV-Überschuss jetzt am Netzverknüpfungspunkt und berücksichtigt laufende Heizstableistung, Speicherladung/-entladung sowie eine Speicherreserve. Dadurch können Heizstäbe und Speicher parallel arbeiten, ohne den Speicher leerzuziehen. Die Energiefluss-Schnellsteuerung zeigt nun denselben Leistungs-DP wie der Energieflussmonitor und Heizstab-Kacheln erscheinen auf der Live-Seite."
+    },
+    "0.6.249": {
+      "en": "StorageFarm regression fix: FENECON EV priority remains disabled for farms, but older farm setups that used the FENECON checkbox as implicit self-consumption enable now keep normal NVP self-discharge. Farm dispatch was softened so healthy online storages above their SoC floor receive proportional setpoints again; added lastDispatchJson diagnostics. Web cache bumped.",
+      "de": "SpeicherFarm-Regressionsfix: Die FENECON-EV-Priorität bleibt für Farmen deaktiviert, aber ältere Farm-Setups, die den FENECON-Haken als implizite Eigenverbrauchs-Freigabe genutzt haben, behalten jetzt die normale NVP-Eigenverbrauchs-Entladung. Die Farm-Verteilung wurde entschärft, sodass gesunde Online-Speicher oberhalb ihrer SoC-Untergrenze wieder proportionale Sollwerte erhalten; neues lastDispatchJson zur Diagnose. Web-Cache erhöht."
+    },
     "0.6.248": {
       "en": "EVCS/storage priority from 0.6.247 is now limited to active FENECON AC mode and is disabled for StorageFarm setups. Conventional storage systems and multi-storage farms keep the previous PV/storage/wallbox behavior. The storage controller also ignores EV-priority caps unless FENECON AC mode is active. Web cache version bumped.",
       "de": "EVCS/Speicher-Priorität aus 0.6.247 ist jetzt auf den aktiven FENECON-AC-Modus begrenzt und bei SpeicherFarm-Setups deaktiviert. Herkömmliche Speicher und Multi-Speicher-Farmen behalten das bisherige PV-/Speicher-/Wallbox-Verhalten. Die Speicherregelung ignoriert EV-Prioritäts-Caps zusätzlich, solange der FENECON-AC-Modus nicht aktiv ist. Web-Cache-Version angehoben."
@@ -1770,6 +1786,10 @@
       "en": "Storage/FENECON: reverted the 0.6.243 AC setpoint formula and restored the proven behavior from 0.6.240/0.6.242. In FENECON AC mode the storage again regulates like before without the additional direct-balance override. Web cache version bumped.",
       "de": "Speicher/FENECON: Die AC-Sollwertformel aus 0.6.243 wurde zurückgenommen und das bewährte Verhalten aus 0.6.240/0.6.242 wiederhergestellt. Im FENECON-AC-Modus regelt der Speicher damit wieder wie zuvor ohne die zusätzliche Direktbilanz-Übersteuerung. Web-Cache-Version angehoben."
     },
+    "0.6.241": {
+      "en": "Storage/FENECON: the AC-mode storage setpoint is now derived from the direct site balance (total load incl. internal extra consumers minus PV/extra producers). This prevents unwanted grid charging while the battery is being charged from PV and adds dedicated diagnostic states for the calculated balance.",
+      "de": "Speicher/FENECON: Die Sollwertbildung im AC-Modus basiert jetzt auf der direkten Anlagenbilanz (Gesamtverbrauch inkl. interner Zusatzverbraucher minus PV/zusätzliche Erzeuger). Damit wird unnötiger Netzbezug während PV-Ladung vermieden; zusätzlich gibt es neue Diagnosezustände für die berechnete Bilanz."
+    },
     "0.6.240": {
       "en": "Energy-flow: the EVCS line to the right is now hidden completely until a wallbox is actually configured/mapped. This removes the ghost connection in installations without a wallbox while keeping the line visible automatically as soon as EVCS is available. Web cache version bumped.",
       "de": "Energiefluss: Die EVCS-/Wallbox-Linie rechts wird jetzt vollständig ausgeblendet, solange keine Wallbox wirklich konfiguriert/gemappt ist. Damit verschwindet die Geister-Verbindung in Anlagen ohne Wallbox; sobald EVCS verfügbar ist, erscheint die Linie automatisch wieder. Web-Cache-Version angehoben."
@@ -1782,6 +1802,19 @@
       "en": "Heating rod: stage Write/Read datapoints are now assigned directly inside the Heating Rod app per stage instead of in the energy-flow control section. Energy-flow consumer control is now type-aware (generic / heat pump / heating rod) and only shows relevant fields. Heating-rod backend and quick-control primarily read stage datapoints from the Heating Rod app while keeping legacy fallbacks from energy flow. Web cache version bumped.",
       "de": "Heizstab: Stage-Write/Read-Datenpunkte werden jetzt pro Stufe direkt in der Heizstab-App zugeordnet statt im Steuerungsbereich des Energieflusses. Die Verbraucher-Steuerung im Energiefluss ist nun typabhängig (Allgemein / Wärmepumpe / Heizstab) und zeigt nur noch passende Felder an. Heizstab-Backend und Schnellsteuerung lesen die Stage-DPs jetzt primär aus der Heizstab-App, behalten aber Legacy-Fallbacks aus dem Energiefluss bei. Web-Cache-Version angehoben."
     },
+    "0.6.237": {
+      "en": "Heating rod quick control for end customers: native quick control via energy-flow monitor / control tile with regulation on/off, manual levels 1/2/3 and a 100% boost mode for 60 minutes. Heating rod live tiles and flow quick-control now recognize heating-rod consumer slots directly. Web cache version bumped.",
+      "de": "Heizstab-Schnellfunktion für Endkunden: native Schnellsteuerung im Energiefluss-Monitor / in der Steuerungskachel mit Regelung Ein/Aus, manuellen Stufen 1/2/3 sowie einem 100%-Boost für 60 Minuten. Heizstab-Live-Kacheln und Flow-Quick-Control erkennen Heizstab-Verbraucher jetzt direkt. Web-Cache-Version angehoben.",
+      "ru": "Быстрое управление ТЭНом для конечных клиентов: нативное управление из монитора потоков энергии / плитки управления с включением/отключением регулирования, ручными уровнями 1/2/3 и режимом Boost на 100% на 60 минут. Плитки и quick-control теперь напрямую распознают потребители типа heating rod. Версия веб-кэша повышена.",
+      "pt": "Função rápida para resistência elétrica para o cliente final: controlo rápido nativo no monitor de fluxo de energia / mosaico de controlo com regulação ligar/desligar, níveis manuais 1/2/3 e modo boost a 100% durante 60 minutos. Os mosaicos e o quick-control reconhecem agora diretamente consumidores do tipo resistência elétrica. Versão da cache web aumentada.",
+      "nl": "Snelfunctie voor verwarmingselementen voor eindgebruikers: native snelbediening in de energiestroommonitor / bedieningskaart met regeling aan/uit, handmatige niveaus 1/2/3 en een 100%-boostmodus voor 60 minuten. Live-tegels en flow quick-control herkennen nu direct heating-rod-verbruikers. Webcacheversie verhoogd.",
+      "fr": "Fonction rapide pour résistance chauffante côté client final : commande rapide native dans le moniteur de flux d’énergie / la tuile de commande avec régulation marche/arrêt, niveaux manuels 1/2/3 et mode boost à 100 % pendant 60 minutes. Les tuiles et le quick-control reconnaissent maintenant directement les consommateurs de type résistance chauffante. Version du cache web augmentée.",
+      "it": "Funzione rapida per la resistenza elettrica per il cliente finale: controllo rapido nativo nel monitor del flusso energetico / riquadro di controllo con regolazione on/off, livelli manuali 1/2/3 e modalità boost al 100% per 60 minuti. Le tile e il quick-control riconoscono ora direttamente i consumatori di tipo heating rod. Versione della cache web aumentata.",
+      "es": "Función rápida para resistencia eléctrica para el cliente final: control rápido nativo en el monitor de flujo de energía / tarjeta de control con regulación on/off, niveles manuales 1/2/3 y modo boost al 100 % durante 60 minutos. Las tarjetas y el quick-control reconocen ahora directamente los consumidores de tipo heating rod. Versión de caché web aumentada.",
+      "pl": "Szybkie sterowanie grzałką dla klienta końcowego: natywne sterowanie z monitora przepływu energii / kafelka sterowania z włączaniem/wyłączaniem regulacji, ręcznymi poziomami 1/2/3 oraz trybem boost 100% przez 60 minut. Kafelki i quick-control rozpoznają teraz bezpośrednio odbiorniki typu heating rod. Zwiększono wersję pamięci podręcznej web.",
+      "uk": "Швидке керування нагрівальним стрижнем для кінцевого клієнта: нативне керування з монітора енергопотоку / плитки керування з увімкненням/вимкненням регулювання, ручними рівнями 1/2/3 та режимом boost 100% на 60 хвилин. Плитки та quick-control тепер напряму розпізнають споживачі типу heating rod. Версію веб-кешу збільшено.",
+      "zh-cn": "面向终端客户的加热棒快捷控制：在能流监控/控制卡片中提供原生快捷控制，可开启/关闭调节，支持手动 1/2/3 档以及 60 分钟的 100% Boost 模式。加热棒实时卡片和流向快捷控制现在可直接识别加热棒类型负载。网页缓存版本已提升。"
+    },
     "0.6.236": {
       "en": "New native Heating Rod app: separate staged 1..12 level control linked to energy-flow consumer slots with configurable stage power and on/off thresholds. Energy-flow consumers now support a device type (generic / heat pump / heating rod) and Stage 1..12 relay/KNX datapoints. Thermal app is focused on heat pumps/climate, skips heating-rod slots, and uses improved hysteresis/budget handling. Web cache version bumped.",
       "de": "Neue native Heizstab-App: separate gestufte 1..12-Stufen-Regelung, verknüpft mit den Verbraucher-Slots im Energiefluss, inklusive konfigurierbarer Stufenleistung sowie Ein-/Aus-Grenzen je Stufe. Energiefluss-Verbraucher unterstützen jetzt einen Gerätetyp (allgemein / Wärmepumpe / Heizstab) und Stage 1..12 Relais-/KNX-Datenpunkte. Die Thermik-App ist jetzt auf Wärmepumpe/Klima fokussiert, überspringt Heizstab-Slots und nutzt eine verbesserte Hysterese-/Budgetbehandlung. Web-Cache-Version angehoben."
@@ -1790,9 +1823,38 @@
       "en": "Storage: added a new FENECON mode in the App-Center. For single-storage setups without StorageFarm it enables self-consumption discharge even without MultiUse, so the AC inverter part keeps balancing house load at the grid point while the DC side may still charge from PV. Default self-consumption target import is 0 W unless configured otherwise. Web cache version bumped.",
       "de": "Speicher: Neuer FENECON-Modus im App-Center. Bei Single-Storage ohne Speicherfarm aktiviert er die Eigenverbrauchs-Entladung auch ohne MultiUse, damit der AC-Teil des Wechselrichters den Hausverbrauch am Netzverknüpfungspunkt weiter ausregelt, während die DC-Seite parallel aus PV laden kann. Standard-Ziel im Eigenverbrauch ist 0 W Netzbezug, sofern nichts anderes konfiguriert ist. Web-Cache-Version angehoben."
     },
+    "0.6.232": {
+      "en": "History performance tuned: month/year now load much faster. Energy cards no longer trigger an additional dense Influx pass; they derive from the already loaded chart series. Sampling is now range-based (week 30 min, month 1 h, year 1 day). Web cache version bumped.",
+      "de": "Historie-Performance optimiert: Monat/Jahr laden jetzt deutlich schneller. Die Energiekarten lösen keinen zusätzlichen dichten Influx-Durchlauf mehr aus, sondern werden aus den bereits geladenen Chart-Serien berechnet. Das Sampling ist jetzt bereichsabhängig (Woche 30 Min, Monat 1 h, Jahr 1 Tag). Web-Cache-Version erhöht."
+    },
+    "0.6.229": {
+      "en": "History performance improved: duplicate initial loads are deduplicated, /api/history now uses short-lived caching, counter/history queries run with less duplication, and exact energy totals reuse the chart series whenever possible.",
+      "de": "Historien-Performance verbessert: doppelte Initial-Ladevorgänge werden zusammengeführt, /api/history nutzt jetzt einen Kurzzeit-Cache, Zähler-/Historienabfragen laufen mit weniger Duplikaten und exakte Energie-Werte verwenden wenn möglich direkt die bereits geladenen Chart-Serien.",
+      "ru": "Повышена производительность истории: дублирующиеся начальные загрузки объединяются, /api/history использует кратковременный кэш, запросы к счётчикам/истории выполняются с меньшим количеством дублей, а точные энергетические значения по возможности берутся из уже загруженных серий графика."
+    },
+    "0.6.228": {
+      "de": "Historie: Regression behoben, bei der kWh-Karten für laufende Tage/Zeiträume zu hoch wurden. Die exakte Historien-Integration nutzt jetzt konsequent die tatsächliche Query-Endzeit statt fälschlich bis zur vollen UI-Endzeit weiter zu integrieren.",
+      "en": "History: fixed a regression where kWh cards became too high for ongoing days/ranges. Exact history integration now consistently uses the actual query end time instead of integrating to the full UI end time."
+    },
+    "0.6.226": {
+      "de": "Live-Status: Die Autarkie-Kachel wird jetzt physikalisch korrekt aus Verbrauch und Netzbezug abgeleitet und läuft damit auch dann sauber mit, wenn der Speicher den Verbrauch deckt. Wenn noch kein Netz-DP eingetroffen ist, nutzt die VIS nur als Fallback eine lokale Abschätzung aus PV und Batterie. Web-Cache-Version angehoben.",
+      "en": "Live status: the autonomy card is now derived physically correctly from load and grid import, so it also updates properly when the battery covers the load. If no grid datapoint has arrived yet, the UI only uses a local PV/battery estimate as a fallback. Web cache version bumped."
+    },
+    "0.6.225": {
+      "de": "Schnell-Inbetriebnahme erweitert: Beim Ein-Klick-Setup werden jetzt auch sichere Standard-Datenpunkte für den Energiefluss automatisch aus nexowatt-devices-Aliasen vorbelegt – inkl. Netz (Import/Export oder Signed-Fallback), Netz-Online/Heartbeat, PV (wenn eindeutig) sowie Speicher-SoC/-Leistung (wenn eindeutig). EV- und Gebäudeverbrauch bleiben bewusst auf Auto-Summe/Auto-Bilanz. Web-Cache-Version angehoben.",
+      "en": "Quick commissioning extended: the one-click setup now also pre-fills safe standard datapoints for the energy-flow tab from nexowatt-devices aliases – including grid (import/export or signed fallback), grid online/heartbeat, PV when unambiguous and storage SoC/power when unambiguous. EV and building load intentionally stay on auto-sum/auto-balance. Web cache version bumped."
+    },
+    "0.6.224": {
+      "de": "Historie/Energieabgleich: Historienkarten und Energiebalken nutzen jetzt konsequent dieselben kanonischen historie.*-Influx-Datenpunkte wie der Live-Bereich. Die Verlaufskarten werden zusätzlich mit einer präzisen 10-Minuten-Energieintegration berechnet, damit Tag/Woche/Monat/Jahr nicht mehr gegeneinander abweichen. Für den Live-Gesamtverbrauch/-Erzeugung werden die Historie-Integrationen ebenfalls feiner berechnet. Web-Cache-Version angehoben.",
+      "en": "History/energy consistency: history cards and energy bars now consistently use the same canonical historie.* Influx datapoints as the live area. History energy cards are additionally calculated with a precise 10-minute integration so day/week/month/year no longer drift apart. Live total energy fallbacks are also integrated with a finer step. Web cache version bumped."
+    },
     "0.6.223": {
       "de": "Historie: Der Bereich „Preis / Bezug / Kosten“ wird jetzt nur noch eingeblendet, wenn dynamischer Tarif oder variables Netzentgelt aktuell aktiv sind. Reine Basispreis-Historie ohne aktivierte Tarif-/Netzentgeltfunktion blendet den Bereich nicht mehr fälschlich ein. Web-Cache-Version angehoben.",
       "en": "History: the “Price / Import / Costs” section is now only shown when dynamic tariff or variable grid fee is currently enabled. Plain base-price history without an active tariff/grid-fee feature no longer shows the section incorrectly. Web cache version bumped."
+    },
+    "0.6.221": {
+      "en": "Charging management audit/hardening: fixed PV-only control so sudden PV drops clamp immediately instead of continuing to allocate from a smoothed average. Also removed the extra startup delay after the PV gate opens by letting the PV start-ready timer build during the gate delay. Static scenario tests covered Auto, PV, Min+PV, Boost, tariff/goal blocking, no-vehicle and regulation-off behaviour. No automatic EVCS enable toggling is used anymore; control remains current/power only.",
+      "de": "Lademanagement geprüft und gehärtet: PV-Only reagiert bei plötzlichem PV-Einbruch jetzt sofort und regelt nicht mehr fälschlich aus einem geglätteten Mittelwert weiter. Zusätzlich entfällt die unnötige Zusatzwartezeit nach dem Öffnen des PV-Gates, weil die PV-Startbereitschaft bereits während der Gate-Verzögerung aufgebaut wird. Getestet wurden die Modi Auto, PV, Min+PV, Boost sowie Tarif-/Zielladen-Sperre, Kein-Fahrzeug und Regelung AUS. Die EVCS-Freigabe wird nicht mehr automatisch getoggelt; geregelt wird nur noch über Strom/Leistung."
     },
     "0.6.220": {
       "de": "Lademanagement-Regressionsfix: Die EVCS-Regelung toggelt die Wallbox-Freigabe nicht mehr automatisch bei Tarif-/PV-Sperren oder bei deaktivierter EMS-Regelung. Stattdessen wird sauber nur noch über Strom-/Leistungssollwerte geregelt, wodurch das An/Aus-Flattern nach dem letzten Update verschwindet.",
@@ -1802,6 +1864,18 @@
       "de": "Historie: Neuer Tarif-/Netzentgelt-Nachweis mit 15-Minuten-Ausdruck, Datum/Uhrzeit, Preis, Bezug und Kosten zur Gegenprüfung der Abrechnung. Einstellungen/§14a: eigener Ausdruck für historisierte Schalt-Ereignisse mit exakten Zeitstempeln ergänzt. Web-Cache-Version angehoben.",
       "en": "History: added a new tariff/grid-fee proof report with 15-minute printout including date/time, price, import and costs for bill cross-checking. Settings/§14a: added a dedicated print report for historized switching events with exact timestamps. Web cache version bumped."
     },
+    "0.6.215": {
+      "de": "Historie: zusätzlicher Preis-/Kostenbereich für dynamischen Tarif und variables Netzentgelt ergänzt – mit Preisverlauf, Bezug und berechneten Kosten je Zeitraum sowie separater Gegenprüfung der Abrechnung. Einstellungen: Netzentgelt-Zusatzpreise für ST/NT/HT können jetzt gepflegt werden; Web-Cache-Version angehoben.",
+      "en": "History: added an extra price/cost section for dynamic tariffs and variable grid fees – including price progression, import and calculated costs per period for bill cross-checking. Settings: net fee add-on prices for ST/NT/HT can now be configured; web cache version bumped."
+    },
+    "0.6.211": {
+      "de": "Update- und Installationspfad gehärtet: Der Adapter fordert jetzt ein sauberes Stoppen vor Updates an, setzt einen kurzen Stop-Timeout und überspringt das unnötige Uploaden des lokalen www-Ordners in die ioBroker-Datenbank. Zusätzlich wurde der Shutdown des eingebetteten HTTP/SSE-Servers bereinigt, damit GitHub-Updates ohne manuellen Adapter-Neustart sauber durchlaufen.",
+      "en": "Hardened update/install path: the adapter now requests a clean stop before updates, uses a short stop timeout and skips the unnecessary upload of the local www folder into the ioBroker database. The embedded HTTP/SSE server shutdown was also cleaned up so GitHub-based updates can complete cleanly without a manual adapter restart."
+    },
+    "0.6.210": {
+      "de": "Speicherfarm: In der Entladeverteilung übernimmt jetzt der Speicher mit höherem SoC deutlich mehr Leistung, während sehr niedrige oder sichtbar begrenzte Speicher automatisch entlastet werden. Damit bleibt die Regelung im Eigenverbrauch stabiler am Einspeisepunkt. Zusätzlich wurde der Farm-Statuszähler „Online x/y“ korrigiert.",
+      "en": "Storage farm: discharge dispatch now shifts noticeably more power to storages with the higher SoC, while very low or visibly limited storages are automatically relieved. This keeps self-consumption balancing steadier at the point of common coupling. Also fixed the farm status counter shown as “Online x/y”."
+    },
     "0.6.208": {
       "de": "EMS/Lademanagement: Das PV-Überschussladen nutzt jetzt standardmäßig einen 500-W-Reservepuffer auf dem effektiven PV-Budget. Dadurch läuft die Überschussladung ruhiger und regelt nicht mehr so hart auf 0 W Netzbezug. Die Runtime-Konfiguration normiert den neuen Wert automatisch mit.",
       "en": "EMS/Charging management: PV surplus charging now applies a default 500 W reserve buffer to the effective PV budget. This makes surplus charging calmer and avoids regulating too tightly against 0 W grid import. Runtime config now normalizes the new value as well."
@@ -1809,6 +1883,10 @@
     "0.6.206": {
       "de": "§14a-Log/Nachweis nutzt jetzt bewusst die bestehende Historie/Influx-Instanz (standardmäßig influxdb.0) statt eine separate §14a-Instanz anzulegen. Bereits von NexoWatt angelegte dedizierte §14a-Influx-Instanzen werden deaktiviert, damit alles sauber auf einer Historie bleibt. Einstellungen/Log-Hinweise entsprechend angepasst. Web-Cache-Version angehoben.",
       "en": "§14a proof/audit logging now intentionally uses the existing history/Influx instance (by default influxdb.0) instead of provisioning a separate §14a instance. Dedicated §14a Influx instances previously created by NexoWatt are disabled so everything stays on one shared history. Settings/log hints updated accordingly. Web cache version bumped."
+    },
+    "0.6.205": {
+      "de": "Einstellungen: Neue Unterseite „Log / Nachweis“ mit §14a-Status, Historisierung und Nachweisdaten. §14a: Dedizierte InfluxDB-Instanz kann jetzt automatisch für den Nachweis bereitgestellt werden, inklusive 730-Tage-Retention, Status- und Fehleranzeige im Frontend. Web-Cache-Version angehoben.",
+      "en": "Settings: new “Log / Proof” subpage with §14a status, history and audit data. §14a: a dedicated InfluxDB instance can now be auto-provisioned for proof logging, including 730-day retention plus frontend status and error display. Web cache version bumped."
     },
     "0.6.204": {
       "en": "§14a: lightweight proof/audit logging added with event snapshots under para14a.audit.* and 1-minute trace samples under para14a.trace.*. If an Influx history instance is detected, history is enabled automatically for these states. Added a note in the §14a config that 730-day retention must be configured in Influx itself. Web cache version bumped.",
@@ -1819,24 +1897,52 @@
       "de": "SmartHome Config: assistierte Auto-Erkennung über den ioBroker Type-Detector mit Gerätevorschlägen inkl. Quellpfad, gemappten Zuständen und gezielter Übernahme. Der Datenpunkt-Picker in der SmartHome-Konfiguration kann jetzt zusätzlich die ioBroker-Objektstruktur mit Ordnern, Breadcrumb und Start/Zurück browsen. Web-Cache-Version angehoben."
     },
     "0.6.202": {
-      "en": "Logic editor: datapoint picker now supports browsing the ioBroker object tree with folders plus breadcrumb, start/back navigation and parallel search. Existing IDs open directly in their parent path. Web cache version bumped.",
-      "de": "Logik-Editor: Der Datenpunkt-Picker unterstützt jetzt das Browsen durch die ioBroker-Objektstruktur mit Ordnern sowie Breadcrumb, Start/Zurück-Navigation und paralleler Suche. Bereits gesetzte IDs öffnen direkt im passenden Elternpfad. Web-Cache-Version angehoben."
+      "en": "Logic editor: the datapoint picker now offers ioBroker object-tree browsing with folders, breadcrumb, start/back navigation and parallel search by ID or name. Existing datapoints open directly in their parent path. Web cache version bumped.",
+      "de": "Logik-Editor: Der Datenpunkt-Picker bietet jetzt zusätzlich das Browsen durch die ioBroker-Objektstruktur mit Ordnern, Breadcrumb, Start/Zurück-Navigation und paralleler Suche nach ID oder Name. Bereits gesetzte Datenpunkte öffnen direkt im passenden Elternpfad. Web-Cache-Version angehoben."
     },
     "0.6.201": {
-      "en": "Logic editor: right-click disconnect for wires/inputs and palette drag & drop with exact drop position in the workspace. Web cache version bumped.",
-      "de": "Logik-Editor: Rechtsklick trennt Verbindungen auf Leitungen/Eingängen; Bausteine aus der Palette lassen sich per Drag & Drop exakt im Arbeitsbereich platzieren. Web-Cache-Version angehoben."
+      "en": "Logic editor: connections can now be disconnected again via right-click (wire or target input). Logic blocks from the palette can be dragged directly into the workspace and dropped at the desired position. Web cache version bumped.",
+      "de": "Logik-Editor: Verbindungen lassen sich jetzt wieder per Rechtsklick trennen (auf Leitung oder Zieleingang). Logik-Bausteine können aus der Palette direkt in den Arbeitsbereich gezogen und an der gewünschten Position abgelegt werden. Web-Cache-Version angehoben."
     },
     "0.6.200": {
-      "en": "EMS/Charging: PV-only stop gate ignores temporary import caused by the active EV load itself; PV surplus control now uses a short 5s control window while the 5min average remains diagnostic. Energy-flow / EVCS live inputs are refreshed every 5s and the web cache was bumped.",
-      "de": "EMS/Lademanagement: Das PV-Only-Stop-Gate ignoriert kurzzeitigen Netzbezug durch die aktive EV-Ladung selbst; die PV-Überschuss-Regelung nutzt jetzt ein kurzes 5s-Regelfenster, während der 5-Minuten-Wert diagnostisch erhalten bleibt. Live-Eingänge für Energiefluss / EVCS werden jetzt alle 5s aktualisiert und der Web-Cache wurde angehoben."
+      "en": "EMS/Charging: PV-only stop gate now ignores temporary grid import caused by the active EV load itself; PV surplus control reacts via a short 5s control window while the 5min average remains available for diagnostics. VIS live inputs for energy flow / EVCS are refreshed every 5s and the web cache was bumped.",
+      "de": "EMS/Lademanagement: Das PV-Only-Stop-Gate ignoriert jetzt kurzzeitigen Netzbezug, der durch die aktuell aktive EV-Ladung selbst entsteht; die PV-Überschuss-Regelung reagiert über ein kurzes 5s-Regelfenster, während der 5-Minuten-Wert für die Diagnose erhalten bleibt. Live-Eingänge für Energiefluss / EVCS werden jetzt alle 5s aktualisiert und der Web-Cache wurde angehoben."
     },
     "0.6.199": {
-      "en": "History/year report prefers configured history datapoints again with automatic fallback to internal historie states; yearly totals fall back to power history when counter deltas are too small.",
-      "de": "Historie/Jahresreport bevorzugt wieder konfigurierte History-Datenpunkte mit automatischem Fallback auf interne historie-States; Jahreswerte fallen bei zu kleinen Counter-Deltas auf die Leistungs-Historie zurück."
+      "en": "History/year report now prefers configured history datapoints again with automatic fallback to internal historie states; yearly energy totals fall back to power history when counter deltas are implausibly small.",
+      "de": "Historie/Jahresreport bevorzugt wieder konfigurierte History-Datenpunkte mit automatischem Fallback auf die internen historie-States; Jahresenergien fallen bei unplausibel kleinen Counter-Deltas auf die Leistungs-Historie zurück."
     },
     "0.6.198": {
       "en": "Maintenance: React/JSONConfig admin package updated.",
       "de": "Wartung: React/JSONConfig-Adminpaket aktualisiert."
+    },
+    "0.6.197": {
+      "en": "EMS/Charging: PV-only import tolerance increased (default pvAbortImportW from 200W to 600W) to reduce unnecessary start/stop cycles on short household load spikes / meter noise.",
+      "de": "EMS/Lademanagement: PV-only Import-Toleranz erhöht (Default pvAbortImportW von 200W → 600W) – reduziert unnötige Start/Stop-Zyklen bei kurzzeitigen Hauslast-Spitzen/Messrauschen."
+    },
+    "0.6.194": {
+      "en": "SmartHome Config: fixed missing DOM helper (Scenes/Timers ReferenceError) and added installer-managed Logic Clocks (time windows) that create boolean datapoints (smarthome.logicClocks.<id>.active) for the Logic Editor.",
+      "de": "SmartHome Config: Fix für fehlende DOM-Hilfsfunktion (Scenes/Timer ReferenceError) + neue installer-verwaltete Logik-Uhren (Zeitfenster), die boolean Datenpunkte (smarthome.logicClocks.<id>.active) für den Logik-Editor erzeugen."
+    },
+    "0.6.193": {
+      "en": "SmartHome timers: added jalousie/roller-shutter scheduling (open/close) and improved the installer timer configurator to list devices directly from the SmartHome configuration (works even if SmartHome is still disabled).",
+      "de": "SmartHome-Zeitschaltuhren: Jalousie/Rollladen jetzt auch per AUF/ZU-Timer steuerbar + Installer-Konfigurator listet Geräte direkt aus der SmartHome-Konfiguration (funktioniert auch wenn SmartHome noch deaktiviert ist)."
+    },
+    "0.6.192": {
+      "en": "SmartHome: added configurable timers (per device) incl. end-user editing via tile clock button, plus a new Scenes configurator (adapter-executed scenes with action lists).",
+      "de": "SmartHome: Zeitschaltuhren pro Gerät ergänzt (Endkunde kann über Uhr-Button in der Kachel einstellen) + neuer Szenen-Konfigurator (adapter-ausgeführte Szenen mit Aktionsliste)."
+    },
+    "0.6.191": {
+      "en": "SmartHome VIS: premium glass finish for device tiles (double-stroke depth, subtle noise grain, refined hover elevation) while keeping the improved readability and uniform layout.",
+      "de": "SmartHome-VIS: Premium-Glass-Finish für Gerätekacheln (Double-Stroke/mehr Tiefe, dezentes Noise-Grain, verfeinertes Hover) bei weiterhin verbesserter Lesbarkeit und einheitlichem Layout."
+    },
+    "0.6.190": {
+      "en": "SmartHome VIS: improved device tile readability (adaptive auto-fit grid, more title space via dynamic header padding, titles up to 3 lines; tooltip shows full device name).",
+      "de": "SmartHome-VIS: Lesbarkeit der Gerätekacheln verbessert (adaptives Auto-Fit-Grid, mehr Platz für Titel durch dynamisches Header-Padding, Titel bis 3 Zeilen; Tooltip zeigt vollen Gerätenamen)."
+    },
+    "0.6.186": {
+      "en": "More icon options for floors/areas (basement, attic, outdoor, garage, panel, server, etc.) incl. 3D variants.",
+      "de": "Mehr Icon-Optionen für Geschosse/Bereiche (Keller, Dach, Außenbereich, Garage, Schaltschrank, Server, usw.) inkl. 3D-Varianten."
     },
     "0.6.185": {
       "en": [
@@ -1858,130 +1964,1334 @@
         "SmartHome-Config: Geräte-Bibliothek rendert Icon-Keys jetzt als SVG-Vorschau (3D Icons werden sauber angezeigt)"
       ]
     },
-    "0.6.59": {
-      "en": "Mobile responsive improvements (iPhone): stable 2-column KPI grid + overflow-safe KPI rows. Weather tile: hide when inactive and show a compact tomorrow line (Open-Meteo daily). Energy totals are seeded with 0 on fresh installs and formatted (kWh/MWh/GWh) in UI.",
-      "de": "Mobile Responsive-Verbesserungen (iPhone): stabiles 2-Spalten KPI-Raster + ueberlaufsichere KPI-Zeilen. Wetter-Kachel: nur anzeigen wenn aktiv und mit kompakter Morgen-Zeile (Open-Meteo daily). Energie-Gesamtwerte werden bei Neuinstallationen mit 0 initialisiert und in der UI automatisch formatiert (kWh/MWh/GWh)."
+    "0.6.183": {
+      "en": "Logic editor: added a \"Back to overview\" button. SmartHome Config/VIS: expanded icon library (incl. subtle 3D icons) and added missing icons (camera/thermometer/grid). Sidebar now renders icon keys as SVG instead of showing raw text. Internal prototype references removed.",
+      "de": "Logik-Editor: \"Zurück zur Übersicht\" Button ergänzt. SmartHome Config/VIS: Icon-Bibliothek erweitert (inkl. dezenter 3D-Icons) und fehlende Icons ergänzt (Kamera/Thermometer/Raster). Sidebar rendert Icon-Keys jetzt als SVG statt als Text. Interne Prototyp-Referenzen entfernt."
+    },
+    "0.6.182": {
+      "en": "SmartHome VIS: polish – breadcrumb subtitle (shows the floor for room pages), clearer floor/room cards, and explicit in-tile quick controls (toggle + +/-) for a more app-like experience. Legacy flat room navigation detection was improved for auto-upgrades.",
+      "de": "SmartHome-VIS: Feintuning – Breadcrumb-Subtitle (zeigt bei Räumen das Geschoss), klarere Geschoss/Raum-Karten sowie explizite Quick-Controls direkt in der Kachel (Toggle + +/-) für ein app-ähnlicheres Bediengefühl. Erkennung von Legacy flacher Raum-Navigation für Auto-Migration verbessert."
+    },
+    "0.6.181": {
+      "en": "SmartHome VIS: sidebar navigation now follows a building structure (Home → Floors → Rooms). Floors are expanded by default so rooms are always reachable without scrolling back up. Legacy flat room pages are auto-upgraded.",
+      "de": "SmartHome-VIS: Sidebar-Navigation nach Gebäude-Struktur (Home → Geschosse → Räume). Geschosse sind standardmäßig aufgeklappt, damit Räume ohne Umwege erreichbar sind. Legacy flache Raum-Seiten werden automatisch migriert."
+    },
+    "0.6.180": {
+      "en": "SmartHome VIS: removed the filter chip bar (Rooms/Functions/Favorites/Text size) for a cleaner end-user UI. VIS now always renders the app-like Floors → Rooms → Tiles structure.",
+      "de": "SmartHome-VIS: Filter-Chip-Leiste (Räume/Funktionen/Favoriten/Textgröße) entfernt – cleanere Endkunden-UI. VIS rendert jetzt immer die App-Struktur Geschoss → Räume → Kacheln."
+    },
+    "0.6.179": {
+      "en": "SmartHomeConfig: fixed SAVE wiping the building structure by persisting floors/meta in /api/smarthome/config. SmartHome VIS: rooms view can now be grouped by floors (like the editor).",
+      "de": "SmartHomeConfig: Fix für SAVE → Gebäude-Struktur weg (Geschosse/Meta werden jetzt in /api/smarthome/config persistiert). SmartHome-VIS: Räume können jetzt nach Geschossen gruppiert werden (wie im Editor)."
+    },
+    "0.6.178": {
+      "en": "SmartHome builder: fixed drag & drop reliability and added icon picker for floors/rooms/devices.",
+      "de": "SmartHome-Builder: Drag & Drop zuverlässiger gemacht und Icon-Auswahl für Geschosse/Räume/Geräte ergänzt."
+    },
+    "0.6.174": {
+      "en": "SmartHome VIS: remove filter row labels (cleaner header) and right-align filter chips.",
+      "de": "SmartHome-VIS: Filter-Labels im Header entfernt (cleaner) und Filter-Chips rechts ausgerichtet."
+    },
+    "0.6.173": {
+      "en": "SmartHome: Fix sidebar page navigation not rendering (ID mismatch). Configured pages now show reliably in the SmartHome VIS.",
+      "de": "SmartHome: Fix für nicht gerenderte Sidebar-Seitennavigation (ID-Mismatch). Konfigurierte Seiten werden jetzt zuverlässig in der SmartHome-VIS angezeigt."
+    },
+    "0.6.172": {
+      "en": "SmartHome: Fix missing JS helpers (page title/sidebar close) that prevented the VIS from rendering.",
+      "de": "SmartHome: Fehlende JS-Helper (Seitentitel/Sidebar schließen) behoben, die das Rendering der VIS verhindert haben."
+    },
+    "0.6.171": {
+      "en": "SmartHome: Fix blank SmartHome screen (views container was never unhidden). Also: include VIS pages/meta in /api/smarthome/config so the sidebar shows configured pages.",
+      "de": "SmartHome: Fix für leeren SmartHome-Screen (Views-Container wurde nie eingeblendet). Zusätzlich: VIS-Seiten/Meta werden wieder über /api/smarthome/config geliefert, damit die Sidebar die konfigurierten Seiten anzeigt."
+    },
+    "0.6.170": {
+      "en": "SmartHome: Fix Page Builder persistence – pages are now stored in the SmartHome config so the SmartHome VIS shows pages and tiles reliably.",
+      "de": "SmartHome: Fix für Page-Builder Persistenz – Seiten werden jetzt in der SmartHome-Config gespeichert, damit die SmartHome-VIS Seiten & Kacheln zuverlässig anzeigt."
+    },
+    "0.6.169": {
+      "en": "SmartHome: fix pages editor null-crash; added Page icon selector; new device types Camera + Universal Widget (iframe/link) with SmartHome media cards.",
+      "de": "SmartHome: Fix für Pages-Editor Null-Crash; Seiten-Icon Auswahlmenü; neue Gerätetypen Kamera + Universal-Widget (iframe/link) inkl. Media-Cards."
+    },
+    "0.6.168": {
+      "en": "Fix: STALE_METER fail-safe now trusts explicit ONLINE/CONNECTED DP (authoritative) and no longer blocks due to stale budget timestamps.",
+      "de": "Fix: STALE_METER-Failsafe vertraut jetzt dem expliziten ONLINE/CONNECTED-DP (authoritativ) und blockiert nicht mehr wegen stale Budget-Zeitstempeln."
+    },
+    "0.6.166": {
+      "en": "Fix: chargingManagement rule tick crash (datapoints.getAliveAgeMs used a non-existing cache map).",
+      "de": "Fix: chargingManagement Regel-Tick Crash (datapoints.getAliveAgeMs nutzte eine nicht existierende Cache-Map)."
+    },
+    "0.6.165": {
+      "en": "Fix: Stale-meter watchdog now detects activity even when mapped datapoints are ioBroker aliases (fallback to target ts if prefix-heartbeat is not observed).",
+      "de": "Fix: Stale‑Meter Watchdog erkennt Aktivität jetzt auch bei gemappten ioBroker‑Alias-DPs (Fallback auf Target‑ts, wenn Prefix‑Heartbeat nicht erkannt wird)."
+    },
+    "0.6.164": {
+      "en": "SmartHome: sidebar pages/navigation presets + config editor; Logic editor: backup/restore buttons; SmartHome devices now include roomId/functionId for stable filtering.",
+      "de": "SmartHome: Seiten/Navigation (Sidebar + Mobile Drawer) inkl. Konfig-Editor; Logikeditor: Backup/Restore Buttons; SmartHome Geräte liefern jetzt roomId/functionId für stabile Filter."
+    },
+    "0.6.163": {
+      "en": "New: Runtime datapoint chargingManagement.control.failsafeEnabled lets you enable/disable the STALE_METER fail-safe without reprogramming or restart. If enabled while config is 'off', the policy defaults to 'block' for safety.",
+      "de": "Neu: Laufzeit-Datenpunkt chargingManagement.control.failsafeEnabled aktiviert/deaktiviert den STALE_METER-Failsafe ohne Umprogrammieren oder Neustart. Wenn aktiviert und die Konfiguration noch 'off' ist, wird zur Sicherheit automatisch 'block' verwendet."
+    },
+    "0.6.162": {
+      "en": "Fix: Prefer nexowatt-devices alias online/heartbeat for meter watchdog. Stale-meter detection no longer requires both Connected+Watchdog to be configured (prevents false STALE_METER when only one DP is set).",
+      "de": "Fix: Bevorzugt nexowatt-devices Alias online/heartbeat für den Zähler-Watchdog. Stale-Meter-Erkennung erfordert nicht mehr zwingend Connected+Watchdog (verhindert falsches STALE_METER wenn nur ein DP gesetzt ist)."
+    },
+    "0.6.161": {
+      "en": "Fix: Storage PV-Reserve no longer blocks grid-charging at very low SoC. Added a safe default PV-reserve min SoC (>=20%) and a less aggressive capacity fallback estimate, preventing 'Speicher lädt nicht' in cheap/NT windows.",
+      "de": "Fix: Speicher PV-Reserve blockiert Netzladung nicht mehr bei sehr niedrigem SoC. Sicherer Default für PV-Reserve-Min-SoC (>=20%) + weniger aggressive Kapazitäts-Fallback-Schätzung. Dadurch verschwindet 'Speicher lädt nicht' in günstig/NT-Fenstern."
+    },
+    "0.6.160": {
+      "en": "Hotfix: STALE_METER no longer blocks charging by default. The EMS keeps running even if a meter watchdog falsely reports stale data. You can re-enable strict blocking later via chargingManagement.staleFailsafeMode='block'.",
+      "de": "Hotfix: STALE_METER blockiert Laden standardmäßig nicht mehr. Das EMS läuft weiter, selbst wenn der Watchdog fälschlich 'veraltet' meldet. Striktes Blockieren kann später wieder per chargingManagement.staleFailsafeMode='block' aktiviert werden."
+    },
+    "0.6.159": {
+      "en": "Fix: STALE_METER now uses the meter device-prefix heartbeat (ANY state update under the same meter) for the grid watchdog. This removes recurring false 'failsafe_stale_meter' when the chosen watchdog value itself is stable (e.g. frequency rounded). Charging will no longer be interrupted as long as the meter keeps sending data.",
+      "de": "Fix: STALE_METER nutzt jetzt den Device-Prefix-Heartbeat (JEDE Zustandsänderung unter demselben Zähler) für den Netzpunkt-Watchdog. Damit verschwinden die wiederkehrenden falschen 'failsafe_stale_meter', wenn der gewählte Watchdog-Wert selbst stabil ist (z. B. gerundete Frequenz). Laden wird nicht mehr unterbrochen, solange der Zähler weiterhin Daten liefert."
+    },
+    "0.6.158": {
+      "en": "Fix: Engine start crash removed (ReferenceError gridPointConnectedId). Added optional GridPoint Connected/Watchdog mappings without breaking the scheduler. Also fixed broken HTML nesting in Mapping → General so the new fields are clean and readable.",
+      "de": "Fix: Engine-Start-Crash behoben (ReferenceError gridPointConnectedId). Optionale Netzpunkt-Connected/Watchdog-Mappings funktionieren jetzt ohne Scheduler-Abbruch. Zusätzlich: kaputte HTML-Verschachtelung in Zuordnung → Allgemein repariert, dadurch sind die neuen Felder sauber und übersichtlich."
+    },
+    "0.6.156": {
+      "en": "Fix: Eliminated recurring false 'failsafe_stale_meter' when grid power datapoints do not update state.ts while values are stable. Staleness now also respects device/adpater connection indicators (comm.connected / info.connection) for useAliveForStale inputs. Also: Charging-Management staleTimeoutSec override now honors explicit 15s values.",
+      "de": "Fix: Wiederkehrender falscher 'failsafe_stale_meter' bei stabilen Netz-Messwerten beseitigt (wenn state.ts nicht fortgeschrieben wird). Freshness berücksichtigt jetzt zusätzlich Verbindungs-Indikatoren (comm.connected / info.connection) für useAliveForStale Eingänge. Außerdem: staleTimeoutSec Override im Lademanagement akzeptiert jetzt explizit auch 15s."
+    },
+    "0.6.155": {
+      "en": "Net fee (HT/NT) is now independent from Dynamic Tariff. HT/NT works even if dynamicTariff = OFF. Status line shows NetFee + Tariff state (e.g. Netzentgelt NT | Tarif aus). Grid-charge permission, discharge permission and load-park limit now consistently consider net fee.",
+      "de": "Netzentgelt (HT/NT) ist jetzt unabhängig vom Dynamischen Tarif. HT/NT wirkt auch wenn dynamicTariff = AUS. Statuszeile zeigt Netzentgelt + Tarif (z.B. Netzentgelt NT | Tarif aus). Netzlade-Freigabe, Entlade-Freigabe und Ladepark-Limit berücksichtigen Netzentgelt jetzt konsistent."
+    },
+    "0.6.154": {
+      "en": "Fix: Stale-meter detection now uses the device-prefix heartbeat for ALL grid metering keys used by Charging Management / Peak Shaving (cm.gridPowerW, grid.powerW, ems.gridPowerW, ps.gridPowerW, gc.gridPowerW). This prevents intermittent 'failsafe_stale_meter' when meters/adapters only update on value change (e.g., NexoWatt-device alias datapoints).",
+      "de": "Fix: Stale‑Meter Erkennung nutzt jetzt die Device‑Prefix‑Heartbeat‑Freshness für ALLE Netz‑Messwerte, die im Lademanagement / Peak‑Shaving verwendet werden (cm.gridPowerW, grid.powerW, ems.gridPowerW, ps.gridPowerW, gc.gridPowerW). Dadurch tritt der sporadische 'failsafe_stale_meter' nicht mehr auf, wenn Zähler/Adapter nur bei Werteänderung aktualisieren (z. B. NexoWatt-device Alias‑Datenpunkte)."
+    },
+    "0.6.153": {
+      "en": "Fix: Eliminated recurring false 'failsafe stale meter' with NexoWatt-device alias datapoints. Grid metering inputs now use a device-prefix heartbeat for freshness (stable values no longer go stale). Also fixed alias priming so the source cache is initialized immediately. Charging-Management stale default aligned to 300s.",
+      "de": "Fix: Wiederkehrender falscher 'Failsafe Stale Meter' bei NexoWatt-device Alias-Datenpunkten beseitigt. Netz-Messwerte nutzen jetzt eine Device-Prefix-Heartbeat-Freshness (stabile Werte werden nicht mehr fälschlich stale). Zusätzlich: Alias-Priming korrigiert (Source-Cache wird sofort initialisiert). Default Stale-Timeout im Lademanagement auf 300s vereinheitlicht."
+    },
+    "0.6.152": {
+      "en": "Goal-Charging: Reduced the SoC refresh wait time before falling back to no-SoC planning. New config: chargingManagement.goalSocWaitFallbackSec (default 30s). This makes Zielladen responsive on wallboxes without a real SoC (often reporting a static 0%).",
+      "de": "Zeit‑Ziel Laden: Wartezeit auf eine SoC‑Aktualisierung vor dem No‑SoC‑Fallback deutlich reduziert. Neu: Konfiguration chargingManagement.goalSocWaitFallbackSec (Default 30s). Dadurch reagiert Zielladen schnell auch bei Wallboxen ohne echten SoC (oft statisch 0%)."
+    },
+    "0.6.148": {
+      "en": "Fix: Eliminated false 'failsafe stale meter' with NVP/slow grid meters. The default CM stale timeout is now 300s and legacy persisted '15s' values are treated as the old default. The internal ems.gridPowerW derivation now uses the same stale threshold as Charging Management, preventing the 0A/0W deadlock.",
+      "de": "Fix: Keine falschen 'Failsafe Stale Meter' mehr bei NVP/langsam aktualisierenden Netz-Zählern. Standard-Stale-Timeout im Lademanagement ist jetzt 300s; ein alter persistierter Wert '15s' wird als Legacy-Default interpretiert. Die interne ems.gridPowerW-Ableitung nutzt jetzt denselben Stale-Timeout wie das Lademanagement, wodurch der 0A/0W-Deadlock verhindert wird."
+    },
+    "0.6.146": {
+      "en": "Charging Management / Zielladen: Improved vehicle plug detection. OCPP states like Preparing/SuspendedEVSE now count as 'vehicle connected' even if evcs.active only reports 'charging'. Fix: PV-Reserve can no longer indirectly shrink the EVCS tariff budget to 0W when storage grid charging is blocked by PV-Reserve (EVCS charging in NT works reliably again).",
+      "de": "Lademanagement / Zielladen: Robustere Fahrzeug-Erkennung. OCPP-Zustände wie Preparing/SuspendedEVSE zählen jetzt als 'Fahrzeug verbunden', auch wenn evcs.active nur 'charging' meldet. Fix: PV-Reserve kann das EVCS-Tarif-Budget nicht mehr indirekt auf 0W reduzieren, wenn Speicher-Netzladung durch PV-Reserve gesperrt ist (EVCS lädt im NT-Fenster wieder zuverlässig)."
+    },
+    "0.6.145": {
+      "en": "Net fee (HT/NT): Fixed an issue where NT windows could fail to enable grid charging for EVCS/Storage. NT now counts as a 'cheap' enable window for storage charging (respecting SoC hysteresis). Charging Management additionally applies the HT/NT override directly to grid-charge permission for robustness.",
+      "de": "Netzentgelt (HT/NT): Fix für einen Fehler, bei dem im NT-Fenster teilweise keine Netzladung für EVCS/Speicher freigegeben wurde. NT zählt jetzt als \"günstiges\" Freigabe-Fenster für Speicher-Netzladung (unter Beachtung der SoC-Hysterese). Zusätzlich wendet das Lademanagement die HT/NT-Übersteuerung direkt auf die Netzlade-Freigabe an (robuster)."
+    },
+    "0.6.144": {
+      "en": "Goal-Charging: SoC is now optional. If the vehicle SoC datapoint is missing or not updated after plug-in, Zielladen falls back to a worst-case deadline plan based on battery capacity and max power. Added goalSocAvailable indicator and updated UI hints. Waiting_soc/soc_stale now pauses charging (0W) until SoC refresh or fallback.",
+      "de": "Zeit‑Ziel Laden: SoC ist jetzt optional. Wenn der Fahrzeug‑SoC Datenpunkt fehlt oder nach dem Einstecken nicht aktualisiert wird, nutzt Zielladen automatisch einen Worst‑Case Deadline‑Plan (auf Basis Akkukapazität + Max‑Leistung). Neu: goalSocAvailable Indikator + angepasste UI‑Hinweise. waiting_soc/soc_stale pausiert jetzt die Ladung (0W) bis SoC aktualisiert ist oder Fallback greift."
+    },
+    "0.6.143": {
+      "en": "Goal-Charging: Fixed stale setpoints when the vehicle is unplugged. Zielladen is now only computed when a vehicle is connected (evcs.active=plugged) and waits for a fresh SoC update after plug-in. If no vehicle is connected, the EMS forces a 0W setpoint (prevents immediate 11kW on plug-in due to cached setpoints). Added reason code NO_VEHICLE + UI hint.",
+      "de": "Zeit‑Ziel Laden: Fix für 'stale' Sollwerte, wenn das Fahrzeug nicht steckt. Zielladen wird jetzt nur berechnet, wenn ein Fahrzeug verbunden ist (evcs.active=plugged) und wartet nach dem Einstecken auf eine frische SoC‑Aktualisierung. Wenn kein Fahrzeug verbunden ist, setzt das EMS den Sollwert konsequent auf 0W (verhindert sofortiges 11kW‑Laden durch gecachte Sollwerte). Neu: Reason‑Code NO_VEHICLE + UI‑Hinweis."
+    },
+    "0.6.141": {
+      "en": "Charging Management: Goal-Charging now treats the dynamic tariff as an optimization bonus. If the tariff blocks grid charging, the controller uses the tariff price forecast (fallback: latest-start) and only overrides the block when needed to still reach the configured finish time. Added goalTariffOverrideReason diagnostics. Default override policy is now 'forecast' (set chargingManagement.goalTariffOverrideMode='always' or goalTariffOverrideAlways=true to restore legacy behavior).",
+      "de": "Lademanagement: Zeit‑Ziel Laden behandelt den dynamischen Tarif jetzt als Optimierungs‑Bonus. Wenn der Tarif Netzladung sperrt, wird anhand der Preis‑Prognose (Fallback: Latest‑Start) nur dann übersteuert, wenn sonst die Deadline verfehlt würde. Neu: Diagnose goalTariffOverrideReason. Standard‑Policy ist jetzt 'forecast' (für Legacy: chargingManagement.goalTariffOverrideMode='always' oder goalTariffOverrideAlways=true)."
+    },
+    "0.6.140": {
+      "en": "Charging Management: Goal-Charging now prioritizes reaching the finish time and can override tariff grid-charge blocking per chargepoint. Diagnostics: Tariff mode (Manual/Auto) is shown in the total budget card.",
+      "de": "Lademanagement: Zeit‑Ziel Laden priorisiert jetzt das Erreichen der Deadline und kann Tarif‑Netzladesperren pro Ladepunkt übersteuern. Diagnose: Tarif‑Modus (Manuell/Automatik) wird im Gesamtbudget angezeigt."
+    },
+    "0.6.139": {
+      "en": "Charging Management: Fixed false 'failsafe stale meter' when multiple grid power sources are mapped. Added failsafe diagnostics states and a clear 'Tariff manual' indicator in the status line.",
+      "de": "Lademanagement: 'Failsafe Stale Meter' wird nicht mehr fälschlich ausgelöst, wenn mehrere Grid‑Power Quellen gemappt sind. Zusätzlich: Failsafe‑Diagnose‑States + Hinweis 'Tarif Manuell' in der Info‑Zeile."
+    },
+    "0.6.138": {
+      "en": "History: The annual report now shows all sections on one page (overview). Tabs are optional filters.",
+      "de": "Historie: Der Jahresreport zeigt jetzt alle Bereiche auf einer Seite (Übersicht). Die Reiter sind optional als Filter nutzbar."
+    },
+    "0.6.137": {
+      "en": "History: Added a new annual report page (multi-year table) with tabs (summary / producers / consumers / batteries / quotes).",
+      "de": "Historie: Neuer Jahresreport (Mehrjahres-Tabelle) mit Reitern (Aufsummiert / Erzeuger / Verbraucher / Batterien / Quoten)."
+    },
+    "0.6.136": {
+      "en": "Goal-Charging: Time picker now supports a 15-minute grid and the configured finish time automatically repeats daily.",
+      "de": "Zeit‑Ziel Laden: Uhrzeit lässt sich jetzt im 15‑Minuten Raster einstellen und wird nach Erreichen automatisch täglich fortgeschrieben."
+    },
+    "0.6.135": {
+      "en": "EVCS report: Live status dot is green again + added a Back button to return to the previous view.",
+      "de": "EVCS Bericht: Status-Dot ist wieder grün + Zurück-Button zum Zurückspringen in die vorherige Ansicht."
+    },
+    "0.6.134": {
+      "en": "EVCS report: Fixed report table rendering (header/footer wiring) and restored CSV export buttons.",
+      "de": "EVCS Bericht: Tabellendaten werden wieder korrekt geladen (Header/Footer‑Wiring) + CSV‑Export Buttons funktionieren wieder."
+    },
+    "0.6.133": {
+      "en": "EVCS report: Uses the standard NexoWatt header/navigation and opens in the same tab from History (no separate browser tab).",
+      "de": "EVCS Bericht: Nutzt jetzt den Standard‑Header mit Navigation und wird aus der Historie im gleichen Tab geöffnet (kein separater Browser‑Tab mehr)."
+    },
+    "0.6.132": {
+      "en": "Installer/Admin: Removed the URL list under the buttons (cleaner for end customers).",
+      "de": "Installer/Admin: URL-Liste unter den Buttons entfernt (übersichtlicher für Endkunden)."
+    },
+    "0.6.131": {
+      "en": "SmartHome: Fixed the circular color picker on high-DPI/iOS, improved tile interactions (tap opens panel for blinds/thermostat, long-press opens panel on detail tiles). Thermostat panel layout refined.",
+      "de": "SmartHome: Farbkreis auf High-DPI/iOS korrigiert, Kachel-Bedienung verbessert (Tippen öffnet Panel bei Jalousie/RTR, Long-Press öffnet Panel bei Detail-Kacheln). RTR-Panel Layout verfeinert."
+    },
+    "0.6.130": {
+      "en": "History: Month/Year view now keeps future days/months empty (0) and no longer inflates the kWh totals.",
+      "de": "Historie: Monats-/Jahresansicht lässt zukünftige Tage/Monate jetzt leer (0) und verfälscht die kWh-Summen nicht mehr."
+    },
+    "0.6.124": {
+      "en": "Admin/Licensing: License handling package cleanup. License key is stored in the adapter instance (native.licenseKey) and therefore remains update-safe.",
+      "de": "Admin/Lizenz: Bereinigung des Lizenz-Pakets. Der Lizenzschlüssel wird in der Adapter-Instanz (native.licenseKey) gespeichert und bleibt damit update-sicher."
+    },
+    "0.6.123": {
+      "en": "Admin/Licensing: Made the license page work reliably in modern ioBroker Admin versions (no servConn) by using a socket.io fallback. System UUID is now shown again.",
+      "de": "Admin/Lizenz: Lizenzseite funktioniert jetzt zuverlässig auch in neueren ioBroker-Admin-Versionen ohne servConn (socket.io Fallback). System-UUID wird wieder korrekt angezeigt."
+    },
+    "0.6.122": {
+      "en": "Admin/Licensing: Fixed license page navigation so it stays inside the ioBroker Admin iframe (servConn available) and reliably shows the system UUID.",
+      "de": "Admin/Lizenz: Lizenzseite wird jetzt korrekt innerhalb der ioBroker-Admin-iFrame geöffnet (servConn verfügbar) – System-UUID wird zuverlässig angezeigt."
+    },
+    "0.6.121": {
+      "en": "Admin/Licensing: Internal maintenance update for UUID-bound license handling.",
+      "de": "Admin/Lizenz: Interne Wartung für UUID-gebundene Lizenzbehandlung."
+    },
+    "0.6.120": {
+      "en": "SmartHome: Upgraded the RGB color-light popover to a mobile-friendly circular color wheel (HSV) with brightness slider and live preview. Admin: Added a dedicated license page (UUID readout + license key input) and a license gate that can lock the VIS/API until activated.",
+      "de": "SmartHome: RGB‑Farblicht‑Popover auf einen mobilfreundlichen Farbkreis (HSV) mit Helligkeits‑Slider und Live‑Vorschau umgestellt. Admin: Neue Lizenz‑Seite (UUID anzeigen + Lizenzschlüssel eingeben) + Lizenz‑Gate (VIS/API können bis zur Freischaltung gesperrt werden)."
+    },
+    "0.6.119": {
+      "en": "SmartHome: Added a new RGB color-light tile type with a color picker popover (HEX/RGB/INT formats). Optional on/off switching via mapped switch DP.",
+      "de": "SmartHome: Neuer RGB-Farblicht-Typ als Kachel mit Colorpicker-Popover (HEX/RGB/INT Formate). Optional Ein/Aus per Schalt-DP."
+    },
+    "0.6.118": {
+      "en": "SmartHome: Audio player – multiroom zone selection (party mode) + playlists/favorites UX (filter, ordering, recently played).",
+      "de": "SmartHome: Audio-Player – Multiroom-Zonenauswahl (Party-Modus) + Playlists/Favoriten-UX (Filter, Reihenfolge, zuletzt gespielt)."
+    },
+    "0.6.117": {
+      "en": "SmartHome: Added an Audio Player tile (transport controls: play/pause, stop, next/prev), volume slider and optional radio station presets. Spotify control is possible via mapped data points (e.g. ioBroker adapters).",
+      "de": "SmartHome: Neuer Audio-Player als Kachel (Play/Pause, Stop, Vor/Zurück), Lautstärke-Slider und optionale Radiosender-Presets. Spotify kann über gemappte Datenpunkte gesteuert werden (z.B. ioBroker-Adapter)."
+    },
+    "0.6.116": {
+      "en": "SmartHome: Fixed an issue where the SmartHome VIS could appear empty because the function icon helper was missing. Function filter chips and function headers now render reliably.",
+      "de": "SmartHome: Fix für eine Anzeige‑Störung – die SmartHome‑VIS konnte leer wirken, weil der Icon‑Helper für Funktions‑Icons fehlte. Funktions‑Filterchips und Funktions‑Header werden jetzt zuverlässig gerendert."
+    },
+    "0.6.115": {
+      "en": "SmartHome: Added a view toggle (Rooms/Functions). In Functions view, devices are grouped by function with a small per-function summary; tiles show the room label for better orientation. Function filter chips now include icons.",
+      "de": "SmartHome: Neue Ansicht-Umschaltung (Räume/Funktionen). In der Funktionen-Ansicht werden Geräte nach Funktion gruppiert inkl. kleiner Zusammenfassung; Kacheln zeigen zusätzlich den Raum für bessere Orientierung. Funktions-Filterchips haben jetzt Icons."
+    },
+    "0.6.114": {
+      "en": "Tariff/storage: Battery grid charging is now allowed only when the tariff is cheap. The NT grid-fee window can override the daytime block, but still requires a cheap tariff. Status text simplified (no time ranges; shows 'self-consumption optimization active' during daytime).",
+      "de": "Tarif/Speicher: Speicher-Netzladen ist jetzt nur bei günstigem Tarif erlaubt. NT (Netzentgelt) kann die Tages-Sperre übersteuern, aber weiterhin nur bei günstigem Tarif. Status-Text vereinfacht (keine Uhrzeiten; tagsüber 'Eigenverbrauchsoptimierung aktiv')."
+    },
+    "0.6.113": {
+      "en": "Tariff/storage: Quarter-based time windows to prevent daytime battery grid charging (Q1/Q4 18:00–06:00, Q2/Q3 21:00–06:00) with an exception for NT grid-fee windows.",
+      "de": "Tarif/Speicher: Quartalsabhängige Zeitfenster gegen Speicher-Netzladen am Tag (Q1/Q4 18:00–06:00, Q2/Q3 21:00–06:00) inkl. Ausnahme bei Netzentgelt NT."
+    },
+    "0.6.112": {
+      "en": "SmartHome: End users can now toggle Favorites directly on each tile via a star (★/☆). Favorites are stored locally per browser and override optional installer defaults.",
+      "de": "SmartHome: Endkunden können Favoriten jetzt direkt in den Kacheln per Stern (★/☆) umschalten. Favoriten werden lokal pro Browser gespeichert und überschreiben optionale Installer-Defaults."
+    },
+    "0.6.111": {
+      "en": "SmartHome: Favorites UX – favorites chip is always visible (disabled if none) + new 'favorites first' chip that pins favorites to the top within each room (stored locally).",
+      "de": "SmartHome: Favoriten-UX – Favoriten-Chip immer sichtbar (deaktiviert falls keine gesetzt) + neuer Chip „★ zuerst“ (Favoriten in Räumen nach oben sortieren, lokal gespeichert)."
+    },
+    "0.6.110": {
+      "en": "SmartHome: Popover got quick presets (dimmer 0/25/50/75/100, blinds 0/50/100), step tuning (1/5/10) with +/- and a small write feedback badge (sending/ok/error).",
+      "de": "SmartHome: Popover mit Quick-Presets (Dimmer 0/25/50/75/100, Jalousie 0/50/100), Schritt-Tuning (1/5/10) mit +/- und Schreib-Feedback (Senden/OK/Fehler)."
+    },
+    "0.6.109": {
+      "en": "SmartHome: Optional live-preview for dimmer/blinds sliders in the popover (throttled while dragging, final commit on release).",
+      "de": "SmartHome: Optionale Live-Vorschau für Dimmer-/Jalousie-Slider im Popover (gedrosselt beim Ziehen, final beim Loslassen)."
+    },
+    "0.6.108": {
+      "en": "SmartHome: Popover sliders (dimmer/blinds) are now more touch-friendly (bigger thumb/track) with a progress-style fill and live value while dragging.",
+      "de": "SmartHome: Popover-Slider (Dimmer/Jalousie) sind jetzt touch-freundlicher (größerer Thumb/Track) mit Progress-Fill und Live-Wert beim Ziehen."
+    },
+    "0.6.107": {
+      "en": "SmartHome: Thermostat popover gauge – moved +/- buttons below the dial for a clearer UX. SmartHome tiles with DP read/write errors are now highlighted more clearly.",
+      "de": "SmartHome: Thermostat-Popup-Gauge – +/- Buttons nach unten verlegt (übersichtlicher). SmartHome-Kacheln mit DP-Lese/Schreib-Fehlern werden jetzt deutlicher hervorgehoben."
+    },
+    "0.6.106": {
+      "en": "SmartHome: Thermostat popover gauge fixed (mirrored to match the reference look) + gradient rendering corrected. SmartHome popovers now lock background scrolling while open (no page sliding behind).",
+      "de": "SmartHome: Thermostat-Popup-Gauge korrigiert (spiegelverkehr wie Referenz) + Gradient-Darstellung gefixt. SmartHome-Popover sperren jetzt das Hintergrund-Scrollen (keins mehr \"hinter\" dem Tooltip)."
+    },
+    "0.6.104": {
+      "en": "NexoLogic: Palette categories are now collapsible folders for better overview, plus a quick button to jump back to the SmartHome config. Added control blocks for room temperature (2-point and P controller) and a PWM (time-proportional) output.",
+      "de": "NexoLogic: Kategorien in der Baustein-Palette sind jetzt einklappbare Ordner (übersichtlicher) + Schnell-Button zur SmartHome-Konfiguration. Neue Regelungs-Bausteine: Raumtemperaturregler (2-Punkt), Raumtemperaturregler (P) und PWM (Zeitproportional)."
+    },
+    "0.6.103": {
+      "en": "NexoLogic: Added weekly time programs (schedule + optional holiday input), counters (pulse, up/down, runtime hours), scaling/mapping, a SmartHome scene trigger block, and separate edge blocks (rising/falling/both). Runtime engine synced to editor block types/params.",
+      "de": "NexoLogic: Zeitprogramme (Wochen-Schedule + optionaler Feiertag-Eingang), Zähler (Impuls, Up/Down, Betriebsstunden), Skalierung/Mapping, SmartHome-Szene auslösen und separate Flanken-Bausteine (steigend/fallend/beide). Runtime-Engine an Editor-Blocktypen/Parameter angeglichen."
+    },
+    "0.6.102": {
+      "en": "NexoLogic: Multi-page logic projects (pages), per-page enable/disable, zoom controls, and fixed save error in the editor.",
+      "de": "NexoLogic: Mehrseitige Logik-Projekte (Seiten), Aktivieren/Deaktivieren pro Seite, Zoom-Steuerung und Speichern-Fehler im Editor behoben."
+    },
+    "0.6.101": {
+      "en": "NexoLogic: Introduced a first node/graph logic editor (modules, wiring, DP picker, save/import/export) and a lightweight runtime engine that evaluates basic logic/math/timer blocks event-driven.",
+      "de": "NexoLogic: Erster Node/Graph-Logikeditor (Module, Verbindungen, DP-Picker, Speichern/Import/Export) plus schlanke Runtime, die Grundbausteine (Logik/Mathe/Zeit) event-driven ausführt."
+    },
+    "0.6.100": {
+      "en": "SmartHome: Thermostat popover now uses a premium gauge (Apple-like) with +/- buttons and tick marks; dimmer/blinds tile sliders are larger for touch. Logic: Added search + room filter chips and rendered logic blocks as proper NexoWatt tiles for a more premium look.",
+      "de": "SmartHome: Thermostat-Popup jetzt als wertiger Gauge (Apple-Look) mit +/- und Skala; Dimmer-/Jalousie-Slider in den Kacheln größer (touch-freundlich). Logik: Suche + Raum-Filter ergänzt und Logikblöcke als echte NexoWatt-Kacheln gerendert (wertiger Look)."
+    },
+    "0.6.98": {
+      "en": "SmartHomeConfig: fixed the icon selector layout so it no longer overlaps in multi-column cards; cleaned up mixed UI wording and adjusted DP test button labels.",
+      "de": "SmartHomeConfig: Icon-Auswahl überlappt nicht mehr in mehrspaltigen Karten; gemischte UI-Begriffe bereinigt (Deutsch) und DP-Test-Buttons angepasst."
+    },
+    "0.6.97": {
+      "en": "SmartHome VIS: room headers now show a small summary (e.g. temperature/humidity) and the page uses the standard VIS background. SmartHomeConfig: device tile ordering can be changed via Drag&Drop or by position index; ordering is respected in SmartHome VIS.",
+      "de": "SmartHome VIS: Raum-Header zeigen jetzt eine kleine Summary (z. B. Temperatur/Luftfeuchte) und die Seite nutzt den Standard-VIS-Hintergrund. SmartHomeConfig: Kachel-Reihenfolge per Drag&Drop oder Positions-Index; die Sortierung wird in der SmartHome-VIS übernommen."
+    },
+    "0.6.96": {
+      "en": "SmartHome VIS: new room-section layout and Apple-Home-like tiles (glass cards) with dynamic on/off icons. SmartHomeConfig: added tile size selector and an icon picker/preview to make setup faster.",
+      "de": "SmartHome VIS: neues Raum-Layout (Sektionen) und Apple‑Home‑ähnliche Kacheln (Glass‑Cards) mit dynamischen An/Aus‑Icons. SmartHomeConfig: Kachelgrößen-Auswahl sowie Icon‑Picker/Vorschau für schnellere Einrichtung."
+    },
+    "0.6.95": {
+      "en": "SmartHome: VIS now uses the standard NexoWatt header tabs (LIVE/HISTORY/EVCS/SMARTHOME) and shows a clear empty-state hint when SmartHome is disabled or no tiles are configured. SmartHomeConfig: Added a warning when SmartHome is disabled. Backend: SmartHomeConfig is now installer-managed/persistent across restarts; SmartHome enabled flag follows the admin instance setting.",
+      "de": "SmartHome: VIS nutzt jetzt die Standard-NexoWatt-Header-Tabs (LIVE/HISTORY/EVCS/SMARTHOME) und zeigt einen klaren Hinweis, wenn SmartHome deaktiviert ist oder keine Kacheln konfiguriert sind. SmartHomeConfig: Hinweis ergänzt, wenn SmartHome deaktiviert ist. Backend: SmartHomeConfig ist nun installer-managed und bleibt über Neustarts erhalten; SmartHome-Aktivierung folgt dem Admin-Instanzschalter."
+    },
+    "0.6.94": {
+      "en": "SmartHomeConfig: Added JSON import/export (rollout/support), device templates for faster setup, and an installer DP test (read/write) button next to each datapoint field. SmartHome: Added lightweight live auto-refresh with change detection.",
+      "de": "SmartHomeConfig: JSON-Import/Export (Rollout/Support), Geräte-Templates für schnellere Einrichtung und DP-Test (Lesen/Schreiben) direkt an den Datenpunkt-Feldern ergänzt. SmartHome: Leichtes Live-Auto-Refresh mit Change-Detection ergänzt."
+    },
+    "0.6.93": {
+      "en": "SmartHomeConfig: Added a validator panel with an error/warning list and highlights to make the setup more stable.",
+      "de": "SmartHomeConfig: Validator-Panel mit Fehler-/Warnliste und Hervorhebung hinzugefügt, damit die Einrichtung stabiler wird."
+    },
+    "0.6.92": {
+      "en": "Admin: Added SmartHome tab (enable toggle + open links) and extended the Installer 'Tab' page with SmartHome VIS/Config shortcuts.",
+      "de": "Admin: Neuer SmartHome-Reiter (Aktivieren-Schalter + Öffnen-Links) und Installer-\"Tab\" um SmartHome VIS/Config-Shortcuts erweitert."
+    },
+    "0.6.91": {
+      "en": "Tariff: PV season profile AI is now always active (customer-friendly default). Manual quarter base factors remain optional as fine-tuning.",
+      "de": "Tarif: PV-Saisonprofil KI ist jetzt immer aktiv (kundenfreundlicher Standard). Manuelle Quartals-Basisfaktoren bleiben optional als Feintuning."
+    },
+    "0.6.90": {
+      "en": "Tariff: Added optional AI automation for the PV season profile. When enabled, the quarter factor is adjusted automatically based on PV forecast strength so customers don't need to tune it (manual quarter values remain available for installers).",
+      "de": "Tarif: Optionale KI-Automatik für das PV-Saisonprofil ergänzt. Wenn aktiv, wird der Quartalsfaktor automatisch aus der PV-Forecast-Stärke abgeleitet – Kunden müssen nichts mehr feinjustieren (manuelle Quartalswerte bleiben für Installateure verfügbar)."
+    },
+    "0.6.89": {
+      "en": "Tariff: Added an optional PV season profile (quarter-based) that adjusts PV-reserve aggressiveness. In strong PV quarters the battery keeps more headroom for cheap PV; in weak quarters it allows more grid charging (while EV goal charging keeps priority).",
+      "de": "Tarif: Optionales PV-Saisonprofil (quartalsbasiert) ergänzt, das die PV-Reserve aggressiver/konservativer macht. In starken PV-Quartalen bleibt mehr Headroom für günstige PV; in schwachen Quartalen ist mehr Netzladen möglich (E-Mobilität/Ziel-Laden behält Vorrang)."
+    },
+    "0.6.86": {
+      "en": "Tariff/Net fee: Standard (ST) times no longer override the dynamic tariff logic. Only NT/HT act as overlays (NT allows grid charging; HT blocks it). Quarters without NT/HT can be configured by disabling the NT/HT windows (Von=Bis / 00:00–00:00).",
+      "de": "Tarif/Netzentgelt: Standard (ST) hebelt die dynamische Tarif-Logik nicht mehr aus. Nur NT/HT wirken als Overlay (NT gibt Netzladen frei; HT sperrt). Quartale ohne NT/HT können durch Deaktivieren der NT/HT-Fenster (Von=Bis / 00:00–00:00) als 24/7 Standard betrieben werden."
+    },
+    "0.6.85": {
+      "en": "Tariff: Time-variable grid fee (HT/NT) now supports a quarter-based schedule (Q1..Q4). You can configure NT/HT windows per quarter; remaining time is treated as Standard.",
+      "de": "Tarif: Zeitvariables Netzentgelt (HT/NT) unterstützt jetzt ein quartalsbasiertes Zeitraster (Q1..Q4). NT/HT-Zeiten können pro Quartal gesetzt werden; die restliche Zeit gilt als Standard."
+    },
+    "0.6.84": {
+      "en": "UI: Tariff/Optimisation view now shows when storage grid charging is intentionally blocked by PV reserve (forecast headroom), making the behaviour transparent (not a bug).",
+      "de": "UI: In der Tarif-/Optimierungsansicht wird jetzt sichtbar, wenn Speicher-Netzladen bewusst durch die PV-Reserve (Forecast-Headroom) geblockt wird – das Verhalten ist damit transparent (kein Bug)."
+    },
+    "0.6.83": {
+      "en": "Tariff (PV Reserve): Night-time grid charging now considers PV forecast even if storage capacity is not mapped (conservative capacity estimation fallback). Prevents charging the battery to 100% from the grid when significant PV is expected the same day.",
+      "de": "Tarif (PV‑Reserve): Netzladen in der Nacht berücksichtigt jetzt den PV‑Forecast auch dann, wenn die Speicherkapazität nicht gemappt ist (konservative Kapazitäts‑Schätzung als Fallback). Verhindert, dass der Speicher bei erwarteter PV‑Erzeugung „blind“ auf 100% aus dem Netz lädt."
+    },
+    "0.6.82": {
+      "en": "UI: Hid Peak-Shaving (Lastspitzenkappung) entry in customer settings to reduce clutter; feature remains installer-protected elsewhere.",
+      "de": "UI: Eintrag 'Lastspitzenkappung' in den Endkunden-Einstellungen ausgeblendet (weniger Verwirrung/Clutter); Funktion bleibt installateurgeschützt an anderer Stelle."
+    },
+    "0.6.81": {
+      "en": "Tariff: Added optional time-variable grid fee (HT/NT) configuration in dynamic tariff settings. In NT window EVCS grid charging is allowed and the battery may charge; outside NT the battery returns to normal self-consumption optimisation and EVCS grid charging is blocked (goal charging can still override per EVCS).",
+      "de": "Tarif: Optionales zeitvariables Netzentgelt (HT/NT) in den Dynamik-Tarif-Einstellungen. Im NT-Fenster ist EVCS-Netzladen erlaubt und der Speicher darf laden; außerhalb NT läuft der Speicher wieder in der Eigenverbrauchsoptimierung und EVCS-Netzladen ist gesperrt (Ziel-Laden kann weiterhin pro Ladepunkt übersteuern)."
+    },
+    "0.6.79": {
+      "en": "Performance: DatapointRegistry upsert is now idempotent and caches unit detection/subscriptions to prevent very slow chargingManagement ticks with many EVCS. UI: EVCS tiles open the control modal reliably with a single click even under heavy SSE re-renders.",
+      "de": "Performance: DatapointRegistry.upsert ist jetzt idempotent und cached Unit-Detection/Subscriptions – verhindert sehr langsame chargingManagement-Ticks bei vielen EVCS. UI: EVCS-Kacheln öffnen das Regel-Modal wieder zuverlässig mit einem Klick (auch bei starken SSE-Re-Renders)."
+    },
+    "0.6.78": {
+      "en": "Chore: Added automatic version bump helper (scripts/bump-version.js) plus an optional git pre-commit hook (.githooks) to bump patch versions on commits.",
+      "de": "Chore: Automatisches Version-Bumping hinzugefügt (scripts/bump-version.js) plus optionaler Git pre-commit Hook (.githooks) zum Erhöhen der Patch-Version bei Commits."
+    },
+    "0.6.77": {
+      "en": "Simulation: updated integration for nexowatt-sim v0.4.x (scenario controls in Simulation UI, auto-enable sim instance, backup/restore VIS tariff settings).",
+      "de": "Simulation: Integration für nexowatt-sim v0.4.x aktualisiert (Szenario-Steuerung in der Simulation-UI, Sim-Instanz automatisch aktivieren, Backup/Restore der VIS-Tarif-Settings)."
+    },
+    "0.6.75": {
+      "en": "Admin: Added Simulation tab (opens Simulation control UI). Simulation: One-click enable/disable with automatic App-Center DP mapping for nexowatt-sim (Grid/PV/Storage/Tariff/EVCS).",
+      "de": "Admin: Neuer Reiter 'Simulation' (öffnet Simulation-Steuerung). Simulation: 1-Klick Aktivieren/Deaktivieren inkl. automatischem App-Center DP-Mapping für nexowatt-sim (Netz/PV/Speicher/Tarif/EVCS)."
+    },
+    "0.6.71": {
+      "en": "Storage control: improved NVP balancing deadband so small discharge setpoints are not suppressed (self-consumption/tariff). Tariff NVP now defaults to the same target/deadband as self-consumption unless explicitly configured. Reduces residual grid import while the battery is discharging.",
+      "de": "Speicherregelung: NVP-Deadband verbessert, damit kleine Entlade-Sollwerte nicht unterdrückt werden (Eigenverbrauch/Tarif). Tarif-NVP übernimmt standardmäßig Ziel/Deadband aus Eigenverbrauch, sofern nicht separat gesetzt. Reduziert Rest-Netzbezug während der Speicher entlädt."
+    },
+    "0.6.68": {
+      "en": "App-Center: fixed DP input row overflow in mapping grid (grid point measurement W/kW). Controls now wrap cleanly inside the card.",
+      "de": "App-Center: DP-Zeilen-Overflow im Zuordnungs-Grid behoben (Netzpunkt-Messung W/kW). Bedienelemente umbrechen jetzt sauber innerhalb der Karte."
+    },
+    "0.6.66": {
+      "en": "Energyflow: add manual W/kW input toggle (no double conversion for kW datapoints)",
+      "de": "Energiefluss: manueller W/kW Eingangsschalter (keine Doppel-Umrechnung bei kW-Datenpunkten)"
+    },
+    "0.6.63": {
+      "en": "PV Forecast: Improved pvforecast JSONTable compatibility (German time parsing + automatic kW detection). Forecast validity should now work out-of-the-box.",
+      "de": "PV Forecast: Verbesserte pvforecast-JSONTable-Kompatibilitaet (deutsches Zeitformat + automatische kW-Erkennung). Forecast sollte jetzt Plug&Play gueltig werden."
+    },
+    "0.6.62": {
+      "en": "VIS: Weather tile shows PV forecast (24h kWh + peak kW) and uses a larger weather icon for better readability.",
+      "de": "VIS: Wetter-Kachel zeigt PV-Prognose (24h kWh + Peak kW) und nutzt ein groesseres Wetter-Icon fuer bessere Lesbarkeit."
     },
     "0.6.57": {
-      "en": "VIS: Weather tile Plug&Play (integrated Open-Meteo fetch; optional App-Center override).",
-      "de": "VIS: Wetter-Kachel Plug&Play (integrierter Open-Meteo Abruf; optional App-Center Override)."
+      "en": "VIS: Weather tile is now Plug&Play (integrated Open-Meteo fetch using system latitude/longitude). No additional adapter required; App-Center mapping can still override if desired.",
+      "de": "VIS: Wetter-Kachel jetzt Plug&Play (integrierter Open-Meteo Abruf ueber System-Lat/Lon). Kein weiterer Adapter noetig; App-Center Mapping kann optional uebersteuern."
+    },
+    "0.6.56": {
+      "en": "VIS: Optional Weather tile in Status section + App-Center mapping (temperature/condition/wind/clouds).",
+      "de": "VIS: Optionale Wetter-Kachel im Status-Bereich + App-Center Mapping (Temperatur/Wettertext/Wind/Wolken)."
+    },
+    "0.6.55": {
+      "en": "Admin UI: Removed legacy EMS/admin configuration panels (moved fully to App-Center). Kept only Diagnostics settings in Admin (log level/intervals/state writing). Removed legacy 'power unit', 'Tariff now' and 'show advanced tabs' options from Admin.",
+      "de": "Admin UI: Legacy EMS-/Admin-Konfiguration entfernt (vollstaendig ins App-Center verlagert). In Admin bleiben nur Diagnose-Einstellungen (Log-Level/Intervalle/State-Schreiben). Legacy-Optionen 'Leistungseinheit', 'Tarif jetzt' und 'Erweiterte Reiter' entfernt."
+    },
+    "0.6.54": {
+      "en": "Fix: History chart zoom works again (touch drag-to-zoom + tap tooltip). Added optional Ctrl/⌘+wheel zoom and improved touch handling.",
+      "de": "Fix: Historie-Chart Zoom funktioniert wieder (Touch: Drag-to-Zoom + Tap-Tooltip). Optional Ctrl/⌘+Mausrad-Zoom und verbessertes Touch-Handling."
+    },
+    "0.6.52": {
+      "en": "Fix: Tariff SoC hysteresis now uses aggregated StorageFarm SoC (totalSocOnline/totalSoc) when StorageFarm is enabled. Prevents false 'storage full (hold)' status and premature stop of tariff charging when only one battery is full.",
+      "de": "Fix: Tarif-SoC-Hysterese nutzt bei aktivierter Speicherfarm jetzt den aggregierten Farm-SoC (totalSocOnline/totalSoc). Verhindert falsches 'Speicher voll (ruht)' und ein zu fruehes Stoppen des Tarif-Ladens, wenn nur ein Einzel-Speicher voll ist."
     },
     "0.6.50": {
-      "en": "Fix: App-Center save now correctly persists installerConfig changes (grid connection limit / NVP).",
-      "de": "Fix: App-Center speichert installerConfig-Aenderungen wieder korrekt (Netzanschlussleistung/NVP)."
+      "en": "Fix: App-Center save now correctly persists installerConfig changes (e.g., grid connection limit / NVP plant power). This restores stable Peak-Shaving and charging management configuration via App-Center only.",
+      "de": "Fix: App-Center speichert installerConfig-Aenderungen wieder korrekt (z.B. Netzanschlussleistung/NVP). Damit funktionieren Peak-Shaving und Lademanagement wieder stabil und ohne Admin-Konfiguration."
+    },
+    "0.6.49": {
+      "en": "Fix: Prevented onStateChange crashes in unit scaling (kW→W cache init); StorageFarm setpoint distribution now allocates only to online storages; App-Center: Added tariff JSON datapoint mappings for today and tomorrow.",
+      "de": "Fix: onStateChange-Crash in Einheiten-Skalierung (kW→W Cache-Init) behoben; Speicherfarm Sollwert-Verteilung nur noch auf Online-Speicher; App-Center: Tarif JSON-Datenpunkte für heute und morgen ergänzt."
+    },
+    "0.6.44": {
+      "en": "Fix: Auto unit scaling for power/energy datapoints (kW/kWh sources now work without manual conversion); Grid sign invert option added in Allgemein; StorageFarm keepalive writes setpoints every 5s to satisfy watchdogs.",
+      "de": "Fix: Automatische Einheiten-Skalierung für Leistungs/Energie-Datenpunkte (kW/kWh funktioniert ohne manuelle Umrechnung); Option zum Invertieren des Netz-Vorzeichens in Allgemein ergänzt; StorageFarm Keepalive schreibt Setpoints alle 5s (Watchdog)."
     },
     "0.6.43": {
       "en": "Fix: Historie in StorageFarm uses farm totals for charge/discharge/SoC (SoC shown again).",
       "de": "Fix: Historie im Speicherfarm-Modus nutzt Farm-Gesamtwerte für Laden/Entladen/SoC (SoC wieder sichtbar)."
     },
+    "0.6.41": {
+      "en": [
+        "Tariff + SoC logic: Fixed auto-enable of storage control when dynamic tariff is active (prevents battery charge/discharge from stopping)."
+      ],
+      "de": [
+        "Tarif + SoC-Logik: Auto-Aktivierung der Speicherregelung bei aktivem dynamischem Tarif gefixt (verhindert, dass Be-/Entladung stehen bleibt)."
+      ]
+    },
+    "0.6.32": {
+      "en": [
+        "Storagefarm: Online/Offline detection improved (SoC/power no longer time out in UI; offline is derived from device connected/offline signals + heartbeat timestamps)."
+      ],
+      "de": [
+        "Speicherfarm: Online/Offline-Erkennung verbessert (SoC/Leistung haben kein UI-Timeout mehr; Offline wird über Device-Connected/Offline-Signale + Heartbeat-Zeitstempel erkannt)."
+      ]
+    },
+    "0.6.30": {
+      "en": [
+        "Notifications: Added monitoring + e-mail alerts (system/adapter down, PV inverter offline via nexowatt-devices, hard NVP/PV curtailment warning).",
+        "Settings: Added per-category switches and a test-mail button."
+      ],
+      "de": [
+        "Benachrichtigungen: Monitoring + E-Mail-Alarme (System/Adapter down, PV-Wechselrichter offline über nexowatt-devices, Warnung bei harter NVP/PV-Abregelung).",
+        "Einstellungen: Schalter pro Kategorie + Test-Mail Button."
+      ]
+    },
+    "0.6.28": {
+      "en": [
+        "History (day): SoC axis is now anchored at the kW zero-line (0% at midline, 100% at top) for a cleaner combined kW/% chart."
+      ],
+      "de": [
+        "Historie (Tag): SoC-Achse startet jetzt auf der kW-0-Linie (0% auf der Mittellinie, 100% oben) – sauberer kombinierter kW/% Chart."
+      ]
+    },
+    "0.6.27": {
+      "en": [
+        "History: Added quick navigation (◀/▶) to step day/week/month/year without editing the date inputs.",
+        "History (day): Added drag-to-zoom selection with \"Zoom zurück\" reset (date inputs remain available for detailed search)."
+      ],
+      "de": [
+        "Historie: Schnelle Navigation (◀/▶), um Tag/Woche/Monat/Jahr durchzuschalten ohne Datum/Uhrzeit zu bearbeiten.",
+        "Historie (Tag): Drag-to-Zoom Auswahl + \"Zoom zurück\" Reset (Datum/Uhrzeit bleibt für detaillierte Suche verfügbar)."
+      ]
+    },
+    "0.6.26": {
+      "en": [
+        "History (day): Improve axis aesthetics (more top padding, axis titles kW/% above the scale, no stacked corner labels)."
+      ],
+      "de": [
+        "Historie (Tag): Achsen optisch verbessert (mehr Top-Padding, Achsentitel kW/% oberhalb der Skala, keine gestapelten Eck-Labels)."
+      ]
+    },
+    "0.6.25": {
+      "en": [
+        "History: Show readable Y-axis tick labels (kW) on the left and SoC axis (0..100%) on the right.",
+        "History: Move the 'kW' unit label away from rounded chart corners so it does not get clipped."
+      ],
+      "de": [
+        "Historie: Lesbare Y-Achsen-Beschriftung (kW) links und SoC-Achse (0..100%) rechts.",
+        "Historie: 'kW'-Einheit weiter nach rechts verschoben, damit sie durch die abgerundeten Ecken nicht abgeschnitten wird."
+      ]
+    },
+    "0.6.23": {
+      "en": "StorageFarm: Energyflow shows aggregated SoC/power correctly (dominant net flow) and avoids maintenance-charge misdirection.",
+      "de": "Speicherfarm: Energiefluss zeigt aggregierten SoC/Leistung korrekt (dominanter Netto‑Fluss) und vermeidet Fehlanzeige durch Erhaltungsladung."
+    },
+    "0.6.21": {
+      "en": [
+        "Storage farm: Added signed actual power datapoint per storage (Istleistung Signed). Farm aggregation now supports signed measurement and falls back to separate charge/discharge values.",
+        "Storage farm UI: Clear separation of measured values (Istwerte) vs setpoints (Sollwerte) and additional sign inversion option for signed measurement."
+      ],
+      "de": [
+        "Speicherfarm: Pro Speicher kann jetzt ein Signed‑Messwert (Istleistung Signed) hinterlegt werden. Die Farm‑Summenbildung unterstützt Signed und fällt sonst auf getrennte Lade-/Entlade‑Messwerte zurück.",
+        "Speicherfarm UI: Saubere Trennung von Istwerten (Messwerte) und Sollwerten (Setpoint) + zusätzliche Vorzeichen‑Option für Signed‑Messwert."
+      ]
+    },
+    "0.6.20": {
+      "en": [
+        "Storage farm: Added derived median SoC and aggregated PV power (DC). Energy flow monitor now uses farm sums (charge/discharge) and median SoC when farm is active.",
+        "Admin: Storage farm table extended with AC/DC coupling and optional PV power datapoint per storage (DC)."
+      ],
+      "de": [
+        "Speicherfarm: Neuer abgeleiteter Median‑SoC und Gesamt‑PV‑Leistung (DC). Energiefluss nutzt bei aktiver Farm die Summen (Laden/Entladen) und den Median‑SoC.",
+        "Admin: Speicherfarm‑Tabelle um AC/DC‑Kopplung und optionalen PV‑Leistungs‑Datenpunkt (DC) erweitert."
+      ]
+    },
+    "0.6.19": {
+      "en": [
+        "History: Day view now queries data in 10-minute steps to match 10-minute Influx logging (prevents stair-step plots).",
+        "History: Densified series now always include the exact 'to' timestamp so plots extend to the right edge and kWh integration covers the last partial bucket."
+      ],
+      "de": [
+        "Historie: Tagesansicht fragt Daten jetzt im 10-Minuten-Schritt ab (passend zum 10-Minuten-Logging in Influx) – verhindert treppenförmige Linien.",
+        "Historie: Verdichtete Zeitreihen enthalten jetzt immer den exakten 'Bis'-Zeitpunkt, damit die Kurven bis zum Rand laufen und die kWh-Berechnung den letzten Teil-Abschnitt berücksichtigt."
+      ]
+    },
+    "0.6.17": {
+      "en": [
+        "App Center: Split EVU/PV regulation (EVU curtailment + zero export) into its own tab for clearer configuration.",
+        "History/Influx: Log historie export states at 10-minute cadence to reduce write volume and prevent history truncation."
+      ],
+      "de": [
+        "App-Center: EVU/PV-Regelung (EVU-Abregelung + 0-Einspeisung) als eigener Tab für übersichtliche Konfiguration.",
+        "Historie/Influx: Export-States werden im 10-Minuten-Raster geschrieben, um Datenmenge zu reduzieren und Abbrüche zu vermeiden."
+      ]
+    },
+    "0.6.16": {
+      "en": [
+        "Netzlimits: PV curtailment as inverter groups + EVU relay stages (60/30/0) in App Center."
+      ],
+      "de": [
+        "Netzlimits: PV-Abregelung als Wechselrichter-Gruppen + EVU-Relais-Stufen (60/30/0) im App-Center."
+      ]
+    },
+    "0.6.15": {
+      "en": [
+        "History: densify aggregated Influx series (hold-last) to avoid long diagonal interpolation lines when datapoints are logged sparsely (e.g. on-change). Improves plot clarity and kWh integration."
+      ],
+      "de": [
+        "Historie: Influx-Zeitreihen werden auf das Schritt-Raster verdichtet (Hold-Last), damit bei sparsamer Aufzeichnung (z.B. nur bei Änderung) keine langen diagonalen Verbindungslinien entstehen. Verbessert Darstellung und kWh-Berechnung."
+      ]
+    },
+    "0.6.14": {
+      "en": [
+        "Fix Historie: storage charge/discharge is now normalised to positive magnitudes (charging power may be negative depending on the source datapoint)."
+      ],
+      "de": [
+        "Fix Historie: Speicher-Beladung/Entladung wird jetzt auf positive Beträge normalisiert (je nach Quell-Datenpunkt kann die Ladeleistung negativ sein)."
+      ]
+    },
+    "0.6.9": {
+      "en": [
+        "Fix: ensure E-Mobility (EVCS) is reliably included in History (fallback to canonical DP and loadpoint sum if needed)."
+      ],
+      "de": [
+        "Fix: E-Mobilität (EVCS) wird in der Historie zuverlässig angezeigt (Fallback auf kanonischen DP und Ladepunkt-Summe falls erforderlich)."
+      ]
+    },
+    "0.6.8": {
+      "en": [
+        "History/Billing: added per-charging-point (LP) EVCS power history states and auto-enable InfluxDB logging. EVCS report now reads these states (no manual Influx setup per OCPP/Modbus datapoint)."
+      ],
+      "de": [
+        "Historie/Abrechnung: pro Ladepunkt (LP) eigene EVCS-Leistungs-Historiestates inkl. automatischer InfluxDB-Aktivierung. EVCS-Report nutzt jetzt diese States (keine manuelle Influx-Konfiguration pro OCPP/Modbus-Datenpunkt mehr)."
+      ]
+    },
+    "0.6.7": {
+      "en": [
+        "Schnellsteuerung: Thermik-Kachel zeigt jetzt ein passendes Icon (wie andere Kacheln)."
+      ],
+      "de": [
+        "Schnellsteuerung: Thermik-Kachel zeigt jetzt ein passendes Icon (wie andere Kacheln)."
+      ]
+    },
+    "0.6.5": {
+      "en": [
+        "Thermik App-Center: use consistent dark input/select styling",
+        "Energyflow Quick-Control: improved layout (gauge right, boost below; no overlap)"
+      ],
+      "de": [
+        "Thermik App-Center: einheitliches Dark-Design für Eingabefelder/Dropdowns",
+        "Energiefluss Quick-Control: Layout verbessert (Gauge rechts, Boost unten; kein Überlappen)"
+      ]
+    },
+    "0.6.4": {
+      "en": [
+        "Fix Thermik table rendering",
+        "Improve Energyflow Quick-Control layout (responsive)"
+      ],
+      "de": [
+        "Fix: Thermik-Tabelle wieder sichtbar",
+        "Energiefluss Quick-Control übersichtlich & responsiv"
+      ]
+    },
+    "0.6.0": {
+      "en": [
+        "Live/Quick tiles now follow App-Center 'installed' flag (not 'enabled').",
+        "Threshold control end-customer UI: rule on/off uses VIS buttons (no checkbox).",
+        "Threshold /api/set: added support for rX.mode with synced rX.enabled for compatibility."
+      ],
+      "de": [
+        "Live-/Schnellsteuerungs-Kacheln folgen jetzt dem App-Center-Flag 'Installiert' (nicht 'Aktiv').",
+        "Schwellwertsteuerung (Endkunde): Regel ein/aus jetzt mit VIS-Buttons (kein Haken).",
+        "Schwellwert /api/set: Unterstützung für rX.mode (mit Sync zu rX.enabled zur Kompatibilität)."
+      ]
+    },
+    "0.5.99": {
+      "en": "Live/Schnellsteuerung: app tiles (BHKW/Generator/Thresholds/Relays) are now shown when the app is enabled even if nothing is configured yet (counts stay at 0). EVCS tile status now falls back to evcs.1.status for single-wallbox setups.",
+      "de": "Live/Schnellsteuerung: App-Kacheln (BHKW/Generator/Schwellwerte/Relais) werden nun angezeigt, sobald die App aktiviert ist – auch wenn noch nichts konfiguriert ist (Zähler bleiben bei 0). EVCS-Kachel zeigt den Status jetzt im Single-Wallbox-Setup per Fallback auf evcs.1.status."
+    },
+    "0.5.98": {
+      "en": "Tariff: Manual mode now uses a finer hysteresis band by default and resets the hysteresis state when mode/reference changes. This prevents 'Tariff expensive' from sticking after changing settings, and enables storage grid-charging when the current price is below the manual threshold.",
+      "de": "Tarif: Manuell nutzt jetzt standardmäßig eine feinere Hysterese-Bandbreite und setzt den Hysterese-Zustand bei Modus/Referenz-Änderungen zurück. Dadurch bleibt „Tarif teuer“ nicht mehr nach Einstellungsänderungen hängen und der Speicher kann bei Preis < Schwelle im günstigen Fenster aus dem Netz laden."
+    },
+    "0.5.97": {
+      "en": "EVCS: Goal/target charging can only be enabled in Auto mode. Added periodic keepalive writes to prevent single wallbox sessions from restarting. Min+PV keeps the technical minimum charging power active when tariff is OFF.",
+      "de": "EVCS: Ziel-/Zeitladen ist nur noch im Auto-Modus aktivierbar. Periodische Keepalive-Schreibzugriffe verhindern Session-Resets bei einzelnen Wallboxen. Min+PV hält die technische Mindestladeleistung aktiv, wenn der Tarif AUS ist."
+    },
+    "0.5.96": {
+      "en": "EMS: EVCS enable/active datapoint is no longer auto-toggled based on target power/current (setpoint=0 now means 'waiting', not 'disabled'). Charging-Management: user mode 'Min+PV' always keeps the technical minimum charging power active (even when tariff policy would otherwise force PV-only); additional power beyond the minimum still uses PV surplus.",
+      "de": "EMS: EVCS Enable/Aktiv-Datenpunkt wird nicht mehr automatisch anhand des Sollwerts geschaltet (Sollwert=0 bedeutet jetzt 'Warten' statt 'Aus'). Lademanagement: User-Modus 'Min+PV' hält immer die technische Mindestladeleistung aktiv (auch wenn die Tarif-Policy sonst PV-only erzwingen würde); zusätzliche Leistung über Minimum nutzt weiterhin PV-Überschuss."
+    },
+    "0.5.95": {
+      "en": "EMS: Fixed a regression where Charging-Management could end up in 'off' due to legacy/override config even though the app was enabled. This restores EVCS setpoint writes (e.g., Boost now correctly ramps to the configured station max power). Maintenance: added safe cleanup for orphaned dynamic objects (e.g., unmapped Historie consumers/producers, removed EVCS/wallbox/station channels).",
+      "de": "EMS: Regression behoben, bei der das Lademanagement trotz aktivierter App durch Legacy/Override-Config auf 'off' fallen konnte. Damit funktionieren EVCS-Sollwert-Schreibzugriffe wieder (z.B. Boost regelt jetzt korrekt auf die konfigurierte Stations-Maximalleistung). Wartung: sichere Bereinigung verwaister dynamischer Objekte (z.B. nicht mehr gemappte Historie-Verbraucher/Erzeuger sowie entfernte EVCS/WB/Stations-Channels)."
+    },
+    "0.5.94": {
+      "en": "EMS: Storage maxChargeW/maxDischargeW are now optional clamps (0 = unlimited; no more default 5 kW cap). EVCS Boost now overrides tariff grid-charge lock and ignores tariff budget cap (Boost = explicit charge-now; hard caps like grid/§14a still apply). §14a: if no activation signal is configured, default is now INACTIVE; expert fallback 'assume active without signal' added.",
+      "de": "EMS: Speicher maxChargeW/maxDischargeW sind jetzt optionale Software-Clamps (0 = unbegrenzt; kein Default-5-kW-Limit mehr). EVCS-Boost überschreibt jetzt die Tarif-Netzladen-Sperre und ignoriert das Tarif-Budget (Boost = bewusst „jetzt laden“; harte Limits wie Netz/§14a bleiben aktiv). §14a: Wenn kein Aktiv-Signal konfiguriert ist, ist §14a jetzt standardmäßig INAKTIV; Experten-Fallback „ohne Signal als aktiv behandeln“ ergänzt."
+    },
+    "0.5.93": {
+      "en": "EMS: Fixed tariff storage discharge power handling. The VIS \"storage power\" setting now limits tariff charging only; tariff discharge regulates at the grid connection point (NVP) and is no longer capped by that user value (only technical maxDischargeW applies).",
+      "de": "EMS: Tarif-Speicherentladung korrigiert. Die in der VIS gesetzte „Speicher-Leistung“ begrenzt jetzt nur noch das Tarif-Laden (Netzladen im günstigen Fenster). Die Tarif-Entladung regelt am Netzverknüpfungspunkt (NVP) und wird nicht mehr durch diesen Nutzerwert gedeckelt (nur maxDischargeW wirkt)."
+    },
+    "0.5.92": {
+      "en": "UI: Fixed EVCS single-wallbox modal (goal charge toggle/inputs now write correctly). Config hot-reload now keeps EVCS count correct so single vs multi-wallbox UI switches reliably. EVCS tooltip/modal is now fully responsive on small screens. Includes PWA cache bump.",
+      "de": "UI: EVCS Einzelladepunkt-Dialog korrigiert (Ziel-Laden-Schalter & Zielwerte schreiben wieder korrekt). Config-Hot-Reload hält die EVCS-Anzahl jetzt korrekt, damit der Wechsel zwischen Single-Dialog und Multi-EVCS-Seite zuverlässig funktioniert. EVCS Tooltip/Popup ist jetzt responsiv auf kleinen Screens. Inkl. PWA-Cache-Bump."
+    },
+    "0.5.91": {
+      "en": "UI: History now shows optional Energiefluss consumers/producers when configured (with dynamic legend + energy cards). History 'Load' button is styled (white text). Live quick-control tiles hide more reliably when an app is uninstalled/disabled. Removed unused admin/nexowatt-logo.png. Includes PWA cache bump.",
+      "de": "UI: Historie zeigt jetzt optionale Energiefluss-Verbraucher/Erzeuger, sobald sie konfiguriert sind (dynamische Legende + Energiekacheln). Historie-Button „Laden“ ist jetzt korrekt gestylt (weiße Schrift). Schnellsteuerungs-Kacheln in LIVE werden zuverlässiger ausgeblendet, wenn eine App nicht installiert/deaktiviert ist. Unbenutztes admin/nexowatt-logo.png entfernt. Inkl. PWA-Cache-Bump."
+    },
+    "0.5.90": {
+      "en": "UI: Live quick-control tiles are now hidden when the corresponding App-Center app is disabled (inactive or uninstalled). Relay tile counters/status fixed. Includes PWA cache bump.",
+      "de": "UI: Schnellsteuerungs-Kacheln in LIVE werden jetzt ausgeblendet, wenn die zugehörige App im App‑Center deaktiviert ist (inaktiv oder nicht installiert). Relais-Kachel Zähler/Status korrigiert. Inkl. PWA-Cache-Bump."
+    },
+    "0.5.89": {
+      "en": "UI: Energy-flow monitor now always renders power in kW (no Watt display). Includes PWA cache bump.",
+      "de": "UI: Energiefluss-Monitor zeigt Leistungswerte jetzt immer in kW (keine Watt-Anzeige mehr). Inkl. PWA-Cache-Bump."
+    },
+    "0.5.88": {
+      "en": "Admin: Advanced configuration tabs are hidden by default (Datapoints/§14a/EMS*/History/Charge points). Added toggle in General: \"Show advanced tabs\". Safety gate: content stays blocked even if a hidden tab is opened directly.",
+      "de": "Admin: Erweiterte Konfigurations-Reiter sind jetzt standardmäßig ausgeblendet (Datenpunkte/§14a/EMS*/Historie/Ladepunkte). Neuer Schalter in Allgemein: „Erweiterte Reiter anzeigen“. Safety-Gate: Inhalte bleiben auch bei Direktaufruf verborgen."
+    },
+    "0.5.86": {
+      "en": "Hotfix: App-Center Storagefarm (MultiUse storage) is now fully usable and EMS App state normalization/legacy enable-flag mapping has been fixed (peak/storagefarm IDs). Includes PWA cache bump.",
+      "de": "Hotfix: App-Center Speicherfarm (MultiUse Speicher) ist jetzt vollständig nutzbar und die EMS-App-State-Normalisierung/Legacy-Enable-Flag-Zuordnung wurde korrigiert (IDs peak/storagefarm). Inkl. PWA-Cache-Bump."
+    },
+    "0.5.84": {
+      "en": "Hotfix: Generation flow direction in Energiefluss is now fixed (PV/Producers/BHKW/Generator always flow towards the building; no more direction flipping due to sign jitter).",
+      "de": "Hotfix: Erzeugungs-Flussrichtung im Energiefluss ist jetzt fest (PV/Erzeuger/BHKW/Generator laufen immer zum Gebäude; kein Richtungswechsel mehr durch Vorzeichen-Jitter)."
+    },
+    "0.5.83": {
+      "en": "Hotfix: App-Center BHKW/Generator option checkboxes fixed (no overlaps; checkbox styling now correctly applied to the input). Minor layout polish for the compact options row.",
+      "de": "Hotfix: App-Center BHKW/Generator Options-Checkboxes korrigiert (keine Überlappungen mehr; Checkbox-Styling jetzt korrekt am Input). Kleine Layout-Politur für die kompakte Optionen-Zeile."
+    },
+    "0.5.82": {
+      "en": "Hotfix: OCPP auto-mapping now prefers meterValues.Power_Active_Import for power (W) and meterValues.Energy_Active_Import_Register for energy (kWh). lastTransactionConsumption is strongly de-prioritized.",
+      "de": "Hotfix: OCPP Auto-Zuordnung bevorzugt jetzt meterValues.Power_Active_Import für Leistung (W) und meterValues.Energy_Active_Import_Register für Energie (kWh). lastTransactionConsumption wird stark abgewertet."
+    },
+    "0.5.81": {
+      "en": "Hotfix: Energy-flow BHKW/Generator nodes are now placed on the lower-left outer ring for a clean circular layout and use the battery-green styling. App-Center BHKW/Generator configuration cards now use the full available width (no empty grid columns) and field hints are rendered below the inputs (no more squeezed/overlapping layout).",
+      "de": "Hotfix: Energiefluss BHKW/Generator werden jetzt auf dem unteren linken Außenring platziert (sauberer Kreis) und in Speicher-Grün dargestellt. App-Center BHKW/Generator Konfiguration nutzt jetzt die volle Breite (keine leeren Grid-Spalten) und Feld-Hinweise stehen unter den Eingaben (kein gequetschtes/überlappendes Layout mehr)."
+    },
+    "0.5.80": {
+      "en": "Hotfix: OCPP auto-discovery now supports the default ioBroker OCPP adapter path layout (ocpp.<inst>.<chargePointId>.<connectorNo>...). Added heuristics to ignore connector 0 (Main) when numbered connectors exist, while propagating station-level online/availability IDs. Minor scoring improvements for Import power/energy.",
+      "de": "Hotfix: OCPP Auto-Erkennung unterstützt jetzt das Standard-Pfadlayout des ioBroker OCPP-Adapters (ocpp.<inst>.<chargePointId>.<connectorNo>...). Heuristik: Connector 0 (Main) wird ignoriert, wenn nummerierte Connectoren existieren, während Online/Availability-IDs aus Main an die Ports vererbt werden. Zusätzlich leichte Scoring-Verbesserung (Import-Leistung/Energie bevorzugen)."
+    },
+    "0.5.78": {
+      "en": "Phase Epic 1 / Punkt 2: App-Center EVCS tab now supports OCPP auto-discovery (detect chargepoints/connectors from ioBroker OCPP states and prefill datapoint mappings). Added /api/ocpp/discover endpoint. PWA cache version bumped.",
+      "de": "Phase Epic 1 / Punkt 2: App-Center → Ladepunkte unterstützt jetzt OCPP Auto-Erkennung (Chargepoints/Connectoren aus ioBroker-OCPP-States erkennen und Datenpunkt-Zuordnungen automatisch vorbelegen). Neuer Endpoint /api/ocpp/discover. PWA-Cache-Version erhöht."
+    },
+    "0.5.77": {
+      "en": "Hotfix: Energy-flow monitor now supports BHKW/Generator nodes (lower-left between grid and battery; visible only when configured with power datapoint). PWA cache version bumped.",
+      "de": "Hotfix: Energiefluss-Monitor unterstützt jetzt BHKW/Generator (links unten zwischen Netz und Batterie; nur sichtbar bei konfiguriertem Leistungs-Datenpunkt). PWA-Cache-Version erhöht."
+    },
+    "0.5.71": {
+      "en": "Hotfix 6.2.4: Energy-flow producers reduced to max 5 (VIS + /config); History & Settings visual refresh; bumped PWA cache version.",
+      "de": "Hotfix 6.2.4: Energiefluss-Erzeuger auf max. 5 reduziert (VIS + /config); History & Settings optisch angepasst; PWA-Cache-Version erhöht."
+    },
+    "0.5.61": {
+      "en": "Phase 6.0.1: EVCS page redesigned for up to 50 chargepoints (tile overview + per-chargepoint tooltip dialog); fixed time-target charging time picker stability; increased EVCS count limit to 50 (App-Center + Admin config).",
+      "de": "Phase 6.0.1: EVCS-Seite für bis zu 50 Ladepunkte überarbeitet (Kachel-Übersicht + Tooltip-Dialog pro Ladepunkt); Zeit-Ziel-Laden: Uhrzeit-Picker stabilisiert; EVCS-Limit auf 50 erhöht (App-Center + Admin-Konfiguration)."
+    },
+    "0.5.52": {
+      "en": "Phase 5.1: Settings installer button now opens the Admin UI on port 8081 (dynamic host); bumped PWA cache version.",
+      "de": "Phase 5.1: Installer-Button in den Einstellungen öffnet jetzt die Admin-Oberfläche auf Port 8081 (dynamischer Host); PWA-Cache-Version erhöht."
+    },
+    "0.5.45": {
+      "en": "Phase 4.4: Thermal control extended with setpoint devices (heat pump/HVAC), profiles (heating/cooling), boost override + manual-hold for quick controls; flow quick control now supports a Boost action.",
+      "de": "Phase 4.4: Thermische Steuerung erweitert um Setpoint-Geräte (Wärmepumpe/Klima), Profile (Heizen/Kühlen), Boost-Override + Manuell-Hold für Schnellsteuerung; Schnellsteuerung unterstützt jetzt Boost."
+    },
+    "0.5.41": {
+      "en": "Phase 4.0: EMS core stabilization (tick mutex, centralized caps/budgets snapshot, deterministic limit propagation to charge management).",
+      "de": "Phase 4.0: EMS-Core stabilisiert (Tick-Mutex gegen Überlappung, zentraler Snapshot für Caps/Budgets, deterministische Limit-Weitergabe ins Lademanagement)."
+    },
+    "0.5.34": {
+      "en": "Phase 3.5: App-Center: show mapping cards only for installed apps; added Live tile datapoint mapping (kWh/CO2/status); fixed App-Center validation scope; refined dynamic tariff gating (neutral/unknown do not block grid).",
+      "de": "Phase 3.5: App-Center: Zuordnungskacheln nur bei installierten Apps anzeigen; neue Live-Kachel-Datenpunkte (kWh/CO₂/Status); Validierung im App-Center korrigiert; dynamische Tarife: Netzladung wird bei neutral/unbekannt nicht blockiert."
+    },
+    "0.5.33": {
+      "en": "Phase 3.4: Station group hard caps (load-balancing) + station diagnostics + more specific reason codes (grid/phase/station/user limits).",
+      "de": "Phase 3.4: Harte Stationsgruppen-Limits (Load-Balancing) + Stations-Diagnose + spezifischere Reason-Codes (Netz/Phase/Station/User-Limits)."
+    },
+    "0.5.32": {
+      "en": "Phase 3.3: Datapoint validation in EMS App Center; per charge point diagnostics; stale detection per charge point (safe failover).",
+      "de": "Phase 3.3: Datenpunkt-Validierung im EMS App-Center; Diagnose pro Ladepunkt; Stale-Detection je Ladepunkt (sicheres Failover)."
+    },
+    "0.5.30": {
+      "de": "Phase 3.1: Ladepunkt-Installer erweitert (Aktiv/Prio/Standard-Modus + Erweitert: Steuerung, Phasen/Spannung, Limits/Steps, Boost). EMS-Lademanagement: Apply-Writes als State verfügbar; Bereinigung PV-Hysterese/Reason-Codes.",
+      "en": "Phase 3.1: charge point installer extended (enable/priority/default mode + advanced control/limits/steps/boost). EMS charging management: apply-writes available as a state; PV hysteresis/ reason-code cleanup."
+    },
+    "0.5.22": {
+      "de": "Speicher-Regelung: Eigenverbrauch nutzt den geglätteten NVP (ems.gridPowerW) und einen skalierten Regler (weniger Schwingen). PV-Überschuss-Laden nutzt ebenfalls den geglätteten Export. Lastspitzenkappung (LSK): Entlade-Rampe wird jetzt auch beim Attack durch Max ΔW/Tick begrenzt (reduziert Sollwertsprünge/Stress, Reserve puffert schnelle Spitzen).",
+      "en": "Storage control: self-consumption uses averaged NVP (ems.gridPowerW) with a scaled controller (less oscillation). PV surplus charging also uses averaged export. Peak shaving (LSK): discharge ramp is now also limited on attack by Max ΔW/tick (reduces setpoint jumps/stress; reserve buffers fast spikes)."
+    },
+    "0.5.21": {
+      "de": "Speicher-Regelung: SoC-Hysterese an Grenzwerten (verhindert Flattern; nach Erreichen einer SoC-Grenze bleibt die Vorgabe stabil bei 0 W / Ruhephase). LSK/ Eigenverbrauch/ Reserve nutzen die Hysterese konsistent.",
+      "en": "Storage control: SoC hysteresis around limits (prevents flapping; once a SoC limit is reached the setpoint remains stable at 0 W / idle). LSK/ self-consumption/ reserve now use consistent hysteresis."
+    },
+    "0.5.20": {
+      "de": "Speicher-Regelung: Anti-PingPong/Anti-Flattern zwischen Laden und Entladen (Sperrzeit bei Richtungswechsel, Neutralband um 0). LSK-Reserve-Nachladen: Refill mit Sicherheits-Margin unterhalb des Peak-Limits und optionaler Wartezeit nach Peak (Release-Delay) zur Vermeidung von Auf-/Zu-Pendeln.",
+      "en": "Storage control: anti-pingpong/anti-chatter between charge and discharge (direction-change lockout, neutral band around 0). LSK reserve refill: refill uses a safety margin below the peak limit and an optional wait time after a peak (release delay) to avoid oscillation."
+    },
+    "0.5.10": "LSK-Refill Headroom-Glättung: weniger Sollwert-Flattern bei Netz-Nachladen; zusätzliche Diagnose-States.",
+    "0.5.8": {
+      "de": "VIS: Header wieder vollständig responsiv und auf allen Seiten fixiert (CSS-Kaskade bereinigt). Peak-Shaving: Reserve wirkt jetzt auch im static-Modus. Speicher-Regelung: LSK-Reserve kann innerhalb des Peak-Limits aus dem Netz nachladen (Headroom), Notstrom-Netzladen wird ebenfalls am Peak-Limit ausgerichtet. Service-Worker Cache-Version erhöht.",
+      "en": "UI: Header is responsive again and fixed across all pages (CSS cascade cleaned up). Peak shaving: reserve now also applies in static mode. Storage control: LSK reserve can recharge from grid within the peak limit (headroom); backup grid-charge is also capped by peak limit. Service worker cache version bumped."
+    },
+    "0.5.5": {
+      "de": "Speicherfarm: Vorzeichen-Invertierung je Speicher (Laden/Entladen) für Mess- und Sollwert-DPs. VIS: keine ioBroker-Erwähnungen mehr und kein Installer/Admin-Link im Endkunden-UI. Service-Worker Cache-Version erhöht.",
+      "en": "Storage farm: per-storage sign inversion (charge/discharge) for measurement and setpoint DPs. UI: removed any ioBroker mentions and installer/admin link from end-user dashboard. Service worker cache version bumped."
+    },
+    "0.5.4": {
+      "de": "Speicherfarm: Endkunden-VIS bereinigt (keine Installer-Hinweise), Status-Tabelle responsiv (Mobile/Card-Layout) und Topbar mobil optimiert. Backend: erste Sollwert-Verteilung (Pool/Gruppen) – schreibt auf pro Speicher konfigurierten Soll-Laden/Soll-Entladen-DPs, Fallback auf Single-Storage bleibt erhalten.",
+      "en": "Storage farm: end-user VIS cleaned (no installer hints), responsive status table (mobile/card layout) and mobile-optimized topbar. Backend: first setpoint distribution (pool/groups) – writes per-storage charge/discharge setpoint DPs, with safe fallback to single-storage mapping."
+    },
+    "0.5.3": {
+      "en": "Storage farm: configuration moved to ioBroker Admin only (VIS read-only overview). Backend blocks /api/set scope storageFarm. Added derived storagesStatusJson without DP IDs. Service worker cache bumped.",
+      "de": "Speicherfarm: Konfiguration ausschließlich im ioBroker‑Admin (VIS nur Übersicht/Status). Backend blockiert /api/set für storageFarm. Neuer abgeleiteter Status storagesStatusJson ohne DP‑IDs. Service‑Worker Cache erhöht."
+    },
+    "0.5.2": {
+      "en": "Admin: added EMS – Storage farm tab with storage table and datapoint mapping. Adapter: sync admin farm config to storageFarm.* states, derived totals timer uses configured interval, unload cleanup.",
+      "de": "Admin: neuer Reiter „EMS – Speicherfarm“ inkl. Tabelle zur Speicher‑Zuordnung. Adapter: Admin‑Konfig wird nach storageFarm.* gespiegelt, Summenbildung nutzt konfiguriertes Intervall, Cleanup beim Unload."
+    },
+    "0.5.1": {
+      "de": "Hotfix Speicherfarm: storageFarm.*-States werden jetzt zuverlässig als lokale Adapter-States abonniert und mit Defaults initialisiert (UI zeigt nach Neustart wieder Werte). Service-Worker Cache-Version erhöht.",
+      "en": "Storage farm hotfix: storageFarm.* states are now subscribed as local adapter states and initialized with defaults (UI keeps values after restart). Service worker cache version bumped."
+    },
+    "0.4.125": {
+      "de": "Feinschliff Admin: Netzanschlussleistung als zentraler Anlagenparameter in den EMS‑Reiter verschoben; §14a zeigt nur noch Hinweis. Doppelte Eingabestellen reduziert.",
+      "en": "Admin polish: moved grid connection power to EMS as a central plant parameter; §14a shows a hint only. Reduced duplicate configuration."
+    },
+    "0.4.124": {
+      "de": "Admin: §14a‑Tab aufgeräumt (Legacy‑Installer Felder entfernt, nur noch Netzanschlussleistung + §14a‑Konfiguration). Keine funktionalen Änderungen an EMS/§14a‑Logik.",
+      "en": "Admin: cleaned up §14a tab (removed legacy installer fields; keep grid connection power + §14a configuration). No functional changes to EMS/§14a logic."
+    },
+    "0.4.123": {
+      "de": "§14a EnWG: Admin‑UI um §14a‑Konfiguration erweitert (Modus Direkt/EMS, optionales Aktiv‑Signal, optionale EMS‑Sollwert‑DP, Verbraucher‑Tabelle). EMS: interner Pmin,14a/GZF‑Mindestwert und EVCS‑Caps werden angewendet.",
+      "en": "§14a EnWG: extended Admin UI (direct/EMS mode, optional activation signal, optional EMS setpoint DP, consumer table). EMS: applies internal Pmin,14a/GZF minimum and EVCS caps."
+    },
+    "0.4.122": {
+      "de": "Rollback: Lizenzpflicht entfernt (Adapter startet wieder ohne Lizenz). Admin-Aufräumen + ioBroker-Login/Write-Schutz bleiben aktiv.",
+      "en": "Rollback: removed mandatory licensing (adapter starts without a license again). Admin cleanup + ioBroker login/write protection remain enabled."
+    },
+    "0.4.119": {
+      "de": "Serienreife‑Gate: Stabilisierung/Feinschliff, Admin‑Aufräumen (SmartHome‑Tabs ausgeblendet) und saubere Defaults für Speicher‑Strategie. Neu: LSK‑Laden/Entladen separat aktivierbar.",
+      "en": "Release gate: stability/polish, admin cleanup (SmartHome tabs hidden) and cleaner defaults for storage strategy. New: LSK charge/discharge separately toggleable."
+    },
+    "0.4.118": {
+      "de": "Gate E: Speicher‑Multiuse (SoC‑Zonen für LSK/Eigenverbrauch/Notstrom, optionale Eigenverbrauchs‑Entladung, LSK Lade/Entlade‑Limits, optionales Reserve‑Netzladen).",
+      "en": "Gate E: Storage multiuse (SoC zones for peak shaving/self‑consumption/backup, optional self‑consumption discharge, LSK charge/discharge limits, optional reserve grid‑charge)."
+    },
+    "0.4.117": {
+      "de": "RC: Admin aufgeräumt (SmartHome-Tabs ausgeblendet), EVCS zeigt jetzt EMS-Hinweise/Fehler (z.B. NO_SETPOINT) direkt im Ladepunkt-Card; Boost-Button wird bei allowBoost=false gesperrt. SW-Cache v7.",
+      "en": "RC: Admin cleaned up (SmartHome tabs hidden), EVCS now shows EMS hints/errors (e.g. NO_SETPOINT) in the chargepoint card; Boost button disabled when allowBoost=false. SW cache v7."
+    },
+    "0.4.114": {
+      "de": "Gate B Fix: EVCS-Modus-Buttons nutzen standardmäßig den EMS Runtime-Mode (chargingManagement.wallboxes.*.userMode) – keine manuelle Modus-DP-Zuordnung pro Ladepunkt nötig. Zusätzlich werden EMS Runtime-States beim Start abonniert/primed, damit die Buttons nach Reload stabil bleiben.",
+      "en": "Gate B Fix: EVCS mode buttons default to EMS runtime mode (chargingManagement.wallboxes.*.userMode) – no manual per-chargepoint mode datapoint mapping required. Also subscribes/primes EMS runtime states on startup so buttons remain stable after reload."
+    },
+    "0.4.113": {
+      "de": "Gate B: Fix UI-Freeze bei Ladepunkt-Modi (SSE/Render-Debounce + Update-Batching). Zusätzlich PV-Hysterese (Start/Stop-Schwellen + Delays + Abort bei Netzbezug) für PV-Modi.",
+      "en": "Gate B: Fix UI freeze on chargepoint mode switching (SSE/render debounce + update batching). Adds PV hysteresis (start/stop thresholds + delays + abort on grid import) for PV modes."
+    },
+    "0.4.109": {
+      "de": "Sprint 3.2: EVCS-Seite steuert jetzt den EMS-Ladepunktmodus (Auto/Boost/Min+PV/PV) je Ladepunkt inkl. Boost-Timer/Prio-Anzeige. Design unverändert.",
+      "en": "Sprint 3.2: EVCS page now controls per chargepoint EMS mode (Auto/Boost/Min+PV/PV) incl. boost timer/priority, same UI design."
+    },
+    "0.4.108": {
+      "de": "EMS: Boost-Priorität pro Ladepunkt inkl. Auto-Timeout (DC 60min / AC 300min) + Debug-States boostSince/boostUntil.",
+      "en": "EMS: Per-chargepoint boost priority with auto-timeout (DC 60m / AC 300m) + boost runtime debug states."
+    },
+    "0.4.106": {
+      "en": [
+        "Sprint 2.2: Station groups (shared power limit) + per charge point Boost permission",
+        "Sprint 3: EMS/Peak Shaving config in Admin UI + multiuse ModuleManager enabled in VIS"
+      ],
+      "de": [
+        "Sprint 2.2: Stationsgruppen (gemeinsame Leistung) + Boost-Erlaubnis je Ladepunkt",
+        "Sprint 3: EMS/Peak-Shaving Einstellungen in der Admin-UI + ModuleManager im VIS aktiviert"
+      ]
+    },
+    "0.4.104": {
+      "de": "Sprint 2: Charging-Management (Multiuse) im VIS-Adapter integriert. Pro Wallbox runtime Modus (auto|pv|minpv|boost) via chargingManagement.wallboxes.*.userMode + /api/set (scope=ems).",
+      "en": "Sprint 2: Embedded charging management (from Multiuse) inside VIS adapter. Per-wallbox runtime mode (auto|pv|minpv|boost) via chargingManagement.wallboxes.*.userMode + /api/set (scope=ems)."
+    },
+    "0.4.91": {
+      "de": "EVCS RFID: Anlernen-UI (Karte anlernen, letzte Karte anzeigen, in Whitelist übernehmen).",
+      "en": "EVCS RFID: Learning UI (start learning, show last card, add to whitelist)."
+    },
+    "0.4.71": {
+      "en": "Fix: EVCS report values are visible in screen mode (single wallbox).",
+      "de": "Fix: EVCS-Berichtwerte sind im Bildschirmmodus sichtbar (einzelne Wallbox)."
+    },
+    "0.4.69": {
+      "en": "SmartHomeConfig: improved datapoint picker (browse list without typing) and user-friendly device type labels.",
+      "de": "SmartHomeConfig: Datenpunkt-Picker verbessert (Liste ohne Eingabe) und benutzerfreundliche Geräte-Typ-Labels."
+    },
+    "0.4.58": {
+      "de": "EVCS Bericht: Öffnet nun die statische Seite /static/evcs-report.html (Weiterleitung von /evcs-report.html), History-Button angepasst.",
+      "en": "EVCS report: Now opens the static page /static/evcs-report.html (redirect from /evcs-report.html), history button updated."
+    },
+    "0.4.57": {
+      "en": "EVCS history series + report page",
+      "de": "EVCS Historie + Berichtseite"
+    },
+    "0.4.52": {
+      "de": "Fix: Admin-GUI-Crash in EVCS-Tabelle behoben (Style-Definitionen als Objekt statt String).",
+      "en": "Fix: Prevented Admin GUI crash in EVCS table (style definitions as object instead of string)."
+    },
+    "0.4.48": {
+      "de": "Fix: Einstellungsseite liest beim Laden die aktuellen Werte (zuletzt gespeicherte Eingaben) ein; doppelte Event-Listener werden verhindert.",
+      "en": "Fix: Settings page now loads current values (last saved inputs) on page load; prevents duplicate event listeners."
+    },
+    "0.4.47": {
+      "de": "Fix: /settings.html wieder direkt erreichbar (Route ergänzt). Settings-Seite nutzt /static/styles.css und wird beim Direktaufruf sichtbar (inkl. Installer-Button).",
+      "en": "Fix: /settings.html reachable again (route added). Settings page uses /static/styles.css and shows on direct open (incl. installer button)."
+    },
+    "0.4.34": "(2025-12-15) Schritt 2: EVCS-Liste (Mehrfach-Wallbox) in Config + API bereitgestellt.",
+    "0.4.32": {
+      "de": "SmartHome A7: Sensor-Kacheln mit sauberer Wert-/Einheitsanzeige und Szenen-Kacheln mit Aktiv/Bereit-Anzeige im HomeKit-Style.",
+      "en": "SmartHome A7: Sensor tiles with clean value/unit display and scene tiles with active/ready labels in HomeKit-style UI."
+    },
+    "0.4.31": {
+      "de": "SmartHome A6/A10: RTR-Kachel mit Solltemperatur-Bedienung (±0,5 °C) und SmartHome-Config-Editor mit Datenpunkt-Auswahl in der VIS.",
+      "en": "SmartHome A6/A10: RTR tile with setpoint control (±0.5 °C) and SmartHome config editor with datapoint selection in the VIS."
+    },
+    "0.4.10": {
+      "en": "Fix: bind and display Production → Total (kWh) and CO₂ savings, add ' t' unit for CO₂.",
+      "de": "Fix: Bindung und Anzeige für Produktion → Gesamt (kWh) und CO₂‑Ersparnis; zusätzlich ' t' als Einheit für CO₂."
+    },
+    "0.3.100": {
+      "en": "History: SoC line (right % axis). Live: Service Worker fetch fixed (Network‑First for JS/HTML; No‑Store for API/Events). All else same as 0.3.96 look.",
+      "de": "Historie: SoC‑Linie (rechte %-Achse). Live: Service‑Worker Fetch korrigiert (Network‑First für JS/HTML; No‑Store für API/Events). Optik wie 0.3.96."
+    },
+    "0.3.99": {
+      "en": "History visual: back to per-point look — force 1‑min step, disable step-lines, show small point markers, use LTTB sampling.",
+      "de": "Historie-Ansicht: wieder mit einzelnen Datenpunkten — 1‑Min‑Auflösung erzwungen, keine Stufenlinien, Punkte sichtbar, LTTB-Sampling."
+    },
+    "0.3.96": {
+      "en": "History re‑revert + robust auto‑advance: exactly like v0.3.84 renderer, but auto updates every 15s when 'To' ≈ now; SSE status dot restored.",
+      "de": "Historie wie v0.3.84 (Renderer), plus robuster Auto‑Weiterlauf (alle 15 s, wenn „Bis“ ≈ Jetzt) und wieder grüner Status‑Punkt (SSE)."
+    },
+    "0.3.95": {
+      "en": "History reverted 1:1 to v0.3.84 behaviour (renderer & range logic). Uses new SW cache v3 to avoid stale files.",
+      "de": "Historie 1:1 auf Stand v0.3.84 zurückgesetzt (Renderer & Zeitbereich). Nutzt neuen SW‑Cache v3, damit keine alten Dateien hängen bleiben."
+    },
+    "0.3.93": {
+      "en": "Service Worker cache updated (v3) and network-first for JS/HTML to prevent stale pages. Fixes issues where HISTORY didn't reflect latest code.",
+      "de": "Service‑Worker Cache aktualisiert (v3) und Network‑First für JS/HTML. Verhindert veraltete Seiten – HISTORY lädt jetzt sicher den neuesten Code."
+    },
+    "0.3.92": {
+      "en": "History auto-advance restored: if 'To' is close to now, the chart auto-updates every 30s (no visible toggle).",
+      "de": "Historie läuft wieder automatisch weiter: Wenn „Bis“ nahe „Jetzt“ liegt, aktualisiert der Chart alle 30 s (ohne sichtbaren Schalter)."
+    },
+    "0.3.91": {
+      "en": "History: live status dot (SSE) restored; no Live toggle. Errors are suppressed and auto-reconnect is slower to avoid console spam.",
+      "de": "Historie: Live‑Statuspunkt (SSE) wieder aktiv; kein Live‑Schalter. Fehler werden abgefangen, Reconnect mit weniger Konsole‑Spam."
+    },
+    "0.3.90": {
+      "en": "Fix history.html SyntaxError after revert (extra IIFE brace removed).",
+      "de": "Fix SyntaxError in history.html nach Revert (überflüssige geschlossene Klammer entfernt)."
+    },
+    "0.3.89": {
+      "en": "Revert History page to previous behavior: removed Live toggle and SSE connection. History is static again; use LIVE tab for realtime.",
+      "de": "Historie wieder wie zuvor: Live‑Schalter und SSE entfernt. Historie ist wieder statisch; Realtime wie gewohnt über LIVE."
+    },
+    "0.3.88": {
+      "en": "History: added Live toggle. When enabled, the chart auto-updates every 30s and keeps the end time at now.",
+      "de": "Historie: neuer Live‑Schalter. Aktiviert hält den Chart das Ende auf „Jetzt“ und lädt alle 30 s automatisch nach."
+    },
+    "0.3.87": {
+      "en": "Fix: Storage card now shows charge/discharge even with German element IDs.",
+      "de": "Fix: Speicher‑Karte zeigt Laden/Entladen nun auch mit deutschen Element‑IDs."
+    },
+    "0.3.86": {
+      "en": "Fix: Self-consumption card not updating when mapped — support German element IDs (selfVerbrauch*).",
+      "de": "Fix: Eigenverbrauch wurde nicht angezeigt — deutsche Element‑IDs (selfVerbrauch*) werden jetzt mit gesetzt."
+    },
+    "0.3.85": {
+      "en": "EVCS modal: power ring now fills proportional to rated kW. Admin → EVCS: new field “Max charging power (kW)”.",
+      "de": "EVCS‑Popup: Kreis füllt sich proportional zur Max‑Leistung. Admin → EVCS: neues Feld „Maximale Ladeleistung (kW)“."
+    },
+    "0.3.84": {
+      "en": "Fix: settings values persist in UI after reload; states are created and read on startup.\nImproved: always include local settings states in /api/state.",
+      "de": "Fix: Einstellungen bleiben nach Reload in der VIS sichtbar; States werden beim Start erstellt und ausgelesen.\nVerbesserung: Lokale Settings-States sind immer in /api/state enthalten."
+    },
+    "0.3.71": {
+      "en": "Color tweak: load (Verbrauch) set to purple.",
+      "de": "Farb-Update: Verbrauch (load) auf Lila gesetzt."
+    },
+    "0.3.70": {
+      "en": "History colors: buy=red, pv=yellow, charge=green, discharge unchanged, feed-in=blue.",
+      "de": "Historie-Farben: Bezug=Rot, PV=Gelb, Beladung=Grün, Entladung unverändert, Einspeisung=Blau."
+    },
+    "0.3.69": {
+      "en": "Fix: unify zero baseline variable to single 'y0' (no duplicate decls).",
+      "de": "Fix: Null-Basisvariable zu einmaligem 'y0' vereinheitlicht (keine doppelten Deklarationen)."
+    },
+    "0.3.68": {
+      "en": "Fix: removed duplicate 'y0' const in history.js to avoid SyntaxError.",
+      "de": "Fix: doppelte 'y0'-Konstante in history.js entfernt (SyntaxError behoben)."
+    },
+    "0.3.67": {
+      "en": "History: SoC anchored at zero line; enforced sign conventions (load/buy/charge positive, discharge/sell negative).",
+      "de": "Historie: SoC an der 0‑Linie verankert; Vorzeichen-Logik erzwungen (Verbrauch/Bezug/Beladung positiv, Entladung/Einspeisung negativ)."
+    },
+    "0.3.66": {
+      "en": "Fix: duplicate yPow declaration removed. Zero baseline highlighted.",
+      "de": "Fix: doppelte yPow-Definition entfernt. Null-Linie hervorgehoben."
+    },
+    "0.3.65": {
+      "en": "History: legend overlap fixed; raw-sample query; negative power below zero; auto y-scale; energy from timestamps.",
+      "de": "Historie: Legenden-Überlappung behoben; Rohwert-Abfrage; negative Leistungen unter 0; automatische Y-Skalierung; Energie via Zeitstempel."
+    },
+    "0.3.35": {
+      "en": "Fix: add missing closing brace to end of initMenu() in app.js; resolves 'Unexpected end of input'.",
+      "de": "Fix: fehlende schließende Klammer am Ende von initMenu() in app.js ergänzt; behebt 'Unexpected end of input'."
+    },
+    "0.3.34": {
+      "en": "Fix: removed leftover token code in app.js (invalid 'let null=null' and invalid assignment).",
+      "de": "Fix: verbliebenen Token-Code in app.js entfernt (ungültiges 'let null=null' und fehlerhafte Zuweisung)."
+    },
+    "0.3.33": {
+      "en": "Fix: removed stray top-level 'await' in www/app.js (line ~275) that caused SyntaxError in browsers.",
+      "de": "Fix: überflüssiges Top-Level-`await` in www/app.js (~Zeile 275) entfernt (Browser-SyntaxError)."
+    },
+    "0.3.32": {
+      "en": "Fix: remove duplicated else/closing braces in main.js login route causing SyntaxError around line 131.",
+      "de": "Fix: doppelte else-/Schlussklammern in main.js Login-Route entfernt (SyntaxError um Zeile 131)."
+    },
+    "0.3.31": {
+      "en": "Fix: stabilize cookie-based login route and guard; remove stray partial insertion causing SyntaxError in main.js; default password 'install2025!'.",
+      "de": "Fix: Cookie-Login/Guard bereinigt; fehlerhafte Teil-Einfügung in main.js behoben (SyntaxError); Standard-Passwort 'install2025!'."
+    },
+    "0.3.30": {
+      "en": "Default installer password = 'install2025!' if none configured; lock active by default.",
+      "de": "Standard-Installer-Passwort = 'install2025!' falls nicht konfiguriert; Bereich standardmäßig gesperrt."
+    },
+    "0.3.29": {
+      "en": "Feature: Cookie-based installer session (HttpOnly); client no longer handles tokens; /config reflects lock state; guard /api/set by cookie session.",
+      "de": "Feature: Cookie-basierte Installer-Session (HttpOnly); kein Token mehr im Client; /config meldet Lock-Status; /api/set durch Session geschützt."
+    },
+    "0.3.28": {
+      "en": "Fix: donut render used undefined chg2/dchg2; replaced with charge/discharge and removed duplicate vars.",
+      "de": "Fix: Donut-Render nutzte undefinierte chg2/dchg2; auf charge/discharge umgestellt und Dubletten entfernt."
+    },
+    "0.3.27": {
+      "en": "Fix: Remove extra closing braces in app.js (line ~418); add hidden username field to password form to satisfy browser accessibility hint.",
+      "de": "Fix: Überzählige schließende Klammern in app.js (ca. Zeile 418) entfernt; verstecktes Username-Feld im Passwort-Formular ergänzt (Browser-Hinweis)."
+    },
+    "0.3.26": {
+      "en": "Fix: Installer login form wrapped in <form>, cancel button closes panel; removed stray top-level await causing crash; keep settings hidden unless token present.",
+      "de": "Fix: Installer-Login in ein <form> verpackt, Abbrechen-Button schließt den Installer; doppelten Top‑Level-Block mit await entfernt (Crash behoben); Einstellungen bleiben gesperrt ohne Token."
+    },
+    "0.3.25": {
+      "de": "Semver-Fix (3-stellig), Installer-Login/Token und Syntax-Fixes enthalten.",
+      "en": "Semver fix (three-part); contains installer login/token and syntax fixes."
+    },
+    "0.3.24.2": {
+      "de": "Installer-Login in <form> verlegt, Submit-Handler mit preventDefault; Syntax-Guards verbessert.",
+      "en": "Installer login uses a form with submit handler; improved syntax guards."
+    },
+    "0.3.24.1": {
+      "de": "Syntaxfehler behoben: initInstallerPanel() wiederhergestellt; keine losen Klammern/Zeilen.",
+      "en": "Fixed syntax error: restored initInstallerPanel(); removed stray lines."
+    },
+    "0.3.24": {
+      "de": "Installer-Schutz gehärtet: kein prompt(); Formular bleibt gesperrt bis erfolgreichem Login; Panel-Init abgesichert.",
+      "en": "Hardened installer lock: removed prompt(); form stays locked until successful login; guarded panel init."
+    },
+    "0.3.23": {
+      "de": "Installer (Login+Token) ergänzt, /api/set mit Tokenpflicht; Donut-Render chg/dchg fix.",
+      "en": "Added installer (login+token), token-protected /api/set; donut render chg/dchg fix."
+    },
+    "0.3.12": {
+      "en": "Bigger brand logo and improved energy flow monitor proportions (responsive).",
+      "de": "Größeres Logo links oben und bessere Proportionen des Energiefluss-Monitors (responsiv)."
+    },
+    "0.3.11": {
+      "en": "Fix: Installer panel hidden on LIVE; console warning fixed (chg undefined); menu uses hideAllPanels; 'NexoWatt Admin' label; responsive grids.",
+      "de": "Fix: Installateur-Panel auf LIVE verborgen; Konsolen-Warnung (chg undefined) behoben; Menü ruft hideAllPanels; Button heißt 'NexoWatt Admin'; responsive Grids."
+    },
+    "0.3.10": {
+      "en": "Fix: JS syntax error (extra '}') prevented menu & live status. Now resolved.",
+      "de": "Fix: JS-Syntaxfehler (extra '}') blockierte Menü & Live-Status. Behoben."
+    },
+    "0.3.9": {
+      "en": "SSE auto-reconnect + DOMContentLoaded init (submenu + live green).",
+      "de": "SSE Auto-Reconnect + DOMContentLoaded-Init (Untermenü + Live grün)."
+    },
+    "0.3.8": {
+      "en": "Fix submenu + live status: DOMContentLoaded init and auto-reconnecting SSE.",
+      "de": "Untermenü + Live-Status gefixt: Initialisierung nach DOM-Load und automatische SSE-Reconnects."
+    },
+    "0.3.7": {
+      "en": "Menu reliability improvements (submenu toggle hardened).",
+      "de": "Untermenü zuverlässig: Toggle/Schließen robuster (StopPropagation + ESC)."
+    },
+    "0.3.6": {
+      "en": "Menu cleanup (removed About), Settings page without Installer button, pre-login before Installer view, improved Installer layout.",
+      "de": "Menü bereinigt (Über entfernt), Einstellungen ohne Installateur-Button, Login vor Installateur-Seite, bessere Installateur-Proportionen."
+    },
+    "0.3.5": {
+      "en": "Added Settings and password-protected Installer pages with ioBroker state bindings and admin link.",
+      "de": "Neue Seiten: Einstellungen und passwortgeschützte Installateur-Ansicht inkl. ioBroker-State-Zuordnungen und Admin-Link."
+    },
+    "0.3.4": {
+      "en": "Removed settings cards (SoC badge & refresh interval) and About panel from both main & settings view.",
+      "de": "Einstellungs-Karten (SoC-Badge & Aktualisierungsintervall) und Über-Panel aus Haupt- und Einstellungsansicht entfernt."
+    },
+    "0.3.3": {
+      "en": "Fix: LIVE tab switches back to main page (initTabs on startup).",
+      "de": "Fix: LIVE-Tab wechselt wieder zur Hauptseite (initTabs beim Start)."
+    },
+    "0.0.32": {
+      "en": "Add hamburger submenu with Settings; add settings panel with SoC badge toggle; minor styles",
+      "de": "Untermenü (Hamburger) mit 'Einstellungen' hinzugefügt; Einstellungsseite inkl. SoC-Badge-Schalter; kleinere Styles"
+    },
+    "0.0.30": {
+      "en": "Battery circle enlarged and inner layout tuned. Energy monitor respects existing datapoint settings.",
+      "de": "Batteriekreis vergrößert und Innenlayout angepasst. Energiemonitor berücksichtigt die bestehenden Datenpunkte."
+    },
+    "0.0.29": {
+      "en": "Icons moved above text inside circles; circles enlarged; labels and values placed inside; battery SoC shown inside battery only.",
+      "de": "Icons über die Texte in den Kreisen; Kreise vergrößert; Namen & Leistungen in den Kreisen; Batterie-SoC nur in der Batterie."
+    },
+    "0.0.28": {
+      "en": "Node labels and power moved inside circles; battery SoC shown inside battery; icons faded for readability.",
+      "de": "Namen und Leistungen in die Kreise verschoben; Batterie-SoC in der Batterie angezeigt; Icons leicht ausgeblendet."
+    },
+    "0.0.27": {
+      "en": "Removed extra battery texts; moved Full/Empty time next to battery power value.",
+      "de": "Zusatztexte (SoC/Laden/Entladen) entfernt; Voll/Leer-Zeit neben Batterie-Leistung angeordnet."
+    },
+    "0.0.26": {
+      "en": "Top-left brand icon updated to the provided NexoWatt logo (PNG).",
+      "de": "Brand-Icon oben links auf das bereitgestellte NexoWatt-Logo (PNG) aktualisiert."
+    },
+    "0.0.25": {
+      "en": "Top-left brand set to NexoWatt logo; battery labels added (SoC, charge, discharge) aligned towards the battery.",
+      "de": "Logo oben links auf NexoWatt gesetzt; Batterie-Beschriftungen (SoC, Laden, Entladen) entlang zur Batterie hinzugefügt."
+    },
+    "0.0.24": {
+      "en": "Energy flow arranged: Load center; PV top; Grid left; Wallbox right; Battery bottom. Header logo updated.",
+      "de": "Energiefluss angeordnet: Verbrauch Mitte; PV oben; Netz links; Wallbox rechts; Batterie unten. Header-Logo aktualisiert."
+    },
+    "0.0.23": {
+      "en": "Restore Energy Flow Monitor to v0.18 implementation; keep topbar tweaks.",
+      "de": "Energieflussmonitor wieder wie in v0.18 hergestellt; Topbar-Anpassungen beibehalten."
+    },
+    "0.0.22": {
+      "en": "Energy flow monitor fixed to always render PV/Grid/Load; graph box made smaller.",
+      "de": "Energiefluss-Monitor repariert (PV/Netz/Verbrauch werden immer gezeichnet); Graph-Box deutlich verkleinert."
+    },
+    "0.0.21": {
+      "en": "Energy graph visible again and smaller; initial render on load; center readouts restored.",
+      "de": "Energiefluss-Graph wieder sichtbar und kleiner; initiale Darstellung beim Laden; Mittelwerte wiederhergestellt."
+    },
+    "0.0.20": {
+      "en": "New dynamic Energy Graph: PV, Grid, Load always present; up to 7 extra nodes; optional cascade; topbar tweaks.",
+      "de": "Neuer dynamischer Energie-Graph: PV, Netz, Verbrauch immer sichtbar; bis zu 7 zusätzliche Knoten; optionale Kaskade; Topbar-Anpassungen."
+    },
+    "0.0.19": {
+      "en": "Increase donut graph size and layout width",
+      "de": "Donut-Graph vergrößert und Layout-Breite erhöht"
+    },
+    "0.0.18": {
+      "de": "Neuer Energiefluss als Netz-Graph mit animierten Richtungs-Linien, responsive. Optionale Verbraucher 1/2 in Admin.",
+      "en": "New energy web graph with animated directional lines, responsive. Optional consumers in admin."
+    },
+    "0.0.17": {
+      "de": "Donut an Vorlage ausgerichtet (Anker-Winkel), Icons am Ring, neues Logo oben links.",
+      "en": "Donut aligned to reference (anchor angles), icons hug ring, new brand logo top-left."
+    },
+    "0.0.16": {
+      "de": "Header: NexoWatt-Logo links eingefügt. Donut visuell verfeinert (Farben/Strich).",
+      "en": "Header brand logo added left. Donut refined (colors/strokes)."
+    },
+    "0.0.15": {
+      "de": "Energymonitor jetzt responsiv (Größe + Icon-Abstände skalieren).",
+      "en": "Energy monitor responsive."
+    },
+    "0.0.14": {
+      "de": "SVG-Icons dichter am Ring. Anordnung: PV oben, Netz links, Speicher unten, Verbrauch rechts.",
+      "en": "SVG icons tighter to ring. Layout: PV top, Grid left, Storage bottom, Load right."
+    },
+    "0.0.13": {
+      "de": "Donut: SVG-Icons, Segmente pro Quadrant bündig am Ring, Anteil am Gesamtfluss.",
+      "en": "Donut: SVG icons, quadrant-aligned segments hugging ring, share-of-total."
+    },
+    "0.0.12": {
+      "de": "Donut mit SVG-Icons und Segmentlängen als Anteil am Gesamtfluss.",
+      "en": "Donut uses SVG icons and segment lengths as share of total flow."
+    },
+    "0.0.11": {
+      "de": "Neuer Energymonitor 1:1 rund (schwarzer Hintergrund), Netz rot.",
+      "en": "New round energy monitor (dark), grid in red."
+    },
+    "0.0.10": {
+      "de": "Runder Energiemonitor mit Icons + SoC-Ring und Lade-/Entladezeit. Neuer Datenpunkt: Speicher Kapazität (kWh).",
+      "en": "Round energy monitor with icons + SoC ring and charge/discharge time. New datapoint: storage capacity (kWh)."
+    },
+    "0.0.9": {
+      "de": "PV-Kreis entfernt, Energiefluss-Monitor hinzugefügt; Oberfläche auf Deutsch.",
+      "en": "Removed PV ring, added energy-flow monitor; UI translated to German."
+    },
+    "0.0.8": {
+      "de": "Eingabefelder auf 'objectId' umgestellt (statt 'id'); Tabs-Struktur korrigiert.",
+      "en": "Switched inputs to 'objectId' (instead of 'id'); fixed tabs structure."
+    },
+    "0.0.7": {
+      "de": "Schema-Fix: Root 'tabs.items' jetzt als Objekt statt Array → Admin-Suche für IDs aktiv.",
+      "en": "Schema fix: root 'tabs.items' changed to object instead of array so Admin ID search works."
+    },
+    "0.0.6": {
+      "de": "Fix: jsonConfig mit explizitem 'attr' je Feld; ID-Suchdialog sollte erscheinen.",
+      "en": "Fix: jsonConfig explicit 'attr' for each field; ID search dialog should appear."
+    },
+    "0.0.5": {
+      "de": "Datenpunkte jetzt als auswählbare Objekt-IDs mit Suchdialog.",
+      "en": "Datapoints are now selectable object IDs with search dialog."
+    },
+    "0.0.4": {
+      "de": "Fix: jsonConfig validiert wieder; Tabs zeigen Titel & Label.",
+      "en": "Fix: jsonConfig validates again; tabs show title & label."
+    },
+    "0.0.3": {
+      "de": "Fix: Tab-Titel in den Instanzeinstellungen (title→label).",
+      "en": "Fix: Tab titles in instance settings (title→label)."
+    },
+    "0.0.2": {
+      "de": "Logos hinzugefügt, Standard-Datenpunkte vorbelegt, GitHub-Readme aktualisiert.",
+      "en": "Added logos, default datapoints prefilled, updated GitHub readme."
+    },
+    "0.0.1": {
+      "en": "Initial release: Responsive NexoWatt EMS dashboard",
+      "de": "Erste Version: Responsives NexoWatt EMS Dashboard"
+    },
+    "0.5.35": {
+      "en": "Phase 3.6: Station-first charging point configuration and budget/gates transparency in EMS App-Center status.",
+      "de": "Phase 3.6: Stationsbasierte Ladepunkt-Konfiguration und Budget/Gates-Transparenz im EMS App‑Center (Status)."
+    },
+    "0.5.42": {
+      "en": "Phase 4.1: §14a hardened (deterministic in-process snapshot), per-connector §14a binding is reflected in diagnostics/reasons, cache bump.",
+      "de": "Phase 4.1: §14a gehärtet (deterministischer In-Process Snapshot), §14a pro Ladepunkt wird in Diagnose/Reason-Codes sichtbar, Cache-Bump."
+    },
+    "0.5.47": {
+      "en": "VIS: EVCS end-customer control extended with 'Regelung' (enable/disable EMS automation) in dashboard modal + multi-chargepoint page. Backend: new per-chargepoint state userEnabled, config-enabled indicator, and safe stop behavior when regulation is off.",
+      "de": "VIS: EVCS-Endkundensteuerung erweitert: 'Regelung' (Automatik an/aus) im Dashboard‑Modal und auf der Multi‑Ladepunkte‑Seite. Backend: neuer Ladepunkt‑State userEnabled + cfgEnabled und sicheres Stop‑Verhalten bei deaktivierter Regelung."
+    },
+    "0.5.48": {
+      "de": "Phase 4.7: Endkunden-Bedienung für Tarife/Peak/§14a (Optimierung-Panel + Modalfenster). Peak-Shaving kann per Schalter deaktiviert werden; §14a-Status wird angezeigt. Robustere Default-Settings-Seeding & Bool-Handling (null => fallback).",
+      "en": "Phase 4.7: End-customer controls for tariffs/peak/§14a (optimization panel + modal). Peak shaving can be toggled; §14a status displayed. More robust default settings seeding & bool null handling."
+    },
+    "0.5.49": {
+      "en": "Phase 4.8: Added §14a configuration tab in the EMS App Center (mode, min-per-device, optional signals + consumer list). Peak-Shaving is now protected: no end-customer toggle in VIS and writes via /api/set are blocked.",
+      "de": "Phase 4.8: Neuer §14a-Tab im EMS App-Center (Modus, Mindestleistung, optionale Signale + Verbraucher-Liste). Peak-Shaving ist jetzt geschützt: kein Endkunden-Schalter in der VIS und Writes via /api/set werden blockiert."
+    },
+    "0.5.50": {
+      "en": "Phase 4.9: Energyflow layout + admin tab rename + installer link in settings",
+      "de": "Phase 4.9: Energiefluss-Layout + Admin-Tab umbenannt + Installer-Link in Einstellungen"
+    },
     "en": {
-      "0.6.40": [
-        "PV total: include PV power datapoints from PV curtailment inverter lists (read) + StorageFarm DC PV (derived).",
-        "StorageFarm: Auto-PV fallback when mapped PV datapoint does not resolve to a state (e.g. channel selected).",
-        "App-Center: PV curtailment inverter UI now supports mapping PV power (read); quick-setup auto-fills when available."
+      "0.5.55": "Phase 5.4: Threshold control app (rules: when X>Y then set/switch Z), incl. live quick control and installer configuration.",
+      "0.5.64": {
+        "title": "Hotfix UI",
+        "content": "Live view KPI & quick-control tiles consolidated (layout/design), HTML structure fixed."
+      },
+      "0.6.187": [
+        "✨ More room/area icons: kids room, guest room, fireplace room, gym, sauna, workshop, tech room, shed, carport (incl. 3D variants).",
+        "🧩 Builder library: room presets with name+icon via drag&drop (living room, kids room, etc.)."
       ]
     },
     "de": {
-      "0.6.40": [
-        "PV Gesamtleistung: PV-Istleistung aus PV-Abregelung (Read) + DC-PV aus Speicherfarm (abgeleitet) werden berücksichtigt.",
-        "Speicherfarm: Auto-PV Fallback wenn der gemappte PV-Datenpunkt keine State ist (z.B. Channel ausgewählt).",
-        "App-Center: PV-Abregelung (Wechselrichter) unterstützt PV-Istleistung (Read); Schnell-Inbetriebnahme füllt automatisch."
+      "0.5.55": "Phase 5.4: Schwellwertsteuerung als App (Regeln: wenn X>Y dann setze/schalte Z), inkl. Live-Schnellsteuerung und Installateur-Konfiguration.",
+      "0.5.64": {
+        "title": "Hotfix UI",
+        "content": "KPI- und Schnellsteuerungs-Kacheln im Live-View konsolidiert (Layout/Design), HTML-Struktur korrigiert."
+      },
+      "0.6.187": [
+        "✨ Mehr Raum-/Bereich-Icons: Kinderzimmer, Gästezimmer, Kaminzimmer, Fitness, Sauna, Werkstatt, Technikraum, Gartenhaus/Schuppen, Carport (inkl. 3D-Varianten).",
+        "🧩 Builder-Library: Raum-Presets mit Name+Icon per Drag&Drop (Wohnzimmer, Kinderzimmer, etc.)."
       ]
     },
-    "0.6.48": {
-      "en": "Stability: App-Center configuration is treated as single source of truth (SoT); automatic migration/seed from native config; improved EMS engine restart + init error diagnostics.",
-      "de": "Stabilitaet: App-Center-Konfiguration ist Single Source of Truth (SoT); automatische Migration/Initialisierung aus der nativen Admin-Konfiguration; robuster EMS-Engine-Restart + Init-Fehler-Diagnose."
+    "0.5.58": {
+      "en": "Phase 5.7: StorageFarm added to EMS App Center (installer) including pool/groups configuration, plus improved aggregated SoC/flows usage for multi-storage control.",
+      "de": "Phase 5.7: Speicherfarm im EMS App-Center (Installer) ergänzt inkl. Pool/Gruppen-Konfiguration, sowie verbesserte Nutzung des aggregierten SoC/Flüsse für Multi-Speicher-Regelung."
+    },
+    "0.5.62": {
+      "en": "Phase 6.1: Added BHKW control app (SoC-based start/stop) incl. VIS quick control card + modal; App-Center mapping/parameters; added /api/bhkw/snapshot; bumped PWA cache version.",
+      "de": "Phase 6.1: BHKW-Steuerung als App (SoC-geführt Start/Stop) inkl. VIS-Kachel + Schnellsteuerung; App‑Center Zuordnung/Parameter; /api/bhkw/snapshot ergänzt; PWA-Cache-Version erhöht."
+    },
+    "0.5.67": {
+      "en": "Hotfix: Live quick tiles depend on installed apps; energy flow monitor modernized + responsive; App-Center status fallback for grid power; extended icon choices for extra consumers.",
+      "de": "Hotfix: Live‑Funktionskacheln nur bei installierten Apps; Energiefluss‑Monitor modernisiert & responsiv; App‑Center Status mit Fallback für Netzleistung; erweiterte Icon‑Auswahl für Zusatzverbraucher."
+    },
+    "0.5.72": {
+      "en": "Hotfix: energyflow layout + UI robustness improvements",
+      "de": "Hotfix: Energiefluss-Layout + UI/Robustheit Verbesserungen"
+    },
+    "0.5.73": {
+      "en": "Hotfix: App-Center save stability (no adapter restart), fixed JSONConfig schema, added missing settings states, improved consumer layout",
+      "de": "Hotfix: App‑Center Save stabil (kein Adapter-Restart), JSONConfig Schema korrigiert, fehlende Settings‑States ergänzt, Verbraucher-Layout verbessert"
+    },
+    "0.6.1": {
+      "en": "VIS: relay control uses Aus/An buttons; Threshold-Control: end-customer can optionally adjust MinOn/MinOff via VIS; Added user permission flags for MinOn/MinOff.",
+      "de": "VIS: Relaissteuerung nutzt Aus/An-Buttons; Schwellwertsteuerung: Endkunde kann optional MinOn/MinOff in der VIS anpassen; Neue Rechte-Flags für MinOn/MinOff."
+    },
+    "0.6.13": {
+      "en": [
+        "Fix: bump adapter version to 0.6.13 (previous builds reported 0.6.9).",
+        "Feature: calculate CO₂ savings internally (PV generation + e-mobility consumption)."
+      ],
+      "de": [
+        "Fix: Adapter-Version korrekt auf 0.6.13 angehoben (vorher wurden Builds fälschlich als 0.6.9 angezeigt).",
+        "Feature: CO₂-Einsparung wird intern berechnet (PV-Erzeugung + E‑Mobilität-Verbrauch)."
+      ]
+    },
+    "0.6.29": {
+      "en": "Added RFID billing report (daily kWh per card) with PDF/CSV export.",
+      "de": "RFID/Ladekarten-Abrechnung (Tageswerte) inkl. PDF/CSV Export hinzugefügt."
+    },
+    "0.6.36": {
+      "en": [
+        "Storagefarm: Stabilized SoC aggregation (no jumps when a storage temporarily stops responding); added quality/debug states."
+      ],
+      "de": [
+        "Speicherfarm: SoC-Aggregation stabilisiert (keine Sprünge mehr bei kurzen Aussetzern); Qualitäts-/Debug-States ergänzt."
+      ]
+    },
+    "0.6.37": {
+      "en": [
+        "Tariff: SoC-aware storage charging hysteresis (cheap: charge only below 98%; stop at 100% and hold 0 W while full)."
+      ],
+      "de": [
+        "Tarif: SoC-basierte Ladehysterese (günstig: Laden nur unter 98%; ab 100% 0 W/ruhen solange günstig)."
+      ]
+    },
+    "0.6.38": {
+      "en": [
+        "Storagefarm: PV (DC) is now auto-detected from nexowatt-devices (aliases.r.pvPower) when not explicitly mapped; fixes missing PV sum in farm mode."
+      ],
+      "de": [
+        "Speicherfarm: PV (DC) wird bei Bedarf automatisch aus nexowatt-devices (aliases.r.pvPower) erkannt, wenn nicht manuell gemappt; behebt fehlende PV-Summe im Farm-Modus."
+      ]
+    },
+    "0.6.40": {
+      "en": [
+        "PV sum: include PV read datapoints from EVU/PV regulation inverter lists (optional) and auto-detected PV_INVERTER devices.",
+        "StorageFarm: DC PV auto-detection now also kicks in when pvPowerId points to a non-state (e.g. channel) so farm PV sum stays correct."
+      ],
+      "de": [
+        "PV-Summe: PV-Read-Datenpunkte aus der EVU/PV-Regelung (Wechselrichterlisten) werden (optional) berücksichtigt – zusätzlich zu automatisch erkannten PV_INVERTER-Geräten.",
+        "Speicherfarm: DC-PV Auto-Erkennung greift jetzt auch, wenn pvPowerId auf kein State zeigt (z.B. Channel) – dadurch bleibt die PV-Summe korrekt."
+      ]
+    },
+    "0.6.45": {
+      "en": "Fix: StorageFarm setpoint writes are now applied for all storages (including split charge/discharge setpoints). Fix: /api/state + Energiefluss monitor now auto-scales mapped kW power datapoints to W (grid import/export + derived loads).",
+      "de": "Fix: Speicherfarm Setpoints werden jetzt für alle Speicher sauber geschrieben (inkl. getrennter Lade-/Entlade-Setpoints). Fix: /api/state + Energiefluss-Monitor skaliert gemappte kW-Leistungs-Datenpunkte automatisch auf W (Netz Bezug/Einspeisung + abgeleitete Verbräuche)."
+    },
+    "0.6.47": {
+      "en": "Hotfix: App-Center (installer.configJson) is authoritative for installer-managed config sections (datapoints/settings/vis/emsApps/…). Prevents legacy Admin leftovers from affecting EMS/energyflow/tariff. UI: History chart tooltip alignment + reduced SSE connections.",
+      "de": "Hotfix: App-Center (installer.configJson) ist Source-of-Truth für installer-verwaltete Konfigbereiche (datapoints/settings/vis/emsApps/…). Verhindert, dass alte Admin-Reste EMS/Energiefluss/Tarif beeinflussen. UI: Historie Tooltip-Ausrichtung + weniger SSE-Verbindungen."
     },
     "0.6.58": {
       "en": "EMS/VIS: Energy totals (kWh) are now provided + historized by NexoWatt by default; App-Center mapping acts as override for external EMS counters.",
       "de": "EMS/VIS: Energie-Gesamtwerte (kWh) werden jetzt standardmaessig vom NexoWatt-EMS bereitgestellt und historisiert; App-Center-Mapping dient nur noch als Override fuer externe EMS-Zaehler."
     },
+    "0.6.60": {
+      "en": "Weather App: Added end-user activation toggle in Settings, with explicit Private vs Commercial mode. Commercial mode requires own API key. Live tile has no attribution/hint text and is only shown when enabled; weather API is not queried when disabled.",
+      "de": "Wetter-App: Aktivierung per Schalter in Einstellungen, mit klarer Auswahl Privat vs Gewerblich. Gewerblich erfordert eigenen API-Key. Live-Kachel ohne Hinweis/Attribution und nur bei Aktivierung sichtbar; bei deaktivierter Wetter-App keine API-Abfragen."
+    },
+    "0.6.61": {
+      "en": "Fix: Weather App settings toggle no longer reverts to OFF due to stale state updates. UI now trusts current input values and properly shows the weather configuration block (Private/Commercial + API key).",
+      "de": "Fix: Wetter-App Schalter springt nicht mehr durch veraltete State-Updates zurueck auf AUS. UI nutzt jetzt die aktuellen Eingabewerte und zeigt den Wetter-Konfigurationsbereich (Privat/Gewerblich + API-Key) korrekt an."
+    },
+    "0.6.64": {
+      "en": "VIS/EMS: Weather tile now shows PV forecast status even if forecast is invalid (helps diagnose missing tomorrow data). Storage Control: improved NVP fine balancing (smaller default NVP target/deadband in tariff discharge and allows smaller setpoints for :nvp sources).",
+      "de": "VIS/EMS: Wetter-Kachel zeigt jetzt den PV-Forecast-Status auch bei ungueltiger Prognose (hilft bei Diagnose, z.B. fehlende Morgen-Daten). Storage-Control: verbesserte NVP-Feinregelung (kleinere Default-Zielwerte/Hysterese im Tarif-Entladen und kleinere Setpoints fuer :nvp Quellen)."
+    },
+    "0.6.72": {
+      "en": "Tariff mode: PV reserve for grid charging using PV forecast (dynamic SoC cap / headroom) to avoid fully charging the battery from the grid when PV is expected. App-Center: single storage capacity (kWh) input is now properly visible (stack layout).",
+      "de": "Tarifmodus: PV‑Reserve fürs Netzladen anhand PV‑Forecast (dynamischer SoC‑Cap / Headroom), damit der Speicher bei erwarteter PV nicht mehr „voll“ aus dem Netz geladen wird. App‑Center: Kapazität (kWh) im Single‑Speicher ist jetzt korrekt sichtbar (Stack‑Layout)."
+    },
     "0.6.76": {
       "en": "EVCS Report: Fix kWh calculation when history buckets are sparse (e.g. 10-min logging with 2-min aggregation). Daily kWh now matches Historie/Influx values.",
       "de": "EVCS Report: kWh-Berechnung korrigiert bei sparsamen Historie-Buckets (z.B. 10‑Minuten Logging mit 2‑Minuten Aggregation). Tages-kWh stimmt jetzt mit Historie/Influx überein."
     },
-    "0.6.125": {
-      "en": [
-        "License: add time-limited trial keys (days) + status states",
-        "Admin license page: show license status (valid / trial / locked)"
-      ],
-      "de": [
-        "Lizenz: Zeitlich begrenzte Testschlüssel (Tage) + Status-States",
-        "Admin-Lizenzseite: Status-Anzeige (gültig / Test / gesperrt)"
-      ]
+    "0.6.105": {
+      "en": "NexoLogic: Added advanced heating control blocks (PI room controller with anti-windup + periodic update, Summer/Winter switch, window contact lock, heating curve for flow setpoint, and a 2-point mixer pulse controller).",
+      "de": "NexoLogic: Erweiterte Heizungs-/Regelungs-Bausteine ergänzt (PI-Raumregler mit Anti-Windup + zyklischem Update, Sommer/Winter-Umschalter, Fensterkontakt-Sperre, Heizkurve für Vorlauf-Soll sowie 2-Punkt-Mischer (Impuls))."
     },
-    "0.6.126": {
-      "en": [
-        "SmartHome: Improve tile name readability on phones (2-line wrapping + actions overlay)",
-        "License gate: show a clear hint when a trial license expired (incl. expiry date + optional system UUID)"
-      ],
-      "de": [
-        "SmartHome: Bessere Lesbarkeit der Kachel-Namen auf Smartphones (2-Zeilen-Umbruch + Actions als Overlay)",
-        "Lizenz-Sperrseite: Klarer Hinweis bei abgelaufener Testlizenz (inkl. Datum + optionaler System-UUID)"
-      ]
+    "0.6.176": {
+      "en": "SmartHome Config: Fix missing helper functions in the Drag & Drop builder (runtime errors).",
+      "de": "SmartHome-Konfiguration: Fehlende Helper-Funktionen im Drag-&-Drop Builder ergänzt (Runtime-Errors behoben)."
     },
-    "0.6.127": {
-      "en": [
-        "SmartHome: Mobile readability – 1-column layout <420px, text size toggle (compact/normal/large)",
-        "SmartHome: Long-press info toast (full name + room/function)"
-      ],
-      "de": [
-        "SmartHome: Mobile-Lesbarkeit – 1-Spalten-Layout <420px, Textgrößen-Umschalter (Kompakt/Normal/Groß)",
-        "SmartHome: Long-Press Info-Hinweis (voller Name + Raum/Funktion)"
-      ]
+    "0.6.177": {
+      "en": "SmartHome Config: Drag & Drop builder fixed (drop works reliably across browsers) + icon selection for floors/rooms/devices.",
+      "de": "SmartHome-Konfiguration: Drag-&-Drop Builder gefixt (Drop zuverlässig in allen Browsern) + Icon-Auswahl für Geschosse/Räume/Geräte."
     },
-    "0.6.128": {
+    "0.6.187": {
       "en": [
-        "PV surplus charging: PV budget now ignores EVCS load (stable regulation) + 5-min smoothing"
+        "✨ More room/area icons: kids room, guest room, fireplace room, gym, sauna, workshop, tech room, shed, carport (incl. 3D variants).",
+        "🧩 Builder library: room presets with name+icon via drag&drop (living room, kids room, etc.)."
       ],
       "de": [
-        "PV-Überschussladen: PV-Budget ignoriert jetzt EVCS-Last (stabile Regelung) + 5-Minuten Glättung"
-      ]
-    },
-    "0.6.129": {
-      "en": [
-        "EMS/EVCS: Installer-only debug lines for PV surplus (without EVCS) – instant + 5-min avg"
-      ],
-      "de": [
-        "EMS/EVCS: Installer-Debug für PV-Überschuss (ohne EVCS) – Instant + 5-Minuten-Ø"
-      ]
-    },
-    "0.6.130": {
-      "en": [
-        "History: Month/Year view now keeps future days/months empty (0) and no longer inflates totals"
-      ],
-      "de": [
-        "Historie: Monats-/Jahresansicht lässt zukünftige Tage/Monate leer (0) und verfälscht Summen nicht mehr"
-      ]
-    },
-    "0.6.134": {
-      "en": [
-        "EVCS report: Fix table rendering after header integration (data rows + totals work again)",
-        "EVCS report: CSV export buttons wired again"
-      ],
-      "de": [
-        "EVCS-Bericht: Tabelle nach Header-Integration repariert (Tageswerte + Summen funktionieren wieder)",
-        "EVCS-Bericht: CSV-Export Buttons wieder korrekt verdrahtet"
-      ]
-    },
-    "0.6.135": {
-      "en": [
-        "EVCS report: status dot uses the standard green 'live' indicator again",
-        "EVCS report: added a Back button to return to the previous view"
-      ],
-      "de": [
-        "EVCS-Bericht: Status-Dot nutzt wieder den standardmäßigen grünen Live-Indikator",
-        "EVCS-Bericht: Zurück-Button ergänzt (zur vorherigen Ansicht)"
-      ]
-    },
-    "0.6.133": {
-      "en": [
-        "EVCS report page: add full NexoWatt header navigation (no separate tab needed)",
-        "History: EVCS report opens in the same tab (easier back/navigation)"
-      ],
-      "de": [
-        "EVCS-Bericht: Voller NexoWatt-Header (Navigation wie auf allen Seiten)",
-        "Historie: EVCS-Bericht öffnet im gleichen Tab (leichter zurück / Navigation)"
+        "✨ Mehr Raum-/Bereich-Icons: Kinderzimmer, Gästezimmer, Kaminzimmer, Fitness, Sauna, Werkstatt, Technikraum, Gartenhaus/Schuppen, Carport (inkl. 3D-Varianten).",
+        "🧩 Builder-Library: Raum-Presets mit Name+Icon per Drag&Drop (Wohnzimmer, Kinderzimmer, etc.)."
       ]
     },
     "0.6.188": {
@@ -1994,9 +3304,21 @@
         "Backup verbessert: vorherige Backup-Version wird behalten + Auto-Restore wenn configJson leer/reset aussieht"
       ]
     },
+    "0.6.195": {
+      "en": "Maintenance: removed unused legacy admin/materialize artifacts (templates.json, index_m.*) and backup/duplicate static assets to reduce package size.",
+      "de": "Wartung: ungenutzte Legacy-Admin/Materialize-Artefakte (templates.json, index_m.*) sowie Backup-/Duplikat-Assets entfernt, um die Paketgröße zu reduzieren."
+    },
+    "0.6.196": {
+      "en": "EMS Charging Management: stabilized PV-only surplus charging by compensating delayed EVCS power metering with last commanded setpoints (prevents start/stop hopping around the ~4.2kW 3-phase minimum). Added diagnostics states pvEvcsActualW/pvEvcsCmdW/pvEvcsUsedW.",
+      "de": "EMS Charging Management: PV-Überschussladen (PV-only) stabilisiert, indem bei verzögerten EVCS-Leistungsmesswerten kurzfristig die letzten Sollwerte zur PV-Überschuss-Rekonstruktion genutzt werden (verhindert Start/Stop-Hoppen um die ~4,2kW 3-Phasen-Minimalleistung). Neue Diagnose-States pvEvcsActualW/pvEvcsCmdW/pvEvcsUsedW."
+    },
     "0.6.207": {
       "de": "Energiefluss-Monitor mit leichter clientseitiger Hysterese beruhigt, damit kleine Messwertsprünge und kurze Richtungswechsel nicht mehr so stark flackern. Leistungswerte werden dort jetzt mit nur noch einer Nachkommastelle angezeigt. Web-Cache-Version angehoben.",
       "en": "Energy-flow monitor now uses a light client-side hysteresis so small measurement jumps and short direction changes no longer flicker as much. Power values in that monitor are now shown with one decimal place only. Web cache version bumped."
+    },
+    "0.6.212": {
+      "de": "PV-Überschussladen stabilisiert: Reiner PV-Überschuss wird jetzt bevorzugt direkt als PV minus Verbrauch ohne EV minus Speicherladung berechnet. Zusätzlich gibt es eine kurze Einschwingzeit nach dem Start, damit Wallboxen/Fahrzeuge bei PV-Starts nicht sofort wieder abgeregelt werden.",
+      "en": "Stabilized PV surplus charging: pure PV surplus is now preferably calculated directly as PV minus non-EV consumption minus storage charging. In addition, a short startup settling time was added so wallboxes/vehicles are not immediately throttled back to 0 right after a PV-based start."
     }
   }
 }
