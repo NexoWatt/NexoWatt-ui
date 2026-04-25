@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.251",
+    "version": "0.6.252",
     "news": {
+      "0.6.252": {
+        "en": "SmartHome blind/shutter control fixed: the position slider and actuator feedback are handled consistently as 0-100 %. The level API now accepts blind devices, and up/down buttons write KNX/OpenKNX direction values 0/1 (false/true for boolean datapoints). The SmartHome configuration also creates proper level read/write fields for blinds and documents the 0/1 direction mapping.",
+        "de": "SmartHome Jalousie/Rollladen korrigiert: Positions-Slider und Aktor-Rückmeldung werden durchgängig als 0-100 % verarbeitet. Die Level-API akzeptiert jetzt auch Jalousie-Geräte, und Auf/Ab-Tasten schreiben KNX/OpenKNX-Richtungswerte 0/1 (false/true bei boolean-Datenpunkten). Die SmartHome-Konfiguration legt für Jalousien wieder saubere Level-Read/Write-Felder an und zeigt die 0/1-Richtungszuordnung an."
+      },
       "0.6.251": {
         "en": "Heating rod PV-auto and quick control fixes: the PV surplus calculation now subtracts grid import before adding already-running heating rod load, so heating rods are actively reduced/off at night or when importing from the grid. Duplicate stage write datapoints are coalesced to avoid contradictory ON/OFF writes. Heating rod quick-control gauges now fill against the configured total heating rod power and expose max/applied/measured power in readback.",
         "de": "Heizstab PV-Auto und Schnellsteuerung korrigiert: Die PV-Überschussberechnung zieht Netzbezug ab, bevor bereits laufende Heizstableistung wieder addiert wird. Dadurch werden Heizstäbe nachts bzw. bei Netzbezug aktiv reduziert/ausgeschaltet. Doppelte Stufen-Schreib-Datenpunkte werden zusammengefasst, damit keine widersprüchlichen EIN/AUS-Schreibbefehle entstehen. Der Ring der Heizstab-Schnellsteuerung wird jetzt gegen die konfigurierte Gesamtleistung befüllt und der Readback liefert Max-/Ist-/Sollleistung."
@@ -1756,8 +1760,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.251",
+  "version": "0.6.252",
   "news": {
+    "0.6.252": {
+      "en": "SmartHome blind/shutter control fixed: the position slider and actuator feedback are handled consistently as 0-100 %. The level API now accepts blind devices, and up/down buttons write KNX/OpenKNX direction values 0/1 (false/true for boolean datapoints). The SmartHome configuration also creates proper level read/write fields for blinds and documents the 0/1 direction mapping.",
+      "de": "SmartHome Jalousie/Rollladen korrigiert: Positions-Slider und Aktor-Rückmeldung werden durchgängig als 0-100 % verarbeitet. Die Level-API akzeptiert jetzt auch Jalousie-Geräte, und Auf/Ab-Tasten schreiben KNX/OpenKNX-Richtungswerte 0/1 (false/true bei boolean-Datenpunkten). Die SmartHome-Konfiguration legt für Jalousien wieder saubere Level-Read/Write-Felder an und zeigt die 0/1-Richtungszuordnung an."
+    },
     "0.6.251": {
       "en": "Heating rod PV-auto and quick control fixes: the PV surplus calculation now subtracts grid import before adding already-running heating rod load, so heating rods are actively reduced/off at night or when importing from the grid. Duplicate stage write datapoints are coalesced to avoid contradictory ON/OFF writes. Heating rod quick-control gauges now fill against the configured total heating rod power and expose max/applied/measured power in readback.",
       "de": "Heizstab PV-Auto und Schnellsteuerung korrigiert: Die PV-Überschussberechnung zieht Netzbezug ab, bevor bereits laufende Heizstableistung wieder addiert wird. Dadurch werden Heizstäbe nachts bzw. bei Netzbezug aktiv reduziert/ausgeschaltet. Doppelte Stufen-Schreib-Datenpunkte werden zusammengefasst, damit keine widersprüchlichen EIN/AUS-Schreibbefehle entstehen. Der Ring der Heizstab-Schnellsteuerung wird jetzt gegen die konfigurierte Gesamtleistung befüllt und der Readback liefert Max-/Ist-/Sollleistung."

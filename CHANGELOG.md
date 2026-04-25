@@ -1,3 +1,11 @@
+## 0.6.252
+
+- SmartHome Jalousie/Rollladen: Positions-Slider und Aktor-Rückmeldung werden jetzt durchgängig als 0-100 % behandelt.
+- SmartHome Level-API: Jalousie-Geräte werden beim Positions-Schreiben jetzt akzeptiert; der Slider schreibt damit wieder korrekt auf den konfigurierten Positions-Write-DP.
+- SmartHome Jalousie-Tasten: Auf schreibt 0/false, Ab schreibt 1/true; Stop bleibt ein Trigger. Boolean-Datenpunkte werden automatisch als false/true geschrieben.
+- SmartHome Konfiguration: Beim Gerätetyp Jalousie/Rollladen werden Level-Read/Write-Felder sauber angelegt; die DP-Testfunktion und Hinweise zeigen die 0/1-Richtungslogik an.
+- PWA/Web-Cache-Version angehoben.
+
 ## 0.6.251
 
 - Heizstab PV-Auto korrigiert: Netzbezug wird bei der Überschussrekonstruktion abgezogen, damit laufende Heizstäbe nachts bzw. bei Import nicht künstlich als PV-Überschuss weiterlaufen.

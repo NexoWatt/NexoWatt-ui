@@ -2472,7 +2472,7 @@ function nwGetStateText(dev) {
   }
   if (type === 'blind') {
     const pos = (typeof st.position === 'number') ? st.position : (typeof st.level === 'number' ? st.level : null);
-    if (typeof pos === 'number') return Math.round(pos) + ' %';
+    if (typeof pos === 'number') return Math.round(nwClampNumber(pos, 0, 100)) + ' %';
     return '—';
   }
   if (type === 'player') {
@@ -3604,12 +3604,15 @@ function nwCreateTile(dev, opts) {
 
   // Dimmer/Blind: optional slider (if level mapping exists)
   // We only show the slider on extra-large tiles to keep the default grid close to the standard tile UX.
-  if (size === 'xl' && (type === 'dimmer' || type === 'blind') && dev.io && dev.io.level && dev.io.level.readId) {
+  if (size === 'xl' && (type === 'dimmer' || type === 'blind') && dev.io && dev.io.level && (dev.io.level.readId || dev.io.level.writeId)) {
     const lvlCfg = dev.io.level;
-    const min = typeof lvlCfg.min === 'number' ? lvlCfg.min : 0;
-    const max = typeof lvlCfg.max === 'number' ? lvlCfg.max : 100;
+    const min = type === 'blind' ? 0 : (typeof lvlCfg.min === 'number' ? lvlCfg.min : 0);
+    const max = type === 'blind' ? 100 : (typeof lvlCfg.max === 'number' ? lvlCfg.max : 100);
     const st = dev.state || {};
-    const current = (typeof st.level === 'number') ? st.level : (typeof st.position === 'number' ? st.position : 0);
+    const current = type === 'blind'
+      ? ((typeof st.position === 'number') ? st.position : (typeof st.level === 'number' ? st.level : 0))
+      : ((typeof st.level === 'number') ? st.level : (typeof st.position === 'number' ? st.position : 0));
+    const hasLevelWrite = canWrite && !!(lvlCfg.writeId || lvlCfg.readId);
 
     const slider = document.createElement('input');
     slider.type = 'range';
@@ -3617,7 +3620,7 @@ function nwCreateTile(dev, opts) {
     slider.max = String(max);
     slider.value = String(Math.max(min, Math.min(max, current)));
     slider.className = 'nw-sh-slider nw-sh-slider--tilebig';
-    slider.disabled = !canWrite;
+    slider.disabled = !hasLevelWrite;
 
     // Visual progress fill (accent track)
     try { nwUpdateRangeFill(slider); } catch (_e) {}
@@ -3631,10 +3634,11 @@ function nwCreateTile(dev, opts) {
     slider.addEventListener('click', stop);
 
     slider.addEventListener('change', async (ev) => {
-      if (!canWrite) return;
+      if (!hasLevelWrite) return;
       const raw = Number(ev.target.value);
       if (!Number.isFinite(raw)) return;
-      await nwSetLevel(dev.id, raw);
+      const target = type === 'blind' ? nwClampNumber(raw, 0, 100) : raw;
+      await nwSetLevel(dev.id, target);
       await nwReloadDevices({ force: true });
     });
 
@@ -3727,7 +3731,8 @@ function nwCreateTile(dev, opts) {
       b.addEventListener('click', (ev) => ev.stopPropagation());
       b.addEventListener('click', async () => {
         if (!canWrite) return;
-        await nwCoverAction(dev.id, action);
+        const ok = await nwCoverAction(dev.id, action);
+        if (ok) await nwReloadDevices({ force: true });
       });
       return b;
     };
@@ -5379,12 +5384,15 @@ function nwCreateBlindPopover(dev, canWrite) {
   const wrap = document.createElement('div');
 
   const lvlCfg = (dev.io && dev.io.level) ? dev.io.level : {};
-  const hasWrite = canWrite && (typeof lvlCfg.writeId === 'string') && (String(lvlCfg.writeId).trim() !== '');
-  const min = (typeof lvlCfg.min === 'number') ? lvlCfg.min : 0;
-  const max = (typeof lvlCfg.max === 'number') ? lvlCfg.max : 100;
+  const hasWrite = canWrite && !!(
+    ((typeof lvlCfg.writeId === 'string') && (String(lvlCfg.writeId).trim() !== '')) ||
+    ((typeof lvlCfg.readId === 'string') && (String(lvlCfg.readId).trim() !== ''))
+  );
+  const min = 0;
+  const max = 100;
 
   const st = dev.state || {};
-  const current = (typeof st.position === 'number') ? st.position : (typeof st.level === 'number' ? st.level : 0);
+  const current = nwClampNumber((typeof st.position === 'number') ? st.position : (typeof st.level === 'number' ? st.level : 0), min, max);
 
   // Live-preview toggle (throttled writes while dragging)
   let livePreview = nwLoadBoolLS(NW_SH_LIVE_PREVIEW_LS_KEY, NW_SH_LIVE_PREVIEW_DEFAULT);
@@ -5618,8 +5626,8 @@ function nwCreateBlindPopover(dev, canWrite) {
       return;
     }
     hint.textContent = livePreview
-      ? 'Live-Vorschau: AN (gedrosselt). Beim Loslassen wird der Wert final übernommen.'
-      : 'Tipp: Regler ziehen oder Tasten nutzen.';
+      ? 'Live-Vorschau: AN (gedrosselt). Beim Loslassen wird der Wert final übernommen. Auf=0, Ab=1.'
+      : 'Tipp: Regler 0–100 % ziehen oder Tasten nutzen. Auf=0, Ab=1.';
   }
 
   updateHint();

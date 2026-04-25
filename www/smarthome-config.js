@@ -1061,21 +1061,36 @@ function nwValidateConfig(cfg) {
     } else if (type === 'blind') {
       const lvl = (io && io.level) ? io.level : {};
       const cover = (io && io.cover) ? io.cover : {};
-      const posRead = (lvl && typeof lvl.readId === 'string') ? lvl.readId.trim() : '';
-      const posWrite = (lvl && typeof lvl.writeId === 'string') ? lvl.writeId.trim() : '';
-      const upId = (cover && typeof cover.upId === 'string') ? cover.upId.trim() : '';
-      const downId = (cover && typeof cover.downId === 'string') ? cover.downId.trim() : '';
-      const stopId = (cover && typeof cover.stopId === 'string') ? cover.stopId.trim() : '';
-      chkDp('Wert/Position lesen (readId)', posRead);
-      chkDp('Wert/Position schreiben (writeId)', posWrite);
-      chkDp('Taster Auf (upId)', upId);
-      chkDp('Taster Ab (downId)', downId);
+      const legacyBlind = (io && io.blind) ? io.blind : {};
+      const posRead = (lvl && typeof lvl.readId === 'string' && lvl.readId.trim())
+        ? lvl.readId.trim()
+        : ((cover && typeof cover.positionId === 'string' && cover.positionId.trim())
+          ? cover.positionId.trim()
+          : ((legacyBlind && typeof legacyBlind.posId === 'string') ? legacyBlind.posId.trim() : ''));
+      const posWrite = (lvl && typeof lvl.writeId === 'string' && lvl.writeId.trim())
+        ? lvl.writeId.trim()
+        : ((cover && typeof cover.writeId === 'string' && cover.writeId.trim())
+          ? cover.writeId.trim()
+          : ((legacyBlind && typeof legacyBlind.posId === 'string') ? legacyBlind.posId.trim() : ''));
+      const upId = (cover && typeof cover.upId === 'string' && cover.upId.trim())
+        ? cover.upId.trim()
+        : ((legacyBlind && typeof legacyBlind.upId === 'string') ? legacyBlind.upId.trim() : '');
+      const downId = (cover && typeof cover.downId === 'string' && cover.downId.trim())
+        ? cover.downId.trim()
+        : ((legacyBlind && typeof legacyBlind.downId === 'string') ? legacyBlind.downId.trim() : '');
+      const stopId = (cover && typeof cover.stopId === 'string' && cover.stopId.trim())
+        ? cover.stopId.trim()
+        : ((legacyBlind && typeof legacyBlind.stopId === 'string') ? legacyBlind.stopId.trim() : '');
+      chkDp('Position lesen / Status (readId)', posRead);
+      chkDp('Position schreiben (writeId)', posWrite);
+      chkDp('Taster Auf / Richtung 0 (upId)', upId);
+      chkDp('Taster Ab / Richtung 1 (downId)', downId);
       chkDp('Taster Stop (stopId)', stopId);
       if (!posRead && !posWrite && !upId && !downId && !stopId) {
         nwPushIssue(out, 'error', 'Gerät', 'Jalousie/Rollladen ohne Datenpunkte (Position oder up/down/stop fehlt).', ent);
       }
       if (readOnly && !posRead && !upId && !downId && !stopId) {
-        nwPushIssue(out, 'error', 'Gerät', 'Nur Anzeige (readOnly) aktiv, aber kein Read-DP (Position) und keine Tasten-DPs gesetzt.', ent);
+        nwPushIssue(out, 'error', 'Gerät', 'Nur Anzeige (readOnly) aktiv, aber kein Read-DP (Position/Status) und keine Tasten-DPs gesetzt.', ent);
       }
     } else if (type === 'rtr') {
       const cl = (io && io.climate) ? io.climate : {};
@@ -5491,12 +5506,28 @@ function nwRenderShcfgBuilderProps(container) {
       container.appendChild(nwCreateDpInput('Dimmer Level DP', dev.io.dimmer.levelId || '', (v) => { dev.io.dimmer.levelId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
       container.appendChild(nwCreateDpInput('RGB DP', dev.io.color.rgbId || '', (v) => { dev.io.color.rgbId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
     } else if (dev.type === 'blind') {
-      dev.io.blind = dev.io.blind || { upId: null, downId: null, stopId: null, posId: null, tiltId: null };
-      container.appendChild(nwCreateDpInput('Auf (DP)', dev.io.blind.upId || '', (v) => { dev.io.blind.upId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Ab (DP)', dev.io.blind.downId || '', (v) => { dev.io.blind.downId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Stop (DP)', dev.io.blind.stopId || '', (v) => { dev.io.blind.stopId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Position (DP)', dev.io.blind.posId || '', (v) => { dev.io.blind.posId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
-      container.appendChild(nwCreateDpInput('Lamelle (DP)', dev.io.blind.tiltId || '', (v) => { dev.io.blind.tiltId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      // Modernes Schema wie im Expertenmodus. Ältere io.blind-Werte werden einmalig übernommen,
+      // damit bestehende Konfigurationen nach dem Update weiterlaufen.
+      const legacyBlind = dev.io.blind || {};
+      dev.io.level = dev.io.level || { readId: null, writeId: null, min: 0, max: 100 };
+      dev.io.level.readId = dev.io.level.readId || legacyBlind.posId || null;
+      dev.io.level.writeId = dev.io.level.writeId || legacyBlind.posId || null;
+      dev.io.level.min = 0;
+      dev.io.level.max = 100;
+      dev.io.cover = dev.io.cover || { upId: null, downId: null, stopId: null };
+      dev.io.cover.upId = dev.io.cover.upId || legacyBlind.upId || null;
+      dev.io.cover.downId = dev.io.cover.downId || legacyBlind.downId || null;
+      dev.io.cover.stopId = dev.io.cover.stopId || legacyBlind.stopId || null;
+
+      container.appendChild(nwCreateDpInput('Position lesen / Status (readId)', dev.io.level.readId || '', (v) => { dev.io.level.readId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Position schreiben (writeId)', dev.io.level.writeId || '', (v) => { dev.io.level.writeId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Auf / Richtung 0 (upId)', dev.io.cover.upId || '', (v) => { dev.io.cover.upId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Ab / Richtung 1 (downId)', dev.io.cover.downId || '', (v) => { dev.io.cover.downId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      container.appendChild(nwCreateDpInput('Stop (stopId)', dev.io.cover.stopId || '', (v) => { dev.io.cover.stopId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+      const hint = document.createElement('div');
+      hint.className = 'nw-config-help';
+      hint.textContent = 'Slider/Status läuft fest 0–100 %. Auf schreibt 0, Ab schreibt 1. Bei einem KNX-Richtungs-DP denselben DP bei Auf und Ab eintragen.';
+      container.appendChild(nwCreateFieldRow('Hinweis', hint));
     } else if (dev.type === 'rtr') {
       dev.io.rtr = dev.io.rtr || { tempId: null, setId: null, modeId: null, humidityId: null };
       container.appendChild(nwCreateDpInput('Temperatur (DP)', dev.io.rtr.tempId || '', (v) => { dev.io.rtr.tempId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
@@ -6382,11 +6413,13 @@ function nwCreateDpInput(labelText, value, onChange) {
       }
 
       let val;
-      // Cover commands are usually trigger-like booleans
+      // Jalousie/Rollladen: KNX/OpenKNX Richtung AUF=0, AB=1; Stop bleibt ein Trigger.
       if (labelLower.includes('upid') || labelLower.includes('downid') || labelLower.includes('stopid')) {
-        const ok = confirm('Befehl an ' + id + ' senden?\n\nWert: true');
+        if (labelLower.includes('upid')) val = 0;
+        else if (labelLower.includes('downid')) val = 1;
+        else val = true;
+        const ok = confirm('Befehl an ' + id + ' senden?\n\nWert: ' + String(val));
         if (!ok) return;
-        val = true;
       } else {
         const raw = prompt('Wert für ' + id + ' setzen:', '');
         if (raw === null) return;
@@ -6695,7 +6728,10 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       } else if (t === 'dimmer') {
         d.io.level = d.io.level || { readId: null, writeId: null, min: 0, max: 100 };
       } else if (t === 'blind') {
-        d.io.cover = d.io.cover || { readId: null, upId: null, downId: null, stopId: null, min: 0, max: 100 };
+        d.io.level = d.io.level || { readId: null, writeId: null, min: 0, max: 100 };
+        d.io.level.min = 0;
+        d.io.level.max = 100;
+        d.io.cover = d.io.cover || { upId: null, downId: null, stopId: null };
       } else if (t === 'rtr') {
         d.io.climate = d.io.climate || { currentTempId: null, setpointId: null, modeId: null, humidityId: null, minSetpoint: 15, maxSetpoint: 30 };
       } else if (t === 'camera') {
@@ -6990,15 +7026,28 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
 
     if (io.level) {
       const l = io.level;
-      const readRow = nwCreateDpInput('Wert/Position lesen (readId)', l.readId || '', (val) => {
+      const isBlindLevel = String(dev.type || '').toLowerCase() === 'blind';
+      if (isBlindLevel) {
+        l.min = 0;
+        l.max = 100;
+      }
+      const readRow = nwCreateDpInput(isBlindLevel ? 'Position lesen / Status (readId)' : 'Wert/Position lesen (readId)', l.readId || '', (val) => {
         nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
         nwShcState.config.devices[index].io.level = nwShcState.config.devices[index].io.level || {};
         nwShcState.config.devices[index].io.level.readId = val || null;
+        if (isBlindLevel) {
+          nwShcState.config.devices[index].io.level.min = 0;
+          nwShcState.config.devices[index].io.level.max = 100;
+        }
       });
-      const writeRow = nwCreateDpInput('Wert/Position schreiben (writeId)', l.writeId || '', (val) => {
+      const writeRow = nwCreateDpInput(isBlindLevel ? 'Position schreiben (writeId)' : 'Wert/Position schreiben (writeId)', l.writeId || '', (val) => {
         nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
         nwShcState.config.devices[index].io.level = nwShcState.config.devices[index].io.level || {};
         nwShcState.config.devices[index].io.level.writeId = val || null;
+        if (isBlindLevel) {
+          nwShcState.config.devices[index].io.level.min = 0;
+          nwShcState.config.devices[index].io.level.max = 100;
+        }
       });
 
       const minMaxCtl = document.createElement('div');
@@ -7041,17 +7090,24 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
 
       body.appendChild(readRow);
       body.appendChild(writeRow);
-      body.appendChild(minMaxRow);
+      if (isBlindLevel) {
+        const rangeHint = document.createElement('div');
+        rangeHint.className = 'nw-config-help';
+        rangeHint.textContent = 'Jalousie/Rollladen: Bereich ist fest 0–100 %. 0 = oben/offen, 100 = unten/geschlossen bzw. passend zur Aktor-Rückmeldung.';
+        body.appendChild(nwCreateFieldRow('Bereich', rangeHint));
+      } else {
+        body.appendChild(minMaxRow);
+      }
     }
 
     if (io.cover) {
       const c = io.cover;
-      const upRow = nwCreateDpInput('Taster Auf (upId)', c.upId || '', (val) => {
+      const upRow = nwCreateDpInput('Taster Auf / Richtung 0 (upId)', c.upId || '', (val) => {
         nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
         nwShcState.config.devices[index].io.cover = nwShcState.config.devices[index].io.cover || {};
         nwShcState.config.devices[index].io.cover.upId = val || null;
       });
-      const downRow = nwCreateDpInput('Taster Ab (downId)', c.downId || '', (val) => {
+      const downRow = nwCreateDpInput('Taster Ab / Richtung 1 (downId)', c.downId || '', (val) => {
         nwShcState.config.devices[index].io = nwShcState.config.devices[index].io || {};
         nwShcState.config.devices[index].io.cover = nwShcState.config.devices[index].io.cover || {};
         nwShcState.config.devices[index].io.cover.downId = val || null;
@@ -7064,6 +7120,12 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
       body.appendChild(upRow);
       body.appendChild(downRow);
       body.appendChild(stopRow);
+      if (String(dev.type || '').toLowerCase() === 'blind') {
+        const hint = document.createElement('div');
+        hint.className = 'nw-config-help';
+        hint.textContent = 'Jalousie: Positions-Slider/Status immer 0–100 %. Auf schreibt 0/false, Ab schreibt 1/true. Bei einem KNX-Richtungs-DP denselben DP bei Auf und Ab eintragen.';
+        body.appendChild(hint);
+      }
     }
 
     if (io.climate) {

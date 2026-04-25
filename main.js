@@ -622,35 +622,33 @@ class NexoWattVis extends utils.Adapter {
     // Semantik im UI:
     //  - "on"  = AUF
     //  - "off" = ZU
-    // Bevorzugt: Cover-Buttons (up/down), da unabhängig von der Prozent-Skalierung.
+    // KNX/OpenKNX-typisch: Richtung AUF = 0/false, Richtung AB = 1/true.
     if (dev.type === 'blind' && dev.io) {
       const cover = dev.io.cover || null;
       const lvlCfg = dev.io.level || null;
 
       // AUF
       if (doOn) {
-        if (cover && cover.upId) {
-          await this.setForeignStateAsync(cover.upId, true);
+        if (cover && (cover.upId || cover.actionId)) {
+          await this.setForeignStateAsync(cover.upId || cover.actionId, 0);
           return true;
         }
         if (lvlCfg && (lvlCfg.writeId || lvlCfg.readId)) {
           const dpId = lvlCfg.writeId || lvlCfg.readId;
-          const min = (typeof lvlCfg.min === 'number') ? lvlCfg.min : 0;
-          await this.setForeignStateAsync(dpId, min);
+          await this.setForeignStateAsync(dpId, 0);
           return true;
         }
         return false;
       }
 
       // ZU
-      if (cover && cover.downId) {
-        await this.setForeignStateAsync(cover.downId, true);
+      if (cover && (cover.downId || cover.actionId)) {
+        await this.setForeignStateAsync(cover.downId || cover.actionId, 1);
         return true;
       }
       if (lvlCfg && (lvlCfg.writeId || lvlCfg.readId)) {
         const dpId = lvlCfg.writeId || lvlCfg.readId;
-        const max = (typeof lvlCfg.max === 'number') ? lvlCfg.max : 100;
-        await this.setForeignStateAsync(dpId, max);
+        await this.setForeignStateAsync(dpId, 100);
         return true;
       }
       return false;
@@ -1080,21 +1078,32 @@ class NexoWattVis extends utils.Adapter {
     // Cover (blind) actions: up/down/stop OR position (number)
     if (kLower === 'cover') {
       const v = (typeof value === 'string') ? value.trim().toLowerCase() : value;
-      // action datapoint
+      // action datapoint: AUF = 0, AB = 1, STOP = true
       if (typeof v === 'string' && (v === 'up' || v === 'down' || v === 'stop')) {
         const cv = (dev.io && dev.io.cover) ? dev.io.cover : null;
-        if (!cv || !cv.actionId) return false;
-        const map = cv.actionMap || { up: 'up', down: 'down', stop: 'stop' };
-        const payload = map[v] || v;
-        await this.setForeignStateAsync(cv.actionId, payload);
+        if (!cv) return false;
+        let dpId = '';
+        let payload;
+        if (v === 'up') {
+          dpId = cv.upId || cv.actionId || '';
+          payload = (cv.actionMap && Object.prototype.hasOwnProperty.call(cv.actionMap, 'up')) ? cv.actionMap.up : 0;
+        } else if (v === 'down') {
+          dpId = cv.downId || cv.actionId || '';
+          payload = (cv.actionMap && Object.prototype.hasOwnProperty.call(cv.actionMap, 'down')) ? cv.actionMap.down : 1;
+        } else {
+          dpId = cv.stopId || cv.actionId || '';
+          payload = (cv.actionMap && Object.prototype.hasOwnProperty.call(cv.actionMap, 'stop')) ? cv.actionMap.stop : true;
+        }
+        if (!dpId) return false;
+        await this.setForeignStateAsync(dpId, payload);
         return true;
       }
-      // position via level
+      // position via level: Jalousie immer 0..100 %
       if (typeof v === 'number' && dev.io && dev.io.level && (dev.io.level.writeId || dev.io.level.readId)) {
         const lvlCfg = dev.io.level;
         const dpId = lvlCfg.writeId || lvlCfg.readId;
-        const min = (typeof lvlCfg.min === 'number') ? lvlCfg.min : 0;
-        const max = (typeof lvlCfg.max === 'number') ? lvlCfg.max : 100;
+        const min = (dev.type === 'blind') ? 0 : ((typeof lvlCfg.min === 'number') ? lvlCfg.min : 0);
+        const max = (dev.type === 'blind') ? 100 : ((typeof lvlCfg.max === 'number') ? lvlCfg.max : 100);
         const target = Math.max(min, Math.min(max, v));
         await this.setForeignStateAsync(dpId, target);
         return true;
@@ -5559,23 +5568,29 @@ buildSmartHomeDevicesFromConfig() {
         }
       } else if (type === 'dimmer' || type === 'blind') {
         const lvl = ioCfg.level || {};
-        const readId = lvl.readId || '';
-        const writeId = lvl.writeId || lvl.readId || '';
+        const cover = ioCfg.cover || {};
+        const legacyBlind = ioCfg.blind || {};
+        const readId = (type === 'blind')
+          ? (lvl.readId || cover.positionId || cover.readId || legacyBlind.posId || '')
+          : (lvl.readId || '');
+        const writeId = (type === 'blind')
+          ? (lvl.writeId || cover.writeId || lvl.readId || cover.positionId || cover.readId || legacyBlind.posId || '')
+          : (lvl.writeId || lvl.readId || '');
         if (readId || writeId) {
           dev.io.level = {
             readId,
             writeId,
-            min: typeof lvl.min === 'number' ? lvl.min : 0,
-            max: typeof lvl.max === 'number' ? lvl.max : 100,
+            // Jalousie-/Rollladenpositionen werden in der VIS immer als 0..100 % geführt.
+            min: type === 'blind' ? 0 : (typeof lvl.min === 'number' ? lvl.min : 0),
+            max: type === 'blind' ? 100 : (typeof lvl.max === 'number' ? lvl.max : 100),
           };
         }
         if (type === 'blind') {
-          const cover = ioCfg.cover || {};
           dev.io.cover = {
-            positionId: lvl.readId || '',
-            upId: cover.upId || '',
-            downId: cover.downId || '',
-            stopId: cover.stopId || '',
+            positionId: readId || '',
+            upId: cover.upId || legacyBlind.upId || '',
+            downId: cover.downId || legacyBlind.downId || '',
+            stopId: cover.stopId || legacyBlind.stopId || '',
           };
         }
       } else if (type === 'rtr') {
@@ -5810,8 +5825,8 @@ buildSmartHomeDevicesFromConfig() {
       dev.io.level = {
         readId: positionId,
         writeId: positionId,
-        min: typeof opts.min === 'number' ? opts.min : 0,
-        max: typeof opts.max === 'number' ? opts.max : 100,
+        min: 0,
+        max: 100,
       };
     }
 
@@ -6233,6 +6248,9 @@ if (copy.type === 'scene' && typeof copy.state.on !== 'undefined') {
         }
         if (typeof val !== 'number' || Number.isNaN(val)) {
           val = 0;
+        }
+        if (copy.type === 'blind') {
+          val = Math.max(0, Math.min(100, val));
         }
         copy.state.level = val;
 
@@ -7400,7 +7418,7 @@ app.post('/api/smarthome/toggle', requireAuth, async (req, res) => {
   }
 });
 
-// Level-API für Dimmer (Slider)
+// Level-API für Dimmer und Jalousie/Rollladen (Slider 0..100 %)
 app.post('/api/smarthome/level', requireAuth, async (req, res) => {
   try {
     const id = req.body && req.body.id;
@@ -7413,8 +7431,12 @@ app.post('/api/smarthome/level', requireAuth, async (req, res) => {
       ? this.smartHomeDevices
       : this.buildSmartHomeDevicesFromConfig();
     const dev = devices.find(d => d.id === id);
-    if (!dev || dev.type !== 'dimmer' || !dev.io || !dev.io.level || !dev.io.level.readId) {
-      return res.status(404).json({ ok: false, error: 'device not found or not a dimmer' });
+    const isLevelDevice = dev && (dev.type === 'dimmer' || dev.type === 'blind');
+    if (!isLevelDevice || !dev.io || !dev.io.level || !(dev.io.level.writeId || dev.io.level.readId)) {
+      return res.status(404).json({ ok: false, error: 'device not found or not a level device' });
+    }
+    if (dev.behavior && dev.behavior.readOnly) {
+      return res.status(403).json({ ok: false, error: 'readOnly' });
     }
 
     // level in Zahl umwandeln
@@ -7429,13 +7451,16 @@ app.post('/api/smarthome/level', requireAuth, async (req, res) => {
     }
 
     const levelCfg = dev.io.level;
-    const min = typeof levelCfg.min === 'number' ? levelCfg.min : 0;
-    const max = typeof levelCfg.max === 'number' ? levelCfg.max : 100;
-    let target = Math.max(min, Math.min(max, level));
+    const min = dev.type === 'blind' ? 0 : (typeof levelCfg.min === 'number' ? levelCfg.min : 0);
+    const max = dev.type === 'blind' ? 100 : (typeof levelCfg.max === 'number' ? levelCfg.max : 100);
+    const target = Math.max(min, Math.min(max, level));
 
     const dpId = levelCfg.writeId || levelCfg.readId;
     await this.setForeignStateAsync(dpId, target);
-    return res.json({ ok: true, state: { level: target, on: target > min } });
+
+    const state = { level: target, on: target > min };
+    if (dev.type === 'blind') state.position = target;
+    return res.json({ ok: true, state });
   } catch (e) {
     this.log.warn('SmartHome level API error: ' + e.message);
     res.status(500).json({ ok: false, error: 'internal error' });
@@ -7502,7 +7527,7 @@ app.post('/api/smarthome/color', requireAuth, async (req, res) => {
 app.post('/api/smarthome/cover', requireAuth, async (req, res) => {
   try {
     const id = req.body && req.body.id;
-    const action = req.body && req.body.action;
+    const action = String((req.body && req.body.action) || '').trim().toLowerCase();
     if (!id || !action) {
       return res.status(400).json({ ok: false, error: 'missing id or action' });
     }
@@ -7514,15 +7539,22 @@ app.post('/api/smarthome/cover', requireAuth, async (req, res) => {
     if (!dev || dev.type !== 'blind' || !dev.io || !dev.io.cover) {
       return res.status(404).json({ ok: false, error: 'device not found or not a blind/cover' });
     }
+    if (dev.behavior && dev.behavior.readOnly) {
+      return res.status(403).json({ ok: false, error: 'readOnly' });
+    }
 
     const cover = dev.io.cover || {};
-    let dpId;
+    let dpId = '';
+    let rawPayload;
     if (action === 'up') {
-      dpId = cover.upId;
+      dpId = cover.upId || cover.actionId || '';
+      rawPayload = (cover.actionMap && Object.prototype.hasOwnProperty.call(cover.actionMap, 'up')) ? cover.actionMap.up : 0; // KNX/OpenKNX: 0/false = AUF
     } else if (action === 'down') {
-      dpId = cover.downId;
+      dpId = cover.downId || cover.actionId || '';
+      rawPayload = (cover.actionMap && Object.prototype.hasOwnProperty.call(cover.actionMap, 'down')) ? cover.actionMap.down : 1; // KNX/OpenKNX: 1/true = AB
     } else if (action === 'stop') {
-      dpId = cover.stopId;
+      dpId = cover.stopId || '';
+      rawPayload = (cover.actionMap && Object.prototype.hasOwnProperty.call(cover.actionMap, 'stop')) ? cover.actionMap.stop : true;
     } else {
       return res.status(400).json({ ok: false, error: 'invalid action' });
     }
@@ -7531,8 +7563,20 @@ app.post('/api/smarthome/cover', requireAuth, async (req, res) => {
       return res.status(404).json({ ok: false, error: 'no datapoint for action' });
     }
 
-    await this.setForeignStateAsync(dpId, true);
-    return res.json({ ok: true });
+    const coercePayloadForDp = async (targetDpId, payload) => {
+      if (action !== 'up' && action !== 'down') return payload;
+      try {
+        const obj = await this.getForeignObjectAsync(targetDpId);
+        const typ = String(obj && obj.common && obj.common.type || '').toLowerCase();
+        if (typ === 'boolean') return !!payload;
+        if (typ === 'string') return String(payload);
+      } catch (_e) {}
+      return payload;
+    };
+
+    const payload = await coercePayloadForDp(dpId, rawPayload);
+    await this.setForeignStateAsync(dpId, payload);
+    return res.json({ ok: true, state: { action, value: rawPayload } });
   } catch (e) {
     this.log.warn('SmartHome cover API error: ' + e.message);
     res.status(500).json({ ok: false, error: 'internal error' });
