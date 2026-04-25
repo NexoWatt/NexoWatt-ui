@@ -739,16 +739,21 @@ if (typeof soc === 'number') {
         // Hausverbrauch ausregeln kann, während der DC-Teil parallel PV in den
         // Speicher schiebt.
         const feneconAcModeConfigured = cfg.feneconAcMode === true;
+        const hasExplicitSelfFlag = (cfg.selfDischargeEnabled === true || cfg.selfDischargeEnabled === false);
         // FENECON-AC ist ein Sonderpfad für Einzel-Speicher. Bei aktiver SpeicherFarm
-        // bleibt die bewährte Farm-/Multi-Storage-Regelung vollständig im Legacy-Pfad.
+        // bleibt die Farm-Regelung im normalen Multi-Storage-/NVP-Pfad. Wichtig:
+        // Wenn ältere Installationen den FENECON-Haken als implizite Freigabe für
+        // Eigenverbrauch genutzt haben, darf diese Freigabe in der Farm NICHT verloren gehen.
         const feneconAcMode = !!(feneconAcModeConfigured && !farmEnabled);
+        const farmSelfDischargeFallback = !!(farmEnabled && feneconAcModeConfigured && !hasExplicitSelfFlag);
         // Sicherheits-Gate: Die EVCS-vor-Speicher-Priorität darf ausschließlich im
-        // aktiven FENECON-AC-Modus wirken. Alle herkömmlichen Speicher und Farm-Setups
-        // ignorieren diese Caps.
+        // aktiven FENECON-AC-Einzel-Speicher-Modus wirken. Alle herkömmlichen Speicher
+        // und alle SpeicherFarm-Setups ignorieren diese Caps.
         const evPriorityBlockStorageCharge = !!(feneconAcMode && evPriorityBlockStorageChargeRaw);
         const evPriorityStarvedW = feneconAcMode ? evPriorityStarvedWRaw : 0;
-        const hasExplicitSelfFlag = (cfg.selfDischargeEnabled === true || cfg.selfDischargeEnabled === false);
-        const selfDischargeEnabled = hasExplicitSelfFlag ? (cfg.selfDischargeEnabled === true) : feneconAcMode;
+        const selfDischargeEnabled = hasExplicitSelfFlag
+            ? (cfg.selfDischargeEnabled === true)
+            : (feneconAcMode || farmSelfDischargeFallback);
         const selfMinSoc = clamp(num(cfg.selfMinSocPct, reserveMin), 0, 100);
         const selfMaxSoc = clamp(num(cfg.selfMaxSocPct, 100), 0, 100);
         // Eigenverbrauchs-Optimierung: Ziel-Netzbezug am NVP.
@@ -1000,7 +1005,8 @@ if (typeof soc === 'number') {
 						      let capKWhEstimated = false;
 						      try {
 						        const farmCfg2 = (this.adapter && this.adapter.config && this.adapter.config.storageFarm) ? this.adapter.config.storageFarm : null;
-						        if (farmCfg2 && farmCfg2.enabled && Array.isArray(farmCfg2.storages)) {
+						        const farmEnabledForCapacity = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
+						        if (farmEnabledForCapacity && farmCfg2 && Array.isArray(farmCfg2.storages)) {
 						          let sum = 0;
 						          for (const s of farmCfg2.storages) {
 						            if (!s || s.enabled === false) continue;
@@ -1915,6 +1921,7 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     acMode: false,
                     configured: !!feneconAcModeConfigured,
                     disabledReason: (feneconAcModeConfigured && farmEnabled) ? 'storageFarm-active' : null,
+                    farmSelfDischargeFallback: !!farmSelfDischargeFallback,
                     loadTargetW: null,
                     loadSource: null,
                 },

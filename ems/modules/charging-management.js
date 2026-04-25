@@ -1077,11 +1077,18 @@ class ChargingManagementModule extends BaseModule {
         const storageCfgForEvPriority = (this.adapter && this.adapter.config && this.adapter.config.storage)
             ? this.adapter.config.storage
             : {};
-        const storageControlEnabledForEvPriority = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageControl !== false);
-        const storageFarmActiveForEvPriority = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm === true);
+        const storageFarmCfgForEvPriority = (this.adapter && this.adapter.config && this.adapter.config.storageFarm)
+            ? this.adapter.config.storageFarm
+            : {};
+        const isTruthyFlag = (v) => v === true || v === 1 || String(v).toLowerCase() === 'true' || String(v) === '1';
+        const storageControlEnabledForEvPriority = !(this.adapter && this.adapter.config && this.adapter.config.enableStorageControl === false);
+        const storageFarmActiveForEvPriority = !!(this.adapter && this.adapter.config && (
+            isTruthyFlag(this.adapter.config.enableStorageFarm) || isTruthyFlag(storageFarmCfgForEvPriority.enabled)
+        ));
         // Die mit 0.6.247 eingeführte EVCS-vor-Speicher-Priorität ist ein FENECON-Sonderpfad.
         // Für alle herkömmlichen Speicher und für SpeicherFarm-Setups bleibt das bisherige
-        // PV-/Speicher-/Wallbox-Verhalten unverändert.
+        // PV-/Speicher-/Wallbox-Verhalten unverändert. Das Farm-Gate ist bewusst bool-tolerant,
+        // weil ioBroker/native Werte je nach Quelle auch als String/Number ankommen können.
         const feneconEvPriorityActive = !!(storageControlEnabledForEvPriority
             && !storageFarmActiveForEvPriority
             && storageCfgForEvPriority.feneconAcMode === true);

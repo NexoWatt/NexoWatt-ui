@@ -1,3 +1,10 @@
+## 0.6.249
+- SpeicherFarm-Regressionsfix: FENECON-EV-Priorität bleibt für Farmen aus, aber Farm-Setups mit gesetztem FENECON-Haken verlieren nicht mehr automatisch die normale Eigenverbrauchs-Entladung.
+- SpeicherFarm-Verteilung entschärft: keine harte 0-W-Verteilung mehr durch quadratische SoC-Gewichtung; Online-Speicher oberhalb ihrer SoC-Untergrenze erhalten wieder proportionale Sollwerte.
+- SpeicherFarm-Diagnose ergänzt: `storageFarm.lastDispatchJson` zeigt Zielwert, Quelle, SoC-Untergrenze und die verteilten Lade-/Entlade-Sollwerte pro Speicher.
+- Charging-Management: Farm-Erkennung für die FENECON-EV-Priorität bool-tolerant gemacht, damit String/Number-Flags die Farm nicht versehentlich in den FENECON-Sonderpfad schieben.
+- Web-Cache-Version erhöht.
+
 ## 0.6.248
 - EVCS/Speicher-Priorität aus 0.6.247 auf den aktiven FENECON-AC-Modus begrenzt. Herkömmliche Speicher behalten damit das bisherige PV-/Speicher-/Wallbox-Verhalten.
 - Charging-Management: PV-/Min+PV-Wallboxen lösen die neue Speicher-Vorranglogik nur noch aus, wenn `storage.feneconAcMode` aktiv und keine Speicherfarm eingeschaltet ist.

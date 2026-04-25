@@ -3195,6 +3195,7 @@ class NexoWattVis extends utils.Adapter {
       storagesDegraded: { type: 'number', role: 'value', def: 0, name: 'Degraded Speicher (abgeleitet)' },
       storagesTotal: { type: 'number', role: 'value', def: 0, name: 'Konfigurierte Speicher' },
       storagesStatusJson: { type: 'string', role: 'json', def: '[]', name: 'Speicher-Status (JSON, abgeleitet)' },
+      lastDispatchJson: { type: 'string', role: 'json', def: '{}', name: 'Letzte Sollwert-Verteilung (JSON, Debug)' },
     };
 
     for (const [key, c] of Object.entries(defs)) {
@@ -3240,6 +3241,7 @@ class NexoWattVis extends utils.Adapter {
       storagesDegraded: 0,
       storagesTotal: 0,
       storagesStatusJson: '[]',
+      lastDispatchJson: '{}',
     };
 
     for (const [k, defVal] of Object.entries(defaults)) {
@@ -4004,7 +4006,10 @@ try {
     const reserveMin = Number(storageCfg.reserveMinSocPct);
     const reserveFloor = (reserveEnabled && Number.isFinite(reserveMin)) ? reserveMin : 0;
 
-    const selfEnabled = storageCfg.selfDischargeEnabled === true;
+    const farmEnabled = !!(this.config && this.config.enableStorageFarm);
+    const feneconFarmFallback = !!(farmEnabled && storageCfg.feneconAcMode === true
+      && !(storageCfg.selfDischargeEnabled === true || storageCfg.selfDischargeEnabled === false));
+    const selfEnabled = storageCfg.selfDischargeEnabled === true || feneconFarmFallback;
     const selfMin = Number(storageCfg.selfMinSocPct);
     const selfFloor = (selfEnabled && Number.isFinite(selfMin)) ? selfMin : 0;
 
@@ -4183,14 +4188,21 @@ try {
         } else if (dir === 'discharge') {
           if (typeof soc === 'number') {
             const aboveFloor = Math.max(0, soc - dischargeFloorSoc);
-            base = aboveFloor * aboveFloor;
-
-            // In Eigenverbrauch soll der Speicher mit höherem SoC sichtbar mehr tragen.
-            // Die niedrigste Batterie wird daher bei deutlicher Spreizung fast entlastet.
-            if (socSpread >= 1) {
-              const deltaToMin = soc - minSoc;
-              if (deltaToMin <= 0.35) base *= 0.02;
-              else base *= (1 + deltaToMin);
+            if (aboveFloor <= 0.05) {
+              base = 0;
+            } else {
+              // Farm-/Pool-Balancing: höhere SoCs sollen mehr tragen, aber ein
+              // online verfügbarer Speicher oberhalb seiner Entlade-Untergrenze darf
+              // nicht praktisch auf 0 W fallen. Die frühere quadratische Gewichtung
+              // plus Spreizungsfaktor hat bei 88%/49% fast die komplette Entladung
+              // auf Speicher 1 gelegt. Das macht den zweiten Speicher scheinbar
+              // wirkungslos und kann die Farm aus dem Gleichgewicht bringen.
+              base = Math.pow(aboveFloor, 1.15);
+              if (socSpread >= 1 && Number.isFinite(minSoc) && Number.isFinite(maxSoc)) {
+                const rel = Math.max(0, Math.min(1, (soc - minSoc) / Math.max(1, socSpread)));
+                // 0.75..1.35: sichtbare SoC-Balance ohne harte Abschaltung.
+                base *= (0.75 + rel * 0.60);
+              }
             }
           } else {
             base = 1;
@@ -4253,27 +4265,11 @@ try {
         oi = (oi + 1) % order.length;
       }
 
-      // Kleine Entladeanteile an sehr niedrige SoCs bringen in der Praxis oft nichts.
-      // Solche Mini-Sollwerte werden auf stärkere Speicher umverteilt.
-      if (dir === 'discharge' && list.length > 1) {
-        const minAllocW = 150;
-        const recipients = order.filter(i => alloc[i] >= minAllocW && (weights[i] || 0) > 0);
-        if (recipients.length > 0) {
-          let reclaimed = 0;
-          for (let i = 0; i < alloc.length; i++) {
-            if (alloc[i] > 0 && alloc[i] < minAllocW) {
-              reclaimed += alloc[i];
-              alloc[i] = 0;
-            }
-          }
-          let ri = 0;
-          while (reclaimed > 0 && recipients.length > 0) {
-            alloc[recipients[ri]] += 1;
-            reclaimed -= 1;
-            ri = (ri + 1) % recipients.length;
-          }
-        }
-      }
+      // Keine pauschale Mini-Watt-Umverteilung im Pool-Modus:
+      // Auch kleine Sollwerte sind als Keepalive/Feinregelung wichtig. Eine harte
+      // 150-W-Schwelle hat bei kleinen NVP-Korrekturen dazu geführt, dass einzelne
+      // online Speicher dauerhaft 0-W-Setpoints bekommen haben. Hersteller, die
+      // Mindestleistungen benötigen, begrenzen intern oder über ihre eigenen DPs.
 
       const allocMap = new Map();
       const weightMap = new Map();
@@ -4302,10 +4298,20 @@ try {
     const eligible = hasOnlineInfo ? eligibleAll.filter(s => s.online === true) : eligibleAll;
     if (hasOnlineInfo && eligible.length === 0) return { applied: false, reason: 'no_online_storages' };
 
+    // Entladen nur auf Speicher verteilen, die oberhalb der jeweils aktiven
+    // SoC-Untergrenze liegen. Dadurch verhindert die Farm, dass ein einzelner
+    // niedriger Speicher durch Fallback-Gewichtung trotzdem wieder Sollwerte bekommt.
+    const eligibleForDispatch = (direction === 'discharge')
+      ? eligible.filter(s => {
+          const soc = Number(s && s.soc);
+          return !Number.isFinite(soc) || soc > (dischargeFloorSoc + 0.05);
+        })
+      : eligible;
+
     // Allocation map: storage -> watts for active direction
     let allocMap = new Map();
 
-    if (direction === 'idle') {
+    if (direction === 'idle' || (direction !== 'idle' && eligibleForDispatch.length === 0)) {
       allocMap = new Map();
     } else if (sf.mode === 'groups' && sf.groups && sf.groups.length > 0) {
       // Group allocation: distribute to groups proportionally, then within group weighted
@@ -4313,7 +4319,7 @@ try {
       const groupBuckets = new Map();
       for (const g of groups) groupBuckets.set(g.name, []);
 
-      for (const s of eligible) {
+      for (const s of eligibleForDispatch) {
         const gname = s.group && groupBuckets.has(s.group) ? s.group : null;
         if (!gname) continue;
         const g = groups.find(x => x.name === gname) || null;
@@ -4327,7 +4333,7 @@ try {
       // Remove empty groups
       const activeGroups = groups.filter(g => (groupBuckets.get(g.name) || []).length > 0);
       if (activeGroups.length === 0) {
-        allocMap = allocateWeighted(absW, eligible, direction).allocMap;
+        allocMap = allocateWeighted(absW, eligibleForDispatch, direction).allocMap;
       } else {
         const gWeights = activeGroups.map(g => {
           const items = groupBuckets.get(g.name) || [];
@@ -4358,7 +4364,7 @@ try {
         }
       }
     } else {
-      allocMap = allocateWeighted(absW, eligible, direction).allocMap;
+      allocMap = allocateWeighted(absW, eligibleForDispatch, direction).allocMap;
     }
 
     // Apply writes: always zero the opposite direction to avoid stale values
@@ -4425,6 +4431,33 @@ try {
       this._sfRememberDispatchSnapshot(s, direction, alloc);
       results.push(r);
     }
+
+    // Diagnose für Farm-Verteilung: damit sofort sichtbar ist, welcher Speicher
+    // welchen Sollwert bekommen hat und ob eine SoC-Untergrenze gegriffen hat.
+    try {
+      const diag = {
+        ts: Date.now(),
+        mode: sf.mode,
+        direction,
+        targetW: w,
+        source: src,
+        dischargeFloorSocPct: (direction === 'discharge') ? dischargeFloorSoc : null,
+        onlineStorages: eligible.length,
+        dispatchStorages: eligibleForDispatch.length,
+        results: results.map(r => ({
+          name: r.name || '',
+          soc: r.soc,
+          actualChargeW: r.actualChargeW,
+          actualDischargeW: r.actualDischargeW,
+          chargeW: r.chargeW,
+          dischargeW: r.dischargeW,
+          ok: r.ok,
+        })),
+      };
+      const json = JSON.stringify(diag);
+      await this.setStateAsync('storageFarm.lastDispatchJson', { val: json, ack: true });
+      try { this.updateValue('storageFarm.lastDispatchJson', json, Date.now()); } catch (_eUpd) {}
+    } catch (_eDiag) {}
 
     // Log only on debug to avoid noise
     try {
@@ -14938,7 +14971,7 @@ return res.json(out);
       // Weather App (FIS settings)
       'weatherEnabled','weatherUsageMode','weatherApiKey'
     ];
-    const storageFarmLocalKeys = ['enabled', 'mode', 'configJson', 'groupsJson', 'totalSoc', 'medianSoc', 'totalSocOnline', 'socSourcesTotal', 'socSourcesOnline', 'socDegraded', 'totalChargePowerW', 'totalDischargePowerW', 'totalPvPowerW', 'storagesOnline', 'storagesDegraded', 'storagesTotal', 'storagesStatusJson'];
+    const storageFarmLocalKeys = ['enabled', 'mode', 'configJson', 'groupsJson', 'totalSoc', 'medianSoc', 'totalSocOnline', 'socSourcesTotal', 'socSourcesOnline', 'socDegraded', 'totalChargePowerW', 'totalDischargePowerW', 'totalPvPowerW', 'storagesOnline', 'storagesDegraded', 'storagesTotal', 'storagesStatusJson', 'lastDispatchJson'];
     // Weitere lokale States, die in der VIS angezeigt werden sollen (ohne Admin-Mapping)
     // Wichtig: Diese Keys müssen auch dann funktionieren, wenn sie NICHT im Admin unter
     // "Datenpunkte" gemappt wurden. Daher wird im Subscribe-Loop unten auf die lokalen
