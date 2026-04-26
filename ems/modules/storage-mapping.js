@@ -62,7 +62,7 @@ class SpeicherMappingModule extends BaseModule {
             { id: `${base}.mapping.ladenErlaubtId`, name: 'Laden erlaubt Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.entladenErlaubtId`, name: 'Entladen erlaubt Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.reserveSocId`, name: 'Reserve-SoC Datenpunkt-ID', type: 'string', role: 'text', def: '' },
-            { id: `${base}.mapping.feneconGridSetpointId`, name: 'FENECON SetGridActivePower Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.feneconGridSetpointId`, name: 'FENECON SetGridActivePower Datenpunkt-ID (Legacy, nicht genutzt)', type: 'string', role: 'text', def: '' },
 
             { id: `${base}.socPct`, name: 'Speicher Ladezustand (SoC)', type: 'number', role: 'value.battery', def: 0 },
             { id: `${base}.socAlterMs`, name: 'SoC Alter (ms)', type: 'number', role: 'value.interval', def: 0 },
@@ -125,14 +125,9 @@ class SpeicherMappingModule extends BaseModule {
         const chargeEnId = String(dp.chargeEnableObjectId || '').trim();
         const dischargeEnId = String(dp.dischargeEnableObjectId || '').trim();
         const reserveSocId = String(dp.reserveSocObjectId || '').trim();
-
-        // FENECON-Hybrid Netzpunktführung: ctrlBalancing0/SetGridActivePower.
-        // Dieser Wert ist ein Netzanschlusspunkt-Sollwert (Import + / Export -),
-        // nicht die direkte Batterie-Leistung. Er wird nur vom expliziten
-        // FENECON-Sondermodus genutzt.
-        const feneconGridSetpointId = String(dp.feneconGridSetpointObjectId || dp.feneconSetGridActivePowerObjectId || '').trim();
-        const feneconGridSetpointScale = Number.isFinite(Number(dp.feneconGridSetpointScale)) ? Number(dp.feneconGridSetpointScale) : 1;
-        const feneconGridSetpointInv = !!dp.feneconGridSetpointInvert;
+        // FENECON-Hybrid ab 0.6.255 nutzt keinen SetGridActivePower-DP mehr.
+        // Der alte Konfigurationswert bleibt nur als Legacy-Diagnose erhalten.
+        const feneconGridSetpointId = '';
 
         // Diagnose schreiben
         await this._setIfChanged('speicher.mapping.modus', String(controlMode || ''));
@@ -243,24 +238,6 @@ class SpeicherMappingModule extends BaseModule {
             });
         }
 
-        if (feneconGridSetpointId) {
-            await this.dp.upsert({
-                key: 'st.feneconGridSetpointW',
-                name: 'FENECON SetGridActivePower',
-                objectId: feneconGridSetpointId,
-                dataType: 'number',
-                direction: 'out',
-                unit: 'W',
-                scale: feneconGridSetpointScale,
-                offset: 0,
-                invert: feneconGridSetpointInv,
-                deadband: 0,
-                min: -1000000,
-                max: 0,
-                note: 'FENECON ctrlBalancing0/SetGridActivePower: Netzpunkt-Sollwert, nur <= 0 W'
-            });
-        }
-
         if (reserveSocId) {
             await this.dp.upsert({
                 key: 'st.reserveSocPct',
@@ -279,11 +256,11 @@ class SpeicherMappingModule extends BaseModule {
         const missing = [];
         if (!socId) missing.push('SoC');
 
-        const feneconGridConfiguredRaw = (typeof feneconGridControlEnabled === 'boolean') ? (feneconGridControlEnabled === true) : (feneconAcMode === true);
-        const feneconGridConfigured = !!(feneconGridConfiguredRaw && !farmEnabled);
-        if (feneconGridConfigured) {
-            if (!feneconGridSetpointId) missing.push('FENECON SetGridActivePower');
-        } else if (String(controlMode) === 'targetPower') {
+        const feneconHybridConfiguredRaw = (typeof feneconGridControlEnabled === 'boolean') ? (feneconGridControlEnabled === true) : (feneconAcMode === true);
+        const feneconHybridConfigured = !!(feneconHybridConfiguredRaw && !farmEnabled);
+        if (feneconHybridConfigured || String(controlMode) === 'targetPower') {
+            // FENECON-Hybrid schreibt nur in den Betriebsfällen, in denen NexoWatt wirklich extern führen soll,
+            // auf den normalen beschreibbaren Batterie-Sollleistungs-DP. SetGridActivePower wird nicht benutzt.
             if (!sollId) missing.push('Sollleistung (W)');
         } else if (String(controlMode) === 'limits') {
             if (!maxChargeId) missing.push('Max Ladeleistung (W)');

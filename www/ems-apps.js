@@ -301,8 +301,7 @@
   const STORAGE_DP_FIELDS = [
     { key: 'socObjectId', label: 'SoC (%)', requiredModes: ['targetPower','limits','enableFlags'] },
     { key: 'batteryPowerObjectId', label: 'Ist-Leistung (W) (optional)', requiredModes: [] },
-    { key: 'targetPowerObjectId', label: 'Sollleistung (W)', requiredModes: ['targetPower'] },
-    { key: 'feneconGridSetpointObjectId', label: 'FENECON SetGridActivePower (W)', requiredModes: [], placeholder: 'z.B. fenecon.0.ctrlBalancing0.SetGridActivePower', hint: 'Nur für FENECON‑Netzpunktführung: ctrlBalancing0/SetGridActivePower. NexoWatt schreibt hier standardmäßig -100 W bis max. 0 W.' },
+    { key: 'targetPowerObjectId', label: 'Sollleistung (W)', requiredModes: ['targetPower'], hint: 'Bei FENECON‑Hybrid ist das der einzige beschreibbare Vorgabe‑DP für Be-/Entladung. SetGridActivePower wird nicht verwendet.' },
     { key: 'maxChargeObjectId', label: 'Max Ladeleistung (W)', requiredModes: ['limits'] },
     { key: 'maxDischargeObjectId', label: 'Max Entladeleistung (W)', requiredModes: ['limits'] },
     { key: 'chargeEnableObjectId', label: 'Laden erlaubt (bool)', requiredModes: ['enableFlags'] },
@@ -7053,6 +7052,14 @@ function _collectFlowPowerDpIsWFromUI() {
     patch.storage.controlMode = getStorageMode();
     patch.storage.datapoints = deepMerge({}, (currentConfig.storage && currentConfig.storage.datapoints) ? currentConfig.storage.datapoints : {});
     patch.storage.feneconGridControlEnabled = !!(els.storageFeneconAcMode && els.storageFeneconAcMode.checked);
+    // Der Haken bedeutet ab 0.6.255: FENECON-Hybrid/FEMS-Priorität.
+    // SetGridActivePower wird nicht mehr verwendet; ein eventuell vorhandener Legacy-DP wird entfernt.
+    try {
+      delete patch.storage.datapoints.feneconGridSetpointObjectId;
+      delete patch.storage.datapoints.feneconSetGridActivePowerObjectId;
+      delete patch.storage.datapoints.feneconGridSetpointScale;
+      delete patch.storage.datapoints.feneconGridSetpointInvert;
+    } catch (_e) {}
     // Alte FENECON-AC-Direktlogik nicht mehr über den Haken aktivieren.
     // Für SpeicherFarm-Altanlagen bleibt ein bereits vorhandenes feneconAcMode intern erhalten,
     // ansonsten wird es beim Speichern auf false gesetzt.

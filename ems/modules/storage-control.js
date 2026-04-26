@@ -164,12 +164,20 @@ class SpeicherRegelungModule extends BaseModule {
         this._tariffDischargeAllowed = true;
         this._tariffDischargeAllowedTrueSinceMs = 0;
 
-        // FENECON-Hybrid Netzpunktführung (ctrlBalancing0/SetGridActivePower).
-        // Dieser Modus ersetzt die alte direkte FENECON-AC-Speicherleistungslogik.
+        // FENECON-Hybrid Sondermodus.
+        // Ab 0.6.255 wird nicht mehr SetGridActivePower genutzt, weil dieser DP auf
+        // manchen FENECON/FEMS-Systemen nicht beschreibbar ist. Stattdessen gilt:
+        // - bei interner FENECON-PV >= Schwellwert: keine externe Vorgabe, FEMS regelt selbst
+        // - bei zusätzlicher externer PV: nur PV-Überschuss als Lade-Setpoint vorgeben
+        // - bei wenig/keiner PV: normale NexoWatt-Regelung (Tarif/LSK/Reserve) über den
+        //   vorhandenen Batterie-Sollleistungs-DP; dieser wird in jedem Tick erneuert
+        //   und bleibt damit innerhalb des FENECON-10s-Watchdogs.
         this._feneconGridLastWriteMs = 0;
         this._feneconGridLastSetpointW = null;
         this._feneconGridWasActive = false;
         this._feneconGridReleasedDirectTarget = false;
+        this._feneconHybridWasExternal = false;
+        this._feneconHybridLastMode = '';
 
     }
 
@@ -257,19 +265,19 @@ class SpeicherRegelungModule extends BaseModule {
             await this._setIfChanged('speicher.regelung.requestGrund', 'Deaktiviert');
             await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({ ts: Date.now(), disabled: true, reason: 'Deaktiviert' }));
 
-            // FENECON-Netzpunktführung bewusst freigeben, wenn die Speicher-App deaktiviert wird.
-            // Keine positive Vorgabe schreiben: 0 W ist der neutrale FENECON-Standard.
-            // Wichtig: auch zurücksetzen, wenn der Haken im selben Speichern-Vorgang deaktiviert wurde.
+            // FENECON-Hybrid: Bei deaktivierter Speicherregelung nicht zyklisch auf den
+            // Batterie-Sollleistungs-DP schreiben. Dadurch kann das FEMS nach seinem Watchdog
+            // wieder vollständig in den Normalmodus gehen.
             try {
-                let feneconGridWasActivePersisted = false;
-                try {
-                    const stFg = await this.adapter.getStateAsync('speicher.regelung.feneconGridAktiv');
-                    feneconGridWasActivePersisted = !!(stFg && stFg.val === true);
-                } catch {
-                    feneconGridWasActivePersisted = false;
-                }
-                if ((this._isFeneconGridControlConfigured(cfg) || this._feneconGridWasActive || feneconGridWasActivePersisted) && cfg.feneconGridResetOnDisable !== false) {
-                    await this._applyFeneconGridSetpointW(0, 'Speicherregelung deaktiviert – FENECON-Netzpunktführung zurückgesetzt', 'aus', { force: true, intervalMs: 1000 });
+                if (this._isFeneconHybridControlConfigured(cfg) || this._feneconHybridWasExternal || this._feneconGridWasActive) {
+                    await this._setFeneconHybridDiag({
+                        active: false,
+                        mode: 'disabled',
+                        reason: 'Speicherregelung deaktiviert – keine externe FENECON-Vorgabe',
+                        writeMode: 'no-write',
+                    });
+                    this._feneconHybridWasExternal = false;
+                    this._feneconHybridLastMode = 'disabled';
                     this._feneconGridWasActive = false;
                     this._feneconGridReleasedDirectTarget = false;
                 }
@@ -291,95 +299,27 @@ class SpeicherRegelungModule extends BaseModule {
         const hasFarmSetpoints = farmEnabled && farmRows.some(r => r && r.enabled !== false && (String(r.setSignedPowerId||'').trim() || String(r.setChargePowerId||'').trim() || String(r.setDischargePowerId||'').trim()));
 
         const hasTarget = this.dp ? !!this.dp.getEntry('st.targetPowerW') : false;
-        const feneconGridConfigured = this._isFeneconGridControlConfigured(cfg);
-        const feneconGridActive = !!(feneconGridConfigured && !farmEnabled);
-        const feneconGridBlockedByFarm = !!(feneconGridConfigured && farmEnabled);
-        const hasFeneconGridSetpoint = this.dp ? !!this.dp.getEntry('st.feneconGridSetpointW') : false;
+        const feneconHybridConfigured = this._isFeneconHybridControlConfigured(cfg);
+        const feneconHybridActive = !!(feneconHybridConfigured && !farmEnabled);
+        const feneconHybridBlockedByFarm = !!(feneconHybridConfigured && farmEnabled);
 
-        // Neuer FENECON-Hybrid-Sondermodus:
-        // Der alte direkte FENECON-AC-Lastfolger wird nicht mehr genutzt. Stattdessen
-        // wird ausschließlich der FENECON-Balancing-Sollwert am Netzanschlusspunkt gesetzt
-        // (ctrlBalancing0/SetGridActivePower). Keine Wirkung in SpeicherFarm-Setups.
-        if (feneconGridBlockedByFarm) {
-            if (this._feneconGridWasActive && cfg.feneconGridResetOnDisable !== false) {
-                await this._applyFeneconGridSetpointW(0, 'FENECON-Netzpunktführung wegen Speicherfarm deaktiviert – auf 0 W zurückgesetzt', 'aus', { force: true, intervalMs: 1000 });
-            }
-            await this._setIfChanged('speicher.regelung.feneconGridAktiv', false);
-            await this._setIfChanged('speicher.regelung.feneconGridSchreibStatus', 'ignoriert: Speicherfarm aktiv');
-            await this._setIfChanged('speicher.regelung.feneconGridGrund', 'FENECON-Netzpunktführung wird bei aktiver Speicherfarm nicht verwendet');
-            this._feneconGridWasActive = false;
-            this._feneconGridReleasedDirectTarget = false;
-        } else if (feneconGridActive) {
-            const setpointW = this._getFeneconGridSetpointW(cfg);
-            const writeIntervalMs = Math.max(1000, Math.round(num(cfg.feneconGridWriteIntervalSec, 15) * 1000));
-            const reasonGrid = 'FENECON Hybrid: Netzpunktführung über SetGridActivePower';
-
-            await this._releaseDirectStorageTargetForFenecon(reasonGrid);
-
-            let wr = { ok: false, status: 'dp-fehlt', valueW: setpointW };
-            if (hasFeneconGridSetpoint) {
-                wr = await this._applyFeneconGridSetpointW(setpointW, reasonGrid, 'fenecon-grid', { intervalMs: writeIntervalMs });
-            } else {
-                await this._setIfChanged('speicher.regelung.feneconGridAktiv', true);
-                await this._setIfChanged('speicher.regelung.feneconGridSollW', setpointW);
-                await this._setIfChanged('speicher.regelung.feneconGridQuelle', 'fenecon-grid');
-                await this._setIfChanged('speicher.regelung.feneconGridGrund', 'FENECON SetGridActivePower-Datenpunkt fehlt');
-                await this._setIfChanged('speicher.regelung.feneconGridSchreibOk', false);
-                await this._setIfChanged('speicher.regelung.feneconGridSchreibStatus', 'dp-fehlt');
-                await this._setIfChanged('speicher.regelung.feneconGridTargetObjId', '');
-                await this._setIfChanged('speicher.regelung.feneconGridLastWriteRaw', null);
-            }
-
-            await this._setIfChanged('speicher.regelung.requestW', 0);
-            await this._setIfChanged('speicher.regelung.requestQuelle', 'fenecon-grid');
-            await this._setIfChanged('speicher.regelung.requestGrund', reasonGrid);
-            await this._setIfChanged('speicher.regelung.sollW', 0);
-            await this._setIfChanged('speicher.regelung.quelle', 'fenecon-grid');
-            await this._setIfChanged('speicher.regelung.grund', hasFeneconGridSetpoint ? reasonGrid : 'FENECON SetGridActivePower-Datenpunkt fehlt');
-            await this._setIfChanged('speicher.regelung.schreibOk', !!(wr && wr.ok));
-            await this._setIfChanged('speicher.regelung.schreibStatus', hasFeneconGridSetpoint ? ('fenecon-grid:' + String(wr.status || '')) : 'fenecon-grid:dp-fehlt');
-            await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
-            await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({
-                ts: Date.now(),
-                mode: 'fenecon-grid',
-                storageTargetW: 0,
-                gridSetpointW: setpointW,
-                hasSetGridActivePowerDp: !!hasFeneconGridSetpoint,
-                writeStatus: wr && wr.status ? String(wr.status) : '',
-                farmBlocked: false,
-                reason: hasFeneconGridSetpoint ? reasonGrid : 'FENECON SetGridActivePower-Datenpunkt fehlt'
-            }));
-            await this._setIfChanged('speicher.regelung.policyJson', JSON.stringify({
-                ts: Date.now(),
-                fenecon: {
-                    gridControl: true,
-                    replacesLegacyAcMode: true,
-                    gridSetpointW: setpointW,
-                    targetObjectId: wr && wr.objectId ? String(wr.objectId) : '',
-                    writeStatus: wr && wr.status ? String(wr.status) : '',
-                    farmBlocked: false
-                }
-            }));
-
-            this._feneconGridWasActive = true;
-            this._lastTargetW = 0;
-            this._lastReason = hasFeneconGridSetpoint ? reasonGrid : 'FENECON SetGridActivePower-Datenpunkt fehlt';
-            this._lastSource = 'fenecon-grid';
-            return;
-        } else {
-            let feneconGridWasActivePersisted = false;
-            try {
-                const stFg = await this.adapter.getStateAsync('speicher.regelung.feneconGridAktiv');
-                feneconGridWasActivePersisted = !!(stFg && stFg.val === true);
-            } catch {
-                feneconGridWasActivePersisted = false;
-            }
-            if ((this._feneconGridWasActive || feneconGridWasActivePersisted) && cfg.feneconGridResetOnDisable !== false) {
-                await this._applyFeneconGridSetpointW(0, 'FENECON-Netzpunktführung deaktiviert – auf 0 W zurückgesetzt', 'aus', { force: true, intervalMs: 1000 });
-            }
-            this._feneconGridWasActive = false;
-            this._feneconGridReleasedDirectTarget = false;
+        // FENECON-Hybrid ab 0.6.255:
+        // Der App-Center-Haken aktiviert keine SetGridActivePower-Netzpunktführung mehr.
+        // Die normale Speicherfarm bleibt unverändert. Bei Single-FENECON entscheidet die
+        // Policy weiter unten pro Tick, ob überhaupt auf den Batterie-Sollleistungs-DP
+        // geschrieben wird. Tagsüber mit interner FENECON-PV wird bewusst NICHT geschrieben,
+        // damit FEMS selbst regelt und nach seinem 10s-Watchdog im Normalmodus bleibt.
+        if (feneconHybridBlockedByFarm) {
+            await this._setFeneconHybridDiag({
+                active: false,
+                mode: 'blocked-by-farm',
+                reason: 'FENECON-Hybrid-Sondermodus wird bei aktiver Speicherfarm ignoriert',
+                writeMode: 'farm-standard',
+            });
+            this._feneconHybridWasExternal = false;
+            this._feneconHybridLastMode = 'blocked-by-farm';
         }
+
 
         if (controlMode !== 'targetPower') {
             await this._setIfChanged('speicher.regelung.requestW', 0);
@@ -517,20 +457,33 @@ class SpeicherRegelungModule extends BaseModule {
             }
         }
 
-        // Wenn Netzleistung fehlt: sicher auf 0
+        // Wenn Netzleistung fehlt: Standard-Systeme werden sicher auf 0 gesetzt.
+        // FENECON-Hybrid ist hier absichtlich anders: Ohne frischen NVP schreiben wir
+        // keine externe Vorgabe, damit FEMS selbst weiterregelt und nicht durch eine
+        // stale/geschätzte NexoWatt-Vorgabe festgehalten wird.
         if (typeof gridW !== 'number') {
             await this._setIfChanged('speicher.regelung.requestW', 0);
             await this._setIfChanged('speicher.regelung.requestQuelle', 'aus');
             await this._setIfChanged('speicher.regelung.requestGrund', 'Netzleistung fehlt oder zu alt');
             await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({ ts: Date.now(), reqW: 0, reason: 'Netzleistung fehlt oder zu alt', src: 'aus' }));
 
-            await this._applyTargetW(0, 'Netzleistung fehlt oder zu alt', 'aus');
+            if (feneconHybridActive) {
+                await this._setNoWriteTargetDiag(0, 'FENECON Hybrid: Netzleistung fehlt – FEMS regelt selbst, keine externe Vorgabe', 'fenecon-fems', 'fenecon-fems:no-grid-no-write');
+                await this._setFeneconHybridDiag({
+                    active: true,
+                    mode: 'fems-pass-through',
+                    reason: 'Netzleistung fehlt oder zu alt',
+                    writeMode: 'no-write',
+                });
+            } else {
+                await this._applyTargetW(0, 'Netzleistung fehlt oder zu alt', 'aus');
+            }
             await this._setIfChanged('speicher.regelung.netzLeistungW', null);
             await this._setIfChanged('speicher.regelung.netzAlterMs', typeof gridAge === 'number' ? Math.round(gridAge) : null);
             await this._setIfChanged('speicher.regelung.netzLadenErlaubt', null);
             await this._setIfChanged('speicher.regelung.entladenErlaubt', null);
             await this._setIfChanged('speicher.regelung.tarifState', '');
-            await this._setIfChanged('speicher.regelung.policyJson', JSON.stringify({ ts: Date.now(), disabled: true, reason: 'Netzleistung fehlt oder zu alt' }));
+            await this._setIfChanged('speicher.regelung.policyJson', JSON.stringify({ ts: Date.now(), disabled: true, reason: 'Netzleistung fehlt oder zu alt', feneconHybrid: !!feneconHybridActive }));
             return;
         }
         // Show RAW if available (closer to meter), otherwise show filtered.
@@ -681,6 +634,24 @@ class SpeicherRegelungModule extends BaseModule {
             };
             return feneconAcLoadMemo;
         };
+
+        const feneconHybridCtx = feneconHybridActive
+            ? await this._buildFeneconHybridContext({ cfg, staleMs, readCacheNumber, gridW, gridRawW })
+            : { active: false, configured: !!feneconHybridConfigured, farmBlocked: !!feneconHybridBlockedByFarm, mode: feneconHybridBlockedByFarm ? 'blocked-by-farm' : 'standard' };
+
+        if (feneconHybridActive) {
+            await this._setFeneconHybridDiag({
+                active: true,
+                mode: feneconHybridCtx.mode,
+                reason: feneconHybridCtx.reason,
+                writeMode: feneconHybridCtx.writeMode,
+                pvW: feneconHybridCtx.pvW,
+                additionalPvW: feneconHybridCtx.additionalPvW,
+                thresholdW: feneconHybridCtx.thresholdW,
+                additionalThresholdW: feneconHybridCtx.additionalThresholdW,
+            });
+        }
+
 
         // ------------------------------------------------------------
         // Phase 4: Gemeinsame Netzbezug-Caps (Grid-Constraints / Peak-Shaving / Installer)
@@ -849,33 +820,34 @@ if (typeof soc === 'number') {
         const lskMaxSoc = clamp(num(cfg.lskMaxSocPct, 100), 0, 100);
 
         // Eigenverbrauch (Entladen optional)
-        // FENECON-Hybrid ab 0.6.254:
-        // Die alte direkte AC-Speicherleistungslogik wird nicht mehr als Teil der
-        // normalen Speicherregelung ausgeführt. Bei aktivem FENECON-Haken ist der
-        // Code weiter oben bereits in die Netzpunktführung
-        // (ctrlBalancing0/SetGridActivePower) ausgestiegen.
-        const feneconAcModeConfigured = this._isFeneconGridControlConfigured(cfg);
+        // FENECON-Hybrid ab 0.6.255:
+        // Der Haken aktiviert keine permanente externe AC-Lastfolger-Logik mehr.
+        // Bei interner FENECON-PV >= Schwellwert lassen wir FEMS selbst regeln.
+        // Bei wenig/keiner PV darf NexoWatt wieder über den normalen Sollleistungs-DP
+        // arbeiten, damit dynamische Tariflogik, Reserve und LSK nutzbar bleiben.
+        const feneconAcModeConfigured = !!feneconHybridConfigured;
         const hasExplicitSelfFlag = (cfg.selfDischargeEnabled === true || cfg.selfDischargeEnabled === false);
         const feneconAcMode = false;
         // Farm-Verhalten bewusst unverändert lassen: ältere Farm-Setups, die den alten
         // Haken nur als implizite Eigenverbrauchs-Freigabe genutzt haben, behalten diesen
-        // Fallback. Die neue FENECON-Netzpunktführung selbst wirkt in der Farm nicht.
+        // Fallback. Die neue FENECON-Hybrid-Policy selbst wirkt in der Farm nicht.
         const farmSelfDischargeFallback = !!(farmEnabled && cfg.feneconAcMode === true && !hasExplicitSelfFlag);
+        const feneconLowPvSelfDischargeFallback = !!(feneconHybridActive && !hasExplicitSelfFlag);
         // Alte FENECON-EV-Prioritäts-/PV-Block-Caps werden durch den neuen Modus nicht
         // mehr aktiviert. Flexible Verbraucher bleiben in der bestehenden Standardlogik.
         const evPriorityBlockStorageCharge = false;
         const evPriorityStarvedW = 0;
         const selfDischargeEnabled = hasExplicitSelfFlag
             ? (cfg.selfDischargeEnabled === true)
-            : farmSelfDischargeFallback;
+            : (farmSelfDischargeFallback || feneconLowPvSelfDischargeFallback);
         const selfMinSoc = clamp(num(cfg.selfMinSocPct, reserveMin), 0, 100);
         const selfMaxSoc = clamp(num(cfg.selfMaxSocPct, 100), 0, 100);
         // Eigenverbrauchs-Optimierung: Ziel-Netzbezug am NVP.
         // Praxis: ein kleiner Bezug (z. B. 50–150 W) ist oft stabiler als exakt 0 W
         // (Messrauschen, Totzeiten, Geräte-Rampen).
         // Standard-Eigenverbrauch bleibt herstellerunabhängig bei kleinem Ziel-Import.
-        // Der FENECON-Hybrid-Haken nutzt keinen direkten Batterie-Setpoint mehr, sondern
-        // ist oben separat über SetGridActivePower behandelt.
+        // FENECON-Hybrid entscheidet später pro Tick: FEMS-No-Write, Zusatz-PV-Laden
+        // oder normale externe Vorgabe bei wenig/keiner FENECON-PV.
         const selfTargetGridW = Math.max(0, num(cfg.selfTargetGridImportW, 50));
         const selfImportThresholdW = Math.max(0, num(cfg.selfImportThresholdW, 50));
 
@@ -1957,6 +1929,64 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         }
 
         // ------------------------------------------------------------
+        // FENECON-Hybrid-Policy (Single-Speicher, keine Farm)
+        // ------------------------------------------------------------
+        let feneconNoWrite = false;
+        let feneconWriteMode = '';
+        if (feneconHybridActive) {
+            const ctx = feneconHybridCtx || {};
+            const mode = String(ctx.mode || '');
+
+            if (mode === 'fems-pass-through') {
+                // Interne FENECON-PV ist aktiv und keine zusätzliche externe PV erkannt:
+                // NexoWatt schreibt nichts, FEMS regelt den Hybrid-Speicher selbst.
+                targetW = 0;
+                source = 'fenecon-fems';
+                reason = ctx.reason || 'FENECON Hybrid: PV aktiv – FEMS regelt selbst, keine externe Vorgabe';
+                feneconNoWrite = true;
+                feneconWriteMode = 'no-write';
+            } else if (mode === 'external-pv-charge-only') {
+                // Zusätzliche PV ist aktiv: Nur PV-Überschuss-Ladung darf extern vorgegeben
+                // werden. Tarif-/Entlade-/Peak-Setpoints werden während interner PV nicht
+                // gegen die FEMS-Hybridregelung gefahren.
+                if (targetW < 0 && source === 'pv') {
+                    const extraCapW = Math.max(0, Number(ctx.additionalPvW) || 0);
+                    const absTarget = Math.abs(targetW);
+                    if (extraCapW > 0) targetW = -Math.min(absTarget, extraCapW);
+                    reason = String(reason || 'PV-Überschuss laden') + ' · FENECON Zusatz-PV (' + Math.round(extraCapW) + ' W)';
+                    source = 'fenecon-extra-pv';
+                    feneconWriteMode = 'write-extra-pv-charge';
+                } else {
+                    targetW = 0;
+                    source = 'fenecon-fems';
+                    reason = ctx.reason || 'FENECON Hybrid: interne PV aktiv – nur Zusatz-PV-Laden erlaubt, sonst FEMS';
+                    feneconNoWrite = true;
+                    feneconWriteMode = 'no-write';
+                }
+            } else if (mode === 'external-control-low-pv') {
+                // Wenig/keine FENECON-PV: NexoWatt darf normal regeln. Der Sollwert
+                // wird unten per _applyTargetW in jedem Tick erneuert und bleibt damit
+                // innerhalb des FENECON-10s-Watchdogs.
+                feneconWriteMode = 'write-low-pv';
+            } else {
+                feneconWriteMode = 'standard';
+            }
+
+            await this._setFeneconHybridDiag({
+                active: true,
+                mode: mode || (feneconNoWrite ? 'fems-pass-through' : 'external-control-low-pv'),
+                reason,
+                writeMode: feneconWriteMode || (feneconNoWrite ? 'no-write' : 'write'),
+                targetW,
+                pvW: ctx.pvW,
+                additionalPvW: ctx.additionalPvW,
+                thresholdW: ctx.thresholdW,
+                additionalThresholdW: ctx.additionalThresholdW,
+                nvpW: (typeof gridRawW === 'number' && Number.isFinite(gridRawW)) ? gridRawW : gridW,
+            });
+        }
+
+        // ------------------------------------------------------------
         // Phase 2: Dispatcher-Diagnose-Zustände schreiben
         // ------------------------------------------------------------
         const _finalW = targetW;
@@ -2021,24 +2051,25 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
                     requestedCount: (feneconAcMode && Number.isFinite(Number(evPriorityCaps.requestedCount))) ? Math.round(Number(evPriorityCaps.requestedCount)) : 0,
                     limitedWallboxes: (feneconAcMode && Number.isFinite(Number(evPriorityCaps.limitedWallboxes))) ? Math.round(Number(evPriorityCaps.limitedWallboxes)) : 0,
                 } : null,
-                fenecon: feneconAcMode ? (() => {
-                    const acLoad = getFeneconAcLoadTargetW();
-                    return {
-                        acMode: true,
-                        mode: 'nvp-balanced',
-                        loadTargetW: (acLoad && typeof acLoad.w === 'number' && Number.isFinite(acLoad.w)) ? Math.round(acLoad.w) : null,
-                        loadSource: (acLoad && acLoad.source) ? String(acLoad.source) : null,
-                        nvpW: (typeof gridRawW === 'number' && Number.isFinite(gridRawW)) ? Math.round(gridRawW)
-                            : ((typeof gridW === 'number' && Number.isFinite(gridW)) ? Math.round(gridW) : null),
-                        targetGridImportW: Math.round(selfTargetGridW),
-                    };
-                })() : {
-                    acMode: false,
-                    configured: !!feneconAcModeConfigured,
-                    disabledReason: (feneconAcModeConfigured && farmEnabled) ? 'storageFarm-active' : null,
-                    farmSelfDischargeFallback: !!farmSelfDischargeFallback,
-                    loadTargetW: null,
-                    loadSource: null,
+                fenecon: feneconHybridConfigured ? {
+                    hybridMode: !!feneconHybridActive,
+                    configured: !!feneconHybridConfigured,
+                    farmBlocked: !!feneconHybridBlockedByFarm,
+                    mode: feneconHybridCtx && feneconHybridCtx.mode ? String(feneconHybridCtx.mode) : (feneconHybridBlockedByFarm ? 'blocked-by-farm' : 'standard'),
+                    writeMode: feneconWriteMode || '',
+                    noWrite: !!feneconNoWrite,
+                    pvW: (feneconHybridCtx && Number.isFinite(Number(feneconHybridCtx.pvW))) ? Math.round(Number(feneconHybridCtx.pvW)) : null,
+                    additionalPvW: (feneconHybridCtx && Number.isFinite(Number(feneconHybridCtx.additionalPvW))) ? Math.round(Number(feneconHybridCtx.additionalPvW)) : 0,
+                    thresholdW: (feneconHybridCtx && Number.isFinite(Number(feneconHybridCtx.thresholdW))) ? Math.round(Number(feneconHybridCtx.thresholdW)) : null,
+                    reason: feneconHybridCtx && feneconHybridCtx.reason ? String(feneconHybridCtx.reason) : '',
+                    watchdogSec: 10,
+                    setGridActivePowerUsed: false,
+                } : {
+                    hybridMode: false,
+                    configured: false,
+                    farmBlocked: false,
+                    mode: 'standard',
+                    setGridActivePowerUsed: false,
                 },
                 limits: {
                     importLimitW: (typeof importLimitW === 'number' && Number.isFinite(importLimitW)) ? Math.round(importLimitW) : null,
@@ -2082,7 +2113,13 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         };
         await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify(_diag));
 
-        await this._applyTargetW(targetW, reason, source);
+        if (feneconNoWrite) {
+            await this._setNoWriteTargetDiag(targetW, reason, source, 'fenecon-fems:no-write');
+            this._feneconHybridWasExternal = false;
+        } else {
+            await this._applyTargetW(targetW, reason, source);
+            if (feneconHybridActive) this._feneconHybridWasExternal = true;
+        }
 
         // Diagnose: Grenzen
         // (0 = unbegrenzt)
@@ -2127,10 +2164,13 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 
 
             selfDischargeEnabled: storage.selfDischargeEnabled,
-            // Legacy: feneconAcMode bleibt als Migrations-Alias erhalten,
-            // löst aber nicht mehr die alte direkte AC-Setpoint-Logik aus.
+            // Legacy: feneconAcMode bleibt als Migrations-Alias erhalten.
+            // feneconGridControlEnabled ist aus UI-/Migrationsgründen der gespeicherte
+            // Haken, bedeutet ab 0.6.255 aber: FENECON-Hybrid-FEMS-Priorität.
             feneconAcMode: storage.feneconAcMode,
             feneconGridControlEnabled: storage.feneconGridControlEnabled,
+            feneconPvPassthroughThresholdW: storage.feneconPvPassthroughThresholdW,
+            feneconAdditionalPvThresholdW: storage.feneconAdditionalPvThresholdW,
             feneconGridTargetW: storage.feneconGridTargetW,
             feneconGridExportBufferW: storage.feneconGridExportBufferW,
             feneconGridMinSetpointW: storage.feneconGridMinSetpointW,
@@ -2159,104 +2199,208 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         };
     }
 
-    _isFeneconGridControlConfigured(cfg = {}) {
+    _isFeneconHybridControlConfigured(cfg = {}) {
         if (cfg && typeof cfg.feneconGridControlEnabled === 'boolean') return cfg.feneconGridControlEnabled === true;
         // Migration: ältere Installationen hatten nur storage.feneconAcMode.
-        // Ab 0.6.254 bedeutet dieser alte Haken nicht mehr direkte AC-Batterie-Setpoints,
-        // sondern wird einmalig als Aktivierung der neuen FENECON-Netzpunktführung interpretiert.
+        // Ab 0.6.255 bedeutet dieser alte Haken: FENECON-Hybrid-Sondermodus
+        // (FEMS-Priorität am Tag, NexoWatt nur bei Zusatz-PV oder wenig/keiner PV).
         return !!(cfg && cfg.feneconAcMode === true);
     }
 
-    _getFeneconGridSetpointW(cfg = {}) {
-        // FENECON SetGridActivePower: Import positiv, Einspeisung negativ.
-        // Wir schreiben bewusst niemals positive Werte, weil das Netzbezug anfordern würde.
-        let target = null;
-        if (cfg.feneconGridTargetW !== undefined && cfg.feneconGridTargetW !== null && cfg.feneconGridTargetW !== '') {
-            const n = Number(cfg.feneconGridTargetW);
-            if (Number.isFinite(n)) target = (n > 0) ? -Math.abs(n) : n;
-        }
-        if (target === null) {
-            const bufferW = Math.max(0, Number.isFinite(Number(cfg.feneconGridExportBufferW)) ? Number(cfg.feneconGridExportBufferW) : 100);
-            target = -bufferW;
+    // Legacy-Alias für ältere interne Aufrufe.
+    _isFeneconGridControlConfigured(cfg = {}) {
+        return this._isFeneconHybridControlConfigured(cfg);
+    }
+
+    async _buildFeneconHybridContext({ cfg = {}, staleMs = 15000, readCacheNumber = null, gridW = null, gridRawW = null } = {}) {
+        const thresholdW = Math.max(0, num(cfg.feneconPvPassthroughThresholdW, 1000));
+        const additionalThresholdW = Math.max(0, num(cfg.feneconAdditionalPvThresholdW, 100));
+        const now = Date.now();
+
+        const readCache = (key) => {
+            const sid = String(key || '').trim();
+            if (!sid) return null;
+            try {
+                const rec = this.adapter && this.adapter.stateCache ? this.adapter.stateCache[sid] : null;
+                if (rec) {
+                    const age = Number.isFinite(Number(rec.ts)) ? (now - Number(rec.ts)) : 0;
+                    if (age >= 0 && age <= staleMs) {
+                        const n = Number(rec.value);
+                        if (Number.isFinite(n)) return n;
+                    }
+                    return null;
+                }
+            } catch {
+                // ignore
+            }
+            try {
+                if (typeof readCacheNumber === 'function') {
+                    const n = readCacheNumber(sid, null);
+                    if (typeof n === 'number' && Number.isFinite(n)) return n;
+                }
+            } catch {
+                // ignore
+            }
+            return null;
+        };
+
+        const candidates = [];
+        const pushCandidate = (value, source) => {
+            const n = Number(value);
+            if (Number.isFinite(n)) candidates.push({ w: Math.max(0, Math.abs(n)), source });
+        };
+        const readOwnFreshNumber = async (id) => {
+            try {
+                const st = await this.adapter.getStateAsync(id);
+                if (!st) return null;
+                const age = Number.isFinite(Number(st.ts)) ? (now - Number(st.ts)) : 0;
+                if (age < 0 || age > staleMs) return null;
+                const n = Number(st.val);
+                return Number.isFinite(n) ? n : null;
+            } catch {
+                return null;
+            }
+        };
+
+        pushCandidate(await readOwnFreshNumber('derived.core.pv.totalW'), 'derived.core.pv.totalW');
+        pushCandidate(await readOwnFreshNumber('derived.core.pv.acW'), 'derived.core.pv.acW');
+        pushCandidate(readCache('pvPower'), 'pvPower');
+        pushCandidate(readCache('productionTotal'), 'productionTotal');
+        if (this.dp) {
+            pushCandidate(this.dp.getNumberFresh('ps.pvW', staleMs, null), 'ps.pvW');
         }
 
-        const minW = Math.min(0, Number.isFinite(Number(cfg.feneconGridMinSetpointW)) ? Number(cfg.feneconGridMinSetpointW) : -500);
-        const maxW = Math.min(0, Number.isFinite(Number(cfg.feneconGridMaxSetpointW)) ? Number(cfg.feneconGridMaxSetpointW) : 0);
-        const lo = Math.min(minW, maxW);
-        const hi = Math.max(minW, maxW);
-        return Math.round(clamp(target, lo, hi));
+        let pvW = 0;
+        let pvSource = 'missing';
+        for (const c of candidates) {
+            if (c.w >= pvW) {
+                pvW = c.w;
+                pvSource = c.source;
+            }
+        }
+
+        let additionalPvW = 0;
+        let additionalCount = 0;
+        for (let i = 1; i <= 5; i++) {
+            const n = readCache('producer' + i + 'Power');
+            if (typeof n === 'number' && Number.isFinite(n)) {
+                const w = Math.max(0, Math.abs(n));
+                additionalPvW += w;
+                if (w > 0) additionalCount++;
+            }
+        }
+
+        const nvpW = (typeof gridRawW === 'number' && Number.isFinite(gridRawW))
+            ? Number(gridRawW)
+            : ((typeof gridW === 'number' && Number.isFinite(gridW)) ? Number(gridW) : null);
+        const exportW = (typeof nvpW === 'number') ? Math.max(0, -nvpW) : 0;
+
+        const internalPvActive = pvW >= thresholdW;
+        const additionalPvActive = additionalPvW >= additionalThresholdW;
+
+        let mode = 'external-control-low-pv';
+        let writeMode = 'write-low-pv';
+        let reason = 'FENECON Hybrid: PV < ' + Math.round(thresholdW) + ' W – NexoWatt-Regelung aktiv';
+
+        if (internalPvActive && additionalPvActive) {
+            mode = 'external-pv-charge-only';
+            writeMode = 'write-extra-pv-charge';
+            reason = 'FENECON Hybrid: interne PV aktiv, Zusatz-PV erkannt (' + Math.round(additionalPvW) + ' W) – nur Zusatz-PV-Laden extern';
+        } else if (internalPvActive) {
+            mode = 'fems-pass-through';
+            writeMode = 'no-write';
+            reason = 'FENECON Hybrid: PV >= ' + Math.round(thresholdW) + ' W – FEMS regelt selbst, keine externe Vorgabe';
+        }
+
+        return {
+            active: true,
+            configured: true,
+            farmBlocked: false,
+            mode,
+            writeMode,
+            reason,
+            pvW,
+            pvSource,
+            thresholdW,
+            additionalPvW,
+            additionalCount,
+            additionalThresholdW,
+            additionalPvActive,
+            internalPvActive,
+            nvpW,
+            exportW,
+        };
+    }
+
+    async _setFeneconHybridDiag(ctx = {}) {
+        const active = !!ctx.active;
+        const mode = String(ctx.mode || '');
+        const reason = String(ctx.reason || '');
+        const writeMode = String(ctx.writeMode || '');
+        const n = (v, fallback = null) => Number.isFinite(Number(v)) ? Math.round(Number(v)) : fallback;
+        await this._setIfChanged('speicher.regelung.feneconHybridAktiv', active);
+        await this._setIfChanged('speicher.regelung.feneconHybridModus', mode);
+        await this._setIfChanged('speicher.regelung.feneconHybridGrund', reason);
+        await this._setIfChanged('speicher.regelung.feneconHybridSchreibmodus', writeMode);
+        await this._setIfChanged('speicher.regelung.feneconHybridPvW', n(ctx.pvW));
+        await this._setIfChanged('speicher.regelung.feneconHybridZusatzPvW', n(ctx.additionalPvW, 0));
+        await this._setIfChanged('speicher.regelung.feneconHybridSchwelleW', n(ctx.thresholdW));
+        await this._setIfChanged('speicher.regelung.feneconHybridZusatzSchwelleW', n(ctx.additionalThresholdW));
+        await this._setIfChanged('speicher.regelung.feneconHybridSollW', n(ctx.targetW, 0));
+        await this._setIfChanged('speicher.regelung.feneconHybridNvpW', n(ctx.nvpW));
+
+        // Legacy-Diagnosen aus 0.6.254 neutral halten, damit alte VIS/Debug-Ansichten nicht
+        // fälschlich eine SetGridActivePower-Nutzung anzeigen.
+        await this._setIfChanged('speicher.regelung.feneconGridAktiv', false);
+        await this._setIfChanged('speicher.regelung.feneconGridQuelle', 'deprecated');
+        await this._setIfChanged('speicher.regelung.feneconGridGrund', active ? 'ab 0.6.255 nicht genutzt – FENECON-Hybrid nutzt den Sollleistungs-DP bzw. No-Write/FEMS' : reason);
+        await this._setIfChanged('speicher.regelung.feneconGridSchreibOk', false);
+        await this._setIfChanged('speicher.regelung.feneconGridSchreibStatus', 'deprecated');
+    }
+
+    async _setNoWriteTargetDiag(targetW, reason, source, status) {
+        const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
+        try {
+            const e = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.targetPowerW') : null;
+            await this._setIfChanged('speicher.regelung.targetObjId', e && e.objectId ? String(e.objectId) : '');
+        } catch {
+            await this._setIfChanged('speicher.regelung.targetObjId', '');
+        }
+        await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+        await this._setIfChanged('speicher.regelung.sollW', w);
+        await this._setIfChanged('speicher.regelung.quelle', String(source || ''));
+        await this._setIfChanged('speicher.regelung.grund', String(reason || ''));
+        await this._setIfChanged('speicher.regelung.schreibOk', false);
+        await this._setIfChanged('speicher.regelung.schreibStatus', String(status || 'no-write'));
+        this._lastTargetW = 0;
+        this._lastReason = String(reason || '');
+        this._lastSource = String(source || '');
+    }
+
+    _getFeneconGridSetpointW(_cfg = {}) {
+        // Legacy ab 0.6.255: SetGridActivePower wird nicht mehr verwendet, weil dieser DP
+        // bei real getesteten FENECON-Hybrid-Anlagen nicht beschreibbar sein kann.
+        return 0;
     }
 
     async _releaseDirectStorageTargetForFenecon(reason = '') {
-        if (this._feneconGridReleasedDirectTarget) return null;
-        this._feneconGridReleasedDirectTarget = true;
-        if (!this.dp || !this.dp.getEntry || !this.dp.getEntry('st.targetPowerW')) return null;
-        try {
-            const res = await this.dp.writeNumber('st.targetPowerW', 0, false);
-            await this._setIfChanged('speicher.regelung.feneconGridReleaseStatus', res === true ? 'direkter Speicher-Setpoint auf 0 geschrieben' : (res === null ? 'direkter Speicher-Setpoint bereits 0/übersprungen' : 'direkter Speicher-Setpoint nicht möglich'));
-            return res;
-        } catch (e) {
-            await this._setIfChanged('speicher.regelung.feneconGridReleaseStatus', 'direkter Speicher-Setpoint Fehler: ' + (e && e.message ? e.message : e));
-            return false;
-        }
+        // Legacy ab 0.6.255: keine aktive Freigabe per 0-W-Schreiben.
+        // FEMS fällt nach seinem Watchdog selbst in den Normalmodus zurück, solange NexoWatt nicht schreibt.
+        await this._setIfChanged('speicher.regelung.feneconGridReleaseStatus', reason ? ('no-write: ' + String(reason)) : 'no-write');
+        return null;
     }
 
-    async _applyFeneconGridSetpointW(targetW, reason, source, opts = {}) {
-        const w = Number.isFinite(Number(targetW)) ? Math.min(0, Math.round(Number(targetW))) : 0;
-        const now = Date.now();
-        const intervalMs = Math.max(1000, Math.round(num(opts.intervalMs, 15000)));
-        const force = opts.force === true;
-
-        let objId = '';
-        let writeResult = null;
-        let status = 'dp-fehlt';
-
-        try {
-            const e = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.feneconGridSetpointW') : null;
-            objId = e && e.objectId ? String(e.objectId) : '';
-            await this._setIfChanged('speicher.regelung.feneconGridTargetObjId', objId);
-
-            if (!e) {
-                await this._setIfChanged('speicher.regelung.feneconGridLastWriteRaw', null);
-            } else {
-                const same = (typeof this._feneconGridLastSetpointW === 'number' && this._feneconGridLastSetpointW === w);
-                const fresh = this._feneconGridLastWriteMs > 0 && ((now - this._feneconGridLastWriteMs) < intervalMs);
-
-                try {
-                    const scale = (e && Number.isFinite(Number(e.scale)) && Number(e.scale) !== 0) ? Number(e.scale) : 1;
-                    const offset = (e && Number.isFinite(Number(e.offset))) ? Number(e.offset) : 0;
-                    let raw = (w - offset) / scale;
-                    if (e && e.invert) raw = -raw;
-                    if (e && Number.isFinite(Number(e.min))) raw = Math.max(Number(e.min), raw);
-                    if (e && Number.isFinite(Number(e.max))) raw = Math.min(Number(e.max), raw);
-                    await this._setIfChanged('speicher.regelung.feneconGridLastWriteRaw', Math.round(raw));
-                } catch {
-                    await this._setIfChanged('speicher.regelung.feneconGridLastWriteRaw', null);
-                }
-
-                if (!force && same && fresh) {
-                    status = 'intervall';
-                    writeResult = null;
-                } else {
-                    writeResult = await this.dp.writeNumber('st.feneconGridSetpointW', w, false);
-                    this._feneconGridLastSetpointW = w;
-                    this._feneconGridLastWriteMs = now;
-                    status = (writeResult === true) ? 'geschrieben' : (writeResult === null ? 'unverändert' : 'nicht möglich');
-                }
-            }
-        } catch (e) {
-            writeResult = false;
-            status = 'fehler: ' + (e && e.message ? e.message : e);
-        }
-
-        await this._setIfChanged('speicher.regelung.feneconGridAktiv', source !== 'aus' && source !== 'disabled');
-        await this._setIfChanged('speicher.regelung.feneconGridSollW', w);
-        await this._setIfChanged('speicher.regelung.feneconGridQuelle', String(source || ''));
-        await this._setIfChanged('speicher.regelung.feneconGridGrund', String(reason || ''));
-        await this._setIfChanged('speicher.regelung.feneconGridSchreibOk', writeResult === true || (writeResult === null && !!objId));
-        await this._setIfChanged('speicher.regelung.feneconGridSchreibStatus', status);
-
-        return { ok: writeResult === true || (writeResult === null && !!objId), wrote: writeResult === true, status, objectId: objId, valueW: w };
+    async _applyFeneconGridSetpointW(_targetW, reason, source, _opts = {}) {
+        // Legacy ab 0.6.255: niemals auf SetGridActivePower schreiben.
+        await this._setIfChanged('speicher.regelung.feneconGridAktiv', false);
+        await this._setIfChanged('speicher.regelung.feneconGridSollW', 0);
+        await this._setIfChanged('speicher.regelung.feneconGridQuelle', String(source || 'deprecated'));
+        await this._setIfChanged('speicher.regelung.feneconGridGrund', reason ? ('deprecated/no-write: ' + String(reason)) : 'deprecated/no-write');
+        await this._setIfChanged('speicher.regelung.feneconGridSchreibOk', false);
+        await this._setIfChanged('speicher.regelung.feneconGridSchreibStatus', 'deprecated-no-write');
+        await this._setIfChanged('speicher.regelung.feneconGridTargetObjId', '');
+        await this._setIfChanged('speicher.regelung.feneconGridLastWriteRaw', null);
+        return { ok: false, wrote: false, status: 'deprecated-no-write', objectId: '', valueW: 0 };
     }
 
     _readTarifVis(staleMs) {
@@ -2401,15 +2545,25 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.targetObjId', 'Sollleistung Ziel-Datenpunkt (Objekt-ID)', 'string', 'text', '');
         await mk('speicher.regelung.lastWriteRaw', 'Letzter Rohwert (Setpoint)', 'number', 'value');
 
-        await mk('speicher.regelung.feneconGridAktiv', 'FENECON Netzpunktführung aktiv', 'boolean', 'indicator', false);
-        await mk('speicher.regelung.feneconGridSollW', 'FENECON SetGridActivePower Sollwert (W)', 'number', 'value.power', 0);
-        await mk('speicher.regelung.feneconGridQuelle', 'FENECON Netzpunktführung Quelle', 'string', 'text', '');
-        await mk('speicher.regelung.feneconGridGrund', 'FENECON Netzpunktführung Grund', 'string', 'text', '');
-        await mk('speicher.regelung.feneconGridSchreibOk', 'FENECON SetGridActivePower Schreiben OK', 'boolean', 'indicator', false);
-        await mk('speicher.regelung.feneconGridSchreibStatus', 'FENECON SetGridActivePower Schreibstatus', 'string', 'text', '');
-        await mk('speicher.regelung.feneconGridTargetObjId', 'FENECON SetGridActivePower Datenpunkt (Objekt-ID)', 'string', 'text', '');
-        await mk('speicher.regelung.feneconGridLastWriteRaw', 'FENECON letzter Rohwert (SetGridActivePower)', 'number', 'value');
-        await mk('speicher.regelung.feneconGridReleaseStatus', 'FENECON Freigabe direkter Speicher-Setpoint', 'string', 'text', '');
+        await mk('speicher.regelung.feneconGridAktiv', 'FENECON Legacy Netzpunktführung aktiv (nicht genutzt)', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.feneconGridSollW', 'FENECON Legacy SetGridActivePower Sollwert (nicht genutzt)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.feneconGridQuelle', 'FENECON Legacy Netzpunktführung Quelle', 'string', 'text', '');
+        await mk('speicher.regelung.feneconGridGrund', 'FENECON Legacy Netzpunktführung Grund', 'string', 'text', '');
+        await mk('speicher.regelung.feneconGridSchreibOk', 'FENECON Legacy SetGridActivePower Schreiben OK', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.feneconGridSchreibStatus', 'FENECON Legacy SetGridActivePower Schreibstatus', 'string', 'text', '');
+        await mk('speicher.regelung.feneconGridTargetObjId', 'FENECON Legacy SetGridActivePower Datenpunkt (nicht genutzt)', 'string', 'text', '');
+        await mk('speicher.regelung.feneconGridLastWriteRaw', 'FENECON Legacy letzter Rohwert (nicht genutzt)', 'number', 'value');
+        await mk('speicher.regelung.feneconGridReleaseStatus', 'FENECON Legacy Freigabestatus', 'string', 'text', '');
+        await mk('speicher.regelung.feneconHybridAktiv', 'FENECON Hybrid Sondermodus aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.feneconHybridModus', 'FENECON Hybrid Modus', 'string', 'text', '');
+        await mk('speicher.regelung.feneconHybridGrund', 'FENECON Hybrid Grund', 'string', 'text', '');
+        await mk('speicher.regelung.feneconHybridSchreibmodus', 'FENECON Hybrid Schreibmodus', 'string', 'text', '');
+        await mk('speicher.regelung.feneconHybridPvW', 'FENECON Hybrid erkannte PV-Leistung', 'number', 'value.power', null);
+        await mk('speicher.regelung.feneconHybridZusatzPvW', 'FENECON Hybrid erkannte Zusatz-PV-Leistung', 'number', 'value.power', 0);
+        await mk('speicher.regelung.feneconHybridSchwelleW', 'FENECON Hybrid PV-Schwellwert', 'number', 'value.power', 1000);
+        await mk('speicher.regelung.feneconHybridZusatzSchwelleW', 'FENECON Hybrid Zusatz-PV-Schwellwert', 'number', 'value.power', 100);
+        await mk('speicher.regelung.feneconHybridSollW', 'FENECON Hybrid angewendeter Sollwert', 'number', 'value.power', 0);
+        await mk('speicher.regelung.feneconHybridNvpW', 'FENECON Hybrid Netzpunktleistung', 'number', 'value.power', null);
 
         await mk('speicher.regelung.netzLeistungW', 'Netzleistung (W)', 'number', 'value.power');
         await mk('speicher.regelung.netzAlterMs', 'Netzleistung Alter (ms)', 'number', 'value.interval');

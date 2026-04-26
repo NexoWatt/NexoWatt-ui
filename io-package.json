@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.254",
+    "version": "0.6.255",
     "news": {
+      "0.6.255": {
+        "en": "FENECON Hybrid storage logic reworked after field test: SetGridActivePower is no longer used. The App-Center FENECON checkbox now enables an FEMS-priority policy: with FENECON PV >= 1 kW NexoWatt writes no external battery setpoint so FEMS regulates itself; with additional producer PV only PV charging is allowed; below 1 kW PV the normal writable target-power datapoint is refreshed for tariff/time logic. StorageFarm behavior remains unchanged.",
+        "de": "FENECON-Hybrid-Speicherlogik nach Praxistest überarbeitet: SetGridActivePower wird nicht mehr verwendet. Der FENECON-Haken im App-Center aktiviert jetzt eine FEMS-Prioritätslogik: Bei FENECON-PV >= 1 kW schreibt NexoWatt keine externe Batterie-Vorgabe, damit FEMS selbst regelt; bei zusätzlicher Erzeuger-PV wird nur PV-Ladung erlaubt; unter 1 kW PV wird der normale beschreibbare Sollleistungs-DP für Tarif-/Zeitlogik zyklisch erneuert. SpeicherFarm bleibt unverändert."
+      },
       "0.6.254": {
         "en": "FENECON Hybrid storage mode replaced: the App-Center FENECON checkbox now enables grid-point control via ctrlBalancing0/SetGridActivePower instead of the old direct AC battery setpoint logic. The mode writes only neutral/negative grid setpoints (default -100 W), releases the old direct storage target once, is ignored for StorageFarm setups, and adds diagnostics plus a dedicated SetGridActivePower datapoint mapping.",
         "de": "FENECON-Hybrid-Speichermodus ersetzt: Der FENECON-Haken im App-Center aktiviert jetzt die Netzpunktführung über ctrlBalancing0/SetGridActivePower statt der alten direkten AC-Batterie-Sollwertlogik. Der Modus schreibt nur neutrale/negative Netzpunkt-Sollwerte (Standard -100 W), gibt den alten direkten Speicher-Sollwert einmalig frei, wird bei SpeicherFarm-Setups ignoriert und ergänzt Diagnosezustände sowie eine eigene SetGridActivePower-Datenpunktzuordnung."
@@ -1768,8 +1772,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.254",
+  "version": "0.6.255",
   "news": {
+    "0.6.255": {
+      "en": "FENECON Hybrid storage logic reworked after field test: SetGridActivePower is no longer used. The App-Center FENECON checkbox now enables an FEMS-priority policy: with FENECON PV >= 1 kW NexoWatt writes no external battery setpoint so FEMS regulates itself; with additional producer PV only PV charging is allowed; below 1 kW PV the normal writable target-power datapoint is refreshed for tariff/time logic. StorageFarm behavior remains unchanged.",
+      "de": "FENECON-Hybrid-Speicherlogik nach Praxistest überarbeitet: SetGridActivePower wird nicht mehr verwendet. Der FENECON-Haken im App-Center aktiviert jetzt eine FEMS-Prioritätslogik: Bei FENECON-PV >= 1 kW schreibt NexoWatt keine externe Batterie-Vorgabe, damit FEMS selbst regelt; bei zusätzlicher Erzeuger-PV wird nur PV-Ladung erlaubt; unter 1 kW PV wird der normale beschreibbare Sollleistungs-DP für Tarif-/Zeitlogik zyklisch erneuert. SpeicherFarm bleibt unverändert."
+    },
     "0.6.254": {
       "en": "FENECON Hybrid storage mode replaced: the App-Center FENECON checkbox now enables grid-point control via ctrlBalancing0/SetGridActivePower instead of the old direct AC battery setpoint logic. The mode writes only neutral/negative grid setpoints (default -100 W), releases the old direct storage target once, is ignored for StorageFarm setups, and adds diagnostics plus a dedicated SetGridActivePower datapoint mapping.",
       "de": "FENECON-Hybrid-Speichermodus ersetzt: Der FENECON-Haken im App-Center aktiviert jetzt die Netzpunktführung über ctrlBalancing0/SetGridActivePower statt der alten direkten AC-Batterie-Sollwertlogik. Der Modus schreibt nur neutrale/negative Netzpunkt-Sollwerte (Standard -100 W), gibt den alten direkten Speicher-Sollwert einmalig frei, wird bei SpeicherFarm-Setups ignoriert und ergänzt Diagnosezustände sowie eine eigene SetGridActivePower-Datenpunktzuordnung."

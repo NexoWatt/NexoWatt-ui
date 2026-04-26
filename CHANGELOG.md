@@ -1,3 +1,13 @@
+## 0.6.255
+
+- FENECON Hybrid nach Kundentest umgestellt: `SetGridActivePower` wird nicht mehr verwendet, weil dieser DP auf der getesteten FENECON/FEMS-Anlage nicht beschreibbar ist.
+- Der vorhandene FENECON-Haken im App-Center → Speicher aktiviert jetzt eine FEMS-Prioritätslogik: bei FENECON-PV ab ca. 1 kW schreibt NexoWatt keine externe Batterie-Vorgabe, damit FEMS selbst in den Normalmodus zurückfallen und regeln kann.
+- Bei zusätzlicher externer Erzeuger-PV schreibt NexoWatt nur PV-Ladung über den normalen beschreibbaren Sollleistungs-DP und begrenzt den Sollwert auf die erkannte Zusatz-PV.
+- Bei wenig/keiner FENECON-PV unter 1 kW übernimmt NexoWatt wieder die normale Speicherregelung für Dynamik-Tarif, Zeit-/Reserve-/LSK-Logiken und erneuert den Sollwert zyklisch innerhalb des FENECON-Watchdogs.
+- SpeicherFarm bleibt unverändert; der FENECON-Hybrid-Sondermodus wird bei aktiver Farm weiterhin ignoriert.
+- App-Center und Mapping angepasst: kein eigener `FENECON SetGridActivePower`-DP mehr, stattdessen nur der normale `Sollleistung (W)`-DP für die tatsächlich beschreibbare Batterie-Vorgabe.
+- PWA/Web-Cache-Version angehoben.
+
 ## 0.6.254
 
 - FENECON Hybrid: Der bisherige FENECON-Haken im App-Center → Speicher aktiviert jetzt die neue Netzpunktführung über `ctrlBalancing0/SetGridActivePower` statt der alten direkten AC-Batterie-Sollwertlogik.
