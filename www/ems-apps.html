@@ -228,14 +228,14 @@
             </div>
           </div>
           <div class="nw-config-field-row">
-            <div class="nw-config-field-label">FENECON‑Modus</div>
+            <div class="nw-config-field-label">FENECON Hybrid</div>
             <div class="nw-config-field-control nw-config-field-control--stack">
               <label class="nw-config-checklabel" for="storageFeneconAcMode">
                 <input id="storageFeneconAcMode" class="nw-config-checkbox" type="checkbox" />
-                <span>FENECON‑Speicher (AC‑Teil aktiv gegen Hausverbrauch regeln)</span>
+                <span>FENECON‑Netzpunktführung aktivieren</span>
               </label>
               <div class="nw-config-help" style="margin-top:4px; opacity:0.85;">
-                Für FENECON‑Systeme mit AC‑geregeltem Wechselrichter. Aktiviert die Eigenverbrauchs‑Entladung auch ohne <b>MultiUse</b>, damit bei PV‑Ladung der Hausverbrauch weiter am NVP ausgeregelt wird. Wenn kein eigener Zielwert gesetzt ist, nutzt der Modus standardmäßig <b>0&nbsp;W Netzbezug</b>. Bei aktiver <b>Speicherfarm</b> wird dieser Sondermodus automatisch ignoriert, damit die Farm‑Regelung unverändert bleibt.
+                Ersetzt die alte FENECON‑AC‑Sonderlogik. NexoWatt schreibt dann <b>nicht</b> mehr direkt Batterie‑Lade/Entladeleistung, sondern setzt nur den FENECON‑Sollwert <b>ctrlBalancing0/SetGridActivePower</b> leicht negativ (Standard: <b>-100&nbsp;W</b>). Dadurch regelt FENECON den Hybrid‑Speicher selbst am Netzanschlusspunkt. Bei aktiver <b>Speicherfarm</b> wird dieser Modus ignoriert; die Farm‑Regelung bleibt unverändert.
               </div>
             </div>
           </div>

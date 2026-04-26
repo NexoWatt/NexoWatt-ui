@@ -1,3 +1,13 @@
+## 0.6.254
+
+- FENECON Hybrid: Der bisherige FENECON-Haken im App-Center → Speicher aktiviert jetzt die neue Netzpunktführung über `ctrlBalancing0/SetGridActivePower` statt der alten direkten AC-Batterie-Sollwertlogik.
+- FENECON Netzpunktführung: NexoWatt schreibt ausschließlich neutrale bzw. negative Netzpunkt-Sollwerte (Standard `-100 W`, niemals positive Netzbezugs-Vorgaben). FENECON/FEMS regelt PV, Hausverbrauch und Speicher intern am Netzanschlusspunkt.
+- Alte FENECON-Direktlogik abgekoppelt: EVCS-vor-Speicher-Sonderpfade und direkte FENECON-AC-Entladevorgaben werden durch den Haken nicht mehr aktiviert.
+- SpeicherFarm bleibt geschützt: Die neue FENECON-Netzpunktführung wird bei aktiver SpeicherFarm ignoriert; bestehende Farm-Fallbacks bleiben unverändert.
+- App-Center Speicher: Neuer Datenpunkt `FENECON SetGridActivePower (W)` für `ctrlBalancing0/SetGridActivePower` ergänzt, inklusive Diagnosezuständen für Sollwert, Schreibstatus und Ziel-DP.
+- Beim Aktivieren der neuen FENECON-Netzpunktführung wird ein vorhandener direkter Speicher-Sollwert einmalig auf `0 W` freigegeben, damit die alte direkte Vorgabe nicht nachläuft.
+- PWA/Web-Cache-Version angehoben.
+
 ## 0.6.253
 
 - Heizstab Schnellsteuerung/Manuellbetrieb: Wenn die PV-Regelung im Frontend oder die PV-Auto-Freigabe in der Konfiguration ausgeschaltet ist, schreibt der Adapter keinen physischen AUS-Befehl mehr und übersteuert den Aktor nicht mehr. Manuelle KNX-/ioBroker-Schaltungen bleiben dadurch erhalten.

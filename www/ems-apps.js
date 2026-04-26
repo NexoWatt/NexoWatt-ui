@@ -302,6 +302,7 @@
     { key: 'socObjectId', label: 'SoC (%)', requiredModes: ['targetPower','limits','enableFlags'] },
     { key: 'batteryPowerObjectId', label: 'Ist-Leistung (W) (optional)', requiredModes: [] },
     { key: 'targetPowerObjectId', label: 'Sollleistung (W)', requiredModes: ['targetPower'] },
+    { key: 'feneconGridSetpointObjectId', label: 'FENECON SetGridActivePower (W)', requiredModes: [], placeholder: 'z.B. fenecon.0.ctrlBalancing0.SetGridActivePower', hint: 'Nur für FENECON‑Netzpunktführung: ctrlBalancing0/SetGridActivePower. NexoWatt schreibt hier standardmäßig -100 W bis max. 0 W.' },
     { key: 'maxChargeObjectId', label: 'Max Ladeleistung (W)', requiredModes: ['limits'] },
     { key: 'maxDischargeObjectId', label: 'Max Entladeleistung (W)', requiredModes: ['limits'] },
     { key: 'chargeEnableObjectId', label: 'Laden erlaubt (bool)', requiredModes: ['enableFlags'] },
@@ -6150,7 +6151,10 @@ function _collectFlowPowerDpIsWFromUI() {
       els.storageCapacityKWh.value = (Number.isFinite(cap) && cap > 0) ? String(cap) : '';
     }
     if (els.storageFeneconAcMode) {
-      els.storageFeneconAcMode.checked = !!(currentConfig.storage && currentConfig.storage.feneconAcMode);
+      const stF = (currentConfig.storage && typeof currentConfig.storage === 'object') ? currentConfig.storage : {};
+      els.storageFeneconAcMode.checked = (typeof stF.feneconGridControlEnabled === 'boolean')
+        ? !!stF.feneconGridControlEnabled
+        : !!stF.feneconAcMode;
     }
     rebuildStorageTable();
     try { buildStorageFarmUI(); } catch (_e) {}
@@ -7048,7 +7052,14 @@ function _collectFlowPowerDpIsWFromUI() {
     patch.storage = deepMerge({}, currentConfig.storage || {});
     patch.storage.controlMode = getStorageMode();
     patch.storage.datapoints = deepMerge({}, (currentConfig.storage && currentConfig.storage.datapoints) ? currentConfig.storage.datapoints : {});
-    patch.storage.feneconAcMode = !!(els.storageFeneconAcMode && els.storageFeneconAcMode.checked);
+    patch.storage.feneconGridControlEnabled = !!(els.storageFeneconAcMode && els.storageFeneconAcMode.checked);
+    // Alte FENECON-AC-Direktlogik nicht mehr über den Haken aktivieren.
+    // Für SpeicherFarm-Altanlagen bleibt ein bereits vorhandenes feneconAcMode intern erhalten,
+    // ansonsten wird es beim Speichern auf false gesetzt.
+    const storageFarmEnabledForLegacy = !!(patch.emsApps && patch.emsApps.apps && patch.emsApps.apps.storagefarm && patch.emsApps.apps.storagefarm.enabled);
+    patch.storage.feneconAcMode = storageFarmEnabledForLegacy
+      ? !!(currentConfig.storage && currentConfig.storage.feneconAcMode)
+      : false;
 
     // Optional raw patch
     const raw = String(els.rawPatch.value || '').trim();
@@ -7848,7 +7859,7 @@ function _collectFlowPowerDpIsWFromUI() {
     const _update = () => {
       currentConfig = currentConfig || {};
       currentConfig.storage = currentConfig.storage || {};
-      currentConfig.storage.feneconAcMode = !!els.storageFeneconAcMode.checked;
+      currentConfig.storage.feneconGridControlEnabled = !!els.storageFeneconAcMode.checked;
     };
     els.storageFeneconAcMode.addEventListener('change', _update);
     els.storageFeneconAcMode.addEventListener('input', _update);

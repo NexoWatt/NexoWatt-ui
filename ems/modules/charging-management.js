@@ -1074,24 +1074,11 @@ class ChargingManagementModule extends BaseModule {
         if (!this._isEnabled()) return;
 
         const cfg = this.adapter.config.chargingManagement || {};
-        const storageCfgForEvPriority = (this.adapter && this.adapter.config && this.adapter.config.storage)
-            ? this.adapter.config.storage
-            : {};
-        const storageFarmCfgForEvPriority = (this.adapter && this.adapter.config && this.adapter.config.storageFarm)
-            ? this.adapter.config.storageFarm
-            : {};
-        const isTruthyFlag = (v) => v === true || v === 1 || String(v).toLowerCase() === 'true' || String(v) === '1';
-        const storageControlEnabledForEvPriority = !(this.adapter && this.adapter.config && this.adapter.config.enableStorageControl === false);
-        const storageFarmActiveForEvPriority = !!(this.adapter && this.adapter.config && (
-            isTruthyFlag(this.adapter.config.enableStorageFarm) || isTruthyFlag(storageFarmCfgForEvPriority.enabled)
-        ));
-        // Die mit 0.6.247 eingeführte EVCS-vor-Speicher-Priorität ist ein FENECON-Sonderpfad.
-        // Für alle herkömmlichen Speicher und für SpeicherFarm-Setups bleibt das bisherige
-        // PV-/Speicher-/Wallbox-Verhalten unverändert. Das Farm-Gate ist bewusst bool-tolerant,
-        // weil ioBroker/native Werte je nach Quelle auch als String/Number ankommen können.
-        const feneconEvPriorityActive = !!(storageControlEnabledForEvPriority
-            && !storageFarmActiveForEvPriority
-            && storageCfgForEvPriority.feneconAcMode === true);
+        // Alte FENECON-EVCS-vor-Speicher-Priorität deaktiviert.
+        // Der FENECON-Hybrid-Haken steuert ab 0.6.254 ausschließlich die
+        // Netzpunktführung über ctrlBalancing0/SetGridActivePower.
+        // Standard-/Farm-/Wallbox-Verhalten bleibt dadurch unverändert.
+        const feneconEvPriorityActive = false;
 
         // NOTE:
         // "off" is not intended to be a user-facing operating mode. On/Off is handled

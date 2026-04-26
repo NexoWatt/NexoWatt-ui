@@ -62,6 +62,7 @@ class SpeicherMappingModule extends BaseModule {
             { id: `${base}.mapping.ladenErlaubtId`, name: 'Laden erlaubt Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.entladenErlaubtId`, name: 'Entladen erlaubt Datenpunkt-ID', type: 'string', role: 'text', def: '' },
             { id: `${base}.mapping.reserveSocId`, name: 'Reserve-SoC Datenpunkt-ID', type: 'string', role: 'text', def: '' },
+            { id: `${base}.mapping.feneconGridSetpointId`, name: 'FENECON SetGridActivePower Datenpunkt-ID', type: 'string', role: 'text', def: '' },
 
             { id: `${base}.socPct`, name: 'Speicher Ladezustand (SoC)', type: 'number', role: 'value.battery', def: 0 },
             { id: `${base}.socAlterMs`, name: 'SoC Alter (ms)', type: 'number', role: 'value.interval', def: 0 },
@@ -97,13 +98,16 @@ class SpeicherMappingModule extends BaseModule {
         const storage = (this.adapter.config && this.adapter.config.storage) ? this.adapter.config.storage : {};
         const controlMode = (storage && typeof storage.controlMode === 'string') ? storage.controlMode : 'targetPower';
         const dp = (storage && storage.datapoints && typeof storage.datapoints === 'object') ? storage.datapoints : {};
-        return { controlMode, dp };
+        const feneconGridControlEnabled = storage.feneconGridControlEnabled;
+        const feneconAcMode = storage.feneconAcMode;
+        const farmEnabled = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
+        return { controlMode, dp, feneconGridControlEnabled, feneconAcMode, farmEnabled };
     }
 
     async _upsertFromConfig() {
         if (!this.dp) return;
 
-        const { controlMode, dp } = this._getCfg();
+        const { controlMode, dp, feneconGridControlEnabled, feneconAcMode, farmEnabled } = this._getCfg();
 
         const socId = String(dp.socObjectId || '').trim();
         const socScale = Number.isFinite(Number(dp.socScale)) ? Number(dp.socScale) : 1;
@@ -122,6 +126,14 @@ class SpeicherMappingModule extends BaseModule {
         const dischargeEnId = String(dp.dischargeEnableObjectId || '').trim();
         const reserveSocId = String(dp.reserveSocObjectId || '').trim();
 
+        // FENECON-Hybrid Netzpunktführung: ctrlBalancing0/SetGridActivePower.
+        // Dieser Wert ist ein Netzanschlusspunkt-Sollwert (Import + / Export -),
+        // nicht die direkte Batterie-Leistung. Er wird nur vom expliziten
+        // FENECON-Sondermodus genutzt.
+        const feneconGridSetpointId = String(dp.feneconGridSetpointObjectId || dp.feneconSetGridActivePowerObjectId || '').trim();
+        const feneconGridSetpointScale = Number.isFinite(Number(dp.feneconGridSetpointScale)) ? Number(dp.feneconGridSetpointScale) : 1;
+        const feneconGridSetpointInv = !!dp.feneconGridSetpointInvert;
+
         // Diagnose schreiben
         await this._setIfChanged('speicher.mapping.modus', String(controlMode || ''));
         await this._setIfChanged('speicher.mapping.socId', socId);
@@ -132,6 +144,7 @@ class SpeicherMappingModule extends BaseModule {
         await this._setIfChanged('speicher.mapping.ladenErlaubtId', chargeEnId);
         await this._setIfChanged('speicher.mapping.entladenErlaubtId', dischargeEnId);
         await this._setIfChanged('speicher.mapping.reserveSocId', reserveSocId);
+        await this._setIfChanged('speicher.mapping.feneconGridSetpointId', feneconGridSetpointId);
 
         // Datenpunkte registrieren (st.*)
         if (socId) {
@@ -230,6 +243,24 @@ class SpeicherMappingModule extends BaseModule {
             });
         }
 
+        if (feneconGridSetpointId) {
+            await this.dp.upsert({
+                key: 'st.feneconGridSetpointW',
+                name: 'FENECON SetGridActivePower',
+                objectId: feneconGridSetpointId,
+                dataType: 'number',
+                direction: 'out',
+                unit: 'W',
+                scale: feneconGridSetpointScale,
+                offset: 0,
+                invert: feneconGridSetpointInv,
+                deadband: 0,
+                min: -1000000,
+                max: 0,
+                note: 'FENECON ctrlBalancing0/SetGridActivePower: Netzpunkt-Sollwert, nur <= 0 W'
+            });
+        }
+
         if (reserveSocId) {
             await this.dp.upsert({
                 key: 'st.reserveSocPct',
@@ -248,7 +279,11 @@ class SpeicherMappingModule extends BaseModule {
         const missing = [];
         if (!socId) missing.push('SoC');
 
-        if (String(controlMode) === 'targetPower') {
+        const feneconGridConfiguredRaw = (typeof feneconGridControlEnabled === 'boolean') ? (feneconGridControlEnabled === true) : (feneconAcMode === true);
+        const feneconGridConfigured = !!(feneconGridConfiguredRaw && !farmEnabled);
+        if (feneconGridConfigured) {
+            if (!feneconGridSetpointId) missing.push('FENECON SetGridActivePower');
+        } else if (String(controlMode) === 'targetPower') {
             if (!sollId) missing.push('Sollleistung (W)');
         } else if (String(controlMode) === 'limits') {
             if (!maxChargeId) missing.push('Max Ladeleistung (W)');
