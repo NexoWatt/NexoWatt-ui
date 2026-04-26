@@ -1,3 +1,10 @@
+## 0.6.256
+
+- Heizstab: Energiefluss nutzt jetzt die native Heizstab-Leistung (`measuredW` → `appliedW` → `targetW`) statt nur den Verbraucher-DP.
+- Heizstab: Schnellsteuerungs-Ring geglättet und gegen kurze 0-W-Readbacks stabilisiert.
+- Heizstab: optionale 0-/Minus-Einspeise-Logik für abgeregelte PV ergänzt: Forecast als Startfreigabe, langsames Stufe-hoch, schneller Abwurf bei Netzbezug oder Speicherentladung.
+- App Center: neuer Heizstab-Abschnitt „0-Einspeisung / PV-Abregelung nutzen“ mit konservativen Schutzparametern.
+
 ## 0.6.255
 
 - FENECON Hybrid nach Kundentest umgestellt: `SetGridActivePower` wird nicht mehr verwendet, weil dieser DP auf der getesteten FENECON/FEMS-Anlage nicht beschreibbar ist.

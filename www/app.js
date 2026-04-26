@@ -1459,6 +1459,41 @@ try {
   });
 }
 
+
+function isHeatingRodFlowItem(it){
+  try {
+    const t = String((it && (it.consumerType || it.type || it.category)) || '').toLowerCase();
+    const ck = String((it && it.qc && it.qc.controlKind) || '').toLowerCase();
+    return t === 'heatingrod' || t === 'heating_rod' || t === 'heating-rod' || t === 'heizstab' || ck === 'heatingrod' || ck === 'heating_rod' || ck === 'heating-rod';
+  } catch(_e) { return false; }
+}
+
+function resolveHeatingRodFlowPower(it, d, fallbackRaw){
+  const idx = Math.max(1, Math.round(Number(it && it.idx) || 0));
+  const readN = (key) => {
+    try {
+      const n = Number(d(key));
+      return Number.isFinite(n) ? n : NaN;
+    } catch(_e) { return NaN; }
+  };
+  const measured = readN(`heatingRod.devices.c${idx}.measuredW`);
+  const applied = readN(`heatingRod.devices.c${idx}.appliedW`);
+  const target = readN(`heatingRod.devices.c${idx}.targetW`);
+  const maxPower = readN(`heatingRod.devices.c${idx}.maxPowerW`);
+  let valueW = NaN;
+  if (Number.isFinite(measured) && measured > 0) valueW = measured;
+  else if (Number.isFinite(applied) && applied > 0) valueW = applied;
+  else if (Number.isFinite(target) && target > 0) valueW = target;
+  else if (Number.isFinite(fallbackRaw)) valueW = Math.abs(fallbackRaw);
+  else valueW = 0;
+
+  return {
+    valueW: Math.max(0, valueW),
+    maxPowerW: Number.isFinite(maxPower) && maxPower > 0 ? maxPower : 0
+  };
+}
+
+
 function updateEnergyWebExtras(d){
   let consumersSum = 0;
   const show = (id, abs) => {
@@ -1526,7 +1561,20 @@ if (flowExtras && Array.isArray(flowExtras.special)) {
   // Verbraucher
   if (flowExtras && Array.isArray(flowExtras.consumers)) {
     for (const it of flowExtras.consumers) {
-      const raw = Number(d(it.stateKey)) || 0;
+      const rawBase = Number(d(it.stateKey)) || 0;
+      if (isHeatingRodFlowItem(it)) {
+        const rodPower = resolveHeatingRodFlowPower(it, d, rawBase);
+        const abs = stabilizeFlowAbs(`extra:consumer:heatingRod:c${it.idx || it.stateKey || it.lineId || it.nodeId}`, Math.abs(rodPower.valueW));
+        consumersSum += abs;
+        setText(it.valId, formatFlowPower(abs));
+        show(it.lineId, abs);
+        // Heizstab ist immer Verbraucher: Richtung stabil Gebäude -> Heizstab.
+        setRev(it.lineId, false);
+        setNodeActive(it.nodeId, abs > 0);
+        continue;
+      }
+
+      const raw = rawBase;
       const val = stabilizeFlowSigned(`extra:consumer:${it.stateKey || it.lineId || it.nodeId}`, raw);
       const abs = Math.abs(val);
       consumersSum += abs;
@@ -6324,6 +6372,46 @@ function openFlowQc(kind, idx){
   let pendingBoost = null;
   let pendingReg = null;
   let pendingMode = null;
+  let gaugeDisplayW = 0;
+  let gaugeDisplayMaxW = 0;
+  let gaugeZeroConfirm = 0;
+  let gaugeLastFillDeg = '';
+
+  const resetGaugeSmoothing = () => {
+    gaugeDisplayW = 0;
+    gaugeDisplayMaxW = 0;
+    gaugeZeroConfirm = 0;
+    gaugeLastFillDeg = '';
+  };
+
+  const smoothGaugePower = (valueW, maxW, opts = {}) => {
+    const raw = Math.max(0, Math.abs(Number(valueW) || 0));
+    const max = Math.max(0, Number(maxW) || 0);
+    const isRod = !!(opts && opts.isRod);
+    const hardOff = !!(opts && opts.hardOff);
+    let next = raw;
+
+    if (isRod && !hardOff) {
+      if (raw <= 1 && gaugeDisplayW > 50) {
+        gaugeZeroConfirm += 1;
+        if (gaugeZeroConfirm < 3) next = gaugeDisplayW;
+      } else {
+        gaugeZeroConfirm = 0;
+      }
+
+      if (gaugeDisplayW > 0 && next > 0) {
+        const diff = Math.abs(next - gaugeDisplayW);
+        if (diff < 50) next = gaugeDisplayW;
+        else next = (gaugeDisplayW * 0.65) + (next * 0.35);
+      }
+    } else if (hardOff) {
+      gaugeZeroConfirm = 0;
+    }
+
+    gaugeDisplayW = Math.max(0, Math.round(next));
+    if (max > 0) gaugeDisplayMaxW = max;
+    return { valueW: gaugeDisplayW, maxW: gaugeDisplayMaxW || max };
+  };
 
   const showMsg = (t, kind) => {
     if (!msgEl) return;
@@ -6386,8 +6474,11 @@ function openFlowQc(kind, idx){
     const max = Math.max(0, Number(maxW) || 0);
     const pct = Math.max(0, Math.min(1, max > 0 ? (val / max) : 0));
     const deg = (pct * 100).toFixed(1) + '%';
-    flowGauge.style.background = 'radial-gradient(closest-side, #121416 60%, transparent 61% 100%),' +
-                                 'conic-gradient(#6c5ce7 0% ' + deg + ', #2a2f35 ' + deg + ' 100%)';
+    if (deg !== gaugeLastFillDeg) {
+      flowGauge.style.background = 'radial-gradient(closest-side, #121416 60%, transparent 61% 100%),' +
+                                   'conic-gradient(#6c5ce7 0% ' + deg + ', #2a2f35 ' + deg + ' 100%)';
+      gaugeLastFillDeg = deg;
+    }
     flowGauge.title = max > 0 ? `${formatPower(val)} von ${formatPower(max)}` : formatPower(val);
   };
 
@@ -6427,9 +6518,14 @@ function openFlowQc(kind, idx){
   const updatePower = (readbackData = null) => {
     if (!ctx || !powerEl) return;
     const resolved = resolveFlowPower(readbackData);
-    const n = Number(resolved.valueW) || 0;
+    const rod = (readbackData && readbackData.heatingRod && readbackData.heatingRod.available) ? readbackData.heatingRod : null;
+    const isRod = !!(ctx && ctx.kind === 'consumer' && ((ctx.qc && String(ctx.qc.controlKind || '').toLowerCase() === 'heatingrod') || rod));
+    const modeRaw = rod ? String(rod.effectiveMode || rod.userMode || rod.mode || '').toLowerCase() : '';
+    const hardOff = !!(isRod && modeRaw === 'off' && Number(resolved.valueW || 0) <= 1);
+    const smoothed = smoothGaugePower(resolved.valueW, resolved.maxW, { isRod, hardOff });
+    const n = Number(smoothed.valueW) || 0;
     powerEl.textContent = (ctx.kind === 'consumer') ? formatPower(Math.abs(n)) : formatPowerSigned(n);
-    setFlowGaugeFill(n, resolved.maxW);
+    setFlowGaugeFill(n, smoothed.maxW);
   };
 
   const renderModeButtons = (modes, activeMode) => {
@@ -6750,11 +6846,12 @@ function openFlowQc(kind, idx){
     }
 
     showMsg('', '');
+    resetGaugeSmoothing();
     updatePower();
     readback();
 
     if (poll) clearInterval(poll);
-    poll = setInterval(() => { updatePower(); readback(); }, 1000);
+    poll = setInterval(() => { readback(); }, 1000);
     modal.classList.remove('hidden');
   };
 
@@ -6766,6 +6863,7 @@ function openFlowQc(kind, idx){
     pendingBoost = null;
     pendingReg = null;
     pendingMode = null;
+    resetGaugeSmoothing();
     showMsg('', '');
     modal.classList.add('hidden');
   };

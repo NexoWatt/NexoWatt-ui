@@ -130,6 +130,15 @@ class HeatingRodControlModule extends BaseModule {
         if (prev === v) return;
         this._stateCache.set(id, v);
         await this.adapter.setStateAsync(id, v, true);
+        // Own adapter states must also reach the live /api/state cache immediately.
+        // Otherwise the VIS can briefly see stale/0 values (e.g. Heizstab in Energiefluss).
+        try {
+            if (this.adapter && typeof this.adapter.updateValue === 'function') {
+                this.adapter.updateValue(String(id), v, Date.now());
+            }
+        } catch (_e) {
+            // ignore cache mirror failures
+        }
     }
 
     _buildDevicesFromConfig() {
@@ -354,6 +363,12 @@ class HeatingRodControlModule extends BaseModule {
         await mk('heatingRod.summary.appliedTotalW', 'Applied total (W)', 'number', 'value.power', 'W');
         await mk('heatingRod.summary.budgetUsedW', 'Budget used (W)', 'number', 'value.power', 'W');
         await mk('heatingRod.summary.debugJson', 'Debug JSON', 'string', 'json');
+        await mk('heatingRod.summary.zeroExportActive', 'Zero/minus feed-in logic active', 'boolean', 'indicator');
+        await mk('heatingRod.summary.zeroExportCanProbe', 'Zero/minus feed-in probe allowed', 'boolean', 'indicator');
+        await mk('heatingRod.summary.zeroExportReason', 'Zero/minus feed-in reason', 'string', 'text');
+        await mk('heatingRod.summary.zeroExportPvNowW', 'Zero/minus feed-in PV now (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.zeroExportForecastOk', 'Zero/minus feed-in forecast ok', 'boolean', 'indicator');
+        await mk('heatingRod.summary.zeroExportFeedInAtLimit', 'Zero/minus feed-in limit reached', 'boolean', 'indicator');
         await mk('heatingRod.summary.lastUpdate', 'Last update', 'number', 'value.time');
         await mk('heatingRod.summary.status', 'Status', 'string', 'text');
 
@@ -402,6 +417,10 @@ class HeatingRodControlModule extends BaseModule {
             await mk(`heatingRod.devices.${d.id}.appliedW`, 'Applied power (W)', 'number', 'value.power', 'W');
             await mk(`heatingRod.devices.${d.id}.measuredW`, 'Measured (W)', 'number', 'value.power', 'W');
             await mk(`heatingRod.devices.${d.id}.status`, 'Status', 'string', 'text');
+            await mk(`heatingRod.devices.${d.id}.zeroExportActive`, 'Zero/minus feed-in active', 'boolean', 'indicator');
+            await mk(`heatingRod.devices.${d.id}.zeroExportReason`, 'Zero/minus feed-in reason', 'string', 'text');
+            await mk(`heatingRod.devices.${d.id}.zeroExportCanProbe`, 'Zero/minus feed-in probe allowed', 'boolean', 'indicator');
+            await mk(`heatingRod.devices.${d.id}.zeroExportNextAllowedAt`, 'Zero/minus feed-in next probe at', 'number', 'value.time');
 
             if (this.dp && d.powerId) {
                 const k = `hr.${d.id}.pW`;
@@ -580,6 +599,183 @@ class HeatingRodControlModule extends BaseModule {
         };
     }
 
+    _getZeroExportCfg() {
+        const cfg = this._getCfg();
+        const raw = (cfg.zeroExport && typeof cfg.zeroExport === 'object')
+            ? cfg.zeroExport
+            : ((cfg.zeroFeedIn && typeof cfg.zeroFeedIn === 'object') ? cfg.zeroFeedIn : {});
+
+        const n = (keyList, def, minV = 0, maxV = 1e12) => {
+            const keys = Array.isArray(keyList) ? keyList : [keyList];
+            for (const key of keys) {
+                if (!key) continue;
+                const v = raw[key];
+                if (v === null || v === undefined || v === '') continue;
+                const nr = Number(v);
+                if (Number.isFinite(nr)) return Math.round(clamp(nr, minV, maxV));
+            }
+            return Math.round(clamp(def, minV, maxV));
+        };
+
+        return {
+            enabled: !!(raw.enabled || raw.active),
+            feedInLimitW: n(['feedInLimitW', 'allowedExportW', 'exportLimitW'], 1000, 0, 1000000),
+            feedInToleranceW: n(['feedInToleranceW', 'exportToleranceW'], 150, 0, 100000),
+            targetExportBufferW: n(['targetExportBufferW', 'exportBufferW'], 100, 0, 100000),
+            minPvPowerW: n(['minPvPowerW', 'minCurrentPvW'], 1000, 0, 1000000),
+            requireForecast: raw.requireForecast === false ? false : true,
+            minForecastPeakW: n(['minForecastPeakW', 'forecastMinPeakW'], 1000, 0, 1000000),
+            minForecastKwh6h: clamp(num(raw.minForecastKwh6h ?? raw.forecastMinKwh6h, 0.5), 0, 100000),
+            storageFullSocPct: n(['storageFullSocPct', 'storagePrioritySocPct'], 95, 0, 100),
+            gridImportTripW: n(['gridImportTripW', 'maxGridImportW'], 150, 0, 1000000),
+            gridImportTripSec: n(['gridImportTripSec', 'gridImportHoldSec'], 5, 0, 3600),
+            hardGridImportW: n(['hardGridImportW', 'hardImportW'], 500, 0, 1000000),
+            storageDischargeToleranceW: n(['storageDischargeToleranceW', 'batteryDischargeToleranceW'], 300, 0, 1000000),
+            storageDischargeTripSec: n(['storageDischargeTripSec', 'batteryDischargeHoldSec'], 8, 0, 3600),
+            hardStorageDischargeW: n(['hardStorageDischargeW', 'hardBatteryDischargeW'], 800, 0, 1000000),
+            stepUpDelaySec: n(['stepUpDelaySec', 'stepUpWaitSec'], 60, 0, 86400),
+            stepDownDelaySec: n(['stepDownDelaySec', 'stepDownWaitSec'], 5, 0, 86400),
+            cooldownSec: n(['cooldownSec', 'probeCooldownSec'], 60, 0, 86400),
+        };
+    }
+
+    _readCacheRaw(key, fallback = null) {
+        if (!key) return fallback;
+        try {
+            const cache = this.adapter && this.adapter.stateCache;
+            const rec = cache && cache[String(key)];
+            if (rec && typeof rec === 'object' && rec.value !== undefined) return rec.value;
+            if (rec !== undefined) return rec;
+        } catch (_e) {
+            // ignore
+        }
+        return fallback;
+    }
+
+    _readPvNowW(staleMs) {
+        const basePv = this._readNumberAny(['pvPower', 'productionTotal', 'ps.pvPowerW'], staleMs, null);
+        const farmPv = this._readNumberAny(['storageFarm.totalPvPowerW'], staleMs, null);
+        let pv = 0;
+        if (typeof basePv === 'number' && Number.isFinite(basePv)) pv = Math.max(pv, basePv);
+        if (typeof farmPv === 'number' && Number.isFinite(farmPv)) pv = Math.max(pv, farmPv);
+        return Math.max(0, Math.round(pv));
+    }
+
+    _readForecastSnapshot() {
+        const boolVal = (key) => {
+            const raw = this._readCacheRaw(key, null);
+            if (raw === true || raw === 1 || raw === '1') return true;
+            if (typeof raw === 'string' && raw.trim().toLowerCase() === 'true') return true;
+            return false;
+        };
+        const numVal = (keys, fallback = 0) => {
+            const list = Array.isArray(keys) ? keys : [keys];
+            for (const key of list) {
+                const v = this._readCacheNumber(key, null);
+                if (typeof v === 'number' && Number.isFinite(v)) return v;
+            }
+            return fallback;
+        };
+
+        const peakW = Math.max(0, numVal([
+            'forecast.pv.peakWNext24h',
+            'forecast.pv.maxPowerNext24h',
+            'pvForecast.peakWNext24h',
+            'pvForecast.maxPowerW'
+        ], 0));
+        const kwh6h = Math.max(0, numVal([
+            'forecast.pv.kwhNext6h',
+            'forecast.pv.energyNext6hKwh',
+            'pvForecast.kwhNext6h'
+        ], 0));
+        const kwh12h = Math.max(0, numVal([
+            'forecast.pv.kwhNext12h',
+            'forecast.pv.energyNext12hKwh',
+            'pvForecast.kwhNext12h'
+        ], 0));
+        const kwh24h = Math.max(0, numVal([
+            'forecast.pv.kwhNext24h',
+            'forecast.pv.energyNext24hKwh',
+            'pvForecast.kwhNext24h'
+        ], 0));
+
+        const valid = boolVal('forecast.pv.valid')
+            || boolVal('pvForecast.valid')
+            || peakW > 0
+            || kwh6h > 0
+            || kwh12h > 0
+            || kwh24h > 0;
+
+        return { valid, peakW, kwh6h, kwh12h, kwh24h };
+    }
+
+    _computeZeroExportInfo(pvBase) {
+        const cfg = this._getZeroExportCfg();
+        if (!cfg.enabled) {
+            return { active: false, canProbe: false, reason: 'disabled', cfg };
+        }
+        if (!pvBase || !pvBase.gridKnown) {
+            return { active: true, canProbe: false, reason: 'grid_unknown', cfg };
+        }
+
+        const staleTimeoutSec = clamp(num(this._getCfg().staleTimeoutSec, 15), 1, 3600);
+        const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
+        const pvNowW = Math.max(this._readPvNowW(staleMs), Math.round(num(pvBase.pvCapW, 0)));
+        const feedLimitW = Math.max(0, Math.round(num(cfg.feedInLimitW, 0)));
+        const tolW = Math.max(0, Math.round(num(cfg.feedInToleranceW, 0)));
+        const exportW = Math.max(0, Math.round(num(pvBase.exportW, 0)));
+
+        // For a true 0-feed-in plant the export value sits close to 0. For a minus-feed-in
+        // plant (e.g. -1 kW allowed) the plant is at the cap when measured export is close
+        // to the configured allowed export magnitude.
+        const exportWindowW = Math.max(tolW, Math.round(num(cfg.targetExportBufferW, 0)));
+        const feedInAtLimit = feedLimitW > 0
+            ? exportW >= Math.max(0, feedLimitW - exportWindowW)
+            : exportW <= exportWindowW;
+
+        const forecast = this._readForecastSnapshot();
+        const forecastOk = !cfg.requireForecast || (
+            forecast.valid && (
+                forecast.peakW >= cfg.minForecastPeakW
+                || forecast.kwh6h >= cfg.minForecastKwh6h
+                || forecast.kwh12h >= Math.max(cfg.minForecastKwh6h, cfg.minForecastKwh6h * 1.5)
+                || forecast.kwh24h >= Math.max(cfg.minForecastKwh6h, cfg.minForecastKwh6h * 2)
+            )
+        );
+
+        const pvNowOk = pvNowW >= Math.max(0, cfg.minPvPowerW);
+        const soc = (typeof pvBase.storageSocPct === 'number' && Number.isFinite(pvBase.storageSocPct)) ? pvBase.storageSocPct : null;
+        const storageKnown = soc !== null || num(pvBase.storageChargeW, 0) > 0 || num(pvBase.storageDischargeW, 0) > 0;
+        const storageReady = !storageKnown || soc === null || soc >= cfg.storageFullSocPct;
+        const noHardNonPv = !(pvBase.importW > cfg.hardGridImportW || pvBase.storageDischargeW > cfg.hardStorageDischargeW);
+
+        let reason = 'ready';
+        if (!feedInAtLimit) reason = 'feed_in_not_at_limit';
+        else if (!pvNowOk) reason = 'pv_now_too_low';
+        else if (!forecastOk) reason = 'forecast_not_ok';
+        else if (!storageReady) reason = 'storage_priority';
+        else if (!noHardNonPv) reason = 'non_pv_hard_block';
+
+        const canProbe = !!(feedInAtLimit && pvNowOk && forecastOk && storageReady && noHardNonPv);
+
+        return {
+            active: true,
+            canProbe,
+            reason,
+            cfg,
+            pvNowW,
+            feedInAtLimit,
+            forecastOk,
+            forecast,
+            storageReady,
+            pvNowOk,
+            exportW,
+            feedInLimitW: feedLimitW,
+            feedInToleranceW: tolW,
+        };
+    }
+
+
     _stageActuatorKey(stage, idx) {
         if (!stage || typeof stage !== 'object') return `stage:${idx + 1}`;
         const keyCandidates = [stage.writeKey, stage.readKey];
@@ -649,6 +845,16 @@ class HeatingRodControlModule extends BaseModule {
             if (!this._sameStageOnSet(currentSet, set)) return target;
         }
         return 0;
+    }
+
+    _nextPhysicalStageAbove(d, observedStage) {
+        const obs = Math.max(0, Math.min(Math.round(Number(observedStage) || 0), d.stages.length));
+        const currentSet = this._stageOnSetForTarget(d, obs);
+        for (let target = obs + 1; target <= d.stages.length; target++) {
+            const set = this._stageOnSetForTarget(d, target);
+            if (!this._sameStageOnSet(currentSet, set)) return target;
+        }
+        return obs;
     }
 
     _readMeasuredW(d) {
@@ -751,6 +957,114 @@ class HeatingRodControlModule extends BaseModule {
         }
 
         return currentStage;
+    }
+
+    _applyZeroExportStageStrategy(d, desiredStage, observedStage, pvBase, zeroInfo, now) {
+        const info = zeroInfo || this._computeZeroExportInfo(pvBase);
+        const cfg = (info && info.cfg) ? info.cfg : this._getZeroExportCfg();
+        const st = this._ensureStageCtlState(d.id, observedStage);
+        const currentStage = Math.max(0, Math.min(Math.round(Number(st.targetStage ?? observedStage) || 0), d.stageCount));
+        let targetStage = Math.max(0, Math.min(Math.round(Number(desiredStage) || 0), d.stageCount));
+        let reason = (info && info.reason) ? String(info.reason) : 'zero_export';
+        let reduceNow = false;
+        let hardOff = false;
+
+        const importActive = !!(pvBase && pvBase.gridKnown && num(pvBase.importW, 0) > cfg.gridImportTripW);
+        const dischargeActive = !!(pvBase && num(pvBase.storageDischargeW, 0) > cfg.storageDischargeToleranceW);
+        const hardImport = !!(pvBase && pvBase.gridKnown && num(pvBase.importW, 0) > cfg.hardGridImportW);
+        const hardDischarge = !!(pvBase && num(pvBase.storageDischargeW, 0) > cfg.hardStorageDischargeW);
+
+        if (importActive) {
+            if (!st.zeroImportSinceMs) st.zeroImportSinceMs = now;
+        } else {
+            st.zeroImportSinceMs = 0;
+        }
+        if (dischargeActive) {
+            if (!st.zeroDischargeSinceMs) st.zeroDischargeSinceMs = now;
+        } else {
+            st.zeroDischargeSinceMs = 0;
+        }
+
+        const importHoldMs = importActive && st.zeroImportSinceMs ? (now - st.zeroImportSinceMs) : 0;
+        const dischargeHoldMs = dischargeActive && st.zeroDischargeSinceMs ? (now - st.zeroDischargeSinceMs) : 0;
+        hardOff = hardImport || hardDischarge;
+        reduceNow = hardOff
+            || (importActive && importHoldMs >= Math.max(0, cfg.gridImportTripSec * 1000))
+            || (dischargeActive && dischargeHoldMs >= Math.max(0, cfg.storageDischargeTripSec * 1000));
+
+        if (reduceNow) {
+            const reduceBase = Math.max(currentStage, observedStage, targetStage);
+            const lower = hardOff ? 0 : this._previousPhysicalStageBelow(d, reduceBase);
+            targetStage = Math.min(targetStage, lower);
+            st.zeroCooldownUntilMs = now + Math.max(0, cfg.cooldownSec * 1000);
+            st.zeroLastStepDownMs = now;
+            st.lastDecreaseMs = now;
+            st.targetStage = targetStage;
+            reason = hardOff ? 'hard_non_pv_reduce' : (importActive ? 'grid_import_reduce' : 'storage_discharge_reduce');
+            this._stageCtl.set(d.id, st);
+            return {
+                targetStage,
+                reduceNow: true,
+                hardOff,
+                reason,
+                importHoldMs,
+                dischargeHoldMs,
+                nextAllowedAt: st.zeroCooldownUntilMs || 0,
+            };
+        }
+
+        if (info && info.active && info.storageReady === false && Math.max(currentStage, observedStage, targetStage) > 0) {
+            const reduceBase = Math.max(currentStage, observedStage, targetStage);
+            targetStage = Math.min(targetStage, this._previousPhysicalStageBelow(d, reduceBase));
+            st.zeroCooldownUntilMs = now + Math.max(0, cfg.cooldownSec * 1000);
+            st.zeroLastStepDownMs = now;
+            st.lastDecreaseMs = now;
+            st.targetStage = targetStage;
+            reason = 'storage_priority_reduce';
+            this._stageCtl.set(d.id, st);
+            return {
+                targetStage,
+                reduceNow: true,
+                hardOff: false,
+                reason,
+                importHoldMs,
+                dischargeHoldMs,
+                nextAllowedAt: st.zeroCooldownUntilMs || 0,
+            };
+        }
+
+        const cooldownActive = !!(st.zeroCooldownUntilMs && now < st.zeroCooldownUntilMs);
+        const canProbe = !!(info && info.active && info.canProbe && !cooldownActive);
+
+        if (canProbe) {
+            const baseStage = Math.max(currentStage, observedStage, targetStage);
+            const nextStage = this._nextPhysicalStageAbove(d, baseStage);
+            const lastUp = Math.max(num(st.zeroLastStepUpMs, 0), num(st.lastIncreaseMs, 0));
+            const stepWaitMs = Math.max(0, cfg.stepUpDelaySec * 1000);
+            const mayStep = nextStage > baseStage && (!lastUp || (now - lastUp) >= stepWaitMs);
+            if (mayStep) {
+                targetStage = Math.max(targetStage, nextStage);
+                st.zeroLastStepUpMs = now;
+                reason = 'probe_step_up';
+            } else {
+                reason = (nextStage <= baseStage) ? 'max_physical_stage' : 'waiting_step_up_delay';
+            }
+        } else if (cooldownActive) {
+            reason = 'cooldown';
+        }
+
+        st.targetStage = Math.max(0, Math.min(Math.round(Number(targetStage) || 0), d.stageCount));
+        this._stageCtl.set(d.id, st);
+
+        return {
+            targetStage: st.targetStage,
+            reduceNow: false,
+            hardOff: false,
+            reason,
+            importHoldMs,
+            dischargeHoldMs,
+            nextAllowedAt: st.zeroCooldownUntilMs || 0,
+        };
     }
 
     async _writeBoolForce(key, value, force = false) {
@@ -894,6 +1208,7 @@ class HeatingRodControlModule extends BaseModule {
         }
 
         const pvBase = this._computeBasePvAvailableW(currentHeatingRodW);
+        const zeroExportInfo = this._computeZeroExportInfo(pvBase);
         const thermalUsedW = Math.max(0, num(this.adapter && this.adapter._thermalBudgetUsedW, 0));
         let remainingW = Math.max(0, num(pvBase.availableW, 0) - thermalUsedW);
         let appliedTotalW = 0;
@@ -908,6 +1223,10 @@ class HeatingRodControlModule extends BaseModule {
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.maxPowerW`, Math.round(num(d.maxPowerW, 0)));
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.stageCount`, d.stageCount);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.wiredStages`, d.wiredStages);
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportActive`, !!zeroExportInfo.active);
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportCanProbe`, !!zeroExportInfo.canProbe);
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportReason`, String(zeroExportInfo.reason || ''));
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportNextAllowedAt`, Math.round(num((this._stageCtl.get(d.id) || {}).zeroCooldownUntilMs, 0)));
 
             let userEnabled = true;
             try {
@@ -1111,20 +1430,36 @@ class HeatingRodControlModule extends BaseModule {
             }
 
             let desiredStage = this._computeDesiredStage(d, remainingW, observedStage);
+            let zeroDecision = null;
+
+            // 0-/Minus-Einspeiseanlagen verstecken PV-Überschuss am Netzpunkt, weil der
+            // Wechselrichter/FEMS die PV abregelt. In diesem Sondermodus darf PV-Auto vorsichtig
+            // eine physische Heizstab-Stufe als Testlast zuschalten, wenn Forecast, PV-Leistung,
+            // Speicher-SOC und Einspeiselimit zusammenpassen. Danach entscheidet der Netzpunkt:
+            // Netzbezug oder Speicherentladung -> schnell reduzieren; stabil PV -> halten/weiter prüfen.
+            if (zeroExportInfo.active) {
+                zeroDecision = this._applyZeroExportStageStrategy(d, desiredStage, observedStage, pvBase, zeroExportInfo, now);
+                desiredStage = Math.max(0, Math.min(num(zeroDecision.targetStage, desiredStage), d.stageCount));
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportReason`, String(zeroDecision.reason || zeroExportInfo.reason || ''));
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportNextAllowedAt`, Math.round(num(zeroDecision.nextAllowedAt, 0)));
+            }
 
             // Reiner PV-Betrieb: bei Netzbezug oder Speicherentladung keine Stufe halten
-            // oder neu zuschalten. Bei aktivem Heizstab wird ohne Mindestlaufzeit mindestens
-            // eine Stufe zurückgenommen, damit PV-Auto nicht auf Fremdenergie weiterläuft.
-            const forceNonPvDown = !!(pvBase.nonPvEnergyActive);
+            // oder neu zuschalten. Bei aktivem 0-Einspeise-Sondermodus werden kurze Transienten
+            // nicht sofort gekillt, sondern erst nach den konfigurierten Schutzzeiten.
+            let forceNonPvDown = !!(pvBase.nonPvEnergyActive);
+            if (zeroExportInfo.active) forceNonPvDown = !!(zeroDecision && zeroDecision.reduceNow);
             if (forceNonPvDown) {
                 // Reduce to the next lower *physical* actuator set. This is important for
                 // installations that accidentally map several virtual stages to the same KNX/relay
                 // datapoint: targetStage 3 -> 2 would otherwise still keep the same actuator ON.
-                const lowerPhysicalStage = this._previousPhysicalStageBelow(d, observedStage);
+                const lowerPhysicalStage = (zeroDecision && zeroDecision.hardOff)
+                    ? 0
+                    : this._previousPhysicalStageBelow(d, Math.max(observedStage, desiredStage));
                 desiredStage = Math.min(desiredStage, lowerPhysicalStage);
             }
 
-            const forceStorageProtectOff = !!(pvBase.forceOff && desiredStage <= 0);
+            const forceStorageProtectOff = !!(pvBase.forceOff && desiredStage <= 0 && !(zeroExportInfo.active && zeroDecision && !zeroDecision.reduceNow));
             const targetStage = forceStorageProtectOff
                 ? 0
                 : (forceNonPvDown ? desiredStage : this._applyTiming(d, desiredStage, observedStage));
@@ -1144,9 +1479,10 @@ class HeatingRodControlModule extends BaseModule {
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, effectiveTargetStage);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, Math.round(targetW));
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.appliedW`, Math.round(usedW));
+            const zeroSuffix = zeroDecision && zeroDecision.reason ? `_zero_${String(zeroDecision.reason)}` : '';
             const autoStatus = forceStorageProtectOff
-                ? `storage_protect_${String(res.status || '')}`
-                : (forceNonPvDown ? `pv_only_protect_${String(res.status || '')}` : String(res.status || 'pv_auto'));
+                ? `storage_protect_${String(res.status || '')}${zeroSuffix}`
+                : (forceNonPvDown ? `pv_only_protect_${String(res.status || '')}${zeroSuffix}` : `${String(res.status || 'pv_auto')}${zeroSuffix}`);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, autoStatus);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, '');
         }
@@ -1164,6 +1500,12 @@ class HeatingRodControlModule extends BaseModule {
         await this._setStateIfChanged('heatingRod.summary.pvAvailableW', Math.round(Math.max(0, num(pvBase.availableW, 0) - thermalUsedW)));
         await this._setStateIfChanged('heatingRod.summary.appliedTotalW', Math.round(appliedTotalW));
         await this._setStateIfChanged('heatingRod.summary.budgetUsedW', Math.round(budgetUsedW));
+        await this._setStateIfChanged('heatingRod.summary.zeroExportActive', !!zeroExportInfo.active);
+        await this._setStateIfChanged('heatingRod.summary.zeroExportCanProbe', !!zeroExportInfo.canProbe);
+        await this._setStateIfChanged('heatingRod.summary.zeroExportReason', String(zeroExportInfo.reason || ''));
+        await this._setStateIfChanged('heatingRod.summary.zeroExportPvNowW', Math.round(num(zeroExportInfo.pvNowW, 0)));
+        await this._setStateIfChanged('heatingRod.summary.zeroExportForecastOk', !!zeroExportInfo.forecastOk);
+        await this._setStateIfChanged('heatingRod.summary.zeroExportFeedInAtLimit', !!zeroExportInfo.feedInAtLimit);
         await this._setStateIfChanged('heatingRod.summary.debugJson', JSON.stringify({
             source: pvBase.source,
             gridKnown: !!pvBase.gridKnown,
@@ -1187,9 +1529,20 @@ class HeatingRodControlModule extends BaseModule {
             availableW: Math.round(num(pvBase.availableW, 0)),
             thermalUsedW: Math.round(thermalUsedW),
             forceOff: !!pvBase.forceOff,
+            zeroExport: {
+                active: !!zeroExportInfo.active,
+                canProbe: !!zeroExportInfo.canProbe,
+                reason: zeroExportInfo.reason,
+                pvNowW: Math.round(num(zeroExportInfo.pvNowW, 0)),
+                feedInAtLimit: !!zeroExportInfo.feedInAtLimit,
+                feedInLimitW: Math.round(num(zeroExportInfo.feedInLimitW, 0)),
+                forecastOk: !!zeroExportInfo.forecastOk,
+                forecast: zeroExportInfo.forecast || null,
+                storageReady: !!zeroExportInfo.storageReady,
+            },
         }));
         await this._setStateIfChanged('heatingRod.summary.lastUpdate', now);
-        await this._setStateIfChanged('heatingRod.summary.status', (this._devices && this._devices.length) ? `ok_${pvBase.source}${pvBase.forceOff ? '_storage_protect' : ''}${pvBase.nonPvEnergyActive ? '_pv_only_protect' : ''}` : 'no_devices');
+        await this._setStateIfChanged('heatingRod.summary.status', (this._devices && this._devices.length) ? `ok_${pvBase.source}${pvBase.forceOff ? '_storage_protect' : ''}${pvBase.nonPvEnergyActive ? '_pv_only_protect' : ''}${zeroExportInfo.active ? `_zero_${String(zeroExportInfo.reason || 'active')}` : ''}` : 'no_devices');
     }
 }
 
