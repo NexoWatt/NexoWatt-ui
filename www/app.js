@@ -6436,7 +6436,8 @@ function openFlowQc(kind, idx){
     if (!modeButtons) return;
     const list = Array.isArray(modes) ? modes : [];
     modeButtons.innerHTML = '';
-    modeButtons.className = 'nw-evcs-mode-buttons nw-evcs-mode-buttons-4';
+    const colsClass = list.length <= 2 ? 'nw-evcs-mode-buttons-2' : (list.length === 3 ? 'nw-evcs-mode-buttons-3' : (list.length >= 5 ? 'nw-evcs-mode-buttons-5' : 'nw-evcs-mode-buttons-4'));
+    modeButtons.className = `nw-evcs-mode-buttons ${colsClass}`;
     list.forEach((it) => {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -6499,7 +6500,7 @@ function openFlowQc(kind, idx){
           regHint.textContent = isRod
             ? (uEn
                 ? 'PV-Regelung aktiv. Manuelle Stufen und Boost bleiben zusätzlich verfügbar.'
-                : 'PV-Regelung aus. Manuelle Stufen und Boost bleiben verfügbar.')
+                : 'PV-Regelung aus. Der Adapter greift nicht automatisch ein; Stufen, Boost und Aus bleiben händisch verfügbar.')
             : (uEn
                 ? 'Automatik aktiv. Manuelle Bedienung bleibt möglich.'
                 : 'Regelung deaktiviert – manuelle Bedienung bleibt möglich.');
@@ -6728,6 +6729,7 @@ function openFlowQc(kind, idx){
           { value: 'manual1', label: 'Stufe 1' },
           { value: 'manual2', label: 'Stufe 2' },
           { value: 'manual3', label: 'Stufe 3' },
+          { value: 'off', label: 'Aus' },
         ], 'pvAuto');
       } else {
         renderModeButtons([

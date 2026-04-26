@@ -1,3 +1,11 @@
+## 0.6.253
+
+- Heizstab Schnellsteuerung/Manuellbetrieb: Wenn die PV-Regelung im Frontend oder die PV-Auto-Freigabe in der Konfiguration ausgeschaltet ist, schreibt der Adapter keinen physischen AUS-Befehl mehr und übersteuert den Aktor nicht mehr. Manuelle KNX-/ioBroker-Schaltungen bleiben dadurch erhalten.
+- Heizstab manuelle Stufen und Boost: Diese Befehle werden jetzt auch bei deaktivierter PV-Regelung zugelassen und als erzwungener Schaltbefehl auf die konfigurierten Stufen-DPs geschrieben.
+- Heizstab PV-Auto bleibt streng PV-basiert: Automatikbetrieb schreibt nur bei verfügbarem PV-Überschuss; bei Netzbezug oder Speicherentladung wird sicher auf die nächste niedrigere physische Stufe reduziert bzw. AUS geschrieben – auch bei mehrfach verwendeten Stufen-DPs.
+- Heizstab Schnellsteuerung: zusätzlicher Modus „Aus“ ergänzt, damit der Kunde den Heizstab bewusst AUS schreiben kann, ohne die Bedeutung von „PV-Regelung Aus“ zu vermischen.
+- PWA/Web-Cache-Version angehoben.
+
 ## 0.6.252
 
 - SmartHome Jalousie/Rollladen: Positions-Slider und Aktor-Rückmeldung werden jetzt durchgängig als 0-100 % behandelt.

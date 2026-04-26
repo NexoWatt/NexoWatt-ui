@@ -13816,6 +13816,106 @@ settingsConfig: {
             return dev;
           };
 
+          const syncHeatingRodUserState = (localId, val) => {
+            try {
+              const fullId = `${this.namespace}.${localId}`;
+              const emsDp = (this.emsEngine && this.emsEngine.dp && typeof this.emsEngine.dp.handleStateChange === 'function')
+                ? this.emsEngine.dp
+                : null;
+              if (emsDp) emsDp.handleStateChange(fullId, { val, ts: Date.now(), ack: false });
+            } catch (_e) {}
+            try { this.updateValue(localId, val, Date.now()); } catch (_e2) {}
+          };
+
+          const normalizeHeatingRodQuickMode = (raw) => {
+            const s = String(raw === null || raw === undefined ? '' : raw).trim().toLowerCase();
+            if (!s || s === 'inherit' || s === 'system') return 'inherit';
+            if (s === 'auto' || s === 'pvauto' || s === 'pv' || s === 'pva') return 'pvAuto';
+            if (s === 'manual1' || s === 'stufe1' || s === 'level1') return 'manual1';
+            if (s === 'manual2' || s === 'stufe2' || s === 'level2') return 'manual2';
+            if (s === 'manual3' || s === 'stufe3' || s === 'level3') return 'manual3';
+            if (s === 'off' || s === 'aus' || s === '0') return 'off';
+            return 'inherit';
+          };
+
+          const getHeatingRodStoredUserMode = async () => {
+            try {
+              const st = await this.getStateAsync(`heatingRod.user.c${idx}.mode`);
+              return normalizeHeatingRodQuickMode(st && st.val !== undefined && st.val !== null ? st.val : 'inherit');
+            } catch (_e) {
+              return 'inherit';
+            }
+          };
+
+          const heatingRodManualStageForMode = (dev, rawMode) => {
+            const mode = normalizeHeatingRodQuickMode(rawMode);
+            if (mode === 'off') return 0;
+            if (!['manual1', 'manual2', 'manual3'].includes(mode)) return null;
+            const stages = Array.isArray(dev && dev.stages) ? dev.stages : [];
+            const cnt = Math.max(1, Math.min(12, Math.round(Number(dev && dev.stageCount) || stages.length || 1)));
+            const wired = Math.max(0, Math.min(cnt, Math.round(Number(dev && dev.wiredStages) || cnt)));
+            const maxStage = wired || cnt;
+            const fractions = { manual1: 0.25, manual2: 0.5, manual3: 0.75 };
+            return Math.max(1, Math.min(maxStage, Math.ceil(cnt * fractions[mode])));
+          };
+
+          const writeHeatingRodStagesOnce = async (dev, rawTargetStage) => {
+            if (!dev || typeof dev !== 'object') return { targetStage: 0, writes: 0 };
+            const stages = Array.isArray(dev.stages) ? dev.stages : [];
+            const stageCount = Math.max(1, Math.min(12, Math.round(Number(dev.stageCount) || stages.length || 1)));
+            const wiredStages = Math.max(0, Math.min(stageCount, Math.round(Number(dev.wiredStages) || stageCount)));
+            const maxStage = wiredStages || stageCount;
+            const targetStage = Math.max(0, Math.min(maxStage, Math.round(Number(rawTargetStage) || 0)));
+            const emsDp = this.emsEngine && this.emsEngine.dp;
+            const grouped = new Map();
+
+            const addWrite = (stageIndex, rawId, physicalOn) => {
+              const fallbackId = String(rawId || '').trim();
+              const entryKey = `hr.c${idx}.s${stageIndex}.w`;
+              let objectId = fallbackId;
+              let invert = false;
+              try {
+                const entry = emsDp && emsDp.getEntry ? emsDp.getEntry(entryKey) : null;
+                if (entry && entry.objectId) {
+                  objectId = String(entry.objectId || '').trim() || objectId;
+                  invert = !!entry.invert;
+                }
+              } catch (_e) {}
+              if (!objectId) return;
+              const prev = grouped.get(objectId) || { physicalOn: false, invert };
+              prev.physicalOn = !!(prev.physicalOn || physicalOn);
+              prev.invert = !!(prev.invert || invert);
+              grouped.set(objectId, prev);
+            };
+
+            for (let s = 1; s <= stageCount; s++) {
+              const st = (stages[s - 1] && typeof stages[s - 1] === 'object') ? stages[s - 1] : {};
+              const writeId = String(
+                st.writeId || st.dpWriteId || st.writeDp ||
+                ctrl[`stage${s}WriteId`] || ctrl[`heatingStage${s}WriteId`] ||
+                ((s === 1) ? (ctrl.switchWriteId || ctrl.writeId || ctrl.dpWriteId || ctrl.dpId || '') : '') ||
+                ''
+              ).trim();
+              addWrite(s, writeId, s <= targetStage);
+            }
+
+            const writes = [];
+            for (const [objectId, g] of grouped.entries()) {
+              const raw = g.invert ? !g.physicalOn : !!g.physicalOn;
+              await this.setForeignStateAsync(objectId, raw, false);
+              writes.push({ id: objectId, value: raw });
+              try {
+                if (emsDp && emsDp.lastWriteByObjectId && typeof emsDp.lastWriteByObjectId.set === 'function') {
+                  emsDp.lastWriteByObjectId.set(objectId, { val: raw ? 1 : 0, ts: Date.now() });
+                }
+                if (emsDp && typeof emsDp.handleStateChange === 'function') {
+                  emsDp.handleStateChange(objectId, { val: raw, ts: Date.now(), ack: false });
+                }
+              } catch (_e) {}
+            }
+            return { targetStage, writes: writes.length };
+          };
+
           // Boost override – local runtime override, no direct foreign DP.
           if (prop === 'boost') {
             if (kind !== 'consumers') return res.status(400).json({ ok: false, error: 'bad request' });
@@ -13896,11 +13996,18 @@ settingsConfig: {
                 const b = !!value;
                 try {
                   await this.setStateAsync(`heatingRod.user.c${idx}.regEnabled`, b, false);
-                  try { this.updateValue(`heatingRod.user.c${idx}.regEnabled`, b, Date.now()); } catch (_e) {}
+                  syncHeatingRodUserState(`heatingRod.user.c${idx}.regEnabled`, b);
                 } catch (_e) {
                   return res.status(409).json({ ok: false, error: 'not_ready' });
                 }
-                return res.json({ ok: true });
+
+                // Beim Ausschalten der PV-Regelung wird bewusst KEIN physischer AUS-Befehl
+                // geschrieben. Ab jetzt greift die Automatik nicht mehr ein; händische KNX-/ioBroker-
+                // Schaltungen und die manuellen Stufentasten bleiben wirksam. Wer den Heizstab aktiv
+                // ausschalten möchte, nutzt den separaten Modus „Aus“.
+                if (!b) await clearBoost();
+
+                return res.json({ ok: true, released: !b });
               }
 
               let mVal = String(value === null || value === undefined ? 'inherit' : value).trim();
@@ -13915,12 +14022,25 @@ settingsConfig: {
 
               try {
                 await this.setStateAsync(`heatingRod.user.c${idx}.mode`, mVal, false);
-                try { this.updateValue(`heatingRod.user.c${idx}.mode`, mVal, Date.now()); } catch (_e) {}
+                syncHeatingRodUserState(`heatingRod.user.c${idx}.mode`, mVal);
               } catch (_e) {
                 return res.status(409).json({ ok: false, error: 'not_ready' });
               }
               await clearBoost();
-              return res.json({ ok: true });
+
+              // Manuelle Schnellstufen und explizit AUS sofort direkt auf die Aktor-DPs schreiben.
+              // PV-Auto bleibt reine Automatik und schreibt erst im EMS-Zyklus anhand echten PV-Überschusses.
+              const directStage = heatingRodManualStageForMode(resolveHeatingRodDev(), mVal);
+              let directWrite = null;
+              if (directStage !== null) {
+                try {
+                  directWrite = await writeHeatingRodStagesOnce(resolveHeatingRodDev(), directStage);
+                } catch (e) {
+                  return res.status(409).json({ ok: false, error: 'write_failed', message: e && e.message ? e.message : String(e) });
+                }
+              }
+
+              return res.json({ ok: true, targetStage: directStage, directWrite });
             }
 
             if (!cfg.enableThermalControl) return res.status(409).json({ ok: false, error: 'not_ready' });
@@ -14281,7 +14401,12 @@ settingsConfig: {
               const powerW = measuredW > 0 ? measuredW : (appliedW > 0 ? appliedW : targetW);
 
               const manualMode = ['manual1', 'manual2', 'manual3'].includes(userMode);
-              const effectiveEnabled = !!cfgEnabled && (!!out.boostActive || manualMode || (!!userEnabled && effectiveMode !== 'off'));
+              const requestedMode = (userMode !== 'inherit') ? userMode : cfgMode;
+              const pvModeRequested = (requestedMode === 'pvAuto' || requestedMode === 'inherit');
+              // cfgEnabled/userEnabled only gate PV-Auto writes. Manual stages and Boost remain
+              // available so disabling PV regulation does not block customer/manual operation.
+              const pvAutomationActive = !!cfgEnabled && !!userEnabled && pvModeRequested && effectiveMode !== 'off';
+              const effectiveEnabled = !!(out.boostActive || manualMode || pvAutomationActive);
 
               out.heatingRod = {
                 available: true,
@@ -14310,6 +14435,7 @@ settingsConfig: {
                   { value: 'manual1', label: 'Stufe 1' },
                   { value: 'manual2', label: 'Stufe 2' },
                   { value: 'manual3', label: 'Stufe 3' },
+                  { value: 'off', label: 'Aus' },
                 ],
               };
             }

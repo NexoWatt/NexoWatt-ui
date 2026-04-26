@@ -542,19 +542,34 @@ class HeatingRodControlModule extends BaseModule {
         // fehlt, ist die sichere Vorgabe 0 W verfügbar.
         const availableW = gridKnown ? nvpAvailableW : cmAvailableW;
         const source = gridKnown ? 'nvp-storage-reserve' : (pvCapW > 0 ? 'cm-storage-reserve' : 'no-fresh-nvp');
-        const forceOff = availableW <= 50 && (storage.dischargeW > 100 || (gridKnown && importW > 150) || (!gridKnown && currentW > 0 && pvCapW <= 0));
+
+        // PV-Auto darf keine Netz- oder Speicherenergie nachziehen.
+        // Bei echtem Netzbezug oder Speicherentladung muss die Regelung zurücknehmen und darf
+        // nicht neu einschalten. Kleine Toleranzen verhindern Flattern durch Messrauschen um 0 W.
+        const importToleranceW = Math.max(0, Math.round(num(cfg.gridImportToleranceW ?? cfg.pvImportToleranceW ?? 50)));
+        const dischargeToleranceW = Math.max(0, Math.round(num(cfg.storageDischargeToleranceW ?? cfg.pvStorageDischargeToleranceW ?? 100)));
+        const gridImportActive = !!(gridKnown && importW > importToleranceW);
+        const storageDischargeActive = !!(storage.dischargeW > dischargeToleranceW);
+        const nonPvEnergyActive = !!(gridImportActive || storageDischargeActive);
+        const forceOff = availableW <= 50 && (storageDischargeActive || (gridImportActive && currentW > 0) || (!gridKnown && currentW > 0 && pvCapW <= 0));
 
         return {
             pvCapW: Math.max(pvCapW, nvpSurplusBeforeFlexW),
             evcsUsedW,
             availableW,
             source,
+            gridKnown,
             gridW: gridKnown ? gridW : null,
             importW,
+            importToleranceW,
+            gridImportActive,
             exportW,
             currentHeatingRodW: currentW,
             storageChargeW: storage.chargeW,
             storageDischargeW: storage.dischargeW,
+            dischargeToleranceW,
+            storageDischargeActive,
+            nonPvEnergyActive,
             storageSocPct: storage.socPct,
             storageReserveW,
             storageTargetSocPct,
@@ -601,6 +616,39 @@ class HeatingRodControlModule extends BaseModule {
         let sum = 0;
         for (const powerW of byActuator.values()) sum += powerW;
         return this._capDevicePower(d, sum);
+    }
+
+    _stageOnSetForTarget(d, stageCount) {
+        const cnt = Math.max(0, Math.min(Math.round(Number(stageCount) || 0), d.stages.length));
+        const out = new Set();
+        for (let i = 0; i < cnt; i++) {
+            const stage = d.stages[i];
+            // Only stages with an actual write datapoint can change a physical actuator.
+            // If no writeKey exists, fall back to a unique virtual key so legacy setups
+            // still step down by one row.
+            const key = this._stageActuatorKey(stage, i);
+            out.add(key);
+        }
+        return out;
+    }
+
+    _sameStageOnSet(a, b) {
+        if (!a || !b || a.size !== b.size) return false;
+        for (const k of a.values()) {
+            if (!b.has(k)) return false;
+        }
+        return true;
+    }
+
+    _previousPhysicalStageBelow(d, observedStage) {
+        const obs = Math.max(0, Math.min(Math.round(Number(observedStage) || 0), d.stages.length));
+        if (obs <= 0) return 0;
+        const currentSet = this._stageOnSetForTarget(d, obs);
+        for (let target = obs - 1; target >= 0; target--) {
+            const set = this._stageOnSetForTarget(d, target);
+            if (!this._sameStageOnSet(currentSet, set)) return target;
+        }
+        return 0;
     }
 
     _readMeasuredW(d) {
@@ -729,12 +777,13 @@ class HeatingRodControlModule extends BaseModule {
         }
     }
 
-    async _applyStageState(d, targetStage, feedback) {
+    async _applyStageState(d, targetStage, feedback, options = {}) {
         if (!d.wiredStages || d.wiredStages < 1) {
             return { applied: false, status: 'no_stage_write_dp' };
         }
 
         const effectiveStage = Math.max(0, Math.min(Math.round(Number(targetStage) || 0), d.wiredStages));
+        const forceAllWrites = !!(options && options.force);
         let anyTrue = false;
         let anyFalse = false;
 
@@ -763,7 +812,7 @@ class HeatingRodControlModule extends BaseModule {
         }
 
         for (const g of grouped.values()) {
-            const force = !!g.observedKnown && g.observed !== g.shouldOn;
+            const force = forceAllWrites || (!!g.observedKnown && g.observed !== g.shouldOn);
             const res = await this._writeBoolForce(g.writeKey, g.shouldOn, force);
             if (res === true) anyTrue = true;
             if (res === false) anyFalse = true;
@@ -898,10 +947,18 @@ class HeatingRodControlModule extends BaseModule {
             const cfgMode = normalizeMode(d.mode);
             const baseMode = (userMode !== 'inherit') ? userMode : cfgMode;
             const manualStage = this._computeQuickManualStage(d, baseMode);
+            const pvModeRequested = (baseMode === 'pvAuto' || baseMode === 'inherit');
+            const pvAutomationActive = !!d.enabled && !!userEnabled && pvModeRequested;
+            const explicitOff = baseMode === 'off';
             const effectiveMode = ov.boostActive
                 ? 'boost'
-                : (manualStage > 0 ? `manual${Math.min(3, Math.max(1, Math.round(Number(String(baseMode).replace('manual', '')) || 1)))}` : String(baseMode || 'pvAuto'));
-            const effectiveEnabled = !!d.enabled && (ov.boostActive || manualStage > 0 || (!!userEnabled && baseMode !== 'off'));
+                : (manualStage > 0
+                    ? `manual${Math.min(3, Math.max(1, Math.round(Number(String(baseMode).replace('manual', '')) || 1)))}`
+                    : (explicitOff ? 'off' : (pvAutomationActive ? 'pvAuto' : String(baseMode || 'pvAuto'))));
+            // d.enabled and userEnabled mean "PV-Auto darf schreiben". They must not block
+            // manual customer steps, boost, or an installer/customer doing a manual switch on
+            // the native KNX/relay datapoints while PV regulation is disabled.
+            const effectiveEnabled = !!(ov.boostActive || manualStage > 0 || pvAutomationActive);
 
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.userEnabled`, !!userEnabled);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.userMode`, String(userMode));
@@ -922,28 +979,10 @@ class HeatingRodControlModule extends BaseModule {
                 continue;
             }
 
-            if (!d.enabled) {
-                const res = (d.consumerType === 'heatingRod' && d.wiredStages > 0)
-                    ? await this._applyStageState(d, 0, feedback)
-                    : { status: 'disabled' };
-                this._setStageCtlTarget(d.id, 0, observedStage);
-                const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
-                    ? Math.max(0, measuredW)
-                    : Math.max(0, feedback.appliedPowerW);
-                budgetUsedW += Math.round(usedW);
-                remainingW = Math.max(0, remainingW - usedW);
-                await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, 0);
-                await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, 0);
-                await this._setStateIfChanged(`heatingRod.devices.${d.id}.appliedW`, Math.round(usedW));
-                await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, `disabled_${String(res.status || '')}`);
-                await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, '');
-                continue;
-            }
-
             // Temporary boost: always full configured/wired power for the configured duration.
             if (ov.boostActive) {
                 const fullStage = Math.max(0, Math.min(d.wiredStages || d.stageCount, d.stageCount));
-                const res = await this._applyStageState(d, fullStage, feedback);
+                const res = await this._applyStageState(d, fullStage, feedback, { force: true });
                 const effectiveTargetStage = Math.max(0, Math.min(num(res.targetStage, fullStage), d.wiredStages || d.stageCount));
                 this._setStageCtlTarget(d.id, effectiveTargetStage, observedStage);
                 const targetW = this._sumStagePower(d, effectiveTargetStage);
@@ -965,7 +1004,7 @@ class HeatingRodControlModule extends BaseModule {
 
             // Manual customer steps (1/2/3) bypass the PV automatik, but still use native stage writes.
             if (manualStage > 0) {
-                const res = await this._applyStageState(d, manualStage, feedback);
+                const res = await this._applyStageState(d, manualStage, feedback, { force: true });
                 const effectiveTargetStage = Math.max(0, Math.min(num(res.targetStage, manualStage), d.wiredStages || d.stageCount));
                 this._setStageCtlTarget(d.id, effectiveTargetStage, observedStage);
                 const targetW = this._sumStagePower(d, effectiveTargetStage);
@@ -986,20 +1025,23 @@ class HeatingRodControlModule extends BaseModule {
                 continue;
             }
 
-            // End-customer disabled the automatik (Regelung AUS): actively switch the native Heizstab off.
-            if (!userEnabled && (baseMode === 'pvAuto' || baseMode === 'inherit')) {
-                const res = await this._applyStageState(d, 0, feedback);
-                this._setStageCtlTarget(d.id, 0, observedStage);
+            // End-customer disabled PV regulation (Regelung AUS): do NOT write OFF.
+            // The native actuator may now be switched manually in ioBroker/KNX or via the
+            // manual stage buttons above. We only observe/balance so manual heat is not
+            // immediately overwritten by the EMS tick.
+            if (!userEnabled && pvModeRequested) {
                 const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                     ? Math.max(0, measuredW)
                     : Math.max(0, feedback.appliedPowerW);
                 budgetUsedW += Math.round(usedW);
                 remainingW = Math.max(0, remainingW - usedW);
-                await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, 0);
-                await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, 0);
+                appliedTotalW += Math.round(usedW);
+                this._setStageCtlTarget(d.id, observedStage, observedStage);
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, observedStage);
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, this._sumStagePower(d, observedStage));
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.appliedW`, Math.round(usedW));
-                await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, `regulation_off_${String(res.status || '')}`);
-                await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, '');
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, 'regulation_off_manual_allowed');
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, 'manual_allowed');
                 continue;
             }
 
@@ -1020,7 +1062,7 @@ class HeatingRodControlModule extends BaseModule {
             }
 
             if (baseMode === 'off') {
-                const res = await this._applyStageState(d, 0, feedback);
+                const res = await this._applyStageState(d, 0, feedback, { force: true });
                 this._setStageCtlTarget(d.id, 0, observedStage);
                 const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                     ? Math.max(0, measuredW)
@@ -1032,6 +1074,25 @@ class HeatingRodControlModule extends BaseModule {
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.appliedW`, Math.round(usedW));
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, `off_${String(res.status || '')}`);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, '');
+                continue;
+            }
+
+            // Installer/admin disabled PV-Auto for this Heizstab device: observe only.
+            // This is intentionally not an OFF command, so the customer can still switch
+            // the physical Heizstab manually outside PV automation.
+            if (!d.enabled && pvModeRequested) {
+                const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
+                    ? Math.max(0, measuredW)
+                    : Math.max(0, feedback.appliedPowerW);
+                budgetUsedW += Math.round(usedW);
+                remainingW = Math.max(0, remainingW - usedW);
+                appliedTotalW += Math.round(usedW);
+                this._setStageCtlTarget(d.id, observedStage, observedStage);
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, observedStage);
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, this._sumStagePower(d, observedStage));
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.appliedW`, Math.round(usedW));
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, 'pv_auto_disabled_manual_allowed');
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, 'manual_allowed');
                 continue;
             }
 
@@ -1049,11 +1110,27 @@ class HeatingRodControlModule extends BaseModule {
                 continue;
             }
 
-            const desiredStage = this._computeDesiredStage(d, remainingW, observedStage);
+            let desiredStage = this._computeDesiredStage(d, remainingW, observedStage);
+
+            // Reiner PV-Betrieb: bei Netzbezug oder Speicherentladung keine Stufe halten
+            // oder neu zuschalten. Bei aktivem Heizstab wird ohne Mindestlaufzeit mindestens
+            // eine Stufe zurückgenommen, damit PV-Auto nicht auf Fremdenergie weiterläuft.
+            const forceNonPvDown = !!(pvBase.nonPvEnergyActive);
+            if (forceNonPvDown) {
+                // Reduce to the next lower *physical* actuator set. This is important for
+                // installations that accidentally map several virtual stages to the same KNX/relay
+                // datapoint: targetStage 3 -> 2 would otherwise still keep the same actuator ON.
+                const lowerPhysicalStage = this._previousPhysicalStageBelow(d, observedStage);
+                desiredStage = Math.min(desiredStage, lowerPhysicalStage);
+            }
+
             const forceStorageProtectOff = !!(pvBase.forceOff && desiredStage <= 0);
-            const targetStage = forceStorageProtectOff ? 0 : this._applyTiming(d, desiredStage, observedStage);
-            if (forceStorageProtectOff) this._setStageCtlTarget(d.id, 0, observedStage);
-            const res = await this._applyStageState(d, targetStage, feedback);
+            const targetStage = forceStorageProtectOff
+                ? 0
+                : (forceNonPvDown ? desiredStage : this._applyTiming(d, desiredStage, observedStage));
+            if (forceStorageProtectOff || forceNonPvDown) this._setStageCtlTarget(d.id, targetStage, observedStage);
+            const forcePvWrite = !!(forceStorageProtectOff || forceNonPvDown || (targetStage <= 0 && ((typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 50) || Math.max(0, feedback.appliedPowerW || 0) > 0)));
+            const res = await this._applyStageState(d, targetStage, feedback, { force: forcePvWrite });
             const effectiveTargetStage = Math.max(0, Math.min(num(res.targetStage, targetStage), d.wiredStages));
             const targetW = this._sumStagePower(d, effectiveTargetStage);
             const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
@@ -1067,7 +1144,10 @@ class HeatingRodControlModule extends BaseModule {
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, effectiveTargetStage);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, Math.round(targetW));
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.appliedW`, Math.round(usedW));
-            await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, forceStorageProtectOff ? `storage_protect_${String(res.status || '')}` : String(res.status || 'pv_auto'));
+            const autoStatus = forceStorageProtectOff
+                ? `storage_protect_${String(res.status || '')}`
+                : (forceNonPvDown ? `pv_only_protect_${String(res.status || '')}` : String(res.status || 'pv_auto'));
+            await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, autoStatus);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, '');
         }
 
@@ -1086,12 +1166,18 @@ class HeatingRodControlModule extends BaseModule {
         await this._setStateIfChanged('heatingRod.summary.budgetUsedW', Math.round(budgetUsedW));
         await this._setStateIfChanged('heatingRod.summary.debugJson', JSON.stringify({
             source: pvBase.source,
+            gridKnown: !!pvBase.gridKnown,
             gridW: pvBase.gridW,
             importW: Math.round(num(pvBase.importW, 0)),
+            importToleranceW: Math.round(num(pvBase.importToleranceW, 0)),
+            gridImportActive: !!pvBase.gridImportActive,
             exportW: Math.round(num(pvBase.exportW, 0)),
             currentHeatingRodW: Math.round(num(pvBase.currentHeatingRodW, 0)),
             storageChargeW: Math.round(num(pvBase.storageChargeW, 0)),
             storageDischargeW: Math.round(num(pvBase.storageDischargeW, 0)),
+            dischargeToleranceW: Math.round(num(pvBase.dischargeToleranceW, 0)),
+            storageDischargeActive: !!pvBase.storageDischargeActive,
+            nonPvEnergyActive: !!pvBase.nonPvEnergyActive,
             storageSocPct: pvBase.storageSocPct,
             storageReserveW: Math.round(num(pvBase.storageReserveW, 0)),
             storageTargetSocPct: pvBase.storageTargetSocPct,
@@ -1103,7 +1189,7 @@ class HeatingRodControlModule extends BaseModule {
             forceOff: !!pvBase.forceOff,
         }));
         await this._setStateIfChanged('heatingRod.summary.lastUpdate', now);
-        await this._setStateIfChanged('heatingRod.summary.status', (this._devices && this._devices.length) ? `ok_${pvBase.source}${pvBase.forceOff ? '_storage_protect' : ''}` : 'no_devices');
+        await this._setStateIfChanged('heatingRod.summary.status', (this._devices && this._devices.length) ? `ok_${pvBase.source}${pvBase.forceOff ? '_storage_protect' : ''}${pvBase.nonPvEnergyActive ? '_pv_only_protect' : ''}` : 'no_devices');
     }
 }
 
