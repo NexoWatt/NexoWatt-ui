@@ -2958,9 +2958,10 @@ function storageFarmUpdateSummary(){
   const chg = st['storageFarm.totalChargePowerW'] && st['storageFarm.totalChargePowerW'].value;
   const dchg = st['storageFarm.totalDischargePowerW'] && st['storageFarm.totalDischargePowerW'].value;
   const on = st['storageFarm.storagesOnline'] && st['storageFarm.storagesOnline'].value;
+  const disp = st['storageFarm.storagesDispatchAvailable'] && st['storageFarm.storagesDispatchAvailable'].value;
   const deg = st['storageFarm.storagesDegraded'] && st['storageFarm.storagesDegraded'].value;
   const tot = st['storageFarm.storagesTotal'] && st['storageFarm.storagesTotal'].value;
-  sum.textContent = `SoC Ø: ${soc!==undefined?soc:'--'} % | Laden: ${chg!==undefined?formatPower(chg):'--'} | Entladen: ${dchg!==undefined?formatPower(dchg):'--'} | Online: ${on!==undefined?on:'--'}/${tot!==undefined?tot:'--'}${(deg!==undefined && Number(deg)>0) ? (' | Degraded: ' + deg) : ''}`;
+  sum.textContent = `SoC Ø: ${soc!==undefined?soc:'--'} % | Laden: ${chg!==undefined?formatPower(chg):'--'} | Entladen: ${dchg!==undefined?formatPower(dchg):'--'} | Online: ${on!==undefined?on:'--'}/${tot!==undefined?tot:'--'} | Regelbar: ${disp!==undefined?disp:'--'}/${tot!==undefined?tot:'--'}${(deg!==undefined && Number(deg)>0) ? (' | Degraded: ' + deg) : ''}`;
 }
 
 function storageFarmRenderStatusRows(list){
@@ -2995,6 +2996,7 @@ function storageFarmRenderStatusRows(list){
     const dchg = (row && row.dischargePowerW !== undefined && row.dischargePowerW !== null && !isNaN(Number(row.dischargePowerW))) ? formatPower(Number(row.dischargePowerW)) : '--';
     let online = 'Offline';
     if (row && (row.degraded === true || row.state === 'degraded')) online = 'Degraded';
+    else if (row && row.online && row.dispatchAvailable === false) online = 'Gesperrt';
     else if (row && row.online) online = 'Online';
 
     r.appendChild(mkCell(name, 'Speicher'));

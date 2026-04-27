@@ -3200,8 +3200,11 @@ class NexoWattVis extends utils.Adapter {
       totalChargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt Ladeleistung (W) (abgeleitet)' },
       totalDischargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt Entladeleistung (W) (abgeleitet)' },
       totalPvPowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt PV-Leistung (W) (DC, abgeleitet)' },
-      storagesOnline: { type: 'number', role: 'value', def: 0, name: 'Online Speicher (abgeleitet)' },
+      storagesOnline: { type: 'number', role: 'value', def: 0, name: 'Online Speicher (frisch, abgeleitet)' },
       storagesDegraded: { type: 'number', role: 'value', def: 0, name: 'Degraded Speicher (abgeleitet)' },
+      storagesDispatchAvailable: { type: 'number', role: 'value', def: 0, name: 'Regelverfügbare Speicher (abgeleitet)' },
+      availableChargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Verfügbare Ladeleistung (W) (abgeleitet)' },
+      availableDischargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Verfügbare Entladeleistung (W) (abgeleitet)' },
       storagesTotal: { type: 'number', role: 'value', def: 0, name: 'Konfigurierte Speicher' },
       storagesStatusJson: { type: 'string', role: 'json', def: '[]', name: 'Speicher-Status (JSON, abgeleitet)' },
       lastDispatchJson: { type: 'string', role: 'json', def: '{}', name: 'Letzte Sollwert-Verteilung (JSON, Debug)' },
@@ -3248,6 +3251,9 @@ class NexoWattVis extends utils.Adapter {
       totalPvPowerW: 0,
       storagesOnline: 0,
       storagesDegraded: 0,
+      storagesDispatchAvailable: 0,
+      availableChargePowerW: 0,
+      availableDischargePowerW: 0,
       storagesTotal: 0,
       storagesStatusJson: '[]',
       lastDispatchJson: '{}',
@@ -3310,6 +3316,16 @@ class NexoWattVis extends utils.Adapter {
           setChargePowerId: String(r.setChargePowerId || '').trim(),
           setDischargePowerId: String(r.setDischargePowerId || '').trim(),
           setSignedPowerId: String(r.setSignedPowerId || '').trim(),
+          // Herstellerneutrale Farm-Sicherheits- und Leistungsgrenzen.
+          // Statische Werte begrenzen die Verteilung unabhängig vom angebundenen System.
+          maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : null,
+          maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : null,
+          maxChargePowerId: String(r.maxChargePowerId || '').trim(),
+          maxDischargePowerId: String(r.maxDischargePowerId || '').trim(),
+          availableId: String(r.availableId || '').trim(),
+          faultId: String(r.faultId || '').trim(),
+          chargeAllowedId: String(r.chargeAllowedId || '').trim(),
+          dischargeAllowedId: String(r.dischargeAllowedId || '').trim(),
           capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : null,
           group: String(r.group || '').trim(),
         }));
@@ -3568,6 +3584,11 @@ class NexoWattVis extends utils.Adapter {
       let onlineFresh = 0;
       let available = 0;
       let degraded = 0;
+      let dispatchAvailableCount = 0;
+      let availableChargePowerW = 0;
+      let availableDischargePowerW = 0;
+      let availableChargePowerUnbounded = false;
+      let availableDischargePowerUnbounded = false;
       let configured = 0;
 
       // SoC aggregation must be stable in Farm mode even when a storage
@@ -3598,6 +3619,12 @@ class NexoWattVis extends utils.Adapter {
           dischargePowerW: null,
           pvPowerW: null,
           online: false,
+          displayOnline: false,
+          dispatchAvailable: false,
+          chargeDispatchAvailable: false,
+          dischargeDispatchAvailable: false,
+          maxChargeW: null,
+          maxDischargeW: null,
         };
 
         const socId = String(row.socId || '').trim();
@@ -3607,6 +3634,15 @@ class NexoWattVis extends utils.Adapter {
         const dchgId = String(row.dischargePowerId || '').trim();
         const invChg = !!row.invertChargeSign;
         const invDchg = !!row.invertDischargeSign;
+        const setSignedPowerId = String(row.setSignedPowerId || '').trim();
+        const setChargePowerId = String(row.setChargePowerId || '').trim();
+        const setDischargePowerId = String(row.setDischargePowerId || '').trim();
+        const maxChargePowerId = String(row.maxChargePowerId || '').trim();
+        const maxDischargePowerId = String(row.maxDischargePowerId || '').trim();
+        const availableId = String(row.availableId || '').trim();
+        const faultId = String(row.faultId || '').trim();
+        const chargeAllowedId = String(row.chargeAllowedId || '').trim();
+        const dischargeAllowedId = String(row.dischargeAllowedId || '').trim();
         const cap = Number(row.capacityKWh);
         const w = Number.isFinite(cap) && cap > 0 ? cap : 1;
 
@@ -3639,6 +3675,12 @@ class NexoWattVis extends utils.Adapter {
         addBases(chgId);
         addBases(dchgId);
         addBases(pvId);
+        addBases(maxChargePowerId);
+        addBases(maxDischargePowerId);
+        addBases(availableId);
+        addBases(faultId);
+        addBases(chargeAllowedId);
+        addBases(dischargeAllowedId);
 
         const pickFirstState = async (candidates) => {
           for (const cid of candidates) {
@@ -3700,6 +3742,12 @@ class NexoWattVis extends utils.Adapter {
         if (chgId) considerTs(await getState(chgId));
         if (dchgId) considerTs(await getState(dchgId));
         if (pvId) considerTs(await getState(pvId));
+        if (maxChargePowerId) considerTs(await getState(maxChargePowerId));
+        if (maxDischargePowerId) considerTs(await getState(maxDischargePowerId));
+        if (availableId) considerTs(await getState(availableId));
+        if (faultId) considerTs(await getState(faultId));
+        if (chargeAllowedId) considerTs(await getState(chargeAllowedId));
+        if (dischargeAllowedId) considerTs(await getState(dischargeAllowedId));
         // Fallback: if nothing else exists, use SoC ts so minimal configs still work.
         if (!Number.isFinite(heartbeatTs) && socId) considerTs(await getState(socId));
 
@@ -3707,7 +3755,7 @@ class NexoWattVis extends utils.Adapter {
 
         // Do we have any measurement values configured/available?
         let hasAnyValue = false;
-        for (const id of [signedId, chgId, dchgId, pvId, socId]) {
+        for (const id of [signedId, chgId, dchgId, pvId, socId, maxChargePowerId, maxDischargePowerId, availableId, faultId, chargeAllowedId, dischargeAllowedId]) {
           if (!id) continue;
           const st = await getState(id);
           if (st && st.val !== undefined && st.val !== null) { hasAnyValue = true; break; }
@@ -3733,16 +3781,113 @@ class NexoWattVis extends utils.Adapter {
           health = 'online';
         }
 
-        const isAvailable = (health !== 'offline');
+        const isDisplayOnline = (health !== 'offline');
         const isFreshOnline = (health === 'online');
         const isDegraded = (health === 'degraded');
 
-        // Expose for VIS rows
+        // Optional, system-neutral availability / fault / direction signals.
+        // Critical control signals must be fresh; stale signals block dispatch instead of
+        // letting a cached value keep a battery in regulation.
+        const readBoolDp = async (id) => {
+          const sid = String(id || '').trim();
+          if (!sid) return { configured: false, value: null, fresh: true, missing: false, invalid: false };
+          const st = await getState(sid);
+          if (!st || st.val === undefined || st.val === null) return { configured: true, value: null, fresh: false, missing: true, invalid: false };
+          const b = toBool(st.val);
+          const age = (typeof st.ts === 'number' && Number.isFinite(st.ts)) ? (now - st.ts) : null;
+          const fresh = (age === null || age <= staleMs);
+          return { configured: true, value: b, fresh, missing: false, invalid: b === null, ageMs: age };
+        };
+
+        const normalizeLimitW = (v) => {
+          const n = Number(v);
+          if (!Number.isFinite(n) || n < 0) return null;
+          return Math.round(n);
+        };
+
+        const readLimitW = async (staticValue, id) => {
+          const staticLimit = normalizeLimitW(staticValue);
+          const sid = String(id || '').trim();
+          if (!sid) return { limitW: staticLimit, configured: false, fresh: true, missing: false, invalid: false };
+          const st = await getState(sid);
+          if (!st || st.val === undefined || st.val === null) return { limitW: staticLimit, configured: true, fresh: false, missing: true, invalid: false };
+          const age = (typeof st.ts === 'number' && Number.isFinite(st.ts)) ? (now - st.ts) : null;
+          const fresh = (age === null || age <= staleMs);
+          const dyn = await readNumber(sid, 'power', { allowStale: false });
+          if (!fresh || !Number.isFinite(dyn) || dyn < 0) {
+            return { limitW: staticLimit, configured: true, fresh: false, missing: false, invalid: !Number.isFinite(dyn) || dyn < 0, ageMs: age };
+          }
+          const dynamicLimit = Math.round(dyn);
+          const limitW = (staticLimit !== null) ? Math.min(staticLimit, dynamicLimit) : dynamicLimit;
+          return { limitW, configured: true, fresh: true, missing: false, invalid: false, ageMs: age };
+        };
+
+        const availState = await readBoolDp(availableId);
+        const faultState = await readBoolDp(faultId);
+        const chargeAllowedState = await readBoolDp(chargeAllowedId);
+        const dischargeAllowedState = await readBoolDp(dischargeAllowedId);
+        const chargeLimitState = await readLimitW(row.maxChargeW, maxChargePowerId);
+        const dischargeLimitState = await readLimitW(row.maxDischargeW, maxDischargePowerId);
+
+        const maxChargeW = chargeLimitState.limitW;
+        const maxDischargeW = dischargeLimitState.limitW;
+
+        const hasChargeSetpoint = !!(setSignedPowerId || setChargePowerId);
+        const hasDischargeSetpoint = !!(setSignedPowerId || setDischargePowerId);
+
+        const baseBlocked = [];
+        if (!isFreshOnline) baseBlocked.push(stateReason || health || 'not_online');
+        if (availState.configured) {
+          if (!availState.fresh) baseBlocked.push(availState.missing ? 'available_missing' : 'available_stale');
+          else if (availState.invalid) baseBlocked.push('available_invalid');
+          else if (availState.value === false) baseBlocked.push('available_false');
+        }
+        if (faultState.configured) {
+          if (!faultState.fresh) baseBlocked.push(faultState.missing ? 'fault_missing' : 'fault_stale');
+          else if (faultState.invalid) baseBlocked.push('fault_invalid');
+          else if (faultState.value === true) baseBlocked.push('fault_active');
+        }
+
+        const chargeBlocked = baseBlocked.slice();
+        if (!hasChargeSetpoint) chargeBlocked.push('charge_setpoint_missing');
+        if (chargeAllowedState.configured) {
+          if (!chargeAllowedState.fresh) chargeBlocked.push(chargeAllowedState.missing ? 'charge_allowed_missing' : 'charge_allowed_stale');
+          else if (chargeAllowedState.invalid) chargeBlocked.push('charge_allowed_invalid');
+          else if (chargeAllowedState.value === false) chargeBlocked.push('charge_not_allowed');
+        }
+        if (chargeLimitState.configured && !chargeLimitState.fresh) chargeBlocked.push(chargeLimitState.missing ? 'charge_limit_missing' : 'charge_limit_stale');
+        if (maxChargeW !== null && maxChargeW <= 0) chargeBlocked.push('charge_limit_zero');
+
+        const dischargeBlocked = baseBlocked.slice();
+        if (!hasDischargeSetpoint) dischargeBlocked.push('discharge_setpoint_missing');
+        if (dischargeAllowedState.configured) {
+          if (!dischargeAllowedState.fresh) dischargeBlocked.push(dischargeAllowedState.missing ? 'discharge_allowed_missing' : 'discharge_allowed_stale');
+          else if (dischargeAllowedState.invalid) dischargeBlocked.push('discharge_allowed_invalid');
+          else if (dischargeAllowedState.value === false) dischargeBlocked.push('discharge_not_allowed');
+        }
+        if (dischargeLimitState.configured && !dischargeLimitState.fresh) dischargeBlocked.push(dischargeLimitState.missing ? 'discharge_limit_missing' : 'discharge_limit_stale');
+        if (maxDischargeW !== null && maxDischargeW <= 0) dischargeBlocked.push('discharge_limit_zero');
+
+        const chargeDispatchAvailable = chargeBlocked.length === 0;
+        const dischargeDispatchAvailable = dischargeBlocked.length === 0;
+        const dispatchAvailable = chargeDispatchAvailable || dischargeDispatchAvailable;
+
+        // Expose for VIS rows and the dispatcher. From this version on, status.online
+        // intentionally means fresh online. Degraded/stale systems may still be visible
+        // in the UI, but are not allowed to receive active setpoints.
         status.state = health;
         status.degraded = !!isDegraded;
-        // Backwards-compatible: 'online' means available (online OR degraded)
-        status.online = !!isAvailable;
-        if (!isAvailable) status.offlineReason = stateReason;
+        status.displayOnline = !!isDisplayOnline;
+        status.online = !!isFreshOnline;
+        status.dispatchAvailable = !!dispatchAvailable;
+        status.chargeDispatchAvailable = !!chargeDispatchAvailable;
+        status.dischargeDispatchAvailable = !!dischargeDispatchAvailable;
+        status.maxChargeW = (maxChargeW !== null) ? maxChargeW : null;
+        status.maxDischargeW = (maxDischargeW !== null) ? maxDischargeW : null;
+        status.chargeBlockedReasons = chargeBlocked;
+        status.dischargeBlockedReasons = dischargeBlocked;
+        if (baseBlocked.length) status.dispatchBlockedReasons = baseBlocked;
+        if (!isDisplayOnline) status.offlineReason = stateReason;
         if (isDegraded) status.degradedReason = stateReason;
 
         // ---------------------------------------------------------------------
@@ -3813,8 +3958,20 @@ class NexoWattVis extends utils.Adapter {
         if (health === 'online') onlineFresh++;
         else if (health === 'degraded') degraded++;
 
-        // Offline storages: keep row but skip power aggregation
-        if (!isAvailable) {
+        if (dispatchAvailable) dispatchAvailableCount++;
+        if (chargeDispatchAvailable) {
+          if (maxChargeW !== null) availableChargePowerW += Math.max(0, maxChargeW);
+          else availableChargePowerUnbounded = true;
+        }
+        if (dischargeDispatchAvailable) {
+          if (maxDischargeW !== null) availableDischargePowerW += Math.max(0, maxDischargeW);
+          else availableDischargePowerUnbounded = true;
+        }
+
+        // Only fresh-online storages contribute live power values to the farm totals.
+        // Degraded/stale systems stay visible but are removed from active regulation and
+        // from live power aggregation to avoid control based on cached data.
+        if (!isFreshOnline) {
           statusRows.push(status);
           continue;
         }
@@ -3903,6 +4060,12 @@ class NexoWattVis extends utils.Adapter {
       await this.setStateAsync('storageFarm.totalPvPowerW', { val: Math.round(totalPv), ack: true });
       await this.setStateAsync('storageFarm.storagesOnline', { val: available, ack: true });
       await this.setStateAsync('storageFarm.storagesDegraded', { val: degraded, ack: true });
+      const availableChargePowerState = availableChargePowerUnbounded ? null : Math.round(availableChargePowerW);
+      const availableDischargePowerState = availableDischargePowerUnbounded ? null : Math.round(availableDischargePowerW);
+
+      await this.setStateAsync('storageFarm.storagesDispatchAvailable', { val: dispatchAvailableCount, ack: true });
+      await this.setStateAsync('storageFarm.availableChargePowerW', { val: availableChargePowerState, ack: true });
+      await this.setStateAsync('storageFarm.availableDischargePowerW', { val: availableDischargePowerState, ack: true });
       await this.setStateAsync('storageFarm.storagesTotal', { val: configured, ack: true });
       await this.setStateAsync('storageFarm.storagesStatusJson', { val: JSON.stringify(statusRows), ack: true });
 
@@ -3920,6 +4083,9 @@ class NexoWattVis extends utils.Adapter {
         this.updateValue('storageFarm.totalPvPowerW', Math.round(totalPv), now);
         this.updateValue('storageFarm.storagesOnline', available, now);
         this.updateValue('storageFarm.storagesDegraded', degraded, now);
+        this.updateValue('storageFarm.storagesDispatchAvailable', dispatchAvailableCount, now);
+        this.updateValue('storageFarm.availableChargePowerW', availableChargePowerState, now);
+        this.updateValue('storageFarm.availableDischargePowerW', availableDischargePowerState, now);
         this.updateValue('storageFarm.storagesTotal', configured, now);
         this.updateValue('storageFarm.storagesStatusJson', JSON.stringify(statusRows), now);
 
@@ -3929,8 +4095,10 @@ class NexoWattVis extends utils.Adapter {
 // Hintergrund: In vielen Setups sind dort Einzel‑Speicher gemappt – im Farm‑Modus
 // soll jedoch die Pool‑/Gruppen‑Summe angezeigt werden (ohne die Regel‑Logik zu verändern).
 try {
-  // SoC: Durchschnitt (Ø) als Standardanzeige
-  this.updateValue('storageSoc', Math.round(totalSoc * 10) / 10, now);
+  // SoC: Für die aktive Farm-Anzeige bevorzugen wir den frischen Online-SoC.
+  // Der stabile Gesamt-SoC bleibt weiterhin unter storageFarm.totalSoc verfügbar.
+  const activeSoc = socSourcesOnline > 0 ? totalSocOnline : totalSoc;
+  this.updateValue('storageSoc', Math.round(activeSoc * 10) / 10, now);
   this.updateValue('storageChargePower', Math.round(totalCharge), now);
   this.updateValue('storageDischargePower', Math.round(totalDischarge), now);
   this.updateValue('batteryPower', Math.round(totalDischarge - totalCharge), now);
@@ -3972,6 +4140,14 @@ try {
         setSignedPowerId: String(r.setSignedPowerId || '').trim(),
         invertChargeSign: !!r.invertChargeSign,
         invertDischargeSign: !!r.invertDischargeSign,
+        maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : null,
+        maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : null,
+        maxChargePowerId: String(r.maxChargePowerId || '').trim(),
+        maxDischargePowerId: String(r.maxDischargePowerId || '').trim(),
+        availableId: String(r.availableId || '').trim(),
+        faultId: String(r.faultId || '').trim(),
+        chargeAllowedId: String(r.chargeAllowedId || '').trim(),
+        dischargeAllowedId: String(r.dischargeAllowedId || '').trim(),
         capacityKWh: (r.capacityKWh !== undefined && r.capacityKWh !== null && r.capacityKWh !== '') ? Number(r.capacityKWh) : null,
         group: String(r.group || '').trim(),
       }))
@@ -4147,7 +4323,9 @@ try {
     const src = meta && meta.source ? String(meta.source).toLowerCase() : '';
     const dischargeFloorSoc = this._sfGetDischargeFloorSocPct(src);
 
-    // Determine SoC values from derived status (preferred)
+    // Determine live farm status from the derived status JSON. Dispatch availability is
+    // intentionally based on this status and not on the static config alone: stale,
+    // degraded, faulted or unavailable systems must be zeroed and excluded from dispatch.
     let status = [];
     try {
       const st = await this.getStateAsync('storageFarm.storagesStatusJson').catch(() => null);
@@ -4156,27 +4334,67 @@ try {
       status = Array.isArray(parsed) ? parsed : [];
     } catch (_e) { status = []; }
 
-    // Attach derived status to storage rows (index-based; derived list is built from enabled rows in same order)
-    // We explicitly keep the online flag so we can avoid allocating setpoints to offline storages.
+    const finiteLimitOrNull = (v) => {
+      const n = Number(v);
+      if (!Number.isFinite(n) || n < 0) return null;
+      return Math.round(n);
+    };
+
     const storages = sf.storages.map((s, i) => {
       const st = (status && status[i] && typeof status[i] === 'object') ? status[i] : {};
       const soc = (st && Number.isFinite(Number(st.soc))) ? Number(st.soc) : null;
-      const online = (st && typeof st.online === 'boolean') ? st.online : undefined;
+      const online = (st && typeof st.online === 'boolean') ? st.online : false;
+      const displayOnline = (st && typeof st.displayOnline === 'boolean') ? st.displayOnline : online;
       const offlineReason = (st && typeof st.offlineReason === 'string') ? st.offlineReason : '';
+      const state = (st && typeof st.state === 'string') ? st.state : (online ? 'online' : 'unknown');
       const chargePowerW = (st && Number.isFinite(Number(st.chargePowerW))) ? Number(st.chargePowerW) : null;
       const dischargePowerW = (st && Number.isFinite(Number(st.dischargePowerW))) ? Number(st.dischargePowerW) : null;
+      const maxChargeFromStatus = finiteLimitOrNull(st.maxChargeW);
+      const maxDischargeFromStatus = finiteLimitOrNull(st.maxDischargeW);
+      const maxChargeFromConfig = finiteLimitOrNull(s.maxChargeW);
+      const maxDischargeFromConfig = finiteLimitOrNull(s.maxDischargeW);
+      const maxChargeW = (maxChargeFromStatus !== null) ? maxChargeFromStatus : maxChargeFromConfig;
+      const maxDischargeW = (maxDischargeFromStatus !== null) ? maxDischargeFromStatus : maxDischargeFromConfig;
+      const chargeDispatchAvailable = (st && typeof st.chargeDispatchAvailable === 'boolean') ? st.chargeDispatchAvailable : false;
+      const dischargeDispatchAvailable = (st && typeof st.dischargeDispatchAvailable === 'boolean') ? st.dischargeDispatchAvailable : false;
+
       return {
         ...s,
         soc,
         online,
+        displayOnline,
         offlineReason,
-        state: (st && typeof st.state === 'string') ? st.state : '',
+        state,
         degraded: !!(st && st.degraded),
+        dispatchAvailable: !!(st && st.dispatchAvailable),
+        chargeDispatchAvailable,
+        dischargeDispatchAvailable,
+        chargeBlockedReasons: Array.isArray(st.chargeBlockedReasons) ? st.chargeBlockedReasons : [],
+        dischargeBlockedReasons: Array.isArray(st.dischargeBlockedReasons) ? st.dischargeBlockedReasons : [],
+        maxChargeW,
+        maxDischargeW,
         chargePowerW,
         dischargePowerW,
         _sfKey: this._sfGetStorageDispatchKey(s, i),
       };
     });
+
+    const getLimitW = (storage, dir) => {
+      const v = (dir === 'charge') ? Number(storage && storage.maxChargeW) : Number(storage && storage.maxDischargeW);
+      if (Number.isFinite(v) && v >= 0) return Math.round(v);
+      return Number.POSITIVE_INFINITY;
+    };
+
+    const sumLimitW = (items, dir) => {
+      let sum = 0;
+      let hasInfinity = false;
+      for (const s of items || []) {
+        const lim = getLimitW(s, dir);
+        if (!Number.isFinite(lim)) hasInfinity = true;
+        else sum += Math.max(0, lim);
+      }
+      return hasInfinity ? Number.POSITIVE_INFINITY : sum;
+    };
 
     const buildWeights = (items, dir) => {
       const list = (items || []).slice();
@@ -4200,16 +4418,9 @@ try {
             if (aboveFloor <= 0.05) {
               base = 0;
             } else {
-              // Farm-/Pool-Balancing: höhere SoCs sollen mehr tragen, aber ein
-              // online verfügbarer Speicher oberhalb seiner Entlade-Untergrenze darf
-              // nicht praktisch auf 0 W fallen. Die frühere quadratische Gewichtung
-              // plus Spreizungsfaktor hat bei 88%/49% fast die komplette Entladung
-              // auf Speicher 1 gelegt. Das macht den zweiten Speicher scheinbar
-              // wirkungslos und kann die Farm aus dem Gleichgewicht bringen.
               base = Math.pow(aboveFloor, 1.15);
               if (socSpread >= 1 && Number.isFinite(minSoc) && Number.isFinite(maxSoc)) {
                 const rel = Math.max(0, Math.min(1, (soc - minSoc) / Math.max(1, socSpread)));
-                // 0.75..1.35: sichtbare SoC-Balance ohne harte Abschaltung.
                 base *= (0.75 + rel * 0.60);
               }
             }
@@ -4227,72 +4438,110 @@ try {
       });
     };
 
-    const allocateWeighted = (total, items, dir) => {
-      const list = (items || []).slice();
-      if (total <= 0 || list.length === 0) return { allocMap: new Map(), weightMap: new Map() };
+    const normalizeWeights = (list, weights, dir) => {
+      let out = (Array.isArray(weights) ? weights.slice() : []).map(v => (Number.isFinite(v) && v > 0) ? v : 0);
+      let sumW = out.reduce((a, b) => a + b, 0);
 
-      let weights = buildWeights(list, dir);
-      let sumW = weights.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
+      if (!(sumW > 0) && dir === 'discharge') {
+        const socEntries = list
+          .map((it, idx) => ({ idx, soc: Number.isFinite(it.soc) ? Number(it.soc) : NaN }))
+          .filter(x => Number.isFinite(x.soc))
+          .sort((a, b) => b.soc - a.soc);
 
-      if (!(sumW > 0)) {
-        if (dir === 'discharge') {
-          const socEntries = list
-            .map((it, idx) => ({ idx, soc: Number.isFinite(it.soc) ? Number(it.soc) : NaN }))
-            .filter(x => Number.isFinite(x.soc))
-            .sort((a, b) => b.soc - a.soc);
-
-          if (socEntries.length) {
-            const topSoc = socEntries[0].soc;
-            weights = new Array(list.length).fill(0);
-            for (const entry of socEntries) {
-              if ((topSoc - entry.soc) <= 0.25) weights[entry.idx] = 1;
-            }
-            sumW = weights.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
+        if (socEntries.length) {
+          const topSoc = socEntries[0].soc;
+          out = new Array(list.length).fill(0);
+          for (const entry of socEntries) {
+            if ((topSoc - entry.soc) <= 0.25) out[entry.idx] = 1;
           }
+          sumW = out.reduce((a, b) => a + b, 0);
         }
       }
 
       if (!(sumW > 0)) {
-        weights = new Array(list.length).fill(1);
-        sumW = weights.length;
+        out = new Array(list.length).fill(1);
+        sumW = out.length;
       }
 
-      const alloc = new Array(list.length).fill(0);
-      let used = 0;
-      for (let i = 0; i < list.length; i++) {
-        const a = Math.floor(total * (weights[i] / sumW));
-        alloc[i] = Number.isFinite(a) ? a : 0;
-        used += alloc[i];
-      }
-
-      let rem = Math.max(0, total - used);
-      const order = [...alloc.keys()].sort((i, j) => (weights[j] || 0) - (weights[i] || 0));
-      let oi = 0;
-      while (rem > 0 && order.length > 0) {
-        alloc[order[oi]] += 1;
-        rem -= 1;
-        oi = (oi + 1) % order.length;
-      }
-
-      // Keine pauschale Mini-Watt-Umverteilung im Pool-Modus:
-      // Auch kleine Sollwerte sind als Keepalive/Feinregelung wichtig. Eine harte
-      // 150-W-Schwelle hat bei kleinen NVP-Korrekturen dazu geführt, dass einzelne
-      // online Speicher dauerhaft 0-W-Setpoints bekommen haben. Hersteller, die
-      // Mindestleistungen benötigen, begrenzen intern oder über ihre eigenen DPs.
-
-      const allocMap = new Map();
-      const weightMap = new Map();
-      for (let i = 0; i < list.length; i++) {
-        allocMap.set(list[i], alloc[i]);
-        weightMap.set(list[i], weights[i]);
-      }
-      return { allocMap, weightMap };
+      return { weights: out, sumW };
     };
 
-    // Build eligible storages for direction (only those with mapped setpoint dp)
+    const allocateWeightedCapped = (total, items, dir) => {
+      const list = (items || []).slice();
+      const requestedW = Math.max(0, Math.round(Number(total) || 0));
+      const allocMap = new Map();
+      const weightMap = new Map();
+      if (requestedW <= 0 || list.length === 0) return { allocMap, weightMap, requestedW, deliveredW: 0, unservedW: requestedW };
+
+      const rawWeights = buildWeights(list, dir);
+      const { weights } = normalizeWeights(list, rawWeights, dir);
+      const caps = list.map(s => getLimitW(s, dir));
+
+      const alloc = new Array(list.length).fill(0);
+      let remaining = requestedW;
+      let active = list
+        .map((_, idx) => idx)
+        .filter(idx => {
+          const cap = caps[idx];
+          return (cap > 0 || !Number.isFinite(cap)) && (weights[idx] > 0);
+        });
+
+      let guard = 0;
+      while (remaining > 0 && active.length > 0 && guard++ < 100) {
+        const sumW = active.reduce((sum, idx) => sum + (weights[idx] || 0), 0);
+        if (!(sumW > 0)) break;
+
+        let used = 0;
+        const order = [];
+        for (const idx of active) {
+          const cap = caps[idx];
+          const headroom = Number.isFinite(cap) ? Math.max(0, cap - alloc[idx]) : remaining;
+          if (headroom <= 0) continue;
+          const raw = remaining * ((weights[idx] || 0) / sumW);
+          const floor = Math.floor(raw);
+          const add = Math.min(headroom, floor);
+          if (add > 0) {
+            alloc[idx] += add;
+            used += add;
+          }
+          order.push({ idx, frac: raw - floor, weight: weights[idx] || 0 });
+        }
+
+        remaining -= used;
+
+        if (remaining > 0) {
+          order.sort((a, b) => (b.frac - a.frac) || (b.weight - a.weight));
+          let progressed = false;
+          for (const o of order) {
+            if (remaining <= 0) break;
+            const cap = caps[o.idx];
+            const headroom = Number.isFinite(cap) ? Math.max(0, cap - alloc[o.idx]) : remaining;
+            if (headroom <= 0) continue;
+            alloc[o.idx] += 1;
+            remaining -= 1;
+            progressed = true;
+          }
+          if (!progressed) break;
+        }
+
+        active = active.filter(idx => {
+          const cap = caps[idx];
+          return Number.isFinite(cap) ? (alloc[idx] < cap) : true;
+        });
+      }
+
+      let deliveredW = 0;
+      for (let i = 0; i < list.length; i++) {
+        const a = Math.max(0, Math.round(alloc[i] || 0));
+        deliveredW += a;
+        allocMap.set(list[i], a);
+        weightMap.set(list[i], weights[i] || 0);
+      }
+
+      return { allocMap, weightMap, requestedW, deliveredW, unservedW: Math.max(0, requestedW - deliveredW) };
+    };
+
     const canUse = (s) => {
-      // A storage can be controlled either via separate setpoints (Soll Laden / Soll Entladen)
-      // or via a single signed setpoint (setSignedPowerId).
       if (direction === 'charge') return !!(s.setSignedPowerId || s.setChargePowerId);
       if (direction === 'discharge') return !!(s.setSignedPowerId || s.setDischargePowerId);
       return !!(s.setSignedPowerId || s.setChargePowerId || s.setDischargePowerId);
@@ -4301,82 +4550,80 @@ try {
     const eligibleAll = storages.filter(canUse);
     if (eligibleAll.length === 0) return { applied: false, reason: 'no_setpoint_dps' };
 
-    // If we have online/offline information from the derived farm status, distribute power only to
-    // online storages. This prevents under-delivery when some storages are offline (e.g. 1/2 online).
-    const hasOnlineInfo = eligibleAll.some(s => typeof s.online === 'boolean');
-    const eligible = hasOnlineInfo ? eligibleAll.filter(s => s.online === true) : eligibleAll;
-    if (hasOnlineInfo && eligible.length === 0) return { applied: false, reason: 'no_online_storages' };
+    const dispatchEligible = (direction === 'charge')
+      ? eligibleAll.filter(s => s.chargeDispatchAvailable === true)
+      : ((direction === 'discharge')
+          ? eligibleAll.filter(s => s.dischargeDispatchAvailable === true)
+          : eligibleAll);
 
-    // Entladen nur auf Speicher verteilen, die oberhalb der jeweils aktiven
-    // SoC-Untergrenze liegen. Dadurch verhindert die Farm, dass ein einzelner
-    // niedriger Speicher durch Fallback-Gewichtung trotzdem wieder Sollwerte bekommt.
     const eligibleForDispatch = (direction === 'discharge')
-      ? eligible.filter(s => {
+      ? dispatchEligible.filter(s => {
           const soc = Number(s && s.soc);
           return !Number.isFinite(soc) || soc > (dischargeFloorSoc + 0.05);
         })
-      : eligible;
+      : dispatchEligible;
 
-    // Allocation map: storage -> watts for active direction
     let allocMap = new Map();
+    let deliveredAbsW = 0;
+    let unservedAbsW = (direction === 'idle') ? 0 : absW;
 
-    if (direction === 'idle' || (direction !== 'idle' && eligibleForDispatch.length === 0)) {
-      allocMap = new Map();
-    } else if (sf.mode === 'groups' && sf.groups && sf.groups.length > 0) {
-      // Group allocation: distribute to groups proportionally, then within group weighted
-      const groups = [...sf.groups].sort((a, b) => (b.priority || 0) - (a.priority || 0));
-      const groupBuckets = new Map();
-      for (const g of groups) groupBuckets.set(g.name, []);
+    if (direction !== 'idle' && eligibleForDispatch.length > 0) {
+      if (sf.mode === 'groups' && sf.groups && sf.groups.length > 0) {
+        const groups = [...sf.groups].sort((a, b) => (b.priority || 0) - (a.priority || 0));
+        const groupBuckets = new Map();
+        for (const g of groups) groupBuckets.set(g.name, []);
 
-      for (const s of eligibleForDispatch) {
-        const gname = s.group && groupBuckets.has(s.group) ? s.group : null;
-        if (!gname) continue;
-        const g = groups.find(x => x.name === gname) || null;
-        if (g && Number.isFinite(s.soc)) {
-          if (typeof g.socMin === 'number' && s.soc < g.socMin) continue;
-          if (typeof g.socMax === 'number' && s.soc > g.socMax) continue;
+        for (const s of eligibleForDispatch) {
+          const gname = s.group && groupBuckets.has(s.group) ? s.group : null;
+          if (!gname) continue;
+          const g = groups.find(x => x.name === gname) || null;
+          if (g && Number.isFinite(s.soc)) {
+            if (typeof g.socMin === 'number' && s.soc < g.socMin) continue;
+            if (typeof g.socMax === 'number' && s.soc > g.socMax) continue;
+          }
+          groupBuckets.get(gname).push(s);
         }
-        groupBuckets.get(gname).push(s);
-      }
 
-      // Remove empty groups
-      const activeGroups = groups.filter(g => (groupBuckets.get(g.name) || []).length > 0);
-      if (activeGroups.length === 0) {
-        allocMap = allocateWeighted(absW, eligibleForDispatch, direction).allocMap;
+        const activeGroups = groups.filter(g => (groupBuckets.get(g.name) || []).length > 0);
+        if (activeGroups.length === 0) {
+          const res = allocateWeightedCapped(absW, eligibleForDispatch, direction);
+          allocMap = res.allocMap;
+          deliveredAbsW = res.deliveredW;
+          unservedAbsW = res.unservedW;
+        } else {
+          const groupPseudo = activeGroups.map(g => {
+            const items = groupBuckets.get(g.name) || [];
+            const capacityKWh = items.reduce((sum, s) => sum + ((Number.isFinite(s.capacityKWh) && s.capacityKWh > 0) ? s.capacityKWh : 1), 0);
+            const groupLimit = sumLimitW(items, direction);
+            return {
+              name: g.name,
+              group: g.name,
+              capacityKWh,
+              soc: null,
+              maxChargeW: direction === 'charge' ? groupLimit : null,
+              maxDischargeW: direction === 'discharge' ? groupLimit : null,
+            };
+          });
+
+          const gRes = allocateWeightedCapped(absW, groupPseudo, direction);
+          for (let i = 0; i < activeGroups.length; i++) {
+            const pseudo = groupPseudo[i];
+            const gAlloc = gRes.allocMap.get(pseudo) || 0;
+            const items = groupBuckets.get(activeGroups[i].name) || [];
+            const inner = allocateWeightedCapped(gAlloc, items, direction);
+            for (const [s, a] of inner.allocMap.entries()) allocMap.set(s, (allocMap.get(s) || 0) + a);
+          }
+          deliveredAbsW = Array.from(allocMap.values()).reduce((sum, v) => sum + (Number.isFinite(v) ? v : 0), 0);
+          unservedAbsW = Math.max(0, absW - deliveredAbsW);
+        }
       } else {
-        const gWeights = activeGroups.map(g => {
-          const items = groupBuckets.get(g.name) || [];
-          return items.reduce((sum, s) => sum + ((Number.isFinite(s.capacityKWh) && s.capacityKWh > 0) ? s.capacityKWh : 1), 0);
-        });
-        let gSum = gWeights.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
-        if (!(gSum > 0)) { gSum = activeGroups.length; for (let i = 0; i < gWeights.length; i++) gWeights[i] = 1; }
-
-        // First pass: floor allocations
-        const gAlloc = new Array(activeGroups.length).fill(0);
-        let used = 0;
-        for (let i = 0; i < activeGroups.length; i++) {
-          const a = Math.floor(absW * (gWeights[i] / gSum));
-          gAlloc[i] = Number.isFinite(a) ? a : 0;
-          used += gAlloc[i];
-        }
-        let rem = Math.max(0, absW - used);
-        const order = [...gAlloc.keys()].sort((i, j) => (gWeights[j] || 0) - (gWeights[i] || 0));
-        let oi = 0;
-        while (rem > 0 && order.length > 0) { gAlloc[order[oi]] += 1; rem -= 1; oi = (oi + 1) % order.length; }
-
-        // Within each group: weighted allocation
-        for (let i = 0; i < activeGroups.length; i++) {
-          const g = activeGroups[i];
-          const items = groupBuckets.get(g.name) || [];
-          const { allocMap: m } = allocateWeighted(gAlloc[i], items, direction);
-          for (const [s, a] of m.entries()) allocMap.set(s, (allocMap.get(s) || 0) + a);
-        }
+        const res = allocateWeightedCapped(absW, eligibleForDispatch, direction);
+        allocMap = res.allocMap;
+        deliveredAbsW = res.deliveredW;
+        unservedAbsW = res.unservedW;
       }
-    } else {
-      allocMap = allocateWeighted(absW, eligibleForDispatch, direction).allocMap;
     }
 
-    // Apply writes: always zero the opposite direction to avoid stale values
     let anyOkRelevant = false;
     const results = [];
     for (const s of storages) {
@@ -4384,15 +4631,9 @@ try {
       const chargeW = (direction === 'charge') ? alloc : 0;
       const dischargeW = (direction === 'discharge') ? alloc : 0;
 
-      // Hersteller-/Adapterabhängige Vorzeichen-Konventionen:
-      // - Standard (separate Soll-Laden/Soll-Entladen): positive Werte.
-      // - Pro Speicher kann das Vorzeichen für Laden/Entladen invertiert werden.
-      // - Optional: Ein einzelner Signed-Sollwert (setSignedPowerId) kann beide Richtungen steuern.
       const outChargeW = s.invertChargeSign ? -chargeW : chargeW;
       const outDischargeW = s.invertDischargeSign ? -dischargeW : dischargeW;
 
-      // Signed mapping (falls genutzt): Default = Entladen positiv, Laden negativ.
-      // Über invertChargeSign / invertDischargeSign kann pro Richtung gedreht werden.
       let outSignedW = 0;
       if (s.setSignedPowerId) {
         if (direction === 'charge') outSignedW = -Math.abs(chargeW);
@@ -4405,6 +4646,14 @@ try {
       const r = {
         name: s.name || '',
         soc: Number.isFinite(Number(s.soc)) ? Number(s.soc) : null,
+        state: s.state || '',
+        online: !!s.online,
+        dispatchAvailable: !!s.dispatchAvailable,
+        chargeDispatchAvailable: !!s.chargeDispatchAvailable,
+        dischargeDispatchAvailable: !!s.dischargeDispatchAvailable,
+        maxChargeW: (s.maxChargeW !== null && Number.isFinite(Number(s.maxChargeW))) ? Number(s.maxChargeW) : null,
+        maxDischargeW: (s.maxDischargeW !== null && Number.isFinite(Number(s.maxDischargeW))) ? Number(s.maxDischargeW) : null,
+        blockedReasons: direction === 'charge' ? (s.chargeBlockedReasons || []) : (direction === 'discharge' ? (s.dischargeBlockedReasons || []) : []),
         actualChargeW: Number.isFinite(Number(s.chargePowerW)) ? Number(s.chargePowerW) : null,
         actualDischargeW: Number.isFinite(Number(s.dischargePowerW)) ? Number(s.dischargePowerW) : null,
         chargeW,
@@ -4412,6 +4661,7 @@ try {
         ok: true,
         writes: {},
       };
+
       if (s.setSignedPowerId) {
         const wr = await this._sfWriteIfChanged(s.setSignedPowerId, outSignedW);
         r.writes.signed = wr;
@@ -4419,7 +4669,6 @@ try {
         if (wr.ok) anyOkRelevant = true;
       }
 
-      // Write charge setpoint (also when signed is configured; keeps both paths consistent)
       if (s.setChargePowerId) {
         const wr = await this._sfWriteIfChanged(s.setChargePowerId, outChargeW);
         r.writes.charge = wr;
@@ -4428,7 +4677,6 @@ try {
         if (direction === 'idle' && wr.ok) anyOkRelevant = true;
       }
 
-      // Write discharge setpoint (also when signed is configured; keeps both paths consistent)
       if (s.setDischargePowerId) {
         const wr = await this._sfWriteIfChanged(s.setDischargePowerId, outDischargeW);
         r.writes.discharge = wr;
@@ -4441,20 +4689,38 @@ try {
       results.push(r);
     }
 
-    // Diagnose für Farm-Verteilung: damit sofort sichtbar ist, welcher Speicher
-    // welchen Sollwert bekommen hat und ob eine SoC-Untergrenze gegriffen hat.
     try {
       const diag = {
         ts: Date.now(),
         mode: sf.mode,
         direction,
         targetW: w,
+        deliveredW: direction === 'charge' ? -deliveredAbsW : deliveredAbsW,
+        unservedW: unservedAbsW,
         source: src,
         dischargeFloorSocPct: (direction === 'discharge') ? dischargeFloorSoc : null,
-        onlineStorages: eligible.length,
-        dispatchStorages: eligibleForDispatch.length,
+        onlineStorages: storages.filter(s => s.online === true).length,
+        dispatchStorages: (direction === 'charge')
+          ? eligibleForDispatch.filter(s => s.chargeDispatchAvailable === true).length
+          : ((direction === 'discharge') ? eligibleForDispatch.filter(s => s.dischargeDispatchAvailable === true).length : eligibleAll.length),
+        availableChargePowerW: (() => {
+          const v = sumLimitW(storages.filter(s => s.chargeDispatchAvailable === true), 'charge');
+          return Number.isFinite(v) ? Math.round(v) : null;
+        })(),
+        availableDischargePowerW: (() => {
+          const v = sumLimitW(storages.filter(s => s.dischargeDispatchAvailable === true), 'discharge');
+          return Number.isFinite(v) ? Math.round(v) : null;
+        })(),
         results: results.map(r => ({
           name: r.name || '',
+          state: r.state || '',
+          online: r.online,
+          dispatchAvailable: r.dispatchAvailable,
+          chargeDispatchAvailable: r.chargeDispatchAvailable,
+          dischargeDispatchAvailable: r.dischargeDispatchAvailable,
+          maxChargeW: r.maxChargeW,
+          maxDischargeW: r.maxDischargeW,
+          blockedReasons: r.blockedReasons,
           soc: r.soc,
           actualChargeW: r.actualChargeW,
           actualDischargeW: r.actualDischargeW,
@@ -4468,14 +4734,13 @@ try {
       try { this.updateValue('storageFarm.lastDispatchJson', json, Date.now()); } catch (_eUpd) {}
     } catch (_eDiag) {}
 
-    // Log only on debug to avoid noise
     try {
       if (this.log && typeof this.log.debug === 'function') {
-        this.log.debug(`[storageFarm] apply targetW=${w} dir=${direction} storages=${storages.length} src=${src}`);
+        this.log.debug(`[storageFarm] apply targetW=${w} dir=${direction} delivered=${direction === 'charge' ? -deliveredAbsW : deliveredAbsW}W unserved=${unservedAbsW}W storages=${storages.length} src=${src}`);
       }
     } catch (_eLog) {}
 
-    return { applied: !!anyOkRelevant, direction, targetW: w, results };
+    return { applied: !!anyOkRelevant, direction, targetW: w, deliveredW: direction === 'charge' ? -deliveredAbsW : deliveredAbsW, unservedW: unservedAbsW, results };
   }
 
   async syncInstallerConfigToStates() {
@@ -15168,7 +15433,7 @@ return res.json(out);
       // Weather App (FIS settings)
       'weatherEnabled','weatherUsageMode','weatherApiKey'
     ];
-    const storageFarmLocalKeys = ['enabled', 'mode', 'configJson', 'groupsJson', 'totalSoc', 'medianSoc', 'totalSocOnline', 'socSourcesTotal', 'socSourcesOnline', 'socDegraded', 'totalChargePowerW', 'totalDischargePowerW', 'totalPvPowerW', 'storagesOnline', 'storagesDegraded', 'storagesTotal', 'storagesStatusJson', 'lastDispatchJson'];
+    const storageFarmLocalKeys = ['enabled', 'mode', 'configJson', 'groupsJson', 'totalSoc', 'medianSoc', 'totalSocOnline', 'socSourcesTotal', 'socSourcesOnline', 'socDegraded', 'totalChargePowerW', 'totalDischargePowerW', 'totalPvPowerW', 'storagesOnline', 'storagesDegraded', 'storagesDispatchAvailable', 'availableChargePowerW', 'availableDischargePowerW', 'storagesTotal', 'storagesStatusJson', 'lastDispatchJson'];
     // Weitere lokale States, die in der VIS angezeigt werden sollen (ohne Admin-Mapping)
     // Wichtig: Diese Keys müssen auch dann funktionieren, wenn sie NICHT im Admin unter
     // "Datenpunkte" gemappt wurden. Daher wird im Subscribe-Loop unten auf die lokalen

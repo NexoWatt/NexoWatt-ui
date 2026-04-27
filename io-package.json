@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.256",
+    "version": "0.6.257",
     "news": {
+      "0.6.257": {
+        "en": "StorageFarm: hardened system-neutral farm dispatch. Degraded/stale/faulted storages are excluded from active control and zeroed, per-storage charge/discharge limits and availability/fault signals are supported, and active farm mode no longer falls back to a single storage target unless explicitly allowed.",
+        "de": "Speicherfarm: herstellerneutrale Farm-Dispatch-Logik gehärtet. Degraded/stale/gestörte Speicher werden aus der aktiven Regelung genommen und auf 0 W gesetzt, Lade-/Entladegrenzen sowie Verfügbarkeits-/Störungssignale je Speicher werden unterstützt, und der aktive Farmbetrieb fällt nicht mehr ungeprüft auf einen Einzel-Sollwert zurück.",
+        "ru": "StorageFarm: hardened system-neutral farm dispatch. Degraded/stale/faulted storages are excluded from active control and zeroed; per-storage charge/discharge limits and availability/fault signals are supported.",
+        "pt": "StorageFarm: hardened system-neutral farm dispatch. Degraded/stale/faulted storages are excluded from active control and zeroed; per-storage charge/discharge limits and availability/fault signals are supported.",
+        "nl": "StorageFarm: hardened system-neutral farm dispatch. Degraded/stale/faulted storages are excluded from active control and zeroed; per-storage charge/discharge limits and availability/fault signals are supported.",
+        "fr": "StorageFarm: hardened system-neutral farm dispatch. Degraded/stale/faulted storages are excluded from active control and zeroed; per-storage charge/discharge limits and availability/fault signals are supported.",
+        "it": "StorageFarm: hardened system-neutral farm dispatch. Degraded/stale/faulted storages are excluded from active control and zeroed; per-storage charge/discharge limits and availability/fault signals are supported.",
+        "es": "StorageFarm: hardened system-neutral farm dispatch. Degraded/stale/faulted storages are excluded from active control and zeroed; per-storage charge/discharge limits and availability/fault signals are supported.",
+        "pl": "StorageFarm: hardened system-neutral farm dispatch. Degraded/stale/faulted storages are excluded from active control and zeroed; per-storage charge/discharge limits and availability/fault signals are supported.",
+        "uk": "StorageFarm: hardened system-neutral farm dispatch. Degraded/stale/faulted storages are excluded from active control and zeroed; per-storage charge/discharge limits and availability/fault signals are supported.",
+        "zh-cn": "StorageFarm: hardened system-neutral farm dispatch. Degraded/stale/faulted storages are excluded from active control and zeroed; per-storage charge/discharge limits and availability/fault signals are supported."
+      },
       "0.6.256": {
         "en": "Heating rod: energy flow power display, stable quick-control gauge, and optional zero/minus feed-in PV curtailment logic.",
         "de": "Heizstab: Leistungsanzeige im Energiefluss, stabiler Schnellsteuerungs-Ring und optionale 0-/Minus-Einspeise-Logik zur Nutzung abgeregelter PV.",
@@ -1785,7 +1798,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.256",
+  "version": "0.6.257",
   "news": {
     "0.6.256": {
       "en": "Heating rod: energy flow power display, stable quick-control gauge, and optional zero/minus feed-in PV curtailment logic.",

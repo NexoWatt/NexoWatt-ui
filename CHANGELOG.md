@@ -1,3 +1,12 @@
+## 0.6.257
+
+- Speicherfarm: herstellerneutrale Dispatch-Logik gehärtet; degradierte, stale oder gestörte Speicher werden aus der aktiven Regelung genommen und auf 0 W gesetzt.
+- Speicherfarm: feste und dynamische Lade-/Entladegrenzen sowie Verfügbarkeits-, Störungs-, Ladefreigabe- und Entladefreigabe-Datenpunkte je Speicher ergänzt.
+- Speicherfarm: Sollwerte werden nur noch auf regelverfügbare Speicher verteilt und auf deren verfügbare Leistung begrenzt; nicht erfüllbare Restleistung wird in der Dispatch-Diagnose ausgewiesen.
+- Speicherregelung: Bei aktivem Farmbetrieb kein ungeprüfter Rückfall mehr auf den Einzel-Speicher-Sollwert; dies ist nur noch über eine explizite Expertenfreigabe möglich.
+- Speicherfarm-UI/Visualisierung: neue Eingabefelder und Statusanzeige für regelbare Speicher ergänzt.
+- PWA/Web-Cache-Version angehoben.
+
 ## 0.6.256
 
 - Heizstab: Energiefluss nutzt jetzt die native Heizstab-Leistung (`measuredW` → `appliedW` → `targetW`) statt nur den Verbraucher-DP.

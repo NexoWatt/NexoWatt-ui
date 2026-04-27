@@ -382,9 +382,18 @@ class SpeicherRegelungModule extends BaseModule {
                 const hasOnline = Number.isFinite(onlineN) && onlineN > 0;
 
                 if (hasOnline) {
-                    const stSoc = await this.adapter.getStateAsync('storageFarm.totalSoc');
-                    const v = stSoc && stSoc.val !== undefined && stSoc.val !== null ? Number(stSoc.val) : NaN;
-                    const age = stSoc && typeof stSoc.ts === 'number' ? (now - Number(stSoc.ts)) : null;
+                    // Für die aktive Regelung bevorzugen wir den SoC der frisch verfügbaren Speicher.
+                    // Offline-/Cache-Anteile bleiben damit aus Reserve-/Fallback-Entscheidungen heraus.
+                    let stSoc = await this.adapter.getStateAsync('storageFarm.totalSocOnline');
+                    let v = stSoc && stSoc.val !== undefined && stSoc.val !== null ? Number(stSoc.val) : NaN;
+                    let age = stSoc && typeof stSoc.ts === 'number' ? (now - Number(stSoc.ts)) : null;
+
+                    if (!Number.isFinite(v)) {
+                        stSoc = await this.adapter.getStateAsync('storageFarm.totalSoc');
+                        v = stSoc && stSoc.val !== undefined && stSoc.val !== null ? Number(stSoc.val) : NaN;
+                        age = stSoc && typeof stSoc.ts === 'number' ? (now - Number(stSoc.ts)) : null;
+                    }
+
                     if (Number.isFinite(v) && (age === null || age <= staleMs)) {
                         soc = v;
                         socAge = age;
@@ -2431,23 +2440,36 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         }
 
         // schreiben (Sollleistung)
-        // Wenn Speicherfarm aktiv ist und Setpoint-DPs konfiguriert sind, verteilen wir den Sollwert
-        // auf mehrere Speicher (Pool/Gruppen) und schreiben NICHT mehr auf den Single-Storage-DP.
+        // Wenn die Speicherfarm aktiv ist, ist die Farm-Verteilung der führende Pfad.
+        // Ein Rückfall auf den klassischen Einzel-Speicher-Sollwert ist im Farmbetrieb bewusst gesperrt,
+        // außer der Betreiber gibt ihn explizit frei. Dadurch vermeiden wir, dass ein Farm-Gesamtsollwert
+        // versehentlich auf ein einzelnes System geschrieben wird.
         let writeResult = null;
         let farmApplied = false;
+        let farmReason = '';
+        const farmEnabledForWrite = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
+        const farmCfgForWrite = (this.adapter && this.adapter.config && this.adapter.config.storageFarm) ? this.adapter.config.storageFarm : {};
+        const allowSingleTargetFallback = farmEnabledForWrite && (farmCfgForWrite.allowSingleTargetFallback === true || farmCfgForWrite.allowSingleTargetFallback === 'true');
 
         try {
-            if (this.adapter && typeof this.adapter.applyStorageFarmTargetW === 'function') {
+            if (farmEnabledForWrite && this.adapter && typeof this.adapter.applyStorageFarmTargetW === 'function') {
                 const res = await this.adapter.applyStorageFarmTargetW(w, { source, reason });
                 farmApplied = !!(res && res.applied);
+                farmReason = res && res.reason ? String(res.reason) : '';
                 if (farmApplied) writeResult = true;
             }
-        } catch (_eFarm) {
+        } catch (eFarm) {
             farmApplied = false;
+            farmReason = eFarm && eFarm.message ? String(eFarm.message) : 'exception';
         }
 
+        const mayUseSingleTarget = !farmEnabledForWrite || allowSingleTargetFallback;
+
         if (!farmApplied) {
-            if (this.dp && this.dp.getEntry('st.targetPowerW')) {
+            if (!mayUseSingleTarget) {
+                writeResult = false;
+                await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+            } else if (this.dp && this.dp.getEntry('st.targetPowerW')) {
                 // Rohwert berechnen (Skalierung/Offset/Invert), damit der Installateur den Weg bis zum Endgerät nachvollziehen kann.
                 try {
                     const e = this.dp.getEntry('st.targetPowerW');
@@ -2480,7 +2502,12 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await this._setIfChanged('speicher.regelung.quelle', String(source || ''));
         await this._setIfChanged('speicher.regelung.grund', String(reason || ''));
         await this._setIfChanged('speicher.regelung.schreibOk', writeResult === true);
-        await this._setIfChanged('speicher.regelung.schreibStatus', farmApplied ? 'farm' : ((writeResult === null) ? 'unverändert' : (writeResult === true ? 'geschrieben' : 'nicht möglich')));
+        const writeStatus = farmApplied
+            ? 'farm'
+            : (farmEnabledForWrite && !allowSingleTargetFallback
+                ? ('farm-nicht-moeglich' + (farmReason ? ':' + farmReason : ''))
+                : ((writeResult === null) ? 'unverändert' : (writeResult === true ? 'geschrieben' : 'nicht möglich')));
+        await this._setIfChanged('speicher.regelung.schreibStatus', writeStatus);
 
         this._lastTargetW = w;
         this._lastReason = String(reason || '');
