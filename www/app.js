@@ -2995,10 +2995,31 @@ function storageFarmRenderStatusRows(list){
     const chg = (row && row.chargePowerW !== undefined && row.chargePowerW !== null && !isNaN(Number(row.chargePowerW))) ? formatPower(Number(row.chargePowerW)) : '--';
     const dchg = (row && row.dischargePowerW !== undefined && row.dischargePowerW !== null && !isNaN(Number(row.dischargePowerW))) ? formatPower(Number(row.dischargePowerW)) : '--';
     let online = 'Offline';
-    if (row && (row.degraded === true || row.state === 'degraded')) online = row.dispatchAvailable ? 'Degraded / regelbar' : 'Degraded';
-    else if (row && row.online && row.dispatchAvailable === false) online = 'Gesperrt';
-    else if (row && row.online) online = row.dispatchAvailable ? 'Online' : 'Gesperrt';
-    else if (row && row.dispatchAvailable) online = 'Regelbar';
+    const rowIsOnline = !!(row && (row.online === true || row.displayOnline === true || row.dispatchAvailable === true));
+    const rowIsDegraded = !!(row && (row.degraded === true || row.state === 'degraded'));
+    const reasons = []
+      .concat(row && Array.isArray(row.dispatchBlockedReasons) ? row.dispatchBlockedReasons : [])
+      .concat(row && Array.isArray(row.chargeBlockedReasons) ? row.chargeBlockedReasons : [])
+      .concat(row && Array.isArray(row.dischargeBlockedReasons) ? row.dischargeBlockedReasons : []);
+    const hasHardLock = reasons.some((x) => [
+      'available_false',
+      'fault_active',
+      'device_offline',
+      'charge_not_allowed',
+      'discharge_not_allowed'
+    ].includes(String(x || '')));
+    const isIdle = ((row && row.chargePowerW !== undefined && row.chargePowerW !== null && !isNaN(Number(row.chargePowerW))) ? Math.abs(Number(row.chargePowerW)) : 0)
+      + ((row && row.dischargePowerW !== undefined && row.dischargePowerW !== null && !isNaN(Number(row.dischargePowerW))) ? Math.abs(Number(row.dischargePowerW)) : 0) < 20;
+
+    if (rowIsOnline && row && row.dispatchAvailable === true) {
+      online = rowIsDegraded ? 'Degraded / Bereit' : (isIdle ? 'Online / Standby' : 'Online / Bereit');
+    } else if (rowIsOnline && hasHardLock) {
+      online = 'Gesperrt';
+    } else if (rowIsOnline) {
+      online = rowIsDegraded ? 'Degraded / prüfen' : 'Online / prüfen';
+    } else if (row && row.dispatchAvailable) {
+      online = 'Regelbar';
+    }
 
     r.appendChild(mkCell(name, 'Speicher'));
     

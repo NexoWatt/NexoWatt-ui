@@ -3806,7 +3806,12 @@ class NexoWattVis extends utils.Adapter {
         };
 
         const normalizeLimitW = (v) => {
-          const n = Number(v);
+          // Leer / nicht gesetzt bedeutet: keine harte Begrenzung.
+          // Wichtig: Number(null) und Number('') wären 0 und würden den Speicher
+          // fälschlich mit charge_limit_zero/discharge_limit_zero sperren.
+          if (v === undefined || v === null) return null;
+          if (typeof v === 'string' && v.trim() === '') return null;
+          const n = Number(String(v).replace(',', '.'));
           if (!Number.isFinite(n) || n < 0) return null;
           return Math.round(n);
         };
@@ -4331,7 +4336,10 @@ try {
     } catch (_e) { status = []; }
 
     const finiteLimitOrNull = (v) => {
-      const n = Number(v);
+      // Leer / null / undefined = unlimitiert. Nicht als 0 interpretieren.
+      if (v === undefined || v === null) return null;
+      if (typeof v === 'string' && v.trim() === '') return null;
+      const n = Number(String(v).replace(',', '.'));
       if (!Number.isFinite(n) || n < 0) return null;
       return Math.round(n);
     };
@@ -4377,7 +4385,11 @@ try {
     });
 
     const getLimitW = (storage, dir) => {
-      const v = (dir === 'charge') ? Number(storage && storage.maxChargeW) : Number(storage && storage.maxDischargeW);
+      const raw = (dir === 'charge') ? (storage && storage.maxChargeW) : (storage && storage.maxDischargeW);
+      // Leer / null / undefined = unlimitiert. 0 ist nur dann Sperre, wenn bewusst 0 eingetragen wurde.
+      if (raw === undefined || raw === null) return Number.POSITIVE_INFINITY;
+      if (typeof raw === 'string' && raw.trim() === '') return Number.POSITIVE_INFINITY;
+      const v = Number(String(raw).replace(',', '.'));
       if (Number.isFinite(v) && v >= 0) return Math.round(v);
       return Number.POSITIVE_INFINITY;
     };

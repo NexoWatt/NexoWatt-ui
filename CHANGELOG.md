@@ -1,3 +1,9 @@
+## 0.6.259
+
+- Speicherfarm-Hotfix: Leere direkte Max.-Lade-/Entladefelder werden jetzt korrekt als unbegrenzt behandelt und nicht mehr als 0 W.
+- Dadurch werden Signed-DP-only-Speicher mit leerer Leistungsgrenze nicht mehr fälschlich als gesperrt / nicht regelbar bewertet.
+- VIS-Status unterscheidet jetzt zwischen Online/Standby, Online/Bereit, Online/prüfen und echter Sperre.
+
 ## 0.6.258
 
 - Speicherfarm: Freigabe-/Stör-DPs bleiben optional; leer bedeutet freigegeben. Stale/degraded Messwerte blockieren den Dispatch nicht mehr automatisch, solange keine explizite Sperre/Störung vorliegt.
