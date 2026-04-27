@@ -378,13 +378,17 @@ class SpeicherRegelungModule extends BaseModule {
         if (farmEnabled) {
             try {
                 const stOnline = await this.adapter.getStateAsync('storageFarm.storagesOnline');
+                const stDispatch = await this.adapter.getStateAsync('storageFarm.storagesDispatchAvailable');
                 const onlineN = stOnline && stOnline.val !== undefined && stOnline.val !== null ? Number(stOnline.val) : NaN;
+                const dispatchN = stDispatch && stDispatch.val !== undefined && stDispatch.val !== null ? Number(stDispatch.val) : NaN;
                 const hasOnline = Number.isFinite(onlineN) && onlineN > 0;
+                const hasDispatchable = Number.isFinite(dispatchN) && dispatchN > 0;
 
-                if (hasOnline) {
-                    // Für die aktive Regelung bevorzugen wir den SoC der frisch verfügbaren Speicher.
-                    // Offline-/Cache-Anteile bleiben damit aus Reserve-/Fallback-Entscheidungen heraus.
-                    let stSoc = await this.adapter.getStateAsync('storageFarm.totalSocOnline');
+                if (hasOnline || hasDispatchable) {
+                    // Für die aktive Farm-Regelung bevorzugen wir frische Online-SoCs.
+                    // Wenn Systeme aber nur degraded/stale sind und trotzdem dispatchbar bleiben
+                    // (z.B. selten aktualisierte Signed-DPs), nutzen wir den stabilen Farm-SoC.
+                    let stSoc = hasOnline ? await this.adapter.getStateAsync('storageFarm.totalSocOnline') : null;
                     let v = stSoc && stSoc.val !== undefined && stSoc.val !== null ? Number(stSoc.val) : NaN;
                     let age = stSoc && typeof stSoc.ts === 'number' ? (now - Number(stSoc.ts)) : null;
 
@@ -441,10 +445,13 @@ class SpeicherRegelungModule extends BaseModule {
         if (farmEnabled) {
             try {
                 const stOnline = await this.adapter.getStateAsync('storageFarm.storagesOnline');
+                const stDispatch = await this.adapter.getStateAsync('storageFarm.storagesDispatchAvailable');
                 const onlineN = stOnline && stOnline.val !== undefined && stOnline.val !== null ? Number(stOnline.val) : NaN;
+                const dispatchN = stDispatch && stDispatch.val !== undefined && stDispatch.val !== null ? Number(stDispatch.val) : NaN;
                 const hasOnline = Number.isFinite(onlineN) && onlineN > 0;
+                const hasDispatchable = Number.isFinite(dispatchN) && dispatchN > 0;
 
-                if (hasOnline) {
+                if (hasOnline || hasDispatchable) {
                     const stChg = await this.adapter.getStateAsync('storageFarm.totalChargePowerW');
                     const stDchg = await this.adapter.getStateAsync('storageFarm.totalDischargePowerW');
 
@@ -458,7 +465,9 @@ class SpeicherRegelungModule extends BaseModule {
                     if (Number.isFinite(chg) && Number.isFinite(dchg) && (age === null || age <= staleMs)) {
                         battPowerW = dchg - chg;
                         battPowerAge = age;
-                        battPowerInvalidReason = 'Farm: aggregierte Ist-Leistung (Entladen-Laden)';
+                        battPowerInvalidReason = hasOnline
+                            ? 'Farm: aggregierte Ist-Leistung (Entladen-Laden)'
+                            : 'Farm: aggregierte Ist-Leistung, degraded/dispatchbar';
                     }
                 }
             } catch (_eFarm) {

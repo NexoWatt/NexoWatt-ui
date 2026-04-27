@@ -2995,9 +2995,10 @@ function storageFarmRenderStatusRows(list){
     const chg = (row && row.chargePowerW !== undefined && row.chargePowerW !== null && !isNaN(Number(row.chargePowerW))) ? formatPower(Number(row.chargePowerW)) : '--';
     const dchg = (row && row.dischargePowerW !== undefined && row.dischargePowerW !== null && !isNaN(Number(row.dischargePowerW))) ? formatPower(Number(row.dischargePowerW)) : '--';
     let online = 'Offline';
-    if (row && (row.degraded === true || row.state === 'degraded')) online = 'Degraded';
+    if (row && (row.degraded === true || row.state === 'degraded')) online = row.dispatchAvailable ? 'Degraded / regelbar' : 'Degraded';
     else if (row && row.online && row.dispatchAvailable === false) online = 'Gesperrt';
-    else if (row && row.online) online = 'Online';
+    else if (row && row.online) online = row.dispatchAvailable ? 'Online' : 'Gesperrt';
+    else if (row && row.dispatchAvailable) online = 'Regelbar';
 
     r.appendChild(mkCell(name, 'Speicher'));
     

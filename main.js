@@ -3316,12 +3316,12 @@ class NexoWattVis extends utils.Adapter {
           setChargePowerId: String(r.setChargePowerId || '').trim(),
           setDischargePowerId: String(r.setDischargePowerId || '').trim(),
           setSignedPowerId: String(r.setSignedPowerId || '').trim(),
+          invertSetSignedPowerSign: !!r.invertSetSignedPowerSign,
           // Herstellerneutrale Farm-Sicherheits- und Leistungsgrenzen.
           // Statische Werte begrenzen die Verteilung unabhängig vom angebundenen System.
+          // Ab v0.6.258 bewusst nur direkte Eingaben: keine dynamischen Max-Leistungs-DP als harte Grenze.
           maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : null,
           maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : null,
-          maxChargePowerId: String(r.maxChargePowerId || '').trim(),
-          maxDischargePowerId: String(r.maxDischargePowerId || '').trim(),
           availableId: String(r.availableId || '').trim(),
           faultId: String(r.faultId || '').trim(),
           chargeAllowedId: String(r.chargeAllowedId || '').trim(),
@@ -3637,8 +3637,13 @@ class NexoWattVis extends utils.Adapter {
         const setSignedPowerId = String(row.setSignedPowerId || '').trim();
         const setChargePowerId = String(row.setChargePowerId || '').trim();
         const setDischargePowerId = String(row.setDischargePowerId || '').trim();
-        const maxChargePowerId = String(row.maxChargePowerId || '').trim();
-        const maxDischargePowerId = String(row.maxDischargePowerId || '').trim();
+        const hasChargeSetpoint = !!(setSignedPowerId || setChargePowerId);
+        const hasDischargeSetpoint = !!(setSignedPowerId || setDischargePowerId);
+        const hasAnySetpoint = !!(setSignedPowerId || setChargePowerId || setDischargePowerId);
+
+        // Ab v0.6.258 sind die Leistungsgrenzen bewusst feste Eingaben in der Farm-Konfiguration.
+        // Dynamische Max-Leistungs-DPs werden in der harten Dispatch-Logik nicht mehr verwendet,
+        // damit die Speicherfarm auch mit einfachen Signed-DP-Systemen herstellerneutral läuft.
         const availableId = String(row.availableId || '').trim();
         const faultId = String(row.faultId || '').trim();
         const chargeAllowedId = String(row.chargeAllowedId || '').trim();
@@ -3654,12 +3659,12 @@ class NexoWattVis extends utils.Adapter {
         // ---------------------------------------------------------------------
         // Online/Offline logic
         // ---------------------------------------------------------------------
-        // Requirement:
-        // - SoC must NOT "timeout" (some systems update SoC less frequently)
-        // - Powers should still show last known values when online
-        // - A device shall be marked Offline when the device adapter reports it
-        //   (connected=false / offline=true) OR when no data arrives for some time
-        //   (adapter hung → timestamps stop updating)
+        // Wichtig für die herstellerneutrale Farm:
+        // - Freigabe-/Stör-DPs sind optional. Nicht gesetzt = nicht blockierend.
+        // - Stale Messwerte machen den Speicher in der Anzeige "degraded", blockieren den
+        //   Dispatch aber nicht automatisch. Viele Systeme aktualisieren SoC/Istleistung selten.
+        // - Hart blockiert wird nur bei explizit offline, fehlender Grundkonfiguration, aktiver
+        //   Störung oder bewusst gesperrter Freigabe.
 
         // Infer device base from nexowatt-devices datapoints
         // Support both: "...devices.X.aliases...." and direct "...devices.X...." mappings.
@@ -3675,8 +3680,6 @@ class NexoWattVis extends utils.Adapter {
         addBases(chgId);
         addBases(dchgId);
         addBases(pvId);
-        addBases(maxChargePowerId);
-        addBases(maxDischargePowerId);
         addBases(availableId);
         addBases(faultId);
         addBases(chargeAllowedId);
@@ -3742,28 +3745,27 @@ class NexoWattVis extends utils.Adapter {
         if (chgId) considerTs(await getState(chgId));
         if (dchgId) considerTs(await getState(dchgId));
         if (pvId) considerTs(await getState(pvId));
-        if (maxChargePowerId) considerTs(await getState(maxChargePowerId));
-        if (maxDischargePowerId) considerTs(await getState(maxDischargePowerId));
         if (availableId) considerTs(await getState(availableId));
         if (faultId) considerTs(await getState(faultId));
         if (chargeAllowedId) considerTs(await getState(chargeAllowedId));
         if (dischargeAllowedId) considerTs(await getState(dischargeAllowedId));
-        // Fallback: if nothing else exists, use SoC ts so minimal configs still work.
+        // Fallback: if nothing else exists, use SoC ts so minimal configs still show degraded/online.
         if (!Number.isFinite(heartbeatTs) && socId) considerTs(await getState(socId));
 
         const stale = Number.isFinite(heartbeatTs) ? ((now - heartbeatTs) > staleMs) : false;
 
-        // Do we have any measurement values configured/available?
-        let hasAnyValue = false;
-        for (const id of [signedId, chgId, dchgId, pvId, socId, maxChargePowerId, maxDischargePowerId, availableId, faultId, chargeAllowedId, dischargeAllowedId]) {
+        // Do we have any feedback values configured/available?
+        // Setpoint-DPs alone are enough for dispatch, but they are not treated as real feedback.
+        let hasFeedbackValue = false;
+        for (const id of [signedId, chgId, dchgId, pvId, socId, availableId, faultId, chargeAllowedId, dischargeAllowedId]) {
           if (!id) continue;
           const st = await getState(id);
-          if (st && st.val !== undefined && st.val !== null) { hasAnyValue = true; break; }
+          if (st && st.val !== undefined && st.val !== null) { hasFeedbackValue = true; break; }
         }
 
         // Health-state for UI/summary
-        // - offline: adapter/device explicitly reports offline OR there is no data at all
-        // - degraded: no fresh updates for a while (stale heartbeat) but we keep last known values
+        // - offline: explicit device offline OR no feedback and no controllable setpoint
+        // - degraded: stale/no feedback but setpoint exists; dispatch may still continue
         // - online: fresh updates
         let health = 'offline';
         let stateReason = '';
@@ -3771,9 +3773,12 @@ class NexoWattVis extends utils.Adapter {
         if (explicitOffline) {
           health = 'offline';
           stateReason = 'device_offline';
-        } else if (!hasAnyValue) {
+        } else if (!hasFeedbackValue && !hasAnySetpoint) {
           health = 'offline';
           stateReason = 'no_data';
+        } else if (!hasFeedbackValue && hasAnySetpoint) {
+          health = 'degraded';
+          stateReason = 'no_feedback_setpoint_only';
         } else if (stale) {
           health = 'degraded';
           stateReason = 'stale';
@@ -3786,8 +3791,9 @@ class NexoWattVis extends utils.Adapter {
         const isDegraded = (health === 'degraded');
 
         // Optional, system-neutral availability / fault / direction signals.
-        // Critical control signals must be fresh; stale signals block dispatch instead of
-        // letting a cached value keep a battery in regulation.
+        // Sie sind bewusst optional: leer = keine Sperre. Stale Werte werden als Warnung
+        // dokumentiert, aber nicht automatisch als Sperre gewertet, weil viele Systeme diese
+        // Flags nur bei Änderung aktualisieren.
         const readBoolDp = async (id) => {
           const sid = String(id || '').trim();
           if (!sid) return { configured: false, value: null, fresh: true, missing: false, invalid: false };
@@ -3805,76 +3811,66 @@ class NexoWattVis extends utils.Adapter {
           return Math.round(n);
         };
 
-        const readLimitW = async (staticValue, id) => {
+        const readLimitW = async (staticValue) => {
           const staticLimit = normalizeLimitW(staticValue);
-          const sid = String(id || '').trim();
-          if (!sid) return { limitW: staticLimit, configured: false, fresh: true, missing: false, invalid: false };
-          const st = await getState(sid);
-          if (!st || st.val === undefined || st.val === null) return { limitW: staticLimit, configured: true, fresh: false, missing: true, invalid: false };
-          const age = (typeof st.ts === 'number' && Number.isFinite(st.ts)) ? (now - st.ts) : null;
-          const fresh = (age === null || age <= staleMs);
-          const dyn = await readNumber(sid, 'power', { allowStale: false });
-          if (!fresh || !Number.isFinite(dyn) || dyn < 0) {
-            return { limitW: staticLimit, configured: true, fresh: false, missing: false, invalid: !Number.isFinite(dyn) || dyn < 0, ageMs: age };
-          }
-          const dynamicLimit = Math.round(dyn);
-          const limitW = (staticLimit !== null) ? Math.min(staticLimit, dynamicLimit) : dynamicLimit;
-          return { limitW, configured: true, fresh: true, missing: false, invalid: false, ageMs: age };
+          return { limitW: staticLimit, configured: false, fresh: true, missing: false, invalid: false };
         };
 
         const availState = await readBoolDp(availableId);
         const faultState = await readBoolDp(faultId);
         const chargeAllowedState = await readBoolDp(chargeAllowedId);
         const dischargeAllowedState = await readBoolDp(dischargeAllowedId);
-        const chargeLimitState = await readLimitW(row.maxChargeW, maxChargePowerId);
-        const dischargeLimitState = await readLimitW(row.maxDischargeW, maxDischargePowerId);
+        const chargeLimitState = await readLimitW(row.maxChargeW);
+        const dischargeLimitState = await readLimitW(row.maxDischargeW);
 
         const maxChargeW = chargeLimitState.limitW;
         const maxDischargeW = dischargeLimitState.limitW;
 
-        const hasChargeSetpoint = !!(setSignedPowerId || setChargePowerId);
-        const hasDischargeSetpoint = !!(setSignedPowerId || setDischargePowerId);
-
         const baseBlocked = [];
-        if (!isFreshOnline) baseBlocked.push(stateReason || health || 'not_online');
+        const dispatchWarnings = [];
+        if (explicitOffline || health === 'offline') baseBlocked.push(stateReason || health || 'not_online');
+        else if (isDegraded) dispatchWarnings.push(stateReason || 'degraded');
+
         if (availState.configured) {
-          if (!availState.fresh) baseBlocked.push(availState.missing ? 'available_missing' : 'available_stale');
+          if (availState.missing) baseBlocked.push('available_missing');
           else if (availState.invalid) baseBlocked.push('available_invalid');
           else if (availState.value === false) baseBlocked.push('available_false');
+          else if (!availState.fresh) dispatchWarnings.push('available_stale_using_last');
         }
         if (faultState.configured) {
-          if (!faultState.fresh) baseBlocked.push(faultState.missing ? 'fault_missing' : 'fault_stale');
+          if (faultState.missing) baseBlocked.push('fault_missing');
           else if (faultState.invalid) baseBlocked.push('fault_invalid');
           else if (faultState.value === true) baseBlocked.push('fault_active');
+          else if (!faultState.fresh) dispatchWarnings.push('fault_stale_using_last');
         }
 
         const chargeBlocked = baseBlocked.slice();
         if (!hasChargeSetpoint) chargeBlocked.push('charge_setpoint_missing');
         if (chargeAllowedState.configured) {
-          if (!chargeAllowedState.fresh) chargeBlocked.push(chargeAllowedState.missing ? 'charge_allowed_missing' : 'charge_allowed_stale');
+          if (chargeAllowedState.missing) chargeBlocked.push('charge_allowed_missing');
           else if (chargeAllowedState.invalid) chargeBlocked.push('charge_allowed_invalid');
           else if (chargeAllowedState.value === false) chargeBlocked.push('charge_not_allowed');
+          else if (!chargeAllowedState.fresh) dispatchWarnings.push('charge_allowed_stale_using_last');
         }
-        if (chargeLimitState.configured && !chargeLimitState.fresh) chargeBlocked.push(chargeLimitState.missing ? 'charge_limit_missing' : 'charge_limit_stale');
         if (maxChargeW !== null && maxChargeW <= 0) chargeBlocked.push('charge_limit_zero');
 
         const dischargeBlocked = baseBlocked.slice();
         if (!hasDischargeSetpoint) dischargeBlocked.push('discharge_setpoint_missing');
         if (dischargeAllowedState.configured) {
-          if (!dischargeAllowedState.fresh) dischargeBlocked.push(dischargeAllowedState.missing ? 'discharge_allowed_missing' : 'discharge_allowed_stale');
+          if (dischargeAllowedState.missing) dischargeBlocked.push('discharge_allowed_missing');
           else if (dischargeAllowedState.invalid) dischargeBlocked.push('discharge_allowed_invalid');
           else if (dischargeAllowedState.value === false) dischargeBlocked.push('discharge_not_allowed');
+          else if (!dischargeAllowedState.fresh) dispatchWarnings.push('discharge_allowed_stale_using_last');
         }
-        if (dischargeLimitState.configured && !dischargeLimitState.fresh) dischargeBlocked.push(dischargeLimitState.missing ? 'discharge_limit_missing' : 'discharge_limit_stale');
         if (maxDischargeW !== null && maxDischargeW <= 0) dischargeBlocked.push('discharge_limit_zero');
 
         const chargeDispatchAvailable = chargeBlocked.length === 0;
         const dischargeDispatchAvailable = dischargeBlocked.length === 0;
         const dispatchAvailable = chargeDispatchAvailable || dischargeDispatchAvailable;
 
-        // Expose for VIS rows and the dispatcher. From this version on, status.online
-        // intentionally means fresh online. Degraded/stale systems may still be visible
-        // in the UI, but are not allowed to receive active setpoints.
+        // Expose for VIS rows and the dispatcher. status.online means fresh feedback;
+        // dispatchAvailable is the decisive flag for active control. Degraded/stale systems
+        // may remain dispatchable when no explicit lock/fault is present.
         status.state = health;
         status.degraded = !!isDegraded;
         status.displayOnline = !!isDisplayOnline;
@@ -3886,6 +3882,7 @@ class NexoWattVis extends utils.Adapter {
         status.maxDischargeW = (maxDischargeW !== null) ? maxDischargeW : null;
         status.chargeBlockedReasons = chargeBlocked;
         status.dischargeBlockedReasons = dischargeBlocked;
+        if (dispatchWarnings.length) status.dispatchWarnings = Array.from(new Set(dispatchWarnings));
         if (baseBlocked.length) status.dispatchBlockedReasons = baseBlocked;
         if (!isDisplayOnline) status.offlineReason = stateReason;
         if (isDegraded) status.degradedReason = stateReason;
@@ -3969,8 +3966,8 @@ class NexoWattVis extends utils.Adapter {
         }
 
         // Only fresh-online storages contribute live power values to the farm totals.
-        // Degraded/stale systems stay visible but are removed from active regulation and
-        // from live power aggregation to avoid control based on cached data.
+        // Degraded/stale systems stay visible and may remain dispatchable, but they are
+        // excluded from live power aggregation to avoid reporting cached Istleistung as active power.
         if (!isFreshOnline) {
           statusRows.push(status);
           continue;
@@ -4138,12 +4135,11 @@ try {
         setChargePowerId: String(r.setChargePowerId || '').trim(),
         setDischargePowerId: String(r.setDischargePowerId || '').trim(),
         setSignedPowerId: String(r.setSignedPowerId || '').trim(),
+        invertSetSignedPowerSign: !!r.invertSetSignedPowerSign,
         invertChargeSign: !!r.invertChargeSign,
         invertDischargeSign: !!r.invertDischargeSign,
         maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : null,
         maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : null,
-        maxChargePowerId: String(r.maxChargePowerId || '').trim(),
-        maxDischargePowerId: String(r.maxDischargePowerId || '').trim(),
         availableId: String(r.availableId || '').trim(),
         faultId: String(r.faultId || '').trim(),
         chargeAllowedId: String(r.chargeAllowedId || '').trim(),
@@ -4371,6 +4367,7 @@ try {
         dischargeDispatchAvailable,
         chargeBlockedReasons: Array.isArray(st.chargeBlockedReasons) ? st.chargeBlockedReasons : [],
         dischargeBlockedReasons: Array.isArray(st.dischargeBlockedReasons) ? st.dischargeBlockedReasons : [],
+        dispatchWarnings: Array.isArray(st.dispatchWarnings) ? st.dispatchWarnings : [],
         maxChargeW,
         maxDischargeW,
         chargePowerW,
@@ -4428,7 +4425,11 @@ try {
             base = 1;
           }
 
-          base *= this._sfGetResponseLimitFactor(it, 'discharge', now);
+          // Istleistungs-DPs sind in der Farm ab v0.6.258 reine Mess-/Diagnosewerte.
+          // Sie dürfen die Sollwertverteilung nicht drosseln, damit Systeme auch mit
+          // Signed-Setpoint-only oder selten aktualisierten Istwerten weiterlaufen.
+          const responseLimiterEnabled = !!(this.config && this.config.storageFarm && this.config.storageFarm.enableResponseLimiter === true);
+          if (responseLimiterEnabled) base *= this._sfGetResponseLimitFactor(it, 'discharge', now);
         } else {
           base = 1;
         }
@@ -4636,11 +4637,12 @@ try {
 
       let outSignedW = 0;
       if (s.setSignedPowerId) {
+        // Signed-Setpoint-Konvention: Standard = Laden negativ / Entladen positiv.
+        // Bei Systemen mit umgekehrter Konvention kann separat der Signed-Sollwert invertiert werden.
         if (direction === 'charge') outSignedW = -Math.abs(chargeW);
         else if (direction === 'discharge') outSignedW = +Math.abs(dischargeW);
         else outSignedW = 0;
-        if (direction === 'charge' && s.invertChargeSign) outSignedW = -outSignedW;
-        if (direction === 'discharge' && s.invertDischargeSign) outSignedW = -outSignedW;
+        if (s.invertSetSignedPowerSign) outSignedW = -outSignedW;
       }
 
       const r = {
@@ -4654,6 +4656,7 @@ try {
         maxChargeW: (s.maxChargeW !== null && Number.isFinite(Number(s.maxChargeW))) ? Number(s.maxChargeW) : null,
         maxDischargeW: (s.maxDischargeW !== null && Number.isFinite(Number(s.maxDischargeW))) ? Number(s.maxDischargeW) : null,
         blockedReasons: direction === 'charge' ? (s.chargeBlockedReasons || []) : (direction === 'discharge' ? (s.dischargeBlockedReasons || []) : []),
+        warnings: Array.isArray(s.dispatchWarnings) ? s.dispatchWarnings : [],
         actualChargeW: Number.isFinite(Number(s.chargePowerW)) ? Number(s.chargePowerW) : null,
         actualDischargeW: Number.isFinite(Number(s.dischargePowerW)) ? Number(s.dischargePowerW) : null,
         chargeW,
@@ -4721,6 +4724,7 @@ try {
           maxChargeW: r.maxChargeW,
           maxDischargeW: r.maxDischargeW,
           blockedReasons: r.blockedReasons,
+          warnings: r.warnings,
           soc: r.soc,
           actualChargeW: r.actualChargeW,
           actualDischargeW: r.actualDischargeW,

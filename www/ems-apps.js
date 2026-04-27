@@ -4569,11 +4569,11 @@ function _collectFlowPowerDpIsWFromUI() {
         setChargePowerId: String(r.setChargePowerId || '').trim(),
         setDischargePowerId: String(r.setDischargePowerId || '').trim(),
         setSignedPowerId: String(r.setSignedPowerId || '').trim(),
-        // Feste und dynamische Leistungsgrenzen / Freigaben je Speicher (herstellerneutral)
+        invertSetSignedPowerSign: !!r.invertSetSignedPowerSign,
+        // Feste Leistungsgrenzen / Freigaben je Speicher (herstellerneutral).
+        // Ab v0.6.258: Maximalleistungen sind direkte Eingaben, keine DP-Zuordnung.
         maxChargeW: (r.maxChargeW !== undefined && r.maxChargeW !== null && r.maxChargeW !== '') ? Number(r.maxChargeW) : '',
         maxDischargeW: (r.maxDischargeW !== undefined && r.maxDischargeW !== null && r.maxDischargeW !== '') ? Number(r.maxDischargeW) : '',
-        maxChargePowerId: String(r.maxChargePowerId || '').trim(),
-        maxDischargePowerId: String(r.maxDischargePowerId || '').trim(),
         availableId: String(r.availableId || '').trim(),
         faultId: String(r.faultId || '').trim(),
         chargeAllowedId: String(r.chargeAllowedId || '').trim(),
@@ -4782,6 +4782,16 @@ function _collectFlowPowerDpIsWFromUI() {
       return d;
     };
 
+    const mkGridHelp = (text) => {
+      const d = document.createElement('div');
+      d.style.gridColumn = '1 / -1';
+      d.style.fontSize = '0.76rem';
+      d.style.lineHeight = '1.35';
+      d.style.color = '#9ca3af';
+      d.textContent = text;
+      return d;
+    };
+
     // Storages list
     if (!sf.storages || sf.storages.length === 0) {
       const empty = document.createElement('div');
@@ -4826,9 +4836,6 @@ function _collectFlowPowerDpIsWFromUI() {
         grid.appendChild(mkCheckField('Aktiv', `sf_${idx}_enabled`, s.enabled !== false, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].enabled = !!v; }));
         grid.appendChild(mkTextField('Name', `sf_${idx}_name`, s.name, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].name = v; }, 'z.B. Batterie 1'));
         grid.appendChild(mkNumField('Kapazität (kWh)', `sf_${idx}_cap`, s.capacityKWh, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].capacityKWh = v; }, 'optional'));
-        grid.appendChild(mkNumField('Max. Laden (W)', `sf_${idx}_maxChargeW`, s.maxChargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxChargeW = v; }, 'optional, feste Grenze'));
-        grid.appendChild(mkNumField('Max. Entladen (W)', `sf_${idx}_maxDischargeW`, s.maxDischargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxDischargeW = v; }, 'optional, feste Grenze'));
-
         if (sf.mode === 'groups') {
           grid.appendChild(mkTextField('Gruppe', `sf_${idx}_group`, s.group, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].group = v; }, 'z.B. Gruppe A'));
         }
@@ -4857,17 +4864,23 @@ function _collectFlowPowerDpIsWFromUI() {
         grid.appendChild(mkGridDivider('Sollwerte (Setpoint)'));
 
         grid.appendChild(mkDpField('Sollwert Signed (W)', `sf_${idx}_setSignedPowerId`, s.setSignedPowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].setSignedPowerId = v; }, '(-) laden / (+) entladen'));
+        grid.appendChild(mkCheckField('Vorzeichen Sollwert Signed invertieren', `sf_${idx}_invSetSigned`, !!s.invertSetSignedPowerSign, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].invertSetSignedPowerSign = !!v; }));
         grid.appendChild(mkDpField('Sollwert Laden (W)', `sf_${idx}_setChargePowerId`, s.setChargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].setChargePowerId = v; }, 'nur Laden (optional)'));
         grid.appendChild(mkDpField('Sollwert Entladen (W)', `sf_${idx}_setDischargePowerId`, s.setDischargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].setDischargePowerId = v; }, 'nur Entladen (optional)'));
 
-        // Verfügbarkeit & Grenzen
-        grid.appendChild(mkGridDivider('Verfügbarkeit & Grenzen'));
+        // Feste Leistungsgrenzen
+        grid.appendChild(mkGridDivider('Feste Leistungsgrenzen (direkte Eingabe)'));
+        grid.appendChild(mkGridHelp('Diese Werte begrenzen die Farm-Verteilung pro Speicher. Leer = unbegrenzt, 0 = diese Richtung sperren. Keine DP-Zuordnung nötig.'));
+        grid.appendChild(mkNumField('Max. Beladen (W)', `sf_${idx}_maxChargeW`, s.maxChargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxChargeW = v; }, 'z.B. 50000'));
+        grid.appendChild(mkNumField('Max. Entladen (W)', `sf_${idx}_maxDischargeW`, s.maxDischargeW, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxDischargeW = v; }, 'z.B. 50000'));
+
+        // Verfügbarkeit & Freigaben
+        grid.appendChild(mkGridDivider('Verfügbarkeit & Freigaben'));
+        grid.appendChild(mkGridHelp('Freigabe-DPs sind optional. Leer = freigegeben. Nur zuordnen, wenn das Speichersystem einen echten Status-DP liefert.'));
         grid.appendChild(mkDpField('Verfügbar / Freigabe', `sf_${idx}_availableId`, s.availableId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].availableId = v; }, 'true/1 = verfügbar, false/0 = gesperrt'));
         grid.appendChild(mkDpField('Störung / Fehler', `sf_${idx}_faultId`, s.faultId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].faultId = v; }, 'true/1 = Störung'));
         grid.appendChild(mkDpField('Ladefreigabe', `sf_${idx}_chargeAllowedId`, s.chargeAllowedId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].chargeAllowedId = v; }, 'true/1 = Laden erlaubt'));
         grid.appendChild(mkDpField('Entladefreigabe', `sf_${idx}_dischargeAllowedId`, s.dischargeAllowedId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].dischargeAllowedId = v; }, 'true/1 = Entladen erlaubt'));
-        grid.appendChild(mkDpField('Dynamische max. Ladeleistung (W)', `sf_${idx}_maxChargePowerId`, s.maxChargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxChargePowerId = v; }, 'optional vom System'));
-        grid.appendChild(mkDpField('Dynamische max. Entladeleistung (W)', `sf_${idx}_maxDischargePowerId`, s.maxDischargePowerId, (v) => { const sf2 = _ensureStorageFarmCfg(); sf2.storages[i].maxDischargePowerId = v; }, 'optional vom System'));
 
         right.appendChild(grid);
 
@@ -4911,10 +4924,9 @@ function _collectFlowPowerDpIsWFromUI() {
           setChargePowerId: '',
           setDischargePowerId: '',
           setSignedPowerId: '',
+          invertSetSignedPowerSign: false,
           maxChargeW: '',
           maxDischargeW: '',
-          maxChargePowerId: '',
-          maxDischargePowerId: '',
           availableId: '',
           faultId: '',
           chargeAllowedId: '',

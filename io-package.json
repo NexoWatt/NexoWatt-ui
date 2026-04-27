@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.257",
+    "version": "0.6.258",
     "news": {
+      "0.6.258": {
+        "en": "StorageFarm: dispatch remains system-neutral with signed-DP-only systems and slowly updating measurements. Availability/fault DPs are optional, per-storage max powers are entered directly, and dynamic max-power DP mappings are no longer used as hard farm limits.",
+        "de": "Speicherfarm: Dispatch bleibt herstellerneutral auch mit Signed-DP-only und selten aktualisierten Messwerten regelbar. Freigabe-/Stör-DPs sind optional, Maximalleistungen werden direkt je Speicher eingetragen, und dynamische Max-Leistungs-DP-Zuordnungen werden nicht mehr als harte Farm-Grenzen verwendet."
+      },
       "0.6.257": {
         "en": "StorageFarm: hardened system-neutral farm dispatch. Degraded/stale/faulted storages are excluded from active control and zeroed, per-storage charge/discharge limits and availability/fault signals are supported, and active farm mode no longer falls back to a single storage target unless explicitly allowed.",
         "de": "Speicherfarm: herstellerneutrale Farm-Dispatch-Logik gehärtet. Degraded/stale/gestörte Speicher werden aus der aktiven Regelung genommen und auf 0 W gesetzt, Lade-/Entladegrenzen sowie Verfügbarkeits-/Störungssignale je Speicher werden unterstützt, und der aktive Farmbetrieb fällt nicht mehr ungeprüft auf einen Einzel-Sollwert zurück.",
@@ -1798,8 +1802,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.257",
+  "version": "0.6.258",
   "news": {
+    "0.6.258": {
+      "en": "StorageFarm: dispatch remains system-neutral with signed-DP-only systems and slowly updating measurements. Availability/fault DPs are optional, per-storage max powers are entered directly, and dynamic max-power DP mappings are no longer used as hard farm limits.",
+      "de": "Speicherfarm: Dispatch bleibt herstellerneutral auch mit Signed-DP-only und selten aktualisierten Messwerten regelbar. Freigabe-/Stör-DPs sind optional, Maximalleistungen werden direkt je Speicher eingetragen, und dynamische Max-Leistungs-DP-Zuordnungen werden nicht mehr als harte Farm-Grenzen verwendet."
+    },
     "0.6.256": {
       "en": "Heating rod: energy flow power display, stable quick-control gauge, and optional zero/minus feed-in PV curtailment logic.",
       "de": "Heizstab: Leistungsanzeige im Energiefluss, stabiler Schnellsteuerungs-Ring und optionale 0-/Minus-Einspeise-Logik zur Nutzung abgeregelter PV.",

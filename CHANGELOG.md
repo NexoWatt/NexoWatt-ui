@@ -1,3 +1,10 @@
+## 0.6.258
+
+- Speicherfarm: Freigabe-/Stör-DPs bleiben optional; leer bedeutet freigegeben. Stale/degraded Messwerte blockieren den Dispatch nicht mehr automatisch, solange keine explizite Sperre/Störung vorliegt.
+- Speicherfarm: Istleistungs-DPs sind für die Farm-Verteilung nur noch Mess-/Diagnosewerte; die Sollwertverteilung läuft auch mit Signed-DP-only Systemen weiter.
+- Speicherfarm: Maximale Be-/Entladeleistung wird je Speicher als direkte Eingabe gepflegt; dynamische Max-Leistungs-DP-Zuordnungen wurden aus der harten Dispatch-Logik entfernt.
+- UI: neuer klarer Bereich „Feste Leistungsgrenzen (direkte Eingabe)“ und separate Vorzeichenoption für Signed-Sollwerte.
+
 ## 0.6.257
 
 - Speicherfarm: herstellerneutrale Dispatch-Logik gehärtet; degradierte, stale oder gestörte Speicher werden aus der aktiven Regelung genommen und auf 0 W gesetzt.
