@@ -1673,6 +1673,8 @@ function _collectFlowPowerDpIsWFromUI() {
     h.devices = Array.isArray(h.devices) ? h.devices : [];
     h.storageReserveW = Math.max(0, Math.round(Number(h.storageReserveW ?? 1000) || 1000));
     h.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number(h.storageTargetSocPct ?? 90) || 90)));
+    const hMinPvRaw = Number(h.minPvPowerW ?? h.pvAutoMinPvPowerW ?? h.minCurrentPvW);
+    h.minPvPowerW = Math.max(0, Math.round(Number.isFinite(hMinPvRaw) ? hMinPvRaw : 800));
     h.zeroExport = (h.zeroExport && typeof h.zeroExport === 'object') ? h.zeroExport : {};
     const z = h.zeroExport;
     const zn = (key, def, min, max, integer = true) => {
@@ -2064,6 +2066,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
     const grpCoord = _mkCfgGroup('Speicher-Koordination');
     grpCoord.body.appendChild(_mkCfgField('Speicher-Reserve (W)', _mkCfgInput('number', cfg.storageReserveW, (v) => { cfg.storageReserveW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'PV-Auto lässt diese Leistung für die Speicherladung frei, solange der Speicher unter dem Ziel-SoC liegt.'));
+    grpCoord.body.appendChild(_mkCfgField('PV-Auto erst ab PV-Erzeugung (W)', _mkCfgInput('number', cfg.minPvPowerW, (v) => { cfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Unterhalb dieser aktuell erkannten PV-Leistung regelt die App den Heizstab nicht und schreibt auch kein automatisches AUS. Manuelle Schaltungen bleiben unverändert. Empfehlung: 800 W.'));
     grpCoord.body.appendChild(_mkCfgField('Reserve bis SoC (%)', _mkCfgInput('number', cfg.storageTargetSocPct, (v) => { cfg.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '130px' }), 'Ab diesem Speicher-SoC darf der Heizstab den PV-Überschuss ohne Reserve nutzen.'));
     const coordHint = document.createElement('div');
     coordHint.className = 'nw-config-field-hint';
@@ -2077,7 +2080,7 @@ function _collectFlowPowerDpIsWFromUI() {
     grpZero.body.appendChild(_mkCfgField('Erlaubte Einspeisung (W)', _mkCfgInput('number', zeroCfg.feedInLimitW, (v) => { zeroCfg.feedInLimitW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Bei -1 kW Einspeiselimit bitte 1000 eintragen. Bei echter 0-Einspeisung 0 eintragen.'));
     grpZero.body.appendChild(_mkCfgField('Einspeise-Toleranz (W)', _mkCfgInput('number', zeroCfg.feedInToleranceW, (v) => { zeroCfg.feedInToleranceW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Ab diesem Korridor gilt der Netzpunkt als am Einspeiselimit.'));
     grpZero.body.appendChild(_mkCfgField('Ziel-Einspeisepuffer (W)', _mkCfgInput('number', zeroCfg.targetExportBufferW, (v) => { zeroCfg.targetExportBufferW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Sicherheitsabstand: die Testlast startet erst, wenn am Einspeiselimit noch dieser Puffer plausibel vorhanden ist.'));
-    grpZero.body.appendChild(_mkCfgField('Mindest-PV aktuell (W)', _mkCfgInput('number', zeroCfg.minPvPowerW, (v) => { zeroCfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Unterhalb dieser aktuell gemessenen PV-Leistung wird keine Testlast zugeschaltet.'));
+    grpZero.body.appendChild(_mkCfgField('Mindest-PV für Testlast (W)', _mkCfgInput('number', zeroCfg.minPvPowerW, (v) => { zeroCfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Zusätzliche Freigabe für 0-/Minus-Einspeise-Proben. Die allgemeine PV-Auto-Schwelle oben gilt zusätzlich.'));
     grpZero.body.appendChild(_mkCfgField('Forecast erforderlich', _mkCfgToggle(zeroCfg.requireForecast !== false, (v) => { zeroCfg.requireForecast = !!v; setDirty(); }), 'Forecast ist nur Freigabe/Plausibilität. Der Netzpunkt entscheidet danach, ob die Stufe bleiben darf.'));
     grpZero.body.appendChild(_mkCfgField('Forecast Peak min. (W)', _mkCfgInput('number', zeroCfg.minForecastPeakW, (v) => { zeroCfg.minForecastPeakW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Mindestens erwartete PV-Spitze innerhalb des Forecast-Zeitraums.'));
     grpZero.body.appendChild(_mkCfgField('Forecast 6h min. (kWh)', _mkCfgInput('number', zeroCfg.minForecastKwh6h, (v) => { zeroCfg.minForecastKwh6h = Math.max(0, Number(v) || 0); setDirty(); }, { min: 0, step: 0.1, width: '150px' }), 'Alternative Freigabe über erwartete Energie in den nächsten Stunden.'));

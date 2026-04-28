@@ -1,3 +1,9 @@
+## 0.6.261
+
+- Heizstab: Globale Mindest-PV-Freigabe für PV-Auto ergänzt. Unterhalb der Schwelle beobachtet die App nur noch und schreibt kein automatisches AUS, damit manuelle KNX-/ioBroker-Schaltungen nicht überschrieben werden.
+- Heizstab: 0-/Minus-Einspeise-Logik blockiert normale PV-Überschüsse bei aktivem Speicher-Vorrang nicht mehr; der Speicher-Vorrang sperrt nur zusätzliche Testlast für verdeckte/abgeregelte PV.
+- Heizstab: Forecast-Snapshot und aktuelle PV-Leistung werden robuster gelesen (interner Forecast-Snapshot, ps.pvW/Charging-Management-Fallbacks); Diagnose um PV-Auto-Freigabe erweitert.
+
 ## 0.6.260
 
 - Historie/Influx-Hotfix: Zusätzliche Erzeuger/Verbraucher aus dem Energiefluss werden beim Speichern im App-Center sofort als kanonische `historie.producers/consumers.*.powerW`-Datenpunkte angelegt und für InfluxDB aktiviert. Kein Adapter-Neustart mehr notwendig.

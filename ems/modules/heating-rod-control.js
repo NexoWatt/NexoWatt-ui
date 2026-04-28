@@ -369,6 +369,9 @@ class HeatingRodControlModule extends BaseModule {
         await mk('heatingRod.summary.zeroExportPvNowW', 'Zero/minus feed-in PV now (W)', 'number', 'value.power', 'W');
         await mk('heatingRod.summary.zeroExportForecastOk', 'Zero/minus feed-in forecast ok', 'boolean', 'indicator');
         await mk('heatingRod.summary.zeroExportFeedInAtLimit', 'Zero/minus feed-in limit reached', 'boolean', 'indicator');
+        await mk('heatingRod.summary.pvAutomationMinW', 'PV-Auto minimum PV power (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.pvAutomationPvNowW', 'PV-Auto current PV power used for gate (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.pvAutomationAllowed', 'PV-Auto allowed by minimum PV power', 'boolean', 'indicator');
         await mk('heatingRod.summary.lastUpdate', 'Last update', 'number', 'value.time');
         await mk('heatingRod.summary.status', 'Status', 'string', 'text');
 
@@ -639,6 +642,26 @@ class HeatingRodControlModule extends BaseModule {
         };
     }
 
+    _getPvAutomationMinW() {
+        const cfg = this._getCfg();
+
+        // Global PV-Auto enable threshold. This is intentionally separate from
+        // zeroExport.minPvPowerW: the latter only guards additional probe/test loads
+        // for hidden/abgeregelte PV. If no explicit value exists yet, use 800 W.
+        const candidates = [
+            cfg.minPvPowerW,
+            cfg.pvAutoMinPvPowerW,
+            cfg.minCurrentPvW
+        ];
+
+        for (const raw of candidates) {
+            if (raw === null || raw === undefined || raw === '') continue;
+            const n = Number(raw);
+            if (Number.isFinite(n)) return Math.max(0, Math.round(clamp(n, 0, 1000000)));
+        }
+        return 800;
+    }
+
     _readCacheRaw(key, fallback = null) {
         if (!key) return fallback;
         try {
@@ -653,7 +676,16 @@ class HeatingRodControlModule extends BaseModule {
     }
 
     _readPvNowW(staleMs) {
-        const basePv = this._readNumberAny(['pvPower', 'productionTotal', 'ps.pvPowerW'], staleMs, null);
+        const basePv = this._readNumberAny([
+            'pvPower',
+            'productionTotal',
+            // PeakShaving registers the current PV input as ps.pvW. Keep the old
+            // ps.pvPowerW alias as compatibility fallback.
+            'ps.pvW',
+            'ps.pvPowerW',
+            'chargingManagement.control.pvPowerW',
+            'cm.pvPowerW'
+        ], staleMs, null);
         const farmPv = this._readNumberAny(['storageFarm.totalPvPowerW'], staleMs, null);
         let pv = 0;
         if (typeof basePv === 'number' && Number.isFinite(basePv)) pv = Math.max(pv, basePv);
@@ -662,6 +694,24 @@ class HeatingRodControlModule extends BaseModule {
     }
 
     _readForecastSnapshot() {
+        // Prefer the in-memory snapshot from PvForecastModule. It is updated in the
+        // same ModuleManager cycle before Heizstab, so it is fresher and more reliable
+        // than reading the already-published ioBroker states back from cache.
+        try {
+            const snap = this.adapter && this.adapter._pvForecast;
+            if (snap && typeof snap === 'object' && snap.ts) {
+                return {
+                    valid: !!snap.valid,
+                    peakW: Math.max(0, num(snap.peakWNext24h, 0)),
+                    kwh6h: Math.max(0, num(snap.kwhNext6h, 0)),
+                    kwh12h: Math.max(0, num(snap.kwhNext12h, 0)),
+                    kwh24h: Math.max(0, num(snap.kwhNext24h, 0)),
+                };
+            }
+        } catch (_e) {
+            // fall through to state-cache fallback
+        }
+
         const boolVal = (key) => {
             const raw = this._readCacheRaw(key, null);
             if (raw === true || raw === 1 || raw === '1') return true;
@@ -1013,8 +1063,12 @@ class HeatingRodControlModule extends BaseModule {
             };
         }
 
-        if (info && info.active && info.storageReady === false && Math.max(currentStage, observedStage, targetStage) > 0) {
-            const reduceBase = Math.max(currentStage, observedStage, targetStage);
+        // Speicher-Vorrang darf nur die zusätzliche 0-Einspeise-Testlast sperren.
+        // Normaler, am Netzpunkt/Speicherladung rekonstruierter PV-Überschuss darf weiter genutzt
+        // werden. Deshalb reduzieren wir hier nur, wenn aus der normalen PV-Bilanz kein Ziel mehr
+        // übrig ist (targetStage <= 0), aber noch eine physische Stufe läuft.
+        if (info && info.active && info.storageReady === false && targetStage <= 0 && Math.max(currentStage, observedStage) > 0) {
+            const reduceBase = Math.max(currentStage, observedStage);
             targetStage = Math.min(targetStage, this._previousPhysicalStageBelow(d, reduceBase));
             st.zeroCooldownUntilMs = now + Math.max(0, cfg.cooldownSec * 1000);
             st.zeroLastStepDownMs = now;
@@ -1209,6 +1263,15 @@ class HeatingRodControlModule extends BaseModule {
 
         const pvBase = this._computeBasePvAvailableW(currentHeatingRodW);
         const zeroExportInfo = this._computeZeroExportInfo(pvBase);
+        const minPvAutomationW = this._getPvAutomationMinW();
+        const staleTimeoutSec = clamp(num(this._getCfg().staleTimeoutSec, 15), 1, 3600);
+        const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
+        const pvNowForAutomationW = Math.max(
+            this._readPvNowW(staleMs),
+            Math.round(num(pvBase.pvCapW, 0)),
+            Math.round(num(zeroExportInfo && zeroExportInfo.pvNowW, 0))
+        );
+        const pvAutomationAllowedByMin = minPvAutomationW <= 0 || pvNowForAutomationW >= minPvAutomationW;
         const thermalUsedW = Math.max(0, num(this.adapter && this.adapter._thermalBudgetUsedW, 0));
         let remainingW = Math.max(0, num(pvBase.availableW, 0) - thermalUsedW);
         let appliedTotalW = 0;
@@ -1415,6 +1478,25 @@ class HeatingRodControlModule extends BaseModule {
                 continue;
             }
 
+            // Global PV-Auto gate: below the configured current PV generation threshold
+            // the app must not regulate this device at all. This keeps manual/KNX/ioBroker
+            // switching untouched and prevents the EMS from automatically writing OFF.
+            if (pvAutomationActive && !pvAutomationAllowedByMin) {
+                const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
+                    ? Math.max(0, measuredW)
+                    : Math.max(0, feedback.appliedPowerW);
+                budgetUsedW += Math.round(usedW);
+                remainingW = Math.max(0, remainingW - usedW);
+                appliedTotalW += Math.round(usedW);
+                this._setStageCtlTarget(d.id, observedStage, observedStage);
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, observedStage);
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, this._sumStagePower(d, observedStage));
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.appliedW`, Math.round(usedW));
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, `pv_min_not_reached_manual_allowed_${pvNowForAutomationW}of${minPvAutomationW}W`);
+                await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, 'manual_allowed');
+                continue;
+            }
+
             if (d.wiredStages < 1) {
                 const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                     ? Math.max(0, measuredW)
@@ -1506,8 +1588,14 @@ class HeatingRodControlModule extends BaseModule {
         await this._setStateIfChanged('heatingRod.summary.zeroExportPvNowW', Math.round(num(zeroExportInfo.pvNowW, 0)));
         await this._setStateIfChanged('heatingRod.summary.zeroExportForecastOk', !!zeroExportInfo.forecastOk);
         await this._setStateIfChanged('heatingRod.summary.zeroExportFeedInAtLimit', !!zeroExportInfo.feedInAtLimit);
+        await this._setStateIfChanged('heatingRod.summary.pvAutomationMinW', Math.round(num(minPvAutomationW, 0)));
+        await this._setStateIfChanged('heatingRod.summary.pvAutomationPvNowW', Math.round(num(pvNowForAutomationW, 0)));
+        await this._setStateIfChanged('heatingRod.summary.pvAutomationAllowed', !!pvAutomationAllowedByMin);
         await this._setStateIfChanged('heatingRod.summary.debugJson', JSON.stringify({
             source: pvBase.source,
+            pvAutomationMinW: Math.round(num(minPvAutomationW, 0)),
+            pvAutomationPvNowW: Math.round(num(pvNowForAutomationW, 0)),
+            pvAutomationAllowed: !!pvAutomationAllowedByMin,
             gridKnown: !!pvBase.gridKnown,
             gridW: pvBase.gridW,
             importW: Math.round(num(pvBase.importW, 0)),
@@ -1542,7 +1630,7 @@ class HeatingRodControlModule extends BaseModule {
             },
         }));
         await this._setStateIfChanged('heatingRod.summary.lastUpdate', now);
-        await this._setStateIfChanged('heatingRod.summary.status', (this._devices && this._devices.length) ? `ok_${pvBase.source}${pvBase.forceOff ? '_storage_protect' : ''}${pvBase.nonPvEnergyActive ? '_pv_only_protect' : ''}${zeroExportInfo.active ? `_zero_${String(zeroExportInfo.reason || 'active')}` : ''}` : 'no_devices');
+        await this._setStateIfChanged('heatingRod.summary.status', (this._devices && this._devices.length) ? `ok_${pvBase.source}${!pvAutomationAllowedByMin ? '_pv_min_block' : ''}${pvBase.forceOff ? '_storage_protect' : ''}${pvBase.nonPvEnergyActive ? '_pv_only_protect' : ''}${zeroExportInfo.active ? `_zero_${String(zeroExportInfo.reason || 'active')}` : ''}` : 'no_devices');
     }
 }
 
