@@ -1,8 +1,9 @@
-## 0.6.259
+## 0.6.260
 
-- Speicherfarm-Hotfix: Leere direkte Max.-Lade-/Entladefelder werden jetzt korrekt als unbegrenzt behandelt und nicht mehr als 0 W.
-- Dadurch werden Signed-DP-only-Speicher mit leerer Leistungsgrenze nicht mehr fälschlich als gesperrt / nicht regelbar bewertet.
-- VIS-Status unterscheidet jetzt zwischen Online/Standby, Online/Bereit, Online/prüfen und echter Sperre.
+- Historie/Influx-Hotfix: Zusätzliche Erzeuger/Verbraucher aus dem Energiefluss werden beim Speichern im App-Center sofort als kanonische `historie.producers/consumers.*.powerW`-Datenpunkte angelegt und für InfluxDB aktiviert. Kein Adapter-Neustart mehr notwendig.
+- Historie/Influx: Optional-Slots werden robuster aus `datapoints.*Power` und alten `vis.flowSlots.*`-Strukturen erkannt.
+- Historie/API: Cache wird nach App-Center-Speichern/Import geleert und die Historie-Stati werden sofort einmal geschrieben.
+- Speicherfarm-Hotfix aus 0.6.259 bleibt enthalten: Leere direkte Max.-Lade-/Entladefelder bedeuten unbegrenzt und sperren Signed-DP-only-Speicher nicht.
 
 ## 0.6.258
 

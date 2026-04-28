@@ -6882,16 +6882,16 @@ async migrateNativeConfig() {
       const MAX_PRODUCERS = 5;
 
       for (let i = 1; i <= MAX_CONSUMERS; i++) {
-        const dpKey = `consumer${i}Power`;
-        const mapped = String(dps[dpKey] || '').trim();
+        const info = this._nwGetFlowSlotInfo ? this._nwGetFlowSlotInfo('consumers', i) : null;
+        const mapped = info && String(info.objectId || '').trim();
         if (!mapped) {
           await delRec(`historie.consumers.c${i}`);
         }
       }
 
       for (let i = 1; i <= MAX_PRODUCERS; i++) {
-        const dpKey = `producer${i}Power`;
-        const mapped = String(dps[dpKey] || '').trim();
+        const info = this._nwGetFlowSlotInfo ? this._nwGetFlowSlotInfo('producers', i) : null;
+        const mapped = info && String(info.objectId || '').trim();
         if (!mapped) {
           await delRec(`historie.producers.p${i}`);
         }
@@ -9471,6 +9471,20 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           }
         } catch (_e) {}
 
+        // Historie/Influx: when optional Verbraucher/Erzeuger are added in the App-Center,
+        // create the canonical nexowatt-ui.0.historie.* states immediately. Previously this
+        // only happened on adapter startup, so newly connected producer slots appeared in
+        // the History UI but had no object/influx binding until a restart.
+        try {
+          if (this._nwHistoryApiCache instanceof Map) this._nwHistoryApiCache.clear();
+          if (this._nwHistoryApiInflight instanceof Map) this._nwHistoryApiInflight.clear();
+          await this.ensureHistorieExportStates();
+          await this.updateHistorieExportStates('config-save');
+          this.startHistorieExportTimer();
+        } catch (e) {
+          try { this.log.debug('Historie refresh after config save failed: ' + (e && e.message ? e.message : e)); } catch (_e2) {}
+        }
+
         // StorageFarm: derived status + scheduler in sync after installer save
         try { await this.ensureStorageFarmStates(); } catch (_e) {}
         try { await this.syncStorageFarmDefaultsToStates(); } catch (_e) {}
@@ -9655,6 +9669,17 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
             await this.subscribeConfiguredStates();
           }
         } catch (_e) {}
+
+        // Historie/Influx: provision canonical optional series immediately after import.
+        try {
+          if (this._nwHistoryApiCache instanceof Map) this._nwHistoryApiCache.clear();
+          if (this._nwHistoryApiInflight instanceof Map) this._nwHistoryApiInflight.clear();
+          await this.ensureHistorieExportStates();
+          await this.updateHistorieExportStates('import');
+          this.startHistorieExportTimer();
+        } catch (e) {
+          try { this.log.debug('Historie refresh after import failed: ' + (e && e.message ? e.message : e)); } catch (_e2) {}
+        }
 
         // StorageFarm: derived status + scheduler in sync after import
         try { await this.ensureStorageFarmStates(); } catch (_e) {}
@@ -11250,21 +11275,21 @@ app.get('/api/history', async (req, res) => {
         const MAX_PRODUCERS = 5;
 
         for (let i = 1; i <= MAX_CONSUMERS; i++) {
-          const dpKey = `consumer${i}Power`;
-          const mapped = String(dps[dpKey] || '').trim();
+          const info = this._nwGetFlowSlotInfo ? this._nwGetFlowSlotInfo('consumers', i) : null;
+          const mapped = info && String(info.objectId || '').trim();
           if (!mapped) continue;
-          const slotCfg = (Array.isArray(fs.consumers) && fs.consumers[i - 1]) ? fs.consumers[i - 1] : null;
-          const name = (slotCfg && slotCfg.name) ? String(slotCfg.name) : `Verbraucher ${i}`;
+          const dpKey = info && info.key ? info.key : `consumer${i}Power`;
+          const name = info && info.name ? String(info.name) : `Verbraucher ${i}`;
           const candidates = this._nwGetHistoryDpCandidates(dpKey);
           extraConsumerReq.push({ idx: i, name, candidates });
         }
 
         for (let i = 1; i <= MAX_PRODUCERS; i++) {
-          const dpKey = `producer${i}Power`;
-          const mapped = String(dps[dpKey] || '').trim();
+          const info = this._nwGetFlowSlotInfo ? this._nwGetFlowSlotInfo('producers', i) : null;
+          const mapped = info && String(info.objectId || '').trim();
           if (!mapped) continue;
-          const slotCfg = (Array.isArray(fs.producers) && fs.producers[i - 1]) ? fs.producers[i - 1] : null;
-          const name = (slotCfg && slotCfg.name) ? String(slotCfg.name) : `Erzeuger ${i}`;
+          const dpKey = info && info.key ? info.key : `producer${i}Power`;
+          const name = info && info.name ? String(info.name) : `Erzeuger ${i}`;
           const candidates = this._nwGetHistoryDpCandidates(dpKey);
           extraProducerReq.push({ idx: i, name, candidates });
         }
@@ -13135,6 +13160,13 @@ app.get('/config', (req, res) => {
               const key = (kind === 'consumers') ? `consumer${i}Power` : `producer${i}Power`;
               let stateKey = key;
               let mapped = !!String(dps[key] || '').trim();
+              try {
+                const info = this._nwGetFlowSlotInfo ? this._nwGetFlowSlotInfo(kind, i) : null;
+                if (info && String(info.objectId || '').trim()) {
+                  mapped = true;
+                  stateKey = info.stateKey || key;
+                }
+              } catch (_e) {}
 
               // Legacy: älteres Setup hatte Heizung separat (consumptionHeating). Wenn consumer1Power leer ist,
               // nutzen wir es als Slot 1 (Anzeige) ohne die Konfiguration zu verändern.
@@ -15104,35 +15136,132 @@ return res.json(out);
 
 
 
+  _nwNormalizeFlowSlotKind(kind) {
+    const k = String(kind || '').trim().toLowerCase();
+    return k.startsWith('prod') ? 'producers' : 'consumers';
+  }
+
+  _nwFlowSlotCount(kind) {
+    return this._nwNormalizeFlowSlotKind(kind) === 'producers' ? 5 : 10;
+  }
+
+  _nwFlowSlotKey(kind, index) {
+    const k = this._nwNormalizeFlowSlotKind(kind);
+    const idx = Math.max(1, Math.round(Number(index) || 1));
+    return k === 'producers' ? `producer${idx}Power` : `consumer${idx}Power`;
+  }
+
+  _nwGetFlowSlotsRoot() {
+    try {
+      const cfg = (this.config && typeof this.config === 'object') ? this.config : {};
+      const vis = (cfg.vis && typeof cfg.vis === 'object') ? cfg.vis : {};
+      if (vis.flowSlots && typeof vis.flowSlots === 'object') return vis.flowSlots;
+      if (cfg.flowSlots && typeof cfg.flowSlots === 'object') return cfg.flowSlots;
+    } catch (_e) {}
+    return {};
+  }
+
+  _nwFlowSlotPowerIdFromSlot(slot) {
+    try {
+      if (!slot || typeof slot !== 'object') return '';
+      const candidates = [
+        slot.objectId,
+        slot.powerReadId,
+        slot.powerObjectId,
+        slot.powerId,
+        slot.powerWId,
+        slot.powerDpId,
+        slot.powerDp,
+        slot.datapointId,
+        slot.dataPointId,
+        slot.stateId,
+        slot.dpId,
+        slot.dp,
+      ];
+      for (const c of candidates) {
+        const id = String(c || '').trim();
+        if (id) return id;
+      }
+    } catch (_e) {}
+    return '';
+  }
+
+  _nwGetFlowSlotInfo(kind, index) {
+    const k = this._nwNormalizeFlowSlotKind(kind);
+    const idx = Math.max(1, Math.min(this._nwFlowSlotCount(k), Math.round(Number(index) || 1)));
+    const key = this._nwFlowSlotKey(k, idx);
+    const dps = (this.config && this.config.datapoints && typeof this.config.datapoints === 'object') ? this.config.datapoints : {};
+    const fsRoot = this._nwGetFlowSlotsRoot();
+    const list = Array.isArray(fsRoot[k]) ? fsRoot[k] : [];
+    const slot = (list[idx - 1] && typeof list[idx - 1] === 'object') ? list[idx - 1] : {};
+
+    let objectId = String(dps[key] || '').trim();
+    let source = objectId ? 'datapoints' : '';
+
+    // Backward compatibility / robustness: older exports and some quick-setup helpers
+    // stored the measurement DP directly inside vis.flowSlots.* instead of datapoints.*.
+    // Treat that as mapped as well so subscription, canonical Historie-DPs and Influx
+    // provisioning stay in sync immediately after a slot is connected.
+    if (!objectId) {
+      objectId = this._nwFlowSlotPowerIdFromSlot(slot);
+      if (objectId) source = 'flowSlots';
+    }
+
+    const defaultName = k === 'producers' ? `Erzeuger ${idx}` : (idx === 1 ? 'Heizung/Wärmepumpe' : `Verbraucher ${idx}`);
+    const name = String(slot.name || '').trim() || defaultName;
+    const stateKey = String(slot.stateKey || slot.dpKey || key || '').trim() || key;
+
+    return {
+      kind: k,
+      index: idx,
+      key,
+      stateKey,
+      objectId,
+      mapped: !!objectId,
+      source,
+      name,
+      slot,
+    };
+  }
+
   prepareFlowSlots(flowSlotsCfg) {
     try {
-      const dps = (this.config && this.config.datapoints) || {};
       const out = [];
-
+      const seen = new Set();
       const counts = { consumers: 10, producers: 5 };
+
+      const add = (objectId, stateKey) => {
+        const id = String(objectId || '').trim();
+        const key = String(stateKey || '').trim();
+        if (!id || !key) return;
+        if (id.startsWith(this.namespace + '.')) return;
+        const sig = `${id}|${key}`;
+        if (seen.has(sig)) return;
+        seen.add(sig);
+        out.push({ objectId: id, stateKey: key });
+      };
+
       for (const kind of Object.keys(counts)) {
         const count = counts[kind] || 0;
         for (let i = 1; i <= count; i++) {
-          const dpKey = kind === 'consumers' ? `consumer${i}Power` : `producer${i}Power`;
-          const objectId = String(dps[dpKey] || '').trim();
-          if (!objectId) continue;
-          if (objectId.startsWith(this.namespace + '.')) continue;
-          out.push({ objectId, stateKey: dpKey });
+          const info = this._nwGetFlowSlotInfo(kind, i);
+          if (info && info.objectId) add(info.objectId, info.stateKey || info.key);
         }
       }
 
-      // Backward compatibility: if objectIds were stored directly inside flowSlots
-      if (flowSlotsCfg && typeof flowSlotsCfg === 'object') {
+      // Backward compatibility: caller-supplied flowSlots object may contain direct IDs.
+      const cfg = (this.config && typeof this.config === 'object') ? this.config : {};
+      const vis = (cfg.vis && typeof cfg.vis === 'object') ? cfg.vis : {};
+      const roots = [flowSlotsCfg, vis.flowSlots, cfg.flowSlots].filter(r => r && typeof r === 'object');
+      for (const root of roots) {
         for (const kind of ['consumers', 'producers']) {
-          const list = Array.isArray(flowSlotsCfg[kind]) ? flowSlotsCfg[kind] : [];
-          for (const slot of list) {
-            const objectId = String(slot && slot.objectId ? slot.objectId : '').trim();
-            const stateKey = String(slot && slot.stateKey ? slot.stateKey : (slot && slot.dpKey ? slot.dpKey : '')).trim();
-            if (!objectId || !stateKey) continue;
-            if (objectId.startsWith(this.namespace + '.')) continue;
-            if (!out.some(x => x.objectId === objectId && x.stateKey === stateKey)) {
-              out.push({ objectId, stateKey });
-            }
+          const list = Array.isArray(root[kind]) ? root[kind] : [];
+          for (let pos = 0; pos < list.length; pos++) {
+            const slot = list[pos];
+            const objectId = this._nwFlowSlotPowerIdFromSlot(slot);
+            const fallbackKey = this._nwFlowSlotKey(kind, pos + 1);
+            const stateKey = String(slot && (slot.stateKey || slot.dpKey) || fallbackKey).trim();
+            add(objectId, stateKey);
           }
         }
       }
@@ -16466,10 +16595,6 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
 
     // Dynamic: optional consumers/producers from Energiefluss-Monitor
-    const vis = (this.config && this.config.vis) || {};
-    const fs = (vis && vis.flowSlots && typeof vis.flowSlots === 'object') ? vis.flowSlots : {};
-    const dps = (this.config && this.config.datapoints) || {};
-
     await ensureChannel('historie.consumers', 'Verbraucher (Energiefluss)');
     await ensureChannel('historie.producers', 'Erzeuger (Energiefluss)');
 
@@ -16477,21 +16602,19 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const MAX_PRODUCERS = 5;
 
     for (let i = 1; i <= MAX_CONSUMERS; i++) {
-      const dpKey = `consumer${i}Power`;
-      const mapped = String(dps[dpKey] || '').trim();
+      const info = this._nwGetFlowSlotInfo ? this._nwGetFlowSlotInfo('consumers', i) : null;
+      const mapped = info && String(info.objectId || '').trim();
       if (!mapped) continue;
-      const slotCfg = (Array.isArray(fs.consumers) && fs.consumers[i - 1]) ? fs.consumers[i - 1] : null;
-      const label = (slotCfg && slotCfg.name) ? String(slotCfg.name) : `Verbraucher ${i}`;
+      const label = info && info.name ? String(info.name) : `Verbraucher ${i}`;
       await ensureChannel(`historie.consumers.c${i}`, label);
       await ensureState(`historie.consumers.c${i}.powerW`, `${label} Leistung`, 'value.power', 'W');
     }
 
     for (let i = 1; i <= MAX_PRODUCERS; i++) {
-      const dpKey = `producer${i}Power`;
-      const mapped = String(dps[dpKey] || '').trim();
+      const info = this._nwGetFlowSlotInfo ? this._nwGetFlowSlotInfo('producers', i) : null;
+      const mapped = info && String(info.objectId || '').trim();
       if (!mapped) continue;
-      const slotCfg = (Array.isArray(fs.producers) && fs.producers[i - 1]) ? fs.producers[i - 1] : null;
-      const label = (slotCfg && slotCfg.name) ? String(slotCfg.name) : `Erzeuger ${i}`;
+      const label = info && info.name ? String(info.name) : `Erzeuger ${i}`;
       await ensureChannel(`historie.producers.p${i}`, label);
       await ensureState(`historie.producers.p${i}.powerW`, `${label} Leistung`, 'value.power', 'W');
     }
@@ -16926,13 +17049,17 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     }
 
-    // Dynamic slots (only if the corresponding cache entries exist)
+    // Dynamic slots (only if mapped and the corresponding cache entries exist)
     for (let i = 1; i <= 10; i++) {
-      const v = this._nwGetNumberFromCache(`consumer${i}Power`);
+      const info = this._nwGetFlowSlotInfo ? this._nwGetFlowSlotInfo('consumers', i) : null;
+      if (!info || !String(info.objectId || '').trim()) continue;
+      const v = this._nwGetNumberFromCache(info.stateKey || info.key || `consumer${i}Power`);
       if (Number.isFinite(v)) this._nwSetHistorieValue(`historie.consumers.c${i}.powerW`, Math.abs(v), now, 0);
     }
     for (let i = 1; i <= 5; i++) {
-      const v = this._nwGetNumberFromCache(`producer${i}Power`);
+      const info = this._nwGetFlowSlotInfo ? this._nwGetFlowSlotInfo('producers', i) : null;
+      if (!info || !String(info.objectId || '').trim()) continue;
+      const v = this._nwGetNumberFromCache(info.stateKey || info.key || `producer${i}Power`);
       if (Number.isFinite(v)) this._nwSetHistorieValue(`historie.producers.p${i}.powerW`, Math.abs(v), now, 0);
     }
   }
@@ -17331,6 +17458,25 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const explicitForced = raw.startsWith('!') ? this._nwTrimId(raw.slice(1)) : '';
     const explicit = this._nwTrimId(raw);
     const canon = this._nwTrimId(this._nwGetCanonicalHistorieId(name));
+    const liveMapped = (() => {
+      try {
+        const n = String(name || '');
+        const mConsumer = n.match(/^consumer(\d+)Power$/);
+        if (mConsumer && this._nwGetFlowSlotInfo) {
+          const info = this._nwGetFlowSlotInfo('consumers', Number(mConsumer[1]));
+          return this._nwTrimId(info && info.objectId);
+        }
+        const mProducer = n.match(/^producer(\d+)Power$/);
+        if (mProducer && this._nwGetFlowSlotInfo) {
+          const info = this._nwGetFlowSlotInfo('producers', Number(mProducer[1]));
+          return this._nwTrimId(info && info.objectId);
+        }
+        const liveDps = (this.config && this.config.datapoints && typeof this.config.datapoints === 'object') ? this.config.datapoints : {};
+        return this._nwTrimId(liveDps[n]);
+      } catch (_e) {
+        return '';
+      }
+    })();
     const ns = this.namespace;
     const dynamicTariffActive = !!(this.stateCache && this.stateCache['settings.dynamicTariff'] && this.stateCache['settings.dynamicTariff'].value);
 
@@ -17390,9 +17536,13 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     if (preferCanonical) {
       add(canon);
       add(explicit);
+      // Fallback for newly mapped optional Verbraucher/Erzeuger: if the canonical
+      // export state has no data yet, allow reading the original live DP history.
+      add(liveMapped);
     } else {
       add(explicit);
       add(canon);
+      add(liveMapped);
     }
     return out;
   }
