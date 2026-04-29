@@ -57,6 +57,45 @@ const nwShcState = {
   },
 };
 
+
+const NW_SHCFG_SENSOR_UNIT_OPTIONS = [
+  { value: '', label: '— keine Einheit / automatisch' },
+  { value: '°C', label: '°C' },
+  { value: 'W', label: 'W' },
+  { value: 'kW', label: 'kW' },
+  { value: 'kWh', label: 'kWh' },
+  { value: 'Lux', label: 'Lux' },
+  { value: 'CO₂', label: 'CO₂' },
+  { value: 'V', label: 'V' },
+  { value: 'A', label: 'A' },
+  { value: 'Wh', label: 'Wh' },
+  { value: '%', label: '%' },
+  { value: 'K', label: 'K' },
+  { value: 'm/s', label: 'm/s' },
+  { value: 'km/h', label: 'km/h' },
+  { value: 'ppm', label: 'ppm' },
+];
+
+const NW_SHCFG_SENSOR_PRECISION_OPTIONS = [
+  { value: '0', label: '0' },
+  { value: '1', label: '1' },
+  { value: '2', label: '2' },
+  { value: '3', label: '3' },
+  { value: '4', label: '4' },
+];
+
+function nwShcfgDefaultSensorUiFromTemplate(tpl) {
+  const meta = String((tpl && tpl.meta) || '').trim().toLowerCase();
+  const name = String((tpl && tpl.name) || '').trim().toLowerCase();
+  const hay = `${meta} ${name}`;
+
+  if (meta === '°c' || /temperatur|temperature|sauna/.test(hay)) return { unit: '°C', precision: 1 };
+  if (meta.includes('0…100') || meta.includes('0...100') || /prozent|percent/.test(hay)) return { unit: '%', precision: 0 };
+  if (/\b0\/1\b|binär|binaer|binary/.test(hay)) return { unit: '', precision: 0 };
+  return { unit: '', precision: 1 };
+}
+
+
 // Small DOM helper (used by new modules). Intentionally tiny and local to this file.
 function byId(id) {
   return document.getElementById(id);
@@ -5540,7 +5579,34 @@ function nwRenderShcfgBuilderProps(container) {
       container.appendChild(nwCreateFieldRow('Szenenname', nwShcfgCreateTextInput(dev.io.scene.name || '', (v) => { dev.io.scene.name = v; nwMarkDirty(true); }))); 
     } else if (dev.type === 'sensor') {
       dev.io.sensor = dev.io.sensor || { readId: null };
+      dev.ui = dev.ui || {};
+      if (typeof dev.ui.unit !== 'string') dev.ui.unit = '';
+      if (typeof dev.ui.precision !== 'number') dev.ui.precision = 1;
+
       container.appendChild(nwCreateDpInput('Wert (Read DP)', dev.io.sensor.readId || '', (v) => { dev.io.sensor.readId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
+
+      const displayTitle = document.createElement('div');
+      displayTitle.className = 'nw-config-card__subtitle';
+      displayTitle.style.marginTop = '10px';
+      displayTitle.textContent = 'Anzeige / Funktionseinheit';
+      container.appendChild(displayTitle);
+
+      container.appendChild(
+        nwCreateFieldRow('Einheit', nwShcfgCreateSelect(NW_SHCFG_SENSOR_UNIT_OPTIONS, dev.ui.unit || '', (v) => {
+          dev.ui.unit = String(v || '');
+          nwMarkDirty(true);
+          nwRenderShcfgShell();
+        }))
+      );
+
+      container.appendChild(
+        nwCreateFieldRow('Nachkommastellen', nwShcfgCreateSelect(NW_SHCFG_SENSOR_PRECISION_OPTIONS, String(dev.ui.precision ?? 1), (v) => {
+          const n = Number(v);
+          dev.ui.precision = Number.isFinite(n) ? n : 1;
+          nwMarkDirty(true);
+          nwRenderShcfgShell();
+        }))
+      );
     } else if (dev.type === 'player') {
       dev.io.player = dev.io.player || { titleId:null, artistId:null, albumId:null, playingId:null, volumeId:null, muteId:null, nextId:null, prevId:null, playId:null, pauseId:null };
       container.appendChild(nwCreateDpInput('Titel (DP)', dev.io.player.titleId || '', (v) => { dev.io.player.titleId = nwShcfgNullIfEmpty(v); nwMarkDirty(true); }));
@@ -6219,6 +6285,7 @@ function nwAddDeviceFromTemplate(templateId, opts = {}) {
     dev.behavior.readOnly = true;
   } else if (t === 'sensor') {
     dev.io.sensor = { readId: null };
+    dev.ui = Object.assign({}, dev.ui || {}, nwShcfgDefaultSensorUiFromTemplate(tpl));
     // Sensoren sind in der Regel reine Anzeige (optional anpassbar)
     dev.behavior.readOnly = true;
   } else {
@@ -6744,6 +6811,11 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
         d.behavior.readOnly = true;
       } else if (t === 'sensor') {
         d.io.sensor = d.io.sensor || { readId: null };
+        d.ui = d.ui || {};
+        if (typeof d.ui.unit !== 'string') d.ui.unit = '';
+        if (typeof d.ui.precision !== 'number') d.ui.precision = 1;
+        d.behavior = d.behavior || {};
+        d.behavior.readOnly = true;
       } else if (t === 'player') {
         d.io.player = d.io.player || {
           playingId: null,
@@ -7672,6 +7744,24 @@ function nwRenderDevicesEditor(devices, rooms, functions) {
         nwShcState.config.devices[index].io.sensor.readId = val || null;
       });
       body.appendChild(readRow);
+
+      dev.ui = dev.ui || {};
+      if (typeof dev.ui.unit !== 'string') dev.ui.unit = '';
+      if (typeof dev.ui.precision !== 'number') dev.ui.precision = 1;
+
+      const unitRow = nwCreateFieldRow('Einheit', nwShcfgCreateSelect(NW_SHCFG_SENSOR_UNIT_OPTIONS, dev.ui.unit || '', (val) => {
+        nwShcState.config.devices[index].ui = nwShcState.config.devices[index].ui || {};
+        nwShcState.config.devices[index].ui.unit = String(val || '');
+        nwMarkDirty(true);
+      }));
+      const precisionRow = nwCreateFieldRow('Nachkommastellen', nwShcfgCreateSelect(NW_SHCFG_SENSOR_PRECISION_OPTIONS, String(dev.ui.precision ?? 1), (val) => {
+        const n = Number(val);
+        nwShcState.config.devices[index].ui = nwShcState.config.devices[index].ui || {};
+        nwShcState.config.devices[index].ui.precision = Number.isFinite(n) ? n : 1;
+        nwMarkDirty(true);
+      }));
+      body.appendChild(unitRow);
+      body.appendChild(precisionRow);
     }
 
     if (io.color) {

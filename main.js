@@ -6691,6 +6691,17 @@ if (copy.type === 'scene' && typeof copy.state.on !== 'undefined') {
 
     if (copy.io && copy.io.sensor && copy.io.sensor.readId) {
       try {
+        copy.ui = copy.ui || {};
+        if (!copy.ui.unit) {
+          try {
+            const obj = await this.getForeignObjectAsync(copy.io.sensor.readId);
+            const unit = obj && obj.common && typeof obj.common.unit !== 'undefined' && obj.common.unit !== null
+              ? String(obj.common.unit).trim()
+              : '';
+            if (unit) copy.ui.unit = unit;
+          } catch (_e) {}
+        }
+
         const st = await this.getForeignStateAsync(copy.io.sensor.readId);
         let val = st && st.val;
         if (typeof val === 'string') {

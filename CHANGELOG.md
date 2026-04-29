@@ -1,3 +1,8 @@
+## 0.6.262
+- SmartHome VIS: sensor/status measurement tiles now render their current value large and centered like temperature tiles, including non-temperature Status/Messwerte devices.
+- SmartHome Config: sensor devices now expose an Anzeige/Funktionseinheit selector with units °C, W, kW, kWh, Lux, CO₂, V, A, Wh, %, K, m/s, km/h and ppm plus decimal precision.
+- SmartHome backend: sensor tiles can fall back to the source datapoint's common.unit when no unit is configured manually. Web cache version bumped.
+
 ## 0.6.261
 
 - Heizstab: Globale Mindest-PV-Freigabe für PV-Auto ergänzt. Unterhalb der Schwelle beobachtet die App nur noch und schreibt kein automatisches AUS, damit manuelle KNX-/ioBroker-Schaltungen nicht überschrieben werden.

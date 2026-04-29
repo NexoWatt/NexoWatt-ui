@@ -3785,6 +3785,11 @@ body{ padding-top: var(--topbar-h); }
   opacity: 0.7;
 }
 
+/* Sensor-/Messwert-Kacheln sind bewusst read-only, sollen aber nicht wie deaktiviert wirken. */
+.nw-sh-tile--type-sensor.nw-sh-tile--readonly{
+  opacity: 0.96;
+}
+
 .nw-sh-tile--off{
   opacity: 0.92;
 }
@@ -4029,16 +4034,18 @@ body{ padding-top: var(--topbar-h); }
 }
 
 
-/* SmartHome: temperature readings are the focal point of sensor tiles. */
+/* SmartHome: sensor/status readings are the focal point of value tiles. */
 .nw-sh-tile__state--empty{
   display: none;
 }
 
-.nw-sh-tile--temperature{
+.nw-sh-tile--temperature,
+.nw-sh-tile--value-large{
   justify-content: flex-start;
 }
 
-.nw-sh-tile__big--temperature{
+.nw-sh-tile__big--temperature,
+.nw-sh-tile__big--value{
   flex: 1 1 auto;
   width: 100%;
   min-height: 0;
@@ -4052,15 +4059,20 @@ body{ padding-top: var(--topbar-h); }
   padding: 0 4px 6px;
 }
 
-.nw-sh-tile--temperature .nw-sh-tile__value{
+.nw-sh-tile--temperature .nw-sh-tile__value,
+.nw-sh-tile--value-large .nw-sh-tile__value{
   font-size: clamp(2.15rem, 4.2vw, 3rem);
   font-weight: 900;
   line-height: 0.95;
   letter-spacing: -0.045em;
   color: rgba(248, 250, 252, 0.98);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.nw-sh-tile--temperature .nw-sh-tile__unit{
+.nw-sh-tile--temperature .nw-sh-tile__unit,
+.nw-sh-tile--value-large .nw-sh-tile__unit{
   margin-left: 5px;
   font-size: clamp(0.95rem, 1.5vw, 1.2rem);
   font-weight: 850;

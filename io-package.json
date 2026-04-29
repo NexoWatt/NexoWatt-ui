@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.261",
+    "version": "0.6.262",
     "news": {
+      "0.6.262": {
+        "en": "SmartHome VIS: status/sensor measurement tiles now show their values large and centered like temperature tiles, with configurable units and precision.",
+        "de": "SmartHome VIS: Status-/Messwert-Kacheln zeigen ihre Werte jetzt groß und zentriert wie Temperatur-Kacheln, inklusive einstellbarer Funktionseinheit und Nachkommastellen."
+      },
       "0.6.261": {
         "en": "Heating rod: global minimum-PV gate for PV-Auto, manual-safe observe-only behavior below the threshold, and zero/minus-feed-in storage priority no longer blocks normal PV surplus.",
         "de": "Heizstab: globale Mindest-PV-Freigabe für PV-Auto, unterhalb der Schwelle nur Beobachten ohne automatisches AUS, und Speicher-Vorrang der 0-/Minus-Einspeisung blockiert normalen PV-Überschuss nicht mehr."
@@ -1806,8 +1810,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.261",
+  "version": "0.6.262",
   "news": {
+    "0.6.262": {
+      "en": "SmartHome VIS: status/sensor measurement tiles now show their values large and centered like temperature tiles, with configurable units and precision.",
+      "de": "SmartHome VIS: Status-/Messwert-Kacheln zeigen ihre Werte jetzt groß und zentriert wie Temperatur-Kacheln, inklusive einstellbarer Funktionseinheit und Nachkommastellen."
+    },
     "0.6.261": {
       "en": "Heating rod: global minimum-PV gate for PV-Auto, manual-safe observe-only behavior below the threshold, and zero/minus-feed-in storage priority no longer blocks normal PV surplus.",
       "de": "Heizstab: globale Mindest-PV-Freigabe für PV-Auto, unterhalb der Schwelle nur Beobachten ohne automatisches AUS, und Speicher-Vorrang der 0-/Minus-Einspeisung blockiert normalen PV-Überschuss nicht mehr."
