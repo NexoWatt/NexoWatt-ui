@@ -1,48 +1,9 @@
-## 0.6.270
+## 0.7.0
 
-- Speicherregelung stabilisiert: PV-Überschuss-Laden nutzt bei aktiver 0-Einspeisung nur noch echten Roh-Export am NVP und addiert keinen Import-Bias mehr. Dadurch lädt der Speicher nicht mehr aus dem Netz, nur weil die 0-Einspeise-Regelung einen kleinen Bezugszielwert fährt.
-- PV-Lade-Sollwert wird sofort auf 0 freigegeben, wenn kein Roh-Export mehr sichtbar ist. Die Standard-Rampe lässt dadurch keine negative Rest-Ladeleistung stehen, die Netzbezug erzeugen könnte.
-- PV-Abregelung/WR-Gruppen stabilisiert: Die zentrale installierte PV-Leistung wird bei mehreren Wechselrichtern nicht mehr blind aufgeteilt. Für Multi-WR-Gruppen sind wieder eigene kWp-Werte je WR nötig; bei einem einzelnen WR bleibt die zentrale kWp-Angabe als Fallback möglich.
-- Webcache auf 0.6.270 erhöht.
-
-## 0.6.269
-- App-Center Heizstab: Bereich „0-Einspeise-Testlast / PV-Nachregelung“ in klare Unterbereiche gegliedert: Aktivierung & Einspeisegrenze, Stufentest & PV-Nachregelprüfung, Forecast & Speicherfreigabe sowie Netz-/Akku-Schutz.
-- Die Parameter „PV-Nachregelprüfung“, „PV-Anstieg min. (%)“, „PV-Anstieg min. (W)“ und „Erneuter Test nach PV-Fehlanstieg“ stehen jetzt sichtbar im Heizstab-Logikbereich und sind direkt einstellbar.
-- Klarstellung in der UI: Diese 0-/Minus-Einspeise-Nachregelparameter wirken ausschließlich auf Heizstab-PV-Auto-Testlasten und nicht auf allgemeine PV-/NVP-Regelungen.
-- Webcache auf 0.6.269 erhöht und App-Center-Script mit Cache-Buster versehen.
-
-## 0.6.268
-
-- Heizstab 0-/Minus-Einspeisung: PV-Auto schaltet Testlast jetzt wirklich stufenweise zu, wartet auf die PV-Nachregelung und prüft, ob die Dach-PV-Erzeugung passend mitsteigt.
-- Wenn nach einer Teststufe kein plausibler PV-Anstieg sichtbar ist, wird auf die vorige physische Stufe reduziert und dort verweilt; der nächste Test erfolgt standardmäßig erst nach 600 s / 10 min.
-- Während der PV-Nachregelprüfung wird der PV-only-Deckel temporär nur für diese Teststufe überbrückt, damit die Stufe nicht sofort wieder vom Budget-Cap entfernt wird, bevor die PV-Anlage nachregeln konnte.
-- Unterhalb der PV-Mindestschwelle geht PV-Auto jetzt manuell-sicher in Beobachtung: nur eine von PV-Auto selbst gehaltene Stufe wird einmalig abgeworfen, danach überschreibt die Automatik manuelle Schaltungen ohne PV nicht mehr.
-- App-Center Heizstab: neue Parameter für PV-Nachregelprüfung, Mindest-PV-Anstieg und Retry-Zeit nach fehlendem PV-Anstieg ergänzt.
-- Webcache auf 0.6.268 erhöht.
-
-## 0.6.267
-
-- Heizstab: PV-Auto arbeitet jetzt strikt mit einem PV-only-Budget aus aktueller PV-Erzeugung minus nicht-Heizstab-Gebäudelast minus Speicherreserve. Dadurch können automatische Stufen nicht mehr durch Akku-Entladung am Leben gehalten werden.
-- Heizstab: Die globale Mindest-PV-Schwelle schaltet PV-Auto-Stufen nun aktiv zurück/aus; manuelle Stufen, Boost und bewusst deaktivierte Regelung bleiben unangetastet.
-- App-Center: Unter Zuordnung → Allgemein wurde eine direkte Eingabe für die installierte PV-Leistung in kWp ergänzt. Der Wert wird zentral gespiegelt und für PV-Plausibilität/Abregel-Logiken genutzt, ohne separaten Datenpunkt.
-- PV-Abregelung: Wechselrichter-Gruppen ohne eigene kWp-Aufteilung können die zentrale installierte PV-Leistung als Fallback für die Nennleistung nutzen.
-- Webcache auf 0.6.267 erhöht.
-
-## 0.6.266
-
-- Rollback-Build auf Basis von 0.6.264: Heizstab-Änderung aus 0.6.265 zur direkten 0-Einspeise-PV-Bilanz zurückgenommen.
-- Beibehalten: SmartHome-Messwert-Kacheln, Farm-Verbesserungen und Single-Speicher-NVP-Regelung aus 0.6.264.
-
-## 0.6.264
-
-- Speicherregelung: Single-Speicher-NVP-Balancing weiter geschärft. Der Demand-Clamp nutzt bei aktivem Rest-Netzbezug jetzt nicht nur die Batterie-Istleistung, sondern zusätzlich den letzten NVP-Sollwert als Basis, damit eine träge/fehlende Istleistungsrückmeldung den Sollwert nicht künstlich herunterzieht.
-- Speicherregelung: neue Diagnosewerte `speicher.regelung.nvpDemandBasisW`, `speicher.regelung.nvpDemandClampW` und `speicher.regelung.nvpFeedbackMode` ergänzt.
-
-## 0.6.263
-
-- Speicherfarm: NVP-Balancing nutzt Farm-Istleistung nur noch, wenn mindestens ein Speicher eine frische Istleistungs-Rückmeldung liefert.
-- Speicherfarm: neue Diagnose `storageFarm.powerFeedbackStorages` / `powerFeedbackValid` zur Erkennung träger oder fehlender Batterie-Istleistungs-DPs.
-- Speicherregelung: Signed-Setpoint-only / träge Istleistungs-DPs fallen jetzt auf last-setpoint-basiertes Balancing zurück, statt fälschlich mit 0 W Batterie-Istleistung zu toggeln.
+- Stabile Basis aus der hochgeladenen Version 0.6.262 übernommen.
+- Versionssprung auf 0.7.0 für den nächsten Entwicklungsstand.
+- Webcache angehoben, damit Browser/App-Center die neue Version zuverlässig neu laden.
+- Keine Regeländerungen an Speicher, Speicherfarm, Eigenverbrauch oder Heizstab aus 0.6.267–0.6.270 übernommen.
 
 ## 0.6.262
 - SmartHome VIS: sensor/status measurement tiles now render their current value large and centered like temperature tiles, including non-temperature Status/Messwerte devices.

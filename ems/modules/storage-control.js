@@ -433,47 +433,25 @@ class SpeicherRegelungModule extends BaseModule {
             // ignore
         }
 
-        // Speicherfarm: aggregierte Ist-Leistung nutzen (Netto: Entladen - Laden),
-        // aber nur wenn die Rückmeldung der Farm vollständig und frisch ist.
+        // Speicherfarm: aggregierte Ist-Leistung nutzen (Netto: Entladen - Laden).
         //
-        // Hintergrund des Fixes 0.6.263:
-        // Viele Farmen können zuverlässig mit Signed-Setpoint-only betrieben werden.
-        // In diesem Fall sind Istleistungs-DPs optional oder manchmal alt. Wenn wir
-        // dann 0 W aus der abgeleiteten Farm-Summe als echte Batterieleistung
-        // interpretieren, fällt die NVP-Regelung wieder in den 50%-Fehlpunkt
-        // (Speicher ≈ Netzbezug). Deshalb nutzt das Balancing nur vollständige,
-        // frische Farm-Istleistung; sonst wird der letzte Sollwert als Integrator-
-        // Basis verwendet.
+        // Hintergrund:
+        // In Farm-Setups ist st.batteryPowerW häufig nur auf einen Einzel-Speicher gemappt
+        // oder (Fehler) sogar auf einen Setpoint. Das führt bei NVP-Balancing zu einem
+        // stabilen Fehlpunkt (z. B. ~50% Netzbezug).
+        //
+        // Daher: wenn Farm aktiv ist und die abgeleiteten Summen frisch sind,
+        // überschreiben wir battPowerW mit der Farm-Nettoleistung.
         if (farmEnabled) {
             try {
+                const stOnline = await this.adapter.getStateAsync('storageFarm.storagesOnline');
                 const stDispatch = await this.adapter.getStateAsync('storageFarm.storagesDispatchAvailable');
+                const onlineN = stOnline && stOnline.val !== undefined && stOnline.val !== null ? Number(stOnline.val) : NaN;
                 const dispatchN = stDispatch && stDispatch.val !== undefined && stDispatch.val !== null ? Number(stDispatch.val) : NaN;
-                const dispatchCount = Number.isFinite(dispatchN) ? Math.max(0, Math.round(dispatchN)) : 0;
+                const hasOnline = Number.isFinite(onlineN) && onlineN > 0;
+                const hasDispatchable = Number.isFinite(dispatchN) && dispatchN > 0;
 
-                let statusRows = [];
-                try {
-                    const stJson = await this.adapter.getStateAsync('storageFarm.storagesStatusJson');
-                    const rawJson = stJson && stJson.val !== undefined && stJson.val !== null ? String(stJson.val) : '';
-                    const parsed = rawJson ? JSON.parse(rawJson) : [];
-                    statusRows = Array.isArray(parsed) ? parsed : [];
-                } catch {
-                    statusRows = [];
-                }
-
-                const dispatchRows = statusRows.filter(r => r && typeof r === 'object' && r.dispatchAvailable === true);
-                const expectedActualRows = dispatchRows.length > 0 ? dispatchRows.length : dispatchCount;
-                const freshActualRows = dispatchRows.filter(r => {
-                    const hasPower = Number.isFinite(Number(r.chargePowerW)) || Number.isFinite(Number(r.dischargePowerW));
-                    return hasPower && r.actualPowerFresh === true;
-                }).length;
-
-                const stFeedbackValid = await this.adapter.getStateAsync('storageFarm.powerFeedbackValid').catch(() => null);
-                const feedbackValidState = stFeedbackValid && typeof stFeedbackValid.val === 'boolean' ? stFeedbackValid.val : null;
-                const farmActualReliable = expectedActualRows > 0
-                    ? (freshActualRows >= expectedActualRows)
-                    : (feedbackValidState === true);
-
-                if (farmActualReliable) {
+                if (hasOnline || hasDispatchable) {
                     const stChg = await this.adapter.getStateAsync('storageFarm.totalChargePowerW');
                     const stDchg = await this.adapter.getStateAsync('storageFarm.totalDischargePowerW');
 
@@ -487,14 +465,10 @@ class SpeicherRegelungModule extends BaseModule {
                     if (Number.isFinite(chg) && Number.isFinite(dchg) && (age === null || age <= staleMs)) {
                         battPowerW = dchg - chg;
                         battPowerAge = age;
-                        battPowerInvalidReason = `Farm: aggregierte Ist-Leistung (${freshActualRows}/${expectedActualRows} frisch)`;
+                        battPowerInvalidReason = hasOnline
+                            ? 'Farm: aggregierte Ist-Leistung (Entladen-Laden)'
+                            : 'Farm: aggregierte Ist-Leistung, degraded/dispatchbar';
                     }
-                } else if (expectedActualRows > 0 || dispatchCount > 0) {
-                    battPowerW = null;
-                    battPowerAge = null;
-                    battPowerInvalidReason = expectedActualRows > 0
-                        ? `Farm: Istleistung unvollständig/alt (${freshActualRows}/${expectedActualRows}) – NVP-Regelung nutzt letzten Sollwert`
-                        : 'Farm: keine frische Istleistungs-Rückmeldung – NVP-Regelung nutzt letzten Sollwert';
                 }
             } catch (_eFarm) {
                 // ignore
@@ -604,12 +578,6 @@ class SpeicherRegelungModule extends BaseModule {
         let hardChargeMaxSoc = 100;
         let reason = 'Keine Aktion';
         let source = 'idle';
-
-        // Diagnose/Basis für die feine NVP-Regelung (Single-Speicher und Tarif/Eigenverbrauch).
-        // Wird gesetzt, sobald Tarif- oder Eigenverbrauchs-Entladung aktiv rechnet.
-        let nvpDemandBasisW = null;
-        let nvpDemandClampW = null;
-        let nvpFeedbackMode = '';
 
         const exportW = Math.max(0, -gridW); // negative Netzleistung = Einspeisung (geglättet)
         const importW = Math.max(0, gridW);  // positive Netzleistung = Bezug (geglättet)
@@ -919,13 +887,6 @@ if (typeof soc === 'number') {
         const stepW = Math.max(0, num(cfg.stepW, 50));
         const maxDelta = Math.max(0, num(cfg.maxDeltaWPerTick, 500));
         const pvMaxDeltaCfg = Math.max(0, num(cfg.pvMaxDeltaWPerTick, 1500)); // 0 => nutzt globale Rampe
-
-        // NVP-Feinregelung (Eigenverbrauch/Tarif): diese Quellen sollen Netzbezug deutlich
-        // schneller nachregeln als die konservative Standard-Rampe. Viele Speicher/PCS haben
-        // intern bereits eine eigene Rampe; wenn NexoWatt zusätzlich zu langsam ramped, bleiben
-        // sichtbare Bezugsspitzen stehen. 0 = ohne zusätzliche NVP-Rampe.
-        const nvpMaxDelta = Math.max(0, num(cfg.nvpMaxDeltaWPerTick, 2000));
-        const nvpSafetyMarginW = Math.max(0, num(cfg.nvpSafetyMarginW, 250));
 
         // Policy-spezifische Limits (0 => global)
         const lskMaxChargeW_cfg = Math.max(0, num(cfg.lskMaxChargeW, 0));
@@ -1435,38 +1396,16 @@ if (typeof soc === 'number') {
 						}
 
 						// OpenEMS-Balancing (Vorbild): neuer Sollwert = battIst + (gridIst - gridZiel)
-						// Fallback ohne Ist-Batterieleistung: inkrementelle Regelung (Soll = letzter Sollwert + Fehler).
-						// Erweiterung ab 0.6.263: Wenn der Speicher langsamer reagiert als der EMS-Sollwert,
-						// nehmen wir den Integrator-Kandidaten zusätzlich mit. Dadurch bleibt bei konstantem
-						// Verbrauch kein systematischer Netzbezug stehen, nur weil die Ist-Batterieleistung
-						// noch hinter dem zuletzt gesendeten Sollwert liegt.
-						const balancingCandidateW = (typeof battW === 'number') ? (battW + errAdjW) : (curSetW + errAdjW);
-						const integratorCandidateW = curSetW + errAdjW;
-						let nextSetW = balancingCandidateW;
-						if (errAdjW > 0) nextSetW = Math.max(nextSetW, integratorCandidateW);
-						else if (errAdjW < 0) nextSetW = Math.min(nextSetW, integratorCandidateW);
+						// Fallback ohne Ist-Batterieleistung: inkrementelle Regelung (Soll = letzter Sollwert + Fehler)
+						// Rampe/Schrittweite/Anti-PingPong folgen im Dispatcher weiter unten.
+						let nextSetW = (typeof battW === 'number') ? (battW + errAdjW) : (curSetW + errAdjW);
 
 						// Safety-Clamp gegen unnötige Export-Spikes:
-						// Begrenze grob auf aktuelle Hauslast am NVP.
-						// Wichtig für Single-Speicher (0.6.266, Stand 0.6.264): Wenn die Batterie-Istleistung fehlt,
-						// verzögert oder als 0 W zurückkommt, darf der Clamp den bestehenden Sollwert
-						// nicht künstlich herunterziehen. Sonst entstehen genau die sichtbaren
-						// Netzbezug-Dellen trotz gleichmäßigem Verbrauch. Bei vorhandenem Import nutzen
-						// wir deshalb die höhere Basis aus echter Istleistung und letztem NVP-Sollwert.
-						// Bei Export bleibt die Reduktion bewusst schnell.
+						// Begrenze grob auf aktuelle Hauslast am NVP: Import (roh) + aktuelle Entladung (falls messbar) + Puffer.
 						const importRawNowW = Math.max(0, (typeof nvpRawW === 'number') ? nvpRawW : 0);
 						const dischargeNowW = (typeof battW === 'number') ? Math.max(0, battW) : 0;
-						const lastSetForDemandW = Math.max(0, curSetW);
-						const demandBasisW = (importRawNowW > 0 && lastSetForDemandW > 0)
-							? Math.max(dischargeNowW, lastSetForDemandW)
-							: dischargeNowW;
-						const safetyMarginW = nvpSafetyMarginW;
-						const maxByDemandW = importRawNowW + demandBasisW + safetyMarginW;
-						nvpDemandBasisW = demandBasisW;
-						nvpDemandClampW = maxByDemandW;
-						nvpFeedbackMode = (typeof battW === 'number')
-							? (demandBasisW > dischargeNowW ? 'actual+lastSet' : 'actual')
-							: (lastSetForDemandW > 0 ? 'lastSet' : 'none');
+						const safetyMarginW = 200;
+						const maxByDemandW = importRawNowW + dischargeNowW + safetyMarginW;
 						if (Number.isFinite(maxByDemandW) && maxByDemandW > 0) {
 							nextSetW = Math.min(nextSetW, maxByDemandW);
 						}
@@ -1596,12 +1535,10 @@ if (targetW === 0 && selfDischargeEnabled) {
     const desiredNvpW = selfTargetGridW; // typischerweise kleiner Import (Default 100 W)
     const deadbandW = Math.max(0, selfImportThresholdW); // Start-/Stop-Schwelle gegen Flattern
 
-    // Eigenverbrauch hat einen eigenen Integrator. Tarif-Entladung und Eigenverbrauch
-    // sind beide feine NVP-Balancing-Quellen; beim Wechsel zwischen beiden darf der
-    // Integrator nicht auf 0 fallen, sonst entstehen kurze Netzbezug-Dellen.
+    // Eigenverbrauch hat einen eigenen "Integrator": nur fortsetzen, wenn wir in der letzten Runde
+    // auch aus Eigenverbrauch geregelt haben. Sonst bei 0 starten, damit LSK/Tarif nicht "nachhängt".
     const lastWasSelf = (this._lastSource === 'eigenverbrauch');
-    const lastWasNvpDischarge = (this._lastSource === 'eigenverbrauch' || this._lastSource === 'tarif');
-    const curSetW = (lastWasNvpDischarge && typeof this._lastTargetW === 'number' && this._lastTargetW > 0)
+    const curSetW = (lastWasSelf && typeof this._lastTargetW === 'number' && this._lastTargetW > 0)
         ? this._lastTargetW
         : 0;
 
@@ -1624,15 +1561,8 @@ if (targetW === 0 && selfDischargeEnabled) {
     }
 
         // OpenEMS-Balancing (Vorbild): battIst + (gridIst - gridZiel)
-        // Fallback: letzter Sollwert + Fehler.
-        // Erweiterung ab 0.6.263: Bei nachlaufendem Speicher zusätzlich den Integrator-Kandidaten
-        // berücksichtigen. So erhöht NexoWatt den Sollwert weiter, wenn am Netzpunkt weiterhin
-        // Import steht, auch wenn die Ist-Batterieleistung noch langsam hinterherläuft.
-        const balancingCandidateW = (typeof battW === 'number') ? (battW + errAdjW) : (curSetW + errAdjW);
-        const integratorCandidateW = curSetW + errAdjW;
-        let nextSetW = balancingCandidateW;
-        if (errAdjW > 0) nextSetW = Math.max(nextSetW, integratorCandidateW);
-        else if (errAdjW < 0) nextSetW = Math.min(nextSetW, integratorCandidateW);
+        // Fallback: letzter Sollwert + Fehler
+        let nextSetW = (typeof battW === 'number') ? (battW + errAdjW) : (curSetW + errAdjW);
 
     // Safety-Clamp gegen Überschwingen:
     // Wenn battW nicht gemappt ist (oder NVP kurzfristig "alt" ist), kann die inkrementelle Regelung
@@ -1641,17 +1571,8 @@ if (targetW === 0 && selfDischargeEnabled) {
     // Dadurch bleibt die Regelung im Bereich der realen Hauslast und erzeugt keine Export-Spikes.
     const importRawNowW = Math.max(0, (typeof nvpRawW === 'number') ? nvpRawW : 0);
     const dischargeNowW = (typeof battW === 'number') ? Math.max(0, battW) : 0;
-    const lastSetForDemandW = Math.max(0, curSetW);
-    const demandBasisW = (importRawNowW > 0 && lastSetForDemandW > 0)
-        ? Math.max(dischargeNowW, lastSetForDemandW)
-        : dischargeNowW;
-    const safetyMarginW = nvpSafetyMarginW; // bewusst konservativ; Feintuning über Ziel/Deadband/NVP-Dynamik
-    const maxByDemandW = importRawNowW + demandBasisW + safetyMarginW;
-    nvpDemandBasisW = demandBasisW;
-    nvpDemandClampW = maxByDemandW;
-    nvpFeedbackMode = (typeof battW === 'number')
-        ? (demandBasisW > dischargeNowW ? 'actual+lastSet' : 'actual')
-        : (lastSetForDemandW > 0 ? 'lastSet' : 'none');
+    const safetyMarginW = 200; // bewusst konservativ; Feintuning über selfTargetGridW/Deadband/Rampe
+    const maxByDemandW = importRawNowW + dischargeNowW + safetyMarginW;
     if (Number.isFinite(maxByDemandW) && maxByDemandW > 0) {
         nextSetW = Math.min(nextSetW, maxByDemandW);
     }
@@ -1677,7 +1598,7 @@ if (targetW === 0 && selfDischargeEnabled) {
     // Aktivierung: Nur wenn Import oberhalb der Schwelle liegt ODER wir bereits aktiv waren
     // (Integrator hält den Sollwert dann stabil und passt ihn nach oben/unten an).
     const importNowW = Math.max(0, (typeof nvpCtrlW === 'number') ? nvpCtrlW : 0);
-    const startCond = (importNowW >= deadbandW) || lastWasNvpDischarge;
+    const startCond = (importNowW >= deadbandW) || lastWasSelf;
 
     if (allow && startCond && nextSetW > 0) {
         targetW = nextSetW;
@@ -1691,11 +1612,11 @@ if (targetW === 0 && selfDischargeEnabled) {
 // 4) Eigenverbrauch: PV-Überschuss laden (wenn keine Lastspitze/Tarif/EV-Entladung aktiv)
         if (targetW === 0 && cfg.pvEnabled !== false && !feneconAcMode) {
             // Zero-Export (Nulleinspeisung): bei Export möglichst früh (Schwellwert) in den Speicher laden.
-            // Wichtig: Die Speicherladung selbst bleibt strikt PV-only; der Import-Bias der
-            // WR-/NVP-Abregelung wird hier nicht auf die Ladeleistung addiert.
+            // Hinweis: Extra-Bias nur, wenn Netzladen erlaubt ist (sonst würde der Bias u.U. Netzenergie in den Speicher ziehen).
             const zeCfg = (this.adapter.config && this.adapter.config.enableGridConstraints) ? (this.adapter.config.gridConstraints || {}) : {};
             const zeEnabled = !!((this.adapter.config && this.adapter.config.enableGridConstraints) && zeCfg.zeroExportEnabled);
             const zeDeadband = Math.max(0, num(zeCfg.zeroExportDeadbandW, 50));
+            const zeBias = Math.max(0, num(zeCfg.zeroExportBiasW, 80));
 
             const thrBase = Math.max(0, num(cfg.pvExportThresholdW, 200));
             const thr = zeEnabled ? Math.min(thrBase, zeDeadband) : thrBase;
@@ -1730,18 +1651,9 @@ if (targetW === 0 && selfDischargeEnabled) {
                 // Für die eigentliche Sollwert-Berechnung nutzen wir den geglätteten Export,
                 // damit die Ladeleistung bei wolkigem Himmel nicht "zittert".
                 const exportCtrlW = (typeof exportW === 'number') ? exportW : exportRawW;
-                const exportRawNowW = Math.max(0, (typeof exportRawW === 'number' && Number.isFinite(exportRawW)) ? exportRawW : 0);
-
-                // Stabilitätsfix 0.6.270:
-                // Bei aktiver 0-Einspeisung darf die Speicher-PV-Ladung NICHT zusätzlich den
-                // Import-Bias der WR-/NVP-Abregelung addieren. Sonst arbeiten Speicher und
-                // PV-Abregelung gegeneinander: erst Einspeisung, dann Netzbezug/Netzladung.
-                // Deshalb lädt diese Policy nur noch den aktuell roh sichtbaren Export weg.
-                // Der geglättete Wert darf die Ladung beruhigen, aber niemals über den
-                // aktuellen Roh-Export hinaus erhöhen.
-                const exportForChargeW = Math.min(Math.max(0, exportCtrlW), exportRawNowW);
-                targetW = -clamp(exportForChargeW, 0, chargeLimitW);
-                reason = zeEnabled ? 'Nulleinspeisung: nur echten PV-Export in Speicher laden' : 'Eigenverbrauch: PV-Überschuss laden';
+                const extraBias = (zeEnabled && gridChargeAllowed) ? zeBias : 0;
+                targetW = -clamp(exportCtrlW + extraBias, 0, chargeLimitW);
+                reason = zeEnabled ? 'Nulleinspeisung: Export in Speicher umleiten' : 'Eigenverbrauch: PV-Überschuss laden';
                 source = 'pv';
             }
         }
@@ -1990,11 +1902,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             reason = `${reason} (PV‑Rampe)`;
         }
         // d >= 0 => weniger laden / Richtung 0 -> bewusst ohne Rampe (schnell reagieren)
-    } else if (this._lastSource === 'pv' && _prevRampW < 0 && targetW >= 0) {
-        // Stabilitätsfix 0.6.270:
-        // Wenn PV-Überschuss-Laden wegen fehlendem Roh-Export/Netzbezug endet, muss der
-        // Ladesollwert sofort auf 0 freigegeben werden. Die Standard-Rampe würde sonst
-        // eine negative Rest-Ladeleistung stehen lassen und kurz aus dem Netz laden.
     } else if (source === 'lastspitze' && targetW > 0) {
 	        // Lastspitzenkappung: Sollwertsprünge begrenzen, damit der Speicher nicht "nervös" regelt.
 	        // Hinweis: Für schnellere Reaktion -> "Max ΔW/Tick" erhöhen bzw. im Peak‑Shaving eine Reserve (W) setzen,
@@ -2003,15 +1910,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 	            targetW = _prevRampW + Math.sign(d) * maxDelta;
 	            reason = `${reason} (LSK‑Rampe)`;
 	        }
-    } else if ((source === 'eigenverbrauch' || source === 'tarif') && targetW > 0) {
-        // NVP-Balancing muss Lastsprünge und konstanten Restbezug schneller übernehmen
-        // als die allgemeine Sicherheitsrampe. Erhöhung begrenzen, Absenkung direkt erlauben
-        // (gegen Export/Überschwingen nach Lastabwurf).
-        if (d > 0 && nvpMaxDelta > 0 && d > nvpMaxDelta) {
-            targetW = _prevRampW + nvpMaxDelta;
-            reason = `${reason} (NVP‑Schnellrampe)`;
-        }
-        // d < 0: keine zusätzliche Begrenzung, damit bei PV/Lastabwurf sofort reduziert wird.
     } else if (source === 'fenecon' || this._lastSource === 'fenecon') {
         // FENECON AC-Lastfolger: Lastsprünge müssen in beide Richtungen schnell übernommen werden,
         // sonst bleibt kurz Netzbezug stehen oder es entsteht beim Lastabwurf unnötige Einspeisung.
@@ -2137,11 +2035,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
 					ageMs: (typeof battPowerAge === 'number' && Number.isFinite(battPowerAge)) ? Math.round(battPowerAge) : null,
 					invalidReason: (battPowerInvalidReason && String(battPowerInvalidReason).trim()) ? String(battPowerInvalidReason).trim() : null,
 				},
-				nvpBalance: {
-					feedbackMode: String(nvpFeedbackMode || ''),
-					demandBasisW: (typeof nvpDemandBasisW === 'number' && Number.isFinite(nvpDemandBasisW)) ? Math.round(nvpDemandBasisW) : null,
-					demandClampW: (typeof nvpDemandClampW === 'number' && Number.isFinite(nvpDemandClampW)) ? Math.round(nvpDemandClampW) : null,
-				},
                 soc: (typeof soc === 'number' && Number.isFinite(soc)) ? soc : null,
                 permissions: {
                     gridChargeAllowed: (typeof gridChargeAllowed === 'boolean') ? gridChargeAllowed : null,
@@ -2252,11 +2145,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await this._setIfChanged('speicher.regelung.maxDischargeW', (maxDischargeLimitW_cfg > 0) ? Math.round(maxDischargeLimitW_cfg) : 0);
         await this._setIfChanged('speicher.regelung.stepW', Math.round(stepW));
         await this._setIfChanged('speicher.regelung.maxDeltaWPerTick', Math.round(maxDelta));
-        await this._setIfChanged('speicher.regelung.nvpMaxDeltaWPerTick', Math.round(nvpMaxDelta));
-        await this._setIfChanged('speicher.regelung.nvpSafetyMarginW', Math.round(nvpSafetyMarginW));
-        await this._setIfChanged('speicher.regelung.nvpDemandBasisW', (typeof nvpDemandBasisW === 'number' && Number.isFinite(nvpDemandBasisW)) ? Math.round(nvpDemandBasisW) : null);
-        await this._setIfChanged('speicher.regelung.nvpDemandClampW', (typeof nvpDemandClampW === 'number' && Number.isFinite(nvpDemandClampW)) ? Math.round(nvpDemandClampW) : null);
-        await this._setIfChanged('speicher.regelung.nvpFeedbackMode', String(nvpFeedbackMode || ''));
         await this._setIfChanged('speicher.regelung.pvSchwelleW', Math.round(Math.max(0, num(cfg.pvExportThresholdW, 200))));
     }
 
@@ -2273,8 +2161,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             stepW: storage.stepW,
             maxDeltaWPerTick: storage.maxDeltaWPerTick,
             pvMaxDeltaWPerTick: storage.pvMaxDeltaWPerTick,
-            nvpMaxDeltaWPerTick: storage.nvpMaxDeltaWPerTick,
-            nvpSafetyMarginW: storage.nvpSafetyMarginW,
             reserveEnabled: storage.reserveEnabled,
             reserveMinSocPct: storage.reserveMinSocPct,
             reserveTargetSocPct: storage.reserveTargetSocPct,
@@ -2754,11 +2640,6 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
         await mk('speicher.regelung.maxDischargeW', 'Max Entladeleistung (W)', 'number', 'value.power', 0);
         await mk('speicher.regelung.stepW', 'Schrittweite (W)', 'number', 'value', 0);
         await mk('speicher.regelung.maxDeltaWPerTick', 'Max Änderung je Takt (W)', 'number', 'value.power', 0);
-        await mk('speicher.regelung.nvpMaxDeltaWPerTick', 'NVP Max Änderung je Takt (W)', 'number', 'value.power', 0);
-        await mk('speicher.regelung.nvpSafetyMarginW', 'NVP Sicherheitsaufschlag (W)', 'number', 'value.power', 0);
-        await mk('speicher.regelung.nvpDemandBasisW', 'NVP Demand-Basis für Clamp (W)', 'number', 'value.power', null);
-        await mk('speicher.regelung.nvpDemandClampW', 'NVP Demand-Clamp Grenze (W)', 'number', 'value.power', null);
-        await mk('speicher.regelung.nvpFeedbackMode', 'NVP Feedback-Modus', 'string', 'text', '');
         await mk('speicher.regelung.pvSchwelleW', 'PV-Überschuss-Schwelle (W)', 'number', 'value.power', 0);
     }
 

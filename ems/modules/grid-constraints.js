@@ -191,18 +191,7 @@ class GridConstraintsModule extends BaseModule {
         return 'off';
     }
 
-    _getInstalledPvPowerW() {
-        const ic = (this.adapter && this.adapter.config && this.adapter.config.installerConfig && typeof this.adapter.config.installerConfig === 'object')
-            ? this.adapter.config.installerConfig
-            : {};
-        const kwpRaw = ic.installedPvPowerKwp ?? ic.pvInstalledPowerKwp ?? ic.pvRatedPowerKwp;
-        const kwp = Number(typeof kwpRaw === 'string' ? kwpRaw.replace(',', '.') : kwpRaw);
-        if (Number.isFinite(kwp) && kwp > 0) return Math.round(kwp * 1000);
-        const w = Number(ic.installedPvPowerW ?? ic.pvInstalledPowerW);
-        return (Number.isFinite(w) && w > 0) ? Math.round(w) : 0;
-    }
-
-    _normalizeInvList(list, fallbackTotalW = 0) {
+    _normalizeInvList(list) {
         const arr = Array.isArray(list) ? list : [];
         const out = [];
         for (let i = 0; i < arr.length; i++) {
@@ -216,17 +205,6 @@ class GridConstraintsModule extends BaseModule {
                 name: String(it.name || '').trim(),
                 ratedW,
             });
-        }
-
-        // Stabilitätsfix 0.6.270:
-        // Die zentrale Anlagenleistung aus Zuordnung -> Allgemein darf die WR-Gruppen-
-        // Abregelung nicht blind auf mehrere Wechselrichter verteilen. Eine falsche
-        // Verteilung kann mit der Speicher-NVP-Regelung gegeneinander laufen.
-        // Fallback daher nur bei eindeutigem Einzel-WR; Multi-WR braucht eigene kWp-Werte.
-        const total = out.reduce((sum, it) => sum + (Number(it.ratedW) || 0), 0);
-        const fallback = Math.max(0, Math.round(Number(fallbackTotalW) || 0));
-        if (out.length === 1 && total <= 0 && fallback > 0) {
-            out[0].ratedW = fallback;
         }
         return out;
     }
@@ -252,7 +230,7 @@ class GridConstraintsModule extends BaseModule {
 
     async _tickPvEvu(nowMs, cfg) {
         const enabled = !!cfg.pvEvuEnabled;
-        const inv = this._normalizeInvList(cfg.pvCurtailInvertersEvu, this._getRatedPvW(cfg));
+        const inv = this._normalizeInvList(cfg.pvCurtailInvertersEvu);
 
         if (!enabled || inv.length === 0) {
             // keep states meaningful
@@ -283,7 +261,7 @@ class GridConstraintsModule extends BaseModule {
 
     async _tickZeroExportGroup(nowMs, gridW, cfg, gridStale) {
         const enabled = !!cfg.zeroExportEnabled;
-        const inv = this._normalizeInvList(cfg.pvCurtailInvertersZero, this._getRatedPvW(cfg));
+        const inv = this._normalizeInvList(cfg.pvCurtailInvertersZero);
 
         const biasW = Math.max(0, this._num(cfg.zeroExportBiasW, 80));
         const deadbandW = Math.max(0, this._num(cfg.zeroExportDeadbandW, 50));
@@ -617,8 +595,6 @@ class GridConstraintsModule extends BaseModule {
     _getRatedPvW(cfg) {
         const explicit = this._num(cfg.pvRatedPowerW, 0);
         if (explicit > 0) return explicit;
-        const central = this._getInstalledPvPowerW();
-        if (central > 0) return central;
         const dp = this.dp;
         const v = dp ? dp.getNumber('pv.ratedPowerW', 0) : 0;
         return this._num(v, 0);

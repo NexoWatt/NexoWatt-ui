@@ -104,13 +104,6 @@
             </div>
           </div>
           <div class="nw-config-field-row">
-            <div class="nw-config-field-label">Installierte PV-Leistung (kWp)</div>
-            <div class="nw-config-field-control nw-config-field-control--stack">
-              <input id="installedPvPowerKwp" class="nw-config-input" type="number" min="0" step="0.01" placeholder="z.B. 16.8"/>
-              <div class="nw-config-field-hint">Direkte Anlagenleistung ohne Datenpunkt-Auswahl. Wird zentral für PV-Plausibilität, 0-/Minus-Einspeisung und Heizstab-PV-Only-Schutz genutzt.</div>
-            </div>
-          </div>
-          <div class="nw-config-field-row">
             <div class="nw-config-field-label">Netzpunkt-Messung (W/kW) (Import+ / Export-)</div>
             <div class="nw-config-field-control nw-config-field-control--stack">
               <div class="nw-config-dp-input-wrapper">
@@ -457,21 +450,6 @@
                 <span style="opacity:.85;font-size:.78rem;">W</span>
                 <span style="opacity:.85;font-size:.78rem;">±</span>
                 <input id="muSelfDeadbandW" type="number" class="nw-config-input" style="width:110px;" min="0" max="100000" step="10" placeholder="50" />
-                <span style="opacity:.85;font-size:.78rem;">W</span>
-              </div>
-            </div>
-
-            <div class="nw-config-item">
-              <div class="nw-config-item__left">
-                <div class="nw-config-item__title">NVP‑Dynamik / Speicherreaktion</div>
-                <div class="nw-config-item__subtitle">Schnellere Nachregelung bei Rest‑Netzbezug. Höherer Wert = schnelleres Hochfahren der Entladeleistung; Absenken bleibt sofort möglich.</div>
-              </div>
-              <div class="nw-config-item__right" style="gap:10px;display:flex;align-items:center;flex-wrap:wrap;">
-                <span style="opacity:.85;font-size:.78rem;">Max Δ</span>
-                <input id="muNvpMaxDeltaW" type="number" class="nw-config-input" style="width:110px;" min="0" max="100000" step="50" placeholder="2000" />
-                <span style="opacity:.85;font-size:.78rem;">W/Takt</span>
-                <span style="opacity:.85;font-size:.78rem;">Puffer</span>
-                <input id="muNvpSafetyMarginW" type="number" class="nw-config-input" style="width:110px;" min="0" max="10000" step="10" placeholder="250" />
                 <span style="opacity:.85;font-size:.78rem;">W</span>
               </div>
             </div>
@@ -1177,6 +1155,6 @@
 
 </main>
 
-<script src="/static/ems-apps.js?v=0.6.270"></script>
+<script src="/static/ems-apps.js"></script>
 </body>
 </html>
