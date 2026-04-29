@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.262",
+    "version": "0.6.264",
     "news": {
+      "0.6.264": {
+        "en": "Storage control: single-storage NVP balancing now keeps the last setpoint as demand basis when feedback is slow or missing, avoiding residual grid import dips with steady loads.",
+        "de": "Speicherregelung: Single-Speicher-NVP-Balancing nutzt bei träger/fehlender Istleistungsrückmeldung den letzten Sollwert als Demand-Basis, damit bei gleichmäßiger Last keine Rest-Netzbezug-Dellen entstehen."
+      },
       "0.6.262": {
         "en": "SmartHome VIS: status/sensor measurement tiles now show their values large and centered like temperature tiles, with configurable units and precision.",
         "de": "SmartHome VIS: Status-/Messwert-Kacheln zeigen ihre Werte jetzt groß und zentriert wie Temperatur-Kacheln, inklusive einstellbarer Funktionseinheit und Nachkommastellen."
@@ -1810,7 +1814,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.262",
+  "version": "0.6.264",
   "news": {
     "0.6.262": {
       "en": "SmartHome VIS: status/sensor measurement tiles now show their values large and centered like temperature tiles, with configurable units and precision.",

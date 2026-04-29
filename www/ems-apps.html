@@ -454,6 +454,21 @@
               </div>
             </div>
 
+            <div class="nw-config-item">
+              <div class="nw-config-item__left">
+                <div class="nw-config-item__title">NVP‑Dynamik / Speicherreaktion</div>
+                <div class="nw-config-item__subtitle">Schnellere Nachregelung bei Rest‑Netzbezug. Höherer Wert = schnelleres Hochfahren der Entladeleistung; Absenken bleibt sofort möglich.</div>
+              </div>
+              <div class="nw-config-item__right" style="gap:10px;display:flex;align-items:center;flex-wrap:wrap;">
+                <span style="opacity:.85;font-size:.78rem;">Max Δ</span>
+                <input id="muNvpMaxDeltaW" type="number" class="nw-config-input" style="width:110px;" min="0" max="100000" step="50" placeholder="2000" />
+                <span style="opacity:.85;font-size:.78rem;">W/Takt</span>
+                <span style="opacity:.85;font-size:.78rem;">Puffer</span>
+                <input id="muNvpSafetyMarginW" type="number" class="nw-config-input" style="width:110px;" min="0" max="10000" step="10" placeholder="250" />
+                <span style="opacity:.85;font-size:.78rem;">W</span>
+              </div>
+            </div>
+
             <div class="nw-config-card__row" style="margin-top:10px;opacity:.85;line-height:1.35;">
               Beispiel: Reserve Min=10/Ziel=10, LSK 10–50, Eigenverbrauch 50–100 (alles % SoC).
             </div>

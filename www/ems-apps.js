@@ -68,6 +68,8 @@
     muSelfMaxSoc: document.getElementById('muSelfMaxSoc'),
     muSelfTargetGridW: document.getElementById('muSelfTargetGridW'),
     muSelfDeadbandW: document.getElementById('muSelfDeadbandW'),
+    muNvpMaxDeltaW: document.getElementById('muNvpMaxDeltaW'),
+    muNvpSafetyMarginW: document.getElementById('muNvpSafetyMarginW'),
     muStorageSummary: document.getElementById('muStorageSummary'),
 
     // §14a
@@ -5073,6 +5075,8 @@ function _collectFlowPowerDpIsWFromUI() {
     // Default ab Phase 6.4: Ziel 50 W Import, Deadband ±50 W.
     mu.selfTargetGridImportW = _clampInt(mu.selfTargetGridImportW, 0, 1000000, 50);
     mu.selfImportThresholdW = _clampInt(mu.selfImportThresholdW, 0, 1000000, 50);
+    mu.nvpMaxDeltaWPerTick = _clampInt(mu.nvpMaxDeltaWPerTick, 0, 1000000, 2000);
+    mu.nvpSafetyMarginW = _clampInt(mu.nvpSafetyMarginW, 0, 1000000, 250);
 
     // Legacy-Felder beibehalten (Anzeige/Kompatibilität), aber normalisieren
     mu.reserveToSocPct = reserveTo;
@@ -5103,6 +5107,8 @@ function _collectFlowPowerDpIsWFromUI() {
 
     const selfTargetW = _clampInt(mu.selfTargetGridImportW, 0, 1000000, 50);
     const selfDeadbandW = _clampInt(mu.selfImportThresholdW, 0, 1000000, 50);
+    const nvpMaxDeltaW = _clampInt(mu.nvpMaxDeltaWPerTick, 0, 1000000, 2000);
+    const nvpSafetyMarginW = _clampInt(mu.nvpSafetyMarginW, 0, 1000000, 250);
 
     const lines = [
       `Zonen: Reserve 0–${reserveMin} %, LSK ${lskMin}–${lskMax} %, Eigenverbrauch ${selfMin}–${selfMax} %`,
@@ -5110,6 +5116,7 @@ function _collectFlowPowerDpIsWFromUI() {
       `lskEnabled = ${peakOn ? 'true' : 'false'}  | lskMinSocPct = ${lskMin}  | lskMaxSocPct = ${lskMax}`,
       `selfDischargeEnabled = ${selfOn ? 'true' : 'false'}  | selfMinSocPct = ${selfMin}  | selfMaxSocPct = ${selfMax}`,
       `selfTargetGridImportW = ${selfTargetW} W  | selfDeadbandW = ±${selfDeadbandW} W`,
+      `nvpMaxDeltaWPerTick = ${nvpMaxDeltaW} W/Takt  | nvpSafetyMarginW = ${nvpSafetyMarginW} W`,
     ];
 
     els.muStorageSummary.innerHTML = '';
@@ -5142,6 +5149,8 @@ function _collectFlowPowerDpIsWFromUI() {
       if (els.muSelfMaxSoc) els.muSelfMaxSoc.disabled = d;
       if (els.muSelfTargetGridW) els.muSelfTargetGridW.disabled = d;
       if (els.muSelfDeadbandW) els.muSelfDeadbandW.disabled = d;
+      if (els.muNvpMaxDeltaW) els.muNvpMaxDeltaW.disabled = d;
+      if (els.muNvpSafetyMarginW) els.muNvpSafetyMarginW.disabled = d;
     };
 
     setDisabled(!a.installed);
@@ -5163,6 +5172,8 @@ function _collectFlowPowerDpIsWFromUI() {
       if (els.muSelfMaxSoc) els.muSelfMaxSoc.value = numOrEmpty(mu2.selfMaxSocPct);
       if (els.muSelfTargetGridW) els.muSelfTargetGridW.value = numOrEmpty(mu2.selfTargetGridImportW);
       if (els.muSelfDeadbandW) els.muSelfDeadbandW.value = numOrEmpty(mu2.selfImportThresholdW);
+      if (els.muNvpMaxDeltaW) els.muNvpMaxDeltaW.value = numOrEmpty(mu2.nvpMaxDeltaWPerTick);
+      if (els.muNvpSafetyMarginW) els.muNvpSafetyMarginW.value = numOrEmpty(mu2.nvpSafetyMarginW);
 
       _renderStorageMultiUseSummary(mu2);
     };
@@ -5192,6 +5203,8 @@ function _collectFlowPowerDpIsWFromUI() {
       // NVP‑Regelung (Eigenverbrauch)
       const selfTargetW = _clampInt(els.muSelfTargetGridW ? els.muSelfTargetGridW.value : mu2.selfTargetGridImportW, 0, 1000000, 50);
       const selfDeadbandW = _clampInt(els.muSelfDeadbandW ? els.muSelfDeadbandW.value : mu2.selfImportThresholdW, 0, 1000000, 50);
+      const nvpMaxDeltaW = _clampInt(els.muNvpMaxDeltaW ? els.muNvpMaxDeltaW.value : mu2.nvpMaxDeltaWPerTick, 0, 1000000, 2000);
+      const nvpSafetyMarginW = _clampInt(els.muNvpSafetyMarginW ? els.muNvpSafetyMarginW.value : mu2.nvpSafetyMarginW, 0, 1000000, 250);
 
       mu2.reserveMinSocPct = reserveMin;
       mu2.reserveTargetSocPct = reserveTarget;
@@ -5201,6 +5214,8 @@ function _collectFlowPowerDpIsWFromUI() {
       mu2.selfMaxSocPct = selfMax;
       mu2.selfTargetGridImportW = selfTargetW;
       mu2.selfImportThresholdW = selfDeadbandW;
+      mu2.nvpMaxDeltaWPerTick = nvpMaxDeltaW;
+      mu2.nvpSafetyMarginW = nvpSafetyMarginW;
 
       // Legacy fields keep a meaningful approximation
       mu2.reserveToSocPct = reserveMin;
@@ -5216,6 +5231,8 @@ function _collectFlowPowerDpIsWFromUI() {
       if (els.muSelfMaxSoc) els.muSelfMaxSoc.value = numOrEmpty(selfMax);
       if (els.muSelfTargetGridW) els.muSelfTargetGridW.value = numOrEmpty(selfTargetW);
       if (els.muSelfDeadbandW) els.muSelfDeadbandW.value = numOrEmpty(selfDeadbandW);
+      if (els.muNvpMaxDeltaW) els.muNvpMaxDeltaW.value = numOrEmpty(nvpMaxDeltaW);
+      if (els.muNvpSafetyMarginW) els.muNvpSafetyMarginW.value = numOrEmpty(nvpSafetyMarginW);
 
       _renderStorageMultiUseSummary(mu2);
       scheduleValidation(200);
@@ -5234,6 +5251,8 @@ function _collectFlowPowerDpIsWFromUI() {
     if (els.muSelfMaxSoc) els.muSelfMaxSoc.onchange = syncFromUiToCfg;
     if (els.muSelfTargetGridW) els.muSelfTargetGridW.onchange = syncFromUiToCfg;
     if (els.muSelfDeadbandW) els.muSelfDeadbandW.onchange = syncFromUiToCfg;
+    if (els.muNvpMaxDeltaW) els.muNvpMaxDeltaW.onchange = syncFromUiToCfg;
+    if (els.muNvpSafetyMarginW) els.muNvpSafetyMarginW.onchange = syncFromUiToCfg;
 
     syncFromCfgToUi();
 

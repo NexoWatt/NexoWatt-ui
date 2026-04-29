@@ -2445,8 +2445,12 @@ class NexoWattVis extends utils.Adapter {
       // Damit bleiben EMS‑Setups portabel und können später ohne native‑Config übernommen werden.
       const selfTargetGridW = clampInt(mu.selfTargetGridImportW, 0, 1000000, 50);
       const selfDeadbandW = clampInt(mu.selfImportThresholdW, 0, 1000000, 50);
+      const nvpMaxDeltaW = clampInt(mu.nvpMaxDeltaWPerTick, 0, 1000000, 2000);
+      const nvpSafetyMarginW = clampInt(mu.nvpSafetyMarginW, 0, 1000000, 250);
       st.selfTargetGridImportW = selfTargetGridW;
       st.selfImportThresholdW = selfDeadbandW;
+      st.nvpMaxDeltaWPerTick = nvpMaxDeltaW;
+      st.nvpSafetyMarginW = nvpSafetyMarginW;
 
       return nativeObj;
     } catch (e) {
@@ -3200,6 +3204,10 @@ class NexoWattVis extends utils.Adapter {
       totalChargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt Ladeleistung (W) (abgeleitet)' },
       totalDischargePowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt Entladeleistung (W) (abgeleitet)' },
       totalPvPowerW: { type: 'number', role: 'value.power', def: 0, name: 'Gesamt PV-Leistung (W) (DC, abgeleitet)' },
+      powerFeedbackStorages: { type: 'number', role: 'value', def: 0, name: 'Speicher mit frischer Istleistungs-Rückmeldung (Debug)' },
+      powerFeedbackValid: { type: 'boolean', role: 'indicator', def: false, name: 'Farm-Istleistung für Regelung gültig (Debug)' },
+      actualPowerSourcesOnline: { type: 'number', role: 'value', def: 0, name: 'Frische Istleistungsquellen Speicherfarm (Debug)' },
+      actualPowerSourcesTotal: { type: 'number', role: 'value', def: 0, name: 'Konfigurierte Istleistungsquellen Speicherfarm (Debug)' },
       storagesOnline: { type: 'number', role: 'value', def: 0, name: 'Online Speicher (frisch, abgeleitet)' },
       storagesDegraded: { type: 'number', role: 'value', def: 0, name: 'Degraded Speicher (abgeleitet)' },
       storagesDispatchAvailable: { type: 'number', role: 'value', def: 0, name: 'Regelverfügbare Speicher (abgeleitet)' },
@@ -3249,6 +3257,10 @@ class NexoWattVis extends utils.Adapter {
       totalChargePowerW: 0,
       totalDischargePowerW: 0,
       totalPvPowerW: 0,
+      powerFeedbackStorages: 0,
+      powerFeedbackValid: false,
+      actualPowerSourcesOnline: 0,
+      actualPowerSourcesTotal: 0,
       storagesOnline: 0,
       storagesDegraded: 0,
       storagesDispatchAvailable: 0,
@@ -3590,6 +3602,11 @@ class NexoWattVis extends utils.Adapter {
       let availableChargePowerUnbounded = false;
       let availableDischargePowerUnbounded = false;
       let configured = 0;
+      // Anzahl frischer Istleistungs-Quellen. Wichtig für die Speicherregelung:
+      // Wenn eine Farm nur Setpoints hat oder die Istwerte alt sind, darf die
+      // NVP-Regelung diese 0-Werte nicht als echte Batterieleistung verwenden.
+      let actualPowerSourcesOnline = 0;
+      let actualPowerSourcesTotal = 0;
 
       // SoC aggregation must be stable in Farm mode even when a storage
       // temporarily stops responding (adapter hiccups).
@@ -3625,6 +3642,8 @@ class NexoWattVis extends utils.Adapter {
           dischargeDispatchAvailable: false,
           maxChargeW: null,
           maxDischargeW: null,
+          actualPowerFresh: false,
+          actualPowerSource: '',
         };
 
         const socId = String(row.socId || '').trim();
@@ -3821,6 +3840,17 @@ class NexoWattVis extends utils.Adapter {
           return { limitW: staticLimit, configured: false, fresh: true, missing: false, invalid: false };
         };
 
+        const isFreshStateId = async (id) => {
+          const sid = String(id || '').trim();
+          if (!sid) return false;
+          const st = await getState(sid);
+          if (!st || st.val === undefined || st.val === null) return false;
+          // ts = letzte Aktualisierung. Ohne ts werten wir den Wert als nutzbar,
+          // damit ältere Adapter nicht pauschal ausgeschlossen werden.
+          if (typeof st.ts !== 'number' || !Number.isFinite(st.ts)) return true;
+          return (now - Number(st.ts)) <= staleMs;
+        };
+
         const availState = await readBoolDp(availableId);
         const faultState = await readBoolDp(faultId);
         const chargeAllowedState = await readBoolDp(chargeAllowedId);
@@ -3982,6 +4012,9 @@ class NexoWattVis extends utils.Adapter {
         // ---------------------------------------------------------------------
 
         let usedSigned = false;
+        let actualPowerRead = false;
+        let actualPowerFresh = false;
+        let actualPowerSource = '';
 
         if (signedId) {
           const v = await readNumber(signedId, 'power', { allowStale: true });
@@ -3992,12 +4025,23 @@ class NexoWattVis extends utils.Adapter {
             const charge = vv < 0 ? Math.abs(vv) : 0;
             const discharge = vv > 0 ? vv : 0;
 
-            totalCharge += charge;
-            totalDischarge += discharge;
+            const fresh = await isFreshStateId(signedId);
+            // Nur frische Istleistung in die Regel-/Historie-Summe aufnehmen.
+            // Alte Istwerte bleiben als Kachel/Status sichtbar, dürfen aber keine
+            // NVP-Balancing-Berechnung verfälschen.
+            if (fresh) {
+              totalCharge += charge;
+              totalDischarge += discharge;
+            }
 
             status.chargePowerW = charge;
             status.dischargePowerW = discharge;
+            status.actualPowerFresh = !!fresh;
+            status.actualPowerSource = 'signed';
 
+            actualPowerRead = true;
+            actualPowerFresh = actualPowerFresh || !!fresh;
+            actualPowerSource = 'signed';
             usedSigned = true;
           }
         }
@@ -4009,8 +4053,12 @@ class NexoWattVis extends utils.Adapter {
             let vv = invChg ? -v : v;
             // In der Farm interpretieren wir Ladeleistung als positive Größe.
             if (vv < 0) vv = 0;
-            totalCharge += vv;
+            const fresh = await isFreshStateId(chgId);
+            if (fresh) totalCharge += vv;
             status.chargePowerW = vv;
+            actualPowerRead = true;
+            actualPowerFresh = actualPowerFresh || !!fresh;
+            actualPowerSource = actualPowerSource || 'split';
           }
         }
 
@@ -4020,9 +4068,20 @@ class NexoWattVis extends utils.Adapter {
             let vv = invDchg ? -v : v;
             // In der Farm interpretieren wir Entladeleistung als positive Größe.
             if (vv < 0) vv = 0;
-            totalDischarge += vv;
+            const fresh = await isFreshStateId(dchgId);
+            if (fresh) totalDischarge += vv;
             status.dischargePowerW = vv;
+            actualPowerRead = true;
+            actualPowerFresh = actualPowerFresh || !!fresh;
+            actualPowerSource = actualPowerSource || 'split';
           }
+        }
+
+        if (actualPowerRead) {
+          actualPowerSourcesTotal++;
+          status.actualPowerFresh = !!actualPowerFresh;
+          status.actualPowerSource = actualPowerSource || status.actualPowerSource || 'power';
+          if (actualPowerFresh) actualPowerSourcesOnline++;
         }
 
         // PV-Leistung (nur DC-gekoppelte Speicher) – als positive Größe
@@ -4035,6 +4094,8 @@ class NexoWattVis extends utils.Adapter {
             status.pvPowerW = vv;
           }
         }
+
+        status.powerFeedbackFresh = !!actualPowerFresh;
 
         statusRows.push(status);
         available++;
@@ -4050,6 +4111,7 @@ class NexoWattVis extends utils.Adapter {
       const totalSoc = socWeightAll > 0 ? (socWeightedAll / socWeightAll) : 0;
       const totalSocOnline = socWeightOnline > 0 ? (socWeightedOnline / socWeightOnline) : 0;
       const socDegraded = (degraded > 0) || (socSourcesTotal > 0 && socSourcesOnline >= 0 && socSourcesOnline < socSourcesTotal) || (available < configured);
+      const powerFeedbackValid = dispatchAvailableCount > 0 && actualPowerSourcesOnline >= dispatchAvailableCount;
 
       await this.setStateAsync('storageFarm.totalSoc', { val: Math.round(totalSoc * 10) / 10, ack: true });
       await this.setStateAsync('storageFarm.medianSoc', { val: Math.round(medianSoc * 10) / 10, ack: true });
@@ -4057,6 +4119,10 @@ class NexoWattVis extends utils.Adapter {
       await this.setStateAsync('storageFarm.socSourcesTotal', { val: socSourcesTotal, ack: true });
       await this.setStateAsync('storageFarm.socSourcesOnline', { val: socSourcesOnline, ack: true });
       await this.setStateAsync('storageFarm.socDegraded', { val: !!socDegraded, ack: true });
+      await this.setStateAsync('storageFarm.powerFeedbackStorages', { val: actualPowerSourcesOnline, ack: true });
+      await this.setStateAsync('storageFarm.powerFeedbackValid', { val: !!powerFeedbackValid, ack: true });
+      await this.setStateAsync('storageFarm.actualPowerSourcesOnline', { val: actualPowerSourcesOnline, ack: true });
+      await this.setStateAsync('storageFarm.actualPowerSourcesTotal', { val: actualPowerSourcesTotal, ack: true });
       await this.setStateAsync('storageFarm.totalChargePowerW', { val: Math.round(totalCharge), ack: true });
       await this.setStateAsync('storageFarm.totalDischargePowerW', { val: Math.round(totalDischarge), ack: true });
       await this.setStateAsync('storageFarm.totalPvPowerW', { val: Math.round(totalPv), ack: true });
@@ -4080,6 +4146,10 @@ class NexoWattVis extends utils.Adapter {
         this.updateValue('storageFarm.socSourcesTotal', socSourcesTotal, now);
         this.updateValue('storageFarm.socSourcesOnline', socSourcesOnline, now);
         this.updateValue('storageFarm.socDegraded', !!socDegraded, now);
+        this.updateValue('storageFarm.powerFeedbackStorages', actualPowerSourcesOnline, now);
+        this.updateValue('storageFarm.powerFeedbackValid', !!powerFeedbackValid, now);
+        this.updateValue('storageFarm.actualPowerSourcesOnline', actualPowerSourcesOnline, now);
+        this.updateValue('storageFarm.actualPowerSourcesTotal', actualPowerSourcesTotal, now);
         this.updateValue('storageFarm.totalChargePowerW', Math.round(totalCharge), now);
         this.updateValue('storageFarm.totalDischargePowerW', Math.round(totalDischarge), now);
         this.updateValue('storageFarm.totalPvPowerW', Math.round(totalPv), now);
@@ -15589,7 +15659,7 @@ return res.json(out);
       // Weather App (FIS settings)
       'weatherEnabled','weatherUsageMode','weatherApiKey'
     ];
-    const storageFarmLocalKeys = ['enabled', 'mode', 'configJson', 'groupsJson', 'totalSoc', 'medianSoc', 'totalSocOnline', 'socSourcesTotal', 'socSourcesOnline', 'socDegraded', 'totalChargePowerW', 'totalDischargePowerW', 'totalPvPowerW', 'storagesOnline', 'storagesDegraded', 'storagesDispatchAvailable', 'availableChargePowerW', 'availableDischargePowerW', 'storagesTotal', 'storagesStatusJson', 'lastDispatchJson'];
+    const storageFarmLocalKeys = ['enabled', 'mode', 'configJson', 'groupsJson', 'totalSoc', 'medianSoc', 'totalSocOnline', 'socSourcesTotal', 'socSourcesOnline', 'socDegraded', 'totalChargePowerW', 'totalDischargePowerW', 'totalPvPowerW', 'powerFeedbackStorages', 'powerFeedbackValid', 'actualPowerSourcesOnline', 'actualPowerSourcesTotal', 'storagesOnline', 'storagesDegraded', 'storagesDispatchAvailable', 'availableChargePowerW', 'availableDischargePowerW', 'storagesTotal', 'storagesStatusJson', 'lastDispatchJson'];
     // Weitere lokale States, die in der VIS angezeigt werden sollen (ohne Admin-Mapping)
     // Wichtig: Diese Keys müssen auch dann funktionieren, wenn sie NICHT im Admin unter
     // "Datenpunkte" gemappt wurden. Daher wird im Subscribe-Loop unten auf die lokalen

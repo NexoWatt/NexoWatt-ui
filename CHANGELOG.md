@@ -1,3 +1,14 @@
+## 0.6.264
+
+- Speicherregelung: Single-Speicher-NVP-Balancing weiter geschärft. Der Demand-Clamp nutzt bei aktivem Rest-Netzbezug jetzt nicht nur die Batterie-Istleistung, sondern zusätzlich den letzten NVP-Sollwert als Basis, damit eine träge/fehlende Istleistungsrückmeldung den Sollwert nicht künstlich herunterzieht.
+- Speicherregelung: neue Diagnosewerte `speicher.regelung.nvpDemandBasisW`, `speicher.regelung.nvpDemandClampW` und `speicher.regelung.nvpFeedbackMode` ergänzt.
+
+## 0.6.263
+
+- Speicherfarm: NVP-Balancing nutzt Farm-Istleistung nur noch, wenn mindestens ein Speicher eine frische Istleistungs-Rückmeldung liefert.
+- Speicherfarm: neue Diagnose `storageFarm.powerFeedbackStorages` / `powerFeedbackValid` zur Erkennung träger oder fehlender Batterie-Istleistungs-DPs.
+- Speicherregelung: Signed-Setpoint-only / träge Istleistungs-DPs fallen jetzt auf last-setpoint-basiertes Balancing zurück, statt fälschlich mit 0 W Batterie-Istleistung zu toggeln.
+
 ## 0.6.262
 - SmartHome VIS: sensor/status measurement tiles now render their current value large and centered like temperature tiles, including non-temperature Status/Messwerte devices.
 - SmartHome Config: sensor devices now expose an Anzeige/Funktionseinheit selector with units °C, W, kW, kWh, Lux, CO₂, V, A, Wh, %, K, m/s, km/h and ppm plus decimal precision.
