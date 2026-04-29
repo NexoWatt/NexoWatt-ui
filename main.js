@@ -205,6 +205,8 @@ class NexoWattVis extends utils.Adapter {
       // to avoid triggering ioBroker instance restarts (which broke the App‑Center “save”).
       configJson:   { type: 'string', role: 'json', def: '{}' },
       gridConnectionPower: { type: 'number', role: 'value.power', def: 0 },
+      installedPvPowerKwp: { type: 'number', role: 'value', def: 0 },
+      installedPvPowerW: { type: 'number', role: 'value.power', def: 0 },
       para14a:      { type: 'boolean', role: 'state', def: false },
       chargepoints: { type: 'number', role: 'state', def: 0 },
       storageCount: { type: 'number', role: 'state', def: 0 },
@@ -4831,9 +4833,20 @@ try {
 
   async syncInstallerConfigToStates() {
     const cfg = (this.config && this.config.installerConfig) || {};
+    const installedPvKwp = (() => {
+      const rawKwp = cfg.installedPvPowerKwp ?? cfg.pvInstalledPowerKwp ?? cfg.pvRatedPowerKwp;
+      const kwp = Number(String(rawKwp ?? '').replace(',', '.'));
+      if (Number.isFinite(kwp) && kwp > 0) return kwp;
+      const rawW = cfg.installedPvPowerW ?? cfg.pvInstalledPowerW;
+      const w = Number(rawW);
+      return (Number.isFinite(w) && w > 0) ? (w / 1000) : 0;
+    })();
+    const installedPvW = Math.max(0, Math.round(installedPvKwp * 1000));
     const toSet = {
       adminUrl: cfg.adminUrl || '',
       gridConnectionPower: Number(cfg.gridConnectionPower || 0),
+      installedPvPowerKwp: Math.round(installedPvKwp * 1000) / 1000,
+      installedPvPowerW: installedPvW,
       para14a: !!cfg.para14a,
       chargepoints: Number(cfg.chargepoints || 0),
       storageCount: Number(cfg.storageCount || 0),

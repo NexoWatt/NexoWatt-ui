@@ -1,3 +1,11 @@
+## 0.6.267
+
+- Heizstab: PV-Auto arbeitet jetzt strikt mit einem PV-only-Budget aus aktueller PV-Erzeugung minus nicht-Heizstab-Gebäudelast minus Speicherreserve. Dadurch können automatische Stufen nicht mehr durch Akku-Entladung am Leben gehalten werden.
+- Heizstab: Die globale Mindest-PV-Schwelle schaltet PV-Auto-Stufen nun aktiv zurück/aus; manuelle Stufen, Boost und bewusst deaktivierte Regelung bleiben unangetastet.
+- App-Center: Unter Zuordnung → Allgemein wurde eine direkte Eingabe für die installierte PV-Leistung in kWp ergänzt. Der Wert wird zentral gespiegelt und für PV-Plausibilität/Abregel-Logiken genutzt, ohne separaten Datenpunkt.
+- PV-Abregelung: Wechselrichter-Gruppen ohne eigene kWp-Aufteilung können die zentrale installierte PV-Leistung als Fallback für die Nennleistung nutzen.
+- Webcache auf 0.6.267 erhöht.
+
 ## 0.6.266
 
 - Rollback-Build auf Basis von 0.6.264: Heizstab-Änderung aus 0.6.265 zur direkten 0-Einspeise-PV-Bilanz zurückgenommen.

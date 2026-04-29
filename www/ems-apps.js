@@ -14,6 +14,7 @@
 
 
     gridConnectionPower: document.getElementById('gridConnectionPower'),
+    installedPvPowerKwp: document.getElementById('installedPvPowerKwp'),
     gridPointPowerId: document.getElementById('gridPointPowerId'),
     gridPointPowerIdDisplay: document.getElementById('gridPointPowerIdDisplay'),
     gridPointConnectedId: document.getElementById('gridPointConnectedId'),
@@ -549,6 +550,23 @@ function _collectFlowPowerDpIsWFromUI() {
   function numOrEmpty(v) {
     return (typeof v === 'number' && Number.isFinite(v)) ? String(v) : '';
   }
+
+function installedPvKwpFromConfig(cfg) {
+  const c = (cfg && typeof cfg === 'object') ? cfg : {};
+  const ic = (c.installerConfig && typeof c.installerConfig === 'object') ? c.installerConfig : {};
+  const gc = (c.gridConstraints && typeof c.gridConstraints === 'object') ? c.gridConstraints : {};
+  const kwpCandidates = [ic.installedPvPowerKwp, ic.pvInstalledPowerKwp, ic.pvRatedPowerKwp];
+  for (const raw of kwpCandidates) {
+    const n = Number(String(raw ?? '').replace(',', '.'));
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  const wCandidates = [ic.installedPvPowerW, ic.pvInstalledPowerW, gc.pvRatedPowerW];
+  for (const raw of wCandidates) {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n > 0) return Math.round((n / 1000) * 1000) / 1000;
+  }
+  return 0;
+}
 
   function buildAppsUI() {
     if (!els.appsList) return;
@@ -2068,7 +2086,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
     const grpCoord = _mkCfgGroup('Speicher-Koordination');
     grpCoord.body.appendChild(_mkCfgField('Speicher-Reserve (W)', _mkCfgInput('number', cfg.storageReserveW, (v) => { cfg.storageReserveW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'PV-Auto lässt diese Leistung für die Speicherladung frei, solange der Speicher unter dem Ziel-SoC liegt.'));
-    grpCoord.body.appendChild(_mkCfgField('PV-Auto erst ab PV-Erzeugung (W)', _mkCfgInput('number', cfg.minPvPowerW, (v) => { cfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Unterhalb dieser aktuell erkannten PV-Leistung regelt die App den Heizstab nicht und schreibt auch kein automatisches AUS. Manuelle Schaltungen bleiben unverändert. Empfehlung: 800 W.'));
+    grpCoord.body.appendChild(_mkCfgField('PV-Auto erst ab PV-Erzeugung (W)', _mkCfgInput('number', cfg.minPvPowerW, (v) => { cfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Unterhalb dieser aktuell erkannten PV-Leistung schaltet PV-Auto automatisch zurück/aus. Manuelle Schaltungen, Boost und bewusst deaktivierte Regelung bleiben unverändert. Empfehlung: 800 W.'));
     grpCoord.body.appendChild(_mkCfgField('Reserve bis SoC (%)', _mkCfgInput('number', cfg.storageTargetSocPct, (v) => { cfg.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '130px' }), 'Ab diesem Speicher-SoC darf der Heizstab den PV-Überschuss ohne Reserve nutzen.'));
     const coordHint = document.createElement('div');
     coordHint.className = 'nw-config-field-hint';
@@ -6095,6 +6113,10 @@ function _collectFlowPowerDpIsWFromUI() {
 
     // Plant params
     els.gridConnectionPower.value = numOrEmpty(currentConfig.installerConfig && currentConfig.installerConfig.gridConnectionPower);
+    if (els.installedPvPowerKwp) {
+      const pvKwp = installedPvKwpFromConfig(currentConfig);
+      els.installedPvPowerKwp.value = pvKwp > 0 ? String(pvKwp) : '';
+    }
     els.schedulerIntervalMs.value = numOrEmpty(currentConfig.schedulerIntervalMs);
 
     const dps = currentConfig.datapoints || {};
@@ -7072,6 +7094,14 @@ function _collectFlowPowerDpIsWFromUI() {
     patch.installerConfig = patch.installerConfig || {};
     if (Number.isFinite(gcp) && gcp >= 0) patch.installerConfig.gridConnectionPower = Math.round(gcp);
 
+    if (els.installedPvPowerKwp) {
+      const pvKwpRaw = String(els.installedPvPowerKwp.value || '').replace(',', '.');
+      const pvKwp = Number(pvKwpRaw);
+      if (Number.isFinite(pvKwp) && pvKwp >= 0) {
+        patch.installerConfig.installedPvPowerKwp = Math.round(pvKwp * 1000) / 1000;
+        patch.installerConfig.installedPvPowerW = Math.round(pvKwp * 1000);
+      }
+    }
 
     // §14a (Netzsteuerung)
     try {
@@ -7197,6 +7227,19 @@ function _collectFlowPowerDpIsWFromUI() {
 
     // Keep installerConfig as single source of truth for installer-only features
     patch.installerConfig = deepMerge({}, (currentConfig && currentConfig.installerConfig) ? currentConfig.installerConfig : {}, patch.installerConfig || {});
+
+    // Zentral eingegebene PV-Anlagenleistung als W-Wert spiegeln; GridConstraints nutzt diesen
+    // Wert als PV-Nennleistung, ohne dafür einen separaten DP auswählen zu müssen.
+    try {
+      const pvKwp = Number(String(patch.installerConfig.installedPvPowerKwp ?? '').replace(',', '.'));
+      if (Number.isFinite(pvKwp) && pvKwp >= 0) {
+        const pvW = Math.round(pvKwp * 1000);
+        patch.installerConfig.installedPvPowerKwp = Math.round(pvKwp * 1000) / 1000;
+        patch.installerConfig.installedPvPowerW = pvW;
+        patch.gridConstraints = deepMerge({}, patch.gridConstraints || {});
+        patch.gridConstraints.pvRatedPowerW = pvW;
+      }
+    } catch (_e) {}
 
     return patch;
   }
