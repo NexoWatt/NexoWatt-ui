@@ -1,3 +1,10 @@
+## 0.6.265
+
+- Heizstab: 0-/Minus-Einspeise-Logik erweitert. Bei aktiver 0-Einspeisung wird der nutzbare Heizstab-Überschuss jetzt zusätzlich aus `PV-Erzeugung - Gebäudelast - Speicherreserve` berechnet, weil am Netzanschlusspunkt durch die 0-Einspeisung kein echter Export sichtbar ist.
+- Heizstab: Speicher-Reserve und Reserve-bis-SoC wirken jetzt auch auf diese direkte PV-Bilanz, sodass der Speicher bis zum Ziel-SoC weiterhin definierte PV-Leistung reserviert bekommt.
+- Heizstab: neue Diagnosewerte für direkte PV-Bilanz ergänzt (`buildingLoadW`, `nonFlexLoadW`, `pvDirectSurplusBeforeFlexW`, `pvDirectAvailableW`, `zeroExportPvBalanceActive`).
+- Heizstab-Admin: Option „PV-Bilanz aus Erzeugung nutzen“ im Bereich 0-Einspeisung ergänzt und standardmäßig aktiviert.
+
 ## 0.6.264
 
 - Speicherregelung: Single-Speicher-NVP-Balancing weiter geschärft. Der Demand-Clamp nutzt bei aktivem Rest-Netzbezug jetzt nicht nur die Batterie-Istleistung, sondern zusätzlich den letzten NVP-Sollwert als Basis, damit eine träge/fehlende Istleistungsrückmeldung den Sollwert nicht künstlich herunterzieht.
