@@ -1,3 +1,10 @@
+## 0.6.270
+
+- Speicherregelung stabilisiert: PV-Überschuss-Laden nutzt bei aktiver 0-Einspeisung nur noch echten Roh-Export am NVP und addiert keinen Import-Bias mehr. Dadurch lädt der Speicher nicht mehr aus dem Netz, nur weil die 0-Einspeise-Regelung einen kleinen Bezugszielwert fährt.
+- PV-Lade-Sollwert wird sofort auf 0 freigegeben, wenn kein Roh-Export mehr sichtbar ist. Die Standard-Rampe lässt dadurch keine negative Rest-Ladeleistung stehen, die Netzbezug erzeugen könnte.
+- PV-Abregelung/WR-Gruppen stabilisiert: Die zentrale installierte PV-Leistung wird bei mehreren Wechselrichtern nicht mehr blind aufgeteilt. Für Multi-WR-Gruppen sind wieder eigene kWp-Werte je WR nötig; bei einem einzelnen WR bleibt die zentrale kWp-Angabe als Fallback möglich.
+- Webcache auf 0.6.270 erhöht.
+
 ## 0.6.269
 - App-Center Heizstab: Bereich „0-Einspeise-Testlast / PV-Nachregelung“ in klare Unterbereiche gegliedert: Aktivierung & Einspeisegrenze, Stufentest & PV-Nachregelprüfung, Forecast & Speicherfreigabe sowie Netz-/Akku-Schutz.
 - Die Parameter „PV-Nachregelprüfung“, „PV-Anstieg min. (%)“, „PV-Anstieg min. (W)“ und „Erneuter Test nach PV-Fehlanstieg“ stehen jetzt sichtbar im Heizstab-Logikbereich und sind direkt einstellbar.

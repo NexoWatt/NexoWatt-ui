@@ -218,16 +218,15 @@ class GridConstraintsModule extends BaseModule {
             });
         }
 
-        // Wenn pro WR noch keine kWp eingetragen sind, nutzt die Logik die zentrale
-        // Anlagenleistung aus Zuordnung -> Allgemein als Fallback, statt blind zu fahren.
+        // Stabilitätsfix 0.6.270:
+        // Die zentrale Anlagenleistung aus Zuordnung -> Allgemein darf die WR-Gruppen-
+        // Abregelung nicht blind auf mehrere Wechselrichter verteilen. Eine falsche
+        // Verteilung kann mit der Speicher-NVP-Regelung gegeneinander laufen.
+        // Fallback daher nur bei eindeutigem Einzel-WR; Multi-WR braucht eigene kWp-Werte.
         const total = out.reduce((sum, it) => sum + (Number(it.ratedW) || 0), 0);
         const fallback = Math.max(0, Math.round(Number(fallbackTotalW) || 0));
-        if (out.length > 0 && total <= 0 && fallback > 0) {
-            const base = Math.floor(fallback / out.length);
-            const rest = fallback - (base * out.length);
-            for (let i = 0; i < out.length; i++) {
-                out[i].ratedW = base + (i === out.length - 1 ? rest : 0);
-            }
+        if (out.length === 1 && total <= 0 && fallback > 0) {
+            out[0].ratedW = fallback;
         }
         return out;
     }

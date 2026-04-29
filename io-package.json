@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.269",
+    "version": "0.6.270",
     "news": {
+      "0.6.270": {
+        "en": "Storage regulation stability restored: PV surplus charging now uses only real raw export and immediately releases PV charging when export disappears, preventing grid charging. Central installed PV kWp no longer blindly auto-splits multi-inverter zero-export curtailment groups; per-inverter kWp is required for multi-WR groups.",
+        "de": "Speicherregelung stabilisiert: PV-Überschussladung nutzt nur noch echten Roh-Export und gibt PV-Laden sofort frei, sobald der Export weg ist. Dadurch wird Netzladen durch Nachlauf/Bias verhindert. Die zentrale installierte PV-Leistung wird bei Multi-WR-0-Einspeisegruppen nicht mehr blind verteilt; dort sind eigene kWp je WR erforderlich."
+      },
       "0.6.269": {
         "en": "Heating rod App-Center zero/minus-feed-in section reorganized into clear subgroups. PV-rise test parameters are now visible in the heating-rod logic section, with explicit wording that they only affect heating-rod PV-auto test loads. Web cache bumped.",
         "de": "Heizstab App-Center Bereich für 0-/Minus-Einspeisung übersichtlicher gruppiert. Die PV-Nachregel-Testparameter sind jetzt direkt und sichtbar in der Heizstablogik einstellbar, mit klarer Kennzeichnung, dass sie nur die Heizstab-PV-Auto-Testlast betreffen. Webcache erhöht."
@@ -1830,7 +1834,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.269",
+  "version": "0.6.270",
   "news": {
     "0.6.262": {
       "en": "SmartHome VIS: status/sensor measurement tiles now show their values large and centered like temperature tiles, with configurable units and precision.",

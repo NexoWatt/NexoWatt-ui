@@ -1691,11 +1691,11 @@ if (targetW === 0 && selfDischargeEnabled) {
 // 4) Eigenverbrauch: PV-Überschuss laden (wenn keine Lastspitze/Tarif/EV-Entladung aktiv)
         if (targetW === 0 && cfg.pvEnabled !== false && !feneconAcMode) {
             // Zero-Export (Nulleinspeisung): bei Export möglichst früh (Schwellwert) in den Speicher laden.
-            // Hinweis: Extra-Bias nur, wenn Netzladen erlaubt ist (sonst würde der Bias u.U. Netzenergie in den Speicher ziehen).
+            // Wichtig: Die Speicherladung selbst bleibt strikt PV-only; der Import-Bias der
+            // WR-/NVP-Abregelung wird hier nicht auf die Ladeleistung addiert.
             const zeCfg = (this.adapter.config && this.adapter.config.enableGridConstraints) ? (this.adapter.config.gridConstraints || {}) : {};
             const zeEnabled = !!((this.adapter.config && this.adapter.config.enableGridConstraints) && zeCfg.zeroExportEnabled);
             const zeDeadband = Math.max(0, num(zeCfg.zeroExportDeadbandW, 50));
-            const zeBias = Math.max(0, num(zeCfg.zeroExportBiasW, 80));
 
             const thrBase = Math.max(0, num(cfg.pvExportThresholdW, 200));
             const thr = zeEnabled ? Math.min(thrBase, zeDeadband) : thrBase;
@@ -1730,9 +1730,18 @@ if (targetW === 0 && selfDischargeEnabled) {
                 // Für die eigentliche Sollwert-Berechnung nutzen wir den geglätteten Export,
                 // damit die Ladeleistung bei wolkigem Himmel nicht "zittert".
                 const exportCtrlW = (typeof exportW === 'number') ? exportW : exportRawW;
-                const extraBias = (zeEnabled && gridChargeAllowed) ? zeBias : 0;
-                targetW = -clamp(exportCtrlW + extraBias, 0, chargeLimitW);
-                reason = zeEnabled ? 'Nulleinspeisung: Export in Speicher umleiten' : 'Eigenverbrauch: PV-Überschuss laden';
+                const exportRawNowW = Math.max(0, (typeof exportRawW === 'number' && Number.isFinite(exportRawW)) ? exportRawW : 0);
+
+                // Stabilitätsfix 0.6.270:
+                // Bei aktiver 0-Einspeisung darf die Speicher-PV-Ladung NICHT zusätzlich den
+                // Import-Bias der WR-/NVP-Abregelung addieren. Sonst arbeiten Speicher und
+                // PV-Abregelung gegeneinander: erst Einspeisung, dann Netzbezug/Netzladung.
+                // Deshalb lädt diese Policy nur noch den aktuell roh sichtbaren Export weg.
+                // Der geglättete Wert darf die Ladung beruhigen, aber niemals über den
+                // aktuellen Roh-Export hinaus erhöhen.
+                const exportForChargeW = Math.min(Math.max(0, exportCtrlW), exportRawNowW);
+                targetW = -clamp(exportForChargeW, 0, chargeLimitW);
+                reason = zeEnabled ? 'Nulleinspeisung: nur echten PV-Export in Speicher laden' : 'Eigenverbrauch: PV-Überschuss laden';
                 source = 'pv';
             }
         }
@@ -1981,6 +1990,11 @@ const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(thi
             reason = `${reason} (PV‑Rampe)`;
         }
         // d >= 0 => weniger laden / Richtung 0 -> bewusst ohne Rampe (schnell reagieren)
+    } else if (this._lastSource === 'pv' && _prevRampW < 0 && targetW >= 0) {
+        // Stabilitätsfix 0.6.270:
+        // Wenn PV-Überschuss-Laden wegen fehlendem Roh-Export/Netzbezug endet, muss der
+        // Ladesollwert sofort auf 0 freigegeben werden. Die Standard-Rampe würde sonst
+        // eine negative Rest-Ladeleistung stehen lassen und kurz aus dem Netz laden.
     } else if (source === 'lastspitze' && targetW > 0) {
 	        // Lastspitzenkappung: Sollwertsprünge begrenzen, damit der Speicher nicht "nervös" regelt.
 	        // Hinweis: Für schnellere Reaktion -> "Max ΔW/Tick" erhöhen bzw. im Peak‑Shaving eine Reserve (W) setzen,
