@@ -1,3 +1,8 @@
+## 0.6.266
+
+- Rollback-Build auf Basis von 0.6.264: Heizstab-Änderung aus 0.6.265 zur direkten 0-Einspeise-PV-Bilanz zurückgenommen.
+- Beibehalten: SmartHome-Messwert-Kacheln, Farm-Verbesserungen und Single-Speicher-NVP-Regelung aus 0.6.264.
+
 ## 0.6.264
 
 - Speicherregelung: Single-Speicher-NVP-Balancing weiter geschärft. Der Demand-Clamp nutzt bei aktivem Rest-Netzbezug jetzt nicht nur die Batterie-Istleistung, sondern zusätzlich den letzten NVP-Sollwert als Basis, damit eine träge/fehlende Istleistungsrückmeldung den Sollwert nicht künstlich herunterzieht.

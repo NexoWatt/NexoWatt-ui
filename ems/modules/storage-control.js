@@ -1448,7 +1448,7 @@ if (typeof soc === 'number') {
 
 						// Safety-Clamp gegen unnötige Export-Spikes:
 						// Begrenze grob auf aktuelle Hauslast am NVP.
-						// Wichtig für Single-Speicher (0.6.264): Wenn die Batterie-Istleistung fehlt,
+						// Wichtig für Single-Speicher (0.6.266, Stand 0.6.264): Wenn die Batterie-Istleistung fehlt,
 						// verzögert oder als 0 W zurückkommt, darf der Clamp den bestehenden Sollwert
 						// nicht künstlich herunterziehen. Sonst entstehen genau die sichtbaren
 						// Netzbezug-Dellen trotz gleichmäßigem Verbrauch. Bei vorhandenem Import nutzen
