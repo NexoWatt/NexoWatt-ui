@@ -1722,6 +1722,10 @@ function installedPvKwpFromConfig(cfg) {
     zn('stepUpDelaySec', 60, 0, 86400);
     zn('stepDownDelaySec', 5, 0, 86400);
     zn('cooldownSec', 60, 0, 86400);
+    zn('pvRiseObserveSec', 30, 0, 3600);
+    zn('pvRiseMinGainW', 150, 0, 1000000);
+    zn('pvRiseMinRatioPct', 60, 0, 100);
+    zn('pvRiseRetrySec', 600, 0, 86400);
 
     const bySlot = new Map();
     for (const raw of h.devices) {
@@ -2086,7 +2090,7 @@ function installedPvKwpFromConfig(cfg) {
 
     const grpCoord = _mkCfgGroup('Speicher-Koordination');
     grpCoord.body.appendChild(_mkCfgField('Speicher-Reserve (W)', _mkCfgInput('number', cfg.storageReserveW, (v) => { cfg.storageReserveW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'PV-Auto lässt diese Leistung für die Speicherladung frei, solange der Speicher unter dem Ziel-SoC liegt.'));
-    grpCoord.body.appendChild(_mkCfgField('PV-Auto erst ab PV-Erzeugung (W)', _mkCfgInput('number', cfg.minPvPowerW, (v) => { cfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Unterhalb dieser aktuell erkannten PV-Leistung schaltet PV-Auto automatisch zurück/aus. Manuelle Schaltungen, Boost und bewusst deaktivierte Regelung bleiben unverändert. Empfehlung: 800 W.'));
+    grpCoord.body.appendChild(_mkCfgField('PV-Auto erst ab PV-Erzeugung (W)', _mkCfgInput('number', cfg.minPvPowerW, (v) => { cfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Unterhalb dieser aktuell erkannten PV-Leistung geht PV-Auto in Beobachtung: nur eine von PV-Auto selbst gehaltene Stufe wird einmalig abgeworfen, danach bleiben manuelle Schaltungen möglich. Empfehlung: 800 W.'));
     grpCoord.body.appendChild(_mkCfgField('Reserve bis SoC (%)', _mkCfgInput('number', cfg.storageTargetSocPct, (v) => { cfg.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '130px' }), 'Ab diesem Speicher-SoC darf der Heizstab den PV-Überschuss ohne Reserve nutzen.'));
     const coordHint = document.createElement('div');
     coordHint.className = 'nw-config-field-hint';
@@ -2112,10 +2116,14 @@ function installedPvKwpFromConfig(cfg) {
     grpZero.body.appendChild(_mkCfgField('Speicherentladung-Zeit (s)', _mkCfgInput('number', zeroCfg.storageDischargeTripSec, (v) => { zeroCfg.storageDischargeTripSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Erlaubt kurze Speicher-Transienten, reduziert aber bei anhaltender Entladung.'));
     grpZero.body.appendChild(_mkCfgField('Harte Speicherentladung (W)', _mkCfgInput('number', zeroCfg.hardStorageDischargeW, (v) => { zeroCfg.hardStorageDischargeW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Ab dieser Entladung wird sofort komplett zurückgenommen.'));
     grpZero.body.appendChild(_mkCfgField('Stufe-hoch Wartezeit (s)', _mkCfgInput('number', zeroCfg.stepUpDelaySec, (v) => { zeroCfg.stepUpDelaySec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Langsam hochfahren: nur eine physische Stufe je Wartezeit.'));
+    grpZero.body.appendChild(_mkCfgField('PV-Nachregelprüfung (s)', _mkCfgInput('number', zeroCfg.pvRiseObserveSec, (v) => { zeroCfg.pvRiseObserveSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Nach dem Zuschalten einer Teststufe wird so lange geprüft, ob die PV-Erzeugung vom Dach passend mitsteigt.'));
+    grpZero.body.appendChild(_mkCfgField('PV-Anstieg min. (%)', _mkCfgInput('number', zeroCfg.pvRiseMinRatioPct, (v) => { zeroCfg.pvRiseMinRatioPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '150px' }), 'Mindestanteil der neu zugeschalteten Stufenleistung, der als PV-Erzeugungsanstieg sichtbar werden muss.'));
+    grpZero.body.appendChild(_mkCfgField('PV-Anstieg min. (W)', _mkCfgInput('number', zeroCfg.pvRiseMinGainW, (v) => { zeroCfg.pvRiseMinGainW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Zusätzliche absolute Mindeständerung gegen Messrauschen.'));
+    grpZero.body.appendChild(_mkCfgField('Erneuter Test nach PV-Fehlanstieg (s)', _mkCfgInput('number', zeroCfg.pvRiseRetrySec, (v) => { zeroCfg.pvRiseRetrySec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 30, width: '170px' }), 'Wenn die PV-Erzeugung nach einer Teststufe nicht mitsteigt, wird auf die vorige Stufe reduziert und erst nach dieser Zeit erneut probiert. Empfehlung: 600 s.'));
     grpZero.body.appendChild(_mkCfgField('Cooldown nach Abwurf (s)', _mkCfgInput('number', zeroCfg.cooldownSec, (v) => { zeroCfg.cooldownSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Wartezeit nach Netzbezug/Speicherentladung, bevor erneut getestet wird.'));
     const zeroHint = document.createElement('div');
     zeroHint.className = 'nw-config-field-hint';
-    zeroHint.textContent = 'Prinzip: Forecast erlaubt nur den Versuch. Danach wird langsam Stufe für Stufe zugeschaltet. Bei Netzbezug oder Speicherentladung wird schnell reduziert. Manuell, Boost und Aus bleiben davon unberührt.';
+    zeroHint.textContent = 'Prinzip: Forecast erlaubt nur den Versuch. Danach wird eine physische Stufe zugeschaltet und beobachtet: steigt die PV-Erzeugung vom Dach nicht plausibel mit, wird auf die vorige Stufe reduziert und nach der Retry-Zeit erneut getestet. Bei Netzbezug oder Speicherentladung wird zusätzlich schnell reduziert. Manuell, Boost und Aus bleiben davon unberührt.';
     grpZero.body.appendChild(zeroHint);
     els.heatingRodDevices.appendChild(grpZero.wrap);
 

@@ -1,3 +1,12 @@
+## 0.6.268
+
+- Heizstab 0-/Minus-Einspeisung: PV-Auto schaltet Testlast jetzt wirklich stufenweise zu, wartet auf die PV-Nachregelung und prüft, ob die Dach-PV-Erzeugung passend mitsteigt.
+- Wenn nach einer Teststufe kein plausibler PV-Anstieg sichtbar ist, wird auf die vorige physische Stufe reduziert und dort verweilt; der nächste Test erfolgt standardmäßig erst nach 600 s / 10 min.
+- Während der PV-Nachregelprüfung wird der PV-only-Deckel temporär nur für diese Teststufe überbrückt, damit die Stufe nicht sofort wieder vom Budget-Cap entfernt wird, bevor die PV-Anlage nachregeln konnte.
+- Unterhalb der PV-Mindestschwelle geht PV-Auto jetzt manuell-sicher in Beobachtung: nur eine von PV-Auto selbst gehaltene Stufe wird einmalig abgeworfen, danach überschreibt die Automatik manuelle Schaltungen ohne PV nicht mehr.
+- App-Center Heizstab: neue Parameter für PV-Nachregelprüfung, Mindest-PV-Anstieg und Retry-Zeit nach fehlendem PV-Anstieg ergänzt.
+- Webcache auf 0.6.268 erhöht.
+
 ## 0.6.267
 
 - Heizstab: PV-Auto arbeitet jetzt strikt mit einem PV-only-Budget aus aktueller PV-Erzeugung minus nicht-Heizstab-Gebäudelast minus Speicherreserve. Dadurch können automatische Stufen nicht mehr durch Akku-Entladung am Leben gehalten werden.
