@@ -1687,7 +1687,6 @@ function _collectFlowPowerDpIsWFromUI() {
       z[key] = integer ? Math.round(n) : n;
     };
     z.enabled = (typeof z.enabled === 'boolean') ? !!z.enabled : false;
-    z.usePvBalance = (typeof z.usePvBalance === 'boolean') ? !!z.usePvBalance : true;
     zn('feedInLimitW', 1000, 0, 1000000);
     zn('feedInToleranceW', 150, 0, 100000);
     zn('targetExportBufferW', 100, 0, 100000);
@@ -2073,14 +2072,13 @@ function _collectFlowPowerDpIsWFromUI() {
     grpCoord.body.appendChild(_mkCfgField('Reserve bis SoC (%)', _mkCfgInput('number', cfg.storageTargetSocPct, (v) => { cfg.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '130px' }), 'Ab diesem Speicher-SoC darf der Heizstab den PV-Überschuss ohne Reserve nutzen.'));
     const coordHint = document.createElement('div');
     coordHint.className = 'nw-config-field-hint';
-    coordHint.textContent = 'Damit Heizstab und Speicher parallel arbeiten, wird zuerst der Überschuss am Netzanschlusspunkt bilanziert. Bei 0-Einspeisung wird zusätzlich PV-Erzeugung minus Gebäudelast minus Speicherreserve berechnet. Speicherentladung zählt nicht als PV-Überschuss; Speicherladung oberhalb der Reserve kann vom Heizstab genutzt werden.';
+    coordHint.textContent = 'Damit Heizstab und Speicher parallel arbeiten, wird zuerst der Überschuss am Netzanschlusspunkt bilanziert. Speicherentladung zählt nicht als PV-Überschuss; Speicherladung oberhalb der Reserve kann vom Heizstab genutzt werden.';
     grpCoord.body.appendChild(coordHint);
     els.heatingRodDevices.appendChild(grpCoord.wrap);
 
     const zeroCfg = cfg.zeroExport || {};
     const grpZero = _mkCfgGroup('0-Einspeisung / PV-Abregelung nutzen');
     grpZero.body.appendChild(_mkCfgField('Logik aktiv', _mkCfgToggle(!!zeroCfg.enabled, (v) => { zeroCfg.enabled = !!v; setDirty(); }), 'Nur für 0-/Minus-Einspeiseanlagen: PV-Auto darf vorsichtig Stufe für Stufe Testlast zuschalten, wenn Forecast und Einspeiselimit darauf hindeuten, dass PV abgeregelt wird.'));
-    grpZero.body.appendChild(_mkCfgField('PV-Bilanz aus Erzeugung nutzen', _mkCfgToggle(zeroCfg.usePvBalance !== false, (v) => { zeroCfg.usePvBalance = !!v; setDirty(); }), 'Wichtig für echte 0-Einspeisung: nutzbare Heizstableistung wird zusätzlich aus PV-Erzeugung minus Gebäudelast minus Speicherreserve berechnet, weil am NVP kaum Überschuss sichtbar ist.'));
     grpZero.body.appendChild(_mkCfgField('Erlaubte Einspeisung (W)', _mkCfgInput('number', zeroCfg.feedInLimitW, (v) => { zeroCfg.feedInLimitW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Bei -1 kW Einspeiselimit bitte 1000 eintragen. Bei echter 0-Einspeisung 0 eintragen.'));
     grpZero.body.appendChild(_mkCfgField('Einspeise-Toleranz (W)', _mkCfgInput('number', zeroCfg.feedInToleranceW, (v) => { zeroCfg.feedInToleranceW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Ab diesem Korridor gilt der Netzpunkt als am Einspeiselimit.'));
     grpZero.body.appendChild(_mkCfgField('Ziel-Einspeisepuffer (W)', _mkCfgInput('number', zeroCfg.targetExportBufferW, (v) => { zeroCfg.targetExportBufferW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Sicherheitsabstand: die Testlast startet erst, wenn am Einspeiselimit noch dieser Puffer plausibel vorhanden ist.'));

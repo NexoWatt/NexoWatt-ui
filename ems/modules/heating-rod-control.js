@@ -358,11 +358,6 @@ class HeatingRodControlModule extends BaseModule {
         await mk('heatingRod.summary.storageReserveW', 'Reserved storage charge power (W)', 'number', 'value.power', 'W');
         await mk('heatingRod.summary.storageChargeW', 'Storage charge power used for coordination (W)', 'number', 'value.power', 'W');
         await mk('heatingRod.summary.storageDischargeW', 'Storage discharge power used for coordination (W)', 'number', 'value.power', 'W');
-        await mk('heatingRod.summary.buildingLoadW', 'Building load used for PV balance (W)', 'number', 'value.power', 'W');
-        await mk('heatingRod.summary.nonFlexLoadW', 'Non-flexible load used for PV balance (W)', 'number', 'value.power', 'W');
-        await mk('heatingRod.summary.pvDirectSurplusBeforeFlexW', 'Direct PV surplus before reserve (W)', 'number', 'value.power', 'W');
-        await mk('heatingRod.summary.pvDirectAvailableW', 'Direct PV available after storage reserve (W)', 'number', 'value.power', 'W');
-        await mk('heatingRod.summary.zeroExportPvBalanceActive', 'Zero feed-in direct PV balance active', 'boolean', 'indicator');
         await mk('heatingRod.summary.pvAvailableRawW', 'PV available raw (W)', 'number', 'value.power', 'W');
         await mk('heatingRod.summary.pvAvailableW', 'PV available after thermal (W)', 'number', 'value.power', 'W');
         await mk('heatingRod.summary.appliedTotalW', 'Applied total (W)', 'number', 'value.power', 'W');
@@ -532,8 +527,8 @@ class HeatingRodControlModule extends BaseModule {
 
         const pvCapWRaw = this._readNumberAny(['hr.cm.pvCapW', 'chargingManagement.control.pvCapEffectiveW'], staleMs, null);
         const usedWRaw = this._readNumberAny(['hr.cm.usedW', 'chargingManagement.control.usedW'], staleMs, null);
-        const pvCapW = (typeof pvCapWRaw === 'number' && Number.isFinite(pvCapWRaw)) ? Math.max(0, Math.abs(pvCapWRaw)) : 0;
-        const evcsUsedW = (typeof usedWRaw === 'number' && Number.isFinite(usedWRaw)) ? Math.max(0, Math.abs(usedWRaw)) : 0;
+        const pvCapW = (typeof pvCapWRaw === 'number' && Number.isFinite(pvCapWRaw)) ? Math.max(0, pvCapWRaw) : 0;
+        const evcsUsedW = (typeof usedWRaw === 'number' && Number.isFinite(usedWRaw)) ? Math.max(0, usedWRaw) : 0;
 
         const gridW = this._readNumberAny(['grid.powerRawW', 'grid.powerW', 'ps.gridPowerW'], staleMs, null);
         const gridKnown = (typeof gridW === 'number' && Number.isFinite(gridW));
@@ -552,12 +547,6 @@ class HeatingRodControlModule extends BaseModule {
             ? storageReserveCfgW
             : 0;
 
-        const zeroRaw = (cfg.zeroExport && typeof cfg.zeroExport === 'object')
-            ? cfg.zeroExport
-            : ((cfg.zeroFeedIn && typeof cfg.zeroFeedIn === 'object') ? cfg.zeroFeedIn : {});
-        const zeroExportEnabled = !!(zeroRaw && (zeroRaw.enabled || zeroRaw.active));
-        const zeroExportUsePvBalance = zeroRaw.usePvBalance === false ? false : true;
-
         // NVP-Bilanz vor flexiblen Heizstäben:
         //   Export/Import am Netzpunkt + bereits laufende Heizstableistung + Speicherladung - Speicherentladung.
         // Wichtig: Netzbezug muss abgezogen werden. Sonst hält eine bereits laufende Heizstableistung
@@ -570,50 +559,11 @@ class HeatingRodControlModule extends BaseModule {
         const nvpAvailableW = Math.max(0, nvpSurplusBeforeFlexW - storageReserveW);
 
         const cmAvailableW = (pvCapW > 0) ? Math.max(0, pvCapW - evcsUsedW - storageReserveW) : 0;
-
-        // 0-Einspeisung: Am NVP ist oft kein Export sichtbar, obwohl PV abgeregelt oder in den Speicher gedrückt wird.
-        // Für Heizstäbe ist dann die bessere Größe:
-        //   nutzbare PV = aktuelle PV-Erzeugung - Gebäudelast ohne flexible Heizstäbe - Speicherreserve.
-        // Die Speicherreserve bleibt aktiv, solange der Speicher unter dem Ziel-SoC liegt.
-        const pvNowW = Math.max(this._readPvNowW(staleMs), pvCapW);
-        const buildingLoadDirectW = this._readBuildingLoadW(staleMs, null);
-        const buildingLoadFallbackW = (gridKnown && pvNowW > 0)
-            ? Math.max(0, pvNowW + importW + storage.dischargeW - exportW - storage.chargeW)
-            : null;
-        const buildingLoadW = (typeof buildingLoadDirectW === 'number' && Number.isFinite(buildingLoadDirectW))
-            ? buildingLoadDirectW
-            : buildingLoadFallbackW;
-        const buildingLoadKnown = (typeof buildingLoadW === 'number' && Number.isFinite(buildingLoadW));
-        const nonFlexLoadW = buildingLoadKnown ? Math.max(0, buildingLoadW - currentW) : null;
-        const pvDirectSurplusBeforeFlexW = (pvNowW > 0 && nonFlexLoadW !== null)
-            ? Math.max(0, pvNowW - nonFlexLoadW)
-            : 0;
-        const pvDirectAvailableW = Math.max(0, pvDirectSurplusBeforeFlexW - storageReserveW);
-        const zeroExportPvBalanceActive = !!(zeroExportEnabled && zeroExportUsePvBalance && pvDirectAvailableW > 0);
-
-        // Wenn ein frischer Netzpunktwert vorhanden ist, ist er im Normalbetrieb die härtere Wahrheit.
-        // Bei aktiver 0-/Minus-Einspeise-Logik darf zusätzlich die direkte PV-Bilanz genutzt werden,
-        // weil der NVP-Export durch die Anlagenregelung künstlich auf 0 bzw. auf das Einspeiselimit geklemmt wird.
-        let availableW = 0;
-        let source = 'no-fresh-nvp';
-        if (gridKnown) {
-            if (zeroExportPvBalanceActive && pvDirectAvailableW > nvpAvailableW) {
-                availableW = pvDirectAvailableW;
-                source = 'zero-export-pv-balance-storage-reserve';
-            } else {
-                availableW = nvpAvailableW;
-                source = 'nvp-storage-reserve';
-            }
-        } else if (zeroExportPvBalanceActive) {
-            availableW = pvDirectAvailableW;
-            source = 'zero-export-pv-balance-no-nvp';
-        } else if (pvCapW > 0) {
-            availableW = cmAvailableW;
-            source = 'cm-storage-reserve';
-        } else {
-            availableW = 0;
-            source = 'no-fresh-nvp';
-        }
+        // Wenn ein frischer Netzpunktwert vorhanden ist, ist er für Heizstäbe die härtere Wahrheit.
+        // Ohne Netzpunktwert wird ausschließlich das Charging-Management-Cap genutzt; wenn auch das
+        // fehlt, ist die sichere Vorgabe 0 W verfügbar.
+        const availableW = gridKnown ? nvpAvailableW : cmAvailableW;
+        const source = gridKnown ? 'nvp-storage-reserve' : (pvCapW > 0 ? 'cm-storage-reserve' : 'no-fresh-nvp');
 
         // PV-Auto darf keine Netz- oder Speicherenergie nachziehen.
         // Bei echtem Netzbezug oder Speicherentladung muss die Regelung zurücknehmen und darf
@@ -626,8 +576,7 @@ class HeatingRodControlModule extends BaseModule {
         const forceOff = availableW <= 50 && (storageDischargeActive || (gridImportActive && currentW > 0) || (!gridKnown && currentW > 0 && pvCapW <= 0));
 
         return {
-            pvCapW: Math.max(pvCapW, nvpSurplusBeforeFlexW, pvNowW),
-            pvNowW,
+            pvCapW: Math.max(pvCapW, nvpSurplusBeforeFlexW),
             evcsUsedW,
             availableW,
             source,
@@ -649,12 +598,6 @@ class HeatingRodControlModule extends BaseModule {
             nvpSurplusBeforeFlexW,
             cmAvailableW,
             nvpAvailableW,
-            buildingLoadW: buildingLoadKnown ? Math.round(buildingLoadW) : null,
-            nonFlexLoadW: nonFlexLoadW !== null ? Math.round(nonFlexLoadW) : null,
-            pvDirectSurplusBeforeFlexW,
-            pvDirectAvailableW,
-            zeroExportPvBalanceActive,
-            zeroExportUsePvBalance,
             forceOff,
         };
     }
@@ -679,7 +622,6 @@ class HeatingRodControlModule extends BaseModule {
 
         return {
             enabled: !!(raw.enabled || raw.active),
-            usePvBalance: raw.usePvBalance === false ? false : true,
             feedInLimitW: n(['feedInLimitW', 'allowedExportW', 'exportLimitW'], 1000, 0, 1000000),
             feedInToleranceW: n(['feedInToleranceW', 'exportToleranceW'], 150, 0, 100000),
             targetExportBufferW: n(['targetExportBufferW', 'exportBufferW'], 100, 0, 100000),
@@ -742,34 +684,13 @@ class HeatingRodControlModule extends BaseModule {
             'ps.pvW',
             'ps.pvPowerW',
             'chargingManagement.control.pvPowerW',
-            'cm.pvPowerW',
-            'derived.core.pv.totalW',
-            'derived.core.pv.acW'
+            'cm.pvPowerW'
         ], staleMs, null);
-        const farmPv = this._readNumberAny(['storageFarm.totalPvPowerW', 'derived.core.pv.dcW'], staleMs, null);
+        const farmPv = this._readNumberAny(['storageFarm.totalPvPowerW'], staleMs, null);
         let pv = 0;
-        if (typeof basePv === 'number' && Number.isFinite(basePv)) pv = Math.max(pv, Math.abs(basePv));
-        if (typeof farmPv === 'number' && Number.isFinite(farmPv)) pv = Math.max(pv, Math.abs(farmPv));
+        if (typeof basePv === 'number' && Number.isFinite(basePv)) pv = Math.max(pv, basePv);
+        if (typeof farmPv === 'number' && Number.isFinite(farmPv)) pv = Math.max(pv, farmPv);
         return Math.max(0, Math.round(pv));
-    }
-
-    _readBuildingLoadW(staleMs, fallback = null) {
-        const direct = this._readNumberAny([
-            'consumptionTotal',
-            'derived.core.building.loadTotalW',
-            'derived.core.building.loadRestW',
-            'building.loadTotalW',
-            'buildingLoadW',
-            'housePowerW',
-            'loadPowerW',
-            'loadPower'
-        ], staleMs, null);
-
-        if (typeof direct === 'number' && Number.isFinite(direct)) {
-            return Math.max(0, Math.round(Math.abs(direct)));
-        }
-
-        return fallback;
     }
 
     _readForecastSnapshot() {
@@ -876,20 +797,16 @@ class HeatingRodControlModule extends BaseModule {
         const soc = (typeof pvBase.storageSocPct === 'number' && Number.isFinite(pvBase.storageSocPct)) ? pvBase.storageSocPct : null;
         const storageKnown = soc !== null || num(pvBase.storageChargeW, 0) > 0 || num(pvBase.storageDischargeW, 0) > 0;
         const storageReady = !storageKnown || soc === null || soc >= cfg.storageFullSocPct;
-        const pvBalanceReady = !!(cfg.usePvBalance && pvBase && pvBase.zeroExportPvBalanceActive && num(pvBase.pvDirectAvailableW, 0) > 0);
         const noHardNonPv = !(pvBase.importW > cfg.hardGridImportW || pvBase.storageDischargeW > cfg.hardStorageDischargeW);
 
-        const zeroReadyForStep = !!(feedInAtLimit || pvBalanceReady);
-
         let reason = 'ready';
-        if (!zeroReadyForStep) reason = 'feed_in_not_at_limit';
+        if (!feedInAtLimit) reason = 'feed_in_not_at_limit';
         else if (!pvNowOk) reason = 'pv_now_too_low';
         else if (!forecastOk) reason = 'forecast_not_ok';
-        else if (!storageReady && !pvBalanceReady) reason = 'storage_priority';
+        else if (!storageReady) reason = 'storage_priority';
         else if (!noHardNonPv) reason = 'non_pv_hard_block';
-        else if (pvBalanceReady) reason = 'pv_balance_ready';
 
-        const canProbe = !!(zeroReadyForStep && pvNowOk && forecastOk && (storageReady || pvBalanceReady) && noHardNonPv);
+        const canProbe = !!(feedInAtLimit && pvNowOk && forecastOk && storageReady && noHardNonPv);
 
         return {
             active: true,
@@ -898,7 +815,6 @@ class HeatingRodControlModule extends BaseModule {
             cfg,
             pvNowW,
             feedInAtLimit,
-            zeroReadyForStep,
             forecastOk,
             forecast,
             storageReady,
@@ -906,13 +822,6 @@ class HeatingRodControlModule extends BaseModule {
             exportW,
             feedInLimitW: feedLimitW,
             feedInToleranceW: tolW,
-            usePvBalance: cfg.usePvBalance,
-            pvBalanceReady,
-            pvBalanceActive: !!(pvBase && pvBase.zeroExportPvBalanceActive),
-            pvDirectAvailableW: Math.round(num(pvBase && pvBase.pvDirectAvailableW, 0)),
-            pvDirectSurplusBeforeFlexW: Math.round(num(pvBase && pvBase.pvDirectSurplusBeforeFlexW, 0)),
-            buildingLoadW: (pvBase && pvBase.buildingLoadW !== null && pvBase.buildingLoadW !== undefined) ? Math.round(num(pvBase.buildingLoadW, 0)) : null,
-            nonFlexLoadW: (pvBase && pvBase.nonFlexLoadW !== null && pvBase.nonFlexLoadW !== undefined) ? Math.round(num(pvBase.nonFlexLoadW, 0)) : null,
         };
     }
 
@@ -1669,11 +1578,6 @@ class HeatingRodControlModule extends BaseModule {
         await this._setStateIfChanged('heatingRod.summary.storageReserveW', Math.round(num(pvBase.storageReserveW, 0)));
         await this._setStateIfChanged('heatingRod.summary.storageChargeW', Math.round(num(pvBase.storageChargeW, 0)));
         await this._setStateIfChanged('heatingRod.summary.storageDischargeW', Math.round(num(pvBase.storageDischargeW, 0)));
-        await this._setStateIfChanged('heatingRod.summary.buildingLoadW', pvBase.buildingLoadW === null || pvBase.buildingLoadW === undefined ? 0 : Math.round(num(pvBase.buildingLoadW, 0)));
-        await this._setStateIfChanged('heatingRod.summary.nonFlexLoadW', pvBase.nonFlexLoadW === null || pvBase.nonFlexLoadW === undefined ? 0 : Math.round(num(pvBase.nonFlexLoadW, 0)));
-        await this._setStateIfChanged('heatingRod.summary.pvDirectSurplusBeforeFlexW', Math.round(num(pvBase.pvDirectSurplusBeforeFlexW, 0)));
-        await this._setStateIfChanged('heatingRod.summary.pvDirectAvailableW', Math.round(num(pvBase.pvDirectAvailableW, 0)));
-        await this._setStateIfChanged('heatingRod.summary.zeroExportPvBalanceActive', !!pvBase.zeroExportPvBalanceActive);
         await this._setStateIfChanged('heatingRod.summary.pvAvailableRawW', Math.round(num(pvBase.availableW, 0)));
         await this._setStateIfChanged('heatingRod.summary.pvAvailableW', Math.round(Math.max(0, num(pvBase.availableW, 0) - thermalUsedW)));
         await this._setStateIfChanged('heatingRod.summary.appliedTotalW', Math.round(appliedTotalW));
@@ -1707,13 +1611,6 @@ class HeatingRodControlModule extends BaseModule {
             storageSocPct: pvBase.storageSocPct,
             storageReserveW: Math.round(num(pvBase.storageReserveW, 0)),
             storageTargetSocPct: pvBase.storageTargetSocPct,
-            pvNowW: Math.round(num(pvBase.pvNowW, 0)),
-            buildingLoadW: pvBase.buildingLoadW,
-            nonFlexLoadW: pvBase.nonFlexLoadW,
-            pvDirectSurplusBeforeFlexW: Math.round(num(pvBase.pvDirectSurplusBeforeFlexW, 0)),
-            pvDirectAvailableW: Math.round(num(pvBase.pvDirectAvailableW, 0)),
-            zeroExportPvBalanceActive: !!pvBase.zeroExportPvBalanceActive,
-            zeroExportUsePvBalance: !!pvBase.zeroExportUsePvBalance,
             nvpSurplusBeforeFlexW: Math.round(num(pvBase.nvpSurplusBeforeFlexW, 0)),
             nvpAvailableW: Math.round(num(pvBase.nvpAvailableW, 0)),
             cmAvailableW: Math.round(num(pvBase.cmAvailableW, 0)),
@@ -1730,9 +1627,6 @@ class HeatingRodControlModule extends BaseModule {
                 forecastOk: !!zeroExportInfo.forecastOk,
                 forecast: zeroExportInfo.forecast || null,
                 storageReady: !!zeroExportInfo.storageReady,
-                usePvBalance: !!zeroExportInfo.usePvBalance,
-                pvBalanceActive: !!zeroExportInfo.pvBalanceActive,
-                pvDirectAvailableW: Math.round(num(zeroExportInfo.pvDirectAvailableW, 0)),
             },
         }));
         await this._setStateIfChanged('heatingRod.summary.lastUpdate', now);
