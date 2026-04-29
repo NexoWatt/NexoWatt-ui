@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.6.268",
+    "version": "0.6.269",
     "news": {
+      "0.6.269": {
+        "en": "Heating rod App-Center zero/minus-feed-in section reorganized into clear subgroups. PV-rise test parameters are now visible in the heating-rod logic section, with explicit wording that they only affect heating-rod PV-auto test loads. Web cache bumped.",
+        "de": "Heizstab App-Center Bereich für 0-/Minus-Einspeisung übersichtlicher gruppiert. Die PV-Nachregel-Testparameter sind jetzt direkt und sichtbar in der Heizstablogik einstellbar, mit klarer Kennzeichnung, dass sie nur die Heizstab-PV-Auto-Testlast betreffen. Webcache erhöht."
+      },
       "0.6.268": {
         "en": "Heating rod zero/minus-feed-in PV-auto now performs PV-rise validation: after each test stage it waits, verifies that roof PV production follows the added load, falls back to the previous stage if it does not, and retries after 10 minutes by default. Below the PV minimum, PV-auto changes to manual-safe observe-only after dropping only its own stage once.",
         "de": "Heizstab 0-/Minus-Einspeise-PV-Auto prüft jetzt den PV-Anstieg: Nach jeder Teststufe wird gewartet und geprüft, ob die Dach-PV-Erzeugung der zusätzlichen Last folgt. Wenn nicht, wird auf die vorige Stufe reduziert und standardmäßig erst nach 10 Minuten erneut getestet. Unterhalb der PV-Mindestschwelle geht PV-Auto manuell-sicher in Beobachtung und wirft nur eine eigene Automatik-Stufe einmalig ab."
@@ -1826,7 +1830,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.6.268",
+  "version": "0.6.269",
   "news": {
     "0.6.262": {
       "en": "SmartHome VIS: status/sensor measurement tiles now show their values large and centered like temperature tiles, with configurable units and precision.",

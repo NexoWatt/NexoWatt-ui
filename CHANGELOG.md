@@ -1,3 +1,9 @@
+## 0.6.269
+- App-Center Heizstab: Bereich „0-Einspeise-Testlast / PV-Nachregelung“ in klare Unterbereiche gegliedert: Aktivierung & Einspeisegrenze, Stufentest & PV-Nachregelprüfung, Forecast & Speicherfreigabe sowie Netz-/Akku-Schutz.
+- Die Parameter „PV-Nachregelprüfung“, „PV-Anstieg min. (%)“, „PV-Anstieg min. (W)“ und „Erneuter Test nach PV-Fehlanstieg“ stehen jetzt sichtbar im Heizstab-Logikbereich und sind direkt einstellbar.
+- Klarstellung in der UI: Diese 0-/Minus-Einspeise-Nachregelparameter wirken ausschließlich auf Heizstab-PV-Auto-Testlasten und nicht auf allgemeine PV-/NVP-Regelungen.
+- Webcache auf 0.6.269 erhöht und App-Center-Script mit Cache-Buster versehen.
+
 ## 0.6.268
 
 - Heizstab 0-/Minus-Einspeisung: PV-Auto schaltet Testlast jetzt wirklich stufenweise zu, wartet auf die PV-Nachregelung und prüft, ob die Dach-PV-Erzeugung passend mitsteigt.

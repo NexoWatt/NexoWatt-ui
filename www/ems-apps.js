@@ -1876,6 +1876,49 @@ function installedPvKwpFromConfig(cfg) {
     return { wrap, body };
   }
 
+  function _mkCfgSubGroup(title, subtitle = '') {
+    const wrap = document.createElement('div');
+    wrap.style.width = '100%';
+    wrap.style.boxSizing = 'border-box';
+    wrap.style.padding = '10px';
+    wrap.style.border = '1px solid rgba(148,163,184,0.16)';
+    wrap.style.borderRadius = '10px';
+    wrap.style.background = 'rgba(15,23,42,0.32)';
+    wrap.style.display = 'flex';
+    wrap.style.flexDirection = 'column';
+    wrap.style.gap = '8px';
+
+    const head = document.createElement('div');
+    head.style.display = 'flex';
+    head.style.flexDirection = 'column';
+    head.style.gap = '2px';
+
+    const titleEl = document.createElement('div');
+    titleEl.textContent = title;
+    titleEl.style.fontWeight = '700';
+    titleEl.style.fontSize = '0.78rem';
+    titleEl.style.color = '#dbeafe';
+    head.appendChild(titleEl);
+
+    if (subtitle) {
+      const sub = document.createElement('div');
+      sub.textContent = subtitle;
+      sub.className = 'nw-config-field-hint';
+      sub.style.margin = '0';
+      head.appendChild(sub);
+    }
+
+    const body = document.createElement('div');
+    body.style.display = 'grid';
+    body.style.gridTemplateColumns = 'repeat(auto-fit, minmax(220px, 1fr))';
+    body.style.gap = '10px 14px';
+    body.style.alignItems = 'start';
+
+    wrap.appendChild(head);
+    wrap.appendChild(body);
+    return { wrap, body };
+  }
+
   function _mkCfgBadge(text, tone = 'default') {
     const span = document.createElement('span');
     span.textContent = text;
@@ -2089,41 +2132,71 @@ function installedPvKwpFromConfig(cfg) {
     const stageCountOptions = Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}` }));
 
     const grpCoord = _mkCfgGroup('Speicher-Koordination');
+    grpCoord.wrap.style.flex = '1 1 100%';
+    grpCoord.body.style.display = 'grid';
+    grpCoord.body.style.gridTemplateColumns = 'repeat(auto-fit, minmax(240px, 1fr))';
+    grpCoord.body.style.alignItems = 'start';
     grpCoord.body.appendChild(_mkCfgField('Speicher-Reserve (W)', _mkCfgInput('number', cfg.storageReserveW, (v) => { cfg.storageReserveW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'PV-Auto lässt diese Leistung für die Speicherladung frei, solange der Speicher unter dem Ziel-SoC liegt.'));
     grpCoord.body.appendChild(_mkCfgField('PV-Auto erst ab PV-Erzeugung (W)', _mkCfgInput('number', cfg.minPvPowerW, (v) => { cfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Unterhalb dieser aktuell erkannten PV-Leistung geht PV-Auto in Beobachtung: nur eine von PV-Auto selbst gehaltene Stufe wird einmalig abgeworfen, danach bleiben manuelle Schaltungen möglich. Empfehlung: 800 W.'));
     grpCoord.body.appendChild(_mkCfgField('Reserve bis SoC (%)', _mkCfgInput('number', cfg.storageTargetSocPct, (v) => { cfg.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '130px' }), 'Ab diesem Speicher-SoC darf der Heizstab den PV-Überschuss ohne Reserve nutzen.'));
     const coordHint = document.createElement('div');
     coordHint.className = 'nw-config-field-hint';
     coordHint.textContent = 'Damit Heizstab und Speicher parallel arbeiten, wird zuerst der Überschuss am Netzanschlusspunkt bilanziert. Speicherentladung zählt nicht als PV-Überschuss; Speicherladung oberhalb der Reserve kann vom Heizstab genutzt werden.';
+    coordHint.style.gridColumn = '1 / -1';
     grpCoord.body.appendChild(coordHint);
     els.heatingRodDevices.appendChild(grpCoord.wrap);
 
     const zeroCfg = cfg.zeroExport || {};
-    const grpZero = _mkCfgGroup('0-Einspeisung / PV-Abregelung nutzen');
-    grpZero.body.appendChild(_mkCfgField('Logik aktiv', _mkCfgToggle(!!zeroCfg.enabled, (v) => { zeroCfg.enabled = !!v; setDirty(); }), 'Nur für 0-/Minus-Einspeiseanlagen: PV-Auto darf vorsichtig Stufe für Stufe Testlast zuschalten, wenn Forecast und Einspeiselimit darauf hindeuten, dass PV abgeregelt wird.'));
-    grpZero.body.appendChild(_mkCfgField('Erlaubte Einspeisung (W)', _mkCfgInput('number', zeroCfg.feedInLimitW, (v) => { zeroCfg.feedInLimitW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Bei -1 kW Einspeiselimit bitte 1000 eintragen. Bei echter 0-Einspeisung 0 eintragen.'));
-    grpZero.body.appendChild(_mkCfgField('Einspeise-Toleranz (W)', _mkCfgInput('number', zeroCfg.feedInToleranceW, (v) => { zeroCfg.feedInToleranceW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Ab diesem Korridor gilt der Netzpunkt als am Einspeiselimit.'));
-    grpZero.body.appendChild(_mkCfgField('Ziel-Einspeisepuffer (W)', _mkCfgInput('number', zeroCfg.targetExportBufferW, (v) => { zeroCfg.targetExportBufferW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Sicherheitsabstand: die Testlast startet erst, wenn am Einspeiselimit noch dieser Puffer plausibel vorhanden ist.'));
-    grpZero.body.appendChild(_mkCfgField('Mindest-PV für Testlast (W)', _mkCfgInput('number', zeroCfg.minPvPowerW, (v) => { zeroCfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Zusätzliche Freigabe für 0-/Minus-Einspeise-Proben. Die allgemeine PV-Auto-Schwelle oben gilt zusätzlich.'));
-    grpZero.body.appendChild(_mkCfgField('Forecast erforderlich', _mkCfgToggle(zeroCfg.requireForecast !== false, (v) => { zeroCfg.requireForecast = !!v; setDirty(); }), 'Forecast ist nur Freigabe/Plausibilität. Der Netzpunkt entscheidet danach, ob die Stufe bleiben darf.'));
-    grpZero.body.appendChild(_mkCfgField('Forecast Peak min. (W)', _mkCfgInput('number', zeroCfg.minForecastPeakW, (v) => { zeroCfg.minForecastPeakW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Mindestens erwartete PV-Spitze innerhalb des Forecast-Zeitraums.'));
-    grpZero.body.appendChild(_mkCfgField('Forecast 6h min. (kWh)', _mkCfgInput('number', zeroCfg.minForecastKwh6h, (v) => { zeroCfg.minForecastKwh6h = Math.max(0, Number(v) || 0); setDirty(); }, { min: 0, step: 0.1, width: '150px' }), 'Alternative Freigabe über erwartete Energie in den nächsten Stunden.'));
-    grpZero.body.appendChild(_mkCfgField('Speicher-Vorrang bis SoC (%)', _mkCfgInput('number', zeroCfg.storageFullSocPct, (v) => { zeroCfg.storageFullSocPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '150px' }), 'Erst ab diesem SoC darf versteckte/abgeregelte PV vorsichtig in den Heizstab gehen.'));
-    grpZero.body.appendChild(_mkCfgField('Netzbezug-Abwurf (W)', _mkCfgInput('number', zeroCfg.gridImportTripW, (v) => { zeroCfg.gridImportTripW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Wenn Netzbezug länger ansteht, wird eine physische Stufe reduziert.'));
-    grpZero.body.appendChild(_mkCfgField('Netzbezug-Zeit (s)', _mkCfgInput('number', zeroCfg.gridImportTripSec, (v) => { zeroCfg.gridImportTripSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Schutzzeit für kurze Nachregel-Transienten des Wechselrichters/FEMS.'));
-    grpZero.body.appendChild(_mkCfgField('Harter Netzbezug (W)', _mkCfgInput('number', zeroCfg.hardGridImportW, (v) => { zeroCfg.hardGridImportW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Ab diesem Netzbezug wird sofort komplett zurückgenommen.'));
-    grpZero.body.appendChild(_mkCfgField('Speicherentladung-Abwurf (W)', _mkCfgInput('number', zeroCfg.storageDischargeToleranceW, (v) => { zeroCfg.storageDischargeToleranceW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Verhindert, dass Batterieenergie verheizt wird.'));
-    grpZero.body.appendChild(_mkCfgField('Speicherentladung-Zeit (s)', _mkCfgInput('number', zeroCfg.storageDischargeTripSec, (v) => { zeroCfg.storageDischargeTripSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Erlaubt kurze Speicher-Transienten, reduziert aber bei anhaltender Entladung.'));
-    grpZero.body.appendChild(_mkCfgField('Harte Speicherentladung (W)', _mkCfgInput('number', zeroCfg.hardStorageDischargeW, (v) => { zeroCfg.hardStorageDischargeW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Ab dieser Entladung wird sofort komplett zurückgenommen.'));
-    grpZero.body.appendChild(_mkCfgField('Stufe-hoch Wartezeit (s)', _mkCfgInput('number', zeroCfg.stepUpDelaySec, (v) => { zeroCfg.stepUpDelaySec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Langsam hochfahren: nur eine physische Stufe je Wartezeit.'));
-    grpZero.body.appendChild(_mkCfgField('PV-Nachregelprüfung (s)', _mkCfgInput('number', zeroCfg.pvRiseObserveSec, (v) => { zeroCfg.pvRiseObserveSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Nach dem Zuschalten einer Teststufe wird so lange geprüft, ob die PV-Erzeugung vom Dach passend mitsteigt.'));
-    grpZero.body.appendChild(_mkCfgField('PV-Anstieg min. (%)', _mkCfgInput('number', zeroCfg.pvRiseMinRatioPct, (v) => { zeroCfg.pvRiseMinRatioPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '150px' }), 'Mindestanteil der neu zugeschalteten Stufenleistung, der als PV-Erzeugungsanstieg sichtbar werden muss.'));
-    grpZero.body.appendChild(_mkCfgField('PV-Anstieg min. (W)', _mkCfgInput('number', zeroCfg.pvRiseMinGainW, (v) => { zeroCfg.pvRiseMinGainW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Zusätzliche absolute Mindeständerung gegen Messrauschen.'));
-    grpZero.body.appendChild(_mkCfgField('Erneuter Test nach PV-Fehlanstieg (s)', _mkCfgInput('number', zeroCfg.pvRiseRetrySec, (v) => { zeroCfg.pvRiseRetrySec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 30, width: '170px' }), 'Wenn die PV-Erzeugung nach einer Teststufe nicht mitsteigt, wird auf die vorige Stufe reduziert und erst nach dieser Zeit erneut probiert. Empfehlung: 600 s.'));
-    grpZero.body.appendChild(_mkCfgField('Cooldown nach Abwurf (s)', _mkCfgInput('number', zeroCfg.cooldownSec, (v) => { zeroCfg.cooldownSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Wartezeit nach Netzbezug/Speicherentladung, bevor erneut getestet wird.'));
+    const grpZero = _mkCfgGroup('Heizstab: 0-Einspeise-Testlast / PV-Nachregelung');
+    grpZero.wrap.style.flex = '1 1 100%';
+    grpZero.body.style.display = 'grid';
+    grpZero.body.style.gridTemplateColumns = '1fr';
+    grpZero.body.style.alignItems = 'stretch';
+
+    const zeroIntro = document.createElement('div');
+    zeroIntro.className = 'nw-config-field-hint';
+    zeroIntro.style.margin = '0';
+    zeroIntro.style.maxWidth = '1100px';
+    zeroIntro.textContent = 'Diese Parameter gehören ausschließlich zur Heizstab-PV-Auto-Logik. Sie geben frei, wann der Heizstab als Testlast hochfahren darf, und schützen gleichzeitig vor Netzbezug oder Speicherentladung.';
+    grpZero.body.appendChild(zeroIntro);
+
+    const zeroEnable = _mkCfgSubGroup('1) Aktivierung & Einspeisegrenze', 'Nur für 0-/Minus-Einspeiseanlagen: Der Heizstab testet vorsichtig, ob abgeregelte Dach-PV durch zusätzliche Last sichtbar wird.');
+    zeroEnable.body.appendChild(_mkCfgField('Logik aktiv', _mkCfgToggle(!!zeroCfg.enabled, (v) => { zeroCfg.enabled = !!v; setDirty(); }), 'Nur Heizstab-PV-Auto. Manuell, Boost und Aus bleiben unberührt.'));
+    zeroEnable.body.appendChild(_mkCfgField('Erlaubte Einspeisung (W)', _mkCfgInput('number', zeroCfg.feedInLimitW, (v) => { zeroCfg.feedInLimitW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Echte 0-Einspeisung = 0. Minus-1-kW-Limit = 1000.'));
+    zeroEnable.body.appendChild(_mkCfgField('Einspeise-Toleranz (W)', _mkCfgInput('number', zeroCfg.feedInToleranceW, (v) => { zeroCfg.feedInToleranceW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Korridor am Netzpunkt, ab dem das Limit als erreicht gilt.'));
+    zeroEnable.body.appendChild(_mkCfgField('Ziel-Einspeisepuffer (W)', _mkCfgInput('number', zeroCfg.targetExportBufferW, (v) => { zeroCfg.targetExportBufferW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Sicherheitsabstand vor dem Teststart.'));
+    zeroEnable.body.appendChild(_mkCfgField('Mindest-PV für Testlast (W)', _mkCfgInput('number', zeroCfg.minPvPowerW, (v) => { zeroCfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Zusätzlich zur allgemeinen PV-Auto-Schwelle oben.'));
+    grpZero.body.appendChild(zeroEnable.wrap);
+
+    const zeroProbe = _mkCfgSubGroup('2) Stufentest & PV-Nachregelprüfung', 'Nach jeder zugeschalteten Heizstab-Stufe wird geprüft, ob die PV-Erzeugung vom Dach plausibel mitsteigt. Wenn nicht: zurück auf die vorige Stufe und später erneut testen.');
+    zeroProbe.body.appendChild(_mkCfgField('Stufe-hoch Wartezeit (s)', _mkCfgInput('number', zeroCfg.stepUpDelaySec, (v) => { zeroCfg.stepUpDelaySec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Nur eine physische Stufe je Wartezeit.'));
+    zeroProbe.body.appendChild(_mkCfgField('PV-Nachregelprüfung (s)', _mkCfgInput('number', zeroCfg.pvRiseObserveSec, (v) => { zeroCfg.pvRiseObserveSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Beobachtungsfenster direkt nach dem Zuschalten.'));
+    zeroProbe.body.appendChild(_mkCfgField('PV-Anstieg min. (%)', _mkCfgInput('number', zeroCfg.pvRiseMinRatioPct, (v) => { zeroCfg.pvRiseMinRatioPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '150px' }), 'Mindestanteil der neuen Stufenleistung.'));
+    zeroProbe.body.appendChild(_mkCfgField('PV-Anstieg min. (W)', _mkCfgInput('number', zeroCfg.pvRiseMinGainW, (v) => { zeroCfg.pvRiseMinGainW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Absolute Mindeständerung gegen Messrauschen.'));
+    zeroProbe.body.appendChild(_mkCfgField('Erneuter Test nach PV-Fehlanstieg (s)', _mkCfgInput('number', zeroCfg.pvRiseRetrySec, (v) => { zeroCfg.pvRiseRetrySec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 30, width: '170px' }), 'Empfehlung: 600 s = 10 Minuten.'));
+    zeroProbe.body.appendChild(_mkCfgField('Cooldown nach Abwurf (s)', _mkCfgInput('number', zeroCfg.cooldownSec, (v) => { zeroCfg.cooldownSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Wartezeit nach Netz-/Speicher-Schutzabwurf.'));
+    grpZero.body.appendChild(zeroProbe.wrap);
+
+    const zeroForecast = _mkCfgSubGroup('3) Forecast & Speicherfreigabe', 'Forecast ist nur eine Plausibilitätsfreigabe. Entscheidend bleibt danach der Netzpunkt und der PV-Anstieg.');
+    zeroForecast.body.appendChild(_mkCfgField('Forecast erforderlich', _mkCfgToggle(zeroCfg.requireForecast !== false, (v) => { zeroCfg.requireForecast = !!v; setDirty(); }), 'Bei aktivem Haken muss Forecast die Testlast freigeben.'));
+    zeroForecast.body.appendChild(_mkCfgField('Forecast Peak min. (W)', _mkCfgInput('number', zeroCfg.minForecastPeakW, (v) => { zeroCfg.minForecastPeakW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Mindestens erwartete PV-Spitze.'));
+    zeroForecast.body.appendChild(_mkCfgField('Forecast 6h min. (kWh)', _mkCfgInput('number', zeroCfg.minForecastKwh6h, (v) => { zeroCfg.minForecastKwh6h = Math.max(0, Number(v) || 0); setDirty(); }, { min: 0, step: 0.1, width: '150px' }), 'Alternative Freigabe über Energieprognose.'));
+    zeroForecast.body.appendChild(_mkCfgField('Speicher-Vorrang bis SoC (%)', _mkCfgInput('number', zeroCfg.storageFullSocPct, (v) => { zeroCfg.storageFullSocPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '150px' }), 'Erst ab diesem SoC darf versteckte PV in den Heizstab.'));
+    grpZero.body.appendChild(zeroForecast.wrap);
+
+    const zeroProtect = _mkCfgSubGroup('4) Schutz: kein Netz- oder Akku-Verheizen', 'Sobald Netzbezug oder Speicherentladung nicht nur kurz transient ist, wird die Heizstab-Testlast reduziert.');
+    zeroProtect.body.appendChild(_mkCfgField('Netzbezug-Abwurf (W)', _mkCfgInput('number', zeroCfg.gridImportTripW, (v) => { zeroCfg.gridImportTripW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Bei anhaltendem Netzbezug eine Stufe runter.'));
+    zeroProtect.body.appendChild(_mkCfgField('Netzbezug-Zeit (s)', _mkCfgInput('number', zeroCfg.gridImportTripSec, (v) => { zeroCfg.gridImportTripSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Schutzzeit für kurze WR-/FEMS-Transienten.'));
+    zeroProtect.body.appendChild(_mkCfgField('Harter Netzbezug (W)', _mkCfgInput('number', zeroCfg.hardGridImportW, (v) => { zeroCfg.hardGridImportW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Ab hier sofort komplett zurücknehmen.'));
+    zeroProtect.body.appendChild(_mkCfgField('Speicherentladung-Abwurf (W)', _mkCfgInput('number', zeroCfg.storageDischargeToleranceW, (v) => { zeroCfg.storageDischargeToleranceW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Verhindert Akkuenergie im Heizstab.'));
+    zeroProtect.body.appendChild(_mkCfgField('Speicherentladung-Zeit (s)', _mkCfgInput('number', zeroCfg.storageDischargeTripSec, (v) => { zeroCfg.storageDischargeTripSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Kurze Speicher-Transienten bleiben erlaubt.'));
+    zeroProtect.body.appendChild(_mkCfgField('Harte Speicherentladung (W)', _mkCfgInput('number', zeroCfg.hardStorageDischargeW, (v) => { zeroCfg.hardStorageDischargeW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Ab hier sofort komplett zurücknehmen.'));
+    grpZero.body.appendChild(zeroProtect.wrap);
+
     const zeroHint = document.createElement('div');
     zeroHint.className = 'nw-config-field-hint';
-    zeroHint.textContent = 'Prinzip: Forecast erlaubt nur den Versuch. Danach wird eine physische Stufe zugeschaltet und beobachtet: steigt die PV-Erzeugung vom Dach nicht plausibel mit, wird auf die vorige Stufe reduziert und nach der Retry-Zeit erneut getestet. Bei Netzbezug oder Speicherentladung wird zusätzlich schnell reduziert. Manuell, Boost und Aus bleiben davon unberührt.';
+    zeroHint.style.margin = '0';
+    zeroHint.textContent = 'Ablauf: Forecast + Einspeiselimit erlauben nur den Versuch. Dann schaltet Heizstab-PV-Auto genau eine Stufe zu, wartet auf die PV-Nachregelung, prüft den Dach-PV-Anstieg und bleibt nur dann oben. Bei fehlendem PV-Anstieg, Netzbezug oder Speicherentladung wird reduziert.';
     grpZero.body.appendChild(zeroHint);
     els.heatingRodDevices.appendChild(grpZero.wrap);
 
