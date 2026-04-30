@@ -1,3 +1,18 @@
+## 0.7.4
+
+- Heizstab-PV-Auto folgt dem PV-/NVP-Budget jetzt als diskreter Budget-Gate-Verbraucher: sichtbare Einspeisung am NVP, die bereits laufende Heizstableistung und nutzbare Speicherladung oberhalb der Reserve werden gemeinsam für die Stufenzielberechnung genutzt.
+- Speicherreserve wird jetzt als fehlende Reserve bilanziert: lädt der Speicher bereits mindestens mit der Reserve, blockiert sie den Heizstab nicht weiter; fehlt Reserve-Ladeleistung, wird sie weiterhin vom Heizstab-Budget zurückgehalten.
+- Stufenmodell lernt die reale Heizstableistung aus der Messung der laufenden Stufe. Wenn die Default-Konfiguration z. B. 2 kW pro Stufe annimmt, der reale Heizstab aber 1 kW pro Stufe zieht, kann PV-Auto trotzdem korrekt auf Stufe 2/3 hochfahren.
+- Batterie-Richtung wird in der Heizstab-Budgetierung bevorzugt über den signierten `batteryPower` bewertet. Eine aktiv ladende Batterie kann dadurch nicht mehr fälschlich als Speicherentladung den Stufen-Hochlauf blockieren.
+- Neue Einstellung im Heizstab-Bereich „Budget-Gates & Lastmanagement“: „Stufe-hoch Wartezeit (s)“. Hochfahren erfolgt maximal eine physische Stufe je Wartezeit; Reduzieren bei dauerhaftem Netzbezug/Speicherentladung bleibt schnell.
+- Lade-/Lastmanagement, Speicherregelung und Speicherfarm-Verteilung wurden nicht geändert.
+
+## 0.7.3
+
+- PV-Gate im Lade-/Lastmanagement wird jetzt dauerhaft berechnet und veröffentlicht, auch wenn gerade keine Wallbox im PV-Modus aktiv ist. Dadurch sehen nachgelagerte Apps wie die Heizstabsteuerung den vorhandenen PV-Überschuss zuverlässig.
+- Keine Änderung an der EVCS-Budgetverteilung: Das PV-Cap begrenzt Wallboxen weiterhin nur, wenn PV-only/PV-Modus aktiv ist.
+- Heizstab-PV-Budget liest stale registrierte Datenpunkte nicht mehr über den rohen Adapter-Cache zurück. Alte Batterie-Entlade-/Netzwerte können dadurch eine echte PV-Freigabe nicht mehr blockieren.
+
 ## 0.7.2
 
 - Heizstab-PV-Auto als lesender Budget-Gate-Verbraucher neu aufgebaut: Restbudget und PV-Gate aus dem bestehenden Lade-/Lastmanagement werden nur gelesen und begrenzen die Heizstab-Stufen.

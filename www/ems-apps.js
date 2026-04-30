@@ -1685,6 +1685,7 @@ function _collectFlowPowerDpIsWFromUI() {
       storageDischargeHoldSec: ['storageDischargeHoldSec', 'storageDischargeTripSec'],
       hardStorageDischargeW: ['hardStorageDischargeW'],
       budgetSafetyReserveW: ['budgetSafetyReserveW', 'pvSafetyReserveW'],
+      stageUpDelaySec: ['stageUpDelaySec', 'budgetStageUpDelaySec', 'pvStageUpDelaySec'],
     };
     const hn = (key, def, min, max) => {
       let raw = h[key];
@@ -1706,6 +1707,7 @@ function _collectFlowPowerDpIsWFromUI() {
     hn('storageDischargeHoldSec', 15, 0, 3600);
     hn('hardStorageDischargeW', 1200, 0, 1000000);
     hn('budgetSafetyReserveW', 150, 0, 1000000);
+    hn('stageUpDelaySec', 10, 0, 3600);
     h.zeroExport = (h.zeroExport && typeof h.zeroExport === 'object') ? h.zeroExport : {};
     const z = h.zeroExport;
     const zn = (key, def, min, max, integer = true) => {
@@ -2121,6 +2123,7 @@ function _collectFlowPowerDpIsWFromUI() {
     grpGate.body.appendChild(_mkCfgField('Speicherentladung-Haltezeit (s)', _mkCfgInput('number', cfg.storageDischargeHoldSec, (v) => { cfg.storageDischargeHoldSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Nach dieser Zeit mit Speicherentladung über der Toleranz wird eine physische Stufe reduziert.'));
     grpGate.body.appendChild(_mkCfgField('Harte Speicherentladung AUS (W)', _mkCfgInput('number', cfg.hardStorageDischargeW, (v) => { cfg.hardStorageDischargeW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Ab dieser Speicherentladung wird sofort komplett zurückgenommen.'));
     grpGate.body.appendChild(_mkCfgField('Budget-Sicherheitsreserve (W)', _mkCfgInput('number', cfg.budgetSafetyReserveW, (v) => { cfg.budgetSafetyReserveW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Wird vom berechneten Heizstab-PV-Budget abgezogen, damit Speicher, Hauslast und Messrauschen nicht gegeneinander regeln.'));
+    grpGate.body.appendChild(_mkCfgField('Stufe-hoch Wartezeit (s)', _mkCfgInput('number', cfg.stageUpDelaySec, (v) => { cfg.stageUpDelaySec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'PV-Budgetfolger: erhöht maximal eine physische Heizstab-Stufe je Wartezeit. Reduzieren bleibt schnell, wenn Netzbezug/Speicherentladung dauerhaft überschritten wird.'));
     els.heatingRodDevices.appendChild(grpGate.wrap);
 
     const zeroCfg = cfg.zeroExport || {};

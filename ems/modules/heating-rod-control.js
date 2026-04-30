@@ -497,12 +497,19 @@ class HeatingRodControlModule extends BaseModule {
         for (const key of list) {
             if (!key) continue;
             try {
-                if (this.dp && this.dp.getEntry && this.dp.getEntry(key)) {
+                const hasDpEntry = !!(this.dp && this.dp.getEntry && this.dp.getEntry(key));
+                if (hasDpEntry) {
+                    // Registered datapoints carry freshness metadata. If such a datapoint is
+                    // stale, never resurrect the old value from the raw adapter cache. This is
+                    // especially important for Batterie-Entladen: an old discharge value would
+                    // otherwise block Heizstab step-up although the live NVP/PV budget is clean.
+                    if (typeof this.dp.isStale === 'function' && this.dp.isStale(key, staleMs)) continue;
                     const v = this.dp.getNumberFresh ? this.dp.getNumberFresh(key, staleMs, null) : this.dp.getNumber(key, null);
                     if (typeof v === 'number' && Number.isFinite(v)) return v;
+                    continue;
                 }
             } catch (_e) {
-                // ignore
+                // ignore and try the raw cache fallback for unregistered aliases below
             }
             const c = this._readCacheNumber(key, null);
             if (typeof c === 'number' && Number.isFinite(c)) return c;
@@ -515,13 +522,15 @@ class HeatingRodControlModule extends BaseModule {
         for (const key of list) {
             if (!key) continue;
             try {
-                if (this.dp && this.dp.getEntry && this.dp.getEntry(key)) {
+                const hasDpEntry = !!(this.dp && this.dp.getEntry && this.dp.getEntry(key));
+                if (hasDpEntry) {
                     if (typeof this.dp.isStale === 'function' && this.dp.isStale(key, staleMs)) continue;
                     const v = this.dp.getBoolean ? this.dp.getBoolean(key, null) : null;
                     if (v !== null && v !== undefined) return !!v;
+                    continue;
                 }
             } catch (_e) {
-                // ignore
+                // ignore and try the raw cache fallback for unregistered aliases below
             }
             const raw = this._readCacheRaw(key, null);
             if (raw === null || raw === undefined) continue;
@@ -559,6 +568,7 @@ class HeatingRodControlModule extends BaseModule {
             storageDischargeHoldSec: pickNum(['storageDischargeHoldSec', 'storageDischargeTripSec', 'pvStorageDischargeHoldSec'], 15, 0, 3600),
             hardStorageDischargeW: pickNum(['hardStorageDischargeW', 'pvHardStorageDischargeW'], 1200, 0, 1000000),
             budgetSafetyReserveW: pickNum(['budgetSafetyReserveW', 'pvSafetyReserveW'], 150, 0, 1000000),
+            stageUpDelaySec: pickNum(['stageUpDelaySec', 'budgetStageUpDelaySec', 'pvStageUpDelaySec'], 10, 0, 3600),
         };
     }
 
@@ -575,8 +585,22 @@ class HeatingRodControlModule extends BaseModule {
 
         const batteryPowerW = this._readNumberAny(['batteryPower'], staleMs, null);
         if (typeof batteryPowerW === 'number' && Number.isFinite(batteryPowerW)) {
-            if (batteryPowerW < 0 && chargeW <= 0) chargeW = Math.max(0, Math.abs(batteryPowerW));
-            if (batteryPowerW > 0 && dischargeW <= 0) dischargeW = Math.max(0, Math.abs(batteryPowerW));
+            const signedW = Math.round(batteryPowerW);
+            const noiseW = 25;
+            // batteryPower is the canonical direction signal in this adapter:
+            // +W = discharge, -W = charge. Prefer that direction over separate
+            // charge/discharge aliases, because those can be delayed or vendor-specific.
+            // Otherwise a charging battery can look like discharge and block stage-up.
+            if (signedW < -noiseW) {
+                chargeW = Math.max(chargeW, Math.abs(signedW));
+                dischargeW = 0;
+            } else if (signedW > noiseW) {
+                dischargeW = Math.max(dischargeW, signedW);
+                chargeW = 0;
+            } else {
+                chargeW = 0;
+                dischargeW = 0;
+            }
         }
 
         const socPct = this._readNumberAny([
@@ -637,6 +661,13 @@ class HeatingRodControlModule extends BaseModule {
         const storageReserveW = (storageKnown && !(typeof storage.socPct === 'number' && storage.socPct >= storageTargetSocPct))
             ? storageReserveCfgW
             : 0;
+        // Speicherreserve sauber bilanzieren: Was der Speicher bereits lädt, erfüllt zuerst
+        // die Reserve. Nur die noch fehlende Reserve wird vom Heizstab-Budget abgezogen;
+        // Speicherladung oberhalb der Reserve darf als nutzbarer PV-Überschuss gelten.
+        const storageReserveMissingW = Math.max(0, storageReserveW - Math.max(0, storage.chargeW));
+        const storageChargeUsableW = storageReserveW > 0
+            ? Math.max(0, Math.max(0, storage.chargeW) - storageReserveW)
+            : Math.max(0, storage.chargeW);
 
         // Gate A/T/§14a/Peak: consume the remaining central budget after EVCS.
         // This is intentionally read-only: Heizstab does not change the load management budget engine.
@@ -678,10 +709,15 @@ class HeatingRodControlModule extends BaseModule {
             if (finite(cmPvNoEvAvg) && cmPvNoEvAvg > 0) candidates.push({ k: 'cm.pvSurplusNoEvAvg5mW', w: cmPvNoEvAvg });
             if (candidates.length) {
                 const best = candidates.reduce((a, b) => (b.w > a.w ? b : a), candidates[0]);
-                cmPvGateW = Math.max(0, best.w - evcsUsedW + currentW - storageReserveW - gateCfg.budgetSafetyReserveW);
-                cmPvGateSource = best.k;
+                // The EVCS PV gate reports the currently visible PV surplus. For Heizstab
+                // targeting this is a total flexible-load budget: keep the already running
+                // Heizstab stage in the budget and only reserve actual battery charging power.
+                // A storage reserve must not blindly eat visible NVP export, otherwise the rod
+                // can get stuck on stage 1 although several kW are still exported.
+                cmPvGateW = Math.max(0, best.w - evcsUsedW + currentW + storageChargeUsableW - storage.dischargeW - storageReserveMissingW - gateCfg.budgetSafetyReserveW);
+                cmPvGateSource = `${best.k}+nvp-follow`;
             } else if (cmPvAvailable === false && finite(cmPvCapEffectiveRaw)) {
-                cmPvGateW = Math.max(0, currentW - storageReserveW - gateCfg.budgetSafetyReserveW);
+                cmPvGateW = Math.max(0, currentW - storageReserveMissingW - gateCfg.budgetSafetyReserveW);
                 cmPvGateSource = 'cm.pvAvailable.false_hold_only';
             }
         }
@@ -690,10 +726,11 @@ class HeatingRodControlModule extends BaseModule {
         // import above the configured tolerance consumes the budget; small import remains allowed
         // to keep the stages running calmly like PV-only EV charging.
         const importExcessW = gridKnown ? Math.max(0, importW - gateCfg.maxGridImportW) : 0;
+        const usableStorageChargeForNvpW = storageChargeUsableW;
         const nvpSurplusBeforeFlexW = gridKnown
-            ? Math.max(0, exportW + currentW + storage.chargeW - storage.dischargeW - importExcessW)
+            ? Math.max(0, exportW + currentW + usableStorageChargeForNvpW - storage.dischargeW - importExcessW)
             : 0;
-        const nvpAvailableW = Math.max(0, nvpSurplusBeforeFlexW - storageReserveW - gateCfg.budgetSafetyReserveW);
+        const nvpAvailableW = Math.max(0, nvpSurplusBeforeFlexW - storageReserveMissingW - gateCfg.budgetSafetyReserveW);
 
         let pvBudgetGateW = nvpAvailableW;
         let pvBudgetSource = gridKnown ? 'nvp+ownLoad+storageReserve' : 'no-fresh-nvp';
@@ -746,7 +783,11 @@ class HeatingRodControlModule extends BaseModule {
             nonPvEnergyActive,
             storageSocPct: storage.socPct,
             storageReserveW,
+            storageReserveMissingW,
+            storageChargeUsableW,
             storageTargetSocPct,
+            usableStorageChargeForNvpW,
+            stageUpDelaySec: gateCfg.stageUpDelaySec,
             nvpSurplusBeforeFlexW,
             cmAvailableW: (cmPvGateW !== null && Number.isFinite(cmPvGateW)) ? Math.max(0, cmPvGateW) : 0,
             nvpAvailableW,
@@ -1159,24 +1200,82 @@ class HeatingRodControlModule extends BaseModule {
         return prev;
     }
 
-    _computeDesiredStage(d, remainingW, currentStage) {
+    _stagePowerScale(d, observedStage = 0, measuredW = null) {
+        const st = (d && d.id && this._stageCtl && this._stageCtl.get) ? (this._stageCtl.get(d.id) || null) : null;
+        const learned = st && Number.isFinite(Number(st.stagePowerScale)) ? clamp(Number(st.stagePowerScale), 0.25, 4) : 1;
+        const obs = Math.max(0, Math.min(Math.round(Number(observedStage) || 0), d && d.stages ? d.stages.length : 0));
+        const measured = Number(measuredW);
+        if (obs <= 0 || !Number.isFinite(measured) || measured <= 50) return learned;
+        const configuredW = Math.max(0, this._sumStagePower(d, obs));
+        if (configuredW <= 50) return learned;
+        const ratio = measured / configuredW;
+        if (!Number.isFinite(ratio) || ratio <= 0) return learned;
+        // Clamp keeps a noisy meter from destroying the stage model, but still corrects
+        // common setups where the configured default says 2 kW/stage and the real rod is 1 kW/stage.
+        const scale = clamp(ratio, 0.25, 4);
+        if (d && d.id && this._stageCtl && this._stageCtl.set) {
+            const next = Object.assign({}, st || { targetStage: obs, lastIncreaseMs: 0, lastDecreaseMs: 0 }, { stagePowerScale: scale });
+            this._stageCtl.set(d.id, next);
+        }
+        return scale;
+    }
+
+    _sumStagePowerModel(d, stageCount, observedStage = 0, measuredW = null) {
+        const configuredW = this._sumStagePower(d, stageCount);
+        const scale = this._stagePowerScale(d, observedStage, measuredW);
+        return this._capDevicePower(d, Math.round(configuredW * scale));
+    }
+
+    _stageThresholdModel(d, stageIndexZeroBased, key, observedStage = 0, measuredW = null, fallbackStageCount = null) {
+        const stage = d && d.stages ? d.stages[stageIndexZeroBased] : null;
+        const scale = this._stagePowerScale(d, observedStage, measuredW);
+        const raw = stage && Number.isFinite(Number(stage[key])) ? Math.max(0, Number(stage[key])) : null;
+        if (raw !== null) return Math.round(raw * scale);
+        const cnt = fallbackStageCount !== null ? fallbackStageCount : (stageIndexZeroBased + 1);
+        return this._sumStagePowerModel(d, cnt, observedStage, measuredW);
+    }
+
+    _computeDesiredStage(d, remainingW, currentStage, measuredW = null) {
         let stage = Math.max(0, Math.min(Math.round(Number(currentStage) || 0), d.stageCount));
+        const budgetW = Math.max(0, Math.round(num(remainingW, 0)));
 
         while (stage > 0) {
-            const cfg = d.stages[stage - 1];
-            if (!cfg) break;
-            if (remainingW < Math.max(0, num(cfg.offBelowW, 0))) stage--;
+            const offBelowW = this._stageThresholdModel(d, stage - 1, 'offBelowW', currentStage, measuredW, stage);
+            if (budgetW < Math.max(0, offBelowW)) stage--;
             else break;
         }
 
         while (stage < d.stageCount) {
-            const cfg = d.stages[stage];
-            if (!cfg) break;
-            if (remainingW >= Math.max(0, num(cfg.onAboveW, 0))) stage++;
+            const thresholdCfgW = this._stageThresholdModel(d, stage, 'onAboveW', currentStage, measuredW, stage + 1);
+            const nextPowerW = this._sumStagePowerModel(d, stage + 1, currentStage, measuredW);
+            // Use the lower of the explicit threshold and the learned real cumulative power.
+            // This lets PV-Auto follow the real hardware when the default/configured stage
+            // power is too high, without breaking installers that intentionally entered
+            // higher thresholds for hysteresis.
+            const onAboveW = Math.max(0, Math.min(thresholdCfgW, nextPowerW || thresholdCfgW));
+            if (budgetW >= onAboveW) stage++;
             else break;
         }
 
         return Math.max(0, Math.min(stage, d.stageCount));
+    }
+
+    _limitBudgetStageStepUp(d, desiredStage, observedStage, now) {
+        const cfg = this._getBudgetGateCfg();
+        const st = this._ensureStageCtlState(d.id, observedStage);
+        const base = Math.max(0, Math.min(Math.round(Number(st.targetStage ?? observedStage) || 0), d.stageCount));
+        let target = Math.max(0, Math.min(Math.round(Number(desiredStage) || 0), d.stageCount));
+        if (target <= base) return target;
+
+        const nextPhysical = this._nextPhysicalStageAbove(d, base);
+        if (nextPhysical > base) target = Math.min(target, nextPhysical);
+        const waitMs = Math.max(0, Math.round(num(cfg.stageUpDelaySec, 10) * 1000));
+        const lastUp = Math.max(num(st.budgetLastStepUpMs, 0), num(st.lastIncreaseMs, 0));
+        if (waitMs > 0 && lastUp > 0 && (now - lastUp) < waitMs) return base;
+
+        st.budgetLastStepUpMs = now;
+        this._stageCtl.set(d.id, st);
+        return target;
     }
 
     _applyTiming(d, desiredStage, observedStage) {
@@ -1209,7 +1308,7 @@ class HeatingRodControlModule extends BaseModule {
         return currentStage;
     }
 
-    _applyZeroExportStageStrategy(d, desiredStage, observedStage, pvBase, zeroInfo, now) {
+    _applyZeroExportStageStrategy(d, desiredStage, observedStage, pvBase, zeroInfo, now, measuredW = null) {
         const info = zeroInfo || this._computeZeroExportInfo(pvBase);
         const cfg = (info && info.cfg) ? info.cfg : this._getZeroExportCfg();
         const st = this._ensureStageCtlState(d.id, observedStage);
@@ -1359,8 +1458,8 @@ class HeatingRodControlModule extends BaseModule {
             const stepWaitMs = Math.max(0, cfg.stepUpDelaySec * 1000);
             const mayStep = nextStage > baseStage && (!lastUp || (now - lastUp) >= stepWaitMs);
             if (mayStep) {
-                const basePowerW = this._sumStagePower(d, baseStage);
-                const nextPowerW = this._sumStagePower(d, nextStage);
+                const basePowerW = this._sumStagePowerModel(d, baseStage, observedStage, measuredW);
+                const nextPowerW = this._sumStagePowerModel(d, nextStage, observedStage, measuredW);
                 targetStage = Math.max(targetStage, nextStage);
                 st.zeroLastStepUpMs = now;
                 st.zeroProbe = {
@@ -1783,7 +1882,7 @@ class HeatingRodControlModule extends BaseModule {
                 continue;
             }
 
-            let desiredStage = this._computeDesiredStage(d, remainingW, observedStage);
+            let desiredStage = this._computeDesiredStage(d, remainingW, observedStage, measuredW);
             let zeroDecision = null;
 
             // Wenn der Budget-Gate-Schutz gerade einen Netzbezug/Speicherbezug beobachtet,
@@ -1791,6 +1890,8 @@ class HeatingRodControlModule extends BaseModule {
             // laufen, damit PV/FEMS sauber nachregeln kann.
             if (budgetProtection && budgetProtection.watchActive && desiredStage > observedStage) {
                 desiredStage = observedStage;
+            } else if (desiredStage > observedStage) {
+                desiredStage = this._limitBudgetStageStepUp(d, desiredStage, observedStage, now);
             }
 
             // 0-/Minus-Einspeiseanlagen verstecken PV-Überschuss am Netzpunkt, weil der
@@ -1799,7 +1900,7 @@ class HeatingRodControlModule extends BaseModule {
             // Speicher-SOC und Einspeiselimit zusammenpassen. Danach entscheidet der Netzpunkt:
             // Netzbezug oder Speicherentladung -> schnell reduzieren; stabil PV -> halten/weiter prüfen.
             if (zeroExportInfo.active) {
-                zeroDecision = this._applyZeroExportStageStrategy(d, desiredStage, observedStage, pvBase, zeroExportInfo, now);
+                zeroDecision = this._applyZeroExportStageStrategy(d, desiredStage, observedStage, pvBase, zeroExportInfo, now, measuredW);
                 desiredStage = Math.max(0, Math.min(num(zeroDecision.targetStage, desiredStage), d.stageCount));
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportReason`, String(zeroDecision.reason || zeroExportInfo.reason || ''));
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.zeroExportNextAllowedAt`, Math.round(num(zeroDecision.nextAllowedAt, 0)));
@@ -1829,7 +1930,7 @@ class HeatingRodControlModule extends BaseModule {
             const forcePvWrite = !!(forceStorageProtectOff || forceNonPvDown || (targetStage <= 0 && ((typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 50) || Math.max(0, feedback.appliedPowerW || 0) > 0)));
             const res = await this._applyStageState(d, targetStage, feedback, { force: forcePvWrite });
             const effectiveTargetStage = Math.max(0, Math.min(num(res.targetStage, targetStage), d.wiredStages));
-            const targetW = this._sumStagePower(d, effectiveTargetStage);
+            const targetW = this._sumStagePowerModel(d, effectiveTargetStage, observedStage, measuredW);
             const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                 ? Math.max(0, measuredW)
                 : targetW;
@@ -1900,8 +2001,12 @@ class HeatingRodControlModule extends BaseModule {
             nonPvEnergyActive: !!pvBase.nonPvEnergyActive,
             storageSocPct: pvBase.storageSocPct,
             storageReserveW: Math.round(num(pvBase.storageReserveW, 0)),
+            storageReserveMissingW: Math.round(num(pvBase.storageReserveMissingW, 0)),
+            storageChargeUsableW: Math.round(num(pvBase.storageChargeUsableW, 0)),
             storageTargetSocPct: pvBase.storageTargetSocPct,
             nvpSurplusBeforeFlexW: Math.round(num(pvBase.nvpSurplusBeforeFlexW, 0)),
+            usableStorageChargeForNvpW: Math.round(num(pvBase.usableStorageChargeForNvpW, 0)),
+            stageUpDelaySec: Math.round(num(pvBase.stageUpDelaySec, 0)),
             nvpAvailableW: Math.round(num(pvBase.nvpAvailableW, 0)),
             cmAvailableW: Math.round(num(pvBase.cmAvailableW, 0)),
             availableW: Math.round(num(pvBase.availableW, 0)),
