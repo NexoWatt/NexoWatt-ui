@@ -96,6 +96,8 @@ class HeatingRodControlModule extends BaseModule {
         this._stateCache = new Map();
         /** @type {Map<string, {targetStage:number,lastIncreaseMs:number,lastDecreaseMs:number}>} */
         this._stageCtl = new Map();
+        /** @type {{importSinceMs:number, dischargeSinceMs:number}} */
+        this._budgetProtect = { importSinceMs: 0, dischargeSinceMs: 0 };
     }
 
     _isEnabled() {
@@ -362,6 +364,15 @@ class HeatingRodControlModule extends BaseModule {
         await mk('heatingRod.summary.pvAvailableW', 'PV available after thermal (W)', 'number', 'value.power', 'W');
         await mk('heatingRod.summary.appliedTotalW', 'Applied total (W)', 'number', 'value.power', 'W');
         await mk('heatingRod.summary.budgetUsedW', 'Budget used (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.budgetGateTotalW', 'Budget gate total (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.budgetGateRemainingW', 'Budget gate remaining after EVCS (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.budgetGatePvW', 'Budget gate PV for heating rod (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.budgetGateEffectiveW', 'Budget gate effective for heating rod (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.budgetGateSource', 'Budget gate source', 'string', 'text');
+        await mk('heatingRod.summary.gridImportW', 'Grid import used for heating rod gate (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.gridImportLimitW', 'Allowed grid import in PV auto (W)', 'number', 'value.power', 'W');
+        await mk('heatingRod.summary.gridImportExceeded', 'Grid import above heating rod limit', 'boolean', 'indicator');
+        await mk('heatingRod.summary.storageDischargeExceeded', 'Storage discharge above heating rod limit', 'boolean', 'indicator');
         await mk('heatingRod.summary.debugJson', 'Debug JSON', 'string', 'json');
         await mk('heatingRod.summary.zeroExportActive', 'Zero/minus feed-in logic active', 'boolean', 'indicator');
         await mk('heatingRod.summary.zeroExportCanProbe', 'Zero/minus feed-in probe allowed', 'boolean', 'indicator');
@@ -380,9 +391,18 @@ class HeatingRodControlModule extends BaseModule {
         try {
             const ns = String(this.adapter.namespace || '').trim();
             if (ns && this.dp) {
+                await this.dp.upsert({ key: 'hr.cm.active', objectId: `${ns}.chargingManagement.control.active`, dataType: 'boolean', direction: 'in' });
+                await this.dp.upsert({ key: 'hr.cm.budgetW', objectId: `${ns}.chargingManagement.control.budgetW`, dataType: 'number', direction: 'in', unit: 'W' });
+                await this.dp.upsert({ key: 'hr.cm.remainingW', objectId: `${ns}.chargingManagement.control.remainingW`, dataType: 'number', direction: 'in', unit: 'W' });
+                await this.dp.upsert({ key: 'hr.cm.pvCapRawW', objectId: `${ns}.chargingManagement.control.pvCapRawW`, dataType: 'number', direction: 'in', unit: 'W' });
                 await this.dp.upsert({ key: 'hr.cm.pvCapW', objectId: `${ns}.chargingManagement.control.pvCapEffectiveW`, dataType: 'number', direction: 'in', unit: 'W' });
+                await this.dp.upsert({ key: 'hr.cm.pvAvailable', objectId: `${ns}.chargingManagement.control.pvAvailable`, dataType: 'boolean', direction: 'in' });
                 await this.dp.upsert({ key: 'hr.cm.usedW', objectId: `${ns}.chargingManagement.control.usedW`, dataType: 'number', direction: 'in', unit: 'W' });
                 await this.dp.upsert({ key: 'hr.cm.pvSurplusNoEvRawW', objectId: `${ns}.chargingManagement.control.pvSurplusNoEvRawW`, dataType: 'number', direction: 'in', unit: 'W' });
+                await this.dp.upsert({ key: 'hr.cm.pvSurplusNoEvAvg5mW', objectId: `${ns}.chargingManagement.control.pvSurplusNoEvAvg5mW`, dataType: 'number', direction: 'in', unit: 'W' });
+                await this.dp.upsert({ key: 'hr.cm.gridW', objectId: `${ns}.chargingManagement.control.gridImportW`, dataType: 'number', direction: 'in', unit: 'W' });
+                await this.dp.upsert({ key: 'hr.cm.staleMeter', objectId: `${ns}.chargingManagement.control.staleMeter`, dataType: 'boolean', direction: 'in' });
+                await this.dp.upsert({ key: 'hr.cm.staleBudget', objectId: `${ns}.chargingManagement.control.staleBudget`, dataType: 'boolean', direction: 'in' });
                 for (let i = 1; i <= 10; i++) {
                     await this.dp.upsert({ key: `hr.user.c${i}.regEnabled`, objectId: `${ns}.heatingRod.user.c${i}.regEnabled`, dataType: 'boolean', direction: 'in' });
                     await this.dp.upsert({ key: `hr.user.c${i}.mode`, objectId: `${ns}.heatingRod.user.c${i}.mode`, dataType: 'string', direction: 'in' });
@@ -490,6 +510,58 @@ class HeatingRodControlModule extends BaseModule {
         return fallback;
     }
 
+    _readBooleanAny(keys, staleMs, fallback = null) {
+        const list = Array.isArray(keys) ? keys : [keys];
+        for (const key of list) {
+            if (!key) continue;
+            try {
+                if (this.dp && this.dp.getEntry && this.dp.getEntry(key)) {
+                    if (typeof this.dp.isStale === 'function' && this.dp.isStale(key, staleMs)) continue;
+                    const v = this.dp.getBoolean ? this.dp.getBoolean(key, null) : null;
+                    if (v !== null && v !== undefined) return !!v;
+                }
+            } catch (_e) {
+                // ignore
+            }
+            const raw = this._readCacheRaw(key, null);
+            if (raw === null || raw === undefined) continue;
+            if (typeof raw === 'boolean') return raw;
+            if (typeof raw === 'number') return raw !== 0;
+            if (typeof raw === 'string') {
+                const t = raw.trim().toLowerCase();
+                if (['true', '1', 'on', 'yes', 'active', 'enabled'].includes(t)) return true;
+                if (['false', '0', 'off', 'no', 'inactive', 'disabled'].includes(t)) return false;
+            }
+        }
+        return fallback;
+    }
+
+    _getBudgetGateCfg() {
+        const cfg = this._getCfg();
+        const zero = (cfg.zeroExport && typeof cfg.zeroExport === 'object') ? cfg.zeroExport : {};
+        const pickNum = (keys, def, minV = 0, maxV = 1e12) => {
+            const list = Array.isArray(keys) ? keys : [keys];
+            for (const key of list) {
+                const raw = (cfg[key] !== undefined && cfg[key] !== null && cfg[key] !== '') ? cfg[key] : zero[key];
+                if (raw === null || raw === undefined || raw === '') continue;
+                const n = Number(raw);
+                if (Number.isFinite(n)) return Math.round(clamp(n, minV, maxV));
+            }
+            return Math.round(clamp(def, minV, maxV));
+        };
+
+        return {
+            useBudgetGates: true,
+            maxGridImportW: pickNum(['maxGridImportW', 'gridImportToleranceW', 'pvMaxGridImportW', 'pvImportToleranceW', 'gridImportTripW'], 250, 0, 1000000),
+            gridImportHoldSec: pickNum(['gridImportHoldSec', 'gridImportTripSec', 'pvGridImportHoldSec'], 15, 0, 3600),
+            hardGridImportW: pickNum(['hardGridImportW', 'pvHardGridImportW'], 3000, 0, 1000000),
+            storageDischargeToleranceW: pickNum(['storageDischargeToleranceW', 'pvStorageDischargeToleranceW'], 300, 0, 1000000),
+            storageDischargeHoldSec: pickNum(['storageDischargeHoldSec', 'storageDischargeTripSec', 'pvStorageDischargeHoldSec'], 15, 0, 3600),
+            hardStorageDischargeW: pickNum(['hardStorageDischargeW', 'pvHardStorageDischargeW'], 1200, 0, 1000000),
+            budgetSafetyReserveW: pickNum(['budgetSafetyReserveW', 'pvSafetyReserveW'], 150, 0, 1000000),
+        };
+    }
+
     _readStorageSnapshot(staleMs) {
         let chargeW = Math.max(0, num(this._readNumberAny([
             'storageFarm.totalChargePowerW',
@@ -522,19 +594,38 @@ class HeatingRodControlModule extends BaseModule {
 
     _computeBasePvAvailableW(currentHeatingRodW = 0) {
         const cfg = this._getCfg();
+        const gateCfg = this._getBudgetGateCfg();
         const staleTimeoutSec = clamp(num(cfg.staleTimeoutSec, 15), 1, 3600);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
+        const finite = (v) => (typeof v === 'number' && Number.isFinite(v));
 
-        const pvCapWRaw = this._readNumberAny(['hr.cm.pvCapW', 'chargingManagement.control.pvCapEffectiveW'], staleMs, null);
-        const usedWRaw = this._readNumberAny(['hr.cm.usedW', 'chargingManagement.control.usedW'], staleMs, null);
-        const pvCapW = (typeof pvCapWRaw === 'number' && Number.isFinite(pvCapWRaw)) ? Math.max(0, pvCapWRaw) : 0;
-        const evcsUsedW = (typeof usedWRaw === 'number' && Number.isFinite(usedWRaw)) ? Math.max(0, usedWRaw) : 0;
+        const cmActive = this._readBooleanAny(['hr.cm.active', 'chargingManagement.control.active'], staleMs, null);
+        const cmStaleMeter = this._readBooleanAny(['hr.cm.staleMeter', 'chargingManagement.control.staleMeter'], staleMs, false);
+        const cmStaleBudget = this._readBooleanAny(['hr.cm.staleBudget', 'chargingManagement.control.staleBudget'], staleMs, false);
 
-        const gridW = this._readNumberAny(['grid.powerRawW', 'grid.powerW', 'ps.gridPowerW'], staleMs, null);
-        const gridKnown = (typeof gridW === 'number' && Number.isFinite(gridW));
+        const cmBudgetWRaw = this._readNumberAny(['hr.cm.budgetW', 'chargingManagement.control.budgetW'], staleMs, null);
+        const cmRemainingWRaw = this._readNumberAny(['hr.cm.remainingW', 'chargingManagement.control.remainingW'], staleMs, null);
+        const cmUsedWRaw = this._readNumberAny(['hr.cm.usedW', 'chargingManagement.control.usedW'], staleMs, null);
+        const cmPvCapEffectiveRaw = this._readNumberAny(['hr.cm.pvCapW', 'chargingManagement.control.pvCapEffectiveW'], staleMs, null);
+        const cmPvCapRawRaw = this._readNumberAny(['hr.cm.pvCapRawW', 'chargingManagement.control.pvCapRawW'], staleMs, null);
+        const cmPvNoEvRaw = this._readNumberAny(['hr.cm.pvSurplusNoEvRawW', 'chargingManagement.control.pvSurplusNoEvRawW'], staleMs, null);
+        const cmPvNoEvAvg = this._readNumberAny(['hr.cm.pvSurplusNoEvAvg5mW', 'chargingManagement.control.pvSurplusNoEvAvg5mW'], staleMs, null);
+        const cmPvAvailable = this._readBooleanAny(['hr.cm.pvAvailable', 'chargingManagement.control.pvAvailable'], staleMs, null);
+
+        const pvCapW = finite(cmPvCapEffectiveRaw) ? Math.max(0, cmPvCapEffectiveRaw) : 0;
+        const evcsUsedW = finite(cmUsedWRaw) ? Math.max(0, cmUsedWRaw) : 0;
+        const currentW = Math.max(0, num(currentHeatingRodW, 0));
+
+        const gridW = this._readNumberAny([
+            'hr.cm.gridW',
+            'chargingManagement.control.gridImportW',
+            'grid.powerRawW',
+            'grid.powerW',
+            'ps.gridPowerW'
+        ], staleMs, null);
+        const gridKnown = finite(gridW);
         const exportW = gridKnown ? Math.max(0, -gridW) : 0;
         const importW = gridKnown ? Math.max(0, gridW) : 0;
-        const currentW = Math.max(0, num(currentHeatingRodW, 0));
         const storage = this._readStorageSnapshot(staleMs);
 
         const storageTargetSocPct = clamp(num(cfg.storageTargetSocPct, 90), 0, 100);
@@ -547,63 +638,168 @@ class HeatingRodControlModule extends BaseModule {
             ? storageReserveCfgW
             : 0;
 
-        // NVP-Bilanz vor flexiblen Heizstäben:
-        //   Export/Import am Netzpunkt + bereits laufende Heizstableistung + Speicherladung - Speicherentladung.
-        // Wichtig: Netzbezug muss abgezogen werden. Sonst hält eine bereits laufende Heizstableistung
-        // nachts ihren eigenen vermeintlichen PV-Überschuss künstlich am Leben.
-        // Ohne frischen Netzpunktwert darf die aktuelle Heizstableistung NICHT als Überschuss-Fallback
-        // verwendet werden; sonst schaltet ein laufender Heizstab bei Dunkelheit nie sauber aus.
+        // Gate A/T/§14a/Peak: consume the remaining central budget after EVCS.
+        // This is intentionally read-only: Heizstab does not change the load management budget engine.
+        let totalGateRemainingW = Number.POSITIVE_INFINITY;
+        let totalGateBudgetW = Number.POSITIVE_INFINITY;
+        let totalGateSource = 'unlimited';
+        const cmLooksActive = cmActive === true
+            || evcsUsedW > 0
+            || (finite(cmBudgetWRaw) && cmBudgetWRaw > 0)
+            || (finite(cmRemainingWRaw) && cmRemainingWRaw > 0);
+        if (gateCfg.useBudgetGates && cmLooksActive && !cmStaleBudget && finite(cmRemainingWRaw)) {
+            totalGateRemainingW = Math.max(0, cmRemainingWRaw);
+            totalGateBudgetW = finite(cmBudgetWRaw) ? Math.max(0, cmBudgetWRaw) : totalGateRemainingW + evcsUsedW;
+            totalGateSource = 'chargingManagement.remainingW';
+        } else {
+            try {
+                const caps = (this.adapter && this.adapter._emsCaps && typeof this.adapter._emsCaps === 'object') ? this.adapter._emsCaps : null;
+                const cap = caps && caps.evcsHighLevel ? num(caps.evcsHighLevel.capW, null) : null;
+                if (gateCfg.useBudgetGates && typeof cap === 'number' && Number.isFinite(cap) && cap > 0) {
+                    totalGateBudgetW = Math.max(0, cap);
+                    totalGateRemainingW = Math.max(0, cap - evcsUsedW);
+                    totalGateSource = `ems.core.${String(caps.evcsHighLevel.binding || 'highLevel')}`;
+                }
+            } catch (_e) {
+                // ignore core fallback
+            }
+        }
+
+        // Gate B: prefer the same PV surplus gate that EVCS uses when it is active.
+        // It is reconstructed without EVCS; therefore add the current Heizstab load back in,
+        // otherwise an already running stage would collapse its own PV budget at 0 export.
+        let cmPvGateW = null;
+        let cmPvGateSource = '';
+        if (!cmStaleMeter) {
+            const candidates = [];
+            if (finite(cmPvCapEffectiveRaw) && cmPvCapEffectiveRaw > 0) candidates.push({ k: 'cm.pvCapEffectiveW', w: cmPvCapEffectiveRaw });
+            if (finite(cmPvCapRawRaw) && cmPvCapRawRaw > 0) candidates.push({ k: 'cm.pvCapRawW', w: cmPvCapRawRaw });
+            if (finite(cmPvNoEvRaw) && cmPvNoEvRaw > 0) candidates.push({ k: 'cm.pvSurplusNoEvRawW', w: cmPvNoEvRaw });
+            if (finite(cmPvNoEvAvg) && cmPvNoEvAvg > 0) candidates.push({ k: 'cm.pvSurplusNoEvAvg5mW', w: cmPvNoEvAvg });
+            if (candidates.length) {
+                const best = candidates.reduce((a, b) => (b.w > a.w ? b : a), candidates[0]);
+                cmPvGateW = Math.max(0, best.w - evcsUsedW + currentW - storageReserveW - gateCfg.budgetSafetyReserveW);
+                cmPvGateSource = best.k;
+            } else if (cmPvAvailable === false && finite(cmPvCapEffectiveRaw)) {
+                cmPvGateW = Math.max(0, currentW - storageReserveW - gateCfg.budgetSafetyReserveW);
+                cmPvGateSource = 'cm.pvAvailable.false_hold_only';
+            }
+        }
+
+        // Fallback/second truth: NVP balance without Heizstab as flexible load.
+        // import above the configured tolerance consumes the budget; small import remains allowed
+        // to keep the stages running calmly like PV-only EV charging.
+        const importExcessW = gridKnown ? Math.max(0, importW - gateCfg.maxGridImportW) : 0;
         const nvpSurplusBeforeFlexW = gridKnown
-            ? Math.max(0, exportW - importW + currentW + storage.chargeW - storage.dischargeW)
+            ? Math.max(0, exportW + currentW + storage.chargeW - storage.dischargeW - importExcessW)
             : 0;
-        const nvpAvailableW = Math.max(0, nvpSurplusBeforeFlexW - storageReserveW);
+        const nvpAvailableW = Math.max(0, nvpSurplusBeforeFlexW - storageReserveW - gateCfg.budgetSafetyReserveW);
 
-        const cmAvailableW = (pvCapW > 0) ? Math.max(0, pvCapW - evcsUsedW - storageReserveW) : 0;
-        // Wenn ein frischer Netzpunktwert vorhanden ist, ist er für Heizstäbe die härtere Wahrheit.
-        // Ohne Netzpunktwert wird ausschließlich das Charging-Management-Cap genutzt; wenn auch das
-        // fehlt, ist die sichere Vorgabe 0 W verfügbar.
-        const availableW = gridKnown ? nvpAvailableW : cmAvailableW;
-        const source = gridKnown ? 'nvp-storage-reserve' : (pvCapW > 0 ? 'cm-storage-reserve' : 'no-fresh-nvp');
+        let pvBudgetGateW = nvpAvailableW;
+        let pvBudgetSource = gridKnown ? 'nvp+ownLoad+storageReserve' : 'no-fresh-nvp';
+        if (cmPvGateW !== null && Number.isFinite(cmPvGateW) && cmPvGateW > pvBudgetGateW) {
+            pvBudgetGateW = cmPvGateW;
+            pvBudgetSource = cmPvGateSource || 'cm.pvGate';
+        }
 
-        // PV-Auto darf keine Netz- oder Speicherenergie nachziehen.
-        // Bei echtem Netzbezug oder Speicherentladung muss die Regelung zurücknehmen und darf
-        // nicht neu einschalten. Kleine Toleranzen verhindern Flattern durch Messrauschen um 0 W.
-        const importToleranceW = Math.max(0, Math.round(num(cfg.gridImportToleranceW ?? cfg.pvImportToleranceW ?? 50)));
-        const dischargeToleranceW = Math.max(0, Math.round(num(cfg.storageDischargeToleranceW ?? cfg.pvStorageDischargeToleranceW ?? 100)));
-        const gridImportActive = !!(gridKnown && importW > importToleranceW);
-        const storageDischargeActive = !!(storage.dischargeW > dischargeToleranceW);
+        const effectiveGateW = Math.max(0, Math.min(
+            pvBudgetGateW,
+            Number.isFinite(totalGateRemainingW) ? totalGateRemainingW : Number.POSITIVE_INFINITY
+        ));
+
+        const source = `${pvBudgetSource}|${totalGateSource}`;
+        const gridImportActive = !!(gridKnown && importW > gateCfg.maxGridImportW);
+        const storageDischargeActive = !!(storage.dischargeW > gateCfg.storageDischargeToleranceW);
         const nonPvEnergyActive = !!(gridImportActive || storageDischargeActive);
-        const forceOff = availableW <= 50 && (storageDischargeActive || (gridImportActive && currentW > 0) || (!gridKnown && currentW > 0 && pvCapW <= 0));
+        const forceOff = effectiveGateW <= 50 && currentW > 0 && (importW > gateCfg.hardGridImportW || storage.dischargeW > gateCfg.hardStorageDischargeW);
 
         return {
-            pvCapW: Math.max(pvCapW, nvpSurplusBeforeFlexW),
+            pvCapW: Math.max(pvBudgetGateW, pvCapW, nvpSurplusBeforeFlexW),
             evcsUsedW,
-            availableW,
+            availableW: effectiveGateW,
             source,
+            gateCfg,
+            useBudgetGates: !!gateCfg.useBudgetGates,
+            budgetGateTotalW: Number.isFinite(totalGateBudgetW) ? Math.max(0, totalGateBudgetW) : null,
+            budgetGateRemainingW: Number.isFinite(totalGateRemainingW) ? Math.max(0, totalGateRemainingW) : null,
+            budgetGatePvW: Math.max(0, pvBudgetGateW),
+            budgetGateEffectiveW: Math.max(0, effectiveGateW),
+            budgetGateSource: source,
+            cmActive,
+            cmStaleMeter: !!cmStaleMeter,
+            cmStaleBudget: !!cmStaleBudget,
+            cmPvAvailable,
+            cmPvCapEffectiveW: pvCapW,
+            cmPvCapRawW: finite(cmPvCapRawRaw) ? Math.max(0, cmPvCapRawRaw) : 0,
+            cmPvSurplusNoEvRawW: finite(cmPvNoEvRaw) ? Math.max(0, cmPvNoEvRaw) : 0,
             gridKnown,
             gridW: gridKnown ? gridW : null,
             importW,
-            importToleranceW,
+            importToleranceW: gateCfg.maxGridImportW,
             gridImportActive,
             exportW,
             currentHeatingRodW: currentW,
             storageChargeW: storage.chargeW,
             storageDischargeW: storage.dischargeW,
-            dischargeToleranceW,
+            dischargeToleranceW: gateCfg.storageDischargeToleranceW,
             storageDischargeActive,
             nonPvEnergyActive,
             storageSocPct: storage.socPct,
             storageReserveW,
             storageTargetSocPct,
             nvpSurplusBeforeFlexW,
-            cmAvailableW,
+            cmAvailableW: (cmPvGateW !== null && Number.isFinite(cmPvGateW)) ? Math.max(0, cmPvGateW) : 0,
             nvpAvailableW,
             forceOff,
         };
     }
 
+    _updateBudgetGateProtection(pvBase, now) {
+        const cfg = (pvBase && pvBase.gateCfg) ? pvBase.gateCfg : this._getBudgetGateCfg();
+        const st = this._budgetProtect || { importSinceMs: 0, dischargeSinceMs: 0 };
+        const importActive = !!(pvBase && pvBase.gridKnown && num(pvBase.importW, 0) > cfg.maxGridImportW);
+        const dischargeActive = !!(pvBase && num(pvBase.storageDischargeW, 0) > cfg.storageDischargeToleranceW);
+        const hardImport = !!(pvBase && pvBase.gridKnown && num(pvBase.importW, 0) > cfg.hardGridImportW);
+        const hardDischarge = !!(pvBase && num(pvBase.storageDischargeW, 0) > cfg.hardStorageDischargeW);
+        if (importActive) {
+            if (!st.importSinceMs) st.importSinceMs = now;
+        } else {
+            st.importSinceMs = 0;
+        }
+        if (dischargeActive) {
+            if (!st.dischargeSinceMs) st.dischargeSinceMs = now;
+        } else {
+            st.dischargeSinceMs = 0;
+        }
+
+        const importHoldMs = importActive && st.importSinceMs ? Math.max(0, now - st.importSinceMs) : 0;
+        const dischargeHoldMs = dischargeActive && st.dischargeSinceMs ? Math.max(0, now - st.dischargeSinceMs) : 0;
+        const hardOff = !!(hardImport || hardDischarge);
+        const reduceNow = hardOff
+            || (importActive && importHoldMs >= Math.max(0, cfg.gridImportHoldSec * 1000))
+            || (dischargeActive && dischargeHoldMs >= Math.max(0, cfg.storageDischargeHoldSec * 1000));
+        const reason = hardOff
+            ? (hardImport ? 'hard_grid_import' : 'hard_storage_discharge')
+            : (reduceNow ? (importActive ? 'grid_import_hold' : 'storage_discharge_hold') : (importActive || dischargeActive ? 'watch' : 'ok'));
+
+        this._budgetProtect = st;
+        return {
+            importActive,
+            dischargeActive,
+            hardImport,
+            hardDischarge,
+            importHoldMs,
+            dischargeHoldMs,
+            hardOff,
+            reduceNow,
+            watchActive: !!((importActive || dischargeActive) && !reduceNow),
+            reason,
+        };
+    }
+
     _getZeroExportCfg() {
         const cfg = this._getCfg();
+        const gateCfg = this._getBudgetGateCfg();
         const raw = (cfg.zeroExport && typeof cfg.zeroExport === 'object')
             ? cfg.zeroExport
             : ((cfg.zeroFeedIn && typeof cfg.zeroFeedIn === 'object') ? cfg.zeroFeedIn : {});
@@ -630,15 +826,19 @@ class HeatingRodControlModule extends BaseModule {
             minForecastPeakW: n(['minForecastPeakW', 'forecastMinPeakW'], 1000, 0, 1000000),
             minForecastKwh6h: clamp(num(raw.minForecastKwh6h ?? raw.forecastMinKwh6h, 0.5), 0, 100000),
             storageFullSocPct: n(['storageFullSocPct', 'storagePrioritySocPct'], 95, 0, 100),
-            gridImportTripW: n(['gridImportTripW', 'maxGridImportW'], 150, 0, 1000000),
-            gridImportTripSec: n(['gridImportTripSec', 'gridImportHoldSec'], 5, 0, 3600),
-            hardGridImportW: n(['hardGridImportW', 'hardImportW'], 500, 0, 1000000),
-            storageDischargeToleranceW: n(['storageDischargeToleranceW', 'batteryDischargeToleranceW'], 300, 0, 1000000),
-            storageDischargeTripSec: n(['storageDischargeTripSec', 'batteryDischargeHoldSec'], 8, 0, 3600),
-            hardStorageDischargeW: n(['hardStorageDischargeW', 'hardBatteryDischargeW'], 800, 0, 1000000),
+            gridImportTripW: gateCfg.maxGridImportW,
+            gridImportTripSec: gateCfg.gridImportHoldSec,
+            hardGridImportW: gateCfg.hardGridImportW,
+            storageDischargeToleranceW: gateCfg.storageDischargeToleranceW,
+            storageDischargeTripSec: gateCfg.storageDischargeHoldSec,
+            hardStorageDischargeW: gateCfg.hardStorageDischargeW,
             stepUpDelaySec: n(['stepUpDelaySec', 'stepUpWaitSec'], 60, 0, 86400),
             stepDownDelaySec: n(['stepDownDelaySec', 'stepDownWaitSec'], 5, 0, 86400),
             cooldownSec: n(['cooldownSec', 'probeCooldownSec'], 60, 0, 86400),
+            probeObserveSec: n(['probeObserveSec', 'pvFollowCheckSec', 'pvNachregelCheckSec'], 45, 0, 3600),
+            probeMinPvRisePct: n(['probeMinPvRisePct', 'pvRiseMinPct', 'pvAnstiegMinPct'], 20, 0, 1000),
+            probeMinPvRiseW: n(['probeMinPvRiseW', 'pvRiseMinW', 'pvAnstiegMinW'], 150, 0, 1000000),
+            probeRetrySec: n(['probeRetrySec', 'retryAfterFailedRiseSec', 'pvRiseRetrySec'], 600, 0, 86400),
         };
     }
 
@@ -1016,6 +1216,7 @@ class HeatingRodControlModule extends BaseModule {
         const currentStage = Math.max(0, Math.min(Math.round(Number(st.targetStage ?? observedStage) || 0), d.stageCount));
         let targetStage = Math.max(0, Math.min(Math.round(Number(desiredStage) || 0), d.stageCount));
         let reason = (info && info.reason) ? String(info.reason) : 'zero_export';
+        const pvNowW = Math.max(0, Math.round(num(info && info.pvNowW, 0)));
         let reduceNow = false;
         let hardOff = false;
 
@@ -1049,6 +1250,7 @@ class HeatingRodControlModule extends BaseModule {
             st.zeroCooldownUntilMs = now + Math.max(0, cfg.cooldownSec * 1000);
             st.zeroLastStepDownMs = now;
             st.lastDecreaseMs = now;
+            st.zeroProbe = null;
             st.targetStage = targetStage;
             reason = hardOff ? 'hard_non_pv_reduce' : (importActive ? 'grid_import_reduce' : 'storage_discharge_reduce');
             this._stageCtl.set(d.id, st);
@@ -1073,6 +1275,7 @@ class HeatingRodControlModule extends BaseModule {
             st.zeroCooldownUntilMs = now + Math.max(0, cfg.cooldownSec * 1000);
             st.zeroLastStepDownMs = now;
             st.lastDecreaseMs = now;
+            st.zeroProbe = null;
             st.targetStage = targetStage;
             reason = 'storage_priority_reduce';
             this._stageCtl.set(d.id, st);
@@ -1087,6 +1290,65 @@ class HeatingRodControlModule extends BaseModule {
             };
         }
 
+        const probe = (st.zeroProbe && typeof st.zeroProbe === 'object') ? st.zeroProbe : null;
+        if (probe) {
+            const probeStage = Math.max(0, Math.min(Math.round(Number(probe.stage) || 0), d.stageCount));
+            const probeStillOn = probeStage > 0 && Math.max(currentStage, observedStage, targetStage) >= probeStage;
+            if (!probeStillOn) {
+                st.zeroProbe = null;
+            } else {
+                const observeMs = Math.max(0, Math.round(num(cfg.probeObserveSec, 45) * 1000));
+                const startMs = Math.max(0, Math.round(num(probe.startMs, now)));
+                const elapsedMs = Math.max(0, now - startMs);
+                if (observeMs > 0 && elapsedMs < observeMs) {
+                    targetStage = Math.max(targetStage, probeStage);
+                    st.targetStage = targetStage;
+                    reason = 'probe_observing_pv_rise';
+                    this._stageCtl.set(d.id, st);
+                    return {
+                        targetStage: st.targetStage,
+                        reduceNow: false,
+                        hardOff: false,
+                        reason,
+                        importHoldMs,
+                        dischargeHoldMs,
+                        nextAllowedAt: startMs + observeMs,
+                    };
+                }
+
+                const riseW = Math.max(0, pvNowW - Math.max(0, Math.round(num(probe.basePvW, 0))));
+                const addedPowerW = Math.max(0, Math.round(num(probe.addedPowerW, 0)));
+                const needRiseW = Math.max(
+                    Math.max(0, Math.round(num(cfg.probeMinPvRiseW, 150))),
+                    Math.round(addedPowerW * Math.max(0, num(cfg.probeMinPvRisePct, 20)) / 100)
+                );
+
+                if (riseW + 1 < needRiseW) {
+                    const reduceBase = Math.max(currentStage, observedStage, targetStage, probeStage);
+                    targetStage = this._previousPhysicalStageBelow(d, reduceBase);
+                    st.zeroCooldownUntilMs = now + Math.max(0, cfg.probeRetrySec * 1000);
+                    st.zeroLastStepDownMs = now;
+                    st.lastDecreaseMs = now;
+                    st.zeroProbe = null;
+                    st.targetStage = targetStage;
+                    reason = `probe_pv_rise_failed_${riseW}of${needRiseW}W`;
+                    this._stageCtl.set(d.id, st);
+                    return {
+                        targetStage,
+                        reduceNow: true,
+                        hardOff: false,
+                        reason,
+                        importHoldMs,
+                        dischargeHoldMs,
+                        nextAllowedAt: st.zeroCooldownUntilMs || 0,
+                    };
+                }
+
+                st.zeroProbe = null;
+                reason = `probe_pv_rise_ok_${riseW}of${needRiseW}W`;
+            }
+        }
+
         const cooldownActive = !!(st.zeroCooldownUntilMs && now < st.zeroCooldownUntilMs);
         const canProbe = !!(info && info.active && info.canProbe && !cooldownActive);
 
@@ -1097,8 +1359,17 @@ class HeatingRodControlModule extends BaseModule {
             const stepWaitMs = Math.max(0, cfg.stepUpDelaySec * 1000);
             const mayStep = nextStage > baseStage && (!lastUp || (now - lastUp) >= stepWaitMs);
             if (mayStep) {
+                const basePowerW = this._sumStagePower(d, baseStage);
+                const nextPowerW = this._sumStagePower(d, nextStage);
                 targetStage = Math.max(targetStage, nextStage);
                 st.zeroLastStepUpMs = now;
+                st.zeroProbe = {
+                    stage: nextStage,
+                    baseStage,
+                    basePvW: pvNowW,
+                    addedPowerW: Math.max(0, nextPowerW - basePowerW),
+                    startMs: now,
+                };
                 reason = 'probe_step_up';
             } else {
                 reason = (nextStage <= baseStage) ? 'max_physical_stage' : 'waiting_step_up_delay';
@@ -1262,6 +1533,7 @@ class HeatingRodControlModule extends BaseModule {
         }
 
         const pvBase = this._computeBasePvAvailableW(currentHeatingRodW);
+        const budgetProtection = this._updateBudgetGateProtection(pvBase, now);
         const zeroExportInfo = this._computeZeroExportInfo(pvBase);
         const minPvAutomationW = this._getPvAutomationMinW();
         const staleTimeoutSec = clamp(num(this._getCfg().staleTimeoutSec, 15), 1, 3600);
@@ -1514,6 +1786,13 @@ class HeatingRodControlModule extends BaseModule {
             let desiredStage = this._computeDesiredStage(d, remainingW, observedStage);
             let zeroDecision = null;
 
+            // Wenn der Budget-Gate-Schutz gerade einen Netzbezug/Speicherbezug beobachtet,
+            // nicht weiter hochfahren. Bestehende Stufe darf bis zur konfigurierten Schutzzeit
+            // laufen, damit PV/FEMS sauber nachregeln kann.
+            if (budgetProtection && budgetProtection.watchActive && desiredStage > observedStage) {
+                desiredStage = observedStage;
+            }
+
             // 0-/Minus-Einspeiseanlagen verstecken PV-Überschuss am Netzpunkt, weil der
             // Wechselrichter/FEMS die PV abregelt. In diesem Sondermodus darf PV-Auto vorsichtig
             // eine physische Heizstab-Stufe als Testlast zuschalten, wenn Forecast, PV-Leistung,
@@ -1529,13 +1808,14 @@ class HeatingRodControlModule extends BaseModule {
             // Reiner PV-Betrieb: bei Netzbezug oder Speicherentladung keine Stufe halten
             // oder neu zuschalten. Bei aktivem 0-Einspeise-Sondermodus werden kurze Transienten
             // nicht sofort gekillt, sondern erst nach den konfigurierten Schutzzeiten.
-            let forceNonPvDown = !!(pvBase.nonPvEnergyActive);
-            if (zeroExportInfo.active) forceNonPvDown = !!(zeroDecision && zeroDecision.reduceNow);
+            let forceNonPvDown = !!(budgetProtection && budgetProtection.reduceNow);
+            if (zeroExportInfo.active) forceNonPvDown = !!(forceNonPvDown || (zeroDecision && zeroDecision.reduceNow));
             if (forceNonPvDown) {
                 // Reduce to the next lower *physical* actuator set. This is important for
                 // installations that accidentally map several virtual stages to the same KNX/relay
                 // datapoint: targetStage 3 -> 2 would otherwise still keep the same actuator ON.
-                const lowerPhysicalStage = (zeroDecision && zeroDecision.hardOff)
+                const hardOff = !!((budgetProtection && budgetProtection.hardOff) || (zeroDecision && zeroDecision.hardOff));
+                const lowerPhysicalStage = hardOff
                     ? 0
                     : this._previousPhysicalStageBelow(d, Math.max(observedStage, desiredStage));
                 desiredStage = Math.min(desiredStage, lowerPhysicalStage);
@@ -1562,9 +1842,10 @@ class HeatingRodControlModule extends BaseModule {
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, Math.round(targetW));
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.appliedW`, Math.round(usedW));
             const zeroSuffix = zeroDecision && zeroDecision.reason ? `_zero_${String(zeroDecision.reason)}` : '';
+            const gateSuffix = budgetProtection && budgetProtection.reason && budgetProtection.reason !== 'ok' ? `_gate_${String(budgetProtection.reason)}` : '';
             const autoStatus = forceStorageProtectOff
-                ? `storage_protect_${String(res.status || '')}${zeroSuffix}`
-                : (forceNonPvDown ? `pv_only_protect_${String(res.status || '')}${zeroSuffix}` : `${String(res.status || 'pv_auto')}${zeroSuffix}`);
+                ? `storage_protect_${String(res.status || '')}${zeroSuffix}${gateSuffix}`
+                : (forceNonPvDown ? `pv_only_protect_${String(res.status || '')}${zeroSuffix}${gateSuffix}` : `${String(res.status || 'pv_auto')}${zeroSuffix}${gateSuffix}`);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, autoStatus);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, '');
         }
@@ -1582,6 +1863,15 @@ class HeatingRodControlModule extends BaseModule {
         await this._setStateIfChanged('heatingRod.summary.pvAvailableW', Math.round(Math.max(0, num(pvBase.availableW, 0) - thermalUsedW)));
         await this._setStateIfChanged('heatingRod.summary.appliedTotalW', Math.round(appliedTotalW));
         await this._setStateIfChanged('heatingRod.summary.budgetUsedW', Math.round(budgetUsedW));
+        await this._setStateIfChanged('heatingRod.summary.budgetGateTotalW', pvBase.budgetGateTotalW === null ? 0 : Math.round(num(pvBase.budgetGateTotalW, 0)));
+        await this._setStateIfChanged('heatingRod.summary.budgetGateRemainingW', pvBase.budgetGateRemainingW === null ? 0 : Math.round(num(pvBase.budgetGateRemainingW, 0)));
+        await this._setStateIfChanged('heatingRod.summary.budgetGatePvW', Math.round(num(pvBase.budgetGatePvW, 0)));
+        await this._setStateIfChanged('heatingRod.summary.budgetGateEffectiveW', Math.round(num(pvBase.budgetGateEffectiveW, 0)));
+        await this._setStateIfChanged('heatingRod.summary.budgetGateSource', String(pvBase.budgetGateSource || pvBase.source || ''));
+        await this._setStateIfChanged('heatingRod.summary.gridImportW', Math.round(num(pvBase.importW, 0)));
+        await this._setStateIfChanged('heatingRod.summary.gridImportLimitW', Math.round(num(pvBase.importToleranceW, 0)));
+        await this._setStateIfChanged('heatingRod.summary.gridImportExceeded', !!(budgetProtection && budgetProtection.importActive));
+        await this._setStateIfChanged('heatingRod.summary.storageDischargeExceeded', !!(budgetProtection && budgetProtection.dischargeActive));
         await this._setStateIfChanged('heatingRod.summary.zeroExportActive', !!zeroExportInfo.active);
         await this._setStateIfChanged('heatingRod.summary.zeroExportCanProbe', !!zeroExportInfo.canProbe);
         await this._setStateIfChanged('heatingRod.summary.zeroExportReason', String(zeroExportInfo.reason || ''));
@@ -1617,6 +1907,22 @@ class HeatingRodControlModule extends BaseModule {
             availableW: Math.round(num(pvBase.availableW, 0)),
             thermalUsedW: Math.round(thermalUsedW),
             forceOff: !!pvBase.forceOff,
+            budgetGate: {
+                useBudgetGates: !!pvBase.useBudgetGates,
+                totalW: pvBase.budgetGateTotalW,
+                remainingW: pvBase.budgetGateRemainingW,
+                pvW: Math.round(num(pvBase.budgetGatePvW, 0)),
+                effectiveW: Math.round(num(pvBase.budgetGateEffectiveW, 0)),
+                source: pvBase.budgetGateSource,
+                cmActive: pvBase.cmActive,
+                cmStaleMeter: !!pvBase.cmStaleMeter,
+                cmStaleBudget: !!pvBase.cmStaleBudget,
+                cmPvAvailable: pvBase.cmPvAvailable,
+                cmPvCapEffectiveW: Math.round(num(pvBase.cmPvCapEffectiveW, 0)),
+                cmPvCapRawW: Math.round(num(pvBase.cmPvCapRawW, 0)),
+                cmPvSurplusNoEvRawW: Math.round(num(pvBase.cmPvSurplusNoEvRawW, 0)),
+                protection: budgetProtection || null,
+            },
             zeroExport: {
                 active: !!zeroExportInfo.active,
                 canProbe: !!zeroExportInfo.canProbe,
@@ -1630,7 +1936,7 @@ class HeatingRodControlModule extends BaseModule {
             },
         }));
         await this._setStateIfChanged('heatingRod.summary.lastUpdate', now);
-        await this._setStateIfChanged('heatingRod.summary.status', (this._devices && this._devices.length) ? `ok_${pvBase.source}${!pvAutomationAllowedByMin ? '_pv_min_block' : ''}${pvBase.forceOff ? '_storage_protect' : ''}${pvBase.nonPvEnergyActive ? '_pv_only_protect' : ''}${zeroExportInfo.active ? `_zero_${String(zeroExportInfo.reason || 'active')}` : ''}` : 'no_devices');
+        await this._setStateIfChanged('heatingRod.summary.status', (this._devices && this._devices.length) ? `ok_${pvBase.source}${!pvAutomationAllowedByMin ? '_pv_min_block' : ''}${pvBase.forceOff ? '_storage_protect' : ''}${budgetProtection && budgetProtection.reason !== 'ok' ? `_gate_${String(budgetProtection.reason)}` : ''}${zeroExportInfo.active ? `_zero_${String(zeroExportInfo.reason || 'active')}` : ''}` : 'no_devices');
     }
 }
 

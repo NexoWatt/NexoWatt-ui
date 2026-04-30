@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.1",
+    "version": "0.7.2",
     "news": {
+      "0.7.2": {
+        "en": "Heating rod PV-Auto rebuilt as a read-only budget-gate consumer. It now uses the existing charging/load-management remaining budget and PV gate before switching stages, keeps running through short inverter/FEMS transients, and reduces only after configurable grid-import or battery-discharge hold times. Zero/minus feed-in test loads now verify that PV generation actually rises and retry after a failed PV-rise check. Charging management, storage control and storage-farm distribution were not changed.",
+        "de": "Heizstab-PV-Auto als lesender Budget-Gate-Verbraucher neu aufgebaut. Die App nutzt jetzt Restbudget und PV-Gate aus dem bestehenden Lade-/Lastmanagement, bevor Stufen geschaltet werden, bleibt bei kurzen WR-/FEMS-Transienten stabil und reduziert erst nach einstellbarer Netzbezug- oder Speicherentlade-Haltezeit. 0-/Minus-Einspeise-Testlasten prüfen jetzt, ob die PV-Erzeugung wirklich nachregelt, und warten nach fehlendem PV-Anstieg bis zum nächsten Versuch. Lade-/Lastmanagement, Speicherregelung und Speicherfarm-Verteilung wurden nicht geändert."
+      },
       "0.7.1": {
         "en": "Storage control stabilized: self-consumption and tariff discharge now hold the last active setpoint inside the NVP target band instead of following delayed/noisy battery or storage-farm actual-power values. The demand safety clamp also treats the last commanded discharge setpoint as plausible discharge power, preventing stale 0 W telemetry from pulling the farm down. No changes to heating rod logic, PV surplus charging, storage-farm distribution, or zero-feed-in control.",
         "de": "Speicherregelung stabilisiert: Eigenverbrauchs- und Tarif-Entladung halten innerhalb des NVP-Zielbands den letzten aktiven Sollwert, statt verzögerten/rauschenden Batterie- oder Speicherfarm-Istleistungen zu folgen. Der Sicherheits-Lastdeckel wertet den letzten geschriebenen Entlade-Sollwert zusätzlich als plausible Entladeleistung, damit stale 0-W-Telemetrie die Farm nicht herunterzieht. Keine Änderungen an Heizstablogik, PV-Überschussladung, Speicherfarm-Verteilung oder 0-Einspeise-Regelung."

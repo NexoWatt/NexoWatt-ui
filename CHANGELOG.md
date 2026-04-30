@@ -1,3 +1,11 @@
+## 0.7.2
+
+- Heizstab-PV-Auto als lesender Budget-Gate-Verbraucher neu aufgebaut: Restbudget und PV-Gate aus dem bestehenden Lade-/Lastmanagement werden nur gelesen und begrenzen die Heizstab-Stufen.
+- Keine Änderungen am Lade-/Lastmanagement, an der Speicherregelung oder an der Speicherfarm-Verteilung.
+- Heizstab-Stufen bleiben bei kurzen WR-/FEMS-Nachregeltransienten stabil und werden erst nach einstellbarer Netzbezug- oder Speicherentlade-Haltezeit reduziert.
+- 0-/Minus-Einspeise-Testlast prüft jetzt nach dem Zuschalten, ob die PV-Erzeugung tatsächlich steigt; bei fehlendem PV-Anstieg wird zurückgeschaltet und erst nach der Retry-Zeit erneut getestet.
+- App-Center Heizstab übersichtlicher gegliedert: Speicher-Koordination, Budget-Gates & Lastmanagement sowie 0-Einspeise-Testlast / PV-Nachregelung.
+
 ## 0.7.1
 
 - Speicherregelung stabilisiert: NVP-Eigenverbrauchs- und Tarif-Entladung halten im Zielband den letzten aktiven Sollwert, statt kurzzeitig springenden Batterie-Istwerten/Farm-Aggregationen nach unten zu folgen.
