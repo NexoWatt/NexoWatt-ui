@@ -1389,21 +1389,32 @@ if (typeof soc === 'number') {
 							errW = nvpRawW - targetImportW;
 						}
 
-						// Deadband gegen Flattern: erst außerhalb der Bandbreite nachregeln
-						let errAdjW = 0;
-						if (errW > deadbandW || errW < -deadbandW) {
-							errAdjW = errW; // volle Abweichung verwenden (keine systematische Offset-Regelung)
-						}
+						// Deadband gegen Flattern: erst außerhalb der Bandbreite nachregeln.
+						// WICHTIG: Innerhalb der Deadband darf der Sollwert nicht mit der Batterie-Istleistung
+						// mitwandern. Viele Speicher/Farm-DPs melden die Istleistung zeitversetzt oder leicht
+						// springend. Wenn wir bei err=0 trotzdem battIst als neuen Sollwert übernehmen,
+						// entstehen sichtbare Sollwertsprünge trotz konstantem Verbrauch.
+						const outsideDeadband = (errW > deadbandW || errW < -deadbandW);
+						const holdInDeadband = !outsideDeadband && curSetW > 0;
+						let errAdjW = outsideDeadband ? errW : 0;
 
-						// OpenEMS-Balancing (Vorbild): neuer Sollwert = battIst + (gridIst - gridZiel)
-						// Fallback ohne Ist-Batterieleistung: inkrementelle Regelung (Soll = letzter Sollwert + Fehler)
+						// OpenEMS-Balancing (Vorbild): neuer Sollwert = battIst + (gridIst - gridZiel).
+						// Innerhalb der Deadband halten wir aber den letzten Sollwert, statt auf die
+						// zeitversetzte Istleistung zu springen.
+						// Fallback ohne Ist-Batterieleistung: inkrementelle Regelung (Soll = letzter Sollwert + Fehler).
 						// Rampe/Schrittweite/Anti-PingPong folgen im Dispatcher weiter unten.
-						let nextSetW = (typeof battW === 'number') ? (battW + errAdjW) : (curSetW + errAdjW);
+						let nextSetW = holdInDeadband
+							? curSetW
+							: ((typeof battW === 'number') ? (battW + errAdjW) : (curSetW + errAdjW));
 
 						// Safety-Clamp gegen unnötige Export-Spikes:
 						// Begrenze grob auf aktuelle Hauslast am NVP: Import (roh) + aktuelle Entladung (falls messbar) + Puffer.
+						// Bei aktiver Regelung zählt der letzte selbst gesetzte Sollwert als plausible Entladebasis,
+						// damit zeitversetzte/0-W-Istwerte die Farm nicht künstlich herunterziehen.
 						const importRawNowW = Math.max(0, (typeof nvpRawW === 'number') ? nvpRawW : 0);
-						const dischargeNowW = (typeof battW === 'number') ? Math.max(0, battW) : 0;
+						const measuredDischargeNowW = (typeof battW === 'number') ? Math.max(0, battW) : 0;
+						const commandedDischargeNowW = curSetW > 0 ? curSetW : 0;
+						const dischargeNowW = Math.max(measuredDischargeNowW, commandedDischargeNowW);
 						const safetyMarginW = 200;
 						const maxByDemandW = importRawNowW + dischargeNowW + safetyMarginW;
 						if (Number.isFinite(maxByDemandW) && maxByDemandW > 0) {
@@ -1555,22 +1566,32 @@ if (targetW === 0 && selfDischargeEnabled) {
 
     // PI-light: Inkrement-Regelung.
     // Hinweis: Stabilisierung erfolgt über Deadband + Dispatcher (Schrittweite/Rampe/Anti-PingPong).
-    let errAdjW = 0;
-    if (errW > deadbandW || errW < -deadbandW) {
-        errAdjW = errW;
-    }
+    // WICHTIG: Innerhalb der Deadband den letzten Sollwert halten. Sonst wandert der
+    // Sollwert mit der zeitversetzten Batterie-/Farm-Istleistung mit und springt trotz
+    // konstantem Hausverbrauch unnötig hoch/runter.
+    const outsideDeadband = (errW > deadbandW || errW < -deadbandW);
+    const holdInDeadband = !outsideDeadband && lastWasSelf && curSetW > 0;
+    let errAdjW = outsideDeadband ? errW : 0;
 
-        // OpenEMS-Balancing (Vorbild): battIst + (gridIst - gridZiel)
+        // OpenEMS-Balancing (Vorbild): battIst + (gridIst - gridZiel).
+        // Innerhalb der Deadband halten wir den letzten Sollwert statt auf die
+        // zeitversetzte Istleistung zu springen.
         // Fallback: letzter Sollwert + Fehler
-        let nextSetW = (typeof battW === 'number') ? (battW + errAdjW) : (curSetW + errAdjW);
+        let nextSetW = holdInDeadband
+            ? curSetW
+            : ((typeof battW === 'number') ? (battW + errAdjW) : (curSetW + errAdjW));
 
     // Safety-Clamp gegen Überschwingen:
     // Wenn battW nicht gemappt ist (oder NVP kurzfristig "alt" ist), kann die inkrementelle Regelung
     // zu großen Sollwerten aufintegrieren. Wir begrenzen deshalb die Entladeleistung grob auf
     // "aktuelle Last" am NVP: Import (roh) + aktuelle Entladung (falls messbar) + kleiner Puffer.
     // Dadurch bleibt die Regelung im Bereich der realen Hauslast und erzeugt keine Export-Spikes.
+    // Bei aktiver Eigenverbrauchsregelung zählt der letzte selbst gesetzte Sollwert als plausible
+    // Entladebasis, damit zeitversetzte/0-W-Istwerte die Farm nicht künstlich herunterziehen.
     const importRawNowW = Math.max(0, (typeof nvpRawW === 'number') ? nvpRawW : 0);
-    const dischargeNowW = (typeof battW === 'number') ? Math.max(0, battW) : 0;
+    const measuredDischargeNowW = (typeof battW === 'number') ? Math.max(0, battW) : 0;
+    const commandedDischargeNowW = curSetW > 0 ? curSetW : 0;
+    const dischargeNowW = Math.max(measuredDischargeNowW, commandedDischargeNowW);
     const safetyMarginW = 200; // bewusst konservativ; Feintuning über selfTargetGridW/Deadband/Rampe
     const maxByDemandW = importRawNowW + dischargeNowW + safetyMarginW;
     if (Number.isFinite(maxByDemandW) && maxByDemandW > 0) {

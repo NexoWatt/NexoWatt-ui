@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.0",
+    "version": "0.7.1",
     "news": {
+      "0.7.1": {
+        "en": "Storage control stabilized: self-consumption and tariff discharge now hold the last active setpoint inside the NVP target band instead of following delayed/noisy battery or storage-farm actual-power values. The demand safety clamp also treats the last commanded discharge setpoint as plausible discharge power, preventing stale 0 W telemetry from pulling the farm down. No changes to heating rod logic, PV surplus charging, storage-farm distribution, or zero-feed-in control.",
+        "de": "Speicherregelung stabilisiert: Eigenverbrauchs- und Tarif-Entladung halten innerhalb des NVP-Zielbands den letzten aktiven Sollwert, statt verzögerten/rauschenden Batterie- oder Speicherfarm-Istleistungen zu folgen. Der Sicherheits-Lastdeckel wertet den letzten geschriebenen Entlade-Sollwert zusätzlich als plausible Entladeleistung, damit stale 0-W-Telemetrie die Farm nicht herunterzieht. Keine Änderungen an Heizstablogik, PV-Überschussladung, Speicherfarm-Verteilung oder 0-Einspeise-Regelung."
+      },
       "0.7.0": {
         "en": "Stable 0.7.0 baseline from uploaded 0.6.262: version bump and web-cache bump only. The faulty storage/farm/heating-rod control changes from 0.6.267–0.6.270 are not included.",
         "de": "Stabile 0.7.0-Basis aus der hochgeladenen 0.6.262: nur Versionssprung und Webcache-Bump. Die fehlerhaften Speicher-/Farm-/Heizstab-Regeländerungen aus 0.6.267–0.6.270 sind nicht übernommen."
@@ -1814,8 +1818,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.0",
+  "version": "0.7.1",
   "news": {
+    "0.7.1": {
+      "en": "Storage control stabilized: self-consumption and tariff discharge now hold the last active setpoint inside the NVP target band instead of following delayed/noisy battery or storage-farm actual-power values. The demand safety clamp also treats the last commanded discharge setpoint as plausible discharge power, preventing stale 0 W telemetry from pulling the farm down. No changes to heating rod logic, PV surplus charging, storage-farm distribution, or zero-feed-in control.",
+      "de": "Speicherregelung stabilisiert: Eigenverbrauchs- und Tarif-Entladung halten innerhalb des NVP-Zielbands den letzten aktiven Sollwert, statt verzögerten/rauschenden Batterie- oder Speicherfarm-Istleistungen zu folgen. Der Sicherheits-Lastdeckel wertet den letzten geschriebenen Entlade-Sollwert zusätzlich als plausible Entladeleistung, damit stale 0-W-Telemetrie die Farm nicht herunterzieht. Keine Änderungen an Heizstablogik, PV-Überschussladung, Speicherfarm-Verteilung oder 0-Einspeise-Regelung."
+    },
     "0.7.0": {
       "en": "Stable 0.7.0 baseline from uploaded 0.6.262: version bump and web-cache bump only. The faulty storage/farm/heating-rod control changes from 0.6.267–0.6.270 are not included.",
       "de": "Stabile 0.7.0-Basis aus der hochgeladenen 0.6.262: nur Versionssprung und Webcache-Bump. Die fehlerhaften Speicher-/Farm-/Heizstab-Regeländerungen aus 0.6.267–0.6.270 sind nicht übernommen."

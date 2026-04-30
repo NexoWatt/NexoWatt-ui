@@ -1,3 +1,9 @@
+## 0.7.1
+
+- Speicherregelung stabilisiert: NVP-Eigenverbrauchs- und Tarif-Entladung halten im Zielband den letzten aktiven Sollwert, statt kurzzeitig springenden Batterie-Istwerten/Farm-Aggregationen nach unten zu folgen.
+- Safety-Clamp nutzt bei aktiver NVP-Regelung zusätzlich den letzten wirksamen Sollwert als Entladebasis. Dadurch werden 0-W- oder Stale-Messaussetzer nicht mehr direkt als Regelgrundlage verwendet.
+- Keine Änderungen an Heizstablogik, PV-Überschussladung, Speicherfarm-Verteilung oder 0-Einspeise-Regelung.
+
 ## 0.7.0
 
 - Stabile Basis aus der hochgeladenen Version 0.6.262 übernommen.
