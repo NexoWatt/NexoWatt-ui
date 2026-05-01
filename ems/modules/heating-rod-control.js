@@ -739,6 +739,36 @@ class HeatingRodControlModule extends BaseModule {
             pvBudgetSource = cmPvGateSource || 'cm.pvGate';
         }
 
+        // Primary future path: central EMS Budget & Gates.
+        // Charging reserves EVCS first, Thermal reserves second, Heizstab follows the remaining PV budget.
+        // We still apply Heizstab-specific Speicherreserve/Sicherheitsreserve here, because this app owns
+        // the staged relay decision and must protect manual/external channels.
+        try {
+            const rt = this.adapter && this.adapter._emsBudget;
+            const snap = rt && typeof rt.peek === 'function' ? rt.peek() : null;
+            const age = snap && Number.isFinite(Number(snap.ts)) ? (Date.now() - Number(snap.ts)) : Number.POSITIVE_INFINITY;
+            if (snap && age <= staleMs) {
+                const remTotal = Number(snap.remainingTotalW);
+                if (Number.isFinite(remTotal) && remTotal >= 0) {
+                    totalGateRemainingW = Math.min(totalGateRemainingW, Math.max(0, remTotal));
+                    totalGateBudgetW = Number.isFinite(totalGateBudgetW) ? totalGateBudgetW : Math.max(0, remTotal);
+                    totalGateSource = 'ems.budget.remainingTotalW';
+                }
+
+                const remPv = Number(snap.remainingPvW);
+                if (Number.isFinite(remPv) && remPv >= 0) {
+                    // Sobald der zentrale Budget-Koordinator frisch ist, ist sein Rest-PV-Budget
+                    // maßgeblich. Legacy-NVP/CM-Werte bleiben nur Fallback, damit nach Priorität
+                    // keine App wieder ein bereits vergebenes PV-Budget doppelt nutzt.
+                    const centralPvW = Math.max(0, remPv - storageReserveMissingW - gateCfg.budgetSafetyReserveW);
+                    pvBudgetGateW = centralPvW;
+                    pvBudgetSource = 'ems.budget.remainingPvW';
+                }
+            }
+        } catch (_e) {
+            // legacy NVP/CM fallback remains active
+        }
+
         const effectiveGateW = Math.max(0, Math.min(
             pvBudgetGateW,
             Number.isFinite(totalGateRemainingW) ? totalGateRemainingW : Number.POSITIVE_INFINITY
@@ -1678,9 +1708,14 @@ class HeatingRodControlModule extends BaseModule {
             }
         } catch (_e) {
             currentHeatingRodW = 0;
+            currentAutoHeatingRodW = 0;
         }
 
-        const pvBase = this._computeBasePvAvailableW(currentHeatingRodW);
+        // Only add EMS/PV-Auto-owned heating-rod load back into the NVP budget.
+        // A KNX/manual stage is an ordinary house load and must not inflate the
+        // automatic step-up budget.
+        const pvBase = this._computeBasePvAvailableW(currentAutoHeatingRodW);
+        const budgetProtection = this._updateBudgetGateProtection(pvBase, now);
         const zeroExportInfo = this._computeZeroExportInfo(pvBase);
         const minPvAutomationW = this._getPvAutomationMinW();
         const staleTimeoutSec = clamp(num(this._getCfg().staleTimeoutSec, 15), 1, 3600);
@@ -1943,7 +1978,16 @@ class HeatingRodControlModule extends BaseModule {
                 continue;
             }
 
-            let desiredStage = this._computeDesiredStage(d, remainingW, observedStage);
+            const ownNow = this._getAutoOwnership(d, observedStage, measuredW, feedback);
+            if (pvAutomationActive && ownNow.externalManual) {
+                const usedW = await this._observeManualExternal(d, observedStage, measuredW, feedback, 'external_manual_knx_observed');
+                budgetUsedW += usedW;
+                remainingW = Math.max(0, remainingW - usedW);
+                appliedTotalW += usedW;
+                continue;
+            }
+
+            let desiredStage = this._computeDesiredStage(d, remainingW, observedStage, measuredW);
             let zeroDecision = null;
 
             // Wenn der Budget-Gate-Schutz gerade einen Netzbezug/Speicherbezug beobachtet,
@@ -1991,7 +2035,8 @@ class HeatingRodControlModule extends BaseModule {
             const forcePvWrite = !!(forceStorageProtectOff || forceNonPvDown || (targetStage <= 0 && ((typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 50) || Math.max(0, feedback.appliedPowerW || 0) > 0)));
             const res = await this._applyStageState(d, targetStage, feedback, { force: forcePvWrite });
             const effectiveTargetStage = Math.max(0, Math.min(num(res.targetStage, targetStage), d.wiredStages));
-            const targetW = this._sumStagePower(d, effectiveTargetStage);
+            this._markAutoOwnership(d, effectiveTargetStage > 0, effectiveTargetStage, 'pvAuto');
+            const targetW = this._sumStagePowerModel(d, effectiveTargetStage, observedStage, measuredW);
             const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                 ? Math.max(0, measuredW)
                 : targetW;
@@ -2013,6 +2058,29 @@ class HeatingRodControlModule extends BaseModule {
         }
 
         this.adapter._heatingRodBudgetUsedW = Math.round(budgetUsedW);
+
+        // Central EMS Budget & Gates reservation. Heizstab is normally a lower-priority PV consumer
+        // after Ladepunkte/Thermik. This is diagnostics + downstream accounting only; manual KNX
+        // channels remain protected by the ownership logic above.
+        try {
+            const rt = this.adapter && this.adapter._emsBudget;
+            if (rt && typeof rt.reserve === 'function') {
+                const used = Math.max(0, Math.round(budgetUsedW || 0));
+                rt.reserve({
+                    key: 'heatingRod',
+                    app: 'heatingRodControl',
+                    label: 'Heizstab',
+                    priority: 300,
+                    requestedW: used,
+                    reserveW: used,
+                    pvReserveW: used,
+                    pvOnly: true,
+                    mode: 'pvAuto',
+                });
+            }
+        } catch (_e) {
+            // budget diagnostics only
+        }
 
         await this._setStateIfChanged('heatingRod.summary.pvCapW', Math.round(num(pvBase.pvCapW, 0)));
         await this._setStateIfChanged('heatingRod.summary.evcsUsedW', Math.round(num(pvBase.evcsUsedW, 0)));

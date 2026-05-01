@@ -2642,6 +2642,8 @@ class ChargingManagementModule extends BaseModule {
         // Debug: PV surplus without EVCS (instant + smoothed)
         let pvSurplusNoEvRawWState = 0;
         let pvSurplusNoEvAvg5mWState = 0;
+        // Central EMS budget coordinator: reserve the PV part used by EVCS later in the tick.
+        let pvEvcsUsedWForBudget = 0;
 
         if (needPvBudget || needPvDiagnostics) {
             // PV-Überschuss sauber ermitteln:
@@ -2705,6 +2707,7 @@ class ChargingManagementModule extends BaseModule {
                 pvEvcsActualW = pvEvcsUsedW;
                 pvEvcsCmdW = pvEvcsUsedW;
             }
+            pvEvcsUsedWForBudget = Math.max(0, Math.round(pvEvcsUsedW || 0));
 
             // Diagnostics (UI)
             try {
@@ -4820,6 +4823,30 @@ if (components.length) {
         await this._queueState('chargingManagement.control.budgetW', Number.isFinite(budgetW) ? budgetW : 0, true);
         await this._queueState('chargingManagement.control.usedW', Number.isFinite(budgetW) ? usedW : totalTargetPowerW, true);
         await this._queueState('chargingManagement.control.remainingW', Number.isFinite(budgetW) ? remainingW : 0, true);
+
+        // Central EMS Budget & Gates: EVCS is the first flexible consumer group.
+        // This does not change EVCS allocation; it only reserves the already decided target/usage
+        // for downstream apps (thermal, heating rod, generic loads) in the same tick.
+        try {
+            const rt = this.adapter && this.adapter._emsBudget;
+            if (rt && typeof rt.reserve === 'function') {
+                const evcsReserveW = Math.max(0, Math.round(Number.isFinite(budgetW) ? usedW : totalTargetPowerW));
+                const evcsPvReserveW = Math.max(0, Math.min(evcsReserveW, Math.round(pvEvcsUsedWForBudget || 0)));
+                rt.reserve({
+                    key: 'evcs',
+                    app: 'chargingManagement',
+                    label: 'Ladepunkte',
+                    priority: 100,
+                    requestedW: evcsReserveW,
+                    reserveW: evcsReserveW,
+                    pvReserveW: evcsPvReserveW,
+                    pvOnly: false,
+                    mode: String(mode || ''),
+                });
+            }
+        } catch (_e) {
+            // budget diagnostics only
+        }
 
             // Cleanup session tracking for removed wallboxes (avoid memory leaks)
             for (const [safeKey, lastSeenTs] of this._chargingLastSeenMs.entries()) {

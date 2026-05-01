@@ -10836,6 +10836,24 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           storageAssistActive: await getOwn('chargingManagement.control.storageAssistActive'),
           storageAssistW: await getOwn('chargingManagement.control.storageAssistW'),
           storageAssistSoCPct: await getOwn('chargingManagement.control.storageAssistSoCPct'),
+
+          // Central EMS Budget & Gates (app-independent background coordinator).
+          emsBudgetActive: await getOwn('ems.budget.active'),
+          emsBudgetMode: await getOwn('ems.budget.mode'),
+          emsBudgetTotalW: await getOwn('ems.budget.totalBudgetW'),
+          emsBudgetRemainingTotalW: await getOwn('ems.budget.remainingTotalW'),
+          emsBudgetPvRawW: await getOwn('ems.budget.pvBudgetRawW'),
+          emsBudgetPvW: await getOwn('ems.budget.pvBudgetW'),
+          emsBudgetRemainingPvW: await getOwn('ems.budget.remainingPvW'),
+          emsBudgetGridW: await getOwn('ems.budget.gridW'),
+          emsBudgetGridExportW: await getOwn('ems.budget.gridExportW'),
+          emsBudgetGridImportW: await getOwn('ems.budget.gridImportW'),
+          emsBudgetStorageChargeW: await getOwn('ems.budget.storageChargeW'),
+          emsBudgetStorageDischargeW: await getOwn('ems.budget.storageDischargeW'),
+          emsBudgetPvPowerW: await getOwn('ems.budget.pvPowerW'),
+          emsBudgetFlexUsedW: await getOwn('ems.budget.flexUsedW'),
+          emsBudgetBinding: await getOwn('ems.budget.binding'),
+          emsBudgetConsumersJson: await getOwn('ems.budget.consumersJson'),
         };
 
         const summary = {

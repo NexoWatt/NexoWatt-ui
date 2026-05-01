@@ -467,7 +467,31 @@ const mk = async (id, name, type, role, unit = undefined) => {
         const staleTimeoutSec = clamp(num(cfg.staleTimeoutSec, 15), 1, 3600);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
 
-        // Primary: PV cap (effective) after EVCS, provided by charging module.
+        // Primary: central EMS Budget & Gates. Charging management reserves EVCS first,
+        // thermal consumers get the next priority layer, and heating rods receive the remaining PV budget.
+        try {
+            const rt = this.adapter && this.adapter._emsBudget;
+            const snap = rt && typeof rt.peek === 'function' ? rt.peek() : null;
+            const age = snap && Number.isFinite(Number(snap.ts)) ? (Date.now() - Number(snap.ts)) : Number.POSITIVE_INFINITY;
+            if (snap && age <= staleMs) {
+                const pvTotalW = snap.gates && snap.gates.pv ? Number(snap.gates.pv.effectiveW) : 0;
+                const remainingPvW = Number(snap.remainingPvW);
+                if (Number.isFinite(remainingPvW) && remainingPvW >= 0) {
+                    const evcs = snap.consumers && snap.consumers.evcs ? snap.consumers.evcs : null;
+                    const evcsUsedW = evcs && Number.isFinite(Number(evcs.reserveW)) ? Math.max(0, Number(evcs.reserveW)) : 0;
+                    return {
+                        pvCapW: Math.max(0, Number.isFinite(pvTotalW) ? pvTotalW : remainingPvW),
+                        evcsUsedW,
+                        availableW: Math.max(0, remainingPvW),
+                        source: 'ems.budget',
+                    };
+                }
+            }
+        } catch (_e) {
+            // fall back to legacy budget source
+        }
+
+        // Legacy fallback: PV cap (effective) after EVCS, provided by charging module.
         const pvCapW = this.dp ? this.dp.getNumberFresh('th.cm.pvCapW', staleMs, null) : null;
         const usedW = this.dp ? this.dp.getNumberFresh('th.cm.usedW', staleMs, null) : null;
 
@@ -872,6 +896,27 @@ const mk = async (id, name, type, role, unit = undefined) => {
         }
 
         this.adapter._thermalBudgetUsedW = Math.round(budgetUsedW);
+
+        // Central EMS Budget & Gates reservation for downstream apps.
+        try {
+            const rt = this.adapter && this.adapter._emsBudget;
+            if (rt && typeof rt.reserve === 'function') {
+                const used = Math.max(0, Math.round(budgetUsedW || 0));
+                rt.reserve({
+                    key: 'thermal',
+                    app: 'thermalControl',
+                    label: 'Thermik',
+                    priority: 200,
+                    requestedW: used,
+                    reserveW: used,
+                    pvReserveW: used,
+                    pvOnly: true,
+                    mode: 'pvAuto',
+                });
+            }
+        } catch (_e) {
+            // budget diagnostics only
+        }
 
         await this._setStateIfChanged('thermal.summary.pvCapW', Math.round(num(pv.pvCapW, 0)));
         await this._setStateIfChanged('thermal.summary.evcsUsedW', Math.round(num(pv.evcsUsedW, 0)));

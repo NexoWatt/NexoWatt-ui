@@ -1,3 +1,43 @@
+## 0.7.6
+
+- Zentrale EMS Budget-&-Gates-Schicht eingeführt: `ems.budget.*` läuft dauerhaft im Hintergrund und veröffentlicht PV-Budget, Netzbudget, Speicherladung/-entladung, flexible Lasten und Restbudgets.
+- Flexible Verbraucher reservieren Budget jetzt nach Priorität: Ladepunkte/EVCS zuerst, Thermik danach, Heizstab anschließend. Dadurch wird PV-Überschuss nicht mehr von mehreren Apps gleichzeitig doppelt verplant.
+- Heizstab-PV-Auto und Thermik-PV-Auto nutzen bevorzugt das zentrale Rest-PV-Budget; ältere NVP-/Lademanagement-Werte bleiben nur als Fallback erhalten.
+- Budget-&-Gates-Diagnose im App-Center von „Lademanagement“ auf zentrale EMS-Sicht erweitert, inklusive zentraler Messbasis und Restbudget nach Priorität.
+- Lade-/Lastmanagement wurde nur um Budget-Reservierung/Diagnose erweitert; Speicherregelung und Speicherfarm-Verteilung wurden nicht geändert.
+
+## 0.7.5
+
+- Heizstab-PV-Auto unterscheidet jetzt zwischen eigenen Auto-/Boost-Stufen und extern manuell geschalteten KNX-/Relais-Kanälen. Manuelle Kanäle werden beobachtet und nicht mehr durch ein automatisches AUS überschrieben.
+- Die PV-Auto-Mindestfreigabe nutzt wieder die tatsächlich gemessene PV-Erzeugung. Rekonstruierte NVP-/Heizstab-Budgetwerte zählen nicht mehr als PV-Erzeugung.
+- Wenn die PV-Erzeugung unter die Mindestschwelle fällt, werden nur von der EMS selbst gehaltene Auto-Stufen einmalig abgeworfen; danach bleibt manuelle Schaltbarkeit erhalten.
+- Für die Budget-Rekonstruktion wird nur noch EMS-/PV-Auto-eigene Heizstableistung als flexible Last zurückgerechnet. Externe manuelle Heizstableistung zählt als normale Hauslast und bläht das Auto-Budget nicht künstlich auf.
+- Heizstab-App-Center aufgeräumt: zentrale PV-Auto-Budgetwerte in einem kompakten Block, 0-/Minus-Einspeise-Testlasten in einem optionalen erweiterten Bereich.
+- Lade-/Lastmanagement, Speicherregelung und Speicherfarm-Verteilung wurden nicht geändert.
+
+## 0.7.4
+
+- Heizstab-PV-Auto folgt dem PV-/NVP-Budget jetzt als diskreter Budget-Gate-Verbraucher: sichtbare Einspeisung am NVP, die bereits laufende Heizstableistung und nutzbare Speicherladung oberhalb der Reserve werden gemeinsam für die Stufenzielberechnung genutzt.
+- Speicherreserve wird jetzt als fehlende Reserve bilanziert: lädt der Speicher bereits mindestens mit der Reserve, blockiert sie den Heizstab nicht weiter; fehlt Reserve-Ladeleistung, wird sie weiterhin vom Heizstab-Budget zurückgehalten.
+- Stufenmodell lernt die reale Heizstableistung aus der Messung der laufenden Stufe. Wenn die Default-Konfiguration z. B. 2 kW pro Stufe annimmt, der reale Heizstab aber 1 kW pro Stufe zieht, kann PV-Auto trotzdem korrekt auf Stufe 2/3 hochfahren.
+- Batterie-Richtung wird in der Heizstab-Budgetierung bevorzugt über den signierten `batteryPower` bewertet. Eine aktiv ladende Batterie kann dadurch nicht mehr fälschlich als Speicherentladung den Stufen-Hochlauf blockieren.
+- Neue Einstellung im Heizstab-Bereich „Budget-Gates & Lastmanagement“: „Stufe-hoch Wartezeit (s)“. Hochfahren erfolgt maximal eine physische Stufe je Wartezeit; Reduzieren bei dauerhaftem Netzbezug/Speicherentladung bleibt schnell.
+- Lade-/Lastmanagement, Speicherregelung und Speicherfarm-Verteilung wurden nicht geändert.
+
+## 0.7.3
+
+- PV-Gate im Lade-/Lastmanagement wird jetzt dauerhaft berechnet und veröffentlicht, auch wenn gerade keine Wallbox im PV-Modus aktiv ist. Dadurch sehen nachgelagerte Apps wie die Heizstabsteuerung den vorhandenen PV-Überschuss zuverlässig.
+- Keine Änderung an der EVCS-Budgetverteilung: Das PV-Cap begrenzt Wallboxen weiterhin nur, wenn PV-only/PV-Modus aktiv ist.
+- Heizstab-PV-Budget liest stale registrierte Datenpunkte nicht mehr über den rohen Adapter-Cache zurück. Alte Batterie-Entlade-/Netzwerte können dadurch eine echte PV-Freigabe nicht mehr blockieren.
+
+## 0.7.2
+
+- Heizstab-PV-Auto als lesender Budget-Gate-Verbraucher neu aufgebaut: Restbudget und PV-Gate aus dem bestehenden Lade-/Lastmanagement werden nur gelesen und begrenzen die Heizstab-Stufen.
+- Keine Änderungen am Lade-/Lastmanagement, an der Speicherregelung oder an der Speicherfarm-Verteilung.
+- Heizstab-Stufen bleiben bei kurzen WR-/FEMS-Nachregeltransienten stabil und werden erst nach einstellbarer Netzbezug- oder Speicherentlade-Haltezeit reduziert.
+- 0-/Minus-Einspeise-Testlast prüft jetzt nach dem Zuschalten, ob die PV-Erzeugung tatsächlich steigt; bei fehlendem PV-Anstieg wird zurückgeschaltet und erst nach der Retry-Zeit erneut getestet.
+- App-Center Heizstab übersichtlicher gegliedert: Speicher-Koordination, Budget-Gates & Lastmanagement sowie 0-Einspeise-Testlast / PV-Nachregelung.
+
 ## 0.7.1
 
 - Speicherregelung stabilisiert: NVP-Eigenverbrauchs- und Tarif-Entladung halten im Zielband den letzten aktiven Sollwert, statt kurzzeitig springenden Batterie-Istwerten/Farm-Aggregationen nach unten zu folgen.
