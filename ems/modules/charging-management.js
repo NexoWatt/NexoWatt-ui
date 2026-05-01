@@ -2622,6 +2622,11 @@ class ChargingManagementModule extends BaseModule {
         // (b) no active wallbox is in a grid-allowed mode (normal/minpv/boost).
         const capTotalBudgetByPv = (pvSurplusOnlyCfg || forcePvSurplusOnly) && !anyGridAllowedActive;
         const needPvBudget = anyPvLimitedActive || capTotalBudgetByPv;
+        // Das PV-Gate ist inzwischen ein zentrales Diagnose-/Budget-Signal für nachgelagerte Apps
+        // (z. B. Heizstab). Deshalb muss der PV-Überschuss auch dann berechnet und veröffentlicht
+        // werden, wenn gerade keine Wallbox im PV-Modus aktiv ist. Wichtig: Das beeinflusst NICHT
+        // die EVCS-Budgetbegrenzung; angewendet wird pvCapW weiterhin nur, wenn needPvBudget/capTotalBudgetByPv aktiv ist.
+        const needPvDiagnostics = true;
 
         // PV surplus / cap (used for PV-limited wallboxes; and optionally to cap total budget)
         let pvCapW = null;
@@ -2638,7 +2643,7 @@ class ChargingManagementModule extends BaseModule {
         let pvSurplusNoEvRawWState = 0;
         let pvSurplusNoEvAvg5mWState = 0;
 
-        if (needPvBudget) {
+        if (needPvBudget || needPvDiagnostics) {
             // PV-Überschuss sauber ermitteln:
             // Problem (vorher): PV-Cap wurde aus dem NVP (grid export) direkt abgeleitet.
             // Sobald die Wallbox startet, sinkt der Export (weil EVCS selbst verbraucht)
@@ -2894,7 +2899,7 @@ class ChargingManagementModule extends BaseModule {
 
         }
 
-        if (!needPvBudget) {
+        if (!needPvBudget && !needPvDiagnostics) {
             this._pvAvailable = false;
             this._pvAboveSinceMs = 0;
             this._pvBelowSinceMs = 0;

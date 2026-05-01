@@ -1675,6 +1675,39 @@ function _collectFlowPowerDpIsWFromUI() {
     h.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number(h.storageTargetSocPct ?? 90) || 90)));
     const hMinPvRaw = Number(h.minPvPowerW ?? h.pvAutoMinPvPowerW ?? h.minCurrentPvW);
     h.minPvPowerW = Math.max(0, Math.round(Number.isFinite(hMinPvRaw) ? hMinPvRaw : 800));
+    h.useBudgetGates = true;
+    const legacyZeroForBudget = (h.zeroExport && typeof h.zeroExport === 'object') ? h.zeroExport : {};
+    const legacyBudgetAliases = {
+      maxGridImportW: ['maxGridImportW', 'gridImportTripW'],
+      gridImportHoldSec: ['gridImportHoldSec', 'gridImportTripSec'],
+      hardGridImportW: ['hardGridImportW'],
+      storageDischargeToleranceW: ['storageDischargeToleranceW'],
+      storageDischargeHoldSec: ['storageDischargeHoldSec', 'storageDischargeTripSec'],
+      hardStorageDischargeW: ['hardStorageDischargeW'],
+      budgetSafetyReserveW: ['budgetSafetyReserveW', 'pvSafetyReserveW'],
+      stageUpDelaySec: ['stageUpDelaySec', 'budgetStageUpDelaySec', 'pvStageUpDelaySec'],
+    };
+    const hn = (key, def, min, max) => {
+      let raw = h[key];
+      if (raw === undefined || raw === null || raw === '') {
+        const aliases = legacyBudgetAliases[key] || [];
+        for (const alias of aliases) {
+          const zRaw = legacyZeroForBudget[alias];
+          if (zRaw !== undefined && zRaw !== null && zRaw !== '') { raw = zRaw; break; }
+        }
+      }
+      let n = Number(raw);
+      if (!Number.isFinite(n)) n = def;
+      h[key] = Math.round(Math.max(min, Math.min(max, n)));
+    };
+    hn('maxGridImportW', 250, 0, 1000000);
+    hn('gridImportHoldSec', 15, 0, 3600);
+    hn('hardGridImportW', 3000, 0, 1000000);
+    hn('storageDischargeToleranceW', 300, 0, 1000000);
+    hn('storageDischargeHoldSec', 15, 0, 3600);
+    hn('hardStorageDischargeW', 1200, 0, 1000000);
+    hn('budgetSafetyReserveW', 150, 0, 1000000);
+    hn('stageUpDelaySec', 10, 0, 3600);
     h.zeroExport = (h.zeroExport && typeof h.zeroExport === 'object') ? h.zeroExport : {};
     const z = h.zeroExport;
     const zn = (key, def, min, max, integer = true) => {
@@ -1702,6 +1735,10 @@ function _collectFlowPowerDpIsWFromUI() {
     zn('stepUpDelaySec', 60, 0, 86400);
     zn('stepDownDelaySec', 5, 0, 86400);
     zn('cooldownSec', 60, 0, 86400);
+    zn('probeObserveSec', 45, 0, 3600);
+    zn('probeMinPvRisePct', 20, 0, 1000);
+    zn('probeMinPvRiseW', 150, 0, 1000000);
+    zn('probeRetrySec', 600, 0, 86400);
 
     const bySlot = new Map();
     for (const raw of h.devices) {
@@ -1848,6 +1885,37 @@ function _collectFlowPowerDpIsWFromUI() {
     body.style.alignItems = 'flex-end';
 
     wrap.appendChild(head);
+    wrap.appendChild(body);
+    return { wrap, body };
+  }
+
+  function _mkCfgDetailsGroup(title, open = false) {
+    const wrap = document.createElement('details');
+    wrap.open = !!open;
+    wrap.style.display = 'flex';
+    wrap.style.flexDirection = 'column';
+    wrap.style.gap = '8px';
+    wrap.style.padding = '10px 12px';
+    wrap.style.border = '1px solid rgba(255,255,255,0.08)';
+    wrap.style.borderRadius = '12px';
+    wrap.style.background = 'rgba(255,255,255,0.02)';
+    wrap.style.flex = '1 1 320px';
+
+    const summary = document.createElement('summary');
+    summary.textContent = title;
+    summary.style.cursor = 'pointer';
+    summary.style.fontWeight = '600';
+    summary.style.fontSize = '0.82rem';
+    summary.style.opacity = '0.92';
+
+    const body = document.createElement('div');
+    body.style.display = 'flex';
+    body.style.flexWrap = 'wrap';
+    body.style.gap = '10px';
+    body.style.alignItems = 'flex-end';
+    body.style.marginTop = '10px';
+
+    wrap.appendChild(summary);
     wrap.appendChild(body);
     return { wrap, body };
   }
@@ -2064,39 +2132,36 @@ function _collectFlowPowerDpIsWFromUI() {
     ];
     const stageCountOptions = Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}` }));
 
-    const grpCoord = _mkCfgGroup('Speicher-Koordination');
-    grpCoord.body.appendChild(_mkCfgField('Speicher-Reserve (W)', _mkCfgInput('number', cfg.storageReserveW, (v) => { cfg.storageReserveW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'PV-Auto lässt diese Leistung für die Speicherladung frei, solange der Speicher unter dem Ziel-SoC liegt.'));
-    grpCoord.body.appendChild(_mkCfgField('PV-Auto erst ab PV-Erzeugung (W)', _mkCfgInput('number', cfg.minPvPowerW, (v) => { cfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Unterhalb dieser aktuell erkannten PV-Leistung regelt die App den Heizstab nicht und schreibt auch kein automatisches AUS. Manuelle Schaltungen bleiben unverändert. Empfehlung: 800 W.'));
-    grpCoord.body.appendChild(_mkCfgField('Reserve bis SoC (%)', _mkCfgInput('number', cfg.storageTargetSocPct, (v) => { cfg.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '130px' }), 'Ab diesem Speicher-SoC darf der Heizstab den PV-Überschuss ohne Reserve nutzen.'));
-    const coordHint = document.createElement('div');
-    coordHint.className = 'nw-config-field-hint';
-    coordHint.textContent = 'Damit Heizstab und Speicher parallel arbeiten, wird zuerst der Überschuss am Netzanschlusspunkt bilanziert. Speicherentladung zählt nicht als PV-Überschuss; Speicherladung oberhalb der Reserve kann vom Heizstab genutzt werden.';
-    grpCoord.body.appendChild(coordHint);
-    els.heatingRodDevices.appendChild(grpCoord.wrap);
+    const grpAuto = _mkCfgGroup('PV-Auto – Budgetfolger');
+    const autoInfo = document.createElement('div');
+    autoInfo.className = 'nw-config-field-hint';
+    autoInfo.style.flexBasis = '100%';
+    autoInfo.textContent = 'Saubere Reihenfolge: Budget-Gates lesen, PV/NVP-Überschuss verfolgen, Stufen halten und nur eigene PV-Auto-Stufen wieder abwerfen. Externe KNX-/Relais-Schaltungen werden beobachtet und nicht überschrieben.';
+    grpAuto.body.appendChild(autoInfo);
+    grpAuto.body.appendChild(_mkCfgField('Speicher-Reserve (W)', _mkCfgInput('number', cfg.storageReserveW, (v) => { cfg.storageReserveW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Bleibt für Speicherladung frei, solange der Speicher unter dem Ziel-SoC liegt.'));
+    grpAuto.body.appendChild(_mkCfgField('Reserve bis SoC (%)', _mkCfgInput('number', cfg.storageTargetSocPct, (v) => { cfg.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '130px' }), 'Ab diesem SoC darf der Heizstab den Überschuss ohne Speicherreserve nutzen.'));
+    grpAuto.body.appendChild(_mkCfgField('PV-Auto ab PV (W)', _mkCfgInput('number', cfg.minPvPowerW, (v) => { cfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Darunter schreibt PV-Auto kein neues Zuschalten. Eigene Auto-Stufen werden abgeworfen, manuelle KNX-Stufen bleiben an.'));
+    grpAuto.body.appendChild(_mkCfgField('Netzbezug erlaubt (W)', _mkCfgInput('number', cfg.maxGridImportW, (v) => { cfg.maxGridImportW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Kurzzeitiger Toleranzwert. Erst darüber wird beobachtet/reduziert.'));
+    grpAuto.body.appendChild(_mkCfgField('Netzbezug Zeit (s)', _mkCfgInput('number', cfg.gridImportHoldSec, (v) => { cfg.gridImportHoldSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '130px' }), 'So lange darf der Toleranzwert anstehen, bevor eine Auto-Stufe reduziert wird.'));
+    grpAuto.body.appendChild(_mkCfgField('Speicherentladung erlaubt (W)', _mkCfgInput('number', cfg.storageDischargeToleranceW, (v) => { cfg.storageDischargeToleranceW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '160px' }), 'Akku-Schutz: dauerhafte Entladung über diesem Wert reduziert Auto-Stufen.'));
+    grpAuto.body.appendChild(_mkCfgField('Sicherheitsreserve (W)', _mkCfgInput('number', cfg.budgetSafetyReserveW, (v) => { cfg.budgetSafetyReserveW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Abzug vom Heizstab-Budget gegen Messrauschen.'));
+    grpAuto.body.appendChild(_mkCfgField('Stufe-hoch Wartezeit (s)', _mkCfgInput('number', cfg.stageUpDelaySec, (v) => { cfg.stageUpDelaySec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Maximal eine physische Stufe pro Wartezeit.'));
+    els.heatingRodDevices.appendChild(grpAuto.wrap);
 
     const zeroCfg = cfg.zeroExport || {};
-    const grpZero = _mkCfgGroup('0-Einspeisung / PV-Abregelung nutzen');
-    grpZero.body.appendChild(_mkCfgField('Logik aktiv', _mkCfgToggle(!!zeroCfg.enabled, (v) => { zeroCfg.enabled = !!v; setDirty(); }), 'Nur für 0-/Minus-Einspeiseanlagen: PV-Auto darf vorsichtig Stufe für Stufe Testlast zuschalten, wenn Forecast und Einspeiselimit darauf hindeuten, dass PV abgeregelt wird.'));
-    grpZero.body.appendChild(_mkCfgField('Erlaubte Einspeisung (W)', _mkCfgInput('number', zeroCfg.feedInLimitW, (v) => { zeroCfg.feedInLimitW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Bei -1 kW Einspeiselimit bitte 1000 eintragen. Bei echter 0-Einspeisung 0 eintragen.'));
-    grpZero.body.appendChild(_mkCfgField('Einspeise-Toleranz (W)', _mkCfgInput('number', zeroCfg.feedInToleranceW, (v) => { zeroCfg.feedInToleranceW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Ab diesem Korridor gilt der Netzpunkt als am Einspeiselimit.'));
-    grpZero.body.appendChild(_mkCfgField('Ziel-Einspeisepuffer (W)', _mkCfgInput('number', zeroCfg.targetExportBufferW, (v) => { zeroCfg.targetExportBufferW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Sicherheitsabstand: die Testlast startet erst, wenn am Einspeiselimit noch dieser Puffer plausibel vorhanden ist.'));
-    grpZero.body.appendChild(_mkCfgField('Mindest-PV für Testlast (W)', _mkCfgInput('number', zeroCfg.minPvPowerW, (v) => { zeroCfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Zusätzliche Freigabe für 0-/Minus-Einspeise-Proben. Die allgemeine PV-Auto-Schwelle oben gilt zusätzlich.'));
-    grpZero.body.appendChild(_mkCfgField('Forecast erforderlich', _mkCfgToggle(zeroCfg.requireForecast !== false, (v) => { zeroCfg.requireForecast = !!v; setDirty(); }), 'Forecast ist nur Freigabe/Plausibilität. Der Netzpunkt entscheidet danach, ob die Stufe bleiben darf.'));
-    grpZero.body.appendChild(_mkCfgField('Forecast Peak min. (W)', _mkCfgInput('number', zeroCfg.minForecastPeakW, (v) => { zeroCfg.minForecastPeakW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Mindestens erwartete PV-Spitze innerhalb des Forecast-Zeitraums.'));
-    grpZero.body.appendChild(_mkCfgField('Forecast 6h min. (kWh)', _mkCfgInput('number', zeroCfg.minForecastKwh6h, (v) => { zeroCfg.minForecastKwh6h = Math.max(0, Number(v) || 0); setDirty(); }, { min: 0, step: 0.1, width: '150px' }), 'Alternative Freigabe über erwartete Energie in den nächsten Stunden.'));
-    grpZero.body.appendChild(_mkCfgField('Speicher-Vorrang bis SoC (%)', _mkCfgInput('number', zeroCfg.storageFullSocPct, (v) => { zeroCfg.storageFullSocPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '150px' }), 'Erst ab diesem SoC darf versteckte/abgeregelte PV vorsichtig in den Heizstab gehen.'));
-    grpZero.body.appendChild(_mkCfgField('Netzbezug-Abwurf (W)', _mkCfgInput('number', zeroCfg.gridImportTripW, (v) => { zeroCfg.gridImportTripW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Wenn Netzbezug länger ansteht, wird eine physische Stufe reduziert.'));
-    grpZero.body.appendChild(_mkCfgField('Netzbezug-Zeit (s)', _mkCfgInput('number', zeroCfg.gridImportTripSec, (v) => { zeroCfg.gridImportTripSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Schutzzeit für kurze Nachregel-Transienten des Wechselrichters/FEMS.'));
-    grpZero.body.appendChild(_mkCfgField('Harter Netzbezug (W)', _mkCfgInput('number', zeroCfg.hardGridImportW, (v) => { zeroCfg.hardGridImportW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Ab diesem Netzbezug wird sofort komplett zurückgenommen.'));
-    grpZero.body.appendChild(_mkCfgField('Speicherentladung-Abwurf (W)', _mkCfgInput('number', zeroCfg.storageDischargeToleranceW, (v) => { zeroCfg.storageDischargeToleranceW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Verhindert, dass Batterieenergie verheizt wird.'));
-    grpZero.body.appendChild(_mkCfgField('Speicherentladung-Zeit (s)', _mkCfgInput('number', zeroCfg.storageDischargeTripSec, (v) => { zeroCfg.storageDischargeTripSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Erlaubt kurze Speicher-Transienten, reduziert aber bei anhaltender Entladung.'));
-    grpZero.body.appendChild(_mkCfgField('Harte Speicherentladung (W)', _mkCfgInput('number', zeroCfg.hardStorageDischargeW, (v) => { zeroCfg.hardStorageDischargeW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Ab dieser Entladung wird sofort komplett zurückgenommen.'));
-    grpZero.body.appendChild(_mkCfgField('Stufe-hoch Wartezeit (s)', _mkCfgInput('number', zeroCfg.stepUpDelaySec, (v) => { zeroCfg.stepUpDelaySec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Langsam hochfahren: nur eine physische Stufe je Wartezeit.'));
-    grpZero.body.appendChild(_mkCfgField('Cooldown nach Abwurf (s)', _mkCfgInput('number', zeroCfg.cooldownSec, (v) => { zeroCfg.cooldownSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Wartezeit nach Netzbezug/Speicherentladung, bevor erneut getestet wird.'));
-    const zeroHint = document.createElement('div');
-    zeroHint.className = 'nw-config-field-hint';
-    zeroHint.textContent = 'Prinzip: Forecast erlaubt nur den Versuch. Danach wird langsam Stufe für Stufe zugeschaltet. Bei Netzbezug oder Speicherentladung wird schnell reduziert. Manuell, Boost und Aus bleiben davon unberührt.';
-    grpZero.body.appendChild(zeroHint);
+    const grpZero = _mkCfgDetailsGroup('Erweitert: 0-/Minus-Einspeise-Testlast', !!zeroCfg.enabled);
+    const zeroInfo = document.createElement('div');
+    zeroInfo.className = 'nw-config-field-hint';
+    zeroInfo.style.flexBasis = '100%';
+    zeroInfo.textContent = 'Nur öffnen, wenn die Anlage bei 0-/Minus-Einspeisung PV abregelt und der Heizstab als Testlast vorsichtig PV-Nachregelung auslösen soll.';
+    grpZero.body.appendChild(zeroInfo);
+    grpZero.body.appendChild(_mkCfgField('Testlast aktiv', _mkCfgToggle(!!zeroCfg.enabled, (v) => { zeroCfg.enabled = !!v; setDirty(); }), 'Nur Heizstab-PV-Auto; kein Eingriff in Ladepark oder Speicher.'));
+    grpZero.body.appendChild(_mkCfgField('Erlaubte Einspeisung (W)', _mkCfgInput('number', zeroCfg.feedInLimitW, (v) => { zeroCfg.feedInLimitW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), '0 bei echter 0-Einspeisung, 1000 bei -1 kW Limit.'));
+    grpZero.body.appendChild(_mkCfgField('Mindest-PV Testlast (W)', _mkCfgInput('number', zeroCfg.minPvPowerW, (v) => { zeroCfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Zusätzliche Freigabe für Testlasten.'));
+    grpZero.body.appendChild(_mkCfgField('Forecast erforderlich', _mkCfgToggle(zeroCfg.requireForecast !== false, (v) => { zeroCfg.requireForecast = !!v; setDirty(); }), 'Forecast nur als Plausibilität; Netzpunkt entscheidet danach.'));
+    grpZero.body.appendChild(_mkCfgField('Speicher-Vorrang bis SoC (%)', _mkCfgInput('number', zeroCfg.storageFullSocPct, (v) => { zeroCfg.storageFullSocPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '150px' }), 'Bis hier wird versteckte PV zuerst dem Speicher gelassen.'));
+    grpZero.body.appendChild(_mkCfgField('PV-Nachregelprüfung (s)', _mkCfgInput('number', zeroCfg.probeObserveSec, (v) => { zeroCfg.probeObserveSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Zeitfenster nach Zuschalten einer Teststufe.'));
+    grpZero.body.appendChild(_mkCfgField('Erneuter Test nach Fehler (s)', _mkCfgInput('number', zeroCfg.probeRetrySec, (v) => { zeroCfg.probeRetrySec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '170px' }), 'Standard 600 s = 10 Minuten.'));
     els.heatingRodDevices.appendChild(grpZero.wrap);
 
     const mkStageDpField = (labelText, inputId, value, onChange, placeholder = 'optional') => {
