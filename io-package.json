@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.7",
+    "version": "0.7.8",
     "news": {
+      "0.7.8": {
+        "en": "Heating rod PV-Auto is now a robust central-budget follower with hold budget, hysteresis and manual KNX protection. Running EMS-owned stages are added back to the central remaining PV budget for holding, PV minimum blocks only new step-up instead of hard OFF, small grid/storage oscillations are tolerated until the configured hold times, and only PV-Auto-owned rod load is reserved in ems.budget. The App-Center heating-rod area was reorganized into clear Budget & Storage, Robust Switching and advanced hard-protection sections.",
+        "de": "Heizstab-PV-Auto arbeitet jetzt robuster als zentraler Budget-Follower mit Haltebudget, Hysterese und KNX-Manuellschutz. Laufende EMS-eigene Stufen werden zum zentralen Rest-PV-Budget zurückgerechnet, damit sie stabil gehalten werden; die PV-Mindestgrenze blockiert nur neues Hochfahren statt hart AUS; kleine Netz-/Speicherschwankungen werden bis zu den Haltezeiten toleriert; und nur PV-Auto-eigene Heizstableistung wird in ems.budget reserviert. Der Heizstab-Bereich im App-Center wurde in Budget & Speicher, Robustes Schalten und erweiterte harte Schutzgrenzen aufgeräumt."
+      },
       "0.7.7": {
         "en": "Added central Gate D – PV Forecast under ems.budget.forecast.*. The gate publishes forecast validity, confidence, current/average/peak forecast power and forecast energy horizons so future apps and AI-based strategies can use one shared prognosis source without changing charging, storage or heating-rod regulation.",
         "de": "Zentrales Gate D – PV Forecast unter ems.budget.forecast.* ergänzt. Das Gate veröffentlicht Forecast-Gültigkeit, Confidence, aktuelle/durchschnittliche/Peak-Prognoseleistung und Energie-Horizonte, damit zukünftige Apps und KI-Strategien eine gemeinsame Prognosequelle nutzen können, ohne Lade-, Speicher- oder Heizstabregelung zu verändern."
@@ -1851,8 +1855,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.7",
+  "version": "0.7.8",
   "news": {
+    "0.7.8": {
+      "en": "Heating rod PV-Auto is now a robust central-budget follower with hold budget, hysteresis and manual KNX protection. Running EMS-owned stages are added back to the central remaining PV budget for holding, PV minimum blocks only new step-up instead of hard OFF, small grid/storage oscillations are tolerated until the configured hold times, and only PV-Auto-owned rod load is reserved in ems.budget. The App-Center heating-rod area was reorganized into clear Budget & Storage, Robust Switching and advanced hard-protection sections.",
+      "de": "Heizstab-PV-Auto arbeitet jetzt robuster als zentraler Budget-Follower mit Haltebudget, Hysterese und KNX-Manuellschutz. Laufende EMS-eigene Stufen werden zum zentralen Rest-PV-Budget zurückgerechnet, damit sie stabil gehalten werden; die PV-Mindestgrenze blockiert nur neues Hochfahren statt hart AUS; kleine Netz-/Speicherschwankungen werden bis zu den Haltezeiten toleriert; und nur PV-Auto-eigene Heizstableistung wird in ems.budget reserviert. Der Heizstab-Bereich im App-Center wurde in Budget & Speicher, Robustes Schalten und erweiterte harte Schutzgrenzen aufgeräumt."
+    },
     "0.7.7": {
       "en": "Central Gate D - PV Forecast added under ems.budget.forecast.* with validity, confidence, power and energy horizon diagnostics for future forecast-aware apps and AI strategies. No charging, storage or heating-rod regulation was changed.",
       "de": "Zentrales Gate D - PV Forecast unter ems.budget.forecast.* ergänzt, inklusive Gültigkeit, Confidence, Leistungs- und Energie-Horizonten für zukünftige prognosebasierte Apps und KI-Strategien. Lade-, Speicher- und Heizstabregelung wurden nicht geändert."

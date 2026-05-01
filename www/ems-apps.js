@@ -1686,6 +1686,8 @@ function _collectFlowPowerDpIsWFromUI() {
       hardStorageDischargeW: ['hardStorageDischargeW'],
       budgetSafetyReserveW: ['budgetSafetyReserveW', 'pvSafetyReserveW'],
       stageUpDelaySec: ['stageUpDelaySec', 'budgetStageUpDelaySec', 'pvStageUpDelaySec'],
+      minStageRunSec: ['minStageRunSec', 'minAutoStageRunSec', 'pvMinStageRunSec'],
+      cooldownAfterOffSec: ['cooldownAfterOffSec', 'autoCooldownAfterOffSec', 'pvCooldownAfterOffSec'],
     };
     const hn = (key, def, min, max) => {
       let raw = h[key];
@@ -1701,13 +1703,15 @@ function _collectFlowPowerDpIsWFromUI() {
       h[key] = Math.round(Math.max(min, Math.min(max, n)));
     };
     hn('maxGridImportW', 250, 0, 1000000);
-    hn('gridImportHoldSec', 15, 0, 3600);
-    hn('hardGridImportW', 3000, 0, 1000000);
+    hn('gridImportHoldSec', 45, 0, 3600);
+    hn('hardGridImportW', 1500, 0, 1000000);
     hn('storageDischargeToleranceW', 300, 0, 1000000);
-    hn('storageDischargeHoldSec', 15, 0, 3600);
-    hn('hardStorageDischargeW', 1200, 0, 1000000);
-    hn('budgetSafetyReserveW', 150, 0, 1000000);
-    hn('stageUpDelaySec', 10, 0, 3600);
+    hn('storageDischargeHoldSec', 45, 0, 3600);
+    hn('hardStorageDischargeW', 2000, 0, 1000000);
+    hn('budgetSafetyReserveW', 200, 0, 1000000);
+    hn('stageUpDelaySec', 20, 0, 3600);
+    hn('minStageRunSec', 120, 0, 86400);
+    hn('cooldownAfterOffSec', 180, 0, 86400);
     h.zeroExport = (h.zeroExport && typeof h.zeroExport === 'object') ? h.zeroExport : {};
     const z = h.zeroExport;
     const zn = (key, def, min, max, integer = true) => {
@@ -2132,21 +2136,37 @@ function _collectFlowPowerDpIsWFromUI() {
     ];
     const stageCountOptions = Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}` }));
 
-    const grpAuto = _mkCfgGroup('PV-Auto – Budgetfolger');
+    const grpAuto = _mkCfgGroup('PV-Auto – Budget & Speicher');
     const autoInfo = document.createElement('div');
     autoInfo.className = 'nw-config-field-hint';
     autoInfo.style.flexBasis = '100%';
-    autoInfo.textContent = 'Saubere Reihenfolge: Budget-Gates lesen, PV/NVP-Überschuss verfolgen, Stufen halten und nur eigene PV-Auto-Stufen wieder abwerfen. Externe KNX-/Relais-Schaltungen werden beobachtet und nicht überschrieben.';
+    autoInfo.textContent = 'Zentrale EMS-Budget-Gates lesen, PV/NVP-Überschuss verfolgen und eigene PV-Auto-Stufen halten. Externe KNX-/Relais-Schaltungen werden nur beobachtet.';
     grpAuto.body.appendChild(autoInfo);
     grpAuto.body.appendChild(_mkCfgField('Speicher-Reserve (W)', _mkCfgInput('number', cfg.storageReserveW, (v) => { cfg.storageReserveW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Bleibt für Speicherladung frei, solange der Speicher unter dem Ziel-SoC liegt.'));
     grpAuto.body.appendChild(_mkCfgField('Reserve bis SoC (%)', _mkCfgInput('number', cfg.storageTargetSocPct, (v) => { cfg.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); setDirty(); }, { min: 0, max: 100, step: 1, width: '130px' }), 'Ab diesem SoC darf der Heizstab den Überschuss ohne Speicherreserve nutzen.'));
-    grpAuto.body.appendChild(_mkCfgField('PV-Auto ab PV (W)', _mkCfgInput('number', cfg.minPvPowerW, (v) => { cfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Darunter schreibt PV-Auto kein neues Zuschalten. Eigene Auto-Stufen werden abgeworfen, manuelle KNX-Stufen bleiben an.'));
-    grpAuto.body.appendChild(_mkCfgField('Netzbezug erlaubt (W)', _mkCfgInput('number', cfg.maxGridImportW, (v) => { cfg.maxGridImportW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Kurzzeitiger Toleranzwert. Erst darüber wird beobachtet/reduziert.'));
-    grpAuto.body.appendChild(_mkCfgField('Netzbezug Zeit (s)', _mkCfgInput('number', cfg.gridImportHoldSec, (v) => { cfg.gridImportHoldSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '130px' }), 'So lange darf der Toleranzwert anstehen, bevor eine Auto-Stufe reduziert wird.'));
-    grpAuto.body.appendChild(_mkCfgField('Speicherentladung erlaubt (W)', _mkCfgInput('number', cfg.storageDischargeToleranceW, (v) => { cfg.storageDischargeToleranceW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '160px' }), 'Akku-Schutz: dauerhafte Entladung über diesem Wert reduziert Auto-Stufen.'));
+    grpAuto.body.appendChild(_mkCfgField('PV-Auto ab PV (W)', _mkCfgInput('number', cfg.minPvPowerW, (v) => { cfg.minPvPowerW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 50, width: '150px' }), 'Start-/Hochschaltgrenze. Unterhalb wird nicht neu zugeschaltet, laufende Auto-Stufen werden aber über Netz-/Speichergates stabil gehalten.'));
     grpAuto.body.appendChild(_mkCfgField('Sicherheitsreserve (W)', _mkCfgInput('number', cfg.budgetSafetyReserveW, (v) => { cfg.budgetSafetyReserveW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Abzug vom Heizstab-Budget gegen Messrauschen.'));
-    grpAuto.body.appendChild(_mkCfgField('Stufe-hoch Wartezeit (s)', _mkCfgInput('number', cfg.stageUpDelaySec, (v) => { cfg.stageUpDelaySec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Maximal eine physische Stufe pro Wartezeit.'));
     els.heatingRodDevices.appendChild(grpAuto.wrap);
+
+    const grpSwitch = _mkCfgGroup('Robustes Schalten');
+    const switchInfo = document.createElement('div');
+    switchInfo.className = 'nw-config-field-hint';
+    switchInfo.style.flexBasis = '100%';
+    switchInfo.textContent = 'Hysterese gegen Netz- und WR-Schwankungen: erst stabil hochfahren, bei kleinem Netzbezug halten und nur nach Haltezeit reduzieren.';
+    grpSwitch.body.appendChild(switchInfo);
+    grpSwitch.body.appendChild(_mkCfgField('Stufe-hoch Wartezeit (s)', _mkCfgInput('number', cfg.stageUpDelaySec, (v) => { cfg.stageUpDelaySec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '150px' }), 'Maximal eine physische Stufe pro Wartezeit.'));
+    grpSwitch.body.appendChild(_mkCfgField('Min. Laufzeit Auto-Stufe (s)', _mkCfgInput('number', cfg.minStageRunSec, (v) => { cfg.minStageRunSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '170px' }), 'Verhindert nervöses Runterschalten bei kurzen Budget-Dellen.'));
+    grpSwitch.body.appendChild(_mkCfgField('Cooldown nach Abwurf (s)', _mkCfgInput('number', cfg.cooldownAfterOffSec, (v) => { cfg.cooldownAfterOffSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '170px' }), 'Wartezeit bevor nach komplettem AUS wieder gestartet wird.'));
+    grpSwitch.body.appendChild(_mkCfgField('Netzbezug erlaubt (W)', _mkCfgInput('number', cfg.maxGridImportW, (v) => { cfg.maxGridImportW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '150px' }), 'Kleiner erlaubter Bezug, damit der Heizstab bei NVP-Schwankungen an bleibt.'));
+    grpSwitch.body.appendChild(_mkCfgField('Netzbezug Haltezeit (s)', _mkCfgInput('number', cfg.gridImportHoldSec, (v) => { cfg.gridImportHoldSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '160px' }), 'Erst wenn der Bezug so lange überschritten ist, wird eine Auto-Stufe reduziert.'));
+    grpSwitch.body.appendChild(_mkCfgField('Speicherentladung erlaubt (W)', _mkCfgInput('number', cfg.storageDischargeToleranceW, (v) => { cfg.storageDischargeToleranceW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '170px' }), 'Akku-Schutz: kurze Messdellen sind erlaubt, dauerhafte Entladung reduziert Auto-Stufen.'));
+    grpSwitch.body.appendChild(_mkCfgField('Speicherentladung Haltezeit (s)', _mkCfgInput('number', cfg.storageDischargeHoldSec, (v) => { cfg.storageDischargeHoldSec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '190px' }), 'Dauer bis zur Reduzierung bei Akku-Entladung.'));
+    els.heatingRodDevices.appendChild(grpSwitch.wrap);
+
+    const grpProtect = _mkCfgDetailsGroup('Erweitert: harte Schutzgrenzen', false);
+    grpProtect.body.appendChild(_mkCfgField('Harter Netzbezug AUS/Runter (W)', _mkCfgInput('number', cfg.hardGridImportW, (v) => { cfg.hardGridImportW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '180px' }), 'Sofortschutz bei deutlich zu hohem Netzbezug.'));
+    grpProtect.body.appendChild(_mkCfgField('Harte Speicherentladung AUS/Runter (W)', _mkCfgInput('number', cfg.hardStorageDischargeW, (v) => { cfg.hardStorageDischargeW = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '210px' }), 'Sofortschutz bei deutlicher Akku-Entladung.'));
+    els.heatingRodDevices.appendChild(grpProtect.wrap);
 
     const zeroCfg = cfg.zeroExport || {};
     const grpZero = _mkCfgDetailsGroup('Erweitert: 0-/Minus-Einspeise-Testlast', !!zeroCfg.enabled);

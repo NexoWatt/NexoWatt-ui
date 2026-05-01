@@ -1,3 +1,12 @@
+## 0.7.8
+
+- Heizstab-PV-Auto robuster als zentraler Budget-Follower umgesetzt: laufende EMS-eigene Stufen werden als Haltebudget zum zentralen Rest-PV-Budget zurückgerechnet, damit sie bei sauberem NVP nicht nervös abschalten.
+- PV-Mindestleistung wirkt jetzt als Start-/Hochschaltgrenze und nicht mehr als harter AUS-Befehl. Bestehende Auto-Stufen werden über Netzbezug- und Speicherentlade-Gates reduziert, manuelle KNX-/Relais-Schaltungen bleiben geschützt.
+- Kleine Netz- und Speicher-Schwankungen werden per Hysterese gehalten; Reduzierung erfolgt erst nach einstellbarer Haltezeit, harte Grenzen greifen weiterhin sofort.
+- Nur PV-Auto-/Boost-eigene Heizstableistung wird als flexible Last in `ems.budget` reserviert. Externe manuelle Heizstablast zählt als normale Hauslast und bläht das zentrale PV-Budget nicht doppelt auf.
+- App-Center Heizstab aufgeräumt: klare Blöcke für **PV-Auto – Budget & Speicher**, **Robustes Schalten** und **Erweitert: harte Schutzgrenzen**.
+- Keine Regeländerung an Lade-/Lastmanagement, Speicherregelung, Speicherfarm oder Gate-D-Forecast.
+
 ## 0.7.7
 
 - Zentrales **Gate D – PV Forecast** unter `ems.budget.forecast.*` ergänzt.
