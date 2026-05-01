@@ -1,33 +1,8 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.5",
+    "version": "0.7.1",
     "news": {
-      "0.7.5": {
-        "en": "Heating rod PV-Auto now distinguishes EMS-owned automatic stages from external KNX/relay manual switching. When real PV generation falls below the PV-Auto threshold, only PV-Auto/boost-owned stages are dropped; externally switched channels are observed and no longer overwritten with an automatic OFF. The PV-Auto enable gate again uses actually measured PV generation instead of reconstructed NVP/heating-rod budget. The heating-rod App-Center section was cleaned up, with zero/minus feed-in test loads moved into an optional advanced area.",
-        "de": "Heizstab-PV-Auto unterscheidet jetzt eigene Auto-Stufen von externen KNX-/Relais-Schaltungen. Sinkt die reale PV-Erzeugung unter die PV-Auto-Schwelle, werden nur von PV-Auto/Boost gesetzte Stufen abgeworfen; manuell geschaltete Kanäle werden beobachtet und nicht mehr automatisch ausgeschaltet. Die PV-Auto-Freigabe nutzt wieder die tatsächlich gemessene PV-Erzeugung und nicht das rekonstruierte NVP-/Heizstab-Budget. Außerdem wurde der Heizstab-Bereich im App-Center deutlich aufgeräumt; 0-/Minus-Einspeise-Testlasten liegen nun im erweiterten optionalen Bereich."
-      },
-      "0.7.4": {
-        "en": "Heating rod PV-Auto now follows the PV/NVP budget as a discrete budget-gate consumer: visible NVP export and usable storage charge above the reserve are used for stage targeting, running rod load is kept in the budget, and stage power can be learned from measured rod power so wrong default stage sizes no longer block higher stages. A configurable budget stage-up delay was added; charging management and storage control were not changed. The storage reserve is now evaluated as missing reserve: storage charge above the reserve is usable while missing reserve remains withheld.",
-        "de": "Heizstab-PV-Auto folgt jetzt dem PV-/NVP-Budget als diskreter Budget-Gate-Verbraucher: sichtbare NVP-Einspeisung und nutzbare Speicherladung oberhalb der Reserve fließen in die Stufenzielberechnung ein, laufende Heizstableistung bleibt im Budget, und die reale Stufenleistung kann aus der gemessenen Heizstableistung gelernt werden. Dadurch blockieren falsche Default-Stufengrößen kein Hochfahren mehr. Eine einstellbare Budget-Stufe-hoch-Wartezeit wurde ergänzt; Lade-/Lastmanagement und Speicherregelung wurden nicht geändert. Die Speicherreserve wird als fehlende Reserve bewertet: bereits vorhandene Speicherladung oberhalb der Reserve wird nutzbar, fehlende Reserve bleibt zurückgehalten."
-      },
-      "0.7.3": {
-        "en": "PV gate diagnostics are now calculated continuously for downstream apps such as heating rod control. Heating rod PV budget no longer falls back to stale raw cache values when registered datapoints are stale.",
-        "de": "PV-Gate-Diagnose wird jetzt dauerhaft für nachgelagerte Apps wie die Heizstabsteuerung berechnet. Die Heizstab-PV-Freigabe fällt bei stale registrierten Datenpunkten nicht mehr auf alte Rohcache-Werte zurück.",
-        "ru": "Диагностика PV Gate теперь рассчитывается постоянно для downstream-приложений, например управления ТЭНом. PV-бюджет ТЭНа больше не использует устаревшие значения raw cache для stale зарегистрированных datapoints.",
-        "pt": "O diagnóstico PV Gate agora é calculado continuamente para apps posteriores, como o controlo do aquecedor. O orçamento PV do aquecedor já não recorre a valores antigos do raw cache quando datapoints registados estão stale.",
-        "nl": "PV Gate-diagnose wordt nu continu berekend voor downstream apps zoals de verwarmingsstaafregeling. Het PV-budget van de verwarmingsstaaf valt bij stale geregistreerde datapunten niet meer terug op oude raw-cachewaarden.",
-        "fr": "Le diagnostic PV Gate est désormais calculé en continu pour les applications aval comme la commande de résistance chauffante. Le budget PV de la résistance ne retombe plus sur d’anciennes valeurs de cache brut quand des datapoints enregistrés sont périmés.",
-        "it": "La diagnostica PV Gate ora viene calcolata continuamente per app a valle come il controllo della resistenza. Il budget PV della resistenza non usa più vecchi valori raw cache quando datapoint registrati risultano stale.",
-        "es": "El diagnóstico PV Gate ahora se calcula continuamente para apps posteriores como el control del calentador. El presupuesto PV del calentador ya no vuelve a valores antiguos de caché bruto cuando los datapoints registrados están obsoletos.",
-        "pl": "Diagnostyka PV Gate jest teraz liczona stale dla aplikacji downstream, np. sterowania grzałką. Budżet PV grzałki nie wraca już do starych wartości raw cache, gdy zarejestrowane datapointy są stale.",
-        "uk": "Діагностика PV Gate тепер розраховується постійно для downstream-додатків, наприклад керування ТЕНом. PV-бюджет ТЕНа більше не використовує застарілі значення raw cache для stale зареєстрованих datapoints.",
-        "zh-cn": "PV Gate 诊断现在会为加热棒控制等下游应用持续计算。注册数据点过期时，加热棒 PV 预算不再回退到旧的原始缓存值。"
-      },
-      "0.7.2": {
-        "en": "Heating rod PV-Auto rebuilt as a read-only budget-gate consumer. It now uses the existing charging/load-management remaining budget and PV gate before switching stages, keeps running through short inverter/FEMS transients, and reduces only after configurable grid-import or battery-discharge hold times. Zero/minus feed-in test loads now verify that PV generation actually rises and retry after a failed PV-rise check. Charging management, storage control and storage-farm distribution were not changed.",
-        "de": "Heizstab-PV-Auto als lesender Budget-Gate-Verbraucher neu aufgebaut. Die App nutzt jetzt Restbudget und PV-Gate aus dem bestehenden Lade-/Lastmanagement, bevor Stufen geschaltet werden, bleibt bei kurzen WR-/FEMS-Transienten stabil und reduziert erst nach einstellbarer Netzbezug- oder Speicherentlade-Haltezeit. 0-/Minus-Einspeise-Testlasten prüfen jetzt, ob die PV-Erzeugung wirklich nachregelt, und warten nach fehlendem PV-Anstieg bis zum nächsten Versuch. Lade-/Lastmanagement, Speicherregelung und Speicherfarm-Verteilung wurden nicht geändert."
-      },
       "0.7.1": {
         "en": "Storage control stabilized: self-consumption and tariff discharge now hold the last active setpoint inside the NVP target band instead of following delayed/noisy battery or storage-farm actual-power values. The demand safety clamp also treats the last commanded discharge setpoint as plausible discharge power, preventing stale 0 W telemetry from pulling the farm down. No changes to heating rod logic, PV surplus charging, storage-farm distribution, or zero-feed-in control.",
         "de": "Speicherregelung stabilisiert: Eigenverbrauchs- und Tarif-Entladung halten innerhalb des NVP-Zielbands den letzten aktiven Sollwert, statt verzögerten/rauschenden Batterie- oder Speicherfarm-Istleistungen zu folgen. Der Sicherheits-Lastdeckel wertet den letzten geschriebenen Entlade-Sollwert zusätzlich als plausible Entladeleistung, damit stale 0-W-Telemetrie die Farm nicht herunterzieht. Keine Änderungen an Heizstablogik, PV-Überschussladung, Speicherfarm-Verteilung oder 0-Einspeise-Regelung."
@@ -1843,16 +1818,8 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.5",
+  "version": "0.7.1",
   "news": {
-    "0.7.5": {
-      "en": "Heating rod PV-Auto now distinguishes EMS-owned automatic stages from external KNX/relay manual switching. When real PV generation falls below the PV-Auto threshold, only PV-Auto/boost-owned stages are dropped; externally switched channels are observed and no longer overwritten with an automatic OFF. The PV-Auto enable gate again uses actually measured PV generation instead of reconstructed NVP/heating-rod budget. The heating-rod App-Center section was cleaned up, with zero/minus feed-in test loads moved into an optional advanced area.",
-      "de": "Heizstab-PV-Auto unterscheidet jetzt eigene Auto-Stufen von externen KNX-/Relais-Schaltungen. Sinkt die reale PV-Erzeugung unter die PV-Auto-Schwelle, werden nur von PV-Auto/Boost gesetzte Stufen abgeworfen; manuell geschaltete Kanäle werden beobachtet und nicht mehr automatisch ausgeschaltet. Die PV-Auto-Freigabe nutzt wieder die tatsächlich gemessene PV-Erzeugung und nicht das rekonstruierte NVP-/Heizstab-Budget. Außerdem wurde der Heizstab-Bereich im App-Center deutlich aufgeräumt; 0-/Minus-Einspeise-Testlasten liegen nun im erweiterten optionalen Bereich."
-    },
-    "0.7.4": {
-      "en": "Heating rod PV-Auto now follows the PV/NVP budget as a discrete budget-gate consumer. Visible NVP export, running rod load and usable storage charge above the reserve are used for stage targeting; measured rod power can correct wrong default stage sizes. Charging management and storage control were not changed. The storage reserve is evaluated as missing reserve.",
-      "de": "Heizstab-PV-Auto folgt jetzt dem PV-/NVP-Budget als diskreter Budget-Gate-Verbraucher. Sichtbare NVP-Einspeisung, laufende Heizstableistung und nutzbare Speicherladung oberhalb der Reserve werden für die Stufenzielberechnung genutzt; gemessene Heizstableistung kann falsche Default-Stufengrößen korrigieren. Lade-/Lastmanagement und Speicherregelung wurden nicht geändert. Die Speicherreserve wird als fehlende Reserve bewertet."
-    },
     "0.7.1": {
       "en": "Storage control stabilized: self-consumption and tariff discharge now hold the last active setpoint inside the NVP target band instead of following delayed/noisy battery or storage-farm actual-power values. The demand safety clamp also treats the last commanded discharge setpoint as plausible discharge power, preventing stale 0 W telemetry from pulling the farm down. No changes to heating rod logic, PV surplus charging, storage-farm distribution, or zero-feed-in control.",
       "de": "Speicherregelung stabilisiert: Eigenverbrauchs- und Tarif-Entladung halten innerhalb des NVP-Zielbands den letzten aktiven Sollwert, statt verzögerten/rauschenden Batterie- oder Speicherfarm-Istleistungen zu folgen. Der Sicherheits-Lastdeckel wertet den letzten geschriebenen Entlade-Sollwert zusätzlich als plausible Entladeleistung, damit stale 0-W-Telemetrie die Farm nicht herunterzieht. Keine Änderungen an Heizstablogik, PV-Überschussladung, Speicherfarm-Verteilung oder 0-Einspeise-Regelung."

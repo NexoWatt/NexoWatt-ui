@@ -1678,14 +1678,9 @@ class HeatingRodControlModule extends BaseModule {
             }
         } catch (_e) {
             currentHeatingRodW = 0;
-            currentAutoHeatingRodW = 0;
         }
 
-        // Only add EMS/PV-Auto-owned heating-rod load back into the NVP budget.
-        // A KNX/manual stage is an ordinary house load and must not inflate the
-        // automatic step-up budget.
-        const pvBase = this._computeBasePvAvailableW(currentAutoHeatingRodW);
-        const budgetProtection = this._updateBudgetGateProtection(pvBase, now);
+        const pvBase = this._computeBasePvAvailableW(currentHeatingRodW);
         const zeroExportInfo = this._computeZeroExportInfo(pvBase);
         const minPvAutomationW = this._getPvAutomationMinW();
         const staleTimeoutSec = clamp(num(this._getCfg().staleTimeoutSec, 15), 1, 3600);
@@ -1948,16 +1943,7 @@ class HeatingRodControlModule extends BaseModule {
                 continue;
             }
 
-            const ownNow = this._getAutoOwnership(d, observedStage, measuredW, feedback);
-            if (pvAutomationActive && ownNow.externalManual) {
-                const usedW = await this._observeManualExternal(d, observedStage, measuredW, feedback, 'external_manual_knx_observed');
-                budgetUsedW += usedW;
-                remainingW = Math.max(0, remainingW - usedW);
-                appliedTotalW += usedW;
-                continue;
-            }
-
-            let desiredStage = this._computeDesiredStage(d, remainingW, observedStage, measuredW);
+            let desiredStage = this._computeDesiredStage(d, remainingW, observedStage);
             let zeroDecision = null;
 
             // Wenn der Budget-Gate-Schutz gerade einen Netzbezug/Speicherbezug beobachtet,
@@ -2005,8 +1991,7 @@ class HeatingRodControlModule extends BaseModule {
             const forcePvWrite = !!(forceStorageProtectOff || forceNonPvDown || (targetStage <= 0 && ((typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 50) || Math.max(0, feedback.appliedPowerW || 0) > 0)));
             const res = await this._applyStageState(d, targetStage, feedback, { force: forcePvWrite });
             const effectiveTargetStage = Math.max(0, Math.min(num(res.targetStage, targetStage), d.wiredStages));
-            this._markAutoOwnership(d, effectiveTargetStage > 0, effectiveTargetStage, 'pvAuto');
-            const targetW = this._sumStagePowerModel(d, effectiveTargetStage, observedStage, measuredW);
+            const targetW = this._sumStagePower(d, effectiveTargetStage);
             const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                 ? Math.max(0, measuredW)
                 : targetW;
