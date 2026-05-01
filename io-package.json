@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.6",
+    "version": "0.7.7",
     "news": {
+      "0.7.7": {
+        "en": "Added central Gate D – PV Forecast under ems.budget.forecast.*. The gate publishes forecast validity, confidence, current/average/peak forecast power and forecast energy horizons so future apps and AI-based strategies can use one shared prognosis source without changing charging, storage or heating-rod regulation.",
+        "de": "Zentrales Gate D – PV Forecast unter ems.budget.forecast.* ergänzt. Das Gate veröffentlicht Forecast-Gültigkeit, Confidence, aktuelle/durchschnittliche/Peak-Prognoseleistung und Energie-Horizonte, damit zukünftige Apps und KI-Strategien eine gemeinsame Prognosequelle nutzen können, ohne Lade-, Speicher- oder Heizstabregelung zu verändern."
+      },
       "0.7.6": {
         "en": "Introduced the central EMS Budget & Gates coordinator as an always-on background layer. PV, grid and storage budget values are now published under ems.budget.*, and flexible consumers reserve budget by priority: EVCS first, thermal consumers second, heating rods third. Heating rod and thermal PV-Auto now prefer the central remaining PV budget, while legacy NVP/charging-management signals remain fallback paths. Storage regulation and storage-farm distribution were not changed.",
         "de": "Zentrale EMS Budget-&-Gates-Schicht eingeführt, die dauerhaft im Hintergrund läuft. PV-, Netz- und Speicher-Budgetwerte werden nun unter ems.budget.* veröffentlicht; flexible Verbraucher reservieren Budget nach Priorität: Ladepunkte zuerst, Thermik danach, Heizstab anschließend. Heizstab- und Thermik-PV-Auto nutzen bevorzugt das zentrale Rest-PV-Budget, während ältere NVP-/Lademanagement-Signale als Fallback erhalten bleiben. Speicherregelung und Speicherfarm-Verteilung wurden nicht geändert."
@@ -1847,8 +1851,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.6",
+  "version": "0.7.7",
   "news": {
+    "0.7.7": {
+      "en": "Central Gate D - PV Forecast added under ems.budget.forecast.* with validity, confidence, power and energy horizon diagnostics for future forecast-aware apps and AI strategies. No charging, storage or heating-rod regulation was changed.",
+      "de": "Zentrales Gate D - PV Forecast unter ems.budget.forecast.* ergänzt, inklusive Gültigkeit, Confidence, Leistungs- und Energie-Horizonten für zukünftige prognosebasierte Apps und KI-Strategien. Lade-, Speicher- und Heizstabregelung wurden nicht geändert."
+    },
     "0.7.6": {
       "en": "Central EMS Budget & Gates coordinator added. Flexible consumers can now use ems.budget.* and reserve budget by priority; EVCS, thermal control and heating rods are connected.",
       "de": "Zentraler EMS Budget-&-Gates-Koordinator ergänzt. Flexible Verbraucher können jetzt ems.budget.* nutzen und Budget nach Priorität reservieren; Ladepunkte, Thermik und Heizstab sind angebunden."

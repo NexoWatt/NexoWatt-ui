@@ -1,3 +1,11 @@
+## 0.7.7
+
+- Zentrales **Gate D – PV Forecast** unter `ems.budget.forecast.*` ergänzt.
+- Forecast-Gate veröffentlicht jetzt `valid`, `usable`, `confidencePct`, `nowW`, Durchschnittsleistung für 1h/3h, Peaks für 6h/24h sowie Energie-Horizonte für 1h/3h/6h/12h/24h.
+- Forecast-Werte liegen zusätzlich im zentralen `ems.budget.snapshot` unter `gates.forecast`, damit Apps und spätere KI-/Prognose-Strategien eine gemeinsame Quelle nutzen können.
+- Diagnose im App-Center/Statusbereich um **Gate D – PV Forecast** erweitert.
+- Keine Regeländerung an Lade-/Lastmanagement, Speicherregelung, Speicherfarm oder Heizstablogik; das Forecast-Gate ist in dieser Version bewusst nur eine zentrale Informations- und Freigabeschicht.
+
 ## 0.7.6
 
 - Zentrale EMS Budget-&-Gates-Schicht eingeführt: `ems.budget.*` läuft dauerhaft im Hintergrund und veröffentlicht PV-Budget, Netzbudget, Speicherladung/-entladung, flexible Lasten und Restbudgets.

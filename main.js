@@ -10854,6 +10854,25 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           emsBudgetFlexUsedW: await getOwn('ems.budget.flexUsedW'),
           emsBudgetBinding: await getOwn('ems.budget.binding'),
           emsBudgetConsumersJson: await getOwn('ems.budget.consumersJson'),
+
+          // Gate D - PV Forecast (central advisory gate for forecast-aware apps).
+          emsForecastValid: await getOwn('ems.budget.forecast.valid'),
+          emsForecastUsable: await getOwn('ems.budget.forecast.usable'),
+          emsForecastAgeMs: await getOwn('ems.budget.forecast.ageMs'),
+          emsForecastPoints: await getOwn('ems.budget.forecast.points'),
+          emsForecastConfidencePct: await getOwn('ems.budget.forecast.confidencePct'),
+          emsForecastNowW: await getOwn('ems.budget.forecast.nowW'),
+          emsForecastAvgNext1hW: await getOwn('ems.budget.forecast.avgNext1hW'),
+          emsForecastAvgNext3hW: await getOwn('ems.budget.forecast.avgNext3hW'),
+          emsForecastPeakNext6hW: await getOwn('ems.budget.forecast.peakNext6hW'),
+          emsForecastPeakNext24hW: await getOwn('ems.budget.forecast.peakNext24hW'),
+          emsForecastKwhNext1h: await getOwn('ems.budget.forecast.kwhNext1h'),
+          emsForecastKwhNext3h: await getOwn('ems.budget.forecast.kwhNext3h'),
+          emsForecastKwhNext6h: await getOwn('ems.budget.forecast.kwhNext6h'),
+          emsForecastKwhNext12h: await getOwn('ems.budget.forecast.kwhNext12h'),
+          emsForecastKwhNext24h: await getOwn('ems.budget.forecast.kwhNext24h'),
+          emsForecastStatus: await getOwn('ems.budget.forecast.status'),
+          emsForecastSource: await getOwn('ems.budget.forecast.source'),
         };
 
         const summary = {

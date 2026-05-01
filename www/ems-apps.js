@@ -7510,6 +7510,18 @@ function _collectFlowPowerDpIsWFromUI() {
     return Math.round(n) + ' W';
   }
 
+  function _fmtKwh(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return '—';
+    return n.toFixed(n >= 10 ? 1 : 2) + ' kWh';
+  }
+
+  function _fmtPct(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return '—';
+    return Math.round(n) + ' %';
+  }
+
   function renderStationsDiag(payload) {
     if (!els.stationsDiag) return;
     els.stationsDiag.innerHTML = '';
@@ -7708,6 +7720,24 @@ function _collectFlowPowerDpIsWFromUI() {
         { label: 'Speicher entlädt', value: _fmtW(n(ctrl.emsBudgetStorageDischargeW)) },
         { label: 'Flexible Lasten', value: _fmtW(n(ctrl.emsBudgetFlexUsedW)) },
       ], ''));
+
+      const fcValid = b(ctrl.emsForecastValid);
+      const fcUsable = b(ctrl.emsForecastUsable);
+      const fcKind = fcUsable ? 'ok' : (fcValid ? 'warn' : 'warn');
+      const fcAge = n(ctrl.emsForecastAgeMs);
+      els.chargingBudget.appendChild(mkCard('Gate D – PV Forecast', [
+        { label: 'Forecast gültig', value: _fmtBool(fcValid, 'JA', 'NEIN') },
+        { label: 'Für Apps nutzbar', value: _fmtBool(fcUsable, 'JA', 'NEIN') },
+        { label: 'Confidence', value: _fmtPct(n(ctrl.emsForecastConfidencePct)) },
+        { label: 'Alter', value: Number.isFinite(fcAge) ? _fmtAge(fcAge) : '—' },
+        { label: 'PV Prognose jetzt', value: _fmtW(n(ctrl.emsForecastNowW)) },
+        { label: 'Ø nächste 1h', value: _fmtW(n(ctrl.emsForecastAvgNext1hW)) },
+        { label: 'Ø nächste 3h', value: _fmtW(n(ctrl.emsForecastAvgNext3hW)) },
+        { label: 'Peak nächste 6h', value: _fmtW(n(ctrl.emsForecastPeakNext6hW)) },
+        { label: 'Energie nächste 6h', value: _fmtKwh(n(ctrl.emsForecastKwhNext6h)) },
+        { label: 'Energie nächste 24h', value: _fmtKwh(n(ctrl.emsForecastKwhNext24h)) },
+        { label: 'Status', value: String(ctrl.emsForecastStatus || '') },
+      ], fcKind));
 
       try {
         const consumers = JSON.parse(String(ctrl.emsBudgetConsumersJson || '[]'));
