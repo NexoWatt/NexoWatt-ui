@@ -1,10 +1,9 @@
-## 0.7.9
+## 0.7.10
 
-- Schwellwertsteuerung optional an zentrale `ems.budget` Gates angebunden: pro Regel kann eine geschätzte Verbraucherleistung, Budget-Typ und Budget-Reserve gesetzt werden. Standard bleibt aus, damit vorhandene Alarm-/Anzeige-/Logikregeln unverändert laufen.
-- Budgetfähige Schwellwertregeln reservieren nur bei Auto-Betrieb und aktiver Regel; manuelle User-Modi bleiben bewusst Gate-Bypass und werden nicht automatisch überschrieben.
-- PV-gesteuerte Schwellwertlasten blockieren neue Starts ohne freies Budget und halten laufende Verbraucher bei kurzen NVP-/Restbudget-Schwankungen.
-- Thermik-Budgetbilanz nachgeschärft: Manuell, Aus und Manual-Hold zählen nicht mehr als EMS-PV-Auto-Budgetverbraucher; nur EMS-Boost/PV-Auto wird reserviert.
-- Peakshaving und MultiUse bleiben unverändert als Schutz-/Reserveebenen und werden nicht als PV-Budgetverbraucher geführt.
+- Hotfix-Rollback für 0.7.9: zentrale Budget-&-Gates-Schicht auf den stabilen 0.7.8-Codepfad zurückgesetzt.
+- Experimentelle Schwellwert-Gate-, Thermal- und Core-Diagnoseänderungen aus 0.7.9 entfernt, weil sie die Gate-Aktualisierung in Installationen stören konnten.
+- Gegenüber 0.7.8 keine Funktionsänderung an Lade-/Lastmanagement, Speicherregelung, Speicherfarm, Heizstablogik, Peakshaving, MultiUse oder Gate D / PV-Forecast.
+- Webcache auf nexowatt-cache-v180 erhöht.
 
 ## 0.7.8
 
