@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.10",
+    "version": "0.7.11",
     "news": {
+      "0.7.11": {
+        "en": "Budget priority diagnostics now show live reservation/used power correctly. Runtime consumer JSON now carries usedW/pvUsedW aliases in addition to reserveW/pvReserveW, the App-Center falls back to reserve fields, and live flexUsedW is mirrored after reservations. EMS/PV-Auto heating-rod ownership can also be restored after restart when persisted state clearly indicates an automatic stage; external/manual KNX states remain protected.",
+        "de": "Die Budget-Prioritätsdiagnose zeigt genutzte/reservierte Leistung jetzt korrekt live an. Das Runtime-Consumer-JSON enthält zusätzlich usedW/pvUsedW neben reserveW/pvReserveW, das App-Center fällt sauber auf Reserve-Felder zurück, und flexUsedW wird nach Reservierungen live gespiegelt. EMS-/PV-Auto-Heizstab-Ownership kann nach einem Neustart wiederhergestellt werden, wenn der persistierte Zustand klar auf eine automatische Stufe hinweist; externe/manuelle KNX-Zustände bleiben geschützt."
+      },
       "0.7.10": {
         "en": "Hotfix rollback for 0.7.9: restored the central Budget & Gates implementation to the stable 0.7.8 code path. The experimental threshold-gate and thermal/core diagnostic changes from 0.7.9 were removed so ems.budget.* values update reliably again. No functional changes to charging, storage, heating-rod, peak-shaving, multi-use or forecast logic compared with 0.7.8.",
         "de": "Hotfix-Rollback für 0.7.9: Die zentrale Budget-&-Gates-Schicht wurde auf den stabilen Codepfad aus 0.7.8 zurückgesetzt. Die experimentellen Schwellwert-Gate- sowie Thermal/Core-Diagnoseänderungen aus 0.7.9 wurden entfernt, damit ems.budget.* wieder zuverlässig aktuelle Werte liefert. Gegenüber 0.7.8 keine Funktionsänderungen an Lade-, Speicher-, Heizstab-, Peakshaving-, MultiUse- oder Forecast-Logik."
@@ -1859,8 +1863,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.10",
+  "version": "0.7.11",
   "news": {
+    "0.7.11": {
+      "en": "Budget & Gates diagnostic hotfix: live runtime reservations now expose usedW/pvUsedW/actualW in consumersJson and update ems.budget.flexUsedW during reservations, so active heating-rod/thermal/EVCS consumers are shown with their current used power instead of 0 W. Explicit Auto(PV) can also take over an already running heating-rod stage after restart/manual observation for correct budget accounting. No changes to storage, peak-shaving, MultiUse or core storage logic.",
+      "de": "Budget-&-Gates-Diagnose-Hotfix: Laufende Runtime-Reservierungen veröffentlichen jetzt usedW/pvUsedW/actualW im consumersJson und aktualisieren ems.budget.flexUsedW direkt bei Reservierungen. Dadurch werden aktive Heizstab-/Thermik-/EVCS-Verbraucher in Prioritäten/Reservierungen mit ihrer aktuellen Leistung angezeigt statt 0 W. Zusätzlich kann explizites Auto(PV) eine bereits laufende Heizstab-Stufe nach Neustart/manueller Beobachtung wieder für die Budget-Bilanz übernehmen. Keine Änderungen an Speicher, Peakshaving, MultiUse oder Speicher-Kernlogik."
+    },
     "0.7.10": {
       "en": "Hotfix rollback for 0.7.9: restored the central Budget & Gates implementation to the stable 0.7.8 code path. The experimental threshold-gate and thermal/core diagnostic changes from 0.7.9 were removed so ems.budget.* values update reliably again. No functional changes to charging, storage, heating-rod, peak-shaving, multi-use or forecast logic compared with 0.7.8.",
       "de": "Hotfix-Rollback für 0.7.9: Die zentrale Budget-&-Gates-Schicht wurde auf den stabilen Codepfad aus 0.7.8 zurückgesetzt. Die experimentellen Schwellwert-Gate- sowie Thermal/Core-Diagnoseänderungen aus 0.7.9 wurden entfernt, damit ems.budget.* wieder zuverlässig aktuelle Werte liefert. Gegenüber 0.7.8 keine Funktionsänderungen an Lade-, Speicher-, Heizstab-, Peakshaving-, MultiUse- oder Forecast-Logik."

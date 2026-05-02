@@ -1715,6 +1715,56 @@ class HeatingRodControlModule extends BaseModule {
         return { st, target, observedStage: obs, loadPresent, autoOwned, externalManual };
     }
 
+    async _readOwnStateValue(id, fallback = null) {
+        try {
+            const st = await this.adapter.getStateAsync(String(id));
+            if (!st || st.val === null || st.val === undefined) return fallback;
+            return st.val;
+        } catch (_e) {
+            return fallback;
+        }
+    }
+
+    async _restoreAutoOwnershipIfLikely(d, pvAutomationActive, observedStage = 0, measuredW = null, feedback = null) {
+        if (!d || !d.id || !pvAutomationActive) return false;
+        const own = this._getAutoOwnership(d, observedStage, measuredW, feedback);
+        if (own.autoOwned) return true;
+        if (!own.loadPresent || own.observedStage <= 0) return false;
+
+        // After adapter restart/update the in-memory ownership is empty, although
+        // the KNX/relay stage may still be the EMS PV-Auto stage from before.
+        // Restore only with strong evidence from persisted own states. Manual/external
+        // KNX switching remains protected and is never adopted just because Auto(PV) is selected.
+        const prefix = `heatingRod.devices.${d.id}`;
+        const lastTargetRaw = await this._readOwnStateValue(`${prefix}.targetStage`, null);
+        const lastStatus = String(await this._readOwnStateValue(`${prefix}.status`, '') || '').toLowerCase();
+        const lastOverride = String(await this._readOwnStateValue(`${prefix}.override`, '') || '').toLowerCase();
+        const lastTarget = Math.max(0, Math.round(Number(lastTargetRaw) || 0));
+
+        const manualEvidence = /^manual/.test(lastStatus)
+            || lastStatus.includes('external_manual')
+            || lastStatus.includes('manual_allowed')
+            || lastStatus.includes('manual_cfg')
+            || lastStatus.startsWith('off_')
+            || lastOverride.includes('manual');
+        if (manualEvidence) return false;
+
+        const autoEvidence = lastStatus.includes('pv_auto')
+            || lastStatus.includes('budget')
+            || lastStatus.includes('step_up')
+            || lastStatus.includes('gate_')
+            || lastStatus.includes('zero_')
+            || lastStatus.includes('storage_protect')
+            || lastStatus.includes('pv_only_protect')
+            || lastOverride === 'boost';
+        if (!autoEvidence || lastTarget <= 0) return false;
+        if (own.observedStage > lastTarget) return false;
+
+        this._setStageCtlTarget(d.id, lastTarget, own.observedStage);
+        this._markAutoOwnership(d, true, lastTarget, 'pvAuto_restore');
+        return true;
+    }
+
     async _observeManualExternal(d, observedStage, measuredW, feedback, status = 'external_manual_knx_observed') {
         const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
             ? Math.max(0, measuredW)
@@ -2017,6 +2067,9 @@ class HeatingRodControlModule extends BaseModule {
                 continue;
             }
 
+            if (pvAutomationActive) {
+                await this._restoreAutoOwnershipIfLikely(d, pvAutomationActive, observedStage, measuredW, feedback);
+            }
             const ownNow = this._getAutoOwnership(d, observedStage, measuredW, feedback);
             if (pvAutomationActive && ownNow.externalManual) {
                 const usedW = await this._observeManualExternal(d, observedStage, measuredW, feedback, 'external_manual_knx_observed');
@@ -2114,6 +2167,7 @@ class HeatingRodControlModule extends BaseModule {
                     requestedW: used,
                     reserveW: used,
                     pvReserveW: used,
+                    actualW: Math.max(0, Math.round(currentHeatingRodW || appliedTotalW || used || 0)),
                     pvOnly: true,
                     mode: 'pvAuto',
                 });

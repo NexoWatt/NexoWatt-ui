@@ -7766,10 +7766,15 @@ function _collectFlowPowerDpIsWFromUI() {
             .filter((c) => c && typeof c === 'object')
             .sort((a, b) => Number(a.priority || 999) - Number(b.priority || 999))
             .slice(0, 6)
-            .map((c) => ({
-              label: `${Number(c.priority || 999)} · ${String(c.label || c.key || c.app || '')}`,
-              value: `${_fmtW(n(c.usedW))} / PV ${_fmtW(n(c.pvUsedW))}`
-            }));
+            .map((c) => {
+              const reserveW = n(c.usedW ?? c.reserveW ?? c.requestedW);
+              const pvReserveW = n(c.pvUsedW ?? c.pvReserveW ?? (c.pvOnly ? reserveW : 0));
+              const actualW = n(c.actualW ?? c.usedW ?? c.reserveW ?? c.requestedW);
+              return {
+                label: `${Number(c.priority || 999)} · ${String(c.label || c.key || c.app || '')}`,
+                value: `Ist ${_fmtW(actualW)} · Res ${_fmtW(reserveW)} / PV ${_fmtW(pvReserveW)}`
+              };
+            });
           if (lines.length) els.chargingBudget.appendChild(mkCard('Prioritäten / Reservierungen', lines, ''));
         }
       } catch (_e) {}

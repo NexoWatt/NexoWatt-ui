@@ -96,6 +96,10 @@ function makeBudgetRuntime(adapter, snapshot) {
             if (Number.isFinite(this.remainingTotalW)) this.remainingTotalW = Math.max(0, this.remainingTotalW - reserveW);
             this.remainingPvW = Math.max(0, this.remainingPvW - pvReserveW);
 
+            const reserveRoundedW = roundW(reserveW);
+            const pvReserveRoundedW = roundW(pvReserveW);
+            const actualW = Math.max(0, Number.isFinite(Number(r.actualW)) ? Number(r.actualW) : reserveW);
+            const actualRoundedW = roundW(actualW);
             const entry = {
                 key,
                 app,
@@ -103,8 +107,13 @@ function makeBudgetRuntime(adapter, snapshot) {
                 priority,
                 requestedW: roundW(requestedW),
                 grantW: roundW(grantW),
-                reserveW: roundW(reserveW),
-                pvReserveW: roundW(pvReserveW),
+                // Public display/API aliases: diagnostics and UIs expect usedW/pvUsedW.
+                // Runtime reservations also keep reserveW/pvReserveW for internal clarity.
+                usedW: reserveRoundedW,
+                pvUsedW: pvReserveRoundedW,
+                reserveW: reserveRoundedW,
+                pvReserveW: pvReserveRoundedW,
+                actualW: actualRoundedW,
                 pvOnly: !!r.pvOnly,
                 mode: String(r.mode || ''),
                 ts: Date.now(),
@@ -116,19 +125,28 @@ function makeBudgetRuntime(adapter, snapshot) {
 
             try {
                 const pfx = `ems.budget.consumers.${key}`;
+                const liveConsumers = this.order.map(k => this.consumers[k] || null).filter(Boolean);
+                const flexUsedW = liveConsumers.reduce((sum, c) => sum + Math.max(0, Number(c.usedW ?? c.reserveW) || 0), 0);
                 if (adapter && typeof adapter.setStateAsync === 'function') {
-                    adapter.setStateAsync(`${pfx}.usedW`, roundW(reserveW), true).catch(() => {});
-                    adapter.setStateAsync(`${pfx}.pvUsedW`, roundW(pvReserveW), true).catch(() => {});
+                    adapter.setStateAsync(`${pfx}.usedW`, reserveRoundedW, true).catch(() => {});
+                    adapter.setStateAsync(`${pfx}.pvUsedW`, pvReserveRoundedW, true).catch(() => {});
+                    adapter.setStateAsync(`${pfx}.actualW`, actualRoundedW, true).catch(() => {});
                     adapter.setStateAsync(`${pfx}.priority`, roundW(priority), true).catch(() => {});
                     adapter.setStateAsync(`${pfx}.mode`, String(r.mode || ''), true).catch(() => {});
+                    adapter.setStateAsync('ems.budget.flexUsedW', roundW(flexUsedW), true).catch(() => {});
                     adapter.setStateAsync('ems.budget.remainingTotalW', Number.isFinite(this.remainingTotalW) ? roundW(this.remainingTotalW) : 0, true).catch(() => {});
                     adapter.setStateAsync('ems.budget.remainingPvW', roundW(this.remainingPvW), true).catch(() => {});
-                    adapter.setStateAsync('ems.budget.consumersJson', JSON.stringify(this.order.map(k => this.consumers[k] || null).filter(Boolean)), true).catch(() => {});
+                    adapter.setStateAsync('ems.budget.consumersJson', JSON.stringify(liveConsumers), true).catch(() => {});
                 }
                 if (adapter && typeof adapter.updateValue === 'function') {
                     const now = Date.now();
+                    adapter.updateValue(`${pfx}.usedW`, reserveRoundedW, now);
+                    adapter.updateValue(`${pfx}.pvUsedW`, pvReserveRoundedW, now);
+                    adapter.updateValue(`${pfx}.actualW`, actualRoundedW, now);
+                    adapter.updateValue('ems.budget.flexUsedW', roundW(flexUsedW), now);
                     adapter.updateValue('ems.budget.remainingTotalW', Number.isFinite(this.remainingTotalW) ? roundW(this.remainingTotalW) : 0, now);
                     adapter.updateValue('ems.budget.remainingPvW', roundW(this.remainingPvW), now);
+                    adapter.updateValue('ems.budget.consumersJson', JSON.stringify(liveConsumers), now);
                 }
             } catch (_e) {
                 // Diagnostics only.
@@ -298,6 +316,7 @@ class CoreLimitsModule extends BaseModule {
             });
             await mk(`ems.budget.consumers.${key}.usedW`, `${key} used (W)`, 'number', 'value.power', 'W');
             await mk(`ems.budget.consumers.${key}.pvUsedW`, `${key} PV used (W)`, 'number', 'value.power', 'W');
+            await mk(`ems.budget.consumers.${key}.actualW`, `${key} actual power (W)`, 'number', 'value.power', 'W');
             await mk(`ems.budget.consumers.${key}.priority`, `${key} priority`, 'number', 'value');
             await mk(`ems.budget.consumers.${key}.mode`, `${key} mode`, 'string', 'text');
         }

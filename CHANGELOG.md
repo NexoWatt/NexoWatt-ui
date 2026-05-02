@@ -1,3 +1,13 @@
+## 0.7.11
+
+- **Budget-Prioritäten/Reservierungen korrigiert:** Runtime-Reservierungen schreiben jetzt im JSON zusätzlich `usedW`/`pvUsedW`, nicht nur `reserveW`/`pvReserveW`. Dadurch zeigt die App-Center-Karte nicht mehr fälschlich `0 W`, obwohl ein Verbraucher reserviert ist.
+- App-Center zeigt in **Prioritäten / Reservierungen** jetzt **Ist**, **Res** und **PV** an und nutzt Reserve-Felder als Fallback.
+- `ems.budget.flexUsedW` wird nach Runtime-Reservierungen live in den State- und API-Cache gespiegelt, damit **Zentrale Messbasis → Flexible Lasten** nicht bis zum nächsten Core-Tick bei 0 hängen bleibt.
+- Heizstab-Budget-Ownership nach Neustart robuster: Eine noch laufende EMS-/PV-Auto-Stufe kann wieder als eigene Auto-Stufe erkannt und in `ems.budget` reserviert werden, wenn der persistierte Status klar auf Automatik hinweist.
+- Externe/manuelle KNX-Schaltungen bleiben geschützt: manuelle/externe Statuswerte werden nicht als Auto-Ownership übernommen.
+- Keine Änderungen an Lade-/Lastmanagement, Speicherregelung, Speicherfarm, Peakshaving, MultiUse, Gate D oder der eigentlichen zentralen Core-Gate-Budgetberechnung.
+- Webcache auf nexowatt-cache-v181 erhöht.
+
 ## 0.7.10
 
 - Hotfix-Rollback für 0.7.9: zentrale Budget-&-Gates-Schicht auf den stabilen 0.7.8-Codepfad zurückgesetzt.
