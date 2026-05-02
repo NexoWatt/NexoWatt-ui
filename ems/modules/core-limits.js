@@ -290,7 +290,7 @@ class CoreLimitsModule extends BaseModule {
         await mk('ems.budget.forecast.snapshotJson', 'PV forecast gate snapshot (JSON)', 'string', 'json');
 
         // Per-consumer diagnostics for currently supported app families.
-        for (const key of ['evcs', 'thermal', 'heatingRod', 'generic']) {
+        for (const key of ['evcs', 'thermal', 'heatingRod', 'threshold', 'generic']) {
             await this.adapter.setObjectNotExistsAsync(`ems.budget.consumers.${key}`, {
                 type: 'channel',
                 common: { name: `Budget consumer ${key}` },
@@ -517,7 +517,9 @@ class CoreLimitsModule extends BaseModule {
         const evcsPvUsedW = Math.max(0, this._readCacheNumber(['chargingManagement.control.pvEvcsUsedW'], 0) || 0);
         const thermalUsedW = Math.max(0, this._readRuntimeOrStateNumber(['_thermalBudgetUsedW'], null) ?? this._readCacheNumber(['thermal.summary.budgetUsedW'], 0) ?? 0);
         const heatingRodUsedW = Math.max(0, this._readRuntimeOrStateNumber(['_heatingRodBudgetUsedW'], null) ?? this._readCacheNumber(['heatingRod.summary.budgetUsedW'], 0) ?? 0);
-        const flexUsedW = Math.max(0, evcsUsedW + thermalUsedW + heatingRodUsedW);
+        const thresholdUsedW = Math.max(0, this._readRuntimeOrStateNumber(['_thresholdBudgetUsedW'], null) ?? this._readCacheNumber(['threshold.summary.budgetUsedW'], 0) ?? 0);
+        const thresholdPvUsedW = Math.max(0, this._readRuntimeOrStateNumber(['_thresholdPvBudgetUsedW'], null) ?? this._readCacheNumber(['threshold.summary.pvBudgetUsedW'], thresholdUsedW) ?? 0);
+        const flexUsedW = Math.max(0, evcsUsedW + thermalUsedW + heatingRodUsedW + thresholdUsedW);
 
         // The raw PV budget is reconstructed from the NVP plus already-running controlled loads.
         // Storage charging is added as parked PV, because consumers with lower priority may be allowed
@@ -560,6 +562,8 @@ class CoreLimitsModule extends BaseModule {
                 evcsPvUsedW: roundW(evcsPvUsedW),
                 thermalUsedW: roundW(thermalUsedW),
                 heatingRodUsedW: roundW(heatingRodUsedW),
+                thresholdUsedW: roundW(thresholdUsedW),
+                thresholdPvUsedW: roundW(thresholdPvUsedW),
                 flexUsedW: roundW(flexUsedW),
                 pvReserveW: roundW(pvReserveW),
             },
@@ -591,6 +595,7 @@ class CoreLimitsModule extends BaseModule {
                 evcs: { priority: 100, usedW: roundW(evcsUsedW), pvUsedW: roundW(evcsPvUsedW), mode: 'charging' },
                 thermal: { priority: 200, usedW: roundW(thermalUsedW), pvUsedW: roundW(thermalUsedW), mode: 'pvAuto' },
                 heatingRod: { priority: 300, usedW: roundW(heatingRodUsedW), pvUsedW: roundW(heatingRodUsedW), mode: 'pvAuto' },
+                threshold: { priority: 400, usedW: roundW(thresholdUsedW), pvUsedW: roundW(thresholdPvUsedW), mode: thresholdUsedW > 0 ? 'auto-gated' : '' },
             },
         };
     }
@@ -822,7 +827,7 @@ class CoreLimitsModule extends BaseModule {
             await this.adapter.setStateAsync('ems.budget.forecast.source', String(fg.source || ''), true);
             await this.adapter.setStateAsync('ems.budget.forecast.snapshotJson', JSON.stringify(fg), true);
 
-            for (const key of ['evcs', 'thermal', 'heatingRod']) {
+            for (const key of ['evcs', 'thermal', 'heatingRod', 'threshold']) {
                 const c = b.consumers[key] || {};
                 await this.adapter.setStateAsync(`ems.budget.consumers.${key}.usedW`, roundW(c.usedW), true);
                 await this.adapter.setStateAsync(`ems.budget.consumers.${key}.pvUsedW`, roundW(c.pvUsedW), true);

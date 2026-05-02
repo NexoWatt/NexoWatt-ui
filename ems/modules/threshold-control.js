@@ -15,6 +15,11 @@ function clamp(v, minV, maxV, fallback = null) {
     return n;
 }
 
+function roundW(v, fallback = 0) {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.round(n) : fallback;
+}
+
 function safeIndex(i) {
     const n = Math.round(Number(i) || 0);
     if (n < 1) return 1;
@@ -42,6 +47,8 @@ class ThresholdControlModule extends BaseModule {
         this._hyst = new Map();
         /** @type {Map<string, any>} */
         this._stateCache = new Map();
+        /** @type {Map<string, {importSinceMs:number}>} */
+        this._budgetProtect = new Map();
     }
 
     _isEnabled() {
@@ -77,6 +84,16 @@ class ThresholdControlModule extends BaseModule {
         const s = String(raw || '').trim().toLowerCase();
         if (s === 'bool' || s === 'boolean' || s === 'switch') return 'boolean';
         return 'number';
+    }
+
+    _normalizeBudgetType(raw) {
+        const s = String(raw || '').trim().toLowerCase();
+        if (!s || s === 'off' || s === 'none' || s === 'disabled' || s === 'aus') return 'off';
+        if (s === 'reserve' || s === 'reserveonly' || s === 'reserve-only' || s === 'nurreserve') return 'reserveOnly';
+        if (s === 'total' || s === 'gesamt' || s === 'grid' || s === 'netz') return 'total';
+        if (s === 'both' || s === 'pvandtotal' || s === 'pv+total' || s === 'pv_total') return 'pvAndTotal';
+        // PV means: PV-Restbudget UND Gesamt-/Netz-Gate müssen reichen.
+        return 'pv';
     }
 
     _buildRulesFromConfig() {
@@ -123,6 +140,22 @@ class ThresholdControlModule extends BaseModule {
             const userCanSetMinOnSec = (typeof r.userCanSetMinOnSec === 'boolean') ? !!r.userCanSetMinOnSec : userCanSetThreshold;
             const userCanSetMinOffSec = (typeof r.userCanSetMinOffSec === 'boolean') ? !!r.userCanSetMinOffSec : userCanSetThreshold;
 
+            // Optional Budget-Gate for rules that switch real flexible loads.
+            // Default OFF so alarms/signals/logic-only rules remain untouched.
+            const useBudgetGate = (typeof r.useBudgetGate === 'boolean') ? !!r.useBudgetGate : !!r.budgetGateEnabled;
+            const budgetType = this._normalizeBudgetType(r.budgetType || r.budgetGateType || r.budgetMode || 'pv');
+            const budgetEstimatedW = clamp(
+                r.budgetEstimatedW ?? r.estimatedPowerW ?? r.powerW ?? r.loadPowerW,
+                0,
+                1e12,
+                0
+            ) || 0;
+            const budgetSafetyReserveW = clamp((r.budgetSafetyReserveW ?? r.safetyReserveW), 0, 1e12, 100) || 0;
+            const budgetPriority = Math.round(clamp((r.budgetPriority ?? r.priority), 1, 999, 400 + idx));
+            const budgetMaxGridImportW = clamp((r.budgetMaxGridImportW ?? r.maxGridImportW), 0, 1e12, 250) || 0;
+            const budgetGridImportDelaySec = clamp((r.budgetGridImportDelaySec ?? r.gridImportDelaySec), 0, 3600, 45) || 0;
+            const budgetMaxAgeMs = Math.max(500, Math.round(clamp((r.budgetMaxAgeMs ?? r.budgetStaleMs ?? r.maxAgeMs), 500, 10 * 60 * 1000, 15000)));
+
             out.push({
                 idx,
                 id: `r${idx}`,
@@ -143,6 +176,14 @@ class ThresholdControlModule extends BaseModule {
                 userCanSetThreshold,
                 userCanSetMinOnSec,
                 userCanSetMinOffSec,
+                useBudgetGate,
+                budgetType,
+                budgetEstimatedW,
+                budgetSafetyReserveW,
+                budgetPriority,
+                budgetMaxGridImportW,
+                budgetGridImportDelaySec,
+                budgetMaxAgeMs,
             });
         }
 
@@ -171,6 +212,12 @@ class ThresholdControlModule extends BaseModule {
         await this.adapter.setObjectNotExistsAsync('threshold.user', {
             type: 'channel',
             common: { name: 'User' },
+            native: {},
+        });
+
+        await this.adapter.setObjectNotExistsAsync('threshold.summary', {
+            type: 'channel',
+            common: { name: 'Summary' },
             native: {},
         });
 
@@ -203,6 +250,12 @@ class ThresholdControlModule extends BaseModule {
 
         // Build rules from current config
         this._buildRulesFromConfig();
+
+        await mk('threshold.summary.lastUpdate', 'Letztes Update (ts)', 'number', 'value.time');
+        await mk('threshold.summary.budgetUsedW', 'Budget-Verbrauch Schwellwerte (W)', 'number', 'value.power', 'W');
+        await mk('threshold.summary.pvBudgetUsedW', 'PV-Budget-Verbrauch Schwellwerte (W)', 'number', 'value.power', 'W');
+        await mk('threshold.summary.activeBudgetRules', 'Aktive Budget-Regeln', 'number', 'value');
+        await mk('threshold.summary.status', 'Status', 'string', 'text');
 
         // Create fixed slots (1..10) so the VIS can rely on stable ids.
         for (let i = 1; i <= 10; i++) {
@@ -266,6 +319,14 @@ class ThresholdControlModule extends BaseModule {
             await mk(`threshold.rules.r${i}.status`, 'Status', 'string', 'text');
             await mk(`threshold.rules.r${i}.lastChange`, 'Letzte Umschaltung (ts)', 'number', 'value.time');
             await mk(`threshold.rules.r${i}.lastWriteOk`, 'Letzter Write OK', 'boolean', 'indicator');
+            await mk(`threshold.rules.r${i}.budgetGateEnabled`, 'Budget-Gate aktiv', 'boolean', 'indicator');
+            await mk(`threshold.rules.r${i}.budgetType`, 'Budget-Typ', 'string', 'text');
+            await mk(`threshold.rules.r${i}.budgetEstimateW`, 'Budget-Schätzung (W)', 'number', 'value.power', 'W');
+            await mk(`threshold.rules.r${i}.budgetAvailableW`, 'Budget verfügbar (W)', 'number', 'value.power', 'W');
+            await mk(`threshold.rules.r${i}.budgetGrantW`, 'Budget Freigabe (W)', 'number', 'value.power', 'W');
+            await mk(`threshold.rules.r${i}.budgetGridImportW`, 'Budget Netzbezug (W)', 'number', 'value.power', 'W');
+            await mk(`threshold.rules.r${i}.budgetBlocked`, 'Budget blockiert', 'boolean', 'indicator');
+            await mk(`threshold.rules.r${i}.budgetStatus`, 'Budget-Status', 'string', 'text');
         }
 
         // Register user states (read) in dpRegistry for deterministic reads
@@ -301,22 +362,177 @@ class ThresholdControlModule extends BaseModule {
         }
     }
 
+    _budgetEstimateW(r) {
+        const cfgW = Number(r && r.budgetEstimatedW);
+        if (Number.isFinite(cfgW) && cfgW > 0) return Math.round(cfgW);
+        if (r && r.outType === 'number') {
+            const onW = Number(r.onValue);
+            if (Number.isFinite(onW) && onW > 0) return Math.round(onW);
+        }
+        return 0;
+    }
+
+    _budgetSnapshot(maxAgeMs) {
+        try {
+            const rt = this.adapter && this.adapter._emsBudget;
+            const snap = rt && typeof rt.peek === 'function' ? rt.peek() : null;
+            const age = snap && Number.isFinite(Number(snap.ts)) ? (Date.now() - Number(snap.ts)) : Number.POSITIVE_INFINITY;
+            if (snap && age <= Math.max(500, Number(maxAgeMs) || 5000)) return snap;
+        } catch (_e) {}
+        return null;
+    }
+
+    _budgetAvailableW(r, mem, estimateW, snap) {
+        if (!snap) return null;
+        const type = this._normalizeBudgetType(r && r.budgetType);
+        const remainingPvW = Math.max(0, Number(snap.remainingPvW) || 0);
+        const totalRaw = Number(snap.remainingTotalW);
+        const remainingTotalW = Number.isFinite(totalRaw) ? Math.max(0, totalRaw) : Number.POSITIVE_INFINITY;
+        const ownHoldW = (mem && mem.active) ? Math.max(0, Number(estimateW) || 0) : 0;
+
+        if (type === 'total') {
+            return Number.isFinite(remainingTotalW) ? (remainingTotalW + ownHoldW) : Number.POSITIVE_INFINITY;
+        }
+
+        // PV-Budget-Verbraucher müssen das PV-Restbudget UND harte Gesamt-/Netzlimits einhalten.
+        const pvAvail = remainingPvW + ownHoldW;
+        const totalAvail = Number.isFinite(remainingTotalW) ? (remainingTotalW + ownHoldW) : Number.POSITIVE_INFINITY;
+        return Math.min(pvAvail, totalAvail);
+    }
+
+    _applyBudgetGate(r, mem, desiredOn, alreadyReservedPvW = 0, now = Date.now()) {
+        const useGate = !!(r && r.useBudgetGate);
+        const type = this._normalizeBudgetType(r && r.budgetType);
+        const estimateW = this._budgetEstimateW(r);
+        const safetyW = Math.max(0, Number(r && r.budgetSafetyReserveW) || 0);
+        const maxAgeMs = Math.max(500, Number(r && (r.budgetMaxAgeMs || r.maxAgeMs)) || 15000);
+        const result = {
+            enabled: useGate,
+            type,
+            estimateW,
+            safetyW,
+            availableW: null,
+            gridImportW: 0,
+            grantW: 0,
+            status: useGate ? 'idle' : 'off',
+            want: !!desiredOn,
+            blocked: false,
+        };
+
+        if (!useGate || !desiredOn || type === 'off') return result;
+        if (type === 'reserveOnly') {
+            result.status = (mem && mem.active) ? 'reserve_hold' : 'reserve_start';
+            result.grantW = estimateW;
+            return result;
+        }
+        if (estimateW <= 0) {
+            result.want = false;
+            result.blocked = true;
+            result.status = 'budget_no_estimate';
+            return result;
+        }
+
+        const snap = this._budgetSnapshot(maxAgeMs);
+        if (!snap) {
+            // No central budget: do not start new loads, but do not force an already running
+            // rule off solely because the snapshot is missing/stale.
+            result.want = !!(mem && mem.active);
+            result.blocked = !result.want;
+            result.status = (mem && mem.active) ? 'budget_hold_stale' : 'budget_missing';
+            result.availableW = null;
+            result.grantW = result.want ? estimateW : 0;
+            return result;
+        }
+
+        let availableW = this._budgetAvailableW(r, mem, estimateW, snap);
+        const already = Math.max(0, Number(alreadyReservedPvW) || 0);
+        if ((type === 'pv' || type === 'pvAndTotal') && Number.isFinite(availableW)) {
+            availableW = Math.max(0, availableW - already);
+        }
+        result.availableW = Number.isFinite(availableW) ? Math.max(0, Math.round(availableW)) : null;
+
+        const raw = (snap.raw && typeof snap.raw === 'object') ? snap.raw : {};
+        const gates = (snap.gates && typeof snap.gates === 'object') ? snap.gates : {};
+        const gridGate = (gates.grid && typeof gates.grid === 'object') ? gates.grid : {};
+        const gridImportW = Math.max(0, Number.isFinite(Number(raw.gridImportW)) ? Number(raw.gridImportW) : (Number(gridGate.importW) || 0));
+        result.gridImportW = Math.round(gridImportW);
+
+        const isActive = !!(mem && mem.active);
+        const needW = isActive ? Math.max(0, safetyW) : Math.max(0, estimateW + safetyW);
+        let ok = (availableW === Number.POSITIVE_INFINITY) || (Number.isFinite(availableW) && availableW >= needW);
+        const reasons = [];
+        if (!ok) reasons.push(isActive ? 'budget_hold_low' : 'budget_blocked');
+
+        // PV-gated loads stay on through small NVP oscillations. They are only dropped
+        // when real grid import is above tolerance for the configured delay.
+        if (isActive && (type === 'pv' || type === 'pvAndTotal')) {
+            const maxGridImportW = Math.max(0, Number(r && r.budgetMaxGridImportW) || 0);
+            const delayMs = Math.max(0, Math.round(Number(r && r.budgetGridImportDelaySec) || 0) * 1000);
+            const prot = this._budgetProtect.get(r.id) || { importSinceMs: 0 };
+            if (gridImportW > maxGridImportW) {
+                if (!prot.importSinceMs) prot.importSinceMs = now;
+                const ageMs = now - prot.importSinceMs;
+                if (delayMs <= 0 || ageMs >= delayMs) {
+                    ok = false;
+                    reasons.push(`grid_import_${roundW(gridImportW)}gt${roundW(maxGridImportW)}`);
+                } else {
+                    // Hold during the delay; this is the anti-flutter part.
+                    ok = true;
+                    reasons.push(`grid_hold_${Math.ceil((delayMs - ageMs) / 1000)}s`);
+                }
+            } else {
+                prot.importSinceMs = 0;
+                if (!ok) {
+                    ok = true;
+                    reasons.push('nvp_hold_ok');
+                }
+            }
+            this._budgetProtect.set(r.id, prot);
+        } else {
+            const prot = this._budgetProtect.get(r.id);
+            if (prot) prot.importSinceMs = 0;
+        }
+
+        result.want = !!ok;
+        result.blocked = !ok;
+        result.grantW = ok ? estimateW : 0;
+        result.status = ok
+            ? (reasons.length ? reasons.join('+') : (isActive ? 'budget_hold_ok' : 'budget_start_ok'))
+            : (reasons.join('+') || (isActive ? 'budget_drop' : 'budget_blocked'));
+        return result;
+    }
+
     async tick() {
         const enabled = this._isEnabled();
         const now = Date.now();
+        let budgetUsedW = 0;
+        let budgetPvUsedW = 0;
+        let activeBudgetRules = 0;
+        let budgetPriority = 400;
 
         // Update configured flags even if module disabled (UI diagnostics)
         for (let i = 1; i <= 10; i++) {
             const r = this._getRule(i);
             const configured = !!(r && r.inputId && r.outputId && r.threshold !== null && r.threshold !== undefined);
             await this._setStateIfChanged(`threshold.rules.r${i}.configured`, configured);
+            await this._setStateIfChanged(`threshold.rules.r${i}.budgetGateEnabled`, !!(r && r.useBudgetGate));
+            await this._setStateIfChanged(`threshold.rules.r${i}.budgetType`, r ? this._normalizeBudgetType(r.budgetType) : '');
+            await this._setStateIfChanged(`threshold.rules.r${i}.budgetEstimateW`, r ? this._budgetEstimateW(r) : 0);
             if (!enabled) {
                 await this._setStateIfChanged(`threshold.rules.r${i}.effectiveEnabled`, false);
                 await this._setStateIfChanged(`threshold.rules.r${i}.status`, configured ? 'disabled' : 'unconfigured');
             }
         }
 
-        if (!enabled) return;
+        if (!enabled) {
+            try { this.adapter._thresholdBudgetUsedW = 0; this.adapter._thresholdPvBudgetUsedW = 0; } catch (_e) {}
+            await this._setStateIfChanged('threshold.summary.lastUpdate', now);
+            await this._setStateIfChanged('threshold.summary.budgetUsedW', 0);
+            await this._setStateIfChanged('threshold.summary.pvBudgetUsedW', 0);
+            await this._setStateIfChanged('threshold.summary.activeBudgetRules', 0);
+            await this._setStateIfChanged('threshold.summary.status', 'disabled');
+            return;
+        }
 
         for (const r of this._rules) {
             const id = r.id;
@@ -367,6 +583,19 @@ class ThresholdControlModule extends BaseModule {
 
             if (typeof input !== 'number') {
                 if (!isManual) {
+                    const staleMem = this._hyst.get(id) || { active: false };
+                    if (r.useBudgetGate && staleMem.active) {
+                        const estW = Math.max(0, this._budgetEstimateW(r));
+                        if (estW > 0) {
+                            budgetUsedW += estW;
+                            const bt = this._normalizeBudgetType(r.budgetType);
+                            if (bt === 'pv' || bt === 'pvAndTotal' || bt === 'reserveOnly') budgetPvUsedW += estW;
+                            if (Number.isFinite(Number(r.budgetPriority))) budgetPriority = Math.min(budgetPriority, Number(r.budgetPriority));
+                            activeBudgetRules += 1;
+                        }
+                        await this._setStateIfChanged(`threshold.rules.r${idx}.budgetGrantW`, estW);
+                        await this._setStateIfChanged(`threshold.rules.r${idx}.budgetStatus`, 'stale_hold');
+                    }
                     await this._setStateIfChanged(`threshold.rules.r${idx}.status`, 'stale');
                     continue;
                 }
@@ -379,9 +608,16 @@ class ThresholdControlModule extends BaseModule {
             let status = mem.active ? 'active' : 'inactive';
 
             if (isManual) {
-                // Manuelle Übersteuerung: sofortiges An/Aus
+                // Manuelle Übersteuerung: sofortiges An/Aus.
+                // Budget-Gates sind hier bewusst Bypass: manuelle Schaltungen werden beobachtet,
+                // aber nicht als EMS-Budgetverbraucher reserviert.
                 want = (userMode === 2);
                 status = want ? 'manual_on' : 'manual_off';
+                await this._setStateIfChanged(`threshold.rules.r${idx}.budgetAvailableW`, 0);
+                await this._setStateIfChanged(`threshold.rules.r${idx}.budgetGrantW`, 0);
+                await this._setStateIfChanged(`threshold.rules.r${idx}.budgetGridImportW`, 0);
+                await this._setStateIfChanged(`threshold.rules.r${idx}.budgetBlocked`, false);
+                await this._setStateIfChanged(`threshold.rules.r${idx}.budgetStatus`, r.useBudgetGate ? 'manual_bypass' : 'off');
             } else {
                 // Hysteresis thresholds
                 const hyst = Math.max(0, Number(r.hysteresis || 0));
@@ -405,6 +641,23 @@ class ThresholdControlModule extends BaseModule {
                     } else {
                         if (input >= offThr) want = false;
                     }
+                }
+
+                const gate = this._applyBudgetGate(r, mem, want, budgetPvUsedW, now);
+                if (gate.enabled) {
+                    want = !!gate.want;
+                    status = gate.status || status;
+                    await this._setStateIfChanged(`threshold.rules.r${idx}.budgetAvailableW`, gate.availableW === null ? null : Math.round(gate.availableW));
+                    await this._setStateIfChanged(`threshold.rules.r${idx}.budgetGrantW`, Math.round(gate.grantW || 0));
+                    await this._setStateIfChanged(`threshold.rules.r${idx}.budgetGridImportW`, Math.round(gate.gridImportW || 0));
+                    await this._setStateIfChanged(`threshold.rules.r${idx}.budgetBlocked`, !!gate.blocked);
+                    await this._setStateIfChanged(`threshold.rules.r${idx}.budgetStatus`, String(gate.status || ''));
+                } else {
+                    await this._setStateIfChanged(`threshold.rules.r${idx}.budgetAvailableW`, 0);
+                    await this._setStateIfChanged(`threshold.rules.r${idx}.budgetGrantW`, 0);
+                    await this._setStateIfChanged(`threshold.rules.r${idx}.budgetGridImportW`, 0);
+                    await this._setStateIfChanged(`threshold.rules.r${idx}.budgetBlocked`, false);
+                    await this._setStateIfChanged(`threshold.rules.r${idx}.budgetStatus`, 'off');
                 }
 
                 // minOn/minOff constraints (anti-flatter)
@@ -470,9 +723,50 @@ class ThresholdControlModule extends BaseModule {
                 this._hyst.set(id, mem);
             }
 
+            if (!isManual && r.useBudgetGate && mem.active) {
+                const estW = Math.max(0, this._budgetEstimateW(r));
+                if (estW > 0) {
+                    budgetUsedW += estW;
+                    const bt = this._normalizeBudgetType(r.budgetType);
+                    if (bt === 'pv' || bt === 'pvAndTotal' || bt === 'reserveOnly') budgetPvUsedW += estW;
+                    if (Number.isFinite(Number(r.budgetPriority))) budgetPriority = Math.min(budgetPriority, Number(r.budgetPriority));
+                    activeBudgetRules += 1;
+                }
+            }
+
             await this._setStateIfChanged(`threshold.rules.r${idx}.active`, mem.active);
             await this._setStateIfChanged(`threshold.rules.r${idx}.status`, status);
         }
+
+        try {
+            this.adapter._thresholdBudgetUsedW = roundW(budgetUsedW);
+            this.adapter._thresholdPvBudgetUsedW = roundW(budgetPvUsedW);
+        } catch (_e) {}
+
+        try {
+            const rt = this.adapter && this.adapter._emsBudget;
+            if (rt && typeof rt.reserve === 'function' && budgetUsedW > 0) {
+                rt.reserve({
+                    key: 'threshold',
+                    app: 'thresholdControl',
+                    label: 'Schwellwerte',
+                    priority: Math.max(1, Math.min(999, Math.round(budgetPriority || 400))),
+                    requestedW: Math.max(0, roundW(budgetUsedW)),
+                    reserveW: Math.max(0, roundW(budgetUsedW)),
+                    pvReserveW: Math.max(0, roundW(budgetPvUsedW)),
+                    pvOnly: budgetPvUsedW > 0,
+                    mode: 'auto-gated',
+                });
+            }
+        } catch (_e) {
+            // budget diagnostics only
+        }
+
+        await this._setStateIfChanged('threshold.summary.lastUpdate', now);
+        await this._setStateIfChanged('threshold.summary.budgetUsedW', roundW(budgetUsedW));
+        await this._setStateIfChanged('threshold.summary.pvBudgetUsedW', roundW(budgetPvUsedW));
+        await this._setStateIfChanged('threshold.summary.activeBudgetRules', roundW(activeBudgetRules));
+        await this._setStateIfChanged('threshold.summary.status', activeBudgetRules > 0 ? 'ok_gated' : 'ok');
     }
 }
 

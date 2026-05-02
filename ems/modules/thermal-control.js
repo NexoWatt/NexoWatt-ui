@@ -669,15 +669,9 @@ const mk = async (id, name, type, role, unit = undefined) => {
             await this._setStateIfChanged(`thermal.devices.${d.id}.boostUntil`, ov.boostUntil ? Math.round(ov.boostUntil) : 0);
             await this._setStateIfChanged(`thermal.devices.${d.id}.manualUntil`, ov.manualUntil ? Math.round(ov.manualUntil) : 0);
 
-            // Device disabled OR automation disabled by end-customer -> no writes (but still account measured load)
+            // Device disabled OR automation disabled by end-customer -> no writes.
+            // External/manual thermal load is normal house load and must NOT be reserved as EMS PV budget.
             if (!effectiveEnabled) {
-                // subtract measured usage from remaining budget to avoid over-allocating PV to other consumers
-                if (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0) {
-                    const used = Math.max(0, measuredW);
-                    remainingW = Math.max(0, remainingW - used);
-                    budgetUsedW += Math.round(used);
-                }
-
                 await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 0);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, false);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.status`, userEnabled ? 'disabled' : 'regulation_off');
@@ -685,14 +679,9 @@ const mk = async (id, name, type, role, unit = undefined) => {
                 continue;
             }
 
-            // Manual-hold (from quick control) – do not overwrite user commands
+            // Manual-hold (from quick control) – do not overwrite user commands.
+            // Manual/external operation is observed only and is not reserved in ems.budget.
             if (ov.manualActive && !ov.boostActive) {
-                // subtract measured usage from remaining budget to avoid over-allocating PV
-                if (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0) {
-                    const used = Math.max(0, measuredW);
-                    remainingW = Math.max(0, remainingW - used);
-                    budgetUsedW += Math.round(used);
-                }
                 await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 0);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, false);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.status`, 'manual_hold');
@@ -760,13 +749,8 @@ const mk = async (id, name, type, role, unit = undefined) => {
                 continue;
             }
 
-            // Manual mode -> no writes (but account measured load)
+            // Manual mode -> no writes. Do not reserve as EMS PV budget.
             if (effectiveMode === 'manual') {
-                if (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0) {
-                    const used = Math.max(0, measuredW);
-                    remainingW = Math.max(0, remainingW - used);
-                    budgetUsedW += Math.round(used);
-                }
                 await this._setStateIfChanged(`thermal.devices.${d.id}.targetW`, 0);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.applied`, false);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.status`, 'manual');
@@ -811,11 +795,10 @@ const mk = async (id, name, type, role, unit = undefined) => {
                     await this._setStateIfChanged(`thermal.devices.${d.id}.status`, `off_${String(res.status || '')}`);
                 }
 
-                // While ramping down, we still account measured usage.
+                // While ramping down, we still show measured usage, but it is no longer
+                // an EMS PV-auto reservation and therefore not added to budgetUsedW.
                 if (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0) usedW = measuredW;
                 appliedTotalW += Math.max(0, Math.round(usedW));
-                budgetUsedW += Math.max(0, Math.round(usedW));
-                remainingW = Math.max(0, remainingW - usedW);
                 await this._setStateIfChanged(`thermal.devices.${d.id}.override`, '');
                 continue;
             }

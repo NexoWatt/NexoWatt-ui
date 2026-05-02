@@ -1,3 +1,11 @@
+## 0.7.9
+
+- Schwellwertsteuerung optional an zentrale `ems.budget` Gates angebunden: pro Regel kann eine geschätzte Verbraucherleistung, Budget-Typ und Budget-Reserve gesetzt werden. Standard bleibt aus, damit vorhandene Alarm-/Anzeige-/Logikregeln unverändert laufen.
+- Budgetfähige Schwellwertregeln reservieren nur bei Auto-Betrieb und aktiver Regel; manuelle User-Modi bleiben bewusst Gate-Bypass und werden nicht automatisch überschrieben.
+- PV-gesteuerte Schwellwertlasten blockieren neue Starts ohne freies Budget und halten laufende Verbraucher bei kurzen NVP-/Restbudget-Schwankungen.
+- Thermik-Budgetbilanz nachgeschärft: Manuell, Aus und Manual-Hold zählen nicht mehr als EMS-PV-Auto-Budgetverbraucher; nur EMS-Boost/PV-Auto wird reserviert.
+- Peakshaving und MultiUse bleiben unverändert als Schutz-/Reserveebenen und werden nicht als PV-Budgetverbraucher geführt.
+
 ## 0.7.8
 
 - Heizstab-PV-Auto robuster als zentraler Budget-Follower umgesetzt: laufende EMS-eigene Stufen werden als Haltebudget zum zentralen Rest-PV-Budget zurückgerechnet, damit sie bei sauberem NVP nicht nervös abschalten.

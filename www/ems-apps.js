@@ -3017,6 +3017,15 @@ function _collectFlowPowerDpIsWFromUI() {
       return (s === 'below' || s === '<' || s === 'lt' || s === 'kleiner') ? 'below' : 'above';
     };
 
+    const normBudgetType = (v) => {
+      const s = String(v || '').trim().toLowerCase();
+      if (!s || s === 'off' || s === 'none' || s === 'disabled' || s === 'aus') return 'off';
+      if (s === 'reserve' || s === 'reserveonly' || s === 'reserve-only' || s === 'nurreserve') return 'reserveOnly';
+      if (s === 'total' || s === 'gesamt' || s === 'grid' || s === 'netz') return 'total';
+      if (s === 'both' || s === 'pvandtotal' || s === 'pv+total' || s === 'pv_total') return 'pvAndTotal';
+      return 'pv';
+    };
+
     for (let i = 0; i < t.rules.length; i++) {
       const r0 = t.rules[i] || {};
       const idx = Math.max(1, Math.min(10, Math.round(Number(r0.idx ?? r0.index ?? (i + 1)) || (i + 1))));
@@ -3046,6 +3055,14 @@ function _collectFlowPowerDpIsWFromUI() {
         userCanSetThreshold: (typeof r0.userCanSetThreshold === 'boolean') ? !!r0.userCanSetThreshold : true,
         userCanSetMinOnSec: (typeof r0.userCanSetMinOnSec === 'boolean') ? !!r0.userCanSetMinOnSec : ((typeof r0.userCanSetThreshold === 'boolean') ? !!r0.userCanSetThreshold : true),
         userCanSetMinOffSec: (typeof r0.userCanSetMinOffSec === 'boolean') ? !!r0.userCanSetMinOffSec : ((typeof r0.userCanSetThreshold === 'boolean') ? !!r0.userCanSetThreshold : true),
+        useBudgetGate: (typeof r0.useBudgetGate === 'boolean') ? !!r0.useBudgetGate : !!r0.budgetGateEnabled,
+        budgetType: normBudgetType(r0.budgetType || r0.budgetGateType || r0.budgetMode || 'pv'),
+        budgetEstimatedW: (Number.isFinite(Number(r0.budgetEstimatedW ?? r0.estimatedPowerW ?? r0.powerW ?? r0.loadPowerW))) ? Math.max(0, Math.round(Number(r0.budgetEstimatedW ?? r0.estimatedPowerW ?? r0.powerW ?? r0.loadPowerW))) : 0,
+        budgetSafetyReserveW: (Number.isFinite(Number(r0.budgetSafetyReserveW ?? r0.safetyReserveW))) ? Math.max(0, Math.round(Number(r0.budgetSafetyReserveW ?? r0.safetyReserveW))) : 100,
+        budgetPriority: (Number.isFinite(Number(r0.budgetPriority ?? r0.priority))) ? Math.max(1, Math.min(999, Math.round(Number(r0.budgetPriority ?? r0.priority)))) : (400 + idx),
+        budgetMaxGridImportW: (Number.isFinite(Number(r0.budgetMaxGridImportW ?? r0.maxGridImportW))) ? Math.max(0, Math.round(Number(r0.budgetMaxGridImportW ?? r0.maxGridImportW))) : 250,
+        budgetGridImportDelaySec: (Number.isFinite(Number(r0.budgetGridImportDelaySec ?? r0.gridImportDelaySec))) ? Math.max(0, Math.round(Number(r0.budgetGridImportDelaySec ?? r0.gridImportDelaySec))) : 45,
+        budgetMaxAgeMs: (Number.isFinite(Number(r0.budgetMaxAgeMs ?? r0.budgetStaleMs))) ? Math.max(500, Math.round(Number(r0.budgetMaxAgeMs ?? r0.budgetStaleMs))) : 15000,
       });
     }
 
@@ -3096,6 +3113,11 @@ function _collectFlowPowerDpIsWFromUI() {
       wrap.appendChild(t2);
       return wrap;
     };
+
+    els.thresholdRules.appendChild(mkHdr(
+      'Budget-Gate optional',
+      'Nur Regeln, die echte Verbraucher schalten, sollten ein Budget-Gate nutzen. Alarm-, Anzeige- und Logikregeln bleiben ohne Gate. Manuell übersteuerte Regeln werden nicht vom Gate überschrieben.'
+    ));
 
     if (!t.rules.length) {
       els.thresholdRules.appendChild(mkHdr('Noch keine Regeln.', 'Klicke auf „Regel hinzufügen“, um die erste Automation zu erstellen.'));
@@ -3255,6 +3277,15 @@ function _collectFlowPowerDpIsWFromUI() {
       return wrap;
     };
 
+    const normBudgetType = (v) => {
+      const s = String(v || '').trim().toLowerCase();
+      if (!s || s === 'off' || s === 'none' || s === 'disabled' || s === 'aus') return 'off';
+      if (s === 'reserve' || s === 'reserveonly' || s === 'reserve-only' || s === 'nurreserve') return 'reserveOnly';
+      if (s === 'total' || s === 'gesamt' || s === 'grid' || s === 'netz') return 'total';
+      if (s === 'both' || s === 'pvandtotal' || s === 'pv+total' || s === 'pv_total') return 'pvAndTotal';
+      return 'pv';
+    };
+
     const updateRule = (idx, patch) => {
       const t2 = _ensureThresholdCfg();
       const r = t2.rules.find(x => Number(x.idx) === Number(idx));
@@ -3263,6 +3294,9 @@ function _collectFlowPowerDpIsWFromUI() {
       // normalize types
       r.outputType = (String(r.outputType || '').toLowerCase() === 'boolean') ? 'boolean' : 'number';
       r.compare = (String(r.compare || '').toLowerCase() === 'below') ? 'below' : 'above';
+      r.budgetType = normBudgetType(r.budgetType || 'pv');
+      try { setDirty(); } catch (_e) {}
+      try { scheduleValidation(200); } catch (_e) {}
     };
 
     for (const r of t.rules) {
@@ -3286,7 +3320,7 @@ function _collectFlowPowerDpIsWFromUI() {
       title.textContent = `Regel ${idx}`;
       const sub = document.createElement('div');
       sub.className = 'nw-config-item__subtitle';
-      sub.textContent = 'Wenn Input ' + (r.compare === 'below' ? '<' : '>') + ' Schwellwert → schreibe Output';
+      sub.textContent = 'Wenn Input ' + (r.compare === 'below' ? '<' : '>') + ' Schwellwert → schreibe Output' + (r.useBudgetGate ? ' · Budget-Gate aktiv' : '');
       left.appendChild(title);
       left.appendChild(sub);
 
@@ -3359,6 +3393,21 @@ function _collectFlowPowerDpIsWFromUI() {
 
       grid.appendChild(mkNumField('Max. Alter Input', `thr_rule_${idx}_maxAgeMs`, r.maxAgeMs, (n) => updateRule(idx, { maxAgeMs: Math.max(500, Math.round(n)) }), '', 'ms'));
 
+      grid.appendChild(mkChk('Budget-Gate verwenden', `thr_rule_${idx}_useBudgetGate`, !!r.useBudgetGate, (b) => { updateRule(idx, { useBudgetGate: !!b }); buildThresholdUI(); }));
+      if (r.useBudgetGate) {
+        grid.appendChild(mkSelectField('Budget-Modus', `thr_rule_${idx}_budgetType`, normBudgetType(r.budgetType || 'pv'), [
+          { v: 'reserveOnly', t: 'Nur reservieren / Restbudget abziehen' },
+          { v: 'pv', t: 'PV-Restbudget + Netzschutz' },
+          { v: 'total', t: 'Gesamt-/Netzbudget' },
+          { v: 'pvAndTotal', t: 'PV + Gesamtbudget' },
+        ], (v) => updateRule(idx, { budgetType: normBudgetType(v) })));
+        grid.appendChild(mkNumField('Geschätzte Last', `thr_rule_${idx}_budgetEstimatedW`, r.budgetEstimatedW, (n) => updateRule(idx, { budgetEstimatedW: Math.max(0, Math.round(n)) }), '', 'W'));
+        grid.appendChild(mkNumField('Budget-Reserve', `thr_rule_${idx}_budgetSafetyReserveW`, r.budgetSafetyReserveW, (n) => updateRule(idx, { budgetSafetyReserveW: Math.max(0, Math.round(n)) }), '', 'W'));
+        grid.appendChild(mkNumField('Priorität', `thr_rule_${idx}_budgetPriority`, r.budgetPriority, (n) => updateRule(idx, { budgetPriority: Math.max(1, Math.min(999, Math.round(n))) }), '', ''));
+        grid.appendChild(mkNumField('Netzbezug erlaubt', `thr_rule_${idx}_budgetMaxGridImportW`, r.budgetMaxGridImportW, (n) => updateRule(idx, { budgetMaxGridImportW: Math.max(0, Math.round(n)) }), '', 'W'));
+        grid.appendChild(mkNumField('Netzbezug-Haltezeit', `thr_rule_${idx}_budgetGridImportDelaySec`, r.budgetGridImportDelaySec, (n) => updateRule(idx, { budgetGridImportDelaySec: Math.max(0, Math.round(n)) }), '', 's'));
+      }
+
       grid.appendChild(mkChk('Endkunde darf Regel ein/aus', `thr_rule_${idx}_userCanToggle`, r.userCanToggle !== false, (b) => updateRule(idx, { userCanToggle: !!b })));
       grid.appendChild(mkChk('Endkunde darf Schwellwert ändern', `thr_rule_${idx}_userCanSetThreshold`, r.userCanSetThreshold !== false, (b) => updateRule(idx, { userCanSetThreshold: !!b })));
       grid.appendChild(mkChk('Endkunde darf MinOn ändern', `thr_rule_${idx}_userCanSetMinOnSec`, r.userCanSetMinOnSec !== false, (b) => updateRule(idx, { userCanSetMinOnSec: !!b })));
@@ -3381,7 +3430,7 @@ function _collectFlowPowerDpIsWFromUI() {
           return;
         }
         const t2 = _ensureThresholdCfg();
-        t2.rules.push({ idx: next, enabled: true, name: `Regel ${next}`, compare: 'above', threshold: 0, hysteresis: 0, minOnSec: 0, minOffSec: 0, outputType: 'boolean', onValue: true, offValue: false, maxAgeMs: 5000, userCanToggle: true, userCanSetThreshold: true, userCanSetMinOnSec: true, userCanSetMinOffSec: true, inputId: '', outputId: '' });
+        t2.rules.push({ idx: next, enabled: true, name: `Regel ${next}`, compare: 'above', threshold: 0, hysteresis: 0, minOnSec: 0, minOffSec: 0, outputType: 'boolean', onValue: true, offValue: false, maxAgeMs: 5000, userCanToggle: true, userCanSetThreshold: true, userCanSetMinOnSec: true, userCanSetMinOffSec: true, useBudgetGate: false, budgetType: 'pv', budgetEstimatedW: 0, budgetSafetyReserveW: 100, budgetPriority: 400 + next, budgetMaxGridImportW: 250, budgetGridImportDelaySec: 45, budgetMaxAgeMs: 15000, inputId: '', outputId: '' });
         buildThresholdUI();
         scheduleValidation(200);
       };

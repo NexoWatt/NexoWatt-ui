@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.8",
+    "version": "0.7.9",
     "news": {
+      "0.7.9": {
+        "en": "Threshold control can now optionally route real flexible loads through the central EMS Budget & Gates. Manual user modes bypass the gate; thermal manual/off states no longer reserve EMS PV budget. Peak-shaving and MultiUse remain unchanged as protection/reserve layers.",
+        "de": "Schwellwertsteuerung kann echte flexible Verbraucher jetzt optional über die zentralen EMS Budget-&-Gates führen. Manuelle User-Modi bleiben Gate-Bypass; Thermik in Manuell/Aus reserviert kein EMS-PV-Budget mehr. Peak-Shaving und MultiUse bleiben unverändert als Schutz-/Reserveebenen."
+      },
       "0.7.8": {
         "en": "Heating rod PV-Auto is now a robust central-budget follower with hold budget, hysteresis and manual KNX protection. Running EMS-owned stages are added back to the central remaining PV budget for holding, PV minimum blocks only new step-up instead of hard OFF, small grid/storage oscillations are tolerated until the configured hold times, and only PV-Auto-owned rod load is reserved in ems.budget. The App-Center heating-rod area was reorganized into clear Budget & Storage, Robust Switching and advanced hard-protection sections.",
         "de": "Heizstab-PV-Auto arbeitet jetzt robuster als zentraler Budget-Follower mit Haltebudget, Hysterese und KNX-Manuellschutz. Laufende EMS-eigene Stufen werden zum zentralen Rest-PV-Budget zurückgerechnet, damit sie stabil gehalten werden; die PV-Mindestgrenze blockiert nur neues Hochfahren statt hart AUS; kleine Netz-/Speicherschwankungen werden bis zu den Haltezeiten toleriert; und nur PV-Auto-eigene Heizstableistung wird in ems.budget reserviert. Der Heizstab-Bereich im App-Center wurde in Budget & Speicher, Robustes Schalten und erweiterte harte Schutzgrenzen aufgeräumt."
