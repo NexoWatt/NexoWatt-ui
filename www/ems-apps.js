@@ -7734,6 +7734,128 @@ function _collectFlowPowerDpIsWFromUI() {
     const centralTotalW = n(ctrl.emsBudgetTotalW);
     const centralRemainingTotalW = n(ctrl.emsBudgetRemainingTotalW);
     const centralActive = b(ctrl.emsBudgetActive) || Number.isFinite(centralPvW) || Number.isFinite(centralRemainingPvW);
+
+    // Gate A – Netz
+    const gridBind = b(ctrl.gridCapBinding);
+    const gateANetzCard = mkCard('Gate A – Netz', [
+      { label: 'Netzlimit (cfg)', value: _fmtW(n(ctrl.gridImportLimitW)) },
+      { label: 'Netzlimit (eff)', value: _fmtW(n(ctrl.gridImportLimitEffW)) },
+      { label: 'Netz (W)', value: _fmtW(n(ctrl.gridImportW)) },
+      { label: 'Grundlast (est.)', value: _fmtW(n(ctrl.gridBaseLoadW)) },
+      { label: 'EVCS Cap (Netz)', value: _fmtW(n(ctrl.gridCapEvcsW)) },
+      { label: 'Binding', value: _fmtBool(gridBind, 'JA', 'NEIN') },
+    ], gridBind ? 'warn' : 'ok');
+
+    // Gate A – Phasen
+    const phaseBind = b(ctrl.phaseCapBinding);
+    const gateAPhasenCard = mkCard('Gate A – Phasen', [
+      { label: 'Max Phase (cfg)', value: (n(ctrl.gridMaxPhaseA) != null) ? (Number(n(ctrl.gridMaxPhaseA)).toFixed(1) + ' A') : '--' },
+      { label: 'Worst Phase', value: (n(ctrl.gridWorstPhaseA) != null) ? (Number(n(ctrl.gridWorstPhaseA)).toFixed(1) + ' A') : '--' },
+      { label: 'EVCS Cap (Phasen)', value: _fmtW(n(ctrl.gridPhaseCapEvcsW)) },
+      { label: 'Binding', value: _fmtBool(phaseBind, 'JA', 'NEIN') },
+    ], phaseBind ? 'warn' : 'ok');
+
+    // Gate A2 – §14a
+    const p14aActive = b(ctrl.para14aActive);
+    const p14aBind = b(ctrl.para14aBinding);
+    const gateA2Card = mkCard('Gate A2 – §14a', [
+      { label: 'Aktiv', value: _fmtBool(p14aActive, 'JA', 'NEIN') },
+      { label: 'Mode', value: String(ctrl.para14aMode || '') },
+      { label: 'Cap', value: _fmtW(n(ctrl.para14aCapEvcsW)) },
+      { label: 'Binding', value: _fmtBool(p14aBind, 'JA', 'NEIN') },
+    ], p14aActive ? (p14aBind ? 'warn' : 'ok') : '');
+
+    // Gate B – PV
+    const pvKind = b(ctrl.pvAvailable) ? 'ok' : 'warn';
+    const pvLines = [
+      { label: 'PV verfügbar', value: _fmtBool(b(ctrl.pvAvailable), 'JA', 'NEIN') },
+      { label: 'PV Cap raw', value: _fmtW(n(ctrl.pvCapRawW)) },
+      { label: 'PV Cap effektiv', value: _fmtW(n(ctrl.pvCapEffectiveW)) },
+    ];
+
+    // Debug only (Installer): show PV surplus without EVCS consumption.
+    // Helps to verify sign conventions & smoothing for PV-only charging.
+    try {
+      const as = (window.NW_AUTH && window.NW_AUTH.getState) ? window.NW_AUTH.getState() : null;
+      const isInstaller = as ? !!as.isInstaller : true;
+      if (isInstaller) {
+        pvLines.push({ label: 'PV Überschuss (ohne EV) – Instant', value: _fmtW(n(ctrl.pvSurplusNoEvRawW)) });
+        pvLines.push({ label: 'PV Überschuss (ohne EV) – Ø 5 min', value: _fmtW(n(ctrl.pvSurplusNoEvAvg5mW)) });
+      }
+    } catch (_e) {}
+
+    const gateBPvCard = mkCard('Gate B – PV', pvLines, pvKind);
+
+    // Gate C – Speicher
+    const sa = b(ctrl.storageAssistActive);
+    const gateCSpeicherCard = mkCard('Gate C – Speicher', [
+      { label: 'Assist aktiv', value: _fmtBool(sa, 'JA', 'NEIN') },
+      { label: 'Assist (W)', value: _fmtW(n(ctrl.storageAssistW)) },
+      { label: 'SoC (%)', value: (n(ctrl.storageAssistSoCPct) != null) ? (Number(n(ctrl.storageAssistSoCPct)).toFixed(1) + ' %') : '--' },
+    ], sa ? 'ok' : '');
+
+    let gateDForecastCard = null;
+    let gateETariffCard = null;
+    let priorityCard = null;
+
+    if (centralActive) {
+      const fcValid = b(ctrl.emsForecastValid);
+      const fcUsable = b(ctrl.emsForecastUsable);
+      const fcKind = fcUsable ? 'ok' : (fcValid ? 'warn' : 'warn');
+      const fcAge = n(ctrl.emsForecastAgeMs);
+      gateDForecastCard = mkCard('Gate D – PV Forecast', [
+        { label: 'Forecast gültig', value: _fmtBool(fcValid, 'JA', 'NEIN') },
+        { label: 'Für Apps nutzbar', value: _fmtBool(fcUsable, 'JA', 'NEIN') },
+        { label: 'Confidence', value: _fmtPct(n(ctrl.emsForecastConfidencePct)) },
+        { label: 'Alter', value: Number.isFinite(fcAge) ? _fmtAge(fcAge) : '—' },
+        { label: 'PV Prognose jetzt', value: _fmtW(n(ctrl.emsForecastNowW)) },
+        { label: 'Ø nächste 1h', value: _fmtW(n(ctrl.emsForecastAvgNext1hW)) },
+        { label: 'Ø nächste 3h', value: _fmtW(n(ctrl.emsForecastAvgNext3hW)) },
+        { label: 'Peak nächste 6h', value: _fmtW(n(ctrl.emsForecastPeakNext6hW)) },
+        { label: 'Energie nächste 6h', value: _fmtKwh(n(ctrl.emsForecastKwhNext6h)) },
+        { label: 'Energie nächste 24h', value: _fmtKwh(n(ctrl.emsForecastKwhNext24h)) },
+        { label: 'Status', value: String(ctrl.emsForecastStatus || '') },
+      ], fcKind);
+
+      const tariffNeg = b(ctrl.emsTariffNegativeActive);
+      const tariffPref = b(ctrl.emsTariffGridImportPreferred);
+      const tariffKind = tariffPref ? 'ok' : (b(ctrl.emsTariffActive) ? '' : 'warn');
+      gateETariffCard = mkCard('Gate E – Tarif / Negativpreis', [
+        { label: 'Tarif aktiv', value: _fmtBool(b(ctrl.emsTariffActive), 'JA', 'NEIN') },
+        { label: 'Status', value: String(ctrl.emsTariffStatus || ctrl.emsTariffState || '') },
+        { label: 'Aktueller Preis', value: _fmtEurKwh(n(ctrl.emsTariffCurrentPriceEurKwh)) },
+        { label: 'Negativpreis aktiv', value: _fmtBool(tariffNeg, 'JA', 'NEIN') },
+        { label: 'Netzbezug bevorzugt', value: _fmtBool(tariffPref, 'JA', 'NEIN') },
+        { label: 'Speicher Netzladen', value: _fmtBool(b(ctrl.emsTariffStorageGridChargeAllowed), 'JA', 'NEIN') },
+        { label: 'EVCS Netzladen', value: _fmtBool(b(ctrl.emsTariffEvcsGridChargeAllowed), 'JA', 'NEIN') },
+        { label: 'Speicher Entladen', value: _fmtBool(b(ctrl.emsTariffDischargeAllowed), 'JA', 'NEIN') },
+        { label: 'PV-Abregelung empfohlen', value: _fmtBool(b(ctrl.emsTariffPvCurtailRecommended), 'JA', 'NEIN') },
+        { label: 'Min. negativ im Forecast', value: _fmtEurKwh(n(ctrl.emsTariffNegativeMinPriceEurKwh)) },
+        { label: 'Nächstes Negativfenster', value: `${_fmtIsoShort(ctrl.emsTariffNextNegativeFrom)} → ${_fmtIsoShort(ctrl.emsTariffNextNegativeTo)}` },
+      ], tariffKind);
+
+      try {
+        const consumers = JSON.parse(String(ctrl.emsBudgetConsumersJson || '[]'));
+        if (Array.isArray(consumers) && consumers.length) {
+          const lines = consumers
+            .filter((c) => c && typeof c === 'object')
+            .sort((a, b) => Number(a.priority || 999) - Number(b.priority || 999))
+            .slice(0, 6)
+            .map((c) => {
+              const reserveW = n(c.usedW ?? c.reserveW ?? c.requestedW);
+              const pvReserveW = n(c.pvUsedW ?? c.pvReserveW ?? (c.pvOnly ? reserveW : 0));
+              const actualW = n(c.actualW ?? c.usedW ?? c.reserveW ?? c.requestedW);
+              return {
+                label: `${Number(c.priority || 999)} · ${String(c.label || c.key || c.app || '')}`,
+                value: `Ist ${_fmtW(actualW)} · Res ${_fmtW(reserveW)} / PV ${_fmtW(pvReserveW)}`
+              };
+            });
+          if (lines.length) priorityCard = mkCard('Prioritäten / Reservierungen', lines, '');
+        }
+      } catch (_e) {}
+    }
+
+    // First show the central overview, then the gates in alphabetic/functional order.
     if (centralActive) {
       const cKind = (Number.isFinite(centralPvW) && centralPvW > 0) ? 'ok' : 'warn';
       els.chargingBudget.appendChild(mkCard('Zentrales EMS-Budget', [
@@ -7754,62 +7876,20 @@ function _collectFlowPowerDpIsWFromUI() {
         { label: 'Speicher entlädt', value: _fmtW(n(ctrl.emsBudgetStorageDischargeW)) },
         { label: 'Flexible Lasten', value: _fmtW(n(ctrl.emsBudgetFlexUsedW)) },
       ], ''));
-
-      const fcValid = b(ctrl.emsForecastValid);
-      const fcUsable = b(ctrl.emsForecastUsable);
-      const fcKind = fcUsable ? 'ok' : (fcValid ? 'warn' : 'warn');
-      const fcAge = n(ctrl.emsForecastAgeMs);
-      els.chargingBudget.appendChild(mkCard('Gate D – PV Forecast', [
-        { label: 'Forecast gültig', value: _fmtBool(fcValid, 'JA', 'NEIN') },
-        { label: 'Für Apps nutzbar', value: _fmtBool(fcUsable, 'JA', 'NEIN') },
-        { label: 'Confidence', value: _fmtPct(n(ctrl.emsForecastConfidencePct)) },
-        { label: 'Alter', value: Number.isFinite(fcAge) ? _fmtAge(fcAge) : '—' },
-        { label: 'PV Prognose jetzt', value: _fmtW(n(ctrl.emsForecastNowW)) },
-        { label: 'Ø nächste 1h', value: _fmtW(n(ctrl.emsForecastAvgNext1hW)) },
-        { label: 'Ø nächste 3h', value: _fmtW(n(ctrl.emsForecastAvgNext3hW)) },
-        { label: 'Peak nächste 6h', value: _fmtW(n(ctrl.emsForecastPeakNext6hW)) },
-        { label: 'Energie nächste 6h', value: _fmtKwh(n(ctrl.emsForecastKwhNext6h)) },
-        { label: 'Energie nächste 24h', value: _fmtKwh(n(ctrl.emsForecastKwhNext24h)) },
-        { label: 'Status', value: String(ctrl.emsForecastStatus || '') },
-      ], fcKind));
-
-      const tariffNeg = b(ctrl.emsTariffNegativeActive);
-      const tariffPref = b(ctrl.emsTariffGridImportPreferred);
-      const tariffKind = tariffPref ? 'ok' : (b(ctrl.emsTariffActive) ? '' : 'warn');
-      els.chargingBudget.appendChild(mkCard('Gate E – Tarif / Negativpreis', [
-        { label: 'Tarif aktiv', value: _fmtBool(b(ctrl.emsTariffActive), 'JA', 'NEIN') },
-        { label: 'Status', value: String(ctrl.emsTariffStatus || ctrl.emsTariffState || '') },
-        { label: 'Aktueller Preis', value: _fmtEurKwh(n(ctrl.emsTariffCurrentPriceEurKwh)) },
-        { label: 'Negativpreis aktiv', value: _fmtBool(tariffNeg, 'JA', 'NEIN') },
-        { label: 'Netzbezug bevorzugt', value: _fmtBool(tariffPref, 'JA', 'NEIN') },
-        { label: 'Speicher Netzladen', value: _fmtBool(b(ctrl.emsTariffStorageGridChargeAllowed), 'JA', 'NEIN') },
-        { label: 'EVCS Netzladen', value: _fmtBool(b(ctrl.emsTariffEvcsGridChargeAllowed), 'JA', 'NEIN') },
-        { label: 'Speicher Entladen', value: _fmtBool(b(ctrl.emsTariffDischargeAllowed), 'JA', 'NEIN') },
-        { label: 'PV-Abregelung empfohlen', value: _fmtBool(b(ctrl.emsTariffPvCurtailRecommended), 'JA', 'NEIN') },
-        { label: 'Min. negativ im Forecast', value: _fmtEurKwh(n(ctrl.emsTariffNegativeMinPriceEurKwh)) },
-        { label: 'Nächstes Negativfenster', value: `${_fmtIsoShort(ctrl.emsTariffNextNegativeFrom)} → ${_fmtIsoShort(ctrl.emsTariffNextNegativeTo)}` },
-      ], tariffKind));
-
-      try {
-        const consumers = JSON.parse(String(ctrl.emsBudgetConsumersJson || '[]'));
-        if (Array.isArray(consumers) && consumers.length) {
-          const lines = consumers
-            .filter((c) => c && typeof c === 'object')
-            .sort((a, b) => Number(a.priority || 999) - Number(b.priority || 999))
-            .slice(0, 6)
-            .map((c) => {
-              const reserveW = n(c.usedW ?? c.reserveW ?? c.requestedW);
-              const pvReserveW = n(c.pvUsedW ?? c.pvReserveW ?? (c.pvOnly ? reserveW : 0));
-              const actualW = n(c.actualW ?? c.usedW ?? c.reserveW ?? c.requestedW);
-              return {
-                label: `${Number(c.priority || 999)} · ${String(c.label || c.key || c.app || '')}`,
-                value: `Ist ${_fmtW(actualW)} · Res ${_fmtW(reserveW)} / PV ${_fmtW(pvReserveW)}`
-              };
-            });
-          if (lines.length) els.chargingBudget.appendChild(mkCard('Prioritäten / Reservierungen', lines, ''));
-        }
-      } catch (_e) {}
     }
+
+    [
+      gateANetzCard,
+      gateAPhasenCard,
+      gateA2Card,
+      gateBPvCard,
+      gateCSpeicherCard,
+      gateDForecastCard,
+      gateETariffCard,
+      priorityCard,
+    ].forEach((card) => {
+      if (card) els.chargingBudget.appendChild(card);
+    });
 
     els.chargingBudget.appendChild(mkCard('Ladebudget EVCS', [
       { label: 'Tarif', value: tariffTxt },
@@ -7819,66 +7899,6 @@ function _collectFlowPowerDpIsWFromUI() {
       { label: 'Remaining', value: _fmtW(remW) },
       { label: 'Status', value: String(ctrl.status || '') },
     ], budgetKind));
-
-    // PV Gate (B)
-    const pvKind = b(ctrl.pvAvailable) ? 'ok' : 'warn';
-
-    const pvLines = [
-      { label: 'PV verfügbar', value: _fmtBool(b(ctrl.pvAvailable), 'JA', 'NEIN') },
-      { label: 'PV Cap raw', value: _fmtW(n(ctrl.pvCapRawW)) },
-      { label: 'PV Cap effektiv', value: _fmtW(n(ctrl.pvCapEffectiveW)) },
-    ];
-
-    // Debug only (Installer): show PV surplus without EVCS consumption
-    // Helps to verify sign conventions & smoothing for PV-only charging.
-    try {
-      const as = (window.NW_AUTH && window.NW_AUTH.getState) ? window.NW_AUTH.getState() : null;
-      const isInstaller = as ? !!as.isInstaller : true;
-      if (isInstaller) {
-        pvLines.push({ label: 'PV Überschuss (ohne EV) – Instant', value: _fmtW(n(ctrl.pvSurplusNoEvRawW)) });
-        pvLines.push({ label: 'PV Überschuss (ohne EV) – Ø 5 min', value: _fmtW(n(ctrl.pvSurplusNoEvAvg5mW)) });
-      }
-    } catch (_e) {}
-
-    els.chargingBudget.appendChild(mkCard('Gate B – PV', pvLines, pvKind));
-
-    // Grid safety caps (A)
-    const gridBind = b(ctrl.gridCapBinding);
-    els.chargingBudget.appendChild(mkCard('Gate A – Netz', [
-      { label: 'Netzlimit (cfg)', value: _fmtW(n(ctrl.gridImportLimitW)) },
-      { label: 'Netzlimit (eff)', value: _fmtW(n(ctrl.gridImportLimitEffW)) },
-      { label: 'Netz (W)', value: _fmtW(n(ctrl.gridImportW)) },
-      { label: 'Grundlast (est.)', value: _fmtW(n(ctrl.gridBaseLoadW)) },
-      { label: 'EVCS Cap (Netz)', value: _fmtW(n(ctrl.gridCapEvcsW)) },
-      { label: 'Binding', value: _fmtBool(gridBind, 'JA', 'NEIN') },
-    ], gridBind ? 'warn' : 'ok'));
-
-    // Phase cap
-    const phaseBind = b(ctrl.phaseCapBinding);
-    els.chargingBudget.appendChild(mkCard('Gate A – Phasen', [
-      { label: 'Max Phase (cfg)', value: (n(ctrl.gridMaxPhaseA) != null) ? (Number(n(ctrl.gridMaxPhaseA)).toFixed(1) + ' A') : '--' },
-      { label: 'Worst Phase', value: (n(ctrl.gridWorstPhaseA) != null) ? (Number(n(ctrl.gridWorstPhaseA)).toFixed(1) + ' A') : '--' },
-      { label: 'EVCS Cap (Phasen)', value: _fmtW(n(ctrl.gridPhaseCapEvcsW)) },
-      { label: 'Binding', value: _fmtBool(phaseBind, 'JA', 'NEIN') },
-    ], phaseBind ? 'warn' : 'ok'));
-
-    // §14a (A2)
-    const p14aActive = b(ctrl.para14aActive);
-    const p14aBind = b(ctrl.para14aBinding);
-    els.chargingBudget.appendChild(mkCard('Gate A2 – §14a', [
-      { label: 'Aktiv', value: _fmtBool(p14aActive, 'JA', 'NEIN') },
-      { label: 'Mode', value: String(ctrl.para14aMode || '') },
-      { label: 'Cap', value: _fmtW(n(ctrl.para14aCapEvcsW)) },
-      { label: 'Binding', value: _fmtBool(p14aBind, 'JA', 'NEIN') },
-    ], p14aActive ? (p14aBind ? 'warn' : 'ok') : ''));
-
-    // Speicher-Unterstützung (C)
-    const sa = b(ctrl.storageAssistActive);
-    els.chargingBudget.appendChild(mkCard('Gate C – Speicher', [
-      { label: 'Assist aktiv', value: _fmtBool(sa, 'JA', 'NEIN') },
-      { label: 'Assist (W)', value: _fmtW(n(ctrl.storageAssistW)) },
-      { label: 'SoC (%)', value: (n(ctrl.storageAssistSoCPct) != null) ? (Number(n(ctrl.storageAssistSoCPct)).toFixed(1) + ' %') : '--' },
-    ], sa ? 'ok' : ''));
 
     // Summary (optional)
     if (sum) {

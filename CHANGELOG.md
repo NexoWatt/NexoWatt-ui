@@ -1,3 +1,10 @@
+# 0.7.15
+
+- App-Center/Budget-&-Gates-Diagnose sortiert: zentrale Übersicht zuerst, danach Gate A (Netz), Gate A Phasen, Gate A2 (§14a), Gate B (PV), Gate C (Speicher), Gate D (PV-Forecast) und Gate E (Tarif/Negativpreis).
+- „Prioritäten / Reservierungen“, Ladebudget und Summary stehen danach als Diagnose-/Verbraucherblöcke.
+- Reine UI-/Diagnose-Aufräumung; keine EMS-Regellogik an Speicher, Lade-/Lastmanagement, Heizstab, Peakshaving, MultiUse, Forecast oder Tariflogik geändert.
+- Webcache auf `nexowatt-cache-v185` erhöht.
+
 # 0.7.14
 
 - Gate E – Tarif / Negativpreis ergänzt: negative dynamische Preise setzen zentral `ems.budget.tariff.*` und bevorzugen Netzbezug.

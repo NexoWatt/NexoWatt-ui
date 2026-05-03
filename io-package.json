@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.14",
+    "version": "0.7.15",
     "news": {
+      "0.7.15": {
+        "en": "Budget & Gates diagnostics are now ordered consistently: central overview first, then Gate A (grid), Gate A phases, Gate A2 (§14a), Gate B (PV), Gate C (storage), Gate D (PV forecast) and Gate E (tariff/negative price). This is a UI/diagnostics cleanup only; no EMS regulation logic was changed.",
+        "de": "Budget-&-Gates-Diagnose neu sortiert: zuerst die zentrale Übersicht, danach Gate A (Netz), Gate A Phasen, Gate A2 (§14a), Gate B (PV), Gate C (Speicher), Gate D (PV-Forecast) und Gate E (Tarif/Negativpreis). Reine UI-/Diagnose-Aufräumung; keine EMS-Regellogik geändert."
+      },
       "0.7.14": {
         "en": "Added Gate E for negative dynamic electricity prices. When the effective tariff/forecast price is below zero, grid import is preferred: tariff flags allow storage grid charging and EVCS grid charging, block tariff-based storage discharge, publish ems.budget.tariff.*, and recommend PV curtailment. Hard grid, phase, §14a and peak-shaving limits remain active. Heating rod and thermal budget followers can use total budget in negative-price windows without consuming PV budget; MultiUse and peak-shaving behavior remains unchanged.",
         "de": "Gate E für negative dynamische Strompreise ergänzt. Wenn der effektive Tarif-/Forecastpreis unter 0 liegt, wird Netzbezug bevorzugt: Tarif-Flags geben Speicher-Netzladen und EVCS-Netzladen frei, sperren tarifbasierte Speicherentladung, veröffentlichen ems.budget.tariff.* und empfehlen PV-Abregelung. Harte Netz-, Phasen-, §14a- und Peakshaving-Grenzen bleiben aktiv. Heizstab- und Thermik-Budgetfolger können in Negativpreisfenstern Gesamtbudget nutzen, ohne PV-Budget zu verbrauchen; MultiUse und Peakshaving bleiben unverändert."
@@ -1875,8 +1879,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.14",
+  "version": "0.7.15",
   "news": {
+    "0.7.15": {
+      "en": "Budget & Gates diagnostics sorted into Gate A/A2/B/C/D/E order. UI cleanup only; no regulation logic changed.",
+      "de": "Budget-&-Gates-Diagnose in Gate-A/A2/B/C/D/E-Reihenfolge sortiert. Nur UI-Aufräumung; keine Regellogik geändert."
+    },
     "0.7.14": {
       "en": "Gate E - Tariff/negative price added. Negative dynamic tariff prices now prefer grid import, allow storage and EVCS grid charging, block storage discharge from tariff logic, expose ems.budget.tariff.* diagnostics and let PV curtailment/zero-export logic bias toward import while hard safety limits stay active. Thermal and heating-rod budget followers can use total budget in negative-price windows. MultiUse and peak-shaving unchanged. Web cache bumped.",
       "de": "Gate E - Tarif/Negativpreis ergänzt. Negative dynamische Tarifpreise bevorzugen jetzt Netzbezug, erlauben Speicher- und EVCS-Netzladen, sperren tarifbasierte Speicherentladung, stellen ems.budget.tariff.* als Diagnose bereit und lassen PV-Abregelung/0-Einspeisung in Richtung Import-Bias arbeiten, während harte Schutzgrenzen aktiv bleiben. Thermik- und Heizstab-Budgetfolger können in Negativpreisfenstern Gesamtbudget nutzen. MultiUse und Peakshaving unverändert. Webcache erhöht."
