@@ -738,6 +738,7 @@ class HeatingRodControlModule extends BaseModule {
 
         let pvBudgetGateW = nvpAvailableW;
         let pvBudgetSource = gridKnown ? 'nvp+ownLoad+storageReserve' : 'no-fresh-nvp';
+        let pvBudgetFromCentral = false;
         if (cmPvGateW !== null && Number.isFinite(cmPvGateW) && cmPvGateW > pvBudgetGateW) {
             pvBudgetGateW = cmPvGateW;
             pvBudgetSource = cmPvGateSource || 'cm.pvGate';
@@ -772,6 +773,7 @@ class HeatingRodControlModule extends BaseModule {
                     const centralPvW = Math.max(0, remPv + currentW - storageReserveMissingW - gateCfg.budgetSafetyReserveW);
                     pvBudgetGateW = centralPvW;
                     pvBudgetSource = 'ems.budget.remainingPvW+ownAutoLoad';
+                    pvBudgetFromCentral = true;
                 }
             }
         } catch (_e) {
@@ -801,6 +803,7 @@ class HeatingRodControlModule extends BaseModule {
             budgetGatePvW: Math.max(0, pvBudgetGateW),
             budgetGateEffectiveW: Math.max(0, effectiveGateW),
             budgetGateSource: source,
+            pvBudgetFromCentral: !!pvBudgetFromCentral,
             cmActive,
             cmStaleMeter: !!cmStaleMeter,
             cmStaleBudget: !!cmStaleBudget,
@@ -959,6 +962,8 @@ class HeatingRodControlModule extends BaseModule {
         const basePv = this._readNumberAny([
             'pvPower',
             'productionTotal',
+            'derived.core.pv.totalW',
+            'ems.budget.pvPowerW',
             // PeakShaving registers the current PV input as ps.pvW. Keep the old
             // ps.pvPowerW alias as compatibility fallback.
             'ps.pvW',
@@ -1191,9 +1196,18 @@ class HeatingRodControlModule extends BaseModule {
         return obs;
     }
 
-    _readMeasuredW(d) {
+    _readMeasuredW(d, staleMs = null) {
         if (!(this.dp && d.pWKey && this.dp.getEntry && this.dp.getEntry(d.pWKey))) return null;
-        const v = this.dp.getNumber(d.pWKey, null);
+        let v = null;
+        try {
+            if (Number.isFinite(Number(staleMs)) && staleMs > 0 && typeof this.dp.getNumberFresh === 'function') {
+                v = this.dp.getNumberFresh(d.pWKey, staleMs, null);
+            } else {
+                v = this.dp.getNumber(d.pWKey, null);
+            }
+        } catch (_e) {
+            v = null;
+        }
         return (typeof v === 'number' && Number.isFinite(v)) ? v : null;
     }
 
@@ -1804,12 +1818,15 @@ class HeatingRodControlModule extends BaseModule {
             // ignore
         }
 
+        const staleTimeoutSec = clamp(num(this._getCfg().staleTimeoutSec, 15), 1, 3600);
+        const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
+
         const preFeedbackById = new Map();
         let currentHeatingRodW = 0;
         let currentAutoHeatingRodW = 0;
         try {
             for (const d of this._devices) {
-                const measuredW = this._readMeasuredW(d);
+                const measuredW = this._readMeasuredW(d, staleMs);
                 const feedback = this._readStageFeedback(d);
                 const observedStagePre = feedback && feedback.anyKnown ? feedback.currentStage : (this._stageCtl.get(d.id)?.targetStage || 0);
                 let usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
@@ -1835,12 +1852,15 @@ class HeatingRodControlModule extends BaseModule {
         const budgetProtection = this._updateBudgetGateProtection(pvBase, now);
         const zeroExportInfo = this._computeZeroExportInfo(pvBase);
         const minPvAutomationW = this._getPvAutomationMinW();
-        const staleTimeoutSec = clamp(num(this._getCfg().staleTimeoutSec, 15), 1, 3600);
-        const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
         const pvNowForAutomationW = this._readPvNowW(staleMs);
         const pvAutomationAllowedByMin = minPvAutomationW <= 0 || pvNowForAutomationW >= minPvAutomationW;
         const thermalUsedW = Math.max(0, num(this.adapter && this.adapter._thermalBudgetUsedW, 0));
-        let remainingW = Math.max(0, num(pvBase.availableW, 0) - thermalUsedW);
+        // Wenn pvBase aus der zentralen EMS-Budget-Schicht kommt, ist Thermik mit
+        // Priorität 200 dort bereits abgezogen. Dann darf Heizstab Thermik NICHT
+        // noch einmal abziehen, sonst startet/steigt PV-Auto trotz freiem Gate nicht.
+        const pvBudgetFromCentral = !!(pvBase && pvBase.pvBudgetFromCentral);
+        const thermalDeductedW = pvBudgetFromCentral ? 0 : thermalUsedW;
+        let remainingW = Math.max(0, num(pvBase.availableW, 0) - thermalDeductedW);
         let appliedTotalW = 0;
         // budgetUsedW is intentionally only EMS/PV-Auto-owned heating-rod load.
         // Extern/manual KNX heat is ordinary house load and must not be reserved again
@@ -1883,7 +1903,7 @@ class HeatingRodControlModule extends BaseModule {
             userMode = normalizeUserMode(userMode);
 
             const pre = preFeedbackById.get(d.id) || {};
-            const measuredW = (typeof pre.measuredW === 'number' && Number.isFinite(pre.measuredW)) ? pre.measuredW : this._readMeasuredW(d);
+            const measuredW = (typeof pre.measuredW === 'number' && Number.isFinite(pre.measuredW)) ? pre.measuredW : this._readMeasuredW(d, staleMs);
             if (typeof measuredW === 'number' && Number.isFinite(measuredW)) {
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.measuredW`, Math.round(measuredW));
             }
@@ -2184,7 +2204,7 @@ class HeatingRodControlModule extends BaseModule {
         await this._setStateIfChanged('heatingRod.summary.storageChargeW', Math.round(num(pvBase.storageChargeW, 0)));
         await this._setStateIfChanged('heatingRod.summary.storageDischargeW', Math.round(num(pvBase.storageDischargeW, 0)));
         await this._setStateIfChanged('heatingRod.summary.pvAvailableRawW', Math.round(num(pvBase.availableW, 0)));
-        await this._setStateIfChanged('heatingRod.summary.pvAvailableW', Math.round(Math.max(0, num(pvBase.availableW, 0) - thermalUsedW)));
+        await this._setStateIfChanged('heatingRod.summary.pvAvailableW', Math.round(Math.max(0, num(pvBase.availableW, 0) - thermalDeductedW)));
         await this._setStateIfChanged('heatingRod.summary.appliedTotalW', Math.round(appliedTotalW));
         await this._setStateIfChanged('heatingRod.summary.budgetUsedW', Math.round(budgetUsedW));
         await this._setStateIfChanged('heatingRod.summary.budgetGateTotalW', pvBase.budgetGateTotalW === null ? 0 : Math.round(num(pvBase.budgetGateTotalW, 0)));
@@ -2235,6 +2255,8 @@ class HeatingRodControlModule extends BaseModule {
             cmAvailableW: Math.round(num(pvBase.cmAvailableW, 0)),
             availableW: Math.round(num(pvBase.availableW, 0)),
             thermalUsedW: Math.round(thermalUsedW),
+            thermalDeductedW: Math.round(thermalDeductedW),
+            pvBudgetFromCentral: !!pvBudgetFromCentral,
             forceOff: !!pvBase.forceOff,
             budgetGate: {
                 useBudgetGates: !!pvBase.useBudgetGates,
@@ -2243,6 +2265,7 @@ class HeatingRodControlModule extends BaseModule {
                 pvW: Math.round(num(pvBase.budgetGatePvW, 0)),
                 effectiveW: Math.round(num(pvBase.budgetGateEffectiveW, 0)),
                 source: pvBase.budgetGateSource,
+                pvBudgetFromCentral: !!pvBase.pvBudgetFromCentral,
                 cmActive: pvBase.cmActive,
                 cmStaleMeter: !!pvBase.cmStaleMeter,
                 cmStaleBudget: !!pvBase.cmStaleBudget,

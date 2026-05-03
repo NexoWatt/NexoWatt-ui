@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.11",
+    "version": "0.7.13",
     "news": {
+      "0.7.13": {
+        "en": "Heating rod PV-auto now treats fresh central EMS remaining PV budget as already priority-adjusted, so thermal budget is not subtracted twice. This fixes blocked auto-start and missing stage-up when the central Gates already deducted higher-priority consumers.",
+        "de": "Heizstab-PV-Auto nutzt frisches zentrales EMS-Rest-PV-Budget jetzt als bereits prioritätsbereinigt. Thermik wird dabei nicht mehr doppelt abgezogen. Das behebt blockierten Auto-Start und fehlendes Hochstufen, wenn die zentralen Gates Verbraucher höherer Priorität bereits abgezogen haben."
+      },
+      "0.7.12": {
+        "en": "Heating rod PV-auto start robustness improved: PV live source now also uses central EMS PV power and stale heating-rod power no longer blocks PV-auto. Budget consumer diagnostics hide disabled zero-load apps; forecast gate stays stable without a runtime snapshot.",
+        "de": "Heizstab-PV-Auto Startrobustheit verbessert: PV-Livewert nutzt zusätzlich die zentrale EMS-PV-Leistung, stale Heizstab-Istleistung blockiert PV-Auto nicht mehr. Budget-Verbraucherdiagnose blendet deaktivierte 0-W-Apps aus; Forecast-Gate läuft auch ohne Runtime-Snapshot stabil weiter."
+      },
       "0.7.11": {
         "en": "Budget priority diagnostics now show live reservation/used power correctly. Runtime consumer JSON now carries usedW/pvUsedW aliases in addition to reserveW/pvReserveW, the App-Center falls back to reserve fields, and live flexUsedW is mirrored after reservations. EMS/PV-Auto heating-rod ownership can also be restored after restart when persisted state clearly indicates an automatic stage; external/manual KNX states remain protected.",
         "de": "Die Budget-Prioritätsdiagnose zeigt genutzte/reservierte Leistung jetzt korrekt live an. Das Runtime-Consumer-JSON enthält zusätzlich usedW/pvUsedW neben reserveW/pvReserveW, das App-Center fällt sauber auf Reserve-Felder zurück, und flexUsedW wird nach Reservierungen live gespiegelt. EMS-/PV-Auto-Heizstab-Ownership kann nach einem Neustart wiederhergestellt werden, wenn der persistierte Zustand klar auf eine automatische Stufe hinweist; externe/manuelle KNX-Zustände bleiben geschützt."
@@ -1863,8 +1871,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.11",
+  "version": "0.7.13",
   "news": {
+    "0.7.13": {
+      "en": "Heating rod PV-Auto now treats fresh central ems.budget.remainingPvW as already prioritized, so higher-priority thermal reservations are no longer subtracted a second time. This fixes PV-Auto start/step-up blocking where the rod only started after manual stage 1 and then stayed there. Legacy fallback budgets still keep the local thermal deduction. Web cache version bumped.",
+      "de": "Heizstab PV-Auto nutzt frisches zentrales ems.budget.remainingPvW jetzt als bereits priorisiertes Restbudget, sodass Thermik-Reservierungen mit höherer Priorität nicht noch einmal lokal abgezogen werden. Das behebt Start-/Hochschaltblockaden, bei denen der Heizstab erst nach manueller Stufe 1 lief und dann dort hängen blieb. Legacy-Fallback-Budgets behalten den lokalen Thermik-Abzug. Webcache erhöht."
+    },
     "0.7.11": {
       "en": "Budget & Gates diagnostic hotfix: live runtime reservations now expose usedW/pvUsedW/actualW in consumersJson and update ems.budget.flexUsedW during reservations, so active heating-rod/thermal/EVCS consumers are shown with their current used power instead of 0 W. Explicit Auto(PV) can also take over an already running heating-rod stage after restart/manual observation for correct budget accounting. No changes to storage, peak-shaving, MultiUse or core storage logic.",
       "de": "Budget-&-Gates-Diagnose-Hotfix: Laufende Runtime-Reservierungen veröffentlichen jetzt usedW/pvUsedW/actualW im consumersJson und aktualisieren ems.budget.flexUsedW direkt bei Reservierungen. Dadurch werden aktive Heizstab-/Thermik-/EVCS-Verbraucher in Prioritäten/Reservierungen mit ihrer aktuellen Leistung angezeigt statt 0 W. Zusätzlich kann explizites Auto(PV) eine bereits laufende Heizstab-Stufe nach Neustart/manueller Beobachtung wieder für die Budget-Bilanz übernehmen. Keine Änderungen an Speicher, Peakshaving, MultiUse oder Speicher-Kernlogik."

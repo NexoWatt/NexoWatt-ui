@@ -446,7 +446,8 @@ class CoreLimitsModule extends BaseModule {
             ? this.adapter._pvForecast
             : null;
         const curve = (pf && Array.isArray(pf.curve)) ? pf.curve : [];
-        const points = Number.isFinite(Number(pf && pf.points)) ? Number(pf.points) : curve.length;
+        const pointsRaw = pf ? pf.points : null;
+        const points = Number.isFinite(Number(pointsRaw)) ? Number(pointsRaw) : curve.length;
         const valid = !!(pf && pf.valid && points > 0);
         const ageMs = (pf && pf.ageMs !== null && pf.ageMs !== undefined && Number.isFinite(Number(pf.ageMs)))
             ? Math.max(0, Number(pf.ageMs))
@@ -532,10 +533,22 @@ class CoreLimitsModule extends BaseModule {
             }
         }
 
-        const evcsUsedW = Math.max(0, this._readCacheNumber(['chargingManagement.control.usedW', 'evcs.totalPowerW'], 0) || 0);
-        const evcsPvUsedW = Math.max(0, this._readCacheNumber(['chargingManagement.control.pvEvcsUsedW'], 0) || 0);
-        const thermalUsedW = Math.max(0, this._readRuntimeOrStateNumber(['_thermalBudgetUsedW'], null) ?? this._readCacheNumber(['thermal.summary.budgetUsedW'], 0) ?? 0);
-        const heatingRodUsedW = Math.max(0, this._readRuntimeOrStateNumber(['_heatingRodBudgetUsedW'], null) ?? this._readCacheNumber(['heatingRod.summary.budgetUsedW'], 0) ?? 0);
+        const evcsEnabled = cfg.enableChargingManagement !== false;
+        const thermalEnabled = cfg.enableThermalControl === true;
+        const heatingRodEnabled = cfg.enableHeatingRodControl === true;
+
+        const evcsUsedRawW = Math.max(0, this._readCacheNumber(['chargingManagement.control.usedW', 'evcs.totalPowerW'], 0) || 0);
+        const evcsPvUsedRawW = Math.max(0, this._readCacheNumber(['chargingManagement.control.pvEvcsUsedW'], 0) || 0);
+        const thermalUsedRawW = Math.max(0, this._readRuntimeOrStateNumber(['_thermalBudgetUsedW'], null) ?? this._readCacheNumber(['thermal.summary.budgetUsedW'], 0) ?? 0);
+        const heatingRodUsedRawW = Math.max(0, this._readRuntimeOrStateNumber(['_heatingRodBudgetUsedW'], null) ?? this._readCacheNumber(['heatingRod.summary.budgetUsedW'], 0) ?? 0);
+
+        // Only active EMS-controlled apps may reserve central budget. Disabled apps can
+        // still have old summary states from before a restart/update; those must not
+        // create ghost reservations or reduce remainingPvW.
+        const evcsUsedW = evcsEnabled ? evcsUsedRawW : 0;
+        const evcsPvUsedW = evcsEnabled ? evcsPvUsedRawW : 0;
+        const thermalUsedW = thermalEnabled ? thermalUsedRawW : 0;
+        const heatingRodUsedW = heatingRodEnabled ? heatingRodUsedRawW : 0;
         const flexUsedW = Math.max(0, evcsUsedW + thermalUsedW + heatingRodUsedW);
 
         // The raw PV budget is reconstructed from the NVP plus already-running controlled loads.
@@ -606,11 +619,19 @@ class CoreLimitsModule extends BaseModule {
                     binding: bindings.join('+'),
                 },
             },
-            consumers: {
-                evcs: { priority: 100, usedW: roundW(evcsUsedW), pvUsedW: roundW(evcsPvUsedW), mode: 'charging' },
-                thermal: { priority: 200, usedW: roundW(thermalUsedW), pvUsedW: roundW(thermalUsedW), mode: 'pvAuto' },
-                heatingRod: { priority: 300, usedW: roundW(heatingRodUsedW), pvUsedW: roundW(heatingRodUsedW), mode: 'pvAuto' },
-            },
+            consumers: (() => {
+                const out = {};
+                if (evcsUsedW > 0 || evcsPvUsedW > 0) {
+                    out.evcs = { priority: 100, usedW: roundW(evcsUsedW), pvUsedW: roundW(evcsPvUsedW), mode: 'charging' };
+                }
+                if (thermalUsedW > 0) {
+                    out.thermal = { priority: 200, usedW: roundW(thermalUsedW), pvUsedW: roundW(thermalUsedW), mode: 'pvAuto' };
+                }
+                if (heatingRodUsedW > 0) {
+                    out.heatingRod = { priority: 300, usedW: roundW(heatingRodUsedW), pvUsedW: roundW(heatingRodUsedW), mode: 'pvAuto' };
+                }
+                return out;
+            })(),
         };
     }
 
@@ -854,6 +875,8 @@ class CoreLimitsModule extends BaseModule {
                 this.adapter.updateValue('ems.budget.pvBudgetW', roundW(b.gates.pv.effectiveW), now);
                 this.adapter.updateValue('ems.budget.pvBudgetRawW', roundW(b.gates.pv.rawW), now);
                 this.adapter.updateValue('ems.budget.gridW', roundW(b.raw.gridW), now);
+                this.adapter.updateValue('ems.budget.flexUsedW', roundW(b.raw.flexUsedW), now);
+                this.adapter.updateValue('ems.budget.consumersJson', JSON.stringify(consumersInit), now);
                 if (b.gates && b.gates.forecast) {
                     this.adapter.updateValue('ems.budget.forecast.nowW', roundW(b.gates.forecast.nowW), now);
                     this.adapter.updateValue('ems.budget.forecast.avgNext1hW', roundW(b.gates.forecast.avgNext1hW), now);

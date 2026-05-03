@@ -1,3 +1,27 @@
+# 0.7.13
+
+- Heizstab-PV-Auto korrigiert: Bei frischem zentralem `ems.budget.remainingPvW` wird Thermik nicht mehr zusätzlich abgezogen, da die zentrale Budget-Schicht Verbraucher nach Priorität bereits berücksichtigt.
+- Behebt Fälle, in denen der Heizstab im PV-Auto trotz freiem Gate nicht automatisch startete oder nach manueller Stufe nicht weiter hochschaltete.
+- Diagnose erweitert: Debug-JSON zeigt jetzt `pvBudgetFromCentral` und `thermalDeductedW`, damit doppelte Budgetabzüge sofort sichtbar sind.
+- Webcache auf `nexowatt-cache-v183` erhöht.
+
+## 0.7.13
+
+- Heizstab-PV-Auto Start-/Hochschaltpfad korrigiert: Wenn die Heizstab-App das frische zentrale `ems.budget.remainingPvW` nutzt, wird `thermalUsedW` nicht mehr erneut lokal abgezogen, weil Thermik/Ladepunkte im zentralen Restbudget bereits nach Priorität berücksichtigt sind.
+- Behebt den Fall, dass der Heizstab im PV-Auto trotz PV-Restbudget nicht selbst startet oder nach manuell gesetzter Stufe 1 nicht weiter hochschaltet.
+- Legacy-/Fallback-Budgets behalten den lokalen Thermik-Abzug, damit alte NVP-/CM-Pfade weiter geschützt bleiben.
+- Keine Änderungen an Speicherregelung, Speicherfarm, Lade-/Lastmanagement, Peakshaving, MultiUse, Thermik-Regelung oder Gate-D-Forecast.
+- Webcache auf nexowatt-cache-v183 erhöht.
+
+## 0.7.12
+
+- Heizstab-PV-Auto Startpfad geprüft und robuster gemacht: die PV-Mindestfreigabe nutzt jetzt zusätzlich `ems.budget.pvPowerW` und `derived.core.pv.totalW`, damit PV-Auto nicht blockiert, wenn die zentrale Gate-Schicht PV korrekt sieht, aber der direkte PV-Alias nicht frisch im Heizstabmodul ankommt.
+- Heizstab-Istleistung wird im Heizstabmodul jetzt frisch/stale-geprüft gelesen. Alte Consumer-Power-Werte können dadurch keine externe KNX-/Manuell-Erkennung mehr vortäuschen und den PV-Auto-Start blockieren.
+- Zentrale Budget-/Reservierungsdiagnose bereinigt: deaktivierte Apps mit 0 W werden nicht mehr als feste Geister-Consumer in `ems.budget.consumersJson` geschrieben; alte/stale Werte deaktivierter Thermik-/Heizstab-Apps fließen nicht mehr in `flexUsedW`.
+- Forecast-Gate gegen fehlende Runtime abgesichert, damit die zentrale Gate-Schicht weiterläuft, auch wenn noch kein PV-Forecast-Snapshot vorhanden ist.
+- Keine Regeländerungen an Speicherregelung, Speicherfarm, Ladepunktverteilung, Peakshaving, MultiUse oder Forecast-Strategie.
+- Webcache auf nexowatt-cache-v182 erhöht.
+
 ## 0.7.11
 
 - **Budget-Prioritäten/Reservierungen korrigiert:** Runtime-Reservierungen schreiben jetzt im JSON zusätzlich `usedW`/`pvUsedW`, nicht nur `reserveW`/`pvReserveW`. Dadurch zeigt die App-Center-Karte nicht mehr fälschlich `0 W`, obwohl ein Verbraucher reserviert ist.
