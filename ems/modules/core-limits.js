@@ -220,6 +220,12 @@ class CoreLimitsModule extends BaseModule {
             native: {},
         });
 
+        await this.adapter.setObjectNotExistsAsync('ems.budget.tariff', {
+            type: 'channel',
+            common: { name: 'Budget Gate E - Tarif / Negativpreis' },
+            native: {},
+        });
+
         const mk = async (id, name, type, role, unit = undefined, write = false) => {
             await this.adapter.setObjectNotExistsAsync(id, {
                 type: 'state',
@@ -306,6 +312,24 @@ class CoreLimitsModule extends BaseModule {
         await mk('ems.budget.forecast.status', 'PV forecast gate status', 'string', 'text');
         await mk('ems.budget.forecast.source', 'PV forecast source', 'string', 'text');
         await mk('ems.budget.forecast.snapshotJson', 'PV forecast gate snapshot (JSON)', 'string', 'json');
+
+        // Gate E - Tarif / Negativpreis. Advisory + permission gate for price-aware control.
+        // It does not bypass hard grid/phase/§14a/peak limits; it only tells apps that
+        // grid import is economically preferred during negative effective prices.
+        await mk('ems.budget.tariff.active', 'Tariff gate active', 'boolean', 'indicator');
+        await mk('ems.budget.tariff.state', 'Tariff state', 'string', 'text');
+        await mk('ems.budget.tariff.currentPriceEurKwh', 'Current tariff price (€/kWh)', 'number', 'value');
+        await mk('ems.budget.tariff.negativeActive', 'Negative price active', 'boolean', 'indicator');
+        await mk('ems.budget.tariff.gridImportPreferred', 'Grid import preferred', 'boolean', 'indicator');
+        await mk('ems.budget.tariff.storageGridChargeAllowed', 'Storage grid charge allowed by tariff', 'boolean', 'indicator');
+        await mk('ems.budget.tariff.evcsGridChargeAllowed', 'EVCS grid charge allowed by tariff', 'boolean', 'indicator');
+        await mk('ems.budget.tariff.dischargeAllowed', 'Discharge allowed by tariff', 'boolean', 'indicator');
+        await mk('ems.budget.tariff.pvCurtailRecommended', 'PV curtailment recommended by tariff', 'boolean', 'indicator');
+        await mk('ems.budget.tariff.negativeMinPriceEurKwh', 'Minimum negative price in horizon (€/kWh)', 'number', 'value');
+        await mk('ems.budget.tariff.nextNegativeFrom', 'Next negative price window from (ISO)', 'string', 'text');
+        await mk('ems.budget.tariff.nextNegativeTo', 'Next negative price window to (ISO)', 'string', 'text');
+        await mk('ems.budget.tariff.status', 'Tariff gate status', 'string', 'text');
+        await mk('ems.budget.tariff.snapshotJson', 'Tariff gate snapshot (JSON)', 'string', 'json');
 
         // Per-consumer diagnostics for currently supported app families.
         for (const key of ['evcs', 'thermal', 'heatingRod', 'generic']) {
@@ -577,6 +601,25 @@ class CoreLimitsModule extends BaseModule {
         // provider JSON separately. It does not alter instantaneous PV budget here.
         const forecastGate = this._makeForecastGate(now);
 
+        // Gate E: tariff/negative-price gate. This is advisory for all apps and
+        // permission-like for modules that already consume tariff flags.
+        const tSrc = (coreSnapshot && coreSnapshot.tariff && typeof coreSnapshot.tariff === 'object') ? coreSnapshot.tariff : {};
+        const tariffGate = {
+            active: !!tSrc.active,
+            state: String(tSrc.state || ''),
+            currentPriceEurKwh: isFiniteNumber(tSrc.currentPriceEurKwh) ? Number(tSrc.currentPriceEurKwh) : null,
+            negativeActive: !!tSrc.negativeActive,
+            gridImportPreferred: !!tSrc.gridImportPreferred,
+            storageGridChargeAllowed: !!tSrc.storageGridChargeAllowed,
+            evcsGridChargeAllowed: !!tSrc.evcsGridChargeAllowed,
+            dischargeAllowed: tSrc.dischargeAllowed !== false,
+            pvCurtailRecommended: !!tSrc.pvCurtailRecommended,
+            negativeMinPriceEurKwh: isFiniteNumber(tSrc.negativeMinPriceEurKwh) ? Number(tSrc.negativeMinPriceEurKwh) : null,
+            nextNegativeFrom: String(tSrc.nextNegativeFrom || ''),
+            nextNegativeTo: String(tSrc.nextNegativeTo || ''),
+            status: String(tSrc.status || (tSrc.gridImportPreferred ? 'grid_import_preferred' : (tSrc.active ? 'active' : 'inactive'))),
+        };
+
         return {
             ts: now,
             active: true,
@@ -614,6 +657,7 @@ class CoreLimitsModule extends BaseModule {
                     dischargeW: roundW(storageDischargeW),
                 },
                 forecast: forecastGate,
+                tariff: tariffGate,
                 total: {
                     effectiveW: Number.isFinite(totalBudgetW) ? roundW(totalBudgetW) : null,
                     binding: bindings.join('+'),
@@ -708,6 +752,16 @@ class CoreLimitsModule extends BaseModule {
         const gridChargeAllowed = await readStateBool(this.adapter, 'tarif.netzLadenErlaubt', true);
         const dischargeAllowed = await readStateBool(this.adapter, 'tarif.entladenErlaubt', true);
 
+        const tariffActive = await readStateBool(this.adapter, 'tarif.aktiv', false);
+        const tariffState = await readStateString(this.adapter, 'tarif.state', '');
+        const tariffCurrentPrice = await readStateNumber(this.adapter, 'tarif.preisAktuellEurProKwh', null);
+        const tariffNegativeActive = await readStateBool(this.adapter, 'tarif.negativpreisAktiv', false);
+        const tariffGridImportPreferred = await readStateBool(this.adapter, 'tarif.netzbezugBevorzugt', tariffNegativeActive);
+        const tariffNegativeMinPrice = await readStateNumber(this.adapter, 'tarif.negativPreisMinEurProKwh', null);
+        const tariffNextNegativeFrom = await readStateString(this.adapter, 'tarif.naechstesNegativVon', '');
+        const tariffNextNegativeTo = await readStateString(this.adapter, 'tarif.naechstesNegativBis', '');
+        const tariffStatus = await readStateString(this.adapter, 'tarif.negativpreisStatus', '');
+
         const p14a = (this.adapter && this.adapter._para14a && typeof this.adapter._para14a === 'object') ? this.adapter._para14a : null;
 
         let para14aActive = false;
@@ -771,6 +825,18 @@ class CoreLimitsModule extends BaseModule {
                 budgetW: (typeof tariffBudgetW === 'number') ? tariffBudgetW : null,
                 gridChargeAllowed: !!gridChargeAllowed,
                 dischargeAllowed: !!dischargeAllowed,
+                active: !!tariffActive,
+                state: tariffState || '',
+                currentPriceEurKwh: isFiniteNumber(tariffCurrentPrice) ? Number(tariffCurrentPrice) : null,
+                negativeActive: !!tariffNegativeActive,
+                gridImportPreferred: !!tariffGridImportPreferred,
+                storageGridChargeAllowed: !!(tariffGridImportPreferred && gridChargeAllowed),
+                evcsGridChargeAllowed: !!(tariffGridImportPreferred && gridChargeAllowed),
+                pvCurtailRecommended: !!tariffGridImportPreferred,
+                negativeMinPriceEurKwh: isFiniteNumber(tariffNegativeMinPrice) ? Number(tariffNegativeMinPrice) : null,
+                nextNegativeFrom: tariffNextNegativeFrom || '',
+                nextNegativeTo: tariffNextNegativeTo || '',
+                status: tariffStatus || (tariffGridImportPreferred ? 'active_grid_import_preferred' : (tariffNegativeActive ? 'negative_detected' : 'inactive')),
             },
             para14a: {
                 active: !!para14aActive,
@@ -790,6 +856,7 @@ class CoreLimitsModule extends BaseModule {
             this.adapter._emsCaps = snapshot;
             this.adapter._emsBudget = budgetRuntime;
             this.adapter._emsForecastGate = budgetSnapshot && budgetSnapshot.gates ? budgetSnapshot.gates.forecast : null;
+            this.adapter._emsTariffGate = budgetSnapshot && budgetSnapshot.gates ? budgetSnapshot.gates.tariff : null;
         } catch {
             // ignore
         }
@@ -862,6 +929,22 @@ class CoreLimitsModule extends BaseModule {
             await this.adapter.setStateAsync('ems.budget.forecast.source', String(fg.source || ''), true);
             await this.adapter.setStateAsync('ems.budget.forecast.snapshotJson', JSON.stringify(fg), true);
 
+            const tg = (b.gates && b.gates.tariff) ? b.gates.tariff : {};
+            await this.adapter.setStateAsync('ems.budget.tariff.active', !!tg.active, true);
+            await this.adapter.setStateAsync('ems.budget.tariff.state', String(tg.state || ''), true);
+            await this.adapter.setStateAsync('ems.budget.tariff.currentPriceEurKwh', tg.currentPriceEurKwh === null || tg.currentPriceEurKwh === undefined ? null : Number(tg.currentPriceEurKwh), true);
+            await this.adapter.setStateAsync('ems.budget.tariff.negativeActive', !!tg.negativeActive, true);
+            await this.adapter.setStateAsync('ems.budget.tariff.gridImportPreferred', !!tg.gridImportPreferred, true);
+            await this.adapter.setStateAsync('ems.budget.tariff.storageGridChargeAllowed', !!tg.storageGridChargeAllowed, true);
+            await this.adapter.setStateAsync('ems.budget.tariff.evcsGridChargeAllowed', !!tg.evcsGridChargeAllowed, true);
+            await this.adapter.setStateAsync('ems.budget.tariff.dischargeAllowed', tg.dischargeAllowed !== false, true);
+            await this.adapter.setStateAsync('ems.budget.tariff.pvCurtailRecommended', !!tg.pvCurtailRecommended, true);
+            await this.adapter.setStateAsync('ems.budget.tariff.negativeMinPriceEurKwh', tg.negativeMinPriceEurKwh === null || tg.negativeMinPriceEurKwh === undefined ? null : Number(tg.negativeMinPriceEurKwh), true);
+            await this.adapter.setStateAsync('ems.budget.tariff.nextNegativeFrom', String(tg.nextNegativeFrom || ''), true);
+            await this.adapter.setStateAsync('ems.budget.tariff.nextNegativeTo', String(tg.nextNegativeTo || ''), true);
+            await this.adapter.setStateAsync('ems.budget.tariff.status', String(tg.status || ''), true);
+            await this.adapter.setStateAsync('ems.budget.tariff.snapshotJson', JSON.stringify(tg), true);
+
             for (const key of ['evcs', 'thermal', 'heatingRod']) {
                 const c = b.consumers[key] || {};
                 await this.adapter.setStateAsync(`ems.budget.consumers.${key}.usedW`, roundW(c.usedW), true);
@@ -882,6 +965,12 @@ class CoreLimitsModule extends BaseModule {
                     this.adapter.updateValue('ems.budget.forecast.avgNext1hW', roundW(b.gates.forecast.avgNext1hW), now);
                     this.adapter.updateValue('ems.budget.forecast.kwhNext6h', Number.isFinite(Number(b.gates.forecast.kwhNext6h)) ? Number(b.gates.forecast.kwhNext6h) : 0, now);
                     this.adapter.updateValue('ems.budget.forecast.usable', !!b.gates.forecast.usable, now);
+                }
+                if (b.gates && b.gates.tariff) {
+                    this.adapter.updateValue('ems.budget.tariff.negativeActive', !!b.gates.tariff.negativeActive, now);
+                    this.adapter.updateValue('ems.budget.tariff.gridImportPreferred', !!b.gates.tariff.gridImportPreferred, now);
+                    this.adapter.updateValue('ems.budget.tariff.currentPriceEurKwh', b.gates.tariff.currentPriceEurKwh, now);
+                    this.adapter.updateValue('ems.budget.tariff.status', String(b.gates.tariff.status || ''), now);
                 }
             }
         } catch {

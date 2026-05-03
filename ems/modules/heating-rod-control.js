@@ -775,6 +775,16 @@ class HeatingRodControlModule extends BaseModule {
                     pvBudgetSource = 'ems.budget.remainingPvW+ownAutoLoad';
                     pvBudgetFromCentral = true;
                 }
+
+                const tariffGate = snap.gates && snap.gates.tariff ? snap.gates.tariff : null;
+                const tariffImportPreferred = !!(tariffGate && tariffGate.gridImportPreferred);
+                if (tariffImportPreferred && Number.isFinite(remTotal) && remTotal >= 0) {
+                    // Gate E: Bei Negativpreis darf der Heizstab als aktivierter flexibler
+                    // Verbraucher Netzbudget nutzen. Gate A/A2/Peak bleiben über remTotal aktiv.
+                    pvBudgetGateW = Math.max(0, remTotal + currentW - gateCfg.budgetSafetyReserveW);
+                    pvBudgetSource = 'ems.budget.tariffNegative.remainingTotalW+ownAutoLoad';
+                    pvBudgetFromCentral = true;
+                }
             }
         } catch (_e) {
             // legacy NVP/CM fallback remains active
@@ -804,6 +814,7 @@ class HeatingRodControlModule extends BaseModule {
             budgetGateEffectiveW: Math.max(0, effectiveGateW),
             budgetGateSource: source,
             pvBudgetFromCentral: !!pvBudgetFromCentral,
+            tariffGridImportPreferred: String(pvBudgetSource || '').includes('tariffNegative'),
             cmActive,
             cmStaleMeter: !!cmStaleMeter,
             cmStaleBudget: !!cmStaleBudget,
@@ -840,7 +851,8 @@ class HeatingRodControlModule extends BaseModule {
     _updateBudgetGateProtection(pvBase, now) {
         const cfg = (pvBase && pvBase.gateCfg) ? pvBase.gateCfg : this._getBudgetGateCfg();
         const st = this._budgetProtect || { importSinceMs: 0, dischargeSinceMs: 0 };
-        const importActive = !!(pvBase && pvBase.gridKnown && num(pvBase.importW, 0) > cfg.maxGridImportW);
+        const tariffImportPreferred = !!(pvBase && pvBase.tariffGridImportPreferred);
+        const importActive = !!(!tariffImportPreferred && pvBase && pvBase.gridKnown && num(pvBase.importW, 0) > cfg.maxGridImportW);
         const dischargeActive = !!(pvBase && num(pvBase.storageDischargeW, 0) > cfg.storageDischargeToleranceW);
         const hardImport = !!(pvBase && pvBase.gridKnown && num(pvBase.importW, 0) > cfg.hardGridImportW);
         const hardDischarge = !!(pvBase && num(pvBase.storageDischargeW, 0) > cfg.hardStorageDischargeW);
@@ -2072,7 +2084,7 @@ class HeatingRodControlModule extends BaseModule {
             // Global PV-Auto minimum: this is now only a start/step-up gate.
             // It must not be a hard OFF, because small cloud/PV transients would otherwise
             // kill a stable stage and external KNX/manual switching would feel broken.
-            const pvMinBlocksStepUp = !!(pvAutomationActive && !pvAutomationAllowedByMin);
+            const pvMinBlocksStepUp = !!(pvAutomationActive && !pvBase.tariffGridImportPreferred && !pvAutomationAllowedByMin);
 
             if (d.wiredStages < 1) {
                 const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
@@ -2179,6 +2191,7 @@ class HeatingRodControlModule extends BaseModule {
             const rt = this.adapter && this.adapter._emsBudget;
             if (rt && typeof rt.reserve === 'function') {
                 const used = Math.max(0, Math.round(budgetUsedW || 0));
+                const tariffImportPreferred = !!(pvBase && pvBase.tariffGridImportPreferred);
                 rt.reserve({
                     key: 'heatingRod',
                     app: 'heatingRodControl',
@@ -2186,10 +2199,10 @@ class HeatingRodControlModule extends BaseModule {
                     priority: 300,
                     requestedW: used,
                     reserveW: used,
-                    pvReserveW: used,
+                    pvReserveW: tariffImportPreferred ? 0 : used,
                     actualW: Math.max(0, Math.round(currentHeatingRodW || appliedTotalW || used || 0)),
-                    pvOnly: true,
-                    mode: 'pvAuto',
+                    pvOnly: !tariffImportPreferred,
+                    mode: tariffImportPreferred ? 'tariffNegative' : 'pvAuto',
                 });
             }
         } catch (_e) {
@@ -2266,6 +2279,7 @@ class HeatingRodControlModule extends BaseModule {
                 effectiveW: Math.round(num(pvBase.budgetGateEffectiveW, 0)),
                 source: pvBase.budgetGateSource,
                 pvBudgetFromCentral: !!pvBase.pvBudgetFromCentral,
+                tariffGridImportPreferred: !!pvBase.tariffGridImportPreferred,
                 cmActive: pvBase.cmActive,
                 cmStaleMeter: !!pvBase.cmStaleMeter,
                 cmStaleBudget: !!pvBase.cmStaleBudget,

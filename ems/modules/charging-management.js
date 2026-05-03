@@ -2193,6 +2193,27 @@ class ChargingManagementModule extends BaseModule {
             // ignore
         }
 
+        // Gate E – Negativpreis / Netzbezug bevorzugt:
+        // Wenn der dynamische effektive Tarif negativ ist, darf das Lade-/Lastmanagement
+        // Netzladen freigeben und PV-only nur für Auto/Global-Modi aufheben. Harte Limits
+        // (Netzanschluss, Phasen, §14a, Peak-Shaving) bleiben weiter aktiv.
+        let tariffNegativeActive = false;
+        let tariffGridImportPreferred = false;
+        try {
+            const stNeg = await this._getStateCached('tarif.negativpreisAktiv');
+            const stPref = await this._getStateCached('tarif.netzbezugBevorzugt');
+            tariffNegativeActive = stNeg ? !!stNeg.val : false;
+            tariffGridImportPreferred = stPref ? !!stPref.val : tariffNegativeActive;
+        } catch {
+            tariffNegativeActive = false;
+            tariffGridImportPreferred = false;
+        }
+
+        if (tariffGridImportPreferred) {
+            gridChargeAllowedRaw = true;
+            dischargeAllowedRaw = false;
+        }
+
         // Debounce gegen Flattern:
         // - Sperren (false) wirken sofort (Safety-first)
         // - Freigaben (true) erst nach stabiler True-Phase (hold)
@@ -2243,7 +2264,11 @@ class ChargingManagementModule extends BaseModule {
         }
 
         // Global default PV-only behaviour (same as before)
-        const pvSurplusOnlyCfg = cfg.pvSurplusOnly === true || mode === 'pvSurplus';
+        const pvSurplusOnlyCfgBase = cfg.pvSurplusOnly === true || mode === 'pvSurplus';
+        // Bei Negativpreis wird Netzbezug wirtschaftlich bevorzugt. Deshalb darf die
+        // globale PV-only-Vorgabe im Automatikpfad temporär aufgehoben werden. Explizite
+        // Wallbox-Modi wie "PV" bleiben User-Wunsch und werden weiter respektiert.
+        const pvSurplusOnlyCfg = tariffGridImportPreferred ? false : pvSurplusOnlyCfgBase;
         const forcePvSurplusOnly = !gridChargeAllowed;
 
         // Determine effective per-wallbox mode (runtime override via VIS)
@@ -2339,7 +2364,8 @@ class ChargingManagementModule extends BaseModule {
 
                         let allowGrid = true;
                         if (active) {
-                            if (state === 'teuer') allowGrid = false;
+                            if (p < -1e-9) allowGrid = true;
+                            else if (state === 'teuer') allowGrid = false;
                             else if (state === 'guenstig') allowGrid = !!allowEvcsCheap;
                             else allowGrid = true;
                         }
@@ -2559,13 +2585,15 @@ class ChargingManagementModule extends BaseModule {
                 // (Hard limits like §14a / Grid caps / Phase caps still apply later in the pipeline.)
                 eff = 'boost';
             } else if (override === 'pv') {
-                eff = 'pv';
+                // Gate E: Bei negativem dynamischem Tarif wird Netzbezug bewusst bevorzugt.
+                // Dann heben wir auch den PV-Modus temporär auf, damit die Ladepunkte
+                // wirtschaftlich Netzstrom abnehmen können. Harte Netz-/Phasen-/§14a-
+                // Grenzen bleiben weiter aktiv.
+                eff = tariffGridImportPreferred ? 'normal' : 'pv';
             } else if (override === 'minpv') {
-                // "Min+PV" is an explicit user mode:
-                // - always keep the minimum charging power active (even if PV=0)
-                // - additional power beyond the technical minimum is still limited by PV surplus
-                // Therefore we do NOT force it to pure PV mode, even when tariff policy blocks grid-charging.
-                eff = 'minpv';
+                // "Min+PV" hält normalerweise die Mindestladung und begrenzt Mehrleistung auf PV.
+                // Bei Negativpreis wird daraus temporär ein normaler netzfreigegebener Modus.
+                eff = tariffGridImportPreferred ? 'normal' : 'minpv';
             } else {
                 // auto: follow global defaults
                 eff = (forcePvForW || pvSurplusOnlyCfg) ? 'pv' : 'normal';
@@ -3008,6 +3036,9 @@ if (components.length) {
                 engine: true,
                 mode,
                 pvSurplusOnlyCfg,
+                pvSurplusOnlyCfgBase,
+                tariffNegativeActive,
+                tariffGridImportPreferred,
                 forcePvSurplusOnly,
                 gridChargeAllowed,
                 dischargeAllowed,

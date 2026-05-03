@@ -476,14 +476,20 @@ const mk = async (id, name, type, role, unit = undefined) => {
             if (snap && age <= staleMs) {
                 const pvTotalW = snap.gates && snap.gates.pv ? Number(snap.gates.pv.effectiveW) : 0;
                 const remainingPvW = Number(snap.remainingPvW);
+                const tariffGate = snap.gates && snap.gates.tariff ? snap.gates.tariff : null;
+                const tariffImportPreferred = !!(tariffGate && tariffGate.gridImportPreferred);
+                const remainingTotalW = Number(snap.remainingTotalW);
                 if (Number.isFinite(remainingPvW) && remainingPvW >= 0) {
                     const evcs = snap.consumers && snap.consumers.evcs ? snap.consumers.evcs : null;
                     const evcsUsedW = evcs && Number.isFinite(Number(evcs.reserveW)) ? Math.max(0, Number(evcs.reserveW)) : 0;
+                    const availableByTariffW = (tariffImportPreferred && Number.isFinite(remainingTotalW) && remainingTotalW >= 0)
+                        ? Math.max(0, remainingTotalW)
+                        : null;
                     return {
                         pvCapW: Math.max(0, Number.isFinite(pvTotalW) ? pvTotalW : remainingPvW),
                         evcsUsedW,
-                        availableW: Math.max(0, remainingPvW),
-                        source: 'ems.budget',
+                        availableW: availableByTariffW !== null ? availableByTariffW : Math.max(0, remainingPvW),
+                        source: availableByTariffW !== null ? 'ems.budget.tariffNegative' : 'ems.budget',
                     };
                 }
             }
@@ -902,6 +908,7 @@ const mk = async (id, name, type, role, unit = undefined) => {
             const rt = this.adapter && this.adapter._emsBudget;
             if (rt && typeof rt.reserve === 'function') {
                 const used = Math.max(0, Math.round(budgetUsedW || 0));
+                const tariffImportPreferred = String(pv.source || '').includes('tariffNegative');
                 rt.reserve({
                     key: 'thermal',
                     app: 'thermalControl',
@@ -909,9 +916,9 @@ const mk = async (id, name, type, role, unit = undefined) => {
                     priority: 200,
                     requestedW: used,
                     reserveW: used,
-                    pvReserveW: used,
-                    pvOnly: true,
-                    mode: 'pvAuto',
+                    pvReserveW: tariffImportPreferred ? 0 : used,
+                    pvOnly: !tariffImportPreferred,
+                    mode: tariffImportPreferred ? 'tariffNegative' : 'pvAuto',
                 });
             }
         } catch (_e) {

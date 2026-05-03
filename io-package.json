@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.13",
+    "version": "0.7.14",
     "news": {
+      "0.7.14": {
+        "en": "Added Gate E for negative dynamic electricity prices. When the effective tariff/forecast price is below zero, grid import is preferred: tariff flags allow storage grid charging and EVCS grid charging, block tariff-based storage discharge, publish ems.budget.tariff.*, and recommend PV curtailment. Hard grid, phase, §14a and peak-shaving limits remain active. Heating rod and thermal budget followers can use total budget in negative-price windows without consuming PV budget; MultiUse and peak-shaving behavior remains unchanged.",
+        "de": "Gate E für negative dynamische Strompreise ergänzt. Wenn der effektive Tarif-/Forecastpreis unter 0 liegt, wird Netzbezug bevorzugt: Tarif-Flags geben Speicher-Netzladen und EVCS-Netzladen frei, sperren tarifbasierte Speicherentladung, veröffentlichen ems.budget.tariff.* und empfehlen PV-Abregelung. Harte Netz-, Phasen-, §14a- und Peakshaving-Grenzen bleiben aktiv. Heizstab- und Thermik-Budgetfolger können in Negativpreisfenstern Gesamtbudget nutzen, ohne PV-Budget zu verbrauchen; MultiUse und Peakshaving bleiben unverändert."
+      },
       "0.7.13": {
         "en": "Heating rod PV-auto now treats fresh central EMS remaining PV budget as already priority-adjusted, so thermal budget is not subtracted twice. This fixes blocked auto-start and missing stage-up when the central Gates already deducted higher-priority consumers.",
         "de": "Heizstab-PV-Auto nutzt frisches zentrales EMS-Rest-PV-Budget jetzt als bereits prioritätsbereinigt. Thermik wird dabei nicht mehr doppelt abgezogen. Das behebt blockierten Auto-Start und fehlendes Hochstufen, wenn die zentralen Gates Verbraucher höherer Priorität bereits abgezogen haben."
@@ -1871,8 +1875,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.13",
+  "version": "0.7.14",
   "news": {
+    "0.7.14": {
+      "en": "Gate E - Tariff/negative price added. Negative dynamic tariff prices now prefer grid import, allow storage and EVCS grid charging, block storage discharge from tariff logic, expose ems.budget.tariff.* diagnostics and let PV curtailment/zero-export logic bias toward import while hard safety limits stay active. Thermal and heating-rod budget followers can use total budget in negative-price windows. MultiUse and peak-shaving unchanged. Web cache bumped.",
+      "de": "Gate E - Tarif/Negativpreis ergänzt. Negative dynamische Tarifpreise bevorzugen jetzt Netzbezug, erlauben Speicher- und EVCS-Netzladen, sperren tarifbasierte Speicherentladung, stellen ems.budget.tariff.* als Diagnose bereit und lassen PV-Abregelung/0-Einspeisung in Richtung Import-Bias arbeiten, während harte Schutzgrenzen aktiv bleiben. Thermik- und Heizstab-Budgetfolger können in Negativpreisfenstern Gesamtbudget nutzen. MultiUse und Peakshaving unverändert. Webcache erhöht."
+    },
     "0.7.13": {
       "en": "Heating rod PV-Auto now treats fresh central ems.budget.remainingPvW as already prioritized, so higher-priority thermal reservations are no longer subtracted a second time. This fixes PV-Auto start/step-up blocking where the rod only started after manual stage 1 and then stayed there. Legacy fallback budgets still keep the local thermal deduction. Web cache version bumped.",
       "de": "Heizstab PV-Auto nutzt frisches zentrales ems.budget.remainingPvW jetzt als bereits priorisiertes Restbudget, sodass Thermik-Reservierungen mit höherer Priorität nicht noch einmal lokal abgezogen werden. Das behebt Start-/Hochschaltblockaden, bei denen der Heizstab erst nach manueller Stufe 1 lief und dann dort hängen blieb. Legacy-Fallback-Budgets behalten den lokalen Thermik-Abzug. Webcache erhöht."

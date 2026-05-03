@@ -7536,6 +7536,20 @@ function _collectFlowPowerDpIsWFromUI() {
     return n.toFixed(n >= 10 ? 1 : 2) + ' kWh';
   }
 
+  function _fmtEurKwh(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return '—';
+    return n.toFixed(4) + ' €/kWh';
+  }
+
+  function _fmtIsoShort(v) {
+    const s = String(v || '').trim();
+    if (!s) return '—';
+    const d = new Date(s);
+    if (!Number.isFinite(d.getTime())) return s;
+    return d.toLocaleString();
+  }
+
   function _fmtPct(v) {
     const n = Number(v);
     if (!Number.isFinite(n)) return '—';
@@ -7758,6 +7772,23 @@ function _collectFlowPowerDpIsWFromUI() {
         { label: 'Energie nächste 24h', value: _fmtKwh(n(ctrl.emsForecastKwhNext24h)) },
         { label: 'Status', value: String(ctrl.emsForecastStatus || '') },
       ], fcKind));
+
+      const tariffNeg = b(ctrl.emsTariffNegativeActive);
+      const tariffPref = b(ctrl.emsTariffGridImportPreferred);
+      const tariffKind = tariffPref ? 'ok' : (b(ctrl.emsTariffActive) ? '' : 'warn');
+      els.chargingBudget.appendChild(mkCard('Gate E – Tarif / Negativpreis', [
+        { label: 'Tarif aktiv', value: _fmtBool(b(ctrl.emsTariffActive), 'JA', 'NEIN') },
+        { label: 'Status', value: String(ctrl.emsTariffStatus || ctrl.emsTariffState || '') },
+        { label: 'Aktueller Preis', value: _fmtEurKwh(n(ctrl.emsTariffCurrentPriceEurKwh)) },
+        { label: 'Negativpreis aktiv', value: _fmtBool(tariffNeg, 'JA', 'NEIN') },
+        { label: 'Netzbezug bevorzugt', value: _fmtBool(tariffPref, 'JA', 'NEIN') },
+        { label: 'Speicher Netzladen', value: _fmtBool(b(ctrl.emsTariffStorageGridChargeAllowed), 'JA', 'NEIN') },
+        { label: 'EVCS Netzladen', value: _fmtBool(b(ctrl.emsTariffEvcsGridChargeAllowed), 'JA', 'NEIN') },
+        { label: 'Speicher Entladen', value: _fmtBool(b(ctrl.emsTariffDischargeAllowed), 'JA', 'NEIN') },
+        { label: 'PV-Abregelung empfohlen', value: _fmtBool(b(ctrl.emsTariffPvCurtailRecommended), 'JA', 'NEIN') },
+        { label: 'Min. negativ im Forecast', value: _fmtEurKwh(n(ctrl.emsTariffNegativeMinPriceEurKwh)) },
+        { label: 'Nächstes Negativfenster', value: `${_fmtIsoShort(ctrl.emsTariffNextNegativeFrom)} → ${_fmtIsoShort(ctrl.emsTariffNextNegativeTo)}` },
+      ], tariffKind));
 
       try {
         const consumers = JSON.parse(String(ctrl.emsBudgetConsumersJson || '[]'));

@@ -58,6 +58,17 @@ class GridConstraintsModule extends BaseModule {
         return Math.min(Math.max(n, minV), maxV);
     }
 
+    async _isTariffGridImportPreferred() {
+        try {
+            const tv = (this.adapter && this.adapter._tarifVis) ? this.adapter._tarifVis : null;
+            if (tv && (tv.gridImportPreferred || tv.netzbezugBevorzugt || tv.negativeActive)) return true;
+            const st = await this.adapter.getStateAsync('tarif.netzbezugBevorzugt');
+            return !!(st && st.val);
+        } catch {
+            return false;
+        }
+    }
+
     async init() {
         if (!this._isEnabled()) return;
 
@@ -263,7 +274,10 @@ class GridConstraintsModule extends BaseModule {
         const enabled = !!cfg.zeroExportEnabled;
         const inv = this._normalizeInvList(cfg.pvCurtailInvertersZero);
 
-        const biasW = Math.max(0, this._num(cfg.zeroExportBiasW, 80));
+        const tariffGridImportPreferred = await this._isTariffGridImportPreferred();
+        const baseBiasW = Math.max(0, this._num(cfg.zeroExportBiasW, 80));
+        const negativeBiasW = tariffGridImportPreferred ? Math.max(0, this._num(cfg.zeroExportNegativePriceImportBiasW, 1000)) : 0;
+        const biasW = tariffGridImportPreferred ? Math.max(baseBiasW, negativeBiasW) : baseBiasW;
         const deadbandW = Math.max(0, this._num(cfg.zeroExportDeadbandW, 50));
 
         await this.adapter.setStateAsync('gridConstraints.zeroExport.enabled', enabled, true);
@@ -356,7 +370,7 @@ class GridConstraintsModule extends BaseModule {
             applied = applied || (ok1 === true || ok1 === null) || (ok2 === true || ok2 === null) || (ok3 === true || ok3 === null);
         }
 
-        await this.adapter.setStateAsync('gridConstraints.zeroExport.action', fastTrip ? 'group_fast' : 'group', true);
+        await this.adapter.setStateAsync('gridConstraints.zeroExport.action', tariffGridImportPreferred ? (fastTrip ? 'tariff_negative_group_fast' : 'tariff_negative_group') : (fastTrip ? 'group_fast' : 'group'), true);
         await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', applied, true);
         await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointW', Math.round(next), true);
         await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointPct', Math.round(pct * 10) / 10, true);
@@ -461,7 +475,10 @@ class GridConstraintsModule extends BaseModule {
     async _tickZeroExport(nowMs, gridW, cfg, gridStale) {
         const enabled = !!cfg.zeroExportEnabled;
 
-        const biasW = Math.max(0, this._num(cfg.zeroExportBiasW, 80));
+        const tariffGridImportPreferred = await this._isTariffGridImportPreferred();
+        const baseBiasW = Math.max(0, this._num(cfg.zeroExportBiasW, 80));
+        const negativeBiasW = tariffGridImportPreferred ? Math.max(0, this._num(cfg.zeroExportNegativePriceImportBiasW, 1000)) : 0;
+        const biasW = tariffGridImportPreferred ? Math.max(baseBiasW, negativeBiasW) : baseBiasW;
         const deadbandW = Math.max(0, this._num(cfg.zeroExportDeadbandW, 50));
 
         await this.adapter.setStateAsync('gridConstraints.zeroExport.enabled', enabled, true);
@@ -542,7 +559,7 @@ class GridConstraintsModule extends BaseModule {
 
             const ok = await this.dp.writeNumber('pv.limitW', next, false);
 
-            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', fastTrip ? 'pvLimitW_fast' : 'pvLimitW', true);
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', tariffGridImportPreferred ? (fastTrip ? 'tariff_negative_pvLimitW_fast' : 'tariff_negative_pvLimitW') : (fastTrip ? 'pvLimitW_fast' : 'pvLimitW'), true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', ok === true || ok === null, true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointW', Math.round(next), true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointPct', 0, true);
@@ -579,7 +596,7 @@ class GridConstraintsModule extends BaseModule {
 
             const ok = await this.dp.writeNumber('pv.limitPct', next, false);
 
-            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', fastTrip ? 'pvLimitPct_fast' : 'pvLimitPct', true);
+            await this.adapter.setStateAsync('gridConstraints.zeroExport.action', tariffGridImportPreferred ? (fastTrip ? 'tariff_negative_pvLimitPct_fast' : 'tariff_negative_pvLimitPct') : (fastTrip ? 'pvLimitPct_fast' : 'pvLimitPct'), true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.applied', ok === true || ok === null, true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointW', 0, true);
             await this.adapter.setStateAsync('gridConstraints.pvCurtail.setpointPct', Math.round(next * 10) / 10, true);

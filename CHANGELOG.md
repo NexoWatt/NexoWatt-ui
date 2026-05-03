@@ -1,3 +1,14 @@
+# 0.7.14
+
+- Gate E – Tarif / Negativpreis ergänzt: negative dynamische Preise setzen zentral `ems.budget.tariff.*` und bevorzugen Netzbezug.
+- Bei Negativpreis werden Speicher-Netzladen und EVCS-Netzladen freigegeben; tarifbasierte Speicherentladung wird gesperrt.
+- Zentrale Budgetkarte zeigt Gate E mit Preis, Negativstatus, Netzbezug bevorzugt, Speicher-/EVCS-Freigabe und PV-Abregel-Empfehlung.
+- 0-Einspeisung/PV-Abregelung erhält bei Negativpreis einen Import-Bias, damit PV – sofern technisch steuerbar – zugunsten wirtschaftlichem Netzbezug zurückgenommen werden kann.
+- Heizstab und Thermik können in Negativpreisfenstern Gesamtbudget statt reinem PV-Restbudget nutzen; ihre Budget-Reservierung zählt dann nicht als PV-Verbrauch.
+- Harte Grenzen bleiben aktiv: Netzanschluss, Phasenlimits, §14a, Peakshaving und Sicherheitslimits werden nicht überstimmt.
+- MultiUse und Peakshaving bleiben in ihrer Grundfunktion unverändert.
+- Webcache auf `nexowatt-cache-v184` erhöht.
+
 # 0.7.13
 
 - Heizstab-PV-Auto korrigiert: Bei frischem zentralem `ems.budget.remainingPvW` wird Thermik nicht mehr zusätzlich abgezogen, da die zentrale Budget-Schicht Verbraucher nach Priorität bereits berücksichtigt.

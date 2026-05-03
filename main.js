@@ -10873,6 +10873,21 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           emsForecastKwhNext24h: await getOwn('ems.budget.forecast.kwhNext24h'),
           emsForecastStatus: await getOwn('ems.budget.forecast.status'),
           emsForecastSource: await getOwn('ems.budget.forecast.source'),
+
+          // Gate E - Tarif / Negativpreis
+          emsTariffActive: await getOwn('ems.budget.tariff.active'),
+          emsTariffState: await getOwn('ems.budget.tariff.state'),
+          emsTariffCurrentPriceEurKwh: await getOwn('ems.budget.tariff.currentPriceEurKwh'),
+          emsTariffNegativeActive: await getOwn('ems.budget.tariff.negativeActive'),
+          emsTariffGridImportPreferred: await getOwn('ems.budget.tariff.gridImportPreferred'),
+          emsTariffStorageGridChargeAllowed: await getOwn('ems.budget.tariff.storageGridChargeAllowed'),
+          emsTariffEvcsGridChargeAllowed: await getOwn('ems.budget.tariff.evcsGridChargeAllowed'),
+          emsTariffDischargeAllowed: await getOwn('ems.budget.tariff.dischargeAllowed'),
+          emsTariffPvCurtailRecommended: await getOwn('ems.budget.tariff.pvCurtailRecommended'),
+          emsTariffNegativeMinPriceEurKwh: await getOwn('ems.budget.tariff.negativeMinPriceEurKwh'),
+          emsTariffNextNegativeFrom: await getOwn('ems.budget.tariff.nextNegativeFrom'),
+          emsTariffNextNegativeTo: await getOwn('ems.budget.tariff.nextNegativeTo'),
+          emsTariffStatus: await getOwn('ems.budget.tariff.status'),
         };
 
         const summary = {
