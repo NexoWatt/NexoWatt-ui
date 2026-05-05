@@ -1,3 +1,10 @@
+# 0.7.17
+
+- Energiefluss-Monitor nachgeprüft und robuster gemacht: optionale Verbraucher werden jetzt kollisionsarm rechts verteilt und halten Abstand zu PV, EVCS/Ladestation, Batterie, Gebäude und untereinander.
+- Bei vielen optionalen Verbrauchern werden die Zusatzkreise stärker skaliert, damit sie responsiv in der Kachel bleiben.
+- Reine UI-/VIS-Anpassung; keine EMS-Regellogik geändert.
+- Webcache auf `nexowatt-cache-v187` erhöht.
+
 # 0.7.15
 
 - App-Center/Budget-&-Gates-Diagnose sortiert: zentrale Übersicht zuerst, danach Gate A (Netz), Gate A Phasen, Gate A2 (§14a), Gate B (PV), Gate C (Speicher), Gate D (PV-Forecast) und Gate E (Tarif/Negativpreis).

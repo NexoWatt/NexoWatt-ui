@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.15",
+    "version": "0.7.17",
     "news": {
+      "0.7.17": {
+        "en": "Energy-flow monitor layout was rechecked and made more robust: optional consumers are placed with collision avoidance and stronger scaling at high density so they keep distance from PV, EVCS, battery, building and each other. UI/VIS only; no EMS regulation logic changed.",
+        "de": "Energiefluss-Monitor nachgeprüft und robuster gemacht: optionale Verbraucher werden mit Kollisionsvermeidung platziert und bei hoher Dichte stärker skaliert, damit sie Abstand zu PV, EVCS/Ladestation, Batterie, Gebäude und untereinander halten. Nur UI/VIS; keine EMS-Regellogik geändert."
+      },
       "0.7.15": {
         "en": "Budget & Gates diagnostics are now ordered consistently: central overview first, then Gate A (grid), Gate A phases, Gate A2 (§14a), Gate B (PV), Gate C (storage), Gate D (PV forecast) and Gate E (tariff/negative price). This is a UI/diagnostics cleanup only; no EMS regulation logic was changed.",
         "de": "Budget-&-Gates-Diagnose neu sortiert: zuerst die zentrale Übersicht, danach Gate A (Netz), Gate A Phasen, Gate A2 (§14a), Gate B (PV), Gate C (Speicher), Gate D (PV-Forecast) und Gate E (Tarif/Negativpreis). Reine UI-/Diagnose-Aufräumung; keine EMS-Regellogik geändert."
@@ -1879,8 +1883,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.15",
+  "version": "0.7.17",
   "news": {
+    "0.7.17": {
+      "en": "Energy-flow monitor layout was rechecked and made more robust: optional consumers are placed with collision avoidance and stronger scaling at high density so they keep distance from PV, EVCS, battery, building and each other. UI/VIS only; no EMS regulation logic changed.",
+      "de": "Energiefluss-Monitor nachgeprüft und robuster gemacht: optionale Verbraucher werden mit Kollisionsvermeidung platziert und bei hoher Dichte stärker skaliert, damit sie Abstand zu PV, EVCS/Ladestation, Batterie, Gebäude und untereinander halten. Nur UI/VIS; keine EMS-Regellogik geändert."
+    },
     "0.7.15": {
       "en": "Budget & Gates diagnostics sorted into Gate A/A2/B/C/D/E order. UI cleanup only; no regulation logic changed.",
       "de": "Budget-&-Gates-Diagnose in Gate-A/A2/B/C/D/E-Reihenfolge sortiert. Nur UI-Aufräumung; keine Regellogik geändert."
