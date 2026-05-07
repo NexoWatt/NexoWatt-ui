@@ -1,3 +1,36 @@
+# 0.7.21
+
+- Budget-&-Gates-Diagnose stabilisiert: Die Kachel „Prioritäten / Reservierungen“ bleibt dauerhaft sichtbar und verschwindet nicht mehr bei 0-W-Reservierungen.
+- Wenn keine aktive Reservierung vorhanden ist, wird ein ruhiger Platzhalter „Aktive Reservierungen: keine“ angezeigt.
+- 0-W-Geisterzeilen werden ausgeblendet; echte Verbraucher/Reservierungen zeigen weiterhin Ist-, Reservierungs- und PV-Leistung.
+- Reine UI-/Diagnose-Korrektur; keine EMS-Regellogik geändert.
+- Webcache auf `nexowatt-cache-v190` erhöht.
+
+# 0.7.20
+
+- Heizstab-PV-Auto Akkuschutz korrigiert: Speicherfarm-0-Werte können echte Speicherentladung aus den Basis-Aliasen nicht mehr verdecken. Dadurch erkennt Gate C Akku-Entladung wieder sauber.
+- Harte Speicher-/Netzgrenzen wirken dadurch wieder zuverlässig: bei harter Akku-Entladung wird die PV-Auto-Heizstableistung sofort reduziert/abgeworfen.
+- Zentrales Restbudget wird im Heizstab zusätzlich gegen das physische NVP-/Speicher-PV-Cap geprüft. Eine alte eigene Heizstab-Reservierung kann damit nicht mehr als verfügbarer PV-Überschuss gelten.
+- Gate D/PV-Forecast wird als Step-up-Plausibilität berücksichtigt: neue höhere Stufen werden nur freigegeben, wenn Live-PV/Forecast die Zielstufe plausibel tragen können.
+- EVCS-/Lademanagement-Priorität bleibt unverändert; Ladepunkte haben weiterhin Vorrang vor Thermik/Heizstab.
+- Webcache auf `nexowatt-cache-v189` erhöht.
+
+# 0.7.19
+
+- Publish-Sicherheits-Hotfix: `package.json` bereinigt und `publish:check`/`prepublishOnly` ergänzt. Der Check prüft vor `npm publish`, ob `package.json` und `io-package.json` gültiges JSON sind und ob ungelöste Git-Konfliktmarker (`<<<<<<<`, `=======`, `>>>>>>>`) in Projektdateien stehen.
+- npm-Paketdateiliste bereinigt: `src-admin-tab`-Quellordner wird nicht mehr in das npm-Paket aufgenommen; die gebauten Admin-/VIS-Dateien bleiben enthalten.
+- Keine EMS-Regellogik, keine Gates, keine Speicher-/EVCS-/Heizstab-/Tarif-/VIS-Logik geändert.
+- Webcache auf `nexowatt-cache-v189` erhöht.
+
+# 0.7.18
+
+- Heizstab-PV-Auto-Hochstufen korrigiert: stale/verzögerte Stage-Read-DPs setzen das EMS-eigene Ziel nicht mehr bei jedem Tick zurück auf die beobachtete niedrigere Stufe.
+- Stage-Feedback nutzt nun frische Read-DPs bevorzugt, fällt bei stale Read-DPs aber auf den Write-/State-DP zurück. Dadurch blockieren alte KNX/OpenKNX-Rückmeldungen das Hochfahren nicht mehr.
+- EMS-eigene PV-Auto-Stufen reservieren nach dem Schaltbefehl sofort die kommandierte Zielleistung im zentralen Budget, auch wenn der Leistungsmesser noch verzögert nur die alte Stufe zeigt.
+- Behebt Fälle, in denen bei mehreren kW PV-/NVP-Überschuss nur Stufe 1 aktiv blieb und nicht auf Stufe 2/3/4 weitergeschaltet wurde.
+- Keine Änderungen an Speicherregelung, Lade-/Lastmanagement, Tariflogik, Peakshaving, MultiUse oder Gate-Berechnung.
+- Webcache auf `nexowatt-cache-v188` erhöht.
+
 # 0.7.17
 
 - Energiefluss-Monitor nachgeprüft und robuster gemacht: optionale Verbraucher werden jetzt kollisionsarm rechts verteilt und halten Abstand zu PV, EVCS/Ladestation, Batterie, Gebäude und untereinander.

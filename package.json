@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.7.17",
+  "version": "0.7.21",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "Proprietary License (NPL) v1.0",
@@ -17,7 +17,9 @@
     "githooks:install": "node scripts/install-githooks.js",
     "admin:install": "npm --prefix src-admin-tab install",
     "admin:build": "npm --prefix src-admin-tab run build",
-    "build": "npm run admin:build"
+    "build": "npm run admin:build",
+    "publish:check": "node scripts/verify-publish.js",
+    "prepublishOnly": "node scripts/verify-publish.js"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.0.0",
@@ -43,7 +45,6 @@
   "files": [
     "admin/**/*",
     "www/**/*",
-    "src-admin-tab/**/*",
     "main.js",
     "io-package.json",
     "README.md",
