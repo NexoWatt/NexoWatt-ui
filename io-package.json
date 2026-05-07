@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.18",
+    "version": "0.7.19",
     "news": {
+      "0.7.19": {
+        "en": "Publish safety hotfix: package metadata is cleaned and a prepublish verification script checks JSON validity and unresolved Git conflict markers before npm publish. NPM package file list no longer includes src-admin-tab source files. No EMS runtime or UI logic changed.",
+        "de": "Publish-Sicherheits-Hotfix: Paket-Metadaten bereinigt und ein Prepublish-Check prüft JSON-Gültigkeit sowie ungelöste Git-Konfliktmarker vor npm publish. Die npm-Paketdateiliste enthält die src-admin-tab-Quelldateien nicht mehr. Keine EMS-Runtime- oder UI-Logik geändert."
+      },
       "0.7.18": {
         "en": "Heating rod PV-Auto step-up fixed: stale/lagging stage feedback no longer resets the EMS-owned target back to the observed lower stage, and commanded PV-Auto target power is reserved immediately so the central Gates reflect the intended stage-up. This addresses cases where stage 1 stayed active despite several kW of PV/NVP surplus. No changes to storage, EVCS, tariff, peak-shaving or MultiUse logic.",
         "de": "Heizstab-PV-Auto-Hochstufen korrigiert: stale/verzögerte Stufen-Rückmeldungen setzen das EMS-eigene Ziel nicht mehr bei jedem Tick auf die beobachtete niedrigere Stufe zurück. Außerdem wird die kommandierte PV-Auto-Zielleistung sofort reserviert, damit die zentralen Gates das beabsichtigte Hochstufen abbilden. Behebt Fälle, in denen trotz mehrerer kW PV-/NVP-Überschuss nur Stufe 1 aktiv blieb. Keine Änderungen an Speicher, EVCS, Tarif, Peakshaving oder MultiUse."
@@ -1887,8 +1891,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.18",
+  "version": "0.7.19",
   "news": {
+    "0.7.19": {
+      "en": "Publish safety hotfix: package metadata is cleaned and a prepublish verification script checks JSON validity and unresolved Git conflict markers before npm publish. NPM package file list no longer includes src-admin-tab source files. No EMS runtime or UI logic changed.",
+      "de": "Publish-Sicherheits-Hotfix: Paket-Metadaten bereinigt und ein Prepublish-Check prüft JSON-Gültigkeit sowie ungelöste Git-Konfliktmarker vor npm publish. Die npm-Paketdateiliste enthält die src-admin-tab-Quelldateien nicht mehr. Keine EMS-Runtime- oder UI-Logik geändert."
+    },
     "0.7.17": {
       "en": "Energy-flow monitor layout was rechecked and made more robust: optional consumers are placed with collision avoidance and stronger scaling at high density so they keep distance from PV, EVCS, battery, building and each other. UI/VIS only; no EMS regulation logic changed.",
       "de": "Energiefluss-Monitor nachgeprüft und robuster gemacht: optionale Verbraucher werden mit Kollisionsvermeidung platziert und bei hoher Dichte stärker skaliert, damit sie Abstand zu PV, EVCS/Ladestation, Batterie, Gebäude und untereinander halten. Nur UI/VIS; keine EMS-Regellogik geändert."

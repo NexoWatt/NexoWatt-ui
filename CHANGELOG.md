@@ -1,3 +1,10 @@
+# 0.7.19
+
+- Publish-Sicherheits-Hotfix: `package.json` bereinigt und `publish:check`/`prepublishOnly` ergänzt. Der Check prüft vor `npm publish`, ob `package.json` und `io-package.json` gültiges JSON sind und ob ungelöste Git-Konfliktmarker (`<<<<<<<`, `=======`, `>>>>>>>`) in Projektdateien stehen.
+- npm-Paketdateiliste bereinigt: `src-admin-tab`-Quellordner wird nicht mehr in das npm-Paket aufgenommen; die gebauten Admin-/VIS-Dateien bleiben enthalten.
+- Keine EMS-Regellogik, keine Gates, keine Speicher-/EVCS-/Heizstab-/Tarif-/VIS-Logik geändert.
+- Webcache auf `nexowatt-cache-v189` erhöht.
+
 # 0.7.18
 
 - Heizstab-PV-Auto-Hochstufen korrigiert: stale/verzögerte Stage-Read-DPs setzen das EMS-eigene Ziel nicht mehr bei jedem Tick zurück auf die beobachtete niedrigere Stufe.
