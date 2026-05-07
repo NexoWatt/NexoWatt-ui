@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.19",
+    "version": "0.7.20",
     "news": {
+      "0.7.20": {
+        "en": "Heating rod PV-auto battery protection fixed: storage-farm 0 W values no longer hide real storage discharge, Gate C detects battery discharge again and hard storage/grid limits reduce immediately. Central remaining budget is cross-checked against the physical NVP/storage PV cap so old heating-rod reservations no longer masquerade as PV surplus. Gate D/PV forecast is used as step-up plausibility. EVCS priority remains unchanged.",
+        "de": "Heizstab-PV-Auto-Akkuschutz korrigiert: Speicherfarm-0-Werte verdecken echte Speicherentladung nicht mehr, Gate C erkennt Akku-Entladung wieder sauber und harte Speicher-/Netzgrenzen reduzieren sofort. Zentrales Restbudget wird mit physischem NVP-/Speicher-PV-Cap gegengeprüft, damit alte Heizstab-Reservierungen nicht als PV-Überschuss gelten. Gate D/PV-Forecast wird als Step-up-Plausibilität berücksichtigt. EVCS-Priorität bleibt unverändert."
+      },
       "0.7.19": {
         "en": "Publish safety hotfix: package metadata is cleaned and a prepublish verification script checks JSON validity and unresolved Git conflict markers before npm publish. NPM package file list no longer includes src-admin-tab source files. No EMS runtime or UI logic changed.",
         "de": "Publish-Sicherheits-Hotfix: Paket-Metadaten bereinigt und ein Prepublish-Check prüft JSON-Gültigkeit sowie ungelöste Git-Konfliktmarker vor npm publish. Die npm-Paketdateiliste enthält die src-admin-tab-Quelldateien nicht mehr. Keine EMS-Runtime- oder UI-Logik geändert."
@@ -1891,8 +1895,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.19",
+  "version": "0.7.20",
   "news": {
+    "0.7.20": {
+      "en": "Heating rod PV-auto battery protection fixed: storage-farm 0 W values no longer hide real storage discharge, Gate C detects battery discharge again and hard storage/grid limits reduce immediately. Central remaining budget is cross-checked against the physical NVP/storage PV cap so old heating-rod reservations no longer masquerade as PV surplus. Gate D/PV forecast is used as step-up plausibility. EVCS priority remains unchanged.",
+      "de": "Heizstab-PV-Auto-Akkuschutz korrigiert: Speicherfarm-0-Werte verdecken echte Speicherentladung nicht mehr, Gate C erkennt Akku-Entladung wieder sauber und harte Speicher-/Netzgrenzen reduzieren sofort. Zentrales Restbudget wird mit physischem NVP-/Speicher-PV-Cap gegengeprüft, damit alte Heizstab-Reservierungen nicht als PV-Überschuss gelten. Gate D/PV-Forecast wird als Step-up-Plausibilität berücksichtigt. EVCS-Priorität bleibt unverändert."
+    },
     "0.7.19": {
       "en": "Publish safety hotfix: package metadata is cleaned and a prepublish verification script checks JSON validity and unresolved Git conflict markers before npm publish. NPM package file list no longer includes src-admin-tab source files. No EMS runtime or UI logic changed.",
       "de": "Publish-Sicherheits-Hotfix: Paket-Metadaten bereinigt und ein Prepublish-Check prüft JSON-Gültigkeit sowie ungelöste Git-Konfliktmarker vor npm publish. Die npm-Paketdateiliste enthält die src-admin-tab-Quelldateien nicht mehr. Keine EMS-Runtime- oder UI-Logik geändert."

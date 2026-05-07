@@ -517,6 +517,33 @@ class HeatingRodControlModule extends BaseModule {
         return fallback;
     }
 
+    _readNumberMaxAny(keys, staleMs, fallback = null) {
+        const list = Array.isArray(keys) ? keys : [keys];
+        let best = null;
+        for (const key of list) {
+            if (!key) continue;
+            let val = null;
+            try {
+                const hasDpEntry = !!(this.dp && this.dp.getEntry && this.dp.getEntry(key));
+                if (hasDpEntry) {
+                    if (typeof this.dp.isStale === 'function' && this.dp.isStale(key, staleMs)) continue;
+                    const v = this.dp.getNumberFresh ? this.dp.getNumberFresh(key, staleMs, null) : this.dp.getNumber(key, null);
+                    if (typeof v === 'number' && Number.isFinite(v)) val = v;
+                } else {
+                    const c = this._readCacheNumber(key, null);
+                    if (typeof c === 'number' && Number.isFinite(c)) val = c;
+                }
+            } catch (_e) {
+                const c = this._readCacheNumber(key, null);
+                if (typeof c === 'number' && Number.isFinite(c)) val = c;
+            }
+            if (typeof val === 'number' && Number.isFinite(val)) {
+                best = best === null ? val : Math.max(best, val);
+            }
+        }
+        return best === null ? fallback : best;
+    }
+
     _readBooleanAny(keys, staleMs, fallback = null) {
         const list = Array.isArray(keys) ? keys : [keys];
         for (const key of list) {
@@ -577,12 +604,15 @@ class HeatingRodControlModule extends BaseModule {
     }
 
     _readStorageSnapshot(staleMs) {
-        let chargeW = Math.max(0, num(this._readNumberAny([
+        // Speicherfarm- und Einzelakku-Aliase können beide im Cache stehen. Ein 0-W-Wert
+        // aus storageFarm.* darf einen echten Entlade-/Ladewert aus den Basis-Aliasen nicht
+        // verdecken. Sonst erkennt der Heizstab keine Akku-Entladung und hält zu hohe Stufen.
+        let chargeW = Math.max(0, num(this._readNumberMaxAny([
             'storageFarm.totalChargePowerW',
             'storageChargePower'
         ], staleMs, null), 0));
 
-        let dischargeW = Math.max(0, num(this._readNumberAny([
+        let dischargeW = Math.max(0, num(this._readNumberMaxAny([
             'storageFarm.totalDischargePowerW',
             'storageDischargePower'
         ], staleMs, null), 0));
@@ -739,6 +769,10 @@ class HeatingRodControlModule extends BaseModule {
         let pvBudgetGateW = nvpAvailableW;
         let pvBudgetSource = gridKnown ? 'nvp+ownLoad+storageReserve' : 'no-fresh-nvp';
         let pvBudgetFromCentral = false;
+        let forecastGate = null;
+        let forecastUsable = false;
+        let forecastStepCapW = 0;
+        const pvNowW = this._readPvNowW(staleMs);
         if (cmPvGateW !== null && Number.isFinite(cmPvGateW) && cmPvGateW > pvBudgetGateW) {
             pvBudgetGateW = cmPvGateW;
             pvBudgetSource = cmPvGateSource || 'cm.pvGate';
@@ -755,9 +789,21 @@ class HeatingRodControlModule extends BaseModule {
             if (snap && age <= staleMs) {
                 const remTotal = Number(snap.remainingTotalW);
                 if (Number.isFinite(remTotal) && remTotal >= 0) {
-                    totalGateRemainingW = Math.min(totalGateRemainingW, Math.max(0, remTotal));
-                    totalGateBudgetW = Number.isFinite(totalGateBudgetW) ? totalGateBudgetW : Math.max(0, remTotal);
-                    totalGateSource = 'ems.budget.remainingTotalW';
+                    // remainingTotalW is already after lower-priority live reservations. For the
+                    // current Heizstab hold decision, add back only our own PV-Auto load so Gate A
+                    // does not force a down-step merely because the rod already reserved budget.
+                    const remTotalHoldW = Math.max(0, remTotal + currentW);
+                    totalGateRemainingW = Math.min(totalGateRemainingW, remTotalHoldW);
+                    totalGateBudgetW = Number.isFinite(totalGateBudgetW) ? totalGateBudgetW : Math.max(0, remTotalHoldW);
+                    totalGateSource = 'ems.budget.remainingTotalW+ownAutoLoad';
+                }
+
+                const fg = snap.gates && snap.gates.forecast ? snap.gates.forecast : null;
+                if (fg && typeof fg === 'object') {
+                    forecastGate = fg;
+                    forecastUsable = !!fg.usable;
+                    const fVals = [fg.nowW, fg.avgNext1hW, fg.avgNext3hW].map(Number).filter(Number.isFinite).map(v => Math.max(0, v));
+                    forecastStepCapW = fVals.length ? Math.max(...fVals, pvNowW) : pvNowW;
                 }
 
                 const remPv = Number(snap.remainingPvW);
@@ -770,9 +816,14 @@ class HeatingRodControlModule extends BaseModule {
                     // Heizstab power that this PV-Auto currently owns. Otherwise an
                     // already-running stage would make ems.budget.remainingPvW drop to 0
                     // and the app would nervously switch off although NVP is still clean.
-                    const centralPvW = Math.max(0, remPv + currentW - storageReserveMissingW - gateCfg.budgetSafetyReserveW);
+                    let centralPvW = Math.max(0, remPv + currentW - storageReserveMissingW - gateCfg.budgetSafetyReserveW);
+                    // Physical PV-only cross-check: the central coordinator may still carry the
+                    // previous tick's own Heizstab reservation. The live NVP/storage balance is the
+                    // final truth for PV-only: if the battery is discharging or the roof output has
+                    // fallen, do not let the old reservation masquerade as available PV.
+                    if (gridKnown) centralPvW = Math.min(centralPvW, Math.max(0, nvpAvailableW));
                     pvBudgetGateW = centralPvW;
-                    pvBudgetSource = 'ems.budget.remainingPvW+ownAutoLoad';
+                    pvBudgetSource = 'ems.budget.remainingPvW+ownAutoLoad+nvpPhysicalCap';
                     pvBudgetFromCentral = true;
                 }
 
@@ -815,6 +866,10 @@ class HeatingRodControlModule extends BaseModule {
             budgetGateSource: source,
             pvBudgetFromCentral: !!pvBudgetFromCentral,
             tariffGridImportPreferred: String(pvBudgetSource || '').includes('tariffNegative'),
+            pvNowW,
+            forecastGate,
+            forecastUsable,
+            forecastStepCapW: Math.max(0, Math.round(forecastStepCapW || pvNowW || 0)),
             cmActive,
             cmStaleMeter: !!cmStaleMeter,
             cmStaleBudget: !!cmStaleBudget,
@@ -1447,6 +1502,25 @@ class HeatingRodControlModule extends BaseModule {
         if (!pvAutomationAllowedByMin && targetStage > currentStage) {
             targetStage = currentStage;
             reason = 'pv_min_hold_no_step_up';
+        }
+
+        // Gate D / PV-Forecast: only a step-up guard. It never allows battery use and it
+        // never forces a manual/external stage down. If live PV + short forecast cannot plausibly
+        // support the next cumulative stage, wait instead of climbing into Akku-Bezug.
+        if (targetStage > currentStage && pvBase && pvBase.forecastUsable && !pvBase.tariffGridImportPreferred) {
+            const capW = Math.max(0, Math.round(num(pvBase.forecastStepCapW, 0)));
+            if (capW > 0) {
+                let cappedStage = currentStage;
+                for (let s = currentStage + 1; s <= targetStage; s++) {
+                    const needW = this._sumStagePowerModel(d, s, observedStage, null);
+                    if (needW <= capW + Math.max(150, Math.round(num((pvBase.gateCfg || {}).budgetSafetyReserveW, 200)))) cappedStage = s;
+                    else break;
+                }
+                if (cappedStage < targetStage) {
+                    targetStage = cappedStage;
+                    reason = 'forecast_step_cap';
+                }
+            }
         }
 
         // During small grid/storage oscillations we hold the current physical stage.
@@ -2331,6 +2405,8 @@ class HeatingRodControlModule extends BaseModule {
                 cmPvCapEffectiveW: Math.round(num(pvBase.cmPvCapEffectiveW, 0)),
                 cmPvCapRawW: Math.round(num(pvBase.cmPvCapRawW, 0)),
                 cmPvSurplusNoEvRawW: Math.round(num(pvBase.cmPvSurplusNoEvRawW, 0)),
+                forecastUsable: !!pvBase.forecastUsable,
+                forecastStepCapW: Math.round(num(pvBase.forecastStepCapW, 0)),
                 protection: budgetProtection || null,
             },
             zeroExport: {

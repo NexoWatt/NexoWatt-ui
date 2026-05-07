@@ -375,6 +375,22 @@ class CoreLimitsModule extends BaseModule {
         return fallback;
     }
 
+    _readCacheNumberMax(keys, fallback = null) {
+        const cache = this.adapter && this.adapter.stateCache ? this.adapter.stateCache : null;
+        if (!cache || !Array.isArray(keys)) return fallback;
+        let best = null;
+        for (const k of keys) {
+            if (!k) continue;
+            try {
+                const rec = cache[String(k)];
+                const raw = rec && typeof rec === 'object' && Object.prototype.hasOwnProperty.call(rec, 'value') ? rec.value : rec;
+                const v = Number(raw);
+                if (Number.isFinite(v)) best = best === null ? v : Math.max(best, v);
+            } catch (_e) {}
+        }
+        return best === null ? fallback : best;
+    }
+
     _readRuntimeOrStateNumber(keys, fallback = null) {
         const a = this.adapter || {};
         for (const k of keys || []) {
@@ -540,8 +556,12 @@ class CoreLimitsModule extends BaseModule {
             return Math.max(0, this._readCacheNumber(['derived.core.pv.totalW', 'pvPower', 'productionTotal', 'storageFarm.totalPvPowerW'], 0) || 0);
         })();
 
-        let storageChargeW = Math.max(0, this._readCacheNumber(['storageFarm.totalChargePowerW', 'storageChargePower'], 0) || 0);
-        let storageDischargeW = Math.max(0, this._readCacheNumber(['storageFarm.totalDischargePowerW', 'storageDischargePower'], 0) || 0);
+        // Speicherfarm- und Einzelakku-Aliase können parallel existieren. Ein 0-W-Wert aus
+        // storageFarm.* darf einen echten Wert aus storageChargePower/storageDischargePower
+        // nicht verdecken, sonst sieht Gate C keine Akku-Entladung und Verbraucher halten
+        // fälschlich Last aus dem Speicher. Darum hier bewusst den größten frischen Wert nutzen.
+        let storageChargeW = Math.max(0, this._readCacheNumberMax(['storageFarm.totalChargePowerW', 'storageChargePower'], 0) || 0);
+        let storageDischargeW = Math.max(0, this._readCacheNumberMax(['storageFarm.totalDischargePowerW', 'storageDischargePower'], 0) || 0);
         const batteryPowerW = this._readCacheNumber(['batteryPower'], null);
         if (isFiniteNumber(batteryPowerW)) {
             const signed = Math.round(batteryPowerW);

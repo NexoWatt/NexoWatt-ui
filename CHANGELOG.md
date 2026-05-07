@@ -1,3 +1,12 @@
+# 0.7.20
+
+- Heizstab-PV-Auto Akkuschutz korrigiert: Speicherfarm-0-Werte können echte Speicherentladung aus den Basis-Aliasen nicht mehr verdecken. Dadurch erkennt Gate C Akku-Entladung wieder sauber.
+- Harte Speicher-/Netzgrenzen wirken dadurch wieder zuverlässig: bei harter Akku-Entladung wird die PV-Auto-Heizstableistung sofort reduziert/abgeworfen.
+- Zentrales Restbudget wird im Heizstab zusätzlich gegen das physische NVP-/Speicher-PV-Cap geprüft. Eine alte eigene Heizstab-Reservierung kann damit nicht mehr als verfügbarer PV-Überschuss gelten.
+- Gate D/PV-Forecast wird als Step-up-Plausibilität berücksichtigt: neue höhere Stufen werden nur freigegeben, wenn Live-PV/Forecast die Zielstufe plausibel tragen können.
+- EVCS-/Lademanagement-Priorität bleibt unverändert; Ladepunkte haben weiterhin Vorrang vor Thermik/Heizstab.
+- Webcache auf `nexowatt-cache-v189` erhöht.
+
 # 0.7.19
 
 - Publish-Sicherheits-Hotfix: `package.json` bereinigt und `publish:check`/`prepublishOnly` ergänzt. Der Check prüft vor `npm publish`, ob `package.json` und `io-package.json` gültiges JSON sind und ob ungelöste Git-Konfliktmarker (`<<<<<<<`, `=======`, `>>>>>>>`) in Projektdateien stehen.
