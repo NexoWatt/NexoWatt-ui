@@ -7836,23 +7836,37 @@ function _collectFlowPowerDpIsWFromUI() {
 
       try {
         const consumers = JSON.parse(String(ctrl.emsBudgetConsumersJson || '[]'));
-        if (Array.isArray(consumers) && consumers.length) {
-          const lines = consumers
-            .filter((c) => c && typeof c === 'object')
-            .sort((a, b) => Number(a.priority || 999) - Number(b.priority || 999))
-            .slice(0, 6)
-            .map((c) => {
-              const reserveW = n(c.usedW ?? c.reserveW ?? c.requestedW);
-              const pvReserveW = n(c.pvUsedW ?? c.pvReserveW ?? (c.pvOnly ? reserveW : 0));
-              const actualW = n(c.actualW ?? c.usedW ?? c.reserveW ?? c.requestedW);
-              return {
-                label: `${Number(c.priority || 999)} · ${String(c.label || c.key || c.app || '')}`,
-                value: `Ist ${_fmtW(actualW)} · Res ${_fmtW(reserveW)} / PV ${_fmtW(pvReserveW)}`
-              };
-            });
-          if (lines.length) priorityCard = mkCard('Prioritäten / Reservierungen', lines, '');
-        }
-      } catch (_e) {}
+        const lines = Array.isArray(consumers) ? consumers
+          .filter((c) => c && typeof c === 'object')
+          .map((c) => {
+            const reserveW = n(c.usedW ?? c.reserveW ?? c.requestedW);
+            const pvReserveW = n(c.pvUsedW ?? c.pvReserveW ?? (c.pvOnly ? reserveW : 0));
+            const actualW = n(c.actualW ?? c.usedW ?? c.reserveW ?? c.requestedW);
+            return Object.assign({}, c, { reserveW, pvReserveW, actualW });
+          })
+          // Nur echte aktive/relevante Reservierungen als Zeile anzeigen.
+          // Die Kachel selbst bleibt trotzdem sichtbar, damit das Grid nicht springt.
+          .filter((c) => Math.max(Math.abs(c.actualW), Math.abs(c.reserveW), Math.abs(c.pvReserveW)) >= 5)
+          .sort((a, b) => Number(a.priority || 999) - Number(b.priority || 999))
+          .slice(0, 6)
+          .map((c) => ({
+            label: `${Number(c.priority || 999)} · ${String(c.label || c.key || c.app || '')}`,
+            value: `Ist ${_fmtW(c.actualW)} · Res ${_fmtW(c.reserveW)} / PV ${_fmtW(c.pvReserveW)}`
+          })) : [];
+
+        priorityCard = mkCard('Prioritäten / Reservierungen',
+          lines.length ? lines : [
+            { label: 'Aktive Reservierungen', value: 'keine' },
+            { label: 'Flex genutzt', value: _fmtW(n(ctrl.emsBudgetFlexUsedW)) },
+          ],
+          lines.length ? '' : 'ok'
+        );
+      } catch (_e) {
+        priorityCard = mkCard('Prioritäten / Reservierungen', [
+          { label: 'Status', value: 'warte auf Snapshot' },
+          { label: 'Flex genutzt', value: _fmtW(n(ctrl.emsBudgetFlexUsedW)) },
+        ], 'warn');
+      }
     }
 
     // First show the central overview, then the gates in alphabetic/functional order.

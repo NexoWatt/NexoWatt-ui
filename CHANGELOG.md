@@ -1,3 +1,11 @@
+# 0.7.21
+
+- Budget-&-Gates-Diagnose stabilisiert: Die Kachel „Prioritäten / Reservierungen“ bleibt dauerhaft sichtbar und verschwindet nicht mehr bei 0-W-Reservierungen.
+- Wenn keine aktive Reservierung vorhanden ist, wird ein ruhiger Platzhalter „Aktive Reservierungen: keine“ angezeigt.
+- 0-W-Geisterzeilen werden ausgeblendet; echte Verbraucher/Reservierungen zeigen weiterhin Ist-, Reservierungs- und PV-Leistung.
+- Reine UI-/Diagnose-Korrektur; keine EMS-Regellogik geändert.
+- Webcache auf `nexowatt-cache-v190` erhöht.
+
 # 0.7.20
 
 - Heizstab-PV-Auto Akkuschutz korrigiert: Speicherfarm-0-Werte können echte Speicherentladung aus den Basis-Aliasen nicht mehr verdecken. Dadurch erkennt Gate C Akku-Entladung wieder sauber.

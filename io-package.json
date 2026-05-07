@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.20",
+    "version": "0.7.21",
     "news": {
+      "0.7.21": {
+        "en": "Budget & Gates UI fix: the Priorities / Reservations card now stays visible with a calm placeholder when no active reservations exist, preventing the diagnostic grid from jumping. Zero-watt ghost rows are hidden while real reservations still show actual, reserved and PV power.",
+        "de": "Budget-&-Gates-UI-Fix: Die Kachel Prioritäten / Reservierungen bleibt jetzt dauerhaft sichtbar und zeigt bei fehlenden aktiven Reservierungen einen ruhigen Platzhalter. Dadurch springt das Diagnose-Grid nicht mehr. 0-W-Geisterzeilen werden ausgeblendet, echte Reservierungen zeigen weiter Ist-, Reservierungs- und PV-Leistung."
+      },
       "0.7.20": {
         "en": "Heating rod PV-auto battery protection fixed: storage-farm 0 W values no longer hide real storage discharge, Gate C detects battery discharge again and hard storage/grid limits reduce immediately. Central remaining budget is cross-checked against the physical NVP/storage PV cap so old heating-rod reservations no longer masquerade as PV surplus. Gate D/PV forecast is used as step-up plausibility. EVCS priority remains unchanged.",
         "de": "Heizstab-PV-Auto-Akkuschutz korrigiert: Speicherfarm-0-Werte verdecken echte Speicherentladung nicht mehr, Gate C erkennt Akku-Entladung wieder sauber und harte Speicher-/Netzgrenzen reduzieren sofort. Zentrales Restbudget wird mit physischem NVP-/Speicher-PV-Cap gegengeprüft, damit alte Heizstab-Reservierungen nicht als PV-Überschuss gelten. Gate D/PV-Forecast wird als Step-up-Plausibilität berücksichtigt. EVCS-Priorität bleibt unverändert."
@@ -1895,8 +1899,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.20",
+  "version": "0.7.21",
   "news": {
+    "0.7.21": {
+      "en": "Budget & Gates UI fix: the Priorities / Reservations card now stays visible with a calm placeholder when no active reservations exist, preventing the diagnostic grid from jumping. Zero-watt ghost rows are hidden while real reservations still show actual, reserved and PV power.",
+      "de": "Budget-&-Gates-UI-Fix: Die Kachel Prioritäten / Reservierungen bleibt jetzt dauerhaft sichtbar und zeigt bei fehlenden aktiven Reservierungen einen ruhigen Platzhalter. Dadurch springt das Diagnose-Grid nicht mehr. 0-W-Geisterzeilen werden ausgeblendet, echte Reservierungen zeigen weiter Ist-, Reservierungs- und PV-Leistung."
+    },
     "0.7.20": {
       "en": "Heating rod PV-auto battery protection fixed: storage-farm 0 W values no longer hide real storage discharge, Gate C detects battery discharge again and hard storage/grid limits reduce immediately. Central remaining budget is cross-checked against the physical NVP/storage PV cap so old heating-rod reservations no longer masquerade as PV surplus. Gate D/PV forecast is used as step-up plausibility. EVCS priority remains unchanged.",
       "de": "Heizstab-PV-Auto-Akkuschutz korrigiert: Speicherfarm-0-Werte verdecken echte Speicherentladung nicht mehr, Gate C erkennt Akku-Entladung wieder sauber und harte Speicher-/Netzgrenzen reduzieren sofort. Zentrales Restbudget wird mit physischem NVP-/Speicher-PV-Cap gegengeprüft, damit alte Heizstab-Reservierungen nicht als PV-Überschuss gelten. Gate D/PV-Forecast wird als Step-up-Plausibilität berücksichtigt. EVCS-Priorität bleibt unverändert."
