@@ -1015,6 +1015,7 @@ if (typeof soc === 'number') {
 		if (targetW === 0) {
 			const tv = (this.adapter && this.adapter._tarifVis) ? this.adapter._tarifVis : null;
 			const tvAktiv = !!(tv && tv.aktiv);
+			const tariffNegativeImportPreferred = !!(tv && (tv.negativeActive || tv.gridImportPreferred || tv.netzbezugBevorzugt));
 			tarifState = (tvAktiv && typeof tv.state === 'string') ? tv.state : null;
 
 			if (tvAktiv) {
@@ -1065,7 +1066,7 @@ if (typeof soc === 'number') {
 						// Nicht gegen Einspeisung "anladen" – PV-Überschuss wird unten behandelt.
 						// Hinweis: Dadurch wird bei Einspeisung kein zusätzliches Netzladen erzwungen.
 						// (Bewusstes Design: PV-Überschuss-Laden übernimmt dann die Regelung.)
-						if (nvpNowW < 0) {
+						if (nvpNowW < 0 && !tariffNegativeImportPreferred) {
 							chargeW = 0;
 						}
 
@@ -1089,7 +1090,7 @@ if (typeof soc === 'number') {
 						let pvDebug = null;
 						try {
 						  const pf = (this.adapter && this.adapter._pvForecast) ? this.adapter._pvForecast : null;
-						  const pvReserveEnabled = (cfg.tariffPvReserveEnabled !== false); // default: ON
+						  const pvReserveEnabled = (cfg.tariffPvReserveEnabled !== false) && !tariffNegativeImportPreferred; // default: ON, bei Negativpreis bewusst aus
 						  if (pvReserveEnabled && pf && pf.valid && Array.isArray(pf.curve) && pf.curve.length) {
 						    // Bei sehr alten Forecasts lieber keine PV‑Reserve erzwingen.
 						    const maxAgeMs = 24 * 3600000;
@@ -1347,6 +1348,8 @@ if (typeof soc === 'number') {
 						targetW = -Math.max(0, chargeW);
 						if (pvBlockGridCharge) {
 							reason = pvBlockReason || 'Tarif: günstig – PV Forecast -> Netzladen gesperrt';
+						} else if (tariffNegativeImportPreferred) {
+							reason = (targetW === 0) ? 'Tarif: Negativpreis – Netzladen nicht möglich' : 'Tarif: Negativpreis – Netzladen bevorzugt';
 						} else {
 							reason = (targetW === 0) ? 'Tarif: günstig – Netzladen nicht möglich' : 'Tarif: günstig – Netzladen';
 						}

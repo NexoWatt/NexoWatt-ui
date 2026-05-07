@@ -1,8 +1,56 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.4",
+    "version": "0.7.18",
     "news": {
+      "0.7.18": {
+        "en": "Heating rod PV-Auto step-up fixed: stale/lagging stage feedback no longer resets the EMS-owned target back to the observed lower stage, and commanded PV-Auto target power is reserved immediately so the central Gates reflect the intended stage-up. This addresses cases where stage 1 stayed active despite several kW of PV/NVP surplus. No changes to storage, EVCS, tariff, peak-shaving or MultiUse logic.",
+        "de": "Heizstab-PV-Auto-Hochstufen korrigiert: stale/verzögerte Stufen-Rückmeldungen setzen das EMS-eigene Ziel nicht mehr bei jedem Tick auf die beobachtete niedrigere Stufe zurück. Außerdem wird die kommandierte PV-Auto-Zielleistung sofort reserviert, damit die zentralen Gates das beabsichtigte Hochstufen abbilden. Behebt Fälle, in denen trotz mehrerer kW PV-/NVP-Überschuss nur Stufe 1 aktiv blieb. Keine Änderungen an Speicher, EVCS, Tarif, Peakshaving oder MultiUse."
+      },
+      "0.7.17": {
+        "en": "Energy-flow monitor layout was rechecked and made more robust: optional consumers are placed with collision avoidance and stronger scaling at high density so they keep distance from PV, EVCS, battery, building and each other. UI/VIS only; no EMS regulation logic changed.",
+        "de": "Energiefluss-Monitor nachgeprüft und robuster gemacht: optionale Verbraucher werden mit Kollisionsvermeidung platziert und bei hoher Dichte stärker skaliert, damit sie Abstand zu PV, EVCS/Ladestation, Batterie, Gebäude und untereinander halten. Nur UI/VIS; keine EMS-Regellogik geändert."
+      },
+      "0.7.15": {
+        "en": "Budget & Gates diagnostics are now ordered consistently: central overview first, then Gate A (grid), Gate A phases, Gate A2 (§14a), Gate B (PV), Gate C (storage), Gate D (PV forecast) and Gate E (tariff/negative price). This is a UI/diagnostics cleanup only; no EMS regulation logic was changed.",
+        "de": "Budget-&-Gates-Diagnose neu sortiert: zuerst die zentrale Übersicht, danach Gate A (Netz), Gate A Phasen, Gate A2 (§14a), Gate B (PV), Gate C (Speicher), Gate D (PV-Forecast) und Gate E (Tarif/Negativpreis). Reine UI-/Diagnose-Aufräumung; keine EMS-Regellogik geändert."
+      },
+      "0.7.14": {
+        "en": "Added Gate E for negative dynamic electricity prices. When the effective tariff/forecast price is below zero, grid import is preferred: tariff flags allow storage grid charging and EVCS grid charging, block tariff-based storage discharge, publish ems.budget.tariff.*, and recommend PV curtailment. Hard grid, phase, §14a and peak-shaving limits remain active. Heating rod and thermal budget followers can use total budget in negative-price windows without consuming PV budget; MultiUse and peak-shaving behavior remains unchanged.",
+        "de": "Gate E für negative dynamische Strompreise ergänzt. Wenn der effektive Tarif-/Forecastpreis unter 0 liegt, wird Netzbezug bevorzugt: Tarif-Flags geben Speicher-Netzladen und EVCS-Netzladen frei, sperren tarifbasierte Speicherentladung, veröffentlichen ems.budget.tariff.* und empfehlen PV-Abregelung. Harte Netz-, Phasen-, §14a- und Peakshaving-Grenzen bleiben aktiv. Heizstab- und Thermik-Budgetfolger können in Negativpreisfenstern Gesamtbudget nutzen, ohne PV-Budget zu verbrauchen; MultiUse und Peakshaving bleiben unverändert."
+      },
+      "0.7.13": {
+        "en": "Heating rod PV-auto now treats fresh central EMS remaining PV budget as already priority-adjusted, so thermal budget is not subtracted twice. This fixes blocked auto-start and missing stage-up when the central Gates already deducted higher-priority consumers.",
+        "de": "Heizstab-PV-Auto nutzt frisches zentrales EMS-Rest-PV-Budget jetzt als bereits prioritätsbereinigt. Thermik wird dabei nicht mehr doppelt abgezogen. Das behebt blockierten Auto-Start und fehlendes Hochstufen, wenn die zentralen Gates Verbraucher höherer Priorität bereits abgezogen haben."
+      },
+      "0.7.12": {
+        "en": "Heating rod PV-auto start robustness improved: PV live source now also uses central EMS PV power and stale heating-rod power no longer blocks PV-auto. Budget consumer diagnostics hide disabled zero-load apps; forecast gate stays stable without a runtime snapshot.",
+        "de": "Heizstab-PV-Auto Startrobustheit verbessert: PV-Livewert nutzt zusätzlich die zentrale EMS-PV-Leistung, stale Heizstab-Istleistung blockiert PV-Auto nicht mehr. Budget-Verbraucherdiagnose blendet deaktivierte 0-W-Apps aus; Forecast-Gate läuft auch ohne Runtime-Snapshot stabil weiter."
+      },
+      "0.7.11": {
+        "en": "Budget priority diagnostics now show live reservation/used power correctly. Runtime consumer JSON now carries usedW/pvUsedW aliases in addition to reserveW/pvReserveW, the App-Center falls back to reserve fields, and live flexUsedW is mirrored after reservations. EMS/PV-Auto heating-rod ownership can also be restored after restart when persisted state clearly indicates an automatic stage; external/manual KNX states remain protected.",
+        "de": "Die Budget-Prioritätsdiagnose zeigt genutzte/reservierte Leistung jetzt korrekt live an. Das Runtime-Consumer-JSON enthält zusätzlich usedW/pvUsedW neben reserveW/pvReserveW, das App-Center fällt sauber auf Reserve-Felder zurück, und flexUsedW wird nach Reservierungen live gespiegelt. EMS-/PV-Auto-Heizstab-Ownership kann nach einem Neustart wiederhergestellt werden, wenn der persistierte Zustand klar auf eine automatische Stufe hinweist; externe/manuelle KNX-Zustände bleiben geschützt."
+      },
+      "0.7.10": {
+        "en": "Hotfix rollback for 0.7.9: restored the central Budget & Gates implementation to the stable 0.7.8 code path. The experimental threshold-gate and thermal/core diagnostic changes from 0.7.9 were removed so ems.budget.* values update reliably again. No functional changes to charging, storage, heating-rod, peak-shaving, multi-use or forecast logic compared with 0.7.8.",
+        "de": "Hotfix-Rollback für 0.7.9: Die zentrale Budget-&-Gates-Schicht wurde auf den stabilen Codepfad aus 0.7.8 zurückgesetzt. Die experimentellen Schwellwert-Gate- sowie Thermal/Core-Diagnoseänderungen aus 0.7.9 wurden entfernt, damit ems.budget.* wieder zuverlässig aktuelle Werte liefert. Gegenüber 0.7.8 keine Funktionsänderungen an Lade-, Speicher-, Heizstab-, Peakshaving-, MultiUse- oder Forecast-Logik."
+      },
+      "0.7.8": {
+        "en": "Heating rod PV-Auto is now a robust central-budget follower with hold budget, hysteresis and manual KNX protection. Running EMS-owned stages are added back to the central remaining PV budget for holding, PV minimum blocks only new step-up instead of hard OFF, small grid/storage oscillations are tolerated until the configured hold times, and only PV-Auto-owned rod load is reserved in ems.budget. The App-Center heating-rod area was reorganized into clear Budget & Storage, Robust Switching and advanced hard-protection sections.",
+        "de": "Heizstab-PV-Auto arbeitet jetzt robuster als zentraler Budget-Follower mit Haltebudget, Hysterese und KNX-Manuellschutz. Laufende EMS-eigene Stufen werden zum zentralen Rest-PV-Budget zurückgerechnet, damit sie stabil gehalten werden; die PV-Mindestgrenze blockiert nur neues Hochfahren statt hart AUS; kleine Netz-/Speicherschwankungen werden bis zu den Haltezeiten toleriert; und nur PV-Auto-eigene Heizstableistung wird in ems.budget reserviert. Der Heizstab-Bereich im App-Center wurde in Budget & Speicher, Robustes Schalten und erweiterte harte Schutzgrenzen aufgeräumt."
+      },
+      "0.7.7": {
+        "en": "Added central Gate D – PV Forecast under ems.budget.forecast.*. The gate publishes forecast validity, confidence, current/average/peak forecast power and forecast energy horizons so future apps and AI-based strategies can use one shared prognosis source without changing charging, storage or heating-rod regulation.",
+        "de": "Zentrales Gate D – PV Forecast unter ems.budget.forecast.* ergänzt. Das Gate veröffentlicht Forecast-Gültigkeit, Confidence, aktuelle/durchschnittliche/Peak-Prognoseleistung und Energie-Horizonte, damit zukünftige Apps und KI-Strategien eine gemeinsame Prognosequelle nutzen können, ohne Lade-, Speicher- oder Heizstabregelung zu verändern."
+      },
+      "0.7.6": {
+        "en": "Introduced the central EMS Budget & Gates coordinator as an always-on background layer. PV, grid and storage budget values are now published under ems.budget.*, and flexible consumers reserve budget by priority: EVCS first, thermal consumers second, heating rods third. Heating rod and thermal PV-Auto now prefer the central remaining PV budget, while legacy NVP/charging-management signals remain fallback paths. Storage regulation and storage-farm distribution were not changed.",
+        "de": "Zentrale EMS Budget-&-Gates-Schicht eingeführt, die dauerhaft im Hintergrund läuft. PV-, Netz- und Speicher-Budgetwerte werden nun unter ems.budget.* veröffentlicht; flexible Verbraucher reservieren Budget nach Priorität: Ladepunkte zuerst, Thermik danach, Heizstab anschließend. Heizstab- und Thermik-PV-Auto nutzen bevorzugt das zentrale Rest-PV-Budget, während ältere NVP-/Lademanagement-Signale als Fallback erhalten bleiben. Speicherregelung und Speicherfarm-Verteilung wurden nicht geändert."
+      },
+      "0.7.5": {
+        "en": "Heating rod PV-Auto now distinguishes EMS-owned automatic stages from external KNX/relay manual switching. When real PV generation falls below the PV-Auto threshold, only PV-Auto/boost-owned stages are dropped; externally switched channels are observed and no longer overwritten with an automatic OFF. The PV-Auto enable gate again uses actually measured PV generation instead of reconstructed NVP/heating-rod budget. The heating-rod App-Center section was cleaned up, with zero/minus feed-in test loads moved into an optional advanced area.",
+        "de": "Heizstab-PV-Auto unterscheidet jetzt eigene Auto-Stufen von externen KNX-/Relais-Schaltungen. Sinkt die reale PV-Erzeugung unter die PV-Auto-Schwelle, werden nur von PV-Auto/Boost gesetzte Stufen abgeworfen; manuell geschaltete Kanäle werden beobachtet und nicht mehr automatisch ausgeschaltet. Die PV-Auto-Freigabe nutzt wieder die tatsächlich gemessene PV-Erzeugung und nicht das rekonstruierte NVP-/Heizstab-Budget. Außerdem wurde der Heizstab-Bereich im App-Center deutlich aufgeräumt; 0-/Minus-Einspeise-Testlasten liegen nun im erweiterten optionalen Bereich."
+      },
       "0.7.4": {
         "en": "Heating rod PV-Auto now follows the PV/NVP budget as a discrete budget-gate consumer: visible NVP export and usable storage charge above the reserve are used for stage targeting, running rod load is kept in the budget, and stage power can be learned from measured rod power so wrong default stage sizes no longer block higher stages. A configurable budget stage-up delay was added; charging management and storage control were not changed. The storage reserve is now evaluated as missing reserve: storage charge above the reserve is usable while missing reserve remains withheld.",
         "de": "Heizstab-PV-Auto folgt jetzt dem PV-/NVP-Budget als diskreter Budget-Gate-Verbraucher: sichtbare NVP-Einspeisung und nutzbare Speicherladung oberhalb der Reserve fließen in die Stufenzielberechnung ein, laufende Heizstableistung bleibt im Budget, und die reale Stufenleistung kann aus der gemessenen Heizstableistung gelernt werden. Dadurch blockieren falsche Default-Stufengrößen kein Hochfahren mehr. Eine einstellbare Budget-Stufe-hoch-Wartezeit wurde ergänzt; Lade-/Lastmanagement und Speicherregelung wurden nicht geändert. Die Speicherreserve wird als fehlende Reserve bewertet: bereits vorhandene Speicherladung oberhalb der Reserve wird nutzbar, fehlende Reserve bleibt zurückgehalten."
@@ -1839,8 +1887,48 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.4",
+  "version": "0.7.18",
   "news": {
+    "0.7.17": {
+      "en": "Energy-flow monitor layout was rechecked and made more robust: optional consumers are placed with collision avoidance and stronger scaling at high density so they keep distance from PV, EVCS, battery, building and each other. UI/VIS only; no EMS regulation logic changed.",
+      "de": "Energiefluss-Monitor nachgeprüft und robuster gemacht: optionale Verbraucher werden mit Kollisionsvermeidung platziert und bei hoher Dichte stärker skaliert, damit sie Abstand zu PV, EVCS/Ladestation, Batterie, Gebäude und untereinander halten. Nur UI/VIS; keine EMS-Regellogik geändert."
+    },
+    "0.7.15": {
+      "en": "Budget & Gates diagnostics sorted into Gate A/A2/B/C/D/E order. UI cleanup only; no regulation logic changed.",
+      "de": "Budget-&-Gates-Diagnose in Gate-A/A2/B/C/D/E-Reihenfolge sortiert. Nur UI-Aufräumung; keine Regellogik geändert."
+    },
+    "0.7.14": {
+      "en": "Gate E - Tariff/negative price added. Negative dynamic tariff prices now prefer grid import, allow storage and EVCS grid charging, block storage discharge from tariff logic, expose ems.budget.tariff.* diagnostics and let PV curtailment/zero-export logic bias toward import while hard safety limits stay active. Thermal and heating-rod budget followers can use total budget in negative-price windows. MultiUse and peak-shaving unchanged. Web cache bumped.",
+      "de": "Gate E - Tarif/Negativpreis ergänzt. Negative dynamische Tarifpreise bevorzugen jetzt Netzbezug, erlauben Speicher- und EVCS-Netzladen, sperren tarifbasierte Speicherentladung, stellen ems.budget.tariff.* als Diagnose bereit und lassen PV-Abregelung/0-Einspeisung in Richtung Import-Bias arbeiten, während harte Schutzgrenzen aktiv bleiben. Thermik- und Heizstab-Budgetfolger können in Negativpreisfenstern Gesamtbudget nutzen. MultiUse und Peakshaving unverändert. Webcache erhöht."
+    },
+    "0.7.13": {
+      "en": "Heating rod PV-Auto now treats fresh central ems.budget.remainingPvW as already prioritized, so higher-priority thermal reservations are no longer subtracted a second time. This fixes PV-Auto start/step-up blocking where the rod only started after manual stage 1 and then stayed there. Legacy fallback budgets still keep the local thermal deduction. Web cache version bumped.",
+      "de": "Heizstab PV-Auto nutzt frisches zentrales ems.budget.remainingPvW jetzt als bereits priorisiertes Restbudget, sodass Thermik-Reservierungen mit höherer Priorität nicht noch einmal lokal abgezogen werden. Das behebt Start-/Hochschaltblockaden, bei denen der Heizstab erst nach manueller Stufe 1 lief und dann dort hängen blieb. Legacy-Fallback-Budgets behalten den lokalen Thermik-Abzug. Webcache erhöht."
+    },
+    "0.7.11": {
+      "en": "Budget & Gates diagnostic hotfix: live runtime reservations now expose usedW/pvUsedW/actualW in consumersJson and update ems.budget.flexUsedW during reservations, so active heating-rod/thermal/EVCS consumers are shown with their current used power instead of 0 W. Explicit Auto(PV) can also take over an already running heating-rod stage after restart/manual observation for correct budget accounting. No changes to storage, peak-shaving, MultiUse or core storage logic.",
+      "de": "Budget-&-Gates-Diagnose-Hotfix: Laufende Runtime-Reservierungen veröffentlichen jetzt usedW/pvUsedW/actualW im consumersJson und aktualisieren ems.budget.flexUsedW direkt bei Reservierungen. Dadurch werden aktive Heizstab-/Thermik-/EVCS-Verbraucher in Prioritäten/Reservierungen mit ihrer aktuellen Leistung angezeigt statt 0 W. Zusätzlich kann explizites Auto(PV) eine bereits laufende Heizstab-Stufe nach Neustart/manueller Beobachtung wieder für die Budget-Bilanz übernehmen. Keine Änderungen an Speicher, Peakshaving, MultiUse oder Speicher-Kernlogik."
+    },
+    "0.7.10": {
+      "en": "Hotfix rollback for 0.7.9: restored the central Budget & Gates implementation to the stable 0.7.8 code path. The experimental threshold-gate and thermal/core diagnostic changes from 0.7.9 were removed so ems.budget.* values update reliably again. No functional changes to charging, storage, heating-rod, peak-shaving, multi-use or forecast logic compared with 0.7.8.",
+      "de": "Hotfix-Rollback für 0.7.9: Die zentrale Budget-&-Gates-Schicht wurde auf den stabilen Codepfad aus 0.7.8 zurückgesetzt. Die experimentellen Schwellwert-Gate- sowie Thermal/Core-Diagnoseänderungen aus 0.7.9 wurden entfernt, damit ems.budget.* wieder zuverlässig aktuelle Werte liefert. Gegenüber 0.7.8 keine Funktionsänderungen an Lade-, Speicher-, Heizstab-, Peakshaving-, MultiUse- oder Forecast-Logik."
+    },
+    "0.7.8": {
+      "en": "Heating rod PV-Auto is now a robust central-budget follower with hold budget, hysteresis and manual KNX protection. Running EMS-owned stages are added back to the central remaining PV budget for holding, PV minimum blocks only new step-up instead of hard OFF, small grid/storage oscillations are tolerated until the configured hold times, and only PV-Auto-owned rod load is reserved in ems.budget. The App-Center heating-rod area was reorganized into clear Budget & Storage, Robust Switching and advanced hard-protection sections.",
+      "de": "Heizstab-PV-Auto arbeitet jetzt robuster als zentraler Budget-Follower mit Haltebudget, Hysterese und KNX-Manuellschutz. Laufende EMS-eigene Stufen werden zum zentralen Rest-PV-Budget zurückgerechnet, damit sie stabil gehalten werden; die PV-Mindestgrenze blockiert nur neues Hochfahren statt hart AUS; kleine Netz-/Speicherschwankungen werden bis zu den Haltezeiten toleriert; und nur PV-Auto-eigene Heizstableistung wird in ems.budget reserviert. Der Heizstab-Bereich im App-Center wurde in Budget & Speicher, Robustes Schalten und erweiterte harte Schutzgrenzen aufgeräumt."
+    },
+    "0.7.7": {
+      "en": "Central Gate D - PV Forecast added under ems.budget.forecast.* with validity, confidence, power and energy horizon diagnostics for future forecast-aware apps and AI strategies. No charging, storage or heating-rod regulation was changed.",
+      "de": "Zentrales Gate D - PV Forecast unter ems.budget.forecast.* ergänzt, inklusive Gültigkeit, Confidence, Leistungs- und Energie-Horizonten für zukünftige prognosebasierte Apps und KI-Strategien. Lade-, Speicher- und Heizstabregelung wurden nicht geändert."
+    },
+    "0.7.6": {
+      "en": "Central EMS Budget & Gates coordinator added. Flexible consumers can now use ems.budget.* and reserve budget by priority; EVCS, thermal control and heating rods are connected.",
+      "de": "Zentraler EMS Budget-&-Gates-Koordinator ergänzt. Flexible Verbraucher können jetzt ems.budget.* nutzen und Budget nach Priorität reservieren; Ladepunkte, Thermik und Heizstab sind angebunden."
+    },
+    "0.7.5": {
+      "en": "Heating rod PV-Auto now distinguishes EMS-owned automatic stages from external KNX/relay manual switching. When real PV generation falls below the PV-Auto threshold, only PV-Auto/boost-owned stages are dropped; externally switched channels are observed and no longer overwritten with an automatic OFF. The PV-Auto enable gate again uses actually measured PV generation instead of reconstructed NVP/heating-rod budget. The heating-rod App-Center section was cleaned up, with zero/minus feed-in test loads moved into an optional advanced area.",
+      "de": "Heizstab-PV-Auto unterscheidet jetzt eigene Auto-Stufen von externen KNX-/Relais-Schaltungen. Sinkt die reale PV-Erzeugung unter die PV-Auto-Schwelle, werden nur von PV-Auto/Boost gesetzte Stufen abgeworfen; manuell geschaltete Kanäle werden beobachtet und nicht mehr automatisch ausgeschaltet. Die PV-Auto-Freigabe nutzt wieder die tatsächlich gemessene PV-Erzeugung und nicht das rekonstruierte NVP-/Heizstab-Budget. Außerdem wurde der Heizstab-Bereich im App-Center deutlich aufgeräumt; 0-/Minus-Einspeise-Testlasten liegen nun im erweiterten optionalen Bereich."
+    },
     "0.7.4": {
       "en": "Heating rod PV-Auto now follows the PV/NVP budget as a discrete budget-gate consumer. Visible NVP export, running rod load and usable storage charge above the reserve are used for stage targeting; measured rod power can correct wrong default stage sizes. Charging management and storage control were not changed. The storage reserve is evaluated as missing reserve.",
       "de": "Heizstab-PV-Auto folgt jetzt dem PV-/NVP-Budget als diskreter Budget-Gate-Verbraucher. Sichtbare NVP-Einspeisung, laufende Heizstableistung und nutzbare Speicherladung oberhalb der Reserve werden für die Stufenzielberechnung genutzt; gemessene Heizstableistung kann falsche Default-Stufengrößen korrigieren. Lade-/Lastmanagement und Speicherregelung wurden nicht geändert. Die Speicherreserve wird als fehlende Reserve bewertet."

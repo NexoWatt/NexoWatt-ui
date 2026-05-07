@@ -1072,7 +1072,7 @@ function initEnergyWebExtras(flowSlots){
   // Keep optional nodes readable while reserving more whitespace for labels.
   // Producers in particular tend to have longer labels (e.g. "Erzeuger X").
   const optionalDensity = Math.max(nCons, nProd);
-  const rConsumer = (optionalDensity >= 9) ? 26 : (optionalDensity >= 7) ? 28 : (optionalDensity >= 5) ? 30 : 34;
+  const rConsumer = (optionalDensity >= 9) ? 22 : (optionalDensity >= 7) ? 24 : (optionalDensity >= 5) ? 28 : 34;
   const rProducer = rConsumer; // same size as consumers (optically consistent)
 
   // anchor points (must match SVG positions)
@@ -1370,24 +1370,107 @@ const placeSpecialLowerLeftArc = (items) => {
   // Avoid the very top/bottom so the value/label texts never clip.
   const spanDeg = 80;
 
-  // Consumers: right arc (top-right -> bottom-right)
+  // --- responsive collision-safe placement for optional consumers ---
+  // The fixed EVCS / PV / battery nodes already occupy parts of the ring.
+  // Optional consumers are therefore not simply spread from -80° to +80° anymore,
+  // because that can put a consumer directly above PV or close to EVCS/battery when
+  // the energy-flow tile is wide.
+  const xMinNode = VB_MIN_X + margin + rMaxNode;
+  const xMaxNode = VB_MAX_X - margin - rMaxNode;
+  const yMinNode = VB_MIN_Y + margin + rMaxNode + 26; // room for value text above
+  const yMaxNode = VB_MAX_Y - margin - rMaxNode - 34; // room for label text below
+
+  const clampFlowPoint = (pt) => ({
+    x: Math.max(xMinNode, Math.min(xMaxNode, pt.x)),
+    y: Math.max(yMinNode, Math.min(yMaxNode, pt.y))
+  });
+
+  const sampleAngles = (startDeg, endDeg, count) => {
+    if (count <= 0) return [];
+    if (count === 1) return [Math.round((startDeg + endDeg) / 2)];
+    const step = (endDeg - startDeg) / (count - 1);
+    return Array.from({ length: count }, (_, i) => startDeg + step * i);
+  };
+
+  const buildConsumerAngles = (count) => {
+    if (count <= 0) return [];
+    const evcsVisibleNow = !!(flowExtras && flowExtras.meta && flowExtras.meta.evcsAvailable);
+
+    if (!evcsVisibleNow) {
+      // If the EVCS node is hidden, the right side can be used more evenly.
+      return sampleAngles(-66, 68, count);
+    }
+
+    // Keep a free corridor around the fixed EVCS node at 0° and avoid the very
+    // top/bottom zones close to PV/battery. The split keeps 1..9 consumers readable.
+    if (count === 1) return [-46];
+    const upperCount = Math.ceil(count / 2);
+    const lowerCount = count - upperCount;
+    const upper = sampleAngles(-62, -30, upperCount);
+    const lower = sampleAngles(30, 68, lowerCount);
+    return upper.concat(lower);
+  };
+
+  const nudgeAway = (pt, blocker, minDist) => {
+    let dx = pt.x - blocker.x;
+    let dy = pt.y - blocker.y;
+    let dist = Math.hypot(dx, dy);
+    if (!Number.isFinite(dist) || dist < 0.001) {
+      dx = blocker.x <= ringCx ? 1 : -1;
+      dy = 0;
+      dist = 1;
+    }
+    if (dist >= minDist) return false;
+    const push = minDist - dist;
+    pt.x += (dx / dist) * push;
+    pt.y += (dy / dist) * push;
+    return true;
+  };
+
+  const resolveExtraNodePoint = (kind, x, y, rNode, placed) => {
+    const pt = clampFlowPoint({ x, y });
+    const fixedBlockers = [
+      { x: ANCHOR_BUILDING.x, y: ANCHOR_BUILDING.y, r: 44, name: 'building' },
+      { x: ANCHOR_PV.x, y: ANCHOR_PV.y, r: 44, name: 'pv' },
+      { x: 300, y: 460, r: 44, name: 'battery' }
+    ];
+    if (flowExtras && flowExtras.meta && flowExtras.meta.evcsAvailable) {
+      fixedBlockers.push({ x: 440, y: 300, r: 44, name: 'evcs' });
+    }
+
+    const blockers = fixedBlockers.concat(Array.isArray(placed) ? placed : []);
+    for (let iter = 0; iter < 10; iter++) {
+      let moved = false;
+      for (const blocker of blockers) {
+        const minDist = (blocker.r || 0) + rNode + (kind === 'consumer' ? 24 : 18);
+        if (nudgeAway(pt, blocker, minDist)) moved = true;
+      }
+      const clamped = clampFlowPoint(pt);
+      if (clamped.x !== pt.x || clamped.y !== pt.y) {
+        pt.x = clamped.x;
+        pt.y = clamped.y;
+        moved = true;
+      }
+      if (!moved) break;
+    }
+    return pt;
+  };
+
+  // Consumers: right side, collision-safe.
   const placeConsumersRightArc = (items) => {
     const n = items.length;
     if (!n) return;
 
-    const startDeg = -spanDeg;
-    const endDeg = spanDeg;
-    const stepDeg = (n <= 1) ? 0 : ((endDeg - startDeg) / (n - 1));
-
-	    for (let i = 0; i < n; i++) {
-	      // If there is only a single optional consumer, avoid placing it exactly on the
-	      // EVCS horizontal axis (y=300) to prevent the visual impression that the
-	      // consumer is "behind" the EVCS. A small upward offset keeps the diagram clear.
-	      const aDeg = (n <= 1) ? -25 : (startDeg + stepDeg * i);
+    const placed = [];
+    const angles = buildConsumerAngles(n);
+    for (let i = 0; i < n; i++) {
+      const aDeg = angles[Math.min(i, angles.length - 1)];
       const a = aDeg * Math.PI / 180;
-      const x = ringCx + rx * Math.cos(a);
-      const y = ringCy + ry * Math.sin(a);
-      placeItem(items[i], x, y, 'consumer', i, rConsumer);
+      const baseX = ringCx + rx * Math.cos(a);
+      const baseY = ringCy + ry * Math.sin(a);
+      const pt = resolveExtraNodePoint('consumer', baseX, baseY, rConsumer, placed);
+      placed.push({ x: pt.x, y: pt.y, r: rConsumer, name: `consumer${i + 1}` });
+      placeItem(items[i], pt.x, pt.y, 'consumer', i, rConsumer);
     }
   };
 

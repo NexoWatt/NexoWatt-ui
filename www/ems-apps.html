@@ -618,7 +618,7 @@
       <div class="nw-card">
         <div class="nw-card__title">Hinweis</div>
         <div class="nw-card__subtitle">
-          Die Thermik-Regelung nutzt bevorzugt das verbleibende PV-Budget aus dem Lademanagement (PV-Cap minus EVCS-Ist). Falls kein Lademanagement aktiv ist, wird der Netz-Import/Export als Fallback verwendet.
+          Die Thermik-Regelung nutzt bevorzugt das zentrale EMS-PV-Restbudget nach Priorität. Falls der zentrale Budget-Koordinator noch keine frischen Werte liefert, wird weiterhin Netz-Import/Export als Fallback verwendet.
         </div>
         <div class="nw-help">
           Empfehlung: Verbraucher-Slots im Energiefluss mit Name + Leistung + (optional) Switch/Setpoint oder SG-Ready anbinden. Gestufte Heizstäbe bitte im Tab <b>Heizstab</b> parametrieren.
@@ -1054,13 +1054,13 @@
     
     <section class="nw-config-section">
       <div class="nw-config-section__head">
-        <h2 class="nw-config-section__title">Budget &amp; Gates – Lademanagement</h2>
+        <h2 class="nw-config-section__title">Budget &amp; Gates – Zentral EMS</h2>
         <div class="nw-config-row__actions">
           <button id="refreshChargingBudget" type="button" class="nw-config-btn nw-config-btn--ghost">Aktualisieren</button>
         </div>
       </div>
       <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
-        Transparenz über das aktuelle Ladebudget und die aktiven Begrenzungen (Netz/Phasen/§14a/PV/Station).
+        Zentrale Budget-/Gate-Schicht für alle flexiblen Apps. Das Lademanagement nutzt sie zuerst; Thermik, Heizstab und spätere Verbraucher folgen nach Priorität.
       </div>
       <div id="chargingBudget" class="nw-config-grid"></div>
     </section>

@@ -1,2 +1,982 @@
 'use strict';
-require('../../scripts/secure-loader').load(module, __filename, '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');
+
+const { BaseModule } = require('./base');
+
+function num(v, fallback = null) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function clamp(v, minV, maxV, fallback = null) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return fallback;
+    let x = n;
+    if (Number.isFinite(minV)) x = Math.max(minV, x);
+    if (Number.isFinite(maxV)) x = Math.min(maxV, x);
+    return x;
+}
+
+function roundW(v, fallback = 0) {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.round(n) : fallback;
+}
+
+function isFiniteNumber(v) {
+    return typeof v === 'number' && Number.isFinite(v);
+}
+
+async function readStateNumber(adapter, id, fallback = null) {
+    try {
+        const st = await adapter.getStateAsync(id);
+        const n = st ? Number(st.val) : NaN;
+        return Number.isFinite(n) ? n : fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+async function readStateBool(adapter, id, fallback = null) {
+    try {
+        const st = await adapter.getStateAsync(id);
+        if (!st) return fallback;
+        if (st.val === null || st.val === undefined) return fallback;
+        if (typeof st.val === 'boolean') return st.val;
+        if (typeof st.val === 'number') return st.val !== 0;
+        if (typeof st.val === 'string') {
+            const s = st.val.trim().toLowerCase();
+            if (s === 'true' || s === '1' || s === 'on' || s === 'yes' || s === 'active' || s === 'ja') return true;
+            if (s === 'false' || s === '0' || s === 'off' || s === 'no' || s === 'inactive' || s === 'nein') return false;
+        }
+        return !!st.val;
+    } catch {
+        return fallback;
+    }
+}
+
+async function readStateString(adapter, id, fallback = '') {
+    try {
+        const st = await adapter.getStateAsync(id);
+        if (!st) return fallback;
+        const s = String(st.val ?? '').trim();
+        return s;
+    } catch {
+        return fallback;
+    }
+}
+
+function makeBudgetRuntime(adapter, snapshot) {
+    const ts = Number(snapshot && snapshot.ts) || Date.now();
+    const totalEffRaw = snapshot && snapshot.gates && snapshot.gates.total ? snapshot.gates.total.effectiveW : Number.POSITIVE_INFINITY;
+    const totalEff = (totalEffRaw === null || totalEffRaw === undefined) ? Number.POSITIVE_INFINITY : Number(totalEffRaw);
+    const pvEff = snapshot && snapshot.gates && snapshot.gates.pv ? snapshot.gates.pv.effectiveW : 0;
+
+    const rt = {
+        ts,
+        version: 1,
+        gates: snapshot.gates || {},
+        raw: snapshot.raw || {},
+        remainingTotalW: Number.isFinite(totalEff) ? Math.max(0, totalEff) : Number.POSITIVE_INFINITY,
+        remainingPvW: Math.max(0, Number(pvEff) || 0),
+        consumers: {},
+        order: [],
+
+        reserve(req) {
+            const r = (req && typeof req === 'object') ? req : {};
+            const key = String(r.key || r.consumer || r.app || 'unknown').trim() || 'unknown';
+            const app = String(r.app || key).trim() || key;
+            const priority = Number.isFinite(Number(r.priority)) ? Number(r.priority) : 999;
+            const requestedW = Math.max(0, Number.isFinite(Number(r.requestedW)) ? Number(r.requestedW) : 0);
+            const reserveW = Math.max(0, Number.isFinite(Number(r.reserveW)) ? Number(r.reserveW) : requestedW);
+            const pvReserveW = Math.max(0, Number.isFinite(Number(r.pvReserveW)) ? Number(r.pvReserveW) : (r.pvOnly ? reserveW : 0));
+            const totalCap = Number.isFinite(this.remainingTotalW) ? this.remainingTotalW : Number.POSITIVE_INFINITY;
+            const pvCap = Math.max(0, this.remainingPvW);
+            const cap = r.pvOnly ? Math.min(totalCap, pvCap) : totalCap;
+            const grantW = Math.max(0, Math.min(requestedW, cap));
+
+            if (Number.isFinite(this.remainingTotalW)) this.remainingTotalW = Math.max(0, this.remainingTotalW - reserveW);
+            this.remainingPvW = Math.max(0, this.remainingPvW - pvReserveW);
+
+            const reserveRoundedW = roundW(reserveW);
+            const pvReserveRoundedW = roundW(pvReserveW);
+            const actualW = Math.max(0, Number.isFinite(Number(r.actualW)) ? Number(r.actualW) : reserveW);
+            const actualRoundedW = roundW(actualW);
+            const entry = {
+                key,
+                app,
+                label: String(r.label || key),
+                priority,
+                requestedW: roundW(requestedW),
+                grantW: roundW(grantW),
+                // Public display/API aliases: diagnostics and UIs expect usedW/pvUsedW.
+                // Runtime reservations also keep reserveW/pvReserveW for internal clarity.
+                usedW: reserveRoundedW,
+                pvUsedW: pvReserveRoundedW,
+                reserveW: reserveRoundedW,
+                pvReserveW: pvReserveRoundedW,
+                actualW: actualRoundedW,
+                pvOnly: !!r.pvOnly,
+                mode: String(r.mode || ''),
+                ts: Date.now(),
+                remainingTotalW: Number.isFinite(this.remainingTotalW) ? roundW(this.remainingTotalW) : null,
+                remainingPvW: roundW(this.remainingPvW),
+            };
+            this.consumers[key] = entry;
+            if (!this.order.includes(key)) this.order.push(key);
+
+            try {
+                const pfx = `ems.budget.consumers.${key}`;
+                const liveConsumers = this.order.map(k => this.consumers[k] || null).filter(Boolean);
+                const flexUsedW = liveConsumers.reduce((sum, c) => sum + Math.max(0, Number(c.usedW ?? c.reserveW) || 0), 0);
+                if (adapter && typeof adapter.setStateAsync === 'function') {
+                    adapter.setStateAsync(`${pfx}.usedW`, reserveRoundedW, true).catch(() => {});
+                    adapter.setStateAsync(`${pfx}.pvUsedW`, pvReserveRoundedW, true).catch(() => {});
+                    adapter.setStateAsync(`${pfx}.actualW`, actualRoundedW, true).catch(() => {});
+                    adapter.setStateAsync(`${pfx}.priority`, roundW(priority), true).catch(() => {});
+                    adapter.setStateAsync(`${pfx}.mode`, String(r.mode || ''), true).catch(() => {});
+                    adapter.setStateAsync('ems.budget.flexUsedW', roundW(flexUsedW), true).catch(() => {});
+                    adapter.setStateAsync('ems.budget.remainingTotalW', Number.isFinite(this.remainingTotalW) ? roundW(this.remainingTotalW) : 0, true).catch(() => {});
+                    adapter.setStateAsync('ems.budget.remainingPvW', roundW(this.remainingPvW), true).catch(() => {});
+                    adapter.setStateAsync('ems.budget.consumersJson', JSON.stringify(liveConsumers), true).catch(() => {});
+                }
+                if (adapter && typeof adapter.updateValue === 'function') {
+                    const now = Date.now();
+                    adapter.updateValue(`${pfx}.usedW`, reserveRoundedW, now);
+                    adapter.updateValue(`${pfx}.pvUsedW`, pvReserveRoundedW, now);
+                    adapter.updateValue(`${pfx}.actualW`, actualRoundedW, now);
+                    adapter.updateValue('ems.budget.flexUsedW', roundW(flexUsedW), now);
+                    adapter.updateValue('ems.budget.remainingTotalW', Number.isFinite(this.remainingTotalW) ? roundW(this.remainingTotalW) : 0, now);
+                    adapter.updateValue('ems.budget.remainingPvW', roundW(this.remainingPvW), now);
+                    adapter.updateValue('ems.budget.consumersJson', JSON.stringify(liveConsumers), now);
+                }
+            } catch (_e) {
+                // Diagnostics only.
+            }
+
+            return entry;
+        },
+
+        peek() {
+            return {
+                ts: this.ts,
+                gates: this.gates,
+                raw: this.raw,
+                remainingTotalW: Number.isFinite(this.remainingTotalW) ? roundW(this.remainingTotalW) : null,
+                remainingPvW: roundW(this.remainingPvW),
+                consumers: this.consumers,
+                order: this.order.slice(),
+            };
+        },
+    };
+
+    return rt;
+}
+
+/**
+ * Phase 4.0/4.8: zentrale Cap-/Budget-/Gate-Snapshot-Schicht.
+ *
+ * Ziele:
+ * - EIN zentraler, pro Tick deterministischer Snapshot für Limits/Budgets.
+ * - Gate A/B/C laufen immer im Hintergrund, unabhängig davon, welche App gerade aktiv ist.
+ * - Apps können das zentrale Budget lesen/reservieren und regeln dadurch nicht mehr gegeneinander.
+ *
+ * Wichtiger Grundsatz:
+ * - Dieser Core schreibt KEINE Geräte-Setpoints.
+ * - Er stellt nur konsistente Caps/Budgets bereit, die andere Module nutzen.
+ */
+class CoreLimitsModule extends BaseModule {
+    constructor(adapter, dpRegistry) {
+        super(adapter, dpRegistry);
+        this._inited = false;
+    }
+
+    async init() {
+        await this.adapter.setObjectNotExistsAsync('ems.core', {
+            type: 'channel',
+            common: { name: 'EMS Core' },
+            native: {},
+        });
+
+        await this.adapter.setObjectNotExistsAsync('ems.budget', {
+            type: 'channel',
+            common: { name: 'EMS Budget & Gates' },
+            native: {},
+        });
+
+        await this.adapter.setObjectNotExistsAsync('ems.budget.gates', {
+            type: 'channel',
+            common: { name: 'Budget Gates' },
+            native: {},
+        });
+
+        await this.adapter.setObjectNotExistsAsync('ems.budget.consumers', {
+            type: 'channel',
+            common: { name: 'Budget Consumers' },
+            native: {},
+        });
+
+        await this.adapter.setObjectNotExistsAsync('ems.budget.forecast', {
+            type: 'channel',
+            common: { name: 'Budget Gate D - PV Forecast' },
+            native: {},
+        });
+
+        await this.adapter.setObjectNotExistsAsync('ems.budget.tariff', {
+            type: 'channel',
+            common: { name: 'Budget Gate E - Tarif / Negativpreis' },
+            native: {},
+        });
+
+        const mk = async (id, name, type, role, unit = undefined, write = false) => {
+            await this.adapter.setObjectNotExistsAsync(id, {
+                type: 'state',
+                common: {
+                    name,
+                    type,
+                    role,
+                    read: true,
+                    write: !!write,
+                    ...(unit ? { unit } : {}),
+                },
+                native: {},
+            });
+        };
+
+        await mk('ems.core.lastUpdate', 'Last update (ts)', 'number', 'value.time');
+
+        // Grid/Plant Caps
+        await mk('ems.core.gridConnectionLimitW_cfg', 'Grid connection limit (W) configured', 'number', 'value.power', 'W');
+        await mk('ems.core.gridSafetyMarginW', 'Grid safety margin (W)', 'number', 'value.power', 'W');
+        await mk('ems.core.gridConstraintsCapW', 'Grid constraints cap (W) (RLM/EVU)', 'number', 'value.power', 'W');
+        await mk('ems.core.gridImportLimitW_effective', 'Grid import limit effective (W)', 'number', 'value.power', 'W');
+        await mk('ems.core.gridImportLimitW_physical', 'Grid import limit physical (W) (cfg/EVU minus margin)', 'number', 'value.power', 'W');
+        await mk('ems.core.gridImportLimitW_peakShaving', 'Grid import limit from Peak-Shaving (W)', 'number', 'value.power', 'W');
+        await mk('ems.core.gridImportLimitW_source', 'Grid import limit binding source', 'string', 'text');
+        await mk('ems.core.gridMaxPhaseA_cfg', 'Grid max phase current (A) configured', 'number', 'value.current', 'A');
+
+        // Peak
+        await mk('ems.core.peakActive', 'Peak active', 'boolean', 'indicator');
+        await mk('ems.core.peakBudgetW', 'Peak budget for controlled loads (W)', 'number', 'value.power', 'W');
+
+        // Tariff
+        await mk('ems.core.tariffBudgetW', 'Tariff cap for controlled loads (W)', 'number', 'value.power', 'W');
+        await mk('ems.core.gridChargeAllowed', 'Grid charge allowed', 'boolean', 'indicator');
+        await mk('ems.core.dischargeAllowed', 'Discharge allowed', 'boolean', 'indicator');
+
+        // §14a
+        await mk('ems.core.para14aActive', '§14a active', 'boolean', 'indicator');
+        await mk('ems.core.para14aMode', '§14a mode', 'string', 'text');
+        await mk('ems.core.para14aEvcsCapW', '§14a EVCS cap (W)', 'number', 'value.power', 'W');
+
+        // Result (high-level)
+        await mk('ems.core.evcsHighLevelCapW', 'EVCS high level cap (W) (min of peak/tariff/14a)', 'number', 'value.power', 'W');
+        await mk('ems.core.evcsHighLevelBinding', 'EVCS high level binding sources', 'string', 'text');
+        await mk('ems.core.snapshot', 'Snapshot (JSON)', 'string', 'text');
+
+        // Central gates. These are app-independent and intentionally live under ems.budget.
+        await mk('ems.budget.lastUpdate', 'Budget last update (ts)', 'number', 'value.time');
+        await mk('ems.budget.active', 'Budget coordinator active', 'boolean', 'indicator');
+        await mk('ems.budget.mode', 'Budget coordinator mode', 'string', 'text');
+        await mk('ems.budget.totalBudgetW', 'Total controlled-load budget (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.remainingTotalW', 'Remaining controlled-load budget (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.pvBudgetRawW', 'PV budget raw before reserve (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.pvBudgetW', 'PV budget effective (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.remainingPvW', 'Remaining PV budget (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.gridW', 'Grid power signed (W) (+ import / - export)', 'number', 'value.power', 'W');
+        await mk('ems.budget.gridExportW', 'Grid export (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.gridImportW', 'Grid import (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.storageChargeW', 'Storage charge power (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.storageDischargeW', 'Storage discharge power (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.pvPowerW', 'PV production power (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.flexUsedW', 'Already active flexible load (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.binding', 'Budget binding source', 'string', 'text');
+        await mk('ems.budget.consumersJson', 'Budget consumers (JSON)', 'string', 'text');
+        await mk('ems.budget.snapshot', 'Budget snapshot (JSON)', 'string', 'text');
+
+        // Gate D - PV Forecast. Advisory background gate for forecast-aware app decisions.
+        // It does not write setpoints and does not change the instantaneous PV budget by itself.
+        await mk('ems.budget.forecast.valid', 'PV forecast valid', 'boolean', 'indicator');
+        await mk('ems.budget.forecast.usable', 'PV forecast usable for app decisions', 'boolean', 'indicator');
+        await mk('ems.budget.forecast.ageMs', 'PV forecast age (ms)', 'number', 'value', 'ms');
+        await mk('ems.budget.forecast.points', 'PV forecast points', 'number', 'value');
+        await mk('ems.budget.forecast.confidencePct', 'PV forecast confidence (%)', 'number', 'value', '%');
+        await mk('ems.budget.forecast.nowW', 'PV forecast now (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.forecast.avgNext1hW', 'PV forecast average next 1h (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.forecast.avgNext3hW', 'PV forecast average next 3h (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.forecast.peakNext6hW', 'PV forecast peak next 6h (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.forecast.peakNext24hW', 'PV forecast peak next 24h (W)', 'number', 'value.power', 'W');
+        await mk('ems.budget.forecast.kwhNext1h', 'PV forecast energy next 1h (kWh)', 'number', 'value.energy', 'kWh');
+        await mk('ems.budget.forecast.kwhNext3h', 'PV forecast energy next 3h (kWh)', 'number', 'value.energy', 'kWh');
+        await mk('ems.budget.forecast.kwhNext6h', 'PV forecast energy next 6h (kWh)', 'number', 'value.energy', 'kWh');
+        await mk('ems.budget.forecast.kwhNext12h', 'PV forecast energy next 12h (kWh)', 'number', 'value.energy', 'kWh');
+        await mk('ems.budget.forecast.kwhNext24h', 'PV forecast energy next 24h (kWh)', 'number', 'value.energy', 'kWh');
+        await mk('ems.budget.forecast.status', 'PV forecast gate status', 'string', 'text');
+        await mk('ems.budget.forecast.source', 'PV forecast source', 'string', 'text');
+        await mk('ems.budget.forecast.snapshotJson', 'PV forecast gate snapshot (JSON)', 'string', 'json');
+
+        // Gate E - Tarif / Negativpreis. Advisory + permission gate for price-aware control.
+        // It does not bypass hard grid/phase/§14a/peak limits; it only tells apps that
+        // grid import is economically preferred during negative effective prices.
+        await mk('ems.budget.tariff.active', 'Tariff gate active', 'boolean', 'indicator');
+        await mk('ems.budget.tariff.state', 'Tariff state', 'string', 'text');
+        await mk('ems.budget.tariff.currentPriceEurKwh', 'Current tariff price (€/kWh)', 'number', 'value');
+        await mk('ems.budget.tariff.negativeActive', 'Negative price active', 'boolean', 'indicator');
+        await mk('ems.budget.tariff.gridImportPreferred', 'Grid import preferred', 'boolean', 'indicator');
+        await mk('ems.budget.tariff.storageGridChargeAllowed', 'Storage grid charge allowed by tariff', 'boolean', 'indicator');
+        await mk('ems.budget.tariff.evcsGridChargeAllowed', 'EVCS grid charge allowed by tariff', 'boolean', 'indicator');
+        await mk('ems.budget.tariff.dischargeAllowed', 'Discharge allowed by tariff', 'boolean', 'indicator');
+        await mk('ems.budget.tariff.pvCurtailRecommended', 'PV curtailment recommended by tariff', 'boolean', 'indicator');
+        await mk('ems.budget.tariff.negativeMinPriceEurKwh', 'Minimum negative price in horizon (€/kWh)', 'number', 'value');
+        await mk('ems.budget.tariff.nextNegativeFrom', 'Next negative price window from (ISO)', 'string', 'text');
+        await mk('ems.budget.tariff.nextNegativeTo', 'Next negative price window to (ISO)', 'string', 'text');
+        await mk('ems.budget.tariff.status', 'Tariff gate status', 'string', 'text');
+        await mk('ems.budget.tariff.snapshotJson', 'Tariff gate snapshot (JSON)', 'string', 'json');
+
+        // Per-consumer diagnostics for currently supported app families.
+        for (const key of ['evcs', 'thermal', 'heatingRod', 'generic']) {
+            await this.adapter.setObjectNotExistsAsync(`ems.budget.consumers.${key}`, {
+                type: 'channel',
+                common: { name: `Budget consumer ${key}` },
+                native: {},
+            });
+            await mk(`ems.budget.consumers.${key}.usedW`, `${key} used (W)`, 'number', 'value.power', 'W');
+            await mk(`ems.budget.consumers.${key}.pvUsedW`, `${key} PV used (W)`, 'number', 'value.power', 'W');
+            await mk(`ems.budget.consumers.${key}.actualW`, `${key} actual power (W)`, 'number', 'value.power', 'W');
+            await mk(`ems.budget.consumers.${key}.priority`, `${key} priority`, 'number', 'value');
+            await mk(`ems.budget.consumers.${key}.mode`, `${key} mode`, 'string', 'text');
+        }
+
+        this._inited = true;
+    }
+
+    _readDpNumberFresh(keys, maxAgeMs, fallback = null) {
+        if (!this.dp || !Array.isArray(keys)) return fallback;
+        for (const k of keys) {
+            if (!k) continue;
+            try {
+                const v = this.dp.getNumberFresh(String(k), maxAgeMs, null);
+                if (typeof v === 'number' && Number.isFinite(v)) return v;
+            } catch (_e) {}
+        }
+        return fallback;
+    }
+
+    _readCacheNumber(keys, fallback = null) {
+        const cache = this.adapter && this.adapter.stateCache ? this.adapter.stateCache : null;
+        if (!cache || !Array.isArray(keys)) return fallback;
+        for (const k of keys) {
+            if (!k) continue;
+            try {
+                const rec = cache[String(k)];
+                const raw = rec && typeof rec === 'object' && Object.prototype.hasOwnProperty.call(rec, 'value') ? rec.value : rec;
+                const v = Number(raw);
+                if (Number.isFinite(v)) return v;
+            } catch (_e) {}
+        }
+        return fallback;
+    }
+
+    _readRuntimeOrStateNumber(keys, fallback = null) {
+        const a = this.adapter || {};
+        for (const k of keys || []) {
+            if (!k) continue;
+            try {
+                const v = a[String(k)];
+                const n = Number(v);
+                if (Number.isFinite(n)) return n;
+            } catch (_e) {}
+        }
+        return fallback;
+    }
+
+    _forecastPowerAt(curve, ts) {
+        if (!Array.isArray(curve) || !curve.length) return 0;
+        const t = Number(ts);
+        if (!Number.isFinite(t)) return 0;
+        let bestFuture = null;
+        for (const s of curve) {
+            if (!s || typeof s !== 'object') continue;
+            const t0 = Number(s.t);
+            const dt = Number(s.dtMs);
+            const w = Math.max(0, Number(s.w) || 0);
+            if (!Number.isFinite(t0) || !Number.isFinite(dt) || dt <= 0) continue;
+            const t1 = t0 + dt;
+            if (t >= t0 && t < t1) return w;
+            if (t0 > t && (bestFuture === null || t0 < bestFuture.t)) bestFuture = { t: t0, w };
+        }
+        // If there is no segment exactly covering now but the next segment starts soon,
+        // expose it as a cautious now-value. Forecast sources sometimes publish anchors
+        // on 15/30/60 minute boundaries while the EMS tick is in between.
+        if (bestFuture && (bestFuture.t - t) <= 30 * 60 * 1000) return bestFuture.w;
+        return 0;
+    }
+
+    _forecastIntegrateKwh(curve, fromMs, toMs) {
+        if (!Array.isArray(curve) || !curve.length) return 0;
+        const a = Number(fromMs);
+        const b = Number(toMs);
+        if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return 0;
+        let wh = 0;
+        for (const s of curve) {
+            if (!s || typeof s !== 'object') continue;
+            const t0 = Number(s.t);
+            const dt = Number(s.dtMs);
+            let w = Number(s.w);
+            if (!Number.isFinite(t0) || !Number.isFinite(dt) || dt <= 0 || !Number.isFinite(w)) continue;
+            if (w < 0) w = 0;
+            const t1 = t0 + dt;
+            if (t1 <= a || t0 >= b) continue;
+            const ov0 = Math.max(a, t0);
+            const ov1 = Math.min(b, t1);
+            const ovMs = ov1 - ov0;
+            if (ovMs > 0) wh += w * (ovMs / 3600000);
+        }
+        return wh / 1000;
+    }
+
+    _forecastPeakW(curve, fromMs, toMs) {
+        if (!Array.isArray(curve) || !curve.length) return 0;
+        const a = Number(fromMs);
+        const b = Number(toMs);
+        if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return 0;
+        let peak = 0;
+        for (const s of curve) {
+            if (!s || typeof s !== 'object') continue;
+            const t0 = Number(s.t);
+            const dt = Number(s.dtMs);
+            const w = Math.max(0, Number(s.w) || 0);
+            if (!Number.isFinite(t0) || !Number.isFinite(dt) || dt <= 0) continue;
+            const t1 = t0 + dt;
+            if (t1 <= a || t0 >= b) continue;
+            peak = Math.max(peak, w);
+        }
+        return peak;
+    }
+
+    _forecastConfidencePct(valid, ageMs, points) {
+        if (!valid) return 0;
+        const p = Number(points);
+        if (!Number.isFinite(p) || p <= 0) return 0;
+        const age = Number(ageMs);
+        if (!Number.isFinite(age) || age < 0) return 90;
+        if (age <= 2 * 3600000) return 100;
+        if (age <= 6 * 3600000) return 85;
+        if (age <= 12 * 3600000) return 70;
+        if (age <= 24 * 3600000) return 50;
+        return 20;
+    }
+
+    _makeForecastGate(now) {
+        const pf = (this.adapter && this.adapter._pvForecast && typeof this.adapter._pvForecast === 'object')
+            ? this.adapter._pvForecast
+            : null;
+        const curve = (pf && Array.isArray(pf.curve)) ? pf.curve : [];
+        const pointsRaw = pf ? pf.points : null;
+        const points = Number.isFinite(Number(pointsRaw)) ? Number(pointsRaw) : curve.length;
+        const valid = !!(pf && pf.valid && points > 0);
+        const ageMs = (pf && pf.ageMs !== null && pf.ageMs !== undefined && Number.isFinite(Number(pf.ageMs)))
+            ? Math.max(0, Number(pf.ageMs))
+            : null;
+        const confidencePct = this._forecastConfidencePct(valid, ageMs, points);
+
+        const kwh1 = valid ? this._forecastIntegrateKwh(curve, now, now + 1 * 3600000) : 0;
+        const kwh3 = valid ? this._forecastIntegrateKwh(curve, now, now + 3 * 3600000) : 0;
+        const kwh6 = valid ? Math.max(0, Number(pf.kwhNext6h) || 0, this._forecastIntegrateKwh(curve, now, now + 6 * 3600000)) : 0;
+        const kwh12 = valid ? Math.max(0, Number(pf.kwhNext12h) || 0, this._forecastIntegrateKwh(curve, now, now + 12 * 3600000)) : 0;
+        const kwh24 = valid ? Math.max(0, Number(pf.kwhNext24h) || 0, this._forecastIntegrateKwh(curve, now, now + 24 * 3600000)) : 0;
+        const nowW = valid ? this._forecastPowerAt(curve, now) : 0;
+        const avgNext1hW = Math.max(0, kwh1 * 1000);
+        const avgNext3hW = Math.max(0, (kwh3 * 1000) / 3);
+        const peakNext6hW = valid ? this._forecastPeakW(curve, now, now + 6 * 3600000) : 0;
+        const peakNext24hW = valid ? Math.max(0, Number(pf.peakWNext24h) || 0, this._forecastPeakW(curve, now, now + 24 * 3600000)) : 0;
+        const ageOk = (ageMs === null) || ageMs <= 24 * 3600000;
+        const hasFutureYield = (kwh1 > 0.001) || (kwh3 > 0.001) || (kwh6 > 0.001) || peakNext24hW > 0;
+        const usable = !!(valid && ageOk && confidencePct >= 40 && hasFutureYield);
+
+        let status = 'missing';
+        if (pf && !valid) status = 'invalid';
+        if (valid && !ageOk) status = 'stale';
+        if (valid && ageOk && !hasFutureYield) status = 'no_future_yield';
+        if (usable) status = 'ok';
+
+        return {
+            valid,
+            usable,
+            ageMs: ageMs === null ? null : roundW(ageMs),
+            points: roundW(points),
+            confidencePct: roundW(confidencePct),
+            nowW: roundW(nowW),
+            avgNext1hW: roundW(avgNext1hW),
+            avgNext3hW: roundW(avgNext3hW),
+            peakNext6hW: roundW(peakNext6hW),
+            peakNext24hW: roundW(peakNext24hW),
+            kwhNext1h: Number.isFinite(kwh1) ? Number(kwh1.toFixed(3)) : 0,
+            kwhNext3h: Number.isFinite(kwh3) ? Number(kwh3.toFixed(3)) : 0,
+            kwhNext6h: Number.isFinite(kwh6) ? Number(kwh6.toFixed(3)) : 0,
+            kwhNext12h: Number.isFinite(kwh12) ? Number(kwh12.toFixed(3)) : 0,
+            kwhNext24h: Number.isFinite(kwh24) ? Number(kwh24.toFixed(3)) : 0,
+            status,
+            source: pf ? 'forecast.pv' : '',
+        };
+    }
+
+    _makeBudgetSnapshot(now, coreSnapshot) {
+        const cfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
+        const cmCfg = (cfg.chargingManagement && typeof cfg.chargingManagement === 'object') ? cfg.chargingManagement : {};
+        const staleTimeoutSec = clamp(num(cmCfg.staleTimeoutSec, 15), 1, 3600, 15) || 15;
+        const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
+
+        const gridW = (() => {
+            const dpVal = this._readDpNumberFresh(['grid.powerRawW', 'ems.gridPowerRawW', 'grid.powerW', 'ems.gridPowerW', 'ps.gridPowerW'], staleMs, null);
+            if (isFiniteNumber(dpVal)) return dpVal;
+            return this._readCacheNumber(['grid.powerRawW', 'ems.gridPowerRawW', 'grid.powerW', 'ems.gridPowerW', 'gridPower', 'gridPowerW'], 0) || 0;
+        })();
+
+        const gridImportW = Math.max(0, gridW || 0);
+        const gridExportW = Math.max(0, -(gridW || 0));
+
+        const pvPowerW = (() => {
+            const dpVal = this._readDpNumberFresh(['ps.pvW', 'cm.pvPowerW'], staleMs, null);
+            if (isFiniteNumber(dpVal)) return Math.max(0, dpVal);
+            return Math.max(0, this._readCacheNumber(['derived.core.pv.totalW', 'pvPower', 'productionTotal', 'storageFarm.totalPvPowerW'], 0) || 0);
+        })();
+
+        let storageChargeW = Math.max(0, this._readCacheNumber(['storageFarm.totalChargePowerW', 'storageChargePower'], 0) || 0);
+        let storageDischargeW = Math.max(0, this._readCacheNumber(['storageFarm.totalDischargePowerW', 'storageDischargePower'], 0) || 0);
+        const batteryPowerW = this._readCacheNumber(['batteryPower'], null);
+        if (isFiniteNumber(batteryPowerW)) {
+            const signed = Math.round(batteryPowerW);
+            if (signed < -25) {
+                storageChargeW = Math.max(storageChargeW, Math.abs(signed));
+                storageDischargeW = 0;
+            } else if (signed > 25) {
+                storageDischargeW = Math.max(storageDischargeW, signed);
+                storageChargeW = 0;
+            } else {
+                storageChargeW = 0;
+                storageDischargeW = 0;
+            }
+        }
+
+        const evcsEnabled = cfg.enableChargingManagement !== false;
+        const thermalEnabled = cfg.enableThermalControl === true;
+        const heatingRodEnabled = cfg.enableHeatingRodControl === true;
+
+        const evcsUsedRawW = Math.max(0, this._readCacheNumber(['chargingManagement.control.usedW', 'evcs.totalPowerW'], 0) || 0);
+        const evcsPvUsedRawW = Math.max(0, this._readCacheNumber(['chargingManagement.control.pvEvcsUsedW'], 0) || 0);
+        const thermalUsedRawW = Math.max(0, this._readRuntimeOrStateNumber(['_thermalBudgetUsedW'], null) ?? this._readCacheNumber(['thermal.summary.budgetUsedW'], 0) ?? 0);
+        const heatingRodUsedRawW = Math.max(0, this._readRuntimeOrStateNumber(['_heatingRodBudgetUsedW'], null) ?? this._readCacheNumber(['heatingRod.summary.budgetUsedW'], 0) ?? 0);
+
+        // Only active EMS-controlled apps may reserve central budget. Disabled apps can
+        // still have old summary states from before a restart/update; those must not
+        // create ghost reservations or reduce remainingPvW.
+        const evcsUsedW = evcsEnabled ? evcsUsedRawW : 0;
+        const evcsPvUsedW = evcsEnabled ? evcsPvUsedRawW : 0;
+        const thermalUsedW = thermalEnabled ? thermalUsedRawW : 0;
+        const heatingRodUsedW = heatingRodEnabled ? heatingRodUsedRawW : 0;
+        const flexUsedW = Math.max(0, evcsUsedW + thermalUsedW + heatingRodUsedW);
+
+        // The raw PV budget is reconstructed from the NVP plus already-running controlled loads.
+        // Storage charging is added as parked PV, because consumers with lower priority may be allowed
+        // to use it later if their app-specific reserve permits it. Active storage discharge is never PV.
+        const pvBudgetRawW = Math.max(0, gridExportW + flexUsedW + storageChargeW - storageDischargeW);
+        const pvReserveW = clamp(num(cmCfg.pvChargeReserveW, 500), 0, 1e12, 500) || 0;
+        const pvBudgetEffectiveW = Math.max(0, pvBudgetRawW - pvReserveW);
+        const pvAvailable = pvBudgetEffectiveW > 0;
+
+        // Total controlled-load budget for grid-cap/§14a/peak/tariff layer.
+        const gridLimitW = coreSnapshot && coreSnapshot.grid ? Number(coreSnapshot.grid.gridImportLimitW_effective || 0) : 0;
+        const gridHeadroomW = gridLimitW > 0 ? Math.max(0, gridLimitW - gridImportW + flexUsedW) : Number.POSITIVE_INFINITY;
+        const highLevelCapW = coreSnapshot && coreSnapshot.evcsHighLevel && isFiniteNumber(coreSnapshot.evcsHighLevel.capW)
+            ? Math.max(0, Number(coreSnapshot.evcsHighLevel.capW))
+            : Number.POSITIVE_INFINITY;
+        const totalBudgetW = Math.max(0, Math.min(gridHeadroomW, highLevelCapW));
+
+        const bindings = [];
+        if (gridLimitW > 0 && Math.abs(totalBudgetW - gridHeadroomW) <= 1) bindings.push('grid');
+        if (Number.isFinite(highLevelCapW) && Math.abs(totalBudgetW - highLevelCapW) <= 1) bindings.push(coreSnapshot.evcsHighLevel.binding || 'highLevel');
+        if (!bindings.length) bindings.push('unlimited');
+
+        // Gate D: PV forecast is an advisory gate. It is published centrally so apps
+        // can later reserve/shift loads based on prognosis without each app parsing
+        // provider JSON separately. It does not alter instantaneous PV budget here.
+        const forecastGate = this._makeForecastGate(now);
+
+        // Gate E: tariff/negative-price gate. This is advisory for all apps and
+        // permission-like for modules that already consume tariff flags.
+        const tSrc = (coreSnapshot && coreSnapshot.tariff && typeof coreSnapshot.tariff === 'object') ? coreSnapshot.tariff : {};
+        const tariffGate = {
+            active: !!tSrc.active,
+            state: String(tSrc.state || ''),
+            currentPriceEurKwh: isFiniteNumber(tSrc.currentPriceEurKwh) ? Number(tSrc.currentPriceEurKwh) : null,
+            negativeActive: !!tSrc.negativeActive,
+            gridImportPreferred: !!tSrc.gridImportPreferred,
+            storageGridChargeAllowed: !!tSrc.storageGridChargeAllowed,
+            evcsGridChargeAllowed: !!tSrc.evcsGridChargeAllowed,
+            dischargeAllowed: tSrc.dischargeAllowed !== false,
+            pvCurtailRecommended: !!tSrc.pvCurtailRecommended,
+            negativeMinPriceEurKwh: isFiniteNumber(tSrc.negativeMinPriceEurKwh) ? Number(tSrc.negativeMinPriceEurKwh) : null,
+            nextNegativeFrom: String(tSrc.nextNegativeFrom || ''),
+            nextNegativeTo: String(tSrc.nextNegativeTo || ''),
+            status: String(tSrc.status || (tSrc.gridImportPreferred ? 'grid_import_preferred' : (tSrc.active ? 'active' : 'inactive'))),
+        };
+
+        return {
+            ts: now,
+            active: true,
+            mode: 'central-background',
+            raw: {
+                gridW: roundW(gridW),
+                gridImportW: roundW(gridImportW),
+                gridExportW: roundW(gridExportW),
+                pvPowerW: roundW(pvPowerW),
+                storageChargeW: roundW(storageChargeW),
+                storageDischargeW: roundW(storageDischargeW),
+                evcsUsedW: roundW(evcsUsedW),
+                evcsPvUsedW: roundW(evcsPvUsedW),
+                thermalUsedW: roundW(thermalUsedW),
+                heatingRodUsedW: roundW(heatingRodUsedW),
+                flexUsedW: roundW(flexUsedW),
+                pvReserveW: roundW(pvReserveW),
+            },
+            gates: {
+                grid: {
+                    importLimitW: roundW(gridLimitW),
+                    importW: roundW(gridImportW),
+                    exportW: roundW(gridExportW),
+                    headroomW: Number.isFinite(gridHeadroomW) ? roundW(gridHeadroomW) : null,
+                },
+                pv: {
+                    available: !!pvAvailable,
+                    rawW: roundW(pvBudgetRawW),
+                    reserveW: roundW(pvReserveW),
+                    effectiveW: roundW(pvBudgetEffectiveW),
+                    source: 'nvp+controlledLoads+storageCharge-storageDischarge',
+                },
+                storage: {
+                    chargeW: roundW(storageChargeW),
+                    dischargeW: roundW(storageDischargeW),
+                },
+                forecast: forecastGate,
+                tariff: tariffGate,
+                total: {
+                    effectiveW: Number.isFinite(totalBudgetW) ? roundW(totalBudgetW) : null,
+                    binding: bindings.join('+'),
+                },
+            },
+            consumers: (() => {
+                const out = {};
+                if (evcsUsedW > 0 || evcsPvUsedW > 0) {
+                    out.evcs = { priority: 100, usedW: roundW(evcsUsedW), pvUsedW: roundW(evcsPvUsedW), mode: 'charging' };
+                }
+                if (thermalUsedW > 0) {
+                    out.thermal = { priority: 200, usedW: roundW(thermalUsedW), pvUsedW: roundW(thermalUsedW), mode: 'pvAuto' };
+                }
+                if (heatingRodUsedW > 0) {
+                    out.heatingRod = { priority: 300, usedW: roundW(heatingRodUsedW), pvUsedW: roundW(heatingRodUsedW), mode: 'pvAuto' };
+                }
+                return out;
+            })(),
+        };
+    }
+
+    async tick() {
+        if (!this._inited) {
+            try { await this.init(); } catch { /* ignore */ }
+        }
+
+        const now = Date.now();
+        const cfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
+        const psCfg = (cfg && cfg.peakShaving && typeof cfg.peakShaving === 'object') ? cfg.peakShaving : {};
+
+        // ------------------------------------------------------------
+        // Grid connection / physical caps
+        // ------------------------------------------------------------
+        const gridConnectionLimitW_cfg = clamp(num(cfg?.installerConfig?.gridConnectionPower, 0), 0, 1e12, 0) || 0;
+        const gridSafetyMarginW = clamp(num(psCfg?.safetyMarginW, 0), 0, 1e12, 0) || 0;
+        const gridMaxPhaseA_cfg = clamp(num(psCfg?.maxPhaseA, 0), 0, 20000, 0) || 0;
+
+        const gridConstraintsCapW = await readStateNumber(this.adapter, 'gridConstraints.control.maxImportW_final', null);
+
+        let gridImportLimitW_physical = 0;
+        {
+            let base = (gridConnectionLimitW_cfg > 0) ? gridConnectionLimitW_cfg : 0;
+            if (typeof gridConstraintsCapW === 'number' && Number.isFinite(gridConstraintsCapW) && gridConstraintsCapW > 0) {
+                base = (base > 0) ? Math.min(base, gridConstraintsCapW) : gridConstraintsCapW;
+            }
+            if (base > 0) gridImportLimitW_physical = Math.max(0, base - gridSafetyMarginW);
+        }
+
+        const peakEnabledCfg = !!cfg.enablePeakShaving;
+        const peakShavingLimitW_raw = await readStateNumber(this.adapter, 'peakShaving.control.limitW', null);
+        const gridImportLimitW_peakShaving = (peakEnabledCfg && typeof peakShavingLimitW_raw === 'number' && Number.isFinite(peakShavingLimitW_raw) && peakShavingLimitW_raw > 0)
+            ? peakShavingLimitW_raw
+            : 0;
+
+        let gridImportLimitW_effective = 0;
+        let gridImportLimitW_source = '';
+        {
+            const cands = [];
+            if (typeof gridImportLimitW_peakShaving === 'number' && gridImportLimitW_peakShaving > 0) cands.push({ k: 'peak', w: gridImportLimitW_peakShaving });
+            if (typeof gridImportLimitW_physical === 'number' && gridImportLimitW_physical > 0) cands.push({ k: 'physical', w: gridImportLimitW_physical });
+
+            if (cands.length) {
+                let minW = Number.POSITIVE_INFINITY;
+                for (const c of cands) {
+                    const w = Number(c.w);
+                    if (Number.isFinite(w)) minW = Math.min(minW, w);
+                }
+                gridImportLimitW_effective = Number.isFinite(minW) ? Math.max(0, minW) : 0;
+
+                const eps = 0.001;
+                gridImportLimitW_source = cands
+                    .filter(c => Number.isFinite(Number(c.w)) && Math.abs(Number(c.w) - Number(gridImportLimitW_effective)) <= eps)
+                    .map(c => c.k)
+                    .join('+');
+            }
+        }
+
+        // ------------------------------------------------------------
+        // Peak / Tariff / §14a caps
+        // ------------------------------------------------------------
+        const peakActive = await readStateBool(this.adapter, 'peakShaving.control.active', false);
+        const peakBudgetW_raw = await readStateNumber(this.adapter, 'peakShaving.dynamic.availableForControlledW', null);
+        const peakBudgetW = (peakActive && typeof peakBudgetW_raw === 'number' && Number.isFinite(peakBudgetW_raw) && peakBudgetW_raw > 0)
+            ? peakBudgetW_raw
+            : null;
+
+        const tariffBudgetW_raw = await readStateNumber(this.adapter, 'tarif.ladeparkLimitW', null);
+        const tariffBudgetW = (typeof tariffBudgetW_raw === 'number' && Number.isFinite(tariffBudgetW_raw) && tariffBudgetW_raw > 0)
+            ? tariffBudgetW_raw
+            : null;
+
+        const gridChargeAllowed = await readStateBool(this.adapter, 'tarif.netzLadenErlaubt', true);
+        const dischargeAllowed = await readStateBool(this.adapter, 'tarif.entladenErlaubt', true);
+
+        const tariffActive = await readStateBool(this.adapter, 'tarif.aktiv', false);
+        const tariffState = await readStateString(this.adapter, 'tarif.state', '');
+        const tariffCurrentPrice = await readStateNumber(this.adapter, 'tarif.preisAktuellEurProKwh', null);
+        const tariffNegativeActive = await readStateBool(this.adapter, 'tarif.negativpreisAktiv', false);
+        const tariffGridImportPreferred = await readStateBool(this.adapter, 'tarif.netzbezugBevorzugt', tariffNegativeActive);
+        const tariffNegativeMinPrice = await readStateNumber(this.adapter, 'tarif.negativPreisMinEurProKwh', null);
+        const tariffNextNegativeFrom = await readStateString(this.adapter, 'tarif.naechstesNegativVon', '');
+        const tariffNextNegativeTo = await readStateString(this.adapter, 'tarif.naechstesNegativBis', '');
+        const tariffStatus = await readStateString(this.adapter, 'tarif.negativpreisStatus', '');
+
+        const p14a = (this.adapter && this.adapter._para14a && typeof this.adapter._para14a === 'object') ? this.adapter._para14a : null;
+
+        let para14aActive = false;
+        let para14aMode = '';
+        let para14aEvcsCapW = null;
+
+        if (p14a && typeof p14a === 'object') {
+            para14aActive = !!p14a.active;
+            para14aMode = para14aActive ? String(p14a.mode || '') : '';
+            const cap = (para14aActive && typeof p14a.evcsTotalCapW === 'number' && Number.isFinite(p14a.evcsTotalCapW) && p14a.evcsTotalCapW > 0)
+                ? p14a.evcsTotalCapW
+                : null;
+            para14aEvcsCapW = (typeof cap === 'number') ? cap : null;
+        } else {
+            const a = await readStateBool(this.adapter, 'para14a.active', false);
+            para14aActive = !!a;
+            para14aMode = para14aActive ? await readStateString(this.adapter, 'para14a.mode', '') : '';
+            const raw = await readStateNumber(this.adapter, 'para14a.evcsTotalCapW', null);
+            para14aEvcsCapW = (para14aActive && typeof raw === 'number' && Number.isFinite(raw) && raw > 0) ? raw : null;
+        }
+
+        const components = [];
+        if (typeof peakBudgetW === 'number') components.push({ k: 'peak', w: peakBudgetW });
+        if (typeof tariffBudgetW === 'number') components.push({ k: 'tariff', w: tariffBudgetW });
+        if (typeof para14aEvcsCapW === 'number') components.push({ k: '14a', w: para14aEvcsCapW });
+
+        let evcsHighLevelCapW = null;
+        let binding = '';
+        if (components.length) {
+            let minW = Number.POSITIVE_INFINITY;
+            for (const c of components) {
+                const w = Number(c.w);
+                if (Number.isFinite(w)) minW = Math.min(minW, w);
+            }
+            evcsHighLevelCapW = Number.isFinite(minW) ? Math.max(0, minW) : null;
+
+            const eps = 0.001;
+            binding = components
+                .filter(c => Number.isFinite(Number(c.w)) && Math.abs(Number(c.w) - Number(evcsHighLevelCapW)) <= eps)
+                .map(c => c.k)
+                .join('+');
+        }
+
+        const snapshot = {
+            ts: now,
+            grid: {
+                gridConnectionLimitW_cfg,
+                gridSafetyMarginW,
+                gridConstraintsCapW: (typeof gridConstraintsCapW === 'number') ? gridConstraintsCapW : null,
+                gridImportLimitW_physical,
+                gridImportLimitW_peakShaving,
+                gridImportLimitW_effective,
+                gridImportLimitW_source,
+                gridMaxPhaseA_cfg,
+            },
+            peak: {
+                active: !!peakActive,
+                budgetW: (typeof peakBudgetW === 'number') ? peakBudgetW : null,
+            },
+            tariff: {
+                budgetW: (typeof tariffBudgetW === 'number') ? tariffBudgetW : null,
+                gridChargeAllowed: !!gridChargeAllowed,
+                dischargeAllowed: !!dischargeAllowed,
+                active: !!tariffActive,
+                state: tariffState || '',
+                currentPriceEurKwh: isFiniteNumber(tariffCurrentPrice) ? Number(tariffCurrentPrice) : null,
+                negativeActive: !!tariffNegativeActive,
+                gridImportPreferred: !!tariffGridImportPreferred,
+                storageGridChargeAllowed: !!(tariffGridImportPreferred && gridChargeAllowed),
+                evcsGridChargeAllowed: !!(tariffGridImportPreferred && gridChargeAllowed),
+                pvCurtailRecommended: !!tariffGridImportPreferred,
+                negativeMinPriceEurKwh: isFiniteNumber(tariffNegativeMinPrice) ? Number(tariffNegativeMinPrice) : null,
+                nextNegativeFrom: tariffNextNegativeFrom || '',
+                nextNegativeTo: tariffNextNegativeTo || '',
+                status: tariffStatus || (tariffGridImportPreferred ? 'active_grid_import_preferred' : (tariffNegativeActive ? 'negative_detected' : 'inactive')),
+            },
+            para14a: {
+                active: !!para14aActive,
+                mode: para14aMode,
+                evcsCapW: (typeof para14aEvcsCapW === 'number') ? para14aEvcsCapW : null,
+            },
+            evcsHighLevel: {
+                capW: (typeof evcsHighLevelCapW === 'number') ? evcsHighLevelCapW : null,
+                binding,
+            },
+        };
+
+        const budgetSnapshot = this._makeBudgetSnapshot(now, snapshot);
+        const budgetRuntime = makeBudgetRuntime(this.adapter, budgetSnapshot);
+
+        try {
+            this.adapter._emsCaps = snapshot;
+            this.adapter._emsBudget = budgetRuntime;
+            this.adapter._emsForecastGate = budgetSnapshot && budgetSnapshot.gates ? budgetSnapshot.gates.forecast : null;
+            this.adapter._emsTariffGate = budgetSnapshot && budgetSnapshot.gates ? budgetSnapshot.gates.tariff : null;
+        } catch {
+            // ignore
+        }
+
+        try {
+            await this.adapter.setStateAsync('ems.core.lastUpdate', now, true);
+            await this.adapter.setStateAsync('ems.core.gridConnectionLimitW_cfg', Math.round(gridConnectionLimitW_cfg || 0), true);
+            await this.adapter.setStateAsync('ems.core.gridSafetyMarginW', Math.round(gridSafetyMarginW || 0), true);
+            await this.adapter.setStateAsync('ems.core.gridConstraintsCapW', Math.round((typeof gridConstraintsCapW === 'number') ? gridConstraintsCapW : 0), true);
+            await this.adapter.setStateAsync('ems.core.gridImportLimitW_physical', Math.round(gridImportLimitW_physical || 0), true);
+            await this.adapter.setStateAsync('ems.core.gridImportLimitW_peakShaving', Math.round(gridImportLimitW_peakShaving || 0), true);
+            await this.adapter.setStateAsync('ems.core.gridImportLimitW_source', gridImportLimitW_source || '', true);
+            await this.adapter.setStateAsync('ems.core.gridImportLimitW_effective', Math.round(gridImportLimitW_effective || 0), true);
+            await this.adapter.setStateAsync('ems.core.gridMaxPhaseA_cfg', Math.round(gridMaxPhaseA_cfg || 0), true);
+
+            await this.adapter.setStateAsync('ems.core.peakActive', !!peakActive, true);
+            await this.adapter.setStateAsync('ems.core.peakBudgetW', Math.round((typeof peakBudgetW === 'number') ? peakBudgetW : 0), true);
+
+            await this.adapter.setStateAsync('ems.core.tariffBudgetW', Math.round((typeof tariffBudgetW === 'number') ? tariffBudgetW : 0), true);
+            await this.adapter.setStateAsync('ems.core.gridChargeAllowed', !!gridChargeAllowed, true);
+            await this.adapter.setStateAsync('ems.core.dischargeAllowed', !!dischargeAllowed, true);
+
+            await this.adapter.setStateAsync('ems.core.para14aActive', !!para14aActive, true);
+            await this.adapter.setStateAsync('ems.core.para14aMode', para14aMode || '', true);
+            await this.adapter.setStateAsync('ems.core.para14aEvcsCapW', Math.round((typeof para14aEvcsCapW === 'number') ? para14aEvcsCapW : 0), true);
+
+            await this.adapter.setStateAsync('ems.core.evcsHighLevelCapW', Math.round((typeof evcsHighLevelCapW === 'number') ? evcsHighLevelCapW : 0), true);
+            await this.adapter.setStateAsync('ems.core.evcsHighLevelBinding', binding || '', true);
+            await this.adapter.setStateAsync('ems.core.snapshot', JSON.stringify(snapshot), true);
+
+            const b = budgetSnapshot;
+            await this.adapter.setStateAsync('ems.budget.lastUpdate', now, true);
+            await this.adapter.setStateAsync('ems.budget.active', true, true);
+            await this.adapter.setStateAsync('ems.budget.mode', b.mode || 'central-background', true);
+            await this.adapter.setStateAsync('ems.budget.totalBudgetW', b.gates.total.effectiveW === null ? 0 : roundW(b.gates.total.effectiveW), true);
+            await this.adapter.setStateAsync('ems.budget.remainingTotalW', b.gates.total.effectiveW === null ? 0 : roundW(b.gates.total.effectiveW), true);
+            await this.adapter.setStateAsync('ems.budget.pvBudgetRawW', roundW(b.gates.pv.rawW), true);
+            await this.adapter.setStateAsync('ems.budget.pvBudgetW', roundW(b.gates.pv.effectiveW), true);
+            await this.adapter.setStateAsync('ems.budget.remainingPvW', roundW(b.gates.pv.effectiveW), true);
+            await this.adapter.setStateAsync('ems.budget.gridW', roundW(b.raw.gridW), true);
+            await this.adapter.setStateAsync('ems.budget.gridExportW', roundW(b.raw.gridExportW), true);
+            await this.adapter.setStateAsync('ems.budget.gridImportW', roundW(b.raw.gridImportW), true);
+            await this.adapter.setStateAsync('ems.budget.storageChargeW', roundW(b.raw.storageChargeW), true);
+            await this.adapter.setStateAsync('ems.budget.storageDischargeW', roundW(b.raw.storageDischargeW), true);
+            await this.adapter.setStateAsync('ems.budget.pvPowerW', roundW(b.raw.pvPowerW), true);
+            await this.adapter.setStateAsync('ems.budget.flexUsedW', roundW(b.raw.flexUsedW), true);
+            await this.adapter.setStateAsync('ems.budget.binding', b.gates.total.binding || '', true);
+
+            const consumersInit = Object.keys(b.consumers || {}).map(k => ({ key: k, ...(b.consumers[k] || {}) }));
+            await this.adapter.setStateAsync('ems.budget.consumersJson', JSON.stringify(consumersInit), true);
+            await this.adapter.setStateAsync('ems.budget.snapshot', JSON.stringify(b), true);
+
+            const fg = (b.gates && b.gates.forecast) ? b.gates.forecast : {};
+            await this.adapter.setStateAsync('ems.budget.forecast.valid', !!fg.valid, true);
+            await this.adapter.setStateAsync('ems.budget.forecast.usable', !!fg.usable, true);
+            await this.adapter.setStateAsync('ems.budget.forecast.ageMs', fg.ageMs === null || fg.ageMs === undefined ? null : roundW(fg.ageMs), true);
+            await this.adapter.setStateAsync('ems.budget.forecast.points', roundW(fg.points), true);
+            await this.adapter.setStateAsync('ems.budget.forecast.confidencePct', roundW(fg.confidencePct), true);
+            await this.adapter.setStateAsync('ems.budget.forecast.nowW', roundW(fg.nowW), true);
+            await this.adapter.setStateAsync('ems.budget.forecast.avgNext1hW', roundW(fg.avgNext1hW), true);
+            await this.adapter.setStateAsync('ems.budget.forecast.avgNext3hW', roundW(fg.avgNext3hW), true);
+            await this.adapter.setStateAsync('ems.budget.forecast.peakNext6hW', roundW(fg.peakNext6hW), true);
+            await this.adapter.setStateAsync('ems.budget.forecast.peakNext24hW', roundW(fg.peakNext24hW), true);
+            await this.adapter.setStateAsync('ems.budget.forecast.kwhNext1h', Number.isFinite(Number(fg.kwhNext1h)) ? Number(fg.kwhNext1h) : 0, true);
+            await this.adapter.setStateAsync('ems.budget.forecast.kwhNext3h', Number.isFinite(Number(fg.kwhNext3h)) ? Number(fg.kwhNext3h) : 0, true);
+            await this.adapter.setStateAsync('ems.budget.forecast.kwhNext6h', Number.isFinite(Number(fg.kwhNext6h)) ? Number(fg.kwhNext6h) : 0, true);
+            await this.adapter.setStateAsync('ems.budget.forecast.kwhNext12h', Number.isFinite(Number(fg.kwhNext12h)) ? Number(fg.kwhNext12h) : 0, true);
+            await this.adapter.setStateAsync('ems.budget.forecast.kwhNext24h', Number.isFinite(Number(fg.kwhNext24h)) ? Number(fg.kwhNext24h) : 0, true);
+            await this.adapter.setStateAsync('ems.budget.forecast.status', String(fg.status || ''), true);
+            await this.adapter.setStateAsync('ems.budget.forecast.source', String(fg.source || ''), true);
+            await this.adapter.setStateAsync('ems.budget.forecast.snapshotJson', JSON.stringify(fg), true);
+
+            const tg = (b.gates && b.gates.tariff) ? b.gates.tariff : {};
+            await this.adapter.setStateAsync('ems.budget.tariff.active', !!tg.active, true);
+            await this.adapter.setStateAsync('ems.budget.tariff.state', String(tg.state || ''), true);
+            await this.adapter.setStateAsync('ems.budget.tariff.currentPriceEurKwh', tg.currentPriceEurKwh === null || tg.currentPriceEurKwh === undefined ? null : Number(tg.currentPriceEurKwh), true);
+            await this.adapter.setStateAsync('ems.budget.tariff.negativeActive', !!tg.negativeActive, true);
+            await this.adapter.setStateAsync('ems.budget.tariff.gridImportPreferred', !!tg.gridImportPreferred, true);
+            await this.adapter.setStateAsync('ems.budget.tariff.storageGridChargeAllowed', !!tg.storageGridChargeAllowed, true);
+            await this.adapter.setStateAsync('ems.budget.tariff.evcsGridChargeAllowed', !!tg.evcsGridChargeAllowed, true);
+            await this.adapter.setStateAsync('ems.budget.tariff.dischargeAllowed', tg.dischargeAllowed !== false, true);
+            await this.adapter.setStateAsync('ems.budget.tariff.pvCurtailRecommended', !!tg.pvCurtailRecommended, true);
+            await this.adapter.setStateAsync('ems.budget.tariff.negativeMinPriceEurKwh', tg.negativeMinPriceEurKwh === null || tg.negativeMinPriceEurKwh === undefined ? null : Number(tg.negativeMinPriceEurKwh), true);
+            await this.adapter.setStateAsync('ems.budget.tariff.nextNegativeFrom', String(tg.nextNegativeFrom || ''), true);
+            await this.adapter.setStateAsync('ems.budget.tariff.nextNegativeTo', String(tg.nextNegativeTo || ''), true);
+            await this.adapter.setStateAsync('ems.budget.tariff.status', String(tg.status || ''), true);
+            await this.adapter.setStateAsync('ems.budget.tariff.snapshotJson', JSON.stringify(tg), true);
+
+            for (const key of ['evcs', 'thermal', 'heatingRod']) {
+                const c = b.consumers[key] || {};
+                await this.adapter.setStateAsync(`ems.budget.consumers.${key}.usedW`, roundW(c.usedW), true);
+                await this.adapter.setStateAsync(`ems.budget.consumers.${key}.pvUsedW`, roundW(c.pvUsedW), true);
+                await this.adapter.setStateAsync(`ems.budget.consumers.${key}.priority`, roundW(c.priority), true);
+                await this.adapter.setStateAsync(`ems.budget.consumers.${key}.mode`, String(c.mode || ''), true);
+            }
+
+            if (this.adapter && typeof this.adapter.updateValue === 'function') {
+                this.adapter.updateValue('ems.budget.remainingPvW', roundW(b.gates.pv.effectiveW), now);
+                this.adapter.updateValue('ems.budget.pvBudgetW', roundW(b.gates.pv.effectiveW), now);
+                this.adapter.updateValue('ems.budget.pvBudgetRawW', roundW(b.gates.pv.rawW), now);
+                this.adapter.updateValue('ems.budget.gridW', roundW(b.raw.gridW), now);
+                this.adapter.updateValue('ems.budget.flexUsedW', roundW(b.raw.flexUsedW), now);
+                this.adapter.updateValue('ems.budget.consumersJson', JSON.stringify(consumersInit), now);
+                if (b.gates && b.gates.forecast) {
+                    this.adapter.updateValue('ems.budget.forecast.nowW', roundW(b.gates.forecast.nowW), now);
+                    this.adapter.updateValue('ems.budget.forecast.avgNext1hW', roundW(b.gates.forecast.avgNext1hW), now);
+                    this.adapter.updateValue('ems.budget.forecast.kwhNext6h', Number.isFinite(Number(b.gates.forecast.kwhNext6h)) ? Number(b.gates.forecast.kwhNext6h) : 0, now);
+                    this.adapter.updateValue('ems.budget.forecast.usable', !!b.gates.forecast.usable, now);
+                }
+                if (b.gates && b.gates.tariff) {
+                    this.adapter.updateValue('ems.budget.tariff.negativeActive', !!b.gates.tariff.negativeActive, now);
+                    this.adapter.updateValue('ems.budget.tariff.gridImportPreferred', !!b.gates.tariff.gridImportPreferred, now);
+                    this.adapter.updateValue('ems.budget.tariff.currentPriceEurKwh', b.gates.tariff.currentPriceEurKwh, now);
+                    this.adapter.updateValue('ems.budget.tariff.status', String(b.gates.tariff.status || ''), now);
+                }
+            }
+        } catch {
+            // ignore
+        }
+    }
+}
+
+module.exports = { CoreLimitsModule };

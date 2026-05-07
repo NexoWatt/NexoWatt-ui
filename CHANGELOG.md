@@ -1,3 +1,112 @@
+# 0.7.18
+
+- Heizstab-PV-Auto-Hochstufen korrigiert: stale/verzögerte Stage-Read-DPs setzen das EMS-eigene Ziel nicht mehr bei jedem Tick zurück auf die beobachtete niedrigere Stufe.
+- Stage-Feedback nutzt nun frische Read-DPs bevorzugt, fällt bei stale Read-DPs aber auf den Write-/State-DP zurück. Dadurch blockieren alte KNX/OpenKNX-Rückmeldungen das Hochfahren nicht mehr.
+- EMS-eigene PV-Auto-Stufen reservieren nach dem Schaltbefehl sofort die kommandierte Zielleistung im zentralen Budget, auch wenn der Leistungsmesser noch verzögert nur die alte Stufe zeigt.
+- Behebt Fälle, in denen bei mehreren kW PV-/NVP-Überschuss nur Stufe 1 aktiv blieb und nicht auf Stufe 2/3/4 weitergeschaltet wurde.
+- Keine Änderungen an Speicherregelung, Lade-/Lastmanagement, Tariflogik, Peakshaving, MultiUse oder Gate-Berechnung.
+- Webcache auf `nexowatt-cache-v188` erhöht.
+
+# 0.7.17
+
+- Energiefluss-Monitor nachgeprüft und robuster gemacht: optionale Verbraucher werden jetzt kollisionsarm rechts verteilt und halten Abstand zu PV, EVCS/Ladestation, Batterie, Gebäude und untereinander.
+- Bei vielen optionalen Verbrauchern werden die Zusatzkreise stärker skaliert, damit sie responsiv in der Kachel bleiben.
+- Reine UI-/VIS-Anpassung; keine EMS-Regellogik geändert.
+- Webcache auf `nexowatt-cache-v187` erhöht.
+
+# 0.7.15
+
+- App-Center/Budget-&-Gates-Diagnose sortiert: zentrale Übersicht zuerst, danach Gate A (Netz), Gate A Phasen, Gate A2 (§14a), Gate B (PV), Gate C (Speicher), Gate D (PV-Forecast) und Gate E (Tarif/Negativpreis).
+- „Prioritäten / Reservierungen“, Ladebudget und Summary stehen danach als Diagnose-/Verbraucherblöcke.
+- Reine UI-/Diagnose-Aufräumung; keine EMS-Regellogik an Speicher, Lade-/Lastmanagement, Heizstab, Peakshaving, MultiUse, Forecast oder Tariflogik geändert.
+- Webcache auf `nexowatt-cache-v185` erhöht.
+
+# 0.7.14
+
+- Gate E – Tarif / Negativpreis ergänzt: negative dynamische Preise setzen zentral `ems.budget.tariff.*` und bevorzugen Netzbezug.
+- Bei Negativpreis werden Speicher-Netzladen und EVCS-Netzladen freigegeben; tarifbasierte Speicherentladung wird gesperrt.
+- Zentrale Budgetkarte zeigt Gate E mit Preis, Negativstatus, Netzbezug bevorzugt, Speicher-/EVCS-Freigabe und PV-Abregel-Empfehlung.
+- 0-Einspeisung/PV-Abregelung erhält bei Negativpreis einen Import-Bias, damit PV – sofern technisch steuerbar – zugunsten wirtschaftlichem Netzbezug zurückgenommen werden kann.
+- Heizstab und Thermik können in Negativpreisfenstern Gesamtbudget statt reinem PV-Restbudget nutzen; ihre Budget-Reservierung zählt dann nicht als PV-Verbrauch.
+- Harte Grenzen bleiben aktiv: Netzanschluss, Phasenlimits, §14a, Peakshaving und Sicherheitslimits werden nicht überstimmt.
+- MultiUse und Peakshaving bleiben in ihrer Grundfunktion unverändert.
+- Webcache auf `nexowatt-cache-v184` erhöht.
+
+# 0.7.13
+
+- Heizstab-PV-Auto korrigiert: Bei frischem zentralem `ems.budget.remainingPvW` wird Thermik nicht mehr zusätzlich abgezogen, da die zentrale Budget-Schicht Verbraucher nach Priorität bereits berücksichtigt.
+- Behebt Fälle, in denen der Heizstab im PV-Auto trotz freiem Gate nicht automatisch startete oder nach manueller Stufe nicht weiter hochschaltete.
+- Diagnose erweitert: Debug-JSON zeigt jetzt `pvBudgetFromCentral` und `thermalDeductedW`, damit doppelte Budgetabzüge sofort sichtbar sind.
+- Webcache auf `nexowatt-cache-v183` erhöht.
+
+## 0.7.13
+
+- Heizstab-PV-Auto Start-/Hochschaltpfad korrigiert: Wenn die Heizstab-App das frische zentrale `ems.budget.remainingPvW` nutzt, wird `thermalUsedW` nicht mehr erneut lokal abgezogen, weil Thermik/Ladepunkte im zentralen Restbudget bereits nach Priorität berücksichtigt sind.
+- Behebt den Fall, dass der Heizstab im PV-Auto trotz PV-Restbudget nicht selbst startet oder nach manuell gesetzter Stufe 1 nicht weiter hochschaltet.
+- Legacy-/Fallback-Budgets behalten den lokalen Thermik-Abzug, damit alte NVP-/CM-Pfade weiter geschützt bleiben.
+- Keine Änderungen an Speicherregelung, Speicherfarm, Lade-/Lastmanagement, Peakshaving, MultiUse, Thermik-Regelung oder Gate-D-Forecast.
+- Webcache auf nexowatt-cache-v183 erhöht.
+
+## 0.7.12
+
+- Heizstab-PV-Auto Startpfad geprüft und robuster gemacht: die PV-Mindestfreigabe nutzt jetzt zusätzlich `ems.budget.pvPowerW` und `derived.core.pv.totalW`, damit PV-Auto nicht blockiert, wenn die zentrale Gate-Schicht PV korrekt sieht, aber der direkte PV-Alias nicht frisch im Heizstabmodul ankommt.
+- Heizstab-Istleistung wird im Heizstabmodul jetzt frisch/stale-geprüft gelesen. Alte Consumer-Power-Werte können dadurch keine externe KNX-/Manuell-Erkennung mehr vortäuschen und den PV-Auto-Start blockieren.
+- Zentrale Budget-/Reservierungsdiagnose bereinigt: deaktivierte Apps mit 0 W werden nicht mehr als feste Geister-Consumer in `ems.budget.consumersJson` geschrieben; alte/stale Werte deaktivierter Thermik-/Heizstab-Apps fließen nicht mehr in `flexUsedW`.
+- Forecast-Gate gegen fehlende Runtime abgesichert, damit die zentrale Gate-Schicht weiterläuft, auch wenn noch kein PV-Forecast-Snapshot vorhanden ist.
+- Keine Regeländerungen an Speicherregelung, Speicherfarm, Ladepunktverteilung, Peakshaving, MultiUse oder Forecast-Strategie.
+- Webcache auf nexowatt-cache-v182 erhöht.
+
+## 0.7.11
+
+- **Budget-Prioritäten/Reservierungen korrigiert:** Runtime-Reservierungen schreiben jetzt im JSON zusätzlich `usedW`/`pvUsedW`, nicht nur `reserveW`/`pvReserveW`. Dadurch zeigt die App-Center-Karte nicht mehr fälschlich `0 W`, obwohl ein Verbraucher reserviert ist.
+- App-Center zeigt in **Prioritäten / Reservierungen** jetzt **Ist**, **Res** und **PV** an und nutzt Reserve-Felder als Fallback.
+- `ems.budget.flexUsedW` wird nach Runtime-Reservierungen live in den State- und API-Cache gespiegelt, damit **Zentrale Messbasis → Flexible Lasten** nicht bis zum nächsten Core-Tick bei 0 hängen bleibt.
+- Heizstab-Budget-Ownership nach Neustart robuster: Eine noch laufende EMS-/PV-Auto-Stufe kann wieder als eigene Auto-Stufe erkannt und in `ems.budget` reserviert werden, wenn der persistierte Status klar auf Automatik hinweist.
+- Externe/manuelle KNX-Schaltungen bleiben geschützt: manuelle/externe Statuswerte werden nicht als Auto-Ownership übernommen.
+- Keine Änderungen an Lade-/Lastmanagement, Speicherregelung, Speicherfarm, Peakshaving, MultiUse, Gate D oder der eigentlichen zentralen Core-Gate-Budgetberechnung.
+- Webcache auf nexowatt-cache-v181 erhöht.
+
+## 0.7.10
+
+- Hotfix-Rollback für 0.7.9: zentrale Budget-&-Gates-Schicht auf den stabilen 0.7.8-Codepfad zurückgesetzt.
+- Experimentelle Schwellwert-Gate-, Thermal- und Core-Diagnoseänderungen aus 0.7.9 entfernt, weil sie die Gate-Aktualisierung in Installationen stören konnten.
+- Gegenüber 0.7.8 keine Funktionsänderung an Lade-/Lastmanagement, Speicherregelung, Speicherfarm, Heizstablogik, Peakshaving, MultiUse oder Gate D / PV-Forecast.
+- Webcache auf nexowatt-cache-v180 erhöht.
+
+## 0.7.8
+
+- Heizstab-PV-Auto robuster als zentraler Budget-Follower umgesetzt: laufende EMS-eigene Stufen werden als Haltebudget zum zentralen Rest-PV-Budget zurückgerechnet, damit sie bei sauberem NVP nicht nervös abschalten.
+- PV-Mindestleistung wirkt jetzt als Start-/Hochschaltgrenze und nicht mehr als harter AUS-Befehl. Bestehende Auto-Stufen werden über Netzbezug- und Speicherentlade-Gates reduziert, manuelle KNX-/Relais-Schaltungen bleiben geschützt.
+- Kleine Netz- und Speicher-Schwankungen werden per Hysterese gehalten; Reduzierung erfolgt erst nach einstellbarer Haltezeit, harte Grenzen greifen weiterhin sofort.
+- Nur PV-Auto-/Boost-eigene Heizstableistung wird als flexible Last in `ems.budget` reserviert. Externe manuelle Heizstablast zählt als normale Hauslast und bläht das zentrale PV-Budget nicht doppelt auf.
+- App-Center Heizstab aufgeräumt: klare Blöcke für **PV-Auto – Budget & Speicher**, **Robustes Schalten** und **Erweitert: harte Schutzgrenzen**.
+- Keine Regeländerung an Lade-/Lastmanagement, Speicherregelung, Speicherfarm oder Gate-D-Forecast.
+
+## 0.7.7
+
+- Zentrales **Gate D – PV Forecast** unter `ems.budget.forecast.*` ergänzt.
+- Forecast-Gate veröffentlicht jetzt `valid`, `usable`, `confidencePct`, `nowW`, Durchschnittsleistung für 1h/3h, Peaks für 6h/24h sowie Energie-Horizonte für 1h/3h/6h/12h/24h.
+- Forecast-Werte liegen zusätzlich im zentralen `ems.budget.snapshot` unter `gates.forecast`, damit Apps und spätere KI-/Prognose-Strategien eine gemeinsame Quelle nutzen können.
+- Diagnose im App-Center/Statusbereich um **Gate D – PV Forecast** erweitert.
+- Keine Regeländerung an Lade-/Lastmanagement, Speicherregelung, Speicherfarm oder Heizstablogik; das Forecast-Gate ist in dieser Version bewusst nur eine zentrale Informations- und Freigabeschicht.
+
+## 0.7.6
+
+- Zentrale EMS Budget-&-Gates-Schicht eingeführt: `ems.budget.*` läuft dauerhaft im Hintergrund und veröffentlicht PV-Budget, Netzbudget, Speicherladung/-entladung, flexible Lasten und Restbudgets.
+- Flexible Verbraucher reservieren Budget jetzt nach Priorität: Ladepunkte/EVCS zuerst, Thermik danach, Heizstab anschließend. Dadurch wird PV-Überschuss nicht mehr von mehreren Apps gleichzeitig doppelt verplant.
+- Heizstab-PV-Auto und Thermik-PV-Auto nutzen bevorzugt das zentrale Rest-PV-Budget; ältere NVP-/Lademanagement-Werte bleiben nur als Fallback erhalten.
+- Budget-&-Gates-Diagnose im App-Center von „Lademanagement“ auf zentrale EMS-Sicht erweitert, inklusive zentraler Messbasis und Restbudget nach Priorität.
+- Lade-/Lastmanagement wurde nur um Budget-Reservierung/Diagnose erweitert; Speicherregelung und Speicherfarm-Verteilung wurden nicht geändert.
+
+## 0.7.5
+
+- Heizstab-PV-Auto unterscheidet jetzt zwischen eigenen Auto-/Boost-Stufen und extern manuell geschalteten KNX-/Relais-Kanälen. Manuelle Kanäle werden beobachtet und nicht mehr durch ein automatisches AUS überschrieben.
+- Die PV-Auto-Mindestfreigabe nutzt wieder die tatsächlich gemessene PV-Erzeugung. Rekonstruierte NVP-/Heizstab-Budgetwerte zählen nicht mehr als PV-Erzeugung.
+- Wenn die PV-Erzeugung unter die Mindestschwelle fällt, werden nur von der EMS selbst gehaltene Auto-Stufen einmalig abgeworfen; danach bleibt manuelle Schaltbarkeit erhalten.
+- Für die Budget-Rekonstruktion wird nur noch EMS-/PV-Auto-eigene Heizstableistung als flexible Last zurückgerechnet. Externe manuelle Heizstableistung zählt als normale Hauslast und bläht das Auto-Budget nicht künstlich auf.
+- Heizstab-App-Center aufgeräumt: zentrale PV-Auto-Budgetwerte in einem kompakten Block, 0-/Minus-Einspeise-Testlasten in einem optionalen erweiterten Bereich.
+- Lade-/Lastmanagement, Speicherregelung und Speicherfarm-Verteilung wurden nicht geändert.
+
 ## 0.7.4
 
 - Heizstab-PV-Auto folgt dem PV-/NVP-Budget jetzt als diskreter Budget-Gate-Verbraucher: sichtbare Einspeisung am NVP, die bereits laufende Heizstableistung und nutzbare Speicherladung oberhalb der Reserve werden gemeinsam für die Stufenzielberechnung genutzt.

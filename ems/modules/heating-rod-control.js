@@ -561,14 +561,18 @@ class HeatingRodControlModule extends BaseModule {
 
         return {
             useBudgetGates: true,
+            // Robust defaults: Heizstab is a stepped, slow thermal load. Small NVP
+            // oscillations must be tolerated instead of instantly dropping a stage.
             maxGridImportW: pickNum(['maxGridImportW', 'gridImportToleranceW', 'pvMaxGridImportW', 'pvImportToleranceW', 'gridImportTripW'], 250, 0, 1000000),
-            gridImportHoldSec: pickNum(['gridImportHoldSec', 'gridImportTripSec', 'pvGridImportHoldSec'], 15, 0, 3600),
-            hardGridImportW: pickNum(['hardGridImportW', 'pvHardGridImportW'], 3000, 0, 1000000),
+            gridImportHoldSec: pickNum(['gridImportHoldSec', 'gridImportTripSec', 'pvGridImportHoldSec'], 45, 0, 3600),
+            hardGridImportW: pickNum(['hardGridImportW', 'pvHardGridImportW'], 1500, 0, 1000000),
             storageDischargeToleranceW: pickNum(['storageDischargeToleranceW', 'pvStorageDischargeToleranceW'], 300, 0, 1000000),
-            storageDischargeHoldSec: pickNum(['storageDischargeHoldSec', 'storageDischargeTripSec', 'pvStorageDischargeHoldSec'], 15, 0, 3600),
-            hardStorageDischargeW: pickNum(['hardStorageDischargeW', 'pvHardStorageDischargeW'], 1200, 0, 1000000),
-            budgetSafetyReserveW: pickNum(['budgetSafetyReserveW', 'pvSafetyReserveW'], 150, 0, 1000000),
-            stageUpDelaySec: pickNum(['stageUpDelaySec', 'budgetStageUpDelaySec', 'pvStageUpDelaySec'], 10, 0, 3600),
+            storageDischargeHoldSec: pickNum(['storageDischargeHoldSec', 'storageDischargeTripSec', 'pvStorageDischargeHoldSec'], 45, 0, 3600),
+            hardStorageDischargeW: pickNum(['hardStorageDischargeW', 'pvHardStorageDischargeW'], 2000, 0, 1000000),
+            budgetSafetyReserveW: pickNum(['budgetSafetyReserveW', 'pvSafetyReserveW'], 200, 0, 1000000),
+            stageUpDelaySec: pickNum(['stageUpDelaySec', 'budgetStageUpDelaySec', 'pvStageUpDelaySec'], 20, 0, 3600),
+            minStageRunSec: pickNum(['minStageRunSec', 'minAutoStageRunSec', 'pvMinStageRunSec'], 120, 0, 86400),
+            cooldownAfterOffSec: pickNum(['cooldownAfterOffSec', 'autoCooldownAfterOffSec', 'pvCooldownAfterOffSec'], 180, 0, 86400),
         };
     }
 
@@ -734,9 +738,56 @@ class HeatingRodControlModule extends BaseModule {
 
         let pvBudgetGateW = nvpAvailableW;
         let pvBudgetSource = gridKnown ? 'nvp+ownLoad+storageReserve' : 'no-fresh-nvp';
+        let pvBudgetFromCentral = false;
         if (cmPvGateW !== null && Number.isFinite(cmPvGateW) && cmPvGateW > pvBudgetGateW) {
             pvBudgetGateW = cmPvGateW;
             pvBudgetSource = cmPvGateSource || 'cm.pvGate';
+        }
+
+        // Primary future path: central EMS Budget & Gates.
+        // Charging reserves EVCS first, Thermal reserves second, Heizstab follows the remaining PV budget.
+        // We still apply Heizstab-specific Speicherreserve/Sicherheitsreserve here, because this app owns
+        // the staged relay decision and must protect manual/external channels.
+        try {
+            const rt = this.adapter && this.adapter._emsBudget;
+            const snap = rt && typeof rt.peek === 'function' ? rt.peek() : null;
+            const age = snap && Number.isFinite(Number(snap.ts)) ? (Date.now() - Number(snap.ts)) : Number.POSITIVE_INFINITY;
+            if (snap && age <= staleMs) {
+                const remTotal = Number(snap.remainingTotalW);
+                if (Number.isFinite(remTotal) && remTotal >= 0) {
+                    totalGateRemainingW = Math.min(totalGateRemainingW, Math.max(0, remTotal));
+                    totalGateBudgetW = Number.isFinite(totalGateBudgetW) ? totalGateBudgetW : Math.max(0, remTotal);
+                    totalGateSource = 'ems.budget.remainingTotalW';
+                }
+
+                const remPv = Number(snap.remainingPvW);
+                if (Number.isFinite(remPv) && remPv >= 0) {
+                    // Sobald der zentrale Budget-Koordinator frisch ist, ist sein Rest-PV-Budget
+                    // maßgeblich. Legacy-NVP/CM-Werte bleiben nur Fallback, damit nach Priorität
+                    // keine App wieder ein bereits vergebenes PV-Budget doppelt nutzt.
+                    // The central coordinator already subtracts active flexible loads. For a
+                    // stepped Heizstab we need a hold budget: add back only the
+                    // Heizstab power that this PV-Auto currently owns. Otherwise an
+                    // already-running stage would make ems.budget.remainingPvW drop to 0
+                    // and the app would nervously switch off although NVP is still clean.
+                    const centralPvW = Math.max(0, remPv + currentW - storageReserveMissingW - gateCfg.budgetSafetyReserveW);
+                    pvBudgetGateW = centralPvW;
+                    pvBudgetSource = 'ems.budget.remainingPvW+ownAutoLoad';
+                    pvBudgetFromCentral = true;
+                }
+
+                const tariffGate = snap.gates && snap.gates.tariff ? snap.gates.tariff : null;
+                const tariffImportPreferred = !!(tariffGate && tariffGate.gridImportPreferred);
+                if (tariffImportPreferred && Number.isFinite(remTotal) && remTotal >= 0) {
+                    // Gate E: Bei Negativpreis darf der Heizstab als aktivierter flexibler
+                    // Verbraucher Netzbudget nutzen. Gate A/A2/Peak bleiben über remTotal aktiv.
+                    pvBudgetGateW = Math.max(0, remTotal + currentW - gateCfg.budgetSafetyReserveW);
+                    pvBudgetSource = 'ems.budget.tariffNegative.remainingTotalW+ownAutoLoad';
+                    pvBudgetFromCentral = true;
+                }
+            }
+        } catch (_e) {
+            // legacy NVP/CM fallback remains active
         }
 
         const effectiveGateW = Math.max(0, Math.min(
@@ -762,6 +813,8 @@ class HeatingRodControlModule extends BaseModule {
             budgetGatePvW: Math.max(0, pvBudgetGateW),
             budgetGateEffectiveW: Math.max(0, effectiveGateW),
             budgetGateSource: source,
+            pvBudgetFromCentral: !!pvBudgetFromCentral,
+            tariffGridImportPreferred: String(pvBudgetSource || '').includes('tariffNegative'),
             cmActive,
             cmStaleMeter: !!cmStaleMeter,
             cmStaleBudget: !!cmStaleBudget,
@@ -798,7 +851,8 @@ class HeatingRodControlModule extends BaseModule {
     _updateBudgetGateProtection(pvBase, now) {
         const cfg = (pvBase && pvBase.gateCfg) ? pvBase.gateCfg : this._getBudgetGateCfg();
         const st = this._budgetProtect || { importSinceMs: 0, dischargeSinceMs: 0 };
-        const importActive = !!(pvBase && pvBase.gridKnown && num(pvBase.importW, 0) > cfg.maxGridImportW);
+        const tariffImportPreferred = !!(pvBase && pvBase.tariffGridImportPreferred);
+        const importActive = !!(!tariffImportPreferred && pvBase && pvBase.gridKnown && num(pvBase.importW, 0) > cfg.maxGridImportW);
         const dischargeActive = !!(pvBase && num(pvBase.storageDischargeW, 0) > cfg.storageDischargeToleranceW);
         const hardImport = !!(pvBase && pvBase.gridKnown && num(pvBase.importW, 0) > cfg.hardGridImportW);
         const hardDischarge = !!(pvBase && num(pvBase.storageDischargeW, 0) > cfg.hardStorageDischargeW);
@@ -920,6 +974,8 @@ class HeatingRodControlModule extends BaseModule {
         const basePv = this._readNumberAny([
             'pvPower',
             'productionTotal',
+            'derived.core.pv.totalW',
+            'ems.budget.pvPowerW',
             // PeakShaving registers the current PV input as ps.pvW. Keep the old
             // ps.pvPowerW alias as compatibility fallback.
             'ps.pvW',
@@ -1011,7 +1067,11 @@ class HeatingRodControlModule extends BaseModule {
 
         const staleTimeoutSec = clamp(num(this._getCfg().staleTimeoutSec, 15), 1, 3600);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
-        const pvNowW = Math.max(this._readPvNowW(staleMs), Math.round(num(pvBase.pvCapW, 0)));
+        // Use only the actually measured PV generation for this guard. The reconstructed
+        // NVP/own-load budget can include a running Heizstab and must not masquerade as
+        // fresh PV generation; otherwise PV-Auto may keep regulating although the roof
+        // generation has already fallen away.
+        const pvNowW = this._readPvNowW(staleMs);
         const feedLimitW = Math.max(0, Math.round(num(cfg.feedInLimitW, 0)));
         const tolW = Math.max(0, Math.round(num(cfg.feedInToleranceW, 0)));
         const exportW = Math.max(0, Math.round(num(pvBase.exportW, 0)));
@@ -1148,26 +1208,57 @@ class HeatingRodControlModule extends BaseModule {
         return obs;
     }
 
-    _readMeasuredW(d) {
+    _readMeasuredW(d, staleMs = null) {
         if (!(this.dp && d.pWKey && this.dp.getEntry && this.dp.getEntry(d.pWKey))) return null;
-        const v = this.dp.getNumber(d.pWKey, null);
+        let v = null;
+        try {
+            if (Number.isFinite(Number(staleMs)) && staleMs > 0 && typeof this.dp.getNumberFresh === 'function') {
+                v = this.dp.getNumberFresh(d.pWKey, staleMs, null);
+            } else {
+                v = this.dp.getNumber(d.pWKey, null);
+            }
+        } catch (_e) {
+            v = null;
+        }
         return (typeof v === 'number' && Number.isFinite(v)) ? v : null;
     }
 
-    _readStageFeedback(d) {
+    _readStageFeedback(d, staleMs = null) {
         /** @type {Array<boolean|null>} */
         const states = [];
         const powerByActuator = new Map();
         let contiguous = 0;
         let anyKnown = false;
+
+        const readBoolFresh = (key) => {
+            if (!(this.dp && key && this.dp.getEntry && this.dp.getEntry(key))) return { known: false, value: null, stale: false };
+            try {
+                if (Number.isFinite(Number(staleMs)) && staleMs > 0 && typeof this.dp.isStale === 'function' && this.dp.isStale(key, staleMs)) {
+                    return { known: false, value: null, stale: true };
+                }
+                const value = this.dp.getBoolean ? this.dp.getBoolean(key, null) : null;
+                return { known: value !== null && value !== undefined, value, stale: false };
+            } catch (_e) {
+                return { known: false, value: null, stale: false };
+            }
+        };
+
         for (let i = 0; i < d.stages.length; i++) {
             const stage = d.stages[i];
             let val = null;
-            if (this.dp && stage.readKey && this.dp.getEntry && this.dp.getEntry(stage.readKey)) {
-                val = this.dp.getBoolean(stage.readKey, null);
+
+            // Prefer a fresh feedback/read DP. If the feedback DP is stale, fall back
+            // to the write/state DP. This is important for KNX/OpenKNX installations
+            // where read objects may stay old for hours while the EMS has just written
+            // the relay. A stale false feedback must not reset PV-Auto back to stage 1
+            // on every tick and block step-up although the NVP/PV budget is available.
+            const read = stage.readKey ? readBoolFresh(stage.readKey) : { known: false, value: null, stale: false };
+            if (read.known) {
+                val = read.value;
             } else if (this.dp && stage.writeKey && this.dp.getEntry && this.dp.getEntry(stage.writeKey)) {
-                val = this.dp.getBoolean(stage.writeKey, null);
+                try { val = this.dp.getBoolean ? this.dp.getBoolean(stage.writeKey, null) : null; } catch (_e) { val = null; }
             }
+
             states.push(val);
             if (val !== null && val !== undefined) anyKnown = true;
             if (val === true) {
@@ -1195,7 +1286,23 @@ class HeatingRodControlModule extends BaseModule {
         const prev = this._stageCtl.get(id) || { targetStage: 0, lastIncreaseMs: 0, lastDecreaseMs: 0 };
         const obs = Math.max(0, Math.round(Number(observedStage) || 0));
         if (!Number.isFinite(prev.targetStage)) prev.targetStage = obs;
-        if (obs !== prev.targetStage) prev.targetStage = obs;
+
+        const target = Math.max(0, Math.round(Number(prev.targetStage) || 0));
+        const ownedStage = Math.max(0, Math.round(Number(prev.autoOwnedStage) || 0));
+        const autoOwned = !!(prev.autoOwned && Math.max(target, ownedStage) > 0);
+
+        if (autoOwned) {
+            // PV-Auto must not lose its target just because a read/feedback DP lags
+            // behind or is stale. Otherwise each tick resets targetStage to the
+            // currently observed lower stage and the stepped controller can never
+            // climb from stage 1 to stage 2/3/4 despite enough PV budget.
+            // If a higher physical stage is observed, sync upwards so external
+            // intervention can still be detected by _getAutoOwnership().
+            if (obs > target) prev.targetStage = obs;
+        } else if (obs !== target) {
+            prev.targetStage = obs;
+        }
+
         this._stageCtl.set(id, prev);
         return prev;
     }
@@ -1281,12 +1388,19 @@ class HeatingRodControlModule extends BaseModule {
     _applyTiming(d, desiredStage, observedStage) {
         const st = this._ensureStageCtlState(d.id, observedStage);
         const now = nowMs();
-        const minOnMs = Math.max(0, Math.round(num(d.minOnSec, 0) * 1000));
-        const minOffMs = Math.max(0, Math.round(num(d.minOffSec, 0) * 1000));
+        const gateCfg = this._getBudgetGateCfg();
+        const minOnMs = Math.max(
+            Math.max(0, Math.round(num(d.minOnSec, 0) * 1000)),
+            Math.max(0, Math.round(num(gateCfg.minStageRunSec, 0) * 1000))
+        );
+        const minOffMsBase = Math.max(0, Math.round(num(d.minOffSec, 0) * 1000));
         let currentStage = Math.max(0, Math.min(Math.round(Number(st.targetStage) || 0), d.stageCount));
 
         if (desiredStage > currentStage) {
-            if (minOffMs > 0 && st.lastDecreaseMs > 0 && (now - st.lastDecreaseMs) < minOffMs) {
+            const cooldownMs = currentStage <= 0
+                ? Math.max(minOffMsBase, Math.max(0, Math.round(num(gateCfg.cooldownAfterOffSec, 0) * 1000)))
+                : minOffMsBase;
+            if (cooldownMs > 0 && st.lastDecreaseMs > 0 && (now - st.lastDecreaseMs) < cooldownMs) {
                 return currentStage;
             }
             st.targetStage = desiredStage;
@@ -1306,6 +1420,54 @@ class HeatingRodControlModule extends BaseModule {
         }
 
         return currentStage;
+    }
+
+    _applyBudgetFollowerStageStrategy(d, desiredStage, observedStage, pvBase, budgetProtection, now, pvAutomationAllowedByMin = true) {
+        const st = this._ensureStageCtlState(d.id, observedStage);
+        const currentStage = Math.max(0, Math.min(Math.round(Number(st.targetStage ?? observedStage) || 0), d.stageCount));
+        let targetStage = Math.max(0, Math.min(Math.round(Number(desiredStage) || 0), d.stageCount));
+        let reason = 'budget_follow';
+
+        const hardOff = !!(budgetProtection && budgetProtection.hardOff);
+        const reduceNow = !!(budgetProtection && budgetProtection.reduceNow);
+        const watchActive = !!(budgetProtection && budgetProtection.watchActive);
+
+        if (hardOff || reduceNow) {
+            const reduceBase = Math.max(currentStage, observedStage, targetStage);
+            targetStage = hardOff ? 0 : this._previousPhysicalStageBelow(d, reduceBase);
+            st.lastDecreaseMs = now;
+            st.targetStage = targetStage;
+            this._stageCtl.set(d.id, st);
+            reason = hardOff ? 'hard_protect' : String((budgetProtection && budgetProtection.reason) || 'protect_reduce');
+            return { targetStage, reduceNow: true, hardOff, reason };
+        }
+
+        // PV minimum is a start/step-up gate, not a nervous OFF command. Once PV-Auto
+        // owns a stage, NVP import and storage-discharge gates decide when it must go down.
+        if (!pvAutomationAllowedByMin && targetStage > currentStage) {
+            targetStage = currentStage;
+            reason = 'pv_min_hold_no_step_up';
+        }
+
+        // During small grid/storage oscillations we hold the current physical stage.
+        // The configured hold timers in _updateBudgetGateProtection decide later
+        // whether a real down-step is necessary.
+        if (watchActive && targetStage > currentStage) {
+            targetStage = currentStage;
+            reason = String((budgetProtection && budgetProtection.reason) || 'gate_watch');
+        }
+        if (targetStage < currentStage) {
+            targetStage = currentStage;
+            reason = watchActive ? 'hold_while_gate_watch' : 'hold_budget_hysteresis';
+        }
+
+        if (targetStage > currentStage) {
+            targetStage = this._limitBudgetStageStepUp(d, targetStage, observedStage, now);
+            if (targetStage > currentStage) reason = 'step_up_budget_ok';
+            else reason = 'step_up_wait';
+        }
+
+        return { targetStage, reduceNow: false, hardOff: false, reason };
     }
 
     _applyZeroExportStageStrategy(d, desiredStage, observedStage, pvBase, zeroInfo, now, measuredW = null) {
@@ -1590,6 +1752,97 @@ class HeatingRodControlModule extends BaseModule {
         return st;
     }
 
+    _markAutoOwnership(d, owned, targetStage = 0, source = '') {
+        if (!d || !d.id) return null;
+        const st = this._stageCtl.get(d.id) || { targetStage: 0, lastIncreaseMs: 0, lastDecreaseMs: 0 };
+        const stage = Math.max(0, Math.round(Number(targetStage) || 0));
+        const now = nowMs();
+        st.autoOwned = !!(owned && stage > 0);
+        st.autoOwnedStage = st.autoOwned ? stage : 0;
+        st.autoOwnedSource = st.autoOwned ? String(source || 'pvAuto') : '';
+        st.autoLastWriteMs = now;
+        if (st.autoOwned && !st.autoOwnedSinceMs) st.autoOwnedSinceMs = now;
+        if (!st.autoOwned) st.autoOwnedSinceMs = 0;
+        this._stageCtl.set(d.id, st);
+        return st;
+    }
+
+    _getAutoOwnership(d, observedStage = 0, measuredW = null, feedback = null) {
+        const st = (d && d.id && this._stageCtl && this._stageCtl.get) ? (this._stageCtl.get(d.id) || {}) : {};
+        const target = Math.max(0, Math.round(Number(st.targetStage) || 0));
+        const obs = Math.max(0, Math.round(Number(observedStage) || 0));
+        const measured = (typeof measuredW === 'number' && Number.isFinite(measuredW)) ? Math.max(0, measuredW) : 0;
+        const applied = Math.max(0, Number(feedback && feedback.appliedPowerW) || 0);
+        const loadPresent = obs > 0 || measured > 50 || applied > 50;
+        const autoOwned = !!(st.autoOwned && target > 0 && loadPresent);
+        const externalManual = !!(loadPresent && (!autoOwned || (obs > 0 && target > 0 && obs > target)));
+        return { st, target, observedStage: obs, loadPresent, autoOwned, externalManual };
+    }
+
+    async _readOwnStateValue(id, fallback = null) {
+        try {
+            const st = await this.adapter.getStateAsync(String(id));
+            if (!st || st.val === null || st.val === undefined) return fallback;
+            return st.val;
+        } catch (_e) {
+            return fallback;
+        }
+    }
+
+    async _restoreAutoOwnershipIfLikely(d, pvAutomationActive, observedStage = 0, measuredW = null, feedback = null) {
+        if (!d || !d.id || !pvAutomationActive) return false;
+        const own = this._getAutoOwnership(d, observedStage, measuredW, feedback);
+        if (own.autoOwned) return true;
+        if (!own.loadPresent || own.observedStage <= 0) return false;
+
+        // After adapter restart/update the in-memory ownership is empty, although
+        // the KNX/relay stage may still be the EMS PV-Auto stage from before.
+        // Restore only with strong evidence from persisted own states. Manual/external
+        // KNX switching remains protected and is never adopted just because Auto(PV) is selected.
+        const prefix = `heatingRod.devices.${d.id}`;
+        const lastTargetRaw = await this._readOwnStateValue(`${prefix}.targetStage`, null);
+        const lastStatus = String(await this._readOwnStateValue(`${prefix}.status`, '') || '').toLowerCase();
+        const lastOverride = String(await this._readOwnStateValue(`${prefix}.override`, '') || '').toLowerCase();
+        const lastTarget = Math.max(0, Math.round(Number(lastTargetRaw) || 0));
+
+        const manualEvidence = /^manual/.test(lastStatus)
+            || lastStatus.includes('external_manual')
+            || lastStatus.includes('manual_allowed')
+            || lastStatus.includes('manual_cfg')
+            || lastStatus.startsWith('off_')
+            || lastOverride.includes('manual');
+        if (manualEvidence) return false;
+
+        const autoEvidence = lastStatus.includes('pv_auto')
+            || lastStatus.includes('budget')
+            || lastStatus.includes('step_up')
+            || lastStatus.includes('gate_')
+            || lastStatus.includes('zero_')
+            || lastStatus.includes('storage_protect')
+            || lastStatus.includes('pv_only_protect')
+            || lastOverride === 'boost';
+        if (!autoEvidence || lastTarget <= 0) return false;
+        if (own.observedStage > lastTarget) return false;
+
+        this._setStageCtlTarget(d.id, lastTarget, own.observedStage);
+        this._markAutoOwnership(d, true, lastTarget, 'pvAuto_restore');
+        return true;
+    }
+
+    async _observeManualExternal(d, observedStage, measuredW, feedback, status = 'external_manual_knx_observed') {
+        const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
+            ? Math.max(0, measuredW)
+            : Math.max(0, feedback && feedback.appliedPowerW ? feedback.appliedPowerW : 0);
+        this._setStageCtlTarget(d.id, observedStage, observedStage);
+        this._markAutoOwnership(d, false, observedStage, 'external_manual');
+        await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, observedStage);
+        await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, this._sumStagePower(d, observedStage));
+        await this._setStateIfChanged(`heatingRod.devices.${d.id}.appliedW`, Math.round(usedW));
+        await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, status);
+        await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, 'manual_external');
+        return Math.round(usedW);
+    }
+
     _computeQuickManualStage(d, userMode) {
         const m = normalizeUserMode(userMode);
         if (m === 'manual1') return Math.min(d.wiredStages || d.stageCount, quickManualLevelToStageCount(d.stageCount, 1));
@@ -1615,37 +1868,53 @@ class HeatingRodControlModule extends BaseModule {
             // ignore
         }
 
+        const staleTimeoutSec = clamp(num(this._getCfg().staleTimeoutSec, 15), 1, 3600);
+        const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
+
         const preFeedbackById = new Map();
         let currentHeatingRodW = 0;
+        let currentAutoHeatingRodW = 0;
         try {
             for (const d of this._devices) {
-                const measuredW = this._readMeasuredW(d);
-                const feedback = this._readStageFeedback(d);
-                const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
+                const measuredW = this._readMeasuredW(d, staleMs);
+                const feedback = this._readStageFeedback(d, staleMs);
+                const observedStagePre = feedback && feedback.anyKnown ? feedback.currentStage : (this._stageCtl.get(d.id)?.targetStage || 0);
+                let usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                     ? Math.max(0, measuredW)
                     : Math.max(0, feedback && feedback.appliedPowerW ? feedback.appliedPowerW : 0);
+                const own = this._getAutoOwnership(d, observedStagePre, measuredW, feedback);
+                if (own.autoOwned && usedW <= 50) {
+                    usedW = this._sumStagePowerModel(d, Math.max(0, own.target || observedStagePre), observedStagePre, measuredW);
+                }
                 currentHeatingRodW += usedW;
+                if (own.autoOwned) currentAutoHeatingRodW += usedW;
                 preFeedbackById.set(d.id, { measuredW, feedback });
             }
         } catch (_e) {
             currentHeatingRodW = 0;
+            currentAutoHeatingRodW = 0;
         }
 
-        const pvBase = this._computeBasePvAvailableW(currentHeatingRodW);
+        // Only add EMS/PV-Auto-owned heating-rod load back into the NVP budget.
+        // A KNX/manual stage is an ordinary house load and must not inflate the
+        // automatic step-up budget.
+        const pvBase = this._computeBasePvAvailableW(currentAutoHeatingRodW);
         const budgetProtection = this._updateBudgetGateProtection(pvBase, now);
         const zeroExportInfo = this._computeZeroExportInfo(pvBase);
         const minPvAutomationW = this._getPvAutomationMinW();
-        const staleTimeoutSec = clamp(num(this._getCfg().staleTimeoutSec, 15), 1, 3600);
-        const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
-        const pvNowForAutomationW = Math.max(
-            this._readPvNowW(staleMs),
-            Math.round(num(pvBase.pvCapW, 0)),
-            Math.round(num(zeroExportInfo && zeroExportInfo.pvNowW, 0))
-        );
+        const pvNowForAutomationW = this._readPvNowW(staleMs);
         const pvAutomationAllowedByMin = minPvAutomationW <= 0 || pvNowForAutomationW >= minPvAutomationW;
         const thermalUsedW = Math.max(0, num(this.adapter && this.adapter._thermalBudgetUsedW, 0));
-        let remainingW = Math.max(0, num(pvBase.availableW, 0) - thermalUsedW);
+        // Wenn pvBase aus der zentralen EMS-Budget-Schicht kommt, ist Thermik mit
+        // Priorität 200 dort bereits abgezogen. Dann darf Heizstab Thermik NICHT
+        // noch einmal abziehen, sonst startet/steigt PV-Auto trotz freiem Gate nicht.
+        const pvBudgetFromCentral = !!(pvBase && pvBase.pvBudgetFromCentral);
+        const thermalDeductedW = pvBudgetFromCentral ? 0 : thermalUsedW;
+        let remainingW = Math.max(0, num(pvBase.availableW, 0) - thermalDeductedW);
         let appliedTotalW = 0;
+        // budgetUsedW is intentionally only EMS/PV-Auto-owned heating-rod load.
+        // Extern/manual KNX heat is ordinary house load and must not be reserved again
+        // in ems.budget, otherwise the central PV budget is double-counted.
         let budgetUsedW = 0;
 
         for (const d of this._devices) {
@@ -1684,12 +1953,12 @@ class HeatingRodControlModule extends BaseModule {
             userMode = normalizeUserMode(userMode);
 
             const pre = preFeedbackById.get(d.id) || {};
-            const measuredW = (typeof pre.measuredW === 'number' && Number.isFinite(pre.measuredW)) ? pre.measuredW : this._readMeasuredW(d);
+            const measuredW = (typeof pre.measuredW === 'number' && Number.isFinite(pre.measuredW)) ? pre.measuredW : this._readMeasuredW(d, staleMs);
             if (typeof measuredW === 'number' && Number.isFinite(measuredW)) {
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.measuredW`, Math.round(measuredW));
             }
 
-            const feedback = pre.feedback || this._readStageFeedback(d);
+            const feedback = pre.feedback || this._readStageFeedback(d, staleMs);
             const observedStage = feedback.anyKnown ? feedback.currentStage : (this._stageCtl.get(d.id)?.targetStage || 0);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.currentStage`, observedStage);
 
@@ -1722,7 +1991,6 @@ class HeatingRodControlModule extends BaseModule {
                 const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                     ? Math.max(0, measuredW)
                     : Math.max(0, feedback.appliedPowerW);
-                budgetUsedW += Math.round(usedW);
                 remainingW = Math.max(0, remainingW - usedW);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, 0);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, 0);
@@ -1738,6 +2006,7 @@ class HeatingRodControlModule extends BaseModule {
                 const res = await this._applyStageState(d, fullStage, feedback, { force: true });
                 const effectiveTargetStage = Math.max(0, Math.min(num(res.targetStage, fullStage), d.wiredStages || d.stageCount));
                 this._setStageCtlTarget(d.id, effectiveTargetStage, observedStage);
+                this._markAutoOwnership(d, effectiveTargetStage > 0, effectiveTargetStage, 'boost');
                 const targetW = this._sumStagePower(d, effectiveTargetStage);
                 const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                     ? Math.max(0, measuredW)
@@ -1760,6 +2029,7 @@ class HeatingRodControlModule extends BaseModule {
                 const res = await this._applyStageState(d, manualStage, feedback, { force: true });
                 const effectiveTargetStage = Math.max(0, Math.min(num(res.targetStage, manualStage), d.wiredStages || d.stageCount));
                 this._setStageCtlTarget(d.id, effectiveTargetStage, observedStage);
+                this._markAutoOwnership(d, false, effectiveTargetStage, 'manual_mode');
                 const targetW = this._sumStagePower(d, effectiveTargetStage);
                 const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                     ? Math.max(0, measuredW)
@@ -1767,7 +2037,6 @@ class HeatingRodControlModule extends BaseModule {
                 const level = Math.min(3, Math.max(1, Math.round(Number(String(baseMode).replace('manual', '')) || 1)));
 
                 appliedTotalW += Math.round(targetW);
-                budgetUsedW += Math.round(usedW);
                 remainingW = Math.max(0, remainingW - usedW);
 
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, effectiveTargetStage);
@@ -1786,10 +2055,10 @@ class HeatingRodControlModule extends BaseModule {
                 const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                     ? Math.max(0, measuredW)
                     : Math.max(0, feedback.appliedPowerW);
-                budgetUsedW += Math.round(usedW);
                 remainingW = Math.max(0, remainingW - usedW);
                 appliedTotalW += Math.round(usedW);
                 this._setStageCtlTarget(d.id, observedStage, observedStage);
+                this._markAutoOwnership(d, false, observedStage, 'manual_allowed');
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, observedStage);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, this._sumStagePower(d, observedStage));
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.appliedW`, Math.round(usedW));
@@ -1803,9 +2072,10 @@ class HeatingRodControlModule extends BaseModule {
                 const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                     ? Math.max(0, measuredW)
                     : Math.max(0, feedback.appliedPowerW);
-                budgetUsedW += Math.round(usedW);
                 remainingW = Math.max(0, remainingW - usedW);
                 appliedTotalW += Math.round(usedW);
+                this._setStageCtlTarget(d.id, observedStage, observedStage);
+                this._markAutoOwnership(d, false, observedStage, 'manual_cfg');
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, observedStage);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, this._sumStagePower(d, observedStage));
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.appliedW`, Math.round(usedW));
@@ -1817,10 +2087,10 @@ class HeatingRodControlModule extends BaseModule {
             if (baseMode === 'off') {
                 const res = await this._applyStageState(d, 0, feedback, { force: true });
                 this._setStageCtlTarget(d.id, 0, observedStage);
+                this._markAutoOwnership(d, false, 0, 'off');
                 const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                     ? Math.max(0, measuredW)
                     : Math.max(0, feedback.appliedPowerW);
-                budgetUsedW += Math.round(usedW);
                 remainingW = Math.max(0, remainingW - usedW);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, 0);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, 0);
@@ -1837,10 +2107,10 @@ class HeatingRodControlModule extends BaseModule {
                 const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                     ? Math.max(0, measuredW)
                     : Math.max(0, feedback.appliedPowerW);
-                budgetUsedW += Math.round(usedW);
                 remainingW = Math.max(0, remainingW - usedW);
                 appliedTotalW += Math.round(usedW);
                 this._setStageCtlTarget(d.id, observedStage, observedStage);
+                this._markAutoOwnership(d, false, observedStage, 'manual_allowed');
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, observedStage);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, this._sumStagePower(d, observedStage));
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.appliedW`, Math.round(usedW));
@@ -1849,30 +2119,15 @@ class HeatingRodControlModule extends BaseModule {
                 continue;
             }
 
-            // Global PV-Auto gate: below the configured current PV generation threshold
-            // the app must not regulate this device at all. This keeps manual/KNX/ioBroker
-            // switching untouched and prevents the EMS from automatically writing OFF.
-            if (pvAutomationActive && !pvAutomationAllowedByMin) {
-                const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
-                    ? Math.max(0, measuredW)
-                    : Math.max(0, feedback.appliedPowerW);
-                budgetUsedW += Math.round(usedW);
-                remainingW = Math.max(0, remainingW - usedW);
-                appliedTotalW += Math.round(usedW);
-                this._setStageCtlTarget(d.id, observedStage, observedStage);
-                await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, observedStage);
-                await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, this._sumStagePower(d, observedStage));
-                await this._setStateIfChanged(`heatingRod.devices.${d.id}.appliedW`, Math.round(usedW));
-                await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, `pv_min_not_reached_manual_allowed_${pvNowForAutomationW}of${minPvAutomationW}W`);
-                await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, 'manual_allowed');
-                continue;
-            }
+            // Global PV-Auto minimum: this is now only a start/step-up gate.
+            // It must not be a hard OFF, because small cloud/PV transients would otherwise
+            // kill a stable stage and external KNX/manual switching would feel broken.
+            const pvMinBlocksStepUp = !!(pvAutomationActive && !pvBase.tariffGridImportPreferred && !pvAutomationAllowedByMin);
 
             if (d.wiredStages < 1) {
                 const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                     ? Math.max(0, measuredW)
                     : Math.max(0, feedback.appliedPowerW);
-                budgetUsedW += Math.round(usedW);
                 remainingW = Math.max(0, remainingW - usedW);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetStage`, 0);
                 await this._setStateIfChanged(`heatingRod.devices.${d.id}.targetW`, 0);
@@ -1882,18 +2137,21 @@ class HeatingRodControlModule extends BaseModule {
                 continue;
             }
 
-            let desiredStage = this._computeDesiredStage(d, remainingW, observedStage, measuredW);
-            let zeroDecision = null;
-
-            // Wenn der Budget-Gate-Schutz gerade einen Netzbezug/Speicherbezug beobachtet,
-            // nicht weiter hochfahren. Bestehende Stufe darf bis zur konfigurierten Schutzzeit
-            // laufen, damit PV/FEMS sauber nachregeln kann.
-            if (budgetProtection && budgetProtection.watchActive && desiredStage > observedStage) {
-                desiredStage = observedStage;
-            } else if (desiredStage > observedStage) {
-                desiredStage = this._limitBudgetStageStepUp(d, desiredStage, observedStage, now);
+            if (pvAutomationActive) {
+                await this._restoreAutoOwnershipIfLikely(d, pvAutomationActive, observedStage, measuredW, feedback);
+            }
+            const ownNow = this._getAutoOwnership(d, observedStage, measuredW, feedback);
+            if (pvAutomationActive && ownNow.externalManual) {
+                const usedW = await this._observeManualExternal(d, observedStage, measuredW, feedback, 'external_manual_knx_observed');
+                remainingW = Math.max(0, remainingW - usedW);
+                appliedTotalW += usedW;
+                continue;
             }
 
+            let desiredStage = this._computeDesiredStage(d, remainingW, observedStage, measuredW);
+            let zeroDecision = null;
+            let budgetDecision = this._applyBudgetFollowerStageStrategy(d, desiredStage, observedStage, pvBase, budgetProtection, now, !pvMinBlocksStepUp);
+            desiredStage = Math.max(0, Math.min(num(budgetDecision.targetStage, desiredStage), d.stageCount));
             // 0-/Minus-Einspeiseanlagen verstecken PV-Überschuss am Netzpunkt, weil der
             // Wechselrichter/FEMS die PV abregelt. In diesem Sondermodus darf PV-Auto vorsichtig
             // eine physische Heizstab-Stufe als Testlast zuschalten, wenn Forecast, PV-Leistung,
@@ -1909,7 +2167,7 @@ class HeatingRodControlModule extends BaseModule {
             // Reiner PV-Betrieb: bei Netzbezug oder Speicherentladung keine Stufe halten
             // oder neu zuschalten. Bei aktivem 0-Einspeise-Sondermodus werden kurze Transienten
             // nicht sofort gekillt, sondern erst nach den konfigurierten Schutzzeiten.
-            let forceNonPvDown = !!(budgetProtection && budgetProtection.reduceNow);
+            let forceNonPvDown = !!((budgetDecision && budgetDecision.reduceNow) || (budgetProtection && budgetProtection.reduceNow));
             if (zeroExportInfo.active) forceNonPvDown = !!(forceNonPvDown || (zeroDecision && zeroDecision.reduceNow));
             if (forceNonPvDown) {
                 // Reduce to the next lower *physical* actuator set. This is important for
@@ -1927,13 +2185,28 @@ class HeatingRodControlModule extends BaseModule {
                 ? 0
                 : (forceNonPvDown ? desiredStage : this._applyTiming(d, desiredStage, observedStage));
             if (forceStorageProtectOff || forceNonPvDown) this._setStageCtlTarget(d.id, targetStage, observedStage);
-            const forcePvWrite = !!(forceStorageProtectOff || forceNonPvDown || (targetStage <= 0 && ((typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 50) || Math.max(0, feedback.appliedPowerW || 0) > 0)));
+            const offWouldTouchLoad = targetStage <= 0 && ((typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 50) || Math.max(0, feedback.appliedPowerW || 0) > 0 || observedStage > 0);
+            const mayWriteOff = !!(ownNow.autoOwned || forceStorageProtectOff || forceNonPvDown);
+            if (targetStage <= 0 && offWouldTouchLoad && !mayWriteOff) {
+                const usedW = await this._observeManualExternal(d, observedStage, measuredW, feedback, 'manual_external_off_protected');
+                remainingW = Math.max(0, remainingW - usedW);
+                appliedTotalW += usedW;
+                continue;
+            }
+            const forcePvWrite = !!(forceStorageProtectOff || forceNonPvDown || (targetStage <= 0 && mayWriteOff && offWouldTouchLoad));
             const res = await this._applyStageState(d, targetStage, feedback, { force: forcePvWrite });
             const effectiveTargetStage = Math.max(0, Math.min(num(res.targetStage, targetStage), d.wiredStages));
+            this._markAutoOwnership(d, effectiveTargetStage > 0, effectiveTargetStage, 'pvAuto');
             const targetW = this._sumStagePowerModel(d, effectiveTargetStage, observedStage, measuredW);
-            const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
+            const measuredUsedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
                 ? Math.max(0, measuredW)
-                : targetW;
+                : 0;
+            // For EMS-owned PV-Auto stages reserve the commanded target immediately.
+            // The physical meter can lag one or more cycles behind the relay write;
+            // reserving only the old measured 1 kW would let the central budget look
+            // like the heater is still on stage 1 and can prevent clean follow-up
+            // decisions/diagnostics while the step-up is already commanded.
+            const usedW = Math.max(measuredUsedW, targetW);
 
             appliedTotalW += Math.round(targetW);
             budgetUsedW += Math.round(usedW);
@@ -1944,24 +2217,51 @@ class HeatingRodControlModule extends BaseModule {
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.appliedW`, Math.round(usedW));
             const zeroSuffix = zeroDecision && zeroDecision.reason ? `_zero_${String(zeroDecision.reason)}` : '';
             const gateSuffix = budgetProtection && budgetProtection.reason && budgetProtection.reason !== 'ok' ? `_gate_${String(budgetProtection.reason)}` : '';
+            const budgetSuffix = budgetDecision && budgetDecision.reason && budgetDecision.reason !== 'budget_follow' ? `_budget_${String(budgetDecision.reason)}` : '';
+            const pvMinSuffix = pvMinBlocksStepUp ? `_pv_min_hold_${pvNowForAutomationW}of${minPvAutomationW}W` : '';
             const autoStatus = forceStorageProtectOff
-                ? `storage_protect_${String(res.status || '')}${zeroSuffix}${gateSuffix}`
-                : (forceNonPvDown ? `pv_only_protect_${String(res.status || '')}${zeroSuffix}${gateSuffix}` : `${String(res.status || 'pv_auto')}${zeroSuffix}${gateSuffix}`);
+                ? `storage_protect_${String(res.status || '')}${zeroSuffix}${gateSuffix}${budgetSuffix}${pvMinSuffix}`
+                : (forceNonPvDown ? `pv_only_protect_${String(res.status || '')}${zeroSuffix}${gateSuffix}${budgetSuffix}${pvMinSuffix}` : `${String(res.status || 'pv_auto')}${zeroSuffix}${gateSuffix}${budgetSuffix}${pvMinSuffix}`);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.status`, autoStatus);
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, '');
         }
 
         this.adapter._heatingRodBudgetUsedW = Math.round(budgetUsedW);
 
+        // Central EMS Budget & Gates reservation. Heizstab is normally a lower-priority PV consumer
+        // after Ladepunkte/Thermik. This is diagnostics + downstream accounting only; manual KNX
+        // channels remain protected by the ownership logic above.
+        try {
+            const rt = this.adapter && this.adapter._emsBudget;
+            if (rt && typeof rt.reserve === 'function') {
+                const used = Math.max(0, Math.round(budgetUsedW || 0));
+                const tariffImportPreferred = !!(pvBase && pvBase.tariffGridImportPreferred);
+                rt.reserve({
+                    key: 'heatingRod',
+                    app: 'heatingRodControl',
+                    label: 'Heizstab',
+                    priority: 300,
+                    requestedW: used,
+                    reserveW: used,
+                    pvReserveW: tariffImportPreferred ? 0 : used,
+                    actualW: Math.max(0, Math.round(currentHeatingRodW || appliedTotalW || used || 0)),
+                    pvOnly: !tariffImportPreferred,
+                    mode: tariffImportPreferred ? 'tariffNegative' : 'pvAuto',
+                });
+            }
+        } catch (_e) {
+            // budget diagnostics only
+        }
+
         await this._setStateIfChanged('heatingRod.summary.pvCapW', Math.round(num(pvBase.pvCapW, 0)));
         await this._setStateIfChanged('heatingRod.summary.evcsUsedW', Math.round(num(pvBase.evcsUsedW, 0)));
         await this._setStateIfChanged('heatingRod.summary.thermalUsedW', Math.round(thermalUsedW));
-        await this._setStateIfChanged('heatingRod.summary.currentHeatingRodW', Math.round(num(pvBase.currentHeatingRodW, currentHeatingRodW)));
+        await this._setStateIfChanged('heatingRod.summary.currentHeatingRodW', Math.round(currentHeatingRodW));
         await this._setStateIfChanged('heatingRod.summary.storageReserveW', Math.round(num(pvBase.storageReserveW, 0)));
         await this._setStateIfChanged('heatingRod.summary.storageChargeW', Math.round(num(pvBase.storageChargeW, 0)));
         await this._setStateIfChanged('heatingRod.summary.storageDischargeW', Math.round(num(pvBase.storageDischargeW, 0)));
         await this._setStateIfChanged('heatingRod.summary.pvAvailableRawW', Math.round(num(pvBase.availableW, 0)));
-        await this._setStateIfChanged('heatingRod.summary.pvAvailableW', Math.round(Math.max(0, num(pvBase.availableW, 0) - thermalUsedW)));
+        await this._setStateIfChanged('heatingRod.summary.pvAvailableW', Math.round(Math.max(0, num(pvBase.availableW, 0) - thermalDeductedW)));
         await this._setStateIfChanged('heatingRod.summary.appliedTotalW', Math.round(appliedTotalW));
         await this._setStateIfChanged('heatingRod.summary.budgetUsedW', Math.round(budgetUsedW));
         await this._setStateIfChanged('heatingRod.summary.budgetGateTotalW', pvBase.budgetGateTotalW === null ? 0 : Math.round(num(pvBase.budgetGateTotalW, 0)));
@@ -1993,7 +2293,8 @@ class HeatingRodControlModule extends BaseModule {
             importToleranceW: Math.round(num(pvBase.importToleranceW, 0)),
             gridImportActive: !!pvBase.gridImportActive,
             exportW: Math.round(num(pvBase.exportW, 0)),
-            currentHeatingRodW: Math.round(num(pvBase.currentHeatingRodW, 0)),
+            currentHeatingRodW: Math.round(currentHeatingRodW),
+            currentAutoHeatingRodW: Math.round(currentAutoHeatingRodW),
             storageChargeW: Math.round(num(pvBase.storageChargeW, 0)),
             storageDischargeW: Math.round(num(pvBase.storageDischargeW, 0)),
             dischargeToleranceW: Math.round(num(pvBase.dischargeToleranceW, 0)),
@@ -2011,6 +2312,8 @@ class HeatingRodControlModule extends BaseModule {
             cmAvailableW: Math.round(num(pvBase.cmAvailableW, 0)),
             availableW: Math.round(num(pvBase.availableW, 0)),
             thermalUsedW: Math.round(thermalUsedW),
+            thermalDeductedW: Math.round(thermalDeductedW),
+            pvBudgetFromCentral: !!pvBudgetFromCentral,
             forceOff: !!pvBase.forceOff,
             budgetGate: {
                 useBudgetGates: !!pvBase.useBudgetGates,
@@ -2019,6 +2322,8 @@ class HeatingRodControlModule extends BaseModule {
                 pvW: Math.round(num(pvBase.budgetGatePvW, 0)),
                 effectiveW: Math.round(num(pvBase.budgetGateEffectiveW, 0)),
                 source: pvBase.budgetGateSource,
+                pvBudgetFromCentral: !!pvBase.pvBudgetFromCentral,
+                tariffGridImportPreferred: !!pvBase.tariffGridImportPreferred,
                 cmActive: pvBase.cmActive,
                 cmStaleMeter: !!pvBase.cmStaleMeter,
                 cmStaleBudget: !!pvBase.cmStaleBudget,

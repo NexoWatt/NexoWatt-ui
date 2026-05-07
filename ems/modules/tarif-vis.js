@@ -78,6 +78,15 @@ class TarifVisModule extends BaseModule {
         await mk('tarif.statusText', 'Tarif Status (VIS)', 'string', 'text');
         await mk('tarif.netFeeEnabled', 'Zeitvariables Netzentgelt aktiv (VIS)', 'boolean', 'indicator');
         await mk('tarif.netFeeMode', 'Netzentgelt Modus (NT/Standard/HT)', 'string', 'text');
+
+        // Gate E – Negativpreis / Tarif-Gewinnoptimierung
+        await mk('tarif.negativpreisAktiv', 'Negativpreis aktiv', 'boolean', 'indicator');
+        await mk('tarif.netzbezugBevorzugt', 'Netzbezug bevorzugt bei Negativpreis', 'boolean', 'indicator');
+        await mk('tarif.negativPreisAktuellEurProKwh', 'Negativpreis aktuell (€/kWh)', 'number', 'value');
+        await mk('tarif.negativPreisMinEurProKwh', 'Negativpreis Minimum (€/kWh, Horizon)', 'number', 'value');
+        await mk('tarif.naechstesNegativVon', 'Nächstes Negativpreis-Fenster ab (ISO)', 'string', 'text');
+        await mk('tarif.naechstesNegativBis', 'Nächstes Negativpreis-Fenster bis (ISO)', 'string', 'text');
+        await mk('tarif.negativpreisStatus', 'Negativpreis Status', 'string', 'text');
         // VIS-Settings als Datenpunkte registrieren (nur wenn dp-Registry vorhanden ist)
         if (this.dp && typeof this.dp.upsert === 'function') {
             const visInst = this._getVisInstance();
@@ -710,6 +719,17 @@ class TarifVisModule extends BaseModule {
             let nextCheapToIso = null;
             let horizonCurve = null;
 
+            // Gate E – Negativpreis: Wenn der effektive dynamische Preis < 0 ist,
+            // soll Netzbezug bewusst bevorzugt werden. Today+Tomorrow werden als
+            // Planungs-/Diagnosehorizont ausgewertet, der aktuelle Preis bleibt
+            // aber die harte Live-Freigabe.
+            let negativeActive = false;
+            let negativeWindowNow = false;
+            let negativeCurrentPrice = null;
+            let negativeMinPrice = null;
+            let nextNegativeFromIso = null;
+            let nextNegativeToIso = null;
+
             if (aktivEff && modusInt === 2) {
                 const rawToday = (this.dp && typeof this.dp.getEntry === 'function' && this.dp.getEntry('tarif.pricesTodayJson'))
                     ? this.dp.getRaw('tarif.pricesTodayJson')
@@ -735,6 +755,50 @@ class TarifVisModule extends BaseModule {
                     preisDurchschnittCalc = all.reduce((s, x) => s + x.priceEurKwh, 0) / all.length;
                 }
             }
+
+            // Negativpreis-Fenster aus Today+Tomorrow-Forecast ermitteln.
+            if (aktivEff) {
+                const negEps = 1e-9;
+
+                if (preisAktuellOk && preisAktuell < -negEps) {
+                    negativeActive = true;
+                    negativeCurrentPrice = preisAktuell;
+                }
+
+                if (Array.isArray(horizonCurve) && horizonCurve.length > 0) {
+                    const negAll = horizonCurve
+                        .filter(x => x && Number.isFinite(x.startMs) && Number.isFinite(x.endMs) && Number.isFinite(x.priceEurKwh))
+                        .filter(x => x.endMs > nowMs && x.priceEurKwh < -negEps)
+                        .sort((a, b) => a.startMs - b.startMs);
+
+                    if (negAll.length > 0) {
+                        negativeMinPrice = Math.min(...negAll.map(x => x.priceEurKwh));
+
+                        const activeSeg = negAll.find(x => x.startMs <= nowMs && x.endMs > nowMs);
+                        if (activeSeg) {
+                            negativeActive = true;
+                            negativeWindowNow = true;
+                            negativeCurrentPrice = activeSeg.priceEurKwh;
+                        }
+
+                        const first = negAll[0];
+                        let winStart = first.startMs;
+                        let winEnd = first.endMs;
+                        for (let i = 1; i < negAll.length; i++) {
+                            const it = negAll[i];
+                            if (it.startMs <= (winEnd + 1000)) {
+                                winEnd = Math.max(winEnd, it.endMs);
+                            } else {
+                                break;
+                            }
+                        }
+                        nextNegativeFromIso = new Date(winStart).toISOString();
+                        nextNegativeToIso = new Date(winEnd).toISOString();
+                    }
+                }
+            }
+
+            const gridImportPreferred = !!(aktivEff && negativeActive);
 
             const preisDurchschnittEff = preisDurchschnittOk ? preisDurchschnitt
                 : (Number.isFinite(preisDurchschnittCalc) ? preisDurchschnittCalc : null);
@@ -867,10 +931,20 @@ class TarifVisModule extends BaseModule {
                 tarifState = next;
             }
 
+            // Negativpreis ist ein Sonderfall von "günstig", aber mit stärkerer
+            // Wirkung: Netzbezug wird bevorzugt, Speicherentladung wird gesperrt und
+            // die Speicher-Netzlade-Zeitfenster/PV-Reserve dürfen nicht blockieren.
+            if (gridImportPreferred) {
+                tarifState = 'guenstig';
+                this._tarifLastState = 'guenstig';
+            }
+
             // --- Priorität ---
             // 1 = Speicher | 2 = Auto | 3 = Ladestation
             const allowStorageCheap = (prioritaet === 1 || prioritaet === 2);
             const allowEvcsCheap = (prioritaet === 2 || prioritaet === 3);
+            const allowStorageCheapEff = gridImportPreferred ? true : allowStorageCheap;
+            const allowEvcsCheapEff = gridImportPreferred ? true : allowEvcsCheap;
 
             // Speicher-SoC (optional)
             //
@@ -956,15 +1030,16 @@ class TarifVisModule extends BaseModule {
 	                // Q1/Q4: 18:00–06:00 | Q2/Q3: 21:00–06:00
 	                // Ausnahme: Wenn zeitvariables Netzentgelt im NT ist, darf geladen werden.
 	                const storageTimeOk = !!storageChargeWindowOk;
-	                const cheapWanted = (tarifState === 'guenstig' && allowStorageCheap);
+	                const cheapWanted = ((tarifState === 'guenstig' && allowStorageCheapEff) || gridImportPreferred);
 	                // Im Netzentgelt‑NT gilt das Zeitfenster als "kosten-günstig" genug,
 	                // damit Speicher‑Netzladung überhaupt erlaubt ist (abhängig von Priorität + SoC‑Latch).
 	                // Dadurch funktioniert NT auch dann, wenn der Stromtarif selbst nur neutral/teuer ist.
-	                const cheapOrNtWanted = (cheapWanted || (netFeeIsNt && allowStorageCheap));
+	                const cheapOrNtWanted = (cheapWanted || (netFeeIsNt && allowStorageCheapEff));
 	                // Speicher darf laden, wenn (Tarif günstig ODER Netzentgelt‑NT) UND Zeitfenster ok.
-	                // Ausnahme zur Zeitfenster‑Policy: Wenn Netzentgelt im NT ist, darf auch außerhalb
-	                // des Zeitfensters geladen werden.
-	                const chargeAllowed = (cheapOrNtWanted && (storageTimeOk || netFeeIsNt));
+	                // Ausnahmen zur Zeitfenster‑Policy:
+	                // - Netzentgelt im NT
+	                // - Negativpreis: Netzbezug ist wirtschaftlich erwünscht und darf tagsüber laden.
+	                const chargeAllowed = (cheapOrNtWanted && (storageTimeOk || netFeeIsNt || gridImportPreferred));
 
 	                if (netFeeIsHt) {
                     // In HT: Speicher soll NICHT durch Tarif entladen/geladen werden → Eigenverbrauch
@@ -1032,10 +1107,12 @@ class TarifVisModule extends BaseModule {
 
             // 1) Basis: dynamischer Tarif (falls aktiv)
             if (aktivEff) {
-                if (tarifState === 'teuer') {
+                if (gridImportPreferred) {
+                    gridChargeAllowed = true;
+                } else if (tarifState === 'teuer') {
                     gridChargeAllowed = false;
                 } else if (tarifState === 'guenstig') {
-                    gridChargeAllowed = allowEvcsCheap ? true : false;
+                    gridChargeAllowed = allowEvcsCheapEff ? true : false;
                 } else {
                     gridChargeAllowed = true;
                 }
@@ -1052,6 +1129,13 @@ class TarifVisModule extends BaseModule {
                     gridChargeAllowed = false;
                 }
                 // Standard (ST): kein Override
+            }
+
+            // Negativpreis hat als wirtschaftliches Signal Vorrang vor PV-only-/HT-Sperren:
+            // Netzbezug erlauben, Speicherentladung vermeiden. Harte Netz-/§14a-/Peak-Grenzen
+            // werden später weiterhin durch die Gates begrenzt.
+            if (gridImportPreferred) {
+                gridChargeAllowed = true;
             }
 
             // Entladen-Freigabe (für Speicher-/Assist-Logik):
@@ -1075,7 +1159,10 @@ class TarifVisModule extends BaseModule {
                 const storageChargingPlanned = Number.isFinite(speicherSollW) && speicherSollW < 0;
                 const forceSelfConsumption = !!storageChargeBlockedByTime || netFeeIsHt;
 
-                if (forceSelfConsumption) {
+                if (gridImportPreferred) {
+                    // Bei Negativpreis soll der Speicher nicht gegen den gewünschten Netzbezug entladen.
+                    dischargeAllowed = false;
+                } else if (forceSelfConsumption) {
                     // Eigenverbrauch-Modus (tagsüber Policy oder HT): Entladen erlaubt.
                     dischargeAllowed = true;
                 } else if (netFeeIsNt) {
@@ -1097,7 +1184,7 @@ class TarifVisModule extends BaseModule {
 
             // Ladepark-Limit: Standard = baseW; Reservierung wenn Speicher im Tarif-Fenster lädt
             let limitW = baseW;
-            if (((aktivEff && (tarifState === 'guenstig')) || (netFeeEff && netFeeMode === 'NT')) && speicherSollW < 0 && baseW > 0) {
+            if (!gridImportPreferred && ((aktivEff && (tarifState === 'guenstig')) || (netFeeEff && netFeeMode === 'NT')) && speicherSollW < 0 && baseW > 0) {
                 const reserveW = Math.max(0, -speicherSollW);
                 const storageShare = (prioritaet === 1) ? 1.0 : (prioritaet === 3) ? 0.0 : 0.5;
                 limitW = Math.max(0, Math.round(baseW - (reserveW * storageShare)));
@@ -1130,6 +1217,14 @@ class TarifVisModule extends BaseModule {
 
             await this._setIfChanged('tarif.netFeeEnabled', netFeeEff);
             await this._setIfChanged('tarif.netFeeMode', netFeeMode);
+
+            await this._setIfChanged('tarif.negativpreisAktiv', !!negativeActive);
+            await this._setIfChanged('tarif.netzbezugBevorzugt', !!gridImportPreferred);
+            await this._setIfChanged('tarif.negativPreisAktuellEurProKwh', (negativeActive && typeof negativeCurrentPrice === 'number' && Number.isFinite(negativeCurrentPrice)) ? negativeCurrentPrice : null);
+            await this._setIfChanged('tarif.negativPreisMinEurProKwh', (typeof negativeMinPrice === 'number' && Number.isFinite(negativeMinPrice)) ? negativeMinPrice : null);
+            await this._setIfChanged('tarif.naechstesNegativVon', nextNegativeFromIso || null);
+            await this._setIfChanged('tarif.naechstesNegativBis', nextNegativeToIso || null);
+            await this._setIfChanged('tarif.negativpreisStatus', gridImportPreferred ? 'active_grid_import_preferred' : (nextNegativeFromIso ? 'scheduled' : 'inactive'));
 
             
 // Kurz-Status für die VIS (Live-Ansicht)
@@ -1170,7 +1265,15 @@ if (aktivEff || netFeeActive) {
   // - Standard (ST): keine Sperre/Erzwingung → dynamischer Tarif wie bisher
   const base = netFeeActive ? `Netzentgelt ${netFeeMode} | ${baseTarif}` : baseTarif;
 
-  if (netFeeOverlayUi) {
+  if (gridImportPreferred) {
+    const parts = [];
+    parts.push('Negativpreis aktiv');
+    if (storageCharging) parts.push('Speicher Netzladen');
+    else if (storageFullHold) parts.push('Speicher voll (ruht)');
+    parts.push('EVCS/Verbraucher Netzbezug freigegeben');
+    parts.push('Speicherentladung gesperrt');
+    statusText = `${base}: ${parts.join(' + ')}`;
+  } else if (netFeeOverlayUi) {
     if (netFeeMode === 'NT') {
       const parts = [];
       if (storageCharging) parts.push('Speicher lädt');
@@ -1247,6 +1350,14 @@ await this._setIfChanged('tarif.statusText', statusText);
                 preisSchwelleGuensig: (typeof preisSchwelleGuensig === 'number' && Number.isFinite(preisSchwelleGuensig)) ? preisSchwelleGuensig : null,
                 nextCheapFromIso: nextCheapFromIso || null,
                 nextCheapToIso: nextCheapToIso || null,
+                negativeActive: !!negativeActive,
+                negativeWindowNow: !!negativeWindowNow,
+                gridImportPreferred: !!gridImportPreferred,
+                netzbezugBevorzugt: !!gridImportPreferred,
+                negativeCurrentPrice: (negativeActive && typeof negativeCurrentPrice === 'number' && Number.isFinite(negativeCurrentPrice)) ? negativeCurrentPrice : null,
+                negativeMinPrice: (typeof negativeMinPrice === 'number' && Number.isFinite(negativeMinPrice)) ? negativeMinPrice : null,
+                nextNegativeFromIso: nextNegativeFromIso || null,
+                nextNegativeToIso: nextNegativeToIso || null,
                 autoBandEur: (typeof autoBandEur === 'number' && Number.isFinite(autoBandEur)) ? autoBandEur : null,
                 horizonHours: (typeof horizonHours === 'number' && Number.isFinite(horizonHours)) ? horizonHours : null,
                 preisRef: (preisRef !== null && preisRef !== undefined && Number.isFinite(preisRef)) ? preisRef : null,

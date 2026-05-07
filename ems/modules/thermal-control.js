@@ -467,7 +467,37 @@ const mk = async (id, name, type, role, unit = undefined) => {
         const staleTimeoutSec = clamp(num(cfg.staleTimeoutSec, 15), 1, 3600);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
 
-        // Primary: PV cap (effective) after EVCS, provided by charging module.
+        // Primary: central EMS Budget & Gates. Charging management reserves EVCS first,
+        // thermal consumers get the next priority layer, and heating rods receive the remaining PV budget.
+        try {
+            const rt = this.adapter && this.adapter._emsBudget;
+            const snap = rt && typeof rt.peek === 'function' ? rt.peek() : null;
+            const age = snap && Number.isFinite(Number(snap.ts)) ? (Date.now() - Number(snap.ts)) : Number.POSITIVE_INFINITY;
+            if (snap && age <= staleMs) {
+                const pvTotalW = snap.gates && snap.gates.pv ? Number(snap.gates.pv.effectiveW) : 0;
+                const remainingPvW = Number(snap.remainingPvW);
+                const tariffGate = snap.gates && snap.gates.tariff ? snap.gates.tariff : null;
+                const tariffImportPreferred = !!(tariffGate && tariffGate.gridImportPreferred);
+                const remainingTotalW = Number(snap.remainingTotalW);
+                if (Number.isFinite(remainingPvW) && remainingPvW >= 0) {
+                    const evcs = snap.consumers && snap.consumers.evcs ? snap.consumers.evcs : null;
+                    const evcsUsedW = evcs && Number.isFinite(Number(evcs.reserveW)) ? Math.max(0, Number(evcs.reserveW)) : 0;
+                    const availableByTariffW = (tariffImportPreferred && Number.isFinite(remainingTotalW) && remainingTotalW >= 0)
+                        ? Math.max(0, remainingTotalW)
+                        : null;
+                    return {
+                        pvCapW: Math.max(0, Number.isFinite(pvTotalW) ? pvTotalW : remainingPvW),
+                        evcsUsedW,
+                        availableW: availableByTariffW !== null ? availableByTariffW : Math.max(0, remainingPvW),
+                        source: availableByTariffW !== null ? 'ems.budget.tariffNegative' : 'ems.budget',
+                    };
+                }
+            }
+        } catch (_e) {
+            // fall back to legacy budget source
+        }
+
+        // Legacy fallback: PV cap (effective) after EVCS, provided by charging module.
         const pvCapW = this.dp ? this.dp.getNumberFresh('th.cm.pvCapW', staleMs, null) : null;
         const usedW = this.dp ? this.dp.getNumberFresh('th.cm.usedW', staleMs, null) : null;
 
@@ -872,6 +902,28 @@ const mk = async (id, name, type, role, unit = undefined) => {
         }
 
         this.adapter._thermalBudgetUsedW = Math.round(budgetUsedW);
+
+        // Central EMS Budget & Gates reservation for downstream apps.
+        try {
+            const rt = this.adapter && this.adapter._emsBudget;
+            if (rt && typeof rt.reserve === 'function') {
+                const used = Math.max(0, Math.round(budgetUsedW || 0));
+                const tariffImportPreferred = String(pv.source || '').includes('tariffNegative');
+                rt.reserve({
+                    key: 'thermal',
+                    app: 'thermalControl',
+                    label: 'Thermik',
+                    priority: 200,
+                    requestedW: used,
+                    reserveW: used,
+                    pvReserveW: tariffImportPreferred ? 0 : used,
+                    pvOnly: !tariffImportPreferred,
+                    mode: tariffImportPreferred ? 'tariffNegative' : 'pvAuto',
+                });
+            }
+        } catch (_e) {
+            // budget diagnostics only
+        }
 
         await this._setStateIfChanged('thermal.summary.pvCapW', Math.round(num(pv.pvCapW, 0)));
         await this._setStateIfChanged('thermal.summary.evcsUsedW', Math.round(num(pv.evcsUsedW, 0)));
