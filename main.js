@@ -1168,16 +1168,43 @@ class NexoWattVis extends utils.Adapter {
   }
 
   async _nwGetSystemUuid() {
+    const pickUuidFromObject = (obj) => {
+      const n = (obj && obj.native) || {};
+      const c = (obj && obj.common) || {};
+      return String(n.uuid || n.UUID || c.uuid || c.UUID || '').trim();
+    };
+
     try {
       const obj = await this.getForeignObjectAsync('system.meta.uuid');
-      if (!obj) return '';
-      const n = obj.native || {};
-      const c = obj.common || {};
-      return String(n.uuid || n.UUID || c.uuid || c.UUID || '').trim();
+      const uuid = pickUuidFromObject(obj);
+      if (uuid) return uuid;
     } catch (e) {
-      this.log.debug(`UUID konnte nicht gelesen werden: ${e}`);
-      return '';
+      this.log.debug(`UUID-Objekt system.meta.uuid konnte nicht gelesen werden: ${e}`);
     }
+
+    try {
+      const st = await this.getForeignStateAsync('system.meta.uuid');
+      const uuid = (st && st.val !== undefined && st.val !== null) ? String(st.val).trim() : '';
+      if (uuid) return uuid;
+    } catch (e) {
+      this.log.debug(`UUID-State system.meta.uuid konnte nicht gelesen werden: ${e}`);
+    }
+
+    try {
+      const cfg = await this.getForeignObjectAsync('system.config');
+      const uuid = pickUuidFromObject(cfg);
+      if (uuid) return uuid;
+    } catch (e) {
+      this.log.debug(`UUID-Fallback system.config konnte nicht gelesen werden: ${e}`);
+    }
+
+    try {
+      const own = await this.getStateAsync('license.uuid');
+      const uuid = (own && own.val !== undefined && own.val !== null) ? String(own.val).trim() : '';
+      if (uuid) return uuid;
+    } catch (_e) {}
+
+    return '';
   }
 
   _nwExpectedLicenseKey(uuid) {
@@ -7276,6 +7303,35 @@ async onReady() {
 
   async startServer() {
     const app = express();
+
+    // Public license information endpoint for the Admin license page.
+    // Must be registered before the license gate so the UUID can be copied
+    // even when the adapter/VIS itself is still locked.
+    const sendLicenseCors = (res) => {
+      try {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      } catch (_e) {}
+    };
+    app.options('/api/license/info', (_req, res) => {
+      sendLicenseCors(res);
+      res.status(204).end();
+    });
+    app.get('/api/license/info', (_req, res) => {
+      sendLicenseCors(res);
+      const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
+      res.json({
+        ok: true,
+        adapter: this.namespace,
+        uuid: String(this._nwSystemUuid || ''),
+        valid: !!this._nwLicenseOk,
+        type: String(info.type || 'none'),
+        message: String(info.msg || ''),
+        expiresAt: Number(info.expiresAt || 0),
+        daysRemaining: Number(info.daysRemaining || 0),
+      });
+    });
 
     // -------------------------------------------------------------------
     // License gate: the adapter/UI is locked until a valid license key is

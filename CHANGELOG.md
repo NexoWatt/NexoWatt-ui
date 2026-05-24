@@ -1,3 +1,13 @@
+# 0.7.22
+
+- Lizenzseite korrigiert: UUID-Auslesung bleibt nicht mehr dauerhaft bei „Lade Daten…“ hängen.
+- Admin-Verbindung nutzt jetzt Timeouts für Objekt-/State-Abfragen, damit hängende Socket-Callbacks die UI nicht blockieren.
+- UUID-Fallbacks erweitert: `system.meta.uuid` Objekt, `system.meta.uuid` State, `system.config` und Adapter-State `license.uuid`.
+- Neuer öffentlicher Runtime-Endpunkt `/api/license/info` vor dem Lizenz-Gate, damit die UUID auch bei gesperrter VIS verfügbar ist.
+- Admin-React-Bundle neu gebaut.
+- Keine EMS-Regellogik geändert.
+- Webcache auf `nexowatt-cache-v191` erhöht.
+
 # 0.7.21
 
 - Budget-&-Gates-Diagnose stabilisiert: Die Kachel „Prioritäten / Reservierungen“ bleibt dauerhaft sichtbar und verschwindet nicht mehr bei 0-W-Reservierungen.

@@ -6,6 +6,7 @@ import {
   getObject,
   getInstance,
   readLicenseStatus,
+  readRuntimeLicenseInfo,
   readSystemUuid,
   setObject,
 } from '../lib/adminConnection';
@@ -21,35 +22,74 @@ export default function LicensePage() {
     setBusy(true);
     setStatus({ ok: true, text: 'Lade Daten…' });
 
-    const conn = await getAdminConnection();
-    if (!conn) {
-      setStatus({
-        ok: false,
-        text: 'Admin-Verbindung nicht verfügbar. Bitte Seite im ioBroker-Admin öffnen.',
-      });
-      setBusy(false);
-      return;
-    }
+    let conn = null;
+    let resolvedUuid = '';
+    let adapterObject = null;
+    let licenseStatus = null;
+    let loadError = null;
 
     try {
-      const [resolvedUuid, adapterObject] = await Promise.all([
-        readSystemUuid(conn),
-        getObject(getAdapterObjectId(instance), conn),
-      ]);
-
-      setUuid(resolvedUuid || 'Nicht verfügbar');
-      setLicenseKey(adapterObject?.native?.licenseKey ? String(adapterObject.native.licenseKey) : '');
-
-      const licenseStatus = await readLicenseStatus(instance, conn);
-      setStatus(licenseStatus);
+      conn = await getAdminConnection();
     } catch (error) {
+      loadError = error;
+    }
+
+    if (conn) {
+      try {
+        resolvedUuid = await readSystemUuid(conn, instance);
+      } catch (error) {
+        loadError = error;
+      }
+
+      try {
+        adapterObject = await getObject(getAdapterObjectId(instance), conn);
+      } catch (error) {
+        loadError = error;
+      }
+
+      try {
+        licenseStatus = await readLicenseStatus(instance, conn);
+      } catch (error) {
+        loadError = error;
+      }
+    }
+
+    // Fallback über den laufenden Adapter-Webserver. Dieser Endpunkt ist bewusst
+    // vor dem Lizenz-Gate erreichbar, damit die UUID auch ohne gültigen Schlüssel
+    // zuverlässig angezeigt werden kann.
+    if (!resolvedUuid || !licenseStatus) {
+      try {
+        const runtimeInfo = await readRuntimeLicenseInfo(instance, conn);
+        if (runtimeInfo?.uuid) resolvedUuid = String(runtimeInfo.uuid);
+        if (!licenseStatus && runtimeInfo) {
+          licenseStatus = {
+            ok: runtimeInfo.valid !== false,
+            text: runtimeInfo.message || (runtimeInfo.valid ? 'Lizenzstatus: gültig ✅' : 'Lizenzstatus: gesperrt/ungültig ❌'),
+          };
+        }
+      } catch (error) {
+        loadError = loadError || error;
+      }
+    }
+
+    setUuid(resolvedUuid || 'Nicht verfügbar');
+    setLicenseKey(adapterObject?.native?.licenseKey ? String(adapterObject.native.licenseKey) : '');
+
+    if (licenseStatus) {
+      setStatus(licenseStatus);
+    } else if (!conn) {
       setStatus({
         ok: false,
-        text: `Laden fehlgeschlagen: ${error?.message || String(error)}`,
+        text: 'Admin-Verbindung nicht verfügbar und Adapter-Webserver nicht erreichbar. Bitte Seite im ioBroker-Admin öffnen oder Adapter-Port prüfen.',
       });
-    } finally {
-      setBusy(false);
+    } else {
+      setStatus({
+        ok: false,
+        text: `Laden teilweise fehlgeschlagen: ${loadError?.message || String(loadError || 'unbekannter Fehler')}`,
+      });
     }
+
+    setBusy(false);
   }, [instance]);
 
   useEffect(() => {

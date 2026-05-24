@@ -1,5 +1,27 @@
 const ADAPTER_NAME = 'nexowatt-ui';
 const DEFAULT_PORT = 8188;
+const ADMIN_CALL_TIMEOUT_MS = 5000;
+const RUNTIME_FETCH_TIMEOUT_MS = 3500;
+
+function withTimeout(promise, ms, label) {
+  let timer = null;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label || 'Aufruf'} Timeout`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+function callbackPromise(fn, label, ms = ADMIN_CALL_TIMEOUT_MS) {
+  return withTimeout(new Promise((resolve, reject) => {
+    try {
+      fn((err, value) => (err ? reject(err) : resolve(value || null)));
+    } catch (error) {
+      reject(error);
+    }
+  }), ms, label);
+}
 
 export function getInstance() {
   try {
@@ -187,9 +209,7 @@ export async function getObject(id, conn = null) {
   if (!resolvedConn) {
     throw new Error('Admin-Verbindung nicht verfügbar');
   }
-  return new Promise((resolve, reject) => {
-    resolvedConn.getObject(id, (err, obj) => (err ? reject(err) : resolve(obj || null)));
-  });
+  return callbackPromise(cb => resolvedConn.getObject(id, cb), `getObject ${id}`);
 }
 
 export async function getState(id, conn = null) {
@@ -197,9 +217,7 @@ export async function getState(id, conn = null) {
   if (!resolvedConn || typeof resolvedConn.getState !== 'function') {
     return null;
   }
-  return new Promise((resolve, reject) => {
-    resolvedConn.getState(id, (err, state) => (err ? reject(err) : resolve(state || null)));
-  });
+  return callbackPromise(cb => resolvedConn.getState(id, cb), `getState ${id}`);
 }
 
 export async function setObject(id, obj, conn = null) {
@@ -207,9 +225,7 @@ export async function setObject(id, obj, conn = null) {
   if (!resolvedConn) {
     throw new Error('Admin-Verbindung nicht verfügbar');
   }
-  return new Promise((resolve, reject) => {
-    resolvedConn.setObject(id, obj, err => (err ? reject(err) : resolve()));
-  });
+  await callbackPromise(cb => resolvedConn.setObject(id, obj, cb), `setObject ${id}`);
 }
 
 export async function readAdapterPort(instance = getInstance(), conn = null) {
@@ -222,33 +238,86 @@ export async function readAdapterPort(instance = getInstance(), conn = null) {
   }
 }
 
-export async function readSystemUuid(conn = null) {
+export async function readSystemUuid(conn = null, instance = getInstance()) {
+  const adapterBase = `${ADAPTER_NAME}.${instance}.license.uuid`;
+
   try {
     const metaObject = await getObject('system.meta.uuid', conn);
     const fromObject = extractUuid(metaObject);
-    if (fromObject) {
-      return fromObject;
-    }
+    if (fromObject) return String(fromObject).trim();
   } catch {
     // ignore and continue with state fallback
   }
 
   try {
     const state = await getState('system.meta.uuid', conn);
-    if (state?.val !== undefined && state?.val !== null) {
-      return String(state.val);
+    if (state?.val !== undefined && state?.val !== null && String(state.val).trim()) {
+      return String(state.val).trim();
     }
   } catch {
-    // ignore and continue with adapter fallback
+    // ignore and continue with system.config fallback
   }
 
   try {
     const systemConfig = await getObject('system.config', conn);
-    const nativeUuid = systemConfig?.native?.uuid || systemConfig?.common?.uuid;
-    return nativeUuid ? String(nativeUuid) : '';
+    const nativeUuid = systemConfig?.native?.uuid || systemConfig?.native?.UUID || systemConfig?.common?.uuid || systemConfig?.common?.UUID;
+    if (nativeUuid) return String(nativeUuid).trim();
   } catch {
-    return '';
+    // ignore and continue with adapter-published fallback
   }
+
+  try {
+    const adapterUuidState = await getState(adapterBase, conn);
+    if (adapterUuidState?.val !== undefined && adapterUuidState?.val !== null && String(adapterUuidState.val).trim()) {
+      return String(adapterUuidState.val).trim();
+    }
+  } catch {
+    // ignore
+  }
+
+  return '';
+}
+
+async function fetchJsonWithTimeout(url, ms = RUNTIME_FETCH_TIMEOUT_MS) {
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  let timer = null;
+  try {
+    if (controller) timer = setTimeout(() => controller.abort(), ms);
+    const response = await fetch(url, {
+      method: 'GET',
+      cache: 'no-store',
+      credentials: 'omit',
+      signal: controller ? controller.signal : undefined,
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+export async function readRuntimeLicenseInfo(instance = getInstance(), conn = null) {
+  const ports = [];
+  try {
+    const configuredPort = await readAdapterPort(instance, conn);
+    if (configuredPort) ports.push(configuredPort);
+  } catch {
+    // ignore
+  }
+  ports.push(DEFAULT_PORT);
+
+  const uniquePorts = ports.filter((port, idx, arr) => port && arr.indexOf(port) === idx);
+  let lastError = null;
+  for (const port of uniquePorts) {
+    try {
+      const info = await fetchJsonWithTimeout(`${buildRuntimeBaseUrl(port)}/api/license/info?instance=${encodeURIComponent(instance)}&t=${Date.now()}`);
+      if (info && typeof info === 'object') return info;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError) throw lastError;
+  return null;
 }
 
 export async function readLicenseStatus(instance = getInstance(), conn = null) {
