@@ -1169,9 +1169,34 @@ class NexoWattVis extends utils.Adapter {
 
   async _nwGetSystemUuid() {
     const pickUuidFromObject = (obj) => {
-      const n = (obj && obj.native) || {};
-      const c = (obj && obj.common) || {};
-      return String(n.uuid || n.UUID || c.uuid || c.UUID || '').trim();
+      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const seen = new Set();
+      const scan = (value, key = '') => {
+        if (value === undefined || value === null) return '';
+        if (typeof value === 'string') {
+          const v = value.trim();
+          if (!v) return '';
+          if (/uuid/i.test(key) || uuidRe.test(v)) return v;
+          return '';
+        }
+        if (typeof value !== 'object') return '';
+        if (seen.has(value)) return '';
+        seen.add(value);
+
+        const preferredKeys = ['uuid', 'UUID', '_uuid', 'systemUuid', 'systemUUID', 'val', 'value'];
+        for (const k of preferredKeys) {
+          if (Object.prototype.hasOwnProperty.call(value, k)) {
+            const found = scan(value[k], k);
+            if (found) return found;
+          }
+        }
+        for (const [k, v] of Object.entries(value)) {
+          const found = scan(v, k);
+          if (found) return found;
+        }
+        return '';
+      };
+      return scan(obj);
     };
 
     try {
@@ -7310,7 +7335,7 @@ async onReady() {
     const sendLicenseCors = (res) => {
       try {
         res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
       } catch (_e) {}
     };
@@ -7318,8 +7343,11 @@ async onReady() {
       sendLicenseCors(res);
       res.status(204).end();
     });
-    app.get('/api/license/info', (_req, res) => {
+    app.get('/api/license/info', async (_req, res) => {
       sendLicenseCors(res);
+      if (!this._nwSystemUuid) {
+        try { this._nwSystemUuid = await this._nwGetSystemUuid(); } catch (_e) {}
+      }
       const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
       res.json({
         ok: true,
@@ -7331,6 +7359,48 @@ async onReady() {
         expiresAt: Number(info.expiresAt || 0),
         daysRemaining: Number(info.daysRemaining || 0),
       });
+    });
+
+    app.options('/api/license/save', (_req, res) => {
+      sendLicenseCors(res);
+      res.status(204).end();
+    });
+    app.post('/api/license/save', express.json({ limit: '64kb' }), async (req, res) => {
+      sendLicenseCors(res);
+      try {
+        const licenseKey = String((req.body && (req.body.licenseKey || req.body.key)) || '').trim();
+        const adapterObjectId = `system.adapter.${this.namespace}`;
+        const adapterObj = await this.getForeignObjectAsync(adapterObjectId);
+        if (!adapterObj) throw new Error(`Adapter-Objekt nicht gefunden: ${adapterObjectId}`);
+
+        adapterObj.native = adapterObj.native || {};
+        adapterObj.native.licenseKey = licenseKey;
+        await this.setForeignObjectAsync(adapterObjectId, adapterObj);
+
+        // Apply immediately without forcing the customer to restart the instance.
+        this.config = this.config || {};
+        this.config.licenseKey = licenseKey;
+        await this._nwInitLicense();
+
+        const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
+        res.json({
+          ok: true,
+          adapter: this.namespace,
+          uuid: String(this._nwSystemUuid || ''),
+          valid: !!this._nwLicenseOk,
+          type: String(info.type || 'none'),
+          message: this._nwLicenseOk
+            ? 'Lizenz gespeichert und aktiviert ✅'
+            : `Lizenz gespeichert, aber noch ungültig: ${String(info.msg || 'unbekannter Fehler')}`,
+          expiresAt: Number(info.expiresAt || 0),
+          daysRemaining: Number(info.daysRemaining || 0),
+        });
+      } catch (error) {
+        res.status(500).json({
+          ok: false,
+          message: `Lizenz konnte nicht gespeichert werden: ${error && error.message ? error.message : String(error)}`,
+        });
+      }
     });
 
     // -------------------------------------------------------------------

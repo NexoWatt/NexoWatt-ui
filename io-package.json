@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.22",
+    "version": "0.7.23",
     "news": {
+      "0.7.23": {
+        "en": "License activation hotfix: Admin callback handling is now compatible with ioBroker callback variants, UUID extraction is more robust, and the adapter exposes a pre-license runtime save endpoint so the license key can be stored and evaluated immediately even when the Admin socket is unreliable.",
+        "de": "Lizenz-Aktivierungs-Hotfix: Admin-Callbacks werden jetzt mit unterschiedlichen ioBroker-Callback-Varianten korrekt verarbeitet, die UUID-Auslesung ist robuster, und der Adapter stellt vor dem Lizenz-Gate einen Runtime-Speicherendpunkt bereit. Dadurch kann der Lizenzschlüssel auch bei unzuverlässiger Admin-Socket-Verbindung gespeichert und sofort geprüft werden."
+      },
       "0.7.22": {
         "en": "License UUID retrieval fixed: the Admin license page now uses timed admin socket/object calls, additional UUID fallbacks and a public /api/license/info runtime endpoint before the license gate. This prevents the license page from staying at “Loading data…” and allows the system UUID to be copied even when the VIS is locked.",
         "de": "Lizenz-UUID-Auslesung korrigiert: Die Admin-Lizenzseite nutzt jetzt zeitbegrenzte Admin-Socket-/Objektaufrufe, zusätzliche UUID-Fallbacks und einen öffentlichen /api/license/info Runtime-Endpunkt vor dem Lizenz-Gate. Dadurch bleibt die Lizenzseite nicht mehr bei „Lade Daten…“ hängen und die System-UUID kann auch bei gesperrter VIS kopiert werden."
@@ -1903,8 +1907,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.22",
+  "version": "0.7.23",
   "news": {
+    "0.7.23": {
+      "en": "License activation hotfix: Admin callback handling is now compatible with ioBroker callback variants, UUID extraction is more robust, and the adapter exposes a pre-license runtime save endpoint so the license key can be stored and evaluated immediately even when the Admin socket is unreliable.",
+      "de": "Lizenz-Aktivierungs-Hotfix: Admin-Callbacks werden jetzt mit unterschiedlichen ioBroker-Callback-Varianten korrekt verarbeitet, die UUID-Auslesung ist robuster, und der Adapter stellt vor dem Lizenz-Gate einen Runtime-Speicherendpunkt bereit. Dadurch kann der Lizenzschlüssel auch bei unzuverlässiger Admin-Socket-Verbindung gespeichert und sofort geprüft werden."
+    },
     "0.7.22": {
       "en": "License UUID retrieval fixed: the Admin license page now uses timed admin socket/object calls, additional UUID fallbacks and a public /api/license/info runtime endpoint before the license gate. This prevents the license page from staying at “Loading data…” and allows the system UUID to be copied even when the VIS is locked.",
       "de": "Lizenz-UUID-Auslesung korrigiert: Die Admin-Lizenzseite nutzt jetzt zeitbegrenzte Admin-Socket-/Objektaufrufe, zusätzliche UUID-Fallbacks und einen öffentlichen /api/license/info Runtime-Endpunkt vor dem Lizenz-Gate. Dadurch bleibt die Lizenzseite nicht mehr bei „Lade Daten…“ hängen und die System-UUID kann auch bei gesperrter VIS kopiert werden."

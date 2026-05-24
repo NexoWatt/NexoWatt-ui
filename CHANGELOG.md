@@ -1,3 +1,12 @@
+# 0.7.23
+
+- Lizenz-Aktivierung behoben: Admin-Callbacks unterstützen jetzt beide ioBroker-Varianten `callback(obj)` und `callback(err, obj)`. Dadurch werden Adapter-Objekt, UUID und Lizenzstatus wieder zuverlässig gelesen.
+- UUID-Auslesung robuster gemacht: `system.meta.uuid`, `system.config`, State-Werte und verschachtelte UUID-Felder werden rekursiv geprüft.
+- Neuer Runtime-Endpunkt `/api/license/save` vor dem Lizenz-Gate: Lizenzschlüssel kann gespeichert und sofort geprüft werden, auch wenn die Admin-Socket-Verbindung im Browser/iframe hängt.
+- `/api/license/info` liest die UUID bei Bedarf erneut nach, falls sie beim Start noch leer war.
+- Admin-React neu gebaut. Keine EMS-/Regellogik geändert.
+- Webcache auf `nexowatt-cache-v192` erhöht.
+
 # 0.7.22
 
 - Lizenzseite korrigiert: UUID-Auslesung bleibt nicht mehr dauerhaft bei „Lade Daten…“ hängen.

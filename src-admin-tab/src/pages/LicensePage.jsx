@@ -8,6 +8,7 @@ import {
   readLicenseStatus,
   readRuntimeLicenseInfo,
   readSystemUuid,
+  saveRuntimeLicenseKey,
   setObject,
 } from '../lib/adminConnection';
 
@@ -73,7 +74,8 @@ export default function LicensePage() {
     }
 
     setUuid(resolvedUuid || 'Nicht verfügbar');
-    setLicenseKey(adapterObject?.native?.licenseKey ? String(adapterObject.native.licenseKey) : '');
+    const configuredKey = adapterObject?.native?.licenseKey ? String(adapterObject.native.licenseKey) : '';
+    if (configuredKey) setLicenseKey(configuredKey);
 
     if (licenseStatus) {
       setStatus(licenseStatus);
@@ -108,6 +110,25 @@ export default function LicensePage() {
   const save = async () => {
     setBusy(true);
 
+    const key = String(licenseKey || '').trim();
+    let adminError = null;
+
+    // Primär über den laufenden Adapter speichern/aktivieren.
+    // Das funktioniert auch dann, wenn die Admin-Socket-API im Browser/iframe zickt.
+    try {
+      const info = await saveRuntimeLicenseKey(instance, key);
+      if (info?.uuid) setUuid(String(info.uuid));
+      setStatus({
+        ok: info?.valid !== false,
+        text: info?.message || (info?.valid ? 'Gespeichert und aktiviert ✅' : 'Gespeichert, aber Lizenz noch ungültig ❌'),
+      });
+      setBusy(false);
+      return;
+    } catch (error) {
+      adminError = error;
+    }
+
+    // Fallback: klassische Admin-Objekt-Speicherung.
     try {
       const conn = await getAdminConnection();
       if (!conn) {
@@ -121,12 +142,15 @@ export default function LicensePage() {
       }
 
       adapterObject.native = adapterObject.native || {};
-      adapterObject.native.licenseKey = String(licenseKey || '').trim();
+      adapterObject.native.licenseKey = key;
       await setObject(adapterId, adapterObject, conn);
 
-      setStatus({ ok: true, text: 'Gespeichert ✅ Bitte Adapter ggf. neu starten.' });
+      setStatus({ ok: true, text: 'Gespeichert ✅ Bitte Adapter neu starten, falls der Status nicht sofort wechselt.' });
     } catch (error) {
-      setStatus({ ok: false, text: `Speichern fehlgeschlagen: ${error?.message || String(error)}` });
+      setStatus({
+        ok: false,
+        text: `Speichern fehlgeschlagen: Runtime ${adminError?.message || String(adminError || 'nicht erreichbar')} / Admin ${error?.message || String(error)}`,
+      });
     } finally {
       setBusy(false);
     }

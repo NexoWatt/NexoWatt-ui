@@ -49,6 +49,39 @@ function safeWindowAccess(getter) {
   }
 }
 
+function isErrorLike(value) {
+  if (!value) return false;
+  if (value instanceof Error) return true;
+  if (typeof value === 'string') return true;
+  if (typeof value !== 'object') return false;
+
+  // ioBroker objects/states can contain "message" in common/native data.
+  // Treat an object as error only if it does NOT look like a normal object/state.
+  const looksLikeIoBrokerObject = value._id || value.type || value.common || value.native;
+  const looksLikeState = Object.prototype.hasOwnProperty.call(value, 'val') || Object.prototype.hasOwnProperty.call(value, 'ack');
+  if (looksLikeIoBrokerObject || looksLikeState) return false;
+
+  return !!(value.error || value.err || value.message);
+}
+
+function normalizeIoBrokerCallback(cb) {
+  return (arg1, arg2) => {
+    // ioBroker admin APIs are inconsistent across versions:
+    //   callback(obj) / callback(state)
+    //   callback(err, obj) / callback(err, state)
+    // Support both, otherwise the license page can hang or misread the UUID.
+    if (arg2 !== undefined) {
+      cb(isErrorLike(arg1) ? arg1 : null, arg2 || null);
+      return;
+    }
+    if (isErrorLike(arg1)) {
+      cb(arg1, null);
+      return;
+    }
+    cb(null, arg1 || null);
+  };
+}
+
 function pickServConn() {
   return (
     safeWindowAccess(() => window.servConn)
@@ -89,7 +122,7 @@ function wrapServConn(servConn) {
     type: 'servConn',
     getObject(id, cb) {
       try {
-        servConn.getObject(id, (err, obj) => cb(err || null, obj || null));
+        servConn.getObject(id, normalizeIoBrokerCallback(cb));
       } catch (error) {
         cb(error, null);
       }
@@ -100,7 +133,7 @@ function wrapServConn(servConn) {
         return;
       }
       try {
-        servConn.getState(id, (err, state) => cb(err || null, state || null));
+        servConn.getState(id, normalizeIoBrokerCallback(cb));
       } catch (error) {
         cb(error, null);
       }
@@ -120,22 +153,14 @@ function wrapSocket(socket) {
     type: 'socket',
     getObject(id, cb) {
       try {
-        socket.emit('getObject', id, (arg1, arg2) => {
-          const obj = arg2 !== undefined ? arg2 : arg1;
-          const err = arg2 !== undefined ? arg1 : null;
-          cb(err || null, obj || null);
-        });
+        socket.emit('getObject', id, normalizeIoBrokerCallback(cb));
       } catch (error) {
         cb(error, null);
       }
     },
     getState(id, cb) {
       try {
-        socket.emit('getState', id, (arg1, arg2) => {
-          const state = arg2 !== undefined ? arg2 : arg1;
-          const err = arg2 !== undefined ? arg1 : null;
-          cb(err || null, state || null);
-        });
+        socket.emit('getState', id, normalizeIoBrokerCallback(cb));
       } catch (error) {
         cb(error, null);
       }
@@ -175,7 +200,7 @@ export async function getAdminConnection() {
     return wrapSocket(socketAlreadyThere);
   }
 
-  const socketIoLoaded = await ensureSocketIo();
+  const socketIoLoaded = await withTimeout(ensureSocketIo(), 3000, 'socket.io Laden');
   if (!socketIoLoaded) {
     return null;
   }
@@ -194,14 +219,36 @@ export async function getAdminConnection() {
 }
 
 export function extractUuid(obj) {
-  if (!obj) {
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const seen = new Set();
+
+  const scan = (value, key = '') => {
+    if (value === undefined || value === null) return '';
+    if (typeof value === 'string') {
+      const v = value.trim();
+      if (!v) return '';
+      if (/uuid/i.test(key) || uuidRe.test(v)) return v;
+      return '';
+    }
+    if (typeof value !== 'object') return '';
+    if (seen.has(value)) return '';
+    seen.add(value);
+
+    const preferredKeys = ['uuid', 'UUID', '_uuid', 'systemUuid', 'systemUUID', 'val', 'value'];
+    for (const k of preferredKeys) {
+      if (Object.prototype.hasOwnProperty.call(value, k)) {
+        const found = scan(value[k], k);
+        if (found) return found;
+      }
+    }
+    for (const [k, v] of Object.entries(value)) {
+      const found = scan(v, k);
+      if (found) return found;
+    }
     return '';
-  }
-  if (obj.native && typeof obj.native.uuid === 'string') return obj.native.uuid;
-  if (obj.native && typeof obj.native.UUID === 'string') return obj.native.UUID;
-  if (obj.common && typeof obj.common.uuid === 'string') return obj.common.uuid;
-  if (obj.common && typeof obj.common.UUID === 'string') return obj.common.UUID;
-  return '';
+  };
+
+  return scan(obj);
 }
 
 export async function getObject(id, conn = null) {
@@ -296,6 +343,29 @@ async function fetchJsonWithTimeout(url, ms = RUNTIME_FETCH_TIMEOUT_MS) {
   }
 }
 
+async function postJsonWithTimeout(url, payload, ms = RUNTIME_FETCH_TIMEOUT_MS) {
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  let timer = null;
+  try {
+    if (controller) timer = setTimeout(() => controller.abort(), ms);
+    const response = await fetch(url, {
+      method: 'POST',
+      cache: 'no-store',
+      credentials: 'omit',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+      signal: controller ? controller.signal : undefined,
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok || json?.ok === false) {
+      throw new Error(json?.message || `HTTP ${response.status}`);
+    }
+    return json;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function readRuntimeLicenseInfo(instance = getInstance(), conn = null) {
   const ports = [];
   try {
@@ -311,6 +381,34 @@ export async function readRuntimeLicenseInfo(instance = getInstance(), conn = nu
   for (const port of uniquePorts) {
     try {
       const info = await fetchJsonWithTimeout(`${buildRuntimeBaseUrl(port)}/api/license/info?instance=${encodeURIComponent(instance)}&t=${Date.now()}`);
+      if (info && typeof info === 'object') return info;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError) throw lastError;
+  return null;
+}
+
+export async function saveRuntimeLicenseKey(instance = getInstance(), licenseKey = '', conn = null) {
+  const ports = [];
+  try {
+    const configuredPort = await readAdapterPort(instance, conn);
+    if (configuredPort) ports.push(configuredPort);
+  } catch {
+    // ignore
+  }
+  ports.push(DEFAULT_PORT);
+
+  const uniquePorts = ports.filter((port, idx, arr) => port && arr.indexOf(port) === idx);
+  let lastError = null;
+  for (const port of uniquePorts) {
+    try {
+      const info = await postJsonWithTimeout(
+        `${buildRuntimeBaseUrl(port)}/api/license/save?instance=${encodeURIComponent(instance)}&t=${Date.now()}`,
+        { licenseKey: String(licenseKey || '').trim() },
+        5000
+      );
       if (info && typeof info === 'object') return info;
     } catch (error) {
       lastError = error;
