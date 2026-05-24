@@ -12,10 +12,32 @@ import {
   setObject,
 } from '../lib/adminConnection';
 
+function getLicenseStorageKey(instance) {
+  return `nexowatt-ui.licenseKey.${instance}`;
+}
+
+function readCachedLicenseKey(instance) {
+  try {
+    return String(window.localStorage.getItem(getLicenseStorageKey(instance)) || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function writeCachedLicenseKey(instance, key) {
+  try {
+    const clean = String(key || '').trim();
+    if (clean) window.localStorage.setItem(getLicenseStorageKey(instance), clean);
+    else window.localStorage.removeItem(getLicenseStorageKey(instance));
+  } catch {
+    // Browser storage may be blocked inside some ioBroker/Admin iframes. Ignore.
+  }
+}
+
 export default function LicensePage() {
   const instance = getInstance();
   const [uuid, setUuid] = useState('');
-  const [licenseKey, setLicenseKey] = useState('');
+  const [licenseKey, setLicenseKey] = useState(() => readCachedLicenseKey(getInstance()));
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState({ ok: true, text: 'Lade Daten…' });
 
@@ -23,16 +45,41 @@ export default function LicensePage() {
     setBusy(true);
     setStatus({ ok: true, text: 'Lade Daten…' });
 
+    const cachedKey = readCachedLicenseKey(instance);
+    if (cachedKey) setLicenseKey(cachedKey);
+
     let conn = null;
     let resolvedUuid = '';
     let adapterObject = null;
     let licenseStatus = null;
+    let runtimeInfo = null;
     let loadError = null;
+
+    // Fast path: Der Adapter selbst liefert UUID, Status und den gespeicherten
+    // Lizenzschlüssel schneller als die Admin-Socket-Fallbacks. Dadurch bleibt
+    // die Voll-Lizenz nach erneutem Öffnen sofort sichtbar.
+    try {
+      runtimeInfo = await readRuntimeLicenseInfo(instance, null);
+      if (runtimeInfo?.uuid) resolvedUuid = String(runtimeInfo.uuid);
+      if (runtimeInfo?.licenseKey) {
+        const runtimeKey = String(runtimeInfo.licenseKey).trim();
+        setLicenseKey(runtimeKey);
+        writeCachedLicenseKey(instance, runtimeKey);
+      }
+      if (runtimeInfo) {
+        licenseStatus = {
+          ok: runtimeInfo.valid !== false,
+          text: runtimeInfo.message || (runtimeInfo.valid ? 'Lizenzstatus: gültig ✅' : 'Lizenzstatus: gesperrt/ungültig ❌'),
+        };
+      }
+    } catch (error) {
+      loadError = error;
+    }
 
     try {
       conn = await getAdminConnection();
     } catch (error) {
-      loadError = error;
+      loadError = loadError || error;
     }
 
     if (conn) {
@@ -60,8 +107,13 @@ export default function LicensePage() {
     // zuverlässig angezeigt werden kann.
     if (!resolvedUuid || !licenseStatus) {
       try {
-        const runtimeInfo = await readRuntimeLicenseInfo(instance, conn);
+        runtimeInfo = await readRuntimeLicenseInfo(instance, conn);
         if (runtimeInfo?.uuid) resolvedUuid = String(runtimeInfo.uuid);
+        if (runtimeInfo?.licenseKey) {
+          const runtimeKey = String(runtimeInfo.licenseKey).trim();
+          setLicenseKey(runtimeKey);
+          writeCachedLicenseKey(instance, runtimeKey);
+        }
         if (!licenseStatus && runtimeInfo) {
           licenseStatus = {
             ok: runtimeInfo.valid !== false,
@@ -74,8 +126,13 @@ export default function LicensePage() {
     }
 
     setUuid(resolvedUuid || 'Nicht verfügbar');
-    const configuredKey = adapterObject?.native?.licenseKey ? String(adapterObject.native.licenseKey) : '';
-    if (configuredKey) setLicenseKey(configuredKey);
+    const configuredKey = adapterObject?.native?.licenseKey
+      ? String(adapterObject.native.licenseKey).trim()
+      : (runtimeInfo?.licenseKey ? String(runtimeInfo.licenseKey).trim() : cachedKey);
+    if (configuredKey) {
+      setLicenseKey(configuredKey);
+      writeCachedLicenseKey(instance, configuredKey);
+    }
 
     if (licenseStatus) {
       setStatus(licenseStatus);
@@ -111,6 +168,7 @@ export default function LicensePage() {
     setBusy(true);
 
     const key = String(licenseKey || '').trim();
+    setLicenseKey(key);
     let adminError = null;
 
     // Primär über den laufenden Adapter speichern/aktivieren.
@@ -118,6 +176,8 @@ export default function LicensePage() {
     try {
       const info = await saveRuntimeLicenseKey(instance, key);
       if (info?.uuid) setUuid(String(info.uuid));
+      if (info?.licenseKey) setLicenseKey(String(info.licenseKey));
+      writeCachedLicenseKey(instance, info?.licenseKey || key);
       setStatus({
         ok: info?.valid !== false,
         text: info?.message || (info?.valid ? 'Gespeichert und aktiviert ✅' : 'Gespeichert, aber Lizenz noch ungültig ❌'),
@@ -144,6 +204,7 @@ export default function LicensePage() {
       adapterObject.native = adapterObject.native || {};
       adapterObject.native.licenseKey = key;
       await setObject(adapterId, adapterObject, conn);
+      writeCachedLicenseKey(instance, key);
 
       setStatus({ ok: true, text: 'Gespeichert ✅ Bitte Adapter neu starten, falls der Status nicht sofort wechselt.' });
     } catch (error) {

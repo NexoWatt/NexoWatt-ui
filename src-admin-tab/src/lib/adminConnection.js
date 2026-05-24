@@ -367,14 +367,13 @@ async function postJsonWithTimeout(url, payload, ms = RUNTIME_FETCH_TIMEOUT_MS) 
 }
 
 export async function readRuntimeLicenseInfo(instance = getInstance(), conn = null) {
-  const ports = [];
+  const ports = [DEFAULT_PORT];
   try {
     const configuredPort = await readAdapterPort(instance, conn);
     if (configuredPort) ports.push(configuredPort);
   } catch {
     // ignore
   }
-  ports.push(DEFAULT_PORT);
 
   const uniquePorts = ports.filter((port, idx, arr) => port && arr.indexOf(port) === idx);
   let lastError = null;

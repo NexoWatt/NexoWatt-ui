@@ -1,3 +1,20 @@
+# 0.7.24
+
+- Lizenz-Admin-Fix: Der gespeicherte vollständige Lizenzschlüssel bleibt nach Verlassen/erneutem Öffnen der Adapterseite sichtbar.
+- Lizenzseite liest jetzt zuerst den schnellen Runtime-Endpunkt und danach erst Admin/native-Fallbacks; dadurch ist UUID/Status/Schlüssel schneller und stabiler sichtbar.
+- Runtime-Endpunkt `/api/license/info` liefert der Admin-Lizenzseite zusätzlich den aktuell konfigurierten Schlüssel, damit das Eingabefeld auch bei Admin-Socket-Problemen wieder befüllt wird.
+- Browser-lokaler Cache bleibt als zusätzlicher Fallback aktiv.
+- Keine EMS-Regellogik geändert.
+- Webcache auf `nexowatt-cache-v193` erhöht.
+
+# 0.7.24
+
+- Lizenzseite verbessert: Nach dem Speichern einer Voll-Lizenz bleibt der Lizenzschlüssel beim erneuten Öffnen wieder sichtbar.
+- Die Admin-Seite stellt den Schlüssel aus der nativen Adapter-Konfiguration wieder her; falls die Admin-Abfrage kurzzeitig nicht liefert, wird der zuletzt erfolgreich gespeicherte Admin-Wert lokal im Browser wieder angezeigt.
+- Der öffentliche Runtime-Endpunkt `/api/license/info` gibt den vollen Lizenzschlüssel weiterhin nicht aus.
+- Reine Admin-/Lizenz-UI-Korrektur; keine EMS-Regellogik geändert.
+- Webcache auf `nexowatt-cache-v193` erhöht.
+
 # 0.7.23
 
 - Lizenz-Aktivierung behoben: Admin-Callbacks unterstützen jetzt beide ioBroker-Varianten `callback(obj)` und `callback(err, obj)`. Dadurch werden Adapter-Objekt, UUID und Lizenzstatus wieder zuverlässig gelesen.

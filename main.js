@@ -7349,6 +7349,10 @@ async onReady() {
         try { this._nwSystemUuid = await this._nwGetSystemUuid(); } catch (_e) {}
       }
       const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
+      const currentLicenseKey = String((this.config && this.config.licenseKey) || '').trim();
+      const maskedLicenseKey = currentLicenseKey
+        ? `${currentLicenseKey.slice(0, 8)}…${currentLicenseKey.slice(-6)}`
+        : '';
       res.json({
         ok: true,
         adapter: this.namespace,
@@ -7358,6 +7362,12 @@ async onReady() {
         message: String(info.msg || ''),
         expiresAt: Number(info.expiresAt || 0),
         daysRemaining: Number(info.daysRemaining || 0),
+        licenseKeyConfigured: !!currentLicenseKey,
+        licenseKeyMasked: maskedLicenseKey,
+        // Needed by the Admin-only license page so a saved full license remains visible
+        // after leaving/re-opening the adapter page. The endpoint is intentionally
+        // before the license gate because activation must also work while locked.
+        licenseKey: currentLicenseKey,
       });
     });
 
@@ -7394,6 +7404,9 @@ async onReady() {
             : `Lizenz gespeichert, aber noch ungültig: ${String(info.msg || 'unbekannter Fehler')}`,
           expiresAt: Number(info.expiresAt || 0),
           daysRemaining: Number(info.daysRemaining || 0),
+          licenseKeyConfigured: !!licenseKey,
+          licenseKeyMasked: licenseKey ? `${licenseKey.slice(0, 8)}…${licenseKey.slice(-6)}` : '',
+          licenseKey,
         });
       } catch (error) {
         res.status(500).json({
