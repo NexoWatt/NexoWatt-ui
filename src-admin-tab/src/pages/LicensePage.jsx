@@ -76,29 +76,42 @@ export default function LicensePage() {
       loadError = error;
     }
 
-    try {
-      conn = await getAdminConnection();
-    } catch (error) {
-      loadError = loadError || error;
-    }
+    const runtimeComplete = !!resolvedUuid && !!licenseStatus;
 
-    if (conn) {
+    // Wenn der Adapter-Webserver UUID + Status bereits geliefert hat, nicht mehr
+    // auf die langsamen ioBroker-Admin-Fallbacks warten. Diese waren der Grund,
+    // warum die UUID-Anzeige trotz funktionierendem /api/license/info lange dauerte.
+    if (!runtimeComplete) {
       try {
-        resolvedUuid = await readSystemUuid(conn, instance);
+        conn = await getAdminConnection();
       } catch (error) {
-        loadError = error;
+        loadError = loadError || error;
       }
 
-      try {
-        adapterObject = await getObject(getAdapterObjectId(instance), conn);
-      } catch (error) {
-        loadError = error;
-      }
+      if (conn) {
+        if (!resolvedUuid) {
+          try {
+            resolvedUuid = await readSystemUuid(conn, instance);
+          } catch (error) {
+            loadError = error;
+          }
+        }
 
-      try {
-        licenseStatus = await readLicenseStatus(instance, conn);
-      } catch (error) {
-        loadError = error;
+        if (!runtimeInfo?.licenseKey) {
+          try {
+            adapterObject = await getObject(getAdapterObjectId(instance), conn);
+          } catch (error) {
+            loadError = error;
+          }
+        }
+
+        if (!licenseStatus) {
+          try {
+            licenseStatus = await readLicenseStatus(instance, conn);
+          } catch (error) {
+            loadError = error;
+          }
+        }
       }
     }
 

@@ -1,7 +1,7 @@
 const ADAPTER_NAME = 'nexowatt-ui';
 const DEFAULT_PORT = 8188;
 const ADMIN_CALL_TIMEOUT_MS = 5000;
-const RUNTIME_FETCH_TIMEOUT_MS = 3500;
+const RUNTIME_FETCH_TIMEOUT_MS = 1500;
 
 function withTimeout(promise, ms, label) {
   let timer = null;
@@ -367,24 +367,37 @@ async function postJsonWithTimeout(url, payload, ms = RUNTIME_FETCH_TIMEOUT_MS) 
 }
 
 export async function readRuntimeLicenseInfo(instance = getInstance(), conn = null) {
-  const ports = [DEFAULT_PORT];
+  const tried = new Set();
+  let lastError = null;
+
+  const tryPort = async (port) => {
+    const p = Number(port) || 0;
+    if (!p || tried.has(p)) return null;
+    tried.add(p);
+    const info = await fetchJsonWithTimeout(`${buildRuntimeBaseUrl(p)}/api/license/info?instance=${encodeURIComponent(instance)}&t=${Date.now()}`);
+    return (info && typeof info === 'object') ? info : null;
+  };
+
+  // Wichtig: erst den Standard-Runtime-Port direkt probieren.
+  // Vorher wurde zuerst der ioBroker-Admin-Socket zum Port-Lesen genutzt;
+  // wenn dieser hing, war selbst der schnelle Runtime-Endpunkt mehrere Sekunden blockiert.
   try {
-    const configuredPort = await readAdapterPort(instance, conn);
-    if (configuredPort) ports.push(configuredPort);
-  } catch {
-    // ignore
+    const info = await tryPort(DEFAULT_PORT);
+    if (info) return info;
+  } catch (error) {
+    lastError = error;
   }
 
-  const uniquePorts = ports.filter((port, idx, arr) => port && arr.indexOf(port) === idx);
-  let lastError = null;
-  for (const port of uniquePorts) {
-    try {
-      const info = await fetchJsonWithTimeout(`${buildRuntimeBaseUrl(port)}/api/license/info?instance=${encodeURIComponent(instance)}&t=${Date.now()}`);
-      if (info && typeof info === 'object') return info;
-    } catch (error) {
-      lastError = error;
-    }
+  // Nur wenn der Standard-Port nicht antwortet, kurz den konfigurierten Port lesen.
+  // Das verhindert lange UUID-Wartezeiten auf Anlagen mit Standardport 8188.
+  try {
+    const configuredPort = await withTimeout(readAdapterPort(instance, conn), 1200, 'Adapter-Port lesen');
+    const info = await tryPort(configuredPort);
+    if (info) return info;
+  } catch (error) {
+    lastError = lastError || error;
   }
+
   if (lastError) throw lastError;
   return null;
 }

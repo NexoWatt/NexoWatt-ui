@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.24",
+    "version": "0.7.25",
     "news": {
+      "0.7.25": {
+        "en": "License page speed fix: UUID is now read from the adapter runtime endpoint first without waiting for ioBroker Admin socket fallbacks. Admin fallbacks are skipped when runtime already delivered UUID and status, reducing long waits before the UUID appears.",
+        "de": "Lizenzseiten-Speed-Fix: Die UUID wird jetzt zuerst direkt über den Adapter-Runtime-Endpunkt gelesen, ohne vorher auf ioBroker-Admin-Socket-Fallbacks zu warten. Admin-Fallbacks werden übersprungen, wenn Runtime bereits UUID und Status geliefert hat. Dadurch erscheint die UUID deutlich schneller."
+      },
       "0.7.24": {
         "en": "License page persistence improved: after a valid full license is saved, the Admin license field is restored from the saved native config or a local Admin cache when reopened. The runtime endpoint still does not expose the full license key; this is a UI persistence fix only.",
         "de": "Lizenzseite verbessert: Nach dem Speichern einer gültigen Voll-Lizenz bleibt der Lizenzschlüssel beim erneuten Öffnen sichtbar. Die Admin-Seite stellt ihn aus der nativen Adapter-Konfiguration oder einem lokalen Admin-Cache wieder her. Der Runtime-Endpunkt gibt den vollen Lizenzschlüssel weiterhin nicht öffentlich aus; reine UI-/Persistenz-Korrektur."
@@ -1911,8 +1915,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.24",
+  "version": "0.7.25",
   "news": {
+    "0.7.25": {
+      "en": "License page speed fix: UUID is now read from the adapter runtime endpoint first without waiting for ioBroker Admin socket fallbacks. Admin fallbacks are skipped when runtime already delivered UUID and status, reducing long waits before the UUID appears.",
+      "de": "Lizenzseiten-Speed-Fix: Die UUID wird jetzt zuerst direkt über den Adapter-Runtime-Endpunkt gelesen, ohne vorher auf ioBroker-Admin-Socket-Fallbacks zu warten. Admin-Fallbacks werden übersprungen, wenn Runtime bereits UUID und Status geliefert hat. Dadurch erscheint die UUID deutlich schneller."
+    },
     "0.7.24": {
       "en": "License page persistence improved: after a valid full license is saved, the Admin license field is restored from the saved native config or a local Admin cache when reopened. The runtime endpoint still does not expose the full license key; this is a UI persistence fix only.",
       "de": "Lizenzseite verbessert: Nach dem Speichern einer gültigen Voll-Lizenz bleibt der Lizenzschlüssel beim erneuten Öffnen sichtbar. Die Admin-Seite stellt ihn aus der nativen Adapter-Konfiguration oder einem lokalen Admin-Cache wieder her. Der Runtime-Endpunkt gibt den vollen Lizenzschlüssel weiterhin nicht öffentlich aus; reine UI-/Persistenz-Korrektur."

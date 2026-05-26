@@ -1,3 +1,12 @@
+# 0.7.25
+
+- Lizenzseite beschleunigt: `/api/license/info` wird jetzt zuerst direkt über den Adapter-Runtime-Port abgefragt.
+- Der Runtime-Fast-Path wartet nicht mehr vorher auf den ioBroker-Admin-Socket zum Port-Lesen.
+- Wenn Runtime UUID und Lizenzstatus liefert, werden langsame Admin-Fallbacks übersprungen.
+- Reduziert lange Wartezeiten, bis die System-UUID im Lizenzdialog erscheint.
+- Keine EMS-/Regellogik geändert.
+- Webcache auf `nexowatt-cache-v194` erhöht.
+
 # 0.7.24
 
 - Lizenz-Admin-Fix: Der gespeicherte vollständige Lizenzschlüssel bleibt nach Verlassen/erneutem Öffnen der Adapterseite sichtbar.
