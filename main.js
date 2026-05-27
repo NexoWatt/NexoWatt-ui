@@ -4155,10 +4155,10 @@ try {
   // SoC: Für die aktive Farm-Anzeige bevorzugen wir den frischen Online-SoC.
   // Der stabile Gesamt-SoC bleibt weiterhin unter storageFarm.totalSoc verfügbar.
   const activeSoc = socSourcesOnline > 0 ? totalSocOnline : totalSoc;
-  this.updateValue('storageSoc', Math.round(activeSoc * 10) / 10, now);
-  this.updateValue('storageChargePower', Math.round(totalCharge), now);
-  this.updateValue('storageDischargePower', Math.round(totalDischarge), now);
-  this.updateValue('batteryPower', Math.round(totalDischarge - totalCharge), now);
+  this.updateValue('storageSoc', Math.round(activeSoc * 10) / 10, now, { raw: false });
+  this.updateValue('storageChargePower', Math.round(totalCharge), now, { raw: false });
+  this.updateValue('storageDischargePower', Math.round(totalDischarge), now, { raw: false });
+  this.updateValue('batteryPower', Math.round(totalDischarge - totalCharge), now, { raw: false });
 
   // PV (DC) Farm‑Summe nur als Fallback, wenn kein PV‑DP gemappt ist
   if (typeof this._nwHasMappedDatapoint === 'function') {
@@ -18496,13 +18496,13 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       if (shouldMirrorStorage) {
         const curC = Number(this.stateCache?.storageChargePower?.value);
         const curD = Number(this.stateCache?.storageDischargePower?.value);
-        if (!Number.isFinite(curC) || curC !== chargeRound) this.updateValue('storageChargePower', chargeRound, ts);
-        if (!Number.isFinite(curD) || curD !== dischargeRound) this.updateValue('storageDischargePower', dischargeRound, ts);
+        if (!Number.isFinite(curC) || curC !== chargeRound) this.updateValue('storageChargePower', chargeRound, ts, { raw: false });
+        if (!Number.isFinite(curD) || curD !== dischargeRound) this.updateValue('storageDischargePower', dischargeRound, ts, { raw: false });
       }
       if (!this._nwHasMappedDatapoint('batteryPower')) {
         const signedRound = Math.round(dischargeW - chargeW);
         const curB = Number(this.stateCache?.batteryPower?.value);
-        if (!Number.isFinite(curB) || curB !== signedRound) this.updateValue('batteryPower', signedRound, ts);
+        if (!Number.isFinite(curB) || curB !== signedRound) this.updateValue('batteryPower', signedRound, ts, { raw: false });
       }
     } catch (_eStorageMirror) {}
   }
@@ -18774,11 +18774,14 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
 
 
-  updateValue(key, value, ts) {
+  updateValue(key, value, ts, opts = {}) {
     const rawValue = value;
     try {
-      if (!this._nwRawValueCache || typeof this._nwRawValueCache !== 'object') this._nwRawValueCache = {};
-      this._nwRawValueCache[key] = { value: rawValue, ts };
+      const keepRaw = !(opts && opts.raw === false);
+      if (keepRaw) {
+        if (!this._nwRawValueCache || typeof this._nwRawValueCache !== 'object') this._nwRawValueCache = {};
+        this._nwRawValueCache[key] = { value: rawValue, ts };
+      }
     } catch (_e0) {}
 
     // Some devices provide charging/discharging power as signed values

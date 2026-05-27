@@ -1,11 +1,3 @@
-# 0.7.26
-
-- Batterie-Energiefluss korrigiert: ein signierter `batteryPower` wird jetzt wie der NVP zentral normalisiert (`-W = Laden`, `+W = Entladen`) und die Option „Batterie‑Vorzeichen invertieren“ greift vor der Aufteilung.
-- `storageChargePower`/`storageDischargePower` zeigen bei signiertem Fallback nicht mehr beide Richtungen gleichzeitig; veraltete Batterie-Werte werden anhand des Geräte-Stale-Timeouts ausgefiltert.
-- VIS, abgeleitete Bilanz-/Historie-Werte sowie Core-Limits/Heizstab-Budgetierung verwenden dieselbe Batterie-Richtungslogik.
-- Config-Hot-Reload aktualisiert nun auch den globalen Energiefluss-Konfigurationssnapshot, damit geänderte Mappings ohne Browser-Reload sauber greifen.
-- Webcache auf `nexowatt-cache-v195` erhöht.
-
 # 0.7.25
 
 - Lizenzseite beschleunigt: `/api/license/info` wird jetzt zuerst direkt über den Adapter-Runtime-Port abgefragt.
