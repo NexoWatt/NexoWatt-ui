@@ -660,6 +660,16 @@ class EmsEngine {
         adapter.config.storage.datapoints = adapter.config.storage.datapoints || {};
         const curBP = (typeof adapter.config.storage.datapoints.batteryPowerObjectId === 'string') ? adapter.config.storage.datapoints.batteryPowerObjectId.trim() : '';
         if (!curBP) adapter.config.storage.datapoints.batteryPowerObjectId = batPowerId;
+
+        // Keep the embedded EMS sign convention in sync with the Energiefluss signed battery mapping.
+        // Convention after normalization: -W = charge, +W = discharge.
+        // If the user enabled the Batterie-Vorzeichen inversion in the flow settings and the
+        // storage module is using this VIS datapoint, apply the same inversion to st.batteryPowerW.
+        const usesVisBatteryPower = !curBP || curBP === batPowerId;
+        const invBat = !!(adapter.config && adapter.config.settings && adapter.config.settings.flowInvertBattery);
+        if (usesVisBatteryPower && adapter.config.storage.datapoints.batteryPowerInvert === undefined) {
+          adapter.config.storage.datapoints.batteryPowerInvert = invBat;
+        }
       }
     } catch (_e) {
       // ignore

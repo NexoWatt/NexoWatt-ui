@@ -619,7 +619,13 @@ class HeatingRodControlModule extends BaseModule {
 
         const batteryPowerW = this._readNumberAny(['batteryPower'], staleMs, null);
         if (typeof batteryPowerW === 'number' && Number.isFinite(batteryPowerW)) {
-            const signedW = Math.round(batteryPowerW);
+            const cfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
+            const flowBatteryMapped = !!(cfg.datapoints && String(cfg.datapoints.batteryPower || '').trim());
+            const farmActive = !!this._readCacheNumber('storageFarm.enabled', 0);
+            // Apply the VIS inversion only to a raw mapped batteryPower datapoint.
+            // Mirrored batteryPower values are already normalized by the main flow engine.
+            const invBattery = flowBatteryMapped && !farmActive && !!(cfg.settings && cfg.settings.flowInvertBattery);
+            const signedW = Math.round(invBattery ? -batteryPowerW : batteryPowerW);
             const noiseW = 25;
             // batteryPower is the canonical direction signal in this adapter:
             // +W = discharge, -W = charge. Prefer that direction over separate

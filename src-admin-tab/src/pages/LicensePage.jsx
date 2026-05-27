@@ -6,14 +6,38 @@ import {
   getObject,
   getInstance,
   readLicenseStatus,
+  readRuntimeLicenseInfo,
   readSystemUuid,
+  saveRuntimeLicenseKey,
   setObject,
 } from '../lib/adminConnection';
+
+function getLicenseStorageKey(instance) {
+  return `nexowatt-ui.licenseKey.${instance}`;
+}
+
+function readCachedLicenseKey(instance) {
+  try {
+    return String(window.localStorage.getItem(getLicenseStorageKey(instance)) || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function writeCachedLicenseKey(instance, key) {
+  try {
+    const clean = String(key || '').trim();
+    if (clean) window.localStorage.setItem(getLicenseStorageKey(instance), clean);
+    else window.localStorage.removeItem(getLicenseStorageKey(instance));
+  } catch {
+    // Browser storage may be blocked inside some ioBroker/Admin iframes. Ignore.
+  }
+}
 
 export default function LicensePage() {
   const instance = getInstance();
   const [uuid, setUuid] = useState('');
-  const [licenseKey, setLicenseKey] = useState('');
+  const [licenseKey, setLicenseKey] = useState(() => readCachedLicenseKey(getInstance()));
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState({ ok: true, text: 'Lade Daten…' });
 
@@ -21,35 +45,123 @@ export default function LicensePage() {
     setBusy(true);
     setStatus({ ok: true, text: 'Lade Daten…' });
 
-    const conn = await getAdminConnection();
-    if (!conn) {
-      setStatus({
-        ok: false,
-        text: 'Admin-Verbindung nicht verfügbar. Bitte Seite im ioBroker-Admin öffnen.',
-      });
-      setBusy(false);
-      return;
-    }
+    const cachedKey = readCachedLicenseKey(instance);
+    if (cachedKey) setLicenseKey(cachedKey);
 
+    let conn = null;
+    let resolvedUuid = '';
+    let adapterObject = null;
+    let licenseStatus = null;
+    let runtimeInfo = null;
+    let loadError = null;
+
+    // Fast path: Der Adapter selbst liefert UUID, Status und den gespeicherten
+    // Lizenzschlüssel schneller als die Admin-Socket-Fallbacks. Dadurch bleibt
+    // die Voll-Lizenz nach erneutem Öffnen sofort sichtbar.
     try {
-      const [resolvedUuid, adapterObject] = await Promise.all([
-        readSystemUuid(conn),
-        getObject(getAdapterObjectId(instance), conn),
-      ]);
-
-      setUuid(resolvedUuid || 'Nicht verfügbar');
-      setLicenseKey(adapterObject?.native?.licenseKey ? String(adapterObject.native.licenseKey) : '');
-
-      const licenseStatus = await readLicenseStatus(instance, conn);
-      setStatus(licenseStatus);
+      runtimeInfo = await readRuntimeLicenseInfo(instance, null);
+      if (runtimeInfo?.uuid) resolvedUuid = String(runtimeInfo.uuid);
+      if (runtimeInfo?.licenseKey) {
+        const runtimeKey = String(runtimeInfo.licenseKey).trim();
+        setLicenseKey(runtimeKey);
+        writeCachedLicenseKey(instance, runtimeKey);
+      }
+      if (runtimeInfo) {
+        licenseStatus = {
+          ok: runtimeInfo.valid !== false,
+          text: runtimeInfo.message || (runtimeInfo.valid ? 'Lizenzstatus: gültig ✅' : 'Lizenzstatus: gesperrt/ungültig ❌'),
+        };
+      }
     } catch (error) {
+      loadError = error;
+    }
+
+    const runtimeComplete = !!resolvedUuid && !!licenseStatus;
+
+    // Wenn der Adapter-Webserver UUID + Status bereits geliefert hat, nicht mehr
+    // auf die langsamen ioBroker-Admin-Fallbacks warten. Diese waren der Grund,
+    // warum die UUID-Anzeige trotz funktionierendem /api/license/info lange dauerte.
+    if (!runtimeComplete) {
+      try {
+        conn = await getAdminConnection();
+      } catch (error) {
+        loadError = loadError || error;
+      }
+
+      if (conn) {
+        if (!resolvedUuid) {
+          try {
+            resolvedUuid = await readSystemUuid(conn, instance);
+          } catch (error) {
+            loadError = error;
+          }
+        }
+
+        if (!runtimeInfo?.licenseKey) {
+          try {
+            adapterObject = await getObject(getAdapterObjectId(instance), conn);
+          } catch (error) {
+            loadError = error;
+          }
+        }
+
+        if (!licenseStatus) {
+          try {
+            licenseStatus = await readLicenseStatus(instance, conn);
+          } catch (error) {
+            loadError = error;
+          }
+        }
+      }
+    }
+
+    // Fallback über den laufenden Adapter-Webserver. Dieser Endpunkt ist bewusst
+    // vor dem Lizenz-Gate erreichbar, damit die UUID auch ohne gültigen Schlüssel
+    // zuverlässig angezeigt werden kann.
+    if (!resolvedUuid || !licenseStatus) {
+      try {
+        runtimeInfo = await readRuntimeLicenseInfo(instance, conn);
+        if (runtimeInfo?.uuid) resolvedUuid = String(runtimeInfo.uuid);
+        if (runtimeInfo?.licenseKey) {
+          const runtimeKey = String(runtimeInfo.licenseKey).trim();
+          setLicenseKey(runtimeKey);
+          writeCachedLicenseKey(instance, runtimeKey);
+        }
+        if (!licenseStatus && runtimeInfo) {
+          licenseStatus = {
+            ok: runtimeInfo.valid !== false,
+            text: runtimeInfo.message || (runtimeInfo.valid ? 'Lizenzstatus: gültig ✅' : 'Lizenzstatus: gesperrt/ungültig ❌'),
+          };
+        }
+      } catch (error) {
+        loadError = loadError || error;
+      }
+    }
+
+    setUuid(resolvedUuid || 'Nicht verfügbar');
+    const configuredKey = adapterObject?.native?.licenseKey
+      ? String(adapterObject.native.licenseKey).trim()
+      : (runtimeInfo?.licenseKey ? String(runtimeInfo.licenseKey).trim() : cachedKey);
+    if (configuredKey) {
+      setLicenseKey(configuredKey);
+      writeCachedLicenseKey(instance, configuredKey);
+    }
+
+    if (licenseStatus) {
+      setStatus(licenseStatus);
+    } else if (!conn) {
       setStatus({
         ok: false,
-        text: `Laden fehlgeschlagen: ${error?.message || String(error)}`,
+        text: 'Admin-Verbindung nicht verfügbar und Adapter-Webserver nicht erreichbar. Bitte Seite im ioBroker-Admin öffnen oder Adapter-Port prüfen.',
       });
-    } finally {
-      setBusy(false);
+    } else {
+      setStatus({
+        ok: false,
+        text: `Laden teilweise fehlgeschlagen: ${loadError?.message || String(loadError || 'unbekannter Fehler')}`,
+      });
     }
+
+    setBusy(false);
   }, [instance]);
 
   useEffect(() => {
@@ -68,6 +180,28 @@ export default function LicensePage() {
   const save = async () => {
     setBusy(true);
 
+    const key = String(licenseKey || '').trim();
+    setLicenseKey(key);
+    let adminError = null;
+
+    // Primär über den laufenden Adapter speichern/aktivieren.
+    // Das funktioniert auch dann, wenn die Admin-Socket-API im Browser/iframe zickt.
+    try {
+      const info = await saveRuntimeLicenseKey(instance, key);
+      if (info?.uuid) setUuid(String(info.uuid));
+      if (info?.licenseKey) setLicenseKey(String(info.licenseKey));
+      writeCachedLicenseKey(instance, info?.licenseKey || key);
+      setStatus({
+        ok: info?.valid !== false,
+        text: info?.message || (info?.valid ? 'Gespeichert und aktiviert ✅' : 'Gespeichert, aber Lizenz noch ungültig ❌'),
+      });
+      setBusy(false);
+      return;
+    } catch (error) {
+      adminError = error;
+    }
+
+    // Fallback: klassische Admin-Objekt-Speicherung.
     try {
       const conn = await getAdminConnection();
       if (!conn) {
@@ -81,12 +215,16 @@ export default function LicensePage() {
       }
 
       adapterObject.native = adapterObject.native || {};
-      adapterObject.native.licenseKey = String(licenseKey || '').trim();
+      adapterObject.native.licenseKey = key;
       await setObject(adapterId, adapterObject, conn);
+      writeCachedLicenseKey(instance, key);
 
-      setStatus({ ok: true, text: 'Gespeichert ✅ Bitte Adapter ggf. neu starten.' });
+      setStatus({ ok: true, text: 'Gespeichert ✅ Bitte Adapter neu starten, falls der Status nicht sofort wechselt.' });
     } catch (error) {
-      setStatus({ ok: false, text: `Speichern fehlgeschlagen: ${error?.message || String(error)}` });
+      setStatus({
+        ok: false,
+        text: `Speichern fehlgeschlagen: Runtime ${adminError?.message || String(adminError || 'nicht erreichbar')} / Admin ${error?.message || String(error)}`,
+      });
     } finally {
       setBusy(false);
     }

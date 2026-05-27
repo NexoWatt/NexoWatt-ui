@@ -59,6 +59,9 @@ class NexoWattVis extends utils.Adapter {
     });
 
     this.stateCache = {};
+    // Public values may be normalized for UI/module safety (e.g. charge/discharge magnitudes).
+    // Keep the original signed input values as well so signed battery fallbacks can be split correctly.
+    this._nwRawValueCache = {};
     this.sseClients = new Set();
     // Batch SSE updates to prevent UI freezes on frequent state updates
     this._ssePendingPayload = {};
@@ -1168,16 +1171,68 @@ class NexoWattVis extends utils.Adapter {
   }
 
   async _nwGetSystemUuid() {
+    const pickUuidFromObject = (obj) => {
+      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const seen = new Set();
+      const scan = (value, key = '') => {
+        if (value === undefined || value === null) return '';
+        if (typeof value === 'string') {
+          const v = value.trim();
+          if (!v) return '';
+          if (/uuid/i.test(key) || uuidRe.test(v)) return v;
+          return '';
+        }
+        if (typeof value !== 'object') return '';
+        if (seen.has(value)) return '';
+        seen.add(value);
+
+        const preferredKeys = ['uuid', 'UUID', '_uuid', 'systemUuid', 'systemUUID', 'val', 'value'];
+        for (const k of preferredKeys) {
+          if (Object.prototype.hasOwnProperty.call(value, k)) {
+            const found = scan(value[k], k);
+            if (found) return found;
+          }
+        }
+        for (const [k, v] of Object.entries(value)) {
+          const found = scan(v, k);
+          if (found) return found;
+        }
+        return '';
+      };
+      return scan(obj);
+    };
+
     try {
       const obj = await this.getForeignObjectAsync('system.meta.uuid');
-      if (!obj) return '';
-      const n = obj.native || {};
-      const c = obj.common || {};
-      return String(n.uuid || n.UUID || c.uuid || c.UUID || '').trim();
+      const uuid = pickUuidFromObject(obj);
+      if (uuid) return uuid;
     } catch (e) {
-      this.log.debug(`UUID konnte nicht gelesen werden: ${e}`);
-      return '';
+      this.log.debug(`UUID-Objekt system.meta.uuid konnte nicht gelesen werden: ${e}`);
     }
+
+    try {
+      const st = await this.getForeignStateAsync('system.meta.uuid');
+      const uuid = (st && st.val !== undefined && st.val !== null) ? String(st.val).trim() : '';
+      if (uuid) return uuid;
+    } catch (e) {
+      this.log.debug(`UUID-State system.meta.uuid konnte nicht gelesen werden: ${e}`);
+    }
+
+    try {
+      const cfg = await this.getForeignObjectAsync('system.config');
+      const uuid = pickUuidFromObject(cfg);
+      if (uuid) return uuid;
+    } catch (e) {
+      this.log.debug(`UUID-Fallback system.config konnte nicht gelesen werden: ${e}`);
+    }
+
+    try {
+      const own = await this.getStateAsync('license.uuid');
+      const uuid = (own && own.val !== undefined && own.val !== null) ? String(own.val).trim() : '';
+      if (uuid) return uuid;
+    } catch (_e) {}
+
+    return '';
   }
 
   _nwExpectedLicenseKey(uuid) {
@@ -7276,6 +7331,93 @@ async onReady() {
 
   async startServer() {
     const app = express();
+
+    // Public license information endpoint for the Admin license page.
+    // Must be registered before the license gate so the UUID can be copied
+    // even when the adapter/VIS itself is still locked.
+    const sendLicenseCors = (res) => {
+      try {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      } catch (_e) {}
+    };
+    app.options('/api/license/info', (_req, res) => {
+      sendLicenseCors(res);
+      res.status(204).end();
+    });
+    app.get('/api/license/info', async (_req, res) => {
+      sendLicenseCors(res);
+      if (!this._nwSystemUuid) {
+        try { this._nwSystemUuid = await this._nwGetSystemUuid(); } catch (_e) {}
+      }
+      const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
+      const currentLicenseKey = String((this.config && this.config.licenseKey) || '').trim();
+      const maskedLicenseKey = currentLicenseKey
+        ? `${currentLicenseKey.slice(0, 8)}…${currentLicenseKey.slice(-6)}`
+        : '';
+      res.json({
+        ok: true,
+        adapter: this.namespace,
+        uuid: String(this._nwSystemUuid || ''),
+        valid: !!this._nwLicenseOk,
+        type: String(info.type || 'none'),
+        message: String(info.msg || ''),
+        expiresAt: Number(info.expiresAt || 0),
+        daysRemaining: Number(info.daysRemaining || 0),
+        licenseKeyConfigured: !!currentLicenseKey,
+        licenseKeyMasked: maskedLicenseKey,
+        // Needed by the Admin-only license page so a saved full license remains visible
+        // after leaving/re-opening the adapter page. The endpoint is intentionally
+        // before the license gate because activation must also work while locked.
+        licenseKey: currentLicenseKey,
+      });
+    });
+
+    app.options('/api/license/save', (_req, res) => {
+      sendLicenseCors(res);
+      res.status(204).end();
+    });
+    app.post('/api/license/save', express.json({ limit: '64kb' }), async (req, res) => {
+      sendLicenseCors(res);
+      try {
+        const licenseKey = String((req.body && (req.body.licenseKey || req.body.key)) || '').trim();
+        const adapterObjectId = `system.adapter.${this.namespace}`;
+        const adapterObj = await this.getForeignObjectAsync(adapterObjectId);
+        if (!adapterObj) throw new Error(`Adapter-Objekt nicht gefunden: ${adapterObjectId}`);
+
+        adapterObj.native = adapterObj.native || {};
+        adapterObj.native.licenseKey = licenseKey;
+        await this.setForeignObjectAsync(adapterObjectId, adapterObj);
+
+        // Apply immediately without forcing the customer to restart the instance.
+        this.config = this.config || {};
+        this.config.licenseKey = licenseKey;
+        await this._nwInitLicense();
+
+        const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
+        res.json({
+          ok: true,
+          adapter: this.namespace,
+          uuid: String(this._nwSystemUuid || ''),
+          valid: !!this._nwLicenseOk,
+          type: String(info.type || 'none'),
+          message: this._nwLicenseOk
+            ? 'Lizenz gespeichert und aktiviert ✅'
+            : `Lizenz gespeichert, aber noch ungültig: ${String(info.msg || 'unbekannter Fehler')}`,
+          expiresAt: Number(info.expiresAt || 0),
+          daysRemaining: Number(info.daysRemaining || 0),
+          licenseKeyConfigured: !!licenseKey,
+          licenseKeyMasked: licenseKey ? `${licenseKey.slice(0, 8)}…${licenseKey.slice(-6)}` : '',
+          licenseKey,
+        });
+      } catch (error) {
+        res.status(500).json({
+          ok: false,
+          message: `Lizenz konnte nicht gespeichert werden: ${error && error.message ? error.message : String(error)}`,
+        });
+      }
+    });
 
     // -------------------------------------------------------------------
     // License gate: the adapter/UI is locked until a valid license key is
@@ -16719,6 +16861,213 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
   }
 
+  _nwGetCacheAgeMs(key, now = Date.now()) {
+    try {
+      const rec = this.stateCache && this.stateCache[key];
+      if (!rec) return null;
+      const ts = Number(rec.ts);
+      if (!Number.isFinite(ts) || ts <= 0) return null;
+      return Math.max(0, Number(now) - ts);
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  _nwGetNumberFromCacheFresh(key, maxAgeMs = null, fallback = null, now = Date.now()) {
+    try {
+      const rec = this.stateCache && this.stateCache[key];
+      if (!rec) return fallback;
+      const n = Number(rec.value);
+      if (!Number.isFinite(n)) return fallback;
+      const maxAge = Number(maxAgeMs);
+      if (Number.isFinite(maxAge) && maxAge > 0) {
+        const age = this._nwGetCacheAgeMs(key, now);
+        if (age !== null && age > maxAge) return fallback;
+      }
+      return n;
+    } catch (_e) {
+      return fallback;
+    }
+  }
+
+  _nwGetRawNumberFromCache(key, maxAgeMs = null, fallback = null, now = Date.now()) {
+    try {
+      const rec = (this._nwRawValueCache && this._nwRawValueCache[key]) || (this.stateCache && this.stateCache[key]);
+      if (!rec) return fallback;
+      const n = Number(rec.value);
+      if (!Number.isFinite(n)) return fallback;
+      const maxAge = Number(maxAgeMs);
+      if (Number.isFinite(maxAge) && maxAge > 0) {
+        const ts = Number(rec.ts);
+        if (Number.isFinite(ts) && ts > 0 && Math.max(0, Number(now) - ts) > maxAge) return fallback;
+      }
+      return n;
+    } catch (_e) {
+      return fallback;
+    }
+  }
+
+  _nwLiveInputMaxAgeMs() {
+    try {
+      const fromState = Number(this.stateCache && this.stateCache['settings.deviceStaleTimeoutSec'] ? this.stateCache['settings.deviceStaleTimeoutSec'].value : NaN);
+      const fromCfg = Number(this.config && this.config.settings ? this.config.settings.deviceStaleTimeoutSec : NaN);
+      const sec = Number.isFinite(fromState) && fromState > 0 ? fromState : (Number.isFinite(fromCfg) && fromCfg > 0 ? fromCfg : 300);
+      return Math.max(10_000, Math.round(sec * 1000));
+    } catch (_e) {
+      return 300_000;
+    }
+  }
+
+  _nwIsBatterySignInverted() {
+    try {
+      if (typeof this._notifyGetSettingBool === 'function') {
+        return this._notifyGetSettingBool('flowInvertBattery', !!(this.config && this.config.settings && this.config.settings.flowInvertBattery));
+      }
+    } catch (_e) {}
+    try {
+      return !!(this.config && this.config.settings && this.config.settings.flowInvertBattery);
+    } catch (_e2) {
+      return false;
+    }
+  }
+
+  _nwResolveBatteryFlowFromCache(opts = {}) {
+    const now = Number.isFinite(Number(opts.now)) ? Number(opts.now) : Date.now();
+    const maxAgeMs = opts.maxAgeMs === undefined ? this._nwLiveInputMaxAgeMs() : opts.maxAgeMs;
+    const deadbandW = Number.isFinite(Number(opts.deadbandW)) ? Math.max(0, Number(opts.deadbandW)) : 25;
+
+    const dps = (this.config && this.config.datapoints && typeof this.config.datapoints === 'object') ? this.config.datapoints : {};
+    const idOf = (key) => String(dps[key] || '').trim();
+    const chargeMapped = !!idOf('storageChargePower');
+    const dischargeMapped = !!idOf('storageDischargePower');
+    const batteryMapped = !!idOf('batteryPower');
+    const sameChargeDischargeId = !!(chargeMapped && dischargeMapped && idOf('storageChargePower') === idOf('storageDischargePower'));
+    const inv = this._nwIsBatterySignInverted();
+
+    const fresh = (key, onlyIfMapped) => {
+      if (onlyIfMapped && !idOf(key)) return null;
+      return this._nwGetNumberFromCacheFresh(key, maxAgeMs, null, now);
+    };
+    const rawFresh = (key, onlyIfMapped) => {
+      if (onlyIfMapped && !idOf(key)) return null;
+      return this._nwGetRawNumberFromCache(key, maxAgeMs, null, now);
+    };
+
+    const fromSigned = (signedRaw, src, opts2 = {}) => {
+      let signed = Number(signedRaw);
+      if (!Number.isFinite(signed)) signed = 0;
+      if (inv) signed = -signed;
+      if (Math.abs(signed) <= deadbandW) signed = 0;
+      const chargeW = signed < 0 ? Math.abs(signed) : 0;
+      const dischargeW = signed > 0 ? signed : 0;
+      return {
+        chargeW: Math.round(chargeW),
+        dischargeW: Math.round(dischargeW),
+        signedW: Math.round(signed),
+        src,
+        inverted: inv,
+        fromSigned: true,
+        mirror: opts2.mirror !== false,
+        staleMs: {
+          batteryPower: this._nwGetCacheAgeMs('batteryPower', now),
+          storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
+          storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
+        },
+      };
+    };
+
+    // Speicherfarm already provides normalized charge/discharge totals. Keep it authoritative
+    // unless a signed single battery datapoint is explicitly mapped for a non-farm setup.
+    const sfEnabled = !!(this.stateCache && this.stateCache['storageFarm.enabled'] && this.stateCache['storageFarm.enabled'].value);
+    if (sfEnabled) {
+      const farmCharge = fresh('storageFarm.totalChargePowerW', false);
+      const farmDischarge = fresh('storageFarm.totalDischargePowerW', false);
+      if (farmCharge !== null || farmDischarge !== null) {
+        let c = Math.max(0, Math.abs(Number(farmCharge || 0)));
+        let d = Math.max(0, Math.abs(Number(farmDischarge || 0)));
+        if (inv) { const t = c; c = d; d = t; }
+        return {
+          chargeW: Math.round(c),
+          dischargeW: Math.round(d),
+          signedW: Math.round(d - c),
+          src: inv ? 'storageFarm(inv)' : 'storageFarm',
+          inverted: inv,
+          fromSigned: false,
+          mirror: true,
+          staleMs: {
+            farmCharge: this._nwGetCacheAgeMs('storageFarm.totalChargePowerW', now),
+            farmDischarge: this._nwGetCacheAgeMs('storageFarm.totalDischargePowerW', now),
+          },
+        };
+      }
+    }
+
+    const batterySigned = batteryMapped ? rawFresh('batteryPower', true) : null;
+    const chargeRaw = chargeMapped ? rawFresh('storageChargePower', true) : null;
+    const dischargeRaw = dischargeMapped ? rawFresh('storageDischargePower', true) : null;
+
+    // If charge/discharge were both mapped to the same signed datapoint, keep the sign.
+    // updateValue() normalizes their public state values to magnitudes, so the private raw cache is used here.
+    if (sameChargeDischargeId && chargeRaw !== null) {
+      return fromSigned(chargeRaw, 'sameChargeDischargeSigned', { mirror: true });
+    }
+
+    // Canonical single signed DP fallback: exactly like NVP signed handling.
+    // Use it when no separate channels are mapped, when separate channels are missing/stale,
+    // or when stale/legacy mirrored values would otherwise show both directions at once.
+    const separateAvailable = (chargeRaw !== null || dischargeRaw !== null);
+    const publicCharge = chargeMapped ? fresh('storageChargePower', true) : null;
+    const publicDischarge = dischargeMapped ? fresh('storageDischargePower', true) : null;
+    const bothPublicDirections = (Number(publicCharge || 0) > deadbandW && Number(publicDischarge || 0) > deadbandW);
+    const bothEqualish = bothPublicDirections && Math.abs(Math.abs(Number(publicCharge || 0)) - Math.abs(Number(publicDischarge || 0))) <= Math.max(2, deadbandW);
+
+    if (batterySigned !== null && (!separateAvailable || bothEqualish || (!chargeMapped && !dischargeMapped))) {
+      return fromSigned(batterySigned, bothEqualish ? 'batterySignedOverrideDual' : 'batterySigned', { mirror: true });
+    }
+
+    if (separateAvailable) {
+      let c = chargeRaw !== null ? Math.abs(Number(chargeRaw)) : 0;
+      let d = dischargeRaw !== null ? Math.abs(Number(dischargeRaw)) : 0;
+      if (!Number.isFinite(c)) c = 0;
+      if (!Number.isFinite(d)) d = 0;
+      if (c <= deadbandW) c = 0;
+      if (d <= deadbandW) d = 0;
+      if (inv) { const t = c; c = d; d = t; }
+      return {
+        chargeW: Math.round(c),
+        dischargeW: Math.round(d),
+        signedW: Math.round(d - c),
+        src: inv ? 'chargeDischarge(inv)' : 'chargeDischarge',
+        inverted: inv,
+        fromSigned: false,
+        mirror: sameChargeDischargeId || !chargeMapped || !dischargeMapped,
+        staleMs: {
+          storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
+          storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
+        },
+      };
+    }
+
+    if (batterySigned !== null) {
+      return fromSigned(batterySigned, 'batterySigned', { mirror: true });
+    }
+
+    return {
+      chargeW: 0,
+      dischargeW: 0,
+      signedW: 0,
+      src: (batteryMapped || chargeMapped || dischargeMapped) ? 'stale-or-missing' : 'missing',
+      inverted: inv,
+      fromSigned: false,
+      mirror: (!chargeMapped || !dischargeMapped),
+      staleMs: {
+        batteryPower: this._nwGetCacheAgeMs('batteryPower', now),
+        storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
+        storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
+      },
+    };
+  }
+
   _nwResolveGridImportExportFromCache() {
     const gridBuyMapped = this._nwHasMappedDatapoint('gridBuyPower');
     const gridSellMapped = this._nwHasMappedDatapoint('gridSellPower');
@@ -16901,8 +17250,9 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     } = this._nwResolveGridImportExportFromCache();
     const pvW = this._nwGetNumberFromCache('pvPower');
     const loadW = this._nwGetNumberFromCache('consumptionTotal');
-    let chgW = this._nwGetNumberFromCache('storageChargePower');
-    let dchgW = this._nwGetNumberFromCache('storageDischargePower');
+    const storageFlowHist = this._nwResolveBatteryFlowFromCache({ now });
+    let chgW = Number(storageFlowHist.chargeW);
+    let dchgW = Number(storageFlowHist.dischargeW);
     let soc = this._nwGetNumberFromCache('storageSoc');
     const evW = this._nwGetNumberFromCache('evcs.totalPowerW');
 
@@ -16932,15 +17282,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     }
 
-    // In StorageFarm mode, prefer the aggregated farm totals for charge/discharge/SoC.
-    // This avoids race conditions with legacy single-storage datapoint mappings that may
-    // still update the generic cache keys.
+    // In StorageFarm mode the storageFlow resolver already prefers the aggregated farm
+    // charge/discharge totals. Keep the farm SoC preference here for history/export.
     if (sfEnabled) {
-      const chgFarmW = this._nwGetNumberFromCache('storageFarm.totalChargePowerW');
-      const dchgFarmW = this._nwGetNumberFromCache('storageFarm.totalDischargePowerW');
       const socFarm = this._nwGetNumberFromCache('storageFarm.totalSoc');
-      if (Number.isFinite(chgFarmW)) chgW = chgFarmW;
-      if (Number.isFinite(dchgFarmW)) dchgW = dchgFarmW;
       if (Number.isFinite(socFarm)) soc = socFarm;
     }
 
@@ -17812,40 +18157,15 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     } = this._nwResolveGridImportExportFromCache();
 
     // --- Storage ---
-    let chargeRaw = this._nwGetNumberFromCache('storageChargePower');
-    let dischargeRaw = this._nwGetNumberFromCache('storageDischargePower');
-    const batteryRaw = this._nwGetNumberFromCache('batteryPower');
-
-    let storageSrc = 'chargeDischarge';
-    if (chargeRaw === null && dischargeRaw === null) {
-      if (batteryRaw !== null) {
-        const signed = Number(batteryRaw);
-        if (Number.isFinite(signed)) {
-          if (signed >= 0) {
-            dischargeRaw = signed;
-            chargeRaw = 0;
-          } else {
-            chargeRaw = -signed;
-            dischargeRaw = 0;
-          }
-          storageSrc = 'batterySigned';
-        } else {
-          chargeRaw = 0;
-          dischargeRaw = 0;
-          storageSrc = 'missing';
-        }
-      } else {
-        chargeRaw = 0;
-        dischargeRaw = 0;
-        storageSrc = 'missing';
-      }
-    } else {
-      if (chargeRaw === null) chargeRaw = 0;
-      if (dischargeRaw === null) dischargeRaw = 0;
-    }
-
-    const chargeW = Math.max(0, Math.abs(chargeRaw ?? 0));
-    const dischargeW = Math.max(0, Math.abs(dischargeRaw ?? 0));
+    // Normalize storage power centrally:
+    //   batteryPower (signed) convention: -W = charge, +W = discharge
+    //   settings.flowInvertBattery flips that signed value before splitting.
+    // Separate charge/discharge datapoints remain supported, but stale/legacy mirrored
+    // values must not make the UI or derived balance show both directions at once.
+    const storageFlow = this._nwResolveBatteryFlowFromCache({ now: ts });
+    const chargeW = Math.max(0, Number(storageFlow.chargeW) || 0);
+    const dischargeW = Math.max(0, Number(storageFlow.dischargeW) || 0);
+    const storageSrc = storageFlow.src || 'missing';
     const gridBuyRound = Math.round(gridBuyW);
     const gridSellRound = Math.round(gridSellW);
 
@@ -18161,6 +18481,30 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         this.updateValue('pvPower', pvTotalRound, ts);
       }
     }
+
+    // 4) If storage is resolved from a signed fallback (or farm/auto values), mirror the
+    // normalized pair into the public keys. This is the battery equivalent of the NVP
+    // import/export fallback and keeps tiles, history and downstream modules aligned.
+    try {
+      const dps = (this.config && this.config.datapoints) || {};
+      const chargeMapped = !!String(dps.storageChargePower || '').trim();
+      const dischargeMapped = !!String(dps.storageDischargePower || '').trim();
+      const samePair = chargeMapped && dischargeMapped && String(dps.storageChargePower || '').trim() === String(dps.storageDischargePower || '').trim();
+      const shouldMirrorStorage = !!(storageFlow && (storageFlow.mirror || samePair || !chargeMapped || !dischargeMapped));
+      const chargeRound = Math.round(chargeW);
+      const dischargeRound = Math.round(dischargeW);
+      if (shouldMirrorStorage) {
+        const curC = Number(this.stateCache?.storageChargePower?.value);
+        const curD = Number(this.stateCache?.storageDischargePower?.value);
+        if (!Number.isFinite(curC) || curC !== chargeRound) this.updateValue('storageChargePower', chargeRound, ts);
+        if (!Number.isFinite(curD) || curD !== dischargeRound) this.updateValue('storageDischargePower', dischargeRound, ts);
+      }
+      if (!this._nwHasMappedDatapoint('batteryPower')) {
+        const signedRound = Math.round(dischargeW - chargeW);
+        const curB = Number(this.stateCache?.batteryPower?.value);
+        if (!Number.isFinite(curB) || curB !== signedRound) this.updateValue('batteryPower', signedRound, ts);
+      }
+    } catch (_eStorageMirror) {}
   }
 
   _nwHasMappedDatapoint(key) {
@@ -18431,9 +18775,17 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
 
   updateValue(key, value, ts) {
+    const rawValue = value;
+    try {
+      if (!this._nwRawValueCache || typeof this._nwRawValueCache !== 'object') this._nwRawValueCache = {};
+      this._nwRawValueCache[key] = { value: rawValue, ts };
+    } catch (_e0) {}
+
     // Some devices provide charging/discharging power as signed values
     // (e.g. charging power can be negative). In NexoWatt we treat
-    // charge/discharge as positive magnitudes for UI/Historie.
+    // public charge/discharge states as positive magnitudes for UI/Historie.
+    // The raw signed value remains available in _nwRawValueCache so a single
+    // signed battery datapoint cannot accidentally fill charge AND discharge.
     if (
       typeof value === 'number' &&
       !isNaN(value) &&
@@ -18499,6 +18851,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         key === 'gridBuyPower' || key === 'gridSellPower' || key === 'gridPointPower' ||
         key === 'pvPower' || key === 'productionTotal' ||
         key === 'storageChargePower' || key === 'storageDischargePower' || key === 'batteryPower' ||
+        key === 'settings.flowInvertBattery' || key === 'settings.deviceStaleTimeoutSec' ||
         /^producer\d+Power$/.test(key) || /^consumer\d+Power$/.test(key) ||
         /^evcs\.\d+\.powerW$/.test(key) || key === 'evcs.totalPowerW' ||
         key.startsWith('storageFarm.');

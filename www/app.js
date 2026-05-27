@@ -1684,8 +1684,9 @@ function computeDerived() {
   // derive some percentages if not provided
   const pv = pick('pvPower', 'productionTotal');
   const load = pick('consumptionTotal');
-  const charge = pick('storageChargePower');
-  const discharge = pick('storageDischargePower');
+  const batteryFlow = getNormalizedBatteryFlow();
+  const charge = Number(batteryFlow.chargeW) || 0;
+  const discharge = Number(batteryFlow.dischargeW) || 0;
 
   const gridMeta = getGridImportExport((k) => get(k));
   const rawBuy = gridMeta.rawBuy;
@@ -1793,6 +1794,117 @@ function getGridImportExport(read) {
   };
 }
 
+function getStateAgeMs(key) {
+  try {
+    const rec = state && state[key];
+    const ts = Number(rec && rec.ts);
+    if (!Number.isFinite(ts) || ts <= 0) return null;
+    return Math.max(0, Date.now() - ts);
+  } catch (_e) {
+    return null;
+  }
+}
+
+function getFlowFreshMaxAgeMs() {
+  try {
+    const stateVal = coerceNumber(state && state['settings.deviceStaleTimeoutSec'] && state['settings.deviceStaleTimeoutSec'].value);
+    const cfgVal = coerceNumber(window.__nwCfg && window.__nwCfg.settings && window.__nwCfg.settings.deviceStaleTimeoutSec);
+    const sec = stateVal != null && stateVal > 0 ? stateVal : (cfgVal != null && cfgVal > 0 ? cfgVal : 300);
+    return Math.max(10000, Math.round(sec * 1000));
+  } catch (_e) {
+    return 300000;
+  }
+}
+
+function getFreshFlowNumber(key, opts = {}) {
+  if (opts.onlyIfMapped && !isMappedDatapoint(key)) return null;
+  const rec = state && state[key];
+  if (!rec) return null;
+  const n = coerceNumber(rec.value);
+  if (n === null) return null;
+  const maxAgeMs = opts.maxAgeMs === undefined ? getFlowFreshMaxAgeMs() : opts.maxAgeMs;
+  const age = getStateAgeMs(key);
+  if (Number.isFinite(Number(maxAgeMs)) && Number(maxAgeMs) > 0 && age !== null && age > Number(maxAgeMs)) return null;
+  return n;
+}
+
+function getConfiguredDatapointId(key) {
+  try {
+    const cfg = window.__nwCfg || {};
+    const dps = cfg && cfg.datapoints && typeof cfg.datapoints === 'object' ? cfg.datapoints : {};
+    return String(dps[key] || '').trim();
+  } catch (_e) {
+    return '';
+  }
+}
+
+function getNormalizedBatteryFlow() {
+  const deadbandW = 25;
+  const inv = !!(state && state['settings.flowInvertBattery'] && state['settings.flowInvertBattery'].value);
+  const chargeId = getConfiguredDatapointId('storageChargePower');
+  const dischargeId = getConfiguredDatapointId('storageDischargePower');
+  const batteryId = getConfiguredDatapointId('batteryPower');
+  const chargeMapped = !!chargeId;
+  const dischargeMapped = !!dischargeId;
+  const batteryMapped = !!batteryId;
+  const samePair = !!(chargeMapped && dischargeMapped && chargeId === dischargeId);
+
+  const fromSigned = (raw, src) => {
+    let signed = Number(raw);
+    if (!Number.isFinite(signed)) signed = 0;
+    if (inv) signed = -signed;
+    if (Math.abs(signed) <= deadbandW) signed = 0;
+    return {
+      chargeW: signed < 0 ? Math.abs(signed) : 0,
+      dischargeW: signed > 0 ? signed : 0,
+      signedW: signed,
+      src,
+      inverted: inv,
+    };
+  };
+
+  const sfEnabled = !!(state && state['storageFarm.enabled'] && state['storageFarm.enabled'].value);
+  if (sfEnabled) {
+    const fc = getFreshFlowNumber('storageFarm.totalChargePowerW');
+    const fd = getFreshFlowNumber('storageFarm.totalDischargePowerW');
+    if (fc !== null || fd !== null) {
+      let c = Math.max(0, Math.abs(Number(fc || 0)));
+      let d = Math.max(0, Math.abs(Number(fd || 0)));
+      if (inv) { const t = c; c = d; d = t; }
+      if (c <= deadbandW) c = 0;
+      if (d <= deadbandW) d = 0;
+      return { chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'storageFarm(inv)' : 'storageFarm', inverted: inv };
+    }
+  }
+
+  const signedBattery = batteryMapped ? getFreshFlowNumber('batteryPower') : null;
+  const charge = chargeMapped ? getFreshFlowNumber('storageChargePower') : null;
+  const discharge = dischargeMapped ? getFreshFlowNumber('storageDischargePower') : null;
+
+  if (samePair && signedBattery !== null) return fromSigned(signedBattery, 'batterySignedForSamePair');
+
+  const separateAvailable = (charge !== null || discharge !== null);
+  const bothDirections = Math.abs(Number(charge || 0)) > deadbandW && Math.abs(Number(discharge || 0)) > deadbandW;
+  const bothEqualish = bothDirections && Math.abs(Math.abs(Number(charge || 0)) - Math.abs(Number(discharge || 0))) <= Math.max(2, deadbandW);
+
+  if (signedBattery !== null && (!separateAvailable || bothEqualish || (!chargeMapped && !dischargeMapped))) {
+    return fromSigned(signedBattery, bothEqualish ? 'batterySignedOverrideDual' : 'batterySigned');
+  }
+
+  if (separateAvailable) {
+    let c = Math.max(0, Math.abs(Number(charge || 0)));
+    let d = Math.max(0, Math.abs(Number(discharge || 0)));
+    if (c <= deadbandW) c = 0;
+    if (d <= deadbandW) d = 0;
+    if (inv) { const t = c; c = d; d = t; }
+    return { chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'chargeDischarge(inv)' : 'chargeDischarge', inverted: inv };
+  }
+
+  if (signedBattery !== null) return fromSigned(signedBattery, 'batterySigned');
+
+  return { chargeW: 0, dischargeW: 0, signedW: 0, src: (batteryMapped || chargeMapped || dischargeMapped) ? 'stale-or-missing' : 'missing', inverted: inv };
+}
+
 function render() {
   const s = state;
 
@@ -1825,17 +1937,14 @@ function render() {
 
   const load = d('consumptionTotal');
   const { buy, sell } = getGridImportExport(d);
-  let charge = d('storageChargePower');
-  let discharge = d('storageDischargePower');
+  const batteryFlow = getNormalizedBatteryFlow();
+  let charge = Number(batteryFlow.chargeW) || 0;
+  let discharge = Number(batteryFlow.dischargeW) || 0;
   let soc = d('storageSoc');
 
   if (sfEnabled) {
-    const c = d('storageFarm.totalChargePowerW');
-    const dch = d('storageFarm.totalDischargePowerW');
     const socAvg = d('storageFarm.totalSoc');
     const socMedian = d('storageFarm.medianSoc');
-    if (c != null && !isNaN(Number(c))) charge = c;
-    if (dch != null && !isNaN(Number(dch))) discharge = dch;
     // Im Farm‑Modus bevorzugen wir den Durchschnitt (Ø), Median bleibt als Fallback.
     if (socAvg != null && !isNaN(Number(socAvg))) soc = socAvg;
     else if (socMedian != null && !isNaN(Number(socMedian))) soc = socMedian;
@@ -2069,6 +2178,7 @@ let cfgReloadPending = false;
 
 const applyConfigSnapshot = (nextCfg) => {
   cfg = nextCfg || {};
+  try { window.__nwCfg = cfg || {}; } catch (_e) { window.__nwCfg = {}; }
   try { units = cfg.units || units; } catch (_e) {}
 
   // App-Center config
@@ -3683,8 +3793,9 @@ render = function(){
     const pv = +(d('pvPower') ?? 0);
     const load = +(d('consumptionTotal') ?? 0);
     const { buy } = getGridImportExport(d);
-    const chg = +(d('storageChargePower') ?? 0);
-    const dchg = +(d('storageDischargePower') ?? 0);
+    const batteryFlow = getNormalizedBatteryFlow();
+    const chg = Number(batteryFlow.chargeW) || 0;
+    const dchg = Number(batteryFlow.dischargeW) || 0;
     const soc = d('storageSoc');
     const cap = +(d('storageCapacityKwh') ?? 0);
 
@@ -3730,8 +3841,9 @@ render = function(){
     const pv = +(d('pvPower') ?? 0);
     const load = +(d('consumptionTotal') ?? 0);
     const { buy, sell } = getGridImportExport(d);
-    const charge = +(d('storageChargePower') ?? 0);
-    const discharge = +(d('storageDischargePower') ?? 0);
+    const batteryFlow = getNormalizedBatteryFlow();
+    const charge = Number(batteryFlow.chargeW) || 0;
+    const discharge = Number(batteryFlow.dischargeW) || 0;
     const soc = d('storageSoc');
     const cap = +(d('storageCapacityKwh') ?? 0);
 
@@ -3785,8 +3897,9 @@ render = function(){
     const pv = +(d('pvPower') ?? 0);
     const load = +(d('consumptionTotal') ?? 0);
     const { buy } = getGridImportExport(d);
-    const chg = +(d('storageChargePower') ?? 0);
-    const dchg = +(d('storageDischargePower') ?? 0);
+    const batteryFlow = getNormalizedBatteryFlow();
+    const chg = Number(batteryFlow.chargeW) || 0;
+    const dchg = Number(batteryFlow.dischargeW) || 0;
     const soc = d('storageSoc');
     const cap = +(d('storageCapacityKwh') ?? 0);
 
@@ -3832,8 +3945,9 @@ render = function(){
     const pv = +(d('pvPower') ?? 0);
     const load = +(d('consumptionTotal') ?? 0);
     const { buy, sell } = getGridImportExport(d);
-    const charge = +(d('storageChargePower') ?? 0);
-    const discharge = +(d('storageDischargePower') ?? 0);
+    const batteryFlow = getNormalizedBatteryFlow();
+    const charge = Number(batteryFlow.chargeW) || 0;
+    const discharge = Number(batteryFlow.dischargeW) || 0;
     const soc = d('storageSoc');
     const cap = +(d('storageCapacityKwh') ?? 0);
 
@@ -5564,26 +5678,25 @@ function updateEnergyWeb() {
   let { buy, sell } = getGridImportExport(d);
   let load = +(d('consumptionTotal') ?? 0);
   let c2 = +(d('evcs.totalPowerW') ?? d('consumptionEvcs') ?? 0); // Wallbox (sum)
-  let batCharge = +(d('storageChargePower') ?? 0);
-  let batDischarge = +(d('storageDischargePower') ?? 0);
-  const batSingle = d('batteryPower'); // optional fallback
+
+  // Batterie: zentral normalisieren wie den NVP.
+  // Signed batteryPower-Konvention: -W = Laden, +W = Entladen;
+  // die Option "Batterie-Vorzeichen invertieren" wird vor dem Split angewendet.
+  const batteryFlow = getNormalizedBatteryFlow();
+  let batCharge = Number(batteryFlow.chargeW) || 0;
+  let batDischarge = Number(batteryFlow.dischargeW) || 0;
   let soc = d('storageSoc');
 
   if (sfEnabled) {
-    const c = d('storageFarm.totalChargePowerW');
-    const dch = d('storageFarm.totalDischargePowerW');
     const socAvg = d('storageFarm.totalSoc');
     const socMedian = d('storageFarm.medianSoc');
-    if (c != null && !isNaN(Number(c))) batCharge = +c;
-    if (dch != null && !isNaN(Number(dch))) batDischarge = +dch;
     // Im Farm‑Modus bevorzugen wir den Durchschnitt (Ø), Median bleibt als Fallback.
     if (socAvg != null && !isNaN(Number(socAvg))) soc = socAvg;
     else if (socMedian != null && !isNaN(Number(socMedian))) soc = socMedian;
   }
 
-  // Invert toggles (remain verfügbar)
+  // Invert toggles (Batterie ist bereits im Normalizer enthalten)
   const invPv   = !!(s['settings.flowInvertPv']?.value);
-  const invBat  = !!(s['settings.flowInvertBattery']?.value);
   const invGrid = !!(s['settings.flowInvertGrid']?.value);
   const invEv   = !!(s['settings.flowInvertEv']?.value);
   const subEvFromLoad = (s['settings.flowSubtractEvFromBuilding']?.value ?? true) ? true : false;
@@ -5593,19 +5706,6 @@ function updateEnergyWeb() {
   if (invEv) c2 = -c2;
   if (!evAvail) c2 = 0;
   if (invGrid) { const t=buy; buy = sell; sell = t; } // swap semantics if inverted grid
-
-  if (invBat) { const t=batCharge; batCharge = batDischarge; batDischarge = t; }
-
-  // Normalize battery flow signs: some systems report negative for charge/discharge
-  if (batCharge < 0 && batDischarge <= 0) { batCharge = Math.abs(batCharge); }
-  if (batDischarge < 0 && batCharge <= 0) { batDischarge = Math.abs(batDischarge); }
-
-  // Fallback: if both battery flows are zero AND a single DP exists, infer direction from its sign
-  if ((batCharge===0 && batDischarge===0) && batSingle !== undefined && batSingle !== null && !isNaN(Number(batSingle))) {
-    const bp = Number(batSingle);
-    if (bp < 0) { batCharge = Math.abs(bp); batDischarge = 0; }
-    else { batDischarge = Math.abs(bp); batCharge = 0; }
-  }
 
   // Optionale Extra-Kreise aktualisieren (Rückgabe = Summe der optionalen Verbraucher)
   const extrasConsumersSum = updateEnergyWebExtras(d);

@@ -564,7 +564,13 @@ class CoreLimitsModule extends BaseModule {
         let storageDischargeW = Math.max(0, this._readCacheNumberMax(['storageFarm.totalDischargePowerW', 'storageDischargePower'], 0) || 0);
         const batteryPowerW = this._readCacheNumber(['batteryPower'], null);
         if (isFiniteNumber(batteryPowerW)) {
-            const signed = Math.round(batteryPowerW);
+            const flowBatteryMapped = !!(cfg.datapoints && String(cfg.datapoints.batteryPower || '').trim());
+            const farmActive = !!this._readCacheNumber(['storageFarm.enabled'], 0);
+            // Apply the VIS inversion only to a raw mapped batteryPower datapoint.
+            // If batteryPower was mirrored from the already-normalized storage pair/farm,
+            // flipping it here again would swap charge/discharge twice.
+            const invBattery = flowBatteryMapped && !farmActive && !!(cfg.settings && cfg.settings.flowInvertBattery);
+            const signed = Math.round(invBattery ? -batteryPowerW : batteryPowerW);
             if (signed < -25) {
                 storageChargeW = Math.max(storageChargeW, Math.abs(signed));
                 storageDischargeW = 0;
