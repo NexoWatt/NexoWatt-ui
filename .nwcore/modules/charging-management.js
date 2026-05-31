@@ -383,6 +383,7 @@ class ChargingManagementModule extends BaseModule {
         this._pvStartReadySinceMs = new Map(); // safeKey -> ms since PV-only start conditions are continuously satisfied
         this._pvBelowMinSinceMs = new Map(); // safeKey -> ms since a running PV-only session is continuously below the technical minimum
         this._pvMinRunUntilMs = new Map(); // safeKey -> ms until a freshly started PV-only session should be kept stable
+        this._pvStartCooldownUntilMs = new Map(); // safeKey -> ms until a failed PV-only start may be retried
     }
 
     /**
@@ -1265,6 +1266,7 @@ class ChargingManagementModule extends BaseModule {
         const pvConnectorStopDelayMs = clamp(num(cfg.pvConnectorStopDelaySec, Math.max(num(cfg.pvStopDelaySec, 30), 45)), 0, 3600) * 1000;
         const pvMinRunMs = clamp(num(cfg.pvMinRunSec, 45), 0, 3600) * 1000;
         const pvRunDeficitToleranceW = clamp(num(cfg.pvRunDeficitToleranceW, 600), 0, 1e12);
+        const pvStartRetryCooldownMs = clamp(num(cfg.pvStartRetryCooldownSec, num(cfg.pvRestartCooldownSec, 180)), 0, 3600) * 1000;
         const pvRampUpAperTick = clamp(num(cfg.pvRampUpAperTick, 0.5), 0, 1e6);
         const pvRampUpWPerTick = clamp(num(cfg.pvRampUpWPerTick, 350), 0, 1e12);
 
@@ -1872,13 +1874,16 @@ class ChargingManagementModule extends BaseModule {
 
             let pvStartupHoldUntilMs = this._pvStartupUntilMs.get(safe) || 0;
             let pvMinRunUntilMs = this._pvMinRunUntilMs.get(safe) || 0;
+            let pvStartCooldownUntilMs = this._pvStartCooldownUntilMs.get(safe) || 0;
             if (!enabled || !online || vehiclePlugged === false) {
                 this._pvStartupUntilMs.delete(safe);
                 this._pvStartReadySinceMs.delete(safe);
                 this._pvBelowMinSinceMs.delete(safe);
                 this._pvMinRunUntilMs.delete(safe);
+                this._pvStartCooldownUntilMs.delete(safe);
                 pvStartupHoldUntilMs = 0;
                 pvMinRunUntilMs = 0;
+                pvStartCooldownUntilMs = 0;
             } else {
                 if (pvStartupHoldUntilMs > 0 && now >= pvStartupHoldUntilMs) {
                     this._pvStartupUntilMs.delete(safe);
@@ -1887,6 +1892,10 @@ class ChargingManagementModule extends BaseModule {
                 if (pvMinRunUntilMs > 0 && now >= pvMinRunUntilMs) {
                     this._pvMinRunUntilMs.delete(safe);
                     pvMinRunUntilMs = 0;
+                }
+                if (pvStartCooldownUntilMs > 0 && now >= pvStartCooldownUntilMs) {
+                    this._pvStartCooldownUntilMs.delete(safe);
+                    pvStartCooldownUntilMs = 0;
                 }
             }
 
@@ -2070,6 +2079,7 @@ class ChargingManagementModule extends BaseModule {
                 actualPowerW: pWNum,
                 pvStartupHoldUntilMs,
                 pvMinRunUntilMs,
+                pvStartCooldownUntilMs,
                 userMode,
                 evcsIndex: (Number.isFinite(evcsIndex) && evcsIndex > 0) ? Math.round(evcsIndex) : 0,
                 vehiclePlugged,
@@ -2815,7 +2825,10 @@ class ChargingManagementModule extends BaseModule {
                 //   PV - (Verbrauch ohne EV) - Speicherladung
                 // Bei aktiver EV-Priorität wird PV-Speicherladung, die gerade den Überschuss bindet,
                 // nicht abgezogen. Diese Leistung soll zuerst der Wallbox angeboten werden.
-                const baseLoadNoEvW = Math.max(0, loadTotalDirectW - pvEvcsActualW);
+                const evcsForLoadW = (pvEvcsUsedW > pvEvcsActualW && loadTotalDirectW >= (pvEvcsUsedW - 100))
+                    ? pvEvcsUsedW
+                    : pvEvcsActualW;
+                const baseLoadNoEvW = Math.max(0, loadTotalDirectW - evcsForLoadW);
                 const storageChargeBlockingPvW = Math.max(0, storageChargeNowW - evPriorityStorageYieldW);
                 pvSurplusNoEvW = Math.max(0, pvDirectW - baseLoadNoEvW - storageChargeBlockingPvW);
                 gridImportNoEvW = Math.max(0, baseLoadNoEvW + storageChargeBlockingPvW - pvDirectW);
@@ -4109,6 +4122,9 @@ if (components.length) {
             const actualOrCmdActive = !!w.charging || actualNowW >= activityThresholdW || prevCmdWasActive;
             const startupHoldActive = isPvManaged && Number.isFinite(Number(w.pvStartupHoldUntilMs)) && Number(w.pvStartupHoldUntilMs) > now;
             const minRunActive = isPvOnly && Number.isFinite(Number(w.pvMinRunUntilMs)) && Number(w.pvMinRunUntilMs) > now;
+            const startCooldownActive = isPvOnly && !actualOrCmdActive
+                && Number.isFinite(Number(w.pvStartCooldownUntilMs))
+                && Number(w.pvStartCooldownUntilMs) > now;
             const pvTechnicalMinW = (w.chargerType === 'AC' && Number(w.phases || 0) === 3)
                 ? Math.max(0, Math.max(num(w.minPW, 0), acMinPower3pW))
                 : Math.max(0, num(w.minPW, 0));
@@ -4335,7 +4351,15 @@ if (components.length) {
                     this._pvStartReadySinceMs.delete(startReadyKey);
                     this._pvBelowMinSinceMs.delete(startReadyKey);
                 } else {
-                    if (!actualOrCmdActive) {
+                    if (startCooldownActive) {
+                        this._pvStartReadySinceMs.delete(startReadyKey);
+                        startReadySince = 0;
+                        if (targetW > 0) {
+                            targetW = 0;
+                            targetA = 0;
+                            reason = ReasonCodes.NO_PV_SURPLUS;
+                        }
+                    } else if (!actualOrCmdActive) {
                         if (needStartW <= 0 || startReadyBudgetW >= needStartW) {
                             if (!startReadySince) {
                                 startReadySince = now;
@@ -4396,6 +4420,7 @@ if (components.length) {
                 this._pvStartReadySinceMs.delete(String(w.safe || ''));
                 this._pvBelowMinSinceMs.delete(String(w.safe || ''));
                 if (!isPvManaged) this._pvMinRunUntilMs.delete(String(w.safe || ''));
+                if (!isPvManaged) this._pvStartCooldownUntilMs.delete(String(w.safe || ''));
             }
 
             // Convert to A for AC current-based control
@@ -4615,6 +4640,34 @@ if (components.length) {
             // MU6.11: Remember last commanded setpoints for ramp limiting
             this._lastCmdTargetW.set(w.safe, cmdW);
             this._lastCmdTargetA.set(w.safe, cmdA);
+
+            // If a PV-only start attempt collapses before the wallbox reports real power,
+            // wait briefly before trying again. This prevents repeated short start pulses
+            // while still allowing the same PV window to recover after a few minutes.
+            try {
+                if (isPvOnly && actualNowW >= activityThresholdW) {
+                    this._pvStartCooldownUntilMs.delete(w.safe);
+                } else if (isPvOnly
+                    && pvStartRetryCooldownMs > 0
+                    && prevCmdWasActive
+                    && cmdW < activityThresholdW
+                    && actualNowW < activityThresholdW
+                    && w.charging !== true
+                    && w.enabled
+                    && w.online
+                    && w.vehiclePlugged !== false
+                    && (reason === ReasonCodes.NO_PV_SURPLUS || reason === ReasonCodes.BELOW_MIN || limiter === 'pv')) {
+                    this._pvStartCooldownUntilMs.set(w.safe, now + pvStartRetryCooldownMs);
+                    this._pvStartReadySinceMs.delete(w.safe);
+                    this._pvBelowMinSinceMs.delete(w.safe);
+                    this._pvStartupUntilMs.delete(w.safe);
+                    this._pvMinRunUntilMs.delete(w.safe);
+                } else if (!isPvOnly || w.vehiclePlugged === false || !w.enabled || !w.online) {
+                    this._pvStartCooldownUntilMs.delete(w.safe);
+                }
+            } catch {
+                // ignore
+            }
 
             // PV-Start Einschwingzeit + Mindestlaufzeit:
             // Einige Wallboxen/Fahrzeuge übernehmen nach der Freigabe die neue Leistung verzögert.
