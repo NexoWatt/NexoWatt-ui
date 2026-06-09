@@ -130,6 +130,25 @@
     psAtypicalReviewExportPdf: document.getElementById('psAtypicalReviewExportPdf'),
     psAtypicalReviewExportStatus: document.getElementById('psAtypicalReviewExportStatus'),
 
+    // KI‑Energieberater / KI‑Optimierung
+    aiAdvisorShowOnLive: document.getElementById('aiAdvisorShowOnLive'),
+    aiAdvisorIntervalSec: document.getElementById('aiAdvisorIntervalSec'),
+    aiAdvisorMaxSuggestions: document.getElementById('aiAdvisorMaxSuggestions'),
+    aiAdvisorMinPriority: document.getElementById('aiAdvisorMinPriority'),
+    aiAdvisorStaleTimeoutSec: document.getElementById('aiAdvisorStaleTimeoutSec'),
+    aiAdvisorExportHighW: document.getElementById('aiAdvisorExportHighW'),
+    aiAdvisorImportHighW: document.getElementById('aiAdvisorImportHighW'),
+    aiAdvisorLowSocPct: document.getElementById('aiAdvisorLowSocPct'),
+    aiAdvisorHighSocPct: document.getElementById('aiAdvisorHighSocPct'),
+    aiAdvisorPvForecastHighW: document.getElementById('aiAdvisorPvForecastHighW'),
+    aiAdvisorCatTariff: document.getElementById('aiAdvisorCatTariff'),
+    aiAdvisorCatPv: document.getElementById('aiAdvisorCatPv'),
+    aiAdvisorCatStorage: document.getElementById('aiAdvisorCatStorage'),
+    aiAdvisorCatEvcs: document.getElementById('aiAdvisorCatEvcs'),
+    aiAdvisorCatPeak: document.getElementById('aiAdvisorCatPeak'),
+    aiAdvisorCatHeating: document.getElementById('aiAdvisorCatHeating'),
+    aiAdvisorCatSystem: document.getElementById('aiAdvisorCatSystem'),
+
     // Tabs
     tabs: document.getElementById('nw-ems-tabs'),
 
@@ -223,6 +242,7 @@
     { id: 'threshold', label: 'Schwellwertsteuerung', desc: 'Regeln (Wenn X > Y dann Schalten/Setzen) – optional mit Endkunden-Anpassung', mandatory: false },
     { id: 'relay', label: 'Relaissteuerung', desc: 'Manuelle Relais / generische Ausgänge (optional endkundentauglich)', mandatory: false },
     { id: 'grid', label: 'Netzlimits', desc: 'Netzrestriktionen (RLM/0‑Einspeisung/Import‑Limits)', mandatory: false },
+    { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung: PV, Tarif, Speicher, Wallboxen und Lastspitzen als Vorschläge auf der LIVE‑Seite', mandatory: false },
     { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', mandatory: true },
     { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls genutzt)', mandatory: false },
     { id: 'multiuse', label: 'MultiUse', desc: 'Speicher Multi‑Use (SoC‑Zonen: Notstrom/LSK/Eigenverbrauch)', mandatory: false }
@@ -848,6 +868,81 @@ function _collectFlowPowerDpIsWFromUI() {
     return (typeof v === 'number' && Number.isFinite(v)) ? String(v) : '';
   }
 
+
+  function _aiSetNumberInput(el, value, def) {
+    if (!el) return;
+    const n = Number(value);
+    const d = Number(def);
+    el.value = Number.isFinite(n) ? String(n) : (Number.isFinite(d) ? String(d) : '');
+  }
+
+  function _aiSetCheckbox(el, value, def = true) {
+    if (!el) return;
+    el.checked = (typeof value === 'boolean') ? value : !!def;
+  }
+
+  function buildAiAdvisorUI() {
+    const cfg = (currentConfig && currentConfig.aiAdvisor && typeof currentConfig.aiAdvisor === 'object') ? currentConfig.aiAdvisor : {};
+    const cats = (cfg.categories && typeof cfg.categories === 'object') ? cfg.categories : {};
+
+    _aiSetCheckbox(els.aiAdvisorShowOnLive, cfg.showOnLive, true);
+    _aiSetNumberInput(els.aiAdvisorIntervalSec, cfg.intervalSec, 60);
+    _aiSetNumberInput(els.aiAdvisorMaxSuggestions, cfg.maxSuggestions, 4);
+    if (els.aiAdvisorMinPriority) {
+      const p = String(cfg.minPriority || 'info').toLowerCase();
+      els.aiAdvisorMinPriority.value = ['info', 'warning', 'action', 'critical'].includes(p) ? p : 'info';
+    }
+    _aiSetNumberInput(els.aiAdvisorStaleTimeoutSec, cfg.staleTimeoutSec, 300);
+    _aiSetNumberInput(els.aiAdvisorExportHighW, cfg.exportHighW, 1500);
+    _aiSetNumberInput(els.aiAdvisorImportHighW, cfg.importHighW, 4000);
+    _aiSetNumberInput(els.aiAdvisorLowSocPct, cfg.lowSocPct, 25);
+    _aiSetNumberInput(els.aiAdvisorHighSocPct, cfg.highSocPct, 85);
+    _aiSetNumberInput(els.aiAdvisorPvForecastHighW, cfg.pvForecastHighW, 3000);
+
+    _aiSetCheckbox(els.aiAdvisorCatTariff, cats.tariff, true);
+    _aiSetCheckbox(els.aiAdvisorCatPv, cats.pv, true);
+    _aiSetCheckbox(els.aiAdvisorCatStorage, cats.storage, true);
+    _aiSetCheckbox(els.aiAdvisorCatEvcs, cats.evcs, true);
+    _aiSetCheckbox(els.aiAdvisorCatPeak, cats.peak, true);
+    _aiSetCheckbox(els.aiAdvisorCatHeating, cats.heating, true);
+    _aiSetCheckbox(els.aiAdvisorCatSystem, cats.system, true);
+  }
+
+  function collectAiAdvisorConfigFromUI(base) {
+    const out = deepMerge({}, (base && typeof base === 'object') ? base : {});
+    const n = (el, def, min, max) => {
+      const raw = el ? Number(el.value) : NaN;
+      let v = Number.isFinite(raw) ? raw : def;
+      if (Number.isFinite(min)) v = Math.max(min, v);
+      if (Number.isFinite(max)) v = Math.min(max, v);
+      return Math.round(v);
+    };
+    out.enabled = true;
+    out.mode = 'advisor';
+    out.advisoryOnly = true;
+    out.showOnLive = els.aiAdvisorShowOnLive ? !!els.aiAdvisorShowOnLive.checked : true;
+    out.intervalSec = n(els.aiAdvisorIntervalSec, 60, 10, 3600);
+    out.maxSuggestions = n(els.aiAdvisorMaxSuggestions, 4, 1, 10);
+    out.minPriority = els.aiAdvisorMinPriority ? String(els.aiAdvisorMinPriority.value || 'info').toLowerCase() : 'info';
+    if (!['info', 'warning', 'action', 'critical'].includes(out.minPriority)) out.minPriority = 'info';
+    out.staleTimeoutSec = n(els.aiAdvisorStaleTimeoutSec, 300, 30, 86400);
+    out.exportHighW = n(els.aiAdvisorExportHighW, 1500, 0, 1000000000);
+    out.importHighW = n(els.aiAdvisorImportHighW, 4000, 0, 1000000000);
+    out.lowSocPct = n(els.aiAdvisorLowSocPct, 25, 0, 100);
+    out.highSocPct = n(els.aiAdvisorHighSocPct, 85, 0, 100);
+    out.pvForecastHighW = n(els.aiAdvisorPvForecastHighW, 3000, 0, 1000000000);
+    out.categories = {
+      tariff: els.aiAdvisorCatTariff ? !!els.aiAdvisorCatTariff.checked : true,
+      pv: els.aiAdvisorCatPv ? !!els.aiAdvisorCatPv.checked : true,
+      storage: els.aiAdvisorCatStorage ? !!els.aiAdvisorCatStorage.checked : true,
+      evcs: els.aiAdvisorCatEvcs ? !!els.aiAdvisorCatEvcs.checked : true,
+      peak: els.aiAdvisorCatPeak ? !!els.aiAdvisorCatPeak.checked : true,
+      heating: els.aiAdvisorCatHeating ? !!els.aiAdvisorCatHeating.checked : true,
+      system: els.aiAdvisorCatSystem ? !!els.aiAdvisorCatSystem.checked : true,
+    };
+    return out;
+  }
+
   function buildAppsUI() {
     if (!els.appsList) return;
     els.appsList.innerHTML = '';
@@ -976,6 +1071,12 @@ function _collectFlowPowerDpIsWFromUI() {
         row.textContent = 'Konfiguration: Reiter „Peak-Shaving“. Dort normale LSK, atypische HLZF und Hybrid-Modus einstellen.';
         body.appendChild(row);
       }
+      if (app.id === 'aiAdvisor') {
+        const row = document.createElement('div');
+        row.className = 'nw-config-card__row';
+        row.textContent = 'Konfiguration: Reiter „KI‑Optimierung“. Im UI‑Adapter nur beratend, keine automatischen Schaltbefehle.';
+        body.appendChild(row);
+      }
 
       card.appendChild(header);
       card.appendChild(body);
@@ -1037,6 +1138,7 @@ function _collectFlowPowerDpIsWFromUI() {
     // Tabs: optional ein-/ausblenden (App-Center)
     const tabMap = [
       { tab: 'peakconfig', app: 'peak' },
+      { tab: 'aiadvisor', app: 'aiAdvisor' },
       { tab: 'thermal', app: 'thermal' },
       { tab: 'heatingrod', app: 'heatingrod' },
       { tab: 'bhkw', app: 'bhkw' },
@@ -6974,6 +7076,9 @@ function _collectFlowPowerDpIsWFromUI() {
     // Peak-Shaving / Lastspitzenkappung
     try { buildPeakShavingUI(); } catch (_e) {}
 
+    // KI‑Energieberater
+    try { buildAiAdvisorUI(); } catch (_e) {}
+
     // Storage
     const mode = (currentConfig.storage && typeof currentConfig.storage.controlMode === 'string') ? currentConfig.storage.controlMode : 'targetPower';
     els.storageControlMode.value = (['targetPower','limits','enableFlags'].includes(mode)) ? mode : 'targetPower';
@@ -7877,6 +7982,9 @@ function _collectFlowPowerDpIsWFromUI() {
 
     // PeakShaving / Lastspitzenkappung
     patch.peakShaving = collectPeakShavingConfigFromUI(currentConfig.peakShaving || {});
+
+    // KI‑Energieberater / KI‑Optimierung
+    patch.aiAdvisor = collectAiAdvisorConfigFromUI(currentConfig.aiAdvisor || {});
 
     // Speicherfarm
     patch.storageFarm = deepMerge({}, currentConfig.storageFarm || {});

@@ -5906,9 +5906,157 @@ statusEl.textContent = msg;
 }
 
 
+
+
+// KI‑Energieberater: beratende Optimierungsvorschläge auf der LIVE-Seite
+function _nwAiAdvisorStateValue(key, fallback = null) {
+  try {
+    const rec = state && state[key];
+    if (!rec || rec.value === undefined || rec.value === null) return fallback;
+    return rec.value;
+  } catch (_e) {
+    return fallback;
+  }
+}
+
+function _nwAiAdvisorBool(key, fallback = false) {
+  const v = _nwAiAdvisorStateValue(key, fallback);
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v !== 0;
+  const s = String(v || '').trim().toLowerCase();
+  if (['true','1','on','yes','ja','active','aktiv'].includes(s)) return true;
+  if (['false','0','off','no','nein','inactive','inaktiv'].includes(s)) return false;
+  return !!fallback;
+}
+
+function _nwAiAdvisorPriorityLabel(p) {
+  const s = String(p || 'info').toLowerCase();
+  if (s === 'critical') return 'Kritisch';
+  if (s === 'success') return 'Chance';
+  if (s === 'action') return 'Empfehlung';
+  if (s === 'warning') return 'Hinweis';
+  if (Number.isFinite(Number(s))) {
+    const n = Number(s);
+    if (n >= 90) return 'Kritisch';
+    if (n >= 75) return 'Empfehlung';
+    if (n >= 60) return 'Hinweis';
+  }
+  return 'Info';
+}
+
+function _nwAiAdvisorCategoryLabel(c) {
+  const s = String(c || '').toLowerCase();
+  if (s === 'tariff') return 'Tarif';
+  if (s === 'pv') return 'PV';
+  if (s === 'forecast') return 'Forecast';
+  if (s === 'storage') return 'Speicher';
+  if (s === 'evcs') return 'Wallbox';
+  if (s === 'peak') return 'Lastspitze';
+  if (s === 'grid') return 'Netz';
+  if (s === 'setup') return 'Setup';
+  if (s === 'heating') return 'Thermik';
+  return 'System';
+}
+
+function _nwAiAdvisorParseSuggestions() {
+  const raw = _nwAiAdvisorStateValue('aiAdvisor.suggestionsJson', '[]');
+  try {
+    const arr = JSON.parse(String(raw || '[]'));
+    return Array.isArray(arr) ? arr.filter(Boolean) : [];
+  } catch (_e) {
+    return [];
+  }
+}
+
+function updateAiAdvisorLiveUi() {
+  const card = document.getElementById('aiAdvisorLiveCard');
+  if (!card) return;
+
+  const enabled = _nwAiAdvisorBool('aiAdvisor.enabled', false);
+  const showOnLive = _nwAiAdvisorBool('aiAdvisor.showOnLive', true);
+  const status = String(_nwAiAdvisorStateValue('aiAdvisor.status', '') || '');
+  const suggestions = _nwAiAdvisorParseSuggestions();
+  const top = suggestions[0] || null;
+
+  const shouldShow = !!(enabled && showOnLive && (top || status));
+  card.classList.toggle('hidden', !shouldShow);
+  if (!shouldShow) return;
+
+  const titleEl = document.getElementById('aiAdvisorLiveTitle');
+  const msgEl = document.getElementById('aiAdvisorLiveMessage');
+  const actionEl = document.getElementById('aiAdvisorLiveAction');
+  const badgeEl = document.getElementById('aiAdvisorLiveBadge');
+  const listEl = document.getElementById('aiAdvisorLiveList');
+  const toggleBtn = document.getElementById('aiAdvisorToggleDetails');
+
+  const topTitle = top ? String(top.title || '') : String(_nwAiAdvisorStateValue('aiAdvisor.topTitle', '') || '');
+  const topMsg = top ? String(top.text || top.message || '') : String(_nwAiAdvisorStateValue('aiAdvisor.topText', '') || '');
+  const topAction = top ? String(top.action || top.actionText || '') : String(_nwAiAdvisorStateValue('aiAdvisor.topAction', '') || '');
+  const topPriority = top ? String(top.severity || top.priority || 'info') : String(_nwAiAdvisorStateValue('aiAdvisor.severity', 'info') || 'info');
+  const topCat = top ? String(top.category || 'system') : String(_nwAiAdvisorStateValue('aiAdvisor.topCategory', 'system') || 'system');
+
+  if (titleEl) titleEl.textContent = topTitle || 'System läuft unauffällig';
+  if (msgEl) msgEl.textContent = topMsg || 'Aktuell erkennt der KI‑Energieberater keinen dringenden Optimierungsbedarf.';
+  if (actionEl) {
+    actionEl.textContent = topAction || '';
+    actionEl.style.display = topAction ? '' : 'none';
+  }
+  if (badgeEl) {
+    badgeEl.textContent = `${_nwAiAdvisorPriorityLabel(topPriority)} · ${_nwAiAdvisorCategoryLabel(topCat)}`;
+    badgeEl.setAttribute('data-priority', topPriority);
+  }
+
+  if (listEl) {
+    listEl.innerHTML = '';
+    const rest = suggestions.slice(0, 6);
+    for (const it of rest) {
+      const item = document.createElement('div');
+      item.className = 'nw-ai-advisor-item';
+
+      const topRow = document.createElement('div');
+      topRow.className = 'nw-ai-advisor-item__top';
+      const t = document.createElement('div');
+      t.className = 'nw-ai-advisor-item__title';
+      t.textContent = String(it.title || 'Vorschlag');
+      const meta = document.createElement('div');
+      meta.className = 'nw-ai-advisor-item__meta';
+      meta.textContent = `${_nwAiAdvisorPriorityLabel(it.severity || it.priority)} · ${_nwAiAdvisorCategoryLabel(it.category)}`;
+      topRow.appendChild(t);
+      topRow.appendChild(meta);
+
+      const msg = document.createElement('div');
+      msg.className = 'nw-ai-advisor-item__msg';
+      msg.textContent = String(it.text || it.message || '');
+      item.appendChild(topRow);
+      item.appendChild(msg);
+
+      const actionTxt = String(it.action || it.actionText || '');
+      if (actionTxt) {
+        const act = document.createElement('div');
+        act.className = 'nw-ai-advisor-item__action';
+        act.textContent = actionTxt;
+        item.appendChild(act);
+      }
+      listEl.appendChild(item);
+    }
+  }
+
+  try {
+    if (toggleBtn && !toggleBtn.dataset.boundAiAdvisor) {
+      toggleBtn.dataset.boundAiAdvisor = '1';
+      toggleBtn.addEventListener('click', () => {
+        const l = document.getElementById('aiAdvisorLiveList');
+        if (!l) return;
+        const open = l.classList.toggle('hidden') === false;
+        toggleBtn.textContent = open ? 'Weniger' : 'Details';
+      });
+    }
+  } catch (_e) {}
+}
+
 // Patch render to also update energy web
 const _renderOld = render;
-render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } try{ updateEnergyWeb(); }catch(e){ console.warn('energy web', e); } }
+render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } try{ updateEnergyWeb(); }catch(e){ console.warn('energy web', e); } try{ updateAiAdvisorLiveUi(); }catch(e){ console.warn('ai advisor', e); } }
 
   // open history page via header tab
   const hbtn = document.getElementById('historyTabBtn');

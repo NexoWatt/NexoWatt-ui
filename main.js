@@ -2027,6 +2027,7 @@ class NexoWattVis extends utils.Adapter {
       'generator',
       'threshold',
       'relay',
+      'aiAdvisor',
       'smartHome',
       'smartHomeConfig',
 
@@ -2133,6 +2134,14 @@ class NexoWattVis extends utils.Adapter {
     ensurePlainObj('generator', {});
     ensurePlainObj('threshold', {});
     ensurePlainObj('relay', {});
+    ensurePlainObj('aiAdvisor', {
+      enabled: true,
+      showOnLive: true,
+      intervalSec: 60,
+      maxSuggestions: 4,
+      minPriority: 'info',
+      categories: { tariff: true, pv: true, storage: true, evcs: true, peak: true, heating: true, system: true }
+    });
     ensurePlainObj('smartHome', {});
     // SmartHomeConfig (Gebäude/Räume/Funktionen/Geräte + optionale SmartHome-VIS Navigation)
     // v2 adds optional "floors" + "pages" + "meta".
@@ -2293,6 +2302,7 @@ class NexoWattVis extends utils.Adapter {
       { id: 'threshold',   enableFlag: 'enableThresholdControl' },
       { id: 'relay',       enableFlag: 'enableRelayControl' },
       { id: 'grid',        enableFlag: 'enableGridConstraints' },
+      { id: 'aiAdvisor',   enableFlag: 'enableAiAdvisor' },
 
       // Shared helper module (always present for UI/runtime convenience)
       { id: 'tariff',      enableFlag: null, mandatory: true, defaultInstalled: true },
@@ -2308,6 +2318,7 @@ class NexoWattVis extends utils.Adapter {
       peak:        ['peak', 'peakShaving', 'peakshaving'],
       storagefarm: ['storagefarm', 'storageFarm', 'storage_farm'],
       heatingrod:  ['heatingrod', 'heatingRod', 'heating_rod', 'heizstab'],
+      ai:          ['ai', 'ki', 'aiOptimization', 'kiOptimization', 'energyAdvisor'],
     };
 
     const out = {
@@ -2397,6 +2408,7 @@ class NexoWattVis extends utils.Adapter {
       { id: 'threshold',   enableFlag: 'enableThresholdControl' },
       { id: 'relay',       enableFlag: 'enableRelayControl' },
       { id: 'grid',        enableFlag: 'enableGridConstraints' },
+      { id: 'aiAdvisor',   enableFlag: 'enableAiAdvisor' },
       { id: 'multiuse',    enableFlag: 'enableMultiUse' },
     ];
 
@@ -9412,6 +9424,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       { id: 'threshold', label: 'Schwellwertsteuerung', desc: 'Regeln (Wenn X > Y dann Schalten/Setzen) – optional mit Endkunden-Anpassung', enableFlag: 'enableThresholdControl', mandatory: false },
       { id: 'relay', label: 'Relaissteuerung', desc: 'Manuelle Relais / generische Ausgänge (optional endkundentauglich)', enableFlag: 'enableRelayControl', mandatory: false },
       { id: 'grid', label: 'Netzlimits', desc: 'Netzrestriktionen (z.B. RLM/0‑Einspeisung/Import‑Limits)', enableFlag: 'enableGridConstraints', mandatory: false },
+      { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung / Energie‑Tipps ohne automatische Schaltbefehle', enableFlag: 'enableAiAdvisor', mandatory: false },
       // tariff is a shared helper module (provider + budget). Keep it always present.
       { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', enableFlag: null, mandatory: true },
       { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls aktiviert)', enableFlag: null, mandatory: false },
@@ -9527,10 +9540,14 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         enableThresholdControl: (typeof n.enableThresholdControl === 'boolean') ? n.enableThresholdControl : undefined,
         enableRelayControl: (typeof n.enableRelayControl === 'boolean') ? n.enableRelayControl : undefined,
         enableGridConstraints: (typeof n.enableGridConstraints === 'boolean') ? n.enableGridConstraints : undefined,
+        enableAiAdvisor: (typeof n.enableAiAdvisor === 'boolean') ? n.enableAiAdvisor : undefined,
         enableMultiUse: (typeof n.enableMultiUse === 'boolean') ? n.enableMultiUse : undefined,
 
         // Phase 2: App-Center state (install/enable)
         emsApps: _nwNormalizeEmsApps(n),
+
+        // KI‑Energieberater
+        aiAdvisor: (n.aiAdvisor && typeof n.aiAdvisor === 'object') ? n.aiAdvisor : undefined,
 
         // Scheduler
         schedulerIntervalMs: (typeof n.schedulerIntervalMs === 'number') ? n.schedulerIntervalMs : undefined,
@@ -9560,6 +9577,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         threshold: (n.threshold && typeof n.threshold === 'object') ? n.threshold : {},
         relay: (n.relay && typeof n.relay === 'object') ? n.relay : {},
         chargingManagement: (n.chargingManagement && typeof n.chargingManagement === 'object') ? n.chargingManagement : {},
+        aiOptimization: (n.aiOptimization && typeof n.aiOptimization === 'object') ? n.aiOptimization : {},
       };
     };
 
@@ -9592,7 +9610,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         const allowedRoot = new Set([
           // Legacy enable flags (kept for backwards compatibility)
-          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableMultiUse',
+          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableMultiUse',
 
           // Phase 2: App Center state
           'emsApps',
@@ -9601,7 +9619,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           'schedulerIntervalMs','installerConfig','datapoints','vis','settings',
 
           // App/module configs
-          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','chargingManagement',
+          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','chargingManagement',
 
           // VIS configuration that is required to configure chargepoints/stations in the installer page
           'settingsConfig',
@@ -9785,7 +9803,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         const allowedRoot = new Set([
           // Legacy enable flags (kept for backwards compatibility)
-          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableMultiUse',
+          'enableChargingManagement','enablePeakShaving','enableStorageControl','enableStorageFarm','enableThermalControl','enableHeatingRodControl','enableBhkwControl','enableGeneratorControl','enableThresholdControl','enableRelayControl','enableGridConstraints','enableAiAdvisor','enableMultiUse',
 
           // Phase 2: App Center state
           'emsApps',
@@ -9794,7 +9812,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           'schedulerIntervalMs','installerConfig','datapoints','vis','settings',
 
           // App/module configs
-          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','chargingManagement',
+          'peakShaving','gridConstraints','storageFarm','storage','thermal','heatingRod','bhkw','generator','threshold','relay','aiAdvisor','chargingManagement',
 
           // VIS configuration that is required to configure chargepoints/stations in the installer page
           'settingsConfig',
@@ -13475,6 +13493,7 @@ settingsConfig: {
           relayEnabled: boolOr(cfg.enableRelayControl, false),
           bhkwEnabled: boolOr(cfg.enableBhkwControl, false),
           generatorEnabled: boolOr(cfg.enableGeneratorControl, false),
+          aiAdvisorEnabled: boolOr(cfg.enableAiAdvisor, false),
           schedulerIntervalMs: (cfg && Number(cfg.schedulerIntervalMs)) || 1000
         },
         thresholdRules: (() => {

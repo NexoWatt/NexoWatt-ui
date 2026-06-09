@@ -1,3 +1,12 @@
+# 0.7.31 - KI-Energieberater / beratende Optimierung
+
+- Neue App-Center-App „KI-Optimierung“ ergänzt.
+- Neuer EMS-Runtime-Baustein `AiAdvisorModule` erzeugt beratende Optimierungsvorschläge unter `aiAdvisor.*`.
+- LIVE-Dashboard zeigt eine dezente KI-Energieberater-Kachel mit Top-Empfehlung und Details.
+- Kategorien und Schwellwerte für Tarif, PV, Speicher, EVCS, Peak/HLZF, Thermik und Systemhinweise sind im App-Center konfigurierbar.
+- Wichtig: Im UI-Adapter bleibt die KI advisor-only; es werden keine Geräte geschaltet. Aktive KI-Schaltentscheidungen bleiben für EOS vorbereitet.
+- Webcache auf `nexowatt-cache-v198` erhöht.
+
 # 0.7.30
 
 - Atypische Nachkontrolle: Exportbereich in der §19-Kachel ergänzt mit CSV- und PDF-Export.

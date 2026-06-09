@@ -48,6 +48,7 @@
       <button type="button" class="nw-tab nw-tab--active" data-tab="apps">Apps</button>
       <button type="button" class="nw-tab" data-tab="mapping">Zuordnung</button>
       <button type="button" class="nw-tab" data-tab="peakconfig">Peak-Shaving</button>
+      <button type="button" class="nw-tab" data-tab="aiadvisor">KI‑Optimierung</button>
       <button type="button" class="nw-tab" data-tab="storagefarm">Speicherfarm</button>
       <button type="button" class="nw-tab" data-tab="multiuse">MultiUse</button>
       <button type="button" class="nw-tab" data-tab="flow">Energiefluss</button>
@@ -361,6 +362,122 @@
         <div class="nw-config-card__body">
           <div class="nw-config-empty" style="margin:0 0 8px 0;">Wochentage: ISO-Format 1=Mo … 7=So. Monate: 1–12. Wenn Monate leer sind, wird die Saison genutzt: Winter = 12/1/2, Sommer = 6/7/8, Übergang = 3/4/5/9/10/11.</div>
           <div id="psAtypicalWindows" class="nw-config-list"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  </div>
+
+
+
+  <div id="nw-tabpanel-aiadvisor" data-tabpanel="aiadvisor" style="display:none;">
+
+  <section class="nw-config-section">
+    <div class="nw-config-section__head">
+      <div>
+        <h2 class="nw-config-section__title">KI‑Optimierung / Energieberater</h2>
+        <div class="nw-config-section__subtitle" style="margin:0;opacity:.85;line-height:1.35;">
+          Beratende KI‑Schicht für die VIS: Sie erzeugt Optimierungsvorschläge zu PV, Tarif, Speicher, Wallboxen und Lastspitzen. Im UI‑Adapter werden <b>keine</b> automatischen Schaltentscheidungen ausgeführt.
+        </div>
+      </div>
+    </div>
+
+    <div class="nw-config-grid" style="margin-top:12px;">
+      <div class="nw-config-card">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Betriebsart</div>
+          <div class="nw-config-card__subtitle">Advisory‑Only für NexoWatt UI; aktive KI‑Entscheidungen später in EOS.</div>
+        </div>
+        <div class="nw-config-card__body">
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label">Aktivierung</label>
+            <div class="nw-config-field-control nw-config-field-control--stack">
+              <div class="nw-config-empty" style="margin:0;line-height:1.4;">
+                Die App wird über <b>Apps → KI‑Energieberater</b> installiert/aktiviert. Diese Seite konfiguriert nur Verhalten und Anzeige.
+              </div>
+            </div>
+          </div>
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="aiAdvisorShowOnLive">LIVE‑Anzeige</label>
+            <div class="nw-config-field-control" style="display:flex;align-items:center;gap:10px;">
+              <input id="aiAdvisorShowOnLive" class="nw-config-checkbox" type="checkbox" />
+              <span class="nw-config-field-hint" style="margin:0;">KI‑Hinweisbox auf der Hauptseite anzeigen</span>
+            </div>
+          </div>
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="aiAdvisorIntervalSec">Analyse‑Intervall (s)</label>
+            <div class="nw-config-field-control"><input id="aiAdvisorIntervalSec" class="nw-config-input" type="number" min="10" max="3600" step="5" placeholder="60" /></div>
+          </div>
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="aiAdvisorMaxSuggestions">Max. Vorschläge</label>
+            <div class="nw-config-field-control"><input id="aiAdvisorMaxSuggestions" class="nw-config-input" type="number" min="1" max="10" step="1" placeholder="4" /></div>
+          </div>
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="aiAdvisorMinPriority">Mindest‑Priorität</label>
+            <div class="nw-config-field-control">
+              <select id="aiAdvisorMinPriority" class="nw-config-input">
+                <option value="info">Alle Hinweise</option>
+                <option value="warning">Nur relevante Hinweise</option>
+                <option value="action">Nur Handlungsempfehlungen</option>
+                <option value="critical">Nur kritische Hinweise</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="nw-config-card">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Schwellwerte</div>
+          <div class="nw-config-card__subtitle">Ab wann die KI Optimierungspotenzial melden soll.</div>
+        </div>
+        <div class="nw-config-card__body">
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="aiAdvisorExportHighW">PV‑Überschuss ab (W)</label>
+            <div class="nw-config-field-control"><input id="aiAdvisorExportHighW" class="nw-config-input" type="number" min="0" step="100" placeholder="1500" /></div>
+          </div>
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="aiAdvisorImportHighW">Hoher Netzbezug ab (W)</label>
+            <div class="nw-config-field-control"><input id="aiAdvisorImportHighW" class="nw-config-input" type="number" min="0" step="100" placeholder="4000" /></div>
+          </div>
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="aiAdvisorLowSocPct">Speicher niedrig (%)</label>
+            <div class="nw-config-field-control"><input id="aiAdvisorLowSocPct" class="nw-config-input" type="number" min="0" max="100" step="1" placeholder="25" /></div>
+          </div>
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="aiAdvisorHighSocPct">Speicher hoch (%)</label>
+            <div class="nw-config-field-control"><input id="aiAdvisorHighSocPct" class="nw-config-input" type="number" min="0" max="100" step="1" placeholder="85" /></div>
+          </div>
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="aiAdvisorPvForecastHighW">PV‑Forecast hoch ab (W)</label>
+            <div class="nw-config-field-control"><input id="aiAdvisorPvForecastHighW" class="nw-config-input" type="number" min="0" step="100" placeholder="3000" /></div>
+          </div>
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="aiAdvisorStaleTimeoutSec">Messwert‑Timeout (s)</label>
+            <div class="nw-config-field-control"><input id="aiAdvisorStaleTimeoutSec" class="nw-config-input" type="number" min="30" max="86400" step="10" placeholder="300" /></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="nw-config-card" style="grid-column:1 / -1;">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Kategorien</div>
+          <div class="nw-config-card__subtitle">Welche Themen die KI in den Vorschlägen berücksichtigen darf.</div>
+        </div>
+        <div class="nw-config-card__body">
+          <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;">
+            <label class="nw-config-checklabel"><input id="aiAdvisorCatTariff" class="nw-config-checkbox" type="checkbox" /> <span>Tarif / Zeitpreise</span></label>
+            <label class="nw-config-checklabel"><input id="aiAdvisorCatPv" class="nw-config-checkbox" type="checkbox" /> <span>PV‑Überschuss</span></label>
+            <label class="nw-config-checklabel"><input id="aiAdvisorCatStorage" class="nw-config-checkbox" type="checkbox" /> <span>Speicher</span></label>
+            <label class="nw-config-checklabel"><input id="aiAdvisorCatEvcs" class="nw-config-checkbox" type="checkbox" /> <span>Wallbox / EVCS</span></label>
+            <label class="nw-config-checklabel"><input id="aiAdvisorCatPeak" class="nw-config-checkbox" type="checkbox" /> <span>Lastspitzen / HLZF</span></label>
+            <label class="nw-config-checklabel"><input id="aiAdvisorCatHeating" class="nw-config-checkbox" type="checkbox" /> <span>Heizstab / Thermik</span></label>
+            <label class="nw-config-checklabel"><input id="aiAdvisorCatSystem" class="nw-config-checkbox" type="checkbox" /> <span>Systemhinweise</span></label>
+          </div>
+          <div class="nw-config-help" style="margin-top:10px;opacity:.85;line-height:1.35;">
+            Die Vorschläge werden als States unter <code>aiAdvisor.*</code> veröffentlicht und auf der LIVE‑Seite angezeigt. Es werden keine Geräte geschaltet; der Nutzer erhält nur verständliche Empfehlungen.
+          </div>
         </div>
       </div>
     </div>

@@ -15,6 +15,7 @@ const { HeatingRodControlModule } = require('./modules/heating-rod-control');
 const { BhkwControlModule } = require('./modules/bhkw-control');
 const { GeneratorControlModule } = require('./modules/generator-control');
 const { ThresholdControlModule } = require('./modules/threshold-control');
+const { AiAdvisorModule } = require('./modules/ai-advisor');
 
 class ModuleManager {
     /**
@@ -221,6 +222,14 @@ class ModuleManager {
             enabledFn: () => !!this.adapter.config.enableThresholdControl,
         });
 
+        // KI‑Energieberater / KI‑Optimierung (advisory only)
+        // Runs late in the tick so it can read the fresh budget/tariff/peak/storage snapshots.
+        this.modules.push({
+            key: 'aiAdvisor',
+            instance: new AiAdvisorModule(this.adapter, this.dp),
+            enabledFn: () => !!(this.adapter.config.enableAiAdvisor || this.adapter.config.enableAiOptimization),
+        });
+
         // Multi use (future)
         this.modules.push({
             key: 'multiUse',
@@ -231,7 +240,7 @@ class ModuleManager {
         // Init modules
         // Hinweis: Einige Module stellen UI-States bereit (z. B. EVCS), die auch dann
         // vorhanden sein sollen, wenn die Logik aktuell deaktiviert ist.
-        const alwaysInit = new Set(['chargingManagement']);
+        const alwaysInit = new Set(['chargingManagement', 'aiAdvisor']);
         for (const m of this.modules) {
             const enabled = !!(m && typeof m.enabledFn === 'function' ? m.enabledFn() : false);
             m.enabled = enabled;

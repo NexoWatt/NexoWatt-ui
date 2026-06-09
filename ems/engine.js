@@ -731,6 +731,7 @@ class EmsEngine {
     try { adapter.subscribeStates('thermal.*'); } catch (_e) {}
     try { adapter.subscribeStates('threshold.*'); } catch (_e) {}
     try { adapter.subscribeStates('gridConstraints.*'); } catch (_e) {}
+    try { adapter.subscribeStates('aiAdvisor.*'); } catch (_e) {}
 
     // Start scheduler
     if (this._timer) clearInterval(this._timer);

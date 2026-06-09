@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.30",
+    "version": "0.7.31",
     "news": {
+      "0.7.31": {
+        "en": "Added advisory AI energy optimizer: a new App-Center “AI Optimization” app, advisor-only EMS module, aiAdvisor.* runtime states, configurable categories/thresholds, and a LIVE dashboard recommendation card. The UI adapter only produces optimization suggestions; no automatic switching decisions are executed.",
+        "de": "Beratende KI-Energieoptimierung ergänzt: neue App-Center-App „KI-Optimierung“, Advisor-only EMS-Modul, aiAdvisor.* Runtime-States, konfigurierbare Kategorien/Schwellwerte und eine Empfehlungskachel auf der LIVE-Seite. Der UI-Adapter erzeugt nur Optimierungsvorschläge; es werden keine automatischen Schaltentscheidungen ausgeführt."
+      },
       "0.7.30": {
         "en": "Atypical peak-shaving after-control proof export added. The adapter now mirrors §19 HLZF review values into canonical Influx history states under historie.peakShaving.atypical.* and provides App-Center CSV/PDF exports for the current proof and Influx time series.",
         "de": "Nachweisexport für atypische Lastspitzenkappung ergänzt. Der Adapter spiegelt die §19-HLZF-Nachkontrollwerte jetzt in kanonische Influx-Historie-States unter historie.peakShaving.atypical.* und bietet im App-Center CSV-/PDF-Exporte für aktuelle Prüfung und Influx-Zeitreihe."

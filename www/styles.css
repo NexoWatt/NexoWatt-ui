@@ -6593,3 +6593,65 @@ body{ padding-top: var(--topbar-h); }
     --nw-sh-tile-min-w: 100%;
   }
 }
+
+/* KI‑Energieberater (LIVE) */
+.nw-ai-advisor-card{
+  background: linear-gradient(135deg, rgba(0,200,83,0.10), rgba(18,20,24,0.96) 38%, rgba(30,35,41,0.92));
+  border-color: rgba(0,200,83,0.28);
+}
+.nw-ai-advisor-header{ justify-content:space-between; }
+.nw-ai-advisor-badge{
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.2px;
+  padding:4px 8px;
+  border-radius:999px;
+  color:#bfffd7;
+  background:rgba(0,200,83,.13);
+  border:1px solid rgba(0,200,83,.32);
+  white-space:nowrap;
+}
+.nw-ai-advisor-badge[data-priority="critical"]{ color:#ffd0d0; background:rgba(231,76,60,.16); border-color:rgba(231,76,60,.4); }
+.nw-ai-advisor-badge[data-priority="action"]{ color:#d9efff; background:rgba(52,152,219,.16); border-color:rgba(52,152,219,.38); }
+.nw-ai-advisor-badge[data-priority="warning"]{ color:#ffe9b0; background:rgba(241,196,15,.14); border-color:rgba(241,196,15,.36); }
+.nw-ai-advisor-badge[data-priority="success"]{ color:#bfffd0; background:rgba(46,204,113,.14); border-color:rgba(46,204,113,.36); }
+.nw-ai-advisor-main{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  gap:12px;
+  align-items:center;
+}
+.nw-ai-advisor-icon{
+  width:38px;
+  height:38px;
+  border-radius:14px;
+  display:grid;
+  place-items:center;
+  background:rgba(0,200,83,.12);
+  border:1px solid rgba(0,200,83,.24);
+  box-shadow:0 0 24px rgba(0,200,83,.08);
+}
+.nw-ai-advisor-title{ font-weight:850; color:var(--text); font-size:15px; }
+.nw-ai-advisor-message{ color:#cdd8df; margin-top:3px; line-height:1.35; }
+.nw-ai-advisor-action{ color:#8de6aa; margin-top:5px; font-size:12px; line-height:1.35; }
+.nw-ai-advisor-toggle{ white-space:nowrap; }
+.nw-ai-advisor-list{
+  margin-top:12px;
+  display:grid;
+  gap:8px;
+}
+.nw-ai-advisor-item{
+  padding:9px 10px;
+  border-radius:12px;
+  background:rgba(0,0,0,.16);
+  border:1px solid rgba(255,255,255,.07);
+}
+.nw-ai-advisor-item__top{ display:flex; justify-content:space-between; gap:8px; align-items:center; }
+.nw-ai-advisor-item__title{ font-weight:800; }
+.nw-ai-advisor-item__meta{ color:var(--muted); font-size:11px; white-space:nowrap; }
+.nw-ai-advisor-item__msg{ color:#cdd8df; margin-top:4px; line-height:1.35; }
+.nw-ai-advisor-item__action{ color:#8de6aa; margin-top:4px; font-size:12px; }
+@media (max-width: 680px){
+  .nw-ai-advisor-main{ grid-template-columns:auto minmax(0,1fr); }
+  .nw-ai-advisor-toggle{ grid-column:1 / -1; justify-self:start; }
+}
