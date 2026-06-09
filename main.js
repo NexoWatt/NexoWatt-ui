@@ -2147,6 +2147,10 @@ class NexoWattVis extends utils.Adapter {
     try {
       const ps = (out.peakShaving && typeof out.peakShaving === 'object' && !Array.isArray(out.peakShaving)) ? out.peakShaving : {};
       out.peakShaving = ps;
+      if (typeof ps.strategyMode !== 'string' || !['standard', 'atypical', 'hybrid', 'monitor'].includes(String(ps.strategyMode).trim().toLowerCase())) {
+        ps.strategyMode = (ps.atypical && ps.atypical.enabled === true) ? 'hybrid' : 'standard';
+        changed = true;
+      }
       if (!this._nwIsPlainObject(ps.atypical)) {
         ps.atypical = {
           enabled: false,
@@ -9398,7 +9402,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     // The runtime remains backward compatible by mapping App states to existing enable* flags.
     const _nwAppCatalog = [
       { id: 'charging', label: 'Lademanagement', desc: 'PV-Überschussladen, Budget, Ladepunkte/Connectors', enableFlag: 'enableChargingManagement', mandatory: false },
-      { id: 'peak', label: 'Peak-Shaving', desc: 'Lastspitzenkappung / Import-Limit', enableFlag: 'enablePeakShaving', mandatory: false },
+      { id: 'peak', label: 'Peak-Shaving', desc: 'Lastspitzenkappung / Import-Limit / Atypische HLZF', enableFlag: 'enablePeakShaving', mandatory: false },
       { id: 'storage', label: 'Speicherregelung', desc: 'Eigenverbrauch / Speicher-Setpoints (herstellerunabhängig)', enableFlag: 'enableStorageControl', mandatory: false },
       { id: 'storagefarm', label: 'Speicherfarm', desc: 'Mehrere Speichersysteme als Pool/Gruppen', enableFlag: 'enableStorageFarm', mandatory: false },
       { id: 'thermal', label: 'Wärmepumpe & Klima', desc: 'PV-Überschuss-Steuerung (Setpoint, On/Off oder SG-Ready) mit Schnellsteuerung', enableFlag: 'enableThermalControl', mandatory: false },

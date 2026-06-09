@@ -78,6 +78,32 @@
     para14aConsumers: document.getElementById('para14aConsumers'),
     addPara14aConsumer: document.getElementById('addPara14aConsumer'),
 
+    // Peak-Shaving / Lastspitzenkappung
+    psStrategyMode: document.getElementById('psStrategyMode'),
+    psStandardMode: document.getElementById('psStandardMode'),
+    psReserveW: document.getElementById('psReserveW'),
+    psSafetyMarginW: document.getElementById('psSafetyMarginW'),
+    psHysteresisW: document.getElementById('psHysteresisW'),
+    psSmoothingSeconds: document.getElementById('psSmoothingSeconds'),
+    psActivateDelaySeconds: document.getElementById('psActivateDelaySeconds'),
+    psReleaseDelaySeconds: document.getElementById('psReleaseDelaySeconds'),
+    psStaleTimeoutSec: document.getElementById('psStaleTimeoutSec'),
+    psFastTripEnabled: document.getElementById('psFastTripEnabled'),
+    psAtypicalVoltageLevel: document.getElementById('psAtypicalVoltageLevel'),
+    psAtypicalThresholdPercent: document.getElementById('psAtypicalThresholdPercent'),
+    psAtypicalApplyVoltageThreshold: document.getElementById('psAtypicalApplyVoltageThreshold'),
+    psAtypicalPAbsRefW: document.getElementById('psAtypicalPAbsRefW'),
+    psAtypicalMinShiftW: document.getElementById('psAtypicalMinShiftW'),
+    psAtypicalTargetLimitW: document.getElementById('psAtypicalTargetLimitW'),
+    psAtypicalSafetyMarginW: document.getElementById('psAtypicalSafetyMarginW'),
+    psAtypicalIncludeWeekends: document.getElementById('psAtypicalIncludeWeekends'),
+    psAtypicalExcludeChristmasNewYear: document.getElementById('psAtypicalExcludeChristmasNewYear'),
+    psAtypicalHolidays: document.getElementById('psAtypicalHolidays'),
+    psAtypicalBridgeDays: document.getElementById('psAtypicalBridgeDays'),
+    psAtypicalCalendarExceptions: document.getElementById('psAtypicalCalendarExceptions'),
+    psAtypicalWindows: document.getElementById('psAtypicalWindows'),
+    psAtypicalAddWindow: document.getElementById('psAtypicalAddWindow'),
+
     // Tabs
     tabs: document.getElementById('nw-ems-tabs'),
 
@@ -175,6 +201,104 @@
     { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls genutzt)', mandatory: false },
     { id: 'multiuse', label: 'MultiUse', desc: 'Speicher Multi‑Use (SoC‑Zonen: Notstrom/LSK/Eigenverbrauch)', mandatory: false }
   ];
+
+
+  const PS_VOLTAGE_THRESHOLDS = Object.freeze({
+    HOS: 5,
+    'HOS/HS': 10,
+    HS: 10,
+    'HS/MS': 20,
+    MS: 20,
+    'MS/NS': 30,
+    NS: 30,
+  });
+
+  function _psVoltageKey(v) {
+    const s = String(v || 'MS').trim().toUpperCase().replace(/Ö/g, 'O').replace(/Ü/g, 'U').replace(/Ä/g, 'A');
+    if (s === 'HÖS' || s === 'HOS') return 'HOS';
+    if (s === 'HÖS/HS' || s === 'HOS/HS' || s === 'HOES/HS') return 'HOS/HS';
+    if (s === 'HS/MS') return 'HS/MS';
+    if (s === 'MS/NS') return 'MS/NS';
+    if (s === 'HS' || s === 'MS' || s === 'NS') return s;
+    return 'MS';
+  }
+
+  function _psThresholdForVoltage(v) {
+    const k = _psVoltageKey(v);
+    return Object.prototype.hasOwnProperty.call(PS_VOLTAGE_THRESHOLDS, k) ? PS_VOLTAGE_THRESHOLDS[k] : 20;
+  }
+
+  function _psNumOrNull(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function _psParseNumberList(value, min, max) {
+    const out = [];
+    const seen = new Set();
+    String(value || '')
+      .split(/[\s,;]+/)
+      .map(x => x.trim())
+      .filter(Boolean)
+      .forEach((x) => {
+        const n = Number(x);
+        if (!Number.isFinite(n)) return;
+        const i = Math.round(n);
+        if (Number.isFinite(min) && i < min) return;
+        if (Number.isFinite(max) && i > max) return;
+        if (seen.has(i)) return;
+        seen.add(i);
+        out.push(i);
+      });
+    out.sort((a, b) => a - b);
+    return out;
+  }
+
+  function _psFormatNumberList(arr) {
+    return Array.isArray(arr) ? arr.map(v => String(v)).join(',') : '';
+  }
+
+  function _psNormalizeDateToken(token) {
+    const s = String(token || '').trim();
+    if (!s) return '';
+    const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) return `${m[1].padStart(4, '0')}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+    return s;
+  }
+
+  function _psParseDateList(value) {
+    const out = [];
+    const seen = new Set();
+    String(value || '')
+      .split(/[\n,;]+/)
+      .map(_psNormalizeDateToken)
+      .filter(Boolean)
+      .forEach((x) => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(x)) return;
+        if (seen.has(x)) return;
+        seen.add(x);
+        out.push(x);
+      });
+    out.sort();
+    return out;
+  }
+
+  function _psFormatDateList(arr) {
+    return Array.isArray(arr) ? arr.map(v => String(v)).filter(Boolean).join('\n') : '';
+  }
+
+  function _psSetNumberInput(el, value) {
+    if (!el) return;
+    const n = Number(value);
+    el.value = Number.isFinite(n) ? String(n) : '';
+  }
+
+  function _psSetSelect(el, value, fallback) {
+    if (!el) return;
+    const v = String(value || fallback || '').trim();
+    const options = Array.from(el.options || []).map(o => o.value);
+    el.value = options.includes(v) ? v : (fallback || (options[0] || ''));
+  }
 
   // Energiefluss-Monitor: Basis-Datapoints (VIS & Algorithmen)
   const FLOW_BASE_DP_FIELDS = [
@@ -673,7 +797,7 @@ function _collectFlowPowerDpIsWFromUI() {
       if (app.id === 'peak') {
         const row = document.createElement('div');
         row.className = 'nw-config-card__row';
-        row.textContent = 'Grenzwert: „Allgemein“ + optionaler Netzleistungs-Datenpunkt.';
+        row.textContent = 'Konfiguration: Reiter „Peak-Shaving“. Dort normale LSK, atypische HLZF und Hybrid-Modus einstellen.';
         body.appendChild(row);
       }
 
@@ -736,6 +860,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
     // Tabs: optional ein-/ausblenden (App-Center)
     const tabMap = [
+      { tab: 'peakconfig', app: 'peak' },
       { tab: 'thermal', app: 'thermal' },
       { tab: 'heatingrod', app: 'heatingrod' },
       { tab: 'bhkw', app: 'bhkw' },
@@ -762,6 +887,277 @@ function _collectFlowPowerDpIsWFromUI() {
       const appsTab = document.querySelector('.nw-tab[data-tab="apps"]');
       if (appsTab) appsTab.click();
     }
+  }
+
+
+  function _psDefaultWindow() {
+    return {
+      enabled: true,
+      label: 'HLZF',
+      season: 'winter',
+      months: [],
+      weekdays: [1, 2, 3, 4, 5],
+      from: '07:00',
+      to: '10:00',
+      validFrom: '',
+      validTo: '',
+    };
+  }
+
+  function _psGetPeakCfg() {
+    currentConfig = currentConfig || {};
+    currentConfig.peakShaving = currentConfig.peakShaving && typeof currentConfig.peakShaving === 'object' ? currentConfig.peakShaving : {};
+    currentConfig.peakShaving.atypical = currentConfig.peakShaving.atypical && typeof currentConfig.peakShaving.atypical === 'object' ? currentConfig.peakShaving.atypical : {};
+    return currentConfig.peakShaving;
+  }
+
+  function _psGetWindowsFromCfg(cfg) {
+    const atypical = (cfg && cfg.atypical && typeof cfg.atypical === 'object') ? cfg.atypical : {};
+    if (Array.isArray(atypical.highLoadWindows)) return atypical.highLoadWindows;
+    if (Array.isArray(atypical.windows)) return atypical.windows;
+    return [];
+  }
+
+  function buildAtypicalWindowsUI() {
+    if (!els.psAtypicalWindows) return;
+    const ps = _psGetPeakCfg();
+    const wins = _psGetWindowsFromCfg(ps);
+    els.psAtypicalWindows.innerHTML = '';
+
+    if (!wins.length) {
+      const empty = document.createElement('div');
+      empty.className = 'nw-config-empty';
+      empty.textContent = 'Noch keine Hochlastzeitfenster hinterlegt. Über „+ Fenster“ ein Zeitfenster hinzufügen.';
+      els.psAtypicalWindows.appendChild(empty);
+    }
+
+    wins.forEach((win, idx) => {
+      const w = win && typeof win === 'object' ? win : {};
+      const row = document.createElement('div');
+      row.className = 'nw-config-card';
+      row.style.margin = '0 0 8px 0';
+      row.setAttribute('data-ps-hlzf-row', String(idx));
+
+      const header = document.createElement('div');
+      header.className = 'nw-config-card__header';
+      header.innerHTML = `
+        <div class="nw-config-card__header-top">
+          <div>
+            <div class="nw-config-card__title">Fenster ${idx + 1}</div>
+            <div class="nw-config-card__subtitle">Label, Saison/Monate, Wochentage und Uhrzeit</div>
+          </div>
+          <div class="nw-config-row__actions">
+            <button type="button" class="nw-config-btn nw-config-btn--ghost" data-ps-window-delete="${idx}">Entfernen</button>
+          </div>
+        </div>`;
+
+      const body = document.createElement('div');
+      body.className = 'nw-config-card__body';
+      body.innerHTML = `
+        <div class="nw-config-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
+          <label class="nw-config-field-control nw-config-field-control--stack">
+            <span class="nw-config-field-label" style="width:auto;">Aktiv</span>
+            <input class="nw-config-checkbox" type="checkbox" data-ps-window-field="enabled" ${w.enabled === false ? '' : 'checked'} />
+          </label>
+          <label class="nw-config-field-control nw-config-field-control--stack">
+            <span class="nw-config-field-label" style="width:auto;">Label</span>
+            <input class="nw-config-input" type="text" data-ps-window-field="label" value="${String(w.label || w.name || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}" placeholder="z.B. Winter morgens" />
+          </label>
+          <label class="nw-config-field-control nw-config-field-control--stack">
+            <span class="nw-config-field-label" style="width:auto;">Saison</span>
+            <select class="nw-config-input" data-ps-window-field="season">
+              <option value="">keine / Monate nutzen</option>
+              <option value="winter">Winter</option>
+              <option value="summer">Sommer</option>
+              <option value="transition">Übergang</option>
+            </select>
+          </label>
+          <label class="nw-config-field-control nw-config-field-control--stack">
+            <span class="nw-config-field-label" style="width:auto;">Monate</span>
+            <input class="nw-config-input" type="text" data-ps-window-field="months" value="${_psFormatNumberList(w.months || w.month)}" placeholder="z.B. 1,2,12" />
+          </label>
+          <label class="nw-config-field-control nw-config-field-control--stack">
+            <span class="nw-config-field-label" style="width:auto;">Wochentage</span>
+            <input class="nw-config-input" type="text" data-ps-window-field="weekdays" value="${_psFormatNumberList(w.weekdays || w.days)}" placeholder="1,2,3,4,5" />
+          </label>
+          <label class="nw-config-field-control nw-config-field-control--stack">
+            <span class="nw-config-field-label" style="width:auto;">Von</span>
+            <input class="nw-config-input" type="time" data-ps-window-field="from" value="${String(w.from || w.start || w.startTime || '').replace(/"/g,'&quot;')}" />
+          </label>
+          <label class="nw-config-field-control nw-config-field-control--stack">
+            <span class="nw-config-field-label" style="width:auto;">Bis</span>
+            <input class="nw-config-input" type="time" data-ps-window-field="to" value="${String(w.to || w.end || w.endTime || '').replace(/"/g,'&quot;')}" />
+          </label>
+          <label class="nw-config-field-control nw-config-field-control--stack">
+            <span class="nw-config-field-label" style="width:auto;">Gültig von</span>
+            <input class="nw-config-input" type="date" data-ps-window-field="validFrom" value="${String(w.validFrom || w.validFromDate || '').replace(/"/g,'&quot;')}" />
+          </label>
+          <label class="nw-config-field-control nw-config-field-control--stack">
+            <span class="nw-config-field-label" style="width:auto;">Gültig bis</span>
+            <input class="nw-config-input" type="date" data-ps-window-field="validTo" value="${String(w.validTo || w.validToDate || '').replace(/"/g,'&quot;')}" />
+          </label>
+        </div>`;
+      row.appendChild(header);
+      row.appendChild(body);
+      els.psAtypicalWindows.appendChild(row);
+
+      const seasonSelect = row.querySelector('[data-ps-window-field="season"]');
+      if (seasonSelect) {
+        const sv = String(w.season || w.jahreszeit || '').trim().toLowerCase();
+        if (['winter', 'summer', 'transition'].includes(sv)) seasonSelect.value = sv;
+        else if (sv === 'sommer') seasonSelect.value = 'summer';
+        else if (sv === 'uebergang' || sv === 'übergang') seasonSelect.value = 'transition';
+      }
+    });
+  }
+
+  function _psCollectWindowRows() {
+    const out = [];
+    if (!els.psAtypicalWindows) return out;
+    const rows = Array.from(els.psAtypicalWindows.querySelectorAll('[data-ps-hlzf-row]'));
+    for (const row of rows) {
+      const get = (field) => row.querySelector(`[data-ps-window-field="${field}"]`);
+      const enabledEl = get('enabled');
+      const label = String((get('label') && get('label').value) || '').trim();
+      const season = String((get('season') && get('season').value) || '').trim();
+      const months = _psParseNumberList((get('months') && get('months').value) || '', 1, 12);
+      const weekdays = _psParseNumberList((get('weekdays') && get('weekdays').value) || '', 0, 7);
+      const from = String((get('from') && get('from').value) || '').trim();
+      const to = String((get('to') && get('to').value) || '').trim();
+      const validFrom = String((get('validFrom') && get('validFrom').value) || '').trim();
+      const validTo = String((get('validTo') && get('validTo').value) || '').trim();
+      const w = {
+        enabled: enabledEl ? !!enabledEl.checked : true,
+        ...(label ? { label } : {}),
+        ...(season ? { season } : {}),
+        ...(months.length ? { months } : {}),
+        ...(weekdays.length ? { weekdays } : {}),
+        ...(from ? { from } : {}),
+        ...(to ? { to } : {}),
+        ...(validFrom ? { validFrom } : {}),
+        ...(validTo ? { validTo } : {}),
+      };
+      if (w.from && w.to) out.push(w);
+    }
+    return out;
+  }
+
+  function _psUpdateAtypicalFieldState() {
+    const mode = els.psStrategyMode ? String(els.psStrategyMode.value || 'standard') : 'standard';
+    const atypicalOn = mode === 'atypical' || mode === 'hybrid' || mode === 'monitor';
+    const standardOn = mode === 'standard' || mode === 'hybrid';
+
+    const atypicalIds = [
+      'psAtypicalVoltageLevel', 'psAtypicalThresholdPercent', 'psAtypicalApplyVoltageThreshold',
+      'psAtypicalPAbsRefW', 'psAtypicalMinShiftW', 'psAtypicalTargetLimitW', 'psAtypicalSafetyMarginW',
+      'psAtypicalIncludeWeekends', 'psAtypicalExcludeChristmasNewYear', 'psAtypicalHolidays',
+      'psAtypicalBridgeDays', 'psAtypicalCalendarExceptions', 'psAtypicalAddWindow'
+    ];
+    atypicalIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !atypicalOn;
+    });
+    if (els.psAtypicalWindows) {
+      els.psAtypicalWindows.querySelectorAll('input,select,textarea,button').forEach((el) => { el.disabled = !atypicalOn; });
+    }
+
+    const standardIds = ['psStandardMode', 'psReserveW'];
+    standardIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !standardOn;
+    });
+  }
+
+  function buildPeakShavingUI() {
+    if (!els.psStrategyMode) return;
+    const ps = _psGetPeakCfg();
+    const a = (ps.atypical && typeof ps.atypical === 'object') ? ps.atypical : {};
+
+    let strategy = String(ps.strategyMode || ps.strategy || '').trim().toLowerCase();
+    if (!['standard', 'atypical', 'hybrid', 'monitor'].includes(strategy)) {
+      strategy = a.enabled ? String(a.mode || 'hybrid').trim().toLowerCase() : 'standard';
+      if (!['atypical', 'hybrid', 'monitor'].includes(strategy)) strategy = a.enabled ? 'hybrid' : 'standard';
+    }
+    _psSetSelect(els.psStrategyMode, strategy, 'standard');
+    _psSetSelect(els.psStandardMode, String(ps.mode || 'static'), 'static');
+    _psSetNumberInput(els.psReserveW, ps.reserveW);
+    _psSetNumberInput(els.psSafetyMarginW, ps.safetyMarginW);
+    _psSetNumberInput(els.psHysteresisW, ps.hysteresisW);
+    _psSetNumberInput(els.psSmoothingSeconds, ps.smoothingSeconds);
+    _psSetNumberInput(els.psActivateDelaySeconds, ps.activateDelaySeconds);
+    _psSetNumberInput(els.psReleaseDelaySeconds, ps.releaseDelaySeconds);
+    _psSetNumberInput(els.psStaleTimeoutSec, ps.staleTimeoutSec);
+    if (els.psFastTripEnabled) els.psFastTripEnabled.checked = ps.fastTripEnabled !== false;
+
+    const vLevel = _psVoltageKey(a.voltageLevel || 'MS');
+    _psSetSelect(els.psAtypicalVoltageLevel, vLevel, 'MS');
+    const threshold = Number.isFinite(Number(a.thresholdPercent)) ? Number(a.thresholdPercent) : _psThresholdForVoltage(vLevel);
+    _psSetNumberInput(els.psAtypicalThresholdPercent, threshold);
+    _psSetNumberInput(els.psAtypicalPAbsRefW, a.annualPeakReferenceW ?? a.pAbsRefW ?? a.pAbsMaxW ?? a.referencePeakW ?? a.referencePeakPowerW);
+    _psSetNumberInput(els.psAtypicalMinShiftW, a.minShiftW ?? 100000);
+    _psSetNumberInput(els.psAtypicalTargetLimitW, a.targetLimitW ?? a.hlzfTargetW ?? a.highLoadLimitW ?? a.capW);
+    _psSetNumberInput(els.psAtypicalSafetyMarginW, a.safetyMarginW);
+    if (els.psAtypicalIncludeWeekends) els.psAtypicalIncludeWeekends.checked = a.includeWeekends === true;
+    if (els.psAtypicalExcludeChristmasNewYear) els.psAtypicalExcludeChristmasNewYear.checked = a.excludeChristmasNewYear !== false;
+    if (els.psAtypicalHolidays) els.psAtypicalHolidays.value = _psFormatDateList(a.holidays || a.holidayDates || []);
+    if (els.psAtypicalBridgeDays) els.psAtypicalBridgeDays.value = _psFormatDateList(a.bridgeDays || a.bridgeDayDates || []);
+    if (els.psAtypicalCalendarExceptions) els.psAtypicalCalendarExceptions.value = _psFormatDateList(a.calendarExceptions || a.exceptions || []);
+
+    buildAtypicalWindowsUI();
+    _psUpdateAtypicalFieldState();
+  }
+
+  function collectPeakShavingConfigFromUI(baseCfg) {
+    const out = deepMerge({}, baseCfg || {});
+    if (!els.psStrategyMode) return out;
+
+    const strategy = String(els.psStrategyMode.value || 'standard').trim().toLowerCase();
+    out.strategyMode = ['standard', 'atypical', 'hybrid', 'monitor'].includes(strategy) ? strategy : 'standard';
+    if (els.psStandardMode) out.mode = (els.psStandardMode.value === 'dynamic') ? 'dynamic' : 'static';
+
+    const setNum = (key, el, min = 0, max = Number.POSITIVE_INFINITY) => {
+      if (!el) return;
+      const n = Number(el.value);
+      if (Number.isFinite(n)) out[key] = Math.min(max, Math.max(min, n));
+      else delete out[key];
+    };
+    setNum('reserveW', els.psReserveW, 0);
+    setNum('safetyMarginW', els.psSafetyMarginW, 0);
+    setNum('hysteresisW', els.psHysteresisW, 0);
+    setNum('smoothingSeconds', els.psSmoothingSeconds, 1, 600);
+    setNum('activateDelaySeconds', els.psActivateDelaySeconds, 0, 3600);
+    setNum('releaseDelaySeconds', els.psReleaseDelaySeconds, 0, 3600);
+    setNum('staleTimeoutSec', els.psStaleTimeoutSec, 1, 3600);
+    if (els.psFastTripEnabled) out.fastTripEnabled = !!els.psFastTripEnabled.checked;
+
+    const atypicalEnabled = out.strategyMode === 'atypical' || out.strategyMode === 'hybrid' || out.strategyMode === 'monitor';
+    const a = deepMerge({}, out.atypical || {});
+    a.enabled = !!atypicalEnabled;
+    a.mode = out.strategyMode === 'monitor' ? 'monitor' : (out.strategyMode === 'atypical' ? 'enforce' : 'hybrid');
+    a.enforce = out.strategyMode !== 'monitor';
+    a.voltageLevel = _psVoltageKey(els.psAtypicalVoltageLevel ? els.psAtypicalVoltageLevel.value : 'MS');
+
+    const threshold = _psNumOrNull(els.psAtypicalThresholdPercent && els.psAtypicalThresholdPercent.value);
+    a.thresholdPercent = threshold === null ? _psThresholdForVoltage(a.voltageLevel) : Math.min(100, Math.max(0, threshold));
+
+    const pAbs = _psNumOrNull(els.psAtypicalPAbsRefW && els.psAtypicalPAbsRefW.value);
+    if (pAbs !== null && pAbs > 0) a.annualPeakReferenceW = Math.round(pAbs); else delete a.annualPeakReferenceW;
+    const minShift = _psNumOrNull(els.psAtypicalMinShiftW && els.psAtypicalMinShiftW.value);
+    a.minShiftW = minShift !== null ? Math.max(0, Math.round(minShift)) : 100000;
+    const target = _psNumOrNull(els.psAtypicalTargetLimitW && els.psAtypicalTargetLimitW.value);
+    if (target !== null && target > 0) a.targetLimitW = Math.round(target); else delete a.targetLimitW;
+    const margin = _psNumOrNull(els.psAtypicalSafetyMarginW && els.psAtypicalSafetyMarginW.value);
+    if (margin !== null && margin >= 0) a.safetyMarginW = Math.round(margin); else delete a.safetyMarginW;
+
+    a.includeWeekends = !!(els.psAtypicalIncludeWeekends && els.psAtypicalIncludeWeekends.checked);
+    a.excludeChristmasNewYear = !(els.psAtypicalExcludeChristmasNewYear && els.psAtypicalExcludeChristmasNewYear.checked === false);
+    a.holidays = _psParseDateList(els.psAtypicalHolidays && els.psAtypicalHolidays.value);
+    a.bridgeDays = _psParseDateList(els.psAtypicalBridgeDays && els.psAtypicalBridgeDays.value);
+    a.calendarExceptions = _psParseDateList(els.psAtypicalCalendarExceptions && els.psAtypicalCalendarExceptions.value);
+    a.highLoadWindows = _psCollectWindowRows();
+
+    out.atypical = a;
+    return out;
   }
 
   function buildDpTable(container, fields, getter, setter, options) {
@@ -6320,6 +6716,9 @@ function _collectFlowPowerDpIsWFromUI() {
       });
     } catch (_e) {}
 
+    // Peak-Shaving / Lastspitzenkappung
+    try { buildPeakShavingUI(); } catch (_e) {}
+
     // Storage
     const mode = (currentConfig.storage && typeof currentConfig.storage.controlMode === 'string') ? currentConfig.storage.controlMode : 'targetPower';
     els.storageControlMode.value = (['targetPower','limits','enableFlags'].includes(mode)) ? mode : 'targetPower';
@@ -7221,8 +7620,8 @@ function _collectFlowPowerDpIsWFromUI() {
     // Grid-Constraints
     patch.gridConstraints = deepMerge({}, currentConfig.gridConstraints || {});
 
-    // PeakShaving: bleibt in der Konfiguration erhalten (kein separater Netz-DP mehr nötig im UI)
-    patch.peakShaving = deepMerge({}, currentConfig.peakShaving || {});
+    // PeakShaving / Lastspitzenkappung
+    patch.peakShaving = collectPeakShavingConfigFromUI(currentConfig.peakShaving || {});
 
     // Speicherfarm
     patch.storageFarm = deepMerge({}, currentConfig.storageFarm || {});
@@ -8196,6 +8595,50 @@ function _collectFlowPowerDpIsWFromUI() {
     els.storageFeneconAcMode.addEventListener('change', _update);
     els.storageFeneconAcMode.addEventListener('input', _update);
   }
+
+
+  // Peak-Shaving / HLZF UI wiring
+  if (els.psStrategyMode) {
+    els.psStrategyMode.addEventListener('change', () => {
+      try { _psUpdateAtypicalFieldState(); } catch (_e) {}
+    });
+  }
+  if (els.psAtypicalVoltageLevel) {
+    els.psAtypicalVoltageLevel.addEventListener('change', () => {
+      if (els.psAtypicalThresholdPercent && !String(els.psAtypicalThresholdPercent.value || '').trim()) {
+        els.psAtypicalThresholdPercent.value = String(_psThresholdForVoltage(els.psAtypicalVoltageLevel.value));
+      }
+    });
+  }
+  if (els.psAtypicalApplyVoltageThreshold) {
+    els.psAtypicalApplyVoltageThreshold.addEventListener('click', () => {
+      if (els.psAtypicalThresholdPercent) {
+        els.psAtypicalThresholdPercent.value = String(_psThresholdForVoltage(els.psAtypicalVoltageLevel ? els.psAtypicalVoltageLevel.value : 'MS'));
+      }
+    });
+  }
+  if (els.psAtypicalAddWindow) {
+    els.psAtypicalAddWindow.addEventListener('click', () => {
+      const ps = _psGetPeakCfg();
+      ps.atypical.highLoadWindows = _psCollectWindowRows();
+      ps.atypical.highLoadWindows.push(_psDefaultWindow());
+      buildAtypicalWindowsUI();
+      _psUpdateAtypicalFieldState();
+    });
+  }
+  document.addEventListener('click', (e) => {
+    const t = e && e.target ? e.target : null;
+    const btn = t && t.closest ? t.closest('[data-ps-window-delete]') : null;
+    if (!btn) return;
+    const idx = Number(btn.getAttribute('data-ps-window-delete'));
+    if (!Number.isFinite(idx)) return;
+    const ps = _psGetPeakCfg();
+    const rows = _psCollectWindowRows();
+    rows.splice(idx, 1);
+    ps.atypical.highLoadWindows = rows;
+    buildAtypicalWindowsUI();
+    _psUpdateAtypicalFieldState();
+  }, true);
 
   // Browse buttons (event delegation) – works for dynamically created fields too
   document.addEventListener('click', (e) => {

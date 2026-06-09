@@ -47,6 +47,7 @@
     <div class="nw-tabs" id="nw-ems-tabs">
       <button type="button" class="nw-tab nw-tab--active" data-tab="apps">Apps</button>
       <button type="button" class="nw-tab" data-tab="mapping">Zuordnung</button>
+      <button type="button" class="nw-tab" data-tab="peakconfig">Peak-Shaving</button>
       <button type="button" class="nw-tab" data-tab="storagefarm">Speicherfarm</button>
       <button type="button" class="nw-tab" data-tab="multiuse">MultiUse</button>
       <button type="button" class="nw-tab" data-tab="flow">Energiefluss</button>
@@ -75,6 +76,243 @@
     </div>
     <div class="nw-config-grid" id="appsList"></div>
     <div class="nw-config-empty" id="appsEmpty" style="display:none;">Keine Apps verfügbar.</div>
+  </section>
+
+  </div>
+
+
+  <div id="nw-tabpanel-peakconfig" data-tabpanel="peakconfig" style="display:none;">
+
+  <section class="nw-config-section">
+    <div class="nw-config-section__head">
+      <div>
+        <h2 class="nw-config-section__title">Peak-Shaving / Lastspitzenkappung</h2>
+        <div class="nw-config-section__subtitle" style="margin:0;opacity:.85;line-height:1.35;">
+          Einstellzentrale für normale Lastspitzenkappung, atypische HLZF-Kappung und Hybrid-Betrieb. Die Netzpunkt-Messung kommt weiterhin aus <b>Zuordnung → Allgemein</b>.
+        </div>
+      </div>
+    </div>
+
+    <div class="nw-config-grid" style="margin-top:12px;">
+      <div class="nw-config-card">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Betriebsart</div>
+          <div class="nw-config-card__subtitle">Welche LSK-Logik soll der EMS-Core aktiv nutzen?</div>
+        </div>
+        <div class="nw-config-card__body">
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psStrategyMode">LSK-Modus</label>
+            <div class="nw-config-field-control nw-config-field-control--stack">
+              <select id="psStrategyMode" class="nw-config-input">
+                <option value="standard">Normale Lastspitzenkappung</option>
+                <option value="atypical">Atypische HLZF-Kappung</option>
+                <option value="hybrid">Hybrid: normal + atypisch</option>
+                <option value="monitor">Atypisch nur beobachten</option>
+              </select>
+              <div class="nw-config-help" style="margin-top:4px;opacity:.85;line-height:1.35;">
+                <b>Normal</b> begrenzt den Netzbezug immer am eingestellten Grenzwert. <b>Atypisch</b> begrenzt nur innerhalb der Hochlastzeitfenster. <b>Hybrid</b> nimmt immer den strengeren Grenzwert.
+              </div>
+            </div>
+          </div>
+
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psStandardMode">Standard-Limitquelle</label>
+            <div class="nw-config-field-control">
+              <select id="psStandardMode" class="nw-config-input">
+                <option value="static">Statisch: Netzanschlussleistung</option>
+                <option value="dynamic">Dynamisch: erlaubte Leistung per DP</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psReserveW">Reserve normal (W)</label>
+            <div class="nw-config-field-control">
+              <input id="psReserveW" class="nw-config-input" type="number" min="0" step="100" placeholder="z.B. 500" />
+            </div>
+          </div>
+
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psSafetyMarginW">Sicherheitsmarge normal (W)</label>
+            <div class="nw-config-field-control">
+              <input id="psSafetyMarginW" class="nw-config-input" type="number" min="0" step="100" placeholder="z.B. 1000" />
+            </div>
+          </div>
+
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psHysteresisW">Hysterese (W)</label>
+            <div class="nw-config-field-control">
+              <input id="psHysteresisW" class="nw-config-input" type="number" min="0" step="100" placeholder="z.B. 500" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="nw-config-card">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Regelverhalten</div>
+          <div class="nw-config-card__subtitle">Glättung, Verzögerung und Failsafe für reale Messwerte</div>
+        </div>
+        <div class="nw-config-card__body">
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psSmoothingSeconds">Glättung (s)</label>
+            <div class="nw-config-field-control">
+              <input id="psSmoothingSeconds" class="nw-config-input" type="number" min="1" max="600" step="1" placeholder="10" />
+            </div>
+          </div>
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psActivateDelaySeconds">Einschaltverzögerung (s)</label>
+            <div class="nw-config-field-control">
+              <input id="psActivateDelaySeconds" class="nw-config-input" type="number" min="0" max="3600" step="1" placeholder="2" />
+            </div>
+          </div>
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psReleaseDelaySeconds">Freigabeverzögerung (s)</label>
+            <div class="nw-config-field-control">
+              <input id="psReleaseDelaySeconds" class="nw-config-input" type="number" min="0" max="3600" step="1" placeholder="5" />
+            </div>
+          </div>
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psStaleTimeoutSec">Messwert-Timeout (s)</label>
+            <div class="nw-config-field-control">
+              <input id="psStaleTimeoutSec" class="nw-config-input" type="number" min="1" max="3600" step="1" placeholder="300" />
+            </div>
+          </div>
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psFastTripEnabled">Fast-Trip</label>
+            <div class="nw-config-field-control" style="display:flex;align-items:center;gap:10px;">
+              <input id="psFastTripEnabled" class="nw-config-checkbox" type="checkbox" />
+              <span class="nw-config-field-hint" style="margin:0;">Schnelle Reaktion auf kurze Rohwert-/Maximalwert-Spitzen</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="nw-config-card">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Atypische Netznutzung (§19)</div>
+          <div class="nw-config-card__subtitle">Zielwert für Hochlastzeitfenster aus Referenz-Peak, Entnahmeebene und Mindestverlagerung</div>
+        </div>
+        <div class="nw-config-card__body">
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psAtypicalVoltageLevel">Entnahmeebene</label>
+            <div class="nw-config-field-control">
+              <select id="psAtypicalVoltageLevel" class="nw-config-input">
+                <option value="HOS">HöS</option>
+                <option value="HOS/HS">HöS/HS</option>
+                <option value="HS">HS</option>
+                <option value="HS/MS">HS/MS</option>
+                <option value="MS">MS</option>
+                <option value="MS/NS">MS/NS</option>
+                <option value="NS">NS</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psAtypicalThresholdPercent">Erheblichkeitsschwelle (%)</label>
+            <div class="nw-config-field-control nw-config-field-control--stack">
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input id="psAtypicalThresholdPercent" class="nw-config-input" type="number" min="0" max="100" step="0.1" placeholder="z.B. 20" />
+                <button id="psAtypicalApplyVoltageThreshold" type="button" class="nw-config-btn nw-config-btn--ghost">aus Ebene</button>
+              </div>
+              <div class="nw-config-help" style="margin-top:4px;opacity:.85;">HöS 5 %, HöS/HS 10 %, HS 10 %, HS/MS 20 %, MS 20 %, MS/NS 30 %, NS 30 %.</div>
+            </div>
+          </div>
+
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psAtypicalPAbsRefW">Referenz-Jahreshöchstlast P_abs_ref (W)</label>
+            <div class="nw-config-field-control">
+              <input id="psAtypicalPAbsRefW" class="nw-config-input" type="number" min="0" step="100" placeholder="z.B. 1000000" />
+            </div>
+          </div>
+
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psAtypicalMinShiftW">Mindestverlagerung (W)</label>
+            <div class="nw-config-field-control">
+              <input id="psAtypicalMinShiftW" class="nw-config-input" type="number" min="0" step="100" placeholder="100000" />
+            </div>
+          </div>
+
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psAtypicalTargetLimitW">Fester HLZF-Grenzwert (W, optional)</label>
+            <div class="nw-config-field-control nw-config-field-control--stack">
+              <input id="psAtypicalTargetLimitW" class="nw-config-input" type="number" min="0" step="100" placeholder="leer = automatisch berechnen" />
+              <div class="nw-config-help" style="margin-top:4px;opacity:.85;">Leer lassen, wenn der Grenzwert aus P_abs_ref, Schwelle und Mindestverlagerung berechnet werden soll.</div>
+            </div>
+          </div>
+
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psAtypicalSafetyMarginW">HLZF-Sicherheitsmarge (W)</label>
+            <div class="nw-config-field-control">
+              <input id="psAtypicalSafetyMarginW" class="nw-config-input" type="number" min="0" step="100" placeholder="z.B. 2000" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="nw-config-card">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Kalender / Ausnahmen</div>
+          <div class="nw-config-card__subtitle">Tage, an denen keine Hochlastzeitfenster gelten sollen</div>
+        </div>
+        <div class="nw-config-card__body">
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psAtypicalIncludeWeekends">Wochenenden berücksichtigen</label>
+            <div class="nw-config-field-control" style="display:flex;align-items:center;gap:10px;">
+              <input id="psAtypicalIncludeWeekends" class="nw-config-checkbox" type="checkbox" />
+              <span class="nw-config-field-hint" style="margin:0;">Standard: aus, da HLZF typischerweise nur an Werktagen aktiv sind.</span>
+            </div>
+          </div>
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="psAtypicalExcludeChristmasNewYear">24.12.–01.01. ausschließen</label>
+            <div class="nw-config-field-control" style="display:flex;align-items:center;gap:10px;">
+              <input id="psAtypicalExcludeChristmasNewYear" class="nw-config-checkbox" type="checkbox" />
+              <span class="nw-config-field-hint" style="margin:0;">Empfohlen aktiv lassen.</span>
+            </div>
+          </div>
+          <div class="nw-config-field-row" style="align-items:flex-start;">
+            <label class="nw-config-field-label" for="psAtypicalHolidays">Feiertage</label>
+            <div class="nw-config-field-control nw-config-field-control--stack">
+              <textarea id="psAtypicalHolidays" class="nw-config-input" rows="4" placeholder="2026-01-01&#10;2026-04-03"></textarea>
+              <div class="nw-config-help" style="margin-top:4px;opacity:.85;">Ein Datum pro Zeile oder kommasepariert im Format YYYY-MM-DD.</div>
+            </div>
+          </div>
+          <div class="nw-config-field-row" style="align-items:flex-start;">
+            <label class="nw-config-field-label" for="psAtypicalBridgeDays">Brückentage</label>
+            <div class="nw-config-field-control">
+              <textarea id="psAtypicalBridgeDays" class="nw-config-input" rows="3" placeholder="2026-05-15"></textarea>
+            </div>
+          </div>
+          <div class="nw-config-field-row" style="align-items:flex-start;">
+            <label class="nw-config-field-label" for="psAtypicalCalendarExceptions">Weitere Ausnahmen</label>
+            <div class="nw-config-field-control">
+              <textarea id="psAtypicalCalendarExceptions" class="nw-config-input" rows="3" placeholder="2026-12-24"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="nw-config-card" style="grid-column:1 / -1;">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__header-top">
+            <div>
+              <div class="nw-config-card__title">Hochlastzeitfenster</div>
+              <div class="nw-config-card__subtitle">Zeitfenster pro Saison/Monat. Mehrere Fenster pro Tag sind möglich.</div>
+            </div>
+            <div class="nw-config-row__actions">
+              <button id="psAtypicalAddWindow" type="button" class="nw-config-btn nw-config-btn--ghost">+ Fenster</button>
+            </div>
+          </div>
+        </div>
+        <div class="nw-config-card__body">
+          <div class="nw-config-empty" style="margin:0 0 8px 0;">
+            Wochentage: ISO-Format 1=Mo … 7=So. Monate: 1–12. Wenn Monate leer sind, wird die Saison genutzt: Winter = 12/1/2, Sommer = 6/7/8, Übergang = 3/4/5/9/10/11.
+          </div>
+          <div id="psAtypicalWindows" class="nw-config-list"></div>
+        </div>
+      </div>
+    </div>
   </section>
 
   </div>

@@ -501,12 +501,22 @@ class PeakShavingModule extends BaseModule {
 
 
         // Atypische Netznutzung / HLZF-Spitzenkappung (§19 Abs. 2 S. 1 StromNEV)
-        // Wird als zusätzlicher Import-Cap nur innerhalb aktiver Hochlastzeitfenster angewendet.
-        // Außerhalb der HLZF bleibt die normale LSK-/Hybrid-Logik unverändert.
+        // strategyMode steuert die UI-Auswahl:
+        // - standard: nur klassische Lastspitzenkappung
+        // - atypical: nur HLZF-Cap innerhalb aktiver Hochlastzeitfenster
+        // - hybrid: klassisch + HLZF, es bindet immer das strengere Limit
+        // - monitor: HLZF-Diagnose ohne Peak-Shaving-Setpoint aus diesem Modul
         const atypicalCfg = (cfg.atypical && typeof cfg.atypical === 'object') ? cfg.atypical : {};
-        const atypicalMode = String(atypicalCfg.mode || 'hybrid').trim().toLowerCase(); // monitor|enforce|hybrid
-        const atypicalEnforce = !!atypicalCfg.enabled && atypicalMode !== 'monitor' && atypicalCfg.enforce !== false;
-        const atypicalSchedule = this._evaluateAtypicalSchedule(atypicalCfg, now);
+        let strategyMode = String(cfg.strategyMode || cfg.strategy || '').trim().toLowerCase();
+        if (!['standard', 'atypical', 'hybrid', 'monitor'].includes(strategyMode)) {
+            const legacyMode = String(atypicalCfg.mode || '').trim().toLowerCase();
+            strategyMode = atypicalCfg.enabled ? (legacyMode === 'monitor' ? 'monitor' : 'hybrid') : 'standard';
+        }
+        const standardLimitEnabled = strategyMode === 'standard' || strategyMode === 'hybrid';
+        const atypicalRuntimeEnabled = !!atypicalCfg.enabled && (strategyMode === 'atypical' || strategyMode === 'hybrid' || strategyMode === 'monitor');
+        const atypicalMode = strategyMode === 'monitor' ? 'monitor' : String(atypicalCfg.mode || (strategyMode === 'atypical' ? 'enforce' : 'hybrid')).trim().toLowerCase(); // monitor|enforce|hybrid
+        const atypicalEnforce = atypicalRuntimeEnabled && atypicalMode !== 'monitor' && atypicalCfg.enforce !== false;
+        const atypicalSchedule = this._evaluateAtypicalSchedule({ ...atypicalCfg, enabled: atypicalRuntimeEnabled }, now);
         const atypicalTarget = this._calculateAtypicalTarget(atypicalCfg);
         const atypicalLimitCandidateW = (atypicalSchedule.active && atypicalEnforce && atypicalTarget.targetLimitW > 0) ? atypicalTarget.targetLimitW : 0;
         const atypicalWantsPowerLimit = atypicalLimitCandidateW > 0;
@@ -543,7 +553,7 @@ class PeakShavingModule extends BaseModule {
         let staleTimeoutSec = num(cfg.staleTimeoutSec, 300);
         staleTimeoutSec = clamp(staleTimeoutSec, 1, 3600);
         const staleMaxAgeMs = staleTimeoutSec * 1000;
-        const wantsPowerLimit = (typeof plantLimitW === 'number' && plantLimitW > 0) || atypicalWantsPowerLimit;
+        const wantsPowerLimit = (standardLimitEnabled && typeof plantLimitW === 'number' && plantLimitW > 0) || atypicalWantsPowerLimit;
         const wantsPhaseLimit = (phaseMode === 'info' || phaseMode === 'enforce') && typeof maxPhaseA === 'number' && maxPhaseA > 0;
         let staleMeter = false;
         const staleKeys = [];
@@ -610,7 +620,7 @@ class PeakShavingModule extends BaseModule {
         let reserveW = num(cfg.reserveW, 0);
         let limitSource = '';
 
-        if (mode === 'dynamic') {
+        if (standardLimitEnabled && mode === 'dynamic') {
             allowedPowerW = this.dp.getNumber('ps.allowedPowerW', null);
             // Central plant limit is a hard cap (if configured). If not configured, allow dynamic DP only.
             const baseMax = (typeof plantLimitW === 'number' && plantLimitW > 0) ? plantLimitW : Number.POSITIVE_INFINITY;
@@ -618,11 +628,15 @@ class PeakShavingModule extends BaseModule {
             limitW = Math.min(baseMax, allowed) - Math.max(0, reserveW);
             if (!Number.isFinite(limitW)) limitW = 0;
             if (limitW > 0) limitSource = (Number.isFinite(baseMax) && Number.isFinite(allowed)) ? 'standard+dynamic' : (Number.isFinite(allowed) ? 'dynamic' : 'standard');
-        } else {
+        } else if (standardLimitEnabled) {
             // static: fester Grenzwert, aber Reserve ebenfalls abziehen (Reserve ist keine dynamic-only Funktion)
             const base = (typeof plantLimitW === 'number' && plantLimitW > 0) ? plantLimitW : 0;
             limitW = Math.max(0, base - Math.max(0, reserveW));
             if (limitW > 0) limitSource = 'standard';
+        } else {
+            // Atypisch-only/Monitor: kein permanenter Standard-Cap außerhalb der HLZF.
+            limitW = 0;
+            limitSource = '';
         }
 
         if (atypicalWantsPowerLimit) {
@@ -664,7 +678,7 @@ class PeakShavingModule extends BaseModule {
         }
 
         await this._publishAtypicalDiagnostics({
-            enabled: !!atypicalCfg.enabled,
+            enabled: !!atypicalRuntimeEnabled,
             mode: atypicalMode,
             enforce: atypicalEnforce,
             schedule: atypicalSchedule,

@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.27",
+    "version": "0.7.28",
     "news": {
+      "0.7.28": {
+        "en": "Peak-Shaving App-Center tab added: installers can now choose standard peak shaving, atypical high-load-window capping, hybrid mode or monitoring, configure §19 reference peak/threshold/minimum shift, calendar exceptions and high-load windows directly in the UI.",
+        "de": "Peak-Shaving-Reiter im App-Center ergänzt: Installateure können jetzt normale Lastspitzenkappung, atypische Hochlastzeitfenster-Kappung, Hybrid-Modus oder Monitoring wählen und §19-Referenzpeak, Schwelle, Mindestverlagerung, Kalenderausnahmen sowie Hochlastzeitfenster direkt in der UI konfigurieren."
+      },
       "0.7.27": {
         "en": "Added atypical peak shaving for high-load time windows. Peak-Shaving can now enforce an additional §19-style HLZF import cap, publish diagnostics under peakShaving.atypical.*, and feed the resulting limit into the central EMS caps through the existing peakShaving.control.limitW path.",
         "de": "Atypische Lastspitzenkappung für Hochlastzeitfenster ergänzt. Peak-Shaving kann jetzt einen zusätzlichen §19-HLZF-Netzbezugscap anwenden, Diagnosewerte unter peakShaving.atypical.* veröffentlichen und das resultierende Limit über den bestehenden peakShaving.control.limitW-Pfad in die zentralen EMS-Caps einspeisen."
@@ -1937,12 +1941,26 @@
         "holidays": [],
         "bridgeDays": [],
         "calendarExceptions": []
-      }
+      },
+      "strategyMode": "standard",
+      "mode": "static",
+      "reserveW": 0,
+      "safetyMarginW": 0,
+      "hysteresisW": 500,
+      "smoothingSeconds": 10,
+      "activateDelaySeconds": 2,
+      "releaseDelaySeconds": 5,
+      "staleTimeoutSec": 300,
+      "fastTripEnabled": true
     }
   },
   "instanceObjects": [],
-  "version": "0.7.27",
+  "version": "0.7.28",
   "news": {
+    "0.7.28": {
+      "en": "Peak-Shaving App-Center tab added: installers can now configure standard, atypical HLZF, hybrid or monitoring modes directly in the UI.",
+      "de": "Peak-Shaving-Reiter im App-Center ergänzt: Installateure können Normalbetrieb, atypische HLZF-Kappung, Hybrid oder Monitoring direkt in der UI konfigurieren."
+    },
     "0.7.27": {
       "en": "Added atypical peak shaving for high-load time windows. Peak-Shaving can now enforce an additional §19-style HLZF import cap, publish diagnostics under peakShaving.atypical.*, and feed the resulting limit into the central EMS caps through the existing peakShaving.control.limitW path.",
       "de": "Atypische Lastspitzenkappung für Hochlastzeitfenster ergänzt. Peak-Shaving kann jetzt einen zusätzlichen §19-HLZF-Netzbezugscap anwenden, Diagnosewerte unter peakShaving.atypical.* veröffentlichen und das resultierende Limit über den bestehenden peakShaving.control.limitW-Pfad in die zentralen EMS-Caps einspeisen."

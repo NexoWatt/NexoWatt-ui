@@ -1,3 +1,10 @@
+# 0.7.28
+
+- App-Center: Neuer Reiter „Peak-Shaving“ für die Parametrierung der Lastspitzenkappung ergänzt. Installateure können jetzt Normalbetrieb, atypische HLZF-Kappung, Hybrid-Modus oder reines Monitoring wählen.
+- Atypische Lastspitzenkappung: Entnahmeebene, Erheblichkeitsschwelle, Referenz-Jahreshöchstlast, Mindestverlagerung, HLZF-Sicherheitsmarge, Feiertage, Brückentage und Hochlastzeitfenster sind nun direkt über die UI einstellbar.
+- Runtime: `peakShaving.strategyMode` trennt Standard-, Atypik-, Hybrid- und Monitoring-Betrieb sauber, sodass im Modus „Atypisch“ außerhalb der HLZF kein permanenter Standard-Cap erzwungen wird.
+- Webcache auf `nexowatt-cache-v195` erhöht.
+
 # 0.7.27
 
 - EMS/Peak-Shaving: Atypische Lastspitzenkappung für Hochlastzeitfenster ergänzt (`peakShaving.atypical.*`). Der HLZF-Cap wird im aktiven Zeitfenster mit dem bestehenden Peak-Shaving-/GridConstraints-Limit geminimt und über `peakShaving.control.limitW` in CoreLimits, Speicherregelung und EVCS-Budget weitergereicht.
