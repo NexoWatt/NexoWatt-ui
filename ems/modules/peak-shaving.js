@@ -201,6 +201,11 @@ class PeakShavingModule extends BaseModule {
             pHlzfMaxW: 0,
             lastUpdate: 0,
         };
+
+        // Nachweis/Audit: throttled samples for Influx/CSV/PDF export.
+        this._atypicalAuditLastSampleMs = 0;
+        this._atypicalAuditLastReason = '';
+        this._atypicalAuditLastHistorySetupMs = 0;
     }
 
     _isEnabled() {
@@ -217,7 +222,7 @@ class PeakShavingModule extends BaseModule {
             native: {},
         });
 
-        for (const ch of ['measure', 'calc', 'control', 'dynamic', 'actuators', 'atypical', 'atypical.review']) {
+        for (const ch of ['measure', 'calc', 'control', 'dynamic', 'actuators', 'atypical', 'atypical.review', 'atypical.audit']) {
             await this.adapter.setObjectNotExistsAsync(`peakShaving.${ch}`, {
                 type: 'channel',
                 common: { name: ch },
@@ -299,6 +304,29 @@ class PeakShavingModule extends BaseModule {
         await mk('peakShaving.atypical.review.eligible', 'Nachkontrolle erfüllt', 'boolean', 'indicator');
         await mk('peakShaving.atypical.review.lastUpdate', 'Nachkontrolle letzte Aktualisierung', 'number', 'value.time');
         await mk('peakShaving.atypical.review.snapshotJson', 'Nachkontrolle Snapshot (JSON)', 'string', 'text');
+
+        await mk('peakShaving.atypical.audit.lastSampleTs', 'Nachweis letzter Influx-Sample-Zeitpunkt', 'number', 'value.time');
+        await mk('peakShaving.atypical.audit.gridImportW', 'Nachweis Netzbezug Sample (W)', 'number', 'value.power');
+        await mk('peakShaving.atypical.audit.activeWindow', 'Nachweis HLZF aktiv', 'boolean', 'indicator');
+        await mk('peakShaving.atypical.audit.windowLabel', 'Nachweis Hochlastzeitfenster', 'string', 'text');
+        await mk('peakShaving.atypical.audit.effectiveLimitW', 'Nachweis wirksames Limit (W)', 'number', 'value.power');
+        await mk('peakShaving.atypical.audit.pAbsMaxW', 'Nachweis P_abs_max laufend (W)', 'number', 'value.power');
+        await mk('peakShaving.atypical.audit.pHlzfMaxW', 'Nachweis P_HLZF_max laufend (W)', 'number', 'value.power');
+        await mk('peakShaving.atypical.audit.deltaW', 'Nachweis Verlagerung (W)', 'number', 'value.power');
+        await mk('peakShaving.atypical.audit.deltaPercent', 'Nachweis Verlagerung (%)', 'number', 'value');
+        await mk('peakShaving.atypical.audit.thresholdOk', 'Nachweis Erheblichkeit erfüllt', 'boolean', 'indicator');
+        await mk('peakShaving.atypical.audit.minShiftOk', 'Nachweis Mindestverlagerung erfüllt', 'boolean', 'indicator');
+        await mk('peakShaving.atypical.audit.savingsEur', 'Nachweis Ersparnis (€)', 'number', 'value');
+        await mk('peakShaving.atypical.audit.eligible', 'Nachweis §19 erfüllt', 'boolean', 'indicator');
+        await mk('peakShaving.atypical.audit.sampleReason', 'Nachweis Sample-Grund', 'string', 'text');
+        await mk('peakShaving.atypical.audit.snapshotJson', 'Nachweis Audit-Snapshot (JSON)', 'string', 'text');
+        await mk('peakShaving.atypical.audit.historyEnabled', 'Nachweis Historie/Influx aktiv', 'boolean', 'indicator');
+        await mk('peakShaving.atypical.audit.historyInstance', 'Nachweis Historien-Instanz', 'string', 'text');
+        await mk('peakShaving.atypical.audit.historyProvisionState', 'Nachweis Historienstatus', 'string', 'text');
+        await mk('peakShaving.atypical.audit.historyProvisionError', 'Nachweis Historienhinweis/Fehler', 'string', 'text');
+        await mk('peakShaving.atypical.audit.retentionTargetDays', 'Nachweis Retention-Ziel (Tage)', 'number', 'value.interval');
+
+        try { await this._setupAtypicalAuditHistory(); } catch { /* optional */ }
     }
 
 
@@ -583,6 +611,8 @@ class PeakShavingModule extends BaseModule {
             year,
             resetIdentity,
             measurementUsable,
+            influxLogEnabled: review.influxLogEnabled !== false,
+            auditIntervalMinutes: Math.max(1, Math.min(1440, Math.round(num(review.auditIntervalMinutes ?? review.influxSampleIntervalMinutes ?? cfg.auditIntervalMinutes ?? 15, 15) || 15))),
             pAbsMaxW: st.pAbsMaxW,
             pHlzfMaxW: st.pHlzfMaxW,
             pAbsEvalW,
@@ -605,6 +635,182 @@ class PeakShavingModule extends BaseModule {
             eligible,
             lastUpdate: st.lastUpdate || 0,
         };
+    }
+
+    async _setupAtypicalAuditHistory() {
+        let historyInstance = '';
+        let provisionState = 'missing';
+        let provisionError = '';
+
+        try {
+            if (this.adapter && typeof this.adapter._nwDetectInfluxInstance === 'function') {
+                const detected = await this.adapter._nwDetectInfluxInstance();
+                if (detected) provisionState = 'detected';
+            }
+        } catch (e) {
+            provisionState = 'detect_error';
+            provisionError = String(e && e.message ? e.message : e);
+        }
+
+        try {
+            if (this.adapter && typeof this.adapter._nwGetHistoryInstance === 'function') {
+                historyInstance = String(this.adapter._nwGetHistoryInstance() || '').trim();
+                if (historyInstance && provisionState === 'missing') provisionState = 'configured_or_default';
+            }
+        } catch (e) {
+            historyInstance = '';
+            provisionState = 'history_instance_error';
+            provisionError = String(e && e.message ? e.message : e);
+        }
+
+        const historyReady = !!historyInstance && !!(this.adapter && typeof this.adapter._nwEnsureInfluxCustom === 'function');
+        const set = async (id, val) => {
+            try { await this.adapter.setStateAsync(id, val, true); } catch { /* optional */ }
+        };
+
+        await set('peakShaving.atypical.audit.historyEnabled', historyReady);
+        await set('peakShaving.atypical.audit.historyInstance', historyInstance);
+        await set('peakShaving.atypical.audit.historyProvisionState', historyReady ? provisionState : (provisionState || 'missing'));
+        await set('peakShaving.atypical.audit.historyProvisionError', provisionError || '');
+        await set('peakShaving.atypical.audit.retentionTargetDays', 730);
+
+        if (!historyReady) return;
+
+        const metaIds = [
+            'peakShaving.atypical.audit.historyEnabled',
+            'peakShaving.atypical.audit.historyInstance',
+            'peakShaving.atypical.audit.historyProvisionState',
+            'peakShaving.atypical.audit.historyProvisionError',
+            'peakShaving.atypical.audit.retentionTargetDays',
+        ];
+        const auditIds = [
+            'peakShaving.atypical.audit.lastSampleTs',
+            'peakShaving.atypical.audit.gridImportW',
+            'peakShaving.atypical.audit.activeWindow',
+            'peakShaving.atypical.audit.windowLabel',
+            'peakShaving.atypical.audit.effectiveLimitW',
+            'peakShaving.atypical.audit.pAbsMaxW',
+            'peakShaving.atypical.audit.pHlzfMaxW',
+            'peakShaving.atypical.audit.deltaW',
+            'peakShaving.atypical.audit.deltaPercent',
+            'peakShaving.atypical.audit.thresholdOk',
+            'peakShaving.atypical.audit.minShiftOk',
+            'peakShaving.atypical.audit.savingsEur',
+            'peakShaving.atypical.audit.eligible',
+            'peakShaving.atypical.audit.sampleReason',
+            'peakShaving.atypical.audit.snapshotJson',
+        ];
+        const reviewIds = [
+            'peakShaving.atypical.review.status',
+            'peakShaving.atypical.review.year',
+            'peakShaving.atypical.review.pAbsMaxW',
+            'peakShaving.atypical.review.pHlzfMaxW',
+            'peakShaving.atypical.review.pAbsEvalW',
+            'peakShaving.atypical.review.pHlzfEvalW',
+            'peakShaving.atypical.review.deltaW',
+            'peakShaving.atypical.review.deltaPercent',
+            'peakShaving.atypical.review.thresholdOk',
+            'peakShaving.atypical.review.minShiftOk',
+            'peakShaving.atypical.review.savingsEur',
+            'peakShaving.atypical.review.savingsOk',
+            'peakShaving.atypical.review.eligible',
+        ];
+
+        for (const id of metaIds) {
+            await this.adapter._nwEnsureInfluxCustom(id, historyInstance, { changesOnly: true });
+        }
+        // Audit samples are deliberately logged per write so the CSV/PDF proof can reconstruct
+        // a time series even if values stay constant over a longer period.
+        for (const id of auditIds) {
+            await this.adapter._nwEnsureInfluxCustom(id, historyInstance, { changesOnly: false });
+        }
+        // Review states are maxima/status values; logging only changes keeps Influx lean.
+        for (const id of reviewIds) {
+            await this.adapter._nwEnsureInfluxCustom(id, historyInstance, { changesOnly: true });
+        }
+    }
+
+    _getAtypicalAuditIntervalMs(atypicalCfg) {
+        const cfg = (atypicalCfg && typeof atypicalCfg === 'object') ? atypicalCfg : {};
+        const review = (cfg.review && typeof cfg.review === 'object') ? cfg.review : ((cfg.nachkontrolle && typeof cfg.nachkontrolle === 'object') ? cfg.nachkontrolle : {});
+        const minutes = num(review.auditIntervalMinutes ?? review.influxSampleIntervalMinutes ?? cfg.auditIntervalMinutes ?? 15, 15);
+        const clamped = clamp(Number(minutes), 1, 1440);
+        return Math.round((Number.isFinite(clamped) ? clamped : 15) * 60 * 1000);
+    }
+
+    async _publishAtypicalAuditSample(ctx) {
+        const c = (ctx && typeof ctx === 'object') ? ctx : {};
+        const review = (c.review && typeof c.review === 'object') ? c.review : {};
+        const cfg = (c.atypicalCfg && typeof c.atypicalCfg === 'object') ? c.atypicalCfg : {};
+        const reviewCfg = (cfg.review && typeof cfg.review === 'object') ? cfg.review : ((cfg.nachkontrolle && typeof cfg.nachkontrolle === 'object') ? cfg.nachkontrolle : {});
+        if (!review.enabled || reviewCfg.influxLogEnabled === false) return;
+
+        const now = Number.isFinite(Number(c.now)) ? Math.round(Number(c.now)) : Date.now();
+        const intervalMs = this._getAtypicalAuditIntervalMs(c.atypicalCfg || {});
+        const schedule = (c.schedule && typeof c.schedule === 'object') ? c.schedule : {};
+        const activeWindow = !!schedule.active;
+        const status = String(review.status || '');
+        const reasonSig = `${activeWindow ? 1 : 0}|${status}|${String(c.binding || '')}|${review.eligible ? 1 : 0}`;
+        const due = !this._atypicalAuditLastSampleMs || (now - this._atypicalAuditLastSampleMs) >= intervalMs;
+        const changedImportant = this._atypicalAuditLastReason && this._atypicalAuditLastReason !== reasonSig;
+        if (!due && !changedImportant) return;
+
+        this._atypicalAuditLastSampleMs = now;
+        this._atypicalAuditLastReason = reasonSig;
+
+        const rawW = Number.isFinite(Number(c.gridPowerRaw)) ? Number(c.gridPowerRaw) : (Number.isFinite(Number(c.effPower)) ? Number(c.effPower) : 0);
+        const gridImportW = Math.max(0, rawW);
+        const set = async (id, val) => {
+            try { await this.adapter.setStateAsync(id, val, true); } catch { /* audit only */ }
+        };
+        const sampleReason = due ? 'interval' : 'state-change';
+        const source = (c.source && typeof c.source === 'object') ? c.source : {};
+        const target = (c.target && typeof c.target === 'object') ? c.target : {};
+        const snapshot = {
+            ts: now,
+            sampleReason,
+            gridImportW: Math.round(gridImportW),
+            activeWindow,
+            windowLabel: String(schedule.windowLabel || ''),
+            effectiveLimitW: Number.isFinite(Number(c.effectiveLimitW)) ? Math.round(Number(c.effectiveLimitW)) : 0,
+            binding: String(c.binding || ''),
+            status,
+            gridOperator: String(source.gridOperator || ''),
+            sourceDocument: String(source.sourceDocument || ''),
+            sourcePublishedAt: String(source.sourcePublishedAt || ''),
+            sourceUrl: String(source.sourceUrl || ''),
+            voltageLevel: String(target.voltageLevel || ''),
+            thresholdPercent: Number.isFinite(Number(target.thresholdPercent)) ? Number(target.thresholdPercent) : (Number.isFinite(Number(review.thresholdPercent)) ? Number(review.thresholdPercent) : 0),
+            minShiftW: Number.isFinite(Number(target.minShiftW)) ? Math.round(Number(target.minShiftW)) : (Number.isFinite(Number(review.minShiftW)) ? Math.round(Number(review.minShiftW)) : 0),
+            year: Number.isFinite(Number(review.year)) ? Math.round(Number(review.year)) : 0,
+            pAbsMaxW: Number.isFinite(Number(review.pAbsMaxW)) ? Math.round(Number(review.pAbsMaxW)) : 0,
+            pHlzfMaxW: Number.isFinite(Number(review.pHlzfMaxW)) ? Math.round(Number(review.pHlzfMaxW)) : 0,
+            pAbsEvalW: Number.isFinite(Number(review.pAbsEvalW)) ? Math.round(Number(review.pAbsEvalW)) : 0,
+            pHlzfEvalW: Number.isFinite(Number(review.pHlzfEvalW)) ? Math.round(Number(review.pHlzfEvalW)) : 0,
+            deltaW: Number.isFinite(Number(review.deltaW)) ? Math.round(Number(review.deltaW)) : 0,
+            deltaPercent: Number.isFinite(Number(review.deltaPercent)) ? Math.round(Number(review.deltaPercent) * 100) / 100 : 0,
+            thresholdOk: !!review.thresholdOk,
+            minShiftOk: !!review.minShiftOk,
+            savingsEur: Number.isFinite(Number(review.savingsEur)) ? Math.round(Number(review.savingsEur) * 100) / 100 : null,
+            savingsOk: review.savingsOk === null ? null : review.savingsOk === true,
+            eligible: !!review.eligible,
+        };
+
+        await set('peakShaving.atypical.audit.lastSampleTs', now);
+        await set('peakShaving.atypical.audit.gridImportW', snapshot.gridImportW);
+        await set('peakShaving.atypical.audit.activeWindow', activeWindow);
+        await set('peakShaving.atypical.audit.windowLabel', snapshot.windowLabel);
+        await set('peakShaving.atypical.audit.effectiveLimitW', snapshot.effectiveLimitW);
+        await set('peakShaving.atypical.audit.pAbsMaxW', snapshot.pAbsMaxW);
+        await set('peakShaving.atypical.audit.pHlzfMaxW', snapshot.pHlzfMaxW);
+        await set('peakShaving.atypical.audit.deltaW', snapshot.deltaW);
+        await set('peakShaving.atypical.audit.deltaPercent', snapshot.deltaPercent);
+        await set('peakShaving.atypical.audit.thresholdOk', snapshot.thresholdOk);
+        await set('peakShaving.atypical.audit.minShiftOk', snapshot.minShiftOk);
+        await set('peakShaving.atypical.audit.savingsEur', snapshot.savingsEur === null ? 0 : snapshot.savingsEur);
+        await set('peakShaving.atypical.audit.eligible', snapshot.eligible);
+        await set('peakShaving.atypical.audit.sampleReason', sampleReason);
+        await set('peakShaving.atypical.audit.snapshotJson', JSON.stringify(snapshot));
     }
 
     async _publishAtypicalDiagnostics(ctx) {
@@ -670,6 +876,15 @@ class PeakShavingModule extends BaseModule {
             effectiveLimitW: Number.isFinite(Number(c.effectiveLimitW)) ? Math.round(Number(c.effectiveLimitW)) : 0,
             binding: String(c.binding || ''),
         }));
+
+        try {
+            const nowSetup = Date.now();
+            if (!this._atypicalAuditLastHistorySetupMs || (nowSetup - this._atypicalAuditLastHistorySetupMs) >= 5 * 60 * 1000) {
+                this._atypicalAuditLastHistorySetupMs = nowSetup;
+                await this._setupAtypicalAuditHistory();
+            }
+        } catch { /* optional */ }
+        await this._publishAtypicalAuditSample(c);
     }
 
     async tick() {
@@ -899,6 +1114,10 @@ class PeakShavingModule extends BaseModule {
             target: atypicalTarget,
             source: atypicalSource,
             review: atypicalReview,
+            atypicalCfg: { ...atypicalCfg, enabled: atypicalRuntimeEnabled },
+            now,
+            gridPowerRaw,
+            effPower,
             limitCandidateW: atypicalLimitCandidateW,
             effectiveLimitW: atypicalWantsPowerLimit ? limitW : 0,
             binding: atypicalWantsPowerLimit ? (limitSource || 'atypical') : '',

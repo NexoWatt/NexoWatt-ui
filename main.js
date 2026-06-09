@@ -10631,6 +10631,10 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     });
 
 
+
+
+
+
     // --- Object validation (Phase 3.3) ---
     // Used by the Installer UI to quickly verify datapoint existence + freshness.
     app.post('/api/object/validate', requireInstaller, async (req, res) => {
@@ -13658,6 +13662,454 @@ settingsConfig: {
     });
 
     // snapshot
+
+
+    // ---------------------------------------------------------------------------
+    // Peak-Shaving / atypische HLZF-Nachkontrolle: Influx-basierter Nachweisexport
+    // ---------------------------------------------------------------------------
+    const nwPsAtCsvEscape = (v) => {
+      const s = String(v === null || v === undefined ? '' : v);
+      return /[";\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const nwPsAtFmtNum = (v, digits = 2) => {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return '';
+      const d = Number.isFinite(Number(digits)) ? Math.max(0, Math.min(6, Math.round(Number(digits)))) : 2;
+      return n.toFixed(d).replace('.', ',');
+    };
+    const nwPsAtPad2 = (n) => String(Number(n) || 0).padStart(2, '0');
+    const nwPsAtIsoLocal = (ts) => {
+      const d = new Date(Number(ts) || Date.now());
+      return `${d.getFullYear()}-${nwPsAtPad2(d.getMonth() + 1)}-${nwPsAtPad2(d.getDate())} ${nwPsAtPad2(d.getHours())}:${nwPsAtPad2(d.getMinutes())}:${nwPsAtPad2(d.getSeconds())}`;
+    };
+    const nwPsAtYmd = (ts) => {
+      const d = new Date(Number(ts) || Date.now());
+      return `${d.getFullYear()}-${nwPsAtPad2(d.getMonth() + 1)}-${nwPsAtPad2(d.getDate())}`;
+    };
+    const nwPsAtParseTs = (raw, { endOfDay = false } = {}) => {
+      if (raw === null || raw === undefined || raw === '') return null;
+      if (typeof raw === 'number' && Number.isFinite(raw)) return raw < 1e12 ? raw * 1000 : raw;
+      const s = String(raw).trim();
+      if (!s) return null;
+      if (/^\d+$/.test(s)) {
+        const n = Number(s);
+        if (!Number.isFinite(n)) return null;
+        return n < 1e12 ? n * 1000 : n;
+      }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const [y, m, d] = s.split('-').map(Number);
+        const dt = new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+        if (endOfDay) dt.setHours(23, 59, 59, 999);
+        return dt.getTime();
+      }
+      const p = Date.parse(s);
+      return Number.isNaN(p) ? null : p;
+    };
+    const nwPsAtStateVal = async (localId, fallback = null) => {
+      try {
+        const rec = this.stateCache && this.stateCache[localId];
+        if (rec && rec.value !== undefined) return rec.value;
+      } catch (_e) {}
+      try {
+        const st = await this.getStateAsync(localId);
+        if (st && st.val !== undefined && st.val !== null) return st.val;
+      } catch (_e2) {}
+      return fallback;
+    };
+    const nwPsAtStateNum = async (localId, fallback = null) => {
+      const v = await nwPsAtStateVal(localId, fallback);
+      const n = Number(v);
+      return Number.isFinite(n) ? n : fallback;
+    };
+    const nwPsAtStateBool = async (localId, fallback = false) => {
+      const v = await nwPsAtStateVal(localId, fallback);
+      if (v === true || v === 1 || v === '1') return true;
+      if (v === false || v === 0 || v === '0') return false;
+      const s = String(v == null ? '' : v).trim().toLowerCase();
+      if (['true', 'on', 'yes', 'ja', 'active'].includes(s)) return true;
+      if (['false', 'off', 'no', 'nein', 'inactive'].includes(s)) return false;
+      return !!fallback;
+    };
+    const nwPsAtStateStr = async (localId, fallback = '') => {
+      const v = await nwPsAtStateVal(localId, fallback);
+      if (v === null || v === undefined) return fallback;
+      return String(v);
+    };
+    const nwPsAtSafeFile = (s) => String(s || '')
+      .replace(/[^a-z0-9_.-]+/gi, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 80) || 'nachweis';
+
+    const nwPsAtBuildReport = async (query = {}) => {
+      const now = Date.now();
+      const cfg = (this.config && this.config.peakShaving && this.config.peakShaving.atypical && typeof this.config.peakShaving.atypical === 'object')
+        ? this.config.peakShaving.atypical
+        : {};
+      const reviewCfg = (cfg.review && typeof cfg.review === 'object') ? cfg.review : {};
+      const yearFromQuery = Number(query.year);
+      const yearFromState = await nwPsAtStateNum('peakShaving.atypical.review.year', null);
+      const yearFromCfg = Number(cfg.year || reviewCfg.year || 0);
+      const year = Number.isFinite(yearFromQuery) && yearFromQuery > 1900
+        ? Math.round(yearFromQuery)
+        : (Number.isFinite(yearFromState) && yearFromState > 1900
+          ? Math.round(yearFromState)
+          : (Number.isFinite(yearFromCfg) && yearFromCfg > 1900 ? Math.round(yearFromCfg) : new Date(now).getFullYear()));
+
+      const defaultFrom = new Date(year, 0, 1, 0, 0, 0, 0).getTime();
+      const defaultToCandidate = new Date(year, 11, 31, 23, 59, 59, 999).getTime();
+      const defaultTo = year === new Date(now).getFullYear() ? now : defaultToCandidate;
+      const start = nwPsAtParseTs(query.from) ?? defaultFrom;
+      const end = Math.max(start + 60000, nwPsAtParseTs(query.to, { endOfDay: true }) ?? defaultTo);
+      const stepMs = Math.max(10 * 60 * 1000, Math.min(24 * 3600 * 1000, Number(query.stepMs) || 10 * 60 * 1000));
+      const ns = this.namespace;
+      const histBase = `${ns}.historie.peakShaving.atypical.`; // legacy/future alias
+      const liveBase = `${ns}.peakShaving.atypical.`;
+      const auditBase = `${ns}.peakShaving.atypical.audit.`;
+      const seriesDefs = [
+        { key: 'gridImportW', ids: [`${auditBase}gridImportW`, `${histBase}gridImportW`] },
+        { key: 'activeWindow', ids: [`${auditBase}activeWindow`, `${histBase}activeWindow`, `${liveBase}activeWindow`] },
+        { key: 'targetLimitW', ids: [`${histBase}targetLimitW`, `${liveBase}targetLimitW`] },
+        { key: 'effectiveLimitW', ids: [`${auditBase}effectiveLimitW`, `${histBase}effectiveLimitW`, `${liveBase}effectiveLimitW`] },
+        { key: 'pAbsMaxW', ids: [`${auditBase}pAbsMaxW`, `${histBase}pAbsMaxW`, `${liveBase}review.pAbsMaxW`] },
+        { key: 'pHlzfMaxW', ids: [`${auditBase}pHlzfMaxW`, `${histBase}pHlzfMaxW`, `${liveBase}review.pHlzfMaxW`] },
+        { key: 'deltaW', ids: [`${auditBase}deltaW`, `${histBase}deltaW`, `${liveBase}review.deltaW`] },
+        { key: 'deltaPercent', ids: [`${auditBase}deltaPercent`, `${histBase}deltaPercent`, `${liveBase}review.deltaPercent`] },
+        { key: 'thresholdOk', ids: [`${auditBase}thresholdOk`, `${histBase}thresholdOk`, `${liveBase}review.thresholdOk`] },
+        { key: 'minShiftOk', ids: [`${auditBase}minShiftOk`, `${histBase}minShiftOk`, `${liveBase}review.minShiftOk`] },
+        { key: 'savingsEur', ids: [`${auditBase}savingsEur`, `${histBase}savingsEur`, `${liveBase}review.savingsEur`] },
+        { key: 'eligible', ids: [`${auditBase}eligible`, `${histBase}eligible`, `${liveBase}review.eligible`] },
+      ];
+
+      let historyReady = false;
+      try { historyReady = !!this._nwGetHistoryInstance(); } catch (_e) { historyReady = false; }
+      const seriesByKey = {};
+      const tsSet = new Set();
+      await Promise.all(seriesDefs.map(async (def) => {
+        let arr = [];
+        try {
+          arr = await this._nwGetHistoryAvgSeriesAny(def.ids, start, end, stepMs);
+        } catch (_e) {
+          arr = [];
+        }
+        seriesByKey[def.key] = new Map();
+        for (const row of Array.isArray(arr) ? arr : []) {
+          const ts = this._nwNormTsMs(row && row.ts);
+          const val = Number(row && row.val);
+          if (!Number.isFinite(ts) || !Number.isFinite(val)) continue;
+          seriesByKey[def.key].set(ts, val);
+          tsSet.add(ts);
+        }
+      }));
+
+      const timestamps = Array.from(tsSet).sort((a, b) => a - b);
+      let rows = timestamps.map((ts) => {
+        const r = { ts };
+        for (const def of seriesDefs) {
+          const m = seriesByKey[def.key];
+          r[def.key] = m && m.has(ts) ? m.get(ts) : null;
+        }
+        return r;
+      });
+
+      const current = {
+        enabled: await nwPsAtStateBool('peakShaving.atypical.review.enabled', false),
+        status: await nwPsAtStateStr('peakShaving.atypical.review.status', ''),
+        year,
+        gridOperator: await nwPsAtStateStr('peakShaving.atypical.gridOperator', cfg.gridOperator || cfg.netzbetreiber || ''),
+        sourceDocument: await nwPsAtStateStr('peakShaving.atypical.sourceDocument', cfg.sourceDocument || ''),
+        sourcePublishedAt: await nwPsAtStateStr('peakShaving.atypical.sourcePublishedAt', cfg.sourcePublishedAt || ''),
+        sourceUrl: await nwPsAtStateStr('peakShaving.atypical.sourceUrl', cfg.sourceUrl || ''),
+        sourceNote: await nwPsAtStateStr('peakShaving.atypical.sourceNote', cfg.sourceNote || cfg.notes || ''),
+        voltageLevel: await nwPsAtStateStr('peakShaving.atypical.voltageLevel', cfg.voltageLevel || ''),
+        thresholdPercent: await nwPsAtStateNum('peakShaving.atypical.thresholdPercent', null),
+        minShiftW: await nwPsAtStateNum('peakShaving.atypical.minShiftW', null),
+        activeWindow: await nwPsAtStateBool('peakShaving.atypical.activeWindow', false),
+        targetLimitW: await nwPsAtStateNum('peakShaving.atypical.targetLimitW', 0),
+        effectiveLimitW: await nwPsAtStateNum('peakShaving.atypical.effectiveLimitW', 0),
+        windowLabel: await nwPsAtStateStr('peakShaving.atypical.windowLabel', ''),
+        pAbsMaxW: await nwPsAtStateNum('peakShaving.atypical.review.pAbsMaxW', 0),
+        pHlzfMaxW: await nwPsAtStateNum('peakShaving.atypical.review.pHlzfMaxW', 0),
+        pAbsEvalW: await nwPsAtStateNum('peakShaving.atypical.review.pAbsEvalW', 0),
+        pHlzfEvalW: await nwPsAtStateNum('peakShaving.atypical.review.pHlzfEvalW', 0),
+        deltaW: await nwPsAtStateNum('peakShaving.atypical.review.deltaW', 0),
+        deltaPercent: await nwPsAtStateNum('peakShaving.atypical.review.deltaPercent', 0),
+        thresholdOk: await nwPsAtStateBool('peakShaving.atypical.review.thresholdOk', false),
+        minShiftOk: await nwPsAtStateBool('peakShaving.atypical.review.minShiftOk', false),
+        savingsEur: await nwPsAtStateNum('peakShaving.atypical.review.savingsEur', 0),
+        savingsOk: await nwPsAtStateBool('peakShaving.atypical.review.savingsOk', false),
+        eligible: await nwPsAtStateBool('peakShaving.atypical.review.eligible', false),
+        lastUpdate: await nwPsAtStateNum('peakShaving.atypical.review.lastUpdate', 0),
+        snapshotJson: await nwPsAtStateStr('peakShaving.atypical.review.snapshotJson', ''),
+      };
+
+      if (!rows.length) {
+        rows = [{
+          ts: now,
+          gridImportW: null,
+          activeWindow: current.activeWindow ? 1 : 0,
+          targetLimitW: current.targetLimitW,
+          effectiveLimitW: current.effectiveLimitW,
+          pAbsMaxW: current.pAbsMaxW,
+          pHlzfMaxW: current.pHlzfMaxW,
+          deltaW: current.deltaW,
+          deltaPercent: current.deltaPercent,
+          thresholdOk: current.thresholdOk ? 1 : 0,
+          minShiftOk: current.minShiftOk ? 1 : 0,
+          savingsEur: current.savingsEur,
+          eligible: current.eligible ? 1 : 0,
+        }];
+      }
+
+      return {
+        ok: true,
+        generatedAt: now,
+        meta: {
+          year,
+          start,
+          end,
+          stepMs,
+          historyInstance: (() => { try { return this._nwGetHistoryInstance(); } catch (_e) { return ''; } })(),
+          historyReady,
+          rows: rows.length,
+        },
+        source: {
+          gridOperator: current.gridOperator,
+          sourceDocument: current.sourceDocument,
+          sourcePublishedAt: current.sourcePublishedAt,
+          sourceUrl: current.sourceUrl,
+          sourceNote: current.sourceNote,
+        },
+        config: {
+          voltageLevel: current.voltageLevel,
+          thresholdPercent: current.thresholdPercent,
+          minShiftW: current.minShiftW,
+          highLoadWindows: Array.isArray(cfg.highLoadWindows) ? cfg.highLoadWindows : (Array.isArray(cfg.windows) ? cfg.windows : []),
+        },
+        summary: current,
+        rows,
+      };
+    };
+
+    const nwPsAtReportToCsv = (report) => {
+      const lines = [];
+      const pushMeta = (k, v) => lines.push(['# ' + k, v == null ? '' : String(v)].map(nwPsAtCsvEscape).join(';'));
+      pushMeta('NexoWatt §19 Nachweisexport', 'Atypische Lastspitzenkappung / HLZF');
+      pushMeta('Erzeugt am', nwPsAtIsoLocal(report.generatedAt));
+      pushMeta('Zeitraum', `${nwPsAtIsoLocal(report.meta.start)} bis ${nwPsAtIsoLocal(report.meta.end)}`);
+      pushMeta('Netzbetreiber', report.source.gridOperator || '');
+      pushMeta('Quelle', report.source.sourceDocument || '');
+      pushMeta('Quelle veröffentlicht', report.source.sourcePublishedAt || '');
+      pushMeta('Entnahmeebene', report.config.voltageLevel || '');
+      pushMeta('Erheblichkeitsschwelle %', nwPsAtFmtNum(report.summary.thresholdPercent, 2));
+      pushMeta('Mindestverlagerung W', nwPsAtFmtNum(report.summary.minShiftW, 0));
+      pushMeta('P_abs_max W', nwPsAtFmtNum(report.summary.pAbsMaxW, 0));
+      pushMeta('P_HLZF_max W', nwPsAtFmtNum(report.summary.pHlzfMaxW, 0));
+      pushMeta('Delta W', nwPsAtFmtNum(report.summary.deltaW, 0));
+      pushMeta('Delta %', nwPsAtFmtNum(report.summary.deltaPercent, 2));
+      pushMeta('Ersparnis EUR', nwPsAtFmtNum(report.summary.savingsEur, 2));
+      pushMeta('Status', report.summary.status || '');
+      pushMeta('Erfüllt', report.summary.eligible ? 'ja' : 'nein');
+      lines.push('');
+      const header = [
+        'Zeitpunkt',
+        'Netzbezug_W',
+        'HLZF_aktiv',
+        'HLZF_Ziellast_W',
+        'Wirksames_Limit_W',
+        'P_abs_max_W',
+        'P_HLZF_max_W',
+        'Delta_W',
+        'Delta_%',
+        'Schwelle_ok',
+        'Mindestverlagerung_ok',
+        'Ersparnis_EUR',
+        'Erfuellt',
+      ];
+      lines.push(header.map(nwPsAtCsvEscape).join(';'));
+      for (const r of report.rows || []) {
+        lines.push([
+          nwPsAtIsoLocal(r.ts),
+          nwPsAtFmtNum(r.gridImportW, 0),
+          Number(r.activeWindow) >= 0.5 ? '1' : '0',
+          nwPsAtFmtNum(r.targetLimitW, 0),
+          nwPsAtFmtNum(r.effectiveLimitW, 0),
+          nwPsAtFmtNum(r.pAbsMaxW, 0),
+          nwPsAtFmtNum(r.pHlzfMaxW, 0),
+          nwPsAtFmtNum(r.deltaW, 0),
+          nwPsAtFmtNum(r.deltaPercent, 2),
+          Number(r.thresholdOk) >= 0.5 ? '1' : '0',
+          Number(r.minShiftOk) >= 0.5 ? '1' : '0',
+          nwPsAtFmtNum(r.savingsEur, 2),
+          Number(r.eligible) >= 0.5 ? '1' : '0',
+        ].map(nwPsAtCsvEscape).join(';'));
+      }
+      return lines.join('\r\n');
+    };
+
+    const nwPsAtPdfAscii = (value) => String(value == null ? '' : value)
+      .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue')
+      .replace(/Ä/g, 'Ae').replace(/Ö/g, 'Oe').replace(/Ü/g, 'Ue')
+      .replace(/ß/g, 'ss').replace(/€/g, 'EUR').replace(/§/g, 'Paragraph ')
+      .replace(/[–—]/g, '-').replace(/\u00a0/g, ' ')
+      .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, '?');
+    const nwPsAtPdfEscape = (value) => nwPsAtPdfAscii(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+    const nwPsAtWrap = (line, max = 95) => {
+      const s = nwPsAtPdfAscii(line);
+      if (s.length <= max) return [s];
+      const out = [];
+      let cur = '';
+      for (const word of s.split(/\s+/)) {
+        if (!word) continue;
+        if ((cur + ' ' + word).trim().length > max) {
+          if (cur) out.push(cur);
+          cur = word;
+        } else {
+          cur = (cur ? cur + ' ' : '') + word;
+        }
+      }
+      if (cur) out.push(cur);
+      return out.length ? out : [''];
+    };
+    const nwPsAtBuildPdf = (title, lines) => {
+      const pageWidth = 595;
+      const pageHeight = 842;
+      const margin = 48;
+      const titleY = 794;
+      const lineHeight = 14;
+      const titleSize = 15;
+      const textSize = 10;
+      const wrapped = [];
+      for (const line of lines) {
+        if (line === '') wrapped.push('');
+        else wrapped.push(...nwPsAtWrap(line, 96));
+      }
+      const perPage = 49;
+      const chunks = [];
+      for (let i = 0; i < wrapped.length; i += perPage) chunks.push(wrapped.slice(i, i + perPage));
+      if (!chunks.length) chunks.push([]);
+
+      const pageIds = [];
+      const contentIds = [];
+      const objects = [];
+      const addObj = (id, body) => { objects[id] = `${id} 0 obj\n${body}\nendobj\n`; };
+      addObj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+      addObj(3, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+
+      chunks.forEach((chunk, idx) => {
+        const pageId = 4 + idx * 2;
+        const contentId = pageId + 1;
+        pageIds.push(pageId);
+        contentIds.push(contentId);
+        let content = '';
+        content += `BT /F1 ${titleSize} Tf ${margin} ${titleY} Td (${nwPsAtPdfEscape(title)}) Tj ET\n`;
+        content += `BT /F1 8 Tf ${pageWidth - 120} 30 Td (Seite ${idx + 1}/${chunks.length}) Tj ET\n`;
+        let y = titleY - 28;
+        for (const line of chunk) {
+          const text = line ? nwPsAtPdfEscape(line) : ' ';
+          content += `BT /F1 ${textSize} Tf ${margin} ${y} Td (${text}) Tj ET\n`;
+          y -= lineHeight;
+        }
+        const len = Buffer.byteLength(content, 'ascii');
+        addObj(contentId, `<< /Length ${len} >>\nstream\n${content}endstream`);
+        addObj(pageId, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>`);
+      });
+      addObj(2, `<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`);
+
+      let pdf = '%PDF-1.4\n';
+      const offsets = [0];
+      const maxId = Math.max(...Object.keys(objects).map(Number));
+      for (let id = 1; id <= maxId; id++) {
+        offsets[id] = Buffer.byteLength(pdf, 'ascii');
+        pdf += objects[id] || `${id} 0 obj\n<<>>\nendobj\n`;
+      }
+      const xref = Buffer.byteLength(pdf, 'ascii');
+      pdf += `xref\n0 ${maxId + 1}\n`;
+      pdf += '0000000000 65535 f \n';
+      for (let id = 1; id <= maxId; id++) pdf += `${String(offsets[id]).padStart(10, '0')} 00000 n \n`;
+      pdf += `trailer\n<< /Size ${maxId + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+      return Buffer.from(pdf, 'ascii');
+    };
+
+    const nwPsAtReportToPdf = (report) => {
+      const s = report.summary || {};
+      const src = report.source || {};
+      const cfg = report.config || {};
+      const lines = [
+        `Erzeugt am: ${nwPsAtIsoLocal(report.generatedAt)}`,
+        `Zeitraum: ${nwPsAtIsoLocal(report.meta.start)} bis ${nwPsAtIsoLocal(report.meta.end)}`,
+        `History/Influx: ${report.meta.historyInstance || 'nicht erkannt'} | Zeilen: ${report.meta.rows}`,
+        '',
+        'Quelle / Stammdaten',
+        `Netzbetreiber: ${src.gridOperator || '-'}`,
+        `Quelle/Dokument: ${src.sourceDocument || '-'}`,
+        `Veroeffentlichung: ${src.sourcePublishedAt || '-'}`,
+        `Quell-URL/Ablage: ${src.sourceUrl || '-'}`,
+        `Bemerkung: ${src.sourceNote || '-'}`,
+        '',
+        'Pruefparameter',
+        `Entnahmeebene: ${cfg.voltageLevel || '-'}`,
+        `Erheblichkeitsschwelle: ${nwPsAtFmtNum(s.thresholdPercent, 2)} %`,
+        `Mindestverlagerung: ${nwPsAtFmtNum(s.minShiftW, 0)} W`,
+        `HLZF-Ziellast aktuell: ${nwPsAtFmtNum(s.targetLimitW, 0)} W`,
+        `Wirksames Limit aktuell: ${nwPsAtFmtNum(s.effectiveLimitW, 0)} W`,
+        '',
+        'Nachkontrolle',
+        `Status: ${s.status || '-'}`,
+        `P_abs_max: ${nwPsAtFmtNum(s.pAbsMaxW, 0)} W`,
+        `P_HLZF_max: ${nwPsAtFmtNum(s.pHlzfMaxW, 0)} W`,
+        `Delta: ${nwPsAtFmtNum(s.deltaW, 0)} W / ${nwPsAtFmtNum(s.deltaPercent, 2)} %`,
+        `Schwelle erfuellt: ${s.thresholdOk ? 'ja' : 'nein'}`,
+        `Mindestverlagerung erfuellt: ${s.minShiftOk ? 'ja' : 'nein'}`,
+        `Geschaetzte Ersparnis: ${nwPsAtFmtNum(s.savingsEur, 2)} EUR`,
+        `Paragraph-19-Nachkontrolle erfuellt: ${s.eligible ? 'ja' : 'nein'}`,
+        '',
+        'Hochlastzeitfenster',
+        `Anzahl hinterlegte Fenster: ${Array.isArray(cfg.highLoadWindows) ? cfg.highLoadWindows.length : 0}`,
+      ];
+      const windows = Array.isArray(cfg.highLoadWindows) ? cfg.highLoadWindows.slice(0, 20) : [];
+      windows.forEach((w, idx) => {
+        lines.push(`${idx + 1}. ${w && (w.label || w.name) ? (w.label || w.name) : 'Fenster'} | ${w && (w.from || w.start || w.startTime) || '?'}-${w && (w.to || w.end || w.endTime) || '?'} | Monate: ${Array.isArray(w && w.months) ? w.months.join(',') : '-'} | Tage: ${Array.isArray(w && w.weekdays) ? w.weekdays.join(',') : '-'}`);
+      });
+      lines.push('');
+      lines.push('Hinweis: Der CSV-Export enthaelt die vollstaendige Influx-Zeitreihe im gewaehlten Zeitraum. Dieses PDF fasst die Nachweisparameter und die aktuelle Pruefung zusammen.');
+      return nwPsAtBuildPdf('NexoWatt - §19 Nachweis atypische Lastspitzenkappung', lines);
+    };
+
+    app.get(['/api/peakshaving/atypical/review', '/api/peak-shaving/atypical/review', '/api/peak-shaving/atypical/review/report'], requireInstaller, async (req, res) => {
+      try {
+        const report = await nwPsAtBuildReport(req.query || {});
+        res.json(report);
+      } catch (e) {
+        res.status(500).json({ ok: false, error: String(e && e.message ? e.message : e) });
+      }
+    });
+
+    app.get(['/api/peakshaving/atypical/review.csv', '/api/peak-shaving/atypical/review.csv'], requireInstaller, async (req, res) => {
+      try {
+        const report = await nwPsAtBuildReport(req.query || {});
+        const name = `NexoWatt_HLZF_Nachweis_${nwPsAtSafeFile(report.source.gridOperator || 'Netzbetreiber')}_${report.meta.year || 'Jahr'}_${nwPsAtYmd(report.meta.start)}_${nwPsAtYmd(report.meta.end)}.csv`;
+        const csv = '\ufeff' + nwPsAtReportToCsv(report);
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+        res.status(200).send(csv);
+      } catch (e) {
+        res.status(500).type('text/plain').send('HLZF CSV Export Fehler: ' + String(e && e.message ? e.message : e));
+      }
+    });
+
+    app.get(['/api/peakshaving/atypical/review.pdf', '/api/peak-shaving/atypical/review.pdf'], requireInstaller, async (req, res) => {
+      try {
+        const report = await nwPsAtBuildReport(req.query || {});
+        const name = `NexoWatt_HLZF_Nachweis_${nwPsAtSafeFile(report.source.gridOperator || 'Netzbetreiber')}_${report.meta.year || 'Jahr'}_${nwPsAtYmd(report.meta.start)}_${nwPsAtYmd(report.meta.end)}.pdf`;
+        const pdf = nwPsAtReportToPdf(report);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+        res.status(200).send(pdf);
+      } catch (e) {
+        res.status(500).type('text/plain').send('HLZF PDF Export Fehler: ' + String(e && e.message ? e.message : e));
+      }
+    });
+
     app.get('/api/state', (_req, res) => {
       res.json(this.stateCache);
     });
@@ -16766,7 +17218,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       try { await this.extendObjectAsync(id, { common: { name } }); } catch (_e) {}
     };
 
-    const ensureState = async (id, name, role, unit, type = 'number') => {
+    const ensureState = async (id, name, role, unit, type = 'number', influxOpts = null) => {
       await this.setObjectNotExistsAsync(id, {
         type: 'state',
         common: {
@@ -16780,7 +17232,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         native: {}
       });
       try { await this.extendObjectAsync(id, { common: { name, role: role || 'value', unit: unit || undefined } }); } catch (_e) {}
-      if (enableInfluxCustom) await this._nwEnsureInfluxCustom(id, inst);
+      if (enableInfluxCustom) await this._nwEnsureInfluxCustom(id, inst, influxOpts);
     };
 
     await ensureChannel('historie', 'Historie (Influx)');
@@ -16813,11 +17265,93 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     await ensureState('historie.tariff.providerCurrentEurPerKwh', 'Tarifpreis Provider aktuell', 'value', '€/kWh');
     await ensureState('historie.tariff.providerAverageEurPerKwh', 'Tarifpreis Provider Durchschnitt', 'value', '€/kWh');
 
+    // Atypische Lastspitzenkappung / §19-Nachweis.
+    // Diese kanonischen Historie-DPs werden im gleichen 10-Minuten-Raster wie die
+    // Energiefluss-Historie nach Influx geschrieben und bilden die Grundlage für
+    // CSV-/PDF-Nachweisexporte im App-Center.
+    await ensureChannel('historie.peakShaving', 'Peak-Shaving');
+    await ensureChannel('historie.peakShaving.atypical', 'Atypische Lastspitzenkappung (§19)');
+    await ensureState('historie.peakShaving.atypical.gridImportW', 'Netzbezug im Nachweisraster', 'value.power', 'W');
+    await ensureState('historie.peakShaving.atypical.activeWindow', 'HLZF aktiv (0/1)', 'value', '', 'number');
+    await ensureState('historie.peakShaving.atypical.targetLimitW', 'HLZF-Ziellast', 'value.power', 'W');
+    await ensureState('historie.peakShaving.atypical.effectiveLimitW', 'Wirksames Peak-Shaving-Limit', 'value.power', 'W');
+    await ensureState('historie.peakShaving.atypical.pAbsMaxW', 'Nachweis P_abs_max', 'value.power', 'W');
+    await ensureState('historie.peakShaving.atypical.pHlzfMaxW', 'Nachweis P_HLZF_max', 'value.power', 'W');
+    await ensureState('historie.peakShaving.atypical.deltaW', 'Nachweis Verlagerung', 'value.power', 'W');
+    await ensureState('historie.peakShaving.atypical.deltaPercent', 'Nachweis Verlagerung', 'value', '%');
+    await ensureState('historie.peakShaving.atypical.thresholdOk', 'Erheblichkeitsschwelle erfüllt (0/1)', 'value', '', 'number');
+    await ensureState('historie.peakShaving.atypical.minShiftOk', 'Mindestverlagerung erfüllt (0/1)', 'value', '', 'number');
+    await ensureState('historie.peakShaving.atypical.savingsEur', 'Geschätzte Ersparnis', 'value', '€');
+    await ensureState('historie.peakShaving.atypical.eligible', '§19-Nachkontrolle erfüllt (0/1)', 'value', '', 'number');
+
+    // Zusätzlich die live publizierten Runtime-States direkt historisieren. Das ist
+    // bewusst redundant: Die historie.*-DPs liefern ein sauberes Export-Raster, die
+    // peakShaving.atypical.review.*-DPs erlauben Detailanalyse mit Original-States.
+    for (const id of [
+      'peakShaving.atypical.activeWindow',
+      'peakShaving.atypical.targetLimitW',
+      'peakShaving.atypical.effectiveLimitW',
+      'peakShaving.atypical.review.pAbsMaxW',
+      'peakShaving.atypical.review.pHlzfMaxW',
+      'peakShaving.atypical.review.pAbsEvalW',
+      'peakShaving.atypical.review.pHlzfEvalW',
+      'peakShaving.atypical.review.deltaW',
+      'peakShaving.atypical.review.deltaPercent',
+      'peakShaving.atypical.review.thresholdOk',
+      'peakShaving.atypical.review.minShiftOk',
+      'peakShaving.atypical.review.savingsEur',
+      'peakShaving.atypical.review.savingsOk',
+      'peakShaving.atypical.review.eligible',
+      'peakShaving.atypical.review.lastUpdate',
+    ]) {
+      try { if (enableInfluxCustom && inst) await this._nwEnsureInfluxCustom(id, inst, { changesOnly: true }); } catch (_e) {}
+    }
+
     // Preis-DPs aus der Tarif-/Provider-Zuordnung ebenfalls direkt an die gemeinsame
     // Historie hängen. Damit kann die Preis-Historie sofort mit den im EMS zugeordneten
     // Tarifwerten arbeiten, auch wenn der kanonische Historie-Export gerade erst anläuft.
     try { if (enableInfluxCustom && inst) await this._nwEnsureInfluxCustom('tarif.preisAktuellEurProKwh', inst); } catch (_e) {}
     try { if (enableInfluxCustom && inst) await this._nwEnsureInfluxCustom('tarif.preisDurchschnittEurProKwh', inst); } catch (_e) {}
+
+    // Atypische Lastspitzenkappung: Nachkontrolle/Audit als Influx-Nachweis.
+    // review.* sind laufende Maxima/Prüfergebnisse (changesOnly), audit.* ist ein gedrosselter
+    // 15-min Nachweis-Sample aus dem EMS-Core (changesOnly=false, damit Influx auch gleiche Werte protokolliert).
+    try {
+      await ensureChannel('peakShaving', 'Peak Shaving');
+      await ensureChannel('peakShaving.atypical', 'Atypische Lastspitzenkappung');
+      await ensureChannel('peakShaving.atypical.review', 'Atypische Nachkontrolle');
+      await ensureChannel('peakShaving.atypical.audit', 'Atypischer Nachweis / Audit');
+      const revOpts = { changesOnly: true };
+      await ensureState('peakShaving.atypical.review.pAbsMaxW', 'Nachkontrolle P_abs_max live', 'value.power', 'W', 'number', revOpts);
+      await ensureState('peakShaving.atypical.review.pHlzfMaxW', 'Nachkontrolle P_HLZF_max live', 'value.power', 'W', 'number', revOpts);
+      await ensureState('peakShaving.atypical.review.pAbsEvalW', 'Nachkontrolle P_abs bewertet', 'value.power', 'W', 'number', revOpts);
+      await ensureState('peakShaving.atypical.review.pHlzfEvalW', 'Nachkontrolle P_HLZF bewertet', 'value.power', 'W', 'number', revOpts);
+      await ensureState('peakShaving.atypical.review.deltaW', 'Nachkontrolle Verlagerung', 'value.power', 'W', 'number', revOpts);
+      await ensureState('peakShaving.atypical.review.deltaPercent', 'Nachkontrolle Verlagerung', 'value', '%', 'number', revOpts);
+      await ensureState('peakShaving.atypical.review.savingsEur', 'Nachkontrolle Ersparnis', 'value', '€', 'number', revOpts);
+      await ensureState('peakShaving.atypical.review.eligible', 'Nachkontrolle erfüllt', 'indicator', '', 'boolean', revOpts);
+      await ensureState('peakShaving.atypical.review.lastUpdate', 'Nachkontrolle letzte Aktualisierung', 'value.time', '', 'number', revOpts);
+      // Kein direktes Influx-Logging für review.snapshotJson: der Live-State enthält Tick-Zeitstempel.
+      // Für den Export wird stattdessen audit.snapshotJson im 10-Minuten-Historie-Raster geschrieben.
+
+      const auditOpts = { changesOnly: false };
+      await ensureState('peakShaving.atypical.audit.lastSampleTs', 'Nachweis Sample-Zeitpunkt', 'value.time', '', 'number', auditOpts);
+      await ensureState('peakShaving.atypical.audit.gridImportW', 'Nachweis Netzbezug', 'value.power', 'W', 'number', auditOpts);
+      await ensureState('peakShaving.atypical.audit.activeWindow', 'Nachweis HLZF aktiv', 'indicator', '', 'boolean', auditOpts);
+      await ensureState('peakShaving.atypical.audit.effectiveLimitW', 'Nachweis wirksames Limit', 'value.power', 'W', 'number', auditOpts);
+      await ensureState('peakShaving.atypical.audit.pAbsMaxW', 'Nachweis P_abs_max laufend', 'value.power', 'W', 'number', auditOpts);
+      await ensureState('peakShaving.atypical.audit.pHlzfMaxW', 'Nachweis P_HLZF_max laufend', 'value.power', 'W', 'number', auditOpts);
+      await ensureState('peakShaving.atypical.audit.deltaW', 'Nachweis Verlagerung', 'value.power', 'W', 'number', auditOpts);
+      await ensureState('peakShaving.atypical.audit.deltaPercent', 'Nachweis Verlagerung', 'value', '%', 'number', auditOpts);
+      await ensureState('peakShaving.atypical.audit.thresholdOk', 'Nachweis Erheblichkeit erfüllt', 'indicator', '', 'boolean', auditOpts);
+      await ensureState('peakShaving.atypical.audit.minShiftOk', 'Nachweis Mindestverlagerung erfüllt', 'indicator', '', 'boolean', auditOpts);
+      await ensureState('peakShaving.atypical.audit.savingsEur', 'Nachweis Ersparnis', 'value', '€', 'number', auditOpts);
+      await ensureState('peakShaving.atypical.audit.eligible', 'Nachweis §19 erfüllt', 'indicator', '', 'boolean', auditOpts);
+      await ensureState('peakShaving.atypical.audit.sampleReason', 'Nachweis Sample-Grund', 'text', '', 'string', { changesOnly: true });
+      await ensureState('peakShaving.atypical.audit.snapshotJson', 'Nachweis Audit-Snapshot', 'json', '', 'string', auditOpts);
+    } catch (e) {
+      try { this.log.debug('Atypische Nachweis-Influx init failed: ' + (e && e.message ? e.message : e)); } catch (_e) {}
+    }
 
     // EVCS per Ladepunkt (für Abrechnung/Detailanalyse)
     // Diese States werden aus den internen EVCS-Leistungswerten befüllt und
@@ -17479,6 +18013,109 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     this._nwSetHistorieValue('historie.tariff.totalEurPerKwh', tariffTotalPrice, now, 0.0001);
     if (Number.isFinite(providerPrice)) this._nwSetHistorieValue('historie.tariff.providerCurrentEurPerKwh', providerPrice, now, 0.0001);
     if (Number.isFinite(providerAveragePrice)) this._nwSetHistorieValue('historie.tariff.providerAverageEurPerKwh', providerAveragePrice, now, 0.0001);
+
+    // Atypische Lastspitzenkappung / §19-Nachweis ins kanonische Influx-Raster spiegeln.
+    // Der Peak-Shaving-Core schreibt die Live-States peakShaving.atypical.* jede Sekunde;
+    // hier ziehen wir daraus exportfreundliche 10-Minuten-Nachweispunkte.
+    try {
+      const atCfg = (this.config && this.config.peakShaving && this.config.peakShaving.atypical && typeof this.config.peakShaving.atypical === 'object') ? this.config.peakShaving.atypical : {};
+      const atReviewCfg = (atCfg.review && typeof atCfg.review === 'object') ? atCfg.review : ((atCfg.nachkontrolle && typeof atCfg.nachkontrolle === 'object') ? atCfg.nachkontrolle : {});
+      if (atReviewCfg.influxLogEnabled !== false) {
+      const atActive = _boolOr('peakShaving.atypical.activeWindow', false);
+      const atTargetLimitW = _numOr('peakShaving.atypical.targetLimitW', 0);
+      const atEffectiveLimitW = _numOr('peakShaving.atypical.effectiveLimitW', 0);
+      const atPAbsMaxW = _numOr('peakShaving.atypical.review.pAbsMaxW', 0);
+      const atPHlzfMaxW = _numOr('peakShaving.atypical.review.pHlzfMaxW', 0);
+      const atDeltaW = _numOr('peakShaving.atypical.review.deltaW', 0);
+      const atDeltaPct = _numOr('peakShaving.atypical.review.deltaPercent', 0);
+      const atThresholdOk = _boolOr('peakShaving.atypical.review.thresholdOk', false);
+      const atMinShiftOk = _boolOr('peakShaving.atypical.review.minShiftOk', false);
+      const atSavingsEur = _numOr('peakShaving.atypical.review.savingsEur', 0);
+      const atEligible = _boolOr('peakShaving.atypical.review.eligible', false);
+
+      this._nwSetHistorieValue('historie.peakShaving.atypical.gridImportW', gridBuy, now, 0);
+      this._nwSetHistorieValue('historie.peakShaving.atypical.activeWindow', atActive ? 1 : 0, now, 0);
+      this._nwSetHistorieValue('historie.peakShaving.atypical.targetLimitW', Number.isFinite(atTargetLimitW) ? atTargetLimitW : 0, now, 0);
+      this._nwSetHistorieValue('historie.peakShaving.atypical.effectiveLimitW', Number.isFinite(atEffectiveLimitW) ? atEffectiveLimitW : 0, now, 0);
+      this._nwSetHistorieValue('historie.peakShaving.atypical.pAbsMaxW', Number.isFinite(atPAbsMaxW) ? atPAbsMaxW : 0, now, 0);
+      this._nwSetHistorieValue('historie.peakShaving.atypical.pHlzfMaxW', Number.isFinite(atPHlzfMaxW) ? atPHlzfMaxW : 0, now, 0);
+      this._nwSetHistorieValue('historie.peakShaving.atypical.deltaW', Number.isFinite(atDeltaW) ? atDeltaW : 0, now, 0);
+      this._nwSetHistorieValue('historie.peakShaving.atypical.deltaPercent', Number.isFinite(atDeltaPct) ? atDeltaPct : 0, now, 0.01);
+      this._nwSetHistorieValue('historie.peakShaving.atypical.thresholdOk', atThresholdOk ? 1 : 0, now, 0);
+      this._nwSetHistorieValue('historie.peakShaving.atypical.minShiftOk', atMinShiftOk ? 1 : 0, now, 0);
+      this._nwSetHistorieValue('historie.peakShaving.atypical.savingsEur', Number.isFinite(atSavingsEur) ? atSavingsEur : 0, now, 0.01);
+      this._nwSetHistorieValue('historie.peakShaving.atypical.eligible', atEligible ? 1 : 0, now, 0);
+
+      const parseJsonSafe = (raw) => {
+        try {
+          const txt = String(raw || '').trim();
+          return txt ? JSON.parse(txt) : null;
+        } catch (_e) {
+          return null;
+        }
+      };
+      const atypicalSnap = parseJsonSafe(_strOr('peakShaving.atypical.snapshotJson', '')) || {};
+      const reviewSnap = parseJsonSafe(_strOr('peakShaving.atypical.review.snapshotJson', '')) || {};
+      const schedule = (atypicalSnap && atypicalSnap.schedule && typeof atypicalSnap.schedule === 'object') ? atypicalSnap.schedule : {};
+      const target = (atypicalSnap && atypicalSnap.target && typeof atypicalSnap.target === 'object') ? atypicalSnap.target : {};
+      const source = (atypicalSnap && atypicalSnap.source && typeof atypicalSnap.source === 'object') ? atypicalSnap.source : {};
+      const review = (atypicalSnap && atypicalSnap.review && typeof atypicalSnap.review === 'object')
+        ? atypicalSnap.review
+        : (reviewSnap && typeof reviewSnap === 'object' ? reviewSnap : {});
+
+      const atPAbsEvalW = _numOr('peakShaving.atypical.review.pAbsEvalW', Number(review.pAbsEvalW || 0) || 0);
+      const atPHlzfEvalW = _numOr('peakShaving.atypical.review.pHlzfEvalW', Number(review.pHlzfEvalW || 0) || 0);
+      const atThresholdPercent = _numOr('peakShaving.atypical.thresholdPercent', Number(review.thresholdPercent ?? target.thresholdPercent ?? 0) || 0);
+      const atMinShiftW = _numOr('peakShaving.atypical.minShiftW', Number(review.minShiftW ?? target.minShiftW ?? 0) || 0);
+      const atSavingsOk = _boolOr('peakShaving.atypical.review.savingsOk', review.savingsOk === true);
+      const atStatus = _strOr('peakShaving.atypical.review.status', String(review.status || ''));
+      const auditSnapshot = {
+        ts: now,
+        sampleReason: String(reason || 'timer'),
+        historyRaster: true,
+        gridImportW: Math.round(Number(gridBuy || 0)),
+        activeWindow: !!atActive,
+        windowLabel: String(schedule.windowLabel || _strOr('peakShaving.atypical.windowLabel', '')),
+        status: atStatus,
+        targetLimitW: Math.round(Number.isFinite(atTargetLimitW) ? atTargetLimitW : 0),
+        effectiveLimitW: Math.round(Number.isFinite(atEffectiveLimitW) ? atEffectiveLimitW : 0),
+        pAbsMaxW: Math.round(Number.isFinite(atPAbsMaxW) ? atPAbsMaxW : 0),
+        pHlzfMaxW: Math.round(Number.isFinite(atPHlzfMaxW) ? atPHlzfMaxW : 0),
+        pAbsEvalW: Math.round(Number.isFinite(atPAbsEvalW) ? atPAbsEvalW : 0),
+        pHlzfEvalW: Math.round(Number.isFinite(atPHlzfEvalW) ? atPHlzfEvalW : 0),
+        deltaW: Math.round(Number.isFinite(atDeltaW) ? atDeltaW : 0),
+        deltaPercent: Number.isFinite(atDeltaPct) ? Math.round(atDeltaPct * 100) / 100 : 0,
+        thresholdPercent: Number.isFinite(atThresholdPercent) ? atThresholdPercent : 0,
+        thresholdOk: !!atThresholdOk,
+        minShiftW: Math.round(Number.isFinite(atMinShiftW) ? atMinShiftW : 0),
+        minShiftOk: !!atMinShiftOk,
+        savingsEur: Number.isFinite(atSavingsEur) ? Math.round(atSavingsEur * 100) / 100 : 0,
+        savingsOk: !!atSavingsOk,
+        eligible: !!atEligible,
+        year: Number(source.year || review.year || 0) || 0,
+        gridOperator: String(source.gridOperator || ''),
+        voltageLevel: String(target.voltageLevel || ''),
+        sourceDocument: String(source.sourceDocument || ''),
+        sourcePublishedAt: String(source.sourcePublishedAt || ''),
+        sourceUrl: String(source.sourceUrl || ''),
+        sourceNote: String(source.sourceNote || ''),
+      };
+
+      if (typeof this.setLocalStateWithCache === 'function') {
+        this.setLocalStateWithCache('peakShaving.atypical.audit.lastSampleTs', now, now);
+        this.setLocalStateWithCache('peakShaving.atypical.audit.gridImportW', auditSnapshot.gridImportW, now);
+        this.setLocalStateWithCache('peakShaving.atypical.audit.activeWindow', !!auditSnapshot.activeWindow, now);
+        this.setLocalStateWithCache('peakShaving.atypical.audit.effectiveLimitW', auditSnapshot.effectiveLimitW, now);
+        this.setLocalStateWithCache('peakShaving.atypical.audit.pAbsMaxW', auditSnapshot.pAbsMaxW, now);
+        this.setLocalStateWithCache('peakShaving.atypical.audit.pHlzfMaxW', auditSnapshot.pHlzfMaxW, now);
+        this.setLocalStateWithCache('peakShaving.atypical.audit.deltaW', auditSnapshot.deltaW, now);
+        this.setLocalStateWithCache('peakShaving.atypical.audit.deltaPercent', auditSnapshot.deltaPercent, now);
+        this.setLocalStateWithCache('peakShaving.atypical.audit.eligible', !!auditSnapshot.eligible, now);
+        this.setLocalStateWithCache('peakShaving.atypical.audit.sampleReason', auditSnapshot.sampleReason, now);
+        this.setLocalStateWithCache('peakShaving.atypical.audit.snapshotJson', JSON.stringify(auditSnapshot), now);
+      }
+      }
+    } catch (_eAtypicalHist) {}
 
     // EVCS per Ladepunkt (Leistung) – für detaillierte Abrechnung
     const evcsCount = Number(this.evcsCount || 0);
@@ -18636,6 +19273,437 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       if (Array.isArray(series) && series.length >= 2) return series;
     }
     return first;
+  }
+
+
+
+  _nwAtypicalReviewParseTs(raw, fallback, endOfDay = false) {
+    if (raw === null || raw === undefined || raw === '') return fallback;
+    if (typeof raw === 'number' && Number.isFinite(raw)) return raw < 1e12 ? Math.round(raw * 1000) : Math.round(raw);
+    const s = String(raw).trim();
+    if (!s) return fallback;
+    if (/^\d+$/.test(s)) {
+      const n = Number(s);
+      if (Number.isFinite(n)) return n < 1e12 ? Math.round(n * 1000) : Math.round(n);
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      const [y, m, d] = s.split('-').map(Number);
+      const dt = new Date(y, m - 1, d, 0, 0, 0, 0);
+      if (endOfDay) dt.setHours(23, 59, 59, 999);
+      return dt.getTime();
+    }
+    const parsed = Date.parse(s);
+    return Number.isNaN(parsed) ? fallback : parsed;
+  }
+
+  _nwAtypicalReviewDateTime(ts) {
+    try {
+      const d = new Date(Number(ts) || Date.now());
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    } catch (_e) {
+      return '';
+    }
+  }
+
+  _nwAtypicalReviewCsvCell(v) {
+    if (v === null || v === undefined) return '';
+    const s = String(v).replace(/\r?\n/g, ' ').replace(/"/g, '""');
+    return `"${s}"`;
+  }
+
+  _nwAtypicalReviewNumber(v, digits = 0) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return '';
+    return digits > 0 ? n.toFixed(digits) : String(Math.round(n));
+  }
+
+  async _nwAtypicalReviewReadState(localId, fallback = null) {
+    try {
+      const key = String(localId || '').replace(new RegExp('^' + this.namespace.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.'), '');
+      const cached = this.stateCache && this.stateCache[key];
+      if (cached && Object.prototype.hasOwnProperty.call(cached, 'value')) return cached.value;
+    } catch (_e0) {}
+    try {
+      const st = await this.getStateAsync(localId);
+      if (!st || st.val === null || st.val === undefined) return fallback;
+      return st.val;
+    } catch (_e) {
+      return fallback;
+    }
+  }
+
+  async _nwAtypicalReviewReadNumber(localId, fallback = 0) {
+    const raw = await this._nwAtypicalReviewReadState(localId, fallback);
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  async _nwAtypicalReviewReadBool(localId, fallback = false) {
+    const raw = await this._nwAtypicalReviewReadState(localId, fallback);
+    if (raw === true || raw === 1 || raw === '1') return true;
+    if (raw === false || raw === 0 || raw === '0') return false;
+    const s = String(raw == null ? '' : raw).trim().toLowerCase();
+    if (['true', 'on', 'yes', 'ja'].includes(s)) return true;
+    if (['false', 'off', 'no', 'nein'].includes(s)) return false;
+    return !!fallback;
+  }
+
+  async _nwAtypicalReviewReadString(localId, fallback = '') {
+    const raw = await this._nwAtypicalReviewReadState(localId, fallback);
+    if (raw === null || raw === undefined) return fallback;
+    return String(raw);
+  }
+
+  async _nwBuildAtypicalReviewExportPayload(query = {}) {
+    const now = Date.now();
+    const cfg = (this.config && this.config.peakShaving && typeof this.config.peakShaving === 'object') ? this.config.peakShaving : {};
+    const atypical = (cfg.atypical && typeof cfg.atypical === 'object') ? cfg.atypical : {};
+    const reviewCfg = (atypical.review && typeof atypical.review === 'object') ? atypical.review : {};
+
+    const stateYear = await this._nwAtypicalReviewReadNumber('peakShaving.atypical.review.year', 0);
+    const cfgYear = Number(reviewCfg.year ?? atypical.year ?? atypical.validityYear ?? atypical.calendarYear ?? 0);
+    const queryYear = Number(query && query.year);
+    const year = Number.isFinite(queryYear) && queryYear > 0 ? Math.round(queryYear)
+      : (Number.isFinite(stateYear) && stateYear > 0 ? Math.round(stateYear)
+        : (Number.isFinite(cfgYear) && cfgYear > 0 ? Math.round(cfgYear) : new Date(now).getFullYear()));
+
+    const defaultFrom = new Date(year, 0, 1, 0, 0, 0, 0).getTime();
+    const defaultTo = Math.min(now, new Date(year, 11, 31, 23, 59, 59, 999).getTime());
+    const from = this._nwAtypicalReviewParseTs(query && query.from, defaultFrom, false);
+    const to = Math.max(from + 60 * 1000, this._nwAtypicalReviewParseTs(query && query.to, defaultTo, true));
+    const stepMs = this._nwChooseStepMs(Math.max(1, to - from), 2500, 10 * 60 * 1000);
+
+    let reviewSnapshot = {};
+    const rawReviewJson = await this._nwAtypicalReviewReadString('peakShaving.atypical.review.snapshotJson', '');
+    if (rawReviewJson) {
+      try { reviewSnapshot = JSON.parse(rawReviewJson); } catch (_e) { reviewSnapshot = {}; }
+    }
+
+    const rawAtypicalJson = await this._nwAtypicalReviewReadString('peakShaving.atypical.snapshotJson', '');
+    let atypicalSnapshot = {};
+    if (rawAtypicalJson) {
+      try { atypicalSnapshot = JSON.parse(rawAtypicalJson); } catch (_e) { atypicalSnapshot = {}; }
+    }
+
+    const source = Object.assign({}, atypicalSnapshot.source || {}, {
+      gridOperator: await this._nwAtypicalReviewReadString('peakShaving.atypical.gridOperator', atypical.gridOperator || atypical.gridOperatorName || atypical.networkOperator || atypical.netzbetreiber || ''),
+      year: await this._nwAtypicalReviewReadNumber('peakShaving.atypical.year', year),
+      sourceDocument: await this._nwAtypicalReviewReadString('peakShaving.atypical.sourceDocument', atypical.sourceDocument || atypical.sourceName || atypical.source || ''),
+      sourcePublishedAt: await this._nwAtypicalReviewReadString('peakShaving.atypical.sourcePublishedAt', atypical.sourcePublishedAt || atypical.publishedAt || atypical.publicationDate || ''),
+      sourceUrl: await this._nwAtypicalReviewReadString('peakShaving.atypical.sourceUrl', atypical.sourceUrl || atypical.sourceLink || atypical.sourcePath || ''),
+      sourceNote: await this._nwAtypicalReviewReadString('peakShaving.atypical.sourceNote', atypical.sourceNote || atypical.note || atypical.notes || ''),
+    });
+
+    const snapshot = {
+      exportTs: now,
+      from,
+      to,
+      year,
+      source,
+      mode: String(cfg.strategyMode || cfg.strategy || ''),
+      voltageLevel: await this._nwAtypicalReviewReadString('peakShaving.atypical.voltageLevel', atypical.voltageLevel || ''),
+      activeWindow: await this._nwAtypicalReviewReadBool('peakShaving.atypical.activeWindow', false),
+      windowLabel: await this._nwAtypicalReviewReadString('peakShaving.atypical.windowLabel', ''),
+      targetLimitW: await this._nwAtypicalReviewReadNumber('peakShaving.atypical.targetLimitW', 0),
+      effectiveLimitW: await this._nwAtypicalReviewReadNumber('peakShaving.atypical.effectiveLimitW', 0),
+      pAbsMaxW: await this._nwAtypicalReviewReadNumber('peakShaving.atypical.review.pAbsMaxW', Number(reviewSnapshot.pAbsMaxW || 0)),
+      pHlzfMaxW: await this._nwAtypicalReviewReadNumber('peakShaving.atypical.review.pHlzfMaxW', Number(reviewSnapshot.pHlzfMaxW || 0)),
+      pAbsEvalW: await this._nwAtypicalReviewReadNumber('peakShaving.atypical.review.pAbsEvalW', Number(reviewSnapshot.pAbsEvalW || 0)),
+      pHlzfEvalW: await this._nwAtypicalReviewReadNumber('peakShaving.atypical.review.pHlzfEvalW', Number(reviewSnapshot.pHlzfEvalW || 0)),
+      thresholdPercent: await this._nwAtypicalReviewReadNumber('peakShaving.atypical.thresholdPercent', Number(reviewSnapshot.thresholdPercent || atypical.thresholdPercent || 0)),
+      minShiftW: await this._nwAtypicalReviewReadNumber('peakShaving.atypical.minShiftW', Number(reviewSnapshot.minShiftW || atypical.minShiftW || 100000)),
+      deltaW: await this._nwAtypicalReviewReadNumber('peakShaving.atypical.review.deltaW', Number(reviewSnapshot.deltaW || 0)),
+      deltaPercent: await this._nwAtypicalReviewReadNumber('peakShaving.atypical.review.deltaPercent', Number(reviewSnapshot.deltaPercent || 0)),
+      thresholdOk: await this._nwAtypicalReviewReadBool('peakShaving.atypical.review.thresholdOk', !!reviewSnapshot.thresholdOk),
+      minShiftOk: await this._nwAtypicalReviewReadBool('peakShaving.atypical.review.minShiftOk', !!reviewSnapshot.minShiftOk),
+      savingsEur: await this._nwAtypicalReviewReadNumber('peakShaving.atypical.review.savingsEur', Number(reviewSnapshot.savingsEur || 0)),
+      savingsOk: await this._nwAtypicalReviewReadBool('peakShaving.atypical.review.savingsOk', reviewSnapshot.savingsOk === true),
+      eligible: await this._nwAtypicalReviewReadBool('peakShaving.atypical.review.eligible', !!reviewSnapshot.eligible),
+      status: await this._nwAtypicalReviewReadString('peakShaving.atypical.review.status', String(reviewSnapshot.status || '')),
+      resetIdentity: await this._nwAtypicalReviewReadString('peakShaving.atypical.review.resetIdentity', String(reviewSnapshot.resetIdentity || '')),
+      lastUpdate: await this._nwAtypicalReviewReadNumber('peakShaving.atypical.review.lastUpdate', Number(reviewSnapshot.lastUpdate || 0)),
+      note: String(reviewCfg.note || reviewCfg.reviewNote || ''),
+    };
+
+    const ns = this.namespace;
+    const ids = {
+      gridImportW: `${ns}.historie.peakShaving.atypical.gridImportW`,
+      activeWindow: `${ns}.historie.peakShaving.atypical.activeWindow`,
+      targetLimitW: `${ns}.historie.peakShaving.atypical.targetLimitW`,
+      effectiveLimitW: `${ns}.historie.peakShaving.atypical.effectiveLimitW`,
+      pAbsMaxW: `${ns}.historie.peakShaving.atypical.pAbsMaxW`,
+      pHlzfMaxW: `${ns}.historie.peakShaving.atypical.pHlzfMaxW`,
+      deltaW: `${ns}.historie.peakShaving.atypical.deltaW`,
+      deltaPercent: `${ns}.historie.peakShaving.atypical.deltaPercent`,
+      thresholdOk: `${ns}.historie.peakShaving.atypical.thresholdOk`,
+      minShiftOk: `${ns}.historie.peakShaving.atypical.minShiftOk`,
+      savingsEur: `${ns}.historie.peakShaving.atypical.savingsEur`,
+      eligible: `${ns}.historie.peakShaving.atypical.eligible`,
+    };
+
+    const series = {};
+    await Promise.all(Object.entries(ids).map(async ([key, id]) => {
+      try { series[key] = await this._nwGetHistoryAvgSeries(id, from, to, stepMs); } catch (_e) { series[key] = []; }
+    }));
+
+    const times = new Set();
+    for (const arr of Object.values(series)) {
+      if (!Array.isArray(arr)) continue;
+      for (const p of arr) if (p && Number.isFinite(Number(p.ts))) times.add(Math.round(Number(p.ts)));
+    }
+
+    const maps = {};
+    for (const [key, arr] of Object.entries(series)) {
+      const m = new Map();
+      for (const p of Array.isArray(arr) ? arr : []) {
+        if (!p || !Number.isFinite(Number(p.ts))) continue;
+        m.set(Math.round(Number(p.ts)), Number(p.val));
+      }
+      maps[key] = m;
+    }
+
+    let rows = Array.from(times).sort((a, b) => a - b).map((ts) => ({
+      ts,
+      time: this._nwAtypicalReviewDateTime(ts),
+      gridImportW: maps.gridImportW && maps.gridImportW.has(ts) ? maps.gridImportW.get(ts) : null,
+      activeWindow: maps.activeWindow && maps.activeWindow.has(ts) ? maps.activeWindow.get(ts) >= 0.5 : null,
+      targetLimitW: maps.targetLimitW && maps.targetLimitW.has(ts) ? maps.targetLimitW.get(ts) : null,
+      effectiveLimitW: maps.effectiveLimitW && maps.effectiveLimitW.has(ts) ? maps.effectiveLimitW.get(ts) : null,
+      pAbsMaxW: maps.pAbsMaxW && maps.pAbsMaxW.has(ts) ? maps.pAbsMaxW.get(ts) : null,
+      pHlzfMaxW: maps.pHlzfMaxW && maps.pHlzfMaxW.has(ts) ? maps.pHlzfMaxW.get(ts) : null,
+      deltaW: maps.deltaW && maps.deltaW.has(ts) ? maps.deltaW.get(ts) : null,
+      deltaPercent: maps.deltaPercent && maps.deltaPercent.has(ts) ? maps.deltaPercent.get(ts) : null,
+      thresholdOk: maps.thresholdOk && maps.thresholdOk.has(ts) ? maps.thresholdOk.get(ts) >= 0.5 : null,
+      minShiftOk: maps.minShiftOk && maps.minShiftOk.has(ts) ? maps.minShiftOk.get(ts) >= 0.5 : null,
+      savingsEur: maps.savingsEur && maps.savingsEur.has(ts) ? maps.savingsEur.get(ts) : null,
+      eligible: maps.eligible && maps.eligible.has(ts) ? maps.eligible.get(ts) >= 0.5 : null,
+    }));
+
+    if (!rows.length) {
+      rows = [{
+        ts: snapshot.lastUpdate || now,
+        time: this._nwAtypicalReviewDateTime(snapshot.lastUpdate || now),
+        gridImportW: null,
+        activeWindow: snapshot.activeWindow,
+        targetLimitW: snapshot.targetLimitW,
+        effectiveLimitW: snapshot.effectiveLimitW,
+        pAbsMaxW: snapshot.pAbsMaxW,
+        pHlzfMaxW: snapshot.pHlzfMaxW,
+        deltaW: snapshot.deltaW,
+        deltaPercent: snapshot.deltaPercent,
+        thresholdOk: snapshot.thresholdOk,
+        minShiftOk: snapshot.minShiftOk,
+        savingsEur: snapshot.savingsEur,
+        eligible: snapshot.eligible,
+      }];
+    }
+
+    return {
+      ok: true,
+      generatedAt: now,
+      year,
+      from,
+      to,
+      stepMs,
+      historyInstance: this._nwGetHistoryInstance ? String(this._nwGetHistoryInstance() || '') : '',
+      snapshot,
+      seriesRows: rows,
+    };
+  }
+
+  _nwAtypicalReviewPayloadToCsv(payload) {
+    const p = payload || {};
+    const s = p.snapshot || {};
+    const src = s.source || {};
+    const rows = [];
+    const add = (cols) => rows.push((cols || []).map((v) => this._nwAtypicalReviewCsvCell(v)).join(';'));
+    add(['NexoWatt - Nachweis atypische Lastspitzenkappung / §19-Prüfung']);
+    add(['Exportzeit', this._nwAtypicalReviewDateTime(p.generatedAt || Date.now())]);
+    add(['Zeitraum', this._nwAtypicalReviewDateTime(p.from), this._nwAtypicalReviewDateTime(p.to)]);
+    add(['History/Influx-Instanz', p.historyInstance || '']);
+    add([]);
+    add(['Netzbetreiber', src.gridOperator || '']);
+    add(['Gültigkeitsjahr', src.year || p.year || '']);
+    add(['Entnahmeebene', s.voltageLevel || '']);
+    add(['Quelle/Dokument', src.sourceDocument || '']);
+    add(['Veröffentlicht am', src.sourcePublishedAt || '']);
+    add(['Quell-URL/Ablage', src.sourceUrl || '']);
+    add(['Bemerkung', src.sourceNote || '']);
+    add([]);
+    add(['Kennzahl', 'Wert', 'Einheit']);
+    add(['P_abs_max gemessen', this._nwAtypicalReviewNumber(s.pAbsMaxW), 'W']);
+    add(['P_HLZF_max gemessen', this._nwAtypicalReviewNumber(s.pHlzfMaxW), 'W']);
+    add(['P_abs bewertet', this._nwAtypicalReviewNumber(s.pAbsEvalW), 'W']);
+    add(['P_HLZF bewertet', this._nwAtypicalReviewNumber(s.pHlzfEvalW), 'W']);
+    add(['Verlagerung', this._nwAtypicalReviewNumber(s.deltaW), 'W']);
+    add(['Verlagerung', this._nwAtypicalReviewNumber(s.deltaPercent, 2), '%']);
+    add(['Erheblichkeitsschwelle', this._nwAtypicalReviewNumber(s.thresholdPercent, 2), '%']);
+    add(['Mindestverlagerung', this._nwAtypicalReviewNumber(s.minShiftW), 'W']);
+    add(['Geschätzte Ersparnis', this._nwAtypicalReviewNumber(s.savingsEur, 2), 'EUR']);
+    add(['Schwelle erfüllt', s.thresholdOk ? 'ja' : 'nein', '']);
+    add(['Mindestverlagerung erfüllt', s.minShiftOk ? 'ja' : 'nein', '']);
+    add(['Nachkontrolle erfüllt', s.eligible ? 'ja' : 'nein', '']);
+    add(['Status', s.status || '', '']);
+    add(['Prüfnotiz', s.note || '', '']);
+    add([]);
+    add(['Zeitreihe aus Influx/Historie']);
+    add(['Zeit', 'Netzbezug_W', 'HLZF_aktiv', 'HLZF_Ziellast_W', 'wirksames_Limit_W', 'P_abs_max_W', 'P_HLZF_max_W', 'Delta_W', 'Delta_%', 'Schwelle_OK', 'Mindestverlagerung_OK', 'Ersparnis_EUR', 'Erfüllt']);
+    for (const r of Array.isArray(p.seriesRows) ? p.seriesRows : []) {
+      add([
+        r.time || this._nwAtypicalReviewDateTime(r.ts),
+        this._nwAtypicalReviewNumber(r.gridImportW),
+        r.activeWindow === null ? '' : (r.activeWindow ? '1' : '0'),
+        this._nwAtypicalReviewNumber(r.targetLimitW),
+        this._nwAtypicalReviewNumber(r.effectiveLimitW),
+        this._nwAtypicalReviewNumber(r.pAbsMaxW),
+        this._nwAtypicalReviewNumber(r.pHlzfMaxW),
+        this._nwAtypicalReviewNumber(r.deltaW),
+        this._nwAtypicalReviewNumber(r.deltaPercent, 2),
+        r.thresholdOk === null ? '' : (r.thresholdOk ? '1' : '0'),
+        r.minShiftOk === null ? '' : (r.minShiftOk ? '1' : '0'),
+        this._nwAtypicalReviewNumber(r.savingsEur, 2),
+        r.eligible === null ? '' : (r.eligible ? '1' : '0'),
+      ]);
+    }
+    return '\ufeff' + rows.join('\r\n');
+  }
+
+  _nwAtypicalReviewAscii(text) {
+    return String(text == null ? '' : text)
+      .replace(/[€]/g, 'EUR')
+      .replace(/[§]/g, 'Par.')
+      .replace(/[ä]/g, 'ae').replace(/[ö]/g, 'oe').replace(/[ü]/g, 'ue')
+      .replace(/[Ä]/g, 'Ae').replace(/[Ö]/g, 'Oe').replace(/[Ü]/g, 'Ue')
+      .replace(/[ß]/g, 'ss')
+      .replace(/[–—]/g, '-')
+      .replace(/[✔✅]/g, 'OK')
+      .replace(/[✖❌]/g, 'NEIN')
+      .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, ' ');
+  }
+
+  _nwAtypicalReviewPdfEscape(text) {
+    return this._nwAtypicalReviewAscii(text).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  }
+
+  _nwAtypicalReviewWrap(text, maxLen = 95) {
+    const s = this._nwAtypicalReviewAscii(text).trim();
+    if (!s) return [''];
+    const out = [];
+    let line = '';
+    for (const word of s.split(/\s+/)) {
+      if (!line) line = word;
+      else if ((line + ' ' + word).length <= maxLen) line += ' ' + word;
+      else { out.push(line); line = word; }
+    }
+    if (line) out.push(line);
+    return out.length ? out : [''];
+  }
+
+  _nwAtypicalReviewPayloadToPdf(payload) {
+    const p = payload || {};
+    const s = p.snapshot || {};
+    const src = s.source || {};
+    const lines = [];
+    const yesNo = (v) => v ? 'ja' : 'nein';
+    lines.push('NexoWatt - Nachweis atypische Lastspitzenkappung / Par.19-Pruefung');
+    lines.push(`Exportzeit: ${this._nwAtypicalReviewDateTime(p.generatedAt || Date.now())}`);
+    lines.push(`Zeitraum: ${this._nwAtypicalReviewDateTime(p.from)} bis ${this._nwAtypicalReviewDateTime(p.to)}`);
+    lines.push(`History/Influx: ${p.historyInstance || 'nicht erkannt'}`);
+    lines.push('');
+    lines.push('Netzbetreiber / Quelle');
+    lines.push(`Netzbetreiber: ${src.gridOperator || '-'}`);
+    lines.push(`Jahr: ${src.year || p.year || '-'}`);
+    lines.push(`Entnahmeebene: ${s.voltageLevel || '-'}`);
+    lines.push(`Quelle/Dokument: ${src.sourceDocument || '-'}`);
+    lines.push(`Veroeffentlicht am: ${src.sourcePublishedAt || '-'}`);
+    lines.push(`Quell-URL/Ablage: ${src.sourceUrl || '-'}`);
+    if (src.sourceNote) lines.push(`Bemerkung: ${src.sourceNote}`);
+    lines.push('');
+    lines.push('Nachkontrolle - Kennzahlen');
+    lines.push(`P_abs_max gemessen: ${this._nwAtypicalReviewNumber(s.pAbsMaxW)} W`);
+    lines.push(`P_HLZF_max gemessen: ${this._nwAtypicalReviewNumber(s.pHlzfMaxW)} W`);
+    lines.push(`P_abs bewertet: ${this._nwAtypicalReviewNumber(s.pAbsEvalW)} W`);
+    lines.push(`P_HLZF bewertet: ${this._nwAtypicalReviewNumber(s.pHlzfEvalW)} W`);
+    lines.push(`Verlagerung: ${this._nwAtypicalReviewNumber(s.deltaW)} W / ${this._nwAtypicalReviewNumber(s.deltaPercent, 2)} %`);
+    lines.push(`Erheblichkeitsschwelle: ${this._nwAtypicalReviewNumber(s.thresholdPercent, 2)} % (${yesNo(s.thresholdOk)})`);
+    lines.push(`Mindestverlagerung: ${this._nwAtypicalReviewNumber(s.minShiftW)} W (${yesNo(s.minShiftOk)})`);
+    lines.push(`Geschaetzte Ersparnis: ${this._nwAtypicalReviewNumber(s.savingsEur, 2)} EUR`);
+    lines.push(`Nachkontrolle erfuellt: ${yesNo(s.eligible)} - Status: ${s.status || '-'}`);
+    if (s.note) lines.push(`Pruefnotiz: ${s.note}`);
+    lines.push('');
+    lines.push(`Zeitreihe: ${Array.isArray(p.seriesRows) ? p.seriesRows.length : 0} Punkte. Vollstaendige Zeitreihe siehe CSV-Export.`);
+    lines.push('Letzte Nachweispunkte:');
+    const sample = (Array.isArray(p.seriesRows) ? p.seriesRows.slice(-28) : []);
+    lines.push('Zeit | Netzbezug W | HLZF | Limit W | Delta % | Erfuellt');
+    for (const r of sample) {
+      lines.push(`${r.time || this._nwAtypicalReviewDateTime(r.ts)} | ${this._nwAtypicalReviewNumber(r.gridImportW)} | ${r.activeWindow ? '1' : '0'} | ${this._nwAtypicalReviewNumber(r.effectiveLimitW)} | ${this._nwAtypicalReviewNumber(r.deltaPercent, 2)} | ${r.eligible ? '1' : '0'}`);
+    }
+
+    const wrapped = [];
+    for (const line of lines) {
+      if (line === '') wrapped.push('');
+      else for (const w of this._nwAtypicalReviewWrap(line, 96)) wrapped.push(w);
+    }
+
+    const pageWidth = 595;
+    const pageHeight = 842;
+    const marginX = 42;
+    const topY = 800;
+    const lineH = 13;
+    const pages = [];
+    let page = [];
+    for (const line of wrapped) {
+      if (page.length >= 56) { pages.push(page); page = []; }
+      page.push(line);
+    }
+    if (page.length) pages.push(page);
+    if (!pages.length) pages.push(['Kein Inhalt']);
+
+    const objects = [];
+    const addObj = (body) => { objects.push(Buffer.isBuffer(body) ? body : Buffer.from(String(body), 'latin1')); return objects.length; };
+    addObj('<< /Type /Catalog /Pages 2 0 R >>');
+    addObj('');
+    addObj('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+
+    const pageRefs = [];
+    pages.forEach((pg, pageIdx) => {
+      let stream = '';
+      let y = topY;
+      if (pageIdx > 0) {
+        stream += `BT /F1 8 Tf ${marginX} 820 Td (${this._nwAtypicalReviewPdfEscape('NexoWatt Nachweis - Seite ' + (pageIdx + 1))}) Tj ET\n`;
+      }
+      pg.forEach((line, idx) => {
+        const size = (pageIdx === 0 && idx === 0) ? 14 : ((line && !line.includes(':') && idx < 25) ? 10 : 9);
+        stream += `BT /F1 ${size} Tf ${marginX} ${y} Td (${this._nwAtypicalReviewPdfEscape(line)}) Tj ET\n`;
+        y -= lineH;
+      });
+      const streamBuf = Buffer.from(stream, 'latin1');
+      const contentId = addObj(Buffer.concat([Buffer.from(`<< /Length ${streamBuf.length} >>\nstream\n`, 'latin1'), streamBuf, Buffer.from('endstream', 'latin1')]));
+      const pageId = addObj(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>`);
+      pageRefs.push(`${pageId} 0 R`);
+    });
+
+    objects[1] = Buffer.from(`<< /Type /Pages /Count ${pageRefs.length} /Kids [${pageRefs.join(' ')}] >>`, 'latin1');
+
+    const chunks = [Buffer.from('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n', 'binary')];
+    const offsets = [0];
+    for (let i = 0; i < objects.length; i++) {
+      offsets[i + 1] = Buffer.concat(chunks).length;
+      chunks.push(Buffer.from(`${i + 1} 0 obj\n`, 'latin1'));
+      chunks.push(objects[i]);
+      chunks.push(Buffer.from('\nendobj\n', 'latin1'));
+    }
+    const xrefOffset = Buffer.concat(chunks).length;
+    const xref = ['xref', `0 ${objects.length + 1}`, '0000000000 65535 f '];
+    for (let i = 1; i <= objects.length; i++) xref.push(String(offsets[i]).padStart(10, '0') + ' 00000 n ');
+    xref.push('trailer');
+    xref.push(`<< /Size ${objects.length + 1} /Root 1 0 R >>`);
+    xref.push('startxref');
+    xref.push(String(xrefOffset));
+    xref.push('%%EOF');
+    chunks.push(Buffer.from(xref.join('\n') + '\n', 'latin1'));
+    return Buffer.concat(chunks);
   }
 
   _nwIntegrateKwh(series, endMs, defaultStepMs, positiveOnly = true) {

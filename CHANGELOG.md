@@ -1,3 +1,10 @@
+# 0.7.30
+
+- Atypische Nachkontrolle: Exportbereich in der §19-Kachel ergänzt mit CSV- und PDF-Export.
+- Influx-Nachweis: `historie.peakShaving.atypical.*` wird automatisch angelegt, in das gemeinsame Historie-/Influx-Raster geschrieben und zusätzlich werden die Runtime-States `peakShaving.atypical.review.*` historisiert.
+- Neue Runtime-Endpunkte: `/api/peakshaving/atypical/review`, `/api/peakshaving/atypical/review.csv` und `/api/peakshaving/atypical/review.pdf`.
+- Webcache auf `nexowatt-cache-v197` erhöht.
+
 # 0.7.29
 
 - App-Center Peak-Shaving: Netzbetreiber-/Quellnachweis für Hochlastzeitfenster ergänzt: Netzbetreiber, Gültigkeitsjahr, Quelle/Dokument, Veröffentlichungsdatum, Quell-URL/Ablage und Bemerkung.

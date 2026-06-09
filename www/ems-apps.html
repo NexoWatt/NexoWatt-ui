@@ -263,8 +263,19 @@
 
       <div class="nw-config-card" style="grid-column:1 / -1;">
         <div class="nw-config-card__header">
-          <div class="nw-config-card__title">Nachkontrolle / §19-Prüfung</div>
-          <div class="nw-config-card__subtitle">Live-Jahreskontrolle plus optionale Jahres-Endwerte aus RLM-/Zählerexport</div>
+          <div class="nw-config-card__header-top">
+            <div>
+              <div class="nw-config-card__title">Nachkontrolle / §19-Prüfung</div>
+              <div class="nw-config-card__subtitle">Live-Jahreskontrolle plus optionale Jahres-Endwerte aus RLM-/Zählerexport</div>
+            </div>
+            <div class="nw-config-row__actions" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;align-items:center;">
+              <input id="psAtypicalReviewExportFrom" class="nw-config-input" type="date" title="Export von" style="width:132px;" />
+              <input id="psAtypicalReviewExportTo" class="nw-config-input" type="date" title="Export bis" style="width:132px;" />
+              <button id="psAtypicalReviewRefresh" type="button" class="nw-config-btn nw-config-btn--ghost">Nachweis aktualisieren</button>
+              <button id="psAtypicalReviewExportCsv" type="button" class="nw-config-btn nw-config-btn--ghost">CSV Export</button>
+              <button id="psAtypicalReviewExportPdf" type="button" class="nw-config-btn nw-config-btn--ghost">PDF Export</button>
+            </div>
+          </div>
         </div>
         <div class="nw-config-card__body">
           <div class="nw-config-empty" style="margin:0 0 10px 0;line-height:1.35;">
@@ -281,6 +292,17 @@
             <label class="nw-config-field-control nw-config-field-control--stack">
               <span class="nw-config-field-label" style="width:auto;">Reset-Schlüssel</span>
               <input id="psAtypicalReviewResetToken" class="nw-config-input" type="text" placeholder="ändern = Jahreswerte neu starten" />
+            </label>
+            <label class="nw-config-field-control nw-config-field-control--stack">
+              <span class="nw-config-field-label" style="width:auto;">Influx-Logging</span>
+              <span style="display:flex;align-items:center;gap:10px;">
+                <input id="psAtypicalReviewInfluxLogEnabled" class="nw-config-checkbox" type="checkbox" />
+                <span class="nw-config-field-hint" style="margin:0;">Audit-Samples speichern</span>
+              </span>
+            </label>
+            <label class="nw-config-field-control nw-config-field-control--stack">
+              <span class="nw-config-field-label" style="width:auto;">Audit-Intervall (min)</span>
+              <input id="psAtypicalReviewAuditIntervalMinutes" class="nw-config-input" type="number" min="1" max="1440" step="1" placeholder="15" />
             </label>
             <label class="nw-config-field-control nw-config-field-control--stack">
               <span class="nw-config-field-label" style="width:auto;">Ist-Jahreshöchstlast P_abs_ist (W)</span>
@@ -322,6 +344,7 @@
             </div>
           </div>
           <div id="psAtypicalReviewPreview" class="nw-config-empty" style="margin-top:10px;line-height:1.45;">Live-Nachkontrolle läuft im Adapter unter peakShaving.atypical.review.*. Manuelle Jahres-Endwerte sind optional; leer = laufende Messung verwenden.</div>
+          <div id="psAtypicalReviewExportStatus" class="nw-config-help" style="margin-top:8px;opacity:.85;line-height:1.35;">Nachweis-Historie wird automatisch in Influx über <code>peakShaving.atypical.review.*</code> und gedrosselte Audit-Samples unter <code>peakShaving.atypical.audit.*</code> mitgeführt. CSV/PDF exportieren die aktuelle Prüfung plus die Influx-Zeitreihe.</div>
         </div>
       </div>
 

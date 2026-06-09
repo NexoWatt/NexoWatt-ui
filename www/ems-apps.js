@@ -110,6 +110,8 @@
     psAtypicalSourceUrl: document.getElementById('psAtypicalSourceUrl'),
     psAtypicalSourceNote: document.getElementById('psAtypicalSourceNote'),
     psAtypicalReviewEnabled: document.getElementById('psAtypicalReviewEnabled'),
+    psAtypicalReviewInfluxLogEnabled: document.getElementById('psAtypicalReviewInfluxLogEnabled'),
+    psAtypicalReviewAuditIntervalMinutes: document.getElementById('psAtypicalReviewAuditIntervalMinutes'),
     psAtypicalReviewResetToken: document.getElementById('psAtypicalReviewResetToken'),
     psAtypicalReviewPAbsActualW: document.getElementById('psAtypicalReviewPAbsActualW'),
     psAtypicalReviewPHlzfMaxW: document.getElementById('psAtypicalReviewPHlzfMaxW'),
@@ -121,6 +123,12 @@
     psAtypicalReviewMaxReductionPercent: document.getElementById('psAtypicalReviewMaxReductionPercent'),
     psAtypicalReviewNote: document.getElementById('psAtypicalReviewNote'),
     psAtypicalReviewPreview: document.getElementById('psAtypicalReviewPreview'),
+    psAtypicalReviewRefresh: document.getElementById('psAtypicalReviewRefresh'),
+    psAtypicalReviewExportFrom: document.getElementById('psAtypicalReviewExportFrom'),
+    psAtypicalReviewExportTo: document.getElementById('psAtypicalReviewExportTo'),
+    psAtypicalReviewExportCsv: document.getElementById('psAtypicalReviewExportCsv'),
+    psAtypicalReviewExportPdf: document.getElementById('psAtypicalReviewExportPdf'),
+    psAtypicalReviewExportStatus: document.getElementById('psAtypicalReviewExportStatus'),
 
     // Tabs
     tabs: document.getElementById('nw-ems-tabs'),
@@ -392,6 +400,74 @@
       : (r.technicalEligible ? 'Status: technisch erfüllt, wirtschaftliche Prüfung noch offen/negativ ⚠️' : 'Status: Kriterien noch nicht erfüllt ❌');
     els.psAtypicalReviewPreview.textContent = `${parts.join(' · ')} · ${status}`;
   }
+
+
+
+  function _psAtypicalReviewExportUrl(format) {
+    const rawFmt = String(format || 'csv').trim().toLowerCase();
+    const fmt = rawFmt === 'pdf' ? 'pdf' : (rawFmt === 'json' ? 'json' : 'csv');
+    const params = new URLSearchParams();
+    try {
+      const year = _psNumOrNull(els.psAtypicalYear && els.psAtypicalYear.value);
+      if (year !== null && year > 0) params.set('year', String(Math.round(year)));
+      const from = String((els.psAtypicalReviewExportFrom && els.psAtypicalReviewExportFrom.value) || '').trim();
+      const to = String((els.psAtypicalReviewExportTo && els.psAtypicalReviewExportTo.value) || '').trim();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      const reset = String((els.psAtypicalReviewResetToken && els.psAtypicalReviewResetToken.value) || '').trim();
+      if (reset) params.set('reset', reset);
+    } catch (_e) {}
+    const qs = params.toString();
+    const base = fmt === 'json' ? '/api/peakshaving/atypical/review' : `/api/peakshaving/atypical/review.${fmt}`;
+    return `${base}${qs ? `?${qs}` : ''}`;
+  }
+
+  function _psAtypicalReviewDefaultStatus() {
+    return 'Nachweis-Historie wird automatisch in Influx über historie.peakShaving.atypical.* und gedrosselte Audit-Samples unter peakShaving.atypical.audit.* mitgeführt. CSV/PDF exportieren die aktuelle Prüfung plus die Influx-Zeitreihe.';
+  }
+
+  function _psOpenAtypicalReviewExport(format) {
+    try {
+      if (els.psAtypicalReviewExportStatus) {
+        els.psAtypicalReviewExportStatus.textContent = `Nachweis-${String(format || '').toUpperCase()} wird erzeugt …`;
+      }
+      const url = _psAtypicalReviewExportUrl(format);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => {
+        if (els.psAtypicalReviewExportStatus) els.psAtypicalReviewExportStatus.textContent = _psAtypicalReviewDefaultStatus();
+      }, 2500);
+    } catch (e) {
+      if (els.psAtypicalReviewExportStatus) els.psAtypicalReviewExportStatus.textContent = 'Export konnte nicht gestartet werden: ' + (e && e.message ? e.message : e);
+    }
+  }
+
+  async function _psRefreshAtypicalReviewExportStatus() {
+    if (!els.psAtypicalReviewExportStatus) return;
+    try {
+      els.psAtypicalReviewExportStatus.textContent = 'Nachweis wird aus Runtime/Influx gelesen …';
+      const params = new URLSearchParams();
+      const year = _psNumOrNull(els.psAtypicalYear && els.psAtypicalYear.value);
+      if (year !== null && year > 0) params.set('year', String(Math.round(year)));
+      const from = String((els.psAtypicalReviewExportFrom && els.psAtypicalReviewExportFrom.value) || '').trim();
+      const to = String((els.psAtypicalReviewExportTo && els.psAtypicalReviewExportTo.value) || '').trim();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      const url = '/api/peakshaving/atypical/review' + (params.toString() ? `?${params.toString()}` : '');
+      const data = await fetchJson(url, { method: 'GET' });
+      const meta = data && data.meta ? data.meta : {};
+      const sum = data && data.summary ? data.summary : {};
+      const rows = Number(meta.rows || (Array.isArray(data && data.rows) ? data.rows.length : 0) || 0);
+      const pAbs = Number(sum.pAbsMaxW || sum.pAbsEvalW || 0);
+      const pHlzf = Number(sum.pHlzfMaxW || sum.pHlzfEvalW || 0);
+      const deltaPct = Number(sum.deltaPercent || 0);
+      const ok = !!sum.eligible;
+      const hist = meta.historyInstance ? `Influx: ${meta.historyInstance}` : 'Influx: nicht erkannt';
+      els.psAtypicalReviewExportStatus.textContent = `${hist} · Samples: ${rows} · P_abs ${Math.round(pAbs)} W · P_HLZF ${Math.round(pHlzf)} W · Δ ${Math.round(deltaPct * 100) / 100} % · ${ok ? '§19 erfüllt ✅' : '§19 offen/nicht erfüllt ⚠️'}`;
+    } catch (e) {
+      els.psAtypicalReviewExportStatus.textContent = 'Nachweis konnte nicht gelesen werden: ' + (e && e.message ? e.message : e);
+    }
+  }
+
 
   function _psSetSelect(el, value, fallback) {
     if (!el) return;
@@ -1154,10 +1230,13 @@ function _collectFlowPowerDpIsWFromUI() {
       'psAtypicalSourceUrl', 'psAtypicalSourceNote',
       'psAtypicalIncludeWeekends', 'psAtypicalExcludeChristmasNewYear', 'psAtypicalHolidays',
       'psAtypicalBridgeDays', 'psAtypicalCalendarExceptions', 'psAtypicalAddWindow',
-      'psAtypicalReviewEnabled', 'psAtypicalReviewResetToken', 'psAtypicalReviewPAbsActualW',
+      'psAtypicalReviewEnabled', 'psAtypicalReviewResetToken', 'psAtypicalReviewInfluxLogEnabled',
+      'psAtypicalReviewAuditIntervalMinutes', 'psAtypicalReviewPAbsActualW',
       'psAtypicalReviewPHlzfMaxW', 'psAtypicalReviewPowerPriceEurPerKwYear',
+      'psAtypicalReviewEnergyPriceEurPerKwh', 'psAtypicalReviewAnnualEnergyKwh',
       'psAtypicalReviewSavingsBagatelleEur', 'psAtypicalReviewGeneralGridFeeEur',
-      'psAtypicalReviewMaxReductionPercent', 'psAtypicalReviewNote'
+      'psAtypicalReviewMaxReductionPercent', 'psAtypicalReviewNote',
+      'psAtypicalReviewRefresh', 'psAtypicalReviewExportFrom', 'psAtypicalReviewExportTo', 'psAtypicalReviewExportCsv', 'psAtypicalReviewExportPdf'
     ];
     atypicalIds.forEach((id) => {
       const el = document.getElementById(id);
@@ -1218,6 +1297,8 @@ function _collectFlowPowerDpIsWFromUI() {
 
     const review = (a.review && typeof a.review === 'object') ? a.review : (a.nachkontrolle && typeof a.nachkontrolle === 'object' ? a.nachkontrolle : {});
     if (els.psAtypicalReviewEnabled) els.psAtypicalReviewEnabled.checked = review.enabled !== false;
+    if (els.psAtypicalReviewInfluxLogEnabled) els.psAtypicalReviewInfluxLogEnabled.checked = review.influxLogEnabled !== false;
+    _psSetNumberInput(els.psAtypicalReviewAuditIntervalMinutes, review.auditIntervalMinutes ?? review.influxSampleIntervalMinutes ?? 15);
     _psSetTextInput(els.psAtypicalReviewResetToken, review.resetToken || review.resetKey || '');
     _psSetNumberInput(els.psAtypicalReviewPAbsActualW, review.pAbsActualW ?? review.actualAnnualPeakW ?? review.pAbsIstW);
     _psSetNumberInput(els.psAtypicalReviewPHlzfMaxW, review.pHlzfMaxW ?? review.hlzfPeakW ?? review.pHlzfIstW);
@@ -1228,6 +1309,12 @@ function _collectFlowPowerDpIsWFromUI() {
     _psSetNumberInput(els.psAtypicalReviewGeneralGridFeeEur, review.generalGridFeeEur ?? review.generalGridFee ?? review.allgemeinesNetzentgeltEur);
     _psSetNumberInput(els.psAtypicalReviewMaxReductionPercent, review.maxReductionPercent ?? 80);
     _psSetTextInput(els.psAtypicalReviewNote, review.note || review.reviewNote || '');
+    try {
+      const exportYear = _psNumOrNull(els.psAtypicalYear && els.psAtypicalYear.value) || new Date().getFullYear();
+      const y = Math.round(exportYear);
+      if (els.psAtypicalReviewExportFrom && !els.psAtypicalReviewExportFrom.value) els.psAtypicalReviewExportFrom.value = `${y}-01-01`;
+      if (els.psAtypicalReviewExportTo && !els.psAtypicalReviewExportTo.value) els.psAtypicalReviewExportTo.value = `${y}-12-31`;
+    } catch (_e) {}
 
     buildAtypicalWindowsUI();
     _psUpdateAtypicalFieldState();
@@ -1299,6 +1386,9 @@ function _collectFlowPowerDpIsWFromUI() {
 
     const review = {};
     if (els.psAtypicalReviewEnabled) review.enabled = !!els.psAtypicalReviewEnabled.checked;
+    if (els.psAtypicalReviewInfluxLogEnabled) review.influxLogEnabled = !!els.psAtypicalReviewInfluxLogEnabled.checked;
+    const auditIntervalMinutes = _psNumOrNull(els.psAtypicalReviewAuditIntervalMinutes && els.psAtypicalReviewAuditIntervalMinutes.value);
+    if (auditIntervalMinutes !== null && auditIntervalMinutes > 0) review.auditIntervalMinutes = Math.max(1, Math.min(1440, Math.round(auditIntervalMinutes)));
     const resetToken = String((els.psAtypicalReviewResetToken && els.psAtypicalReviewResetToken.value) || '').trim();
     if (resetToken) review.resetToken = resetToken;
     const pAbsActual = _psNumOrNull(els.psAtypicalReviewPAbsActualW && els.psAtypicalReviewPAbsActualW.value);
@@ -8787,9 +8877,12 @@ function _collectFlowPowerDpIsWFromUI() {
   [
     'psAtypicalThresholdPercent',
     'psAtypicalMinShiftW',
+    'psAtypicalReviewAuditIntervalMinutes',
     'psAtypicalReviewPAbsActualW',
     'psAtypicalReviewPHlzfMaxW',
     'psAtypicalReviewPowerPriceEurPerKwYear',
+    'psAtypicalReviewEnergyPriceEurPerKwh',
+    'psAtypicalReviewAnnualEnergyKwh',
     'psAtypicalReviewSavingsBagatelleEur',
     'psAtypicalReviewGeneralGridFeeEur',
     'psAtypicalReviewMaxReductionPercent',
@@ -8797,6 +8890,23 @@ function _collectFlowPowerDpIsWFromUI() {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', () => { try { _psUpdateAtypicalReviewPreview(); } catch (_e) {} });
   });
+
+  if (els.psAtypicalReviewRefresh) {
+    els.psAtypicalReviewRefresh.addEventListener('click', () => { _psRefreshAtypicalReviewExportStatus().catch(() => {}); });
+  }
+  ['psAtypicalReviewExportFrom', 'psAtypicalReviewExportTo'].forEach((key) => {
+    if (els[key]) {
+      els[key].addEventListener('change', () => _psRefreshAtypicalReviewExportStatus());
+    }
+  });
+
+  if (els.psAtypicalReviewExportCsv) {
+    els.psAtypicalReviewExportCsv.addEventListener('click', () => _psOpenAtypicalReviewExport('csv'));
+  }
+  if (els.psAtypicalReviewExportPdf) {
+    els.psAtypicalReviewExportPdf.addEventListener('click', () => _psOpenAtypicalReviewExport('pdf'));
+  }
+
   if (els.psAtypicalAddWindow) {
     els.psAtypicalAddWindow.addEventListener('click', () => {
       const ps = _psGetPeakCfg();
