@@ -57,13 +57,70 @@
 <button id="tabStorageFarm" class="tab hidden" data-tab="storagefarm">SPEICHERFARM</button>
 </nav>
 <div class="status-dot" id="liveDot" title="Live Verbindung"></div>
+<a class="topbar-gear" href="settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
 <div class="menu hidden" id="menuDropdown"><a class="menu-item" href="./">Live</a><a class="menu-item" href="history.html">History</a>
 <a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item hidden" id="menuSmartHomeLink" href="smarthome.html">SmartHome</a><a class="menu-item hidden" id="menuStorageFarmLink" href="#" onclick="document.querySelector('#tabStorageFarm')?.click();return false;">Speicherfarm</a><a class="menu-item" href="settings.html">Einstellungen</a></div></header>
-<main class="content">
+<main class="content nw-dashboard">
+<aside class="nw-dashboard-rail nw-dashboard-left" aria-label="System- und Liveübersicht">
+  <section class="card nw-panel nw-panel-status">
+    <div class="nw-panel-title">
+      <span class="nw-panel-icon">🛡️</span>
+      <span>Systemstatus</span>
+    </div>
+    <div class="nw-system-ok" id="sideStatusText">Alle Systeme normal</div>
+    <div class="nw-status-list">
+      <div class="nw-status-row">
+        <span class="nw-status-icon">📶</span>
+        <span><b>Verbindung</b><small id="sideConnection">Verbinde…</small></span>
+      </div>
+      <div class="nw-status-row">
+        <span class="nw-status-icon">⚙️</span>
+        <span><b>EMS</b><small id="sideEms">Aktiv</small></span>
+      </div>
+      <div class="nw-status-row">
+        <span class="nw-status-icon">🔋</span>
+        <span><b>Speicher</b><small id="sideStorage">-- %</small></span>
+      </div>
+      <div class="nw-status-row">
+        <span class="nw-status-icon">🗼</span>
+        <span><b>Netzstatus</b><small id="sideGridStatus">Stabil</small></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="card nw-panel nw-panel-overview">
+    <div class="nw-panel-title">Live Übersicht</div>
+    <div class="nw-overview-list">
+      <div class="nw-overview-row">
+        <span class="nw-overview-icon">↻</span>
+        <span><small>Gesamtverbrauch</small><b id="sideConsumptionTotal">--</b></span>
+      </div>
+      <div class="nw-overview-row">
+        <span class="nw-overview-icon">☀️</span>
+        <span><small>Eigenverbrauch</small><b id="sideSelfConsumption">-- %</b></span>
+      </div>
+      <div class="nw-overview-row">
+        <span class="nw-overview-icon nw-overview-icon--warn">🔋</span>
+        <span><small>Autarkie</small><b id="sideAutarky">-- %</b></span>
+      </div>
+      <div class="nw-overview-row">
+        <span class="nw-overview-icon">♻️</span>
+        <span><small>CO₂ Einsparung</small><b id="sideCo2Savings">--</b></span>
+      </div>
+    </div>
+    <div class="nw-live-stand">
+      <span>Stand: <b id="sideTimestamp">--</b></span>
+      <span class="nw-live-dot" id="sideLiveDot"></span>
+    </div>
+  </section>
+</aside>
+
+<div class="nw-dashboard-main">
+
 <section class="card energy-web">
 <div class="card-header">
 <div class="legend-color"></div>
-<span>Energiefluss</span>
+<span>Energiefluss – Live</span>
 </div>
 <div class="web-wrap">
 <svg id="energyWebSvg" class="web" preserveAspectRatio="xMidYMid meet" viewBox="-80 40 760 520">
@@ -175,7 +232,10 @@
 <g id="flowExtraNodes"></g>
 </svg>
 
-<div class="ems-status hidden" id="emsStatusText"></div>
+<div class="ems-status-wrap hidden" id="emsStatusWrap">
+  <div class="ems-status hidden" id="emsStatusText"></div>
+  <button class="btn small ems-status-btn" id="energyTariffDetailsBtn" type="button">🏷️ Tarifdetails</button>
+</div>
 </div>
 </section>
 <section class="card nw-ai-advisor-card hidden" id="aiAdvisorLiveCard">
@@ -193,7 +253,7 @@
       <div class="nw-ai-advisor-message" id="aiAdvisorLiveMessage">Der KI‑Energieberater wartet auf aktuelle EMS‑Daten.</div>
       <div class="nw-ai-advisor-action" id="aiAdvisorLiveAction"></div>
     </div>
-    <button class="btn small nw-ai-advisor-toggle" id="aiAdvisorToggleDetails" type="button">Details</button>
+    <button class="btn small nw-ai-advisor-toggle" id="aiAdvisorToggleDetails" type="button">Details ansehen ›</button>
   </div>
   <div class="nw-ai-advisor-list hidden" id="aiAdvisorLiveList"></div>
 </section>
@@ -201,7 +261,7 @@
 <section class="card">
   <div class="card-header">
     <div class="legend-color"></div>
-    <span>Status</span>
+    <span>Status &amp; KPIs</span>
   </div>
 
   <div class="nw-tiles-grid" id="liveStatusTiles" style="padding:12px;">
@@ -379,11 +439,43 @@
   </div>
 </section>
 
+</div>
+
+<aside class="nw-dashboard-rail nw-dashboard-right" aria-label="Aktuelle Werte und Schnellzugriff">
+  <section class="card nw-panel nw-values-card">
+    <div class="nw-panel-title">Aktuelle Werte</div>
+    <div class="nw-value-list">
+      <div class="nw-value-row nw-value-row--pv"><span>☀️ PV Erzeugung</span><b id="sidePvPower">--</b></div>
+      <div class="nw-value-row nw-value-row--load"><span>🏠 Gebäudeverbrauch</span><b id="sideBuildingPower">--</b></div>
+      <div class="nw-value-row nw-value-row--grid"><span>🗼 Netzbezug</span><b id="sideGridBuyPower">--</b></div>
+      <div class="nw-value-row nw-value-row--grid"><span>🗼 Netzeinspeisung</span><b id="sideGridSellPower">--</b></div>
+      <div class="nw-value-row nw-value-row--battery"><span>🔋 Batterie Leistung</span><b id="sideBatteryPower">--</b></div>
+      <div class="nw-value-row nw-value-row--battery"><span>🔋 Batterie SoC</span><b id="sideBatterySoc">-- %</b></div>
+      <div class="nw-value-row nw-value-row--ev"><span>🔌 Ladestation Leistung</span><b id="sideEvcsPower">--</b></div>
+    </div>
+  </section>
+
+  <section class="card nw-panel nw-weather-side-card" id="sideWeatherCard" style="display:none;">
+    <div class="nw-panel-title">Wetter heute</div>
+    <div class="nw-weather-side-main">
+      <div class="nw-weather-side-icon" id="sideWeatherIcon">🌤️</div>
+      <div>
+        <b id="sideWeatherTemp">-- °C</b>
+        <small id="sideWeatherCondition">—</small>
+      </div>
+    </div>
+    <div class="nw-weather-side-meta">
+      <span>🌡️ <small>Gefühlt</small><b id="sideWeatherFeels">-- °C</b></span>
+      <span>☁️ <small>Wolken</small><b id="sideWeatherCloud">-- %</b></span>
+      <span>💨 <small>Wind</small><b id="sideWeatherWind">-- km/h</b></span>
+    </div>
+  </section>
+
 <!-- Schnellsteuerung (Live) – im gleichen Design wie die EVCS-Kacheln -->
-<section class="card">
+<section class="card nw-quick-card">
   <div class="card-header">
     <div class="legend-color"></div>
-    <span>Schnellsteuerung</span>
+    <span>Schnellzugriff</span>
   </div>
 
   <div class="nw-tiles-grid" id="liveQuickTiles" style="padding:12px;">
@@ -392,8 +484,8 @@
       <div class="nw-tile__top">
         <div class="nw-tile__icon-circle">⚙</div>
         <div style="flex:1; margin-left:8px; min-width:0;">
-          <div class="nw-tile__alias">Optimierung</div>
-          <div class="nw-tile__room">Tarif &amp; Schutz</div>
+          <div class="nw-tile__alias">Tarif &amp; Kosten</div>
+          <div class="nw-tile__room">Optimierung &amp; Schutz</div>
         </div>
         <button class="nw-tile__badge nw-tile__badge--accent nw-tile__badge--btn" id="tariffEmsBtn" type="button" aria-label="EMS Steuerung öffnen">EMS</button>
         <button class="nw-tile__tip-btn" id="tariffForecastBtn" type="button" aria-label="Preisverlauf (heute) anzeigen">📈</button>
@@ -431,7 +523,7 @@
       <div class="nw-tile__top">
         <div class="nw-tile__icon-circle">⇵</div>
         <div style="flex:1; margin-left:8px; min-width:0;">
-          <div class="nw-tile__alias">Schwellwerte</div>
+          <div class="nw-tile__alias">Lastmanagement</div>
           <div class="nw-tile__room">Automatik-Regeln</div>
         </div>
         <div class="nw-tile__badge">APP</div>
@@ -505,6 +597,7 @@
       </div>
     </div>  </div>
 </section>
+</aside>
 
 <div id="thresholdModal" class="modal hidden">
   <div class="dialog">
@@ -835,7 +928,6 @@
   </div>
 </div>
 
-</section>
 </main>
 <script src="/static/app.js"></script>
 

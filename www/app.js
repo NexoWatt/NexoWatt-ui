@@ -1012,6 +1012,100 @@ function setText(id, text) {
   el.textContent = text;
 }
 
+
+function nwSetDisplay(id, visible, displayValue) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = visible ? (displayValue || '') : 'none';
+}
+
+function nwFormatDashboardTimestamp(ts) {
+  const n = Number(ts);
+  if (!Number.isFinite(n) || n <= 0) return '--';
+  const d = new Date(n);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${dd}.${mm}.${yyyy} ${hh}:${mi}:${ss}`;
+}
+
+function nwLatestStateTimestamp(keys) {
+  const st = window.latestState || state || {};
+  let best = 0;
+  const scanKey = (k) => {
+    const rec = st && st[k];
+    const ts = rec && Number(rec.ts);
+    if (Number.isFinite(ts) && ts > best) best = ts;
+  };
+  if (Array.isArray(keys)) keys.forEach(scanKey);
+  if (!best) {
+    try {
+      Object.keys(st || {}).forEach((k) => {
+        const ts = Number(st[k] && st[k].ts);
+        if (Number.isFinite(ts) && ts > best) best = ts;
+      });
+    } catch (_e) {}
+  }
+  return best || Date.now();
+}
+
+function nwSetLiveOnline(isOnline) {
+  const online = !!isOnline;
+  setText('sideConnection', online ? 'Online' : 'Offline');
+  setText('sideStatusText', online ? 'Alle Systeme normal' : 'Verbindung wird aufgebaut');
+  const dot = document.getElementById('sideLiveDot');
+  if (dot) dot.classList.toggle('is-offline', !online);
+}
+
+function updateDashboardShellUi(data) {
+  const snap = data || {};
+  const d = typeof snap.d === 'function' ? snap.d : ((k) => (window.latestState || state || {})[k]?.value);
+
+  const liveDot = document.getElementById('liveDot');
+  nwSetLiveOnline(!liveDot || liveDot.classList.contains('live'));
+
+  const pv = Number(snap.pv ?? d('pvPower') ?? d('productionTotal') ?? 0) || 0;
+  const buy = Number(snap.buy ?? 0) || 0;
+  const sell = Number(snap.sell ?? 0) || 0;
+  const load = Number(snap.load ?? d('consumptionTotal') ?? 0) || 0;
+  const charge = Math.max(0, Number(snap.charge ?? 0) || 0);
+  const discharge = Math.max(0, Number(snap.discharge ?? 0) || 0);
+  const batterySigned = discharge - charge;
+  const evcsPower = Number(snap.evcsPower ?? d('consumptionEvcs') ?? d('evcsPower') ?? 0) || 0;
+
+  const soc = (snap.socN !== undefined && snap.socN !== null) ? Number(snap.socN) : coerceNumber(d('storageSoc'));
+  const autarky = (snap.autarkyN !== undefined && snap.autarkyN !== null) ? Number(snap.autarkyN) : coerceNumber(d('autarky'));
+  const selfc = (snap.selfcN !== undefined && snap.selfcN !== null) ? Number(snap.selfcN) : coerceNumber(d('selfConsumption'));
+
+  setText('sideStorage', Number.isFinite(soc) ? `${Math.round(soc)} %` : '-- %');
+  setText('sideBatterySoc', Number.isFinite(soc) ? `${Math.round(soc)} %` : '-- %');
+  setText('sideEms', 'Aktiv');
+  const p14 = !!d('ems.core.para14aActive');
+  const peak = String(d('peakShaving.control.status') || '').trim();
+  setText('sideGridStatus', p14 ? '§14a aktiv' : (peak === 'active' ? 'Peak aktiv' : 'Stabil'));
+
+  setText('sideConsumptionTotal', formatFlowPower(Math.max(0, load)));
+  setText('sideSelfConsumption', Number.isFinite(selfc) ? `${Math.round(selfc)} %` : '-- %');
+  setText('sideAutarky', Number.isFinite(autarky) ? `${Math.round(autarky)} %` : '-- %');
+  setText('sideCo2Savings', snap.co2Text || '--');
+
+  setText('sidePvPower', formatFlowPower(Math.abs(pv)));
+  setText('sideBuildingPower', formatFlowPower(Math.max(0, load)));
+  setText('sideGridBuyPower', formatFlowPower(Math.max(0, buy)));
+  setText('sideGridSellPower', formatFlowPower(Math.max(0, sell)));
+  setText('sideBatteryPower', (batterySigned < 0 ? '-' : '') + formatFlowPower(Math.abs(batterySigned)));
+  setText('sideEvcsPower', formatFlowPower(Math.abs(evcsPower)));
+
+  const ts = nwLatestStateTimestamp([
+    'pvPower', 'productionTotal', 'consumptionTotal', 'gridPower', 'gridBuyPower',
+    'gridSellPower', 'storageSoc', 'storagePower', 'consumptionEvcs'
+  ]);
+  setText('sideTimestamp', nwFormatDashboardTimestamp(ts));
+}
+
 // ------------------------------
 // Energiefluss: dynamische Extra-Kreise (Verbraucher/Erzeuger)
 // ------------------------------
@@ -2026,6 +2120,7 @@ function render() {
     const pvLineEl = document.getElementById('pvForecastLine');
 
     if (!weatherEnabled) {
+      nwSetDisplay('sideWeatherCard', false);
       // Weather-App ist aus -> komplette Kachel ausblenden, keine UI-Hinweise
       setText('weatherTomorrow', '');
       setText('weatherUpdated', '—');
@@ -2059,6 +2154,14 @@ function render() {
       setText('weatherCondition', cond);
       setText('weatherWind', _fmtKmh(wWind));
       setText('weatherCloud', _fmtPct(wCloud));
+
+      nwSetDisplay('sideWeatherCard', true);
+      setText('sideWeatherIcon', _pickWeatherIcon(wCode, wText));
+      setText('sideWeatherTemp', _fmtTempC(wTemp));
+      setText('sideWeatherCondition', cond);
+      setText('sideWeatherFeels', _fmtTempC(wTemp));
+      setText('sideWeatherCloud', _fmtPct(wCloud));
+      setText('sideWeatherWind', _fmtKmh(wWind));
 
       // Tomorrow line
       let tomorrowLine = '';
@@ -2109,6 +2212,26 @@ function render() {
         if (pvRow) pvRow.style.display = 'none';
       }
     }
+  } catch (_e) {}
+
+  try {
+    const co2TextDash = (co2Dp != null)
+      ? (isNaN(Number(co2Dp)) ? String(co2Dp) : Number(co2Dp).toFixed(1) + ' t')
+      : (co2FromPvT != null ? co2FromPvT.toFixed(1) + ' t' : '--');
+    updateDashboardShellUi({
+      d,
+      pv,
+      buy,
+      sell,
+      load,
+      charge,
+      discharge,
+      socN,
+      autarkyN,
+      selfcN,
+      evcsPower: d('consumptionEvcs') ?? 0,
+      co2Text: co2TextDash
+    });
   } catch (_e) {}
 
   // Settings: RFID learning UI state (if present)
@@ -2289,8 +2412,8 @@ const refreshConfig = async () => {
     const es = new EventSource('/events');
     const dot = document.getElementById('liveDot');
     if (dot) dot.classList.remove('live');
-    es.onopen = () => { if (dot) dot.classList.add('live'); };
-    es.onerror = () => { if (dot) dot.classList.remove('live'); try{ es.close(); }catch(_){ } setTimeout(startEvents, 3000); };
+    es.onopen = () => { if (dot) dot.classList.add('live'); try{ nwSetLiveOnline(true); }catch(_e){} };
+    es.onerror = () => { if (dot) dot.classList.remove('live'); try{ nwSetLiveOnline(false); }catch(_e){} try{ es.close(); }catch(_){ } setTimeout(startEvents, 3000); };
     es.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data);
@@ -2826,6 +2949,7 @@ window.addEventListener('DOMContentLoaded', ()=> {
   hideAllPanels();
   applyInitialTabFromUrl();
   try { initTariffForecastTooltip(); } catch(_e) {}
+  try { initEmsControlModal(); } catch(_e) {}
 
   // If opened directly as standalone Settings page, show settings panel by default
   try {
@@ -2844,7 +2968,7 @@ window.addEventListener('DOMContentLoaded', ()=> {
 
  // --- Settings & Installer logic ---
 
-function hideAllPanels(){ document.querySelectorAll('[data-tab-content]').forEach(el=> el.classList.add('hidden')); document.querySelector('.content').style.display='block'; }
+function hideAllPanels(){ document.querySelectorAll('[data-tab-content]').forEach(el=> el.classList.add('hidden')); const c=document.querySelector('.content'); if(c) c.style.display='grid'; }
 let SERVER_CFG = { adminUrl: null, installerLocked: false };
 
 async function loadConfig() {
@@ -4216,6 +4340,8 @@ function initEmsControlModal() {
 
   const openBtn = document.getElementById('tariffEmsBtn') || card;
   openBtn.addEventListener('click', (e)=>{ try{ if (e){ e.preventDefault(); e.stopPropagation(); } }catch(_e){} open(e); });
+  const energyDetailsBtn = document.getElementById('energyTariffDetailsBtn');
+  if (energyDetailsBtn) energyDetailsBtn.addEventListener('click', (e)=>{ try{ if (e){ e.preventDefault(); e.stopPropagation(); } }catch(_e){} open(e); });
 
   if (closeBtn) closeBtn.addEventListener('click', close);
   modal.addEventListener('click', (e) => { if (e && e.target === modal) close(); });
@@ -5901,6 +6027,8 @@ function updateEnergyWeb() {
     }
 statusEl.textContent = msg;
     statusEl.classList.toggle('hidden', !msg);
+    const statusWrap = document.getElementById('emsStatusWrap');
+    if (statusWrap) statusWrap.classList.toggle('hidden', !msg);
   }
 
 }
@@ -6048,7 +6176,7 @@ function updateAiAdvisorLiveUi() {
         const l = document.getElementById('aiAdvisorLiveList');
         if (!l) return;
         const open = l.classList.toggle('hidden') === false;
-        toggleBtn.textContent = open ? 'Weniger' : 'Details';
+        toggleBtn.textContent = open ? 'Weniger anzeigen' : 'Details ansehen ›';
       });
     }
   } catch (_e) {}

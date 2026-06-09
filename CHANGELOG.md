@@ -1,3 +1,11 @@
+# 0.7.32 - Responsive Cockpit-Redesign
+
+- LIVE-Dashboard auf das neue responsive Cockpit-Layout umgebaut: linke System-/Liveübersicht, zentraler Energiefluss und rechte Werte-/Schnellzugriffsleiste.
+- Energiefluss-Monitor inklusive Schnellsteuerung für optionale Verbraucher/Erzeuger bleibt erhalten und ist auch auf Tablet/Smartphone touchfreundlich nutzbar.
+- Rechte Schnellzugriffsleiste mit Tarif-/EMS-, Ladestation- und Lastmanagement-Kacheln ergänzt; bestehende Modal- und Steuerlogik bleibt angebunden.
+- Mobile Breakpoints für Smartphone und Tablet ergänzt; KPI-, Wetter-, Advisor- und Schnellzugriffskarten ordnen sich automatisch einspaltig bzw. zweispaltig an.
+- Webcache auf `nexowatt-cache-v199` erhöht.
+
 # 0.7.31 - KI-Energieberater / beratende Optimierung
 
 - Neue App-Center-App „KI-Optimierung“ ergänzt.

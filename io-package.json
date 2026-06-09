@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.31",
+    "version": "0.7.32",
     "news": {
       "0.7.31": {
         "en": "Added advisory AI energy optimizer: a new App-Center “AI Optimization” app, advisor-only EMS module, aiAdvisor.* runtime states, configurable categories/thresholds, and a LIVE dashboard recommendation card. The UI adapter only produces optimization suggestions; no automatic switching decisions are executed.",
@@ -1967,7 +1967,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.28",
+  "version": "0.7.32",
   "news": {
     "0.7.28": {
       "en": "Peak-Shaving App-Center tab added: installers can now configure standard, atypical HLZF, hybrid or monitoring modes directly in the UI.",
