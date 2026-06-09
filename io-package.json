@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.32",
+    "version": "0.7.33",
     "news": {
       "0.7.31": {
         "en": "Added advisory AI energy optimizer: a new App-Center “AI Optimization” app, advisor-only EMS module, aiAdvisor.* runtime states, configurable categories/thresholds, and a LIVE dashboard recommendation card. The UI adapter only produces optimization suggestions; no automatic switching decisions are executed.",
@@ -1747,6 +1747,10 @@
       "0.6.212": {
         "de": "PV-Überschussladen stabilisiert: Reiner PV-Überschuss wird jetzt bevorzugt direkt als PV minus Verbrauch ohne EV minus Speicherladung berechnet. Zusätzlich gibt es eine kurze Einschwingzeit nach dem Start, damit Wallboxen/Fahrzeuge bei PV-Starts nicht sofort wieder abgeregelt werden.",
         "en": "Stabilized PV surplus charging: pure PV surplus is now preferably calculated directly as PV minus non-EV consumption minus storage charging. In addition, a short startup settling time was added so wallboxes/vehicles are not immediately throttled back to 0 right after a PV-based start."
+      },
+      "0.7.33": {
+        "en": "Applied the new responsive cockpit design across all frontend subpages including history, settings, EVCS, SmartHome, App-Center, logic, simulation and reports.",
+        "de": "Neues responsives Cockpit-Design auf alle Frontend-Unterseiten angewendet: History, Einstellungen, EVCS, SmartHome, App-Center, Logik, Simulation und Reports."
       }
     },
     "title": "NexoWatt UI",
@@ -1967,7 +1971,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.32",
+  "version": "0.7.33",
   "news": {
     "0.7.28": {
       "en": "Peak-Shaving App-Center tab added: installers can now configure standard, atypical HLZF, hybrid or monitoring modes directly in the UI.",
@@ -3663,6 +3667,10 @@
     "0.6.212": {
       "de": "PV-Überschussladen stabilisiert: Reiner PV-Überschuss wird jetzt bevorzugt direkt als PV minus Verbrauch ohne EV minus Speicherladung berechnet. Zusätzlich gibt es eine kurze Einschwingzeit nach dem Start, damit Wallboxen/Fahrzeuge bei PV-Starts nicht sofort wieder abgeregelt werden.",
       "en": "Stabilized PV surplus charging: pure PV surplus is now preferably calculated directly as PV minus non-EV consumption minus storage charging. In addition, a short startup settling time was added so wallboxes/vehicles are not immediately throttled back to 0 right after a PV-based start."
+    },
+    "0.7.33": {
+      "en": "Applied the new responsive cockpit design across all frontend subpages including history, settings, EVCS, SmartHome, App-Center, logic, simulation and reports.",
+      "de": "Neues responsives Cockpit-Design auf alle Frontend-Unterseiten angewendet: History, Einstellungen, EVCS, SmartHome, App-Center, Logik, Simulation und Reports."
     }
   }
 }

@@ -8,22 +8,54 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/nexowatt-32.png">
 </head>
 
-<body>
-  <header class="topbar">
-    <div class="brand">
-      <div class="logo" aria-hidden="true"></div>
-      <div class="titles">
-        <div class="title">NexoWatt EMS</div>
-        <div class="subtitle">Simulation</div>
-      </div>
-    </div>
-    <div class="actions">
-      <a class="btn" href="/">VIS öffnen</a>
-      <a class="btn" href="/ems-apps.html">App Center</a>
-    </div>
-  </header>
+<body class="nw-cockpit-page nw-cockpit-skin nw-page-simulation">
+  <header class="topbar nw-cockpit-topbar">
+  <script>
+  (function () {
+    try {
+      var p = window.location.pathname || "";
+      if (p && !p.endsWith("/") && !p.endsWith(".html")) {
+        window.location.replace(p + "/" + window.location.search + window.location.hash);
+      }
+    } catch (e) {}
+  })();
+  </script>
+  <div class="brand"><a href="./" aria-label="NexoWatt Live"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></a></div>
+  <button aria-label="Menu" id="menuBtn" data-nw-menu-fallback="1" type="button">☰</button>
+  <h1>NexoWatt Simulation</h1>
+  <nav class="tabs">
+    <button class="tab" id="liveTabBtn" type="button" onclick="window.location.href='./'">LIVE</button>
+    <button class="tab" id="historyTabBtn" type="button" onclick="window.location.href='history.html'">HISTORY</button>
+    <button class="tab" id="tabSmartHome" type="button" onclick="window.location.href='smarthome.html'">SMARTHOME</button>
+    <button class="tab" id="tabStorageFarm" type="button" onclick="window.location.href='ems-apps.html#storagefarm'">SPEICHERFARM</button>
+    <button class="tab active" type="button" onclick="window.location.href='ems-apps.html'">APP-CENTER</button>
+  </nav>
+  <div class="status-dot live" id="liveDot" title="Live Verbindung"></div>
+  <a class="topbar-gear" href="settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
+  <div class="menu hidden" id="menuDropdown">
+    <a class="menu-item" href="./">Live</a>
+    <a class="menu-item" href="history.html">History</a>
+    <a class="menu-item" href="smarthome.html" id="menuSmartHomeLink">SmartHome</a>
+    <a class="menu-item" href="ems-apps.html#storagefarm" id="menuStorageFarmLink">Speicherfarm</a>
+    <a class="menu-item" href="ems-apps.html">App-Center</a>
+    <a class="menu-item" href="evcs.html" id="menuEvcsLink">EVCS</a>
+    <a class="menu-item" href="settings.html">Einstellungen</a>
+  </div>
+</header>
 
-  <main class="content" style="max-width: 1100px;">
+  <section class="nw-page-hero" aria-label="Seitenübersicht">
+    <div>
+      <div class="nw-page-hero__eyebrow">Testbetrieb</div>
+      <div class="nw-page-hero__title">Simulation</div>
+      <div class="nw-page-hero__subtitle">EMS-Simulation, Szenarien und automatische Datenpunkt-Zuordnung im neuen Look.</div>
+    </div>
+    <div class="nw-page-hero__right">
+      <span class="nw-page-hero__pill">Lab</span>
+    </div>
+  </section>
+
+
+  <main class="content nw-page-shell nw-simulation-page nw-subpage" style="max-width: 1100px;">
     <div class="nw-smarthome-header" style="margin-top: 10px;">
       <div>
         <h1 style="margin: 0;">Simulation</h1>
@@ -116,6 +148,12 @@
       </section>
   </main>
 
-  <script src="/static/simulation.js"></script>
+  <script src="/static/nw-shell.js"></script>
+<script src="/static/simulation.js"></script>
+
+
+
+  <script src="/static/cockpit-shell.js"></script>
+
 </body>
 </html>

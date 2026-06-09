@@ -25,7 +25,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
 </head>
-<body>
+<body class="nw-cockpit-page nw-cockpit-skin nw-page-smarthome">
 <header class="topbar">
   <div class="brand">
     <a href="/"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></a>
@@ -40,7 +40,8 @@
     <button id="tabSmartHome" class="tab active" onclick="window.location.href='smarthome.html'">SMARTHOME</button>
   </nav>
 
-  <div class="menu hidden" id="menuDropdown">
+  <a class="topbar-gear" href="settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
+<div class="menu hidden" id="menuDropdown">
     <a class="menu-item" href="./">Live</a>
     <a class="menu-item" href="history.html">History</a>
     <a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a>
@@ -49,7 +50,18 @@
   </div>
 </header>
 
-<main class="content">
+<main class="content nw-page-shell nw-smarthome-page nw-subpage">
+  <section class="nw-page-hero" aria-label="SmartHome Übersicht">
+    <div>
+      <div class="nw-page-hero__eyebrow">SmartHome</div>
+      <h2>Gebäudevisualisierung</h2>
+      <p class="nw-page-hero__subtitle">Räume, Geräte und Favoriten im Cockpit-Look – mit responsiver Seitenleiste und mobiler Drawer-Navigation.</p>
+    </div>
+    <div class="nw-page-hero__actions">
+      <a class="btn sm" href="smarthome-config.html">Konfiguration</a>
+      <a class="btn sm" href="logic.html">NexoLogic</a>
+    </div>
+  </section>
   <div id="nw-smarthome-root">
     <div class="nw-sh-layout">
       <!-- Left sidebar navigation (desktop/tablet). On mobile it becomes a drawer. -->
@@ -82,5 +94,8 @@
 </main>
 
 <script src="/static/smarthome.js"></script>
+
+  <script src="/static/cockpit-shell.js"></script>
+
 </body>
 </html>

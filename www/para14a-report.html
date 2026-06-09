@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/static/styles.css" />
   <link rel="stylesheet" href="/static/report.css" />
 </head>
-<body>
+<body class="nw-cockpit-page nw-cockpit-skin nw-page-para14a-report">
   <header class="topbar">
     <script>
       (function () {
@@ -30,7 +30,8 @@
       <button class="tab hidden" id="tabEvcs" onclick="window.location.href='/evcs'">EVCS</button>
     </nav>
     <div class="status-dot" id="liveDot" title="Live Verbindung"></div>
-    <div class="menu hidden" id="menuDropdown">
+    <a class="topbar-gear" href="settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
+<div class="menu hidden" id="menuDropdown">
       <a class="menu-item" href="/">Live</a>
       <a class="menu-item" href="/history">History</a>
       <a class="menu-item hidden" id="menuStorageFarmLink" href="/?tab=storagefarm">Speicherfarm</a>
@@ -40,7 +41,19 @@
     </div>
   </header>
 
-  <main class="wrap report-wrap">
+  <section class="nw-page-hero" aria-label="Seitenübersicht">
+    <div>
+      <div class="nw-page-hero__eyebrow">Nachweis</div>
+      <div class="nw-page-hero__title">§14a Nachweis</div>
+      <div class="nw-page-hero__subtitle">Ereignisprotokoll, Limits und Regelergebnisse für Ausdruck und Export.</div>
+    </div>
+    <div class="nw-page-hero__right">
+      <span class="nw-page-hero__pill">Audit</span>
+    </div>
+  </section>
+
+
+  <main class="wrap report-wrap nw-subpage nw-subpage-report">
     <div class="report-head">
       <div>
         <h2>§14a Nachweis / Ausdruck</h2>
@@ -101,5 +114,8 @@
 
   <script src="/static/report-common.js"></script>
   <script src="/static/para14a-report.js"></script>
+
+  <script src="/static/cockpit-shell.js"></script>
+
 </body>
 </html>

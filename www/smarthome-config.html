@@ -12,17 +12,54 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
 </head>
-<body>
-<header class="topbar">
-  <div class="brand">
-    <a href="/" style="display:inline-flex;align-items:center;text-decoration:none;">
-      <img alt="NexoWatt" src="/static/nexowatt-logo.png"/>
-    </a>
-  </div>
+<body class="nw-cockpit-page nw-cockpit-skin nw-page-smarthome-config">
+<header class="topbar nw-cockpit-topbar">
+  <script>
+  (function () {
+    try {
+      var p = window.location.pathname || "";
+      if (p && !p.endsWith("/") && !p.endsWith(".html")) {
+        window.location.replace(p + "/" + window.location.search + window.location.hash);
+      }
+    } catch (e) {}
+  })();
+  </script>
+  <div class="brand"><a href="./" aria-label="NexoWatt Live"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></a></div>
+  <button aria-label="Menu" id="menuBtn" data-nw-menu-fallback="1" type="button">☰</button>
   <h1>SmartHome Konfiguration</h1>
+  <nav class="tabs">
+    <button class="tab" id="liveTabBtn" type="button" onclick="window.location.href='./'">LIVE</button>
+    <button class="tab" id="historyTabBtn" type="button" onclick="window.location.href='history.html'">HISTORY</button>
+    <button class="tab active" id="tabSmartHome" type="button" onclick="window.location.href='smarthome.html'">SMARTHOME</button>
+    <button class="tab" id="tabStorageFarm" type="button" onclick="window.location.href='ems-apps.html#storagefarm'">SPEICHERFARM</button>
+    <button class="tab" type="button" onclick="window.location.href='ems-apps.html'">APP-CENTER</button>
+  </nav>
+  <div class="status-dot live" id="liveDot" title="Live Verbindung"></div>
+  <a class="topbar-gear" href="settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
+  <div class="menu hidden" id="menuDropdown">
+    <a class="menu-item" href="./">Live</a>
+    <a class="menu-item" href="history.html">History</a>
+    <a class="menu-item" href="smarthome.html" id="menuSmartHomeLink">SmartHome</a>
+    <a class="menu-item" href="ems-apps.html#storagefarm" id="menuStorageFarmLink">Speicherfarm</a>
+    <a class="menu-item" href="ems-apps.html">App-Center</a>
+    <a class="menu-item" href="evcs.html" id="menuEvcsLink">EVCS</a>
+    <a class="menu-item" href="settings.html">Einstellungen</a>
+  </div>
 </header>
 
-<main class="content">
+  <section class="nw-page-hero" aria-label="Seitenübersicht">
+    <div>
+      <div class="nw-page-hero__eyebrow">Setup</div>
+      <div class="nw-page-hero__title">SmartHome Konfiguration</div>
+      <div class="nw-page-hero__subtitle">Gebäude, Räume, Geräte und Auto-Erkennung im einheitlichen Cockpit-Stil.</div>
+    </div>
+    <div class="nw-page-hero__right">
+      <span class="nw-page-hero__pill">Installer</span>
+    </div>
+  </section>
+
+
+<main class="content nw-page-shell nw-smarthome-config-page nw-subpage">
   <div id="nw-smarthome-config-root">
     <div class="nw-smarthome-header">
       <div>
@@ -475,6 +512,12 @@
   </div>
 </main>
 
+<script src="/static/nw-shell.js"></script>
 <script src="/static/smarthome-config.js"></script>
+
+
+
+  <script src="/static/cockpit-shell.js"></script>
+
 </body>
 </html>

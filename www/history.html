@@ -154,7 +154,7 @@
     <link rel="apple-touch-icon" sizes="152x152" href="./assets/icons/nexowatt-152.png">
     <link rel="apple-touch-icon" sizes="120x120" href="./assets/icons/nexowatt-120.png">
 </head>
-<body>
+<body class="nw-cockpit-page nw-cockpit-skin nw-page-history">
   <header class="topbar">
 <script>
 /* NexoWatt: normalize base path so relative links work even if opened without trailing slash */
@@ -179,9 +179,21 @@
 <button id="tabSmartHome" class="tab hidden" onclick="window.location.href='smarthome.html'">SMARTHOME</button>
 </nav>
 <div class="status-dot" id="liveDot" title="Live Verbindung"></div>
+<a class="topbar-gear" href="settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
 <div class="menu hidden" id="menuDropdown"><a class="menu-item" href="./">Live</a><a class="menu-item" href="history.html">History</a>
 <a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item hidden" id="menuSmartHomeLink" href="smarthome.html">SmartHome</a><a class="menu-item hidden" id="menuStorageFarmLink" href="./?tab=storagefarm">Speicherfarm</a><a class="menu-item" href="settings.html">Einstellungen</a></div></header>
-  <div class="hist-wrap">
+  <main class="hist-wrap nw-page-shell nw-history-page">
+    <section class="nw-page-hero" aria-label="Historie Übersicht">
+      <div>
+        <div class="nw-page-hero__eyebrow">History</div>
+        <h2>Historie &amp; Auswertung</h2>
+        <p class="nw-page-hero__subtitle">Energieflüsse, Speicher, Netzbezug, E‑Mobilität und Tarifkosten im Cockpit-Design analysieren.</p>
+      </div>
+      <div class="nw-page-hero__actions">
+        <button id="tariffReportHeroBtn" class="btn sm" type="button" onclick="document.getElementById('tariffReportBtn')?.click()">Tarifnachweis</button>
+        <button class="btn sm" type="button" onclick="window.location.href='year-report.html'">Jahresreport</button>
+      </div>
+    </section>
     <div class="toolbar">
       <div class="range">
         <button class="btn sm range-btn active" data-range="day">Tag</button>
@@ -234,7 +246,7 @@
       </div>
       <div class="cards" id="priceCards"></div>
     </section>
-  </div>
+  </main>
 <script src="/static/history.js"></script>
 <script>
 if ('serviceWorker' in navigator) {
@@ -243,5 +255,8 @@ if ('serviceWorker' in navigator) {
     });
 }
 </script>
+
+  <script src="/static/cockpit-shell.js"></script>
+
 </body>
 </html>

@@ -7,7 +7,7 @@
   <link rel="manifest" href="./manifest.webmanifest"/>
   <link rel="stylesheet" href="/static/styles.css"/>
 </head>
-<body>
+<body class="nw-cockpit-page nw-cockpit-skin nw-page-settings">
 <header class="topbar">
 <script>
 /* NexoWatt: normalize base path so relative links work even if opened without trailing slash */
@@ -25,21 +25,33 @@
 <button aria-label="Menu" id="menuBtn">☰</button>
 <h1>NexoWatt EMS</h1>
 <nav class="tabs">
-<button class="tab active" data-tab="live">LIVE</button>
-<button class="tab" id="historyTabBtn" data-tab="history">HISTORY</button>
+<button class="tab" data-tab="live" onclick="window.location.href='./'">LIVE</button>
+<button class="tab" id="historyTabBtn" onclick="window.location.href='history.html'" data-tab="history">HISTORY</button>
 <button id="tabEvcs" class="tab hidden" onclick="window.location.href='evcs.html'">EVCS</button>
 <button id="tabSmartHome" class="tab hidden" data-tab="smarthome">SMARTHOME</button>
 </nav>
 <div class="status-dot" id="liveDot" title="Live Verbindung"></div>
+<a class="topbar-gear is-active" href="settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
 <div class="menu hidden" id="menuDropdown"><a class="menu-item" href="./">Live</a><a class="menu-item" href="history.html">History</a>
 <a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item hidden" id="menuSmartHomeLink" href="smarthome.html">SmartHome</a><a class="menu-item" href="settings.html">Einstellungen</a></div></header>
-<main class="content">
+<main class="content nw-empty-content nw-subpage nw-subpage-settings">
   <!-- Inhalt bewusst leer: Einstellungen werden als eigener Bereich darunter gerendert -->
 </main>
 
 <script src="/static/app.js"></script>
 
-<section class="settings-wrap" data-tab-content="settings" data-settings-page="general">
+<section class="settings-wrap nw-page-shell nw-settings-page-shell" data-tab-content="settings" data-settings-page="general">
+  <section class="nw-page-hero" aria-label="Einstellungen Übersicht">
+    <div>
+      <div class="nw-page-hero__eyebrow">Settings</div>
+      <h2>Einstellungen</h2>
+      <p class="nw-page-hero__subtitle">Installer, Benachrichtigungen, Tarife, RFID und Nachweise in einer responsiven Cockpit-Struktur.</p>
+    </div>
+    <div class="nw-page-hero__actions">
+      <a class="btn sm" href="ems-apps.html">App-Center</a>
+      <a class="btn sm" href="./">Live öffnen</a>
+    </div>
+  </section>
   <div class="nw-settings-layout">
     <aside class="card nw-settings-nav-card">
       <div class="card-header"><span>Seiten</span></div>
@@ -637,5 +649,8 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
+
+  <script src="/static/cockpit-shell.js"></script>
+
 </body>
 </html>

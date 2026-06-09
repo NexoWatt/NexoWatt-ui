@@ -15,7 +15,7 @@
   </style>
 </head>
 
-<body>
+<body class="nw-cockpit-page nw-cockpit-skin nw-page-evcs-report">
   <header class="topbar">
     <script>
       // Normalize base path (works with /history vs /static/history.html etc.)
@@ -39,7 +39,8 @@
       <button class="tab hidden" id="tabEvcs" onclick="window.location.href='/evcs'">EVCS</button>
     </nav>
     <div class="status-dot" id="liveDot" title="Live Verbindung"></div>
-    <div class="menu hidden" id="menuDropdown">
+    <a class="topbar-gear" href="settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
+<div class="menu hidden" id="menuDropdown">
       <a class="menu-item" href="/">Live</a>
       <a class="menu-item" href="/history">History</a>
       <a class="menu-item hidden" id="menuStorageFarmLink" href="/?tab=storagefarm">Speicherfarm</a>
@@ -49,7 +50,19 @@
     </div>
   </header>
 
-  <main class="wrap report-wrap">
+  <section class="nw-page-hero" aria-label="Seitenübersicht">
+    <div>
+      <div class="nw-page-hero__eyebrow">Report</div>
+      <div class="nw-page-hero__title">EVCS Bericht</div>
+      <div class="nw-page-hero__subtitle">Ladeenergie, Sessions und Exporte mit druckfreundlicher Cockpit-Ansicht.</div>
+    </div>
+    <div class="nw-page-hero__right">
+      <span class="nw-page-hero__pill">PDF/CSV</span>
+    </div>
+  </section>
+
+
+  <main class="wrap report-wrap nw-subpage nw-subpage-report">
     <div class="report-head">
       <div class="report-head-left">
         <h2>EVCS Bericht</h2>
@@ -95,5 +108,8 @@
   </main>
 
   <script src="/static/evcs-report.js"></script>
+
+  <script src="/static/cockpit-shell.js"></script>
+
 </body>
 </html>

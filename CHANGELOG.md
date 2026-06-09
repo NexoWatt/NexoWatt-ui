@@ -1,3 +1,11 @@
+# 0.7.33 - Frontend-weites Cockpit-Design
+
+- Alle Haupt-Unterseiten optisch an das neue NexoWatt EMS Cockpit angepasst: History, Einstellungen, EVCS, SmartHome, SmartHome-Konfiguration, NexoLogic, App-Center/Speicherfarm, Simulation und Reports.
+- Gemeinsame Topbar-, Karten-, Button-, Formular-, Tabellen- und Dialog-Styles ergänzt, damit das komplette Frontend visuell einheitlich wirkt.
+- Mobile und Tablet-Breakpoints für Unterseiten erweitert: Toolbars, Einstellungsbereiche, App-Center-Zeilen, Energiefluss-Konfiguration und Tabellen stapeln bzw. scrollen touchfreundlich.
+- App-Center, SmartHome-Konfiguration, Simulation und RFID-Report erhalten die gemeinsame mobile Navigation über `nw-shell.js`.
+- Webcache auf `nexowatt-cache-v200` erhöht.
+
 # 0.7.32 - Responsive Cockpit-Redesign
 
 - LIVE-Dashboard auf das neue responsive Cockpit-Layout umgebaut: linke System-/Liveübersicht, zentraler Energiefluss und rechte Werte-/Schnellzugriffsleiste.

@@ -20,7 +20,7 @@
   <link rel="icon" type="image/png" href="/static/apple-touch-icon.png"/>
   <link href="/static/styles.css" rel="stylesheet"/>
 </head>
-<body>
+<body class="nw-cockpit-page nw-cockpit-skin nw-page-evcs">
 <header class="topbar">
   <div class="brand">
     <a href="/"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></a>
@@ -35,7 +35,8 @@
     <button id="tabSmartHome" class="tab hidden" onclick="window.location.href='smarthome.html'">SMARTHOME</button>
   </nav>
 
-  <div class="menu hidden" id="menuDropdown">
+  <a class="topbar-gear" href="settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
+<div class="menu hidden" id="menuDropdown">
     <a class="menu-item" href="./">Live</a>
     <a class="menu-item" href="history.html">History</a>
     <a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a>
@@ -44,7 +45,18 @@
   </div>
 </header>
 
-<main class="content" style="grid-template-columns: 1fr;">
+<main class="content nw-page-shell nw-evcs-page nw-subpage" style="grid-template-columns: 1fr;">
+  <section class="nw-page-hero" aria-label="EVCS Übersicht">
+    <div>
+      <div class="nw-page-hero__eyebrow">EVCS</div>
+      <h2>Lademanagement</h2>
+      <p class="nw-page-hero__subtitle">Ladepunkte, RFID-Sessions und Schnellsteuerung im neuen NexoWatt Design – auch touchfreundlich auf Smartphone und Tablet.</p>
+    </div>
+    <div class="nw-page-hero__actions">
+      <a class="btn sm" href="evcs-report.html">EVCS Bericht</a>
+      <a class="btn sm" href="ems-apps.html#evcs">Konfiguration</a>
+    </div>
+  </section>
   <section class="card">
     <div class="card-header">
       <div class="legend-color"></div>
@@ -70,5 +82,8 @@
 </div>
 
 <script src="/static/evcs.js"></script>
+
+  <script src="/static/cockpit-shell.js"></script>
+
 </body>
 </html>
