@@ -1,4 +1,13 @@
+# 0.7.38 - Speicherfarm-Route und KI-Berater Kundenschalter
+
+- Fehler behoben: `storagefarm.html` ist jetzt direkt unter `/storagefarm.html`, `/storagefarm`, `/speicherfarm.html` und `/speicherfarm` erreichbar; die 404-Seite beim Topbar-Reiter Speicherfarm ist damit beseitigt.
+- Kundenschalter in den Einstellungen ergänzt: Der KI-Energieberater kann vom Kunden unter `Einstellungen → Allgemein` ein- und ausgeschaltet werden.
+- Der KI-Energieberater respektiert jetzt die neue Einstellung `settings.aiAdvisorEnabled` sofort im LIVE-Dashboard und im EMS-Modul.
+- Kompatibilität zwischen `aiAdvisor.showOnLive` und `aiAdvisor.showInLive` bereinigt, damit App-Center-Konfiguration und LIVE-Anzeige konsistent bleiben.
+- Service-Worker Cache auf `nexowatt-cache-v206` erhöht.
+
 # 0.7.37 - SmartHome Halbkreis-Bedienung und Feinschliff
+
 
 - SmartHome-Dimmer und Jalousien erhalten im großen Bedienpanel zusätzlich einen interaktiven Halbkreis-Regler mit +/− Bedienung; der klassische Slider bleibt als Präzisionssteuerung erhalten.
 - Halbkreis-Regler und Slider werden gegenseitig synchronisiert und bleiben mit Live-Vorschau/Commit-Logik kompatibel.

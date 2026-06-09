@@ -885,7 +885,7 @@ function _collectFlowPowerDpIsWFromUI() {
     const cfg = (currentConfig && currentConfig.aiAdvisor && typeof currentConfig.aiAdvisor === 'object') ? currentConfig.aiAdvisor : {};
     const cats = (cfg.categories && typeof cfg.categories === 'object') ? cfg.categories : {};
 
-    _aiSetCheckbox(els.aiAdvisorShowOnLive, cfg.showOnLive, true);
+    _aiSetCheckbox(els.aiAdvisorShowOnLive, (cfg.showInLive !== undefined ? cfg.showInLive : cfg.showOnLive), true);
     _aiSetNumberInput(els.aiAdvisorIntervalSec, cfg.intervalSec, 60);
     _aiSetNumberInput(els.aiAdvisorMaxSuggestions, cfg.maxSuggestions, 4);
     if (els.aiAdvisorMinPriority) {
@@ -921,6 +921,7 @@ function _collectFlowPowerDpIsWFromUI() {
     out.mode = 'advisor';
     out.advisoryOnly = true;
     out.showOnLive = els.aiAdvisorShowOnLive ? !!els.aiAdvisorShowOnLive.checked : true;
+    out.showInLive = out.showOnLive;
     out.intervalSec = n(els.aiAdvisorIntervalSec, 60, 10, 3600);
     out.maxSuggestions = n(els.aiAdvisorMaxSuggestions, 4, 1, 10);
     out.minPriority = els.aiAdvisorMinPriority ? String(els.aiAdvisorMinPriority.value || 'info').toLowerCase() : 'info';

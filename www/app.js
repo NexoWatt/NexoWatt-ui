@@ -2722,6 +2722,7 @@ function initSettingsPanel(){
   };
 
   // UI-Update immer ausführen
+  try { syncToggleButtonsForInputId('s_aiAdvisorEnabled'); } catch (_e) {}
   updateWeatherVisibility();
   updateWeatherModeUi();
 
@@ -3070,6 +3071,18 @@ function bindInputValue(el, stateKey) {
       val = Number(el.value);
       if (!Number.isFinite(val)) val = 0;
     } else val = el.value;
+
+    try {
+      if (stateKey) {
+        if (!state || typeof state !== 'object') state = {};
+        const prev = state[stateKey] && typeof state[stateKey] === 'object' ? state[stateKey] : {};
+        state[stateKey] = Object.assign({}, prev, { value: val, ts: Date.now(), ack: false });
+        window.latestState = state;
+      }
+      if (scope === 'settings' && key === 'aiAdvisorEnabled') {
+        try { updateAiAdvisorLiveUi(); } catch (_e) {}
+      }
+    } catch (_e) {}
 
     try {
       await fetch('/api/set', {
@@ -6136,13 +6149,20 @@ function updateAiAdvisorLiveUi() {
   const card = document.getElementById('aiAdvisorLiveCard');
   if (!card) return;
 
+  // Endkunden-Schalter aus den Einstellungen: Der Kunde entscheidet,
+  // ob der KI-Energieberater im Kundencockpit aktiv/sichtbar ist.
+  const customerEnabled = _nwAiAdvisorBool('settings.aiAdvisorEnabled', true);
+  const emsCfg = (window.__nwEmsCfg && typeof window.__nwEmsCfg === 'object') ? window.__nwEmsCfg : {};
+  const appCenterEnabled = (emsCfg.aiAdvisorEnabled === undefined || emsCfg.aiAdvisorEnabled === null)
+    ? true
+    : !(emsCfg.aiAdvisorEnabled === false || emsCfg.aiAdvisorEnabled === 0 || String(emsCfg.aiAdvisorEnabled).toLowerCase() === 'false');
   const enabled = _nwAiAdvisorBool('aiAdvisor.enabled', false);
-  const showOnLive = _nwAiAdvisorBool('aiAdvisor.showOnLive', true);
+  const showInLive = _nwAiAdvisorBool('aiAdvisor.showInLive', _nwAiAdvisorBool('aiAdvisor.showOnLive', true));
   const status = String(_nwAiAdvisorStateValue('aiAdvisor.status', '') || '');
-  const suggestions = _nwAiAdvisorParseSuggestions();
+  const suggestions = (customerEnabled && appCenterEnabled) ? _nwAiAdvisorParseSuggestions() : [];
   const top = suggestions[0] || null;
 
-  const shouldShow = !!(enabled && showOnLive && (top || status));
+  const shouldShow = !!(appCenterEnabled && customerEnabled && enabled && showInLive && (top || status));
   card.classList.toggle('hidden', !shouldShow);
   if (!shouldShow) return;
 

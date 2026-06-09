@@ -93,6 +93,18 @@
             Hier liegen allgemeine Frontend-Einstellungen und die Wetter-App. Weitere Themen findest du links sauber in eigenen Seiten.
           </div>
 
+          <div class="nw-settings-section-title">KI‑Energieberater</div>
+          <label class="row"><span>KI‑Berater im LIVE-Dashboard</span>
+            <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_aiAdvisorEnabled">
+              <button type="button" data-value="false">Aus</button>
+              <button type="button" data-value="true">An</button>
+            </div>
+            <input type="checkbox" class="nw-toggle-hidden" id="s_aiAdvisorEnabled" data-scope="settings" data-key="aiAdvisorEnabled" checked>
+          </label>
+          <small class="muted nw-settings-help" style="display:block;margin-top:6px;color:var(--muted)">
+            Der Kunde entscheidet hier selbst, ob die Hinweisbox „KI‑Energieberater“ im LIVE-Dashboard aktiv ist. Aus bedeutet: keine Berater-Kachel im Kundencockpit.
+          </small>
+
           <div class="nw-settings-section-title">Wetter</div>
       <label class="row"><span>Wetter-App</span>
         <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_weather_enabled">

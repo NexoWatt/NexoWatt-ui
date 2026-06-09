@@ -1436,6 +1436,9 @@ class NexoWattVis extends utils.Adapter {
       // Used in live views (e.g. Speicherfarm) and monitoring/notifications.
       deviceStaleTimeoutSec: { type: 'number', role: 'value.interval', def: 300 },
 
+      // Kundencockpit: KI-Energieberater kann vom Betreiber ein-/ausgeschaltet werden.
+      aiAdvisorEnabled: { type: 'boolean', role: 'state', def: true },
+
       dynamicTariff: { type: 'boolean', role: 'state', def: false },
       storagePower: { type: 'number', role: 'value.power', def: 1000 },
       price: { type: 'number', role: 'value', def: 0.25 },
@@ -7542,6 +7545,11 @@ async onReady() {
         </html>`);
     });
 
+    // --- Static UI pages ---------------------------------------------------
+    app.get(['/storagefarm.html','/storagefarm','/speicherfarm.html','/speicherfarm'], (_req, res) => {
+      res.sendFile(path.join(__dirname, 'www', 'storagefarm.html'));
+    });
+
     app.get('/', (_req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'index.html'));
     });
@@ -11393,6 +11401,7 @@ app.get(['/logic.html','/logic'], (req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'evcs.html'));
     });
 
+
     // --- EVCS report page ---
     app.get(['/evcs-report.html','/evcs-report'], (req, res) => {
       const qs = (req && req.url && req.url.includes('?')) ? req.url.slice(req.url.indexOf('?')) : '';
@@ -14194,6 +14203,20 @@ settingsConfig: {
         }
 
 
+        // Customer-facing KI-Energieberater toggle.
+        // Store this as local VIS state so the customer can decide without opening installer/admin config.
+        if (scope === 'settings' && String(key) === 'aiAdvisorEnabled') {
+          const b = !!value;
+          try {
+            await this.setStateAsync('settings.aiAdvisorEnabled', { val: b, ack: false });
+            try { this.updateValue('settings.aiAdvisorEnabled', b, Date.now()); } catch (_e) {}
+            return res.json({ ok: true });
+          } catch (e) {
+            this.log.warn('set error (aiAdvisorEnabled): ' + (e && e.message ? e.message : e));
+            return res.status(500).json({ ok: false, error: 'internal error' });
+          }
+        }
+
         // Installer-only scopes (protect RFID whitelist + installer settings)
         if ((scope === 'installer' || scope === 'rfid') && authEnabled && protectWrites) {
           const s = req.nwSession;
@@ -16270,6 +16293,9 @@ return res.json(out);
       'notifyInverters',
       'notifyHardCurtailment',
       'notifyRecovery',
+      'deviceStaleTimeoutSec',
+      // Customer cockpit settings
+      'aiAdvisorEnabled',
       // Tariff/charging settings
       'dynamicTariff','storagePower','price','priority','tariffMode',
       // PV Saisonprofil (Quartale)

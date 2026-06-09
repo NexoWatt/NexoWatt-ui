@@ -100,10 +100,21 @@ class AiAdvisorModule extends BaseModule {
             : {};
         const cats = (c.categories && typeof c.categories === 'object') ? c.categories : {};
         const minPriority = String(c.minPriority || 'info').trim().toLowerCase();
+        let customerEnabled = true;
+        try {
+            const rec = this.adapter && this.adapter.stateCache ? this.adapter.stateCache['settings.aiAdvisorEnabled'] : null;
+            customerEnabled = bool(rec && Object.prototype.hasOwnProperty.call(rec, 'value') ? rec.value : true, true);
+        } catch (_e) {
+            customerEnabled = true;
+        }
+        const configuredEnabled = c.enabled !== false;
+        const showOnLiveCfg = (c.showInLive !== undefined) ? c.showInLive : c.showOnLive;
         return {
-            enabled: c.enabled !== false,
+            enabled: configuredEnabled && customerEnabled,
+            customerEnabled,
+            configuredEnabled,
             advisoryOnly: true,
-            showInLive: c.showInLive !== false,
+            showInLive: showOnLiveCfg !== false,
             // App-Center writes intervalSec/exportHighW/importHighW/pvForecastHighW.
             // Keep legacy/canonical aliases as well so older configs remain valid.
             minIntervalSec: clamp(num(c.minIntervalSec ?? c.intervalSec, 60), 10, 3600),
@@ -170,6 +181,8 @@ class AiAdvisorModule extends BaseModule {
         await mk('aiAdvisor.enabled', 'KI-Energieberater aktiv', 'boolean', 'indicator');
         await mk('aiAdvisor.advisoryOnly', 'Nur Beratung, keine Schaltentscheidungen', 'boolean', 'indicator');
         await mk('aiAdvisor.showInLive', 'In LIVE anzeigen', 'boolean', 'indicator');
+        // Compatibility alias: App-Center and older VIS builds used "showOnLive".
+        await mk('aiAdvisor.showOnLive', 'In LIVE anzeigen', 'boolean', 'indicator');
         await mk('aiAdvisor.status', 'Status', 'string', 'text');
         await mk('aiAdvisor.severity', 'Höchste Priorität / Severity', 'string', 'text');
         await mk('aiAdvisor.headline', 'Kurz-Hinweis', 'string', 'text');
@@ -632,10 +645,11 @@ class AiAdvisorModule extends BaseModule {
         await this._set('aiAdvisor.enabled', false);
         await this._set('aiAdvisor.advisoryOnly', true);
         await this._set('aiAdvisor.showInLive', cfg.showInLive !== false);
+        await this._set('aiAdvisor.showOnLive', cfg.showInLive !== false);
         await this._set('aiAdvisor.status', 'disabled');
         await this._set('aiAdvisor.severity', 'neutral');
         await this._set('aiAdvisor.headline', 'KI-Energieberater deaktiviert');
-        await this._set('aiAdvisor.summary', 'Die beratende KI ist im App-Center deaktiviert.');
+        await this._set('aiAdvisor.summary', cfg.customerEnabled === false ? 'Die beratende KI ist in den Kundeneinstellungen deaktiviert.' : 'Die beratende KI ist im App-Center deaktiviert.');
         await this._set('aiAdvisor.count', 0);
         await this._set('aiAdvisor.score', 0);
         await this._set('aiAdvisor.topTitle', '');
@@ -677,6 +691,7 @@ class AiAdvisorModule extends BaseModule {
         await this._set('aiAdvisor.enabled', true);
         await this._set('aiAdvisor.advisoryOnly', true);
         await this._set('aiAdvisor.showInLive', cfg.showInLive !== false);
+        await this._set('aiAdvisor.showOnLive', cfg.showInLive !== false);
         await this._set('aiAdvisor.status', 'ok');
         await this._set('aiAdvisor.severity', severity);
         await this._set('aiAdvisor.headline', headline);
