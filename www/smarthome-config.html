@@ -11,8 +11,31 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
+
+<script>
+(function(){
+  try {
+    var params = new URLSearchParams(window.location.search || '');
+    var ref = String(document.referrer || '');
+    var adminLaunch = params.get('nwadmin') === '1'
+      || sessionStorage.getItem('nwAdminLaunch') === '1'
+      || /\/adapter\/nexowatt-ui\//i.test(ref)
+      || /[:\/]8081[\/]/.test(ref);
+    if (adminLaunch) {
+      sessionStorage.setItem('nwAdminLaunch', '1');
+      document.documentElement.classList.remove('nw-installer-locked');
+      return;
+    }
+    document.documentElement.classList.add('nw-installer-locked');
+    window.location.replace('./');
+  } catch (_e) {
+    window.location.replace('./');
+  }
+})();
+</script>
+
 </head>
-<body class="nw-cockpit-page nw-cockpit-skin nw-page-smarthome-config">
+<body class="nw-cockpit-page nw-cockpit-skin nw-page-smarthome-config nw-installer-page">
 <header class="topbar nw-cockpit-topbar">
   <script>
   (function () {
@@ -24,26 +47,22 @@
     } catch (e) {}
   })();
   </script>
-  <div class="brand"><a href="./" aria-label="NexoWatt Live"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></a></div>
+  <div class="brand"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></div>
   <button aria-label="Menu" id="menuBtn" data-nw-menu-fallback="1" type="button">☰</button>
   <h1>SmartHome Konfiguration</h1>
-  <nav class="tabs">
-    <button class="tab" id="liveTabBtn" type="button" onclick="window.location.href='./'">LIVE</button>
-    <button class="tab" id="historyTabBtn" type="button" onclick="window.location.href='history.html'">HISTORY</button>
-    <button class="tab active" id="tabSmartHome" type="button" onclick="window.location.href='smarthome.html'">SMARTHOME</button>
-    <button class="tab" id="tabStorageFarm" type="button" onclick="window.location.href='ems-apps.html#storagefarm'">SPEICHERFARM</button>
-    <button class="tab" type="button" onclick="window.location.href='ems-apps.html'">APP-CENTER</button>
+  <nav class="tabs nw-installer-tabs" aria-label="Installer Navigation">
+    <button class="tab" type="button" onclick="window.location.href='ems-apps.html?nwadmin=1'">APP-CENTER</button>
+    <button class="tab" type="button" onclick="window.location.href='simulation.html?nwadmin=1'">SIMULATION</button>
+    <button class="tab active" type="button" onclick="window.location.href='smarthome-config.html?nwadmin=1'">SMARTHOME CONFIG</button>
+    <button class="tab" type="button" onclick="window.location.href='logic.html?nwadmin=1'">NEXOLOGIC</button>
   </nav>
   <div class="status-dot live" id="liveDot" title="Live Verbindung"></div>
-  <a class="topbar-gear" href="settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
+  <span class="nw-installer-badge" title="Installerbereich">ADMIN</span>
   <div class="menu hidden" id="menuDropdown">
-    <a class="menu-item" href="./">Live</a>
-    <a class="menu-item" href="history.html">History</a>
-    <a class="menu-item" href="smarthome.html" id="menuSmartHomeLink">SmartHome</a>
-    <a class="menu-item" href="ems-apps.html#storagefarm" id="menuStorageFarmLink">Speicherfarm</a>
-    <a class="menu-item" href="ems-apps.html">App-Center</a>
-    <a class="menu-item" href="evcs.html" id="menuEvcsLink">EVCS</a>
-    <a class="menu-item" href="settings.html">Einstellungen</a>
+    <a class="menu-item" href="ems-apps.html?nwadmin=1">App-Center</a>
+    <a class="menu-item" href="simulation.html?nwadmin=1">Simulation</a>
+    <a class="menu-item" href="smarthome-config.html?nwadmin=1">SmartHome Config</a>
+    <a class="menu-item" href="logic.html?nwadmin=1">NexoLogic</a>
   </div>
 </header>
 
@@ -75,8 +94,7 @@
           <button id="nw-config-export-btn" class="nw-config-btn nw-config-btn--ghost" type="button">Export</button>
           <button id="nw-config-import-btn" class="nw-config-btn nw-config-btn--ghost" type="button">Import</button>
           <input id="nw-config-import-file" type="file" accept="application/json,.json" style="display:none;"/>
-          <a class="nw-config-btn nw-config-btn--ghost" href="/smarthome.html">SmartHome öffnen</a>
-	          <a class="nw-config-btn nw-config-btn--ghost" href="/logic.html">Logik öffnen</a>
+	          <a class="nw-config-btn nw-config-btn--ghost" href="/logic.html?nwadmin=1">Logik öffnen</a>
 
         </div>
 <div id="nw-config-status" class="nw-config-status"></div>

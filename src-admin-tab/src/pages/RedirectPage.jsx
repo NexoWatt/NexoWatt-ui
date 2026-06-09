@@ -10,15 +10,15 @@ import {
 const TARGETS = {
   appcenter: {
     title: 'EMS App-Center',
-    path: '/ems-apps.html',
+    path: '/ems-apps.html?nwadmin=1',
   },
   simulation: {
     title: 'Simulation',
-    path: '/simulation.html',
+    path: '/simulation.html?nwadmin=1',
   },
   'smarthome-config': {
     title: 'SmartHome Config',
-    path: '/smarthome-config.html',
+    path: '/smarthome-config.html?nwadmin=1',
   },
   'smarthome-vis': {
     title: 'SmartHome VIS',

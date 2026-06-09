@@ -11199,7 +11199,31 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     });
 
 // --- EMS Apps / Installer Page ---
-    app.get(['/ems-apps.html', '/ems-apps'], (req, res) => {
+    
+function nwIsAdminLaunch(req) {
+  try {
+    if (req && req.query && String(req.query.nwadmin || '') === '1') return true;
+    const cookie = String((req && req.headers && req.headers.cookie) || '');
+    if (/(^|;\s*)nwadmin=1(;|$)/.test(cookie)) return true;
+    const ref = String((req && (req.get && req.get('referer'))) || '');
+    if (/\/adapter\/nexowatt-ui\//i.test(ref)) return true;
+    if (/[:\/]8081[\/]/.test(ref)) return true;
+  } catch (e) {}
+  return false;
+}
+function nwRequireAdminLaunch(req, res) {
+  try {
+    if (req && req.query && String(req.query.nwadmin || '') === '1' && res && typeof res.setHeader === 'function') {
+      res.setHeader('Set-Cookie', 'nwadmin=1; Path=/; SameSite=Lax');
+    }
+  } catch (e) {}
+  if (nwIsAdminLaunch(req)) return true;
+  try { res.redirect('/'); } catch (e) { res.status(403).send('Installerbereich nur über Admin erreichbar.'); }
+  return false;
+}
+
+app.get(['/ems-apps.html', '/ems-apps'], (req, res) => {
+      if (!nwRequireAdminLaunch(req, res)) return;
       try {
         const file = require('path').join(__dirname, 'www', 'ems-apps.html');
         res.sendFile(file);
@@ -11211,6 +11235,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
 // --- Simulation Page ---
     app.get(['/simulation.html', '/simulation'], (req, res) => {
+      if (!nwRequireAdminLaunch(req, res)) return;
       try {
         const file = require('path').join(__dirname, 'www', 'simulation.html');
         res.sendFile(file);
@@ -11222,6 +11247,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
 // --- SmartHomeConfig Page (VIS-Konfig-Ansicht) ---
     app.get(['/smarthome-config.html', '/smarthome-config'], (req, res) => {
+      if (!nwRequireAdminLaunch(req, res)) return;
       try {
         const file = require('path').join(__dirname, 'www', 'smarthome-config.html');
         res.sendFile(file);
@@ -11366,6 +11392,7 @@ app.post('/api/logic/editor', requireInstaller, async (req, res) => {
 
 // --- Logic (NexoLogic) Page ---
 app.get(['/logic.html','/logic'], (req, res) => {
+  if (!nwRequireAdminLaunch(req, res)) return;
   try {
     const file = require('path').join(__dirname, 'www', 'logic.html');
     res.sendFile(file);

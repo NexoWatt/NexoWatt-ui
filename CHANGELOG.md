@@ -1,3 +1,10 @@
+# 0.7.34 - History Vollbreite / Speicherfarm- und Admin-Trennung
+
+- History-Seite auf Desktop in die verfügbare Breite gezogen; Tablet und Smartphone bleiben mit eigenen Breakpoints responsiv und touchfreundlich.
+- Speicherfarm-Reiter im Kunden-Frontend bereinigt: Dort wird nur noch die read-only Speicherfarm-Tabelle/Übersicht angezeigt, das LIVE-Dashboard wird beim Wechsel zuverlässig ausgeblendet.
+- Installateur-/Adminbereiche wieder sauber vom Kunden-Frontend getrennt: kein Admin-/Installer-Einstieg mehr in der Kunden-Einstellungsseite; Installer-Seiten erhalten einen Admin-Launch-Guard und werden über die ioBroker-Admin-Seite geöffnet.
+- Webcache auf `nexowatt-cache-v201` erhöht.
+
 # 0.7.33 - Frontend-weites Cockpit-Design
 
 - Alle Haupt-Unterseiten optisch an das neue NexoWatt EMS Cockpit angepasst: History, Einstellungen, EVCS, SmartHome, SmartHome-Konfiguration, NexoLogic, App-Center/Speicherfarm, Simulation und Reports.

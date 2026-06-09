@@ -2439,6 +2439,25 @@ startEvents();
 }
 
 
+
+function nwSetLiveDashboardVisible(visible){
+  const live = document.querySelector('.content.nw-dashboard') || document.querySelector('.content');
+  if (!live) return;
+  try { live.classList.toggle('nw-tab-live-hidden', !visible); } catch (_e) {}
+  try {
+    if (visible) live.style.setProperty('display', 'grid');
+    else live.style.setProperty('display', 'none', 'important');
+  } catch (_e) {
+    live.style.display = visible ? 'grid' : 'none';
+  }
+  try {
+    document.body.classList.toggle('nw-live-active', !!visible);
+    if (visible) {
+      document.body.classList.remove('nw-storagefarm-active', 'nw-settings-active', 'nw-smarthome-active');
+    }
+  } catch (_e) {}
+}
+
 // --- Menu & Settings ---
 function initMenu(){
   const btn = document.getElementById('menuBtn');
@@ -2457,7 +2476,7 @@ function initMenu(){
     close();
     // show settings section
     hideAllPanels();
-    document.querySelector('.content').style.display = 'none';
+    nwSetLiveDashboardVisible(false);
     const sec = document.querySelector('[data-tab-content="settings"]');
     if (sec) sec.classList.remove('hidden');
       try{ if (typeof initSettingsPanel==='function') initSettingsPanel();
@@ -2956,8 +2975,7 @@ window.addEventListener('DOMContentLoaded', ()=> {
     const p = (location && location.pathname) ? String(location.pathname) : '';
     const isSettings = p.endsWith('/settings.html') || p.endsWith('settings.html');
     if (isSettings) {
-      const live = document.querySelector('.content');
-      if (live) live.style.display = 'none';
+      nwSetLiveDashboardVisible(false);
       const sec = document.querySelector('[data-tab-content="settings"]');
       if (sec) sec.classList.remove('hidden');
       try { setupSettings(); } catch(_e) {}
@@ -2968,7 +2986,7 @@ window.addEventListener('DOMContentLoaded', ()=> {
 
  // --- Settings & Installer logic ---
 
-function hideAllPanels(){ document.querySelectorAll('[data-tab-content]').forEach(el=> el.classList.add('hidden')); const c=document.querySelector('.content'); if(c) c.style.display='grid'; }
+function hideAllPanels(){ document.querySelectorAll('[data-tab-content]').forEach(el=> el.classList.add('hidden')); nwSetLiveDashboardVisible(true); try { document.body.classList.remove('nw-storagefarm-active','nw-settings-active','nw-smarthome-active'); } catch(_e){} }
 let SERVER_CFG = { adminUrl: null, installerLocked: false };
 
 async function loadConfig() {
@@ -3845,8 +3863,7 @@ function setupInstaller(){
       e.preventDefault();
       const installerSec = document.querySelector('[data-tab-content="installer"]');
       if (installerSec) installerSec.classList.add('hidden');
-      const live = document.querySelector('.content');
-      if (live) live.style.display = 'grid';
+      nwSetLiveDashboardVisible(true);
       document.querySelectorAll('.tabs .tab').forEach(b => {
         b.classList.toggle('active', b.getAttribute('data-tab') === 'live');
       });
@@ -3879,10 +3896,16 @@ function initTabs(){
     buttons.forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     const tab = btn.getAttribute('data-tab');
+    try {
+      document.body.classList.toggle('nw-storagefarm-active', tab === 'storagefarm');
+      document.body.classList.toggle('nw-settings-active', tab === 'settings');
+      document.body.classList.toggle('nw-smarthome-active', tab === 'smarthome');
+      document.body.classList.toggle('nw-live-active', tab === 'live');
+    } catch (_e) {}
 
     // Show/hide groups
     // main ".content" holds live top sections; other sections are siblings
-    document.querySelector('.content').style.display = (tab==='live') ? 'grid' : 'none';
+    nwSetLiveDashboardVisible(tab === 'live');
     for (const k of ['history','settings','smarthome','storagefarm']) {
       const el = sections[k];
       if (el) el.classList.toggle('hidden', tab !== k);
@@ -6212,8 +6235,7 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
         return;
       }
       // fallback: show settings section explicitly
-      const content = document.querySelector('.content');
-      if (content) content.style.display = 'none';
+      nwSetLiveDashboardVisible(false);
       const sec = document.querySelector('[data-tab-content="settings"]');
       if (sec) sec.classList.remove('hidden');
       try{ if (typeof initSettingsPanel==='function') initSettingsPanel();

@@ -9921,3 +9921,171 @@ tbody tr:hover td{ background:rgba(0,230,118,.055); }
   .card,.report-card{ box-shadow:none !important; background:#fff !important; color:#111 !important; border-color:#ddd !important; }
   table,td,th{ color:#111 !important; background:#fff !important; }
 }
+
+
+/* =====================================================================
+   NexoWatt 0.7.34 user fixes
+   - History full-width on desktop
+   - Properly hide LIVE cockpit when non-live tabs are open
+   - Speicherfarm customer tab is read-only/table only
+   - Customer frontend no longer exposes installer entry points
+   ===================================================================== */
+
+.content.nw-dashboard.nw-tab-live-hidden,
+.content.nw-dashboard[style*="display: none"],
+body.nw-storagefarm-active .content.nw-dashboard,
+body.nw-settings-active .content.nw-dashboard,
+body.nw-smarthome-active .content.nw-dashboard{
+  display:none !important;
+}
+
+body.nw-page-history .hist-wrap,
+body.nw-cockpit-page.nw-page-history .hist-wrap,
+.hist-wrap.nw-history-page{
+  width:calc(100vw - clamp(24px, 2.5vw, 56px)) !important;
+  max-width:none !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
+  padding-left:0 !important;
+  padding-right:0 !important;
+  box-sizing:border-box !important;
+}
+body.nw-page-history .nw-page-hero,
+body.nw-page-history .toolbar,
+body.nw-page-history #chart,
+body.nw-page-history #priceChart,
+body.nw-page-history .legend,
+body.nw-page-history .cards,
+body.nw-page-history #cards,
+body.nw-page-history #priceCards,
+body.nw-page-history .pricing-section{
+  width:100% !important;
+  max-width:none !important;
+  box-sizing:border-box !important;
+}
+body.nw-page-history #chart{
+  height:clamp(440px, 58vh, 660px) !important;
+}
+body.nw-page-history #priceChart{
+  height:clamp(280px, 36vh, 430px) !important;
+}
+
+[data-tab-content="storagefarm"]{
+  width:min(calc(100vw - clamp(24px, 2.5vw, 56px)), 1320px) !important;
+  max-width:1320px !important;
+  margin:0 auto !important;
+  padding:clamp(12px, 1.6vw, 22px) 0 24px !important;
+  box-sizing:border-box !important;
+}
+[data-tab-content="storagefarm"].hidden{ display:none !important; }
+[data-tab-content="storagefarm"] > .card{
+  width:100% !important;
+  box-sizing:border-box !important;
+}
+.sf-table{
+  width:100%;
+  overflow-x:auto;
+}
+.sf-table .rfid-whitelist-head,
+.sf-table .rfid-whitelist-row{
+  min-width:760px;
+}
+.sf-cell{
+  background:rgba(4,18,32,.72) !important;
+  border-color:rgba(104,150,193,.22) !important;
+}
+
+/* Customer pages: hide any accidental installer launch elements. */
+body:not(.nw-installer-page) #openInstallerBtn,
+body:not(.nw-installer-page) #menuOpenInstaller,
+body:not(.nw-installer-page) [data-customer-hidden="installer"]{
+  display:none !important;
+}
+
+body.nw-installer-locked{ display:none !important; }
+
+@media (max-width: 1024px){
+  body.nw-page-history .hist-wrap,
+  body.nw-cockpit-page.nw-page-history .hist-wrap,
+  .hist-wrap.nw-history-page{
+    width:calc(100vw - 24px) !important;
+  }
+  body.nw-page-history #chart{ height:380px !important; }
+  body.nw-page-history #priceChart{ height:260px !important; }
+  [data-tab-content="storagefarm"]{
+    width:calc(100vw - 24px) !important;
+    padding-top:12px !important;
+  }
+}
+@media (max-width: 680px){
+  body.nw-page-history .hist-wrap,
+  body.nw-cockpit-page.nw-page-history .hist-wrap,
+  .hist-wrap.nw-history-page{
+    width:calc(100vw - 16px) !important;
+  }
+  body.nw-page-history #chart{ height:320px !important; }
+  body.nw-page-history #priceChart{ height:240px !important; }
+  body.nw-page-history .toolbar,
+  body.nw-page-history .report-toolbar,
+  body.nw-page-history .range{
+    width:100% !important;
+  }
+  [data-tab-content="storagefarm"]{
+    width:calc(100vw - 16px) !important;
+    padding-top:8px !important;
+  }
+  .sf-table{ overflow-x:visible; }
+  .sf-table .rfid-whitelist-head{ display:none !important; }
+  .sf-table .rfid-whitelist-row{
+    min-width:0;
+    grid-template-columns:1fr !important;
+    gap:8px !important;
+    padding:10px !important;
+    border:1px solid rgba(104,150,193,.20);
+    border-radius:16px;
+    background:rgba(4,18,32,.56);
+  }
+}
+
+
+/* 0.7.34 safety net: installer/config links are hidden in customer pages. */
+body:not(.nw-installer-page) a[href*="ems-apps.html"],
+body:not(.nw-installer-page) a[href*="simulation.html"],
+body:not(.nw-installer-page) a[href*="smarthome-config.html"],
+body:not(.nw-installer-page) a[href*="logic.html"],
+body:not(.nw-installer-page) button[onclick*="ems-apps.html"],
+body:not(.nw-installer-page) button[onclick*="simulation.html"],
+body:not(.nw-installer-page) button[onclick*="smarthome-config.html"],
+body:not(.nw-installer-page) button[onclick*="logic.html"]{
+  display:none !important;
+}
+
+
+/* Installer pages use their own admin-only chrome, separated from customer navigation. */
+.nw-installer-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:34px;
+  padding:0 12px;
+  border-radius:999px;
+  border:1px solid rgba(0,230,118,.44);
+  color:#dfffee;
+  background:rgba(0,230,118,.10);
+  font-weight:900;
+  letter-spacing:.08em;
+  font-size:12px;
+  box-shadow:0 0 18px rgba(0,230,118,.13), inset 0 1px 0 rgba(255,255,255,.05);
+}
+.nw-installer-tabs .tab{
+  white-space:nowrap;
+}
+body.nw-installer-page .topbar h1::after{
+  content:' · Admin';
+  color:rgba(183,204,221,.72);
+  font-size:.78em;
+  font-weight:700;
+}
+@media (max-width:820px){
+  .nw-installer-badge{ min-height:34px; padding:0 10px; font-size:11px; }
+}
