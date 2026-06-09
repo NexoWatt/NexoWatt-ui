@@ -26,7 +26,7 @@
         if(p.includes('history') || p.includes('report')) is = text === 'history';
         if(p.includes('smarthome')) is = text === 'smarthome';
         if(p.includes('evcs')) is = text === 'evcs';
-        if(q.includes('storagefarm')) is = text === 'speicherfarm';
+        if(q.includes('storagefarm') || p.includes('storagefarm')) is = text === 'speicherfarm';
         if(p.includes('logic')) is = text.includes('logic');
         if(is){ t.classList.add('active'); t.classList.add('tab-active'); }
         else if(p.includes('settings') || p.includes('ems-apps') || p.includes('simulation') || p.includes('smarthome-config')){ t.classList.remove('active'); }

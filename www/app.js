@@ -2285,9 +2285,18 @@ async function bootstrap() {
       // Speicherfarm Tab/Link
       const sf = !!(cfg.ems && cfg.ems.storageFarmEnabled);
       const sft = document.getElementById('tabStorageFarm');
-      if (sft) sft.classList.toggle('hidden', !sf);
+      if (sft) {
+        sft.classList.toggle('hidden', !sf);
+        sft.removeAttribute('data-tab');
+        sft.onclick = function(){ window.location.href = 'storagefarm.html'; };
+      }
+      try { if ((new URLSearchParams(window.location.search || '')).get('tab') === 'storagefarm') window.location.replace('storagefarm.html'); } catch(_e) {}
       const sfl = document.getElementById('menuStorageFarmLink');
-      if (sfl) sfl.classList.toggle('hidden', !sf);
+      if (sfl) {
+        sfl.classList.toggle('hidden', !sf);
+        sfl.setAttribute('href', 'storagefarm.html');
+        sfl.onclick = null;
+      }
     }catch(_e){}
   } catch (e) {
     console.warn('[config]', e);
@@ -2355,6 +2364,7 @@ const applyConfigSnapshot = (nextCfg) => {
     const tabStorageFarm = document.getElementById('tabStorageFarm');
     if (menuStorageFarmLink) menuStorageFarmLink.classList.toggle('hidden', !window.__nwStorageFarmEnabled);
     if (tabStorageFarm) tabStorageFarm.classList.toggle('hidden', !window.__nwStorageFarmEnabled);
+    try { if ((new URLSearchParams(window.location.search || '')).get('tab') === 'storagefarm') window.location.replace('storagefarm.html'); } catch(_e) {}
   } catch (e) {
     console.warn('[config-apply]', e);
   }
@@ -2439,25 +2449,6 @@ startEvents();
 }
 
 
-
-function nwSetLiveDashboardVisible(visible){
-  const live = document.querySelector('.content.nw-dashboard') || document.querySelector('.content');
-  if (!live) return;
-  try { live.classList.toggle('nw-tab-live-hidden', !visible); } catch (_e) {}
-  try {
-    if (visible) live.style.setProperty('display', 'grid');
-    else live.style.setProperty('display', 'none', 'important');
-  } catch (_e) {
-    live.style.display = visible ? 'grid' : 'none';
-  }
-  try {
-    document.body.classList.toggle('nw-live-active', !!visible);
-    if (visible) {
-      document.body.classList.remove('nw-storagefarm-active', 'nw-settings-active', 'nw-smarthome-active');
-    }
-  } catch (_e) {}
-}
-
 // --- Menu & Settings ---
 function initMenu(){
   const btn = document.getElementById('menuBtn');
@@ -2476,7 +2467,7 @@ function initMenu(){
     close();
     // show settings section
     hideAllPanels();
-    nwSetLiveDashboardVisible(false);
+    document.querySelector('.content').style.display = 'none';
     const sec = document.querySelector('[data-tab-content="settings"]');
     if (sec) sec.classList.remove('hidden');
       try{ if (typeof initSettingsPanel==='function') initSettingsPanel();
@@ -2861,6 +2852,11 @@ function applyInitialTabFromUrl(){
     const params = new URLSearchParams(window.location.search || '');
     const tab = String(params.get('tab') || '').trim().toLowerCase();
     if (!tab) return;
+    // Legacy links: Speicherfarm is now a dedicated table-only page.
+    if (tab === 'storagefarm') {
+      window.location.replace('storagefarm.html');
+      return;
+    }
 
     let tries = 0;
     const maxTries = 20;
@@ -2975,7 +2971,8 @@ window.addEventListener('DOMContentLoaded', ()=> {
     const p = (location && location.pathname) ? String(location.pathname) : '';
     const isSettings = p.endsWith('/settings.html') || p.endsWith('settings.html');
     if (isSettings) {
-      nwSetLiveDashboardVisible(false);
+      const live = document.querySelector('.content');
+      if (live) live.style.display = 'none';
       const sec = document.querySelector('[data-tab-content="settings"]');
       if (sec) sec.classList.remove('hidden');
       try { setupSettings(); } catch(_e) {}
@@ -2986,7 +2983,38 @@ window.addEventListener('DOMContentLoaded', ()=> {
 
  // --- Settings & Installer logic ---
 
-function hideAllPanels(){ document.querySelectorAll('[data-tab-content]').forEach(el=> el.classList.add('hidden')); nwSetLiveDashboardVisible(true); try { document.body.classList.remove('nw-storagefarm-active','nw-settings-active','nw-smarthome-active'); } catch(_e){} }
+function hideAllPanels(){
+  document.body && document.body.classList.remove('nw-storagefarm-only');
+  document.querySelectorAll('[data-tab-content]').forEach(el=> el.classList.add('hidden'));
+  const c = document.querySelector('.content.nw-dashboard') || document.querySelector('.content');
+  if(c) c.style.display = 'grid';
+}
+
+function showDashboardTab(tab){
+  tab = String(tab || 'live').trim().toLowerCase() || 'live';
+  const live = document.querySelector('.content.nw-dashboard') || document.querySelector('main.content') || document.querySelector('.content');
+  const isLive = tab === 'live';
+  if (live) live.style.display = isLive ? 'grid' : 'none';
+
+  document.querySelectorAll('[data-tab-content]').forEach(el => {
+    el.classList.toggle('hidden', el.getAttribute('data-tab-content') !== tab);
+  });
+
+  document.body && document.body.classList.toggle('nw-storagefarm-only', tab === 'storagefarm');
+
+  document.querySelectorAll('.tabs .tab').forEach(b => {
+    const active = (b.getAttribute('data-tab') || '').toLowerCase() === tab;
+    b.classList.toggle('active', active);
+    b.classList.toggle('tab-active', active);
+  });
+
+  if (tab === 'storagefarm') {
+    window.location.href = 'storagefarm.html';
+    return;
+  }
+}
+try { window.nwShowDashboardTab = showDashboardTab; } catch(_e) {}
+
 let SERVER_CFG = { adminUrl: null, installerLocked: false };
 
 async function loadConfig() {
@@ -3863,7 +3891,8 @@ function setupInstaller(){
       e.preventDefault();
       const installerSec = document.querySelector('[data-tab-content="installer"]');
       if (installerSec) installerSec.classList.add('hidden');
-      nwSetLiveDashboardVisible(true);
+      const live = document.querySelector('.content');
+      if (live) live.style.display = 'grid';
       document.querySelectorAll('.tabs .tab').forEach(b => {
         b.classList.toggle('active', b.getAttribute('data-tab') === 'live');
       });
@@ -3884,32 +3913,16 @@ function initInstallerPanel(){
 
 // Simple tab switching
 function initTabs(){
-  const buttons = document.querySelectorAll('.tabs .tab');
-  const sections = {
-    live: document.querySelector('.content'),
-    history: document.querySelector('[data-tab-content="history"]'),
-    settings: document.querySelector('[data-tab-content="settings"]'),
-    smarthome: document.querySelector('[data-tab-content="smarthome"]'),
-    storagefarm: document.querySelector('[data-tab-content="storagefarm"]'),
-  };
+  const buttons = document.querySelectorAll('.tabs .tab[data-tab]');
   buttons.forEach(btn => btn.addEventListener('click', () => {
-    buttons.forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    const tab = btn.getAttribute('data-tab');
-    try {
-      document.body.classList.toggle('nw-storagefarm-active', tab === 'storagefarm');
-      document.body.classList.toggle('nw-settings-active', tab === 'settings');
-      document.body.classList.toggle('nw-smarthome-active', tab === 'smarthome');
-      document.body.classList.toggle('nw-live-active', tab === 'live');
-    } catch (_e) {}
+    const tab = btn.getAttribute('data-tab') || 'live';
 
-    // Show/hide groups
-    // main ".content" holds live top sections; other sections are siblings
-    nwSetLiveDashboardVisible(tab === 'live');
-    for (const k of ['history','settings','smarthome','storagefarm']) {
-      const el = sections[k];
-      if (el) el.classList.toggle('hidden', tab !== k);
-    }
+    // Standalone pages are handled through normal navigation.
+    if (tab === 'history') { window.location.href = '/history.html'; return; }
+    if (tab === 'smarthome') { window.location.href = '/smarthome.html'; return; }
+    if (tab === 'storagefarm') { window.location.href = '/storagefarm.html'; return; }
+
+    showDashboardTab(tab);
   }));
 }
 
@@ -6235,7 +6248,8 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
         return;
       }
       // fallback: show settings section explicitly
-      nwSetLiveDashboardVisible(false);
+      const content = document.querySelector('.content');
+      if (content) content.style.display = 'none';
       const sec = document.querySelector('[data-tab-content="settings"]');
       if (sec) sec.classList.remove('hidden');
       try{ if (typeof initSettingsPanel==='function') initSettingsPanel();

@@ -1,8 +1,33 @@
-# 0.7.34 - History Vollbreite / Speicherfarm- und Admin-Trennung
+# 0.7.37 - SmartHome Halbkreis-Bedienung und Feinschliff
 
-- History-Seite auf Desktop in die verfügbare Breite gezogen; Tablet und Smartphone bleiben mit eigenen Breakpoints responsiv und touchfreundlich.
-- Speicherfarm-Reiter im Kunden-Frontend bereinigt: Dort wird nur noch die read-only Speicherfarm-Tabelle/Übersicht angezeigt, das LIVE-Dashboard wird beim Wechsel zuverlässig ausgeblendet.
-- Installateur-/Adminbereiche wieder sauber vom Kunden-Frontend getrennt: kein Admin-/Installer-Einstieg mehr in der Kunden-Einstellungsseite; Installer-Seiten erhalten einen Admin-Launch-Guard und werden über die ioBroker-Admin-Seite geöffnet.
+- SmartHome-Dimmer und Jalousien erhalten im großen Bedienpanel zusätzlich einen interaktiven Halbkreis-Regler mit +/− Bedienung; der klassische Slider bleibt als Präzisionssteuerung erhalten.
+- Halbkreis-Regler und Slider werden gegenseitig synchronisiert und bleiben mit Live-Vorschau/Commit-Logik kompatibel.
+- Service-Worker Cache auf `nexowatt-cache-v204` erhöht.
+
+# 0.7.36 - UI-Polish SmartHome, Einstellungen und Speicherfarm
+
+- Alte Allgemeine-Einstellungen-Sektion vollständig aus dem LIVE-Dashboard entfernt; Einstellungen liegen nur noch auf `settings.html`.
+- Speicherfarm bleibt table-only und nutzt auf dem PC die verfügbare Breite/Höhe deutlich besser.
+- SmartHome-Kacheln sauberer ausgerichtet, aktive Gebäudestruktur-Einträge wieder kontrastreich lesbar.
+- SmartHome-Bedienkacheln mit Halbkreis-Statusanzeige ergänzt; Klick auf Dimmer, RGB, Jalousie, RTR und Player öffnet direkt die große Bedienung.
+- Überschrift-/Hero-Kacheln in Einstellungen und Installerbereich auf eine gemeinsame Container-Achse und sauberes Padding gebracht.
+- Service-Worker Cache auf `nexowatt-cache-v203` erhöht.
+
+# 0.7.35 - History Vollbreite, Speicherfarm-Tabelle, Admin-Trennung
+
+- History auf Desktop auf volle verfügbare Breite erweitert; Tablet und Smartphone bleiben responsiv.
+- Top-Level-Reiter „Speicherfarm“ öffnet jetzt eine eigene table-only Seite (`storagefarm.html`) statt das LIVE-Dashboard als eingebetteten Tab zu zeigen.
+- Alte Links auf `?tab=storagefarm` werden auf die neue Speicherfarm-Tabelle umgeleitet.
+- Installer-/Konfigurationsseiten unter `/www` sind per Admin-Handoff geschützt und werden aus dem Kundenfrontend nicht mehr direkt verlinkt.
+- Admin-React-Handoff ergänzt `nwAdmin=1`, damit App-Center, Simulation und SmartHome-Konfiguration weiterhin aus der ioBroker-Adminseite geöffnet werden können.
+- Service-Worker Cache auf `nexowatt-cache-v202` erhöht.
+
+# 0.7.34 - History Full-Width & Speicherfarm-Tab-Fix
+
+- History-Seite auf Desktop/PC auf volle verfügbare Cockpit-Breite erweitert; Tablet- und Smartphone-Breakpoints bleiben touchfreundlich responsiv.
+- Diagrammhöhen für History und Preis/Kosten auf Desktop vergrößert, auf Tablet/Smartphone weiterhin kompakt begrenzt.
+- Speicherfarm-Tab im Endkunden-Frontend zeigt jetzt ausschließlich die Read-only-Speicherfarm-Tabelle und blendet das LIVE-Dashboard zuverlässig aus.
+- Topbar-Links „SPEICHERFARM“ führen auf die Read-only-Tabelle; die Konfiguration bleibt im App-Center intern erreichbar.
 - Webcache auf `nexowatt-cache-v201` erhöht.
 
 # 0.7.33 - Frontend-weites Cockpit-Design

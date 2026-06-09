@@ -45,7 +45,7 @@
     <div>
       <div class="nw-page-hero__eyebrow">Settings</div>
       <h2>Einstellungen</h2>
-      <p class="nw-page-hero__subtitle">Benachrichtigungen, Tarife, RFID, Wetter und Nachweise in einer responsiven Cockpit-Struktur.</p>
+      <p class="nw-page-hero__subtitle">Benachrichtigungen, Tarife, RFID und Nachweise in einer responsiven Cockpit-Struktur. Installer-Funktionen öffnen separat über ioBroker Admin.</p>
     </div>
     <div class="nw-page-hero__actions">
       <a class="btn sm" href="./">Live öffnen</a>
@@ -57,7 +57,7 @@
       <div class="nw-settings-nav">
         <button class="nw-settings-nav__item is-active" type="button" data-settings-page-target="general">
           <span class="nw-settings-nav__title">Allgemein</span>
-          <small>Wetter &amp; Allgemein</small>
+          <small>Admin-Zugang &amp; Wetter</small>
         </button>
         <button class="nw-settings-nav__item" type="button" data-settings-page-target="notify">
           <span class="nw-settings-nav__title">Benachrichtigungen</span>
@@ -82,7 +82,14 @@
       <section class="card nw-settings-page" data-settings-panel="general">
         <div class="card-header"><span>Allgemein</span></div>
         <div class="form">
-<div class="nw-settings-note">
+    <div class="row" style="align-items:center; margin-top:10px;">
+      <span>Installateur</span>
+      <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex:1 1 auto">
+        <a class="btn" id="openInstallerBtn" href="#">Admin öffnen</a>
+      </div>
+    </div>
+
+          <div class="nw-settings-note">
             Hier liegen allgemeine Frontend-Einstellungen und die Wetter-App. Weitere Themen findest du links sauber in eigenen Seiten.
           </div>
 
@@ -606,7 +613,7 @@
 
 
 <script>
-// Admin shortcut removed from customer frontend; installer opens from ioBroker Admin only.
+// Installer/Admin shortcut: always open the local Admin UI on port 8081.
 // Uses the current host (dynamic DNS / reverse proxy hostnames) and replaces only the port.
 (function () {
   try {

@@ -2,74 +2,75 @@
 <html lang="de">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta content="width=device-width, initial-scale=1" name="viewport"/>
   <title>NexoWatt EMS – Speicherfarm</title>
-  <link rel="stylesheet" href="/static/styles.css"/>
-  <link rel="manifest" href="./manifest.webmanifest"/>
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/nexowatt-32.png"/>
-  <meta name="theme-color" content="#0c0f12"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="apple-mobile-web-app-title" content="NexoWatt EMS"/>
+  <link href="/static/styles.css" rel="stylesheet"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/nexowatt-32.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0c0f12">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
 </head>
 <body class="nw-cockpit-page nw-cockpit-skin nw-page-storagefarm">
 <header class="topbar nw-cockpit-topbar">
+  <script>
+  (function () {
+    try {
+      var p = window.location.pathname || "";
+      if (p && !p.endsWith("/") && !p.endsWith(".html")) {
+        window.location.replace(p + "/" + window.location.search + window.location.hash);
+      }
+    } catch (e) {}
+  })();
+  </script>
   <div class="brand"><a href="./" aria-label="NexoWatt Live"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></a></div>
   <button aria-label="Menu" id="menuBtn" data-nw-menu-fallback="1" type="button">☰</button>
   <h1>NexoWatt EMS</h1>
-  <nav class="tabs" aria-label="Hauptnavigation">
+  <nav class="tabs">
     <button class="tab" id="liveTabBtn" type="button" onclick="window.location.href='./'">LIVE</button>
     <button class="tab" id="historyTabBtn" type="button" onclick="window.location.href='history.html'">HISTORY</button>
     <button class="tab active" id="tabStorageFarm" type="button" onclick="window.location.href='storagefarm.html'">SPEICHERFARM</button>
     <button class="tab hidden" id="tabEvcs" type="button" onclick="window.location.href='evcs.html'">EVCS</button>
     <button class="tab hidden" id="tabSmartHome" type="button" onclick="window.location.href='smarthome.html'">SMARTHOME</button>
   </nav>
-  <div class="status-dot" id="liveDot" title="Live Verbindung"></div>
+  <div class="status-dot live" id="liveDot" title="Live Verbindung"></div>
   <a class="topbar-gear" href="settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
   <div class="menu hidden" id="menuDropdown">
     <a class="menu-item" href="./">Live</a>
     <a class="menu-item" href="history.html">History</a>
-    <a class="menu-item" id="menuStorageFarmLink" href="storagefarm.html">Speicherfarm</a>
-    <a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a>
-    <a class="menu-item hidden" id="menuSmartHomeLink" href="smarthome.html">SmartHome</a>
+    <a class="menu-item" href="storagefarm.html" id="menuStorageFarmLink">Speicherfarm</a>
+    <a class="menu-item hidden" href="evcs.html" id="menuEvcsLink">EVCS</a>
+    <a class="menu-item hidden" href="smarthome.html" id="menuSmartHomeLink">SmartHome</a>
     <a class="menu-item" href="settings.html">Einstellungen</a>
   </div>
 </header>
 
-<main class="storagefarm-wrap nw-page-shell nw-storagefarm-page nw-storagefarm-standalone" aria-label="Speicherfarm Übersicht">
-  <section class="nw-page-hero" aria-label="Speicherfarm">
-    <div>
-      <div class="nw-page-hero__eyebrow">Speicherfarm</div>
-      <h2>Speicherfarm Tabelle</h2>
-      <p class="nw-page-hero__subtitle">Read-only Übersicht der Speicherfarm. Konfiguration, Zuordnung und Gruppen bleiben ausschließlich im Admin-/Installerbereich.</p>
-    </div>
-    <div class="nw-page-hero__actions">
-      <button class="btn sm" id="sf_reload" type="button">Neu laden</button>
-    </div>
-  </section>
-
-  <section class="card nw-storagefarm-table-card" aria-live="polite">
-    <div class="card-header nw-storagefarm-header">
-      <span>Speicherfarm</span>
-      <small id="sf_mode_label" style="color:var(--muted)">Modus: --</small>
-    </div>
-    <div class="form nw-storagefarm-table-only">
-      <div class="row" style="margin-top:10px;gap:10px;flex-wrap:wrap">
-        <small id="sf_summary" style="color:var(--muted)">SoC Ø: -- % | Laden: -- | Entladen: -- | Online: --/-- | Regelbar: --/--</small>
+<main class="storagefarm-wrap nw-subpage" aria-label="Speicherfarm Tabelle">
+  <section class="card nw-storagefarm-card" aria-live="polite">
+    <div class="nw-storagefarm-head">
+      <div>
+        <div class="nw-page-hero__eyebrow">Speicherfarm</div>
+        <h2>Speicherfarm</h2>
+        <small id="sf_summary">SoC Ø: -- % | Laden: -- | Entladen: -- | Online: --/-- | Regelbar: --/--</small>
       </div>
-
-      <div class="sf-table" style="margin-top:12px">
-        <div class="rfid-whitelist-head" style="grid-template-columns: 1.6fr 1fr 1fr 1fr 0.8fr;">
-          <div>Speicher</div>
-          <div>SoC (%)</div>
-          <div>Laden</div>
-          <div>Entladen</div>
-          <div>Status</div>
-        </div>
-        <div id="sf_status_rows" class="rfid-whitelist-rows"></div>
-        <small id="sf_msg" style="display:block;margin-top:8px;color:var(--muted)"></small>
+      <div class="nw-storagefarm-actions">
+        <span id="sf_mode_label" class="nw-storagefarm-mode">Modus: --</span>
+        <button class="btn" id="sf_reload" type="button">Neu laden</button>
       </div>
     </div>
+
+    <div class="sf-table nw-storagefarm-table" role="table" aria-label="Speicherfarm Status">
+      <div class="nw-storagefarm-row nw-storagefarm-row--head" role="row">
+        <div role="columnheader">Speicher</div>
+        <div role="columnheader">SoC (%)</div>
+        <div role="columnheader">Laden</div>
+        <div role="columnheader">Entladen</div>
+        <div role="columnheader">Status</div>
+      </div>
+      <div id="sf_status_rows" class="nw-storagefarm-rows"></div>
+    </div>
+    <small id="sf_msg" class="nw-storagefarm-msg"></small>
   </section>
 </main>
 

@@ -44,11 +44,11 @@ export default function InstallerPage() {
     },
     {
       label: 'EMS Apps öffnen',
-      onClick: () => openExternal(`${baseUrl}/ems-apps.html?nwadmin=1`),
+      onClick: () => openExternal(`${baseUrl}/ems-apps.html?nwAdmin=1`),
     },
     {
       label: 'Simulation',
-      onClick: () => openExternal(`${baseUrl}/simulation.html?nwadmin=1`),
+      onClick: () => openExternal(`${baseUrl}/simulation.html?nwAdmin=1`),
     },
     {
       label: 'Lizenz',
@@ -60,7 +60,7 @@ export default function InstallerPage() {
     },
     {
       label: 'SmartHome Config',
-      onClick: () => openExternal(`${baseUrl}/smarthome-config.html?nwadmin=1`),
+      onClick: () => openExternal(`${baseUrl}/smarthome-config.html?nwAdmin=1`),
     },
   ];
 

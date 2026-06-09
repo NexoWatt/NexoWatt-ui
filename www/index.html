@@ -54,12 +54,12 @@
 <button class="tab" id="historyTabBtn" data-tab="history">HISTORY</button>
 <button id="tabEvcs" class="tab hidden" onclick="window.location.href='evcs.html'">EVCS</button>
 <button id="tabSmartHome" class="tab hidden" data-tab="smarthome">SMARTHOME</button>
-<button id="tabStorageFarm" class="tab hidden" data-tab="storagefarm">SPEICHERFARM</button>
+<button id="tabStorageFarm" class="tab hidden" type="button" onclick="window.location.href='storagefarm.html'">SPEICHERFARM</button>
 </nav>
 <div class="status-dot" id="liveDot" title="Live Verbindung"></div>
 <a class="topbar-gear" href="settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
 <div class="menu hidden" id="menuDropdown"><a class="menu-item" href="./">Live</a><a class="menu-item" href="history.html">History</a>
-<a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item hidden" id="menuSmartHomeLink" href="smarthome.html">SmartHome</a><a class="menu-item hidden" id="menuStorageFarmLink" href="#" onclick="document.querySelector('#tabStorageFarm')?.click();return false;">Speicherfarm</a><a class="menu-item" href="settings.html">Einstellungen</a></div></header>
+<a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item hidden" id="menuSmartHomeLink" href="smarthome.html">SmartHome</a><a class="menu-item hidden" id="menuStorageFarmLink" href="storagefarm.html">Speicherfarm</a><a class="menu-item" href="settings.html">Einstellungen</a></div></header>
 <main class="content nw-dashboard">
 <aside class="nw-dashboard-rail nw-dashboard-left" aria-label="System- und Liveübersicht">
   <section class="card nw-panel nw-panel-status">
@@ -931,78 +931,8 @@
 </main>
 <script src="/static/app.js"></script>
 
-<section class="hidden settings-wrap" data-tab-content="settings">
-  <section class="card">
-    <div class="card-header"><span>Allgemeine Einstellungen</span></div>
-    <div class="form">
-      <label class="row"><span>Benachrichtigungen</span>
-        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_notify"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
-        <input type="checkbox" class="nw-toggle-hidden" id="s_notify" data-scope="settings" data-key="notifyEnabled">
-      </label>
-      <label class="row"><span>E-Mail</span>
-        <input type="email" id="s_email" data-scope="settings" data-key="email">
-      </label>
-      <label class="row"><span>Dynamischer Zeittarif</span>
-        <div class="nw-evcs-mode-buttons nw-evcs-mode-buttons-2 nw-toggle" data-toggle-for="s_dyn"><button type="button" data-value="false">Aus</button><button type="button" data-value="true">An</button></div>
-        <input type="checkbox" class="nw-toggle-hidden" id="s_dyn" data-scope="settings" data-key="dynamicTariff">
-      </label>
-<label class="row"><span>Speicher Leistung (W)</span>
-        <input type="number" id="s_storagePower" step="1" data-scope="settings" data-key="storagePower">
-      </label>
-      <label class="row"><span>Strompreis (€)</span>
-        <input type="number" id="s_price" step="0.01" data-scope="settings" data-key="price">
-      </label>
-      <div class="row"><span>Priorität (Tarif): <b id="s_priority_label">Auto</b></span>
-        <input type="range" id="s_priority" min="1" max="3" step="1" data-scope="settings" data-key="priority">
-        <small>1 = Speicher, 2 = Auto, 3 = Ladestation</small>
-      </div>
-      <div class="row"><span>Modus Tarif</span>
-        <input type="range" id="s_tariffMode" min="1" max="2" step="1" data-scope="settings" data-key="tariffMode">
-        <small>1 = Manuell, 2 = Automatisch</small>
-      </div>
-    
-      <!-- Hinweis: Installateur-/Admin-Konfiguration erfolgt außerhalb des Endkunden-Dashboards -->
-    </div>
-  </section>
-
-  
-</section>
-</section>
-
-<!-- Speicherfarm (nur sichtbar, wenn im Admin unter EMS aktiviert) -->
-<section class="hidden" data-tab-content="storagefarm">
-  <section class="card">
-    <div class="card-header"><span>Speicherfarm</span></div>
-    <div class="form">
-
-      <div class="row" style="align-items:center">
-        <span>Übersicht</span>
-        <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex:1 1 auto">
-          <small id="sf_mode_label" style="color:var(--muted)">Modus: --</small>
-          <button class="btn" id="sf_reload" type="button">Neu laden</button>
-        </div>
-      </div>
-
-      <div class="row" style="margin-top:10px;gap:10px;flex-wrap:wrap">
-        <small id="sf_summary" style="color:var(--muted)">--</small>
-      </div>
-
-
-      <div class="sf-table" style="margin-top:12px">
-        <div class="rfid-whitelist-head" style="grid-template-columns: 1.6fr 1fr 1fr 1fr 0.8fr;">
-          <div>Speicher</div>
-          <div>SoC (%)</div>
-          <div>Laden</div>
-          <div>Entladen</div>
-          <div>Status</div>
-        </div>
-        <div id="sf_status_rows" class="rfid-whitelist-rows"></div>
-        <small id="sf_msg" style="display:block;margin-top:8px;color:var(--muted)"></small>
-      </div>
-
-    </div>
-  </section>
-</section>
+<!-- Kundeneinstellungen liegen ausschließlich in settings.html. -->
+<!-- Speicherfarm ist eine eigene table-only Seite: storagefarm.html -->
 
 <script>
 if ('serviceWorker' in navigator) {

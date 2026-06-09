@@ -2509,7 +2509,7 @@ function nwInitShcfgShellUi() {
       nwRenderShcfgShell();
     }
   });
-  if (btnLogic) btnLogic.addEventListener('click', () => window.location.href = '/logic.html');
+  if (btnLogic) btnLogic.addEventListener('click', () => window.location.href = '/logic.html?nwAdmin=1');
   if (btnTimers) btnTimers.addEventListener('click', () => nwShcfgSetMode('timers'));
   if (btnScenes) btnScenes.addEventListener('click', () => nwShcfgSetMode('scenes'));
   if (btnBackup) btnBackup.addEventListener('click', () => nwShcfgSetMode('backup'));
@@ -2547,7 +2547,7 @@ function nwInitShcfgShellUi() {
   const timersReload = document.getElementById('nw-shcfg-timers-reload');
   const timersSave = document.getElementById('nw-shcfg-timers-save');
   if (timersBack) timersBack.addEventListener('click', () => nwShcfgSetMode('home'));
-  if (timersOpenLogic) timersOpenLogic.addEventListener('click', () => window.location.href = '/logic.html');
+  if (timersOpenLogic) timersOpenLogic.addEventListener('click', () => window.location.href = '/logic.html?nwAdmin=1');
   if (timersReload) timersReload.addEventListener('click', async () => {
     await nwLoadTimersModule(true);
     await nwLoadLogicClocksModule(true);
@@ -2570,7 +2570,7 @@ function nwInitShcfgShellUi() {
   const scenesAdd = document.getElementById('nw-shcfg-scenes-add');
   const scenesSave = document.getElementById('nw-shcfg-scenes-save');
   if (scenesBack) scenesBack.addEventListener('click', () => nwShcfgSetMode('home'));
-  if (scenesOpenLogic) scenesOpenLogic.addEventListener('click', () => window.location.href = '/logic.html');
+  if (scenesOpenLogic) scenesOpenLogic.addEventListener('click', () => window.location.href = '/logic.html?nwAdmin=1');
   if (scenesAdd) scenesAdd.addEventListener('click', () => {
     nwAddScene();
     nwRenderShcfgShell();

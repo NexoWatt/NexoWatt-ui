@@ -2534,11 +2534,11 @@ function nwGetTileHint(dev) {
   if (!canWrite) return 'Nur Anzeige';
 
   if (type === 'switch') return 'Klicken: Ein/Aus';
-  if (type === 'color') return 'Klicken: Ein/Aus · Symbol/⋯: Farbe einstellen';
+  if (type === 'color') return 'Klicken: große Farbsteuerung · Schalter: Ein/Aus';
   if (type === 'scene') return 'Klicken: Szene auslösen';
-  if (type === 'dimmer') return 'Klicken: Ein/Aus · Regler: Helligkeit · Symbol/⋯: Bedienung';
-  if (type === 'blind') return 'Regler: Position · Tasten: Auf/Stop/Ab · Symbol/⋯: Bedienung';
-  if (type === 'rtr') return 'Symbol/⋯: Solltemperatur einstellen';
+  if (type === 'dimmer') return 'Klicken: große Bedienung · Schalter: Ein/Aus · +/-: Feinregelung';
+  if (type === 'blind') return 'Klicken: große Bedienung · Tasten: Auf/Stop/Ab';
+  if (type === 'rtr') return 'Klicken: große Temperatursteuerung';
   return '';
 }
 
@@ -3626,6 +3626,46 @@ function nwCreateTile(dev, opts) {
     tile.appendChild(big);
   }
 
+  // Premium mini dial inside control tiles (visual half-circle).
+  // Click/tap on the tile opens the large control popover; this dial gives an immediate, clean status preview.
+  if ((type === 'dimmer' || type === 'blind' || type === 'color') && dev.io && dev.io.level && (dev.io.level.readId || dev.io.level.writeId)) {
+    const lvlCfg = dev.io.level || {};
+    const min = type === 'blind' ? 0 : (typeof lvlCfg.min === 'number' ? lvlCfg.min : 0);
+    const max = type === 'blind' ? 100 : (typeof lvlCfg.max === 'number' ? lvlCfg.max : 100);
+    const st = dev.state || {};
+    const raw = type === 'blind'
+      ? ((typeof st.position === 'number') ? st.position : (typeof st.level === 'number' ? st.level : 0))
+      : ((typeof st.level === 'number') ? st.level : (typeof st.position === 'number' ? st.position : 0));
+    const value = nwClampNumber(Number.isFinite(Number(raw)) ? Number(raw) : 0, min, max);
+    const pct = (max - min) > 0 ? Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100)) : 0;
+    const dial = document.createElement('div');
+    dial.className = 'nw-sh-tile-dial';
+    dial.style.setProperty('--nw-sh-arc-deg', Math.round(pct * 1.8) + 'deg');
+    dial.title = 'Große Bedienung öffnen';
+
+    const arc = document.createElement('div');
+    arc.className = 'nw-sh-tile-dial__arc';
+    const valueEl = document.createElement('div');
+    valueEl.className = 'nw-sh-tile-dial__value';
+    valueEl.textContent = Math.round(value) + '%';
+    arc.appendChild(valueEl);
+
+    const meta = document.createElement('div');
+    meta.className = 'nw-sh-tile-dial__meta';
+    const label = document.createElement('div');
+    label.className = 'nw-sh-tile-dial__label';
+    label.textContent = type === 'blind' ? 'Position' : (type === 'color' ? 'Helligkeit' : 'Dimmer');
+    const hint = document.createElement('div');
+    hint.className = 'nw-sh-tile-dial__hint';
+    hint.textContent = 'Tippen für große Steuerung';
+    meta.appendChild(label);
+    meta.appendChild(hint);
+
+    dial.appendChild(arc);
+    dial.appendChild(meta);
+    tile.appendChild(dial);
+  }
+
   // Dimmer/Blind: optional slider (if level mapping exists)
   // We only show the slider on extra-large tiles to keep the default grid close to the standard tile UX.
   if (size === 'xl' && (type === 'dimmer' || type === 'blind') && dev.io && dev.io.level && (dev.io.level.readId || dev.io.level.writeId)) {
@@ -3822,7 +3862,7 @@ function nwCreateTile(dev, opts) {
       tile.__nwIgnoreNextClick = false;
       return;
     }
-    if (type === 'blind' || type === 'rtr') {
+    if (type === 'blind' || type === 'rtr' || type === 'dimmer' || type === 'color' || type === 'player') {
       nwOpenDevicePopover(dev, tile);
       return;
     }
@@ -4772,6 +4812,8 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
   // Premium: colored progress track.
   nwUpdateRangeFill(slider);
 
+  let dial = null;
+
   // Helper: commit a new value (writes once + reload) with feedback.
   async function commitLevel(nextVal, opts) {
     const options = opts || {};
@@ -4782,6 +4824,7 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
     slider.value = String(clamped);
     v.textContent = Math.round(clamped) + ' %';
     nwUpdateRangeFill(slider);
+    if (dial && typeof dial.nwSetValue === 'function') dial.nwSetValue(clamped);
 
     if (!hasWrite) return clamped;
 
@@ -4795,6 +4838,26 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
     return clamped;
   }
 
+  dial = nwCreateValueGauge({
+    value: current,
+    min,
+    max,
+    step: 1,
+    unit: '%',
+    label,
+    sub2: 'Halbkreis ziehen oder +/− tippen',
+    canWrite: hasWrite,
+    formatter: (val) => Math.round(val) + '%',
+    minmaxFormatter: (val) => Math.round(val) + '%',
+    onInput: (val) => {
+      slider.value = String(val);
+      v.textContent = Math.round(val) + ' %';
+      nwUpdateRangeFill(slider);
+      if (hasWrite && livePreview && liveSender) liveSender.trigger(val, false);
+    },
+    onCommit: async (val) => { await commitLevel(val); },
+  });
+
   slider.addEventListener('click', (ev) => ev.stopPropagation());
 
   slider.addEventListener('input', (ev) => {
@@ -4802,6 +4865,7 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
     if (!Number.isFinite(raw)) return;
     v.textContent = Math.round(raw) + ' %';
     nwUpdateRangeFill(slider);
+    if (dial && typeof dial.nwSetValue === 'function') dial.nwSetValue(raw);
 
     // Optional: live-preview (throttled) while dragging.
     if (hasWrite && livePreview && liveSender) {
@@ -4930,6 +4994,7 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
   updateHint();
 
   wrap.appendChild(row);
+  wrap.appendChild(dial);
   wrap.appendChild(slider);
   wrap.appendChild(presets);
   wrap.appendChild(stepRow);
@@ -5495,6 +5560,8 @@ function nwCreateBlindPopover(dev, canWrite) {
   // Premium: colored progress track.
   nwUpdateRangeFill(slider);
 
+  let dial = null;
+
   // Helper: commit a new value (writes once + reload) with feedback.
   async function commitPos(nextVal, opts) {
     const options = opts || {};
@@ -5505,6 +5572,7 @@ function nwCreateBlindPopover(dev, canWrite) {
     slider.value = String(clamped);
     v.textContent = Math.round(clamped) + ' %';
     nwUpdateRangeFill(slider);
+    if (dial && typeof dial.nwSetValue === 'function') dial.nwSetValue(clamped);
 
     if (!hasWrite) return clamped;
 
@@ -5518,6 +5586,27 @@ function nwCreateBlindPopover(dev, canWrite) {
     return clamped;
   }
 
+  dial = nwCreateValueGauge({
+    value: current,
+    min,
+    max,
+    step: 1,
+    unit: '%',
+    label: 'Position',
+    sub2: '0 % auf · 100 % ab',
+    canWrite: hasWrite,
+    formatter: (val) => Math.round(val) + '%',
+    minmaxFormatter: (val) => Math.round(val) + '%',
+    stops: [['0%', '#27b8ff'], ['55%', '#00e676'], ['100%', '#ffd31a']],
+    onInput: (val) => {
+      slider.value = String(val);
+      v.textContent = Math.round(val) + ' %';
+      nwUpdateRangeFill(slider);
+      if (hasWrite && livePreview && liveSender) liveSender.trigger(val, false);
+    },
+    onCommit: async (val) => { await commitPos(val); },
+  });
+
   slider.addEventListener('click', (ev) => ev.stopPropagation());
 
   slider.addEventListener('input', (ev) => {
@@ -5525,6 +5614,7 @@ function nwCreateBlindPopover(dev, canWrite) {
     if (!Number.isFinite(raw)) return;
     v.textContent = Math.round(raw) + ' %';
     nwUpdateRangeFill(slider);
+    if (dial && typeof dial.nwSetValue === 'function') dial.nwSetValue(raw);
 
     // Optional: live-preview (throttled) while dragging.
     if (hasWrite && livePreview && liveSender) {
@@ -5682,6 +5772,7 @@ function nwCreateBlindPopover(dev, canWrite) {
   controls.appendChild(mk('▼', 'down'));
 
   wrap.appendChild(row);
+  wrap.appendChild(dial);
   wrap.appendChild(slider);
   wrap.appendChild(presets);
   wrap.appendChild(stepRow);
@@ -5741,6 +5832,259 @@ function nwCreateRtrPopover(dev, canWrite) {
 }
 
 
+
+function nwCreateValueGauge(opts) {
+  const min = Number(opts && opts.min);
+  const max = Number(opts && opts.max);
+  const step = Number(opts && opts.step) || 1;
+  const unit = (opts && typeof opts.unit === 'string') ? opts.unit : '';
+  const label = (opts && typeof opts.label === 'string') ? opts.label : '';
+  const sub2 = (opts && typeof opts.sub2 === 'string') ? opts.sub2 : '';
+  const canWrite = !!(opts && opts.canWrite);
+  const onInput = (opts && typeof opts.onInput === 'function') ? opts.onInput : null;
+  const onCommit = (opts && typeof opts.onCommit === 'function') ? opts.onCommit : null;
+  const formatter = (opts && typeof opts.formatter === 'function') ? opts.formatter : ((v) => Math.round(v) + (unit ? ' ' + unit : ''));
+  const minmaxFormatter = (opts && typeof opts.minmaxFormatter === 'function') ? opts.minmaxFormatter : ((v) => Math.round(v) + (unit ? ' ' + unit : ''));
+
+  let value = Number(opts && opts.value);
+  if (!Number.isFinite(value)) value = Number.isFinite(min) ? min : 0;
+  value = nwRoundToStep(nwClampNumber(value, min, max), step);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'nw-sh-gauge nw-sh-gauge--level';
+
+  const canvas = document.createElement('div');
+  canvas.className = 'nw-sh-gauge__canvas';
+  wrap.appendChild(canvas);
+
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.classList.add('nw-sh-gauge__svg');
+  svg.setAttribute('viewBox', '0 0 200 140');
+  svg.setAttribute('role', 'img');
+
+  const cx = 100;
+  const cy = 110;
+  const r = 80;
+  const gradId = 'nwShValueGaugeGrad' + Math.random().toString(36).slice(2, 9);
+
+  const defs = document.createElementNS(NS, 'defs');
+  const grad = document.createElementNS(NS, 'linearGradient');
+  grad.setAttribute('id', gradId);
+  grad.setAttribute('gradientUnits', 'userSpaceOnUse');
+  grad.setAttribute('x1', String(cx - r));
+  grad.setAttribute('y1', String(cy));
+  grad.setAttribute('x2', String(cx + r));
+  grad.setAttribute('y2', String(cy));
+  const stops = (opts && Array.isArray(opts.stops) && opts.stops.length) ? opts.stops : [
+    ['0%', '#27b8ff'], ['50%', '#00e676'], ['100%', '#ffd31a']
+  ];
+  stops.forEach((pair) => {
+    const s = document.createElementNS(NS, 'stop');
+    s.setAttribute('offset', String(pair[0]));
+    s.setAttribute('stop-color', String(pair[1]));
+    grad.appendChild(s);
+  });
+  defs.appendChild(grad);
+  svg.appendChild(defs);
+
+  const base = document.createElementNS(NS, 'path');
+  base.setAttribute('d', `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`);
+  base.setAttribute('fill', 'none');
+  base.classList.add('nw-sh-gauge__track');
+
+  const active = document.createElementNS(NS, 'path');
+  active.setAttribute('fill', 'none');
+  active.classList.add('nw-sh-gauge__active');
+  active.style.stroke = `url(#${gradId})`;
+
+  const ticks = document.createElementNS(NS, 'g');
+  ticks.classList.add('nw-sh-gauge__ticks');
+  const tickCount = 10;
+  for (let i = 0; i <= tickCount; i++) {
+    const f = i / tickCount;
+    const ang = Math.PI - f * Math.PI;
+    const outer = r + 4;
+    const inner = r - (i % 5 === 0 ? 12 : 7);
+    const line = document.createElementNS(NS, 'line');
+    line.setAttribute('x1', (cx + outer * Math.cos(ang)).toFixed(2));
+    line.setAttribute('y1', (cy - outer * Math.sin(ang)).toFixed(2));
+    line.setAttribute('x2', (cx + inner * Math.cos(ang)).toFixed(2));
+    line.setAttribute('y2', (cy - inner * Math.sin(ang)).toFixed(2));
+    line.classList.add('nw-sh-gauge__tick');
+    if (i % 5 === 0) line.classList.add('nw-sh-gauge__tick--major');
+    ticks.appendChild(line);
+  }
+
+  const knob = document.createElementNS(NS, 'circle');
+  knob.classList.add('nw-sh-gauge__knob');
+  knob.setAttribute('r', '7');
+
+  const hit = document.createElementNS(NS, 'path');
+  hit.setAttribute('d', `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`);
+  hit.setAttribute('fill', 'none');
+  hit.classList.add('nw-sh-gauge__hit');
+
+  svg.appendChild(base);
+  svg.appendChild(active);
+  svg.appendChild(ticks);
+  svg.appendChild(knob);
+  svg.appendChild(hit);
+  canvas.appendChild(svg);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'nw-sh-gauge__overlay';
+
+  const btnMinus = document.createElement('button');
+  btnMinus.type = 'button';
+  btnMinus.className = 'nw-sh-gauge__btn';
+  btnMinus.textContent = '−';
+
+  const btnPlus = document.createElement('button');
+  btnPlus.type = 'button';
+  btnPlus.className = 'nw-sh-gauge__btn';
+  btnPlus.textContent = '+';
+
+  const center = document.createElement('div');
+  center.className = 'nw-sh-gauge__center';
+
+  const valEl = document.createElement('div');
+  valEl.className = 'nw-sh-gauge__value';
+
+  const labEl = document.createElement('div');
+  labEl.className = 'nw-sh-gauge__label';
+  labEl.textContent = label;
+
+  const sub2El = document.createElement('div');
+  sub2El.className = 'nw-sh-gauge__sub';
+  sub2El.textContent = sub2;
+
+  center.appendChild(valEl);
+  if (label) center.appendChild(labEl);
+  if (sub2) center.appendChild(sub2El);
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'nw-sh-gauge__btnrow';
+  btnRow.appendChild(btnMinus);
+  btnRow.appendChild(btnPlus);
+  overlay.appendChild(center);
+  overlay.appendChild(btnRow);
+  canvas.appendChild(overlay);
+
+  const minmax = document.createElement('div');
+  minmax.className = 'nw-sh-gauge__minmax';
+  const minEl = document.createElement('span');
+  const maxEl = document.createElement('span');
+  minEl.textContent = minmaxFormatter(min);
+  maxEl.textContent = minmaxFormatter(max);
+  minmax.appendChild(minEl);
+  minmax.appendChild(maxEl);
+  wrap.appendChild(minmax);
+
+  function setValue(v, silent) {
+    value = nwRoundToStep(nwClampNumber(v, min, max), step);
+    valEl.textContent = formatter(value);
+    const f = (max > min) ? ((value - min) / (max - min)) : 0;
+    const ang = Math.PI - f * Math.PI;
+    const x = cx + r * Math.cos(ang);
+    const y = cy - r * Math.sin(ang);
+    if (f <= 0.001) active.setAttribute('d', '');
+    else active.setAttribute('d', `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)}`);
+    knob.setAttribute('cx', x.toFixed(2));
+    knob.setAttribute('cy', y.toFixed(2));
+    if (!silent && onInput) onInput(value);
+  }
+
+  async function commit() {
+    if (!canWrite || !onCommit) return;
+    await onCommit(value);
+  }
+
+  setValue(value, true);
+
+  const stop = (ev) => ev.stopPropagation();
+  btnMinus.addEventListener('click', stop);
+  btnPlus.addEventListener('click', stop);
+  btnMinus.addEventListener('click', async () => {
+    if (!canWrite) return;
+    setValue(value - step);
+    await commit();
+  });
+  btnPlus.addEventListener('click', async () => {
+    if (!canWrite) return;
+    setValue(value + step);
+    await commit();
+  });
+
+  if (!canWrite) {
+    btnMinus.disabled = true;
+    btnPlus.disabled = true;
+    btnMinus.style.opacity = '0.5';
+    btnPlus.style.opacity = '0.5';
+    btnMinus.style.cursor = 'default';
+    btnPlus.style.cursor = 'default';
+  }
+
+  const pickFromClient = (clientX, clientY) => {
+    const rect = svg.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return;
+    const px = (clientX - rect.left) / rect.width * 200;
+    const py = (clientY - rect.top) / rect.height * 140;
+    const dx = px - cx;
+    const dy = cy - py;
+    let ang = Math.atan2(dy, dx);
+    if (ang < 0) ang = 0;
+    if (ang > Math.PI) ang = Math.PI;
+    const f = (Math.PI - ang) / Math.PI;
+    setValue(min + f * (max - min));
+  };
+
+  const onMouseDown = (ev) => {
+    if (!canWrite) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    nwPopoverDragging = true;
+    pickFromClient(ev.clientX, ev.clientY);
+    const move = (e) => pickFromClient(e.clientX, e.clientY);
+    const up = async () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      nwPopoverDragging = false;
+      await commit();
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  };
+
+  const onTouchStart = (ev) => {
+    if (!canWrite) return;
+    if (!ev.touches || !ev.touches.length) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    nwPopoverDragging = true;
+    pickFromClient(ev.touches[0].clientX, ev.touches[0].clientY);
+    const move = (e) => {
+      if (!e.touches || !e.touches.length) return;
+      pickFromClient(e.touches[0].clientX, e.touches[0].clientY);
+    };
+    const end = async () => {
+      document.removeEventListener('touchmove', move);
+      document.removeEventListener('touchend', end);
+      document.removeEventListener('touchcancel', end);
+      nwPopoverDragging = false;
+      await commit();
+    };
+    document.addEventListener('touchmove', move, { passive: false });
+    document.addEventListener('touchend', end);
+    document.addEventListener('touchcancel', end);
+  };
+
+  hit.addEventListener('mousedown', onMouseDown);
+  hit.addEventListener('touchstart', onTouchStart, { passive: false });
+
+  wrap.nwSetValue = (next) => setValue(next, true);
+  return wrap;
+}
 
 function nwCreateThermostatGauge(opts) {
   const min = Number(opts && opts.min);

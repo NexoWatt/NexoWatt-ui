@@ -2767,7 +2767,7 @@ async function nwInitLogicEditor() {
     } catch (_e) {
       // ignore
     }
-    try { window.location.href = 'smarthome-config.html'; } catch (_e2) {}
+    try { window.location.href = 'smarthome-config.html?nwAdmin=1'; } catch (_e2) {}
   });
 
   if (btnNew) btnNew.addEventListener('click', () => nwHandleNew());
@@ -2776,7 +2776,7 @@ async function nwInitLogicEditor() {
   if (btnImport) btnImport.addEventListener('click', () => nwOpenImport());
   if (btnBackup) btnBackup.addEventListener('click', () => nwOpenBackup());
   if (btnSmarthomeCfg) btnSmarthomeCfg.addEventListener('click', () => {
-    try { window.location.href = 'smarthome-config.html'; } catch (_e) {}
+    try { window.location.href = 'smarthome-config.html?nwAdmin=1'; } catch (_e) {}
   });
 
 
