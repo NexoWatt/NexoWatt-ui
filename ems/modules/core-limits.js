@@ -25,6 +25,15 @@ function isFiniteNumber(v) {
     return typeof v === 'number' && Number.isFinite(v);
 }
 
+function isPeakShavingRuntimeEnabled(config) {
+    const cfg = (config && typeof config === 'object') ? config : {};
+    if (cfg.enablePeakShaving === true) return true;
+    const ps = (cfg.peakShaving && typeof cfg.peakShaving === 'object') ? cfg.peakShaving : {};
+    const atypical = (ps.atypical && typeof ps.atypical === 'object') ? ps.atypical : {};
+    return atypical.enabled === true;
+}
+
+
 async function readStateNumber(adapter, id, fallback = null) {
     try {
         const st = await adapter.getStateAsync(id);
@@ -732,7 +741,7 @@ class CoreLimitsModule extends BaseModule {
             if (base > 0) gridImportLimitW_physical = Math.max(0, base - gridSafetyMarginW);
         }
 
-        const peakEnabledCfg = !!cfg.enablePeakShaving;
+        const peakEnabledCfg = isPeakShavingRuntimeEnabled(cfg);
         const peakShavingLimitW_raw = await readStateNumber(this.adapter, 'peakShaving.control.limitW', null);
         const gridImportLimitW_peakShaving = (peakEnabledCfg && typeof peakShavingLimitW_raw === 'number' && Number.isFinite(peakShavingLimitW_raw) && peakShavingLimitW_raw > 0)
             ? peakShavingLimitW_raw

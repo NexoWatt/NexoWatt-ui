@@ -716,7 +716,7 @@ class SpeicherRegelungModule extends BaseModule {
         await this._setIfChanged('speicher.regelung.importHeadroomRawW', (typeof importHeadroomRawW === 'number') ? Math.round(importHeadroomRawW) : null);
 
         // Peak-Shaving Kontexte (Limit/Headroom) – wird für LSK-Entladung und für "Reserve wieder auffüllen" genutzt.
-        const peakEnabled = !!this.adapter.config.enablePeakShaving;
+        const peakEnabled = !!this.adapter.config.enablePeakShaving || !!(this.adapter.config.peakShaving && this.adapter.config.peakShaving.atypical && this.adapter.config.peakShaving.atypical.enabled);
         let psLimitW = null;
         let psOverW = null;
         let psReqRedW = null;

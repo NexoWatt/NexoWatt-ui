@@ -64,6 +64,118 @@ function clamp(n, min, max) {
     return n;
 }
 
+const ATYPICAL_THRESHOLD_PERCENT_BY_VOLTAGE_LEVEL = Object.freeze({
+    // §19 Abs. 2 S. 1 StromNEV / BNetzA-Leitfaden: Erheblichkeitsschwellen je Entnahmeebene.
+    HOS: 5,
+    HOSHS: 10,
+    HS: 10,
+    HSMS: 20,
+    MS: 20,
+    MSNS: 30,
+    NS: 30,
+});
+
+function normalizeVoltageLevelKey(v) {
+    return String(v || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '');
+}
+
+function atypicalThresholdPercent(voltageLevel, fallback = 20) {
+    const key = normalizeVoltageLevelKey(voltageLevel);
+    if (Object.prototype.hasOwnProperty.call(ATYPICAL_THRESHOLD_PERCENT_BY_VOLTAGE_LEVEL, key)) {
+        return ATYPICAL_THRESHOLD_PERCENT_BY_VOLTAGE_LEVEL[key];
+    }
+    return fallback;
+}
+
+function isPeakShavingRuntimeEnabled(config) {
+    const cfg = (config && typeof config === 'object') ? config : {};
+    if (cfg.enablePeakShaving === true) return true;
+    const ps = (cfg.peakShaving && typeof cfg.peakShaving === 'object') ? cfg.peakShaving : {};
+    const atypical = (ps.atypical && typeof ps.atypical === 'object') ? ps.atypical : {};
+    return atypical.enabled === true;
+}
+
+function parseHmToMinutes(value) {
+    const s = String(value || '').trim();
+    const m = s.match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return null;
+    const h = Number(m[1]);
+    const min = Number(m[2]);
+    if (!Number.isInteger(h) || !Number.isInteger(min) || h < 0 || h > 23 || min < 0 || min > 59) return null;
+    return h * 60 + min;
+}
+
+function localYmd(date) {
+    const d = (date instanceof Date) ? date : new Date(date);
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return '';
+    const y = String(d.getFullYear()).padStart(4, '0');
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+function normalizeYmd(value) {
+    if (value instanceof Date) return localYmd(value);
+    const s = String(value || '').trim();
+    if (!s) return '';
+    const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) {
+        return `${String(m[1]).padStart(4, '0')}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+    }
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? '' : localYmd(d);
+}
+
+function asArray(value) {
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') return value.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+    if (value === null || value === undefined || value === '') return [];
+    return [value];
+}
+
+function toNumberArray(value) {
+    const out = [];
+    const seen = new Set();
+    for (const item of asArray(value)) {
+        const n = Number(item);
+        if (!Number.isFinite(n)) continue;
+        const r = Math.round(n);
+        if (seen.has(r)) continue;
+        seen.add(r);
+        out.push(r);
+    }
+    return out;
+}
+
+function toDateSet(value) {
+    const set = new Set();
+    for (const item of asArray(value)) {
+        let raw = item;
+        if (item && typeof item === 'object' && !(item instanceof Date)) {
+            raw = item.date || item.day || item.ymd || item.value || '';
+        }
+        const ymd = normalizeYmd(raw);
+        if (ymd) set.add(ymd);
+    }
+    return set;
+}
+
+function isoWeekday(date) {
+    const js = date.getDay();
+    return js === 0 ? 7 : js;
+}
+
+function isChristmasNewYearPeriod(date) {
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    return (month === 12 && day >= 24) || (month === 1 && day <= 1);
+}
+
+
 class PeakShavingModule extends BaseModule {
     constructor(adapter, dpRegistry) {
         super(adapter, dpRegistry);
@@ -83,7 +195,7 @@ class PeakShavingModule extends BaseModule {
     }
 
     _isEnabled() {
-        return !!this.adapter.config.enablePeakShaving;
+        return isPeakShavingRuntimeEnabled(this.adapter && this.adapter.config);
     }
 
     async init() {
@@ -96,7 +208,7 @@ class PeakShavingModule extends BaseModule {
             native: {},
         });
 
-        for (const ch of ['measure', 'calc', 'control', 'dynamic', 'actuators']) {
+        for (const ch of ['measure', 'calc', 'control', 'dynamic', 'actuators', 'atypical']) {
             await this.adapter.setObjectNotExistsAsync(`peakShaving.${ch}`, {
                 type: 'channel',
                 common: { name: ch },
@@ -137,6 +249,224 @@ class PeakShavingModule extends BaseModule {
 
         await mk('peakShaving.calc.avgPowerW', 'Average power (W)', 'number', 'value.power');
         await mk('peakShaving.calc.samples', 'Samples', 'number', 'value');
+
+        await mk('peakShaving.atypical.enabled', 'Atypische Spitzenkappung aktiviert', 'boolean', 'indicator');
+        await mk('peakShaving.atypical.enforce', 'Atypische Spitzenkappung erzwingen', 'boolean', 'indicator');
+        await mk('peakShaving.atypical.activeWindow', 'Aktives Hochlastzeitfenster', 'boolean', 'indicator');
+        await mk('peakShaving.atypical.status', 'Atypische Spitzenkappung Status', 'string', 'text');
+        await mk('peakShaving.atypical.windowLabel', 'Aktuelles Hochlastzeitfenster', 'string', 'text');
+        await mk('peakShaving.atypical.voltageLevel', 'Entnahmeebene', 'string', 'text');
+        await mk('peakShaving.atypical.thresholdPercent', 'Erheblichkeitsschwelle (%)', 'number', 'value');
+        await mk('peakShaving.atypical.minShiftW', 'Mindestverlagerung (W)', 'number', 'value.power');
+        await mk('peakShaving.atypical.pAbsRefW', 'Referenz-Jahreshöchstlast P_abs_ref (W)', 'number', 'value.power');
+        await mk('peakShaving.atypical.targetLimitW', 'HLZF-Ziellast (W)', 'number', 'value.power');
+        await mk('peakShaving.atypical.effectiveLimitW', 'Wirksames HLZF-Limit nach Hybrid-Minimum (W)', 'number', 'value.power');
+        await mk('peakShaving.atypical.deltaW', 'Verlagerung gegenüber P_abs_ref (W)', 'number', 'value.power');
+        await mk('peakShaving.atypical.deltaPercent', 'Verlagerung gegenüber P_abs_ref (%)', 'number', 'value');
+        await mk('peakShaving.atypical.eligiblePotential', '§19-Potenzial erfüllt Zielparameter', 'boolean', 'indicator');
+        await mk('peakShaving.atypical.binding', 'Bindendes Limit / Quelle', 'string', 'text');
+        await mk('peakShaving.atypical.snapshotJson', 'Atypische Spitzenkappung Snapshot (JSON)', 'string', 'text');
+    }
+
+
+    _atypicalSeasonMonths(season) {
+        const s = String(season || '').trim().toLowerCase();
+        if (!s) return [];
+        if (['winter', 'win', 'w'].includes(s)) return [1, 2, 12];
+        if (['sommer', 'summer', 'sum', 's'].includes(s)) return [6, 7, 8];
+        if (['uebergang', 'übergang', 'transition', 'spring-autumn', 'fruehjahr-herbst', 'frühjahr-herbst'].includes(s)) return [3, 4, 5, 9, 10, 11];
+        return [];
+    }
+
+    _atypicalWindowLabel(win) {
+        if (win && typeof win === 'object') {
+            const explicit = String(win.label || win.name || win.id || '').trim();
+            if (explicit) return explicit;
+            const from = String(win.from || win.start || win.startTime || win.fromTime || '').trim();
+            const to = String(win.to || win.end || win.endTime || win.toTime || '').trim();
+            if (from || to) return `${from || '?'}-${to || '?'}`;
+        }
+        return '';
+    }
+
+    _atypicalWindowMatches(win, nowDate) {
+        if (!win || typeof win !== 'object') return false;
+        if (win.enabled === false || win.active === false) return false;
+
+        const ymd = localYmd(nowDate);
+        const validFrom = normalizeYmd(win.validFrom || win.validFromDate || win.fromDate || '');
+        const validTo = normalizeYmd(win.validTo || win.validToDate || win.toDate || '');
+        if (validFrom && ymd < validFrom) return false;
+        if (validTo && ymd > validTo) return false;
+
+        const month = nowDate.getMonth() + 1;
+        const months = toNumberArray(win.months || win.month || []);
+        if (months.length && !months.includes(month)) return false;
+        if (!months.length) {
+            const seasonMonths = this._atypicalSeasonMonths(win.season || win.jahreszeit || '');
+            if (seasonMonths.length && !seasonMonths.includes(month)) return false;
+        }
+
+        const weekdays = toNumberArray(win.weekdays || win.days || win.weekday || []);
+        if (weekdays.length) {
+            const iso = isoWeekday(nowDate); // 1=Mon ... 7=Sun
+            const js = nowDate.getDay(); // 0=Sun ... 6=Sat
+            if (!weekdays.includes(iso) && !weekdays.includes(js)) return false;
+        }
+
+        const fromMin = parseHmToMinutes(win.from || win.start || win.startTime || win.fromTime);
+        const toMin = parseHmToMinutes(win.to || win.end || win.endTime || win.toTime);
+        if (fromMin === null || toMin === null || fromMin === toMin) return false;
+
+        const nowMin = nowDate.getHours() * 60 + nowDate.getMinutes();
+        if (toMin > fromMin) return nowMin >= fromMin && nowMin < toMin;
+        // Overnight windows are not typical for HLZF, but supporting them keeps the parser robust.
+        return nowMin >= fromMin || nowMin < toMin;
+    }
+
+    _evaluateAtypicalSchedule(atypicalCfg, now) {
+        const cfg = (atypicalCfg && typeof atypicalCfg === 'object') ? atypicalCfg : {};
+        const enabled = !!cfg.enabled;
+        const date = new Date(now || Date.now());
+        const ymd = localYmd(date);
+        if (!enabled) return { enabled: false, active: false, reason: 'disabled', ymd, windowLabel: '' };
+
+        const includeWeekends = cfg.includeWeekends === true;
+        if (!includeWeekends && isoWeekday(date) >= 6) {
+            return { enabled: true, active: false, reason: 'weekend', ymd, windowLabel: '' };
+        }
+
+        const excludeChristmasNewYear = cfg.excludeChristmasNewYear !== false;
+        if (excludeChristmasNewYear && isChristmasNewYearPeriod(date)) {
+            return { enabled: true, active: false, reason: 'christmas-new-year-period', ymd, windowLabel: '' };
+        }
+
+        const holidaySet = toDateSet(cfg.holidays || cfg.holidayDates || []);
+        const bridgeDaySet = toDateSet(cfg.bridgeDays || cfg.bridgeDayDates || []);
+        const exceptionSet = toDateSet(cfg.calendarExceptions || cfg.exceptions || []);
+        if (holidaySet.has(ymd)) return { enabled: true, active: false, reason: 'holiday', ymd, windowLabel: '' };
+        if (bridgeDaySet.has(ymd)) return { enabled: true, active: false, reason: 'bridge-day', ymd, windowLabel: '' };
+        if (exceptionSet.has(ymd)) return { enabled: true, active: false, reason: 'calendar-exception', ymd, windowLabel: '' };
+
+        const windows = Array.isArray(cfg.highLoadWindows)
+            ? cfg.highLoadWindows
+            : (Array.isArray(cfg.windows) ? cfg.windows : []);
+        if (!windows.length) return { enabled: true, active: false, reason: 'no-high-load-windows', ymd, windowLabel: '' };
+
+        for (const win of windows) {
+            if (this._atypicalWindowMatches(win, date)) {
+                return {
+                    enabled: true,
+                    active: true,
+                    reason: 'active-high-load-window',
+                    ymd,
+                    windowLabel: this._atypicalWindowLabel(win),
+                    window: win,
+                };
+            }
+        }
+
+        return { enabled: true, active: false, reason: 'outside-high-load-window', ymd, windowLabel: '' };
+    }
+
+    _calculateAtypicalTarget(atypicalCfg) {
+        const cfg = (atypicalCfg && typeof atypicalCfg === 'object') ? atypicalCfg : {};
+        const voltageLevel = String(
+            cfg.voltageLevel ||
+            this.adapter?.config?.installerConfig?.voltageLevel ||
+            this.adapter?.config?.settingsConfig?.voltageLevel ||
+            'MS'
+        );
+        const fallbackThreshold = atypicalThresholdPercent(voltageLevel, 20);
+        let thresholdPercent = clamp(num(cfg.thresholdPercent, fallbackThreshold), 0, 100);
+        if (typeof thresholdPercent !== 'number') thresholdPercent = fallbackThreshold;
+
+        let minShiftW = clamp(num(cfg.minShiftW, 100000), 0, 1e12);
+        if (typeof minShiftW !== 'number') minShiftW = 100000;
+
+        const pAbsRefW = Math.max(0, num(
+            cfg.annualPeakReferenceW ?? cfg.pAbsRefW ?? cfg.pAbsMaxW ?? cfg.referencePeakW ?? cfg.referencePeakPowerW,
+            0
+        ) || 0);
+        const explicitTargetW = num(cfg.targetLimitW ?? cfg.hlzfTargetW ?? cfg.highLoadLimitW ?? cfg.capW, null);
+        const marginW = Math.max(0, num(cfg.safetyMarginW, 0) || 0);
+
+        let rawTargetW = 0;
+        let targetSource = '';
+        if (typeof explicitTargetW === 'number' && explicitTargetW > 0) {
+            rawTargetW = explicitTargetW;
+            targetSource = 'explicit';
+        } else if (pAbsRefW > 0) {
+            const byPercentW = pAbsRefW * Math.max(0, 1 - (thresholdPercent / 100));
+            const byShiftW = Math.max(0, pAbsRefW - minShiftW);
+            rawTargetW = Math.min(byPercentW, byShiftW);
+            targetSource = 'derived-from-annual-peak';
+        }
+
+        const targetLimitW = rawTargetW > 0 ? Math.max(0, rawTargetW - marginW) : 0;
+        const deltaW = (pAbsRefW > 0 && rawTargetW > 0) ? Math.max(0, pAbsRefW - rawTargetW) : 0;
+        const deltaPercent = pAbsRefW > 0 ? (deltaW / pAbsRefW * 100) : 0;
+        const thresholdOk = pAbsRefW > 0 && deltaPercent + 1e-9 >= thresholdPercent;
+        const minShiftOk = pAbsRefW > 0 && deltaW + 1e-9 >= minShiftW;
+        const eligiblePotential = rawTargetW > 0 && thresholdOk && minShiftOk;
+
+        let reason = 'ok';
+        if (!(rawTargetW > 0)) reason = 'missing-target-or-reference-peak';
+        else if (targetSource === 'explicit' && !(pAbsRefW > 0)) reason = 'explicit-target-without-reference-peak';
+        else if (!eligiblePotential && pAbsRefW > 0) reason = 'threshold-or-min-shift-not-met';
+
+        return {
+            voltageLevel,
+            thresholdPercent,
+            minShiftW,
+            pAbsRefW,
+            rawTargetW,
+            marginW,
+            targetLimitW,
+            targetSource,
+            deltaW,
+            deltaPercent,
+            thresholdOk,
+            minShiftOk,
+            eligiblePotential,
+            reason,
+        };
+    }
+
+    async _publishAtypicalDiagnostics(ctx) {
+        const c = (ctx && typeof ctx === 'object') ? ctx : {};
+        const schedule = (c.schedule && typeof c.schedule === 'object') ? c.schedule : {};
+        const target = (c.target && typeof c.target === 'object') ? c.target : {};
+        const set = async (id, val) => {
+            try { await this.adapter.setStateAsync(id, val, true); } catch { /* diagnostics only */ }
+        };
+
+        await set('peakShaving.atypical.enabled', !!c.enabled);
+        await set('peakShaving.atypical.enforce', !!c.enforce);
+        await set('peakShaving.atypical.activeWindow', !!schedule.active);
+        await set('peakShaving.atypical.status', String(schedule.reason || target.reason || ''));
+        await set('peakShaving.atypical.windowLabel', String(schedule.windowLabel || ''));
+        await set('peakShaving.atypical.voltageLevel', String(target.voltageLevel || ''));
+        await set('peakShaving.atypical.thresholdPercent', Number.isFinite(Number(target.thresholdPercent)) ? Number(target.thresholdPercent) : 0);
+        await set('peakShaving.atypical.minShiftW', Number.isFinite(Number(target.minShiftW)) ? Math.round(Number(target.minShiftW)) : 0);
+        await set('peakShaving.atypical.pAbsRefW', Number.isFinite(Number(target.pAbsRefW)) ? Math.round(Number(target.pAbsRefW)) : 0);
+        await set('peakShaving.atypical.targetLimitW', Number.isFinite(Number(target.targetLimitW)) ? Math.round(Number(target.targetLimitW)) : 0);
+        await set('peakShaving.atypical.effectiveLimitW', Number.isFinite(Number(c.effectiveLimitW)) ? Math.round(Number(c.effectiveLimitW)) : 0);
+        await set('peakShaving.atypical.deltaW', Number.isFinite(Number(target.deltaW)) ? Math.round(Number(target.deltaW)) : 0);
+        await set('peakShaving.atypical.deltaPercent', Number.isFinite(Number(target.deltaPercent)) ? Math.round(Number(target.deltaPercent) * 100) / 100 : 0);
+        await set('peakShaving.atypical.eligiblePotential', !!target.eligiblePotential);
+        await set('peakShaving.atypical.binding', String(c.binding || ''));
+        await set('peakShaving.atypical.snapshotJson', JSON.stringify({
+            ts: Date.now(),
+            mode: String(c.mode || ''),
+            enabled: !!c.enabled,
+            enforce: !!c.enforce,
+            schedule,
+            target,
+            limitCandidateW: Number.isFinite(Number(c.limitCandidateW)) ? Math.round(Number(c.limitCandidateW)) : 0,
+            effectiveLimitW: Number.isFinite(Number(c.effectiveLimitW)) ? Math.round(Number(c.effectiveLimitW)) : 0,
+            binding: String(c.binding || ''),
+        }));
     }
 
     async tick() {
@@ -168,6 +498,18 @@ class PeakShavingModule extends BaseModule {
         const phaseMode = String(cfg.phaseMode || (maxPhaseA > 0 ? 'enforce' : 'off')); // off|info|enforce
         const hysteresisA = clamp(num(cfg.hysteresisA, 1), 0, 100);
         const voltageV = clamp(num(cfg.voltageV, 230), 50, 400);
+
+
+        // Atypische Netznutzung / HLZF-Spitzenkappung (§19 Abs. 2 S. 1 StromNEV)
+        // Wird als zusätzlicher Import-Cap nur innerhalb aktiver Hochlastzeitfenster angewendet.
+        // Außerhalb der HLZF bleibt die normale LSK-/Hybrid-Logik unverändert.
+        const atypicalCfg = (cfg.atypical && typeof cfg.atypical === 'object') ? cfg.atypical : {};
+        const atypicalMode = String(atypicalCfg.mode || 'hybrid').trim().toLowerCase(); // monitor|enforce|hybrid
+        const atypicalEnforce = !!atypicalCfg.enabled && atypicalMode !== 'monitor' && atypicalCfg.enforce !== false;
+        const atypicalSchedule = this._evaluateAtypicalSchedule(atypicalCfg, now);
+        const atypicalTarget = this._calculateAtypicalTarget(atypicalCfg);
+        const atypicalLimitCandidateW = (atypicalSchedule.active && atypicalEnforce && atypicalTarget.targetLimitW > 0) ? atypicalTarget.targetLimitW : 0;
+        const atypicalWantsPowerLimit = atypicalLimitCandidateW > 0;
 
         // Bind datapoints from config (manufacturer-independent)
         if (cfg.gridPointPowerId) {
@@ -201,7 +543,7 @@ class PeakShavingModule extends BaseModule {
         let staleTimeoutSec = num(cfg.staleTimeoutSec, 300);
         staleTimeoutSec = clamp(staleTimeoutSec, 1, 3600);
         const staleMaxAgeMs = staleTimeoutSec * 1000;
-        const wantsPowerLimit = typeof plantLimitW === 'number' && plantLimitW > 0;
+        const wantsPowerLimit = (typeof plantLimitW === 'number' && plantLimitW > 0) || atypicalWantsPowerLimit;
         const wantsPhaseLimit = (phaseMode === 'info' || phaseMode === 'enforce') && typeof maxPhaseA === 'number' && maxPhaseA > 0;
         let staleMeter = false;
         const staleKeys = [];
@@ -266,6 +608,7 @@ class PeakShavingModule extends BaseModule {
         let limitW = 0;
         let allowedPowerW = null;
         let reserveW = num(cfg.reserveW, 0);
+        let limitSource = '';
 
         if (mode === 'dynamic') {
             allowedPowerW = this.dp.getNumber('ps.allowedPowerW', null);
@@ -274,10 +617,24 @@ class PeakShavingModule extends BaseModule {
             const allowed = (typeof allowedPowerW === 'number' && allowedPowerW > 0) ? allowedPowerW : Number.POSITIVE_INFINITY;
             limitW = Math.min(baseMax, allowed) - Math.max(0, reserveW);
             if (!Number.isFinite(limitW)) limitW = 0;
+            if (limitW > 0) limitSource = (Number.isFinite(baseMax) && Number.isFinite(allowed)) ? 'standard+dynamic' : (Number.isFinite(allowed) ? 'dynamic' : 'standard');
         } else {
             // static: fester Grenzwert, aber Reserve ebenfalls abziehen (Reserve ist keine dynamic-only Funktion)
             const base = (typeof plantLimitW === 'number' && plantLimitW > 0) ? plantLimitW : 0;
             limitW = Math.max(0, base - Math.max(0, reserveW));
+            if (limitW > 0) limitSource = 'standard';
+        }
+
+        if (atypicalWantsPowerLimit) {
+            if (limitW > 0) {
+                if (atypicalLimitCandidateW <= limitW + 0.001) {
+                    limitSource = limitSource ? `atypical+${limitSource}` : 'atypical';
+                }
+                limitW = Math.min(limitW, atypicalLimitCandidateW);
+            } else {
+                limitW = atypicalLimitCandidateW;
+                limitSource = 'atypical';
+            }
         }
 
         // GridConstraints (RLM): zusätzliche dynamische Obergrenze für den Netzbezug
@@ -287,7 +644,13 @@ class PeakShavingModule extends BaseModule {
                 const st = await this.adapter.getStateAsync('gridConstraints.rlm.capNowW');
                 const cap = (st && typeof st.val === 'number') ? st.val : Number(st && st.val);
                 if (Number.isFinite(cap) && cap > 0) {
+                    const beforeLimitW = limitW;
                     limitW = (limitW > 0) ? Math.min(limitW, cap) : cap;
+                    if (limitW > 0 && (!(beforeLimitW > 0) || cap <= beforeLimitW + 0.001)) {
+                        limitSource = limitSource
+                            ? `gridConstraints+${limitSource}`
+                            : 'gridConstraints';
+                    }
                 }
             } catch {
                 // ignore
@@ -299,6 +662,17 @@ class PeakShavingModule extends BaseModule {
         if (typeof limitW === 'number' && limitW > 0) {
             limitW = Math.max(0, limitW - Math.max(0, safetyMarginW));
         }
+
+        await this._publishAtypicalDiagnostics({
+            enabled: !!atypicalCfg.enabled,
+            mode: atypicalMode,
+            enforce: atypicalEnforce,
+            schedule: atypicalSchedule,
+            target: atypicalTarget,
+            limitCandidateW: atypicalLimitCandidateW,
+            effectiveLimitW: atypicalWantsPowerLimit ? limitW : 0,
+            binding: atypicalWantsPowerLimit ? (limitSource || 'atypical') : '',
+        });
 
         // Phase analysis
         const l1 = useAverage ? this._winL1.mean() : l1Raw;
@@ -488,7 +862,7 @@ class PeakShavingModule extends BaseModule {
             const lvl = (diagCfg.logLevel === 'info' || diagCfg.logLevel === 'debug') ? diagCfg.logLevel : 'debug';
             const fn = (this.adapter && this.adapter.log && typeof this.adapter.log[lvl] === 'function') ? this.adapter.log[lvl] : this.adapter.log.debug;
             try {
-                fn.call(this.adapter.log, `[Lastspitzenkappung] Modus=${mode} aktiv=${active} status=${status} Grund=${reason} (${reasonToGerman(reason)}) MesswertAlt=${staleMeter ? 1 : 0} FastTrip=${fastTripViolation ? 1 : 0} Safety=${Math.round(Number(safetyMarginW || 0))}W Limit=${Math.round(Number(limitW || 0))}W Roh=${Math.round(Number(gridPowerRaw || 0))}W MW=${Math.round(Number(avgPower || 0))}W Trip=${Math.round(Number(tripPower || 0))}W Eff=${Math.round(Number(effPower || 0))}W Über=${Math.round(Number(overW || 0))}W VerfCtl=${Math.round(Number(availableForControlledW || 0))}W BedarfRed=${Math.round(Number(requiredReductionW || 0))}W`);
+                fn.call(this.adapter.log, `[Lastspitzenkappung] Modus=${mode} aktiv=${active} status=${status} Grund=${reason} (${reasonToGerman(reason)}) MesswertAlt=${staleMeter ? 1 : 0} FastTrip=${fastTripViolation ? 1 : 0} Safety=${Math.round(Number(safetyMarginW || 0))}W Limit=${Math.round(Number(limitW || 0))}W Quelle=${limitSource || 'none'} Atypisch=${atypicalSchedule.active ? 1 : 0} AtypischLimit=${Math.round(Number(atypicalLimitCandidateW || 0))}W Roh=${Math.round(Number(gridPowerRaw || 0))}W MW=${Math.round(Number(avgPower || 0))}W Trip=${Math.round(Number(tripPower || 0))}W Eff=${Math.round(Number(effPower || 0))}W Über=${Math.round(Number(overW || 0))}W VerfCtl=${Math.round(Number(availableForControlledW || 0))}W BedarfRed=${Math.round(Number(requiredReductionW || 0))}W`);
             } catch {
                 // ignore
             }

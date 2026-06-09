@@ -161,7 +161,7 @@
   // Phase 2: App-Center (install + enable per capability)
   const APP_CATALOG = [
     { id: 'charging', label: 'Lademanagement', desc: 'PV-Überschussladen, Budget-Verteilung, Ladepunkte/Ports (AC/DC) + Stationsgruppen', mandatory: false },
-    { id: 'peak', label: 'Peak-Shaving', desc: 'Lastspitzenkappung / Import-Limit', mandatory: false },
+    { id: 'peak', label: 'Peak-Shaving', desc: 'Lastspitzenkappung / Import-Limit / Atypische HLZF', mandatory: false },
     { id: 'storage', label: 'Speicherregelung', desc: 'Eigenverbrauch / Speicher-Setpoints (herstellerunabhängig)', mandatory: false },
     { id: 'storagefarm', label: 'Speicherfarm', desc: 'Mehrere Speichersysteme als Pool/Gruppen', mandatory: false },
     { id: 'thermal', label: 'Wärmepumpe & Klima', desc: 'PV-Überschuss-Steuerung für Wärmepumpe/Klima (Setpoint, On/Off oder SG-Ready) inkl. Schnellsteuerung', mandatory: false },

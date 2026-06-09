@@ -109,7 +109,7 @@ class ModuleManager {
         this.modules.push({
             key: 'peakShaving',
             instance: new PeakShavingModule(this.adapter, this.dp),
-            enabledFn: () => !!this.adapter.config.enablePeakShaving,
+            enabledFn: () => !!this.adapter.config.enablePeakShaving || !!(this.adapter.config.peakShaving && this.adapter.config.peakShaving.atypical && this.adapter.config.peakShaving.atypical.enabled),
         });
 
         // §14a EnWG (steuerbare Verbrauchseinrichtungen)

@@ -594,8 +594,9 @@ class EmsEngine {
     adapter.config._chargingHasAnySetpoint = !!anyControl;
     adapter.config.chargingManagement = chargingCfg;
 
-    // If PeakShaving is enabled but no gridPointPowerId is set, default to internal derived net grid power
-    if (adapter.config.enablePeakShaving) {
+    // If PeakShaving/Atypical HLZF is enabled but no gridPointPowerId is set, default to internal derived net grid power
+    const peakRuntimeEnabled = !!adapter.config.enablePeakShaving || !!(adapter.config.peakShaving && adapter.config.peakShaving.atypical && adapter.config.peakShaving.atypical.enabled);
+    if (peakRuntimeEnabled) {
       adapter.config.peakShaving = adapter.config.peakShaving || {};
       const gp = typeof adapter.config.peakShaving.gridPointPowerId === 'string' ? adapter.config.peakShaving.gridPointPowerId.trim() : '';
       if (!gp && this._gridPowerId) {

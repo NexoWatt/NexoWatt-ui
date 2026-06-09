@@ -1,3 +1,9 @@
+# 0.7.27
+
+- EMS/Peak-Shaving: Atypische Lastspitzenkappung für Hochlastzeitfenster ergänzt (`peakShaving.atypical.*`). Der HLZF-Cap wird im aktiven Zeitfenster mit dem bestehenden Peak-Shaving-/GridConstraints-Limit geminimt und über `peakShaving.control.limitW` in CoreLimits, Speicherregelung und EVCS-Budget weitergereicht.
+- Neue Diagnose-States unter `peakShaving.atypical.*` zeigen aktives Hochlastzeitfenster, HLZF-Ziellast, Entnahmeebene, Erheblichkeitsschwelle, Mindestverlagerung und bindende Limitquelle.
+- App-Center-Konfiguration wird mit deaktivierten Default-Feldern für `peakShaving.atypical` normalisiert; Lizenzlogik bleibt unverändert.
+
 # 0.7.25
 
 - Lizenzseite beschleunigt: `/api/license/info` wird jetzt zuerst direkt über den Adapter-Runtime-Port abgefragt.

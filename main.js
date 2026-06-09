@@ -2142,6 +2142,34 @@ class NexoWattVis extends utils.Adapter {
     ensurePlainObj('logicEditor', { version: 1, graphs: [] });
     ensurePlainObj('diagnostics', {});
 
+    // Atypische Lastspitzenkappung / §19-Hochlastzeitfenster defaults.
+    // Disabled by default; fields are persisted so the App-Center/raw patch can enable the logic without schema drift.
+    try {
+      const ps = (out.peakShaving && typeof out.peakShaving === 'object' && !Array.isArray(out.peakShaving)) ? out.peakShaving : {};
+      out.peakShaving = ps;
+      if (!this._nwIsPlainObject(ps.atypical)) {
+        ps.atypical = {
+          enabled: false,
+          mode: 'hybrid',
+          voltageLevel: 'MS',
+          thresholdPercent: 20,
+          minShiftW: 100000,
+          annualPeakReferenceW: 0,
+          targetLimitW: 0,
+          safetyMarginW: 0,
+          includeWeekends: false,
+          excludeChristmasNewYear: true,
+          highLoadWindows: [],
+          holidays: [],
+          bridgeDays: [],
+          calendarExceptions: []
+        };
+        changed = true;
+      }
+    } catch (_e) {
+      // ignore, config normalization must never block startup
+    }
+
     // Scheduler interval
     if (out.schedulerIntervalMs === undefined) {
       const n = Number(base.schedulerIntervalMs);
@@ -13429,7 +13457,7 @@ settingsConfig: {
         smartHome: cfg.smartHome || {},
         ems: {
           chargingEnabled: inferChargingEnabled(),
-          peakShavingEnabled: boolOr(cfg.enablePeakShaving, false),
+          peakShavingEnabled: boolOr(cfg.enablePeakShaving, false) || boolOr(cfg && cfg.peakShaving && cfg.peakShaving.atypical && cfg.peakShaving.atypical.enabled, false),
           para14aEnabled: boolOr(cfg && cfg.installerConfig && cfg.installerConfig.para14a, false),
           gridConstraintsEnabled: boolOr(cfg.enableGridConstraints, false),
           storageEnabled: boolOr(cfg.enableStorageControl, false),

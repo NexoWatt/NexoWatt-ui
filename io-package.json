@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.26",
+    "version": "0.7.27",
     "news": {
+      "0.7.27": {
+        "en": "Added atypical peak shaving for high-load time windows. Peak-Shaving can now enforce an additional §19-style HLZF import cap, publish diagnostics under peakShaving.atypical.*, and feed the resulting limit into the central EMS caps through the existing peakShaving.control.limitW path.",
+        "de": "Atypische Lastspitzenkappung für Hochlastzeitfenster ergänzt. Peak-Shaving kann jetzt einen zusätzlichen §19-HLZF-Netzbezugscap anwenden, Diagnosewerte unter peakShaving.atypical.* veröffentlichen und das resultierende Limit über den bestehenden peakShaving.control.limitW-Pfad in die zentralen EMS-Caps einspeisen."
+      },
       "0.7.26": {
         "en": "Battery power sign handling fixed: signed storage power is normalized like grid power, battery sign inversion is applied before charge/discharge splitting, stale battery values are guarded, and VIS/status/EMS modules now use one consistent charge/discharge direction.",
         "de": "Batterie-Leistung mit Vorzeichen korrigiert: signed Speicherleistung wird wie der NVP normalisiert, die Batterie-Vorzeichen-Invertierung greift vor der Aufteilung in Laden/Entladen, veraltete Batterie-Werte werden abgesichert und VIS/Status/EMS-Module verwenden jetzt eine einheitliche Lade-/Entlade-Richtung."
@@ -1916,11 +1920,33 @@
       "devices": [],
       "pages": [],
       "meta": {}
+    },
+    "peakShaving": {
+      "atypical": {
+        "enabled": false,
+        "mode": "hybrid",
+        "voltageLevel": "MS",
+        "thresholdPercent": 20,
+        "minShiftW": 100000,
+        "annualPeakReferenceW": 0,
+        "targetLimitW": 0,
+        "safetyMarginW": 0,
+        "includeWeekends": false,
+        "excludeChristmasNewYear": true,
+        "highLoadWindows": [],
+        "holidays": [],
+        "bridgeDays": [],
+        "calendarExceptions": []
+      }
     }
   },
   "instanceObjects": [],
-  "version": "0.7.26",
+  "version": "0.7.27",
   "news": {
+    "0.7.27": {
+      "en": "Added atypical peak shaving for high-load time windows. Peak-Shaving can now enforce an additional §19-style HLZF import cap, publish diagnostics under peakShaving.atypical.*, and feed the resulting limit into the central EMS caps through the existing peakShaving.control.limitW path.",
+      "de": "Atypische Lastspitzenkappung für Hochlastzeitfenster ergänzt. Peak-Shaving kann jetzt einen zusätzlichen §19-HLZF-Netzbezugscap anwenden, Diagnosewerte unter peakShaving.atypical.* veröffentlichen und das resultierende Limit über den bestehenden peakShaving.control.limitW-Pfad in die zentralen EMS-Caps einspeisen."
+    },
     "0.7.26": {
       "en": "Battery power sign handling fixed: signed storage power is normalized like grid power, battery sign inversion is applied before charge/discharge splitting, stale battery values are guarded, and VIS/status/EMS modules now use one consistent charge/discharge direction.",
       "de": "Batterie-Leistung mit Vorzeichen korrigiert: signed Speicherleistung wird wie der NVP normalisiert, die Batterie-Vorzeichen-Invertierung greift vor der Aufteilung in Laden/Entladen, veraltete Batterie-Werte werden abgesichert und VIS/Status/EMS-Module verwenden jetzt eine einheitliche Lade-/Entlade-Richtung."
