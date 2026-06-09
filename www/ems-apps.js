@@ -103,6 +103,24 @@
     psAtypicalCalendarExceptions: document.getElementById('psAtypicalCalendarExceptions'),
     psAtypicalWindows: document.getElementById('psAtypicalWindows'),
     psAtypicalAddWindow: document.getElementById('psAtypicalAddWindow'),
+    psAtypicalGridOperator: document.getElementById('psAtypicalGridOperator'),
+    psAtypicalYear: document.getElementById('psAtypicalYear'),
+    psAtypicalSourceDocument: document.getElementById('psAtypicalSourceDocument'),
+    psAtypicalSourcePublishedAt: document.getElementById('psAtypicalSourcePublishedAt'),
+    psAtypicalSourceUrl: document.getElementById('psAtypicalSourceUrl'),
+    psAtypicalSourceNote: document.getElementById('psAtypicalSourceNote'),
+    psAtypicalReviewEnabled: document.getElementById('psAtypicalReviewEnabled'),
+    psAtypicalReviewResetToken: document.getElementById('psAtypicalReviewResetToken'),
+    psAtypicalReviewPAbsActualW: document.getElementById('psAtypicalReviewPAbsActualW'),
+    psAtypicalReviewPHlzfMaxW: document.getElementById('psAtypicalReviewPHlzfMaxW'),
+    psAtypicalReviewPowerPriceEurPerKwYear: document.getElementById('psAtypicalReviewPowerPriceEurPerKwYear'),
+    psAtypicalReviewEnergyPriceEurPerKwh: document.getElementById('psAtypicalReviewEnergyPriceEurPerKwh'),
+    psAtypicalReviewAnnualEnergyKwh: document.getElementById('psAtypicalReviewAnnualEnergyKwh'),
+    psAtypicalReviewSavingsBagatelleEur: document.getElementById('psAtypicalReviewSavingsBagatelleEur'),
+    psAtypicalReviewGeneralGridFeeEur: document.getElementById('psAtypicalReviewGeneralGridFeeEur'),
+    psAtypicalReviewMaxReductionPercent: document.getElementById('psAtypicalReviewMaxReductionPercent'),
+    psAtypicalReviewNote: document.getElementById('psAtypicalReviewNote'),
+    psAtypicalReviewPreview: document.getElementById('psAtypicalReviewPreview'),
 
     // Tabs
     tabs: document.getElementById('nw-ems-tabs'),
@@ -291,6 +309,88 @@
     if (!el) return;
     const n = Number(value);
     el.value = Number.isFinite(n) ? String(n) : '';
+  }
+
+  function _psSetTextInput(el, value) {
+    if (!el) return;
+    el.value = (value === null || value === undefined) ? '' : String(value);
+  }
+
+  function _psRound2(n) {
+    const x = Number(n);
+    return Number.isFinite(x) ? Math.round(x * 100) / 100 : 0;
+  }
+
+  function _psBuildAtypicalReviewFromUi() {
+    const voltageLevel = els.psAtypicalVoltageLevel ? els.psAtypicalVoltageLevel.value : 'MS';
+    const thresholdInput = _psNumOrNull(els.psAtypicalThresholdPercent && els.psAtypicalThresholdPercent.value);
+    const thresholdPercent = thresholdInput === null ? _psThresholdForVoltage(voltageLevel) : Math.min(100, Math.max(0, thresholdInput));
+    const minShiftInput = _psNumOrNull(els.psAtypicalMinShiftW && els.psAtypicalMinShiftW.value);
+    const minShiftW = minShiftInput === null ? 100000 : Math.max(0, minShiftInput);
+    const pAbsActualW = _psNumOrNull(els.psAtypicalReviewPAbsActualW && els.psAtypicalReviewPAbsActualW.value);
+    const pHlzfMaxW = _psNumOrNull(els.psAtypicalReviewPHlzfMaxW && els.psAtypicalReviewPHlzfMaxW.value);
+    const powerPrice = _psNumOrNull(els.psAtypicalReviewPowerPriceEurPerKwYear && els.psAtypicalReviewPowerPriceEurPerKwYear.value);
+    const bagatelleInput = _psNumOrNull(els.psAtypicalReviewSavingsBagatelleEur && els.psAtypicalReviewSavingsBagatelleEur.value);
+    const bagatelleEur = bagatelleInput === null ? 500 : Math.max(0, bagatelleInput);
+    const generalGridFee = _psNumOrNull(els.psAtypicalReviewGeneralGridFeeEur && els.psAtypicalReviewGeneralGridFeeEur.value);
+    const maxReductionInput = _psNumOrNull(els.psAtypicalReviewMaxReductionPercent && els.psAtypicalReviewMaxReductionPercent.value);
+    const maxReductionPercent = maxReductionInput === null ? 80 : Math.min(100, Math.max(0, maxReductionInput));
+
+    const complete = (pAbsActualW !== null && pAbsActualW > 0 && pHlzfMaxW !== null && pHlzfMaxW >= 0);
+    const deltaW = complete ? Math.max(0, pAbsActualW - pHlzfMaxW) : 0;
+    const deltaPercent = complete ? (deltaW / pAbsActualW * 100) : 0;
+    const thresholdOk = complete && deltaPercent + 1e-9 >= thresholdPercent;
+    const minShiftOk = complete && deltaW + 1e-9 >= minShiftW;
+    const grossSavingsEur = (complete && powerPrice !== null && powerPrice > 0) ? ((deltaW / 1000) * powerPrice) : null;
+    const reductionCapEur = (grossSavingsEur !== null && generalGridFee !== null && generalGridFee > 0) ? (generalGridFee * maxReductionPercent / 100) : null;
+    const savingsEur = grossSavingsEur === null ? null : (reductionCapEur === null ? grossSavingsEur : Math.min(grossSavingsEur, reductionCapEur));
+    const savingsOk = savingsEur === null ? null : savingsEur + 1e-9 >= bagatelleEur;
+    const technicalEligible = complete && thresholdOk && minShiftOk;
+    const eligible = technicalEligible && savingsOk === true;
+
+    return {
+      complete,
+      thresholdPercent,
+      minShiftW,
+      pAbsActualW: pAbsActualW === null ? 0 : pAbsActualW,
+      pHlzfMaxW: pHlzfMaxW === null ? 0 : pHlzfMaxW,
+      deltaW,
+      deltaPercent,
+      powerPriceEurPerKwYear: powerPrice === null ? 0 : powerPrice,
+      generalGridFeeEur: generalGridFee === null ? 0 : generalGridFee,
+      maxReductionPercent,
+      bagatelleEur,
+      grossSavingsEur,
+      reductionCapEur,
+      savingsEur,
+      thresholdOk,
+      minShiftOk,
+      savingsOk,
+      technicalEligible,
+      eligible,
+    };
+  }
+
+  function _psUpdateAtypicalReviewPreview() {
+    if (!els.psAtypicalReviewPreview) return;
+    const r = _psBuildAtypicalReviewFromUi();
+    if (!r.complete) {
+      els.psAtypicalReviewPreview.textContent = 'Noch keine vollständigen Nachkontrollwerte eingetragen. Benötigt werden P_abs_ist und P_HLZF_max aus Live-Messung oder Jahres-/RLM-Export.';
+      return;
+    }
+    const parts = [
+      `Verlagerung: ${Math.round(r.deltaW)} W / ${_psRound2(r.deltaPercent)} %`,
+      `Schwelle: ${_psRound2(r.thresholdPercent)} % ${r.thresholdOk ? '✅' : '❌'}`,
+      `Mindestverlagerung: ${Math.round(r.minShiftW)} W ${r.minShiftOk ? '✅' : '❌'}`,
+    ];
+    if (r.savingsEur === null) {
+      parts.push('Ersparnis: noch nicht berechnet (Leistungspreis fehlt) ⚠️');
+    } else {
+      parts.push(`Ersparnis grob: ${_psRound2(r.savingsEur)} € ${r.savingsOk ? '✅' : '❌'} (Bagatelle ${_psRound2(r.bagatelleEur)} €)`);
+    }
+    const status = r.eligible ? 'Status: §19-Nachkontrolle erfüllt ✅'
+      : (r.technicalEligible ? 'Status: technisch erfüllt, wirtschaftliche Prüfung noch offen/negativ ⚠️' : 'Status: Kriterien noch nicht erfüllt ❌');
+    els.psAtypicalReviewPreview.textContent = `${parts.join(' · ')} · ${status}`;
   }
 
   function _psSetSelect(el, value, fallback) {
@@ -1050,8 +1150,14 @@ function _collectFlowPowerDpIsWFromUI() {
     const atypicalIds = [
       'psAtypicalVoltageLevel', 'psAtypicalThresholdPercent', 'psAtypicalApplyVoltageThreshold',
       'psAtypicalPAbsRefW', 'psAtypicalMinShiftW', 'psAtypicalTargetLimitW', 'psAtypicalSafetyMarginW',
+      'psAtypicalGridOperator', 'psAtypicalYear', 'psAtypicalSourceDocument', 'psAtypicalSourcePublishedAt',
+      'psAtypicalSourceUrl', 'psAtypicalSourceNote',
       'psAtypicalIncludeWeekends', 'psAtypicalExcludeChristmasNewYear', 'psAtypicalHolidays',
-      'psAtypicalBridgeDays', 'psAtypicalCalendarExceptions', 'psAtypicalAddWindow'
+      'psAtypicalBridgeDays', 'psAtypicalCalendarExceptions', 'psAtypicalAddWindow',
+      'psAtypicalReviewEnabled', 'psAtypicalReviewResetToken', 'psAtypicalReviewPAbsActualW',
+      'psAtypicalReviewPHlzfMaxW', 'psAtypicalReviewPowerPriceEurPerKwYear',
+      'psAtypicalReviewSavingsBagatelleEur', 'psAtypicalReviewGeneralGridFeeEur',
+      'psAtypicalReviewMaxReductionPercent', 'psAtypicalReviewNote'
     ];
     atypicalIds.forEach((id) => {
       const el = document.getElementById(id);
@@ -1103,8 +1209,29 @@ function _collectFlowPowerDpIsWFromUI() {
     if (els.psAtypicalBridgeDays) els.psAtypicalBridgeDays.value = _psFormatDateList(a.bridgeDays || a.bridgeDayDates || []);
     if (els.psAtypicalCalendarExceptions) els.psAtypicalCalendarExceptions.value = _psFormatDateList(a.calendarExceptions || a.exceptions || []);
 
+    _psSetTextInput(els.psAtypicalGridOperator, a.gridOperatorName || a.gridOperator || a.networkOperator || a.netzbetreiber || '');
+    _psSetNumberInput(els.psAtypicalYear, a.year || a.validityYear || a.calendarYear);
+    _psSetTextInput(els.psAtypicalSourceDocument, a.sourceDocument || a.sourceName || a.source || '');
+    _psSetTextInput(els.psAtypicalSourcePublishedAt, a.sourcePublishedAt || a.publishedAt || '');
+    _psSetTextInput(els.psAtypicalSourceUrl, a.sourceUrl || a.sourceLink || '');
+    _psSetTextInput(els.psAtypicalSourceNote, a.sourceNote || a.notes || a.comment || a.note || '');
+
+    const review = (a.review && typeof a.review === 'object') ? a.review : (a.nachkontrolle && typeof a.nachkontrolle === 'object' ? a.nachkontrolle : {});
+    if (els.psAtypicalReviewEnabled) els.psAtypicalReviewEnabled.checked = review.enabled !== false;
+    _psSetTextInput(els.psAtypicalReviewResetToken, review.resetToken || review.resetKey || '');
+    _psSetNumberInput(els.psAtypicalReviewPAbsActualW, review.pAbsActualW ?? review.actualAnnualPeakW ?? review.pAbsIstW);
+    _psSetNumberInput(els.psAtypicalReviewPHlzfMaxW, review.pHlzfMaxW ?? review.hlzfPeakW ?? review.pHlzfIstW);
+    _psSetNumberInput(els.psAtypicalReviewPowerPriceEurPerKwYear, review.powerPriceEurPerKwYear ?? review.powerPriceEurPerKwA ?? review.leistungspreisEurProKwJahr);
+    _psSetNumberInput(els.psAtypicalReviewEnergyPriceEurPerKwh, review.energyPriceEurPerKwh ?? review.arbeitspreisEurProKwh);
+    _psSetNumberInput(els.psAtypicalReviewAnnualEnergyKwh, review.annualEnergyKwh ?? review.jahresarbeitKwh);
+    _psSetNumberInput(els.psAtypicalReviewSavingsBagatelleEur, review.bagatelleEur ?? review.bagatellgrenzeEur ?? review.savingsBagatelleEur ?? 500);
+    _psSetNumberInput(els.psAtypicalReviewGeneralGridFeeEur, review.generalGridFeeEur ?? review.generalGridFee ?? review.allgemeinesNetzentgeltEur);
+    _psSetNumberInput(els.psAtypicalReviewMaxReductionPercent, review.maxReductionPercent ?? 80);
+    _psSetTextInput(els.psAtypicalReviewNote, review.note || review.reviewNote || '');
+
     buildAtypicalWindowsUI();
     _psUpdateAtypicalFieldState();
+    _psUpdateAtypicalReviewPreview();
   }
 
   function collectPeakShavingConfigFromUI(baseCfg) {
@@ -1155,6 +1282,44 @@ function _collectFlowPowerDpIsWFromUI() {
     a.bridgeDays = _psParseDateList(els.psAtypicalBridgeDays && els.psAtypicalBridgeDays.value);
     a.calendarExceptions = _psParseDateList(els.psAtypicalCalendarExceptions && els.psAtypicalCalendarExceptions.value);
     a.highLoadWindows = _psCollectWindowRows();
+
+    const setStr = (key, el) => {
+      if (!el) return;
+      const v = String(el.value || '').trim();
+      if (v) a[key] = v; else delete a[key];
+    };
+    setStr('gridOperator', els.psAtypicalGridOperator);
+    const year = _psNumOrNull(els.psAtypicalYear && els.psAtypicalYear.value);
+    if (year !== null && year > 0) a.year = Math.round(year); else delete a.year;
+    setStr('sourceDocument', els.psAtypicalSourceDocument);
+    setStr('sourcePublishedAt', els.psAtypicalSourcePublishedAt);
+    setStr('sourceUrl', els.psAtypicalSourceUrl);
+    setStr('sourceNote', els.psAtypicalSourceNote);
+    setStr('notes', els.psAtypicalSourceNote);
+
+    const review = {};
+    if (els.psAtypicalReviewEnabled) review.enabled = !!els.psAtypicalReviewEnabled.checked;
+    const resetToken = String((els.psAtypicalReviewResetToken && els.psAtypicalReviewResetToken.value) || '').trim();
+    if (resetToken) review.resetToken = resetToken;
+    const pAbsActual = _psNumOrNull(els.psAtypicalReviewPAbsActualW && els.psAtypicalReviewPAbsActualW.value);
+    if (pAbsActual !== null && pAbsActual > 0) review.pAbsActualW = Math.round(pAbsActual);
+    const pHlzf = _psNumOrNull(els.psAtypicalReviewPHlzfMaxW && els.psAtypicalReviewPHlzfMaxW.value);
+    if (pHlzf !== null && pHlzf >= 0) review.pHlzfMaxW = Math.round(pHlzf);
+    const price = _psNumOrNull(els.psAtypicalReviewPowerPriceEurPerKwYear && els.psAtypicalReviewPowerPriceEurPerKwYear.value);
+    if (price !== null && price >= 0) review.powerPriceEurPerKwYear = price;
+    const generalGridFee = _psNumOrNull(els.psAtypicalReviewGeneralGridFeeEur && els.psAtypicalReviewGeneralGridFeeEur.value);
+    if (generalGridFee !== null && generalGridFee >= 0) review.generalGridFeeEur = generalGridFee;
+    const energyPrice = _psNumOrNull(els.psAtypicalReviewEnergyPriceEurPerKwh && els.psAtypicalReviewEnergyPriceEurPerKwh.value);
+    if (energyPrice !== null && energyPrice >= 0) review.energyPriceEurPerKwh = energyPrice;
+    const annualEnergy = _psNumOrNull(els.psAtypicalReviewAnnualEnergyKwh && els.psAtypicalReviewAnnualEnergyKwh.value);
+    if (annualEnergy !== null && annualEnergy >= 0) review.annualEnergyKwh = annualEnergy;
+    const bag = _psNumOrNull(els.psAtypicalReviewSavingsBagatelleEur && els.psAtypicalReviewSavingsBagatelleEur.value);
+    review.bagatelleEur = bag !== null && bag >= 0 ? bag : 500;
+    const maxReduction = _psNumOrNull(els.psAtypicalReviewMaxReductionPercent && els.psAtypicalReviewMaxReductionPercent.value);
+    review.maxReductionPercent = maxReduction !== null ? Math.min(100, Math.max(0, maxReduction)) : 80;
+    const note = String((els.psAtypicalReviewNote && els.psAtypicalReviewNote.value) || '').trim();
+    if (note) review.note = note;
+    if (Object.keys(review).length) a.review = review; else delete a.review;
 
     out.atypical = a;
     return out;
@@ -8615,8 +8780,23 @@ function _collectFlowPowerDpIsWFromUI() {
       if (els.psAtypicalThresholdPercent) {
         els.psAtypicalThresholdPercent.value = String(_psThresholdForVoltage(els.psAtypicalVoltageLevel ? els.psAtypicalVoltageLevel.value : 'MS'));
       }
+      try { _psUpdateAtypicalReviewPreview(); } catch (_e) {}
     });
   }
+
+  [
+    'psAtypicalThresholdPercent',
+    'psAtypicalMinShiftW',
+    'psAtypicalReviewPAbsActualW',
+    'psAtypicalReviewPHlzfMaxW',
+    'psAtypicalReviewPowerPriceEurPerKwYear',
+    'psAtypicalReviewSavingsBagatelleEur',
+    'psAtypicalReviewGeneralGridFeeEur',
+    'psAtypicalReviewMaxReductionPercent',
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => { try { _psUpdateAtypicalReviewPreview(); } catch (_e) {} });
+  });
   if (els.psAtypicalAddWindow) {
     els.psAtypicalAddWindow.addEventListener('click', () => {
       const ps = _psGetPeakCfg();

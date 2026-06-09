@@ -1,3 +1,10 @@
+# 0.7.29
+
+- App-Center Peak-Shaving: Netzbetreiber-/Quellnachweis für Hochlastzeitfenster ergänzt: Netzbetreiber, Gültigkeitsjahr, Quelle/Dokument, Veröffentlichungsdatum, Quell-URL/Ablage und Bemerkung.
+- Atypische Nachkontrolle: Neuer §19-Prüfbereich mit Live-Jahreskontrolle und manuellen Jahres-Endwerten aus RLM-/Zählerexport.
+- Runtime: `peakShaving.atypical.review.*` führt gemessene P_abs_max- und P_HLZF_max-Werte mit, berechnet Verlagerung in W/%, Schwellen-/Mindestverlagerungsstatus, Bagatellprüfung und JSON-Snapshot.
+- Webcache auf `nexowatt-cache-v196` erhöht.
+
 # 0.7.28
 
 - App-Center: Neuer Reiter „Peak-Shaving“ für die Parametrierung der Lastspitzenkappung ergänzt. Installateure können jetzt Normalbetrieb, atypische HLZF-Kappung, Hybrid-Modus oder reines Monitoring wählen.
