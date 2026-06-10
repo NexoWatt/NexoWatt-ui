@@ -10725,3 +10725,30 @@ body.nw-page-smarthome .nw-sh-gauge--level + .nw-sh-slider--big{
     width:min(300px, 100%);
   }
 }
+
+
+/* KI-Energieberater: Kundenziele in Einstellungen */
+.nw-ai-customer-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(240px,1fr));
+  gap:10px 14px;
+  margin-top:14px;
+}
+.nw-ai-setting-row{
+  min-height:58px;
+  border:1px solid rgba(80,170,255,.16);
+  background:linear-gradient(135deg,rgba(3,18,32,.58),rgba(4,36,58,.34));
+  border-radius:14px;
+  padding:10px 12px!important;
+}
+.nw-ai-setting-row select,
+.nw-ai-setting-row input{
+  width:min(190px,42vw);
+  max-width:100%;
+}
+@media (max-width: 760px){
+  .nw-ai-customer-grid{grid-template-columns:1fr;gap:8px;}
+  .nw-ai-setting-row{align-items:flex-start;gap:8px;}
+  .nw-ai-setting-row select,
+  .nw-ai-setting-row input{width:100%;}
+}

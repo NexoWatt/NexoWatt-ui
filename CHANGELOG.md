@@ -1,3 +1,20 @@
+## 0.7.40 - KI-Energieberater Planung & Lernen
+
+- KI‑Energieberater um Tagesfahrplan, EV‑Zielplanung, wetterbasierte Speicherstrategie, Saisonlogik und Komfortfenster erweitert.
+- Lastspitzen‑Lernfunktion, Anomalie‑Erkennung und Prognosequalitätsbewertung ergänzt.
+- Kunden‑Einstellungen für Optimierungsmodus, EV‑Ziel, Komfort-/Ruhezeiten und Prioritäten ergänzt.
+- App‑Center/Admin‑Konfiguration für neue KI‑Bausteine, Schwellwerte, Prioritäten und Kategorien erweitert.
+- Neue States unter `aiAdvisor.*` für Tagesfahrplan, Lernhinweise, Prognosequalität, Anomalien, Saison und Komfortfenster ergänzt.
+
+# 0.7.39 - KI-Berater Wetterprognose und Peak-Shaving-Vorwarnung
+
+- KI-Energieberater nutzt jetzt die vorhandene Wetterprognose: Regen-/Wolkenlage, Temperatur und Morgen-Prognose können Empfehlungen zu Speicherreserve, PV-Fenstern, Thermik und Kühlung beeinflussen.
+- Peak-Shaving-Beratung korrigiert: Bei konfigurierter Netzanschlussleistung von z. B. 30 kW wird ab 90 % eine Vorwarnung ausgelöst, also ab 27 kW.
+- Die Peak-Meldung unterscheidet sauber zwischen „Lastspitzenkappung aktiv“, „Lastspitzenkappung vorbereitet“ und „Lastspitzenkappung nicht konfiguriert“.
+- Neue Runtime-States ergänzt: `aiAdvisor.peakUsagePct`, `aiAdvisor.peakStateText`, `aiAdvisor.gridConnectionLimitW`, `aiAdvisor.peakWarnThresholdW` und `aiAdvisor.weatherSummary`.
+- App-Center erweitert: Schwellwert „Peak-Warnung ab Netzanschluss (%)“, Schlechtwetter-/Regenrisiko-Schwelle und Kategorie „Wetter / Prognose“.
+- Service-Worker Cache auf `nexowatt-cache-v207` erhöht.
+
 # 0.7.38 - Speicherfarm-Route und KI-Berater Kundenschalter
 
 - Fehler behoben: `storagefarm.html` ist jetzt direkt unter `/storagefarm.html`, `/storagefarm`, `/speicherfarm.html` und `/speicherfarm` erreichbar; die 404-Seite beim Topbar-Reiter Speicherfarm ist damit beseitigt.

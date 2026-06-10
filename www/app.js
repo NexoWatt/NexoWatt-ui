@@ -6129,9 +6129,15 @@ function _nwAiAdvisorCategoryLabel(c) {
   if (s === 'storage') return 'Speicher';
   if (s === 'evcs') return 'Wallbox';
   if (s === 'peak') return 'Lastspitze';
+  if (s === 'weather') return 'Wetter';
   if (s === 'grid') return 'Netz';
   if (s === 'setup') return 'Setup';
   if (s === 'heating') return 'Thermik';
+  if (s === 'dailyplan' || s === 'daily-plan' || s === 'plan') return 'Tagesfahrplan';
+  if (s === 'anomaly') return 'Anomalie';
+  if (s === 'comfort') return 'Komfort';
+  if (s === 'learning') return 'Lernen';
+  if (s === 'co2' || s === 'co₂') return 'CO₂';
   return 'System';
 }
 

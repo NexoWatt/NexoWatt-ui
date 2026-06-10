@@ -416,7 +416,7 @@
       <div>
         <h2 class="nw-config-section__title">KI‑Optimierung / Energieberater</h2>
         <div class="nw-config-section__subtitle" style="margin:0;opacity:.85;line-height:1.35;">
-          Beratende KI‑Schicht für die VIS: Sie erzeugt Optimierungsvorschläge zu PV, Tarif, Speicher, Wallboxen und Lastspitzen. Im UI‑Adapter werden <b>keine</b> automatischen Schaltentscheidungen ausgeführt.
+          Beratende KI‑Schicht für die VIS: Tagesfahrplan, Wetter-/PV‑Prognose, EV‑Zielplanung, Peak‑Learning, Anomalie‑Erkennung und Prioritäten. Im UI‑Adapter werden <b>keine</b> automatischen Schaltentscheidungen ausgeführt.
         </div>
       </div>
     </div>
@@ -425,14 +425,14 @@
       <div class="nw-config-card">
         <div class="nw-config-card__header">
           <div class="nw-config-card__title">Betriebsart</div>
-          <div class="nw-config-card__subtitle">Advisory‑Only für NexoWatt UI; aktive KI‑Entscheidungen später in EOS.</div>
+          <div class="nw-config-card__subtitle">Advisory‑Only für NexoWatt UI; der Kunde kann die Anzeige zusätzlich in den Einstellungen ein-/ausschalten.</div>
         </div>
         <div class="nw-config-card__body">
           <div class="nw-config-field-row">
             <label class="nw-config-field-label">Aktivierung</label>
             <div class="nw-config-field-control nw-config-field-control--stack">
               <div class="nw-config-empty" style="margin:0;line-height:1.4;">
-                Die App wird über <b>Apps → KI‑Energieberater</b> installiert/aktiviert. Diese Seite konfiguriert nur Verhalten und Anzeige.
+                Die App wird über <b>Apps → KI‑Energieberater</b> installiert/aktiviert. Diese Seite konfiguriert Verhalten, Lernlogik und Anzeige.
               </div>
             </div>
           </div>
@@ -449,7 +449,7 @@
           </div>
           <div class="nw-config-field-row">
             <label class="nw-config-field-label" for="aiAdvisorMaxSuggestions">Max. Vorschläge</label>
-            <div class="nw-config-field-control"><input id="aiAdvisorMaxSuggestions" class="nw-config-input" type="number" min="1" max="10" step="1" placeholder="4" /></div>
+            <div class="nw-config-field-control"><input id="aiAdvisorMaxSuggestions" class="nw-config-input" type="number" min="1" max="10" step="1" placeholder="6" /></div>
           </div>
           <div class="nw-config-field-row">
             <label class="nw-config-field-label" for="aiAdvisorMinPriority">Mindest‑Priorität</label>
@@ -462,6 +462,34 @@
               </select>
             </div>
           </div>
+          <div class="nw-config-field-row">
+            <label class="nw-config-field-label" for="aiAdvisorOptimizationMode">Standard‑Optimierungsmodus</label>
+            <div class="nw-config-field-control">
+              <select id="aiAdvisorOptimizationMode" class="nw-config-input">
+                <option value="balanced">Ausgewogen</option>
+                <option value="cost">Kosten sparen</option>
+                <option value="autarky">Autarkie maximieren</option>
+                <option value="co2">CO₂‑arm</option>
+                <option value="peak">Netzanschluss schützen</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="nw-config-card">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">KI‑Bausteine</div>
+          <div class="nw-config-card__subtitle">Welche erweiterten Logiken aktiv sind.</div>
+        </div>
+        <div class="nw-config-card__body">
+          <div class="nw-config-grid" style="grid-template-columns:1fr;gap:8px;">
+            <label class="nw-config-checklabel"><input id="aiAdvisorDailyPlanEnabled" class="nw-config-checkbox" type="checkbox" /> <span>Tagesfahrplan erstellen</span></label>
+            <label class="nw-config-checklabel"><input id="aiAdvisorLearningEnabled" class="nw-config-checkbox" type="checkbox" /> <span>Lastspitzen-Lernfunktion</span></label>
+            <label class="nw-config-checklabel"><input id="aiAdvisorAnomalyDetectionEnabled" class="nw-config-checkbox" type="checkbox" /> <span>Anomalie-Erkennung</span></label>
+            <label class="nw-config-checklabel"><input id="aiAdvisorForecastQualityEnabled" class="nw-config-checkbox" type="checkbox" /> <span>Prognosequalität bewerten</span></label>
+            <label class="nw-config-checklabel"><input id="aiAdvisorSeasonLogicEnabled" class="nw-config-checkbox" type="checkbox" /> <span>Saisonlogik nutzen</span></label>
+          </div>
         </div>
       </div>
 
@@ -471,30 +499,57 @@
           <div class="nw-config-card__subtitle">Ab wann die KI Optimierungspotenzial melden soll.</div>
         </div>
         <div class="nw-config-card__body">
-          <div class="nw-config-field-row">
-            <label class="nw-config-field-label" for="aiAdvisorExportHighW">PV‑Überschuss ab (W)</label>
-            <div class="nw-config-field-control"><input id="aiAdvisorExportHighW" class="nw-config-input" type="number" min="0" step="100" placeholder="1500" /></div>
-          </div>
-          <div class="nw-config-field-row">
-            <label class="nw-config-field-label" for="aiAdvisorImportHighW">Hoher Netzbezug ab (W)</label>
-            <div class="nw-config-field-control"><input id="aiAdvisorImportHighW" class="nw-config-input" type="number" min="0" step="100" placeholder="4000" /></div>
-          </div>
-          <div class="nw-config-field-row">
-            <label class="nw-config-field-label" for="aiAdvisorLowSocPct">Speicher niedrig (%)</label>
-            <div class="nw-config-field-control"><input id="aiAdvisorLowSocPct" class="nw-config-input" type="number" min="0" max="100" step="1" placeholder="25" /></div>
-          </div>
-          <div class="nw-config-field-row">
-            <label class="nw-config-field-label" for="aiAdvisorHighSocPct">Speicher hoch (%)</label>
-            <div class="nw-config-field-control"><input id="aiAdvisorHighSocPct" class="nw-config-input" type="number" min="0" max="100" step="1" placeholder="85" /></div>
-          </div>
-          <div class="nw-config-field-row">
-            <label class="nw-config-field-label" for="aiAdvisorPvForecastHighW">PV‑Forecast hoch ab (W)</label>
-            <div class="nw-config-field-control"><input id="aiAdvisorPvForecastHighW" class="nw-config-input" type="number" min="0" step="100" placeholder="3000" /></div>
-          </div>
-          <div class="nw-config-field-row">
-            <label class="nw-config-field-label" for="aiAdvisorStaleTimeoutSec">Messwert‑Timeout (s)</label>
-            <div class="nw-config-field-control"><input id="aiAdvisorStaleTimeoutSec" class="nw-config-input" type="number" min="30" max="86400" step="10" placeholder="300" /></div>
-          </div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorExportHighW">PV‑Überschuss ab (W)</label><div class="nw-config-field-control"><input id="aiAdvisorExportHighW" class="nw-config-input" type="number" min="0" step="100" placeholder="1500" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorImportHighW">Hoher Netzbezug ab (W)</label><div class="nw-config-field-control"><input id="aiAdvisorImportHighW" class="nw-config-input" type="number" min="0" step="100" placeholder="4000" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorPeakNearLimitPct">Peak-Warnung ab Netzanschluss (%)</label><div class="nw-config-field-control"><input id="aiAdvisorPeakNearLimitPct" class="nw-config-input" type="number" min="50" max="100" step="1" placeholder="90" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorWeatherRainRiskPct">Wetterhinweis ab Regenrisiko (%)</label><div class="nw-config-field-control"><input id="aiAdvisorWeatherRainRiskPct" class="nw-config-input" type="number" min="0" max="100" step="1" placeholder="60" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorLowSocPct">Speicher niedrig (%)</label><div class="nw-config-field-control"><input id="aiAdvisorLowSocPct" class="nw-config-input" type="number" min="0" max="100" step="1" placeholder="25" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorHighSocPct">Speicher hoch (%)</label><div class="nw-config-field-control"><input id="aiAdvisorHighSocPct" class="nw-config-input" type="number" min="0" max="100" step="1" placeholder="85" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorPvForecastHighW">PV‑Forecast hoch ab (W)</label><div class="nw-config-field-control"><input id="aiAdvisorPvForecastHighW" class="nw-config-input" type="number" min="0" step="100" placeholder="3000" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorStaleTimeoutSec">Messwert‑Timeout (s)</label><div class="nw-config-field-control"><input id="aiAdvisorStaleTimeoutSec" class="nw-config-input" type="number" min="30" max="86400" step="10" placeholder="300" /></div></div>
+        </div>
+      </div>
+
+      <div class="nw-config-card">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Ziele & Komfortfenster</div>
+          <div class="nw-config-card__subtitle">Basiswerte für Tagesfahrplan, EV‑Zielplanung und Thermik.</div>
+        </div>
+        <div class="nw-config-card__body">
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorEvReadyBy">EV fertig bis</label><div class="nw-config-field-control"><input id="aiAdvisorEvReadyBy" class="nw-config-input" type="time" value="07:00" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorEvTargetSocPct">EV Ziel‑SoC (%)</label><div class="nw-config-field-control"><input id="aiAdvisorEvTargetSocPct" class="nw-config-input" type="number" min="10" max="100" step="1" placeholder="80" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorEvBatteryCapacityKwh">EV Batteriekapazität (kWh)</label><div class="nw-config-field-control"><input id="aiAdvisorEvBatteryCapacityKwh" class="nw-config-input" type="number" min="5" max="300" step="1" placeholder="60" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorThermalReadyBy">Thermik fertig bis</label><div class="nw-config-field-control"><input id="aiAdvisorThermalReadyBy" class="nw-config-input" type="time" value="18:00" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorQuietHoursStart">Ruhezeit Start</label><div class="nw-config-field-control"><input id="aiAdvisorQuietHoursStart" class="nw-config-input" type="time" value="22:00" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorQuietHoursEnd">Ruhezeit Ende</label><div class="nw-config-field-control"><input id="aiAdvisorQuietHoursEnd" class="nw-config-input" type="time" value="06:00" /></div></div>
+        </div>
+      </div>
+
+      <div class="nw-config-card">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Lernen & Qualität</div>
+          <div class="nw-config-card__subtitle">Grenzen für Anomalie- und Prognosebewertung.</div>
+        </div>
+        <div class="nw-config-card__body">
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorAnomalyHighLoadW">Auffällig hoher Verbrauch ab (W)</label><div class="nw-config-field-control"><input id="aiAdvisorAnomalyHighLoadW" class="nw-config-input" type="number" min="0" step="100" placeholder="5500" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorNightBaseLoadW">Nachtgrundlast-Warnung ab (W)</label><div class="nw-config-field-control"><input id="aiAdvisorNightBaseLoadW" class="nw-config-input" type="number" min="0" step="50" placeholder="900" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorForecastQualityWarnPct">Prognosequalität Warnung unter (%)</label><div class="nw-config-field-control"><input id="aiAdvisorForecastQualityWarnPct" class="nw-config-input" type="number" min="0" max="100" step="1" placeholder="65" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorCo2LowGPerKwh">CO₂ niedrig bis (g/kWh)</label><div class="nw-config-field-control"><input id="aiAdvisorCo2LowGPerKwh" class="nw-config-input" type="number" min="0" step="10" placeholder="250" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorCo2HighGPerKwh">CO₂ hoch ab (g/kWh)</label><div class="nw-config-field-control"><input id="aiAdvisorCo2HighGPerKwh" class="nw-config-input" type="number" min="0" step="10" placeholder="500" /></div></div>
+        </div>
+      </div>
+
+      <div class="nw-config-card">
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__title">Prioritäten</div>
+          <div class="nw-config-card__subtitle">Reihenfolge, wenn mehrere flexible Lasten möglich sind.</div>
+        </div>
+        <div class="nw-config-card__body">
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorPriorityStorage">Speicher</label><div class="nw-config-field-control"><input id="aiAdvisorPriorityStorage" class="nw-config-input" type="number" min="0" max="100" step="1" placeholder="90" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorPriorityEvcs">Wallbox / EVCS</label><div class="nw-config-field-control"><input id="aiAdvisorPriorityEvcs" class="nw-config-input" type="number" min="0" max="100" step="1" placeholder="80" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorPriorityThermal">Thermik</label><div class="nw-config-field-control"><input id="aiAdvisorPriorityThermal" class="nw-config-input" type="number" min="0" max="100" step="1" placeholder="60" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorPriorityHeatingRod">Heizstab</label><div class="nw-config-field-control"><input id="aiAdvisorPriorityHeatingRod" class="nw-config-input" type="number" min="0" max="100" step="1" placeholder="45" /></div></div>
+          <div class="nw-config-field-row"><label class="nw-config-field-label" for="aiAdvisorPriorityGeneric">Sonstige Lasten</label><div class="nw-config-field-control"><input id="aiAdvisorPriorityGeneric" class="nw-config-input" type="number" min="0" max="100" step="1" placeholder="40" /></div></div>
         </div>
       </div>
 
@@ -510,7 +565,13 @@
             <label class="nw-config-checklabel"><input id="aiAdvisorCatStorage" class="nw-config-checkbox" type="checkbox" /> <span>Speicher</span></label>
             <label class="nw-config-checklabel"><input id="aiAdvisorCatEvcs" class="nw-config-checkbox" type="checkbox" /> <span>Wallbox / EVCS</span></label>
             <label class="nw-config-checklabel"><input id="aiAdvisorCatPeak" class="nw-config-checkbox" type="checkbox" /> <span>Lastspitzen / HLZF</span></label>
+            <label class="nw-config-checklabel"><input id="aiAdvisorCatWeather" class="nw-config-checkbox" type="checkbox" /> <span>Wetter / Prognose</span></label>
             <label class="nw-config-checklabel"><input id="aiAdvisorCatHeating" class="nw-config-checkbox" type="checkbox" /> <span>Heizstab / Thermik</span></label>
+            <label class="nw-config-checklabel"><input id="aiAdvisorCatDailyPlan" class="nw-config-checkbox" type="checkbox" /> <span>Tagesfahrplan</span></label>
+            <label class="nw-config-checklabel"><input id="aiAdvisorCatAnomaly" class="nw-config-checkbox" type="checkbox" /> <span>Anomalie-Erkennung</span></label>
+            <label class="nw-config-checklabel"><input id="aiAdvisorCatComfort" class="nw-config-checkbox" type="checkbox" /> <span>Komfortfenster</span></label>
+            <label class="nw-config-checklabel"><input id="aiAdvisorCatLearning" class="nw-config-checkbox" type="checkbox" /> <span>Lernhinweise</span></label>
+            <label class="nw-config-checklabel"><input id="aiAdvisorCatCo2" class="nw-config-checkbox" type="checkbox" /> <span>CO₂ / Autarkie</span></label>
             <label class="nw-config-checklabel"><input id="aiAdvisorCatSystem" class="nw-config-checkbox" type="checkbox" /> <span>Systemhinweise</span></label>
           </div>
           <div class="nw-config-help" style="margin-top:10px;opacity:.85;line-height:1.35;">
@@ -522,6 +583,8 @@
   </section>
 
   </div>
+
+
 
   <div id="nw-tabpanel-mapping" data-tabpanel="mapping" style="display:none;">
 

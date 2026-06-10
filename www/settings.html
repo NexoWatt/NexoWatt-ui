@@ -102,7 +102,55 @@
             <input type="checkbox" class="nw-toggle-hidden" id="s_aiAdvisorEnabled" data-scope="settings" data-key="aiAdvisorEnabled" checked>
           </label>
           <small class="muted nw-settings-help" style="display:block;margin-top:6px;color:var(--muted)">
-            Der Kunde entscheidet hier selbst, ob die Hinweisbox „KI‑Energieberater“ im LIVE-Dashboard aktiv ist. Aus bedeutet: keine Berater-Kachel im Kundencockpit.
+            Der Kunde entscheidet selbst, ob die Hinweisbox „KI‑Energieberater“ im LIVE-Dashboard aktiv ist. Die KI bleibt immer beratend und schaltet keine Geräte automatisch.
+          </small>
+
+          <div class="nw-ai-customer-grid">
+            <label class="row nw-ai-setting-row"><span>Optimierungsmodus</span>
+              <select id="s_aiAdvisorMode" data-scope="settings" data-key="aiAdvisorMode">
+                <option value="balanced">Ausgewogen</option>
+                <option value="cost">Kosten sparen</option>
+                <option value="autarky">Autarkie</option>
+                <option value="co2">CO₂‑arm</option>
+                <option value="peak">Netzanschluss schützen</option>
+              </select>
+            </label>
+            <label class="row nw-ai-setting-row"><span>EV fertig bis</span>
+              <input id="s_aiAdvisorEvReadyBy" data-scope="settings" data-key="aiAdvisorEvReadyBy" type="time" value="07:00">
+            </label>
+            <label class="row nw-ai-setting-row"><span>EV Ziel‑SoC (%)</span>
+              <input id="s_aiAdvisorEvTargetSocPct" data-scope="settings" data-key="aiAdvisorEvTargetSocPct" type="number" min="10" max="100" step="1" value="80">
+            </label>
+            <label class="row nw-ai-setting-row"><span>Warmwasser/Heizung fertig bis</span>
+              <input id="s_aiAdvisorThermalReadyBy" data-scope="settings" data-key="aiAdvisorThermalReadyBy" type="time" value="18:00">
+            </label>
+            <label class="row nw-ai-setting-row"><span>Komfortfenster Start</span>
+              <input id="s_aiAdvisorComfortStart" data-scope="settings" data-key="aiAdvisorComfortStart" type="time" value="06:00">
+            </label>
+            <label class="row nw-ai-setting-row"><span>Komfortfenster Ende</span>
+              <input id="s_aiAdvisorComfortEnd" data-scope="settings" data-key="aiAdvisorComfortEnd" type="time" value="22:00">
+            </label>
+            <label class="row nw-ai-setting-row"><span>Ruhezeit Start</span>
+              <input id="s_aiAdvisorQuietHoursStart" data-scope="settings" data-key="aiAdvisorQuietHoursStart" type="time" value="22:00">
+            </label>
+            <label class="row nw-ai-setting-row"><span>Ruhezeit Ende</span>
+              <input id="s_aiAdvisorQuietHoursEnd" data-scope="settings" data-key="aiAdvisorQuietHoursEnd" type="time" value="06:00">
+            </label>
+            <label class="row nw-ai-setting-row"><span>Priorität Speicher</span>
+              <input id="s_aiAdvisorPriorityStorage" data-scope="settings" data-key="aiAdvisorPriorityStorage" type="number" min="0" max="100" step="1" value="90">
+            </label>
+            <label class="row nw-ai-setting-row"><span>Priorität Wallbox</span>
+              <input id="s_aiAdvisorPriorityEvcs" data-scope="settings" data-key="aiAdvisorPriorityEvcs" type="number" min="0" max="100" step="1" value="80">
+            </label>
+            <label class="row nw-ai-setting-row"><span>Priorität Thermik</span>
+              <input id="s_aiAdvisorPriorityThermal" data-scope="settings" data-key="aiAdvisorPriorityThermal" type="number" min="0" max="100" step="1" value="60">
+            </label>
+            <label class="row nw-ai-setting-row"><span>Priorität Heizstab</span>
+              <input id="s_aiAdvisorPriorityHeatingRod" data-scope="settings" data-key="aiAdvisorPriorityHeatingRod" type="number" min="0" max="100" step="1" value="45">
+            </label>
+          </div>
+          <small class="muted nw-settings-help" style="display:block;margin-top:8px;color:var(--muted)">
+            Diese Kundenziele fließen in Tagesfahrplan, EV‑Zielplanung, Speicherstrategie und Peak‑Warnungen ein. Detailparameter wie Schwellwerte bleiben im Admin/App‑Center.
           </small>
 
           <div class="nw-settings-section-title">Wetter</div>

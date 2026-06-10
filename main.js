@@ -1438,6 +1438,20 @@ class NexoWattVis extends utils.Adapter {
 
       // Kundencockpit: KI-Energieberater kann vom Betreiber ein-/ausgeschaltet werden.
       aiAdvisorEnabled: { type: 'boolean', role: 'state', def: true },
+      aiAdvisorMode: { type: 'string', role: 'text', def: 'balanced' },
+      aiAdvisorOptimizationMode: { type: 'string', role: 'text', def: 'balanced' },
+      aiAdvisorComfortStart: { type: 'string', role: 'text', def: '06:00' },
+      aiAdvisorComfortEnd: { type: 'string', role: 'text', def: '22:00' },
+      aiAdvisorQuietHoursStart: { type: 'string', role: 'text', def: '22:00' },
+      aiAdvisorQuietHoursEnd: { type: 'string', role: 'text', def: '06:00' },
+      aiAdvisorEvReadyBy: { type: 'string', role: 'text', def: '07:00' },
+      aiAdvisorEvTargetSocPct: { type: 'number', role: 'value.percent', def: 80 },
+      aiAdvisorThermalReadyBy: { type: 'string', role: 'text', def: '18:00' },
+      aiAdvisorPriorityStorage: { type: 'number', role: 'value', def: 90 },
+      aiAdvisorPriorityEvcs: { type: 'number', role: 'value', def: 80 },
+      aiAdvisorPriorityThermal: { type: 'number', role: 'value', def: 60 },
+      aiAdvisorPriorityHeatingRod: { type: 'number', role: 'value', def: 45 },
+      aiAdvisorPriorityGeneric: { type: 'number', role: 'value', def: 40 },
 
       dynamicTariff: { type: 'boolean', role: 'state', def: false },
       storagePower: { type: 'number', role: 'value.power', def: 1000 },
@@ -2141,9 +2155,33 @@ class NexoWattVis extends utils.Adapter {
       enabled: true,
       showOnLive: true,
       intervalSec: 60,
-      maxSuggestions: 4,
+      maxSuggestions: 6,
       minPriority: 'info',
-      categories: { tariff: true, pv: true, storage: true, evcs: true, peak: true, heating: true, system: true }
+      optimizationMode: 'balanced',
+      dailyPlanEnabled: true,
+      learningEnabled: true,
+      anomalyDetectionEnabled: true,
+      forecastQualityEnabled: true,
+      seasonLogicEnabled: true,
+      evReadyBy: '07:00',
+      evTargetSocPct: 80,
+      evBatteryCapacityKwh: 60,
+      thermalReadyBy: '18:00',
+      quietHoursStart: '22:00',
+      quietHoursEnd: '06:00',
+      anomalyHighLoadW: 5500,
+      nightBaseLoadW: 900,
+      forecastQualityWarnPct: 65,
+      co2LowGPerKwh: 250,
+      co2HighGPerKwh: 500,
+      priorities: { storage: 90, evcs: 80, thermal: 60, heatingRod: 45, generic: 40 },
+      peakNearLimitPct: 90,
+      peakConnectionUsageWarnPct: 90,
+      gridConnectionWarnPct: 90,
+      peakCriticalLimitPct: 98,
+      weatherRainRiskPct: 60,
+      weatherRainProbabilityPct: 60,
+      categories: { tariff: true, pv: true, storage: true, evcs: true, peak: true, weather: true, heating: true, dailyPlan: true, plan: true, anomaly: true, comfort: true, learning: true, co2: true, system: true }
     });
     ensurePlainObj('smartHome', {});
     // SmartHomeConfig (Gebäude/Räume/Funktionen/Geräte + optionale SmartHome-VIS Navigation)
@@ -16296,6 +16334,10 @@ return res.json(out);
       'deviceStaleTimeoutSec',
       // Customer cockpit settings
       'aiAdvisorEnabled',
+      'aiAdvisorMode','aiAdvisorOptimizationMode',
+      'aiAdvisorComfortStart','aiAdvisorComfortEnd','aiAdvisorQuietHoursStart','aiAdvisorQuietHoursEnd',
+      'aiAdvisorEvReadyBy','aiAdvisorEvTargetSocPct','aiAdvisorThermalReadyBy',
+      'aiAdvisorPriorityStorage','aiAdvisorPriorityEvcs','aiAdvisorPriorityThermal','aiAdvisorPriorityHeatingRod','aiAdvisorPriorityGeneric',
       // Tariff/charging settings
       'dynamicTariff','storagePower','price','priority','tariffMode',
       // PV Saisonprofil (Quartale)
