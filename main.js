@@ -17662,6 +17662,83 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       };
     };
 
+    const fromBalance = () => {
+      try {
+        const balanceDeadbandW = Math.max(180, deadbandW);
+        if (this.stateCache && this.stateCache['storageFarm.enabled'] && this.stateCache['storageFarm.enabled'].value) return null;
+
+        const soc = this._nwGetNumberFromCache('storageSoc');
+        if (!Number.isFinite(Number(soc))) return null;
+
+        // Nur mit direkt gemessenem Hausverbrauch ableiten. Ohne Direktmessung wäre
+        // consumptionTotal evtl. schon aus derselben Bilanz berechnet und damit zirkulär.
+        const hasDirectLoad = this._nwHasMappedDatapoint('consumptionTotal') || this._nwHasMappedDatapoint('housePower');
+        if (!hasDirectLoad) return null;
+
+        let load = this._nwGetNumberFromCache('consumptionTotal');
+        if (load === null || !Number.isFinite(Number(load))) load = this._nwGetNumberFromCache('housePower');
+        if (load === null || !Number.isFinite(Number(load))) return null;
+
+        const grid = this._nwResolveGridImportExportFromCache ? this._nwResolveGridImportExportFromCache() : null;
+        if (!grid || !grid.hasGrid) return null;
+
+        let pv = this._nwGetNumberFromCache('pvPower');
+        if ((pv === null || !Number.isFinite(Number(pv))) && this._nwHasMappedDatapoint('productionTotal')) {
+          pv = this._nwGetNumberFromCache('productionTotal');
+        }
+        if (pv === null || !Number.isFinite(Number(pv))) return null;
+
+        let production = Math.max(0, Math.abs(Number(pv) || 0));
+        for (let i = 1; i <= 5; i++) {
+          const extra = this._nwGetNumberFromCache(`producer${i}Power`);
+          if (Number.isFinite(Number(extra))) production += Math.max(0, Math.abs(Number(extra)));
+        }
+
+        const buy = Math.max(0, Number(grid.gridBuyW) || 0);
+        const sell = Math.max(0, Number(grid.gridSellW) || 0);
+        const signed = Math.round(Math.max(0, Number(load) || 0) - production - buy + sell);
+        if (!Number.isFinite(signed) || Math.abs(signed) <= balanceDeadbandW) return null;
+
+        const activity = production + Math.max(0, Number(load) || 0) + buy + sell;
+        if (activity < 500) return null;
+        if (Math.abs(signed) > Math.max(3000, activity * 1.15)) return null;
+        if (signed < 0 && Number(soc) >= 99.5) return null;
+        if (signed > 0 && Number(soc) <= 0.5) return null;
+
+        return {
+          chargeW: signed < 0 ? Math.abs(signed) : 0,
+          dischargeW: signed > 0 ? signed : 0,
+          signedW: signed,
+          src: 'balanceDerived',
+          inverted: false,
+          fromSigned: false,
+          mirror: true,
+          staleMs: {
+            balance: 0,
+            batteryPower: this._nwGetCacheAgeMs('batteryPower', now),
+            storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
+            storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
+          },
+        };
+      } catch (_eBalance) {
+        return null;
+      }
+    };
+
+    const preferBalance = (current) => {
+      try {
+        const measured = Math.max(0, Math.abs(Number(current && current.chargeW) || 0) + Math.abs(Number(current && current.dischargeW) || 0));
+        const srcCur = String(current && current.src || '');
+        const missingLike = !current || srcCur === 'missing' || srcCur === 'stale-or-missing';
+        const derived = fromBalance();
+        if (!derived) return current;
+        if (missingLike || measured <= Math.max(180, deadbandW)) return derived;
+        return current;
+      } catch (_ePrefer) {
+        return current;
+      }
+    };
+
     // Speicherfarm already provides normalized charge/discharge totals. Keep it authoritative
     // unless a signed single battery datapoint is explicitly mapped for a non-farm setup.
     const sfEnabled = !!(this.stateCache && this.stateCache['storageFarm.enabled'] && this.stateCache['storageFarm.enabled'].value);
@@ -17695,7 +17772,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     // If charge/discharge were both mapped to the same signed datapoint, keep the sign.
     // updateValue() normalizes their public state values to magnitudes, so the private raw cache is used here.
     if (sameChargeDischargeId && chargeRaw !== null) {
-      return fromSigned(chargeRaw, 'sameChargeDischargeSigned', { mirror: true });
+      return preferBalance(fromSigned(chargeRaw, 'sameChargeDischargeSigned', { mirror: true }));
     }
 
     // Canonical single signed DP fallback: exactly like NVP signed handling.
@@ -17708,7 +17785,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const bothEqualish = bothPublicDirections && Math.abs(Math.abs(Number(publicCharge || 0)) - Math.abs(Number(publicDischarge || 0))) <= Math.max(2, deadbandW);
 
     if (batterySigned !== null && (!separateAvailable || bothEqualish || (!chargeMapped && !dischargeMapped))) {
-      return fromSigned(batterySigned, bothEqualish ? 'batterySignedOverrideDual' : 'batterySigned', { mirror: true });
+      return preferBalance(fromSigned(batterySigned, bothEqualish ? 'batterySignedOverrideDual' : 'batterySigned', { mirror: true }));
     }
 
     if (separateAvailable) {
@@ -17719,7 +17796,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       if (c <= deadbandW) c = 0;
       if (d <= deadbandW) d = 0;
       if (inv) { const t = c; c = d; d = t; }
-      return {
+      return preferBalance({
         chargeW: Math.round(c),
         dischargeW: Math.round(d),
         signedW: Math.round(d - c),
@@ -17731,14 +17808,14 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
           storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
           storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
         },
-      };
+      });
     }
 
     if (batterySigned !== null) {
-      return fromSigned(batterySigned, 'batterySigned', { mirror: true });
+      return preferBalance(fromSigned(batterySigned, 'batterySigned', { mirror: true }));
     }
 
-    return {
+    return preferBalance({
       chargeW: 0,
       dischargeW: 0,
       signedW: 0,
@@ -17751,7 +17828,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
         storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
       },
-    };
+    });
   }
 
   _nwResolveGridImportExportFromCache() {
@@ -19288,7 +19365,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         if (!Number.isFinite(curC) || curC !== chargeRound) this.updateValue('storageChargePower', chargeRound, ts, { raw: false });
         if (!Number.isFinite(curD) || curD !== dischargeRound) this.updateValue('storageDischargePower', dischargeRound, ts, { raw: false });
       }
-      if (!this._nwHasMappedDatapoint('batteryPower')) {
+      if (!this._nwHasMappedDatapoint('batteryPower') || (storageFlow && storageFlow.src === 'balanceDerived')) {
         const signedRound = Math.round(dischargeW - chargeW);
         const curB = Number(this.stateCache?.batteryPower?.value);
         if (!Number.isFinite(curB) || curB !== signedRound) this.updateValue('batteryPower', signedRound, ts, { raw: false });

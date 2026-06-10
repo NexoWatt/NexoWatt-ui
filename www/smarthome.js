@@ -8397,7 +8397,7 @@ async function nwLoadUiConfigFlags() {
     const cfg = await fetch('/config', { cache: 'no-store' }).then(r => r.json());
 
     const sc = (cfg && cfg.settingsConfig) || {};
-    const evcsAvailable = !!(sc.evcsAvailable || (cfg && cfg.ems && cfg.ems.evcsAvailable));
+    const evcsAvailable = ((Number(sc.evcsConfiguredCount || 0) || (Array.isArray(sc.evcsList) ? sc.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
     nwEvcsCount = evcsAvailable ? Math.max(0, Math.round(Number(sc.evcsCount) || 0)) : 0;
     nwSmartHomeEnabled = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
     const storageFarmEnabled = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(cfg.ems && cfg.ems.storageFarmEnabled);

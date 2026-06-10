@@ -52,7 +52,7 @@
         fetch('/config', { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(cfg){
           cfg = cfg || {};
           var sc = (cfg.settingsConfig && typeof cfg.settingsConfig === 'object') ? cfg.settingsConfig : {};
-          var evAvail = !!(sc.evcsAvailable || (cfg.ems && cfg.ems.evcsAvailable));
+          var evAvail = ((Number(sc.evcsConfiguredCount || 0) || (Array.isArray(sc.evcsList) ? sc.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
           var evCount = Math.max(0, Math.round(Number(sc.evcsCount || 0) || 0));
           var showEvcs = evAvail && evCount >= 2;
           var sh = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);

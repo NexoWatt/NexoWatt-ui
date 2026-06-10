@@ -702,7 +702,7 @@ function render() {
   if (!list) return;
 
   const sc = (cfg && cfg.settingsConfig) || {};
-  const evcsAvailable = !!(sc.evcsAvailable || (cfg && cfg.ems && cfg.ems.evcsAvailable));
+  const evcsAvailable = ((Number(sc.evcsConfiguredCount || 0) || (Array.isArray(sc.evcsList) ? sc.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
   const count = evcsAvailable ? Math.max(0, Math.round(Number(sc.evcsCount) || 0)) : 0;
   const meta = evcsAvailable && Array.isArray(sc.evcsList) ? sc.evcsList : [];
 
@@ -1251,7 +1251,7 @@ async function bootstrap() {
   try {
     cfg = await fetch('/config', { cache: 'no-store' }).then(r => r.json());
     const sc = (cfg && cfg.settingsConfig) || {};
-    const evcsAvailable = !!(sc.evcsAvailable || (cfg && cfg.ems && cfg.ems.evcsAvailable));
+    const evcsAvailable = ((Number(sc.evcsConfiguredCount || 0) || (Array.isArray(sc.evcsList) ? sc.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
     const c = evcsAvailable ? Math.max(0, Math.round(Number(sc.evcsCount) || 0)) : 0;
     const showEvcsPage = evcsAvailable && c >= 2;
     if (!showEvcsPage) {

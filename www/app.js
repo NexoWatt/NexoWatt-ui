@@ -1037,22 +1037,35 @@ function nwAsBool(v, def) {
 
 function nwFeatureMappedRow(row) {
   if (!row || row.enabled === false) return false;
+  // Nur echte Ladepunkt-Zuordnungen zählen. Legacy-Aggregate wie consumptionEvcs
+  // oder alte boolesche Flags dürfen eine Kundenanlage ohne Wallbox nicht sichtbar machen.
   const fields = ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'];
   return fields.some((key) => String(row[key] || '').trim());
+}
+
+function nwConfiguredEvcsRows(inputCfg) {
+  const c = inputCfg || window.__nwCfg || {};
+  try {
+    const sc = (c.settingsConfig && typeof c.settingsConfig === 'object') ? c.settingsConfig : {};
+    const fromSettings = Array.isArray(sc.evcsList) ? sc.evcsList : [];
+    const fromRuntime = Array.isArray(c.evcsList) ? c.evcsList : [];
+    const list = fromSettings.length ? fromSettings : fromRuntime;
+    return list.filter(nwFeatureMappedRow);
+  } catch (_e) {
+    return [];
+  }
 }
 
 function nwEvcsFeatureFromConfig(inputCfg) {
   const c = inputCfg || window.__nwCfg || {};
   try {
+    const rows = nwConfiguredEvcsRows(c);
     const sc = (c.settingsConfig && typeof c.settingsConfig === 'object') ? c.settingsConfig : {};
-    if (typeof sc.evcsAvailable === 'boolean') return sc.evcsAvailable;
-    if (c.ems && typeof c.ems.evcsAvailable === 'boolean') return c.ems.evcsAvailable;
-    const meta = c.flowSlots && c.flowSlots.meta;
-    if (meta && typeof meta.evcsAvailable === 'boolean') return meta.evcsAvailable;
-    const count = Number(sc.evcsCount ?? window.__nwEvcsCount ?? 0);
-    const list = Array.isArray(sc.evcsList) ? sc.evcsList : [];
-    const mapped = list.some(nwFeatureMappedRow);
-    return Number.isFinite(count) && count > 0 && mapped;
+    const configuredCount = Number(sc.evcsConfiguredCount ?? (c.flowSlots && c.flowSlots.meta && c.flowSlots.meta.evcsConfiguredCount) ?? rows.length);
+    const count = Number(sc.evcsCount ?? window.__nwEvcsCount ?? configuredCount ?? 0);
+    // Strikte Regel: Sichtbar erst ab realem Ladepunkt. Ein altes evcsAvailable=true
+    // ohne gemappte Ladepunkt-Zeile wird bewusst ignoriert.
+    return rows.length > 0 || (Number.isFinite(configuredCount) && configuredCount > 0 && Number.isFinite(count) && count > 0);
   } catch (_e) {
     return false;
   }
@@ -2037,6 +2050,77 @@ function getConfiguredDatapointId(key) {
   }
 }
 
+function getBalanceDerivedBatteryFlow(opts = {}) {
+  try {
+    const deadbandW = Number.isFinite(Number(opts.deadbandW)) ? Math.max(0, Number(opts.deadbandW)) : 180;
+    const st = state || window.latestState || {};
+    const read = (k) => st && st[k] ? st[k].value : undefined;
+
+    // In Speicherfarm-Anlagen sind die Farm-Summen die Quelle der Wahrheit.
+    if (nwAsBool(read('storageFarm.enabled'), false)) return null;
+
+    const soc = coerceNumber(read('storageSoc') ?? read('batterySOC'));
+    if (soc === null) return null;
+
+    // Nur aus der Bilanz ableiten, wenn eine echte Verbrauchsleistung gemappt ist.
+    // Sonst würden wir aus einem bereits abgeleiteten consumptionTotal wieder zurückrechnen.
+    const hasDirectLoad = isMappedDatapoint('consumptionTotal') || isMappedDatapoint('housePower');
+    if (!hasDirectLoad) return null;
+
+    const load = coerceNumber(read('consumptionTotal') ?? read('housePower'));
+    if (load === null) return null;
+
+    const grid = getGridImportExport(read);
+    if (!grid || !grid.hasGridInfo) return null;
+
+    let pv = coerceNumber(read('pvPower'));
+    if (pv === null && isMappedDatapoint('productionTotal')) pv = coerceNumber(read('productionTotal'));
+    if (pv === null) return null;
+
+    let production = Math.max(0, Math.abs(Number(pv) || 0));
+    for (let i = 1; i <= 5; i++) {
+      const p = coerceNumber(read(`producer${i}Power`));
+      if (p !== null) production += Math.max(0, Math.abs(p));
+    }
+
+    const signed = Math.round((Math.max(0, load) - production - Math.max(0, grid.buy || 0) + Math.max(0, grid.sell || 0)));
+    if (!Number.isFinite(signed) || Math.abs(signed) <= deadbandW) return null;
+
+    // Plausibilitätsbremsen gegen kurze Messversätze oder unbekannte Verbraucher.
+    const activity = production + Math.max(0, load) + Math.max(0, grid.buy || 0) + Math.max(0, grid.sell || 0);
+    if (activity < 500) return null;
+    if (Math.abs(signed) > Math.max(3000, activity * 1.15)) return null;
+    if (signed < 0 && soc >= 99.5) return null;
+    if (signed > 0 && soc <= 0.5) return null;
+
+    return {
+      chargeW: signed < 0 ? Math.abs(signed) : 0,
+      dischargeW: signed > 0 ? signed : 0,
+      signedW: signed,
+      src: 'balanceDerived',
+      inverted: false,
+      derived: true
+    };
+  } catch (_e) {
+    return null;
+  }
+}
+
+function preferBalanceDerivedBatteryFlow(current, opts = {}) {
+  try {
+    const deadbandW = Number.isFinite(Number(opts.deadbandW)) ? Math.max(180, Number(opts.deadbandW)) : 180;
+    const measured = Math.max(0, Math.abs(Number(current && current.chargeW) || 0) + Math.abs(Number(current && current.dischargeW) || 0));
+    const src = String(current && current.src || '');
+    const missingLike = !current || src === 'missing' || src === 'stale-or-missing';
+    const derived = getBalanceDerivedBatteryFlow({ deadbandW });
+    if (!derived) return current;
+    if (missingLike || measured <= deadbandW) return derived;
+    return current;
+  } catch (_e) {
+    return current;
+  }
+}
+
 function getNormalizedBatteryFlow() {
   const deadbandW = 25;
   const inv = !!(state && state['settings.flowInvertBattery'] && state['settings.flowInvertBattery'].value);
@@ -2080,14 +2164,14 @@ function getNormalizedBatteryFlow() {
   const charge = chargeMapped ? getFreshFlowNumber('storageChargePower') : null;
   const discharge = dischargeMapped ? getFreshFlowNumber('storageDischargePower') : null;
 
-  if (samePair && signedBattery !== null) return fromSigned(signedBattery, 'batterySignedForSamePair');
+  if (samePair && signedBattery !== null) return preferBalanceDerivedBatteryFlow(fromSigned(signedBattery, 'batterySignedForSamePair'), { deadbandW });
 
   const separateAvailable = (charge !== null || discharge !== null);
   const bothDirections = Math.abs(Number(charge || 0)) > deadbandW && Math.abs(Number(discharge || 0)) > deadbandW;
   const bothEqualish = bothDirections && Math.abs(Math.abs(Number(charge || 0)) - Math.abs(Number(discharge || 0))) <= Math.max(2, deadbandW);
 
   if (signedBattery !== null && (!separateAvailable || bothEqualish || (!chargeMapped && !dischargeMapped))) {
-    return fromSigned(signedBattery, bothEqualish ? 'batterySignedOverrideDual' : 'batterySigned');
+    return preferBalanceDerivedBatteryFlow(fromSigned(signedBattery, bothEqualish ? 'batterySignedOverrideDual' : 'batterySigned'), { deadbandW });
   }
 
   if (separateAvailable) {
@@ -2096,12 +2180,12 @@ function getNormalizedBatteryFlow() {
     if (c <= deadbandW) c = 0;
     if (d <= deadbandW) d = 0;
     if (inv) { const t = c; c = d; d = t; }
-    return { chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'chargeDischarge(inv)' : 'chargeDischarge', inverted: inv };
+    return preferBalanceDerivedBatteryFlow({ chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'chargeDischarge(inv)' : 'chargeDischarge', inverted: inv }, { deadbandW });
   }
 
-  if (signedBattery !== null) return fromSigned(signedBattery, 'batterySigned');
+  if (signedBattery !== null) return preferBalanceDerivedBatteryFlow(fromSigned(signedBattery, 'batterySigned'), { deadbandW });
 
-  return { chargeW: 0, dischargeW: 0, signedW: 0, src: (batteryMapped || chargeMapped || dischargeMapped) ? 'stale-or-missing' : 'missing', inverted: inv };
+  return preferBalanceDerivedBatteryFlow({ chargeW: 0, dischargeW: 0, signedW: 0, src: (batteryMapped || chargeMapped || dischargeMapped) ? 'stale-or-missing' : 'missing', inverted: inv }, { deadbandW });
 }
 
 function render() {

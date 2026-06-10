@@ -1,3 +1,11 @@
+## 0.7.42 - Batteriefluss-Verknüpfung und striktere Anlagen-Sichtbarkeit
+
+- Batterie-Leistungsanzeige im Cockpit gehärtet: Wenn Lade-/Entlade-Datenpunkte fehlen, stale sind oder nur 0 liefern, aber PV, Netz, Hausverbrauch und SoC eine klare Batterie-Bilanz ergeben, wird Laden/Entladen plausibel aus der Leistungsbilanz abgeleitet.
+- Energiefluss-Monitor, aktuelle Werte, KPI-Kachel und Historie nutzen damit wieder konsistente Speicherwerte.
+- Backend spiegelt abgeleitete Batterie-Lade-/Entladeleistung auf die öffentlichen Flow-States, damit KI-Berater, Historie und Module dieselbe Speicherlogik sehen.
+- EVCS-/Ladestations-Sichtbarkeit weiter verschärft: Alte Bool-Flags allein reichen nicht mehr aus; sichtbar wird EVCS nur bei wirklich konfigurierten Ladepunkt-Zeilen.
+- Service-Worker Cache auf `nexowatt-cache-v210` erhöht.
+
 ## 0.7.41 - Anlagenabhängige Sichtbarkeit für EVCS und Speicherfarm
 
 - Kunden-Frontend zeigt EVCS/Ladestation nur noch, wenn mindestens ein echter Ladepunkt mit Mess-/Steuer-Datenpunkt konfiguriert ist.
