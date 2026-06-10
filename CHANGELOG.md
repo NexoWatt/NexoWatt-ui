@@ -1,3 +1,13 @@
+## 0.7.41 - Anlagenabhängige Sichtbarkeit für EVCS und Speicherfarm
+
+- Kunden-Frontend zeigt EVCS/Ladestation nur noch, wenn mindestens ein echter Ladepunkt mit Mess-/Steuer-Datenpunkt konfiguriert ist.
+- Default-/Legacy-Placeholder wie `consumptionEvcs` aktivieren keine Wallbox-Anzeige mehr.
+- Ladestation-Wert, Schnellzugriff, Energiefluss-Knoten, EVCS-Seite und EVCS-Navigation werden bei Anlagen ohne Wallbox ausgeblendet.
+- Speicherfarm-Reiter und Farmansicht werden nur noch angezeigt, wenn die Speicherfarm im Installer aktiv ist und mindestens ein Speicher konfiguriert wurde.
+- KI-Energieberater blendet EV-/Wallbox-Empfehlungen bei Anlagen ohne Wallbox aus und formuliert Empfehlungen dann auf Heizstab, Warmwasser und andere flexible Lasten um.
+- App-Center erlaubt `0` Ladepunkte als gültige Konfiguration.
+- Service-Worker Cache auf `nexowatt-cache-v209` erhöht.
+
 ## 0.7.40 - KI-Energieberater Planung & Lernen
 
 - KI‑Energieberater um Tagesfahrplan, EV‑Zielplanung, wetterbasierte Speicherstrategie, Saisonlogik und Komfortfenster erweitert.

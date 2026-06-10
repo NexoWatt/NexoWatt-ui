@@ -740,20 +740,23 @@
 
     // EVCS / SmartHome / Speicherfarm visibility (same logic as History)
     (function(){
-      fetch('/config').then(r=>r.json()).then(cfg=>{
-        const c = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
+      fetch('/config', { cache: 'no-store' }).then(r=>r.json()).then(cfg=>{
+        const sc = (cfg && cfg.settingsConfig) || {};
+        const evcsAvailable = !!(sc.evcsAvailable || (cfg && cfg.ems && cfg.ems.evcsAvailable));
+        const c = evcsAvailable ? Math.max(0, Math.round(Number(sc.evcsCount) || 0)) : 0;
+        const showEvcs = evcsAvailable && c >= 2;
         const l = document.getElementById('menuEvcsLink');
-        if (l) l.classList.toggle('hidden', c < 2);
+        if (l) l.classList.toggle('hidden', !showEvcs);
         const t = document.getElementById('tabEvcs');
-        if (t) t.classList.toggle('hidden', c < 2);
+        if (t) t.classList.toggle('hidden', !showEvcs);
 
-        const sh = !!(cfg.smartHome && cfg.smartHome.enabled);
+        const sh = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
         const sl = document.getElementById('menuSmartHomeLink');
         if (sl) sl.classList.toggle('hidden', !sh);
         const st = document.getElementById('tabSmartHome');
         if (st) st.classList.toggle('hidden', !sh);
 
-        const sf = !!(cfg.ems && cfg.ems.storageFarmEnabled);
+        const sf = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(cfg.ems && cfg.ems.storageFarmEnabled);
         const sft = document.getElementById('tabStorageFarm');
         if (sft) sft.classList.toggle('hidden', !sf);
         const sfl = document.getElementById('menuStorageFarmLink');

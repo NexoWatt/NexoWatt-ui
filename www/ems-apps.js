@@ -6242,7 +6242,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
   function _updateEvcsField(idx, field, value) {
     const sc = _ensureSettingsConfig();
-    const count = _clampInt(sc.evcsCount, 1, 50, 1);
+    const count = _clampInt(sc.evcsCount, 0, 50, 0);
     const list = _ensureEvcsList(count);
     const row = (list[idx - 1] && typeof list[idx - 1] === 'object') ? list[idx - 1] : {};
     row[field] = value;
@@ -6253,7 +6253,7 @@ function _collectFlowPowerDpIsWFromUI() {
   function buildEvcsUI() {
     if (!els.evcsList || !els.evcsCount) return;
     const sc = _ensureSettingsConfig();
-    const count = _clampInt(sc.evcsCount, 1, 50, 1);
+    const count = _clampInt(sc.evcsCount, 0, 50, 0);
     sc.evcsCount = count;
 
     els.evcsCount.value = String(count);
@@ -6266,6 +6266,15 @@ function _collectFlowPowerDpIsWFromUI() {
     sc.stationGroups = Array.isArray(sc.stationGroups) ? sc.stationGroups : [];
 
     els.evcsList.innerHTML = '';
+
+    if (count <= 0) {
+      const empty = document.createElement('div');
+      empty.className = 'nw-help';
+      empty.textContent = 'Keine Wallbox konfiguriert. Setze die Anzahl auf 1 oder höher, wenn eine Ladestation vorhanden ist.';
+      els.evcsList.appendChild(empty);
+      try { if (els.stationGroups) els.stationGroups.innerHTML = ''; } catch (_e) {}
+      return;
+    }
 
     const mkRow = (label, controlEl) => {
       const row = document.createElement('div');
@@ -6401,7 +6410,7 @@ function _collectFlowPowerDpIsWFromUI() {
     const addPortToStation = (stationKey) => {
       const sk = normKey(stationKey);
       const sc2 = _ensureSettingsConfig();
-      const cur = _clampInt(sc2.evcsCount, 1, 50, 1);
+      const cur = _clampInt(sc2.evcsCount, 0, 50, 0);
       if (cur >= 20) return;
 
       const next = cur + 1;
@@ -7012,7 +7021,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
   function collectSettingsConfigFromUI() {
     const out = deepMerge({}, (currentConfig && currentConfig.settingsConfig) ? currentConfig.settingsConfig : {});
-    const count = _clampInt(els.evcsCount ? els.evcsCount.value : out.evcsCount, 1, 50, 1);
+    const count = _clampInt(els.evcsCount ? els.evcsCount.value : out.evcsCount, 0, 50, 0);
     out.evcsCount = count;
 
     if (els.evcsMaxPowerKw) {
@@ -7362,7 +7371,7 @@ function _collectFlowPowerDpIsWFromUI() {
       }
 
       const sc = _ensureSettingsConfig();
-      const currentCount = _clampInt(sc.evcsCount, 1, 50, 1);
+      const currentCount = _clampInt(sc.evcsCount, 0, 50, 0);
 
       if (connectors.length > currentCount) {
         const ok = window.confirm(`OCPP hat ${connectors.length} Ladepunkte erkannt, konfiguriert sind aktuell ${currentCount}.\n\nSoll die Anzahl automatisch auf ${Math.min(50, connectors.length)} erhöht werden?`);
@@ -7372,7 +7381,7 @@ function _collectFlowPowerDpIsWFromUI() {
         }
       }
 
-      const count = _clampInt(sc.evcsCount, 1, 50, 1);
+      const count = _clampInt(sc.evcsCount, 0, 50, 0);
       const list = _ensureEvcsList(count);
 
       for (let i = 0; i < count && i < connectors.length; i++) {
@@ -7755,7 +7764,7 @@ function _collectFlowPowerDpIsWFromUI() {
       let evcsMapped = 0;
       if (evcsDevs.length) {
         const sc = _ensureSettingsConfig();
-        const curCount = _clampInt(sc.evcsCount, 1, 50, 1);
+        const curCount = _clampInt(sc.evcsCount, 0, 50, 0);
         const wantCount = _clampInt(Math.max(curCount, evcsDevs.length), 1, 50, curCount);
         if (wantCount !== curCount) {
           sc.evcsCount = wantCount;
@@ -9290,7 +9299,7 @@ function _collectFlowPowerDpIsWFromUI() {
   if (els.evcsCount) {
     els.evcsCount.addEventListener('change', () => {
       const sc = _ensureSettingsConfig();
-      sc.evcsCount = _clampInt(els.evcsCount.value, 1, 50, 1);
+      sc.evcsCount = _clampInt(els.evcsCount.value, 0, 50, 0);
       buildEvcsUI();
     });
   }

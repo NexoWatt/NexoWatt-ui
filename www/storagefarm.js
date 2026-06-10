@@ -125,20 +125,24 @@
       var settingsConfig = (cfg && cfg.settingsConfig) || {};
       var evcsCount = Math.max(0, Math.round(Number(settingsConfig.evcsCount) || 0));
       var smartHomeEnabled = !!(cfg && cfg.smartHome && cfg.smartHome.enabled);
-      var storageFarmEnabled = !!(ems.storageFarmEnabled || cfg.storageFarmEnabled);
+      var storageFarmEnabled = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(ems.storageFarmEnabled || cfg.storageFarmEnabled);
+      var evcsAvailable = !!(cfg && cfg.settingsConfig && cfg.settingsConfig.evcsAvailable);
       var evcsTab = el('tabEvcs');
       var evcsMenu = el('menuEvcsLink');
       var shTab = el('tabSmartHome');
       var shMenu = el('menuSmartHomeLink');
       var sfTab = el('tabStorageFarm');
       var sfMenu = el('menuStorageFarmLink');
-      if (evcsTab) evcsTab.classList.toggle('hidden', evcsCount < 2);
-      if (evcsMenu) evcsMenu.classList.toggle('hidden', evcsCount < 2);
+      if (evcsTab) evcsTab.classList.toggle('hidden', !(evcsAvailable && evcsCount >= 2));
+      if (evcsMenu) evcsMenu.classList.toggle('hidden', !(evcsAvailable && evcsCount >= 2));
       if (shTab) shTab.classList.toggle('hidden', !smartHomeEnabled);
       if (shMenu) shMenu.classList.toggle('hidden', !smartHomeEnabled);
       if (sfTab) sfTab.classList.toggle('hidden', !storageFarmEnabled);
       if (sfMenu) sfMenu.classList.toggle('hidden', !storageFarmEnabled);
-      if (!storageFarmEnabled) setMsg('Speicherfarm ist im EMS noch nicht aktiviert.');
+      if (!storageFarmEnabled) {
+        setMsg('Speicherfarm ist in dieser Kundenanlage nicht aktiviert.');
+        try { window.location.replace('./'); } catch (_e2) {}
+      }
     } catch (_e) {}
   }
   async function loadState() {

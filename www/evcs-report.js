@@ -281,13 +281,15 @@ function toISODate(ms){
     try {
       const res = await fetch('/config');
       const cfg = await res.json();
-      const settingsConfig = cfg && cfg.settingsConfig;
-      const smartHomeEnabled = !!(cfg && cfg.smartHomeEnabled);
-      const storageFarmEnabled = !!(cfg && cfg.storageFarmEnabled);
+      const settingsConfig = (cfg && cfg.settingsConfig) || {};
+      const smartHomeEnabled = !!(cfg && (cfg.smartHomeEnabled || (cfg.smartHome && cfg.smartHome.enabled)));
+      const storageFarmEnabled = !!(cfg && ((typeof cfg.storageFarmEnabled === 'boolean') ? cfg.storageFarmEnabled : (cfg.ems && cfg.ems.storageFarmEnabled)));
+      const evcsAvailable = !!(settingsConfig.evcsAvailable || (cfg && cfg.ems && cfg.ems.evcsAvailable));
+      const evcsCount = evcsAvailable ? Math.max(0, Math.round(Number(settingsConfig.evcsCount) || 0)) : 0;
 
       const tabEvcs = document.getElementById('tabEvcs');
       const menuEvcs = document.getElementById('menuEvcsLink');
-      const showEvcs = !!(settingsConfig && settingsConfig.evcsCount && settingsConfig.evcsCount >= 2);
+      const showEvcs = evcsAvailable && evcsCount >= 2;
       if(tabEvcs) tabEvcs.classList.toggle('hidden', !showEvcs);
       if(menuEvcs) menuEvcs.classList.toggle('hidden', !showEvcs);
 

@@ -2907,14 +2907,24 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', (e)=>{ e.preventDefault(); dd.classList.toggle('hidden'); });
     document.addEventListener('click', (e)=>{ if(!dd.contains(e.target) && e.target!==btn) dd.classList.add('hidden'); });
   }
-  fetch('/config').then(r=>r.json()).then(cfg=>{
-    const c = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
+  fetch('/config', { cache: 'no-store' }).then(r=>r.json()).then(cfg=>{
+    const sc = (cfg && cfg.settingsConfig) || {};
+    const evcsAvailable = !!(sc.evcsAvailable || (cfg && cfg.ems && cfg.ems.evcsAvailable));
+    const c = evcsAvailable ? Math.max(0, Math.round(Number(sc.evcsCount) || 0)) : 0;
+    const showEvcs = evcsAvailable && c >= 2;
     const l=document.getElementById('menuEvcsLink');
-    if(l) l.classList.toggle('hidden', c < 2);
-    const sh = !!(cfg.smartHome && cfg.smartHome.enabled);
+    if(l) l.classList.toggle('hidden', !showEvcs);
+    const t=document.getElementById('tabEvcs');
+    if(t) t.classList.toggle('hidden', !showEvcs);
+    const sh = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
     const sl = document.getElementById('menuSmartHomeLink');
     if (sl) sl.classList.toggle('hidden', !sh);
     const st = document.getElementById('tabSmartHome');
     if (st) st.classList.toggle('hidden', !sh);
+    const sf = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(cfg.ems && cfg.ems.storageFarmEnabled);
+    const sfMenu = document.getElementById('menuStorageFarmLink');
+    if (sfMenu) sfMenu.classList.toggle('hidden', !sf);
+    const sfTab = document.getElementById('tabStorageFarm');
+    if (sfTab) sfTab.classList.toggle('hidden', !sf);
   }).catch(()=>{});
 })();

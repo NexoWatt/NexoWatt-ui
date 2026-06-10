@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.40",
+    "version": "0.7.41",
     "news": {
+      "0.7.41": {
+        "en": "Feature-dependent visibility fixed: EVCS/charging station and storage farm are only shown in the customer frontend when they are actually configured. Default/legacy placeholders no longer enable wallbox UI; AI Advisor suppresses EV/wallbox hints when no wallbox is available.",
+        "de": "Anlagenabhängige Sichtbarkeit korrigiert: EVCS/Ladestation und Speicherfarm erscheinen im Kunden-Frontend nur noch, wenn sie wirklich konfiguriert sind. Default-/Legacy-Placeholder aktivieren keine Wallbox-Anzeige mehr; KI-Empfehlungen verzichten ohne Wallbox auf EV-/Wallbox-Hinweise."
+      },
       "0.7.39": {
         "en": "AI Advisor extended with weather-aware recommendations and a corrected peak-shaving early warning: the grid connection warning starts at 90% of the configured connection limit (30 kW -> 27 kW). The advisor now reports whether peak shaving is active, prepared, or not configured and publishes additional peak/weather states.",
         "de": "KI-Energieberater erweitert: Wetterprognose fließt in Empfehlungen ein und die Peak-Shaving-Vorwarnung greift korrekt ab 90 % der konfigurierten Netzanschlussleistung (30 kW -> 27 kW). Der Berater zeigt jetzt klar, ob Lastspitzenkappung aktiv, vorbereitet oder nicht konfiguriert ist, und veröffentlicht zusätzliche Peak-/Wetter-States."
@@ -1975,8 +1979,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.40",
+  "version": "0.7.41",
   "news": {
+    "0.7.41": {
+      "en": "Feature-dependent visibility fixed: EVCS/charging station and storage farm are only shown in the customer frontend when they are actually configured. Default/legacy placeholders no longer enable wallbox UI; AI Advisor suppresses EV/wallbox hints when no wallbox is available.",
+      "de": "Anlagenabhängige Sichtbarkeit korrigiert: EVCS/Ladestation und Speicherfarm erscheinen im Kunden-Frontend nur noch, wenn sie wirklich konfiguriert sind. Default-/Legacy-Placeholder aktivieren keine Wallbox-Anzeige mehr; KI-Empfehlungen verzichten ohne Wallbox auf EV-/Wallbox-Hinweise."
+    },
     "0.7.39": {
       "en": "AI Advisor now includes weather-aware recommendations and peak-shaving early warning at 90% of the configured grid connection limit.",
       "de": "KI-Energieberater nutzt jetzt Wetterprognosen und meldet Peak-Shaving-Vorwarnungen ab 90 % der konfigurierten Netzanschlussleistung."

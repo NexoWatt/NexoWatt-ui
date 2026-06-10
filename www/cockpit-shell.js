@@ -47,6 +47,22 @@
           if(!topbar.contains(e.target)) dropdown.classList.add('hidden');
         });
       }
+      // Global customer-feature visibility (EVCS/Speicherfarm) for subpages that do not load app.js.
+      try {
+        fetch('/config', { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(cfg){
+          cfg = cfg || {};
+          var sc = (cfg.settingsConfig && typeof cfg.settingsConfig === 'object') ? cfg.settingsConfig : {};
+          var evAvail = !!(sc.evcsAvailable || (cfg.ems && cfg.ems.evcsAvailable));
+          var evCount = Math.max(0, Math.round(Number(sc.evcsCount || 0) || 0));
+          var showEvcs = evAvail && evCount >= 2;
+          var sh = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
+          var sf = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(cfg.ems && cfg.ems.storageFarmEnabled);
+          [['tabEvcs', showEvcs], ['menuEvcsLink', showEvcs], ['tabSmartHome', sh], ['menuSmartHomeLink', sh], ['tabStorageFarm', sf], ['menuStorageFarmLink', sf]].forEach(function(pair){
+            var el = document.getElementById(pair[0]);
+            if (el) el.classList.toggle('hidden', !pair[1]);
+          });
+        }).catch(function(){});
+      } catch(_e2) {}
     }
   }catch(_e){}
 })();

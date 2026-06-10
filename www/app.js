@@ -78,8 +78,8 @@ let units = { power: 'W', energy: 'kWh' };
 
 // Energiefluss-Monitor: optionale Verbraucher/Erzeuger (Slots)
 let flowSlotsCfg = null; // comes from /config
-let flowExtras = { consumers: [], producers: [], special: [], meta: { evcsAvailable: true } };
-let _flowResponsiveCfg = { consumers: 0, producers: 0, special: 0, evcsVisible: true };
+let flowExtras = { consumers: [], producers: [], special: [], meta: { evcsAvailable: false } };
+let _flowResponsiveCfg = { consumers: 0, producers: 0, special: 0, evcsVisible: false };
 let _flowResponsiveRaf = 0;
 
 function applyEnergyWebResponsiveLayout(nextCfg) {
@@ -1019,6 +1019,109 @@ function nwSetDisplay(id, visible, displayValue) {
   el.style.display = visible ? (displayValue || '') : 'none';
 }
 
+function nwSetElementVisible(el, visible, displayValue) {
+  if (!el) return;
+  try { el.classList.toggle('hidden', !visible); } catch (_e) {}
+  el.style.display = visible ? (displayValue || '') : 'none';
+}
+
+function nwAsBool(v, def) {
+  if (typeof v === 'boolean') return v;
+  if (v === undefined || v === null || v === '') return !!def;
+  if (typeof v === 'number') return v !== 0;
+  const s = String(v).trim().toLowerCase();
+  if (['true', '1', 'yes', 'ja', 'on', 'an'].includes(s)) return true;
+  if (['false', '0', 'no', 'nein', 'off', 'aus'].includes(s)) return false;
+  return !!def;
+}
+
+function nwFeatureMappedRow(row) {
+  if (!row || row.enabled === false) return false;
+  const fields = ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'];
+  return fields.some((key) => String(row[key] || '').trim());
+}
+
+function nwEvcsFeatureFromConfig(inputCfg) {
+  const c = inputCfg || window.__nwCfg || {};
+  try {
+    const sc = (c.settingsConfig && typeof c.settingsConfig === 'object') ? c.settingsConfig : {};
+    if (typeof sc.evcsAvailable === 'boolean') return sc.evcsAvailable;
+    if (c.ems && typeof c.ems.evcsAvailable === 'boolean') return c.ems.evcsAvailable;
+    const meta = c.flowSlots && c.flowSlots.meta;
+    if (meta && typeof meta.evcsAvailable === 'boolean') return meta.evcsAvailable;
+    const count = Number(sc.evcsCount ?? window.__nwEvcsCount ?? 0);
+    const list = Array.isArray(sc.evcsList) ? sc.evcsList : [];
+    const mapped = list.some(nwFeatureMappedRow);
+    return Number.isFinite(count) && count > 0 && mapped;
+  } catch (_e) {
+    return false;
+  }
+}
+
+function nwEvcsCountFromConfig(inputCfg) {
+  const c = inputCfg || window.__nwCfg || {};
+  try {
+    const sc = (c.settingsConfig && typeof c.settingsConfig === 'object') ? c.settingsConfig : {};
+    const n = Number(sc.evcsCount ?? sc.evcsConfiguredCount ?? window.__nwEvcsCount ?? 0);
+    return Math.max(0, Math.round(Number.isFinite(n) ? n : 0));
+  } catch (_e) {
+    return 0;
+  }
+}
+
+function nwStorageFarmFeatureFromConfig(inputCfg, stateSnapshot) {
+  const c = inputCfg || window.__nwCfg || {};
+  if (typeof c.storageFarmEnabled === 'boolean') return c.storageFarmEnabled;
+  if (c.ems && typeof c.ems.storageFarmEnabled === 'boolean') return c.ems.storageFarmEnabled;
+  try {
+    const st = stateSnapshot || window.latestState || state || {};
+    const enabled = nwAsBool(st['storageFarm.enabled'] && st['storageFarm.enabled'].value, false);
+    const total = Number(st['storageFarm.storagesTotal'] && st['storageFarm.storagesTotal'].value);
+    return enabled && Number.isFinite(total) && total > 0;
+  } catch (_e) {
+    return false;
+  }
+}
+
+function nwApplyCustomerFeatureVisibility(inputCfg, stateSnapshot) {
+  const c = inputCfg || window.__nwCfg || {};
+  const evcsAvailable = nwEvcsFeatureFromConfig(c);
+  const evcsCount = evcsAvailable ? nwEvcsCountFromConfig(c) : 0;
+  const showEvcsPage = evcsAvailable && evcsCount >= 2;
+  const storageFarmAvailable = nwStorageFarmFeatureFromConfig(c, stateSnapshot);
+
+  try { window.__nwEvcsAvailable = evcsAvailable; window.__nwEvcsCount = evcsCount; window.__nwStorageFarmEnabled = storageFarmAvailable; } catch (_e) {}
+
+  const menuEvcsLink = document.getElementById('menuEvcsLink');
+  const tabEvcs = document.getElementById('tabEvcs');
+  if (menuEvcsLink) menuEvcsLink.classList.toggle('hidden', !showEvcsPage);
+  if (tabEvcs) tabEvcs.classList.toggle('hidden', !showEvcsPage);
+
+  const evcsCard = document.getElementById('evcsCard');
+  if (evcsCard) evcsCard.classList.toggle('hidden', !evcsAvailable);
+  const evSide = document.getElementById('sideEvcsPower');
+  if (evSide) nwSetElementVisible(evSide.closest('.nw-value-row'), evcsAvailable);
+
+  const evcsNode = document.getElementById('nodeEvcs');
+  if (evcsNode) evcsNode.style.display = evcsAvailable ? '' : 'none';
+  const evcsLine = document.getElementById('lineC2');
+  if (evcsLine) evcsLine.style.display = evcsAvailable ? '' : 'none';
+
+  try {
+    const evVal = document.getElementById('consumptionEvcs');
+    const evBox = evVal && evVal.parentElement;
+    if (evBox) nwSetElementVisible(evBox, evcsAvailable);
+    const tile = document.getElementById('consumptionBuilding') && document.getElementById('consumptionBuilding').closest('.nw-tile');
+    const room = tile && tile.querySelector('.nw-tile__room');
+    if (room) room.textContent = evcsAvailable ? 'EVCS & Gebäude' : 'Gebäude';
+  } catch (_e) {}
+
+  const menuStorageFarmLink = document.getElementById('menuStorageFarmLink');
+  const tabStorageFarm = document.getElementById('tabStorageFarm');
+  if (menuStorageFarmLink) menuStorageFarmLink.classList.toggle('hidden', !storageFarmAvailable);
+  if (tabStorageFarm) tabStorageFarm.classList.toggle('hidden', !storageFarmAvailable);
+}
+
 function nwFormatDashboardTimestamp(ts) {
   const n = Number(ts);
   if (!Number.isFinite(n) || n <= 0) return '--';
@@ -1074,7 +1177,9 @@ function updateDashboardShellUi(data) {
   const charge = Math.max(0, Number(snap.charge ?? 0) || 0);
   const discharge = Math.max(0, Number(snap.discharge ?? 0) || 0);
   const batterySigned = discharge - charge;
-  const evcsPower = Number(snap.evcsPower ?? d('consumptionEvcs') ?? d('evcsPower') ?? 0) || 0;
+  const evcsAvailable = nwEvcsFeatureFromConfig();
+  const evcsPower = evcsAvailable ? (Number(snap.evcsPower ?? d('consumptionEvcs') ?? d('evcsPower') ?? 0) || 0) : 0;
+  try { nwApplyCustomerFeatureVisibility(window.__nwCfg || {}, window.latestState || state || {}); } catch (_e) {}
 
   const soc = (snap.socN !== undefined && snap.socN !== null) ? Number(snap.socN) : coerceNumber(d('storageSoc'));
   const autarky = (snap.autarkyN !== undefined && snap.autarkyN !== null) ? Number(snap.autarkyN) : coerceNumber(d('autarky'));
@@ -1097,7 +1202,7 @@ function updateDashboardShellUi(data) {
   setText('sideGridBuyPower', formatFlowPower(Math.max(0, buy)));
   setText('sideGridSellPower', formatFlowPower(Math.max(0, sell)));
   setText('sideBatteryPower', (batterySigned < 0 ? '-' : '') + formatFlowPower(Math.abs(batterySigned)));
-  setText('sideEvcsPower', formatFlowPower(Math.abs(evcsPower)));
+  if (evcsAvailable) setText('sideEvcsPower', formatFlowPower(Math.abs(evcsPower)));
 
   const ts = nwLatestStateTimestamp([
     'pvPower', 'productionTotal', 'consumptionTotal', 'gridPower', 'gridBuyPower',
@@ -1142,7 +1247,7 @@ function initEnergyWebExtras(flowSlots){
     producers: [],
     special: [],
     meta: {
-      evcsAvailable: !!(flowSlots && ((flowSlots.meta && flowSlots.meta.evcsAvailable) || flowSlots.evcsAvailable))
+      evcsAvailable: !!(flowSlots && ((flowSlots.meta && flowSlots.meta.evcsAvailable) || flowSlots.evcsAvailable)) && nwEvcsFeatureFromConfig(Object.assign({}, window.__nwCfg || {}, { flowSlots: flowSlots }))
     }
   };
 
@@ -2098,16 +2203,19 @@ function render() {
   const gfN = coerceNumber(d('gridFrequency'));
   setText('gridFrequency', gfN != null ? gfN.toFixed(2) + ' Hz' : '--');
 
-  setText('consumptionEvcs', formatPower(d('consumptionEvcs') ?? 0));
+  const evcsAvailableNow = nwEvcsFeatureFromConfig();
+  setText('consumptionEvcs', evcsAvailableNow ? formatPower(d('consumptionEvcs') ?? 0) : '');
   setText('consumptionEnergyKwh', formatEnergyKwh(d('consumptionEnergyKwh')));
   setText('consumptionBuilding', formatPower(d('consumptionTotal') ?? 0));
 
   // EVCS status: prefer per-connector status (single wallbox) and fall back to legacy dp
-  const evcsSt = d('evcsStatus') ?? d('evcs.1.status') ?? d('chargingManagement.wallboxes.lp1.status') ?? '--';
-  setText('evcsStatus', evcsSt);
-  const lastChargeN = coerceNumber(d('evcsLastChargeKwh'));
-  setText('evcsLastChargeKwh', lastChargeN != null ? lastChargeN.toFixed(2) + ' kWh' : '--');
-  if (window.__evcsApply) window.__evcsApply(d, state);
+  if (evcsAvailableNow) {
+    const evcsSt = d('evcsStatus') ?? d('evcs.1.status') ?? d('chargingManagement.wallboxes.lp1.status') ?? '--';
+    setText('evcsStatus', evcsSt);
+    const lastChargeN = coerceNumber(d('evcsLastChargeKwh'));
+    setText('evcsLastChargeKwh', lastChargeN != null ? lastChargeN.toFixed(2) + ' kWh' : '--');
+    if (window.__evcsApply) window.__evcsApply(d, state);
+  }
 
 
   // Wetter (optional) – aktiviert in FIS → Einstellungen (Wetter-App)
@@ -2229,7 +2337,7 @@ function render() {
       socN,
       autarkyN,
       selfcN,
-      evcsPower: d('consumptionEvcs') ?? 0,
+      evcsPower: nwEvcsFeatureFromConfig() ? (d('consumptionEvcs') ?? 0) : 0,
       co2Text: co2TextDash
     });
   } catch (_e) {}
@@ -2269,12 +2377,14 @@ async function bootstrap() {
     applyFlowCoreLabels();
     initEnergyWebExtras(flowSlotsCfg);
     try{
-      const c = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
+      const evcsAvailable = nwEvcsFeatureFromConfig(cfg);
+      const c = evcsAvailable ? nwEvcsCountFromConfig(cfg) : 0;
       window.__nwEvcsCount = c;
+      window.__nwEvcsAvailable = evcsAvailable;
       const l = document.getElementById('menuEvcsLink');
-      if (l) l.classList.toggle('hidden', c < 2);
+      if (l) l.classList.toggle('hidden', !(evcsAvailable && c >= 2));
       const t = document.getElementById('tabEvcs');
-      if (t) t.classList.toggle('hidden', c < 2);
+      if (t) t.classList.toggle('hidden', !(evcsAvailable && c >= 2));
       const sh = !!(cfg.smartHome && cfg.smartHome.enabled);
       window.__nwSmartHomeEnabled = sh;
       const sl = document.getElementById('menuSmartHomeLink');
@@ -2283,20 +2393,21 @@ async function bootstrap() {
       if (st) st.classList.toggle('hidden', !sh);
 
       // Speicherfarm Tab/Link
-      const sf = !!(cfg.ems && cfg.ems.storageFarmEnabled);
+      const sf = nwStorageFarmFeatureFromConfig(cfg, window.latestState || state || {});
       const sft = document.getElementById('tabStorageFarm');
       if (sft) {
         sft.classList.toggle('hidden', !sf);
         sft.removeAttribute('data-tab');
         sft.onclick = function(){ window.location.href = 'storagefarm.html'; };
       }
-      try { if ((new URLSearchParams(window.location.search || '')).get('tab') === 'storagefarm') window.location.replace('storagefarm.html'); } catch(_e) {}
+      try { if ((new URLSearchParams(window.location.search || '')).get('tab') === 'storagefarm' && sf) window.location.replace('storagefarm.html'); } catch(_e) {}
       const sfl = document.getElementById('menuStorageFarmLink');
       if (sfl) {
         sfl.classList.toggle('hidden', !sf);
         sfl.setAttribute('href', 'storagefarm.html');
         sfl.onclick = null;
       }
+      nwApplyCustomerFeatureVisibility(cfg, window.latestState || state || {});
     }catch(_e){}
   } catch (e) {
     console.warn('[config]', e);
@@ -2342,11 +2453,13 @@ const applyConfigSnapshot = (nextCfg) => {
     const evcsCountRaw = (cfg && cfg.settingsConfig && cfg.settingsConfig.evcsCount !== undefined && cfg.settingsConfig.evcsCount !== null)
       ? Number(cfg.settingsConfig.evcsCount)
       : Number(window.__nwEvcsCount);
-    const evcsCount = Math.max(0, Math.round(Number.isFinite(evcsCountRaw) ? evcsCountRaw : 0));
+    const evcsAvailable = nwEvcsFeatureFromConfig(cfg);
+    const evcsCount = evcsAvailable ? Math.max(0, Math.round(Number.isFinite(evcsCountRaw) ? evcsCountRaw : 0)) : 0;
     window.__nwEvcsCount = evcsCount;
+    window.__nwEvcsAvailable = evcsAvailable;
 
-    // EVCS page/tab is only relevant for multiple Ladepunkte.
-    const showEvcsPage = evcsCount >= 2;
+    // EVCS page/tab is only relevant for multiple configured Ladepunkte.
+    const showEvcsPage = evcsAvailable && evcsCount >= 2;
     const menuEvcsLink = document.getElementById('menuEvcsLink');
     const tabEvcs = document.getElementById('tabEvcs');
     if (menuEvcsLink) menuEvcsLink.classList.toggle('hidden', !showEvcsPage);
@@ -2359,12 +2472,13 @@ const applyConfigSnapshot = (nextCfg) => {
     if (menuSmartHomeLink) menuSmartHomeLink.classList.toggle('hidden', !window.__nwSmartHomeEnabled);
     if (tabSmartHome) tabSmartHome.classList.toggle('hidden', !window.__nwSmartHomeEnabled);
 
-    window.__nwStorageFarmEnabled = !!emsCfg.storageFarmEnabled;
+    window.__nwStorageFarmEnabled = nwStorageFarmFeatureFromConfig(cfg, window.latestState || state || {});
     const menuStorageFarmLink = document.getElementById('menuStorageFarmLink');
     const tabStorageFarm = document.getElementById('tabStorageFarm');
     if (menuStorageFarmLink) menuStorageFarmLink.classList.toggle('hidden', !window.__nwStorageFarmEnabled);
     if (tabStorageFarm) tabStorageFarm.classList.toggle('hidden', !window.__nwStorageFarmEnabled);
-    try { if ((new URLSearchParams(window.location.search || '')).get('tab') === 'storagefarm') window.location.replace('storagefarm.html'); } catch(_e) {}
+    nwApplyCustomerFeatureVisibility(cfg, window.latestState || state || {});
+    try { if ((new URLSearchParams(window.location.search || '')).get('tab') === 'storagefarm' && window.__nwStorageFarmEnabled) window.location.replace('storagefarm.html'); } catch(_e) {}
   } catch (e) {
     console.warn('[config-apply]', e);
   }
@@ -5875,7 +5989,7 @@ function updateEnergyWeb() {
   const invGrid = !!(s['settings.flowInvertGrid']?.value);
   const invEv   = !!(s['settings.flowInvertEv']?.value);
   const subEvFromLoad = (s['settings.flowSubtractEvFromBuilding']?.value ?? true) ? true : false;
-  const evAvail = (flowExtras && flowExtras.meta) ? !!flowExtras.meta.evcsAvailable : true;
+  const evAvail = nwEvcsFeatureFromConfig() && ((flowExtras && flowExtras.meta) ? !!flowExtras.meta.evcsAvailable : false);
 
   if (invPv) pv = -pv;
   if (invEv) c2 = -c2;
@@ -6480,7 +6594,8 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
 
   if (card){
     card.addEventListener('click', ()=>{
-      const c = Number(window.__nwEvcsCount || 1) || 1;
+      const c = Number(window.__nwEvcsCount || 0) || 0;
+      if (!nwEvcsFeatureFromConfig()) return;
       if (c >= 2) { window.location.href = '/evcs.html'; return; }
       if (modal) modal.classList.remove('hidden');
     });
@@ -7427,7 +7542,8 @@ function openFlowQc(kind, idx){
     // mark clickable
     n.classList.add('clickable');
     n.addEventListener('click', ()=>{
-      const c = Number(window.__nwEvcsCount || 1) || 1;
+      const c = Number(window.__nwEvcsCount || 0) || 0;
+      if (!nwEvcsFeatureFromConfig()) return;
       if (c >= 2) { window.location.href = '/evcs.html'; return; }
       modal.classList.remove('hidden');
     });

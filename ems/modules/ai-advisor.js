@@ -109,6 +109,34 @@ function isPeakShavingConfigured(config) {
     return ps.enabled === true || atypical.enabled === true;
 }
 
+
+const EVCS_MAPPING_FIELDS = [
+    'powerId', 'energyTotalId', 'energySessionId', 'statusId', 'activeId', 'modeId', 'onlineId',
+    'setCurrentAId', 'setPowerWId', 'enableWriteId', 'lockWriteId', 'rfidReadId', 'vehicleSocId',
+];
+
+function evcsRowHasMapping(row) {
+    const r = (row && typeof row === 'object') ? row : {};
+    return EVCS_MAPPING_FIELDS.some((key) => String(r[key] === null || r[key] === undefined ? '' : r[key]).trim().length > 0);
+}
+
+function inferEvcsAvailable(adapter, settingsCfg) {
+    const cfg = (adapter && adapter.config && typeof adapter.config === 'object') ? adapter.config : {};
+    const sc = (settingsCfg && typeof settingsCfg === 'object') ? settingsCfg : ((cfg.settingsConfig && typeof cfg.settingsConfig === 'object') ? cfg.settingsConfig : {});
+    if (typeof sc.evcsAvailable === 'boolean') return sc.evcsAvailable;
+    const lists = [];
+    if (Array.isArray(sc.evcsList)) lists.push(sc.evcsList);
+    if (Array.isArray(adapter && adapter.evcsList)) lists.push(adapter.evcsList);
+    if (Array.isArray(cfg.evcsList)) lists.push(cfg.evcsList);
+    if (cfg.chargingManagement && Array.isArray(cfg.chargingManagement.wallboxes)) lists.push(cfg.chargingManagement.wallboxes);
+    if (lists.some((list) => list.some(evcsRowHasMapping))) return true;
+    return false;
+}
+
+function evcsPhrase(hasEvcs, withArticle = true) {
+    return hasEvcs ? (withArticle ? 'EV-Laden, Heizstab und andere flexible Lasten' : 'EV-Laden, Heizstab und andere flexible Verbraucher') : (withArticle ? 'Heizstab und andere flexible Lasten' : 'Heizstab und andere flexible Verbraucher');
+}
+
 function buildPeakStateText(s, limitW, usagePct) {
     const statusRaw = String(s && s.peakStatus || '').trim();
     const suffix = statusRaw ? ` · Status ${statusRaw}` : '';
@@ -264,9 +292,11 @@ function toSafeIdPart(value) {
         .replace(/^_+|_+$/g, '');
 }
 
-function priorityText(priorities) {
+function priorityText(priorities, options = {}) {
     const labels = { evcs: 'Wallbox', thermal: 'Thermik', heatingRod: 'Heizstab', storage: 'Speicherreserve', generic: 'sonstige Lasten' };
+    const hasEvcs = options && options.hasEvcs !== false;
     const entries = Object.keys(labels)
+        .filter((key) => hasEvcs || key !== 'evcs')
         .map((key) => ({ key, label: labels[key], value: Number(priorities && priorities[key]) || 0 }))
         .filter((x) => x.value > 0)
         .sort((a, b) => b.value - a.value);
@@ -514,8 +544,9 @@ class AiAdvisorModule extends BaseModule {
         return Array.from(new Set(keys.filter(Boolean)));
     }
 
-    async _readEvGoals() {
+    async _readEvGoals(evcsAvailable = true) {
         const out = [];
+        if (!evcsAvailable) return out;
         const keys = this._chargingWallboxKeys();
         for (const safe of keys) {
             const base = `chargingManagement.wallboxes.${safe}`;
@@ -570,7 +601,7 @@ class AiAdvisorModule extends BaseModule {
         const storageChargeW = await this._readNumber(['ems.budget.storageChargeW', 'storageFarm.totalChargePowerW', 'storageChargePower'], 0);
         const storageDischargeW = await this._readNumber(['ems.budget.storageDischargeW', 'storageFarm.totalDischargePowerW', 'storageDischargePower'], 0);
 
-        const evcsUsedW = await this._readNumber(['chargingManagement.control.usedW', 'evcs.totalPowerW', 'consumptionEvcs'], 0);
+        let evcsUsedW = await this._readNumber(['chargingManagement.control.usedW', 'evcs.totalPowerW', 'consumptionEvcs'], 0);
         const thermalUsedW = await this._readNumber(['thermal.summary.budgetUsedW'], 0);
         const heatingRodUsedW = await this._readNumber(['heatingRod.summary.budgetUsedW'], 0);
         let houseLoadW = await this._readNumber(['ems.budget.loadW', 'ems.budget.houseLoadW', 'derived.core.load.totalW', 'buildingConsumptionW', 'consumptionTotal', 'consumptionHouse'], null);
@@ -580,29 +611,33 @@ class AiAdvisorModule extends BaseModule {
 
         const aiCfg = (this.adapter && this.adapter.config && this.adapter.config.aiAdvisor && typeof this.adapter.config.aiAdvisor === 'object') ? this.adapter.config.aiAdvisor : {};
         const settingsCfg = (this.adapter && this.adapter.config && this.adapter.config.settingsConfig && typeof this.adapter.config.settingsConfig === 'object') ? this.adapter.config.settingsConfig : {};
-        const evcsCountRaw = num(settingsCfg.evcsCount ?? this.adapter.evcsCount, Array.isArray(this.adapter && this.adapter.evcsList) ? this.adapter.evcsList.length : 0);
-        const evcsCount = Math.max(0, Math.min(20, Math.round(num(evcsCountRaw, 0))));
+        const evcsAvailable = inferEvcsAvailable(this.adapter, settingsCfg);
+        if (!evcsAvailable) evcsUsedW = 0;
+        const evcsCountRaw = evcsAvailable ? num(settingsCfg.evcsCount ?? this.adapter.evcsCount, Array.isArray(this.adapter && this.adapter.evcsList) ? this.adapter.evcsList.length : 0) : 0;
+        const evcsCount = evcsAvailable ? Math.max(0, Math.min(20, Math.round(num(evcsCountRaw, 0)))) : 0;
         let evConnectedCount = 0;
         let evVehicleSocPct = null;
         let evStatusText = '';
         let evMode = '';
-        for (let i = 1; i <= Math.max(1, evcsCount || 1); i++) {
-            const status = await this._readString([`evcs.${i}.status`], '');
-            const active = await this._readBool([`evcs.${i}.active`], false);
-            const connectedByStatus = /charging|connected|plug|suspendedev|preparing|laden|verbunden/i.test(status || '');
-            if (active || connectedByStatus) evConnectedCount += 1;
-            if (!evStatusText && status) evStatusText = status;
-            if (!evMode) evMode = await this._readString([`evcs.${i}.mode`], '');
-            const soc = await this._readNumber([`evcs.${i}.vehicleSoc`, `evcs.${i}.vehicleSocPct`, `evcs.${i}.socPct`], null);
-            if (finiteNumber(soc)) evVehicleSocPct = evVehicleSocPct === null ? soc : Math.min(evVehicleSocPct, soc);
+        if (evcsAvailable && evcsCount > 0) {
+            for (let i = 1; i <= evcsCount; i++) {
+                const status = await this._readString([`evcs.${i}.status`], '');
+                const active = await this._readBool([`evcs.${i}.active`], false);
+                const connectedByStatus = /charging|connected|plug|suspendedev|preparing|laden|verbunden/i.test(status || '');
+                if (active || connectedByStatus) evConnectedCount += 1;
+                if (!evStatusText && status) evStatusText = status;
+                if (!evMode) evMode = await this._readString([`evcs.${i}.mode`], '');
+                const soc = await this._readNumber([`evcs.${i}.vehicleSoc`, `evcs.${i}.vehicleSocPct`, `evcs.${i}.socPct`], null);
+                if (finiteNumber(soc)) evVehicleSocPct = evVehicleSocPct === null ? soc : Math.min(evVehicleSocPct, soc);
+            }
         }
-        const connectedCount = await this._readNumber(['chargingManagement.control.connectedCount', 'evcs.connectedCount'], null);
-        if (finiteNumber(connectedCount) && connectedCount > 0) evConnectedCount = Math.max(evConnectedCount, Math.round(connectedCount));
-        const evTargetSocPct = await this._readNumber(['settings.aiAdvisorEvTargetSocPct', 'chargingManagement.targetSocPct', 'evcs.1.targetSoc', 'evcs.1.targetSocPct'], num(aiCfg.evTargetSocPct ?? aiCfg.defaultEvTargetSocPct, 80));
-        const evBatteryCapacityKwh = num(aiCfg.evBatteryCapacityKwh, 60);
-        const evReadyBy = await this._readString(['settings.aiAdvisorEvReadyBy', 'chargingManagement.readyBy', 'evcs.1.readyBy', 'evcs.1.departureTime'], String(aiCfg.evReadyBy || aiCfg.evDepartureTime || '07:00'));
-        const evMinutesUntilReady = minutesUntilClock(evReadyBy, new Date());
-        const evEnergyNeededKwh = (finiteNumber(evVehicleSocPct) && finiteNumber(evTargetSocPct) && finiteNumber(evBatteryCapacityKwh))
+        const connectedCount = evcsAvailable ? await this._readNumber(['chargingManagement.control.connectedCount', 'evcs.connectedCount'], null) : null;
+        if (evcsAvailable && finiteNumber(connectedCount) && connectedCount > 0) evConnectedCount = Math.max(evConnectedCount, Math.round(connectedCount));
+        const evTargetSocPct = evcsAvailable ? await this._readNumber(['settings.aiAdvisorEvTargetSocPct', 'chargingManagement.targetSocPct', 'evcs.1.targetSoc', 'evcs.1.targetSocPct'], num(aiCfg.evTargetSocPct ?? aiCfg.defaultEvTargetSocPct, 80)) : null;
+        const evBatteryCapacityKwh = evcsAvailable ? num(aiCfg.evBatteryCapacityKwh, 60) : null;
+        const evReadyBy = evcsAvailable ? await this._readString(['settings.aiAdvisorEvReadyBy', 'chargingManagement.readyBy', 'evcs.1.readyBy', 'evcs.1.departureTime'], String(aiCfg.evReadyBy || aiCfg.evDepartureTime || '07:00')) : '';
+        const evMinutesUntilReady = evcsAvailable ? minutesUntilClock(evReadyBy, new Date()) : null;
+        const evEnergyNeededKwh = (evcsAvailable && finiteNumber(evVehicleSocPct) && finiteNumber(evTargetSocPct) && finiteNumber(evBatteryCapacityKwh))
             ? Math.max(0, (evBatteryCapacityKwh * (Math.min(100, evTargetSocPct) - Math.max(0, evVehicleSocPct))) / 100)
             : null;
 
@@ -645,7 +680,7 @@ class AiAdvisorModule extends BaseModule {
         const peakStatusLower = String(peakStatus || '').toLowerCase();
         const peakConfigured = isPeakShavingConfigured(this.adapter && this.adapter.config)
             || (finiteNumber(peakLimitW) && peakLimitW > 0 && !['disabled', 'off', 'inactive', 'aus'].includes(peakStatusLower));
-        const evGoals = await this._readEvGoals();
+        const evGoals = evcsAvailable ? await this._readEvGoals(evcsAvailable) : [];
 
         return {
             ts: Date.now(),
@@ -663,7 +698,9 @@ class AiAdvisorModule extends BaseModule {
             storageSocPct: finiteNumber(storageSocPct) ? storageSocPct : null,
             storageChargeW: Math.max(0, num(storageChargeW, 0)),
             storageDischargeW: Math.max(0, num(storageDischargeW, 0)),
-            evcsUsedW: Math.max(0, num(evcsUsedW, 0)),
+            evcsAvailable,
+            evcsCount,
+            evcsUsedW: evcsAvailable ? Math.max(0, num(evcsUsedW, 0)) : 0,
             thermalUsedW: Math.max(0, num(thermalUsedW, 0)),
             heatingRodUsedW: Math.max(0, num(heatingRodUsedW, 0)),
             houseLoadW: Math.max(0, num(houseLoadW, 0)),
@@ -762,7 +799,7 @@ class AiAdvisorModule extends BaseModule {
         if (cfg.anomalyDetectionEnabled) {
             if (quietActive && unexplainedW >= cfg.nightBaseLoadW && Math.max(0, Number(s.evcsUsedW) || 0) < 200) {
                 s.anomalyDetected = true;
-                s.anomalyText = `Ungewöhnliche Grundlast im Ruhefenster: etwa ${formatKw(unexplainedW)} ohne erkennbare Wallbox-/Thermiklast.`;
+                s.anomalyText = s.evcsAvailable ? `Ungewöhnliche Grundlast im Ruhefenster: etwa ${formatKw(unexplainedW)} ohne erkennbare Wallbox-/Thermiklast.` : `Ungewöhnliche Grundlast im Ruhefenster: etwa ${formatKw(unexplainedW)} ohne erkennbare Thermik-/Heizstablast.`;
             } else if (unexplainedW >= cfg.anomalyHighLoadW) {
                 s.anomalyDetected = true;
                 s.anomalyText = `Ungewöhnlich hoher Gebäudeverbrauch: etwa ${formatKw(unexplainedW)} nicht durch bekannte flexible Verbraucher erklärt.`;
@@ -833,19 +870,21 @@ class AiAdvisorModule extends BaseModule {
         const currentCheap = !!(s.negativeActive || s.gridImportPreferred || tariffState.includes('günstig') || tariffState.includes('guenstig') || tariffState.includes('cheap'));
         const currentExpensive = !!(tariffState.includes('teuer') || tariffState.includes('expensive'));
         const surplusW = Math.max(Number(s.gridExportW) || 0, Number(s.pvBudgetW) || 0);
+        const hasEvcs = !!s.evcsAvailable && (Number(s.evcsCount) > 0 || Number(s.evConnectedCount) > 0 || Number(s.evcsUsedW) > 100);
+        const surplusTargets = hasEvcs ? 'Wallbox, Warmwasser oder andere flexible Verbraucher' : 'Warmwasser, Heizstab oder andere flexible Verbraucher';
         const peakLimit = finiteNumber(s.gridConnectionLimitW) && s.gridConnectionLimitW > 0 ? s.gridConnectionLimitW : (finiteNumber(s.peakLimitW) && s.peakLimitW > 0 ? s.peakLimitW : s.gridImportLimitEffectiveW);
         const peakUsagePct = peakLimit ? (s.gridImportW / peakLimit * 100) : 0;
-        if (peakLimit && peakUsagePct >= (cfg.peakNearLimitPct || 90)) add('jetzt', 'Peak-Schutz', `Netzbezug bei ${formatPct(peakUsagePct)}: flexible Lasten nach Priorität reduzieren (${priorityText(cfg.priorities)}).`, 95, 'peak');
-        if (surplusW >= cfg.pvSurplusThresholdW) add('jetzt', 'PV-Überschuss nutzen', `${formatKw(surplusW)} Überschuss in Wallbox, Warmwasser oder andere flexible Verbraucher legen.`, 86, 'pv');
+        if (peakLimit && peakUsagePct >= (cfg.peakNearLimitPct || 90)) add('jetzt', 'Peak-Schutz', `Netzbezug bei ${formatPct(peakUsagePct)}: flexible Lasten nach Priorität reduzieren (${priorityText(cfg.priorities, { hasEvcs })}).`, 95, 'peak');
+        if (surplusW >= cfg.pvSurplusThresholdW) add('jetzt', 'PV-Überschuss nutzen', `${formatKw(surplusW)} Überschuss in ${surplusTargets} legen.`, 86, 'pv');
         if (currentCheap) add('jetzt', 'Günstigen Tarif nutzen', `Preisfenster nutzen${finiteNumber(s.priceNow) ? ` (${formatPrice(s.priceNow)})` : ''}, solange Peak-Reserve bleibt.`, 84, 'tariff');
-        else if (currentExpensive) add('jetzt vermeiden', 'Teures Tarif-/Lastfenster', 'EV-Laden und Heizstab möglichst verschieben; Speicherreserve nur gezielt nutzen.', 80, 'tariff');
+        else if (currentExpensive) add('jetzt vermeiden', 'Teures Tarif-/Lastfenster', hasEvcs ? 'EV-Laden und Heizstab möglichst verschieben; Speicherreserve nur gezielt nutzen.' : 'Heizstab und andere flexible Lasten möglichst verschieben; Speicherreserve nur gezielt nutzen.', 80, 'tariff');
         if (s.nextCheapFrom) add(shortIsoWindow(s.nextCheapFrom, s.nextCheapTo) || 'nächstes Tarif-Fenster', 'Nächstes günstiges Zeitfenster', 'Planbare Lasten in dieses Fenster verschieben.', 68, 'tariff');
         if (s.pvForecastUsable && (s.pvKwh24 > 0 || s.pvPeak24W > 0)) add('Sonnenfenster', 'PV-Prognose einplanen', `${formatKwh(s.pvKwh24)} in 24h erwartet${s.pvPeak24W > 0 ? `, Peak ${formatKw(s.pvPeak24W)}` : ''}. Speicher-Headroom und flexible Lasten darauf abstimmen.`, 70, 'forecast');
-        if (s.evConnectedCount > 0) {
+        if (hasEvcs && s.evConnectedCount > 0) {
             if (finiteNumber(s.evEnergyNeededKwh) && s.evEnergyNeededKwh > 1) add(`bis ${s.evReadyBy || cfg.evReadyBy}`, 'EV-Ziel erreichen', `${formatKwh(s.evEnergyNeededKwh)} bis Ziel-SoC ${formatPct(s.evTargetSocPct || cfg.evTargetSocPct)} nachladen; PV-/Tariffenster bevorzugen.`, s.evMinutesUntilReady !== null && s.evMinutesUntilReady < 180 ? 90 : 74, 'evcs');
             else add(`bis ${s.evReadyBy || cfg.evReadyBy}`, 'EV-Komfort prüfen', 'Fahrzeug ist verbunden; Ziel-SoC/Abfahrtszeit prüfen, damit PV und Tarif sauber geplant werden können.', 52, 'evcs');
         }
-        const activeGoals = (Array.isArray(s.evGoals) ? s.evGoals : []).filter((g) => g && (g.goalEnabled || g.goalActive));
+        const activeGoals = hasEvcs ? (Array.isArray(s.evGoals) ? s.evGoals : []).filter((g) => g && (g.goalEnabled || g.goalActive)) : [];
         if (activeGoals.length) {
             const next = activeGoals.slice().sort((a, b) => (Number(a.goalFinishTs || 0) || Infinity) - (Number(b.goalFinishTs || 0) || Infinity))[0];
             add(tsToShortWindow(next.goalFinishTs) || 'EV-Ziel', 'EV-Zielladen absichern', `${next.label}: Ziel ${next.goalTargetSocPct !== null ? `${round(next.goalTargetSocPct, 0)} %` : 'gesetzt'}${next.goalFinishTs ? ` bis ${formatClockMs(next.goalFinishTs)}` : ''}.`, 82, 'evcs');
@@ -858,7 +897,7 @@ class AiAdvisorModule extends BaseModule {
         }
         if (cfg.seasonLogicEnabled) {
             if (s.season === 'winter') add('laufend', 'Winterstrategie', 'Reserve höher gewichten, weil PV-Fenster kürzer und Wärmelasten relevanter sind.', 54, 'storage');
-            if (s.season === 'summer') add('tagsüber', 'Sommerstrategie', 'PV-Headroom und Eigenverbrauch hoch gewichten; Abendspitzen durch EV/Kühlung vermeiden.', 54, 'pv');
+            if (s.season === 'summer') add('tagsüber', 'Sommerstrategie', hasEvcs ? 'PV-Headroom und Eigenverbrauch hoch gewichten; Abendspitzen durch EV/Kühlung vermeiden.' : 'PV-Headroom und Eigenverbrauch hoch gewichten; Abendspitzen durch Kühlung/Heizstab vermeiden.', 54, 'pv');
         }
         if (s.peakRiskWindow) add(s.peakRiskWindow, 'Gelerntes Peak-Fenster entschärfen', 'Große flexible Lasten nicht gleichzeitig starten.', 74, 'learning');
         if (s.anomalyDetected) add('prüfen', 'Anomalie prüfen', s.anomalyText, 88, 'anomaly');
@@ -900,7 +939,12 @@ class AiAdvisorModule extends BaseModule {
         const currentExpensive = !!(tariffState.includes('teuer') || tariffState.includes('expensive') || (finiteNumber(s.priceNow) && finiteNumber(s.priceAvg) && s.priceNow >= (s.priceAvg + cfg.expensivePriceMarginEurKwh)));
         const hasStorage = s.storageSocPct !== null;
         const storageEnough = !hasStorage || s.storageSocPct >= cfg.minSocForDischargePct;
-        const hasFlexibleLoad = (s.evcsUsedW > 100 || s.thermalUsedW > 100 || s.heatingRodUsedW > 100) || !!(this.adapter && this.adapter.config && (this.adapter.config.enableChargingManagement || this.adapter.config.enableThermalControl || this.adapter.config.enableHeatingRodControl));
+        const hasEvcs = !!s.evcsAvailable && (Number(s.evcsCount) > 0 || Number(s.evConnectedCount) > 0 || Number(s.evcsUsedW) > 100);
+        const evLoadW = hasEvcs ? Math.max(0, Number(s.evcsUsedW) || 0) : 0;
+        const hasFlexibleLoad = (evLoadW > 100 || s.thermalUsedW > 100 || s.heatingRodUsedW > 100) || !!(this.adapter && this.adapter.config && ((hasEvcs && this.adapter.config.enableChargingManagement) || this.adapter.config.enableThermalControl || this.adapter.config.enableHeatingRodControl));
+        const flexibleLoadLabel = evcsPhrase(hasEvcs, true);
+        const flexibleConsumerLabel = evcsPhrase(hasEvcs, false);
+        const pvSurplusTargets = hasEvcs ? 'Wallbox, Warmwasser oder andere flexible Verbraucher' : 'Warmwasser, Heizstab oder andere flexible Verbraucher';
         const configuredGridLimitW = finiteNumber(s.gridConnectionLimitW) && s.gridConnectionLimitW > 0 ? s.gridConnectionLimitW : null;
         const effectiveGridLimitW = finiteNumber(s.peakLimitW) && s.peakLimitW > 0 ? s.peakLimitW : (finiteNumber(s.gridImportLimitEffectiveW) && s.gridImportLimitEffectiveW > 0 ? s.gridImportLimitEffectiveW : null);
         const peakReferenceLimitW = configuredGridLimitW || effectiveGridLimitW;
@@ -919,7 +963,7 @@ class AiAdvisorModule extends BaseModule {
                 id: 'peak-window-protect', category: 'peak', severity: s.peakOverW > 0 ? 'critical' : 'warning', priority: 98, icon: '⚡',
                 title: s.hlzfActive ? 'Hochlastzeitfenster / Lastspitze aktiv' : 'Lastspitzenkappung aktiv',
                 text: s.peakOverW > 0 ? `Aktuell liegt der Netzbezug etwa ${formatKw(s.peakOverW)} über dem Limit${pctText}. Lastspitzenkappung ist aktiv.` : `Der Netzbezug wird aktuell durch ${s.hlzfActive ? 'HLZF/§19' : 'Lastspitzenkappung'} begrenzt${pctText || (finiteNumber(s.peakLimitW) ? ` (Limit ${formatKw(s.peakLimitW)})` : '')}.`,
-                action: `EV-Laden, Heizstab und andere flexible Lasten nach Priorität pausieren/reduzieren (${priorityText(cfg.priorities)}), bis der Netzanschluss wieder unter der Grenze liegt.`,
+                action: `${flexibleLoadLabel} nach Priorität pausieren/reduzieren (${priorityText(cfg.priorities, { hasEvcs })}), bis der Netzanschluss wieder unter der Grenze liegt.`,
                 window: 'jetzt', impact: 'Leistungspreis / Netzanschluss schützen', confidence: 92,
             });
         } else if (peakNearLimit) {
@@ -929,7 +973,7 @@ class AiAdvisorModule extends BaseModule {
                 id: 'peak-near-grid-connection-limit', category: 'peak', severity: peakCriticalLimit ? 'critical' : 'warning', priority: peakCriticalLimit ? 97 : 92, icon: peakCriticalLimit ? '🛑' : '🚧',
                 title: peakCriticalLimit ? 'Netzanschluss am Limit' : `Netzanschluss zu ${formatPct(cfg.peakNearLimitPct)} ausgelastet`,
                 text: `Aktuell werden ${formatKw(s.gridImportW)} von ${formatKw(peakReferenceLimitW)} genutzt (${formatPct(peakUsagePct)}). ${warnText} ${peakReadinessText}`.replace(/\s+/g, ' ').trim(),
-                action: s.peakConfigured ? `Jetzt optimieren: flexible Lasten nach Priorität reduzieren oder verschieben (${priorityText(cfg.priorities)})${hasStorage && storageEnough ? ', Speicherentladung als Stütze prüfen' : ''}. Es bleiben nur etwa ${formatKw(remainingW)} Reserve bis zum Netzanschlusslimit.` : `Peak-Shaving im Installer/App-Center prüfen. Bis dahin flexible Lasten manuell reduzieren oder verschieben${hasStorage && storageEnough ? ' und Speicherstützung prüfen' : ''}. Es bleiben nur etwa ${formatKw(remainingW)} Reserve.`,
+                action: s.peakConfigured ? `Jetzt optimieren: flexible Lasten nach Priorität reduzieren oder verschieben (${priorityText(cfg.priorities, { hasEvcs })})${hasStorage && storageEnough ? ', Speicherentladung als Stütze prüfen' : ''}. Es bleiben nur etwa ${formatKw(remainingW)} Reserve bis zum Netzanschlusslimit.` : `Peak-Shaving im Installer/App-Center prüfen. Bis dahin flexible Lasten manuell reduzieren oder verschieben${hasStorage && storageEnough ? ' und Speicherstützung prüfen' : ''}. Es bleiben nur etwa ${formatKw(remainingW)} Reserve.`,
                 window: 'jetzt', impact: 'Lastspitze vermeiden', confidence: s.peakConfigured ? 90 : 82,
             });
         }
@@ -938,8 +982,8 @@ class AiAdvisorModule extends BaseModule {
             this._pushSuggestion(out, { id: 'ai-day-plan', category: 'plan', severity: 'info', priority: (cfg.optimizationMode === 'comfort' ? 82 : 76), icon: '🗓️', title: 'Tagesfahrplan erstellt', text: s.dayPlan.text, action: 'Planbare Verbraucher anhand dieser Reihenfolge einplanen; der Berater schaltet weiterhin nichts automatisch.', window: 'heute', impact: 'Vorausschauende Planung', confidence: 76 });
         }
 
-        const activeEvGoals = (Array.isArray(s.evGoals) ? s.evGoals : []).filter((g) => g && (g.goalEnabled || g.goalActive));
-        if (cfg.evGoalPlanningEnabled && (activeEvGoals.length || (s.evConnectedCount > 0 && finiteNumber(s.evEnergyNeededKwh)))) {
+        const activeEvGoals = hasEvcs ? (Array.isArray(s.evGoals) ? s.evGoals : []).filter((g) => g && (g.goalEnabled || g.goalActive)) : [];
+        if (hasEvcs && cfg.evGoalPlanningEnabled && (activeEvGoals.length || (s.evConnectedCount > 0 && finiteNumber(s.evEnergyNeededKwh)))) {
             const urgent = activeEvGoals.length ? activeEvGoals.slice().sort((a, b) => (finiteNumber(a.goalRemainingMin) ? a.goalRemainingMin : 999999) - (finiteNumber(b.goalRemainingMin) ? b.goalRemainingMin : 999999))[0] : null;
             const remaining = urgent && finiteNumber(urgent.goalRemainingMin) ? urgent.goalRemainingMin : s.evMinutesUntilReady;
             const shortfall = urgent && finiteNumber(urgent.goalShortfallW) ? Math.max(0, urgent.goalShortfallW) : 0;
@@ -955,18 +999,18 @@ class AiAdvisorModule extends BaseModule {
         if (s.weatherEnabled) {
             const rainyTomorrow = (finiteNumber(s.weatherTomorrowPrecipPct) && s.weatherTomorrowPrecipPct >= cfg.weatherRainRiskPct) || textContainsAny(`${s.weatherTomorrowText || ''} ${s.weatherText || ''}`, ['regen', 'schauer', 'gewitter', 'schnee', 'bedeckt']);
             const sunnyTomorrow = !rainyTomorrow && (textContainsAny(`${s.weatherTomorrowText || ''} ${s.weatherText || ''}`, ['sonnig', 'klar', 'heiter']) || (finiteNumber(s.weatherTomorrowPrecipPct) && s.weatherTomorrowPrecipPct <= 25));
-            if (cfg.storageStrategyEnabled && rainyTomorrow && hasStorage) this._pushSuggestion(out, { id: 'weather-storage-reserve', category: 'weather', severity: s.storageSocPct < cfg.lowSocPct ? 'warning' : 'info', priority: s.storageSocPct < cfg.lowSocPct ? 82 : 68, icon: '🌧️', title: 'Speicherstrategie nach Wetter', text: `Wetter: ${s.weatherSummary}. Für morgen ist ein schwächeres PV-Fenster möglich.`, action: 'Speicherreserve nicht unnötig leeren; EV/Warmwasser eher in sichere Tarif- oder PV-Fenster legen.', window: 'heute / morgen', impact: 'Reserve & Autarkie', confidence: 75 });
+            if (cfg.storageStrategyEnabled && rainyTomorrow && hasStorage) this._pushSuggestion(out, { id: 'weather-storage-reserve', category: 'weather', severity: s.storageSocPct < cfg.lowSocPct ? 'warning' : 'info', priority: s.storageSocPct < cfg.lowSocPct ? 82 : 68, icon: '🌧️', title: 'Speicherstrategie nach Wetter', text: `Wetter: ${s.weatherSummary}. Für morgen ist ein schwächeres PV-Fenster möglich.`, action: hasEvcs ? 'Speicherreserve nicht unnötig leeren; EV/Warmwasser eher in sichere Tarif- oder PV-Fenster legen.' : 'Speicherreserve nicht unnötig leeren; Warmwasser/Heizstab eher in sichere Tarif- oder PV-Fenster legen.', window: 'heute / morgen', impact: 'Reserve & Autarkie', confidence: 75 });
             if (cfg.storageStrategyEnabled && sunnyTomorrow && hasStorage) this._pushSuggestion(out, { id: 'weather-pv-headroom', category: 'weather', severity: 'success', priority: 64, icon: '☀️', title: 'PV-Headroom vorbereiten', text: `Wetter: ${s.weatherSummary}. Gutes PV-Fenster wahrscheinlich.`, action: 'Speicher nicht unnötig per Netz füllen; Platz für PV freihalten und flexible Lasten in die Sonne legen.', window: 'morgen', impact: 'Eigenverbrauch erhöhen', confidence: 72 });
             if (finiteNumber(s.weatherTomorrowMinC) && s.weatherTomorrowMinC <= 3 && hasFlexibleLoad) this._pushSuggestion(out, { id: 'weather-cold-thermal-plan', category: 'weather', severity: 'info', priority: 60, icon: '❄️', title: 'Kalte Nacht einplanen', text: `Die Prognose meldet bis ${formatTemp(s.weatherTomorrowMinC)}. Wärmelasten können später teurer oder peak-relevant werden.`, action: 'Warmwasser, Heizstab oder Wärmepumpe bevorzugt in günstige Tarif- oder PV-Fenster legen, ohne das Peak-Limit zu reißen.', window: 'nächste Nacht', impact: 'Komfort und Peak optimieren', confidence: 68 });
         }
 
         if (cfg.seasonLogicEnabled) {
-            if (s.season === 'winter' && hasStorage) this._pushSuggestion(out, { id: 'season-winter-storage', category: 'storage', severity: 'info', priority: 55, icon: '🧊', title: 'Winterstrategie', text: 'Kürzere PV-Fenster und höhere Wärmelasten: Speicherreserve und Komfortziele höher gewichten.', action: 'Abends nicht zu aggressiv entladen und Warmwasser/EV möglichst in sichere Tarif- oder PV-Fenster legen.', window: 'laufend', impact: 'Reserve & Komfort', confidence: 66 });
-            if (s.season === 'summer') this._pushSuggestion(out, { id: 'season-summer-pv', category: 'pv', severity: 'success', priority: 54, icon: '🌞', title: 'Sommerstrategie', text: 'Lange PV-Fenster: Eigenverbrauch und Speicher-Headroom sind besonders wertvoll.', action: 'Große Verbraucher tagsüber staffeln und Abendspitzen durch EV/Kühlung vermeiden.', window: 'tagsüber', impact: 'Eigenverbrauch & Peak', confidence: 66 });
+            if (s.season === 'winter' && hasStorage) this._pushSuggestion(out, { id: 'season-winter-storage', category: 'storage', severity: 'info', priority: 55, icon: '🧊', title: 'Winterstrategie', text: 'Kürzere PV-Fenster und höhere Wärmelasten: Speicherreserve und Komfortziele höher gewichten.', action: hasEvcs ? 'Abends nicht zu aggressiv entladen und Warmwasser/EV möglichst in sichere Tarif- oder PV-Fenster legen.' : 'Abends nicht zu aggressiv entladen und Warmwasser/Heizstab möglichst in sichere Tarif- oder PV-Fenster legen.', window: 'laufend', impact: 'Reserve & Komfort', confidence: 66 });
+            if (s.season === 'summer') this._pushSuggestion(out, { id: 'season-summer-pv', category: 'pv', severity: 'success', priority: 54, icon: '🌞', title: 'Sommerstrategie', text: 'Lange PV-Fenster: Eigenverbrauch und Speicher-Headroom sind besonders wertvoll.', action: hasEvcs ? 'Große Verbraucher tagsüber staffeln und Abendspitzen durch EV/Kühlung vermeiden.' : 'Große Verbraucher tagsüber staffeln und Abendspitzen durch Kühlung/Heizstab vermeiden.', window: 'tagsüber', impact: 'Eigenverbrauch & Peak', confidence: 66 });
         }
 
         if (s.anomalyDetected) this._pushSuggestion(out, { id: 'anomaly-detected', category: 'anomaly', severity: 'warning', priority: 87, icon: '🔎', title: 'Ungewöhnlichen Verbrauch prüfen', text: s.anomalyText, action: 'Geräteliste/SmartHome prüfen und nicht benötigte Verbraucher ausschalten oder in ein passendes Fenster verschieben.', window: 'jetzt prüfen', impact: 'Fehlverbrauch vermeiden', confidence: 74 });
-        if (s.peakRiskWindow && !peakNearLimit) this._pushSuggestion(out, { id: 'peak-learning-risk', category: 'learning', severity: 'info', priority: 68, icon: '📈', title: 'Gelernte Lastspitze beachten', text: `Die Lastspitzen-Lernfunktion markiert ${s.peakRiskWindow} als typisches Peak-Risiko.`, action: `Flexible Verbraucher vorsorglich staffeln: ${priorityText(cfg.priorities)}.`, window: s.peakRiskWindow, impact: 'Peak vermeiden', confidence: 70 });
+        if (s.peakRiskWindow && !peakNearLimit) this._pushSuggestion(out, { id: 'peak-learning-risk', category: 'learning', severity: 'info', priority: 68, icon: '📈', title: 'Gelernte Lastspitze beachten', text: `Die Lastspitzen-Lernfunktion markiert ${s.peakRiskWindow} als typisches Peak-Risiko.`, action: `Flexible Verbraucher vorsorglich staffeln: ${priorityText(cfg.priorities, { hasEvcs })}.`, window: s.peakRiskWindow, impact: 'Peak vermeiden', confidence: 70 });
         if (cfg.forecastQualityEnabled && finiteNumber(s.forecastQualityPct) && s.forecastQualityPct < cfg.forecastQualityWarnPct) this._pushSuggestion(out, { id: 'forecast-quality-low', category: 'forecast', severity: 'info', priority: 57, icon: '🎯', title: 'Prognosequalität vorsichtig bewerten', text: `${s.forecastQualityText} Empfehlungen werden konservativer gewichtet.`, action: 'Bei niedriger Prognosequalität Speicherreserve erhöhen und harte Lastverschiebungen vermeiden.', window: 'laufend', impact: 'Risiko reduzieren', confidence: 70 });
 
         if (cfg.optimizationMode === 'co2' && finiteNumber(s.co2IntensityGPerKwh)) {
@@ -974,18 +1018,18 @@ class AiAdvisorModule extends BaseModule {
             const dirty = s.co2IntensityGPerKwh >= cfg.co2HighGPerKwh;
             if (clean || dirty) this._pushSuggestion(out, { id: clean ? 'co2-clean-window' : 'co2-high-window', category: 'co2', severity: clean ? 'success' : 'info', priority: clean ? 75 : 65, icon: clean ? '🌱' : '🌫️', title: clean ? 'CO₂-günstiges Zeitfenster' : 'CO₂-intensive Netzphase', text: `Aktuelle CO₂-Intensität: ${Math.round(s.co2IntensityGPerKwh)} g/kWh.`, action: clean ? 'Flexible Lasten bevorzugen, solange Peak-Reserve bleibt.' : 'Nicht dringende Netzlasten verschieben; PV/Speicher bevorzugen.', window: 'jetzt', impact: 'CO₂-Optimierung', confidence: 72 });
         }
-        if (cfg.optimizationMode === 'autarky' && s.gridExportW >= cfg.pvSurplusThresholdW) this._pushSuggestion(out, { id: 'autarky-mode-surplus', category: 'pv', severity: 'success', priority: 75, icon: '🏡', title: 'Autarkie-Modus: Überschuss nutzen', text: `${formatKw(s.gridExportW)} Einspeisung erkannt.`, action: 'Eigenverbrauch erhöhen: Wallbox, Warmwasser oder steuerbare Lasten staffeln.', window: 'jetzt', impact: 'Autarkie erhöhen', confidence: 78 });
-        if (cfg.optimizationMode === 'peak' && peakReferenceLimitW) this._pushSuggestion(out, { id: 'peak-mode-reserve', category: 'peak', severity: peakNearLimit ? 'warning' : 'info', priority: peakNearLimit ? 90 : 56, icon: '🛡️', title: 'Peak-Schutz-Modus', text: `Netzanschluss-Auslastung aktuell ${formatPct(peakUsagePct || 0)}.`, action: `Lasten konsequent nach Priorität staffeln: ${priorityText(cfg.priorities)}.`, window: 'laufend', impact: 'Lastspitzen vermeiden', confidence: 72 });
+        if (cfg.optimizationMode === 'autarky' && s.gridExportW >= cfg.pvSurplusThresholdW) this._pushSuggestion(out, { id: 'autarky-mode-surplus', category: 'pv', severity: 'success', priority: 75, icon: '🏡', title: 'Autarkie-Modus: Überschuss nutzen', text: `${formatKw(s.gridExportW)} Einspeisung erkannt.`, action: `Eigenverbrauch erhöhen: ${pvSurplusTargets} staffeln.`, window: 'jetzt', impact: 'Autarkie erhöhen', confidence: 78 });
+        if (cfg.optimizationMode === 'peak' && peakReferenceLimitW) this._pushSuggestion(out, { id: 'peak-mode-reserve', category: 'peak', severity: peakNearLimit ? 'warning' : 'info', priority: peakNearLimit ? 90 : 56, icon: '🛡️', title: 'Peak-Schutz-Modus', text: `Netzanschluss-Auslastung aktuell ${formatPct(peakUsagePct || 0)}.`, action: `Lasten konsequent nach Priorität staffeln: ${priorityText(cfg.priorities, { hasEvcs })}.`, window: 'laufend', impact: 'Lastspitzen vermeiden', confidence: 72 });
 
         if (s.negativeActive || s.gridImportPreferred) this._pushSuggestion(out, { id: 'negative-price-window', category: 'tariff', severity: 'success', priority: 88, icon: '€', title: s.negativeActive ? 'Negativpreis-Fenster nutzen' : 'Günstiges Netzladefenster', text: s.negativeActive ? 'Der aktuelle Strompreis ist negativ bzw. sehr günstig.' : 'Der Tarif bevorzugt aktuell Netzbezug.', action: `Flexible Lasten jetzt nutzen${hasStorage ? ', Speicherladung prüfen' : ''}, solange Peak-Reserve bleibt.`, window: 'jetzt', impact: 'Kosten senken', confidence: 86 });
-        else if (currentExpensive && hasFlexibleLoad) this._pushSuggestion(out, { id: 'expensive-price-avoid-loads', category: 'tariff', severity: 'warning', priority: 74, icon: '💸', title: 'Teures Tarif-Fenster', text: finiteNumber(s.priceNow) ? `Aktueller Preis ${formatPrice(s.priceNow)} liegt über dem Vergleichswert.` : 'Der aktuelle Tarifzustand ist teuer.', action: 'EV-Laden, Heizstab und andere flexible Verbraucher verschieben oder reduzieren, wenn Komfortziele es erlauben.', window: 'jetzt', impact: 'Kosten vermeiden', confidence: 78 });
-        if (s.nextCheapFrom && !currentCheap) this._pushSuggestion(out, { id: 'next-cheap-window', category: 'tariff', severity: 'info', priority: 62, icon: '⏱️', title: 'Nächstes günstiges Zeitfenster', text: `Günstiges Tarif-Fenster: ${shortIsoWindow(s.nextCheapFrom, s.nextCheapTo) || s.nextCheapFrom}.`, action: 'Planbare Lasten bis dahin zurückstellen, sofern Komfort und EV-Zielzeiten passen.', window: shortIsoWindow(s.nextCheapFrom, s.nextCheapTo), impact: 'Kosten optimieren', confidence: 72 });
-        if (s.gridExportW >= cfg.pvSurplusThresholdW) this._pushSuggestion(out, { id: 'pv-surplus-use', category: 'pv', severity: 'success', priority: 82, icon: '☀️', title: 'PV-Überschuss verfügbar', text: `Aktuell werden etwa ${formatKw(s.gridExportW)} eingespeist.`, action: 'Wallbox, Warmwasser oder andere flexible Verbraucher einschalten bzw. erhöhen, solange kein Peak-Risiko besteht.', window: 'jetzt', impact: 'Eigenverbrauch erhöhen', confidence: 82 });
+        else if (currentExpensive && hasFlexibleLoad) this._pushSuggestion(out, { id: 'expensive-price-avoid-loads', category: 'tariff', severity: 'warning', priority: 74, icon: '💸', title: 'Teures Tarif-Fenster', text: finiteNumber(s.priceNow) ? `Aktueller Preis ${formatPrice(s.priceNow)} liegt über dem Vergleichswert.` : 'Der aktuelle Tarifzustand ist teuer.', action: `${flexibleConsumerLabel} verschieben oder reduzieren, wenn Komfortziele es erlauben.`, window: 'jetzt', impact: 'Kosten vermeiden', confidence: 78 });
+        if (s.nextCheapFrom && !currentCheap) this._pushSuggestion(out, { id: 'next-cheap-window', category: 'tariff', severity: 'info', priority: 62, icon: '⏱️', title: 'Nächstes günstiges Zeitfenster', text: `Günstiges Tarif-Fenster: ${shortIsoWindow(s.nextCheapFrom, s.nextCheapTo) || s.nextCheapFrom}.`, action: hasEvcs ? 'Planbare Lasten bis dahin zurückstellen, sofern Komfort und EV-Zielzeiten passen.' : 'Planbare Lasten bis dahin zurückstellen, sofern Komfortziele passen.', window: shortIsoWindow(s.nextCheapFrom, s.nextCheapTo), impact: 'Kosten optimieren', confidence: 72 });
+        if (s.gridExportW >= cfg.pvSurplusThresholdW) this._pushSuggestion(out, { id: 'pv-surplus-use', category: 'pv', severity: 'success', priority: 82, icon: '☀️', title: 'PV-Überschuss verfügbar', text: `Aktuell werden etwa ${formatKw(s.gridExportW)} eingespeist.`, action: `${pvSurplusTargets} einschalten bzw. erhöhen, solange kein Peak-Risiko besteht.`, window: 'jetzt', impact: 'Eigenverbrauch erhöhen', confidence: 82 });
         if (s.pvForecastUsable && (s.pvKwh24 >= cfg.pvForecastMinKwh || s.pvPeak24W >= cfg.pvPeakMinW)) this._pushSuggestion(out, { id: 'pv-forecast-plan', category: 'forecast', severity: 'info', priority: 66, icon: '🔮', title: 'PV-Prognose einplanen', text: `${formatKwh(s.pvKwh24)} PV-Ertrag in den nächsten 24h erwartet, Peak ca. ${formatKw(s.pvPeak24W)}.`, action: hasStorage ? 'Speicher-Headroom für PV freihalten und flexible Lasten in das Sonnenfenster legen.' : 'Flexible Lasten in das Sonnenfenster legen.', window: 'nächste 24h', impact: 'Autarkie erhöhen', confidence: 75 });
         if (hasStorage && s.storageSocPct <= cfg.lowSocPct) this._pushSuggestion(out, { id: 'storage-low-reserve', category: 'storage', severity: 'warning', priority: 78, icon: '🔋', title: 'Speicherreserve niedrig', text: `Der Speicher liegt bei ${round(s.storageSocPct, 0)} %.`, action: 'Reservegrenze prüfen; flexible Lasten eher in PV- oder günstige Tariffenster verschieben.', window: 'bis Reserve erholt ist', impact: 'Reserve schützen', confidence: 80 });
         if (s.gridImportW >= cfg.highImportThresholdW && !currentCheap && !s.negativeActive && !peakNearLimit && !s.peakActive && !(s.peakOverW > 0)) this._pushSuggestion(out, { id: 'high-grid-import', category: 'grid', severity: 'warning', priority: 70, icon: '📉', title: 'Hoher Netzbezug erkannt', text: `Aktuell werden etwa ${formatKw(s.gridImportW)} aus dem Netz bezogen.`, action: 'Nicht dringende Verbraucher verschieben; bei Speicher prüfen, ob Entladen freigegeben ist.', window: 'jetzt', impact: 'Netzbezug senken', confidence: 72 });
         if (s.para14aActive) this._pushSuggestion(out, { id: 'para14a-active', category: 'grid', severity: 'warning', priority: 84, icon: '🚦', title: '§14a-Leistungsbegrenzung aktiv', text: 'Der Netzbetreiber-/EMS-Deckel für steuerbare Verbraucher ist aktiv.', action: 'Komfortverbraucher priorisieren und nicht notwendige Verbraucher verschieben.', window: 'jetzt', impact: 'Netzvorgabe einhalten', confidence: 85 });
-        if (cfg.comfortHintsEnabled && s.quietActive && (s.evcsUsedW + s.thermalUsedW + s.heatingRodUsedW) > 500 && cfg.optimizationMode !== 'comfort') this._pushSuggestion(out, { id: 'comfort-quiet-hours-flex-load', category: 'comfort', severity: 'info', priority: 63, icon: '🌙', title: 'Ruhezeit: flexible Lasten prüfen', text: `Im Ruhefenster ${s.quietWindow} laufen flexible Verbraucher mit etwa ${formatKw(s.evcsUsedW + s.thermalUsedW + s.heatingRodUsedW)}.`, action: 'Nur laufen lassen, wenn Komfortziel, Abfahrtszeit oder günstiger Tarif wichtiger ist; sonst in PV-/Tariffenster verschieben.', window: 'jetzt', impact: 'Komfort / Geräusch / Peak', confidence: 70 });
+        if (cfg.comfortHintsEnabled && s.quietActive && (evLoadW + s.thermalUsedW + s.heatingRodUsedW) > 500 && cfg.optimizationMode !== 'comfort') this._pushSuggestion(out, { id: 'comfort-quiet-hours-flex-load', category: 'comfort', severity: 'info', priority: 63, icon: '🌙', title: 'Ruhezeit: flexible Lasten prüfen', text: `Im Ruhefenster ${s.quietWindow} laufen flexible Verbraucher mit etwa ${formatKw(evLoadW + s.thermalUsedW + s.heatingRodUsedW)}.`, action: 'Nur laufen lassen, wenn Komfortziel, Abfahrtszeit oder günstiger Tarif wichtiger ist; sonst in PV-/Tariffenster verschieben.', window: 'jetzt', impact: 'Komfort / Geräusch / Peak', confidence: 70 });
         if (cfg.includeInstallerHints && !configuredGridLimitW) this._pushSuggestion(out, { id: 'setup-grid-connection-limit', category: 'setup', severity: 'info', priority: 32, icon: '🔌', title: 'Netzanschlussleistung hinterlegen', text: 'Für korrekte Peak-Shaving-Vorwarnungen fehlt die konfigurierte Netzanschlussleistung.', action: 'Im Installer die Netzanschlussleistung eintragen, z. B. 30000 W für einen 30-kW-Anschluss.', window: 'Setup', impact: 'Peak-Beratung verbessern', confidence: 72 });
         if (cfg.includeInstallerHints && !s.tariffActive && !finiteNumber(s.priceNow)) this._pushSuggestion(out, { id: 'setup-tariff', category: 'setup', severity: 'info', priority: 30, icon: '🧭', title: 'Dynamischen Tarif anbinden', text: 'Für bessere Zeitvorschläge fehlt aktuell ein frisches Preis-/Tarifsignal.', action: 'Im App-Center Tarife/Preisprognose zuordnen.', window: 'Setup', impact: 'KI-Beratung verbessern', confidence: 70 });
         if (cfg.includeInstallerHints && !s.pvForecastUsable) this._pushSuggestion(out, { id: 'setup-pv-forecast', category: 'setup', severity: 'info', priority: 28, icon: '☀️', title: 'PV-Forecast aktivieren', text: 'Für vorausschauende Empfehlungen fehlt eine nutzbare PV-Prognose.', action: 'PV-Forecast im App-Center einrichten, damit Verbraucher zeitlich besser geplant werden können.', window: 'Setup', impact: 'Prognosequalität erhöhen', confidence: 70 });
@@ -1114,7 +1158,7 @@ class AiAdvisorModule extends BaseModule {
         const peakStateText = buildPeakStateText(snapshot, peakReferenceLimitW, peakUsagePct);
         const weatherSummary = buildWeatherSummary(snapshot);
         const dailyPlan = snapshot.dayPlan || { mode: cfg.optimizationMode, modeLabel: optimizationModeLabel(cfg.optimizationMode), items: [], text: '' };
-        const evPlanText = (snapshot.evConnectedCount > 0)
+        const evPlanText = (snapshot.evcsAvailable && snapshot.evConnectedCount > 0)
             ? (finiteNumber(snapshot.evEnergyNeededKwh) && snapshot.evEnergyNeededKwh > 1
                 ? `${formatKwh(snapshot.evEnergyNeededKwh)} bis ${formatPct(snapshot.evTargetSocPct || cfg.evTargetSocPct)} Ziel-SoC nachladen · bereit bis ${snapshot.evReadyBy || cfg.evReadyBy}.`
                 : `Fahrzeug verbunden · Ziel-SoC ${formatPct(snapshot.evTargetSocPct || cfg.evTargetSocPct)} · bereit bis ${snapshot.evReadyBy || cfg.evReadyBy}.`)
