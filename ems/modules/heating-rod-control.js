@@ -691,6 +691,16 @@ class HeatingRodControlModule extends BaseModule {
         const exportW = gridKnown ? Math.max(0, -gridW) : 0;
         const importW = gridKnown ? Math.max(0, gridW) : 0;
         const storage = this._readStorageSnapshot(staleMs);
+        try {
+            const appCfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
+            const hasDirectLoad = !!(appCfg.datapoints && (String(appCfg.datapoints.consumptionTotal || '').trim() || String(appCfg.datapoints.housePower || '').trim()));
+            const splitBatteryConfigured = !!(appCfg.datapoints && (String(appCfg.datapoints.storageChargePower || '').trim() || String(appCfg.datapoints.storageDischargePower || '').trim()));
+            const signedBatteryConfigured = !!(appCfg.datapoints && String(appCfg.datapoints.batteryPower || '').trim());
+            if (!hasDirectLoad && splitBatteryConfigured && !signedBatteryConfigured && exportW > 250 && storage.dischargeW > 250 && storage.chargeW <= 250) {
+                storage.dischargeW = 0;
+                storage.sanitizedExportDischarge = true;
+            }
+        } catch (_eSanitizeStorage) {}
 
         const storageTargetSocPct = clamp(num(cfg.storageTargetSocPct, 90), 0, 100);
         const storageReserveCfgW = Math.max(0, Math.round(num(cfg.storageReserveW, 1000)));

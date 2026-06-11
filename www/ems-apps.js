@@ -2547,8 +2547,10 @@ function _collectFlowPowerDpIsWFromUI() {
     currentConfig.heatingRod = (currentConfig.heatingRod && typeof currentConfig.heatingRod === 'object') ? currentConfig.heatingRod : {};
     const h = currentConfig.heatingRod;
     h.devices = Array.isArray(h.devices) ? h.devices : [];
-    h.storageReserveW = Math.max(0, Math.round(Number(h.storageReserveW ?? 1000) || 1000));
-    h.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number(h.storageTargetSocPct ?? 90) || 90)));
+    const _hrReserveRaw = Number(h.storageReserveW);
+    h.storageReserveW = Math.max(0, Math.round(Number.isFinite(_hrReserveRaw) ? _hrReserveRaw : 1000));
+    const _hrSocRaw = Number(h.storageTargetSocPct);
+    h.storageTargetSocPct = Math.max(0, Math.min(100, Math.round(Number.isFinite(_hrSocRaw) ? _hrSocRaw : 90)));
     const hMinPvRaw = Number(h.minPvPowerW ?? h.pvAutoMinPvPowerW ?? h.minCurrentPvW);
     h.minPvPowerW = Math.max(0, Math.round(Number.isFinite(hMinPvRaw) ? hMinPvRaw : 800));
     h.useBudgetGates = true;
@@ -2687,10 +2689,15 @@ function _collectFlowPowerDpIsWFromUI() {
     if (opts.step != null) inp.step = String(opts.step);
     if (opts.width) inp.style.width = opts.width;
     if (opts.disabled) inp.disabled = true;
-    inp.addEventListener('change', () => {
+    const commit = () => {
       const v = (type === 'number') ? Number(inp.value) : (type === 'checkbox' ? !!inp.checked : inp.value);
       onChange(v, inp);
-    });
+    };
+    // Number/text fields must update the in-memory config immediately. Otherwise a
+    // fast save or a reactive UI refresh can write the previous value again (e.g.
+    // Heizstab Speicher-Reserve snapped back to the default 1000 W).
+    inp.addEventListener('change', commit);
+    if (type !== 'checkbox') inp.addEventListener('input', commit);
     return inp;
   }
 
@@ -7732,12 +7739,18 @@ function _collectFlowPowerDpIsWFromUI() {
       const socId = _nwGetAlias(stDev, 'r.soc');
 
       let storageMapped = false;
-      if (chargeId && dischargeId) {
+      // Prefer the single signed battery power datapoint when it is available.
+      // It is the safest source for the VIS/EMS balance (+ Entladen / - Laden).
+      // Some devices expose split powerCharge/powerDischarge aliases that are
+      // control/assist values rather than the real physical battery flow. Those
+      // can make the house load and PV budget wrong, so use them only when no
+      // signed datapoint exists.
+      if (signedId) {
+        if (_nwApplyFlowDpIfEmpty('batteryPower', signedId, { powerIsW: true })) out.changed = true;
+        storageMapped = true;
+      } else if (chargeId && dischargeId) {
         if (_nwApplyFlowDpIfEmpty('storageChargePower', chargeId, { powerIsW: true })) out.changed = true;
         if (_nwApplyFlowDpIfEmpty('storageDischargePower', dischargeId, { powerIsW: true })) out.changed = true;
-        storageMapped = true;
-      } else if (signedId) {
-        if (_nwApplyFlowDpIfEmpty('batteryPower', signedId, { powerIsW: true })) out.changed = true;
         storageMapped = true;
       }
       if (socId) {

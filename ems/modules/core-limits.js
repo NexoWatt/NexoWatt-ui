@@ -592,6 +592,19 @@ class CoreLimitsModule extends BaseModule {
             }
         }
 
+        // Guard against ghost split-battery aliases: with no direct house-load meter,
+        // discharge + NVP export would inflate house load and reduce the PV budget.
+        // This keeps signed batteryPower and direct load meters authoritative, but avoids
+        // bad powerDischarge aliases breaking Heizstab/EMS budgets.
+        try {
+            const hasDirectLoad = !!(cfg.datapoints && (String(cfg.datapoints.consumptionTotal || '').trim() || String(cfg.datapoints.housePower || '').trim()));
+            const splitBatteryConfigured = !!(cfg.datapoints && (String(cfg.datapoints.storageChargePower || '').trim() || String(cfg.datapoints.storageDischargePower || '').trim()));
+            const signedBatteryConfigured = !!(cfg.datapoints && String(cfg.datapoints.batteryPower || '').trim());
+            if (!hasDirectLoad && splitBatteryConfigured && !signedBatteryConfigured && gridExportW > 250 && storageDischargeW > 250 && storageChargeW <= 250) {
+                storageDischargeW = 0;
+            }
+        } catch (_eSanitizeStorage) {}
+
         const evcsEnabled = cfg.enableChargingManagement !== false;
         const thermalEnabled = cfg.enableThermalControl === true;
         const heatingRodEnabled = cfg.enableHeatingRodControl === true;

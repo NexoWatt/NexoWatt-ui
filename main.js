@@ -17739,6 +17739,31 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     };
 
+    const sanitizeSeparateBatteryFlow = (flow) => {
+      try {
+        if (!flow || String(flow.src || '').indexOf('chargeDischarge') < 0) return flow;
+        const hasDirectLoad = this._nwHasMappedDatapoint('consumptionTotal') || this._nwHasMappedDatapoint('housePower');
+        if (hasDirectLoad) return flow;
+        const grid = this._nwResolveGridImportExportFromCache ? this._nwResolveGridImportExportFromCache() : null;
+        const sellW = Math.max(0, Number(grid && grid.gridSellW) || 0);
+        const dischargeW = Math.max(0, Number(flow.dischargeW) || 0);
+        const chargeW = Math.max(0, Number(flow.chargeW) || 0);
+        const limitW = Math.max(250, deadbandW * 10);
+        if (sellW > limitW && dischargeW > limitW && chargeW <= limitW) {
+          return Object.assign({}, flow, {
+            chargeW: 0,
+            dischargeW: 0,
+            signedW: 0,
+            src: String(flow.src || 'chargeDischarge') + '+sanitized-export-discharge',
+            rejectedDischargeW: Math.round(dischargeW),
+            sanitized: true,
+            mirror: true
+          });
+        }
+      } catch (_eSanitize) {}
+      return flow;
+    };
+
     // Speicherfarm already provides normalized charge/discharge totals. Keep it authoritative
     // unless a signed single battery datapoint is explicitly mapped for a non-farm setup.
     const sfEnabled = !!(this.stateCache && this.stateCache['storageFarm.enabled'] && this.stateCache['storageFarm.enabled'].value);
@@ -17796,7 +17821,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       if (c <= deadbandW) c = 0;
       if (d <= deadbandW) d = 0;
       if (inv) { const t = c; c = d; d = t; }
-      return preferBalance({
+      return preferBalance(sanitizeSeparateBatteryFlow({
         chargeW: Math.round(c),
         dischargeW: Math.round(d),
         signedW: Math.round(d - c),
@@ -17808,7 +17833,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
           storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
           storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
         },
-      });
+      }));
     }
 
     if (batterySigned !== null) {

@@ -1,3 +1,11 @@
+## 0.7.46 - Energiefluss- und Heizstab-Budget-Hotfix
+
+- Energiefluss-Bilanz gehärtet: getrennte Batterie-Laden/Entladen-Datenpunkte werden bei gleichzeitigem Netzeinspeisen ohne direkten Hauslast-Zähler gegen Ghost-Entladung plausibilisiert. Dadurch bläht ein falscher `powerDischarge`-Alias nicht mehr Gebäudelast, PV-Budget, KI-Berater und Heizstab-Budget auf.
+- Core-Limits und Heizstab-Regelung nutzen dieselbe Schutzlogik, damit Status, PV-Budget und Live-Dashboard identisch rechnen.
+- App-Center Schnell-Inbetriebnahme bevorzugt beim Speicher jetzt den signed Batterie-Leistungs-Datenpunkt vor getrennten Lade-/Entlade-Aliasen.
+- Heizstab-Konfiguration korrigiert: numerische Felder schreiben sofort in die aktive Konfiguration; `Speicher-Reserve (W)` springt nicht mehr auf den Default `1000 W` zurück.
+- Service-Worker Cache auf `nexowatt-cache-v214` erhöht.
+
 ## 0.7.45 - App-Center Heizstab-UI Hotfix
 
 - App-Center/Installerseiten erhalten die Installer-Seitenklasse, damit Hero und Hauptcontainer wieder auf derselben breiten Cockpit-Achse liegen.
