@@ -604,42 +604,47 @@ class HeatingRodControlModule extends BaseModule {
     }
 
     _readStorageSnapshot(staleMs) {
-        // Speicherfarm- und Einzelakku-Aliase können beide im Cache stehen. Ein 0-W-Wert
-        // aus storageFarm.* darf einen echten Entlade-/Ladewert aus den Basis-Aliasen nicht
-        // verdecken. Sonst erkennt der Heizstab keine Akku-Entladung und hält zu hohe Stufen.
-        let chargeW = Math.max(0, num(this._readNumberMaxAny([
-            'storageFarm.totalChargePowerW',
-            'storageChargePower'
-        ], staleMs, null), 0));
+        let chargeW = 0;
+        let dischargeW = 0;
+        let usedCentralStorageFlow = false;
+        try {
+            const flow = (this.adapter && typeof this.adapter._nwResolveBatteryFlowFromCache === 'function')
+                ? this.adapter._nwResolveBatteryFlowFromCache({ maxAgeMs: staleMs, deadbandW: 25 })
+                : null;
+            if (flow && typeof flow === 'object') {
+                usedCentralStorageFlow = true;
+                chargeW = Math.max(0, Math.round(Number(flow.chargeW) || 0));
+                dischargeW = Math.max(0, Math.round(Number(flow.dischargeW) || 0));
+            }
+        } catch (_eFlow) {}
 
-        let dischargeW = Math.max(0, num(this._readNumberMaxAny([
-            'storageFarm.totalDischargePowerW',
-            'storageDischargePower'
-        ], staleMs, null), 0));
+        if (!usedCentralStorageFlow) {
+            // Fallback für ältere Laufzeiten: Split-DPs und signed DP bleiben wie bisher erlaubt.
+            chargeW = Math.max(0, num(this._readNumberMaxAny([
+                'storageFarm.totalChargePowerW',
+                'storageChargePower'
+            ], staleMs, null), 0));
 
-        const batteryPowerW = this._readNumberAny(['batteryPower'], staleMs, null);
-        if (typeof batteryPowerW === 'number' && Number.isFinite(batteryPowerW)) {
-            const cfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
-            const flowBatteryMapped = !!(cfg.datapoints && String(cfg.datapoints.batteryPower || '').trim());
-            const farmActive = !!this._readCacheNumber('storageFarm.enabled', 0);
-            // Apply the VIS inversion only to a raw mapped batteryPower datapoint.
-            // Mirrored batteryPower values are already normalized by the main flow engine.
-            const invBattery = flowBatteryMapped && !farmActive && !!(cfg.settings && cfg.settings.flowInvertBattery);
-            const signedW = Math.round(invBattery ? -batteryPowerW : batteryPowerW);
-            const noiseW = 25;
-            // batteryPower is the canonical direction signal in this adapter:
-            // +W = discharge, -W = charge. Prefer that direction over separate
-            // charge/discharge aliases, because those can be delayed or vendor-specific.
-            // Otherwise a charging battery can look like discharge and block stage-up.
-            if (signedW < -noiseW) {
-                chargeW = Math.max(chargeW, Math.abs(signedW));
-                dischargeW = 0;
-            } else if (signedW > noiseW) {
-                dischargeW = Math.max(dischargeW, signedW);
-                chargeW = 0;
-            } else {
-                chargeW = 0;
-                dischargeW = 0;
+            dischargeW = Math.max(0, num(this._readNumberMaxAny([
+                'storageFarm.totalDischargePowerW',
+                'storageDischargePower'
+            ], staleMs, null), 0));
+
+            const batteryPowerW = this._readNumberAny(['batteryPower'], staleMs, null);
+            if (typeof batteryPowerW === 'number' && Number.isFinite(batteryPowerW)) {
+                const cfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
+                const flowBatteryMapped = !!(cfg.datapoints && String(cfg.datapoints.batteryPower || '').trim());
+                const farmActive = !!this._readCacheNumber('storageFarm.enabled', 0);
+                const invBattery = flowBatteryMapped && !farmActive && !!(cfg.settings && cfg.settings.flowInvertBattery);
+                const signedW = Math.round(invBattery ? -batteryPowerW : batteryPowerW);
+                const noiseW = 25;
+                if (signedW < -noiseW) {
+                    chargeW = Math.max(chargeW, Math.abs(signedW));
+                    dischargeW = 0;
+                } else if (signedW > noiseW) {
+                    dischargeW = Math.max(dischargeW, signedW);
+                    chargeW = 0;
+                }
             }
         }
 
@@ -691,17 +696,6 @@ class HeatingRodControlModule extends BaseModule {
         const exportW = gridKnown ? Math.max(0, -gridW) : 0;
         const importW = gridKnown ? Math.max(0, gridW) : 0;
         const storage = this._readStorageSnapshot(staleMs);
-        try {
-            const appCfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
-            const hasDirectLoad = !!(appCfg.datapoints && (String(appCfg.datapoints.consumptionTotal || '').trim() || String(appCfg.datapoints.housePower || '').trim()));
-            const splitBatteryConfigured = !!(appCfg.datapoints && (String(appCfg.datapoints.storageChargePower || '').trim() || String(appCfg.datapoints.storageDischargePower || '').trim()));
-            const signedBatteryConfigured = !!(appCfg.datapoints && String(appCfg.datapoints.batteryPower || '').trim());
-            if (!hasDirectLoad && splitBatteryConfigured && !signedBatteryConfigured && exportW > 250 && storage.dischargeW > 250 && storage.chargeW <= 250) {
-                storage.dischargeW = 0;
-                storage.sanitizedExportDischarge = true;
-            }
-        } catch (_eSanitizeStorage) {}
-
         const storageTargetSocPct = clamp(num(cfg.storageTargetSocPct, 90), 0, 100);
         const storageReserveCfgW = Math.max(0, Math.round(num(cfg.storageReserveW, 1000)));
         const storageKnown = storage.chargeW > 0

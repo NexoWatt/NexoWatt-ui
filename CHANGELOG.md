@@ -1,3 +1,12 @@
+## 0.7.47 - Energiefluss-DP-Resolver und Heizstab-Config-Hotfix
+
+- Energiefluss-Resolver korrigiert: getrennte Lade-/Entlade-DPs bleiben wieder autoritativ und werden nicht mehr pauschal bei Netzeinspeisung unterdrückt.
+- Signed Batterie-DP bleibt unterstützt (`-` = Laden, `+` = Entladen, inklusive Invert-Option).
+- Rechen-Fallback für Speicherleistung greift nur noch, wenn keine frische Messquelle vorhanden ist bzw. eine Seite fehlt und ein direkter Verbrauchszähler vorhanden ist.
+- Core-Limits und Heizstab-Regelung verwenden jetzt dieselbe zentrale Speicherfluss-Auflösung wie der Live-Energiefluss.
+- Heizstab-App-Center: Speicher-Reserve und weitere Zahlenfelder werden direkt aus dem DOM vor dem Speichern geflusht, damit Werte nicht auf Defaults zurückspringen.
+- Service-Worker Cache auf `nexowatt-cache-v215` erhöht.
+
 ## 0.7.46 - Energiefluss- und Heizstab-Budget-Hotfix
 
 - Energiefluss-Bilanz gehärtet: getrennte Batterie-Laden/Entladen-Datenpunkte werden bei gleichzeitigem Netzeinspeisen ohne direkten Hauslast-Zähler gegen Ghost-Entladung plausibilisiert. Dadurch bläht ein falscher `powerDischarge`-Alias nicht mehr Gebäudelast, PV-Budget, KI-Berater und Heizstab-Budget auf.

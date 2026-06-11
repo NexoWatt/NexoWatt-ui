@@ -565,45 +565,44 @@ class CoreLimitsModule extends BaseModule {
             return Math.max(0, this._readCacheNumber(['derived.core.pv.totalW', 'pvPower', 'productionTotal', 'storageFarm.totalPvPowerW'], 0) || 0);
         })();
 
-        // Speicherfarm- und Einzelakku-Aliase können parallel existieren. Ein 0-W-Wert aus
-        // storageFarm.* darf einen echten Wert aus storageChargePower/storageDischargePower
-        // nicht verdecken, sonst sieht Gate C keine Akku-Entladung und Verbraucher halten
-        // fälschlich Last aus dem Speicher. Darum hier bewusst den größten frischen Wert nutzen.
-        let storageChargeW = Math.max(0, this._readCacheNumberMax(['storageFarm.totalChargePowerW', 'storageChargePower'], 0) || 0);
-        let storageDischargeW = Math.max(0, this._readCacheNumberMax(['storageFarm.totalDischargePowerW', 'storageDischargePower'], 0) || 0);
-        const batteryPowerW = this._readCacheNumber(['batteryPower'], null);
-        if (isFiniteNumber(batteryPowerW)) {
-            const flowBatteryMapped = !!(cfg.datapoints && String(cfg.datapoints.batteryPower || '').trim());
-            const farmActive = !!this._readCacheNumber(['storageFarm.enabled'], 0);
-            // Apply the VIS inversion only to a raw mapped batteryPower datapoint.
-            // If batteryPower was mirrored from the already-normalized storage pair/farm,
-            // flipping it here again would swap charge/discharge twice.
-            const invBattery = flowBatteryMapped && !farmActive && !!(cfg.settings && cfg.settings.flowInvertBattery);
-            const signed = Math.round(invBattery ? -batteryPowerW : batteryPowerW);
-            if (signed < -25) {
-                storageChargeW = Math.max(storageChargeW, Math.abs(signed));
-                storageDischargeW = 0;
-            } else if (signed > 25) {
-                storageDischargeW = Math.max(storageDischargeW, signed);
-                storageChargeW = 0;
-            } else {
-                storageChargeW = 0;
-                storageDischargeW = 0;
+        // Speicherleistung wird zentral wie im Energiefluss aufgelöst:
+        // - getrennte Lade-/Entlade-DPs bleiben vollständig gültig
+        // - signed Batterie-DP bleibt gültig (- = Laden, + = Entladen; invertierbar)
+        // - nur wenn keine frische Messquelle vorhanden ist, wird rechnerisch über die Bilanz abgeleitet
+        let storageChargeW = 0;
+        let storageDischargeW = 0;
+        let usedCentralStorageFlow = false;
+        try {
+            const flow = (this.adapter && typeof this.adapter._nwResolveBatteryFlowFromCache === 'function')
+                ? this.adapter._nwResolveBatteryFlowFromCache({ maxAgeMs: staleMs, deadbandW: 25 })
+                : null;
+            if (flow && typeof flow === 'object') {
+                usedCentralStorageFlow = true;
+                storageChargeW = Math.max(0, Math.round(Number(flow.chargeW) || 0));
+                storageDischargeW = Math.max(0, Math.round(Number(flow.dischargeW) || 0));
+            }
+        } catch (_eFlow) {}
+
+        if (!usedCentralStorageFlow) {
+            // Fallback für sehr alte Laufzeiten ohne zentralen Resolver. Keine Plausibilitäts-
+            // Unterdrückung hier: gemappte Split-DPs sind autoritativ.
+            storageChargeW = Math.max(0, this._readCacheNumberMax(['storageFarm.totalChargePowerW', 'storageChargePower'], 0) || 0);
+            storageDischargeW = Math.max(0, this._readCacheNumberMax(['storageFarm.totalDischargePowerW', 'storageDischargePower'], 0) || 0);
+            const batteryPowerW = this._readCacheNumber(['batteryPower'], null);
+            if (isFiniteNumber(batteryPowerW)) {
+                const flowBatteryMapped = !!(cfg.datapoints && String(cfg.datapoints.batteryPower || '').trim());
+                const farmActive = !!this._readCacheNumber(['storageFarm.enabled'], 0);
+                const invBattery = flowBatteryMapped && !farmActive && !!(cfg.settings && cfg.settings.flowInvertBattery);
+                const signed = Math.round(invBattery ? -batteryPowerW : batteryPowerW);
+                if (signed < -25) {
+                    storageChargeW = Math.max(storageChargeW, Math.abs(signed));
+                    storageDischargeW = 0;
+                } else if (signed > 25) {
+                    storageDischargeW = Math.max(storageDischargeW, signed);
+                    storageChargeW = 0;
+                }
             }
         }
-
-        // Guard against ghost split-battery aliases: with no direct house-load meter,
-        // discharge + NVP export would inflate house load and reduce the PV budget.
-        // This keeps signed batteryPower and direct load meters authoritative, but avoids
-        // bad powerDischarge aliases breaking Heizstab/EMS budgets.
-        try {
-            const hasDirectLoad = !!(cfg.datapoints && (String(cfg.datapoints.consumptionTotal || '').trim() || String(cfg.datapoints.housePower || '').trim()));
-            const splitBatteryConfigured = !!(cfg.datapoints && (String(cfg.datapoints.storageChargePower || '').trim() || String(cfg.datapoints.storageDischargePower || '').trim()));
-            const signedBatteryConfigured = !!(cfg.datapoints && String(cfg.datapoints.batteryPower || '').trim());
-            if (!hasDirectLoad && splitBatteryConfigured && !signedBatteryConfigured && gridExportW > 250 && storageDischargeW > 250 && storageChargeW <= 250) {
-                storageDischargeW = 0;
-            }
-        } catch (_eSanitizeStorage) {}
 
         const evcsEnabled = cfg.enableChargingManagement !== false;
         const thermalEnabled = cfg.enableThermalControl === true;

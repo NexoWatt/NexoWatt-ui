@@ -17727,41 +17727,18 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
     const preferBalance = (current) => {
       try {
-        const measured = Math.max(0, Math.abs(Number(current && current.chargeW) || 0) + Math.abs(Number(current && current.dischargeW) || 0));
         const srcCur = String(current && current.src || '');
-        const missingLike = !current || srcCur === 'missing' || srcCur === 'stale-or-missing';
+        const missingLike = !current || srcCur === 'missing' || srcCur === 'stale-or-missing' || current.incomplete === true;
+        if (!missingLike) return current;
         const derived = fromBalance();
         if (!derived) return current;
-        if (missingLike || measured <= Math.max(180, deadbandW)) return derived;
-        return current;
+        return Object.assign({}, derived, {
+          src: String(derived.src || 'balanceDerived') + (current && current.incomplete ? '+missing-side' : ''),
+          fallbackFor: srcCur || 'missing'
+        });
       } catch (_ePrefer) {
         return current;
       }
-    };
-
-    const sanitizeSeparateBatteryFlow = (flow) => {
-      try {
-        if (!flow || String(flow.src || '').indexOf('chargeDischarge') < 0) return flow;
-        const hasDirectLoad = this._nwHasMappedDatapoint('consumptionTotal') || this._nwHasMappedDatapoint('housePower');
-        if (hasDirectLoad) return flow;
-        const grid = this._nwResolveGridImportExportFromCache ? this._nwResolveGridImportExportFromCache() : null;
-        const sellW = Math.max(0, Number(grid && grid.gridSellW) || 0);
-        const dischargeW = Math.max(0, Number(flow.dischargeW) || 0);
-        const chargeW = Math.max(0, Number(flow.chargeW) || 0);
-        const limitW = Math.max(250, deadbandW * 10);
-        if (sellW > limitW && dischargeW > limitW && chargeW <= limitW) {
-          return Object.assign({}, flow, {
-            chargeW: 0,
-            dischargeW: 0,
-            signedW: 0,
-            src: String(flow.src || 'chargeDischarge') + '+sanitized-export-discharge',
-            rejectedDischargeW: Math.round(dischargeW),
-            sanitized: true,
-            mirror: true
-          });
-        }
-      } catch (_eSanitize) {}
-      return flow;
     };
 
     // Speicherfarm already provides normalized charge/discharge totals. Keep it authoritative
@@ -17821,7 +17798,8 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       if (c <= deadbandW) c = 0;
       if (d <= deadbandW) d = 0;
       if (inv) { const t = c; c = d; d = t; }
-      return preferBalance(sanitizeSeparateBatteryFlow({
+      const completePair = !!(chargeMapped && dischargeMapped && chargeRaw !== null && dischargeRaw !== null && !sameChargeDischargeId);
+      return preferBalance({
         chargeW: Math.round(c),
         dischargeW: Math.round(d),
         signedW: Math.round(d - c),
@@ -17829,11 +17807,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         inverted: inv,
         fromSigned: false,
         mirror: sameChargeDischargeId || !chargeMapped || !dischargeMapped,
+        incomplete: !completePair,
         staleMs: {
           storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
           storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
         },
-      }));
+      });
     }
 
     if (batterySigned !== null) {

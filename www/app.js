@@ -2109,13 +2109,15 @@ function getBalanceDerivedBatteryFlow(opts = {}) {
 function preferBalanceDerivedBatteryFlow(current, opts = {}) {
   try {
     const deadbandW = Number.isFinite(Number(opts.deadbandW)) ? Math.max(180, Number(opts.deadbandW)) : 180;
-    const measured = Math.max(0, Math.abs(Number(current && current.chargeW) || 0) + Math.abs(Number(current && current.dischargeW) || 0));
     const src = String(current && current.src || '');
-    const missingLike = !current || src === 'missing' || src === 'stale-or-missing';
+    const missingLike = !current || src === 'missing' || src === 'stale-or-missing' || current.incomplete === true;
+    if (!missingLike) return current;
     const derived = getBalanceDerivedBatteryFlow({ deadbandW });
     if (!derived) return current;
-    if (missingLike || measured <= deadbandW) return derived;
-    return current;
+    return Object.assign({}, derived, {
+      src: String(derived.src || 'balanceDerived') + (current && current.incomplete ? '+missing-side' : ''),
+      fallbackFor: src || 'missing'
+    });
   } catch (_e) {
     return current;
   }
@@ -2144,36 +2146,6 @@ function getNormalizedBatteryFlow() {
       src,
       inverted: inv,
     };
-  };
-
-  const sanitizeSeparateBatteryFlow = (flow) => {
-    try {
-      if (!flow || String(flow.src || '').indexOf('chargeDischarge') < 0) return flow;
-      // In a normal AC-coupled house setup a storage discharge while the NVP is
-      // exporting and no direct house-load meter is configured is almost always a
-      // vendor-/alias-side ghost value (seen with some nexowatt-devices powerDischarge aliases).
-      // Without a direct load meter this value would inflate the building load and
-      // eat the PV budget. Keep true signed batteryPower authoritative, but guard
-      // the separate charge/discharge pair.
-      const hasDirectLoad = isMappedDatapoint('consumptionTotal') || isMappedDatapoint('housePower');
-      if (hasDirectLoad) return flow;
-      const grid = getGridImportExport((k) => state && state[k] ? state[k].value : undefined);
-      const sellW = Math.max(0, Number(grid && grid.sell) || 0);
-      const dischargeW = Math.max(0, Number(flow.dischargeW) || 0);
-      const chargeW = Math.max(0, Number(flow.chargeW) || 0);
-      const limitW = Math.max(250, deadbandW * 10);
-      if (sellW > limitW && dischargeW > limitW && chargeW <= limitW) {
-        return Object.assign({}, flow, {
-          chargeW: 0,
-          dischargeW: 0,
-          signedW: 0,
-          src: String(flow.src || 'chargeDischarge') + '+sanitized-export-discharge',
-          rejectedDischargeW: Math.round(dischargeW),
-          sanitized: true,
-        });
-      }
-    } catch (_e) {}
-    return flow;
   };
 
   const sfEnabled = !!(state && state['storageFarm.enabled'] && state['storageFarm.enabled'].value);
@@ -2210,7 +2182,8 @@ function getNormalizedBatteryFlow() {
     if (c <= deadbandW) c = 0;
     if (d <= deadbandW) d = 0;
     if (inv) { const t = c; c = d; d = t; }
-    return preferBalanceDerivedBatteryFlow(sanitizeSeparateBatteryFlow({ chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'chargeDischarge(inv)' : 'chargeDischarge', inverted: inv }), { deadbandW });
+    const completePair = !!(chargeMapped && dischargeMapped && charge !== null && discharge !== null && !samePair);
+    return preferBalanceDerivedBatteryFlow({ chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'chargeDischarge(inv)' : 'chargeDischarge', inverted: inv, incomplete: !completePair }, { deadbandW });
   }
 
   if (signedBattery !== null) return preferBalanceDerivedBatteryFlow(fromSigned(signedBattery, 'batterySigned'), { deadbandW });

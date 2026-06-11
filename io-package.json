@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.46",
+    "version": "0.7.47",
     "news": {
+      "0.7.47": {
+        "en": "Energy-flow datapoint resolver fixed: split charge/discharge datapoints and signed battery power are supported consistently again; calculated fallback is only used when a fresh measurement source is missing. Heating-rod reserve inputs are flushed before save.",
+        "de": "Energiefluss-Datenpunktauflösung korrigiert: getrennte Lade-/Entlade-Datenpunkte und signed Batterie-Leistung werden wieder konsistent unterstützt; der rechnerische Fallback greift nur, wenn keine frische Messquelle vorhanden ist. Heizstab-Reservefelder werden vor dem Speichern direkt übernommen."
+      },
       "0.7.42": {
         "en": "Feature-dependent visibility fixed: EVCS/charging station and storage farm are only shown in the customer frontend when they are actually configured. Default/legacy placeholders no longer enable wallbox UI; AI Advisor suppresses EV/wallbox hints when no wallbox is available.",
         "de": "Anlagenabhängige Sichtbarkeit korrigiert: EVCS/Ladestation und Speicherfarm erscheinen im Kunden-Frontend nur noch, wenn sie wirklich konfiguriert sind. Default-/Legacy-Placeholder aktivieren keine Wallbox-Anzeige mehr; KI-Empfehlungen verzichten ohne Wallbox auf EV-/Wallbox-Hinweise."
@@ -1987,7 +1991,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.46",
+  "version": "0.7.47",
   "news": {
     "0.7.42": {
       "en": "Feature-dependent visibility fixed: EVCS/charging station and storage farm are only shown in the customer frontend when they are actually configured. Default/legacy placeholders no longer enable wallbox UI; AI Advisor suppresses EV/wallbox hints when no wallbox is available.",
