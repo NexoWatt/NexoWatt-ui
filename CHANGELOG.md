@@ -1,3 +1,11 @@
+## 0.7.49 - Mobile VIS Hotfix History/SmartHome
+
+- History-Seite auf Smartphone/Tablet korrigiert: Zeitraum, Datum, Navigation und Aktionen werden jetzt als responsive Gruppen dargestellt statt als horizontal wegscrollende Riesenkacheln.
+- EVCS-PDF und E-Mobilitäts-Legende in History werden nur noch angezeigt, wenn wirklich Ladepunkte konfiguriert sind.
+- SmartHome-Mobile-Layout gehärtet: Gebäudenavigation ist wieder ein Drawer und nimmt nicht mehr den Seitenfluss ein.
+- SmartHome zeigt einen Lade-/Fehlerzustand statt einer leeren Fläche, falls die Geräte-API langsam ist oder nicht antwortet.
+- Service-Worker Cache auf `nexowatt-cache-v217` erhöht.
+
 ## 0.7.48 - Speicher-DP/Historie-Hotfix
 
 - Speicher-Lade-/Entlade-DPs werden wieder dauerhaft als Quelle der Wahrheit genutzt, auch wenn ein konstanter 0-Wert lange keinen neuen Zeitstempel bekommt.

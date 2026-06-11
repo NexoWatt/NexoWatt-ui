@@ -3238,10 +3238,13 @@ function nwShowEmptyState(show, ctx) {
   if (!empty) return;
 
   if (!show) {
+    empty.classList.remove('nw-sh-empty--loading');
     empty.style.display = 'none';
     empty.textContent = '';
     return;
   }
+
+  empty.classList.remove('nw-sh-empty--loading');
 
   const enabled = (typeof ctx?.enabled === 'boolean')
     ? ctx.enabled
@@ -8359,6 +8362,14 @@ async function nwReloadDevices(opts) {
     nwApplyFiltersAndRender();
   } catch (e) {
     console.error('SmartHome reload error:', e);
+    nwShowEmptyState(true, { enabled: nwSmartHomeEnabled, reason: 'load-error' });
+    const empty = document.getElementById('nw-smarthome-empty');
+    if (empty) {
+      empty.innerHTML = [
+        '⚠️ <b>SmartHome-Daten konnten nicht geladen werden.</b><br/>',
+        '<span style="opacity:0.85">Bitte Verbindung/API prüfen und die Seite neu laden.</span>'
+      ].join('');
+    }
   } finally {
     nwReloadInFlight = false;
   }

@@ -2260,12 +2260,16 @@ async function load(force = false){
     const evcsAvailable = ((Number(sc.evcsConfiguredCount || 0) || (Array.isArray(sc.evcsList) ? sc.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
     const c = evcsAvailable ? Math.max(0, Math.round(Number(sc.evcsCount) || 0)) : 0;
     const showEvcs = evcsAvailable && c >= 2;
+    const showEvcsHistory = evcsAvailable && c >= 1;
     const l = document.getElementById('menuEvcsLink');
     if (l) l.classList.toggle('hidden', !showEvcs);
     const t = document.getElementById('tabEvcs');
     if (t) t.classList.toggle('hidden', !showEvcs);
     const n = document.getElementById('nav-evcs');
     if (n) n.classList.toggle('hidden', !showEvcs);
+    document.querySelectorAll('[data-feature="evcs"]').forEach(function(el){
+      el.classList.toggle('hidden', !showEvcsHistory);
+    });
     const sh = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
     const sl = document.getElementById('menuSmartHomeLink');
     if (sl) sl.classList.toggle('hidden', !sh);

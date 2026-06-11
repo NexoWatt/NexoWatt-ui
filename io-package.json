@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.48",
+    "version": "0.7.49",
     "news": {
+      "0.7.49": {
+        "en": "Mobile VIS hotfix: History controls no longer overflow on smartphones; SmartHome uses a reliable mobile drawer/loading state.",
+        "de": "Mobile-VIS-Hotfix: History-Bedienleiste läuft auf Smartphones nicht mehr seitlich weg; SmartHome nutzt einen zuverlässigen mobilen Drawer/Ladezustand."
+      },
       "0.7.48": {
         "en": "Hotfix: core energy-flow datapoints are no longer discarded as stale, storage split/signed DPs remain authoritative, and balance-derived battery values are only used when no storage DP is configured.",
         "de": "Hotfix: Kern-Datenpunkte im Energiefluss werden nicht mehr wegen altem Zeitstempel verworfen, getrennte/signed Speicher-DPs bleiben autoritativ und berechnete Speicherwerte werden nur genutzt, wenn kein Speicher-DP konfiguriert ist."
@@ -1995,8 +1999,12 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.48",
+  "version": "0.7.49",
   "news": {
+    "0.7.49": {
+      "en": "Mobile VIS hotfix: History controls no longer overflow on smartphones; SmartHome uses a reliable mobile drawer/loading state.",
+      "de": "Mobile-VIS-Hotfix: History-Bedienleiste läuft auf Smartphones nicht mehr seitlich weg; SmartHome nutzt einen zuverlässigen mobilen Drawer/Ladezustand."
+    },
     "0.7.42": {
       "en": "Feature-dependent visibility fixed: EVCS/charging station and storage farm are only shown in the customer frontend when they are actually configured. Default/legacy placeholders no longer enable wallbox UI; AI Advisor suppresses EV/wallbox hints when no wallbox is available.",
       "de": "Anlagenabhängige Sichtbarkeit korrigiert: EVCS/Ladestation und Speicherfarm erscheinen im Kunden-Frontend nur noch, wenn sie wirklich konfiguriert sind. Default-/Legacy-Placeholder aktivieren keine Wallbox-Anzeige mehr; KI-Empfehlungen verzichten ohne Wallbox auf EV-/Wallbox-Hinweise."
