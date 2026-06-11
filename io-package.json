@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.50",
+    "version": "0.7.51",
     "news": {
+      "0.7.51": {
+        "en": "Hotfix: license regression fixed. licenseKey native protection/encryption is temporarily disabled again because ioBroker/Admin masked values could overwrite existing keys; runtime license save now rejects masked placeholders.",
+        "de": "Hotfix: Lizenz-Regression behoben. licenseKey Native-Schutz/Verschlüsselung ist vorübergehend wieder deaktiviert, weil ioBroker/Admin maskierte Werte bestehende Schlüssel überschreiben konnten; Runtime-Speichern weist maskierte Platzhalter zurück."
+      },
       "0.7.50": {
         "en": "ioBroker stability maintenance: Node.js engine raised to >=22, CI prepared for Node 22/24, licenseKey protected/encrypted, info.connection implemented, native ip handling added with bind fallback, package metadata and news cleaned for adapter-checker compatibility.",
         "de": "ioBroker-Stabilitätswartung: Node.js Engine auf >=22 angehoben, CI für Node 22/24 vorbereitet, licenseKey geschützt/verschlüsselt, info.connection implementiert, native ip mit bind-Fallback ergänzt sowie Paket-Metadaten und News für Adapter-Checker bereinigt."
@@ -26,10 +30,6 @@
       "0.7.45": {
         "en": "App-Center heating-rod UI hotfix: configurator cards no longer overlap and installer cockpit width is restored.",
         "de": "App-Center Heizstab-UI-Hotfix: Konfigurator-Karten überlappen nicht mehr und die breite Installer-Cockpit-Achse ist wiederhergestellt."
-      },
-      "0.7.44": {
-        "en": "Publish hotfix: package metadata cleaned and conflict-marker checks hardened so npm publish no longer fails on unresolved package.json merge markers.",
-        "de": "Publish-Hotfix: Paket-Metadaten bereinigt und Konfliktmarker-Prüfung gehärtet, damit npm publish nicht mehr an ungelösten package.json-Merge-Markern scheitert."
       }
     },
     "title": "NexoWatt UI",
@@ -89,7 +89,7 @@
       }
     ],
     "welcomeScreen": "adapter/nexowatt-ui/tab.html",
-    "license": "Proprietary License (NPL) v1.0",
+    "license": "UNLICENSED",
     "stopBeforeUpdate": true,
     "stopTimeout": 2500,
     "wwwDontUpload": true,
@@ -288,11 +288,5 @@
       },
       "native": {}
     }
-  ],
-  "protectedNative": [
-    "licenseKey"
-  ],
-  "encryptedNative": [
-    "licenseKey"
   ]
 }

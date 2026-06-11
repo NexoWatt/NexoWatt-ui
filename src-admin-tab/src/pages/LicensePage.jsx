@@ -12,13 +12,32 @@ import {
   setObject,
 } from '../lib/adminConnection';
 
+
+function looksLikeMaskedLicenseKey(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return false;
+  const normalized = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (/^NW1(T)?[0-9A-Z]+$/.test(normalized)) return false;
+  if (/^[*•·xX_\-.\s]+$/.test(raw) && raw.replace(/\s+/g, '').length >= 3) return true;
+  if (/^(hidden|protected|encrypted|password|secret|redacted|undefined|null)$/i.test(raw)) return true;
+  if (/^\*{3,}/.test(raw) || /\*{3,}$/.test(raw)) return true;
+  if (/^\$\/?[a-z0-9_-]*:/i.test(raw)) return true;
+  if (/^\{\s*"encrypted"\s*:/i.test(raw)) return true;
+  return false;
+}
+
+function normalizeVisibleLicenseKey(value) {
+  const raw = String(value || '').trim();
+  return looksLikeMaskedLicenseKey(raw) ? '' : raw;
+}
+
 function getLicenseStorageKey(instance) {
   return `nexowatt-ui.licenseKey.${instance}`;
 }
 
 function readCachedLicenseKey(instance) {
   try {
-    return String(window.localStorage.getItem(getLicenseStorageKey(instance)) || '').trim();
+    return normalizeVisibleLicenseKey(window.localStorage.getItem(getLicenseStorageKey(instance)) || '');
   } catch {
     return '';
   }
@@ -27,7 +46,7 @@ function readCachedLicenseKey(instance) {
 function writeCachedLicenseKey(instance, key) {
   try {
     const clean = String(key || '').trim();
-    if (clean) window.localStorage.setItem(getLicenseStorageKey(instance), clean);
+    if (clean && !looksLikeMaskedLicenseKey(clean)) window.localStorage.setItem(getLicenseStorageKey(instance), clean);
     else window.localStorage.removeItem(getLicenseStorageKey(instance));
   } catch {
     // Browser storage may be blocked inside some ioBroker/Admin iframes. Ignore.
@@ -62,9 +81,11 @@ export default function LicensePage() {
       runtimeInfo = await readRuntimeLicenseInfo(instance, null);
       if (runtimeInfo?.uuid) resolvedUuid = String(runtimeInfo.uuid);
       if (runtimeInfo?.licenseKey) {
-        const runtimeKey = String(runtimeInfo.licenseKey).trim();
-        setLicenseKey(runtimeKey);
-        writeCachedLicenseKey(instance, runtimeKey);
+        const runtimeKey = normalizeVisibleLicenseKey(runtimeInfo.licenseKey);
+        if (runtimeKey) {
+          setLicenseKey(runtimeKey);
+          writeCachedLicenseKey(instance, runtimeKey);
+        }
       }
       if (runtimeInfo) {
         licenseStatus = {
@@ -139,9 +160,9 @@ export default function LicensePage() {
     }
 
     setUuid(resolvedUuid || 'Nicht verfügbar');
-    const configuredKey = adapterObject?.native?.licenseKey
-      ? String(adapterObject.native.licenseKey).trim()
-      : (runtimeInfo?.licenseKey ? String(runtimeInfo.licenseKey).trim() : cachedKey);
+    const adapterNativeKey = normalizeVisibleLicenseKey(adapterObject?.native?.licenseKey || '');
+    const runtimeVisibleKey = normalizeVisibleLicenseKey(runtimeInfo?.licenseKey || '');
+    const configuredKey = adapterNativeKey || runtimeVisibleKey || cachedKey;
     if (configuredKey) {
       setLicenseKey(configuredKey);
       writeCachedLicenseKey(instance, configuredKey);
@@ -181,6 +202,11 @@ export default function LicensePage() {
     setBusy(true);
 
     const key = String(licenseKey || '').trim();
+    if (looksLikeMaskedLicenseKey(key)) {
+      setStatus({ ok: false, text: 'Dieser Wert ist nur ein geschützter Platzhalter. Bitte echten Lizenzschlüssel neu eintragen.' });
+      setBusy(false);
+      return;
+    }
     setLicenseKey(key);
     let adminError = null;
 

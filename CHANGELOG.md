@@ -1,3 +1,13 @@
+## 0.7.51 - Lizenz-Hotfix nach ioBroker-Stabilitätsupdate
+
+- Regression aus 0.7.50 behoben: `licenseKey` wird vorübergehend wieder ohne `protectedNative`/`encryptedNative` geführt, weil maskierte ioBroker/Admin-Platzhalter gültige Lizenzschlüssel überschreiben konnten.
+- Runtime-Lizenzprüfung liest konfigurierte Schlüssel robuster aus `this.config` und dem Adapter-Objekt.
+- `/api/license/save` weist maskierte/geschützte Platzhalter ab und überschreibt damit keine echte Lizenz mehr.
+- Admin-Lizenzseite ignoriert maskierte Lizenzwerte beim Laden/Speichern.
+- Legacy-Lizenzfeld `common.license` wieder auf `UNLICENSED` gesetzt; `licenseInformation` bleibt für spätere ioBroker-Kompatibilität erhalten.
+- Keine Änderung an Energiefluss-, Speicher-, Heizstab-, KI- oder VIS-Logik.
+- Service-Worker Cache auf `nexowatt-cache-v219` erhöht.
+
 ## 0.7.50 - ioBroker Stability Maintenance
 
 - Node.js Engine auf `>=22` angehoben.

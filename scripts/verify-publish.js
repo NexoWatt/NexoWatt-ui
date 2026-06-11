@@ -96,8 +96,13 @@ if (pkg && io) {
   if (io.news) fail('io-package.json enthält zusätzliches top-level news; bitte nur common.news verwenden.');
   if (io.version) fail('io-package.json enthält zusätzliches top-level version; bitte common.version verwenden.');
 
-  if (!hasNativeProtection(io, 'protectedNative')) fail('io-package.json protectedNative muss licenseKey enthalten.');
-  if (!hasNativeProtection(io, 'encryptedNative')) fail('io-package.json encryptedNative muss licenseKey enthalten.');
+  // 0.7.51: licenseKey protection/encryption is intentionally not enforced here.
+  // It caused an ioBroker/Admin regression where masked placeholders could be
+  // returned to the custom license UI and overwrite valid existing keys.
+  // Runtime save now rejects masked placeholders; native encryption can be
+  // re-enabled later once the Admin flow has been fully verified end-to-end.
+  if (hasNativeProtection(io, 'protectedNative')) warn('io-package.json protectedNative enthält licenseKey; bitte License-UI-Maskierung erneut komplett testen.');
+  if (hasNativeProtection(io, 'encryptedNative')) warn('io-package.json encryptedNative enthält licenseKey; bitte Runtime-/Admin-Entschlüsselung erneut komplett testen.');
   if (!io.native || !Object.prototype.hasOwnProperty.call(io.native, 'ip')) fail('io-package.json native.ip fehlt.');
 
   const inst = Array.isArray(io.instanceObjects) ? io.instanceObjects : [];

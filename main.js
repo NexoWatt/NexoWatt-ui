@@ -1215,6 +1215,60 @@ class NexoWattVis extends utils.Adapter {
     return String(key || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   }
 
+  _nwLooksLikeMaskedLicenseKey(key) {
+    const raw = String(key || '').trim();
+    if (!raw) return false;
+    const normalized = this._nwNormalizeLicenseKey(raw);
+    // Real NexoWatt keys always start with NW1/NW1T after normalization.
+    if (/^NW1(T)?[0-9A-Z]+$/.test(normalized)) return false;
+
+    // ioBroker/Admin may return protected/encrypted native values as masks.
+    // Never treat those placeholders as a real license key and never save them.
+    if (/^[*•·xX_\-.\s]+$/.test(raw) && raw.replace(/\s+/g, '').length >= 3) return true;
+    if (/^(hidden|protected|encrypted|password|secret|redacted|undefined|null)$/i.test(raw)) return true;
+    if (/^\*{3,}/.test(raw) || /\*{3,}$/.test(raw)) return true;
+    if (/^\$\/?[a-z0-9_-]*:/i.test(raw)) return true; // typical encrypted placeholder/cipher marker
+    if (/^\{\s*"encrypted"\s*:/i.test(raw)) return true;
+    return false;
+  }
+
+  _nwCleanLicenseKeyInput(key) {
+    const raw = String(key || '').trim();
+    if (!raw) return '';
+    if (this._nwLooksLikeMaskedLicenseKey(raw)) return '';
+    return raw;
+  }
+
+  async _nwReadNativeLicenseKeyFromObject() {
+    try {
+      const obj = await this.getForeignObjectAsync(`system.adapter.${this.namespace}`);
+      const key = obj && obj.native && obj.native.licenseKey !== undefined ? String(obj.native.licenseKey || '').trim() : '';
+      return key;
+    } catch (_e) {
+      return '';
+    }
+  }
+
+  async _nwGetConfiguredLicenseKey() {
+    const candidates = [];
+    try { candidates.push(String((this.config && this.config.licenseKey) || '').trim()); } catch (_e) {}
+    try {
+      const objKey = await this._nwReadNativeLicenseKeyFromObject();
+      if (objKey) candidates.push(objKey);
+    } catch (_e) {}
+
+    let sawMasked = false;
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      if (this._nwLooksLikeMaskedLicenseKey(candidate)) {
+        sawMasked = true;
+        continue;
+      }
+      return { key: candidate, sawMasked };
+    }
+    return { key: '', sawMasked };
+  }
+
   async _nwGetSystemUuid() {
     const pickUuidFromObject = (obj) => {
       const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1437,9 +1491,17 @@ class NexoWattVis extends utils.Adapter {
 
   async _nwInitLicense() {
     this._nwSystemUuid = await this._nwGetSystemUuid();
-    const entered = String(this.config.licenseKey || '').trim();
+    const licenseSource = await this._nwGetConfiguredLicenseKey();
+    const entered = licenseSource.key;
 
-    const info = await this._nwEvaluateLicense(this._nwSystemUuid, entered);
+    let info = await this._nwEvaluateLicense(this._nwSystemUuid, entered);
+    if (!info.ok && licenseSource.sawMasked && !entered) {
+      info = {
+        ok: false,
+        type: 'invalid',
+        msg: 'Lizenzschlüssel ist nur als geschützter Platzhalter gespeichert. Bitte echten Lizenzschlüssel neu eintragen.',
+      };
+    }
     this._nwLicenseInfo = info;
     this._nwLicenseOk = !!info.ok;
 
@@ -7502,7 +7564,8 @@ async onReady() {
         try { this._nwSystemUuid = await this._nwGetSystemUuid(); } catch (_e) {}
       }
       const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
-      const currentLicenseKey = String((this.config && this.config.licenseKey) || '').trim();
+      const keyInfo = await this._nwGetConfiguredLicenseKey();
+      const currentLicenseKey = keyInfo.key;
       const maskedLicenseKey = currentLicenseKey
         ? `${currentLicenseKey.slice(0, 8)}…${currentLicenseKey.slice(-6)}`
         : '';
@@ -7531,7 +7594,21 @@ async onReady() {
     app.post('/api/license/save', express.json({ limit: '64kb' }), async (req, res) => {
       sendLicenseCors(res);
       try {
-        const licenseKey = String((req.body && (req.body.licenseKey || req.body.key)) || '').trim();
+        const licenseKeyRaw = String((req.body && (req.body.licenseKey || req.body.key)) || '').trim();
+        if (this._nwLooksLikeMaskedLicenseKey(licenseKeyRaw)) {
+          const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
+          res.status(400).json({
+            ok: false,
+            adapter: this.namespace,
+            uuid: String(this._nwSystemUuid || ''),
+            valid: !!this._nwLicenseOk,
+            type: String(info.type || 'none'),
+            message: 'Maskierter/geschützter Lizenz-Platzhalter wurde nicht gespeichert. Bitte den echten Lizenzschlüssel neu eintragen.',
+            licenseKeyConfigured: false,
+          });
+          return;
+        }
+        const licenseKey = licenseKeyRaw;
         const adapterObjectId = `system.adapter.${this.namespace}`;
         const adapterObj = await this.getForeignObjectAsync(adapterObjectId);
         if (!adapterObj) throw new Error(`Adapter-Objekt nicht gefunden: ${adapterObjectId}`);
