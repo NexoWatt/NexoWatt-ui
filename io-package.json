@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.43",
+    "version": "0.7.44",
     "news": {
       "0.7.42": {
         "en": "Feature-dependent visibility fixed: EVCS/charging station and storage farm are only shown in the customer frontend when they are actually configured. Default/legacy placeholders no longer enable wallbox UI; AI Advisor suppresses EV/wallbox hints when no wallbox is available.",
@@ -1763,6 +1763,10 @@
       "0.7.43": {
         "en": "AI Advisor storage SoC source fixed: storage farm default values no longer override the real single-storage SoC. The advisor now publishes its SoC source for diagnostics and avoids false low-reserve warnings when storageFarm is not configured.",
         "de": "KI-Energieberater Speicher-SoC korrigiert: Defaultwerte der Speicherfarm überdecken den echten Einzel-Speicher-SoC nicht mehr. Der Berater veröffentlicht jetzt die verwendete SoC-Quelle zur Diagnose und vermeidet falsche Niedrigreserve-Meldungen, wenn keine Speicherfarm konfiguriert ist."
+      },
+      "0.7.44": {
+        "en": "Publish hotfix: package metadata cleaned and conflict-marker checks hardened so npm publish no longer fails on unresolved package.json merge markers.",
+        "de": "Publish-Hotfix: Paket-Metadaten bereinigt und Konfliktmarker-Prüfung gehärtet, damit npm publish nicht mehr an ungelösten package.json-Merge-Markern scheitert."
       }
     },
     "title": "NexoWatt UI",
@@ -1983,7 +1987,7 @@
     }
   },
   "instanceObjects": [],
-  "version": "0.7.43",
+  "version": "0.7.44",
   "news": {
     "0.7.42": {
       "en": "Feature-dependent visibility fixed: EVCS/charging station and storage farm are only shown in the customer frontend when they are actually configured. Default/legacy placeholders no longer enable wallbox UI; AI Advisor suppresses EV/wallbox hints when no wallbox is available.",
@@ -3695,6 +3699,10 @@
     "0.7.43": {
       "en": "AI Advisor storage SoC source fixed: storage farm default values no longer override the real single-storage SoC. The advisor now publishes its SoC source for diagnostics and avoids false low-reserve warnings when storageFarm is not configured.",
       "de": "KI-Energieberater Speicher-SoC korrigiert: Defaultwerte der Speicherfarm überdecken den echten Einzel-Speicher-SoC nicht mehr. Der Berater veröffentlicht jetzt die verwendete SoC-Quelle zur Diagnose und vermeidet falsche Niedrigreserve-Meldungen, wenn keine Speicherfarm konfiguriert ist."
+    },
+    "0.7.44": {
+      "en": "Publish hotfix: package metadata cleaned and conflict-marker checks hardened so npm publish no longer fails on unresolved package.json merge markers.",
+      "de": "Publish-Hotfix: Paket-Metadaten bereinigt und Konfliktmarker-Prüfung gehärtet, damit npm publish nicht mehr an ungelösten package.json-Merge-Markern scheitert."
     }
   }
 }

@@ -1,3 +1,10 @@
+## 0.7.44 - Publish-/Package-Hotfix
+
+- `package.json` sauber neu geschrieben und Version auf `0.7.44` gesetzt.
+- `io-package.json` und Webmanifest auf `0.7.44` synchronisiert.
+- Service-Worker Cache auf `nexowatt-cache-v212` erhöht.
+- Publish-Prüfung gegen ungelöste Git-Konfliktmarker bestätigt.
+
 ## 0.7.43 - KI-Speicher-SoC-Hotfix
 
 - KI-Energieberater: Speicher-SoC-Ermittlung korrigiert. `storageSoc` ist jetzt die primäre normale Speicher-SoC-Quelle; `storageFarm.totalSoc=0` aus nicht aktiver oder nicht konfigurierter Speicherfarm sowie alte Regelungs-Defaults überdecken den echten Kunden-Frontend-SoC nicht mehr.
