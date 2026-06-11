@@ -1,3 +1,45 @@
+## 0.7.43 - KI-Speicher-SoC-Hotfix
+
+- KI-Energieberater: Speicher-SoC-Ermittlung korrigiert. `storageSoc` ist jetzt die primäre normale Speicher-SoC-Quelle; `storageFarm.totalSoc=0` aus nicht aktiver oder nicht konfigurierter Speicherfarm sowie alte Regelungs-Defaults überdecken den echten Kunden-Frontend-SoC nicht mehr.
+- Speicherfarm-SoC wird nur noch genutzt, wenn die Farm aktiv ist und echte SoC-Quellen vorhanden sind; sonst fällt die KI sauber auf den normalen Speicher-SoC zurück.
+- Neue Diagnose-States `aiAdvisor.storageSocPct` und `aiAdvisor.storageSocSource`, damit sichtbar ist, welchen Speicher-SoC der KI-Berater wirklich verwendet.
+- Service-Worker Cache auf `nexowatt-cache-v211` erhöht.
+
+## 0.7.42 - Batteriefluss-Verknüpfung und striktere Anlagen-Sichtbarkeit
+
+- Batterie-Leistungsanzeige im Cockpit gehärtet: Wenn Lade-/Entlade-Datenpunkte fehlen, stale sind oder nur 0 liefern, aber PV, Netz, Hausverbrauch und SoC eine klare Batterie-Bilanz ergeben, wird Laden/Entladen plausibel aus der Leistungsbilanz abgeleitet.
+- Energiefluss-Monitor, aktuelle Werte, KPI-Kachel und Historie nutzen damit wieder konsistente Speicherwerte.
+- Backend spiegelt abgeleitete Batterie-Lade-/Entladeleistung auf die öffentlichen Flow-States, damit KI-Berater, Historie und Module dieselbe Speicherlogik sehen.
+- EVCS-/Ladestations-Sichtbarkeit weiter verschärft: Alte Bool-Flags allein reichen nicht mehr aus; sichtbar wird EVCS nur bei wirklich konfigurierten Ladepunkt-Zeilen.
+- Service-Worker Cache auf `nexowatt-cache-v210` erhöht.
+
+## 0.7.41 - Anlagenabhängige Sichtbarkeit für EVCS und Speicherfarm
+
+- Kunden-Frontend zeigt EVCS/Ladestation nur noch, wenn mindestens ein echter Ladepunkt mit Mess-/Steuer-Datenpunkt konfiguriert ist.
+- Default-/Legacy-Placeholder wie `consumptionEvcs` aktivieren keine Wallbox-Anzeige mehr.
+- Ladestation-Wert, Schnellzugriff, Energiefluss-Knoten, EVCS-Seite und EVCS-Navigation werden bei Anlagen ohne Wallbox ausgeblendet.
+- Speicherfarm-Reiter und Farmansicht werden nur noch angezeigt, wenn die Speicherfarm im Installer aktiv ist und mindestens ein Speicher konfiguriert wurde.
+- KI-Energieberater blendet EV-/Wallbox-Empfehlungen bei Anlagen ohne Wallbox aus und formuliert Empfehlungen dann auf Heizstab, Warmwasser und andere flexible Lasten um.
+- App-Center erlaubt `0` Ladepunkte als gültige Konfiguration.
+- Service-Worker Cache auf `nexowatt-cache-v209` erhöht.
+
+## 0.7.40 - KI-Energieberater Planung & Lernen
+
+- KI‑Energieberater um Tagesfahrplan, EV‑Zielplanung, wetterbasierte Speicherstrategie, Saisonlogik und Komfortfenster erweitert.
+- Lastspitzen‑Lernfunktion, Anomalie‑Erkennung und Prognosequalitätsbewertung ergänzt.
+- Kunden‑Einstellungen für Optimierungsmodus, EV‑Ziel, Komfort-/Ruhezeiten und Prioritäten ergänzt.
+- App‑Center/Admin‑Konfiguration für neue KI‑Bausteine, Schwellwerte, Prioritäten und Kategorien erweitert.
+- Neue States unter `aiAdvisor.*` für Tagesfahrplan, Lernhinweise, Prognosequalität, Anomalien, Saison und Komfortfenster ergänzt.
+
+# 0.7.39 - KI-Berater Wetterprognose und Peak-Shaving-Vorwarnung
+
+- KI-Energieberater nutzt jetzt die vorhandene Wetterprognose: Regen-/Wolkenlage, Temperatur und Morgen-Prognose können Empfehlungen zu Speicherreserve, PV-Fenstern, Thermik und Kühlung beeinflussen.
+- Peak-Shaving-Beratung korrigiert: Bei konfigurierter Netzanschlussleistung von z. B. 30 kW wird ab 90 % eine Vorwarnung ausgelöst, also ab 27 kW.
+- Die Peak-Meldung unterscheidet sauber zwischen „Lastspitzenkappung aktiv“, „Lastspitzenkappung vorbereitet“ und „Lastspitzenkappung nicht konfiguriert“.
+- Neue Runtime-States ergänzt: `aiAdvisor.peakUsagePct`, `aiAdvisor.peakStateText`, `aiAdvisor.gridConnectionLimitW`, `aiAdvisor.peakWarnThresholdW` und `aiAdvisor.weatherSummary`.
+- App-Center erweitert: Schwellwert „Peak-Warnung ab Netzanschluss (%)“, Schlechtwetter-/Regenrisiko-Schwelle und Kategorie „Wetter / Prognose“.
+- Service-Worker Cache auf `nexowatt-cache-v207` erhöht.
+
 # 0.7.38 - Speicherfarm-Route und KI-Berater Kundenschalter
 
 - Fehler behoben: `storagefarm.html` ist jetzt direkt unter `/storagefarm.html`, `/storagefarm`, `/speicherfarm.html` und `/speicherfarm` erreichbar; die 404-Seite beim Topbar-Reiter Speicherfarm ist damit beseitigt.

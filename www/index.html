@@ -199,7 +199,7 @@
 <text class="lbl" id="pvLabel" text-anchor="middle" y="28">PV</text>
 </g>
 <!-- Wallbox right -->
-<g class="node consumer charger" id="nodeEvcs" transform="translate(440,300)">
+<g class="node consumer charger" id="nodeEvcs" transform="translate(440,300)" style="display:none">
 <circle class="ring charger" r="44"></circle>
 <g class="ico" transform="translate(0,0)">
   <image href="/static/icons/ev.png" x="-14" y="-14" width="28" height="28" />
@@ -451,7 +451,7 @@
       <div class="nw-value-row nw-value-row--grid"><span>🗼 Netzeinspeisung</span><b id="sideGridSellPower">--</b></div>
       <div class="nw-value-row nw-value-row--battery"><span>🔋 Batterie Leistung</span><b id="sideBatteryPower">--</b></div>
       <div class="nw-value-row nw-value-row--battery"><span>🔋 Batterie SoC</span><b id="sideBatterySoc">-- %</b></div>
-      <div class="nw-value-row nw-value-row--ev"><span>🔌 Ladestation Leistung</span><b id="sideEvcsPower">--</b></div>
+      <div class="nw-value-row nw-value-row--ev hidden"><span>🔌 Ladestation Leistung</span><b id="sideEvcsPower">--</b></div>
     </div>
   </section>
 
@@ -500,7 +500,7 @@
       </div>
     </div>
 
-    <div class="nw-tile nw-tile--size-m nw-tile--type-scene" id="evcsCard" tabindex="0" role="button" aria-label="Ladepunkte öffnen">
+    <div class="nw-tile nw-tile--size-m nw-tile--type-scene hidden" id="evcsCard" tabindex="0" role="button" aria-label="Ladepunkte öffnen">
       <div class="nw-tile__top">
         <div class="nw-tile__icon-circle">EV</div>
         <div style="flex:1; margin-left:8px; min-width:0;">

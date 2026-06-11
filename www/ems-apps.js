@@ -135,18 +135,48 @@
     aiAdvisorIntervalSec: document.getElementById('aiAdvisorIntervalSec'),
     aiAdvisorMaxSuggestions: document.getElementById('aiAdvisorMaxSuggestions'),
     aiAdvisorMinPriority: document.getElementById('aiAdvisorMinPriority'),
+    aiAdvisorOptimizationMode: document.getElementById('aiAdvisorOptimizationMode'),
+    aiAdvisorDailyPlanEnabled: document.getElementById('aiAdvisorDailyPlanEnabled'),
+    aiAdvisorLearningEnabled: document.getElementById('aiAdvisorLearningEnabled'),
+    aiAdvisorAnomalyDetectionEnabled: document.getElementById('aiAdvisorAnomalyDetectionEnabled'),
+    aiAdvisorForecastQualityEnabled: document.getElementById('aiAdvisorForecastQualityEnabled'),
+    aiAdvisorSeasonLogicEnabled: document.getElementById('aiAdvisorSeasonLogicEnabled'),
     aiAdvisorStaleTimeoutSec: document.getElementById('aiAdvisorStaleTimeoutSec'),
     aiAdvisorExportHighW: document.getElementById('aiAdvisorExportHighW'),
     aiAdvisorImportHighW: document.getElementById('aiAdvisorImportHighW'),
+    aiAdvisorPeakNearLimitPct: document.getElementById('aiAdvisorPeakNearLimitPct'),
+    aiAdvisorWeatherRainRiskPct: document.getElementById('aiAdvisorWeatherRainRiskPct'),
     aiAdvisorLowSocPct: document.getElementById('aiAdvisorLowSocPct'),
     aiAdvisorHighSocPct: document.getElementById('aiAdvisorHighSocPct'),
     aiAdvisorPvForecastHighW: document.getElementById('aiAdvisorPvForecastHighW'),
+    aiAdvisorEvReadyBy: document.getElementById('aiAdvisorEvReadyBy'),
+    aiAdvisorEvTargetSocPct: document.getElementById('aiAdvisorEvTargetSocPct'),
+    aiAdvisorEvBatteryCapacityKwh: document.getElementById('aiAdvisorEvBatteryCapacityKwh'),
+    aiAdvisorThermalReadyBy: document.getElementById('aiAdvisorThermalReadyBy'),
+    aiAdvisorQuietHoursStart: document.getElementById('aiAdvisorQuietHoursStart'),
+    aiAdvisorQuietHoursEnd: document.getElementById('aiAdvisorQuietHoursEnd'),
+    aiAdvisorAnomalyHighLoadW: document.getElementById('aiAdvisorAnomalyHighLoadW'),
+    aiAdvisorNightBaseLoadW: document.getElementById('aiAdvisorNightBaseLoadW'),
+    aiAdvisorForecastQualityWarnPct: document.getElementById('aiAdvisorForecastQualityWarnPct'),
+    aiAdvisorCo2LowGPerKwh: document.getElementById('aiAdvisorCo2LowGPerKwh'),
+    aiAdvisorCo2HighGPerKwh: document.getElementById('aiAdvisorCo2HighGPerKwh'),
+    aiAdvisorPriorityStorage: document.getElementById('aiAdvisorPriorityStorage'),
+    aiAdvisorPriorityEvcs: document.getElementById('aiAdvisorPriorityEvcs'),
+    aiAdvisorPriorityThermal: document.getElementById('aiAdvisorPriorityThermal'),
+    aiAdvisorPriorityHeatingRod: document.getElementById('aiAdvisorPriorityHeatingRod'),
+    aiAdvisorPriorityGeneric: document.getElementById('aiAdvisorPriorityGeneric'),
     aiAdvisorCatTariff: document.getElementById('aiAdvisorCatTariff'),
     aiAdvisorCatPv: document.getElementById('aiAdvisorCatPv'),
     aiAdvisorCatStorage: document.getElementById('aiAdvisorCatStorage'),
     aiAdvisorCatEvcs: document.getElementById('aiAdvisorCatEvcs'),
     aiAdvisorCatPeak: document.getElementById('aiAdvisorCatPeak'),
+    aiAdvisorCatWeather: document.getElementById('aiAdvisorCatWeather'),
     aiAdvisorCatHeating: document.getElementById('aiAdvisorCatHeating'),
+    aiAdvisorCatDailyPlan: document.getElementById('aiAdvisorCatDailyPlan'),
+    aiAdvisorCatAnomaly: document.getElementById('aiAdvisorCatAnomaly'),
+    aiAdvisorCatComfort: document.getElementById('aiAdvisorCatComfort'),
+    aiAdvisorCatLearning: document.getElementById('aiAdvisorCatLearning'),
+    aiAdvisorCatCo2: document.getElementById('aiAdvisorCatCo2'),
     aiAdvisorCatSystem: document.getElementById('aiAdvisorCatSystem'),
 
     // Tabs
@@ -242,7 +272,7 @@
     { id: 'threshold', label: 'Schwellwertsteuerung', desc: 'Regeln (Wenn X > Y dann Schalten/Setzen) – optional mit Endkunden-Anpassung', mandatory: false },
     { id: 'relay', label: 'Relaissteuerung', desc: 'Manuelle Relais / generische Ausgänge (optional endkundentauglich)', mandatory: false },
     { id: 'grid', label: 'Netzlimits', desc: 'Netzrestriktionen (RLM/0‑Einspeisung/Import‑Limits)', mandatory: false },
-    { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung: PV, Tarif, Speicher, Wallboxen und Lastspitzen als Vorschläge auf der LIVE‑Seite', mandatory: false },
+    { id: 'aiAdvisor', label: 'KI‑Energieberater', desc: 'Beratende KI‑Optimierung: PV, Wetter, Tarif, Speicher, Wallboxen und Lastspitzen als Vorschläge auf der LIVE‑Seite', mandatory: false },
     { id: 'tariff', label: 'Tarife', desc: 'Preis-Signal / Ladepark-Budget / Netzladung-Freigabe', mandatory: true },
     { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls genutzt)', mandatory: false },
     { id: 'multiuse', label: 'MultiUse', desc: 'Speicher Multi‑Use (SoC‑Zonen: Notstrom/LSK/Eigenverbrauch)', mandatory: false }
@@ -881,41 +911,87 @@ function _collectFlowPowerDpIsWFromUI() {
     el.checked = (typeof value === 'boolean') ? value : !!def;
   }
 
+  function _aiSetInputValue(el, value, def = '') {
+    if (!el) return;
+    const v = (value === null || value === undefined || value === '') ? def : value;
+    el.value = String(v === null || v === undefined ? '' : v);
+  }
+
   function buildAiAdvisorUI() {
     const cfg = (currentConfig && currentConfig.aiAdvisor && typeof currentConfig.aiAdvisor === 'object') ? currentConfig.aiAdvisor : {};
     const cats = (cfg.categories && typeof cfg.categories === 'object') ? cfg.categories : {};
+    const prio = (cfg.priorities && typeof cfg.priorities === 'object') ? cfg.priorities : {};
 
     _aiSetCheckbox(els.aiAdvisorShowOnLive, (cfg.showInLive !== undefined ? cfg.showInLive : cfg.showOnLive), true);
     _aiSetNumberInput(els.aiAdvisorIntervalSec, cfg.intervalSec, 60);
-    _aiSetNumberInput(els.aiAdvisorMaxSuggestions, cfg.maxSuggestions, 4);
+    _aiSetNumberInput(els.aiAdvisorMaxSuggestions, cfg.maxSuggestions, 6);
     if (els.aiAdvisorMinPriority) {
       const p = String(cfg.minPriority || 'info').toLowerCase();
       els.aiAdvisorMinPriority.value = ['info', 'warning', 'action', 'critical'].includes(p) ? p : 'info';
     }
+    if (els.aiAdvisorOptimizationMode) {
+      const m = String(cfg.optimizationMode || cfg.mode || 'balanced').toLowerCase();
+      els.aiAdvisorOptimizationMode.value = ['balanced', 'cost', 'autarky', 'co2', 'peak'].includes(m) ? m : 'balanced';
+    }
+    _aiSetCheckbox(els.aiAdvisorDailyPlanEnabled, cfg.dailyPlanEnabled !== false && cfg.dayPlanEnabled !== false, true);
+    _aiSetCheckbox(els.aiAdvisorLearningEnabled, cfg.learningEnabled !== false, true);
+    _aiSetCheckbox(els.aiAdvisorAnomalyDetectionEnabled, cfg.anomalyDetectionEnabled !== false, true);
+    _aiSetCheckbox(els.aiAdvisorForecastQualityEnabled, cfg.forecastQualityEnabled !== false, true);
+    _aiSetCheckbox(els.aiAdvisorSeasonLogicEnabled, cfg.seasonLogicEnabled !== false, true);
+
     _aiSetNumberInput(els.aiAdvisorStaleTimeoutSec, cfg.staleTimeoutSec, 300);
     _aiSetNumberInput(els.aiAdvisorExportHighW, cfg.exportHighW, 1500);
     _aiSetNumberInput(els.aiAdvisorImportHighW, cfg.importHighW, 4000);
+    _aiSetNumberInput(els.aiAdvisorPeakNearLimitPct, cfg.peakNearLimitPct !== undefined ? cfg.peakNearLimitPct : (cfg.peakConnectionUsageWarnPct !== undefined ? cfg.peakConnectionUsageWarnPct : cfg.gridConnectionWarnPct), 90);
+    _aiSetNumberInput(els.aiAdvisorWeatherRainRiskPct, cfg.weatherRainRiskPct !== undefined ? cfg.weatherRainRiskPct : cfg.weatherRainProbabilityPct, 60);
     _aiSetNumberInput(els.aiAdvisorLowSocPct, cfg.lowSocPct, 25);
     _aiSetNumberInput(els.aiAdvisorHighSocPct, cfg.highSocPct, 85);
     _aiSetNumberInput(els.aiAdvisorPvForecastHighW, cfg.pvForecastHighW, 3000);
+
+    _aiSetInputValue(els.aiAdvisorEvReadyBy, cfg.evReadyBy, '07:00');
+    _aiSetNumberInput(els.aiAdvisorEvTargetSocPct, cfg.evTargetSocPct, 80);
+    _aiSetNumberInput(els.aiAdvisorEvBatteryCapacityKwh, cfg.evBatteryCapacityKwh, 60);
+    _aiSetInputValue(els.aiAdvisorThermalReadyBy, cfg.thermalReadyBy, '18:00');
+    _aiSetInputValue(els.aiAdvisorQuietHoursStart, cfg.quietHoursStart, '22:00');
+    _aiSetInputValue(els.aiAdvisorQuietHoursEnd, cfg.quietHoursEnd, '06:00');
+    _aiSetNumberInput(els.aiAdvisorAnomalyHighLoadW, cfg.anomalyHighLoadW, 5500);
+    _aiSetNumberInput(els.aiAdvisorNightBaseLoadW, cfg.nightBaseLoadW, 900);
+    _aiSetNumberInput(els.aiAdvisorForecastQualityWarnPct, cfg.forecastQualityWarnPct, 65);
+    _aiSetNumberInput(els.aiAdvisorCo2LowGPerKwh, cfg.co2LowGPerKwh, 250);
+    _aiSetNumberInput(els.aiAdvisorCo2HighGPerKwh, cfg.co2HighGPerKwh, 500);
+    _aiSetNumberInput(els.aiAdvisorPriorityStorage, cfg.priorityStorage !== undefined ? cfg.priorityStorage : prio.storage, 90);
+    _aiSetNumberInput(els.aiAdvisorPriorityEvcs, cfg.priorityEvcs !== undefined ? cfg.priorityEvcs : prio.evcs, 80);
+    _aiSetNumberInput(els.aiAdvisorPriorityThermal, cfg.priorityThermal !== undefined ? cfg.priorityThermal : prio.thermal, 60);
+    _aiSetNumberInput(els.aiAdvisorPriorityHeatingRod, cfg.priorityHeatingRod !== undefined ? cfg.priorityHeatingRod : prio.heatingRod, 45);
+    _aiSetNumberInput(els.aiAdvisorPriorityGeneric, cfg.priorityGeneric !== undefined ? cfg.priorityGeneric : prio.generic, 40);
 
     _aiSetCheckbox(els.aiAdvisorCatTariff, cats.tariff, true);
     _aiSetCheckbox(els.aiAdvisorCatPv, cats.pv, true);
     _aiSetCheckbox(els.aiAdvisorCatStorage, cats.storage, true);
     _aiSetCheckbox(els.aiAdvisorCatEvcs, cats.evcs, true);
     _aiSetCheckbox(els.aiAdvisorCatPeak, cats.peak, true);
+    _aiSetCheckbox(els.aiAdvisorCatWeather, cats.weather, true);
     _aiSetCheckbox(els.aiAdvisorCatHeating, cats.heating, true);
+    _aiSetCheckbox(els.aiAdvisorCatDailyPlan, cats.dailyPlan !== undefined ? cats.dailyPlan : cats.plan, true);
+    _aiSetCheckbox(els.aiAdvisorCatAnomaly, cats.anomaly, true);
+    _aiSetCheckbox(els.aiAdvisorCatComfort, cats.comfort, true);
+    _aiSetCheckbox(els.aiAdvisorCatLearning, cats.learning, true);
+    _aiSetCheckbox(els.aiAdvisorCatCo2, cats.co2, true);
     _aiSetCheckbox(els.aiAdvisorCatSystem, cats.system, true);
   }
 
   function collectAiAdvisorConfigFromUI(base) {
     const out = deepMerge({}, (base && typeof base === 'object') ? base : {});
-    const n = (el, def, min, max) => {
+    const n = (el, def, min, max, roundValue = true) => {
       const raw = el ? Number(el.value) : NaN;
       let v = Number.isFinite(raw) ? raw : def;
       if (Number.isFinite(min)) v = Math.max(min, v);
       if (Number.isFinite(max)) v = Math.min(max, v);
-      return Math.round(v);
+      return roundValue ? Math.round(v) : v;
+    };
+    const str = (el, def) => {
+      const raw = el ? String(el.value || '').trim() : '';
+      return raw || def;
     };
     out.enabled = true;
     out.mode = 'advisor';
@@ -923,22 +999,68 @@ function _collectFlowPowerDpIsWFromUI() {
     out.showOnLive = els.aiAdvisorShowOnLive ? !!els.aiAdvisorShowOnLive.checked : true;
     out.showInLive = out.showOnLive;
     out.intervalSec = n(els.aiAdvisorIntervalSec, 60, 10, 3600);
-    out.maxSuggestions = n(els.aiAdvisorMaxSuggestions, 4, 1, 10);
+    out.maxSuggestions = n(els.aiAdvisorMaxSuggestions, 6, 1, 10);
     out.minPriority = els.aiAdvisorMinPriority ? String(els.aiAdvisorMinPriority.value || 'info').toLowerCase() : 'info';
     if (!['info', 'warning', 'action', 'critical'].includes(out.minPriority)) out.minPriority = 'info';
+    out.optimizationMode = els.aiAdvisorOptimizationMode ? String(els.aiAdvisorOptimizationMode.value || 'balanced').toLowerCase() : 'balanced';
+    if (!['balanced', 'cost', 'autarky', 'co2', 'peak'].includes(out.optimizationMode)) out.optimizationMode = 'balanced';
+    out.dailyPlanEnabled = els.aiAdvisorDailyPlanEnabled ? !!els.aiAdvisorDailyPlanEnabled.checked : true;
+    out.dayPlanEnabled = out.dailyPlanEnabled;
+    out.learningEnabled = els.aiAdvisorLearningEnabled ? !!els.aiAdvisorLearningEnabled.checked : true;
+    out.anomalyDetectionEnabled = els.aiAdvisorAnomalyDetectionEnabled ? !!els.aiAdvisorAnomalyDetectionEnabled.checked : true;
+    out.forecastQualityEnabled = els.aiAdvisorForecastQualityEnabled ? !!els.aiAdvisorForecastQualityEnabled.checked : true;
+    out.seasonLogicEnabled = els.aiAdvisorSeasonLogicEnabled ? !!els.aiAdvisorSeasonLogicEnabled.checked : true;
+
     out.staleTimeoutSec = n(els.aiAdvisorStaleTimeoutSec, 300, 30, 86400);
     out.exportHighW = n(els.aiAdvisorExportHighW, 1500, 0, 1000000000);
     out.importHighW = n(els.aiAdvisorImportHighW, 4000, 0, 1000000000);
+    out.peakNearLimitPct = n(els.aiAdvisorPeakNearLimitPct, 90, 50, 100);
+    out.peakConnectionUsageWarnPct = out.peakNearLimitPct;
+    out.gridConnectionWarnPct = out.peakNearLimitPct;
+    out.weatherRainRiskPct = n(els.aiAdvisorWeatherRainRiskPct, 60, 0, 100);
+    out.weatherRainProbabilityPct = out.weatherRainRiskPct;
     out.lowSocPct = n(els.aiAdvisorLowSocPct, 25, 0, 100);
     out.highSocPct = n(els.aiAdvisorHighSocPct, 85, 0, 100);
     out.pvForecastHighW = n(els.aiAdvisorPvForecastHighW, 3000, 0, 1000000000);
+
+    out.evReadyBy = str(els.aiAdvisorEvReadyBy, '07:00');
+    out.evTargetSocPct = n(els.aiAdvisorEvTargetSocPct, 80, 10, 100);
+    out.evBatteryCapacityKwh = n(els.aiAdvisorEvBatteryCapacityKwh, 60, 5, 300);
+    out.thermalReadyBy = str(els.aiAdvisorThermalReadyBy, '18:00');
+    out.quietHoursStart = str(els.aiAdvisorQuietHoursStart, '22:00');
+    out.quietHoursEnd = str(els.aiAdvisorQuietHoursEnd, '06:00');
+    out.anomalyHighLoadW = n(els.aiAdvisorAnomalyHighLoadW, 5500, 0, 1000000000);
+    out.nightBaseLoadW = n(els.aiAdvisorNightBaseLoadW, 900, 0, 1000000000);
+    out.forecastQualityWarnPct = n(els.aiAdvisorForecastQualityWarnPct, 65, 0, 100);
+    out.co2LowGPerKwh = n(els.aiAdvisorCo2LowGPerKwh, 250, 0, 2000);
+    out.co2HighGPerKwh = n(els.aiAdvisorCo2HighGPerKwh, 500, 0, 3000);
+    out.priorityStorage = n(els.aiAdvisorPriorityStorage, 90, 0, 100);
+    out.priorityEvcs = n(els.aiAdvisorPriorityEvcs, 80, 0, 100);
+    out.priorityThermal = n(els.aiAdvisorPriorityThermal, 60, 0, 100);
+    out.priorityHeatingRod = n(els.aiAdvisorPriorityHeatingRod, 45, 0, 100);
+    out.priorityGeneric = n(els.aiAdvisorPriorityGeneric, 40, 0, 100);
+    out.priorities = {
+      storage: out.priorityStorage,
+      evcs: out.priorityEvcs,
+      thermal: out.priorityThermal,
+      heatingRod: out.priorityHeatingRod,
+      generic: out.priorityGeneric,
+    };
+
     out.categories = {
       tariff: els.aiAdvisorCatTariff ? !!els.aiAdvisorCatTariff.checked : true,
       pv: els.aiAdvisorCatPv ? !!els.aiAdvisorCatPv.checked : true,
       storage: els.aiAdvisorCatStorage ? !!els.aiAdvisorCatStorage.checked : true,
       evcs: els.aiAdvisorCatEvcs ? !!els.aiAdvisorCatEvcs.checked : true,
       peak: els.aiAdvisorCatPeak ? !!els.aiAdvisorCatPeak.checked : true,
+      weather: els.aiAdvisorCatWeather ? !!els.aiAdvisorCatWeather.checked : true,
       heating: els.aiAdvisorCatHeating ? !!els.aiAdvisorCatHeating.checked : true,
+      dailyPlan: els.aiAdvisorCatDailyPlan ? !!els.aiAdvisorCatDailyPlan.checked : true,
+      plan: els.aiAdvisorCatDailyPlan ? !!els.aiAdvisorCatDailyPlan.checked : true,
+      anomaly: els.aiAdvisorCatAnomaly ? !!els.aiAdvisorCatAnomaly.checked : true,
+      comfort: els.aiAdvisorCatComfort ? !!els.aiAdvisorCatComfort.checked : true,
+      learning: els.aiAdvisorCatLearning ? !!els.aiAdvisorCatLearning.checked : true,
+      co2: els.aiAdvisorCatCo2 ? !!els.aiAdvisorCatCo2.checked : true,
       system: els.aiAdvisorCatSystem ? !!els.aiAdvisorCatSystem.checked : true,
     };
     return out;
@@ -6120,7 +6242,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
   function _updateEvcsField(idx, field, value) {
     const sc = _ensureSettingsConfig();
-    const count = _clampInt(sc.evcsCount, 1, 50, 1);
+    const count = _clampInt(sc.evcsCount, 0, 50, 0);
     const list = _ensureEvcsList(count);
     const row = (list[idx - 1] && typeof list[idx - 1] === 'object') ? list[idx - 1] : {};
     row[field] = value;
@@ -6131,7 +6253,7 @@ function _collectFlowPowerDpIsWFromUI() {
   function buildEvcsUI() {
     if (!els.evcsList || !els.evcsCount) return;
     const sc = _ensureSettingsConfig();
-    const count = _clampInt(sc.evcsCount, 1, 50, 1);
+    const count = _clampInt(sc.evcsCount, 0, 50, 0);
     sc.evcsCount = count;
 
     els.evcsCount.value = String(count);
@@ -6144,6 +6266,15 @@ function _collectFlowPowerDpIsWFromUI() {
     sc.stationGroups = Array.isArray(sc.stationGroups) ? sc.stationGroups : [];
 
     els.evcsList.innerHTML = '';
+
+    if (count <= 0) {
+      const empty = document.createElement('div');
+      empty.className = 'nw-help';
+      empty.textContent = 'Keine Wallbox konfiguriert. Setze die Anzahl auf 1 oder höher, wenn eine Ladestation vorhanden ist.';
+      els.evcsList.appendChild(empty);
+      try { if (els.stationGroups) els.stationGroups.innerHTML = ''; } catch (_e) {}
+      return;
+    }
 
     const mkRow = (label, controlEl) => {
       const row = document.createElement('div');
@@ -6279,7 +6410,7 @@ function _collectFlowPowerDpIsWFromUI() {
     const addPortToStation = (stationKey) => {
       const sk = normKey(stationKey);
       const sc2 = _ensureSettingsConfig();
-      const cur = _clampInt(sc2.evcsCount, 1, 50, 1);
+      const cur = _clampInt(sc2.evcsCount, 0, 50, 0);
       if (cur >= 20) return;
 
       const next = cur + 1;
@@ -6890,7 +7021,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
   function collectSettingsConfigFromUI() {
     const out = deepMerge({}, (currentConfig && currentConfig.settingsConfig) ? currentConfig.settingsConfig : {});
-    const count = _clampInt(els.evcsCount ? els.evcsCount.value : out.evcsCount, 1, 50, 1);
+    const count = _clampInt(els.evcsCount ? els.evcsCount.value : out.evcsCount, 0, 50, 0);
     out.evcsCount = count;
 
     if (els.evcsMaxPowerKw) {
@@ -7240,7 +7371,7 @@ function _collectFlowPowerDpIsWFromUI() {
       }
 
       const sc = _ensureSettingsConfig();
-      const currentCount = _clampInt(sc.evcsCount, 1, 50, 1);
+      const currentCount = _clampInt(sc.evcsCount, 0, 50, 0);
 
       if (connectors.length > currentCount) {
         const ok = window.confirm(`OCPP hat ${connectors.length} Ladepunkte erkannt, konfiguriert sind aktuell ${currentCount}.\n\nSoll die Anzahl automatisch auf ${Math.min(50, connectors.length)} erhöht werden?`);
@@ -7250,7 +7381,7 @@ function _collectFlowPowerDpIsWFromUI() {
         }
       }
 
-      const count = _clampInt(sc.evcsCount, 1, 50, 1);
+      const count = _clampInt(sc.evcsCount, 0, 50, 0);
       const list = _ensureEvcsList(count);
 
       for (let i = 0; i < count && i < connectors.length; i++) {
@@ -7633,7 +7764,7 @@ function _collectFlowPowerDpIsWFromUI() {
       let evcsMapped = 0;
       if (evcsDevs.length) {
         const sc = _ensureSettingsConfig();
-        const curCount = _clampInt(sc.evcsCount, 1, 50, 1);
+        const curCount = _clampInt(sc.evcsCount, 0, 50, 0);
         const wantCount = _clampInt(Math.max(curCount, evcsDevs.length), 1, 50, curCount);
         if (wantCount !== curCount) {
           sc.evcsCount = wantCount;
@@ -9168,7 +9299,7 @@ function _collectFlowPowerDpIsWFromUI() {
   if (els.evcsCount) {
     els.evcsCount.addEventListener('change', () => {
       const sc = _ensureSettingsConfig();
-      sc.evcsCount = _clampInt(els.evcsCount.value, 1, 50, 1);
+      sc.evcsCount = _clampInt(els.evcsCount.value, 0, 50, 0);
       buildEvcsUI();
     });
   }

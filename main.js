@@ -1438,6 +1438,20 @@ class NexoWattVis extends utils.Adapter {
 
       // Kundencockpit: KI-Energieberater kann vom Betreiber ein-/ausgeschaltet werden.
       aiAdvisorEnabled: { type: 'boolean', role: 'state', def: true },
+      aiAdvisorMode: { type: 'string', role: 'text', def: 'balanced' },
+      aiAdvisorOptimizationMode: { type: 'string', role: 'text', def: 'balanced' },
+      aiAdvisorComfortStart: { type: 'string', role: 'text', def: '06:00' },
+      aiAdvisorComfortEnd: { type: 'string', role: 'text', def: '22:00' },
+      aiAdvisorQuietHoursStart: { type: 'string', role: 'text', def: '22:00' },
+      aiAdvisorQuietHoursEnd: { type: 'string', role: 'text', def: '06:00' },
+      aiAdvisorEvReadyBy: { type: 'string', role: 'text', def: '07:00' },
+      aiAdvisorEvTargetSocPct: { type: 'number', role: 'value.percent', def: 80 },
+      aiAdvisorThermalReadyBy: { type: 'string', role: 'text', def: '18:00' },
+      aiAdvisorPriorityStorage: { type: 'number', role: 'value', def: 90 },
+      aiAdvisorPriorityEvcs: { type: 'number', role: 'value', def: 80 },
+      aiAdvisorPriorityThermal: { type: 'number', role: 'value', def: 60 },
+      aiAdvisorPriorityHeatingRod: { type: 'number', role: 'value', def: 45 },
+      aiAdvisorPriorityGeneric: { type: 'number', role: 'value', def: 40 },
 
       dynamicTariff: { type: 'boolean', role: 'state', def: false },
       storagePower: { type: 'number', role: 'value.power', def: 1000 },
@@ -1493,7 +1507,7 @@ class NexoWattVis extends utils.Adapter {
       weatherApiKey: { type: 'string', role: 'text', def: '' },
 
       // EVCS defaults mirrored into runtime settings (written by syncSettingsConfigToStates())
-      evcsCount: { type: 'number', role: 'value', def: 1 },
+      evcsCount: { type: 'number', role: 'value', def: 0 },
       evcsMaxPower: { type: 'number', role: 'value.power', def: 11000 },
 
       // Energy-flow presentation toggles
@@ -2141,9 +2155,33 @@ class NexoWattVis extends utils.Adapter {
       enabled: true,
       showOnLive: true,
       intervalSec: 60,
-      maxSuggestions: 4,
+      maxSuggestions: 6,
       minPriority: 'info',
-      categories: { tariff: true, pv: true, storage: true, evcs: true, peak: true, heating: true, system: true }
+      optimizationMode: 'balanced',
+      dailyPlanEnabled: true,
+      learningEnabled: true,
+      anomalyDetectionEnabled: true,
+      forecastQualityEnabled: true,
+      seasonLogicEnabled: true,
+      evReadyBy: '07:00',
+      evTargetSocPct: 80,
+      evBatteryCapacityKwh: 60,
+      thermalReadyBy: '18:00',
+      quietHoursStart: '22:00',
+      quietHoursEnd: '06:00',
+      anomalyHighLoadW: 5500,
+      nightBaseLoadW: 900,
+      forecastQualityWarnPct: 65,
+      co2LowGPerKwh: 250,
+      co2HighGPerKwh: 500,
+      priorities: { storage: 90, evcs: 80, thermal: 60, heatingRod: 45, generic: 40 },
+      peakNearLimitPct: 90,
+      peakConnectionUsageWarnPct: 90,
+      gridConnectionWarnPct: 90,
+      peakCriticalLimitPct: 98,
+      weatherRainRiskPct: 60,
+      weatherRainProbabilityPct: 60,
+      categories: { tariff: true, pv: true, storage: true, evcs: true, peak: true, weather: true, heating: true, dailyPlan: true, plan: true, anomaly: true, comfort: true, learning: true, co2: true, system: true }
     });
     ensurePlainObj('smartHome', {});
     // SmartHomeConfig (Gebäude/Räume/Funktionen/Geräte + optionale SmartHome-VIS Navigation)
@@ -2953,14 +2991,14 @@ class NexoWattVis extends utils.Adapter {
     }
 
     const native = (simObj && simObj.native && typeof simObj.native === 'object') ? simObj.native : {};
-    let evcsCount = Math.max(1, Math.min(200, Math.round(Number(native.chargersCount || native.chargerCount || native.evcsCount || 1))));
+    let evcsCount = Math.max(0, Math.min(200, Math.round(Number(native.chargersCount ?? native.chargerCount ?? native.evcsCount ?? 0) || 0)));
 
     // Prefer runtime state if available (supports dynamic changes in sim adapter)
     try {
       const stCount = await this.getForeignStateAsync(`${inst}.evcs.count`).catch(() => null);
       const n = (stCount && stCount.val !== undefined && stCount.val !== null) ? Number(stCount.val) : NaN;
-      if (Number.isFinite(n) && n > 0) {
-        evcsCount = Math.max(1, Math.min(200, Math.round(n)));
+      if (Number.isFinite(n) && n >= 0) {
+        evcsCount = Math.max(0, Math.min(200, Math.round(n)));
       }
     } catch (_e) {}
 
@@ -3385,9 +3423,13 @@ class NexoWattVis extends utils.Adapter {
   async syncStorageFarmConfigFromAdmin() {
     try {
       const cfg = this.config || {};
-      const enabled = !!cfg.enableStorageFarm;
+      const adminSf = (cfg.storageFarm && typeof cfg.storageFarm === 'object') ? cfg.storageFarm : {};
+      const rowsRaw = Array.isArray(adminSf.storages) ? adminSf.storages : [];
+      const hasConfiguredStorage = rowsRaw.some(r => r && typeof r === 'object' && r.enabled !== false);
+      const enabled = !!cfg.enableStorageFarm && hasConfiguredStorage;
 
-      // Master-Enable aus Admin in State spiegeln (damit UI + Runtime konsistent bleiben)
+      // Master-Enable aus Admin in State spiegeln (damit UI + Runtime konsistent bleiben).
+      // Ohne konfigurierte Speicher bleibt die Kunden-Farmansicht unsichtbar.
       try {
         await this.setStateAsync('storageFarm.enabled', { val: enabled, ack: true });
         try { this.updateValue('storageFarm.enabled', enabled, Date.now()); } catch (_e0) {}
@@ -3395,7 +3437,6 @@ class NexoWattVis extends utils.Adapter {
 
       if (!enabled) return;
 
-      const adminSf = (cfg.storageFarm && typeof cfg.storageFarm === 'object') ? cfg.storageFarm : {};
       const modeRaw = String(adminSf.mode || 'pool').toLowerCase().trim();
       const mode = (modeRaw === 'groups') ? 'groups' : 'pool';
 
@@ -4912,13 +4953,19 @@ try {
     const cfg = (this.config && this.config.settingsConfig) || {};
     const ratedKw = Number(cfg.evcsMaxPowerKw || 11); // default 11 kW
     const ratedW  = Math.round(ratedKw * 1000);
-    const evcsCount = Math.max(1, Math.min(50, Math.round(Number(cfg.evcsCount || 1))));
+
+    // Ladepunkte sind optional. Alte Builds hatten implizit 1 Ladepunkt als Default;
+    // im Kunden-Frontend darf eine nicht konfigurierte Wallbox dadurch aber nicht sichtbar werden.
+    const rawList = Array.isArray(cfg.evcsList) ? cfg.evcsList : [];
+    const rawCount = (cfg.evcsCount !== undefined && cfg.evcsCount !== null && String(cfg.evcsCount).trim() !== '')
+      ? Number(cfg.evcsCount)
+      : rawList.length;
+    const evcsCount = Math.max(0, Math.min(50, Math.round(Number.isFinite(rawCount) ? rawCount : 0)));
     this.evcsCount = evcsCount;
     this.log.info(`[NexoWatt UI] Ladepunkte konfiguriert: ${evcsCount}`);
 
 
-    // derive evcs list (names) from config; keep it stable and always at least evcsCount entries
-    const rawList = Array.isArray(cfg.evcsList) ? cfg.evcsList : [];
+    // derive evcs list (names) from config; keep it stable and only as long as explicitly configured
     const evcsList = [];
     for (let i = 0; i < evcsCount; i++) {
       const row = rawList[i] || {};
@@ -5030,7 +5077,7 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
   }
 
   async ensureEvcsStates() {
-    const count = Number(this.evcsCount || 1) || 1;
+    const count = Math.max(0, Math.round(Number(this.evcsCount || 0) || 0));
 
     await this.setObjectNotExistsAsync('evcs', {
       type: 'channel',
@@ -5495,7 +5542,7 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
 
   async seedEvcsDayBaseCache() {
     try {
-      const count = Number(this.evcsCount || 1) || 1;
+      const count = Math.max(0, Math.round(Number(this.evcsCount || 0) || 0));
       for (let i = 1; i <= count; i++) {
         const kBase = `evcs.${i}._dayBaseKwh`;
         const kDate = `evcs.${i}._dayBaseDate`;
@@ -5544,8 +5591,8 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
     try {
       const cfg = this.config || {};
       const ns = this.namespace;
-      const count = (Number(this.evcsCount) || (cfg && cfg.settingsConfig && Number(cfg.settingsConfig.evcsCount)) || 1);
-      const evcsCount = (Number.isFinite(count) && count > 0) ? Math.round(count) : 1;
+      const count = (Number(this.evcsCount) || (cfg && cfg.settingsConfig && Number(cfg.settingsConfig.evcsCount)) || 0);
+      const evcsCount = (Number.isFinite(count) && count > 0) ? Math.round(count) : 0;
 
       // Subscribe to all local EMS states (wildcards are supported by the runtime).
       // This keeps the state cache in sync and prevents UI mode buttons from jumping.
@@ -7309,8 +7356,8 @@ async onReady() {
     const enabledFlag = cfg.enableChargingManagement;
     // UI-States auch dann bereitstellen, wenn das Modul vorübergehend deaktiviert ist.
 
-    const count = (Number(this.evcsCount) || Number(cfg?.settingsConfig?.evcsCount) || 1);
-    const evcsCount = (Number.isFinite(count) && count > 0) ? Math.round(count) : 1;
+    const count = (Number(this.evcsCount) || Number(cfg?.settingsConfig?.evcsCount) || 0);
+    const evcsCount = (Number.isFinite(count) && count > 0) ? Math.round(count) : 0;
 
     // Subscribe to ALL internal EMS states (wildcards). This is efficient and ensures
     // state changes propagate to the SSE/stateCache.
@@ -13217,29 +13264,51 @@ app.get('/config', (req, res) => {
       // were not persisted yet.
       const cfg = this.config || {};
 
-      const inferChargingEnabled = () => {
-        const v = cfg.enableChargingManagement;
-        if (typeof v === 'boolean') return v;
-
-        // Upgrade/default behaviour: if the user did not explicitly disable charging,
-        // we expose the EMS runtime controls. The embedded module itself will still
-        // write setpoints only when controllable datapoints are mapped.
-        try {
-          const cnt = Number(cfg && cfg.settingsConfig && cfg.settingsConfig.evcsCount);
-          if (Number.isFinite(cnt) && cnt > 0) return true;
-          const list = Array.isArray(this.evcsList) ? this.evcsList : [];
-          if (list && list.length) return true;
-        } catch (_e) {
-          // ignore
-        }
-        return false;
-      };
-
       const boolOr = (val, def) => (typeof val === 'boolean' ? val : !!def);
-
-      const sess = getSession(req);
       const datapoints = (cfg && cfg.datapoints && typeof cfg.datapoints === 'object') ? cfg.datapoints : {};
       const datapointFlags = Object.fromEntries(Object.entries(datapoints).map(([k, v]) => [k, !!String(v == null ? '' : v).trim()]));
+
+      const evcsMappedFields = [
+        'powerId', 'energyTotalId', 'energySessionId', 'statusId', 'activeId', 'onlineId',
+        'setCurrentAId', 'setPowerWId', 'enableWriteId', 'lockWriteId', 'rfidReadId',
+        'vehicleSocId'
+      ];
+      const rawEvcsRows = Array.isArray(cfg.settingsConfig && cfg.settingsConfig.evcsList) ? cfg.settingsConfig.evcsList : [];
+      const evcsListForConfig = Array.isArray(this.evcsList) ? this.evcsList : rawEvcsRows;
+      const evcsConfiguredCount = rawEvcsRows.filter((row) => {
+        if (!row || row.enabled === false) return false;
+        return evcsMappedFields.some((key) => String(row[key] || '').trim());
+      }).length;
+      // A legacy aggregate datapoint may exist as a default placeholder even on Anlagen ohne Wallbox.
+      // Customer EVCS UI is therefore enabled only when at least one real Ladepunkt row has a mapping/control DP.
+      const evcsAvailable = !!(evcsConfiguredCount > 0);
+      const evcsCountForConfig = evcsAvailable
+        ? Math.max(evcsConfiguredCount, Math.max(0, Math.round(Number(this.evcsCount || 0) || 0)))
+        : 0;
+
+      const parseJsonArraySafe = (raw) => {
+        try {
+          if (Array.isArray(raw)) return raw;
+          if (raw === undefined || raw === null || raw === '') return [];
+          const parsed = JSON.parse(String(raw));
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (_e) {
+          return [];
+        }
+      };
+      const storageRowsFromConfig = Array.isArray(cfg && cfg.storageFarm && cfg.storageFarm.storages) ? cfg.storageFarm.storages : [];
+      // Stale runtime states from older builds must not expose the customer Speicherfarm page.
+      // The page is visible only when the installer configured at least one active storage row.
+      const storageFarmConfigured = storageRowsFromConfig.some((row) => row && row.enabled !== false);
+      const storageFarmAvailable = !!(cfg.enableStorageFarm && storageFarmConfigured);
+
+      const inferChargingEnabled = () => {
+        const v = cfg.enableChargingManagement;
+        if (typeof v === 'boolean') return v && evcsAvailable;
+        return evcsAvailable;
+      };
+
+      const sess = getSession(req);
 
       res.json({
         units: cfg.units || { power: 'W', energy: 'kWh' },
@@ -13470,33 +13539,35 @@ app.get('/config', (req, res) => {
             return out;
           };
 
-          const evcsList = Array.isArray(this.evcsList) ? this.evcsList : [];
-          const evcsHasPower = evcsList.some(e => e && String(e.powerId || '').trim());
-          const evcsAltMapped = !!String(dps.consumptionEvcs || '').trim();
-
           return {
             core,
             consumers: buildSlots('consumers'),
             producers: buildSlots('producers'),
             meta: {
-              evcsAvailable: !!(evcsHasPower || evcsAltMapped)
+              evcsAvailable: evcsAvailable,
+              evcsConfiguredCount: evcsConfiguredCount
             }
           };
         })(),
 
 settingsConfig: {
-          evcsCount: (cfg && cfg.settingsConfig && Number(cfg.settingsConfig.evcsCount)) || (this.evcsCount || 1),
+          evcsCount: evcsCountForConfig,
+          evcsConfiguredCount: evcsConfiguredCount,
+          evcsAvailable: evcsAvailable,
           evcsMaxPowerKw: (cfg && cfg.settingsConfig && Number(cfg.settingsConfig.evcsMaxPowerKw)) || 11,
-          evcsList: Array.isArray(this.evcsList) ? this.evcsList : []
+          evcsList: evcsAvailable ? evcsListForConfig : []
         },
         smartHome: cfg.smartHome || {},
+        smartHomeEnabled: !!(cfg.smartHome && cfg.smartHome.enabled),
+        storageFarmEnabled: storageFarmAvailable,
         ems: {
           chargingEnabled: inferChargingEnabled(),
+          evcsAvailable: evcsAvailable,
           peakShavingEnabled: boolOr(cfg.enablePeakShaving, false) || boolOr(cfg && cfg.peakShaving && cfg.peakShaving.atypical && cfg.peakShaving.atypical.enabled, false),
           para14aEnabled: boolOr(cfg && cfg.installerConfig && cfg.installerConfig.para14a, false),
           gridConstraintsEnabled: boolOr(cfg.enableGridConstraints, false),
           storageEnabled: boolOr(cfg.enableStorageControl, false),
-          storageFarmEnabled: boolOr(cfg.enableStorageFarm, false),
+          storageFarmEnabled: storageFarmAvailable,
           heatingRodEnabled: boolOr(cfg.enableHeatingRodControl, false),
           thresholdEnabled: boolOr(cfg.enableThresholdControl, false),
           relayEnabled: boolOr(cfg.enableRelayControl, false),
@@ -16296,6 +16367,10 @@ return res.json(out);
       'deviceStaleTimeoutSec',
       // Customer cockpit settings
       'aiAdvisorEnabled',
+      'aiAdvisorMode','aiAdvisorOptimizationMode',
+      'aiAdvisorComfortStart','aiAdvisorComfortEnd','aiAdvisorQuietHoursStart','aiAdvisorQuietHoursEnd',
+      'aiAdvisorEvReadyBy','aiAdvisorEvTargetSocPct','aiAdvisorThermalReadyBy',
+      'aiAdvisorPriorityStorage','aiAdvisorPriorityEvcs','aiAdvisorPriorityThermal','aiAdvisorPriorityHeatingRod','aiAdvisorPriorityGeneric',
       // Tariff/charging settings
       'dynamicTariff','storagePower','price','priority','tariffMode',
       // PV Saisonprofil (Quartale)
@@ -17587,6 +17662,83 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       };
     };
 
+    const fromBalance = () => {
+      try {
+        const balanceDeadbandW = Math.max(180, deadbandW);
+        if (this.stateCache && this.stateCache['storageFarm.enabled'] && this.stateCache['storageFarm.enabled'].value) return null;
+
+        const soc = this._nwGetNumberFromCache('storageSoc');
+        if (!Number.isFinite(Number(soc))) return null;
+
+        // Nur mit direkt gemessenem Hausverbrauch ableiten. Ohne Direktmessung wäre
+        // consumptionTotal evtl. schon aus derselben Bilanz berechnet und damit zirkulär.
+        const hasDirectLoad = this._nwHasMappedDatapoint('consumptionTotal') || this._nwHasMappedDatapoint('housePower');
+        if (!hasDirectLoad) return null;
+
+        let load = this._nwGetNumberFromCache('consumptionTotal');
+        if (load === null || !Number.isFinite(Number(load))) load = this._nwGetNumberFromCache('housePower');
+        if (load === null || !Number.isFinite(Number(load))) return null;
+
+        const grid = this._nwResolveGridImportExportFromCache ? this._nwResolveGridImportExportFromCache() : null;
+        if (!grid || !grid.hasGrid) return null;
+
+        let pv = this._nwGetNumberFromCache('pvPower');
+        if ((pv === null || !Number.isFinite(Number(pv))) && this._nwHasMappedDatapoint('productionTotal')) {
+          pv = this._nwGetNumberFromCache('productionTotal');
+        }
+        if (pv === null || !Number.isFinite(Number(pv))) return null;
+
+        let production = Math.max(0, Math.abs(Number(pv) || 0));
+        for (let i = 1; i <= 5; i++) {
+          const extra = this._nwGetNumberFromCache(`producer${i}Power`);
+          if (Number.isFinite(Number(extra))) production += Math.max(0, Math.abs(Number(extra)));
+        }
+
+        const buy = Math.max(0, Number(grid.gridBuyW) || 0);
+        const sell = Math.max(0, Number(grid.gridSellW) || 0);
+        const signed = Math.round(Math.max(0, Number(load) || 0) - production - buy + sell);
+        if (!Number.isFinite(signed) || Math.abs(signed) <= balanceDeadbandW) return null;
+
+        const activity = production + Math.max(0, Number(load) || 0) + buy + sell;
+        if (activity < 500) return null;
+        if (Math.abs(signed) > Math.max(3000, activity * 1.15)) return null;
+        if (signed < 0 && Number(soc) >= 99.5) return null;
+        if (signed > 0 && Number(soc) <= 0.5) return null;
+
+        return {
+          chargeW: signed < 0 ? Math.abs(signed) : 0,
+          dischargeW: signed > 0 ? signed : 0,
+          signedW: signed,
+          src: 'balanceDerived',
+          inverted: false,
+          fromSigned: false,
+          mirror: true,
+          staleMs: {
+            balance: 0,
+            batteryPower: this._nwGetCacheAgeMs('batteryPower', now),
+            storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
+            storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
+          },
+        };
+      } catch (_eBalance) {
+        return null;
+      }
+    };
+
+    const preferBalance = (current) => {
+      try {
+        const measured = Math.max(0, Math.abs(Number(current && current.chargeW) || 0) + Math.abs(Number(current && current.dischargeW) || 0));
+        const srcCur = String(current && current.src || '');
+        const missingLike = !current || srcCur === 'missing' || srcCur === 'stale-or-missing';
+        const derived = fromBalance();
+        if (!derived) return current;
+        if (missingLike || measured <= Math.max(180, deadbandW)) return derived;
+        return current;
+      } catch (_ePrefer) {
+        return current;
+      }
+    };
+
     // Speicherfarm already provides normalized charge/discharge totals. Keep it authoritative
     // unless a signed single battery datapoint is explicitly mapped for a non-farm setup.
     const sfEnabled = !!(this.stateCache && this.stateCache['storageFarm.enabled'] && this.stateCache['storageFarm.enabled'].value);
@@ -17620,7 +17772,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     // If charge/discharge were both mapped to the same signed datapoint, keep the sign.
     // updateValue() normalizes their public state values to magnitudes, so the private raw cache is used here.
     if (sameChargeDischargeId && chargeRaw !== null) {
-      return fromSigned(chargeRaw, 'sameChargeDischargeSigned', { mirror: true });
+      return preferBalance(fromSigned(chargeRaw, 'sameChargeDischargeSigned', { mirror: true }));
     }
 
     // Canonical single signed DP fallback: exactly like NVP signed handling.
@@ -17633,7 +17785,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const bothEqualish = bothPublicDirections && Math.abs(Math.abs(Number(publicCharge || 0)) - Math.abs(Number(publicDischarge || 0))) <= Math.max(2, deadbandW);
 
     if (batterySigned !== null && (!separateAvailable || bothEqualish || (!chargeMapped && !dischargeMapped))) {
-      return fromSigned(batterySigned, bothEqualish ? 'batterySignedOverrideDual' : 'batterySigned', { mirror: true });
+      return preferBalance(fromSigned(batterySigned, bothEqualish ? 'batterySignedOverrideDual' : 'batterySigned', { mirror: true }));
     }
 
     if (separateAvailable) {
@@ -17644,7 +17796,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       if (c <= deadbandW) c = 0;
       if (d <= deadbandW) d = 0;
       if (inv) { const t = c; c = d; d = t; }
-      return {
+      return preferBalance({
         chargeW: Math.round(c),
         dischargeW: Math.round(d),
         signedW: Math.round(d - c),
@@ -17656,14 +17808,14 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
           storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
           storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
         },
-      };
+      });
     }
 
     if (batterySigned !== null) {
-      return fromSigned(batterySigned, 'batterySigned', { mirror: true });
+      return preferBalance(fromSigned(batterySigned, 'batterySigned', { mirror: true }));
     }
 
-    return {
+    return preferBalance({
       chargeW: 0,
       dischargeW: 0,
       signedW: 0,
@@ -17676,7 +17828,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
         storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
       },
-    };
+    });
   }
 
   _nwResolveGridImportExportFromCache() {
@@ -19213,7 +19365,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         if (!Number.isFinite(curC) || curC !== chargeRound) this.updateValue('storageChargePower', chargeRound, ts, { raw: false });
         if (!Number.isFinite(curD) || curD !== dischargeRound) this.updateValue('storageDischargePower', dischargeRound, ts, { raw: false });
       }
-      if (!this._nwHasMappedDatapoint('batteryPower')) {
+      if (!this._nwHasMappedDatapoint('batteryPower') || (storageFlow && storageFlow.src === 'balanceDerived')) {
         const signedRound = Math.round(dischargeW - chargeW);
         const curB = Number(this.stateCache?.batteryPower?.value);
         if (!Number.isFinite(curB) || curB !== signedRound) this.updateValue('batteryPower', signedRound, ts, { raw: false });
@@ -19949,7 +20101,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     // derived EVCS aggregates
     try {
       if (/^evcs\.\d+\.powerW$/.test(key)) {
-        const count = Number(this.evcsCount || 1) || 1;
+        const count = Math.max(0, Math.round(Number(this.evcsCount || 0) || 0));
         let sum = 0;
         for (let i = 1; i <= count; i++) {
           const v = this.stateCache[`evcs.${i}.powerW`]?.value;

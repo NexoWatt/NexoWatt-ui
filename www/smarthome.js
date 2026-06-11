@@ -8396,18 +8396,26 @@ async function nwLoadUiConfigFlags() {
   try {
     const cfg = await fetch('/config', { cache: 'no-store' }).then(r => r.json());
 
-    nwEvcsCount = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
-    nwSmartHomeEnabled = !!(cfg.smartHome && cfg.smartHome.enabled);
+    const sc = (cfg && cfg.settingsConfig) || {};
+    const evcsAvailable = ((Number(sc.evcsConfiguredCount || 0) || (Array.isArray(sc.evcsList) ? sc.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
+    nwEvcsCount = evcsAvailable ? Math.max(0, Math.round(Number(sc.evcsCount) || 0)) : 0;
+    nwSmartHomeEnabled = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
+    const storageFarmEnabled = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(cfg.ems && cfg.ems.storageFarmEnabled);
 
     // EVCS visibility
+    const showEvcs = evcsAvailable && nwEvcsCount >= 2;
     const l = document.getElementById('menuEvcsLink');
-    if (l) l.classList.toggle('hidden', nwEvcsCount < 2);
+    if (l) l.classList.toggle('hidden', !showEvcs);
     const t = document.getElementById('tabEvcs');
-    if (t) t.classList.toggle('hidden', nwEvcsCount < 2);
+    if (t) t.classList.toggle('hidden', !showEvcs);
 
     // SmartHome menu item
     const sl = document.getElementById('menuSmartHomeLink');
     if (sl) sl.classList.toggle('hidden', !nwSmartHomeEnabled);
+    const sfMenu = document.getElementById('menuStorageFarmLink');
+    if (sfMenu) sfMenu.classList.toggle('hidden', !storageFarmEnabled);
+    const sfTab = document.getElementById('tabStorageFarm');
+    if (sfTab) sfTab.classList.toggle('hidden', !storageFarmEnabled);
   } catch (_e) {
     // ignore
   }

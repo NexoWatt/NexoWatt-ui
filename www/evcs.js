@@ -456,7 +456,7 @@ function closeEvcsModal() {
 }
 
 function buildEvcsModalBodyHtml(i) {
-  const count = _evcsCount || 1;
+  const count = Math.max(0, Math.round(Number(_evcsCount) || 0));
   const meta = Array.isArray(_evcsMeta) ? _evcsMeta : [];
   const m = meta[i - 1] || {};
 
@@ -702,8 +702,9 @@ function render() {
   if (!list) return;
 
   const sc = (cfg && cfg.settingsConfig) || {};
-  const count = Number(sc.evcsCount) || 1;
-  const meta = Array.isArray(sc.evcsList) ? sc.evcsList : [];
+  const evcsAvailable = ((Number(sc.evcsConfiguredCount || 0) || (Array.isArray(sc.evcsList) ? sc.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
+  const count = evcsAvailable ? Math.max(0, Math.round(Number(sc.evcsCount) || 0)) : 0;
+  const meta = evcsAvailable && Array.isArray(sc.evcsList) ? sc.evcsList : [];
 
   _evcsCount = count;
   _evcsMeta = meta;
@@ -1248,19 +1249,31 @@ async function bootstrap() {
   bindControls();
 
   try {
-    cfg = await fetch('/config').then(r => r.json());
-    const c = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
+    cfg = await fetch('/config', { cache: 'no-store' }).then(r => r.json());
+    const sc = (cfg && cfg.settingsConfig) || {};
+    const evcsAvailable = ((Number(sc.evcsConfiguredCount || 0) || (Array.isArray(sc.evcsList) ? sc.evcsList.filter(function(r){ if(!r || r.enabled === false) return false; return ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'].some(function(k){ return String(r[k] || '').trim(); }); }).length : 0)) > 0);
+    const c = evcsAvailable ? Math.max(0, Math.round(Number(sc.evcsCount) || 0)) : 0;
+    const showEvcsPage = evcsAvailable && c >= 2;
+    if (!showEvcsPage) {
+      try { window.location.replace('./'); } catch (_e) { window.location.href = './'; }
+      return;
+    }
     const l = document.getElementById('menuEvcsLink');
-    if (l) l.classList.toggle('hidden', c < 2);
+    if (l) l.classList.toggle('hidden', !showEvcsPage);
     const t = document.getElementById('tabEvcs');
-    if (t) t.classList.toggle('hidden', c < 2);
+    if (t) t.classList.toggle('hidden', !showEvcsPage);
     const n = document.getElementById('nav-evcs');
-    if (n) n.classList.toggle('hidden', c < 2);
-    const sh = !!(cfg.smartHome && cfg.smartHome.enabled);
+    if (n) n.classList.toggle('hidden', !showEvcsPage);
+    const sh = !!((cfg.smartHome && cfg.smartHome.enabled) || cfg.smartHomeEnabled);
     const sl = document.getElementById('menuSmartHomeLink');
     if (sl) sl.classList.toggle('hidden', !sh);
     const st = document.getElementById('tabSmartHome');
     if (st) st.classList.toggle('hidden', !sh);
+    const sf = (typeof cfg.storageFarmEnabled === 'boolean') ? !!cfg.storageFarmEnabled : !!(cfg.ems && cfg.ems.storageFarmEnabled);
+    const sfMenu = document.getElementById('menuStorageFarmLink');
+    if (sfMenu) sfMenu.classList.toggle('hidden', !sf);
+    const sfTab = document.getElementById('tabStorageFarm');
+    if (sfTab) sfTab.classList.toggle('hidden', !sf);
   } catch (_e) {}
 
   try {

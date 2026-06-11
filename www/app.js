@@ -78,8 +78,8 @@ let units = { power: 'W', energy: 'kWh' };
 
 // Energiefluss-Monitor: optionale Verbraucher/Erzeuger (Slots)
 let flowSlotsCfg = null; // comes from /config
-let flowExtras = { consumers: [], producers: [], special: [], meta: { evcsAvailable: true } };
-let _flowResponsiveCfg = { consumers: 0, producers: 0, special: 0, evcsVisible: true };
+let flowExtras = { consumers: [], producers: [], special: [], meta: { evcsAvailable: false } };
+let _flowResponsiveCfg = { consumers: 0, producers: 0, special: 0, evcsVisible: false };
 let _flowResponsiveRaf = 0;
 
 function applyEnergyWebResponsiveLayout(nextCfg) {
@@ -1019,6 +1019,122 @@ function nwSetDisplay(id, visible, displayValue) {
   el.style.display = visible ? (displayValue || '') : 'none';
 }
 
+function nwSetElementVisible(el, visible, displayValue) {
+  if (!el) return;
+  try { el.classList.toggle('hidden', !visible); } catch (_e) {}
+  el.style.display = visible ? (displayValue || '') : 'none';
+}
+
+function nwAsBool(v, def) {
+  if (typeof v === 'boolean') return v;
+  if (v === undefined || v === null || v === '') return !!def;
+  if (typeof v === 'number') return v !== 0;
+  const s = String(v).trim().toLowerCase();
+  if (['true', '1', 'yes', 'ja', 'on', 'an'].includes(s)) return true;
+  if (['false', '0', 'no', 'nein', 'off', 'aus'].includes(s)) return false;
+  return !!def;
+}
+
+function nwFeatureMappedRow(row) {
+  if (!row || row.enabled === false) return false;
+  // Nur echte Ladepunkt-Zuordnungen zählen. Legacy-Aggregate wie consumptionEvcs
+  // oder alte boolesche Flags dürfen eine Kundenanlage ohne Wallbox nicht sichtbar machen.
+  const fields = ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'];
+  return fields.some((key) => String(row[key] || '').trim());
+}
+
+function nwConfiguredEvcsRows(inputCfg) {
+  const c = inputCfg || window.__nwCfg || {};
+  try {
+    const sc = (c.settingsConfig && typeof c.settingsConfig === 'object') ? c.settingsConfig : {};
+    const fromSettings = Array.isArray(sc.evcsList) ? sc.evcsList : [];
+    const fromRuntime = Array.isArray(c.evcsList) ? c.evcsList : [];
+    const list = fromSettings.length ? fromSettings : fromRuntime;
+    return list.filter(nwFeatureMappedRow);
+  } catch (_e) {
+    return [];
+  }
+}
+
+function nwEvcsFeatureFromConfig(inputCfg) {
+  const c = inputCfg || window.__nwCfg || {};
+  try {
+    const rows = nwConfiguredEvcsRows(c);
+    const sc = (c.settingsConfig && typeof c.settingsConfig === 'object') ? c.settingsConfig : {};
+    const configuredCount = Number(sc.evcsConfiguredCount ?? (c.flowSlots && c.flowSlots.meta && c.flowSlots.meta.evcsConfiguredCount) ?? rows.length);
+    const count = Number(sc.evcsCount ?? window.__nwEvcsCount ?? configuredCount ?? 0);
+    // Strikte Regel: Sichtbar erst ab realem Ladepunkt. Ein altes evcsAvailable=true
+    // ohne gemappte Ladepunkt-Zeile wird bewusst ignoriert.
+    return rows.length > 0 || (Number.isFinite(configuredCount) && configuredCount > 0 && Number.isFinite(count) && count > 0);
+  } catch (_e) {
+    return false;
+  }
+}
+
+function nwEvcsCountFromConfig(inputCfg) {
+  const c = inputCfg || window.__nwCfg || {};
+  try {
+    const sc = (c.settingsConfig && typeof c.settingsConfig === 'object') ? c.settingsConfig : {};
+    const n = Number(sc.evcsCount ?? sc.evcsConfiguredCount ?? window.__nwEvcsCount ?? 0);
+    return Math.max(0, Math.round(Number.isFinite(n) ? n : 0));
+  } catch (_e) {
+    return 0;
+  }
+}
+
+function nwStorageFarmFeatureFromConfig(inputCfg, stateSnapshot) {
+  const c = inputCfg || window.__nwCfg || {};
+  if (typeof c.storageFarmEnabled === 'boolean') return c.storageFarmEnabled;
+  if (c.ems && typeof c.ems.storageFarmEnabled === 'boolean') return c.ems.storageFarmEnabled;
+  try {
+    const st = stateSnapshot || window.latestState || state || {};
+    const enabled = nwAsBool(st['storageFarm.enabled'] && st['storageFarm.enabled'].value, false);
+    const total = Number(st['storageFarm.storagesTotal'] && st['storageFarm.storagesTotal'].value);
+    return enabled && Number.isFinite(total) && total > 0;
+  } catch (_e) {
+    return false;
+  }
+}
+
+function nwApplyCustomerFeatureVisibility(inputCfg, stateSnapshot) {
+  const c = inputCfg || window.__nwCfg || {};
+  const evcsAvailable = nwEvcsFeatureFromConfig(c);
+  const evcsCount = evcsAvailable ? nwEvcsCountFromConfig(c) : 0;
+  const showEvcsPage = evcsAvailable && evcsCount >= 2;
+  const storageFarmAvailable = nwStorageFarmFeatureFromConfig(c, stateSnapshot);
+
+  try { window.__nwEvcsAvailable = evcsAvailable; window.__nwEvcsCount = evcsCount; window.__nwStorageFarmEnabled = storageFarmAvailable; } catch (_e) {}
+
+  const menuEvcsLink = document.getElementById('menuEvcsLink');
+  const tabEvcs = document.getElementById('tabEvcs');
+  if (menuEvcsLink) menuEvcsLink.classList.toggle('hidden', !showEvcsPage);
+  if (tabEvcs) tabEvcs.classList.toggle('hidden', !showEvcsPage);
+
+  const evcsCard = document.getElementById('evcsCard');
+  if (evcsCard) evcsCard.classList.toggle('hidden', !evcsAvailable);
+  const evSide = document.getElementById('sideEvcsPower');
+  if (evSide) nwSetElementVisible(evSide.closest('.nw-value-row'), evcsAvailable);
+
+  const evcsNode = document.getElementById('nodeEvcs');
+  if (evcsNode) evcsNode.style.display = evcsAvailable ? '' : 'none';
+  const evcsLine = document.getElementById('lineC2');
+  if (evcsLine) evcsLine.style.display = evcsAvailable ? '' : 'none';
+
+  try {
+    const evVal = document.getElementById('consumptionEvcs');
+    const evBox = evVal && evVal.parentElement;
+    if (evBox) nwSetElementVisible(evBox, evcsAvailable);
+    const tile = document.getElementById('consumptionBuilding') && document.getElementById('consumptionBuilding').closest('.nw-tile');
+    const room = tile && tile.querySelector('.nw-tile__room');
+    if (room) room.textContent = evcsAvailable ? 'EVCS & Gebäude' : 'Gebäude';
+  } catch (_e) {}
+
+  const menuStorageFarmLink = document.getElementById('menuStorageFarmLink');
+  const tabStorageFarm = document.getElementById('tabStorageFarm');
+  if (menuStorageFarmLink) menuStorageFarmLink.classList.toggle('hidden', !storageFarmAvailable);
+  if (tabStorageFarm) tabStorageFarm.classList.toggle('hidden', !storageFarmAvailable);
+}
+
 function nwFormatDashboardTimestamp(ts) {
   const n = Number(ts);
   if (!Number.isFinite(n) || n <= 0) return '--';
@@ -1074,7 +1190,9 @@ function updateDashboardShellUi(data) {
   const charge = Math.max(0, Number(snap.charge ?? 0) || 0);
   const discharge = Math.max(0, Number(snap.discharge ?? 0) || 0);
   const batterySigned = discharge - charge;
-  const evcsPower = Number(snap.evcsPower ?? d('consumptionEvcs') ?? d('evcsPower') ?? 0) || 0;
+  const evcsAvailable = nwEvcsFeatureFromConfig();
+  const evcsPower = evcsAvailable ? (Number(snap.evcsPower ?? d('consumptionEvcs') ?? d('evcsPower') ?? 0) || 0) : 0;
+  try { nwApplyCustomerFeatureVisibility(window.__nwCfg || {}, window.latestState || state || {}); } catch (_e) {}
 
   const soc = (snap.socN !== undefined && snap.socN !== null) ? Number(snap.socN) : coerceNumber(d('storageSoc'));
   const autarky = (snap.autarkyN !== undefined && snap.autarkyN !== null) ? Number(snap.autarkyN) : coerceNumber(d('autarky'));
@@ -1097,7 +1215,7 @@ function updateDashboardShellUi(data) {
   setText('sideGridBuyPower', formatFlowPower(Math.max(0, buy)));
   setText('sideGridSellPower', formatFlowPower(Math.max(0, sell)));
   setText('sideBatteryPower', (batterySigned < 0 ? '-' : '') + formatFlowPower(Math.abs(batterySigned)));
-  setText('sideEvcsPower', formatFlowPower(Math.abs(evcsPower)));
+  if (evcsAvailable) setText('sideEvcsPower', formatFlowPower(Math.abs(evcsPower)));
 
   const ts = nwLatestStateTimestamp([
     'pvPower', 'productionTotal', 'consumptionTotal', 'gridPower', 'gridBuyPower',
@@ -1142,7 +1260,7 @@ function initEnergyWebExtras(flowSlots){
     producers: [],
     special: [],
     meta: {
-      evcsAvailable: !!(flowSlots && ((flowSlots.meta && flowSlots.meta.evcsAvailable) || flowSlots.evcsAvailable))
+      evcsAvailable: !!(flowSlots && ((flowSlots.meta && flowSlots.meta.evcsAvailable) || flowSlots.evcsAvailable)) && nwEvcsFeatureFromConfig(Object.assign({}, window.__nwCfg || {}, { flowSlots: flowSlots }))
     }
   };
 
@@ -1932,6 +2050,77 @@ function getConfiguredDatapointId(key) {
   }
 }
 
+function getBalanceDerivedBatteryFlow(opts = {}) {
+  try {
+    const deadbandW = Number.isFinite(Number(opts.deadbandW)) ? Math.max(0, Number(opts.deadbandW)) : 180;
+    const st = state || window.latestState || {};
+    const read = (k) => st && st[k] ? st[k].value : undefined;
+
+    // In Speicherfarm-Anlagen sind die Farm-Summen die Quelle der Wahrheit.
+    if (nwAsBool(read('storageFarm.enabled'), false)) return null;
+
+    const soc = coerceNumber(read('storageSoc') ?? read('batterySOC'));
+    if (soc === null) return null;
+
+    // Nur aus der Bilanz ableiten, wenn eine echte Verbrauchsleistung gemappt ist.
+    // Sonst würden wir aus einem bereits abgeleiteten consumptionTotal wieder zurückrechnen.
+    const hasDirectLoad = isMappedDatapoint('consumptionTotal') || isMappedDatapoint('housePower');
+    if (!hasDirectLoad) return null;
+
+    const load = coerceNumber(read('consumptionTotal') ?? read('housePower'));
+    if (load === null) return null;
+
+    const grid = getGridImportExport(read);
+    if (!grid || !grid.hasGridInfo) return null;
+
+    let pv = coerceNumber(read('pvPower'));
+    if (pv === null && isMappedDatapoint('productionTotal')) pv = coerceNumber(read('productionTotal'));
+    if (pv === null) return null;
+
+    let production = Math.max(0, Math.abs(Number(pv) || 0));
+    for (let i = 1; i <= 5; i++) {
+      const p = coerceNumber(read(`producer${i}Power`));
+      if (p !== null) production += Math.max(0, Math.abs(p));
+    }
+
+    const signed = Math.round((Math.max(0, load) - production - Math.max(0, grid.buy || 0) + Math.max(0, grid.sell || 0)));
+    if (!Number.isFinite(signed) || Math.abs(signed) <= deadbandW) return null;
+
+    // Plausibilitätsbremsen gegen kurze Messversätze oder unbekannte Verbraucher.
+    const activity = production + Math.max(0, load) + Math.max(0, grid.buy || 0) + Math.max(0, grid.sell || 0);
+    if (activity < 500) return null;
+    if (Math.abs(signed) > Math.max(3000, activity * 1.15)) return null;
+    if (signed < 0 && soc >= 99.5) return null;
+    if (signed > 0 && soc <= 0.5) return null;
+
+    return {
+      chargeW: signed < 0 ? Math.abs(signed) : 0,
+      dischargeW: signed > 0 ? signed : 0,
+      signedW: signed,
+      src: 'balanceDerived',
+      inverted: false,
+      derived: true
+    };
+  } catch (_e) {
+    return null;
+  }
+}
+
+function preferBalanceDerivedBatteryFlow(current, opts = {}) {
+  try {
+    const deadbandW = Number.isFinite(Number(opts.deadbandW)) ? Math.max(180, Number(opts.deadbandW)) : 180;
+    const measured = Math.max(0, Math.abs(Number(current && current.chargeW) || 0) + Math.abs(Number(current && current.dischargeW) || 0));
+    const src = String(current && current.src || '');
+    const missingLike = !current || src === 'missing' || src === 'stale-or-missing';
+    const derived = getBalanceDerivedBatteryFlow({ deadbandW });
+    if (!derived) return current;
+    if (missingLike || measured <= deadbandW) return derived;
+    return current;
+  } catch (_e) {
+    return current;
+  }
+}
+
 function getNormalizedBatteryFlow() {
   const deadbandW = 25;
   const inv = !!(state && state['settings.flowInvertBattery'] && state['settings.flowInvertBattery'].value);
@@ -1975,14 +2164,14 @@ function getNormalizedBatteryFlow() {
   const charge = chargeMapped ? getFreshFlowNumber('storageChargePower') : null;
   const discharge = dischargeMapped ? getFreshFlowNumber('storageDischargePower') : null;
 
-  if (samePair && signedBattery !== null) return fromSigned(signedBattery, 'batterySignedForSamePair');
+  if (samePair && signedBattery !== null) return preferBalanceDerivedBatteryFlow(fromSigned(signedBattery, 'batterySignedForSamePair'), { deadbandW });
 
   const separateAvailable = (charge !== null || discharge !== null);
   const bothDirections = Math.abs(Number(charge || 0)) > deadbandW && Math.abs(Number(discharge || 0)) > deadbandW;
   const bothEqualish = bothDirections && Math.abs(Math.abs(Number(charge || 0)) - Math.abs(Number(discharge || 0))) <= Math.max(2, deadbandW);
 
   if (signedBattery !== null && (!separateAvailable || bothEqualish || (!chargeMapped && !dischargeMapped))) {
-    return fromSigned(signedBattery, bothEqualish ? 'batterySignedOverrideDual' : 'batterySigned');
+    return preferBalanceDerivedBatteryFlow(fromSigned(signedBattery, bothEqualish ? 'batterySignedOverrideDual' : 'batterySigned'), { deadbandW });
   }
 
   if (separateAvailable) {
@@ -1991,12 +2180,12 @@ function getNormalizedBatteryFlow() {
     if (c <= deadbandW) c = 0;
     if (d <= deadbandW) d = 0;
     if (inv) { const t = c; c = d; d = t; }
-    return { chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'chargeDischarge(inv)' : 'chargeDischarge', inverted: inv };
+    return preferBalanceDerivedBatteryFlow({ chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'chargeDischarge(inv)' : 'chargeDischarge', inverted: inv }, { deadbandW });
   }
 
-  if (signedBattery !== null) return fromSigned(signedBattery, 'batterySigned');
+  if (signedBattery !== null) return preferBalanceDerivedBatteryFlow(fromSigned(signedBattery, 'batterySigned'), { deadbandW });
 
-  return { chargeW: 0, dischargeW: 0, signedW: 0, src: (batteryMapped || chargeMapped || dischargeMapped) ? 'stale-or-missing' : 'missing', inverted: inv };
+  return preferBalanceDerivedBatteryFlow({ chargeW: 0, dischargeW: 0, signedW: 0, src: (batteryMapped || chargeMapped || dischargeMapped) ? 'stale-or-missing' : 'missing', inverted: inv }, { deadbandW });
 }
 
 function render() {
@@ -2098,16 +2287,19 @@ function render() {
   const gfN = coerceNumber(d('gridFrequency'));
   setText('gridFrequency', gfN != null ? gfN.toFixed(2) + ' Hz' : '--');
 
-  setText('consumptionEvcs', formatPower(d('consumptionEvcs') ?? 0));
+  const evcsAvailableNow = nwEvcsFeatureFromConfig();
+  setText('consumptionEvcs', evcsAvailableNow ? formatPower(d('consumptionEvcs') ?? 0) : '');
   setText('consumptionEnergyKwh', formatEnergyKwh(d('consumptionEnergyKwh')));
   setText('consumptionBuilding', formatPower(d('consumptionTotal') ?? 0));
 
   // EVCS status: prefer per-connector status (single wallbox) and fall back to legacy dp
-  const evcsSt = d('evcsStatus') ?? d('evcs.1.status') ?? d('chargingManagement.wallboxes.lp1.status') ?? '--';
-  setText('evcsStatus', evcsSt);
-  const lastChargeN = coerceNumber(d('evcsLastChargeKwh'));
-  setText('evcsLastChargeKwh', lastChargeN != null ? lastChargeN.toFixed(2) + ' kWh' : '--');
-  if (window.__evcsApply) window.__evcsApply(d, state);
+  if (evcsAvailableNow) {
+    const evcsSt = d('evcsStatus') ?? d('evcs.1.status') ?? d('chargingManagement.wallboxes.lp1.status') ?? '--';
+    setText('evcsStatus', evcsSt);
+    const lastChargeN = coerceNumber(d('evcsLastChargeKwh'));
+    setText('evcsLastChargeKwh', lastChargeN != null ? lastChargeN.toFixed(2) + ' kWh' : '--');
+    if (window.__evcsApply) window.__evcsApply(d, state);
+  }
 
 
   // Wetter (optional) – aktiviert in FIS → Einstellungen (Wetter-App)
@@ -2229,7 +2421,7 @@ function render() {
       socN,
       autarkyN,
       selfcN,
-      evcsPower: d('consumptionEvcs') ?? 0,
+      evcsPower: nwEvcsFeatureFromConfig() ? (d('consumptionEvcs') ?? 0) : 0,
       co2Text: co2TextDash
     });
   } catch (_e) {}
@@ -2269,12 +2461,14 @@ async function bootstrap() {
     applyFlowCoreLabels();
     initEnergyWebExtras(flowSlotsCfg);
     try{
-      const c = Number(cfg.settingsConfig && cfg.settingsConfig.evcsCount) || 1;
+      const evcsAvailable = nwEvcsFeatureFromConfig(cfg);
+      const c = evcsAvailable ? nwEvcsCountFromConfig(cfg) : 0;
       window.__nwEvcsCount = c;
+      window.__nwEvcsAvailable = evcsAvailable;
       const l = document.getElementById('menuEvcsLink');
-      if (l) l.classList.toggle('hidden', c < 2);
+      if (l) l.classList.toggle('hidden', !(evcsAvailable && c >= 2));
       const t = document.getElementById('tabEvcs');
-      if (t) t.classList.toggle('hidden', c < 2);
+      if (t) t.classList.toggle('hidden', !(evcsAvailable && c >= 2));
       const sh = !!(cfg.smartHome && cfg.smartHome.enabled);
       window.__nwSmartHomeEnabled = sh;
       const sl = document.getElementById('menuSmartHomeLink');
@@ -2283,20 +2477,21 @@ async function bootstrap() {
       if (st) st.classList.toggle('hidden', !sh);
 
       // Speicherfarm Tab/Link
-      const sf = !!(cfg.ems && cfg.ems.storageFarmEnabled);
+      const sf = nwStorageFarmFeatureFromConfig(cfg, window.latestState || state || {});
       const sft = document.getElementById('tabStorageFarm');
       if (sft) {
         sft.classList.toggle('hidden', !sf);
         sft.removeAttribute('data-tab');
         sft.onclick = function(){ window.location.href = 'storagefarm.html'; };
       }
-      try { if ((new URLSearchParams(window.location.search || '')).get('tab') === 'storagefarm') window.location.replace('storagefarm.html'); } catch(_e) {}
+      try { if ((new URLSearchParams(window.location.search || '')).get('tab') === 'storagefarm' && sf) window.location.replace('storagefarm.html'); } catch(_e) {}
       const sfl = document.getElementById('menuStorageFarmLink');
       if (sfl) {
         sfl.classList.toggle('hidden', !sf);
         sfl.setAttribute('href', 'storagefarm.html');
         sfl.onclick = null;
       }
+      nwApplyCustomerFeatureVisibility(cfg, window.latestState || state || {});
     }catch(_e){}
   } catch (e) {
     console.warn('[config]', e);
@@ -2342,11 +2537,13 @@ const applyConfigSnapshot = (nextCfg) => {
     const evcsCountRaw = (cfg && cfg.settingsConfig && cfg.settingsConfig.evcsCount !== undefined && cfg.settingsConfig.evcsCount !== null)
       ? Number(cfg.settingsConfig.evcsCount)
       : Number(window.__nwEvcsCount);
-    const evcsCount = Math.max(0, Math.round(Number.isFinite(evcsCountRaw) ? evcsCountRaw : 0));
+    const evcsAvailable = nwEvcsFeatureFromConfig(cfg);
+    const evcsCount = evcsAvailable ? Math.max(0, Math.round(Number.isFinite(evcsCountRaw) ? evcsCountRaw : 0)) : 0;
     window.__nwEvcsCount = evcsCount;
+    window.__nwEvcsAvailable = evcsAvailable;
 
-    // EVCS page/tab is only relevant for multiple Ladepunkte.
-    const showEvcsPage = evcsCount >= 2;
+    // EVCS page/tab is only relevant for multiple configured Ladepunkte.
+    const showEvcsPage = evcsAvailable && evcsCount >= 2;
     const menuEvcsLink = document.getElementById('menuEvcsLink');
     const tabEvcs = document.getElementById('tabEvcs');
     if (menuEvcsLink) menuEvcsLink.classList.toggle('hidden', !showEvcsPage);
@@ -2359,12 +2556,13 @@ const applyConfigSnapshot = (nextCfg) => {
     if (menuSmartHomeLink) menuSmartHomeLink.classList.toggle('hidden', !window.__nwSmartHomeEnabled);
     if (tabSmartHome) tabSmartHome.classList.toggle('hidden', !window.__nwSmartHomeEnabled);
 
-    window.__nwStorageFarmEnabled = !!emsCfg.storageFarmEnabled;
+    window.__nwStorageFarmEnabled = nwStorageFarmFeatureFromConfig(cfg, window.latestState || state || {});
     const menuStorageFarmLink = document.getElementById('menuStorageFarmLink');
     const tabStorageFarm = document.getElementById('tabStorageFarm');
     if (menuStorageFarmLink) menuStorageFarmLink.classList.toggle('hidden', !window.__nwStorageFarmEnabled);
     if (tabStorageFarm) tabStorageFarm.classList.toggle('hidden', !window.__nwStorageFarmEnabled);
-    try { if ((new URLSearchParams(window.location.search || '')).get('tab') === 'storagefarm') window.location.replace('storagefarm.html'); } catch(_e) {}
+    nwApplyCustomerFeatureVisibility(cfg, window.latestState || state || {});
+    try { if ((new URLSearchParams(window.location.search || '')).get('tab') === 'storagefarm' && window.__nwStorageFarmEnabled) window.location.replace('storagefarm.html'); } catch(_e) {}
   } catch (e) {
     console.warn('[config-apply]', e);
   }
@@ -5875,7 +6073,7 @@ function updateEnergyWeb() {
   const invGrid = !!(s['settings.flowInvertGrid']?.value);
   const invEv   = !!(s['settings.flowInvertEv']?.value);
   const subEvFromLoad = (s['settings.flowSubtractEvFromBuilding']?.value ?? true) ? true : false;
-  const evAvail = (flowExtras && flowExtras.meta) ? !!flowExtras.meta.evcsAvailable : true;
+  const evAvail = nwEvcsFeatureFromConfig() && ((flowExtras && flowExtras.meta) ? !!flowExtras.meta.evcsAvailable : false);
 
   if (invPv) pv = -pv;
   if (invEv) c2 = -c2;
@@ -6129,9 +6327,15 @@ function _nwAiAdvisorCategoryLabel(c) {
   if (s === 'storage') return 'Speicher';
   if (s === 'evcs') return 'Wallbox';
   if (s === 'peak') return 'Lastspitze';
+  if (s === 'weather') return 'Wetter';
   if (s === 'grid') return 'Netz';
   if (s === 'setup') return 'Setup';
   if (s === 'heating') return 'Thermik';
+  if (s === 'dailyplan' || s === 'daily-plan' || s === 'plan') return 'Tagesfahrplan';
+  if (s === 'anomaly') return 'Anomalie';
+  if (s === 'comfort') return 'Komfort';
+  if (s === 'learning') return 'Lernen';
+  if (s === 'co2' || s === 'co₂') return 'CO₂';
   return 'System';
 }
 
@@ -6474,7 +6678,8 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
 
   if (card){
     card.addEventListener('click', ()=>{
-      const c = Number(window.__nwEvcsCount || 1) || 1;
+      const c = Number(window.__nwEvcsCount || 0) || 0;
+      if (!nwEvcsFeatureFromConfig()) return;
       if (c >= 2) { window.location.href = '/evcs.html'; return; }
       if (modal) modal.classList.remove('hidden');
     });
@@ -7421,7 +7626,8 @@ function openFlowQc(kind, idx){
     // mark clickable
     n.classList.add('clickable');
     n.addEventListener('click', ()=>{
-      const c = Number(window.__nwEvcsCount || 1) || 1;
+      const c = Number(window.__nwEvcsCount || 0) || 0;
+      if (!nwEvcsFeatureFromConfig()) return;
       if (c >= 2) { window.location.href = '/evcs.html'; return; }
       modal.classList.remove('hidden');
     });
