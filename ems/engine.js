@@ -48,6 +48,18 @@ class EmsEngine {
     this._gridPowerLastTs = 0;
   }
 
+  _setInterval(fn, ms) {
+    const a = this.adapter;
+    return (a && typeof a.setInterval === 'function') ? a.setInterval(fn, ms) : setInterval(fn, ms);
+  }
+
+  _clearInterval(timer) {
+    if (!timer) return;
+    const a = this.adapter;
+    if (a && typeof a.clearInterval === 'function') a.clearInterval(timer);
+    else clearInterval(timer);
+  }
+
   /**
    * Ensure small internal helper states (derived values) exist.
    */
@@ -734,8 +746,8 @@ class EmsEngine {
     try { adapter.subscribeStates('aiAdvisor.*'); } catch (_e) {}
 
     // Start scheduler
-    if (this._timer) clearInterval(this._timer);
-    this._timer = setInterval(() => {
+    if (this._timer) this._clearInterval(this._timer);
+    this._timer = this._setInterval(() => {
       this.tick().catch(err => {
         try { adapter.log.warn(`[EMS] tick failed: ${err?.message || err}`); } catch (_e) {}
       });
@@ -940,7 +952,7 @@ class EmsEngine {
 
   stop() {
     if (this._timer) {
-      clearInterval(this._timer);
+      this._clearInterval(this._timer);
       this._timer = null;
     }
   }

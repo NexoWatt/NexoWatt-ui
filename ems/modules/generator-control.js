@@ -258,7 +258,10 @@ class GeneratorControlModule extends BaseModule {
         if (!objectId) return false;
         try {
             await this.adapter.setForeignStateAsync(objectId, true, false);
-            setTimeout(() => {
+            const setTimer = (this.adapter && typeof this.adapter.setTimeout === 'function')
+                ? this.adapter.setTimeout.bind(this.adapter)
+                : setTimeout;
+            setTimer(() => {
                 this.adapter.setForeignStateAsync(objectId, false, false).catch(() => {});
             }, pulseMs);
             return true;

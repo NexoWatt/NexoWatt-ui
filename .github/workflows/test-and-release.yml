@@ -1,11 +1,13 @@
-name: Test
+name: Test and Release
 
 on:
   push:
+    branches: [main, master]
   pull_request:
+    branches: [main, master]
 
 jobs:
-  package:
+  test:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -20,5 +22,7 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci || npm install
-      - name: Syntax and package validation
-        run: npm run test:package
+      - name: ioBroker package checks
+        run: npm run publish:check
+      - name: Pack dry-run
+        run: npm pack --dry-run

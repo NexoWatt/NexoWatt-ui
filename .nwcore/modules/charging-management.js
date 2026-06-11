@@ -590,6 +590,18 @@ class ChargingManagementModule extends BaseModule {
         }
     }
 
+    _setTimeout(fn, ms) {
+        const a = this.adapter;
+        return (a && typeof a.setTimeout === 'function') ? a.setTimeout(fn, ms) : setTimeout(fn, ms);
+    }
+
+    _clearTimeout(timer) {
+        if (!timer) return;
+        const a = this.adapter;
+        if (a && typeof a.clearTimeout === 'function') a.clearTimeout(timer);
+        else clearTimeout(timer);
+    }
+
     _schedulePubFlush() {
         if (this._pubFlushTimer) return;
 
@@ -598,7 +610,7 @@ class ChargingManagementModule extends BaseModule {
         const diff = now - last;
         const delay = diff >= this._pubFlushIntervalMs ? 0 : (this._pubFlushIntervalMs - diff);
 
-        this._pubFlushTimer = setTimeout(() => {
+        this._pubFlushTimer = this._setTimeout(() => {
             this._pubFlushTimer = null;
             this._flushPubQueue().catch(() => {});
         }, delay);

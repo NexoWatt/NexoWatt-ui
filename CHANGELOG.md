@@ -1,3 +1,16 @@
+## 0.7.50 - ioBroker Stability Maintenance
+
+- Node.js Engine auf `>=22` angehoben.
+- CI/GitHub-Actions auf Node.js 22.x und 24.x vorbereitet.
+- ioBroker-Metadaten ergänzt: `tier`, `dependencies`, `globalDependencies`, `licenseInformation`.
+- `licenseKey` via `protectedNative` und `encryptedNative` geschützt.
+- `info.connection` State ergänzt und beim Start/Stop gesetzt.
+- Admin-Konfiguration nutzt jetzt `native.ip`; `native.bind` bleibt als Legacy-Fallback erhalten.
+- `common.news` auf die letzten 7 Einträge gekürzt; doppelte Top-Level-News entfernt.
+- Publish-/Stabilitätsprüfung erweitert.
+- README auf Englisch als primäre ioBroker-Dokumentation umgestellt.
+- Service-Worker Cache auf `nexowatt-cache-v218` erhöht.
+
 ## 0.7.49 - Mobile VIS Hotfix History/SmartHome
 
 - History-Seite auf Smartphone/Tablet korrigiert: Zeitraum, Datum, Navigation und Aktionen werden jetzt als responsive Gruppen dargestellt statt als horizontal wegscrollende Riesenkacheln.

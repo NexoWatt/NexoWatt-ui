@@ -23,13 +23,15 @@
           "sm": 12,
           "md": 6
         },
-        "bind": {
+        "ip": {
           "type": "text",
-          "label": "Bind-Adresse",
-          "attr": "bind",
+          "label": "IP-Adresse / Bind-Adresse",
+          "attr": "ip",
           "xs": 12,
           "sm": 12,
-          "md": 6
+          "md": 6,
+          "help": "ioBroker-konforme IP-Adresse für den eingebauten Webserver. Legacy native.bind wird weiterhin als Fallback gelesen.",
+          "default": "0.0.0.0"
         }
       }
     },

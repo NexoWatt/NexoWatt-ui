@@ -1,12 +1,12 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.7.49",
+  "version": "0.7.50",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
-  "license": "Proprietary License (NPL) v1.0",
+  "license": "UNLICENSED",
   "main": "main.js",
   "engines": {
-    "node": ">=16"
+    "node": ">=22"
   },
   "scripts": {
     "start": "node main.js",
@@ -19,12 +19,16 @@
     "admin:build": "npm --prefix src-admin-tab run build",
     "build": "npm run admin:build",
     "publish:check": "node scripts/verify-publish.js",
-    "prepublishOnly": "node scripts/verify-publish.js"
+    "prepublishOnly": "node scripts/verify-publish.js",
+    "test": "npm run test:package",
+    "test:package": "node scripts/verify-publish.js && npm pack --dry-run",
+    "test:js": "node scripts/verify-publish.js",
+    "ioBroker:check": "node scripts/verify-publish.js"
   },
   "dependencies": {
-    "@iobroker/adapter-core": "^3.0.0",
+    "@iobroker/adapter-core": "^3.4.1",
     "@iobroker/type-detector": "5.0.10",
-    "express": "^4.18.2"
+    "express": "^4.22.2"
   },
   "keywords": [
     "ioBroker",
@@ -50,5 +54,9 @@
     "README.md",
     "LICENSE",
     "ems/**/*"
-  ]
+  ],
+  "devDependencies": {
+    "@iobroker/testing": "^5.2.2",
+    "@iobroker/adapter-dev": "^1.5.0"
+  }
 }

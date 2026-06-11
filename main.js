@@ -199,6 +199,51 @@ class NexoWattVis extends utils.Adapter {
     this.on('unload', this.onUnload.bind(this));
   }
 
+
+  _nwSetTimeout(fn, ms, ...args) {
+    return (typeof this.setTimeout === 'function') ? this.setTimeout(fn, ms, ...args) : setTimeout(fn, ms, ...args);
+  }
+
+  _nwSetInterval(fn, ms, ...args) {
+    return (typeof this.setInterval === 'function') ? this.setInterval(fn, ms, ...args) : setInterval(fn, ms, ...args);
+  }
+
+  _nwClearTimeout(timer) {
+    if (!timer) return;
+    if (typeof this.clearTimeout === 'function') this.clearTimeout(timer);
+    else clearTimeout(timer);
+  }
+
+  _nwClearInterval(timer) {
+    if (!timer) return;
+    if (typeof this.clearInterval === 'function') this.clearInterval(timer);
+    else clearInterval(timer);
+  }
+
+  _nwSleep(ms) {
+    return new Promise((resolve) => this._nwSetTimeout(resolve, ms));
+  }
+
+  async ensureInfoConnectionState() {
+    await this.setObjectNotExistsAsync('info', {
+      type: 'channel',
+      common: { name: 'Adapter information' },
+      native: {},
+    });
+    await this.setObjectNotExistsAsync('info.connection', {
+      type: 'state',
+      common: {
+        name: 'Adapter connection',
+        type: 'boolean',
+        role: 'indicator.connected',
+        read: true,
+        write: false,
+        def: false,
+      },
+      native: {},
+    });
+  }
+
   
   async ensureInstallerStates() {
     const defs = {
@@ -513,7 +558,7 @@ class NexoWattVis extends utils.Adapter {
 
   _nwClearSmartHomeTimerSchedule() {
     if (this._nwShTimersTimeout) {
-      try { clearTimeout(this._nwShTimersTimeout); } catch (_e) {}
+      try { this._nwClearTimeout(this._nwShTimersTimeout); } catch (_e) {}
       this._nwShTimersTimeout = null;
     }
     this._nwShTimersNextEvent = null;
@@ -535,7 +580,7 @@ class NexoWattVis extends utils.Adapter {
     if (!earliest || typeof earliest.at !== 'number') return;
     const delay = Math.max(250, earliest.at - now);
 
-    this._nwShTimersTimeout = setTimeout(() => {
+    this._nwShTimersTimeout = this._nwSetTimeout(() => {
       this._nwRunDueSmartHomeTimer().catch((e) => {
         this.log.warn('SmartHome timer run error: ' + (e && e.message ? e.message : e));
         // best-effort reschedule
@@ -899,7 +944,7 @@ class NexoWattVis extends utils.Adapter {
 
   _nwClearSmartHomeLogicClockSchedule() {
     if (this._nwShLogicClocksTimeout) {
-      try { clearTimeout(this._nwShLogicClocksTimeout); } catch (_e) {}
+      try { this._nwClearTimeout(this._nwShLogicClocksTimeout); } catch (_e) {}
       this._nwShLogicClocksTimeout = null;
     }
     this._nwShLogicClocksNextEvent = null;
@@ -920,7 +965,7 @@ class NexoWattVis extends utils.Adapter {
     if (!earliest || typeof earliest.at !== 'number') return;
     const delay = Math.max(250, earliest.at - now);
 
-    this._nwShLogicClocksTimeout = setTimeout(() => {
+    this._nwShLogicClocksTimeout = this._nwSetTimeout(() => {
       this._nwRunDueSmartHomeLogicClock().catch((e) => {
         this.log.warn('SmartHome logic clock run error: ' + (e && e.message ? e.message : e));
         try { this._nwScheduleNextSmartHomeLogicClock('error'); } catch (_e2) {}
@@ -1408,13 +1453,13 @@ class NexoWattVis extends utils.Adapter {
 
     if (this._nwLicenseOk) {
       if (info.type === 'trial') {
-        this.log.info(`Lizenz: gültig ✅ (Testlizenz, ${info.daysRemaining} Tage übrig)`);
+        this.log.info(`License valid (test license, ${info.daysRemaining} days remaining).`);
       } else {
-        this.log.info('Lizenz: gültig ✅');
+        this.log.info('License valid.');
       }
     } else {
       // Keep message short; details are in Admin license tab.
-      this.log.warn(`Lizenz: ${info.msg || 'fehlt oder ungültig'} – VIS/API ist gesperrt. Bitte Lizenz im Admin eintragen.`);
+      this.log.warn(`License check failed: ${info.msg || 'missing or invalid'}; VIS/API is locked. Please enter a license in admin.`);
     }
   }
 
@@ -1914,11 +1959,11 @@ class NexoWattVis extends utils.Adapter {
   stopWeatherService() {
     try {
       if (this._nwWeatherStartupTimer) {
-        clearTimeout(this._nwWeatherStartupTimer);
+        this._nwClearTimeout(this._nwWeatherStartupTimer);
         this._nwWeatherStartupTimer = null;
       }
       if (this._nwWeatherTimer) {
-        clearInterval(this._nwWeatherTimer);
+        this._nwClearInterval(this._nwWeatherTimer);
         this._nwWeatherTimer = null;
       }
     } catch (_e) {}
@@ -1935,8 +1980,8 @@ class NexoWattVis extends utils.Adapter {
       const intervalMs = 15 * 60 * 1000;
       const run = () => this.nwUpdateWeather('interval').catch(() => {});
       // First update shortly after activation/startup so UI gets fresh values quickly
-      this._nwWeatherStartupTimer = setTimeout(run, 1000);
-      this._nwWeatherTimer = setInterval(run, intervalMs);
+      this._nwWeatherStartupTimer = this._nwSetTimeout(run, 1000);
+      this._nwWeatherTimer = this._nwSetInterval(run, intervalMs);
     } catch (_e) {}
   }
 
@@ -2932,7 +2977,7 @@ class NexoWattVis extends utils.Adapter {
         const st = await this.getForeignStateAsync(aliveId).catch(() => null);
         if (st && st.val === true) return true;
       } catch (_e) {}
-      await new Promise((r) => setTimeout(r, 500));
+      await this._nwSleep(500);
     }
     return false;
   }
@@ -6897,6 +6942,13 @@ async migrateNativeConfig() {
       this.config = this.config || {};
       const nat = this.config;
 
+      // ioBroker convention: use native.ip for network binding.
+      // Older NexoWatt versions used native.bind; keep it as a legacy fallback
+      // but migrate the runtime config so JSONConfig/Admin can use ip going forward.
+      if (!nat.ip && nat.bind) nat.ip = nat.bind;
+      if (!nat.ip) nat.ip = '0.0.0.0';
+      if (!nat.bind) nat.bind = nat.ip;
+
       let changed = false;
 
       const ensureObject = (key) => {
@@ -7111,6 +7163,8 @@ async migrateNativeConfig() {
 async onReady() {
     try {
       await this.migrateNativeConfig();
+      await this.ensureInfoConnectionState();
+      await this.setStateAsync('info.connection', { val: false, ack: true });
       await this.ensureLicenseStates();
 
       // License gate must be initialized before we start the web server,
@@ -7118,6 +7172,7 @@ async onReady() {
       await this._nwInitLicense();
       // start web server
       await this.startServer();
+      await this.setStateAsync('info.connection', { val: true, ack: true });
 
       // create states first, then write config defaults
       await this.ensureInstallerStates();
@@ -7208,11 +7263,11 @@ async onReady() {
         const intervalRaw = Number(sfCfg.schedulerIntervalMs);
         const interval = Number.isFinite(intervalRaw) ? Math.max(250, Math.min(60000, Math.round(intervalRaw))) : 2000;
 
-        if (this._nwStorageFarmTimer) { try { clearInterval(this._nwStorageFarmTimer); } catch (_e) {} this._nwStorageFarmTimer = null; }
+        if (this._nwStorageFarmTimer) { try { this._nwClearInterval(this._nwStorageFarmTimer); } catch (_e) {} this._nwStorageFarmTimer = null; }
 
         if (sfEnabled) {
           await this.updateStorageFarmDerived('startup');
-          this._nwStorageFarmTimer = setInterval(() => {
+          this._nwStorageFarmTimer = this._nwSetInterval(() => {
             this.updateStorageFarmDerived('timer').catch(() => {});
           }, interval);
         }
@@ -7241,8 +7296,8 @@ async onReady() {
       // Energy totals: if no kWh counters are mapped, derive totals from history/influxdb
       try { await this.updateEnergyTotalsFromInflux('startup'); } catch (_e) {}
       try {
-        if (this._nwEnergyTotalsTimer) clearInterval(this._nwEnergyTotalsTimer);
-        this._nwEnergyTotalsTimer = setInterval(() => {
+        if (this._nwEnergyTotalsTimer) this._nwClearInterval(this._nwEnergyTotalsTimer);
+        this._nwEnergyTotalsTimer = this._nwSetInterval(() => {
           this.updateEnergyTotalsFromInflux('timer').catch(() => {});
         }, 60 * 60 * 1000);
       } catch (_e2) {}
@@ -7260,6 +7315,7 @@ async onReady() {
       try { await this.initLogicEngine(); } catch (e) { this.log.warn('NexoLogic init failed: ' + (e && e.message ? e.message : e)); }
       this.log.info('NexoWatt UI adapter ready.');
     } catch (e) {
+      try { await this.setStateAsync('info.connection', { val: false, ack: true }); } catch (_eConn) {}
       this.log.error(`onReady error: ${e.message}`);
     }
   }
@@ -9749,7 +9805,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         try { await this.syncStorageFarmConfigFromAdmin(); } catch (_e) {}
         try {
           if (this._nwStorageFarmTimer) {
-            clearInterval(this._nwStorageFarmTimer);
+            this._nwClearInterval(this._nwStorageFarmTimer);
             this._nwStorageFarmTimer = null;
           }
 
@@ -9761,7 +9817,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
           if (enabledSf) {
             await this.updateStorageFarmDerived('config-save');
-            this._nwStorageFarmTimer = setInterval(() => { this.updateStorageFarmDerived('timer').catch(() => {}); }, interval);
+            this._nwStorageFarmTimer = this._nwSetInterval(() => { this.updateStorageFarmDerived('timer').catch(() => {}); }, interval);
           }
         } catch (_e) {}
 
@@ -15914,7 +15970,7 @@ return res.json(out);
       });
     });
 
-    const bind = (this.config && this.config.bind) || '0.0.0.0';
+    const bind = (this.config && (this.config.ip || this.config.bind)) || '0.0.0.0';
     const port = (this.config && this.config.port) || 8188;
 
     await new Promise((resolve) => {
@@ -16323,7 +16379,7 @@ return res.json(out);
 
   _nwStopLiveCoreRefresh() {
     if (this._nwLiveCoreRefreshTimer) {
-      try { clearInterval(this._nwLiveCoreRefreshTimer); } catch (_e) {}
+      try { this._nwClearInterval(this._nwLiveCoreRefreshTimer); } catch (_e) {}
       this._nwLiveCoreRefreshTimer = null;
     }
     this._nwLiveCoreRefreshRunning = false;
@@ -16336,7 +16392,7 @@ return res.json(out);
     if (!Array.isArray(plan) || !plan.length) return;
 
     const intervalMs = Math.max(3000, Number(this._nwLiveCoreRefreshIntervalMs) || 3000);
-    this._nwLiveCoreRefreshTimer = setInterval(() => {
+    this._nwLiveCoreRefreshTimer = this._nwSetInterval(() => {
       this._nwRefreshLiveCoreDatapoints('interval').catch(() => {});
     }, intervalMs);
   }
@@ -16732,7 +16788,7 @@ return res.json(out);
   startNotificationMonitor() {
     try {
       if (this._notifyTimer) {
-        try { clearInterval(this._notifyTimer); } catch (_e) {}
+        try { this._nwClearInterval(this._notifyTimer); } catch (_e) {}
         this._notifyTimer = null;
       }
 
@@ -16745,15 +16801,15 @@ return res.json(out);
       };
 
       // Start a bit delayed to allow states/config to settle.
-      setTimeout(tick, 5 * 1000);
-      this._notifyTimer = setInterval(tick, intervalMs);
+      this._nwSetTimeout(tick, 5 * 1000);
+      this._notifyTimer = this._nwSetInterval(tick, intervalMs);
     } catch (_e) {}
   }
 
   stopNotificationMonitor() {
     try {
       if (this._notifyTimer) {
-        try { clearInterval(this._notifyTimer); } catch (_e) {}
+        try { this._nwClearInterval(this._notifyTimer); } catch (_e) {}
         this._notifyTimer = null;
       }
     } catch (_e) {}
@@ -16819,7 +16875,7 @@ return res.json(out);
           done = true;
           resolve({ ok: true, resp });
         });
-        setTimeout(() => {
+        this._nwSetTimeout(() => {
           if (!done) resolve({ ok: true, resp: null });
         }, 2000);
       } catch (e) {
@@ -17301,11 +17357,11 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
       // Clear previous timers
       if (this._nwHistorieTimer) {
-        try { clearInterval(this._nwHistorieTimer); } catch (_e) {}
+        try { this._nwClearInterval(this._nwHistorieTimer); } catch (_e) {}
         this._nwHistorieTimer = null;
       }
       if (this._nwHistorieTimerOnce) {
-        try { clearTimeout(this._nwHistorieTimerOnce); } catch (_e) {}
+        try { this._nwClearTimeout(this._nwHistorieTimerOnce); } catch (_e) {}
         this._nwHistorieTimerOnce = null;
       }
 
@@ -17320,10 +17376,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       // Avoid immediate double-write (startup already writes once)
       if (delay < 1000) delay += intervalMs;
 
-      this._nwHistorieTimerOnce = setTimeout(() => {
+      this._nwHistorieTimerOnce = this._nwSetTimeout(() => {
         this._nwHistorieTimerOnce = null;
         tick();
-        this._nwHistorieTimer = setInterval(tick, intervalMs);
+        this._nwHistorieTimer = this._nwSetInterval(tick, intervalMs);
       }, delay);
     } catch (_e) {}
   }
@@ -18351,7 +18407,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       this._rfidApplyReason = reason || this._rfidApplyReason || 'rfid';
       if (onlyIndex) this._rfidApplyOnlyIndex = Number(onlyIndex) || this._rfidApplyOnlyIndex || null;
       if (this._rfidApplyTimer) return;
-      this._rfidApplyTimer = setTimeout(() => {
+      this._rfidApplyTimer = this._nwSetTimeout(() => {
         this._rfidApplyTimer = null;
         const idx = this._rfidApplyOnlyIndex;
         this._rfidApplyOnlyIndex = null;
@@ -18995,7 +19051,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const delay = since >= minMs ? 0 : (minMs - since);
 
     this._derivedFlow.pending = true;
-    setTimeout(() => {
+    this._nwSetTimeout(() => {
       this._derivedFlow.pending = false;
       this._derivedFlow.lastRunMs = Date.now();
       this.updateDerivedFlowStates(this._derivedFlow.lastReason || 'scheduled')
@@ -20187,7 +20243,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
       if (!this._sseFlushTimer) {
         const batchMs = (this.config && Number(this.config.sseBatchMs)) || 120;
-        this._sseFlushTimer = setTimeout(() => {
+        this._sseFlushTimer = this._nwSetTimeout(() => {
           const p = this._ssePendingPayload || {};
           this._ssePendingPayload = {};
           this._sseFlushTimer = null;
@@ -20209,8 +20265,8 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
   _nwClearTimer(refName) {
     try {
       if (!this[refName]) return;
-      try { clearTimeout(this[refName]); } catch (_e0) {}
-      try { clearInterval(this[refName]); } catch (_e1) {}
+      try { this._nwClearTimeout(this[refName]); } catch (_e0) {}
+      try { this._nwClearInterval(this[refName]); } catch (_e1) {}
       this[refName] = null;
     } catch (_e2) {}
   }
@@ -20292,6 +20348,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
   }
 
   onUnload(callback) {
+    try { this.setStateAsync('info.connection', { val: false, ack: true }).catch(() => {}); } catch (_eConn) {}
     const done = (() => {
       let called = false;
       return () => {
