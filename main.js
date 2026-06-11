@@ -17617,27 +17617,59 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
   }
 
+  _nwStorageFarmIsActiveFromCache() {
+    try {
+      const cfg = this.config || {};
+      const sf = (cfg.storageFarm && typeof cfg.storageFarm === 'object') ? cfg.storageFarm : {};
+      const rows = Array.isArray(sf.storages) ? sf.storages : [];
+      const configured = rows.some(r => r && typeof r === 'object' && r.enabled !== false);
+      if (!cfg.enableStorageFarm || !configured) return false;
+
+      const rec = this.stateCache && this.stateCache['storageFarm.enabled'];
+      if (rec && rec.value === false) return false;
+
+      const totalRec = this.stateCache && this.stateCache['storageFarm.storagesTotal'];
+      if (totalRec && totalRec.value !== undefined && totalRec.value !== null) {
+        const total = Number(totalRec.value);
+        if (Number.isFinite(total) && total <= 0) return false;
+      }
+      return true;
+    } catch (_e) {
+      return false;
+    }
+  }
+
   _nwResolveBatteryFlowFromCache(opts = {}) {
     const now = Number.isFinite(Number(opts.now)) ? Number(opts.now) : Date.now();
     const maxAgeMs = opts.maxAgeMs === undefined ? this._nwLiveInputMaxAgeMs() : opts.maxAgeMs;
     const deadbandW = Number.isFinite(Number(opts.deadbandW)) ? Math.max(0, Number(opts.deadbandW)) : 25;
+    const strictStale = opts.strictStale === true;
 
     const dps = (this.config && this.config.datapoints && typeof this.config.datapoints === 'object') ? this.config.datapoints : {};
     const idOf = (key) => String(dps[key] || '').trim();
     const chargeMapped = !!idOf('storageChargePower');
     const dischargeMapped = !!idOf('storageDischargePower');
     const batteryMapped = !!idOf('batteryPower');
+    const anyStorageMapped = chargeMapped || dischargeMapped || batteryMapped;
     const sameChargeDischargeId = !!(chargeMapped && dischargeMapped && idOf('storageChargePower') === idOf('storageDischargePower'));
     const inv = this._nwIsBatterySignInverted();
 
-    const fresh = (key, onlyIfMapped) => {
+    // Wichtig: Gemappte Kern-DPs werden als Quelle der Wahrheit behandelt, auch wenn
+    // sich der Wert lange nicht geändert hat. Viele ioBroker-Adapter aktualisieren bei
+    // konstant 0 W nur lc/ts selten oder gar nicht. Diese 0-Werte dürfen deshalb nicht
+    // als "fehlend" verworfen und durch eine Bilanzrechnung ersetzt werden.
+    const readMapped = (key, onlyIfMapped, raw = false) => {
       if (onlyIfMapped && !idOf(key)) return null;
-      return this._nwGetNumberFromCacheFresh(key, maxAgeMs, null, now);
+      return raw
+        ? this._nwGetRawNumberFromCache(key, strictStale ? maxAgeMs : null, null, now)
+        : this._nwGetNumberFromCacheFresh(key, strictStale ? maxAgeMs : null, null, now);
     };
-    const rawFresh = (key, onlyIfMapped) => {
-      if (onlyIfMapped && !idOf(key)) return null;
-      return this._nwGetRawNumberFromCache(key, maxAgeMs, null, now);
-    };
+
+    const ageInfo = () => ({
+      batteryPower: this._nwGetCacheAgeMs('batteryPower', now),
+      storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
+      storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
+    });
 
     const fromSigned = (signedRaw, src, opts2 = {}) => {
       let signed = Number(signedRaw);
@@ -17654,24 +17686,22 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         inverted: inv,
         fromSigned: true,
         mirror: opts2.mirror !== false,
-        staleMs: {
-          batteryPower: this._nwGetCacheAgeMs('batteryPower', now),
-          storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
-          storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
-        },
+        derived: false,
+        staleMs: ageInfo(),
       };
     };
 
     const fromBalance = () => {
       try {
         const balanceDeadbandW = Math.max(180, deadbandW);
-        if (this.stateCache && this.stateCache['storageFarm.enabled'] && this.stateCache['storageFarm.enabled'].value) return null;
+        if (this._nwStorageFarmIsActiveFromCache && this._nwStorageFarmIsActiveFromCache()) return null;
 
         const soc = this._nwGetNumberFromCache('storageSoc');
         if (!Number.isFinite(Number(soc))) return null;
 
-        // Nur mit direkt gemessenem Hausverbrauch ableiten. Ohne Direktmessung wäre
-        // consumptionTotal evtl. schon aus derselben Bilanz berechnet und damit zirkulär.
+        // Nur wenn eine echte Verbrauchsleistung als DP gemappt ist, kann Speicherleistung
+        // zuverlässig aus der Bilanz abgeleitet werden. Sonst wäre consumptionTotal ggf.
+        // bereits aus derselben Bilanz erzeugt und die Rechnung zirkulär.
         const hasDirectLoad = this._nwHasMappedDatapoint('consumptionTotal') || this._nwHasMappedDatapoint('housePower');
         if (!hasDirectLoad) return null;
 
@@ -17712,41 +17742,22 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
           src: 'balanceDerived',
           inverted: false,
           fromSigned: false,
+          derived: true,
           mirror: true,
-          staleMs: {
-            balance: 0,
-            batteryPower: this._nwGetCacheAgeMs('batteryPower', now),
-            storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
-            storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
-          },
+          staleMs: Object.assign({ balance: 0 }, ageInfo()),
         };
       } catch (_eBalance) {
         return null;
       }
     };
 
-    const preferBalance = (current) => {
-      try {
-        const srcCur = String(current && current.src || '');
-        const missingLike = !current || srcCur === 'missing' || srcCur === 'stale-or-missing' || current.incomplete === true;
-        if (!missingLike) return current;
-        const derived = fromBalance();
-        if (!derived) return current;
-        return Object.assign({}, derived, {
-          src: String(derived.src || 'balanceDerived') + (current && current.incomplete ? '+missing-side' : ''),
-          fallbackFor: srcCur || 'missing'
-        });
-      } catch (_ePrefer) {
-        return current;
-      }
-    };
-
-    // Speicherfarm already provides normalized charge/discharge totals. Keep it authoritative
-    // unless a signed single battery datapoint is explicitly mapped for a non-farm setup.
-    const sfEnabled = !!(this.stateCache && this.stateCache['storageFarm.enabled'] && this.stateCache['storageFarm.enabled'].value);
+    // Speicherfarm nur dann als Quelle verwenden, wenn sie in der Admin-Konfiguration
+    // wirklich aktiv ist und konfigurierte Speicher enthält. Ein alter stateCache-Wert
+    // "storageFarm.enabled=true" darf normale Einzelanlagen nicht übernehmen.
+    const sfEnabled = this._nwStorageFarmIsActiveFromCache && this._nwStorageFarmIsActiveFromCache();
     if (sfEnabled) {
-      const farmCharge = fresh('storageFarm.totalChargePowerW', false);
-      const farmDischarge = fresh('storageFarm.totalDischargePowerW', false);
+      const farmCharge = readMapped('storageFarm.totalChargePowerW', false, false);
+      const farmDischarge = readMapped('storageFarm.totalDischargePowerW', false, false);
       if (farmCharge !== null || farmDischarge !== null) {
         let c = Math.max(0, Math.abs(Number(farmCharge || 0)));
         let d = Math.max(0, Math.abs(Number(farmDischarge || 0)));
@@ -17758,6 +17769,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
           src: inv ? 'storageFarm(inv)' : 'storageFarm',
           inverted: inv,
           fromSigned: false,
+          derived: false,
           mirror: true,
           staleMs: {
             farmCharge: this._nwGetCacheAgeMs('storageFarm.totalChargePowerW', now),
@@ -17767,30 +17779,19 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     }
 
-    const batterySigned = batteryMapped ? rawFresh('batteryPower', true) : null;
-    const chargeRaw = chargeMapped ? rawFresh('storageChargePower', true) : null;
-    const dischargeRaw = dischargeMapped ? rawFresh('storageDischargePower', true) : null;
+    const batterySigned = batteryMapped ? readMapped('batteryPower', true, true) : null;
+    const chargeRaw = chargeMapped ? readMapped('storageChargePower', true, true) : null;
+    const dischargeRaw = dischargeMapped ? readMapped('storageDischargePower', true, true) : null;
 
-    // If charge/discharge were both mapped to the same signed datapoint, keep the sign.
-    // updateValue() normalizes their public state values to magnitudes, so the private raw cache is used here.
+    // Beide Split-Felder auf denselben DP gemappt = tatsächlich ein signed DP.
     if (sameChargeDischargeId && chargeRaw !== null) {
-      return preferBalance(fromSigned(chargeRaw, 'sameChargeDischargeSigned', { mirror: true }));
+      return fromSigned(chargeRaw, 'sameChargeDischargeSigned', { mirror: true });
     }
 
-    // Canonical single signed DP fallback: exactly like NVP signed handling.
-    // Use it when no separate channels are mapped, when separate channels are missing/stale,
-    // or when stale/legacy mirrored values would otherwise show both directions at once.
-    const separateAvailable = (chargeRaw !== null || dischargeRaw !== null);
-    const publicCharge = chargeMapped ? fresh('storageChargePower', true) : null;
-    const publicDischarge = dischargeMapped ? fresh('storageDischargePower', true) : null;
-    const bothPublicDirections = (Number(publicCharge || 0) > deadbandW && Number(publicDischarge || 0) > deadbandW);
-    const bothEqualish = bothPublicDirections && Math.abs(Math.abs(Number(publicCharge || 0)) - Math.abs(Number(publicDischarge || 0))) <= Math.max(2, deadbandW);
-
-    if (batterySigned !== null && (!separateAvailable || bothEqualish || (!chargeMapped && !dischargeMapped))) {
-      return preferBalance(fromSigned(batterySigned, bothEqualish ? 'batterySignedOverrideDual' : 'batterySigned', { mirror: true }));
-    }
-
-    if (separateAvailable) {
+    // Getrennte Lade-/Entlade-DPs sind autoritativ. Eine fehlende Seite wird als 0 W
+    // behandelt; sie wird nicht durch Bilanzwerte ersetzt. Das schützt Historie und
+    // Regelung vor verfälschten Speicherwerten bei konstantem/stalem 0-Wert.
+    if (chargeRaw !== null || dischargeRaw !== null) {
       let c = chargeRaw !== null ? Math.abs(Number(chargeRaw)) : 0;
       let d = dischargeRaw !== null ? Math.abs(Number(dischargeRaw)) : 0;
       if (!Number.isFinite(c)) c = 0;
@@ -17798,41 +17799,43 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       if (c <= deadbandW) c = 0;
       if (d <= deadbandW) d = 0;
       if (inv) { const t = c; c = d; d = t; }
-      const completePair = !!(chargeMapped && dischargeMapped && chargeRaw !== null && dischargeRaw !== null && !sameChargeDischargeId);
-      return preferBalance({
+      return {
         chargeW: Math.round(c),
         dischargeW: Math.round(d),
         signedW: Math.round(d - c),
         src: inv ? 'chargeDischarge(inv)' : 'chargeDischarge',
         inverted: inv,
         fromSigned: false,
-        mirror: sameChargeDischargeId || !chargeMapped || !dischargeMapped,
-        incomplete: !completePair,
-        staleMs: {
-          storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
-          storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
-        },
-      });
+        derived: false,
+        mirror: false,
+        staleMs: ageInfo(),
+      };
     }
 
+    // Signed Batterie-DP ist der Fallback, wenn keine Split-DPs einen Wert liefern.
     if (batterySigned !== null) {
-      return preferBalance(fromSigned(batterySigned, 'batterySigned', { mirror: true }));
+      return fromSigned(batterySigned, 'batterySigned', { mirror: true });
     }
 
-    return preferBalance({
+    // Rechen-Fallback nur, wenn überhaupt kein Speicher-DP konfiguriert ist.
+    // Wenn ein Speicher-DP konfiguriert, aber aktuell nicht lesbar ist, zeigen wir keinen
+    // geratenen Wert, damit Historie/Regelung nicht verfälscht werden.
+    if (!anyStorageMapped) {
+      const derived = fromBalance();
+      if (derived) return derived;
+    }
+
+    return {
       chargeW: 0,
       dischargeW: 0,
       signedW: 0,
-      src: (batteryMapped || chargeMapped || dischargeMapped) ? 'stale-or-missing' : 'missing',
+      src: anyStorageMapped ? 'mapped-missing' : 'missing',
       inverted: inv,
       fromSigned: false,
-      mirror: (!chargeMapped || !dischargeMapped),
-      staleMs: {
-        batteryPower: this._nwGetCacheAgeMs('batteryPower', now),
-        storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
-        storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
-      },
-    });
+      derived: false,
+      mirror: !anyStorageMapped,
+      staleMs: ageInfo(),
+    };
   }
 
   _nwResolveGridImportExportFromCache() {
@@ -18032,7 +18035,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     // In Farm-/DC-Speicher-Setups kommt ein Teil der PV-Leistung direkt aus den Speichersystemen (DC-PV).
     // Diese Summe wird unter storageFarm.totalPvPowerW bereitgestellt und soll auch in der Historie/Abrechnung
     // zur PV-Erzeugung addiert werden (mit einfacher Double-Count-Heuristik analog zum Energiefluss-Monitor).
-    const sfEnabled = !!this._nwGetNumberFromCache('storageFarm.enabled');
+    const sfEnabled = this._nwStorageFarmIsActiveFromCache ? this._nwStorageFarmIsActiveFromCache() : !!this._nwGetNumberFromCache('storageFarm.enabled');
     const pvFarmW = this._nwGetNumberFromCache('storageFarm.totalPvPowerW');
     if (sfEnabled && Number.isFinite(pvFarmW) && pvFarmW > 0) {
       const farmAbs = Math.abs(pvFarmW);
@@ -19110,7 +19113,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
 
     // --- PV (DC) from Speicherfarm (optional) ---
-    const sfEnabled = !!(this.stateCache?.['storageFarm.enabled'] && this.stateCache['storageFarm.enabled'].value);
+    const sfEnabled = this._nwStorageFarmIsActiveFromCache ? this._nwStorageFarmIsActiveFromCache() : !!(this.stateCache?.['storageFarm.enabled'] && this.stateCache['storageFarm.enabled'].value);
     let pvDcW = 0;
     if (sfEnabled) {
       const dc = this._nwGetNumberFromCache('storageFarm.totalPvPowerW');
@@ -19352,27 +19355,42 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     }
 
-    // 4) If storage is resolved from a signed fallback (or farm/auto values), mirror the
-    // normalized pair into the public keys. This is the battery equivalent of the NVP
-    // import/export fallback and keeps tiles, history and downstream modules aligned.
+    // 4) Mirror normalized storage values only where it is safe:
+    //    - signed DP -> public split states (when split DPs are not mapped)
+    //    - storage farm / calculated fallback -> public states (when no real split DP owns them)
+    //    - same DP in charge+discharge fields -> overwrite both with the normalized split
+    // Real separate charge/discharge DPs are never overwritten by a fallback calculation.
     try {
       const dps = (this.config && this.config.datapoints) || {};
       const chargeMapped = !!String(dps.storageChargePower || '').trim();
       const dischargeMapped = !!String(dps.storageDischargePower || '').trim();
+      const batteryMapped = !!String(dps.batteryPower || '').trim();
       const samePair = chargeMapped && dischargeMapped && String(dps.storageChargePower || '').trim() === String(dps.storageDischargePower || '').trim();
-      const shouldMirrorStorage = !!(storageFlow && (storageFlow.mirror || samePair || !chargeMapped || !dischargeMapped));
+      const src = String(storageFlow && storageFlow.src || '');
+      const fromSignedOnly = !!(storageFlow && storageFlow.fromSigned && !chargeMapped && !dischargeMapped);
+      const fromFarmOrBalance = !!(storageFlow && (src.indexOf('storageFarm') === 0 || src.indexOf('balanceDerived') === 0));
+      const noSplitMapped = !chargeMapped && !dischargeMapped;
+      const shouldMirrorBoth = !!(samePair || fromSignedOnly || (noSplitMapped && fromFarmOrBalance));
+      const shouldZeroMissingSide = !!(storageFlow && !storageFlow.derived && (chargeMapped !== dischargeMapped));
       const chargeRound = Math.round(chargeW);
       const dischargeRound = Math.round(dischargeW);
-      if (shouldMirrorStorage) {
-        const curC = Number(this.stateCache?.storageChargePower?.value);
-        const curD = Number(this.stateCache?.storageDischargePower?.value);
-        if (!Number.isFinite(curC) || curC !== chargeRound) this.updateValue('storageChargePower', chargeRound, ts, { raw: false });
-        if (!Number.isFinite(curD) || curD !== dischargeRound) this.updateValue('storageDischargePower', dischargeRound, ts, { raw: false });
+      const updateLocal = (k, v) => {
+        const cur = Number(this.stateCache?.[k]?.value);
+        if (!Number.isFinite(cur) || cur !== v) this.updateValue(k, v, ts, { raw: false });
+      };
+      if (shouldMirrorBoth) {
+        updateLocal('storageChargePower', chargeRound);
+        updateLocal('storageDischargePower', dischargeRound);
+      } else if (shouldZeroMissingSide) {
+        if (!chargeMapped) updateLocal('storageChargePower', chargeRound);
+        if (!dischargeMapped) updateLocal('storageDischargePower', dischargeRound);
       }
-      if (!this._nwHasMappedDatapoint('batteryPower') || (storageFlow && storageFlow.src === 'balanceDerived')) {
+      // batteryPower is an internal signed convenience value when no signed DP is mapped.
+      // It may be derived from valid split DPs, farm totals or a calculated fallback, but
+      // it must never overwrite a configured signed battery DP.
+      if (!batteryMapped) {
         const signedRound = Math.round(dischargeW - chargeW);
-        const curB = Number(this.stateCache?.batteryPower?.value);
-        if (!Number.isFinite(curB) || curB !== signedRound) this.updateValue('batteryPower', signedRound, ts, { raw: false });
+        updateLocal('batteryPower', signedRound);
       }
     } catch (_eStorageMirror) {}
   }

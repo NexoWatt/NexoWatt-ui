@@ -1,3 +1,11 @@
+## 0.7.48 - Speicher-DP/Historie-Hotfix
+
+- Speicher-Lade-/Entlade-DPs werden wieder dauerhaft als Quelle der Wahrheit genutzt, auch wenn ein konstanter 0-Wert lange keinen neuen Zeitstempel bekommt.
+- Signed Batterie-DP bleibt unterstützt; getrennte Lade-/Entlade-DPs bleiben unterstützt.
+- Rechen-Fallback für Speicherleistung greift nur noch, wenn wirklich kein Speicher-DP konfiguriert ist und eine belastbare Bilanz möglich ist.
+- Speicherfarm-Werte übernehmen normale Einzelanlagen nicht mehr über alte Runtime-States.
+- Der Energiefluss, Core-Limits, Heizstab-Regelung und Historie verwenden wieder dieselbe konservative Speicherauflösung.
+
 ## 0.7.47 - Energiefluss-DP-Resolver und Heizstab-Config-Hotfix
 
 - Energiefluss-Resolver korrigiert: getrennte Lade-/Entlade-DPs bleiben wieder autoritativ und werden nicht mehr pauschal bei Netzeinspeisung unterdrückt.

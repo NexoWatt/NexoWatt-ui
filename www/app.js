@@ -2040,6 +2040,12 @@ function getFreshFlowNumber(key, opts = {}) {
   return n;
 }
 
+function getStableFlowNumber(key, opts = {}) {
+  // Kern-Energiefluss-DPs dürfen nicht als fehlend gelten, nur weil ein konstanter
+  // Wert (typisch 0 W bei Speicher Laden/Entladen) lange nicht geändert wurde.
+  return getFreshFlowNumber(key, Object.assign({}, opts, { maxAgeMs: null }));
+}
+
 function getConfiguredDatapointId(key) {
   try {
     const cfg = window.__nwCfg || {};
@@ -2057,7 +2063,7 @@ function getBalanceDerivedBatteryFlow(opts = {}) {
     const read = (k) => st && st[k] ? st[k].value : undefined;
 
     // In Speicherfarm-Anlagen sind die Farm-Summen die Quelle der Wahrheit.
-    if (nwAsBool(read('storageFarm.enabled'), false)) return null;
+    if (nwStorageFarmFeatureFromConfig(window.__nwCfg || {}, st)) return null;
 
     const soc = coerceNumber(read('storageSoc') ?? read('batterySOC'));
     if (soc === null) return null;
@@ -2132,6 +2138,7 @@ function getNormalizedBatteryFlow() {
   const chargeMapped = !!chargeId;
   const dischargeMapped = !!dischargeId;
   const batteryMapped = !!batteryId;
+  const anyStorageMapped = chargeMapped || dischargeMapped || batteryMapped;
   const samePair = !!(chargeMapped && dischargeMapped && chargeId === dischargeId);
 
   const fromSigned = (raw, src) => {
@@ -2145,59 +2152,59 @@ function getNormalizedBatteryFlow() {
       signedW: signed,
       src,
       inverted: inv,
+      fromSigned: true,
+      derived: false,
     };
   };
 
-  const sfEnabled = !!(state && state['storageFarm.enabled'] && state['storageFarm.enabled'].value);
+  const sfEnabled = nwStorageFarmFeatureFromConfig(window.__nwCfg || {}, state || window.latestState || {});
   if (sfEnabled) {
-    const fc = getFreshFlowNumber('storageFarm.totalChargePowerW');
-    const fd = getFreshFlowNumber('storageFarm.totalDischargePowerW');
+    const fc = getStableFlowNumber('storageFarm.totalChargePowerW');
+    const fd = getStableFlowNumber('storageFarm.totalDischargePowerW');
     if (fc !== null || fd !== null) {
       let c = Math.max(0, Math.abs(Number(fc || 0)));
       let d = Math.max(0, Math.abs(Number(fd || 0)));
       if (inv) { const t = c; c = d; d = t; }
       if (c <= deadbandW) c = 0;
       if (d <= deadbandW) d = 0;
-      return { chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'storageFarm(inv)' : 'storageFarm', inverted: inv };
+      return { chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'storageFarm(inv)' : 'storageFarm', inverted: inv, fromSigned: false, derived: false };
     }
   }
 
-  const signedBattery = batteryMapped ? getFreshFlowNumber('batteryPower') : null;
-  const charge = chargeMapped ? getFreshFlowNumber('storageChargePower') : null;
-  const discharge = dischargeMapped ? getFreshFlowNumber('storageDischargePower') : null;
+  // Gemappte Speicher-DPs stabil lesen: ein unveränderter 0-Wert darf nicht wegen
+  // seines Alters verworfen und durch eine Bilanzrechnung ersetzt werden.
+  const signedBattery = batteryMapped ? getStableFlowNumber('batteryPower') : null;
+  const charge = chargeMapped ? getStableFlowNumber('storageChargePower') : null;
+  const discharge = dischargeMapped ? getStableFlowNumber('storageDischargePower') : null;
 
-  if (samePair && signedBattery !== null) return preferBalanceDerivedBatteryFlow(fromSigned(signedBattery, 'batterySignedForSamePair'), { deadbandW });
+  if (samePair && charge !== null) return fromSigned(charge, 'sameChargeDischargeSigned');
 
-  const separateAvailable = (charge !== null || discharge !== null);
-  const bothDirections = Math.abs(Number(charge || 0)) > deadbandW && Math.abs(Number(discharge || 0)) > deadbandW;
-  const bothEqualish = bothDirections && Math.abs(Math.abs(Number(charge || 0)) - Math.abs(Number(discharge || 0))) <= Math.max(2, deadbandW);
-
-  if (signedBattery !== null && (!separateAvailable || bothEqualish || (!chargeMapped && !dischargeMapped))) {
-    return preferBalanceDerivedBatteryFlow(fromSigned(signedBattery, bothEqualish ? 'batterySignedOverrideDual' : 'batterySigned'), { deadbandW });
-  }
-
-  if (separateAvailable) {
+  if (charge !== null || discharge !== null) {
     let c = Math.max(0, Math.abs(Number(charge || 0)));
     let d = Math.max(0, Math.abs(Number(discharge || 0)));
     if (c <= deadbandW) c = 0;
     if (d <= deadbandW) d = 0;
     if (inv) { const t = c; c = d; d = t; }
-    const completePair = !!(chargeMapped && dischargeMapped && charge !== null && discharge !== null && !samePair);
-    return preferBalanceDerivedBatteryFlow({ chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'chargeDischarge(inv)' : 'chargeDischarge', inverted: inv, incomplete: !completePair }, { deadbandW });
+    return { chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'chargeDischarge(inv)' : 'chargeDischarge', inverted: inv, fromSigned: false, derived: false };
   }
 
-  if (signedBattery !== null) return preferBalanceDerivedBatteryFlow(fromSigned(signedBattery, 'batterySigned'), { deadbandW });
+  if (signedBattery !== null) return fromSigned(signedBattery, 'batterySigned');
 
-  return preferBalanceDerivedBatteryFlow({ chargeW: 0, dischargeW: 0, signedW: 0, src: (batteryMapped || chargeMapped || dischargeMapped) ? 'stale-or-missing' : 'missing', inverted: inv }, { deadbandW });
+  // Rechen-Fallback nur bei wirklich nicht konfiguriertem Speicher-DP.
+  if (!anyStorageMapped) {
+    const derived = getBalanceDerivedBatteryFlow({ deadbandW: Math.max(180, deadbandW) });
+    if (derived) return derived;
+  }
+
+  return { chargeW: 0, dischargeW: 0, signedW: 0, src: anyStorageMapped ? 'mapped-missing' : 'missing', inverted: inv, fromSigned: false, derived: false };
 }
-
 function render() {
   const s = state;
 
   const d = (k) => s[k]?.value;
 
   // Top ring values: map PV, Grid, Load, Bat flows to percent of max for visualization
-  const sfEnabled = !!(s['storageFarm.enabled']?.value);
+  const sfEnabled = nwStorageFarmFeatureFromConfig(window.__nwCfg || {}, s || state || {});
   const pvMapped = isMappedDatapoint('pvPower') || isMappedDatapoint('productionTotal');
 
   // PV (W): primary from mapped PV datapoint; fallback to productionTotal if used as power DP.
@@ -6026,7 +6033,7 @@ function updateEnergyWeb() {
   const s = window.latestState || {};
 
   // Raw datapoints (1:1)
-  const sfEnabled = !!(s['storageFarm.enabled']?.value);
+  const sfEnabled = nwStorageFarmFeatureFromConfig(window.__nwCfg || {}, s || state || {});
   const pvMapped = isMappedDatapoint('pvPower') || isMappedDatapoint('productionTotal');
 
   // PV (W): primary from mapped PV datapoint; fallback to productionTotal if used as power DP.
