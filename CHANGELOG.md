@@ -1,3 +1,11 @@
+## 0.7.45 - App-Center Heizstab-UI Hotfix
+
+- App-Center/Installerseiten erhalten die Installer-Seitenklasse, damit Hero und Hauptcontainer wieder auf derselben breiten Cockpit-Achse liegen.
+- Heizstab-Tab auf volle Breite umgestellt: Gerätekarte und Hinweis liegen nicht mehr nebeneinander, damit 1-12 Stufen und DP-Zeilen nicht in die rechte Karte laufen.
+- Heizstab-Stufenparameter und Write-/Read-DP-Zuordnung responsiv gehärtet: Karten, Gruppen, Felder und Stage-Grid begrenzen sich sauber auf die verfügbare Breite.
+- Seitliches Überlaufen/Überlagern der Heizstab-Konfiguration bei PC-, Tablet- und Smartphone-Breiten behoben.
+- Service-Worker Cache auf `nexowatt-cache-v213` erhöht.
+
 ## 0.7.44 - Publish-/Package-Hotfix
 
 - `package.json` sauber neu geschrieben und Version auf `0.7.44` gesetzt.

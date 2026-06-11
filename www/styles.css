@@ -10752,3 +10752,168 @@ body.nw-page-smarthome .nw-sh-gauge--level + .nw-sh-slider--big{
   .nw-ai-setting-row select,
   .nw-ai-setting-row input{width:100%;}
 }
+
+/* =====================================================================
+   NexoWatt EMS 0.7.45 – App-Center Heizstab UI Responsiveness Hotfix
+   ===================================================================== */
+body.nw-page-ems-apps main.nw-appcenter-page,
+body.nw-page-ems-apps main.nw-page-shell{
+  width:min(var(--nx-page-max, 1580px), calc(100vw - clamp(20px, 3vw, 54px))) !important;
+  max-width:none !important;
+  overflow:visible !important;
+}
+
+body.nw-page-ems-apps .nw-smarthome-tabs{
+  max-width:100% !important;
+  overflow-x:auto !important;
+}
+
+/* Der Heizstab-Konfigurator braucht wegen 1–12 Stufen und DP-Zeilen bewusst
+   die volle Breite. Die Hinweis-Kachel rutscht unter die Gerätekarte, damit
+   keine Eingabefelder mehr über angrenzende Karten laufen. */
+body.nw-page-ems-apps #nw-tabpanel-heatingrod > .nw-grid{
+  grid-template-columns:1fr !important;
+  align-items:start !important;
+}
+body.nw-page-ems-apps #nw-tabpanel-heatingrod .nw-card,
+body.nw-page-ems-apps #heatingRodDevices,
+body.nw-page-ems-apps #heatingRodDevices *{
+  box-sizing:border-box !important;
+}
+body.nw-page-ems-apps #nw-tabpanel-heatingrod .nw-card{
+  min-width:0 !important;
+  overflow:hidden !important;
+}
+body.nw-page-ems-apps #heatingRodDevices{
+  display:grid !important;
+  grid-template-columns:1fr !important;
+  gap:12px !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  overflow:hidden !important;
+}
+body.nw-page-ems-apps #heatingRodDevices > .nw-config-group,
+body.nw-page-ems-apps #heatingRodDevices > details.nw-config-group{
+  width:100% !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  flex:1 1 auto !important;
+  overflow:hidden !important;
+}
+body.nw-page-ems-apps #heatingRodDevices > .nw-config-item,
+body.nw-page-ems-apps #heatingRodDevices > .nw-heatingrod-device-row{
+  width:100% !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  grid-template-columns:1fr !important;
+  gap:12px !important;
+  align-items:start !important;
+  overflow:hidden !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-device-left,
+body.nw-page-ems-apps .nw-heatingrod-device-right{
+  width:100% !important;
+  max-width:100% !important;
+  min-width:0 !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-device-left{
+  padding-bottom:2px !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-device-right{
+  align-items:stretch !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-device-right > .nw-config-group,
+body.nw-page-ems-apps .nw-heatingrod-device-right > details.nw-config-group{
+  width:100% !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  flex:1 1 auto !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-device-right > .nw-config-field-hint{
+  max-width:100% !important;
+  overflow-wrap:anywhere !important;
+}
+body.nw-page-ems-apps .nw-config-mini-field{
+  min-width:min(130px, 100%) !important;
+  max-width:100% !important;
+}
+body.nw-page-ems-apps .nw-config-group .nw-config-input,
+body.nw-page-ems-apps .nw-config-group .nw-config-select,
+body.nw-page-ems-apps .nw-config-group .nw-config-dp-input{
+  max-width:100% !important;
+}
+
+/* Stage-Tabelle: Desktop kompakt als Grid, bei kleiner Breite automatisch
+   lesbar ohne Überlagerung und mit horizontaler Sicherheits-Scrollfläche. */
+body.nw-page-ems-apps .nw-heatingrod-stage-wrap{
+  width:100% !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  overflow-x:auto !important;
+  overflow-y:hidden !important;
+  -webkit-overflow-scrolling:touch !important;
+  scrollbar-width:thin !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-stage-head{
+  min-width:0 !important;
+  max-width:100% !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-stage-head .nw-config-field-hint{
+  max-width:100% !important;
+  overflow-wrap:anywhere !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-stage-row{
+  width:100% !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  grid-template-columns:minmax(78px, .55fr) repeat(3, minmax(90px, 1fr)) !important;
+  gap:8px !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-stage-dp-row{
+  grid-template-columns:minmax(78px, .45fr) repeat(2, minmax(170px, 1fr)) !important;
+  align-items:start !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-stage-row .nw-config-input,
+body.nw-page-ems-apps .nw-heatingrod-stage-row .nw-config-dp-input{
+  min-width:0 !important;
+  width:100% !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-stage-dp-row .nw-config-dp-input-wrapper{
+  max-width:100% !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-stage-dp-row .nw-config-dp-input-wrapper .nw-config-dp-input{
+  flex:1 1 150px !important;
+}
+
+@media (max-width: 980px){
+  body.nw-page-ems-apps main.nw-appcenter-page,
+  body.nw-page-ems-apps main.nw-page-shell{
+    width:calc(100vw - 20px) !important;
+    padding:12px !important;
+  }
+  body.nw-page-ems-apps .nw-heatingrod-stage-row,
+  body.nw-page-ems-apps .nw-heatingrod-stage-dp-row{
+    min-width:560px !important;
+  }
+}
+@media (max-width: 640px){
+  body.nw-page-ems-apps main.nw-appcenter-page,
+  body.nw-page-ems-apps main.nw-page-shell{
+    width:calc(100vw - 12px) !important;
+    padding:8px !important;
+  }
+  body.nw-page-ems-apps #heatingRodDevices{
+    gap:10px !important;
+  }
+  body.nw-page-ems-apps #heatingRodDevices > .nw-config-item,
+  body.nw-page-ems-apps #heatingRodDevices > .nw-heatingrod-device-row{
+    padding:10px !important;
+  }
+  body.nw-page-ems-apps .nw-heatingrod-stage-wrap{
+    padding:10px !important;
+  }
+  body.nw-page-ems-apps .nw-heatingrod-stage-row,
+  body.nw-page-ems-apps .nw-heatingrod-stage-dp-row{
+    min-width:520px !important;
+  }
+}

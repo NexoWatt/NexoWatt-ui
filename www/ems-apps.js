@@ -2721,10 +2721,12 @@ function _collectFlowPowerDpIsWFromUI() {
 
   function _mkCfgField(label, control, hint) {
     const wrap = document.createElement('div');
+    wrap.className = 'nw-config-mini-field';
     wrap.style.display = 'flex';
     wrap.style.flexDirection = 'column';
     wrap.style.gap = '4px';
     wrap.style.minWidth = '130px';
+    wrap.style.maxWidth = '100%';
     const lab = document.createElement('div');
     lab.textContent = label;
     lab.style.fontSize = '0.72rem';
@@ -2743,6 +2745,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
   function _mkCfgGroup(title) {
     const wrap = document.createElement('div');
+    wrap.className = 'nw-config-group';
     wrap.style.display = 'flex';
     wrap.style.flexDirection = 'column';
     wrap.style.gap = '8px';
@@ -2751,6 +2754,8 @@ function _collectFlowPowerDpIsWFromUI() {
     wrap.style.borderRadius = '12px';
     wrap.style.background = 'rgba(255,255,255,0.02)';
     wrap.style.flex = '1 1 320px';
+    wrap.style.minWidth = '0';
+    wrap.style.maxWidth = '100%';
 
     const head = document.createElement('div');
     head.textContent = title;
@@ -2771,6 +2776,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
   function _mkCfgDetailsGroup(title, open = false) {
     const wrap = document.createElement('details');
+    wrap.className = 'nw-config-group nw-config-group--details';
     wrap.open = !!open;
     wrap.style.display = 'flex';
     wrap.style.flexDirection = 'column';
@@ -2780,6 +2786,8 @@ function _collectFlowPowerDpIsWFromUI() {
     wrap.style.borderRadius = '12px';
     wrap.style.background = 'rgba(255,255,255,0.02)';
     wrap.style.flex = '1 1 320px';
+    wrap.style.minWidth = '0';
+    wrap.style.maxWidth = '100%';
 
     const summary = document.createElement('summary');
     summary.textContent = title;
@@ -2823,12 +2831,15 @@ function _collectFlowPowerDpIsWFromUI() {
 
   function _mkDeviceRow(title, subtitle, badges = []) {
     const row = document.createElement('div');
-    row.className = 'nw-config-item';
+    row.className = 'nw-config-item nw-config-item--device-row';
     row.style.alignItems = 'start';
+    row.style.minWidth = '0';
+    row.style.overflow = 'hidden';
 
     const left = document.createElement('div');
     left.className = 'nw-config-item__left';
     left.style.maxWidth = '280px';
+    left.style.minWidth = '0';
 
     const ttl = document.createElement('div');
     ttl.className = 'nw-config-item__title';
@@ -2855,6 +2866,8 @@ function _collectFlowPowerDpIsWFromUI() {
     right.style.flexDirection = 'column';
     right.style.gap = '12px';
     right.style.flex = '1';
+    right.style.minWidth = '0';
+    right.style.maxWidth = '100%';
 
     row.appendChild(left);
     row.appendChild(right);
@@ -3113,7 +3126,10 @@ function _collectFlowPowerDpIsWFromUI() {
         _mkCfgBadge(`Verdrahtet: ${wiredStages}/${dev.stageCount} Stufen`, wiredStages >= dev.stageCount ? 'ok' : 'warn'),
         _mkCfgBadge(`Max: ${dev.maxPowerW} W`),
       ];
-      const { row, right } = _mkDeviceRow(`Slot ${slot} – ${_getFlowConsumerName(slot)}`, 'Native gestufte Heizstab-Regelung. Leistungsmessung kommt aus dem Energiefluss-Slot, die Stage-Relais/KNX-Datenpunkte werden direkt hier in der Heizstab-App gepflegt.', badges);
+      const { row, left, right } = _mkDeviceRow(`Slot ${slot} – ${_getFlowConsumerName(slot)}`, 'Native gestufte Heizstab-Regelung. Leistungsmessung kommt aus dem Energiefluss-Slot, die Stage-Relais/KNX-Datenpunkte werden direkt hier in der Heizstab-App gepflegt.', badges);
+      row.classList.add('nw-heatingrod-device-row');
+      left.classList.add('nw-heatingrod-device-left');
+      right.classList.add('nw-heatingrod-device-right');
 
       const info = document.createElement('div');
       info.className = 'nw-config-field-hint';
@@ -3146,6 +3162,7 @@ function _collectFlowPowerDpIsWFromUI() {
       right.appendChild(grpTiming.wrap);
 
       const stageWrap = document.createElement('div');
+      stageWrap.className = 'nw-heatingrod-stage-wrap';
       stageWrap.style.display = 'flex';
       stageWrap.style.flexDirection = 'column';
       stageWrap.style.gap = '8px';
@@ -3153,8 +3170,12 @@ function _collectFlowPowerDpIsWFromUI() {
       stageWrap.style.border = '1px solid rgba(255,255,255,0.08)';
       stageWrap.style.borderRadius = '12px';
       stageWrap.style.background = 'rgba(255,255,255,0.02)';
+      stageWrap.style.minWidth = '0';
+      stageWrap.style.maxWidth = '100%';
+      stageWrap.style.overflowX = 'auto';
 
       const stageHead = document.createElement('div');
+      stageHead.className = 'nw-heatingrod-stage-head';
       stageHead.style.display = 'flex';
       stageHead.style.flexWrap = 'wrap';
       stageHead.style.justifyContent = 'space-between';
@@ -3172,6 +3193,7 @@ function _collectFlowPowerDpIsWFromUI() {
       stageWrap.appendChild(stageHead);
 
       const headRow = document.createElement('div');
+      headRow.className = 'nw-heatingrod-stage-row nw-heatingrod-stage-row--head';
       headRow.style.display = 'grid';
       headRow.style.gridTemplateColumns = '100px repeat(3, minmax(120px, 1fr))';
       headRow.style.gap = '10px';
@@ -3189,6 +3211,7 @@ function _collectFlowPowerDpIsWFromUI() {
       (dev.stages || []).forEach((stage, index) => {
         const s = index + 1;
         const sRow = document.createElement('div');
+        sRow.className = 'nw-heatingrod-stage-row';
         sRow.style.display = 'grid';
         sRow.style.gridTemplateColumns = '100px repeat(3, minmax(120px, 1fr))';
         sRow.style.gap = '10px';
@@ -3236,6 +3259,7 @@ function _collectFlowPowerDpIsWFromUI() {
         stageWrap.appendChild(sRow);
 
         const dpRow = document.createElement('div');
+        dpRow.className = 'nw-heatingrod-stage-row nw-heatingrod-stage-dp-row';
         dpRow.style.display = 'grid';
         dpRow.style.gridTemplateColumns = '100px repeat(2, minmax(240px, 1fr))';
         dpRow.style.gap = '10px';
