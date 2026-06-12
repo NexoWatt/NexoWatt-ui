@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.62",
+    "version": "0.7.64",
     "news": {
+      "0.7.64": {
+        "de": "Git-/TypeScript-Migrationsstabilisierung: Konfliktprüfung ergänzt, publish:check git-sicher gemacht und keine Runtime-Logik geändert.",
+        "en": "Git/TypeScript migration stabilization: added conflict check, made publish:check Git-safe and did not change runtime logic."
+      },
+      "0.7.63": {
+        "de": "TypeScript-Migrationsschritt: Backend-/API-State-Helfer für /api/state, Feature-Sichtbarkeit, info.connection und Lizenzsicherheit vorbereitet. Keine Runtime-Logik geändert.",
+        "en": "TypeScript migration step: prepared backend/API-state helpers for /api/state, feature visibility, info.connection and license safety. No runtime logic changed."
+      },
       "0.7.61": {
         "de": "TypeScript-Migration: produktionsnahe Energiefluss-Regressionstests für Speicher- und Netz-DPs ergänzt. Keine Runtime-Logik geändert.",
         "en": "TypeScript migration: added production-like energy-flow regression tests for storage and grid datapoints. No runtime logic changed."
@@ -22,14 +30,6 @@
       "0.7.56": {
         "de": "TypeScript-Migrationsbasis ergänzt: tsconfig, erste Verträge für Energiefluss, Speicher, Feature-Sichtbarkeit, KI-Berater, Lizenz und Datenpunkte. Keine Funktionslogik geändert.",
         "en": "Added TypeScript migration scaffold: tsconfig and first contracts for energy flow, storage, feature visibility, AI advisor, license and datapoints. No runtime logic changed."
-      },
-      "0.7.55": {
-        "de": "Dokumentationsvertiefung: Architektur, Datenflüsse, State-/DP-Katalog, kritische Regeln, TypeScript-Migrationsplan, Modul-Checklisten und Code-Verträge ergänzt. Keine Funktionslogik geändert.",
-        "en": "Documentation deepening: added architecture, data flows, state/datapoint catalog, critical rules, TypeScript migration plan, module checklists and code contracts. No functional logic changed."
-      },
-      "0.7.54": {
-        "de": "Wartbarkeitsversion: detaillierte deutsche Abschnittskommentare in Code-Dateien und Kommentarstandard für spätere TypeScript-Migration ergänzt.",
-        "en": "Maintainability release: added detailed German section comments to code files and a commenting standard for the later TypeScript migration."
       }
     },
     "title": "NexoWatt UI",

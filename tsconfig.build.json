@@ -19,7 +19,8 @@
     "src-ts/shared/**/*.ts",
     "src-ts/backend/**/*.ts",
     "src-ts/frontend/**/*.ts",
-    "src-ts/index.ts"
+    "src-ts/index.ts",
+    "src-ts/adapter/**/*.ts"
   ],
   "exclude": [
     "node_modules",

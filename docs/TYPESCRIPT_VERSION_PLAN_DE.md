@@ -52,3 +52,15 @@ src-ts/tests/          Smoke-/Runtime-Tests
 
 Damit entsteht keine unübersichtliche Sammlung von TS-Dateien. Jede Datei muss fachlich
 an ihrem Zielbereich liegen und deutsche Kommentare direkt an den Code-Teilen enthalten.
+
+## 0.7.63 – Backend/API-State-Helfer
+
+Neue Backend-nahe TS-Dateien liegen unter `src-ts/backend/`, weil sie später aus `main.js`
+ausgelagert werden. Die Ordner bleiben fachlich getrennt:
+
+```text
+src-ts/backend/api-state/          /api/state und Response-Hüllen
+src-ts/backend/connection/         info.connection / Webserverstatus
+src-ts/backend/feature-visibility/ EVCS/Farm/SmartHome/Wetter/KI Sichtbarkeit
+src-ts/backend/license/            Lizenz-Schutzlogik
+```

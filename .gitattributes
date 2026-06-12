@@ -1,0 +1,25 @@
+# NexoWatt: stabile Zeilenenden und klare Binärdateien für Git-Merges
+*.js   text eol=lf
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.css  text eol=lf
+*.html text eol=lf
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.zip  binary
+*.tgz  binary
+*.pdf  binary
+*.woff binary
+*.woff2 binary
+
+# Gebaute Admin-Bundles sind Artefakte. Änderungen sollten aus src-admin-tab kommen.
+admin/react/assets/* linguist-generated=true

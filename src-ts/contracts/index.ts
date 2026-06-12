@@ -13,8 +13,12 @@ export * from './ai-advisor';
 export * from './license';
 export * from './datapoints';
 export * from './iobroker-states';
+export * from './api';
+export * from './adapter-api';
 export * from './testing';
 
 export * from './ems-budget';
 
 export * from './heating-rod';
+
+export * as apiStateContracts from './api-state';

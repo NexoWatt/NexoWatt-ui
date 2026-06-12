@@ -1,3 +1,38 @@
+## 0.7.64 - Git-Konflikt-/TypeScript-Stabilisierung
+
+- Git-Konfliktprüfung `npm run git:conflicts` ergänzt.
+- Dokumentation `docs/GIT_CONFLICT_RECOVERY_DE.md` ergänzt, damit lokale Merge-/VS-Code-Konflikte sauber bereinigt werden können.
+- `.gitattributes` ergänzt, damit TypeScript-/JavaScript-/JSON-Dateien stabile LF-Zeilenenden verwenden und Binär-/Build-Artefakte klar behandelt werden.
+- Keine Runtime-Logik geändert: Energiefluss, Speicher, Heizstab, KI, History, SmartHome, Lizenz und info.connection bleiben unverändert.
+
+# 0.7.63 - TypeScript Adapter-State/API Vorbereitung
+
+- TypeScript-Struktur für adapternahe Helfer ergänzt: `src-ts/adapter/state-cache.ts`, `api-state.ts`, `api-set.ts`, `connection-state.ts` und `settings-writes.ts`.
+- Erste typisierte Helfer für StateCache-Normalisierung, `/api/state`-Antworten, `/api/set`-Schreibpläne und `info.connection` vorbereitet.
+- Regressionen für 0-W-Statewerte, `false`-Werte, `value`/`val`-Übergangsformen und Kundeneinstellungs-Schreibpläne ergänzt.
+- Deutsche Kommentare direkt an den neuen Code-Teilen ergänzt, damit die spätere Migration aus `main.js` nachvollziehbar bleibt.
+- Keine produktive Runtime-Logik geändert.
+- Service-Worker Cache auf `nexowatt-cache-v231` erhöht.
+
+## 0.7.63 - TypeScript API-State und Feature-Sichtbarkeit Vorbereitung
+
+- TypeScript-Verträge für `/api/state`, `/api/set` und SSE-Ereignisse ergänzt.
+- Backend-nahe TypeScript-Helfer für StateCache-Normalisierung und API-State-Envelopes vorbereitet.
+- Feature-Sichtbarkeit für EVCS, Speicherfarm, SmartHome, Wetter und KI-Berater als TypeScript-Helfer vorbereitet.
+- Regressionen für gültige 0-W-/false-Statewerte, fehlende States, EVCS ohne echte Wallbox und Speicherfarm ohne echte Farm ergänzt.
+- Neue Checks `test:api-state-feature` und `test:api-state-feature-runtime` ergänzt.
+- Keine produktive Runtime-Logik geändert.
+- Service-Worker Cache auf `nexowatt-cache-v231` erhöht.
+
+# 0.7.63 - TypeScript Backend/API-State Vorbereitung
+
+- TypeScript-Vorbereitung für spätere Migration von `main.js`-Hilfsbereichen ergänzt.
+- Neue Verträge und Helfer für `/api/state`, Feature-Sichtbarkeit, Lizenzplatzhalter-Schutz und `info.connection`.
+- Neue Smoke-/Strukturprüfung `test:backend-api-state` ergänzt.
+- Deutsche Kommentare direkt an den neuen TypeScript-Code-Teilen ergänzt.
+- Keine produktive Runtime-Logik geändert.
+- Service-Worker Cache auf `nexowatt-cache-v231` erhöht.
+
 ## 0.7.62 - TypeScript Core-Limits und Heizstab-Vorbereitung
 
 - TypeScript-Verträge für zentrale EMS-Budgets und Heizstab-/Thermikentscheidungen ergänzt.
