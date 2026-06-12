@@ -1,3 +1,17 @@
+# 0.7.67 - TypeScript Frontend-Display-MJS-Spiegel
+
+- Ersten kontrollierten TS->MJS-Spiegel fuer browsernahe Frontend-Display-Helfer ergänzt.
+- Keine Runtime-Änderung.
+
+## 0.7.67 - TypeScript Frontend-Display-MJS-Spiegel
+
+- Ersten kontrollierten TS->MJS-Spiegel fuer browsernahe Frontend-Display-Helfer ergänzt.
+- Neue Spiegeldateien unter `www/static/ts-mirrors/frontend/`: `display-format.mjs`, `customer-feature-visibility.mjs`, `history-controls.mjs`.
+- Neue Build-/Check-Skripte: `sync:ts-frontend-mirrors`, `check:ts-frontend-mirrors`, `test:ts-frontend-mirrors`.
+- `publish:check` prüft die Frontend-Spiegel synchron, ohne TypeScript-Build auszuführen.
+- Keine Runtime-Änderung an Dashboard, History, Energiefluss, SmartHome, EMS, Lizenz oder info.connection.
+- Service-Worker Cache auf `nexowatt-cache-v235` erhöht.
+
 ## 0.7.66 - TypeScript Build-Output und erster JS-Spiegel
 
 - Erste reproduzierbare TypeScript-zu-JavaScript-Spiegelstrategie eingeführt.

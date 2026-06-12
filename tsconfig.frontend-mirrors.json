@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ES2022",
+    "noEmit": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "rootDir": "src-ts",
+    "outDir": "build-ts/frontend-mirrors",
+    "removeComments": false
+  },
+  "include": [
+    "src-ts/frontend/display-format.ts",
+    "src-ts/frontend/customer-feature-visibility.ts",
+    "src-ts/frontend/history-controls.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "build-ts",
+    "src-ts/tests/**/*",
+    "src-ts/quality/**/*"
+  ]
+}

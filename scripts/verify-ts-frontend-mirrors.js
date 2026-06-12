@@ -1,0 +1,139 @@
+#!/usr/bin/env node
+'use strict';
+
+/**
+ * Datei: scripts/verify-ts-frontend-mirrors.js
+ *
+ * Zweck:
+ * Prüft die Frontend-TS->MJS-Spiegelstrategie ohne TypeScript-Compiler.
+ * Dadurch kann dieser Check in `publish:check` laufen, auch wenn lokal noch
+ * kein `npm install` ausgeführt wurde.
+ */
+
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const { pathToFileURL } = require('url');
+
+const root = path.resolve(__dirname, '..');
+const mirrorSpecs = [
+  {
+    sourceRel: 'src-ts/frontend/display-format.ts',
+    mirrorRel: 'www/static/ts-mirrors/frontend/display-format.mjs',
+    exports: ['formatPowerValue', 'formatEnergyValue', 'formatPercentValue', 'formatPowerW'],
+  },
+  {
+    sourceRel: 'src-ts/frontend/customer-feature-visibility.ts',
+    mirrorRel: 'www/static/ts-mirrors/frontend/customer-feature-visibility.mjs',
+    exports: ['hasRealEvcsProof', 'hasRealStorageFarmProof', 'buildCustomerFeatureVisibility'],
+  },
+  {
+    sourceRel: 'src-ts/frontend/history-controls.ts',
+    mirrorRel: 'www/static/ts-mirrors/frontend/history-controls.mjs',
+    exports: ['buildHistoryToolbarState'],
+  },
+];
+
+/**
+ * Code-Teil: fail
+ * Zweck: Bricht den Check mit klarer Fehlermeldung ab.
+ */
+function fail(message) {
+  console.error(`[verify-ts-frontend-mirrors] ERROR: ${message}`);
+  process.exit(1);
+}
+
+/**
+ * Code-Teil: readRequired
+ * Zweck: Liest eine Pflichtdatei und vereinheitlicht Zeilenenden.
+ */
+function readRequired(rel) {
+  const file = path.join(root, rel);
+  if (!fs.existsSync(file)) fail(`Pflichtdatei fehlt: ${rel}`);
+  return fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+}
+
+/**
+ * Code-Teil: sourceHash
+ * Zweck: Berechnet denselben Hash, den der Build in den MJS-Spiegel schreibt.
+ */
+function sourceHash(sourceRel) {
+  return crypto.createHash('sha256').update(readRequired(sourceRel)).digest('hex');
+}
+
+/**
+ * Code-Teil: requireContains
+ * Zweck: Prüft wichtige Kommentar- und Vertragsanker.
+ */
+function requireContains(rel, needle) {
+  const text = readRequired(rel);
+  if (!text.includes(needle)) fail(`${rel} enthält erwarteten Inhalt nicht: ${needle}`);
+  return text;
+}
+
+/**
+ * Code-Teil: verifyHash
+ *
+ * Zweck:
+ * Vergleicht den im MJS-Spiegel gespeicherten Quell-Hash mit der aktuellen TS-Quelle.
+ * So erkennen wir ohne Compiler, ob ein Spiegel veraltet ist.
+ */
+function verifyHash(spec) {
+  const mirror = readRequired(spec.mirrorRel);
+  const match = mirror.match(/Quell-Hash:\s*sha256:([a-f0-9]{64})/i);
+  if (!match) fail(`${spec.mirrorRel} enthält keinen Quell-Hash.`);
+  const expected = sourceHash(spec.sourceRel);
+  const actual = String(match[1]).toLowerCase();
+  if (actual !== expected) fail(`${spec.mirrorRel} ist nicht synchron zu ${spec.sourceRel}. Bitte npm run sync:ts-frontend-mirrors ausführen.`);
+}
+
+/**
+ * Code-Teil: verifyModuleExports
+ *
+ * Zweck:
+ * Importiert die erzeugten MJS-Spiegel mit Node und prüft die erwarteten Exporte.
+ * Damit merken wir früh, wenn der Spiegel zwar existiert, aber nicht lauffähig ist.
+ */
+async function verifyModuleExports(spec) {
+  const file = path.join(root, spec.mirrorRel);
+  const mod = await import(pathToFileURL(file).href);
+  for (const name of spec.exports) {
+    if (typeof mod[name] !== 'function') fail(`${spec.mirrorRel} exportiert ${name} nicht als Funktion.`);
+  }
+  if (spec.mirrorRel.includes('display-format')) {
+    const formatted = mod.formatPowerValue(0);
+    if (!formatted || formatted.text !== '0 W') fail('display-format.mjs muss 0 W als gültigen Wert formatieren.');
+  }
+  if (spec.mirrorRel.includes('customer-feature-visibility')) {
+    const state = mod.buildCustomerFeatureVisibility({ evcsProofs: [], storageFarmEnabled: false, storageFarmProofs: [] });
+    if (!state || state.hasEvcs !== false || state.hasStorageFarm !== false) fail('customer-feature-visibility.mjs muss nicht konfigurierte Features ausblenden.');
+  }
+  if (spec.mirrorRel.includes('history-controls')) {
+    const toolbar = mod.buildHistoryToolbarState({ mode: 'day', hasEvcs: false, hasTariff: true, canLoad: true });
+    const evcs = toolbar.actions.find((x) => x.key === 'evcsPdf');
+    if (!evcs || evcs.visible !== false) fail('history-controls.mjs muss EVCS PDF ohne Wallbox ausblenden.');
+  }
+}
+
+async function main() {
+  const pkg = JSON.parse(readRequired('package.json'));
+  const scripts = pkg.scripts || {};
+  for (const name of ['sync:ts-frontend-mirrors', 'check:ts-frontend-mirrors', 'test:ts-frontend-mirrors']) {
+    if (!scripts[name]) fail(`package.json scripts.${name} fehlt.`);
+  }
+  requireContains('tsconfig.frontend-mirrors.json', 'src-ts/frontend/display-format.ts');
+  requireContains('scripts/build-ts-frontend-mirrors.js', 'Code-Teil: checkMirrorIsCurrent');
+  requireContains('scripts/build-ts-frontend-mirrors.js', 'Code-Teil: writeRuntimeMirror');
+
+  for (const spec of mirrorSpecs) {
+    requireContains(spec.sourceRel, 'Code-Teil:');
+    requireContains(spec.mirrorRel, 'AUTO-GENERATED FILE');
+    requireContains(spec.mirrorRel, 'Quell-Hash: sha256:');
+    verifyHash(spec);
+    await verifyModuleExports(spec);
+  }
+
+  console.log('[verify-ts-frontend-mirrors] OK: Frontend-TS->MJS-Spiegel sind synchron und importierbar.');
+}
+
+main().catch((err) => fail(err && err.stack ? err.stack : String(err)));
