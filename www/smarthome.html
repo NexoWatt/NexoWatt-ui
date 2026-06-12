@@ -1,4 +1,18 @@
+<!--
+  Datei: www/smarthome.html
+  Rolle: Code-Datei
+  Zweck: Allgemeiner Projektcode; genaue Verantwortung ergibt sich aus Pfad und Funktionsnamen.
+  Wartung: HTML-IDs/Klassen sind Vertragsstellen für www/*.js und CSS. Nicht ohne Suche nach Referenzen ändern.
+-->
 <!DOCTYPE html>
+<!--
+  NexoWatt Code-Kommentar (DE)
+  Zweck: SmartHome-Kundenansicht: Gebäude-/Raumstruktur, Geräte, Szenen und mobile Drawer-Navigation.
+  Zusammenhänge:
+  - Logik in www/smarthome.js, Konfiguration in www/smarthome-config.html/js.
+  Wartungshinweise:
+  - Kundenansicht muss ohne Installerrechte funktionieren.
+-->
 <html lang="de">
 <head>
 <script>
@@ -25,7 +39,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
 </head>
+<!-- NexoWatt Detail-Kommentar (DE) -->
+<!-- SmartHome-Kundenansicht. Struktur-IDs werden von www/smarthome.js für Drawer, Räume und Geräte-Kacheln genutzt. -->
 <body class="nw-cockpit-page nw-cockpit-skin nw-page-smarthome">
+<!-- Abschnitt: Kopfbereich/Navigation. Wird durch CSS und teils durch JS-Menülogik gesteuert. -->
 <header class="topbar">
   <div class="brand">
     <a href="/"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></a>
@@ -50,6 +67,7 @@
   </div>
 </header>
 
+<!-- Abschnitt: Hauptinhalt der Seite. DOM-IDs in diesem Bereich werden durch zugehörige JS-Dateien befüllt. -->
 <main class="content nw-page-shell nw-smarthome-page nw-subpage">
   <section class="nw-page-hero" aria-label="SmartHome Übersicht">
     <div>
@@ -81,7 +99,7 @@
 
         <!-- Filter-/Chip-Leiste bewusst entfernt (Endkunden-UI soll clean bleiben). -->
 
-        <div id="nw-smarthome-empty" class="nw-sh-empty" style="display:none;"></div>
+        <div id="nw-smarthome-empty" class="nw-sh-empty nw-sh-empty--loading">SmartHome wird geladen …</div>
         <div id="nw-smarthome-rooms" class="nw-sh-rooms"></div>
       </section>
     </div>

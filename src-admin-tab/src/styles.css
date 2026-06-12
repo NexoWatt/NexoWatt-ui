@@ -1,3 +1,19 @@
+/*
+ * Datei: src-admin-tab/src/styles.css
+ * Rolle: Admin-React-Quelle
+ * Zweck: React-Quellcode für ioBroker-Admin-Tab und Installer-Einstiegsseiten.
+ * Wartung: Diese Styles hängen an festen HTML-Klassen/IDs. Vor Änderungen betroffene Seiten mobil und Desktop prüfen.
+ */
+/*
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Stylesheet der React-Admin-Tab-Quelle.
+ * Zusammenhänge:
+ * - Build wird nach admin/react/ geschrieben.
+ * - Admin-Layout muss ioBroker-Admin-kompatibel bleiben.
+ * Wartungshinweise:
+ * - Bei Änderungen admin:build ausführen.
+ */
+
 :root {
   color-scheme: dark;
   --nw-bg: #0b1220;

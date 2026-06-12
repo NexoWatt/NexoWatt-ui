@@ -1,15 +1,62 @@
-(function(){
-  function el(id){ return document.getElementById(id); }
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
 
+/**
+ * Datei: www/evcs-report.js
+ * Rolle im Projekt: Frontend-Skript.
+ * Zweck: Browserseitiger Code für eine Kunden-/Installerseite; liest APIs und aktualisiert DOM/UI.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Frontend-Skript einer VIS-/Kundenseite oder eines Reports.
+ * Zusammenhänge:
+ * - Spricht mit APIs aus main.js und rendert Daten aus /api/state, /config oder Reports.
+ * - Styles liegen in www/styles.css bzw. Report-CSS-Dateien.
+ * Wartungshinweise:
+ * - Feature-Sichtbarkeit und Rollen beachten; Kundenfrontend darf keine Installerfunktionen öffnen.
+ */
+
+(function(){
+  /**
+   * Code-Teil: el
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  function el(id){ return document.getElementById(id); }
+  /**
+   * Code-Teil: q
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function q(name){
     const u = new URL(window.location.href);
     return u.searchParams.get(name);
   }
-
+  /**
+   * Code-Teil: fmtDate
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function fmtDate(iso){ return iso || ''; }
 
   // Numeric formatting for UI + PDF (German locale, fixed decimals, tabular numbers in CSS).
   const _nfCache = new Map();
+  /**
+   * Code-Teil: _getNf
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _getNf(d){
     const key = String(d);
     let nf = _nfCache.get(key);
@@ -19,6 +66,12 @@
     }
     return nf;
   }
+  /**
+   * Code-Teil: fmtNum
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function fmtNum(n, d, { emptyZero = true } = {}){
     if (n === null || n === undefined || n === '') {
       return emptyZero ? _getNf(d).format(0) : '';
@@ -27,6 +80,12 @@
     if (!isFinite(x)) return emptyZero ? _getNf(d).format(0) : '';
     return _getNf(d).format(x);
   }
+/**
+ * Code-Teil: toISODate
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function toISODate(ms){
     const d = new Date(ms);
     const y = d.getFullYear();
@@ -34,7 +93,12 @@ function toISODate(ms){
     const dd= String(d.getDate()).padStart(2,'0');
     return `${y}-${m}-${dd}`;
   }
-
+  /**
+   * Code-Teil: load
+   * Zweck: Lädt Daten aus API, States oder Konfiguration.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function load(){
     const rangeMeta = el('rangeMeta');
     const errEl = el('err');
@@ -170,7 +234,12 @@ function toISODate(ms){
       return false;
     }
   }
-
+  /**
+   * Code-Teil: loadAndPrint
+   * Zweck: Lädt Daten aus API, States oder Konfiguration.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function loadAndPrint(){
     // Ensure data is fully loaded BEFORE opening the print dialog.
     const ok = await load();
@@ -183,8 +252,12 @@ function toISODate(ms){
 
     window.print();
   }
-
-
+  /**
+   * Code-Teil: downloadCsv
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function downloadCsv(){
     const fromMs = Number(q('from') || (Date.now() - 7*24*3600*1000));
     const toMs   = Number(q('to')   || Date.now());
@@ -199,7 +272,12 @@ function toISODate(ms){
     a.click();
     a.remove();
   }
-
+  /**
+   * Code-Teil: downloadSessionsCsv
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function downloadSessionsCsv(){
     const fromMs = Number(q('from') || (Date.now() - 7*24*3600*1000));
     const toMs   = Number(q('to')   || Date.now());
@@ -213,8 +291,12 @@ function toISODate(ms){
     a.click();
     a.remove();
   }
-
-
+  /**
+   * Code-Teil: init
+   * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function init(){
     const reloadBtn = el('reloadBtn');
     const printBtn = el('printBtn');
@@ -253,15 +335,18 @@ function toISODate(ms){
   const menuBtn = document.getElementById('menuBtn');
   const menuDropdown = document.getElementById('menuDropdown');
   if (menuBtn && menuDropdown){
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menuBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       menuDropdown.classList.toggle('hidden');
     });
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('click', () => {
       menuDropdown.classList.add('hidden');
     });
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menuDropdown. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     menuDropdown.addEventListener('click', (e) => e.stopPropagation());
   }
 
@@ -310,6 +395,7 @@ function toISODate(ms){
   }
 
   if (document.readyState === 'loading'){
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'DOMContentLoaded' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();

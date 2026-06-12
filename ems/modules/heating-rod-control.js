@@ -1,12 +1,62 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: ems/modules/heating-rod-control.js
+ * Rolle im Projekt: Heizstabregelung.
+ * Zweck: Regelt Heizstab-Freigaben aus PV-Budget, Speicherreserve, Temperatur und Schutzlogik.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Heizstab-Regelung: berechnet Freigaben, Stufen, Speicherreserve und PV-/Netzbedingungen für Heizstabsteuerung.
+ * Zusammenhänge:
+ * - Nutzt Budgets aus core-limits.js und Config aus App-Center.
+ * - Schreibt Heizstab-States und Stufenausgänge.
+ * Wartungshinweise:
+ * - Speicherreserve und PV-Budget dürfen nicht durch falsche Batterie-Fallbacks verfälscht werden.
+ */
+
 'use strict';
 
-const { BaseModule } = require('./base');
 
+/**
+ * Datenvertrag: HeatingRodRuntime
+ * Zweck: Beschreibt die laufende Heizstab-Regelung: Budget, Reserve, Freigaben, Stufen und aktuelle Leistung.
+ * Zusammenhang: App-Center schreibt Config; core-limits.js liefert Budget; dieses Modul schreibt Heizstab-States.
+ * TypeScript-Ziel: HeatingRodRuntime und HeatingRodConfig als getrennte Interfaces modellieren.
+ */
+
+/**
+ * Vertragsstelle: Speicherreserve
+ * Zweck: Speicherreserve-Werte aus dem App-Center dürfen nicht auf Defaults zurückspringen.
+ * Wichtig: Änderungen an Config-Speichern immer mit UI-Speichern und anschließendem Reload prüfen.
+ */
+
+
+const { BaseModule } = require('./base');
+/**
+ * Code-Teil: num
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function num(v, fallback = 0) {
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
 }
-
+/**
+ * Code-Teil: clamp
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function clamp(v, minV, maxV) {
     const n = Number(v);
     if (!Number.isFinite(n)) return minV;
@@ -14,25 +64,45 @@ function clamp(v, minV, maxV) {
     if (Number.isFinite(maxV) && n > maxV) return maxV;
     return n;
 }
-
+/**
+ * Code-Teil: safeSlot
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function safeSlot(slot) {
     const s = Math.round(Number(slot) || 0);
     if (s < 1) return 1;
     if (s > 10) return 10;
     return s;
 }
-
+/**
+ * Code-Teil: nowMs
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nowMs() {
     return Date.now();
 }
-
+/**
+ * Code-Teil: normalizeMode
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function normalizeMode(raw) {
     const s = String(raw || '').trim().toLowerCase();
     if (s === 'manual' || s === 'manuell') return 'manual';
     if (s === 'off' || s === 'aus' || s === '0') return 'off';
     return 'pvAuto';
 }
-
+/**
+ * Code-Teil: normalizeUserMode
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function normalizeUserMode(raw) {
     const s = String(raw || '').trim().toLowerCase();
     if (!s || s === 'inherit' || s === 'system') return 'inherit';
@@ -43,7 +113,12 @@ function normalizeUserMode(raw) {
     if (s === 'off' || s === 'aus' || s === '0') return 'off';
     return 'inherit';
 }
-
+/**
+ * Code-Teil: normalizeConsumerType
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function normalizeConsumerType(raw) {
     const s = String(raw || '').trim().toLowerCase();
     if (!s) return 'generic';
@@ -51,7 +126,12 @@ function normalizeConsumerType(raw) {
     if (s === 'heatpump' || s === 'heat_pump' || s === 'heat-pump' || s === 'waermepumpe' || s === 'wärmepumpe' || s === 'hvac' || s === 'klima') return 'heatPump';
     return 'generic';
 }
-
+/**
+ * Code-Teil: defaultStagePower
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function defaultStagePower(maxPowerW, stageCount, idx) {
     const cnt = Math.max(1, Math.round(Number(stageCount) || 1));
     const maxW = Math.max(0, Math.round(Number(maxPowerW) || 0));
@@ -60,7 +140,12 @@ function defaultStagePower(maxPowerW, stageCount, idx) {
     const rest = maxW - (base * cnt);
     return base + (idx === cnt - 1 ? rest : 0);
 }
-
+/**
+ * Code-Teil: computeStageDefaults
+ * Zweck: Berechnet abgeleitete Werte.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function computeStageDefaults(maxPowerW, stageCount) {
     const stages = [];
     let cumulative = 0;
@@ -77,7 +162,12 @@ function computeStageDefaults(maxPowerW, stageCount) {
     }
     return stages;
 }
-
+/**
+ * Code-Teil: quickManualLevelToStageCount
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function quickManualLevelToStageCount(stageCount, level) {
     const cnt = Math.max(1, Math.round(Number(stageCount) || 1));
     const lvl = Math.max(1, Math.min(3, Math.round(Number(level) || 1)));
@@ -86,7 +176,26 @@ function quickManualLevelToStageCount(stageCount, level) {
     return Math.max(1, Math.min(cnt, target));
 }
 
+/**
+ * Code-Teil: Klasse `HeatingRodControlModule`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+// Klassen-Kommentar: Klasse: HeatingRodControlModule. Aufgabe: gehört zur Heizstab-/Thermiksteuerung. Speicherreserve, PV-Budget und Freigaben müssen mit core-limits übereinstimmen. Zusammenhang: Heizstabregelung, PV-Freigabe, Speicherreserve und Stufensteuerung.
+/**
+ * Klasse: HeatingRodControlModule
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 class HeatingRodControlModule extends BaseModule {
+    /**
+     * Code-Teil: constructor
+     * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
+     * Zusammenhang: Gehört zu EMS-Modul (Regelungs-, Diagnose- oder Beratungslogik innerhalb der EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können Heizstab-Freigaben und Reservelogik beeinflussen; Speicherreserve und PV-Budget testen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     constructor(adapter, dpRegistry) {
         super(adapter, dpRegistry);
 
@@ -100,10 +209,27 @@ class HeatingRodControlModule extends BaseModule {
         this._budgetProtect = { importSinceMs: 0, dischargeSinceMs: 0 };
     }
 
+    /**
+     * Code-Teil: Methode `_isEnabled`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _isEnabled
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _isEnabled() {
         return !!(this.adapter && this.adapter.config && this.adapter.config.enableHeatingRodControl);
     }
-
+    /**
+     * Code-Teil: _getCfg
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _getCfg() {
         const cfg = (this.adapter && this.adapter.config && this.adapter.config.heatingRod && typeof this.adapter.config.heatingRod === 'object')
             ? this.adapter.config.heatingRod
@@ -111,6 +237,18 @@ class HeatingRodControlModule extends BaseModule {
         return cfg;
     }
 
+    /**
+     * Code-Teil: Methode `_getVisFlowSlots`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _getVisFlowSlots
+     * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _getVisFlowSlots() {
         const vis = (this.adapter && this.adapter.config && this.adapter.config.vis && typeof this.adapter.config.vis === 'object')
             ? this.adapter.config.vis
@@ -120,12 +258,29 @@ class HeatingRodControlModule extends BaseModule {
         return arr;
     }
 
+    /**
+     * Code-Teil: Methode `_getDatapoints`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _getDatapoints
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _getDatapoints() {
         return (this.adapter && this.adapter.config && this.adapter.config.datapoints && typeof this.adapter.config.datapoints === 'object')
             ? this.adapter.config.datapoints
             : {};
     }
-
+    /**
+     * Code-Teil: _setStateIfChanged
+     * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _setStateIfChanged(id, val) {
         const v = (typeof val === 'number' && !Number.isFinite(val)) ? null : val;
         const prev = this._stateCache.get(id);
@@ -143,6 +298,18 @@ class HeatingRodControlModule extends BaseModule {
         }
     }
 
+    /**
+     * Code-Teil: Methode `_buildDevicesFromConfig`
+     * Zweck: baut aus Rohdaten eine strukturierte Konfiguration, Liste oder Empfehlung.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _buildDevicesFromConfig
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _buildDevicesFromConfig() {
         const cfg = this._getCfg();
         const list = Array.isArray(cfg.devices) ? cfg.devices : [];
@@ -163,6 +330,18 @@ class HeatingRodControlModule extends BaseModule {
             const ctrl = (slotCfg.ctrl && typeof slotCfg.ctrl === 'object') ? slotCfg.ctrl : {};
             const consumerType = normalizeConsumerType(slotCfg.consumerType || slotCfg.type || slotCfg.category);
 
+            /**
+             * Code-Teil: Arrow-Funktion `configuredStageCount`
+             * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+             * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+             * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+             */
+            /**
+             * Code-Teil: configuredStageCount
+             * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+             * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+             * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+             */
             const configuredStageCount = (() => {
                 let cnt = 0;
                 const prevStages = Array.isArray(r.stages) ? r.stages : [];
@@ -263,6 +442,18 @@ class HeatingRodControlModule extends BaseModule {
         this._devices = out;
     }
 
+    /**
+     * Code-Teil: Methode `init`
+     * Zweck: initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: init
+     * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async init() {
         await this.adapter.setObjectNotExistsAsync('heatingRod', {
             type: 'channel',
@@ -282,6 +473,18 @@ class HeatingRodControlModule extends BaseModule {
             native: {},
         });
 
+        /**
+         * Code-Teil: Arrow-Funktion `ensureDefault`
+         * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: ensureDefault
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const ensureDefault = async (id, val) => {
             try {
                 const s = await this.adapter.getStateAsync(id);
@@ -338,6 +541,12 @@ class HeatingRodControlModule extends BaseModule {
             await ensureDefault(`heatingRod.user.c${i}.mode`, 'inherit');
         }
 
+        /**
+         * Code-Teil: Arrow-Funktion `mk`
+         * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
         const mk = async (id, name, type, role, unit = undefined) => {
             await this.adapter.setObjectNotExistsAsync(id, {
                 type: 'state',
@@ -470,6 +679,18 @@ class HeatingRodControlModule extends BaseModule {
         }
     }
 
+    /**
+     * Code-Teil: Methode `_readCacheNumber`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _readCacheNumber
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _readCacheNumber(key, fallback = null) {
         if (!key) return fallback;
         try {
@@ -492,6 +713,18 @@ class HeatingRodControlModule extends BaseModule {
         return fallback;
     }
 
+    /**
+     * Code-Teil: Methode `_readNumberAny`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _readNumberAny
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _readNumberAny(keys, staleMs, fallback = null) {
         const list = Array.isArray(keys) ? keys : [keys];
         for (const key of list) {
@@ -517,6 +750,18 @@ class HeatingRodControlModule extends BaseModule {
         return fallback;
     }
 
+    /**
+     * Code-Teil: Methode `_readNumberMaxAny`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _readNumberMaxAny
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _readNumberMaxAny(keys, staleMs, fallback = null) {
         const list = Array.isArray(keys) ? keys : [keys];
         let best = null;
@@ -544,6 +789,18 @@ class HeatingRodControlModule extends BaseModule {
         return best === null ? fallback : best;
     }
 
+    /**
+     * Code-Teil: Methode `_readBooleanAny`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _readBooleanAny
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _readBooleanAny(keys, staleMs, fallback = null) {
         const list = Array.isArray(keys) ? keys : [keys];
         for (const key of list) {
@@ -572,9 +829,27 @@ class HeatingRodControlModule extends BaseModule {
         return fallback;
     }
 
+    /**
+     * Code-Teil: Methode `_getBudgetGateCfg`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _getBudgetGateCfg
+     * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _getBudgetGateCfg() {
         const cfg = this._getCfg();
         const zero = (cfg.zeroExport && typeof cfg.zeroExport === 'object') ? cfg.zeroExport : {};
+        /**
+         * Code-Teil: pickNum
+         * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+         * Zusammenhang: Gehört zu EMS-Modul (Regelungs-, Diagnose- oder Beratungslogik innerhalb der EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+         * Wartung/TypeScript: Änderungen können Heizstab-Freigaben und Reservelogik beeinflussen; Speicherreserve und PV-Budget testen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+         */
         const pickNum = (keys, def, minV = 0, maxV = 1e12) => {
             const list = Array.isArray(keys) ? keys : [keys];
             for (const key of list) {
@@ -603,43 +878,60 @@ class HeatingRodControlModule extends BaseModule {
         };
     }
 
+    /**
+     * Code-Teil: Methode `_readStorageSnapshot`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _readStorageSnapshot
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _readStorageSnapshot(staleMs) {
-        // Speicherfarm- und Einzelakku-Aliase können beide im Cache stehen. Ein 0-W-Wert
-        // aus storageFarm.* darf einen echten Entlade-/Ladewert aus den Basis-Aliasen nicht
-        // verdecken. Sonst erkennt der Heizstab keine Akku-Entladung und hält zu hohe Stufen.
-        let chargeW = Math.max(0, num(this._readNumberMaxAny([
-            'storageFarm.totalChargePowerW',
-            'storageChargePower'
-        ], staleMs, null), 0));
+        let chargeW = 0;
+        let dischargeW = 0;
+        let usedCentralStorageFlow = false;
+        try {
+            const flow = (this.adapter && typeof this.adapter._nwResolveBatteryFlowFromCache === 'function')
+                ? this.adapter._nwResolveBatteryFlowFromCache({ maxAgeMs: staleMs, deadbandW: 25 })
+                : null;
+            if (flow && typeof flow === 'object') {
+                usedCentralStorageFlow = true;
+                chargeW = Math.max(0, Math.round(Number(flow.chargeW) || 0));
+                dischargeW = Math.max(0, Math.round(Number(flow.dischargeW) || 0));
+            }
+        } catch (_eFlow) {}
 
-        let dischargeW = Math.max(0, num(this._readNumberMaxAny([
-            'storageFarm.totalDischargePowerW',
-            'storageDischargePower'
-        ], staleMs, null), 0));
+        if (!usedCentralStorageFlow) {
+            // Fallback für ältere Laufzeiten: Split-DPs und signed DP bleiben wie bisher erlaubt.
+            chargeW = Math.max(0, num(this._readNumberMaxAny([
+                'storageFarm.totalChargePowerW',
+                'storageChargePower'
+            ], staleMs, null), 0));
 
-        const batteryPowerW = this._readNumberAny(['batteryPower'], staleMs, null);
-        if (typeof batteryPowerW === 'number' && Number.isFinite(batteryPowerW)) {
-            const cfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
-            const flowBatteryMapped = !!(cfg.datapoints && String(cfg.datapoints.batteryPower || '').trim());
-            const farmActive = !!this._readCacheNumber('storageFarm.enabled', 0);
-            // Apply the VIS inversion only to a raw mapped batteryPower datapoint.
-            // Mirrored batteryPower values are already normalized by the main flow engine.
-            const invBattery = flowBatteryMapped && !farmActive && !!(cfg.settings && cfg.settings.flowInvertBattery);
-            const signedW = Math.round(invBattery ? -batteryPowerW : batteryPowerW);
-            const noiseW = 25;
-            // batteryPower is the canonical direction signal in this adapter:
-            // +W = discharge, -W = charge. Prefer that direction over separate
-            // charge/discharge aliases, because those can be delayed or vendor-specific.
-            // Otherwise a charging battery can look like discharge and block stage-up.
-            if (signedW < -noiseW) {
-                chargeW = Math.max(chargeW, Math.abs(signedW));
-                dischargeW = 0;
-            } else if (signedW > noiseW) {
-                dischargeW = Math.max(dischargeW, signedW);
-                chargeW = 0;
-            } else {
-                chargeW = 0;
-                dischargeW = 0;
+            dischargeW = Math.max(0, num(this._readNumberMaxAny([
+                'storageFarm.totalDischargePowerW',
+                'storageDischargePower'
+            ], staleMs, null), 0));
+
+            const batteryPowerW = this._readNumberAny(['batteryPower'], staleMs, null);
+            if (typeof batteryPowerW === 'number' && Number.isFinite(batteryPowerW)) {
+                const cfg = (this.adapter && this.adapter.config) ? this.adapter.config : {};
+                const flowBatteryMapped = !!(cfg.datapoints && String(cfg.datapoints.batteryPower || '').trim());
+                const farmActive = !!this._readCacheNumber('storageFarm.enabled', 0);
+                const invBattery = flowBatteryMapped && !farmActive && !!(cfg.settings && cfg.settings.flowInvertBattery);
+                const signedW = Math.round(invBattery ? -batteryPowerW : batteryPowerW);
+                const noiseW = 25;
+                if (signedW < -noiseW) {
+                    chargeW = Math.max(chargeW, Math.abs(signedW));
+                    dischargeW = 0;
+                } else if (signedW > noiseW) {
+                    dischargeW = Math.max(dischargeW, signedW);
+                    chargeW = 0;
+                }
             }
         }
 
@@ -656,11 +948,29 @@ class HeatingRodControlModule extends BaseModule {
         };
     }
 
+    /**
+     * Code-Teil: Methode `_computeBasePvAvailableW`
+     * Zweck: berechnet abgeleitete Werte; Änderungen können Energiefluss/History/Regelungen beeinflussen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _computeBasePvAvailableW
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _computeBasePvAvailableW(currentHeatingRodW = 0) {
         const cfg = this._getCfg();
         const gateCfg = this._getBudgetGateCfg();
         const staleTimeoutSec = clamp(num(cfg.staleTimeoutSec, 15), 1, 3600);
         const staleMs = Math.max(1, Math.round(staleTimeoutSec * 1000));
+        /**
+         * Code-Teil: finite
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const finite = (v) => (typeof v === 'number' && Number.isFinite(v));
 
         const cmActive = this._readBooleanAny(['hr.cm.active', 'chargingManagement.control.active'], staleMs, null);
@@ -691,7 +1001,6 @@ class HeatingRodControlModule extends BaseModule {
         const exportW = gridKnown ? Math.max(0, -gridW) : 0;
         const importW = gridKnown ? Math.max(0, gridW) : 0;
         const storage = this._readStorageSnapshot(staleMs);
-
         const storageTargetSocPct = clamp(num(cfg.storageTargetSocPct, 90), 0, 100);
         const storageReserveCfgW = Math.max(0, Math.round(num(cfg.storageReserveW, 1000)));
         const storageKnown = storage.chargeW > 0
@@ -909,6 +1218,18 @@ class HeatingRodControlModule extends BaseModule {
         };
     }
 
+    /**
+     * Code-Teil: Methode `_updateBudgetGateProtection`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _updateBudgetGateProtection
+     * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _updateBudgetGateProtection(pvBase, now) {
         const cfg = (pvBase && pvBase.gateCfg) ? pvBase.gateCfg : this._getBudgetGateCfg();
         const st = this._budgetProtect || { importSinceMs: 0, dischargeSinceMs: 0 };
@@ -953,6 +1274,18 @@ class HeatingRodControlModule extends BaseModule {
         };
     }
 
+    /**
+     * Code-Teil: Methode `_getZeroExportCfg`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _getZeroExportCfg
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _getZeroExportCfg() {
         const cfg = this._getCfg();
         const gateCfg = this._getBudgetGateCfg();
@@ -960,6 +1293,12 @@ class HeatingRodControlModule extends BaseModule {
             ? cfg.zeroExport
             : ((cfg.zeroFeedIn && typeof cfg.zeroFeedIn === 'object') ? cfg.zeroFeedIn : {});
 
+        /**
+         * Code-Teil: Arrow-Funktion `n`
+         * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
         const n = (keyList, def, minV = 0, maxV = 1e12) => {
             const keys = Array.isArray(keyList) ? keyList : [keyList];
             for (const key of keys) {
@@ -998,6 +1337,18 @@ class HeatingRodControlModule extends BaseModule {
         };
     }
 
+    /**
+     * Code-Teil: Methode `_getPvAutomationMinW`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _getPvAutomationMinW
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _getPvAutomationMinW() {
         const cfg = this._getCfg();
 
@@ -1018,6 +1369,18 @@ class HeatingRodControlModule extends BaseModule {
         return 800;
     }
 
+    /**
+     * Code-Teil: Methode `_readCacheRaw`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _readCacheRaw
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _readCacheRaw(key, fallback = null) {
         if (!key) return fallback;
         try {
@@ -1031,6 +1394,18 @@ class HeatingRodControlModule extends BaseModule {
         return fallback;
     }
 
+    /**
+     * Code-Teil: Methode `_readPvNowW`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _readPvNowW
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _readPvNowW(staleMs) {
         const basePv = this._readNumberAny([
             'pvPower',
@@ -1051,6 +1426,18 @@ class HeatingRodControlModule extends BaseModule {
         return Math.max(0, Math.round(pv));
     }
 
+    /**
+     * Code-Teil: Methode `_readForecastSnapshot`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _readForecastSnapshot
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _readForecastSnapshot() {
         // Prefer the in-memory snapshot from PvForecastModule. It is updated in the
         // same ModuleManager cycle before Heizstab, so it is fresher and more reliable
@@ -1070,12 +1457,30 @@ class HeatingRodControlModule extends BaseModule {
             // fall through to state-cache fallback
         }
 
+        /**
+         * Code-Teil: Arrow-Funktion `boolVal`
+         * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: boolVal
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const boolVal = (key) => {
             const raw = this._readCacheRaw(key, null);
             if (raw === true || raw === 1 || raw === '1') return true;
             if (typeof raw === 'string' && raw.trim().toLowerCase() === 'true') return true;
             return false;
         };
+        /**
+         * Code-Teil: numVal
+         * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+         * Zusammenhang: Gehört zu EMS-Modul (Regelungs-, Diagnose- oder Beratungslogik innerhalb der EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+         * Wartung/TypeScript: Änderungen können Heizstab-Freigaben und Reservelogik beeinflussen; Speicherreserve und PV-Budget testen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+         */
         const numVal = (keys, fallback = 0) => {
             const list = Array.isArray(keys) ? keys : [keys];
             for (const key of list) {
@@ -1117,6 +1522,18 @@ class HeatingRodControlModule extends BaseModule {
         return { valid, peakW, kwh6h, kwh12h, kwh24h };
     }
 
+    /**
+     * Code-Teil: Methode `_computeZeroExportInfo`
+     * Zweck: berechnet abgeleitete Werte; Änderungen können Energiefluss/History/Regelungen beeinflussen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _computeZeroExportInfo
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _computeZeroExportInfo(pvBase) {
         const cfg = this._getZeroExportCfg();
         if (!cfg.enabled) {
@@ -1188,6 +1605,18 @@ class HeatingRodControlModule extends BaseModule {
     }
 
 
+    /**
+     * Code-Teil: Methode `_stageActuatorKey`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _stageActuatorKey
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _stageActuatorKey(stage, idx) {
         if (!stage || typeof stage !== 'object') return `stage:${idx + 1}`;
         const keyCandidates = [stage.writeKey, stage.readKey];
@@ -1206,12 +1635,29 @@ class HeatingRodControlModule extends BaseModule {
         return id || `stage:${idx + 1}`;
     }
 
+    /**
+     * Code-Teil: Methode `_capDevicePower`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _capDevicePower
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _capDevicePower(d, valueW) {
         const v = Math.max(0, Math.round(num(valueW, 0)));
         const maxW = Math.max(0, Math.round(num(d && d.maxPowerW, 0)));
         return maxW > 0 ? Math.min(v, maxW) : v;
     }
-
+    /**
+     * Code-Teil: _sumStagePower
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _sumStagePower(d, stageCount) {
         const cnt = Math.max(0, Math.min(Math.round(Number(stageCount) || 0), d.stages.length));
         const byActuator = new Map();
@@ -1226,6 +1672,18 @@ class HeatingRodControlModule extends BaseModule {
         return this._capDevicePower(d, sum);
     }
 
+    /**
+     * Code-Teil: Methode `_stageOnSetForTarget`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _stageOnSetForTarget
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _stageOnSetForTarget(d, stageCount) {
         const cnt = Math.max(0, Math.min(Math.round(Number(stageCount) || 0), d.stages.length));
         const out = new Set();
@@ -1240,6 +1698,18 @@ class HeatingRodControlModule extends BaseModule {
         return out;
     }
 
+    /**
+     * Code-Teil: Methode `_sameStageOnSet`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _sameStageOnSet
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _sameStageOnSet(a, b) {
         if (!a || !b || a.size !== b.size) return false;
         for (const k of a.values()) {
@@ -1248,6 +1718,18 @@ class HeatingRodControlModule extends BaseModule {
         return true;
     }
 
+    /**
+     * Code-Teil: Methode `_previousPhysicalStageBelow`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _previousPhysicalStageBelow
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _previousPhysicalStageBelow(d, observedStage) {
         const obs = Math.max(0, Math.min(Math.round(Number(observedStage) || 0), d.stages.length));
         if (obs <= 0) return 0;
@@ -1259,6 +1741,18 @@ class HeatingRodControlModule extends BaseModule {
         return 0;
     }
 
+    /**
+     * Code-Teil: Methode `_nextPhysicalStageAbove`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _nextPhysicalStageAbove
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _nextPhysicalStageAbove(d, observedStage) {
         const obs = Math.max(0, Math.min(Math.round(Number(observedStage) || 0), d.stages.length));
         const currentSet = this._stageOnSetForTarget(d, obs);
@@ -1269,6 +1763,18 @@ class HeatingRodControlModule extends BaseModule {
         return obs;
     }
 
+    /**
+     * Code-Teil: Methode `_readMeasuredW`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _readMeasuredW
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _readMeasuredW(d, staleMs = null) {
         if (!(this.dp && d.pWKey && this.dp.getEntry && this.dp.getEntry(d.pWKey))) return null;
         let v = null;
@@ -1284,6 +1790,18 @@ class HeatingRodControlModule extends BaseModule {
         return (typeof v === 'number' && Number.isFinite(v)) ? v : null;
     }
 
+    /**
+     * Code-Teil: Methode `_readStageFeedback`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _readStageFeedback
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _readStageFeedback(d, staleMs = null) {
         /** @type {Array<boolean|null>} */
         const states = [];
@@ -1291,6 +1809,18 @@ class HeatingRodControlModule extends BaseModule {
         let contiguous = 0;
         let anyKnown = false;
 
+        /**
+         * Code-Teil: Arrow-Funktion `readBoolFresh`
+         * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: readBoolFresh
+         * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const readBoolFresh = (key) => {
             if (!(this.dp && key && this.dp.getEntry && this.dp.getEntry(key))) return { known: false, value: null, stale: false };
             try {
@@ -1343,6 +1873,18 @@ class HeatingRodControlModule extends BaseModule {
         };
     }
 
+    /**
+     * Code-Teil: Methode `_ensureStageCtlState`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _ensureStageCtlState
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _ensureStageCtlState(id, observedStage = 0) {
         const prev = this._stageCtl.get(id) || { targetStage: 0, lastIncreaseMs: 0, lastDecreaseMs: 0 };
         const obs = Math.max(0, Math.round(Number(observedStage) || 0));
@@ -1368,6 +1910,18 @@ class HeatingRodControlModule extends BaseModule {
         return prev;
     }
 
+    /**
+     * Code-Teil: Methode `_stagePowerScale`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _stagePowerScale
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _stagePowerScale(d, observedStage = 0, measuredW = null) {
         const st = (d && d.id && this._stageCtl && this._stageCtl.get) ? (this._stageCtl.get(d.id) || null) : null;
         const learned = st && Number.isFinite(Number(st.stagePowerScale)) ? clamp(Number(st.stagePowerScale), 0.25, 4) : 1;
@@ -1388,12 +1942,29 @@ class HeatingRodControlModule extends BaseModule {
         return scale;
     }
 
+    /**
+     * Code-Teil: Methode `_sumStagePowerModel`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _sumStagePowerModel
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _sumStagePowerModel(d, stageCount, observedStage = 0, measuredW = null) {
         const configuredW = this._sumStagePower(d, stageCount);
         const scale = this._stagePowerScale(d, observedStage, measuredW);
         return this._capDevicePower(d, Math.round(configuredW * scale));
     }
-
+    /**
+     * Code-Teil: _stageThresholdModel
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _stageThresholdModel(d, stageIndexZeroBased, key, observedStage = 0, measuredW = null, fallbackStageCount = null) {
         const stage = d && d.stages ? d.stages[stageIndexZeroBased] : null;
         const scale = this._stagePowerScale(d, observedStage, measuredW);
@@ -1403,6 +1974,18 @@ class HeatingRodControlModule extends BaseModule {
         return this._sumStagePowerModel(d, cnt, observedStage, measuredW);
     }
 
+    /**
+     * Code-Teil: Methode `_computeDesiredStage`
+     * Zweck: berechnet abgeleitete Werte; Änderungen können Energiefluss/History/Regelungen beeinflussen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _computeDesiredStage
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _computeDesiredStage(d, remainingW, currentStage, measuredW = null) {
         let stage = Math.max(0, Math.min(Math.round(Number(currentStage) || 0), d.stageCount));
         const budgetW = Math.max(0, Math.round(num(remainingW, 0)));
@@ -1428,6 +2011,18 @@ class HeatingRodControlModule extends BaseModule {
         return Math.max(0, Math.min(stage, d.stageCount));
     }
 
+    /**
+     * Code-Teil: Methode `_limitBudgetStageStepUp`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _limitBudgetStageStepUp
+     * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _limitBudgetStageStepUp(d, desiredStage, observedStage, now) {
         const cfg = this._getBudgetGateCfg();
         const st = this._ensureStageCtlState(d.id, observedStage);
@@ -1446,6 +2041,18 @@ class HeatingRodControlModule extends BaseModule {
         return target;
     }
 
+    /**
+     * Code-Teil: Methode `_applyTiming`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _applyTiming
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _applyTiming(d, desiredStage, observedStage) {
         const st = this._ensureStageCtlState(d.id, observedStage);
         const now = nowMs();
@@ -1483,6 +2090,18 @@ class HeatingRodControlModule extends BaseModule {
         return currentStage;
     }
 
+    /**
+     * Code-Teil: Methode `_applyBudgetFollowerStageStrategy`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _applyBudgetFollowerStageStrategy
+     * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _applyBudgetFollowerStageStrategy(d, desiredStage, observedStage, pvBase, budgetProtection, now, pvAutomationAllowedByMin = true) {
         const st = this._ensureStageCtlState(d.id, observedStage);
         const currentStage = Math.max(0, Math.min(Math.round(Number(st.targetStage ?? observedStage) || 0), d.stageCount));
@@ -1550,6 +2169,18 @@ class HeatingRodControlModule extends BaseModule {
         return { targetStage, reduceNow: false, hardOff: false, reason };
     }
 
+    /**
+     * Code-Teil: Methode `_applyZeroExportStageStrategy`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _applyZeroExportStageStrategy
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _applyZeroExportStageStrategy(d, desiredStage, observedStage, pvBase, zeroInfo, now, measuredW = null) {
         const info = zeroInfo || this._computeZeroExportInfo(pvBase);
         const cfg = (info && info.cfg) ? info.cfg : this._getZeroExportCfg();
@@ -1733,6 +2364,18 @@ class HeatingRodControlModule extends BaseModule {
         };
     }
 
+    /**
+     * Code-Teil: Methode `_writeBoolForce`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _writeBoolForce
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _writeBoolForce(key, value, force = false) {
         if (!(this.dp && key && this.dp.getEntry)) return false;
         const entry = this.dp.getEntry(key);
@@ -1757,6 +2400,12 @@ class HeatingRodControlModule extends BaseModule {
         }
     }
 
+    /**
+     * Code-Teil: Methode `_applyStageState`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
     async _applyStageState(d, targetStage, feedback, options = {}) {
         if (!d.wiredStages || d.wiredStages < 1) {
             return { applied: false, status: 'no_stage_write_dp' };
@@ -1806,12 +2455,29 @@ class HeatingRodControlModule extends BaseModule {
         return { applied: !anyFalse, status, targetStage: effectiveStage };
     }
 
+    /**
+     * Code-Teil: Methode `_getOverrides`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _getOverrides
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _getOverrides() {
         return (this.adapter && this.adapter._heatingRodOverrides && typeof this.adapter._heatingRodOverrides === 'object')
             ? this.adapter._heatingRodOverrides
             : {};
     }
-
+    /**
+     * Code-Teil: _readOverrideForDevice
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _readOverrideForDevice(d, now) {
         const ovAll = this._getOverrides();
         const ov = (ovAll && typeof ovAll === 'object' && ovAll[d.id] && typeof ovAll[d.id] === 'object') ? ovAll[d.id] : {};
@@ -1820,6 +2486,18 @@ class HeatingRodControlModule extends BaseModule {
         return { boostUntil, boostActive };
     }
 
+    /**
+     * Code-Teil: Methode `_setStageCtlTarget`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _setStageCtlTarget
+     * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _setStageCtlTarget(id, targetStage, observedStage = null) {
         const st = this._stageCtl.get(id) || { targetStage: 0, lastIncreaseMs: 0, lastDecreaseMs: 0 };
         const prev = Math.max(0, Math.round(Number(observedStage !== null && observedStage !== undefined ? observedStage : st.targetStage) || 0));
@@ -1832,6 +2510,18 @@ class HeatingRodControlModule extends BaseModule {
         return st;
     }
 
+    /**
+     * Code-Teil: Methode `_markAutoOwnership`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _markAutoOwnership
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _markAutoOwnership(d, owned, targetStage = 0, source = '') {
         if (!d || !d.id) return null;
         const st = this._stageCtl.get(d.id) || { targetStage: 0, lastIncreaseMs: 0, lastDecreaseMs: 0 };
@@ -1847,6 +2537,18 @@ class HeatingRodControlModule extends BaseModule {
         return st;
     }
 
+    /**
+     * Code-Teil: Methode `_getAutoOwnership`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _getAutoOwnership
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _getAutoOwnership(d, observedStage = 0, measuredW = null, feedback = null) {
         const st = (d && d.id && this._stageCtl && this._stageCtl.get) ? (this._stageCtl.get(d.id) || {}) : {};
         const target = Math.max(0, Math.round(Number(st.targetStage) || 0));
@@ -1859,6 +2561,18 @@ class HeatingRodControlModule extends BaseModule {
         return { st, target, observedStage: obs, loadPresent, autoOwned, externalManual };
     }
 
+    /**
+     * Code-Teil: Methode `_readOwnStateValue`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _readOwnStateValue
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _readOwnStateValue(id, fallback = null) {
         try {
             const st = await this.adapter.getStateAsync(String(id));
@@ -1869,6 +2583,18 @@ class HeatingRodControlModule extends BaseModule {
         }
     }
 
+    /**
+     * Code-Teil: Methode `_restoreAutoOwnershipIfLikely`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _restoreAutoOwnershipIfLikely
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _restoreAutoOwnershipIfLikely(d, pvAutomationActive, observedStage = 0, measuredW = null, feedback = null) {
         if (!d || !d.id || !pvAutomationActive) return false;
         const own = this._getAutoOwnership(d, observedStage, measuredW, feedback);
@@ -1909,6 +2635,18 @@ class HeatingRodControlModule extends BaseModule {
         return true;
     }
 
+    /**
+     * Code-Teil: Methode `_observeManualExternal`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _observeManualExternal
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _observeManualExternal(d, observedStage, measuredW, feedback, status = 'external_manual_knx_observed') {
         const usedW = (typeof measuredW === 'number' && Number.isFinite(measuredW) && measuredW > 0)
             ? Math.max(0, measuredW)
@@ -1923,6 +2661,18 @@ class HeatingRodControlModule extends BaseModule {
         return Math.round(usedW);
     }
 
+    /**
+     * Code-Teil: Methode `_computeQuickManualStage`
+     * Zweck: berechnet abgeleitete Werte; Änderungen können Energiefluss/History/Regelungen beeinflussen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _computeQuickManualStage
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _computeQuickManualStage(d, userMode) {
         const m = normalizeUserMode(userMode);
         if (m === 'manual1') return Math.min(d.wiredStages || d.stageCount, quickManualLevelToStageCount(d.stageCount, 1));
@@ -1931,6 +2681,18 @@ class HeatingRodControlModule extends BaseModule {
         return 0;
     }
 
+    /**
+     * Code-Teil: Methode `tick`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: tick
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async tick() {
         if (!this._isEnabled()) return;
 

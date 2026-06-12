@@ -1,4 +1,29 @@
 /**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: www/evcs.js
+ * Rolle im Projekt: EVCS-Frontend.
+ * Zweck: Zeigt Ladepunkte, Lademodi und EV-Zielladeinformationen.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: EVCS-Kundenansicht: zeigt Ladepunkte, Modi, Leistung, Ziel-/RFID-Informationen und einfache Bedienung.
+ * Zusammenhänge:
+ * - Hängt an chargingManagement.* States und /api/ems/charging/diagnostics.
+ * - Sichtbarkeit wird über die Installer-Konfiguration gesteuert.
+ * Wartungshinweise:
+ * - Bei Anlagen ohne Wallbox darf diese Ansicht im Kundenfrontend nicht prominent erscheinen.
+ */
+
+/**
  * NexoWatt UI – EVCS Seite
  * Ziel: skalierbar bis 50 Ladepunkte, Übersicht als Kacheln, Details/Bedienung im Tooltip-Dialog.
  */
@@ -13,13 +38,23 @@ const _RENDER_MIN_INTERVAL_MS = 120;
 
 // UI reliability: keep optimistic user actions stable while SSE updates stream in.
 const _pendingWrites = Object.create(null); // key -> { value: string, expires: number }
-
+/**
+ * Code-Teil: _setPendingWrite
+ * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _setPendingWrite(key, value, ttlMs = 1500) {
   try {
     _pendingWrites[String(key)] = { value: String(value), expires: Date.now() + ttlMs };
   } catch (_e) {}
 }
-
+/**
+ * Code-Teil: _clearPendingWrite
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _clearPendingWrite(key, expectedValue) {
   try {
     const k = String(key);
@@ -32,7 +67,12 @@ function _clearPendingWrite(key, expectedValue) {
     if (String(p.value) === String(expectedValue)) delete _pendingWrites[k];
   } catch (_e) {}
 }
-
+/**
+ * Code-Teil: _mergeUpdatePayload
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _mergeUpdatePayload(payload) {
   const now = Date.now();
   const merged = Object.assign({}, state);
@@ -56,7 +96,12 @@ function _mergeUpdatePayload(payload) {
 
   state = merged;
 }
-
+/**
+ * Code-Teil: _isEvcsRelevantPayload
+ * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _isEvcsRelevantPayload(payload) {
   try {
     for (const k of Object.keys(payload || {})) {
@@ -65,7 +110,12 @@ function _isEvcsRelevantPayload(payload) {
   } catch (_e) {}
   return false;
 }
-
+/**
+ * Code-Teil: scheduleRender
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function scheduleRender() {
   if (_renderScheduled) return;
   _renderScheduled = true;
@@ -84,7 +134,12 @@ function scheduleRender() {
     try { render(); } catch (_e) {}
   }, wait);
 }
-
+/**
+ * Code-Teil: d
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function d(key) {
   try {
     return (state && Object.prototype.hasOwnProperty.call(state, key)) ? state[key].value : undefined;
@@ -92,32 +147,57 @@ function d(key) {
     return undefined;
   }
 }
-
+/**
+ * Code-Teil: fmtW
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function fmtW(w) {
   if (w == null || isNaN(w)) return '--';
   const v = Number(w);
   if (Math.abs(v) >= 1000) return (v / 1000).toFixed(2) + ' kW';
   return Math.round(v) + ' W';
 }
-
+/**
+ * Code-Teil: fmtPct
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function fmtPct(v) {
   const n = Number(v);
   if (!isFinite(n)) return '--';
   return Math.round(n) + ' %';
 }
-
+/**
+ * Code-Teil: fmtKwh
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function fmtKwh(v) {
   if (v == null || isNaN(v)) return '--';
   return Number(v).toFixed(2) + ' kWh';
 }
-
+/**
+ * Code-Teil: fmtMin
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function fmtMin(v) {
   const n = Number(v);
   if (!isFinite(n)) return '--';
   if (n <= 0) return '0 min';
   return Math.round(n) + ' min';
 }
-
+/**
+ * Code-Teil: fmtClock
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function fmtClock(ts) {
   const n = Number(ts);
   if (!isFinite(n) || n <= 0) return '';
@@ -130,7 +210,12 @@ function fmtClock(ts) {
     return '';
   }
 }
-
+/**
+ * Code-Teil: nextTsFromTimeInput
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nextTsFromTimeInput(hhmm) {
   const snapped = snapHhmmTo15Min(hhmm);
   const s = String(snapped ?? '').trim();
@@ -151,6 +236,12 @@ function nextTsFromTimeInput(hhmm) {
 
 // Snap a HH:MM time string to a 15‑minute grid (00/15/30/45).
 // Returns '' on invalid input.
+/**
+ * Code-Teil: snapHhmmTo15Min
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function snapHhmmTo15Min(hhmm) {
   const s = String(hhmm ?? '').trim();
   if (!s || !/^\d{2}:\d{2}$/.test(s)) return '';
@@ -168,18 +259,34 @@ function snapHhmmTo15Min(hhmm) {
   const sm = snapped % 60;
   return String(sh).padStart(2, '0') + ':' + String(sm).padStart(2, '0');
 }
-
+/**
+ * Code-Teil: esc
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 }
 
 // Keep adapter-safe id formatting in sync with EMS module (toSafeIdPart)
+/**
+ * Code-Teil: safeIdPart
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function safeIdPart(input) {
   const s = String(input ?? '').trim();
   if (!s) return '';
   return s.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64);
 }
-
+/**
+ * Code-Teil: rfidLabel
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function rfidLabel(i) {
   const enabled = d('evcs.rfid.enabled');
   const reason = d(`evcs.${i}.rfidReason`);
@@ -208,7 +315,12 @@ function rfidLabel(i) {
   if (enabled == null) return null;
   return { text: '--', cls: 'muted', title: titleParts.join(' • ') };
 }
-
+/**
+ * Code-Teil: reasonHint
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function reasonHint(reason, applyStatus) {
   const r = String(reason ?? '').trim().toUpperCase();
   const a = String(applyStatus ?? '').trim().toLowerCase();
@@ -247,6 +359,12 @@ function reasonHint(reason, applyStatus) {
 }
 
 // --- EMS mode mapping (runtime): auto | boost | minpv | pv -------------------
+/**
+ * Code-Teil: emsModeToUi
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function emsModeToUi(mode) {
   const s = String(mode ?? '').trim().toLowerCase();
   if (s === 'boost') return 2;
@@ -254,7 +372,12 @@ function emsModeToUi(mode) {
   if (s === 'pv') return 4;
   return 1; // auto
 }
-
+/**
+ * Code-Teil: clampEmsUi
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function clampEmsUi(v) {
   const n = Number(v);
   if (!isFinite(n)) return 1;
@@ -262,6 +385,12 @@ function clampEmsUi(v) {
 }
 
 // Legacy (direct DP) mode mapping
+/**
+ * Code-Teil: clampUiMode
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function clampUiMode(v) {
   const n = Number(v);
   if (!isFinite(n)) return 1;
@@ -278,12 +407,22 @@ let _modalOpenIdx = 0;
 let _modalLocked = false;
 let _modalInteractionUntil = 0;
 let _modalRerenderTimer = null;
-
+/**
+ * Code-Teil: _touchModalInteraction
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _touchModalInteraction(ttlMs = 900) {
   const t = Date.now() + ttlMs;
   if (t > _modalInteractionUntil) _modalInteractionUntil = t;
 }
-
+/**
+ * Code-Teil: _scheduleModalRerenderRetry
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _scheduleModalRerenderRetry(delayMs) {
   // When the modal is "interaction-locked" we skip body re-rendering (to keep
   // native pickers stable). This helper makes sure the UI updates again once
@@ -299,7 +438,12 @@ function _scheduleModalRerenderRetry(delayMs) {
     // ignore
   }
 }
-
+/**
+ * Code-Teil: _isModalLocked
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _isModalLocked(modalEl) {
   const now = Date.now();
 
@@ -336,10 +480,21 @@ function _isModalLocked(modalEl) {
 }
 
 // --- EVCS helpers ------------------------------------------------------------
+/**
+ * Code-Teil: _hasEms
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _hasEms() {
   return !!((cfg && cfg.ems && cfg.ems.chargingEnabled) || d('chargingManagement.wallboxCount') != null);
 }
-
+/**
+ * Code-Teil: _computeBoostQueueRank
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _computeBoostQueueRank(count) {
   const boostQueueRank = {};
   try {
@@ -368,7 +523,12 @@ function _computeBoostQueueRank(count) {
   } catch (_e) {}
   return boostQueueRank;
 }
-
+/**
+ * Code-Teil: _modeBadge
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _modeBadge(emsUserMode) {
   const m = String(emsUserMode ?? '').trim().toLowerCase();
   if (m === 'boost') return 'BOOST';
@@ -377,7 +537,12 @@ function _modeBadge(emsUserMode) {
   if (m === 'auto') return 'AUTO';
   return '';
 }
-
+/**
+ * Code-Teil: _tileStateClass
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _tileStateClass({ powerW, reason, active, regEnabled }) {
   const p = Number(powerW);
   const r = String(reason ?? '').trim().toUpperCase();
@@ -387,7 +552,12 @@ function _tileStateClass({ powerW, reason, active, regEnabled }) {
   if (isFinite(p) && Math.abs(p) >= 80) return 'nw-tile--state-on';
   return 'nw-tile--state-off';
 }
-
+/**
+ * Code-Teil: _shortStatusText
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _shortStatusText(status, reason) {
   const st = String(status ?? '').trim();
   if (st) return st;
@@ -400,6 +570,12 @@ function _shortStatusText(status, reason) {
 }
 
 // --- Modal -------------------------------------------------------------------
+/**
+ * Code-Teil: openEvcsModal
+ * Zweck: Öffnet Dialoge/Seiten/Popovers.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function openEvcsModal(idx) {
   const i = Number(idx);
   if (!Number.isFinite(i) || i <= 0) return;
@@ -438,7 +614,12 @@ function openEvcsModal(idx) {
   // Focus close button for keyboard navigation
   try { document.getElementById('evcsModalClose')?.focus(); } catch (_e) {}
 }
-
+/**
+ * Code-Teil: closeEvcsModal
+ * Zweck: Schließt Dialoge/Seiten/Popovers.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function closeEvcsModal() {
   const modal = document.getElementById('evcsModal');
   if (!modal) return;
@@ -454,7 +635,12 @@ function closeEvcsModal() {
     }
   } catch (_e) {}
 }
-
+/**
+ * Code-Teil: buildEvcsModalBodyHtml
+ * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function buildEvcsModalBodyHtml(i) {
   const count = Math.max(0, Math.round(Number(_evcsCount) || 0));
   const meta = Array.isArray(_evcsMeta) ? _evcsMeta : [];
@@ -499,6 +685,18 @@ function buildEvcsModalBodyHtml(i) {
   const emsGoalDesiredW = Number.isFinite(Number(d(`${cm}.goalDesiredPowerW`))) ? Math.round(Number(d(`${cm}.goalDesiredPowerW`))) : 0;
   const emsGoalShortfallW = Number.isFinite(Number(d(`${cm}.goalShortfallW`))) ? Math.round(Number(d(`${cm}.goalShortfallW`))) : 0;
 
+  /**
+   * Code-Teil: Arrow-Funktion `emsGoalTimeValue`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: emsGoalTimeValue
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const emsGoalTimeValue = (() => {
     if (!emsGoalFinishTs || emsGoalFinishTs <= 0) return '';
     try {
@@ -697,6 +895,12 @@ function buildEvcsModalBodyHtml(i) {
 }
 
 // --- Render ------------------------------------------------------------------
+/**
+ * Code-Teil: render
+ * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function render() {
   const list = document.getElementById('evcsList');
   if (!list) return;
@@ -841,16 +1045,30 @@ function render() {
 }
 
 // --- Menu --------------------------------------------------------------------
+/**
+ * Code-Teil: initMenu
+ * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function initMenu() {
   const btn = document.getElementById('menuBtn');
   const dd = document.getElementById('menuDropdown');
   if (btn && dd) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btn.addEventListener('click', (e) => { e.preventDefault(); dd.classList.toggle('hidden'); });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('click', (e) => { if (!dd.contains(e.target) && e.target !== btn) dd.classList.add('hidden'); });
   }
 }
 
 // --- Controls (tiles + modal) ------------------------------------------------
+/**
+ * Code-Teil: bindControls
+ * Zweck: Verbindet Event-Handler mit DOM oder Runtime-Objekten.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function bindControls() {
   const list = document.getElementById('evcsList');
   const modal = document.getElementById('evcsModal');
@@ -861,6 +1079,7 @@ function bindControls() {
     // lost if the DOM changes between pointerdown and click. Open the modal on
     // pointerdown (mouse) to guarantee single-click behaviour.
     let _ignoreTileClickUntil = 0;
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointerdown' an list. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     list.addEventListener('pointerdown', (e) => {
       try {
         if (Date.now() < _ignoreTileClickUntil) return;
@@ -878,6 +1097,7 @@ function bindControls() {
       }
     }, { passive: false, capture: true });
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an list. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     list.addEventListener('click', (e) => {
       if (Date.now() < _ignoreTileClickUntil) return;
       const tile = e.target && e.target.closest ? e.target.closest('.nw-tile[data-evcs-tile]') : null;
@@ -887,6 +1107,7 @@ function bindControls() {
       openEvcsModal(idx);
     });
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an list. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     list.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter' && e.key !== ' ') return;
       const tile = e.target && e.target.closest ? e.target.closest('.nw-tile[data-evcs-tile]') : null;
@@ -900,12 +1121,25 @@ function bindControls() {
 
   if (closeBtn) closeBtn.addEventListener('click', () => closeEvcsModal());
   if (modal) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an modal. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     modal.addEventListener('click', (e) => {
       if (e.target === modal) closeEvcsModal();
     });
     // Lock modal during interactions to keep native pickers stable (especially <input type="time">).
     // Note: On some mobile browsers (iOS Safari) pointer events for native pickers are unreliable.
     // Therefore we also listen to touchstart/mousedown in capture phase.
+    /**
+     * Code-Teil: Arrow-Funktion `bumpLock`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: bumpLock
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const bumpLock = (ev) => {
       try {
         const t = ev && ev.target;
@@ -934,9 +1168,13 @@ function bindControls() {
         _touchModalInteraction(2500);
       }
     };
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointerdown' an modal. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     modal.addEventListener('pointerdown', bumpLock, { passive: true, capture: true });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'mousedown' an modal. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     modal.addEventListener('mousedown', bumpLock, { capture: true });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchstart' an modal. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     modal.addEventListener('touchstart', bumpLock, { passive: true, capture: true });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'focusin' an modal. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     modal.addEventListener('focusin', (ev) => {
       _modalLocked = true;
       try {
@@ -952,6 +1190,7 @@ function bindControls() {
         _touchModalInteraction(1500);
       }
     });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'focusout' an modal. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     modal.addEventListener('focusout', () => {
       _touchModalInteraction(2000);
       setTimeout(() => {
@@ -964,6 +1203,7 @@ function bindControls() {
     });
   }
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     const m = document.getElementById('evcsModal');
@@ -971,6 +1211,7 @@ function bindControls() {
   });
 
   // Toggle-Buttons (An/Aus) steuern versteckte Checkbox-Inputs
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('click', (e) => {
     const btn = e && e.target && e.target.closest ? e.target.closest('.nw-toggle button[data-value]') : null;
     if (!btn) return;
@@ -1002,6 +1243,7 @@ function bindControls() {
   }, true);
 
   // Input changes (Active/Regelung/Ziel-Laden Werte)
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('change', async (e) => {
     const t = e.target;
     if (!t) return;
@@ -1160,7 +1402,12 @@ function bindControls() {
   // Mode buttons (EMS)
   // Trigger on pointerdown to avoid lost clicks during SSE renders.
   let _ignoreClickUntil = 0;
-
+  /**
+   * Code-Teil: _syncModeButtonsUi
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _syncModeButtonsUi(idx, mode) {
     try {
       const m = String(mode || 'auto').trim().toLowerCase();
@@ -1172,7 +1419,12 @@ function bindControls() {
       });
     } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: handleModeButton
+   * Zweck: Verarbeitet Events oder API-/Benutzeraktionen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function handleModeButton(btn) {
     if (!btn) return;
 
@@ -1210,6 +1462,7 @@ function bindControls() {
     }
   }
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointerdown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('pointerdown', (e) => {
     const target = e.target;
     if (!target || !target.closest) return;
@@ -1221,6 +1474,7 @@ function bindControls() {
     handleModeButton(btn);
   }, { passive: false });
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     const target = e.target;
@@ -1232,6 +1486,7 @@ function bindControls() {
     handleModeButton(btn);
   });
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('click', (e) => {
     if (Date.now() < _ignoreClickUntil) return;
     const target = e.target;
@@ -1244,6 +1499,12 @@ function bindControls() {
 }
 
 // --- Boot --------------------------------------------------------------------
+/**
+ * Code-Teil: bootstrap
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function bootstrap() {
   initMenu();
   bindControls();
@@ -1306,4 +1567,5 @@ async function bootstrap() {
   } catch (_e) {}
 }
 
+// Ereignis-Kommentar: Bindet das UI-Ereignis 'DOMContentLoaded' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
 document.addEventListener('DOMContentLoaded', bootstrap);

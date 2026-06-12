@@ -1,3 +1,41 @@
+
+/**
+ * Datenvertrag: SmartHomeDeviceView
+ * Zweck: Beschreibt Räume, Geräte, Funktionen und Kacheldaten in der Kundenansicht.
+ * Zusammenhang: smarthome-config.js erzeugt Struktur; smarthome.js rendert und steuert sie.
+ * TypeScript-Ziel: Gebäude, Raum, Gerät und Funktion als getrennte Interfaces modellieren.
+ */
+
+/**
+ * Vertragsstelle: Kundenansicht vs. Konfiguration
+ * Zweck: smarthome.js darf nur Bedienung anzeigen; Installer-/Konfigurationslogik bleibt in smarthome-config.js.
+ */
+
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: www/smarthome.js
+ * Rolle im Projekt: SmartHome-Kundenfrontend.
+ * Zweck: Rendert Räume, Geräte, Kacheln, Popover-Steuerungen und SmartHome-Gerätewerte.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: SmartHome-Kundenansicht: rendert Gebäude-/Raumstruktur, Gerätekacheln, Popover-Steuerungen, Szenen und Timer.
+ * Zusammenhänge:
+ * - Liest Geräte und Räume über /api/smarthome/* aus main.js.
+ * - Gerätekonfiguration entsteht in www/smarthome-config.js und wird serverseitig gespeichert.
+ * Wartungshinweise:
+ * - UI-Änderungen müssen Touch-Bedienung, Drawer-Navigation und Rollen/Authentifizierung berücksichtigen.
+ */
+
 /*
   NexoWatt SmartHome VIS
   - Raum-Sektionen (Apple Home ähnlich)
@@ -22,7 +60,12 @@ const NW_LS_SH_AUDIO_ZONES = 'nw_sh_audio_zones_sel';
 // Favoriten / Zuletzt pro Player
 const NW_LS_SH_PLAYER_FAVS_PREFIX = 'nw_sh_player_favs_'; // + kind + '_' + devId
 const NW_LS_SH_PLAYER_RECENT_PREFIX = 'nw_sh_player_recent_'; // + devId
-
+/**
+ * Code-Teil: nwLsReadJson
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwLsReadJson(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
@@ -32,7 +75,12 @@ function nwLsReadJson(key, fallback) {
     return fallback;
   }
 }
-
+/**
+ * Code-Teil: nwLsWriteJson
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwLsWriteJson(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
@@ -40,23 +88,43 @@ function nwLsWriteJson(key, value) {
     // ignore
   }
 }
-
+/**
+ * Code-Teil: nwGetAllPlayerZones
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetAllPlayerZones() {
   return Array.isArray(nwAllDevices)
     ? nwAllDevices.filter((d) => d && d.type === 'player')
     : [];
 }
-
+/**
+ * Code-Teil: nwLoadAudioZoneSelection
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwLoadAudioZoneSelection() {
   const ids = nwLsReadJson(NW_LS_SH_AUDIO_ZONES, []);
   return Array.isArray(ids) ? ids.filter(Boolean) : [];
 }
-
+/**
+ * Code-Teil: nwSaveAudioZoneSelection
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSaveAudioZoneSelection(ids) {
   const arr = Array.isArray(ids) ? ids.filter(Boolean) : [];
   nwLsWriteJson(NW_LS_SH_AUDIO_ZONES, arr);
 }
-
+/**
+ * Code-Teil: nwGetSelectedAudioZones
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetSelectedAudioZones(primaryId) {
   const all = nwGetAllPlayerZones().map((d) => d.id);
   let sel = nwLoadAudioZoneSelection().filter((id) => all.includes(id));
@@ -64,7 +132,12 @@ function nwGetSelectedAudioZones(primaryId) {
   if (primaryId && !sel.includes(primaryId)) sel.unshift(primaryId);
   return sel;
 }
-
+/**
+ * Code-Teil: nwSetSelectedAudioZones
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSetSelectedAudioZones(ids, primaryId) {
   let arr = Array.isArray(ids) ? ids.filter(Boolean) : [];
   if (!arr.length && primaryId) arr = [primaryId];
@@ -72,21 +145,41 @@ function nwSetSelectedAudioZones(ids, primaryId) {
   nwSaveAudioZoneSelection(arr);
   return arr;
 }
-
+/**
+ * Code-Teil: nwPlayerFavKey
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwPlayerFavKey(devId, kind) {
   return NW_LS_SH_PLAYER_FAVS_PREFIX + String(kind || 'station') + '_' + String(devId || '');
 }
-
+/**
+ * Code-Teil: nwLoadPlayerFavs
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwLoadPlayerFavs(devId, kind) {
   const arr = nwLsReadJson(nwPlayerFavKey(devId, kind), []);
   return Array.isArray(arr) ? arr.map((v) => String(v)) : [];
 }
-
+/**
+ * Code-Teil: nwSavePlayerFavs
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSavePlayerFavs(devId, kind, favs) {
   const arr = Array.isArray(favs) ? favs.map((v) => String(v)) : [];
   nwLsWriteJson(nwPlayerFavKey(devId, kind), arr);
 }
-
+/**
+ * Code-Teil: nwTogglePlayerFav
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwTogglePlayerFav(devId, kind, value) {
   const v = String(value);
   const favs = nwLoadPlayerFavs(devId, kind);
@@ -99,7 +192,12 @@ function nwTogglePlayerFav(devId, kind, value) {
   nwSavePlayerFavs(devId, kind, favs);
   return favs;
 }
-
+/**
+ * Code-Teil: nwMovePlayerFav
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwMovePlayerFav(devId, kind, value, dir) {
   const v = String(value);
   const favs = nwLoadPlayerFavs(devId, kind);
@@ -113,16 +211,31 @@ function nwMovePlayerFav(devId, kind, value, dir) {
   nwSavePlayerFavs(devId, kind, favs);
   return favs;
 }
-
+/**
+ * Code-Teil: nwPlayerRecentKey
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwPlayerRecentKey(devId) {
   return NW_LS_SH_PLAYER_RECENT_PREFIX + String(devId || '');
 }
-
+/**
+ * Code-Teil: nwLoadPlayerRecent
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwLoadPlayerRecent(devId) {
   const arr = nwLsReadJson(nwPlayerRecentKey(devId), []);
   return Array.isArray(arr) ? arr : [];
 }
-
+/**
+ * Code-Teil: nwAddPlayerRecent
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwAddPlayerRecent(devId, item) {
   const list = nwLoadPlayerRecent(devId);
   const entry = {
@@ -2018,6 +2131,12 @@ const NW_ICON_SVGS = {
 
 // Helper: return the raw SVG string for a given icon name.
 // Used for filter chips and section headers (no external icon libs).
+/**
+ * Code-Teil: nwGetIconSvg
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetIconSvg(name, isOn) {
   const n = String(name || '').trim().toLowerCase();
   const variant = isOn ? 'on' : 'off';
@@ -2026,14 +2145,24 @@ function nwGetIconSvg(name, isOn) {
   if (NW_ICON_SVGS.generic && NW_ICON_SVGS.generic[variant]) return NW_ICON_SVGS.generic[variant];
   return '';
 }
-
+/**
+ * Code-Teil: nwIsEmojiLike
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwIsEmojiLike(str) {
   if (!str) return false;
   const s = String(str).trim();
   // emoji are typically > 1 byte, but we accept any short string
   return s.length > 0 && s.length <= 10;
 }
-
+/**
+ * Code-Teil: nwEscapeHtml
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwEscapeHtml(str) {
   return String(str ?? '')
     .replace(/&/g, '&amp;')
@@ -2042,8 +2171,12 @@ function nwEscapeHtml(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
-
-
+/**
+ * Code-Teil: nwSafeBadgeText
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSafeBadgeText(value) {
   let s = String(value || '').trim();
   if (!s) return '';
@@ -2052,7 +2185,12 @@ function nwSafeBadgeText(value) {
   if (s.length > 10) s = s.slice(0, 10);
   return s;
 }
-
+/**
+ * Code-Teil: nwParseDynamicIcon
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwParseDynamicIcon(rawValue) {
   const raw = String(rawValue || '').trim();
   if (!raw) return null;
@@ -2074,7 +2212,12 @@ function nwParseDynamicIcon(rawValue) {
 
   return null;
 }
-
+/**
+ * Code-Teil: nwDynamicDeviceIconSvg
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwDynamicDeviceIconSvg(kind, labelRaw, isOn) {
   const label = nwSafeBadgeText(labelRaw || '');
   const txt = nwEscapeHtml(label || '');
@@ -2122,7 +2265,12 @@ function nwDynamicDeviceIconSvg(kind, labelRaw, isOn) {
 
   return '';
 }
-
+/**
+ * Code-Teil: nwStaticIconHtml
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwStaticIconHtml(iconValue) {
   const raw = String(iconValue || '').trim();
   if (!raw) return '';
@@ -2138,7 +2286,12 @@ function nwStaticIconHtml(iconValue) {
   if (key && NW_ICON_SVGS[key]) return NW_ICON_SVGS[key].off;
   return nwEscapeHtml(raw);
 }
-
+/**
+ * Code-Teil: nwNormalizeIconName
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwNormalizeIconName(raw) {
   const s = String(raw || '').trim().toLowerCase();
   if (!s) return '';
@@ -2272,8 +2425,12 @@ function nwNormalizeIconName(raw) {
   };
   return map[s] || s;
 }
-
-
+/**
+ * Code-Teil: nwLooksLikeTemperatureDevice
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwLooksLikeTemperatureDevice(dev) {
   if (!dev) return false;
   const type = String(dev.type || '').toLowerCase();
@@ -2301,7 +2458,12 @@ function nwLooksLikeTemperatureDevice(dev) {
   // The alias/function must indicate it, otherwise e.g. power/energy sensors would get °C.
   return false;
 }
-
+/**
+ * Code-Teil: nwNormalizeTemperatureUnit
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwNormalizeTemperatureUnit(dev, unit) {
   const raw = String(unit || '').trim();
   if (!nwLooksLikeTemperatureDevice(dev)) return raw;
@@ -2312,7 +2474,12 @@ function nwNormalizeTemperatureUnit(dev, unit) {
   }
   return raw;
 }
-
+/**
+ * Code-Teil: nwGuessIconName
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGuessIconName(dev) {
   const type = String(dev.type || '').toLowerCase();
   const fn = String(dev.function || '').toLowerCase();
@@ -2347,7 +2514,12 @@ function nwGuessIconName(dev) {
 
   return 'generic';
 }
-
+/**
+ * Code-Teil: nwGetIconSpec
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetIconSpec(dev) {
   const raw = (dev && typeof dev.icon !== 'undefined') ? dev.icon : '';
   const iconStr = String(raw || '').trim();
@@ -2372,7 +2544,12 @@ function nwGetIconSpec(dev) {
   // auto
   return { kind: 'svg', name: nwGuessIconName(dev) };
 }
-
+/**
+ * Code-Teil: nwGetAccentColor
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetAccentColor(dev, iconName) {
   const type = String(dev.type || '').toLowerCase();
   const fn = String(dev.function || '').toLowerCase();
@@ -2406,7 +2583,12 @@ function nwGetAccentColor(dev, iconName) {
   if (fn.includes('pv') || fn.includes('energie')) return '#22c55e';
   return '#00e676';
 }
-
+/**
+ * Code-Teil: nwIsOn
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwIsOn(dev) {
   const st = dev && dev.state ? dev.state : {};
   const type = String(dev.type || '').toLowerCase();
@@ -2439,7 +2621,12 @@ function nwIsOn(dev) {
   }
   return false;
 }
-
+/**
+ * Code-Teil: nwSupportsTimer
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSupportsTimer(dev) {
   if (!dev) return false;
   if (dev.behavior && dev.behavior.readOnly) return false;
@@ -2448,7 +2635,12 @@ function nwSupportsTimer(dev) {
   // Added: blinds/jalousie (open/close schedule)
   return ['switch', 'dimmer', 'color', 'scene', 'blind'].includes(type);
 }
-
+/**
+ * Code-Teil: nwGetStateText
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetStateText(dev) {
   const st = dev && dev.state ? dev.state : {};
   const type = String(dev.type || '').toLowerCase();
@@ -2525,7 +2717,12 @@ function nwGetStateText(dev) {
 
   return '';
 }
-
+/**
+ * Code-Teil: nwGetTileHint
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetTileHint(dev) {
   const type = String(dev && dev.type ? dev.type : '').toLowerCase();
   const canWrite = nwHasWriteAccess(dev);
@@ -2541,12 +2738,22 @@ function nwGetTileHint(dev) {
   if (type === 'rtr') return 'Klicken: große Temperatursteuerung';
   return '';
 }
-
-
+/**
+ * Code-Teil: nwFormatBigValue
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwFormatBigValue(dev) {
   const st = dev && dev.state ? dev.state : {};
   const ui = dev.ui || {};
   const type = String(dev.type || '').toLowerCase();
+  /**
+   * Code-Teil: formatUnit
+   * Zweck: Formatiert Daten für Anzeige oder Logs.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const formatUnit = (unit) => nwNormalizeTemperatureUnit(dev, unit || '');
 
   if (type === 'rtr') {
@@ -2598,20 +2805,35 @@ function nwFormatBigValue(dev) {
 
   return { value: '', unit: '', hasValue: false };
 }
-
+/**
+ * Code-Teil: nwGetTileSize
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetTileSize(dev) {
   // v0.6.189+: Uniform tiles for a cleaner overview.
   // We keep the size API/classes for backwards compatibility, but the default UI
   // renders all device tiles in the same size.
   return 'm';
 }
-
+/**
+ * Code-Teil: nwHasWriteAccess
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwHasWriteAccess(dev) {
   const beh = dev && dev.behavior ? dev.behavior : {};
   if (beh.readOnly) return false;
   return true;
 }
-
+/**
+ * Code-Teil: nwCreateIconElement
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCreateIconElement(dev, isOn, iconSpec, accent) {
   const wrap = document.createElement('div');
   wrap.className = 'nw-sh-icon';
@@ -2668,7 +2890,12 @@ function nwCreateIconElement(dev, isOn, iconSpec, accent) {
 }
 
 // ---------- Networking ----------
-
+/**
+ * Code-Teil: nwFetchDevices
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwFetchDevices() {
   const res = await fetch('/api/smarthome/devices', { cache: 'no-store' });
   if (!res.ok) throw new Error('devices fetch failed');
@@ -2676,7 +2903,12 @@ async function nwFetchDevices() {
   if (!data || !data.ok) throw new Error('devices fetch not ok');
   return Array.isArray(data.devices) ? data.devices : [];
 }
-
+/**
+ * Code-Teil: nwToggleDevice
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwToggleDevice(id) {
   const res = await fetch('/api/smarthome/toggle', {
     method: 'POST',
@@ -2688,7 +2920,12 @@ async function nwToggleDevice(id) {
   if (!data || !data.ok) return null;
   return data.state || null;
 }
-
+/**
+ * Code-Teil: nwSetLevel
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwSetLevel(id, level) {
   const res = await fetch('/api/smarthome/level', {
     method: 'POST',
@@ -2700,7 +2937,12 @@ async function nwSetLevel(id, level) {
   if (!data || !data.ok) return null;
   return data.state || null;
 }
-
+/**
+ * Code-Teil: nwSetColor
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwSetColor(id, color) {
   const res = await fetch('/api/smarthome/color', {
     method: 'POST',
@@ -2712,7 +2954,12 @@ async function nwSetColor(id, color) {
   if (!data || !data.ok) return null;
   return data.state || null;
 }
-
+/**
+ * Code-Teil: nwCoverAction
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwCoverAction(id, action) {
   const res = await fetch('/api/smarthome/cover', {
     method: 'POST',
@@ -2723,7 +2970,12 @@ async function nwCoverAction(id, action) {
   const data = await res.json();
   return !!(data && data.ok);
 }
-
+/**
+ * Code-Teil: nwPlayerAction
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwPlayerAction(id, action, value) {
   const body = { id, action };
   if (typeof value !== 'undefined') body.value = value;
@@ -2740,6 +2992,12 @@ async function nwPlayerAction(id, action, value) {
 }
 
 // Multiroom (UI-seitig): dieselbe Aktion auf mehrere Player-Zonen anwenden
+/**
+ * Code-Teil: nwPlayerActionMulti
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwPlayerActionMulti(primaryId, action, value) {
   const zones = nwGetSelectedAudioZones(primaryId);
   const unique = Array.from(new Set(zones));
@@ -2753,7 +3011,12 @@ async function nwPlayerActionMulti(primaryId, action, value) {
   }
   return lastState;
 }
-
+/**
+ * Code-Teil: nwSetRtrSetpoint
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwSetRtrSetpoint(id, setpoint) {
   const res = await fetch('/api/smarthome/rtrSetpoint', {
     method: 'POST',
@@ -2767,6 +3030,12 @@ async function nwSetRtrSetpoint(id, setpoint) {
 }
 
 // --- Zeitschaltuhren (Endkunde) ---
+/**
+ * Code-Teil: nwSaveDeviceTimer
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwSaveDeviceTimer(deviceId, timer) {
   const res = await fetch('/api/smarthome/timers', {
     method: 'POST',
@@ -2778,7 +3047,12 @@ async function nwSaveDeviceTimer(deviceId, timer) {
   if (!data || !data.ok) return null;
   return data.config || null;
 }
-
+/**
+ * Code-Teil: nwDeleteDeviceTimer
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwDeleteDeviceTimer(deviceId) {
   const res = await fetch('/api/smarthome/timers', {
     method: 'POST',
@@ -2790,7 +3064,12 @@ async function nwDeleteDeviceTimer(deviceId) {
   if (!data || !data.ok) return null;
   return data.config || null;
 }
-
+/**
+ * Code-Teil: nwAdjustRtrSetpoint
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwAdjustRtrSetpoint(dev, delta) {
   const st = dev.state || {};
   const cl = dev.io && dev.io.climate ? dev.io.climate : {};
@@ -2808,12 +3087,22 @@ async function nwAdjustRtrSetpoint(dev, delta) {
 }
 
 // ---------- Rendering ----------
-
+/**
+ * Code-Teil: nwClear
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwClear(el) {
   if (!el) return;
   while (el.firstChild) el.removeChild(el.firstChild);
 }
-
+/**
+ * Code-Teil: nwSortBy
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSortBy(a, b) {
   const sa = String(a || '').toLowerCase();
   const sb = String(b || '').toLowerCase();
@@ -2821,7 +3110,12 @@ function nwSortBy(a, b) {
   if (sa > sb) return 1;
   return 0;
 }
-
+/**
+ * Code-Teil: nwGetDeviceOrder
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetDeviceOrder(dev) {
   const o = (dev && typeof dev.order === 'number')
     ? dev.order
@@ -2852,13 +3146,23 @@ const NW_SH_TYPE_LABELS = {
   energy: 'Energie',
   meter: 'Zähler',
 };
-
+/**
+ * Code-Teil: nwTypeLabel
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwTypeLabel(type) {
   const t = String(type || '').trim().toLowerCase();
   if (!t) return 'Unbekannt';
   return NW_SH_TYPE_LABELS[t] || (t.charAt(0).toUpperCase() + t.slice(1));
 }
-
+/**
+ * Code-Teil: nwCompareDevices
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCompareDevices(a, b) {
   // optional: favorites first
   if (nwFilterState && nwFilterState.favoritesFirst) {
@@ -2885,7 +3189,12 @@ function nwCompareDevices(a, b) {
   if (oa !== ob) return oa - ob;
   return nwSortBy(a.alias || a.id, b.alias || b.id);
 }
-
+/**
+ * Code-Teil: nwGroupDevicesByType
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGroupDevicesByType(devices) {
   const map = new Map();
   (devices || []).forEach((d) => {
@@ -2893,7 +3202,6 @@ function nwGroupDevicesByType(devices) {
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(d);
   });
-
   const groups = Array.from(map.entries()).map(([type, list]) => ({
     type,
     title: nwTypeLabel(type),
@@ -2904,14 +3212,24 @@ function nwGroupDevicesByType(devices) {
   groups.sort((a, b) => String(a.title).localeCompare(String(b.title), 'de'));
   return groups;
 }
-
+/**
+ * Code-Teil: nwFormatNumberDE
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwFormatNumberDE(value, precision) {
   const v = Number(value);
   if (!Number.isFinite(v)) return '';
   const p = (typeof precision === 'number' && precision >= 0 && precision <= 6) ? precision : 1;
   return v.toFixed(p).replace('.', ',');
 }
-
+/**
+ * Code-Teil: nwComputeRoomSummary
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwComputeRoomSummary(roomId, allDevices) {
   const rid = nwNormalizeId(roomId);
   if (!rid) return '';
@@ -2957,6 +3275,18 @@ function nwComputeRoomSummary(roomId, allDevices) {
     }
   });
 
+  /**
+   * Code-Teil: Arrow-Funktion `pick`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: pick
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const pick = (arr) => {
     if (!arr.length) return null;
     arr.sort((a, b) => (a.prio - b.prio) || (a.order - b.order));
@@ -2978,7 +3308,12 @@ function nwComputeRoomSummary(roomId, allDevices) {
 
   return parts.join(' · ');
 }
-
+/**
+ * Code-Teil: nwApplyFilters
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwApplyFilters(devices) {
   const arr = Array.isArray(devices) ? devices.slice() : [];
 
@@ -2996,7 +3331,12 @@ function nwApplyFilters(devices) {
 
   return out;
 }
-
+/**
+ * Code-Teil: nwGetAllFunctions
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetAllFunctions(devices) {
   const set = new Set();
   (devices || []).forEach(d => {
@@ -3005,7 +3345,12 @@ function nwGetAllFunctions(devices) {
   });
   return Array.from(set).sort(nwSortBy);
 }
-
+/**
+ * Code-Teil: nwGuessIconForFunctionLabel
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGuessIconForFunctionLabel(label) {
   const s = String(label || '').toLowerCase();
   if (!s) return null;
@@ -3018,17 +3363,28 @@ function nwGuessIconForFunctionLabel(label) {
   if (s.includes('audio') || s.includes('musik') || s.includes('laut')) return 'speaker';
   return null;
 }
-
+/**
+ * Code-Teil: nwRenderViewChips
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRenderViewChips() {
   const wrap = document.getElementById('nw-filter-view');
   if (!wrap) return;
   nwClear(wrap);
-
+  /**
+   * Code-Teil: mkChip
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const mkChip = (label, active, onClick) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'nw-sh-chip' + (active ? ' nw-sh-chip--active' : '');
     btn.textContent = label;
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btn.addEventListener('click', () => {
       onClick();
       nwApplyFiltersAndRender();
@@ -3046,17 +3402,28 @@ function nwRenderViewChips() {
     nwSaveViewMode(nwViewState.mode);
   });
 }
-
+/**
+ * Code-Teil: nwRenderTextSizeChips
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRenderTextSizeChips() {
   const wrap = document.getElementById('nw-filter-textsize');
   if (!wrap) return;
   nwClear(wrap);
-
+  /**
+   * Code-Teil: mkChip
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const mkChip = (label, active, onClick) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'nw-sh-chip' + (active ? ' nw-sh-chip--active' : '');
     btn.textContent = label;
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btn.addEventListener('click', () => {
       onClick();
       // Kein kompletter Re-Render nötig (nur CSS), aber Chips sollen sofort aktualisiert werden.
@@ -3085,7 +3452,12 @@ function nwRenderTextSizeChips() {
     nwApplyTextSizeClass(nwTextSizeState.size);
   });
 }
-
+/**
+ * Code-Teil: nwRenderFunctionChips
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRenderFunctionChips(devices) {
   const wrap = document.getElementById('nw-filter-functions');
   if (!wrap) return;
@@ -3096,6 +3468,18 @@ function nwRenderFunctionChips(devices) {
   const baseFavOnly = !!(nwFilterState.page && nwFilterState.page.favoritesOnly);
   const effectiveFavOnly = baseFavOnly || !!nwFilterState.favoritesOnly;
 
+  /**
+   * Code-Teil: Arrow-Funktion `mkChip`
+   * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: mkChip
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const mkChip = (label, active, onClick, extraClass, disabled, title, iconName) => {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -3109,6 +3493,7 @@ function nwRenderFunctionChips(devices) {
     }
     if (title) btn.title = title;
     if (disabled) btn.disabled = true;
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btn.addEventListener('click', () => {
       if (btn.disabled) return;
       onClick();
@@ -3152,7 +3537,12 @@ function nwRenderFunctionChips(devices) {
     }, null, false, null, ic);
   });
 }
-
+/**
+ * Code-Teil: nwGroupByRoom
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGroupByRoom(devices) {
   const map = new Map();
   (devices || []).forEach((d) => {
@@ -3218,7 +3608,12 @@ function nwGroupByRoom(devices) {
     };
   });
 }
-
+/**
+ * Code-Teil: nwGroupByFunction
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGroupByFunction(devices) {
   const map = new Map();
   (devices || []).forEach(d => {
@@ -3230,7 +3625,12 @@ function nwGroupByFunction(devices) {
   const fns = Array.from(map.keys()).sort(nwSortBy);
   return fns.map(fn => ({ func: fn, devices: map.get(fn) || [] }));
 }
-
+/**
+ * Code-Teil: nwShowEmptyState
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwShowEmptyState(show, ctx) {
   const empty = document.getElementById('nw-smarthome-empty');
   const rooms = document.getElementById('nw-smarthome-rooms');
@@ -3238,10 +3638,13 @@ function nwShowEmptyState(show, ctx) {
   if (!empty) return;
 
   if (!show) {
+    empty.classList.remove('nw-sh-empty--loading');
     empty.style.display = 'none';
     empty.textContent = '';
     return;
   }
+
+  empty.classList.remove('nw-sh-empty--loading');
 
   const enabled = (typeof ctx?.enabled === 'boolean')
     ? ctx.enabled
@@ -3272,7 +3675,12 @@ function nwShowEmptyState(show, ctx) {
 // ---- Long‑Press Info‑Toast (Mobile UX) ----
 let nwShToastEl = null;
 let nwShToastHideTimer = null;
-
+/**
+ * Code-Teil: nwEnsureShToast
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwEnsureShToast() {
   if (nwShToastEl) return nwShToastEl;
   const el = document.createElement('div');
@@ -3282,7 +3690,12 @@ function nwEnsureShToast() {
   nwShToastEl = el;
   return el;
 }
-
+/**
+ * Code-Teil: nwHideShToast
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwHideShToast() {
   if (!nwShToastEl) return;
   nwShToastEl.classList.remove('nw-sh-toast--show');
@@ -3291,7 +3704,12 @@ function nwHideShToast() {
     nwShToastHideTimer = null;
   }
 }
-
+/**
+ * Code-Teil: nwShowShToastForTile
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwShowShToastForTile(dev) {
   const toast = nwEnsureShToast();
   if (nwShToastHideTimer) {
@@ -3324,7 +3742,12 @@ function nwShowShToastForTile(dev) {
     nwShToastHideTimer = null;
   }, 2300);
 }
-
+/**
+ * Code-Teil: nwCreateTile
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCreateTile(dev, opts) {
   const type = String(dev.type || '').toLowerCase();
   const bigValue = nwFormatBigValue(dev);
@@ -3417,6 +3840,7 @@ function nwCreateTile(dev, opts) {
   favBtn.className = 'nw-sh-favbtn' + (isFav ? ' nw-sh-favbtn--active' : '');
   favBtn.textContent = isFav ? '★' : '☆';
   favBtn.title = isFav ? 'Favorit entfernen' : 'Als Favorit markieren';
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an favBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   favBtn.addEventListener('click', (ev) => {
     ev.preventDefault();
     ev.stopPropagation();
@@ -3432,6 +3856,7 @@ function nwCreateTile(dev, opts) {
     tbtn.className = 'nw-sh-timerbtn' + ((dev.timer && dev.timer.enabled) ? ' nw-sh-timerbtn--active' : '');
     tbtn.textContent = '⏲';
     tbtn.title = 'Zeitschaltuhr';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an tbtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     tbtn.addEventListener('click', (ev) => {
       ev.stopPropagation();
       nwOpenTimerPopover(dev, tbtn);
@@ -3444,6 +3869,7 @@ function nwCreateTile(dev, opts) {
     // Klick auf Icon öffnet das Bedienpanel (Tooltip)
     icon.title = 'Bedienung';
     icon.style.cursor = 'pointer';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an icon. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     icon.addEventListener('click', (ev) => {
       ev.stopPropagation();
       nwOpenDevicePopover(dev, tile);
@@ -3455,6 +3881,7 @@ function nwCreateTile(dev, opts) {
     more.className = 'nw-sh-detailbtn';
     more.textContent = '⋯';
     more.title = 'Bedienung';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an more. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     more.addEventListener('click', (ev) => {
       ev.stopPropagation();
       nwOpenDevicePopover(dev, tile);
@@ -3501,6 +3928,7 @@ function nwCreateTile(dev, opts) {
         btn.type = 'button';
         btn.className = 'nw-sh-btn';
         btn.textContent = 'Live öffnen';
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         btn.addEventListener('click', (ev) => {
           ev.stopPropagation();
           const url = liveUrl || snapshotUrl;
@@ -3511,6 +3939,7 @@ function nwCreateTile(dev, opts) {
         big.appendChild(btnRow);
 
         // Click on preview also opens
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an media. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         media.addEventListener('click', (ev) => {
           ev.stopPropagation();
           const url = liveUrl || snapshotUrl;
@@ -3550,6 +3979,7 @@ function nwCreateTile(dev, opts) {
         btn.type = 'button';
         btn.className = 'nw-sh-btn';
         btn.textContent = 'Öffnen';
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         btn.addEventListener('click', (ev) => {
           ev.stopPropagation();
           const u = openUrl || url;
@@ -3604,14 +4034,30 @@ function nwCreateTile(dev, opts) {
           btnPlus.className = 'nw-sh-btn';
           btnPlus.textContent = '+';
 
+          /**
+           * Code-Teil: Arrow-Funktion `stop`
+           * Zweck: verwaltet Lifecycle/Ressourcen wie Server, Timer oder SSE-Verbindungen.
+           * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+           * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+           */
+          /**
+           * Code-Teil: stop
+           * Zweck: Stoppt Prozess, Timer, Engine oder Verbindung.
+           * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const stop = (ev) => ev.stopPropagation();
+          // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnMinus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
           btnMinus.addEventListener('click', stop);
+          // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnPlus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
           btnPlus.addEventListener('click', stop);
 
+          // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnMinus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
           btnMinus.addEventListener('click', async () => {
             await nwAdjustRtrSetpoint(dev, -0.5);
           });
 
+          // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnPlus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
           btnPlus.addEventListener('click', async () => {
             await nwAdjustRtrSetpoint(dev, 0.5);
           });
@@ -3688,15 +4134,32 @@ function nwCreateTile(dev, opts) {
 
     // Visual progress fill (accent track)
     try { nwUpdateRangeFill(slider); } catch (_e) {}
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an slider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     slider.addEventListener('input', () => {
       try { nwUpdateRangeFill(slider); } catch (_e) {}
     }, { passive: true });
 
+    /**
+     * Code-Teil: Arrow-Funktion `stop`
+     * Zweck: verwaltet Lifecycle/Ressourcen wie Server, Timer oder SSE-Verbindungen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: stop
+     * Zweck: Stoppt Prozess, Timer, Engine oder Verbindung.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const stop = (ev) => ev.stopPropagation();
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'mousedown' an slider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     slider.addEventListener('mousedown', stop);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchstart' an slider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     slider.addEventListener('touchstart', stop);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an slider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     slider.addEventListener('click', stop);
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an slider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     slider.addEventListener('change', async (ev) => {
       if (!hasLevelWrite) return;
       const raw = Number(ev.target.value);
@@ -3714,6 +4177,18 @@ function nwCreateTile(dev, opts) {
   const footer = document.createElement('div');
   footer.className = 'nw-sh-tile__footer';
 
+  /**
+   * Code-Teil: Arrow-Funktion `addMiniToggle`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: addMiniToggle
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const addMiniToggle = () => {
     const t = document.createElement('button');
     t.type = 'button';
@@ -3721,7 +4196,9 @@ function nwCreateTile(dev, opts) {
     t.setAttribute('aria-pressed', isOn ? 'true' : 'false');
     t.title = isOn ? 'Ausschalten' : 'Einschalten';
     t.disabled = !canWrite;
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an t. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     t.addEventListener('click', (ev) => ev.stopPropagation());
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an t. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     t.addEventListener('click', async () => {
       if (!canWrite) return;
       const st = await nwToggleDevice(dev.id);
@@ -3731,6 +4208,18 @@ function nwCreateTile(dev, opts) {
     footer.appendChild(t);
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `addMiniBtn`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: addMiniBtn
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const addMiniBtn = (label, title, onClick) => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -3738,7 +4227,9 @@ function nwCreateTile(dev, opts) {
     b.textContent = label;
     if (title) b.title = title;
     b.disabled = !canWrite;
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     b.addEventListener('click', (ev) => ev.stopPropagation());
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     b.addEventListener('click', async () => {
       if (!canWrite) return;
       await onClick();
@@ -3787,12 +4278,26 @@ function nwCreateTile(dev, opts) {
     const controls = document.createElement('div');
     controls.className = 'nw-sh-controls';
 
+    /**
+     * Code-Teil: Arrow-Funktion `mk`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mk
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mk = (label, action) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'nw-sh-btn';
       b.textContent = label;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       b.addEventListener('click', (ev) => ev.stopPropagation());
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       b.addEventListener('click', async () => {
         if (!canWrite) return;
         const ok = await nwCoverAction(dev.id, action);
@@ -3815,6 +4320,18 @@ function nwCreateTile(dev, opts) {
   let lpStartX = 0;
   let lpStartY = 0;
 
+  /**
+   * Code-Teil: Arrow-Funktion `lpCancel`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: lpCancel
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const lpCancel = () => {
     if (lpTimer) {
       clearTimeout(lpTimer);
@@ -3822,6 +4339,7 @@ function nwCreateTile(dev, opts) {
     }
   };
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointerdown' an tile. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   tile.addEventListener('pointerdown', (ev) => {
     if (ev.pointerType !== 'touch') return;
     // In Controls/Buttons/Inputs keinen Long‑Press starten
@@ -3841,6 +4359,7 @@ function nwCreateTile(dev, opts) {
     }, 520);
   }, { passive: true });
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointermove' an tile. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   tile.addEventListener('pointermove', (ev) => {
     if (!lpTimer || ev.pointerType !== 'touch') return;
     const dx = ev.clientX - lpStartX;
@@ -3851,12 +4370,15 @@ function nwCreateTile(dev, opts) {
     }
   }, { passive: true });
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointerup' an tile. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   tile.addEventListener('pointerup', lpCancel, { passive: true });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointercancel' an tile. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   tile.addEventListener('pointercancel', lpCancel, { passive: true });
 
   // Tap actions
   // - Jalousie & Raumtemperatur: Tap öffnet das Bedienpanel (Tooltip)
   // - Schalter/Dimmer/Szene/Player: Tap = Schnellaktion, Long‑Press = Tooltip
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an tile. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   tile.addEventListener('click', async () => {
     if (tile.__nwIgnoreNextClick) {
       tile.__nwIgnoreNextClick = false;
@@ -3926,7 +4448,12 @@ let nwPopoverDragging = false;
 // (Especially important on mobile/touch devices.)
 let nwBodyScrollLocked = false;
 let nwBodyScrollY = 0;
-
+/**
+ * Code-Teil: nwLockBodyScroll
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwLockBodyScroll() {
   if (nwBodyScrollLocked) return;
   nwBodyScrollLocked = true;
@@ -3949,7 +4476,12 @@ function nwLockBodyScroll() {
   document.body.style.width = '100%';
   document.body.classList.add('nw-scroll-locked');
 }
-
+/**
+ * Code-Teil: nwUnlockBodyScroll
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwUnlockBodyScroll() {
   if (!nwBodyScrollLocked) return;
   nwBodyScrollLocked = false;
@@ -3970,7 +4502,12 @@ function nwUnlockBodyScroll() {
   nwBodyScrollY = 0;
   try { window.scrollTo(0, y); } catch (_e) {}
 }
-
+/**
+ * Code-Teil: nwEnsurePopover
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwEnsurePopover() {
   if (nwPopoverBackdropEl && nwPopoverEl) return;
 
@@ -3986,29 +4523,53 @@ function nwEnsurePopover() {
   document.body.appendChild(nwPopoverEl);
 
   // clicks inside should not close
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an nwPopoverEl. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   nwPopoverEl.addEventListener('click', (ev) => ev.stopPropagation());
 
+  /**
+   * Code-Teil: Arrow-Funktion `close`
+   * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: close
+   * Zweck: Schließt Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const close = () => nwClosePopover();
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an nwPopoverBackdropEl. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   nwPopoverBackdropEl.addEventListener('click', close);
 
   // Block scroll gestures on the backdrop itself (extra safety).
   // (Body is locked as well, but this prevents "rubber band" scrolling.)
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'wheel' an nwPopoverBackdropEl. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   nwPopoverBackdropEl.addEventListener('wheel', (ev) => ev.preventDefault(), { passive: false });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchmove' an nwPopoverBackdropEl. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   nwPopoverBackdropEl.addEventListener('touchmove', (ev) => ev.preventDefault(), { passive: false });
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'resize' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   window.addEventListener('resize', () => {
     if (nwPopoverOpenId) nwPositionPopover(nwPopoverAnchorEl);
   }, { passive: true });
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'scroll' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   window.addEventListener('scroll', () => {
     if (nwPopoverOpenId) nwPositionPopover(nwPopoverAnchorEl);
   }, { passive: true, capture: true });
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape') close();
   }, { passive: true });
 }
-
+/**
+ * Code-Teil: nwClosePopover
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwClosePopover() {
   if (!nwPopoverEl || !nwPopoverBackdropEl) return;
   nwPopoverEl.classList.add('hidden');
@@ -4019,7 +4580,12 @@ function nwClosePopover() {
   nwPopoverDragging = false;
   nwUnlockBodyScroll();
 }
-
+/**
+ * Code-Teil: nwOpenDevicePopover
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwOpenDevicePopover(dev, anchorEl) {
   if (!dev || !dev.id) return;
   nwEnsurePopover();
@@ -4049,6 +4615,12 @@ function nwOpenDevicePopover(dev, anchorEl) {
 
 
 // --- Zeitschaltuhr-Popover (pro Gerät) ---
+/**
+ * Code-Teil: nwOpenTimerPopover
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwOpenTimerPopover(dev, anchorEl) {
   if (!dev || !dev.id) return;
   nwEnsurePopover();
@@ -4069,7 +4641,12 @@ function nwOpenTimerPopover(dev, anchorEl) {
 
   requestAnimationFrame(() => nwPositionPopover(anchorEl));
 }
-
+/**
+ * Code-Teil: nwBuildTimerPopoverContent
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwBuildTimerPopoverContent(dev) {
   // Header
   const hdr = document.createElement('div');
@@ -4097,6 +4674,7 @@ function nwBuildTimerPopoverContent(dev) {
   closeBtn.className = 'nw-sh-popover__close';
   closeBtn.textContent = '✕';
   closeBtn.title = 'Schließen';
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an closeBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   closeBtn.addEventListener('click', (ev) => { ev.stopPropagation(); nwClosePopover(); });
   hdr.appendChild(left);
   hdr.appendChild(closeBtn);
@@ -4126,6 +4704,18 @@ function nwBuildTimerPopoverContent(dev) {
   if (typeof onLevel !== 'number' || Number.isNaN(onLevel)) onLevel = maxLvl;
   onLevel = Math.max(minLvl, Math.min(maxLvl, onLevel));
 
+  /**
+   * Code-Teil: Arrow-Funktion `fmtNext`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: fmtNext
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const fmtNext = () => {
     if (!enabled) return 'Zeitschaltuhr: Aus';
     const nextAt = t && t.nextAt ? Number(t.nextAt) : null;
@@ -4140,6 +4730,18 @@ function nwBuildTimerPopoverContent(dev) {
     return 'Zeitschaltuhr aktiv';
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `updateHeaderState`
+   * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: updateHeaderState
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const updateHeaderState = () => { state.textContent = fmtNext(); };
   updateHeaderState();
 
@@ -4156,6 +4758,7 @@ function nwBuildTimerPopoverContent(dev) {
     btn.type = 'button';
     btn.className = 'nw-sh-chip' + (enabled ? ' nw-sh-chip--active' : '');
     btn.textContent = enabled ? 'Ein' : 'Aus';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btn.addEventListener('click', () => {
       enabled = !enabled;
       btn.classList.toggle('nw-sh-chip--active', enabled);
@@ -4189,6 +4792,18 @@ function nwBuildTimerPopoverContent(dev) {
     ];
 
     const set = new Set(days);
+    /**
+     * Code-Teil: Arrow-Funktion `rebuildDays`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: rebuildDays
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const rebuildDays = () => {
       days = Array.from(set);
       days.sort((a, b) => a - b);
@@ -4198,6 +4813,7 @@ function nwBuildTimerPopoverContent(dev) {
       b.type = 'button';
       b.className = 'nw-sh-chip nw-sh-chip--sm' + (set.has(dl.d) ? ' nw-sh-chip--active' : '');
       b.textContent = dl.t;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       b.addEventListener('click', () => {
         if (set.has(dl.d)) set.delete(dl.d);
         else set.add(dl.d);
@@ -4218,6 +4834,18 @@ function nwBuildTimerPopoverContent(dev) {
     const grid = document.createElement('div');
     grid.className = 'nw-sh-timer-grid';
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkTime`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkTime
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkTime = (lbl, val, onChange) => {
       const wrap = document.createElement('div');
       wrap.className = 'nw-sh-timer-field';
@@ -4228,6 +4856,7 @@ function nwBuildTimerPopoverContent(dev) {
       inp.type = 'time';
       inp.className = 'nw-sh-time';
       inp.value = val || '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       inp.addEventListener('change', () => onChange(inp.value));
       wrap.appendChild(l);
       wrap.appendChild(inp);
@@ -4257,6 +4886,7 @@ function nwBuildTimerPopoverContent(dev) {
     range.min = String(minLvl);
     range.max = String(maxLvl);
     range.value = String(onLevel);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an range. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     range.addEventListener('input', () => {
       onLevel = parseFloat(range.value);
       if (!Number.isFinite(onLevel)) onLevel = maxLvl;
@@ -4279,6 +4909,7 @@ function nwBuildTimerPopoverContent(dev) {
     saveBtn.type = 'button';
     saveBtn.className = 'nw-sh-btn nw-sh-btn--primary';
     saveBtn.textContent = 'Speichern';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an saveBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     saveBtn.addEventListener('click', async () => {
       saveBtn.disabled = true;
       try {
@@ -4303,6 +4934,7 @@ function nwBuildTimerPopoverContent(dev) {
     delBtn.type = 'button';
     delBtn.className = 'nw-sh-btn';
     delBtn.textContent = 'Löschen';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an delBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     delBtn.addEventListener('click', async () => {
       delBtn.disabled = true;
       try {
@@ -4323,7 +4955,12 @@ function nwBuildTimerPopoverContent(dev) {
 
   nwPopoverEl.appendChild(body);
 }
-
+/**
+ * Code-Teil: nwPositionPopover
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwPositionPopover(anchorEl) {
   if (!nwPopoverEl || nwPopoverEl.classList.contains('hidden')) return;
 
@@ -4358,13 +4995,23 @@ function nwPositionPopover(anchorEl) {
   nwPopoverEl.style.left = Math.round(left) + 'px';
   nwPopoverEl.style.top = Math.round(top) + 'px';
 }
-
+/**
+ * Code-Teil: nwClampNumber
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwClampNumber(v, min, max) {
   const x = Number(v);
   if (!Number.isFinite(x)) return Number.isFinite(min) ? min : 0;
   return Math.max(min, Math.min(max, x));
 }
-
+/**
+ * Code-Teil: nwRoundToStep
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRoundToStep(v, step) {
   const x = Number(v);
   const s = Number(step);
@@ -4375,6 +5022,12 @@ function nwRoundToStep(v, step) {
 // Visual fill for <input type="range"> sliders (Premium UX).
 // We write a CSS variable (--nw-range-fill) with the percentage.
 // CSS then renders an accent-colored progress track.
+/**
+ * Code-Teil: nwUpdateRangeFill
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwUpdateRangeFill(rangeEl) {
   if (!rangeEl) return;
   const min = Number(rangeEl.min);
@@ -4405,7 +5058,12 @@ const NW_SH_FAVORITES_FIRST_DEFAULT = false;
 // - Key enthält nur Overrides (Abweichungen) gegenüber dem Installer-Default.
 // - Kunde kann in der Kachel per Stern ★ umschalten.
 const NW_SH_FAVORITES_OVERRIDES_LS_KEY = 'nw_sh_favorites_overrides_v1';
-
+/**
+ * Code-Teil: nwLoadJsonLS
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwLoadJsonLS(key, defVal) {
   try {
     const raw = localStorage.getItem(key);
@@ -4417,13 +5075,23 @@ function nwLoadJsonLS(key, defVal) {
     return defVal;
   }
 }
-
+/**
+ * Code-Teil: nwSaveJsonLS
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSaveJsonLS(key, obj) {
   try {
     localStorage.setItem(key, JSON.stringify(obj || {}));
   } catch (_e) {}
 }
-
+/**
+ * Code-Teil: nwLoadFavoriteOverrides
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwLoadFavoriteOverrides() {
   const obj = nwLoadJsonLS(NW_SH_FAVORITES_OVERRIDES_LS_KEY, {});
   // sanitize to {string:boolean}
@@ -4436,15 +5104,30 @@ function nwLoadFavoriteOverrides() {
   } catch (_e) {}
   return out;
 }
-
+/**
+ * Code-Teil: nwSaveFavoriteOverrides
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSaveFavoriteOverrides(map) {
   nwSaveJsonLS(NW_SH_FAVORITES_OVERRIDES_LS_KEY, map || {});
 }
-
+/**
+ * Code-Teil: nwGetInstallerFavorite
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetInstallerFavorite(dev) {
   return !!(dev && dev.behavior && dev.behavior.favorite);
 }
-
+/**
+ * Code-Teil: nwIsFavorite
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwIsFavorite(dev) {
   const id = String(dev && dev.id || '');
   if (!id) return false;
@@ -4454,7 +5137,12 @@ function nwIsFavorite(dev) {
   if (typeof ov === 'boolean') return ov;
   return nwGetInstallerFavorite(dev);
 }
-
+/**
+ * Code-Teil: nwToggleFavorite
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwToggleFavorite(dev) {
   if (!dev || !dev.id) return;
   const id = String(dev.id);
@@ -4471,7 +5159,12 @@ function nwToggleFavorite(dev) {
   }
   nwSaveFavoriteOverrides(nwFavoriteOverrides);
 }
-
+/**
+ * Code-Teil: nwLoadNumberLS
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwLoadNumberLS(key, defVal) {
   try {
     const v = localStorage.getItem(key);
@@ -4482,13 +5175,23 @@ function nwLoadNumberLS(key, defVal) {
     return Number(defVal);
   }
 }
-
+/**
+ * Code-Teil: nwSaveNumberLS
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSaveNumberLS(key, val) {
   try {
     localStorage.setItem(key, String(val));
   } catch (_e) {}
 }
-
+/**
+ * Code-Teil: nwCreateStatusBadge
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCreateStatusBadge() {
   const el = document.createElement('div');
   el.className = 'nw-sh-popover__status hidden';
@@ -4496,7 +5199,12 @@ function nwCreateStatusBadge() {
   el.setAttribute('aria-atomic', 'true');
   return el;
 }
-
+/**
+ * Code-Teil: nwSetStatusBadge
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSetStatusBadge(el, kind, text) {
   if (!el) return;
   el.classList.remove('hidden', 'nw-sh-popover__status--busy', 'nw-sh-popover__status--ok', 'nw-sh-popover__status--err');
@@ -4510,7 +5218,12 @@ function nwSetStatusBadge(el, kind, text) {
   if (kind === 'ok') el.classList.add('nw-sh-popover__status--ok');
   if (kind === 'err') el.classList.add('nw-sh-popover__status--err');
 }
-
+/**
+ * Code-Teil: nwLoadBoolLS
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwLoadBoolLS(key, defVal) {
   try {
     const v = localStorage.getItem(key);
@@ -4522,13 +5235,23 @@ function nwLoadBoolLS(key, defVal) {
     return !!defVal;
   }
 }
-
+/**
+ * Code-Teil: nwSaveBoolLS
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSaveBoolLS(key, val) {
   try {
     localStorage.setItem(key, val ? '1' : '0');
   } catch (_e) {}
 }
-
+/**
+ * Code-Teil: nwLoadViewMode
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwLoadViewMode(defMode) {
   try {
     const v = String(localStorage.getItem(NW_SH_VIEW_MODE_LS_KEY) || '').trim().toLowerCase();
@@ -4537,13 +5260,23 @@ function nwLoadViewMode(defMode) {
   } catch (_e) {}
   return (defMode === 'functions') ? 'functions' : 'rooms';
 }
-
+/**
+ * Code-Teil: nwSaveViewMode
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSaveViewMode(mode) {
   try {
     localStorage.setItem(NW_SH_VIEW_MODE_LS_KEY, (mode === 'functions') ? 'functions' : 'rooms');
   } catch (_e) {}
 }
-
+/**
+ * Code-Teil: nwNormTextSize
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwNormTextSize(v) {
   const s = String(v || '').trim().toLowerCase();
   if (!s) return 'normal';
@@ -4551,7 +5284,12 @@ function nwNormTextSize(v) {
   if (s === 'large' || s === 'gross' || s === 'groß' || s === 'big') return 'large';
   return 'normal';
 }
-
+/**
+ * Code-Teil: nwLoadTextSize
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwLoadTextSize(defSize) {
   try {
     const v = localStorage.getItem(NW_SH_TEXT_SIZE_LS_KEY);
@@ -4559,13 +5297,23 @@ function nwLoadTextSize(defSize) {
   } catch (_e) {}
   return nwNormTextSize(defSize);
 }
-
+/**
+ * Code-Teil: nwSaveTextSize
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSaveTextSize(size) {
   try {
     localStorage.setItem(NW_SH_TEXT_SIZE_LS_KEY, nwNormTextSize(size));
   } catch (_e) {}
 }
-
+/**
+ * Code-Teil: nwApplyTextSizeClass
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwApplyTextSizeClass(size) {
   const root = document.getElementById('nw-smarthome-root');
   if (!root) return;
@@ -4579,6 +5327,12 @@ function nwApplyTextSizeClass(size) {
 // Create a throttled sender for live-preview updates.
 // - max one send every `intervalMs` (leading+trailing)
 // - avoids overlapping requests: keeps only the last pending value
+/**
+ * Code-Teil: nwCreateLivePreviewSender
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCreateLivePreviewSender(sendFn, intervalMs) {
   let lastSentAt = 0;
   let lastSentVal = null;
@@ -4586,7 +5340,12 @@ function nwCreateLivePreviewSender(sendFn, intervalMs) {
   let timer = null;
   let inFlight = false;
   let forceNext = false;
-
+  /**
+   * Code-Teil: schedule
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function schedule() {
     if (inFlight) return;
     if (pendingVal === null || pendingVal === undefined) return;
@@ -4629,7 +5388,12 @@ function nwCreateLivePreviewSender(sendFn, intervalMs) {
       }
     }, wait);
   }
-
+  /**
+   * Code-Teil: trigger
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function trigger(val, force) {
     pendingVal = val;
     if (force) forceNext = true;
@@ -4638,7 +5402,12 @@ function nwCreateLivePreviewSender(sendFn, intervalMs) {
 
   return { trigger };
 }
-
+/**
+ * Code-Teil: nwBuildPopoverContent
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwBuildPopoverContent(dev) {
   if (!nwPopoverEl) return;
 
@@ -4688,6 +5457,7 @@ function nwBuildPopoverContent(dev) {
   close.className = 'nw-sh-popover__close';
   close.textContent = '✕';
   close.title = 'Schließen';
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an close. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   close.addEventListener('click', (ev) => {
     ev.stopPropagation();
     nwClosePopover();
@@ -4719,7 +5489,12 @@ function nwBuildPopoverContent(dev) {
   nwPopoverEl.appendChild(hdr);
   nwPopoverEl.appendChild(body);
 }
-
+/**
+ * Code-Teil: nwCreateLevelPopover
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCreateLevelPopover(dev, canWrite, opts) {
   const wrap = document.createElement('div');
 
@@ -4759,12 +5534,24 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
   right.appendChild(status);
 
   let statusTimer = null;
+  /**
+   * Code-Teil: clearStatusTimer
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function clearStatusTimer() {
     if (statusTimer) {
       clearTimeout(statusTimer);
       statusTimer = null;
     }
   }
+  /**
+   * Code-Teil: flashStatus
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function flashStatus(kind, text, ms) {
     clearStatusTimer();
     nwSetStatusBadge(status, kind, text);
@@ -4775,8 +5562,26 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
       }, ms);
     }
   }
+  /**
+   * Code-Teil: setBusy
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setBusy() { flashStatus('busy', 'Senden…'); }
+  /**
+   * Code-Teil: setOk
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setOk() { flashStatus('ok', 'OK', 1100); }
+  /**
+   * Code-Teil: setErr
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setErr() { flashStatus('err', 'Fehler', 1600); }
 
   let liveBtn = null;
@@ -4787,6 +5592,7 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
     liveBtn.textContent = 'Live';
     liveBtn.title = 'Live-Vorschau beim Ziehen (gedrosselt)';
     liveBtn.setAttribute('aria-pressed', livePreview ? 'true' : 'false');
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an liveBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     liveBtn.addEventListener('click', (ev) => {
       ev.stopPropagation();
       livePreview = !livePreview;
@@ -4815,6 +5621,12 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
   let dial = null;
 
   // Helper: commit a new value (writes once + reload) with feedback.
+  /**
+   * Code-Teil: commitLevel
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function commitLevel(nextVal, opts) {
     const options = opts || {};
     const showStatus = (options.showStatus !== false);
@@ -4858,8 +5670,10 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
     onCommit: async (val) => { await commitLevel(val); },
   });
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an slider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   slider.addEventListener('click', (ev) => ev.stopPropagation());
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an slider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   slider.addEventListener('input', (ev) => {
     const raw = Number(ev.target.value);
     if (!Number.isFinite(raw)) return;
@@ -4873,6 +5687,7 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
     }
   });
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an slider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   slider.addEventListener('change', async (ev) => {
     if (!hasWrite) return;
     const raw = Number(ev.target.value);
@@ -4890,7 +5705,9 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
     b.className = 'nw-sh-chip nw-sh-chip--mini';
     b.textContent = pv + '%';
     b.disabled = !hasWrite;
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     b.addEventListener('click', (ev) => ev.stopPropagation());
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     b.addEventListener('click', async () => {
       if (!hasWrite) return;
       await commitLevel(pv);
@@ -4914,6 +5731,12 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
 
   const stepChoices = [1, 5, 10];
   const stepBtns = new Map();
+  /**
+   * Code-Teil: syncStepBtns
+   * Zweck: Synchronisiert zwei Datenquellen bzw. UI und State.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function syncStepBtns() {
     stepChoices.forEach((s) => {
       const btn = stepBtns.get(s);
@@ -4933,7 +5756,9 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
     c.title = 'Schrittweite ' + s;
     c.disabled = !hasWrite;
     c.setAttribute('aria-pressed', 'false');
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an c. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     c.addEventListener('click', (ev) => ev.stopPropagation());
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an c. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     c.addEventListener('click', () => {
       if (!hasWrite) return;
       step = s;
@@ -4951,7 +5776,9 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
   minus.textContent = '−';
   minus.title = 'Wert verringern';
   minus.disabled = !hasWrite;
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an minus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   minus.addEventListener('click', (ev) => ev.stopPropagation());
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an minus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   minus.addEventListener('click', async () => {
     if (!hasWrite) return;
     const cur = Number(slider.value);
@@ -4964,7 +5791,9 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
   plus.textContent = '+';
   plus.title = 'Wert erhöhen';
   plus.disabled = !hasWrite;
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an plus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   plus.addEventListener('click', (ev) => ev.stopPropagation());
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an plus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   plus.addEventListener('click', async () => {
     if (!hasWrite) return;
     const cur = Number(slider.value);
@@ -4980,7 +5809,12 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
 
   const hint = document.createElement('div');
   hint.className = 'nw-sh-popover__hint';
-
+  /**
+   * Code-Teil: updateHint
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function updateHint() {
     if (!hasWrite) {
       hint.textContent = 'Nur Anzeige (keine Schreib‑DP / writeId konfiguriert).';
@@ -5009,7 +5843,9 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
   toggle.className = 'nw-sh-btn';
   toggle.textContent = nwIsOn(dev) ? 'Ausschalten' : 'Einschalten';
   toggle.disabled = !canWrite;
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an toggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   toggle.addEventListener('click', (ev) => ev.stopPropagation());
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an toggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   toggle.addEventListener('click', async () => {
     if (!canWrite) return;
     setBusy();
@@ -5026,7 +5862,12 @@ function nwCreateLevelPopover(dev, canWrite, opts) {
 
   return wrap;
 }
-
+/**
+ * Code-Teil: nwCreateColorPopover
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCreateColorPopover(dev, canWrite) {
   const wrap = document.createElement('div');
 
@@ -5035,6 +5876,18 @@ function nwCreateColorPopover(dev, canWrite) {
 
   const st = dev.state || {};
 
+  /**
+   * Code-Teil: Arrow-Funktion `normHex`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: normHex
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const normHex = (val) => {
     if (val === null || typeof val === 'undefined') return null;
     let s = String(val).trim();
@@ -5048,9 +5901,32 @@ function nwCreateColorPopover(dev, canWrite) {
   let current = normHex(st.color) || '#ffffff';
 
   /* --------------------------- HSV helpers (UI) --------------------------- */
+  /**
+   * Code-Teil: Arrow-Funktion `clamp01`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: clamp01
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const clamp01 = (n) => Math.max(0, Math.min(1, Number(n)));
+  /**
+   * Code-Teil: clamp
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, Number(n)));
-
+  /**
+   * Code-Teil: hexToRgb
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function hexToRgb(hex) {
     const h = normHex(hex);
     if (!h) return { r: 255, g: 255, b: 255 };
@@ -5060,14 +5936,24 @@ function nwCreateColorPopover(dev, canWrite) {
     const b = parseInt(s.slice(4, 6), 16);
     return { r, g, b };
   }
-
+  /**
+   * Code-Teil: rgbToHex
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function rgbToHex(r, g, b) {
     const rr = clamp(Math.round(r), 0, 255).toString(16).padStart(2, '0');
     const gg = clamp(Math.round(g), 0, 255).toString(16).padStart(2, '0');
     const bb = clamp(Math.round(b), 0, 255).toString(16).padStart(2, '0');
     return ('#' + rr + gg + bb).toLowerCase();
   }
-
+  /**
+   * Code-Teil: rgbToHsv
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function rgbToHsv(r, g, b) {
     const rr = clamp01(r / 255);
     const gg = clamp01(g / 255);
@@ -5087,7 +5973,12 @@ function nwCreateColorPopover(dev, canWrite) {
     const v = max;
     return { h, s, v };
   }
-
+  /**
+   * Code-Teil: hsvToRgb
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function hsvToRgb(h, s, v) {
     const hh = ((Number(h) % 360) + 360) % 360;
     const ss = clamp01(s);
@@ -5110,6 +6001,12 @@ function nwCreateColorPopover(dev, canWrite) {
   }
 
   let hsv = { h: 0, s: 0, v: 1 };
+  /**
+   * Code-Teil: setHsvFromHex
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setHsvFromHex(hex) {
     const rgb = hexToRgb(hex);
     const next = rgbToHsv(rgb.r, rgb.g, rgb.b);
@@ -5152,12 +6049,24 @@ function nwCreateColorPopover(dev, canWrite) {
   right.appendChild(status);
 
   let statusTimer = null;
+  /**
+   * Code-Teil: clearStatusTimer
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function clearStatusTimer() {
     if (statusTimer) {
       clearTimeout(statusTimer);
       statusTimer = null;
     }
   }
+  /**
+   * Code-Teil: flashStatus
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function flashStatus(kind, text, ms) {
     clearStatusTimer();
     nwSetStatusBadge(status, kind, text);
@@ -5168,8 +6077,26 @@ function nwCreateColorPopover(dev, canWrite) {
       }, ms);
     }
   }
+  /**
+   * Code-Teil: setBusy
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setBusy() { flashStatus('busy', 'Senden…'); }
+  /**
+   * Code-Teil: setOk
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setOk() { flashStatus('ok', 'OK', 1100); }
+  /**
+   * Code-Teil: setErr
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setErr() { flashStatus('err', 'Fehler', 1600); }
 
   let liveBtn = null;
@@ -5180,6 +6107,7 @@ function nwCreateColorPopover(dev, canWrite) {
     liveBtn.textContent = 'Live';
     liveBtn.title = 'Live-Vorschau beim Auswählen (gedrosselt)';
     liveBtn.setAttribute('aria-pressed', livePreview ? 'true' : 'false');
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an liveBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     liveBtn.addEventListener('click', (ev) => {
       ev.stopPropagation();
       livePreview = !livePreview;
@@ -5216,18 +6144,33 @@ function nwCreateColorPopover(dev, canWrite) {
   valueSlider.value = String(Math.round(clamp01(hsv.v) * 100));
   valueSlider.className = 'nw-sh-slider nw-sh-slider--big nw-sh-slider--colorvalue';
   valueSlider.disabled = !hasWrite;
-
+  /**
+   * Code-Teil: hsvToHex
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function hsvToHex(h, s, vVal) {
     const rgb = hsvToRgb(h, s, vVal);
     return rgbToHex(rgb.r, rgb.g, rgb.b);
   }
-
+  /**
+   * Code-Teil: updateValueSliderGradient
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function updateValueSliderGradient() {
     // Gradient: black -> full brightness of current hue/sat
     const full = hsvToHex(hsv.h, hsv.s, 1);
     valueSlider.style.setProperty('--nw-colorvalue', `linear-gradient(90deg, #000000, ${full})`);
   }
-
+  /**
+   * Code-Teil: updateWheelMarker
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function updateWheelMarker() {
     const size = wheelWrap.clientWidth || 240;
     const radius = size / 2;
@@ -5240,7 +6183,12 @@ function nwCreateColorPopover(dev, canWrite) {
     wheelMarker.style.top = `${y}px`;
     wheelMarker.style.background = current;
   }
-
+  /**
+   * Code-Teil: setUi
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setUi(hex) {
     const h = normHex(hex) || '#ffffff';
     current = h;
@@ -5251,7 +6199,12 @@ function nwCreateColorPopover(dev, canWrite) {
     updateValueSliderGradient();
     updateWheelMarker();
   }
-
+  /**
+   * Code-Teil: drawWheel
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function drawWheel() {
     // IMPORTANT (Mobile/Retina): We must render the wheel in *canvas pixels*,
     // not CSS pixels. Otherwise the wheel only fills the top-left corner on
@@ -5303,7 +6256,12 @@ function nwCreateColorPopover(dev, canWrite) {
 
     ctx.putImageData(img, 0, 0);
   }
-
+  /**
+   * Code-Teil: commitColor
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function commitColor(hex, opts) {
     const options = opts || {};
     const showStatus = (options.showStatus !== false);
@@ -5330,6 +6288,12 @@ function nwCreateColorPopover(dev, canWrite) {
 
   // Wheel interaction (hue/sat)
   let wheelDragging = false;
+  /**
+   * Code-Teil: updateFromWheelEvent
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function updateFromWheelEvent(ev, opts) {
     const options = opts || {};
     const commit = options.commit === true;
@@ -5354,6 +6318,7 @@ function nwCreateColorPopover(dev, canWrite) {
     }
   }
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointerdown' an wheelWrap. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   wheelWrap.addEventListener('pointerdown', (ev) => {
     if (!hasWrite) return;
     ev.preventDefault();
@@ -5362,12 +6327,19 @@ function nwCreateColorPopover(dev, canWrite) {
     try { wheelWrap.setPointerCapture(ev.pointerId); } catch (_e) {}
     updateFromWheelEvent(ev, { commit: false });
   });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointermove' an wheelWrap. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   wheelWrap.addEventListener('pointermove', (ev) => {
     if (!wheelDragging) return;
     if (!hasWrite) return;
     ev.preventDefault();
     updateFromWheelEvent(ev, { commit: false });
   });
+  /**
+   * Code-Teil: endWheel
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function endWheel(ev) {
     if (!wheelDragging) return;
     wheelDragging = false;
@@ -5376,10 +6348,13 @@ function nwCreateColorPopover(dev, canWrite) {
     updateFromWheelEvent(ev, { commit: true });
     await commitColor(current);
   }
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointerup' an wheelWrap. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   wheelWrap.addEventListener('pointerup', endWheel);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointercancel' an wheelWrap. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   wheelWrap.addEventListener('pointercancel', () => { wheelDragging = false; });
 
   // Brightness (V) slider
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an valueSlider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   valueSlider.addEventListener('input', (ev) => {
     const val = ev && ev.target ? Number(ev.target.value) : 0;
     hsv.v = clamp01(val / 100);
@@ -5389,6 +6364,7 @@ function nwCreateColorPopover(dev, canWrite) {
       liveSender.trigger(String(hex), false);
     }
   });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an valueSlider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   valueSlider.addEventListener('change', async () => {
     if (!hasWrite) return;
     await commitColor(current);
@@ -5412,7 +6388,9 @@ function nwCreateColorPopover(dev, canWrite) {
     b.className = 'nw-sh-chip nw-sh-chip--mini';
     b.textContent = p.label;
     b.disabled = !hasWrite;
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     b.addEventListener('click', (ev) => ev.stopPropagation());
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     b.addEventListener('click', async () => {
       if (!hasWrite) return;
       await commitColor(p.value);
@@ -5422,7 +6400,12 @@ function nwCreateColorPopover(dev, canWrite) {
 
   const hint = document.createElement('div');
   hint.className = 'nw-sh-popover__hint';
-
+  /**
+   * Code-Teil: updateHint
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function updateHint() {
     if (!hasWrite) {
       hint.textContent = 'Nur Anzeige (keine Schreib‑DP / writeId konfiguriert).';
@@ -5451,7 +6434,9 @@ function nwCreateColorPopover(dev, canWrite) {
     toggle.className = 'nw-sh-btn';
     toggle.textContent = nwIsOn(dev) ? 'Ausschalten' : 'Einschalten';
     toggle.disabled = !canWrite;
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an toggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     toggle.addEventListener('click', (ev) => ev.stopPropagation());
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an toggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     toggle.addEventListener('click', async () => {
       if (!canWrite) return;
       setBusy();
@@ -5468,7 +6453,12 @@ function nwCreateColorPopover(dev, canWrite) {
 
   return wrap;
 }
-
+/**
+ * Code-Teil: nwCreateBlindPopover
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCreateBlindPopover(dev, canWrite) {
   const wrap = document.createElement('div');
 
@@ -5508,12 +6498,24 @@ function nwCreateBlindPopover(dev, canWrite) {
   const status = nwCreateStatusBadge();
   right.appendChild(status);
   let statusTimer = null;
+  /**
+   * Code-Teil: clearStatusTimer
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function clearStatusTimer() {
     if (statusTimer) {
       clearTimeout(statusTimer);
       statusTimer = null;
     }
   }
+  /**
+   * Code-Teil: flashStatus
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function flashStatus(kind, text, ms) {
     clearStatusTimer();
     nwSetStatusBadge(status, kind, text);
@@ -5524,8 +6526,26 @@ function nwCreateBlindPopover(dev, canWrite) {
       }, ms);
     }
   }
+  /**
+   * Code-Teil: setBusy
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setBusy() { flashStatus('busy', 'Senden…'); }
+  /**
+   * Code-Teil: setOk
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setOk() { flashStatus('ok', 'OK', 1100); }
+  /**
+   * Code-Teil: setErr
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setErr() { flashStatus('err', 'Fehler', 1600); }
 
   if (hasWrite) {
@@ -5535,6 +6555,7 @@ function nwCreateBlindPopover(dev, canWrite) {
     liveBtn.textContent = 'Live';
     liveBtn.title = 'Live-Vorschau beim Ziehen (gedrosselt)';
     liveBtn.setAttribute('aria-pressed', livePreview ? 'true' : 'false');
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an liveBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     liveBtn.addEventListener('click', (ev) => {
       ev.stopPropagation();
       livePreview = !livePreview;
@@ -5563,6 +6584,12 @@ function nwCreateBlindPopover(dev, canWrite) {
   let dial = null;
 
   // Helper: commit a new value (writes once + reload) with feedback.
+  /**
+   * Code-Teil: commitPos
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function commitPos(nextVal, opts) {
     const options = opts || {};
     const showStatus = (options.showStatus !== false);
@@ -5607,8 +6634,10 @@ function nwCreateBlindPopover(dev, canWrite) {
     onCommit: async (val) => { await commitPos(val); },
   });
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an slider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   slider.addEventListener('click', (ev) => ev.stopPropagation());
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an slider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   slider.addEventListener('input', (ev) => {
     const raw = Number(ev.target.value);
     if (!Number.isFinite(raw)) return;
@@ -5622,6 +6651,7 @@ function nwCreateBlindPopover(dev, canWrite) {
     }
   });
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an slider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   slider.addEventListener('change', async (ev) => {
     if (!hasWrite) return;
     const raw = Number(ev.target.value);
@@ -5639,7 +6669,9 @@ function nwCreateBlindPopover(dev, canWrite) {
     b.className = 'nw-sh-chip nw-sh-chip--mini';
     b.textContent = pv + '%';
     b.disabled = !hasWrite;
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     b.addEventListener('click', (ev) => ev.stopPropagation());
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     b.addEventListener('click', async () => {
       if (!hasWrite) return;
       await commitPos(pv);
@@ -5663,6 +6695,12 @@ function nwCreateBlindPopover(dev, canWrite) {
 
   const stepChoices = [1, 5, 10];
   const stepBtns = new Map();
+  /**
+   * Code-Teil: syncStepBtns
+   * Zweck: Synchronisiert zwei Datenquellen bzw. UI und State.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function syncStepBtns() {
     stepChoices.forEach((s) => {
       const btn = stepBtns.get(s);
@@ -5682,7 +6720,9 @@ function nwCreateBlindPopover(dev, canWrite) {
     c.title = 'Schrittweite ' + s;
     c.disabled = !hasWrite;
     c.setAttribute('aria-pressed', 'false');
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an c. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     c.addEventListener('click', (ev) => ev.stopPropagation());
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an c. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     c.addEventListener('click', () => {
       if (!hasWrite) return;
       step = s;
@@ -5700,7 +6740,9 @@ function nwCreateBlindPopover(dev, canWrite) {
   minus.textContent = '−';
   minus.title = 'Position verringern';
   minus.disabled = !hasWrite;
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an minus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   minus.addEventListener('click', (ev) => ev.stopPropagation());
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an minus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   minus.addEventListener('click', async () => {
     if (!hasWrite) return;
     const cur = Number(slider.value);
@@ -5713,7 +6755,9 @@ function nwCreateBlindPopover(dev, canWrite) {
   plus.textContent = '+';
   plus.title = 'Position erhöhen';
   plus.disabled = !hasWrite;
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an plus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   plus.addEventListener('click', (ev) => ev.stopPropagation());
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an plus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   plus.addEventListener('click', async () => {
     if (!hasWrite) return;
     const cur = Number(slider.value);
@@ -5729,7 +6773,12 @@ function nwCreateBlindPopover(dev, canWrite) {
 
   const hint = document.createElement('div');
   hint.className = 'nw-sh-popover__hint';
-
+  /**
+   * Code-Teil: updateHint
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function updateHint() {
     if (!canWrite) {
       hint.textContent = 'Nur Anzeige (keine Schreib‑DP konfiguriert).';
@@ -5749,13 +6798,27 @@ function nwCreateBlindPopover(dev, canWrite) {
   const controls = document.createElement('div');
   controls.className = 'nw-sh-controls';
 
+  /**
+   * Code-Teil: Arrow-Funktion `mk`
+   * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: mk
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const mk = (label, action) => {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'nw-sh-btn';
     b.textContent = label;
     b.disabled = !canWrite;
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     b.addEventListener('click', (ev) => ev.stopPropagation());
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     b.addEventListener('click', async () => {
       if (!canWrite) return;
       setBusy();
@@ -5781,14 +6844,24 @@ function nwCreateBlindPopover(dev, canWrite) {
 
   return wrap;
 }
-
+/**
+ * Code-Teil: nwGetRtrRange
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetRtrRange(dev) {
   const c = (dev.io && dev.io.climate) ? dev.io.climate : {};
   const min = (typeof c.minSetpoint === 'number') ? c.minSetpoint : 15;
   const max = (typeof c.maxSetpoint === 'number') ? c.maxSetpoint : 30;
   return { min, max };
 }
-
+/**
+ * Code-Teil: nwCreateRtrPopover
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCreateRtrPopover(dev, canWrite) {
   const wrap = document.createElement('div');
 
@@ -5830,9 +6903,12 @@ function nwCreateRtrPopover(dev, canWrite) {
 
   return wrap;
 }
-
-
-
+/**
+ * Code-Teil: nwCreateValueGauge
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCreateValueGauge(opts) {
   const min = Number(opts && opts.min);
   const max = Number(opts && opts.max);
@@ -5980,7 +7056,12 @@ function nwCreateValueGauge(opts) {
   minmax.appendChild(minEl);
   minmax.appendChild(maxEl);
   wrap.appendChild(minmax);
-
+  /**
+   * Code-Teil: setValue
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setValue(v, silent) {
     value = nwRoundToStep(nwClampNumber(v, min, max), step);
     valEl.textContent = formatter(value);
@@ -5994,7 +7075,12 @@ function nwCreateValueGauge(opts) {
     knob.setAttribute('cy', y.toFixed(2));
     if (!silent && onInput) onInput(value);
   }
-
+  /**
+   * Code-Teil: commit
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function commit() {
     if (!canWrite || !onCommit) return;
     await onCommit(value);
@@ -6002,14 +7088,30 @@ function nwCreateValueGauge(opts) {
 
   setValue(value, true);
 
+  /**
+   * Code-Teil: Arrow-Funktion `stop`
+   * Zweck: verwaltet Lifecycle/Ressourcen wie Server, Timer oder SSE-Verbindungen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: stop
+   * Zweck: Stoppt Prozess, Timer, Engine oder Verbindung.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const stop = (ev) => ev.stopPropagation();
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnMinus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   btnMinus.addEventListener('click', stop);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnPlus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   btnPlus.addEventListener('click', stop);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnMinus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   btnMinus.addEventListener('click', async () => {
     if (!canWrite) return;
     setValue(value - step);
     await commit();
   });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnPlus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   btnPlus.addEventListener('click', async () => {
     if (!canWrite) return;
     setValue(value + step);
@@ -6025,6 +7127,18 @@ function nwCreateValueGauge(opts) {
     btnPlus.style.cursor = 'default';
   }
 
+  /**
+   * Code-Teil: Arrow-Funktion `pickFromClient`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: pickFromClient
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const pickFromClient = (clientX, clientY) => {
     const rect = svg.getBoundingClientRect();
     if (!rect || rect.width <= 0 || rect.height <= 0) return;
@@ -6039,23 +7153,67 @@ function nwCreateValueGauge(opts) {
     setValue(min + f * (max - min));
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `onMouseDown`
+   * Zweck: behandelt ein Ereignis oder einen API-/UI-Callback.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: onMouseDown
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const onMouseDown = (ev) => {
     if (!canWrite) return;
     ev.preventDefault();
     ev.stopPropagation();
     nwPopoverDragging = true;
     pickFromClient(ev.clientX, ev.clientY);
+    /**
+     * Code-Teil: move
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const move = (e) => pickFromClient(e.clientX, e.clientY);
+    /**
+     * Code-Teil: Arrow-Funktion `up`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: up
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const up = async () => {
       document.removeEventListener('mousemove', move);
       document.removeEventListener('mouseup', up);
       nwPopoverDragging = false;
       await commit();
     };
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'mousemove' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('mousemove', move);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'mouseup' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('mouseup', up);
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `onTouchStart`
+   * Zweck: behandelt ein Ereignis oder einen API-/UI-Callback.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: onTouchStart
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const onTouchStart = (ev) => {
     if (!canWrite) return;
     if (!ev.touches || !ev.touches.length) return;
@@ -6063,10 +7221,28 @@ function nwCreateValueGauge(opts) {
     ev.stopPropagation();
     nwPopoverDragging = true;
     pickFromClient(ev.touches[0].clientX, ev.touches[0].clientY);
+    /**
+     * Code-Teil: Arrow-Funktion `move`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: move
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const move = (e) => {
       if (!e.touches || !e.touches.length) return;
       pickFromClient(e.touches[0].clientX, e.touches[0].clientY);
     };
+    /**
+     * Code-Teil: end
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const end = async () => {
       document.removeEventListener('touchmove', move);
       document.removeEventListener('touchend', end);
@@ -6074,18 +7250,28 @@ function nwCreateValueGauge(opts) {
       nwPopoverDragging = false;
       await commit();
     };
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchmove' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('touchmove', move, { passive: false });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchend' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('touchend', end);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchcancel' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('touchcancel', end);
   };
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'mousedown' an hit. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   hit.addEventListener('mousedown', onMouseDown);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchstart' an hit. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   hit.addEventListener('touchstart', onTouchStart, { passive: false });
 
   wrap.nwSetValue = (next) => setValue(next, true);
   return wrap;
 }
-
+/**
+ * Code-Teil: nwCreateThermostatGauge
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCreateThermostatGauge(opts) {
   const min = Number(opts && opts.min);
   const max = Number(opts && opts.max);
@@ -6131,6 +7317,18 @@ function nwCreateThermostatGauge(opts) {
   grad.setAttribute('x2', String(cx + r));
   grad.setAttribute('y2', String(cy));
 
+  /**
+   * Code-Teil: Arrow-Funktion `mkStop`
+   * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: mkStop
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const mkStop = (off, col) => {
     const s = document.createElementNS(NS, 'stop');
     s.setAttribute('offset', off);
@@ -6253,6 +7451,18 @@ function nwCreateThermostatGauge(opts) {
   minmax.appendChild(maxEl);
   wrap.appendChild(minmax);
 
+  /**
+   * Code-Teil: Arrow-Funktion `setValue`
+   * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: setValue
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const setValue = (v) => {
     value = nwClampNumber(v, min, max);
     value = nwRoundToStep(value, step);
@@ -6274,6 +7484,18 @@ function nwCreateThermostatGauge(opts) {
     knob.setAttribute('cy', y.toFixed(2));
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `commit`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: commit
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const commit = async () => {
     if (!canWrite || !onCommit) return;
     await onCommit(value);
@@ -6281,18 +7503,34 @@ function nwCreateThermostatGauge(opts) {
 
   setValue(value);
 
+  /**
+   * Code-Teil: Arrow-Funktion `stop`
+   * Zweck: verwaltet Lifecycle/Ressourcen wie Server, Timer oder SSE-Verbindungen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: stop
+   * Zweck: Stoppt Prozess, Timer, Engine oder Verbindung.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const stop = (ev) => ev.stopPropagation();
 
   // Buttons
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnMinus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   btnMinus.addEventListener('click', stop);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnPlus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   btnPlus.addEventListener('click', stop);
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnMinus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   btnMinus.addEventListener('click', async () => {
     if (!canWrite) return;
     setValue(value - step);
     await commit();
   });
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnPlus. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   btnPlus.addEventListener('click', async () => {
     if (!canWrite) return;
     setValue(value + step);
@@ -6308,6 +7546,18 @@ function nwCreateThermostatGauge(opts) {
     btnPlus.style.cursor = 'default';
   }
 
+  /**
+   * Code-Teil: Arrow-Funktion `pickFromClient`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: pickFromClient
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const pickFromClient = (clientX, clientY) => {
     const rect = svg.getBoundingClientRect();
     if (!rect || rect.width <= 0 || rect.height <= 0) return;
@@ -6326,6 +7576,18 @@ function nwCreateThermostatGauge(opts) {
     setValue(v);
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `onMouseDown`
+   * Zweck: behandelt ein Ereignis oder einen API-/UI-Callback.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: onMouseDown
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const onMouseDown = (ev) => {
     if (!canWrite) return;
     ev.preventDefault();
@@ -6334,7 +7596,25 @@ function nwCreateThermostatGauge(opts) {
 
     pickFromClient(ev.clientX, ev.clientY);
 
+    /**
+     * Code-Teil: Arrow-Funktion `move`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: move
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const move = (e) => pickFromClient(e.clientX, e.clientY);
+    /**
+     * Code-Teil: up
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const up = async () => {
       document.removeEventListener('mousemove', move);
       document.removeEventListener('mouseup', up);
@@ -6342,10 +7622,24 @@ function nwCreateThermostatGauge(opts) {
       await commit();
     };
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'mousemove' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('mousemove', move);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'mouseup' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('mouseup', up);
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `onTouchStart`
+   * Zweck: behandelt ein Ereignis oder einen API-/UI-Callback.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: onTouchStart
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const onTouchStart = (ev) => {
     if (!canWrite) return;
     if (!ev.touches || !ev.touches.length) return;
@@ -6356,11 +7650,28 @@ function nwCreateThermostatGauge(opts) {
 
     pickFromClient(ev.touches[0].clientX, ev.touches[0].clientY);
 
+    /**
+     * Code-Teil: Arrow-Funktion `move`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: move
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const move = (e) => {
       if (!e.touches || !e.touches.length) return;
       pickFromClient(e.touches[0].clientX, e.touches[0].clientY);
     };
-
+    /**
+     * Code-Teil: end
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const end = async () => {
       document.removeEventListener('touchmove', move);
       document.removeEventListener('touchend', end);
@@ -6369,18 +7680,27 @@ function nwCreateThermostatGauge(opts) {
       await commit();
     };
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchmove' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('touchmove', move, { passive: false });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchend' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('touchend', end);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchcancel' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('touchcancel', end);
   };
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'mousedown' an hit. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   hit.addEventListener('mousedown', onMouseDown);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchstart' an hit. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   hit.addEventListener('touchstart', onTouchStart, { passive: false });
 
   return wrap;
 }
-
-
+/**
+ * Code-Teil: nwCreatePlayerPopover
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCreatePlayerPopover(dev, canWrite) {
   const wrap = document.createElement('div');
   wrap.className = 'nw-sh-player';
@@ -6469,6 +7789,18 @@ function nwCreatePlayerPopover(dev, canWrite) {
     hint.className = 'nw-sh-player__zoneshint';
     zWrap.appendChild(hint);
 
+    /**
+     * Code-Teil: Arrow-Funktion `renderZones`
+     * Zweck: rendert sichtbare UI-/Diagramm-Elemente aus bereits normalisierten Daten.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: renderZones
+     * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const renderZones = () => {
       const sel = nwGetSelectedAudioZones(dev.id);
       const selSet = new Set(sel);
@@ -6481,6 +7813,7 @@ function nwCreatePlayerPopover(dev, canWrite) {
         b.className = 'nw-sh-chip nw-sh-chip--mini' + (selSet.has(z.id) ? ' nw-sh-chip--active' : '');
         b.textContent = name;
         b.title = 'Zone hinzufügen/entfernen';
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         b.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -6505,6 +7838,7 @@ function nwCreatePlayerPopover(dev, canWrite) {
         : 'Nur diese Zone.';
     };
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an partyBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     partyBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -6513,6 +7847,7 @@ function nwCreatePlayerPopover(dev, canWrite) {
       renderZones();
     });
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an soloBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     soloBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -6528,6 +7863,18 @@ function nwCreatePlayerPopover(dev, canWrite) {
   const controls = document.createElement('div');
   controls.className = 'nw-sh-player__controls';
 
+  /**
+   * Code-Teil: Arrow-Funktion `mkBtn`
+   * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: mkBtn
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const mkBtn = (label, text, onClick, extraClass) => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -6536,6 +7883,7 @@ function nwCreatePlayerPopover(dev, canWrite) {
     b.title = label;
     b.setAttribute('aria-label', label);
     if (!canWrite) b.disabled = true;
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     b.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -6544,22 +7892,18 @@ function nwCreatePlayerPopover(dev, canWrite) {
     });
     return b;
   };
-
   const btnPrev = mkBtn('Zurück', '⏮', async () => {
     await nwPlayerActionMulti(dev.id, 'prev');
     nwRefreshDevicesSoon(100);
   });
-
   const btnPlay = mkBtn(st.on ? 'Pause' : 'Play', st.on ? '⏸' : '▶', async () => {
     await nwPlayerActionMulti(dev.id, 'toggle');
     nwRefreshDevicesSoon(100);
   }, 'nw-sh-player__btn--primary');
-
   const btnNext = mkBtn('Weiter', '⏭', async () => {
     await nwPlayerActionMulti(dev.id, 'next');
     nwRefreshDevicesSoon(100);
   });
-
   const btnStop = mkBtn('Stopp', '⏹', async () => {
     await nwPlayerActionMulti(dev.id, 'stop');
     nwRefreshDevicesSoon(120);
@@ -6601,11 +7945,13 @@ function nwCreatePlayerPopover(dev, canWrite) {
   slider.value = String(vol);
   slider.className = 'nw-sh-slider nw-sh-slider--big';
   slider.disabled = !canWrite || !io.volumeWriteId;
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an slider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   slider.addEventListener('input', () => {
     const v = Number(slider.value);
     const pct = Math.round(((v - volMin) / Math.max(1, (volMax - volMin))) * 100);
     volVal.textContent = String(pct) + ' %';
   });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an slider. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   slider.addEventListener('change', async () => {
     if (!canWrite || !io.volumeWriteId) return;
     const v = Number(slider.value);
@@ -6635,11 +7981,24 @@ function nwCreatePlayerPopover(dev, canWrite) {
     const tabs = document.createElement('div');
     tabs.className = 'nw-sh-player__libtabs';
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkTab`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkTab
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkTab = (kind, label) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'nw-sh-chip nw-sh-chip--mini';
       b.textContent = label;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       b.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -6665,6 +8024,7 @@ function nwCreatePlayerPopover(dev, canWrite) {
     favBtn.className = 'nw-sh-chip nw-sh-chip--mini';
     favBtn.textContent = '★ Favoriten';
     favBtn.title = 'Nur Favoriten anzeigen / Reihenfolge anpassen';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an favBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     favBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -6683,6 +8043,7 @@ function nwCreatePlayerPopover(dev, canWrite) {
     search.className = 'nw-input nw-sh-player__search';
     search.placeholder = 'Suchen…';
     search.autocomplete = 'off';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an search. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     search.addEventListener('input', () => {
       query = String(search.value || '').trim();
       renderList();
@@ -6697,6 +8058,18 @@ function nwCreatePlayerPopover(dev, canWrite) {
     recentWrap.className = 'nw-sh-player__recent';
     lib.appendChild(recentWrap);
 
+    /**
+     * Code-Teil: Arrow-Funktion `getItems`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: getItems
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const getItems = () => {
       const arr = (tab === 'playlist') ? playlists : stations;
       return arr
@@ -6709,6 +8082,18 @@ function nwCreatePlayerPopover(dev, canWrite) {
         .filter(Boolean);
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `renderRecent`
+     * Zweck: rendert sichtbare UI-/Diagramm-Elemente aus bereits normalisierten Daten.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: renderRecent
+     * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const renderRecent = () => {
       nwClear(recentWrap);
       const recent = nwLoadPlayerRecent(dev.id);
@@ -6728,6 +8113,7 @@ function nwCreatePlayerPopover(dev, canWrite) {
         b.textContent = String(r.name || '').trim() || '—';
         b.title = 'Erneut starten';
         b.disabled = !canWrite;
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         b.addEventListener('click', async (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -6745,6 +8131,18 @@ function nwCreatePlayerPopover(dev, canWrite) {
       recentWrap.appendChild(chips);
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `renderList`
+     * Zweck: rendert sichtbare UI-/Diagramm-Elemente aus bereits normalisierten Daten.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: renderList
+     * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const renderList = () => {
       const items = getItems();
       const q = String(query || '').trim().toLowerCase();
@@ -6755,6 +8153,18 @@ function nwCreatePlayerPopover(dev, canWrite) {
       const map = new Map();
       items.forEach((it) => map.set(it.valueStr, it));
 
+      /**
+       * Code-Teil: Arrow-Funktion `matchesQuery`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: matchesQuery
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const matchesQuery = (it) => !q || String(it.name || '').toLowerCase().includes(q);
 
       let shown;
@@ -6793,6 +8203,7 @@ function nwCreatePlayerPopover(dev, canWrite) {
         fav.className = 'nw-sh-player__iconbtn';
         fav.textContent = favSet.has(it.valueStr) ? '★' : '☆';
         fav.title = 'Favorit umschalten';
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an fav. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         fav.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -6805,6 +8216,7 @@ function nwCreatePlayerPopover(dev, canWrite) {
         btn.className = 'nw-sh-player__rowbtn';
         btn.textContent = it.name;
         btn.disabled = !canWrite;
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         btn.addEventListener('click', async (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -6828,6 +8240,7 @@ function nwCreatePlayerPopover(dev, canWrite) {
           up.className = 'nw-sh-player__iconbtn';
           up.textContent = '↑';
           up.title = 'Nach oben';
+          // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an up. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
           up.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -6840,6 +8253,7 @@ function nwCreatePlayerPopover(dev, canWrite) {
           down.className = 'nw-sh-player__iconbtn';
           down.textContent = '↓';
           down.title = 'Nach unten';
+          // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an down. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
           down.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -6855,6 +8269,18 @@ function nwCreatePlayerPopover(dev, canWrite) {
       });
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `render`
+     * Zweck: rendert sichtbare UI-/Diagramm-Elemente aus bereits normalisierten Daten.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: render
+     * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const render = () => {
       if (tabStations) tabStations.classList.toggle('nw-sh-chip--active', tab === 'station');
       if (tabPlaylists) tabPlaylists.classList.toggle('nw-sh-chip--active', tab === 'playlist');
@@ -6871,8 +8297,12 @@ function nwCreatePlayerPopover(dev, canWrite) {
 
   return wrap;
 }
-
-
+/**
+ * Code-Teil: nwCreateHalfDial
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCreateHalfDial(opts) {
   const min = Number(opts && opts.min);
   const max = Number(opts && opts.max);
@@ -6939,6 +8369,18 @@ function nwCreateHalfDial(opts) {
   const cy = 100;
   const r = 80;
 
+  /**
+   * Code-Teil: Arrow-Funktion `setValue`
+   * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: setValue
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const setValue = (v) => {
     value = nwClampNumber(nwRoundToStep(v, step), min, max);
     valEl.textContent = nwFormatNumberDE(value, 1) + '°C';
@@ -6957,6 +8399,18 @@ function nwCreateHalfDial(opts) {
   setValue(value);
 
   // Pointer events
+  /**
+   * Code-Teil: Arrow-Funktion `posToValue`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: posToValue
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const posToValue = (ev) => {
     const rect = svg.getBoundingClientRect();
     if (!rect || !rect.width || !rect.height) return value;
@@ -6978,6 +8432,18 @@ function nwCreateHalfDial(opts) {
     return v;
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `onDown`
+   * Zweck: behandelt ein Ereignis oder einen API-/UI-Callback.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: onDown
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const onDown = (ev) => {
     if (!canWrite) return;
     nwPopoverDragging = true;
@@ -6987,6 +8453,18 @@ function nwCreateHalfDial(opts) {
     ev.stopPropagation();
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `onMove`
+   * Zweck: behandelt ein Ereignis oder einen API-/UI-Callback.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: onMove
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const onMove = (ev) => {
     if (!canWrite) return;
     if (!nwPopoverDragging) return;
@@ -6995,6 +8473,18 @@ function nwCreateHalfDial(opts) {
     ev.stopPropagation();
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `onUp`
+   * Zweck: behandelt ein Ereignis oder einen API-/UI-Callback.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: onUp
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const onUp = async (ev) => {
     if (!canWrite) return;
     if (!nwPopoverDragging) return;
@@ -7010,9 +8500,13 @@ function nwCreateHalfDial(opts) {
     ev.stopPropagation();
   };
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointerdown' an svg. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   svg.addEventListener('pointerdown', onDown);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointermove' an svg. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   svg.addEventListener('pointermove', onMove);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointerup' an svg. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   svg.addEventListener('pointerup', onUp);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointercancel' an svg. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   svg.addEventListener('pointercancel', () => { nwPopoverDragging = false; });
 
   // Accessibility hint
@@ -7026,7 +8520,12 @@ function nwCreateHalfDial(opts) {
 
   return wrap;
 }
-
+/**
+ * Code-Teil: nwRenderRooms
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRenderRooms(devices) {
   const wrap = document.getElementById('nw-smarthome-rooms');
   if (!wrap) return;
@@ -7061,6 +8560,18 @@ function nwRenderRooms(devices) {
     return String(na || '').toLowerCase().localeCompare(String(nb || '').toLowerCase());
   });
 
+  /**
+   * Code-Teil: Arrow-Funktion `renderRoomSection`
+   * Zweck: rendert sichtbare UI-/Diagramm-Elemente aus bereits normalisierten Daten.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: renderRoomSection
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const renderRoomSection = (g) => {
     const section = document.createElement('section');
     section.className = 'nw-sh-room';
@@ -7170,7 +8681,12 @@ function nwRenderRooms(devices) {
     wrap.appendChild(floorSection);
   });
 }
-
+/**
+ * Code-Teil: nwComputeFunctionSummary
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwComputeFunctionSummary(funcName, funcDevices) {
   const name = String(funcName || '').trim();
   const devs = Array.isArray(funcDevices) ? funcDevices : [];
@@ -7187,7 +8703,12 @@ function nwComputeFunctionSummary(funcName, funcDevices) {
   if (onCount > 0) return `${total} Geräte · ${onCount} an`;
   return `${total} Geräte`;
 }
-
+/**
+ * Code-Teil: nwRenderFunctions
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRenderFunctions(devices) {
   const wrap = document.getElementById('nw-smarthome-rooms');
   if (!wrap) return;
@@ -7255,7 +8776,12 @@ function nwRenderFunctions(devices) {
     wrap.appendChild(section);
   });
 }
-
+/**
+ * Code-Teil: nwFindFloorPageId
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwFindFloorPageId(floorId) {
   const fid = nwNormalizeId(floorId);
   const directId = fid ? `floor_${fid}` : 'floor_unassigned';
@@ -7266,17 +8792,26 @@ function nwFindFloorPageId(floorId) {
   const match = pages.find(p => p && nwIsFloorPage(p) && nwGetFloorIdFromPage(p) === fid);
   return match ? match.id : directId;
 }
-
+/**
+ * Code-Teil: nwFindRoomPageId
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwFindRoomPageId(roomId) {
   const rid = nwNormalizeId(roomId);
   const directId = rid ? `room_${rid}` : '';
   const pages = Array.isArray(nwPageState.pages) ? nwPageState.pages : [];
   if (directId && pages.some(p => p && p.id === directId)) return directId;
-
   const match = pages.find(p => p && Array.isArray(p.roomIds) && p.roomIds.length === 1 && nwNormalizeId(p.roomIds[0]) === rid);
   return match ? match.id : directId;
 }
-
+/**
+ * Code-Teil: nwRenderHome
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRenderHome(devices) {
   const wrap = document.getElementById('nw-smarthome-rooms');
   if (!wrap) return;
@@ -7339,6 +8874,18 @@ function nwRenderHome(devices) {
   const floors = Array.isArray(cfg.floors) ? cfg.floors.slice() : [];
   const rooms = Array.isArray(cfg.rooms) ? cfg.rooms.slice() : [];
 
+  /**
+   * Code-Teil: Arrow-Funktion `sortByOrderName`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: sortByOrderName
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const sortByOrderName = (a, b) => {
     const oa = Number.isFinite(+a.order) ? +a.order : 0;
     const ob = Number.isFinite(+b.order) ? +b.order : 0;
@@ -7350,7 +8897,6 @@ function nwRenderHome(devices) {
     .map((f, idx) => ({ ...f, order: (typeof f.order === 'number') ? f.order : (idx + 1) }))
     .slice()
     .sort(sortByOrderName);
-
   const unassignedRooms = rooms.filter(r => !nwNormalizeId(r && r.floorId));
   const hasUnassignedDevices = all.some(d => nwGetDeviceFloorId(d) === '');
 
@@ -7382,7 +8928,6 @@ function nwRenderHome(devices) {
       .filter(r => (fid ? (nwNormalizeId(r && r.floorId) === fid) : !nwNormalizeId(r && r.floorId)))
       .slice()
       .sort(sortByOrderName);
-
     const devCount = all.filter(d => nwGetDeviceFloorId(d) === fid).length;
     const roomCount = roomsInFloor.length;
 
@@ -7422,6 +8967,7 @@ function nwRenderHome(devices) {
       chip.innerHTML = `${r.icon ? `<span class="nw-sh-room-chip__icon">${nwStaticIconHtml(r.icon)}</span>` : ''}<span class="nw-sh-room-chip__label"></span>`;
       const lbl = chip.querySelector('.nw-sh-room-chip__label');
       if (lbl) lbl.textContent = String(r.name || r.id);
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an chip. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       chip.addEventListener('click', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
@@ -7436,6 +8982,7 @@ function nwRenderHome(devices) {
       more.type = 'button';
       more.className = 'nw-sh-room-chip nw-sh-room-chip--more';
       more.textContent = `+${roomsInFloor.length - maxChips}`;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an more. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       more.addEventListener('click', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
@@ -7447,11 +8994,25 @@ function nwRenderHome(devices) {
 
     tile.appendChild(roomsRow);
 
+    /**
+     * Code-Teil: Arrow-Funktion `go`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: go
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const go = () => {
       const pid = nwFindFloorPageId(fid);
       if (pid) nwActivatePage(pid);
     };
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an tile. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     tile.addEventListener('click', go);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an tile. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     tile.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
@@ -7476,11 +9037,21 @@ function nwRenderHome(devices) {
 }
 
 // ---------- Sidebar Pages (Navigation Presets) ----------
-
+/**
+ * Code-Teil: nwNormalizeId
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwNormalizeId(s) {
   return String(s || '').trim();
 }
-
+/**
+ * Code-Teil: nwBuildMetaFromConfig
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwBuildMetaFromConfig(cfg) {
   nwShMeta.floorsById = {};
   nwShMeta.floorIdByName = {};
@@ -7517,7 +9088,12 @@ function nwBuildMetaFromConfig(cfg) {
     nwShMeta.funcIdByName[name] = id;
   });
 }
-
+/**
+ * Code-Teil: nwBuildDefaultPagesFromConfig
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwBuildDefaultPagesFromConfig(cfg) {
   const pages = [];
 
@@ -7662,7 +9238,6 @@ function nwBuildDefaultPagesFromConfig(cfg) {
         if (oa !== ob) return oa - ob;
         return nwSortBy(String(a.name || ''), String(b.name || ''));
       });
-
     const roomIds = roomsSorted.map((r) => nwNormalizeId(r && r.id)).filter(Boolean);
 
     pages.push({
@@ -7698,7 +9273,12 @@ function nwBuildDefaultPagesFromConfig(cfg) {
 
   return pages;
 }
-
+/**
+ * Code-Teil: nwIsHomePage
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwIsHomePage(page) {
   if (!page) return false;
   const id = String(page.id || '').trim().toLowerCase();
@@ -7707,20 +9287,23 @@ function nwIsHomePage(page) {
   if (title === 'home' || title === 'übersicht' || title === 'uebersicht') return true;
   return false;
 }
-
+/**
+ * Code-Teil: nwIsLegacyFlatRoomPages
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwIsLegacyFlatRoomPages(pages, cfg) {
   // Legacy auto-default: Home + one page per room, all at root level.
   const arr = Array.isArray(pages) ? pages : [];
   const rooms = Array.isArray(cfg && cfg.rooms) ? cfg.rooms : [];
   if (!arr.length || !rooms.length) return false;
-
   const hasHome = arr.some((p) => nwIsHomePage(p));
   if (!hasHome) return false;
 
   // No nesting, no floors, no other filter presets.
   if (arr.some((p) => p && p.parentId)) return false;
   if (arr.some((p) => p && String(p.id || '').startsWith('floor_'))) return false;
-
   const others = arr.filter((p) => p && !nwIsHomePage(p));
   if (!others.length) return false;
 
@@ -7747,7 +9330,12 @@ function nwIsLegacyFlatRoomPages(pages, cfg) {
 
   return (floors && floors.length) || roomsHaveFloors;
 }
-
+/**
+ * Code-Teil: nwGetPagesFromConfig
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetPagesFromConfig(cfg) {
   const pages = Array.isArray(cfg && cfg.pages) ? cfg.pages : [];
 
@@ -7781,7 +9369,12 @@ function nwGetPagesFromConfig(cfg) {
   }
   return nwBuildDefaultPagesFromConfig(cfg);
 }
-
+/**
+ * Code-Teil: nwSetSidebarOpen
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSetSidebarOpen(open) {
   const sidebar = document.getElementById('nwShSidebar');
   const overlay = document.getElementById('nwShOverlay');
@@ -7791,11 +9384,17 @@ function nwSetSidebarOpen(open) {
   sidebar.classList.toggle('nw-sh-sidebar--open', isOpen);
   overlay.style.display = isOpen ? 'block' : 'none';
 }
-
+/**
+ * Code-Teil: nwInitSidebarUi
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwInitSidebarUi() {
   const btn = document.getElementById('nwShNavToggle');
   const overlay = document.getElementById('nwShOverlay');
   if (btn) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -7805,12 +9404,15 @@ function nwInitSidebarUi() {
     });
   }
   if (overlay) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an overlay. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     overlay.addEventListener('click', () => nwSetSidebarOpen(false));
   }
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') nwSetSidebarOpen(false);
   });
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'resize' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   window.addEventListener('resize', () => {
     // If we leave mobile breakpoint, ensure overlay/drawer state is reset
     if (window.innerWidth > 900) nwSetSidebarOpen(false);
@@ -7823,13 +9425,17 @@ function nwInitSidebarUi() {
 // The SmartHome VIS must never crash due to missing helpers. Earlier builds
 // referenced these functions but did not ship them, which prevented the whole
 // page from rendering.
-
+/**
+ * Code-Teil: nwUpdatePageTitle
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwUpdatePageTitle() {
   const el = document.getElementById('nwShPageTitle');
   const subEl = document.getElementById('nwShPageSubTitle');
   const pages = Array.isArray(nwPageState.pages) ? nwPageState.pages : [];
   const activeId = nwPageState.activeId;
-
   const page = pages.find((p) => p && p.id === activeId) || pages[0] || null;
   const title = (page && page.title) ? String(page.title) : 'SmartHome';
 
@@ -7872,11 +9478,21 @@ function nwUpdatePageTitle() {
     // ignore
   }
 }
-
+/**
+ * Code-Teil: nwCloseSidebar
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCloseSidebar() {
   nwSetSidebarOpen(false);
 }
-
+/**
+ * Code-Teil: nwLoadExpandedIdsFromLs
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwLoadExpandedIdsFromLs() {
   if (nwPageState.__expandedLoaded) return;
   nwPageState.__expandedLoaded = true;
@@ -7913,8 +9529,12 @@ function nwLoadExpandedIdsFromLs() {
     // ignore
   }
 }
-
-
+/**
+ * Code-Teil: nwSaveExpandedIdsToLs
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSaveExpandedIdsToLs() {
   try {
     localStorage.setItem(NW_SH_NAV_EXPANDED_LS_KEY, JSON.stringify(Array.from(nwPageState.expandedIds || [])));
@@ -7922,7 +9542,12 @@ function nwSaveExpandedIdsToLs() {
     // ignore
   }
 }
-
+/**
+ * Code-Teil: nwEnsureAncestorsExpanded
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwEnsureAncestorsExpanded(pageId) {
   const byId = new Map((nwPageState.pages || []).map((p) => [p.id, p]));
   let cur = byId.get(pageId);
@@ -7937,7 +9562,12 @@ function nwEnsureAncestorsExpanded(pageId) {
   }
   nwSaveExpandedIdsToLs();
 }
-
+/**
+ * Code-Teil: nwToggleNavExpanded
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwToggleNavExpanded(pageId) {
   nwLoadExpandedIdsFromLs();
   if (!pageId) return;
@@ -7946,10 +9576,14 @@ function nwToggleNavExpanded(pageId) {
   nwSaveExpandedIdsToLs();
   nwRenderSidebarNav();
 }
-
+/**
+ * Code-Teil: nwResolvePageFilters
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwResolvePageFilters(page) {
   if (!page) return { roomIds: [], funcIds: [], types: [], favoritesOnly: false };
-
   const byId = new Map((nwPageState.pages || []).map((p) => [p.id, p]));
   const chain = [];
   let cur = page;
@@ -7973,19 +9607,34 @@ function nwResolvePageFilters(page) {
 
   return res;
 }
-
+/**
+ * Code-Teil: nwIsFloorPage
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwIsFloorPage(page) {
   const id = page && typeof page.id === 'string' ? page.id : '';
   return id.startsWith('floor_');
 }
-
+/**
+ * Code-Teil: nwGetFloorIdFromPage
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetFloorIdFromPage(page) {
   const id = page && typeof page.id === 'string' ? page.id : '';
   if (!id.startsWith('floor_')) return '';
   if (id === 'floor_unassigned') return '';
   return id.slice('floor_'.length);
 }
-
+/**
+ * Code-Teil: nwFilterDevicesForPage
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwFilterDevicesForPage(allDevices, page) {
   const list = Array.isArray(allDevices) ? allDevices.slice() : [];
   if (!page) return list;
@@ -8025,11 +9674,21 @@ function nwFilterDevicesForPage(allDevices, page) {
 
   return out;
 }
-
+/**
+ * Code-Teil: nwGetDevicesForPage
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetDevicesForPage(page) {
   return nwFilterDevicesForPage(nwAllDevices, page);
 }
-
+/**
+ * Code-Teil: nwUpdatePageCounts
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwUpdatePageCounts() {
   const counts = {};
   for (const p of nwPageState.pages || []) {
@@ -8038,7 +9697,12 @@ function nwUpdatePageCounts() {
   }
   nwPageState.countsById = counts;
 }
-
+/**
+ * Code-Teil: nwBuildPageTree
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwBuildPageTree(pages) {
   const byId = new Map((pages || []).map((p) => [p.id, p]));
   const children = new Map();
@@ -8054,13 +9718,30 @@ function nwBuildPageTree(pages) {
     }
   }
 
+  /**
+   * Code-Teil: Arrow-Funktion `sortFn`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: sortFn
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const sortFn = (a, b) => (a.order || 0) - (b.order || 0) || String(a.title || '').localeCompare(String(b.title || ''), 'de');
   roots.sort(sortFn);
   for (const [k, arr] of children.entries()) arr.sort(sortFn);
 
   return { byId, children, roots };
 }
-
+/**
+ * Code-Teil: nwRenderSidebarNav
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRenderSidebarNav() {
   // Backwards compatibility: HTML uses id="nwShNav" while some early page-nav
   // prototypes referenced id="nw-sh-nav". Render into whichever exists.
@@ -8074,6 +9755,18 @@ function nwRenderSidebarNav() {
 
   const { children, roots } = nwBuildPageTree(nwPageState.pages || []);
 
+  /**
+   * Code-Teil: Arrow-Funktion `renderList`
+   * Zweck: rendert sichtbare UI-/Diagramm-Elemente aus bereits normalisierten Daten.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: renderList
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const renderList = (list, depth) => {
     for (const p of list) {
       const hasChildren = children.has(p.id) && (children.get(p.id) || []).length > 0;
@@ -8100,6 +9793,7 @@ function nwRenderSidebarNav() {
       caret.textContent = '›';
       if (hasChildren) {
         caret.title = isExpanded ? 'Zuklappen' : 'Aufklappen';
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an caret. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         caret.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -8126,6 +9820,7 @@ function nwRenderSidebarNav() {
       btn.appendChild(label);
       btn.appendChild(badge);
 
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       btn.addEventListener('click', () => {
         if (p.href) {
           window.location.href = p.href;
@@ -8150,7 +9845,12 @@ function nwRenderSidebarNav() {
 
   renderList(roots, 0);
 }
-
+/**
+ * Code-Teil: nwActivatePage
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwActivatePage(pageId) {
   const id = nwNormalizeId(pageId);
   const page = nwPageState.pages.find(p => p.id === id);
@@ -8190,7 +9890,12 @@ function nwActivatePage(pageId) {
   nwRenderSidebarNav();
   nwApplyFiltersAndRender();
 }
-
+/**
+ * Code-Teil: nwLoadSmartHomeConfig
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwLoadSmartHomeConfig() {
   try {
     const data = await fetch('/api/smarthome/config', { cache: 'no-store' }).then(r => r.json());
@@ -8242,14 +9947,24 @@ async function nwLoadSmartHomeConfig() {
     }
   }
 }
-
+/**
+ * Code-Teil: nwGetDeviceRoomId
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetDeviceRoomId(dev) {
   const id = nwNormalizeId(dev && dev.roomId);
   if (id) return id;
   const name = nwNormalizeId(dev && dev.room);
   return nwShMeta.roomIdByName[name] || '';
 }
-
+/**
+ * Code-Teil: nwGetDeviceFloorId
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetDeviceFloorId(dev) {
   const direct = nwNormalizeId(dev && dev.floorId);
   if (direct) return direct;
@@ -8259,14 +9974,24 @@ function nwGetDeviceFloorId(dev) {
   const rm = nwShMeta && nwShMeta.roomsById ? nwShMeta.roomsById[rid] : null;
   return rm && rm.floorId ? nwNormalizeId(rm.floorId) : '';
 }
-
+/**
+ * Code-Teil: nwGetDeviceFuncId
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetDeviceFuncId(dev) {
   const id = nwNormalizeId(dev && dev.functionId);
   if (id) return id;
   const name = nwNormalizeId(dev && dev.function);
   return nwShMeta.funcIdByName[name] || '';
 }
-
+/**
+ * Code-Teil: nwApplyPageFilters
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwApplyPageFilters(devices) {
   let out = devices.slice();
   const p = nwFilterState.page || {};
@@ -8297,7 +10022,12 @@ function nwApplyPageFilters(devices) {
 
   return out;
 }
-
+/**
+ * Code-Teil: nwApplyFiltersAndRender
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwApplyFiltersAndRender() {
   const activePage = (nwPageState.pages || []).find(p => p && p.id === nwPageState.activeId) || null;
 
@@ -8339,7 +10069,12 @@ function nwApplyFiltersAndRender() {
 }
 
 // ---------- Auto refresh + bootstrap ----------
-
+/**
+ * Code-Teil: nwReloadDevices
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwReloadDevices(opts) {
   if (nwReloadInFlight) return;
   nwReloadInFlight = true;
@@ -8359,11 +10094,24 @@ async function nwReloadDevices(opts) {
     nwApplyFiltersAndRender();
   } catch (e) {
     console.error('SmartHome reload error:', e);
+    nwShowEmptyState(true, { enabled: nwSmartHomeEnabled, reason: 'load-error' });
+    const empty = document.getElementById('nw-smarthome-empty');
+    if (empty) {
+      empty.innerHTML = [
+        '⚠️ <b>SmartHome-Daten konnten nicht geladen werden.</b><br/>',
+        '<span style="opacity:0.85">Bitte Verbindung/API prüfen und die Seite neu laden.</span>'
+      ].join('');
+    }
   } finally {
     nwReloadInFlight = false;
   }
 }
-
+/**
+ * Code-Teil: nwStartAutoRefresh
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwStartAutoRefresh(intervalMs) {
   const ms = (typeof intervalMs === 'number' && intervalMs > 1000) ? intervalMs : 5000;
   if (nwAutoRefreshTimer) return;
@@ -8372,26 +10120,63 @@ function nwStartAutoRefresh(intervalMs) {
     nwReloadDevices();
   }, ms);
 }
-
+/**
+ * Code-Teil: nwStopAutoRefresh
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwStopAutoRefresh() {
   if (!nwAutoRefreshTimer) return;
   try { clearInterval(nwAutoRefreshTimer); } catch (_e) {}
   nwAutoRefreshTimer = null;
 }
-
+/**
+ * Code-Teil: nwInitMenu
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwInitMenu() {
   const menuBtn = document.getElementById('menuBtn');
   const menu = document.getElementById('menuDropdown');
   if (menuBtn && menu) {
+    /**
+     * Code-Teil: Arrow-Funktion `close`
+     * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: close
+     * Zweck: Schließt Dialoge/Seiten/Popovers.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const close = () => menu.classList.add('hidden');
+    /**
+     * Code-Teil: toggle
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const toggle = () => menu.classList.toggle('hidden');
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menuBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     menuBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); toggle(); });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menu. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     menu.addEventListener('click', (e) => e.stopPropagation());
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('click', () => close());
   }
 }
-
+/**
+ * Code-Teil: nwLoadUiConfigFlags
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwLoadUiConfigFlags() {
   try {
     const cfg = await fetch('/config', { cache: 'no-store' }).then(r => r.json());
@@ -8420,7 +10205,12 @@ async function nwLoadUiConfigFlags() {
     // ignore
   }
 }
-
+/**
+ * Code-Teil: nwBootstrap
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von SmartHome: Räume, Geräte, Kacheln, Popover; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwBootstrap() {
   nwInitMenu();
 
@@ -8467,6 +10257,7 @@ async function nwBootstrap() {
   await nwReloadDevices({ force: true });
   nwStartAutoRefresh(5000);
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'visibilitychange' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       nwStopAutoRefresh();
@@ -8479,4 +10270,5 @@ async function nwBootstrap() {
   });
 }
 
+// Ereignis-Kommentar: Bindet das UI-Ereignis 'DOMContentLoaded' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
 document.addEventListener('DOMContentLoaded', nwBootstrap);

@@ -1,7 +1,44 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: www/report-common.js
+ * Rolle im Projekt: Frontend-Skript.
+ * Zweck: Browserseitiger Code für eine Kunden-/Installerseite; liest APIs und aktualisiert DOM/UI.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Frontend-Skript einer VIS-/Kundenseite oder eines Reports.
+ * Zusammenhänge:
+ * - Spricht mit APIs aus main.js und rendert Daten aus /api/state, /config oder Reports.
+ * - Styles liegen in www/styles.css bzw. Report-CSS-Dateien.
+ * Wartungshinweise:
+ * - Feature-Sichtbarkeit und Rollen beachten; Kundenfrontend darf keine Installerfunktionen öffnen.
+ */
+
 (function(){
+  /**
+   * Code-Teil: el
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function el(id){ return document.getElementById(id); }
 
   const nfCache = new Map();
+  /**
+   * Code-Teil: getNf
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function getNf(decimals){
     const key = String(decimals);
     let nf = nfCache.get(key);
@@ -14,43 +51,83 @@
     }
     return nf;
   }
-
+  /**
+   * Code-Teil: fmtNum
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function fmtNum(value, decimals, fallback = '—'){
     const n = Number(value);
     return Number.isFinite(n) ? getNf(decimals).format(n) : fallback;
   }
-
+  /**
+   * Code-Teil: fmtMoney
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function fmtMoney(value, fallback = '—'){
     const n = Number(value);
     return Number.isFinite(n) ? (getNf(2).format(n) + ' €') : fallback;
   }
-
+  /**
+   * Code-Teil: fmtPrice
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function fmtPrice(value, fallback = '—'){
     const n = Number(value);
     return Number.isFinite(n) ? (getNf(2).format(n) + ' €/kWh') : fallback;
   }
-
+  /**
+   * Code-Teil: fmtKwh
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function fmtKwh(value, fallback = '—'){
     const n = Number(value);
     return Number.isFinite(n) ? (getNf(2).format(n) + ' kWh') : fallback;
   }
-
+  /**
+   * Code-Teil: fmtPower
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function fmtPower(value, fallback = '—'){
     const n = Number(value);
     if (!Number.isFinite(n)) return fallback;
     if (Math.abs(n) >= 1000) return getNf(1).format(n / 1000) + ' kW';
     return getNf(0).format(n) + ' W';
   }
-
+  /**
+   * Code-Teil: pad2
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function pad2(n){ return String(n).padStart(2, '0'); }
-
+  /**
+   * Code-Teil: toInputValue
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function toInputValue(ms){
     const ts = Number(ms);
     const d = Number.isFinite(ts) ? new Date(ts) : new Date();
     const local = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
     return local.toISOString().slice(0, 16);
   }
-
+  /**
+   * Code-Teil: parseInputValue
+   * Zweck: Parst Rohdaten in ein sicheres internes Format.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function parseInputValue(raw, fallbackMs){
     if (raw == null || raw === '') return Number(fallbackMs) || Date.now();
     const s = String(raw).trim();
@@ -60,25 +137,45 @@
     if (Number.isFinite(n)) return n < 1e12 ? n * 1000 : n;
     return Number(fallbackMs) || Date.now();
   }
-
+  /**
+   * Code-Teil: fmtDateTime
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function fmtDateTime(ms, fallback = '—'){
     const ts = Number(ms);
     if (!Number.isFinite(ts) || ts <= 0) return fallback;
     try { return new Date(ts).toLocaleString('de-DE'); } catch (_e) { return fallback; }
   }
-
+  /**
+   * Code-Teil: fmtDate
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function fmtDate(ms, fallback = '—'){
     const ts = Number(ms);
     if (!Number.isFinite(ts) || ts <= 0) return fallback;
     try { return new Date(ts).toLocaleDateString('de-DE'); } catch (_e) { return fallback; }
   }
-
+  /**
+   * Code-Teil: fmtTime
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function fmtTime(ms, fallback = '—'){
     const ts = Number(ms);
     if (!Number.isFinite(ts) || ts <= 0) return fallback;
     try { return new Date(ts).toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit' }); } catch (_e) { return fallback; }
   }
-
+  /**
+   * Code-Teil: setUrlParams
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setUrlParams(params){
     try {
       const url = new URL(window.location.href);
@@ -90,11 +187,21 @@
       window.history.replaceState({}, '', url.toString());
     } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: getQuery
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function getQuery(name){
     try { return new URL(window.location.href).searchParams.get(name); } catch (_e) { return null; }
   }
-
+  /**
+   * Code-Teil: downloadText
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function downloadText(filename, text, type = 'text/plain;charset=utf-8'){
     const blob = new Blob([text == null ? '' : String(text)], { type });
     const url = URL.createObjectURL(blob);
@@ -106,7 +213,12 @@
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1200);
   }
-
+  /**
+   * Code-Teil: escapeHtml
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function escapeHtml(value){
     return String(value == null ? '' : value)
       .replace(/&/g, '&amp;')
@@ -115,16 +227,24 @@
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
   }
-
+  /**
+   * Code-Teil: setupTopbar
+   * Zweck: Bereitet Konfiguration/Eventbindung für diesen Bereich vor.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setupTopbar(activeTab = 'history'){
     const menuBtn = el('menuBtn');
     const menuDropdown = el('menuDropdown');
     if (menuBtn && menuDropdown){
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menuBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       menuBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         menuDropdown.classList.toggle('hidden');
       });
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       document.addEventListener('click', () => menuDropdown.classList.add('hidden'));
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menuDropdown. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       menuDropdown.addEventListener('click', (e) => e.stopPropagation());
     }
 

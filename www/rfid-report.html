@@ -1,4 +1,19 @@
+<!--
+  Datei: www/rfid-report.html
+  Rolle: Code-Datei
+  Zweck: Allgemeiner Projektcode; genaue Verantwortung ergibt sich aus Pfad und Funktionsnamen.
+  Wartung: HTML-IDs/Klassen sind Vertragsstellen für www/*.js und CSS. Nicht ohne Suche nach Referenzen ändern.
+-->
 <!doctype html>
+<!--
+  NexoWatt Code-Kommentar (DE)
+  Zweck: Report-Seite: Druck-/PDF-/CSV-nahe Auswertung für History, EVCS, Tarif, §14a oder RFID.
+  Zusammenhänge:
+  - Logik liegt in gleichnamiger .js-Datei und gemeinsamen Report-Hilfen.
+  - Daten kommen aus Report-APIs in main.js.
+  Wartungshinweise:
+  - Drucklayout und Tabellenbreiten beachten.
+-->
 <html lang="de">
 <head>
   <meta charset="utf-8"/>
@@ -43,7 +58,8 @@
   </style>
 </head>
 <body class="nw-cockpit-page nw-cockpit-skin nw-page-rfid-report">
-  <header class="topbar no-print">
+  <!-- Abschnitt: Kopfbereich/Navigation. Wird durch CSS und teils durch JS-Menülogik gesteuert. -->
+<header class="topbar no-print">
     <div class="brand"><a href="/" aria-label="NexoWatt Live"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></a></div>
     <button aria-label="Menü" id="menuBtn">☰</button>
     <h1>NexoWatt EMS</h1>

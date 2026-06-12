@@ -1,4 +1,20 @@
 /*
+ * Datei: www/year-report.css
+ * Rolle: Code-Datei
+ * Zweck: Allgemeiner Projektcode; genaue Verantwortung ergibt sich aus Pfad und Funktionsnamen.
+ * Wartung: Diese Styles hängen an festen HTML-Klassen/IDs. Vor Änderungen betroffene Seiten mobil und Desktop prüfen.
+ */
+/*
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Stylesheet für Kunden-/VIS-Seiten, Reports oder mobile Layouts.
+ * Zusammenhänge:
+ * - HTML-Struktur liegt in www/*.html, Logik in www/*.js.
+ * - Responsivität muss Desktop, Tablet und Smartphone abdecken.
+ * Wartungshinweise:
+ * - Keine fachliche Logik hier; nur Darstellung und Sichtbarkeit.
+ */
+
+/*
   Jahresreport (Historie): Mehrjahresübersicht als Tabelle
   - nutzt die globalen Styles (styles.css) und die EVCS-Report Table-Basics
   - ergänzt nur Tabs + Print-Optimierung

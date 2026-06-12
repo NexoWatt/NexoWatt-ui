@@ -1,3 +1,27 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: ems/reasons.js
+ * Rolle im Projekt: Code-Datei.
+ * Zweck: Allgemeiner Projektcode; genaue Verantwortung ergibt sich aus Pfad und Funktionsnamen.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: JavaScript-/JSX-Datei des NexoWatt-Adapters.
+ * Zusammenhänge:
+ * - Teil des Adaptercodes; genaue Nutzung ergibt sich aus Importen und Dateipfad.
+ * Wartungshinweise:
+ * - Vor Änderungen prüfen, welche Datei diese Logik importiert oder über API nutzt.
+ */
+
 'use strict';
 
 /**
@@ -56,6 +80,12 @@ const ReasonCodes = Object.freeze({
  * Unknown reasons are returned as an UPPERCASE string.
  * @param {any} input
  * @returns {string}
+ */
+/**
+ * Code-Teil: normalizeReason
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 function normalizeReason(input) {
     const raw = (input === null || input === undefined) ? '' : String(input);
@@ -132,6 +162,12 @@ const ReasonTextDe = Object.freeze({
 /**
  * Human-readable German explanation for a reason code (for logs/UI).
  * Keeps canonical codes intact (code remains the source of truth).
+ */
+/**
+ * Code-Teil: reasonToGerman
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 function reasonToGerman(code) {
     const c = normalizeReason(code);

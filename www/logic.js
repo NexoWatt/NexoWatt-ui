@@ -1,3 +1,28 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: www/logic.js
+ * Rolle im Projekt: NexoLogic-Frontend.
+ * Zweck: Stellt den visuellen Logik-Editor für Automatisierungen bereit.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: NexoLogic-Editor im Installerbereich: visuelle Logikblöcke, Verbindungen und Speicherung der Automationslogik.
+ * Zusammenhänge:
+ * - Spricht mit /api/logic/* in main.js.
+ * - Runtime-Ausführung erfolgt über ems/nexologic-engine.js.
+ * Wartungshinweise:
+ * - Nur Installerbereich; keine Kundenbedienung ohne Berechtigung.
+ */
+
 /* NexoLogic – Node/Graph Logik-Editor (Basis) */
 
 // -----------------------------
@@ -24,17 +49,57 @@ const nwLE = {
   sceneOptions: [],
 };
 
+/**
+ * Code-Teil: Arrow-Funktion `nwClamp`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+/**
+ * Code-Teil: nwClamp
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwClamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-
+/**
+ * Code-Teil: nwNow
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwNow = () => Date.now();
-
+/**
+ * Code-Teil: nwUuid
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwUuid = (pref) => {
   const r = Math.random().toString(16).slice(2);
   return `${pref}_${nwNow().toString(16)}_${r}`;
 };
 
+/**
+ * Code-Teil: Arrow-Funktion `nwSafeStr`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+/**
+ * Code-Teil: nwSafeStr
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwSafeStr = (v) => (v === undefined || v === null) ? '' : String(v);
 
+/**
+ * Code-Teil: nwBool
+ * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+ * Zusammenhang: Gehört zu Web-Frontend (statische Kunden-/Installer-Seite im Adapter-Webserver) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+ * Wartung/TypeScript: Änderungen an Signatur oder Rückgabe können abhängige Aufrufer beeinflussen; Aufrufstellen mitprüfen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+ */
 const nwBool = (v, def = false) => {
   if (typeof v === 'boolean') return v;
   if (typeof v === 'number') return v !== 0;
@@ -47,6 +112,12 @@ const nwBool = (v, def = false) => {
   return def;
 };
 
+/**
+ * Code-Teil: Arrow-Funktion `nwNum`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
 const nwNum = (v, def = 0) => {
   if (typeof v === 'number' && Number.isFinite(v)) return v;
   if (typeof v === 'string') {
@@ -56,13 +127,30 @@ const nwNum = (v, def = 0) => {
   return def;
 };
 
+/**
+ * Code-Teil: Arrow-Funktion `nwJsonClone`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+/**
+ * Code-Teil: nwJsonClone
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwJsonClone = (o) => {
   try { return JSON.parse(JSON.stringify(o)); } catch (_e) { return null; }
 };
 
 const NW_LE_NODE_W = 240;
 const NW_LE_NODE_DROP_OFFSET_Y = 24;
-
+/**
+ * Code-Teil: nwGetBoardPointFromClient
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetBoardPointFromClient(clientX, clientY) {
   const board = nwLE.el.board;
   if (!board) return null;
@@ -73,7 +161,12 @@ function nwGetBoardPointFromClient(clientX, clientY) {
     y: (clientY - boardRect.top) / z,
   };
 }
-
+/**
+ * Code-Teil: nwClampNodePosition
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwClampNodePosition(x, y, g = nwLE.graph) {
   const boardW = Math.max(800, Number(g && g.board && g.board.w) || 2400);
   const boardH = Math.max(600, Number(g && g.board && g.board.h) || 1400);
@@ -82,7 +175,12 @@ function nwClampNodePosition(x, y, g = nwLE.graph) {
     y: nwClamp(nwNum(y, 0), 0, Math.max(0, boardH - 40)),
   };
 }
-
+/**
+ * Code-Teil: nwReadPaletteBlockType
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwReadPaletteBlockType(ev) {
   try {
     const dt = ev && ev.dataTransfer;
@@ -98,7 +196,12 @@ function nwReadPaletteBlockType(ev) {
   } catch (_e) {}
   return nwSafeStr(nwLE.paletteDragType || '');
 }
-
+/**
+ * Code-Teil: nwSetStatus
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSetStatus(text, ok = true) {
   const el = nwLE.el.status;
   if (!el) return;
@@ -109,6 +212,12 @@ function nwSetStatus(text, ok = true) {
 // -----------------------------
 // Logic Library (Basis‑Bausteine)
 // -----------------------------
+/**
+ * Code-Teil: nwBuildLogicLibrary
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwBuildLogicLibrary() {
   // Port type: bool|number|any
   const LIB = [
@@ -927,6 +1036,12 @@ function nwBuildLogicLibrary() {
 // -----------------------------
 // Load/Save API
 // -----------------------------
+/**
+ * Code-Teil: nwFetchConfig
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwFetchConfig() {
   try {
     const res = await fetch('/api/logic/editor');
@@ -939,7 +1054,12 @@ async function nwFetchConfig() {
     return null;
   }
 }
-
+/**
+ * Code-Teil: nwSaveConfig
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwSaveConfig(cfg) {
   try {
     const res = await fetch('/api/logic/editor', {
@@ -960,6 +1080,12 @@ async function nwSaveConfig(cfg) {
 // -----------------------------
 // Graph Model (single "main" graph)
 // -----------------------------
+/**
+ * Code-Teil: nwDefaultGraph
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwDefaultGraph() {
   return {
     version: 1,
@@ -975,7 +1101,12 @@ function nwDefaultGraph() {
     ],
   };
 }
-
+/**
+ * Code-Teil: nwEnsureConfigDefaults
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwEnsureConfigDefaults(cfg) {
   if (!cfg || typeof cfg !== 'object') cfg = {};
   if (!Array.isArray(cfg.graphs)) cfg.graphs = [];
@@ -983,7 +1114,12 @@ function nwEnsureConfigDefaults(cfg) {
   if (!cfg.version) cfg.version = 1;
   return cfg;
 }
-
+/**
+ * Code-Teil: nwGetGraphById
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetGraphById(cfg, id) {
   cfg = nwEnsureConfigDefaults(cfg);
   const graphs = cfg.graphs;
@@ -996,12 +1132,21 @@ function nwGetGraphById(cfg, id) {
   }
   return g;
 }
-
+/**
+ * Code-Teil: nwGetMainGraph
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwGetMainGraph(cfg) {
   return nwGetGraphById(cfg, 'main');
 }
-
-
+/**
+ * Code-Teil: nwRenderGraphSelector
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRenderGraphSelector() {
   const sel = nwLE.el.graphSelect;
   if (!sel) return;
@@ -1019,13 +1164,23 @@ function nwRenderGraphSelector() {
   }
   if (nwLE.graphId) sel.value = nwLE.graphId;
 }
-
+/**
+ * Code-Teil: nwUpdateGraphControls
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwUpdateGraphControls() {
   const g = nwLE.graph;
   const chk = nwLE.el.graphEnabled;
   if (chk) chk.checked = !(g && g.enabled === false);
 }
-
+/**
+ * Code-Teil: nwSelectGraph
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSelectGraph(id, opts = {}) {
   const cfg = nwEnsureConfigDefaults(nwLE.cfg || {});
   const g = nwGetGraphById(cfg, id);
@@ -1042,7 +1197,12 @@ function nwSelectGraph(id, opts = {}) {
     nwRenderGraph();
   }
 }
-
+/**
+ * Code-Teil: nwAddGraph
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwAddGraph() {
   const cfg = nwEnsureConfigDefaults(nwLE.cfg || {});
   const name = (prompt('Name der neuen Logikseite:', 'Neue Logik') || '').trim();
@@ -1064,7 +1224,12 @@ function nwAddGraph() {
   nwSelectGraph(id);
   nwMarkDirty();
 }
-
+/**
+ * Code-Teil: nwDuplicateGraph
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwDuplicateGraph() {
   const cfg = nwEnsureConfigDefaults(nwLE.cfg || {});
   const src = nwLE.graph;
@@ -1081,7 +1246,12 @@ function nwDuplicateGraph() {
   nwSelectGraph(id);
   nwMarkDirty();
 }
-
+/**
+ * Code-Teil: nwRenameGraph
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRenameGraph() {
   const g = nwLE.graph;
   if (!g) return;
@@ -1091,7 +1261,12 @@ function nwRenameGraph() {
   nwRenderGraphSelector();
   nwMarkDirty();
 }
-
+/**
+ * Code-Teil: nwDeleteGraph
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwDeleteGraph() {
   const cfg = nwEnsureConfigDefaults(nwLE.cfg || {});
   if (!Array.isArray(cfg.graphs) || cfg.graphs.length <= 1) {
@@ -1109,7 +1284,12 @@ function nwDeleteGraph() {
   nwSelectGraph(next && next.id ? next.id : 'main');
   nwMarkDirty();
 }
-
+/**
+ * Code-Teil: nwMarkDirty
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwMarkDirty() {
   nwLE.dirty = true;
   nwSetStatus('Ungespeichert…', false);
@@ -1119,6 +1299,12 @@ function nwMarkDirty() {
 // -----------------------------
 // Rendering
 // -----------------------------
+/**
+ * Code-Teil: nwClearBoard
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwClearBoard() {
   const board = nwLE.el.board;
   if (!board) return;
@@ -1127,7 +1313,12 @@ function nwClearBoard() {
   const svg = nwLE.el.wires;
   if (svg) svg.innerHTML = '';
 }
-
+/**
+ * Code-Teil: nwEnsureBoardSize
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwEnsureBoardSize() {
   const g = nwLE.graph;
   if (!g) return;
@@ -1159,15 +1350,24 @@ function nwEnsureBoardSize() {
 
   nwUpdateZoomLabel();
 }
-
-
+/**
+ * Code-Teil: nwUpdateZoomLabel
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwUpdateZoomLabel() {
   const el = nwLE.el.zoomLabel;
   if (!el) return;
   const z = nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5);
   el.textContent = `${Math.round(z * 100)}%`;
 }
-
+/**
+ * Code-Teil: nwSetZoom
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSetZoom(newZoom, opts = {}) {
   const wrap = nwLE.el.boardWrap;
   const g = nwLE.graph;
@@ -1205,16 +1405,39 @@ function nwSetZoom(newZoom, opts = {}) {
     scale.style.height = `${Math.round(h * z)}px`;
   }
 }
-
+/**
+ * Code-Teil: nwZoomIn
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwZoomIn() {
   nwSetZoom(nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5) + 0.1);
 }
+/**
+ * Code-Teil: nwZoomOut
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwZoomOut() {
   nwSetZoom(nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5) - 0.1);
 }
+/**
+ * Code-Teil: nwZoomReset
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwZoomReset() {
   nwSetZoom(1);
 }
+/**
+ * Code-Teil: nwZoomFit
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwZoomFit() {
   const wrap = nwLE.el.boardWrap;
   const g = nwLE.graph;
@@ -1226,13 +1449,29 @@ function nwZoomFit() {
   const z = Math.min(zx, zy);
   nwSetZoom(z);
 }
-
+/**
+ * Code-Teil: nwRenderPalette
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRenderPalette() {
   const wrap = nwLE.el.palette;
   if (!wrap) return;
   wrap.innerHTML = '';
-
+  /**
+   * Code-Teil: palKey
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const palKey = (cat) => `nwLE.pal.collapsed.${encodeURIComponent(String(cat || ''))}`;
+  /**
+   * Code-Teil: palGetCollapsed
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const palGetCollapsed = (cat) => {
     try {
       const v = localStorage.getItem(palKey(cat));
@@ -1242,6 +1481,18 @@ function nwRenderPalette() {
     // Default: nur die wichtigsten Ordner offen lassen
     return !(['Eingänge', 'Logik'].includes(String(cat || '')));
   };
+  /**
+   * Code-Teil: Arrow-Funktion `palSetCollapsed`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: palSetCollapsed
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const palSetCollapsed = (cat, collapsed) => {
     try { localStorage.setItem(palKey(cat), collapsed ? '1' : '0'); } catch (_e) {}
   };
@@ -1282,6 +1533,7 @@ function nwRenderPalette() {
     groupWrap.className = 'nw-le__palette-group';
     if (collapsed) groupWrap.classList.add('is-collapsed');
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an folder. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     folder.addEventListener('click', () => {
       const isCollapsed = groupWrap.classList.toggle('is-collapsed');
       folder.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
@@ -1297,6 +1549,7 @@ function nwRenderPalette() {
       btn.draggable = true;
       btn.dataset.blockType = it.type;
       btn.innerHTML = `<span class="nw-le__palette-icon">${it.icon || ''}</span><span>${it.name}</span>`;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       btn.addEventListener('click', (e) => {
         if ((nwNow() - nwNum(nwLE.lastPaletteDropAt, 0)) < 250) {
           e.preventDefault();
@@ -1304,6 +1557,7 @@ function nwRenderPalette() {
         }
         nwAddNode(it.type);
       });
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'dragstart' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       btn.addEventListener('dragstart', (e) => {
         const payload = JSON.stringify({ type: it.type });
         nwLE.paletteDragType = it.type;
@@ -1314,6 +1568,7 @@ function nwRenderPalette() {
           e.dataTransfer.setData('text/plain', payload);
         } catch (_e) {}
       });
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'dragend' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       btn.addEventListener('dragend', () => {
         btn.classList.remove('is-dragging');
         nwLE.paletteDragType = null;
@@ -1325,7 +1580,12 @@ function nwRenderPalette() {
     wrap.appendChild(groupWrap);
   }
 }
-
+/**
+ * Code-Teil: nwRenderGraph
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRenderGraph() {
   nwClearBoard();
   nwEnsureBoardSize();
@@ -1340,7 +1600,12 @@ function nwRenderGraph() {
   // wires
   nwRenderAllWires();
 }
-
+/**
+ * Code-Teil: nwRenderNode
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRenderNode(node) {
   const g = nwLE.graph;
   const board = nwLE.el.board;
@@ -1377,6 +1642,7 @@ function nwRenderNode(node) {
   `;
 
   // select
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'mousedown' an el. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   el.addEventListener('mousedown', (e) => {
     // don't start dragging on port clicks
     const port = e.target && e.target.closest && e.target.closest('.nw-le-port');
@@ -1389,6 +1655,7 @@ function nwRenderNode(node) {
   // drag
   const hdr = el.querySelector('.nw-le-node__hdr');
   if (hdr) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'mousedown' an hdr. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     hdr.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
       e.preventDefault();
@@ -1409,6 +1676,7 @@ function nwRenderNode(node) {
   // delete
   const del = el.querySelector('button[data-act="del"]');
   if (del) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an del. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     del.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1419,6 +1687,18 @@ function nwRenderNode(node) {
   // ports
   const inWrap = el.querySelector('.nw-le-node__ports--in');
   const outWrap = el.querySelector('.nw-le-node__ports--out');
+  /**
+   * Code-Teil: Arrow-Funktion `mkPort`
+   * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: mkPort
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const mkPort = (dir, p) => {
     const d = document.createElement('div');
     d.className = `nw-le-port nw-le-port--${dir}`;
@@ -1432,6 +1712,7 @@ function nwRenderNode(node) {
 
     // connect: start from output only
     if (dir === 'out') {
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'mousedown' an d. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       d.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
         e.preventDefault();
@@ -1440,12 +1721,14 @@ function nwRenderNode(node) {
       });
     }
     if (dir === 'in') {
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'mouseup' an d. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       d.addEventListener('mouseup', (e) => {
         if (!nwLE.connecting) return;
         e.preventDefault();
         e.stopPropagation();
         nwFinishConnect(node.id, p.key);
       });
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'contextmenu' an d. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       d.addEventListener('contextmenu', (e) => {
         const removed = nwRemoveLinksToInput(node.id, p.key);
         if (!removed) return;
@@ -1461,7 +1744,12 @@ function nwRenderNode(node) {
 
   board.appendChild(el);
 }
-
+/**
+ * Code-Teil: nwRenderAllWires
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRenderAllWires() {
   const svg = nwLE.el.wires;
   if (!svg) return;
@@ -1480,7 +1768,12 @@ function nwRenderAllWires() {
   }
   nwUpdateAllWirePaths();
 }
-
+/**
+ * Code-Teil: nwUpdateAllWirePaths
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwUpdateAllWirePaths() {
   const svg = nwLE.el.wires;
   const board = nwLE.el.board;
@@ -1489,6 +1782,18 @@ function nwUpdateAllWirePaths() {
   const boardRect = board.getBoundingClientRect();
   const z = nwClamp(nwNum(nwLE.zoom, 1), 0.4, 2.5);
 
+  /**
+   * Code-Teil: Arrow-Funktion `getPortPos`
+   * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: getPortPos
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const getPortPos = (nodeId, portKey, dir) => {
     const el = board.querySelector(`.nw-le-port[data-node-id="${CSS.escape(nodeId)}"][data-port-key="${CSS.escape(portKey)}"][data-port-dir="${dir}"] .nw-le-port__dot`);
     if (!el) return null;
@@ -1499,6 +1804,18 @@ function nwUpdateAllWirePaths() {
     };
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `mkPath`
+   * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: mkPath
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const mkPath = (a, b) => {
     const dx = Math.max(40, Math.abs(b.x - a.x) * 0.45);
     const c1 = { x: a.x + dx, y: a.y };
@@ -1534,6 +1851,12 @@ function nwUpdateAllWirePaths() {
 // -----------------------------
 // Selection & Inspector
 // -----------------------------
+/**
+ * Code-Teil: nwSelectNode
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSelectNode(nodeId) {
   nwLE.selectedNodeId = nodeId;
   // update class
@@ -1545,13 +1868,23 @@ function nwSelectNode(nodeId) {
   }
   nwRenderInspector();
 }
-
+/**
+ * Code-Teil: nwFindNode
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwFindNode(nodeId) {
   const g = nwLE.graph;
   const nodes = (g && Array.isArray(g.nodes)) ? g.nodes : [];
   return nodes.find(n => n && n.id === nodeId) || null;
 }
-
+/**
+ * Code-Teil: nwRenderInspector
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRenderInspector() {
   const wrap = nwLE.el.inspector;
   if (!wrap) return;
@@ -1575,6 +1908,18 @@ function nwRenderInspector() {
 
   const params = node.params || {};
 
+  /**
+   * Code-Teil: Arrow-Funktion `mkRow`
+   * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: mkRow
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const mkRow = (label, html) => {
     const d = document.createElement('div');
     d.className = 'nw-le__inspector-row';
@@ -1609,6 +1954,7 @@ function nwRenderInspector() {
     setTimeout(() => {
       const inp = document.getElementById('nw-le-insp-enabled');
       if (inp) {
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         inp.addEventListener('change', () => {
           node.enabled = !!inp.checked;
           const board = nwLE.el.board;
@@ -1627,6 +1973,7 @@ function nwRenderInspector() {
     setTimeout(() => {
       const inp = document.getElementById('nw-le-insp-label');
       if (inp) {
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         inp.addEventListener('input', () => {
           node.label = inp.value;
           const board = nwLE.el.board;
@@ -1656,6 +2003,7 @@ function nwRenderInspector() {
         const inp = document.getElementById(`nw-le-insp-${key}`);
         const pick = document.getElementById(`nw-le-insp-${key}-pick`);
         if (inp) {
+          // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
           inp.addEventListener('input', () => {
             node.params = node.params || {};
             node.params[key] = inp.value;
@@ -1663,6 +2011,7 @@ function nwRenderInspector() {
           });
         }
         if (pick) {
+          // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an pick. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
           pick.addEventListener('click', async () => {
             const picked = await nwOpenDpPicker(nwSafeStr(inp && inp.value));
             if (picked !== null && picked !== undefined) {
@@ -1688,6 +2037,7 @@ function nwRenderInspector() {
       setTimeout(() => {
         const inp = document.getElementById(`nw-le-insp-${key}`);
         if (inp) {
+          // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
           inp.addEventListener('change', () => {
             node.params = node.params || {};
             node.params[key] = inp.value;
@@ -1704,6 +2054,7 @@ function nwRenderInspector() {
       setTimeout(() => {
         const inp = document.getElementById(`nw-le-insp-${key}`);
         if (inp) {
+          // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
           inp.addEventListener('input', () => {
             node.params = node.params || {};
             node.params[key] = inp.value;
@@ -1737,7 +2088,6 @@ function nwRenderInspector() {
           }
         }
       } catch (e) {}
-
       const chips = dayList.map(d => {
         const checked = cur.has(d.n) ? 'checked' : '';
         return `<label style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid rgba(255,255,255,.08);border-radius:999px;background:rgba(0,0,0,.15);cursor:pointer;user-select:none;">
@@ -1752,6 +2102,18 @@ function nwRenderInspector() {
       setTimeout(() => {
         const host = document.getElementById(`nw-le-insp-${key}`);
         if (!host) return;
+        /**
+         * Code-Teil: Arrow-Funktion `update`
+         * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+         * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: update
+         * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+         * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const update = () => {
           const boxes = host.querySelectorAll('input[type=checkbox][data-day]');
           const sel = [];
@@ -1762,6 +2124,7 @@ function nwRenderInspector() {
           node.params[key] = str;
           nwMarkDirty();
         };
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an host. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         host.addEventListener('change', update);
       }, 0);
 
@@ -1775,6 +2138,7 @@ function nwRenderInspector() {
       setTimeout(() => {
         const inp = document.getElementById(`nw-le-insp-${key}`);
         if (inp) {
+          // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
           inp.addEventListener('change', () => {
             node.params = node.params || {};
             node.params[key] = inp.value;
@@ -1791,6 +2155,7 @@ function nwRenderInspector() {
       setTimeout(() => {
         const inp = document.getElementById(`nw-le-insp-${key}`);
         if (inp) {
+          // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
           inp.addEventListener('input', () => {
             node.params = node.params || {};
             node.params[key] = nwNum(inp.value, 0);
@@ -1808,6 +2173,7 @@ function nwRenderInspector() {
       setTimeout(() => {
         const inp = document.getElementById(`nw-le-insp-${key}`);
         if (inp) {
+          // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
           inp.addEventListener('input', () => {
             node.params = node.params || {};
             node.params[key] = inp.value;
@@ -1823,6 +2189,12 @@ function nwRenderInspector() {
 // -----------------------------
 // Node operations
 // -----------------------------
+/**
+ * Code-Teil: nwAddNode
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwAddNode(type, opts = {}) {
   const def = nwLE.lib.byType[type];
   if (!def) return;
@@ -1859,7 +2231,12 @@ function nwAddNode(type, opts = {}) {
   nwSelectNode(node.id);
   nwMarkDirty();
 }
-
+/**
+ * Code-Teil: nwDeleteNode
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwDeleteNode(nodeId) {
   const g = nwLE.graph;
   if (!g) return;
@@ -1887,6 +2264,12 @@ function nwDeleteNode(nodeId) {
 // -----------------------------
 // Connections
 // -----------------------------
+/**
+ * Code-Teil: nwRemoveLinksWhere
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRemoveLinksWhere(predicate) {
   const g = nwLE.graph;
   if (!g) return 0;
@@ -1901,17 +2284,32 @@ function nwRemoveLinksWhere(predicate) {
   }
   return removed;
 }
-
+/**
+ * Code-Teil: nwRemoveLinkById
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRemoveLinkById(linkId) {
   if (!linkId) return 0;
   return nwRemoveLinksWhere(l => l && l.id === linkId);
 }
-
+/**
+ * Code-Teil: nwRemoveLinksToInput
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRemoveLinksToInput(nodeId, portKey) {
   if (!nodeId || !portKey) return 0;
   return nwRemoveLinksWhere(l => l && l.to && l.to.node === nodeId && l.to.port === portKey);
 }
-
+/**
+ * Code-Teil: nwFindLinkIdNearClientPoint
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwFindLinkIdNearClientPoint(clientX, clientY) {
   const svg = nwLE.el.wires;
   if (!svg) return null;
@@ -1960,7 +2358,12 @@ function nwFindLinkIdNearClientPoint(clientX, clientY) {
 
   return bestId;
 }
-
+/**
+ * Code-Teil: nwStartConnect
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwStartConnect(fromNodeId, fromPortKey) {
   const svg = nwLE.el.wires;
   if (!svg) return;
@@ -1981,7 +2384,12 @@ function nwStartConnect(fromNodeId, fromPortKey) {
     mouse: null,
   };
 }
-
+/**
+ * Code-Teil: nwFinishConnect
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwFinishConnect(toNodeId, toPortKey) {
   const c = nwLE.connecting;
   if (!c) return;
@@ -2004,7 +2412,12 @@ function nwFinishConnect(toNodeId, toPortKey) {
   nwRenderAllWires();
   nwMarkDirty();
 }
-
+/**
+ * Code-Teil: nwCancelConnect
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCancelConnect() {
   const c = nwLE.connecting;
   if (!c) return;
@@ -2017,18 +2430,34 @@ function nwCancelConnect() {
 // -----------------------------
 // DP Picker (Suche + ioBroker-Objektstruktur)
 // -----------------------------
+/**
+ * Code-Teil: nwOpenModal
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwOpenModal(modalEl) {
   if (!modalEl) return;
   modalEl.classList.remove('hidden');
   modalEl.setAttribute('aria-hidden', 'false');
 }
-
+/**
+ * Code-Teil: nwCloseModal
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCloseModal(modalEl) {
   if (!modalEl) return;
   modalEl.classList.add('hidden');
   modalEl.setAttribute('aria-hidden', 'true');
 }
-
+/**
+ * Code-Teil: nwFetchJson
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwFetchJson(url) {
   const res = await fetch(url, { cache: 'no-store' });
   const json = await res.json().catch(() => null);
@@ -2037,28 +2466,48 @@ async function nwFetchJson(url) {
   }
   return json;
 }
-
+/**
+ * Code-Teil: nwDpSearch
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwDpSearch(q) {
   const qs = encodeURIComponent(nwSafeStr(q || '').trim());
   const url = `/api/smarthome/dpsearch?q=${qs}&limit=500`;
   const json = await nwFetchJson(url);
   return Array.isArray(json.results) ? json.results : [];
 }
-
+/**
+ * Code-Teil: nwDpTree
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwDpTree(prefix) {
   const pre = encodeURIComponent(nwSafeStr(prefix || '').trim());
   const url = `/api/object/tree?prefix=${pre}`;
   const json = await nwFetchJson(url);
   return Array.isArray(json.children) ? json.children : [];
 }
-
+/**
+ * Code-Teil: nwDpParentPrefix
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwDpParentPrefix(id) {
   const parts = nwSafeStr(id || '').trim().split('.').filter(Boolean);
   if (parts.length <= 1) return '';
   parts.pop();
   return parts.join('.');
 }
-
+/**
+ * Code-Teil: nwDpMetaText
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwDpMetaText(it) {
   const metaBits = [];
   if (it && it.name) metaBits.push(String(it.name));
@@ -2067,7 +2516,12 @@ function nwDpMetaText(it) {
   if (it && it.unit) metaBits.push(String(it.unit));
   return metaBits.join(' • ');
 }
-
+/**
+ * Code-Teil: nwCreateDpResultRow
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCreateDpResultRow(primary, meta, onActivate) {
   const row = document.createElement('div');
   row.className = 'nw-dp-result';
@@ -2084,6 +2538,18 @@ function nwCreateDpResultRow(primary, meta, onActivate) {
   row.appendChild(metaEl);
 
   if (typeof onActivate === 'function') {
+    /**
+     * Code-Teil: Arrow-Funktion `activate`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: activate
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const activate = (e) => {
       if (e) {
         e.preventDefault();
@@ -2091,7 +2557,9 @@ function nwCreateDpResultRow(primary, meta, onActivate) {
       }
       onActivate();
     };
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an row. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     row.addEventListener('click', activate);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an row. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     row.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') activate(e);
     });
@@ -2099,7 +2567,12 @@ function nwCreateDpResultRow(primary, meta, onActivate) {
 
   return row;
 }
-
+/**
+ * Code-Teil: nwRenderDpResults
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRenderDpResults(list, onPick) {
   const wrap = nwLE.el.dpResults;
   if (!wrap) return;
@@ -2121,7 +2594,12 @@ function nwRenderDpResults(list, onPick) {
     wrap.innerHTML = '<div class="nw-config-empty">Keine Treffer.</div>';
   }
 }
-
+/**
+ * Code-Teil: nwRenderDpBreadcrumb
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwRenderDpBreadcrumb(prefix, onNavigate) {
   const wrap = nwLE.el.dpBreadcrumb;
   if (!wrap) return;
@@ -2129,6 +2607,18 @@ function nwRenderDpBreadcrumb(prefix, onNavigate) {
 
   const parts = nwSafeStr(prefix || '').split('.').filter(Boolean);
 
+  /**
+   * Code-Teil: Arrow-Funktion `mkCrumb`
+   * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: mkCrumb
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const mkCrumb = (label, nextPrefix, clickable) => {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -2138,10 +2628,23 @@ function nwRenderDpBreadcrumb(prefix, onNavigate) {
       btn.disabled = true;
       return btn;
     }
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btn.addEventListener('click', () => onNavigate(nextPrefix));
     return btn;
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `mkSep`
+   * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: mkSep
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const mkSep = () => {
     const sep = document.createElement('span');
     sep.className = 'nw-dp-sep';
@@ -2159,7 +2662,12 @@ function nwRenderDpBreadcrumb(prefix, onNavigate) {
     wrap.appendChild(mkCrumb(part, acc, i < (parts.length - 1)));
   }
 }
-
+/**
+ * Code-Teil: nwOpenDpPicker
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwOpenDpPicker(initialQuery) {
   return new Promise((resolve) => {
     const modal = nwLE.el.dpModal;
@@ -2180,8 +2688,25 @@ function nwOpenDpPicker(initialQuery) {
     const pickerToken = nwUuid('dp_picker');
     nwLE.dpPickerToken = pickerToken;
 
+    /**
+     * Code-Teil: Arrow-Funktion `isAlive`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: isAlive
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const isAlive = () => !done && nwLE.dpPickerToken === pickerToken;
-
+    /**
+     * Code-Teil: finish
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const finish = (val) => {
       if (done) return;
       done = true;
@@ -2191,23 +2716,69 @@ function nwOpenDpPicker(initialQuery) {
       resolve(val);
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `setTreeMessage`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: setTreeMessage
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const setTreeMessage = (html) => {
       if (!treeWrap || !isAlive()) return;
       treeWrap.innerHTML = html;
     };
-
+    /**
+     * Code-Teil: setResultsMessage
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const setResultsMessage = (html) => {
       if (!resultsWrap || !isAlive()) return;
       resultsWrap.innerHTML = html;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `openPrefix`
+     * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: openPrefix
+     * Zweck: Öffnet Dialoge/Seiten/Popovers.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const openPrefix = (nextPrefix) => {
       treePrefix = nwSafeStr(nextPrefix || '').trim();
       refreshTree().catch(() => {});
     };
-
+    /**
+     * Code-Teil: onPick
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const onPick = (id) => finish(id);
 
+    /**
+     * Code-Teil: Arrow-Funktion `upOne`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: upOne
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const upOne = () => {
       if (!treePrefix) return;
       const parts = treePrefix.split('.').filter(Boolean);
@@ -2215,6 +2786,18 @@ function nwOpenDpPicker(initialQuery) {
       treePrefix = parts.join('.');
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `renderTree`
+     * Zweck: rendert sichtbare UI-/Diagramm-Elemente aus bereits normalisierten Daten.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: renderTree
+     * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const renderTree = (children) => {
       if (!treeWrap || !isAlive()) return;
       treeWrap.innerHTML = '';
@@ -2263,6 +2846,18 @@ function nwOpenDpPicker(initialQuery) {
       }
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `refreshTree`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: refreshTree
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const refreshTree = async () => {
       nwRenderDpBreadcrumb(treePrefix, openPrefix);
       setTreeMessage('<div class="nw-config-empty">Ordner werden geladen…</div>');
@@ -2280,6 +2875,18 @@ function nwOpenDpPicker(initialQuery) {
       }
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `onSearch`
+     * Zweck: behandelt ein Ereignis oder einen API-/UI-Callback.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: onSearch
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const onSearch = async () => {
       const q = nwSafeStr(qInp.value || '').trim();
       if (!q) {
@@ -2297,8 +2904,32 @@ function nwOpenDpPicker(initialQuery) {
       }
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `onClose`
+     * Zweck: behandelt ein Ereignis oder einen API-/UI-Callback.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: onClose
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const onClose = () => finish(null);
+    /**
+     * Code-Teil: onBg
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const onBg = (e) => { if (e.target === modal) finish(null); };
+    /**
+     * Code-Teil: onKey
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const onKey = (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -2306,12 +2937,35 @@ function nwOpenDpPicker(initialQuery) {
       }
       if (e.key === 'Escape') finish(null);
     };
+    /**
+     * Code-Teil: Arrow-Funktion `onRoot`
+     * Zweck: behandelt ein Ereignis oder einen API-/UI-Callback.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: onRoot
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const onRoot = () => openPrefix('');
+    /**
+     * Code-Teil: onUp
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const onUp = () => {
       upOne();
       refreshTree().catch(() => {});
     };
-
+    /**
+     * Code-Teil: cleanup
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const cleanup = () => {
       try { btn.removeEventListener('click', onSearch); } catch (_e) {}
       try { closeBtn.removeEventListener('click', onClose); } catch (_e2) {}
@@ -2321,11 +2975,17 @@ function nwOpenDpPicker(initialQuery) {
       try { qInp.removeEventListener('keydown', onKey); } catch (_e6) {}
     };
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btn.addEventListener('click', onSearch);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an closeBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     closeBtn.addEventListener('click', onClose);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an rootBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     rootBtn.addEventListener('click', onRoot);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an upBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     upBtn.addEventListener('click', onUp);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an modal. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     modal.addEventListener('click', onBg);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an qInp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     qInp.addEventListener('keydown', onKey);
 
     qInp.value = nwSafeStr(initialQuery || '');
@@ -2350,6 +3010,12 @@ function nwOpenDpPicker(initialQuery) {
 // -----------------------------
 // Import/Export
 // -----------------------------
+/**
+ * Code-Teil: nwOpenImport
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwOpenImport() {
   const modal = nwLE.el.importModal;
   const t = nwLE.el.importText;
@@ -2358,11 +3024,21 @@ function nwOpenImport() {
   nwOpenModal(modal);
   setTimeout(() => { try { t.focus(); } catch (_e) {} }, 0);
 }
-
+/**
+ * Code-Teil: nwCloseImport
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCloseImport() {
   nwCloseModal(nwLE.el.importModal);
 }
-
+/**
+ * Code-Teil: nwApplyImport
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwApplyImport() {
   const t = nwLE.el.importText;
   if (!t) return;
@@ -2383,8 +3059,12 @@ function nwApplyImport() {
   nwMarkDirty();
   nwCloseImport();
 }
-
-
+/**
+ * Code-Teil: nwOpenExport
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwOpenExport() {
   const modal = nwLE.el.exportModal;
   const t = nwLE.el.exportText;
@@ -2393,11 +3073,21 @@ function nwOpenExport() {
   t.value = JSON.stringify(cfg, null, 2);
   nwOpenModal(modal);
 }
-
+/**
+ * Code-Teil: nwCloseExport
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCloseExport() {
   nwCloseModal(nwLE.el.exportModal);
 }
-
+/**
+ * Code-Teil: nwDownloadExport
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwDownloadExport() {
   const cfg = nwLE.cfg || nwDefaultGraph();
   const json = JSON.stringify(cfg, null, 2);
@@ -2416,23 +3106,43 @@ function nwDownloadExport() {
 // -----------------------------
 // Backup / Restore (wie App-Center)
 // -----------------------------
-
+/**
+ * Code-Teil: nwSetBackupStatus
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSetBackupStatus(msg, type) {
   const el = nwLE.el.backupStatus;
   if (!el) return;
   el.textContent = msg || '';
   el.style.color = (type === 'error') ? '#fca5a5' : '';
 }
-
+/**
+ * Code-Teil: nwOpenBackup
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwOpenBackup() {
   nwSetBackupStatus('', null);
   nwOpenModal(nwLE.el.backupModal);
 }
-
+/**
+ * Code-Teil: nwCloseBackup
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwCloseBackup() {
   nwCloseModal(nwLE.el.backupModal);
 }
-
+/**
+ * Code-Teil: nwBackupExport
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwBackupExport() {
   nwSetBackupStatus('Exportiere Backup …', null);
   const res = await fetch('/api/installer/backup/export', { cache: 'no-store' });
@@ -2451,7 +3161,12 @@ async function nwBackupExport() {
   setTimeout(() => URL.revokeObjectURL(url), 1200);
   nwSetBackupStatus('Backup exportiert ✅', null);
 }
-
+/**
+ * Code-Teil: nwBackupImportFromFile
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwBackupImportFromFile(file, mode) {
   if (!file) return;
   nwSetBackupStatus('Importiere Backup …', null);
@@ -2466,7 +3181,12 @@ async function nwBackupImportFromFile(file, mode) {
   if (!data || !data.ok) throw new Error((data && data.error) ? data.error : 'Backup import fehlgeschlagen');
   nwSetBackupStatus('Backup importiert ✅ (bitte Seite neu laden)', null);
 }
-
+/**
+ * Code-Teil: nwBackupRestoreFromUserdata
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwBackupRestoreFromUserdata() {
   if (!confirm('Wirklich Restore aus 0_userdata durchführen? (überschreibt die aktuelle Konfiguration)')) return;
   nwSetBackupStatus('Lade Backup aus 0_userdata …', null);
@@ -2489,6 +3209,12 @@ async function nwBackupRestoreFromUserdata() {
 // -----------------------------
 // Normalize
 // -----------------------------
+/**
+ * Code-Teil: nwEnsureGraphDefaults
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwEnsureGraphDefaults(g) {
   if (!g || typeof g !== 'object') return;
   if (!g.id) g.id = 'main';
@@ -2525,8 +3251,15 @@ function nwEnsureGraphDefaults(g) {
 // -----------------------------
 // Global events (drag, connect)
 // -----------------------------
+/**
+ * Code-Teil: nwInstallGlobalHandlers
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwInstallGlobalHandlers() {
   // dragging nodes
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'mousemove' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('mousemove', (e) => {
     if (nwLE.dragging) {
       const d = nwLE.dragging;
@@ -2565,15 +3298,18 @@ function nwInstallGlobalHandlers() {
     }
   });
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'mouseup' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('mouseup', () => {
     if (nwLE.dragging) nwLE.dragging = null;
   });
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'dragend' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('dragend', () => {
     if (nwLE.el.boardWrap) nwLE.el.boardWrap.classList.remove('is-drag-over');
     nwLE.paletteDragType = null;
   });
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       if (nwLE.connecting) {
@@ -2597,6 +3333,7 @@ function nwInstallGlobalHandlers() {
   // Ctrl/Cmd + Mausrad zum Zoomen
   const wrap = nwLE.el.boardWrap;
   if (wrap) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'wheel' an wrap. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     wrap.addEventListener('wheel', (e) => {
       if (!(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
@@ -2607,6 +3344,7 @@ function nwInstallGlobalHandlers() {
       }
     }, { passive: false });
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'dragover' an wrap. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     wrap.addEventListener('dragover', (e) => {
       const type = nwReadPaletteBlockType(e);
       if (!type || !nwLE.lib || !nwLE.lib.byType || !nwLE.lib.byType[type]) return;
@@ -2615,6 +3353,7 @@ function nwInstallGlobalHandlers() {
       wrap.classList.add('is-drag-over');
     });
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'drop' an wrap. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     wrap.addEventListener('drop', (e) => {
       const type = nwReadPaletteBlockType(e);
       wrap.classList.remove('is-drag-over');
@@ -2629,6 +3368,7 @@ function nwInstallGlobalHandlers() {
       });
     });
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'contextmenu' an wrap. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     wrap.addEventListener('contextmenu', (e) => {
       const linkId = nwFindLinkIdNearClientPoint(e.clientX, e.clientY);
       if (!linkId) return;
@@ -2642,6 +3382,12 @@ function nwInstallGlobalHandlers() {
 // -----------------------------
 // Toolbar actions
 // -----------------------------
+/**
+ * Code-Teil: nwHandleSave
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwHandleSave() {
   // Clone so we don't mutate the live object while saving
   const cfg = nwEnsureConfigDefaults(nwJsonClone(nwLE.cfg || nwDefaultGraph()));
@@ -2667,8 +3413,12 @@ async function nwHandleSave() {
     nwSetStatus(`Speichern fehlgeschlagen: ${nwSafeStr(res && res.error)}`, false);
   }
 }
-
-
+/**
+ * Code-Teil: nwHandleNew
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwHandleNew() {
   nwLE.cfg = nwEnsureConfigDefaults(nwDefaultGraph());
   nwLE.selectedNodeId = null;
@@ -2684,6 +3434,12 @@ function nwHandleNew() {
 // -----------------------------
 // Init
 // -----------------------------
+/**
+ * Code-Teil: nwInitLogicEditor
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function nwInitLogicEditor() {
   // Elements
   nwLE.el.boardWrap = document.getElementById('nw-le-board-wrap');
@@ -2888,10 +3644,12 @@ async function nwInitLogicEditor() {
   nwInstallGlobalHandlers();
 
   // Update wires on resize
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'resize' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   window.addEventListener('resize', () => nwUpdateAllWirePaths());
 }
 
 
+// Ereignis-Kommentar: Bindet das UI-Ereignis 'DOMContentLoaded' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
 document.addEventListener('DOMContentLoaded', () => {
   nwInitLogicEditor();
 });
@@ -2904,7 +3662,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const btn=document.getElementById('menuBtn');
   const dd=document.getElementById('menuDropdown');
   if(btn && dd){
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btn.addEventListener('click', (e)=>{ e.preventDefault(); dd.classList.toggle('hidden'); });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('click', (e)=>{ if(!dd.contains(e.target) && e.target!==btn) dd.classList.add('hidden'); });
   }
   fetch('/config', { cache: 'no-store' }).then(r=>r.json()).then(cfg=>{

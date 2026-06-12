@@ -1,4 +1,19 @@
+<!--
+  Datei: www/evcs.html
+  Rolle: Code-Datei
+  Zweck: Allgemeiner Projektcode; genaue Verantwortung ergibt sich aus Pfad und Funktionsnamen.
+  Wartung: HTML-IDs/Klassen sind Vertragsstellen für www/*.js und CSS. Nicht ohne Suche nach Referenzen ändern.
+-->
 <!DOCTYPE html>
+<!--
+  NexoWatt Code-Kommentar (DE)
+  Zweck: EVCS-Kundenansicht: Ladepunkte, Modi, Ladeleistung, RFID/Session-Informationen.
+  Zusammenhänge:
+  - Logik in www/evcs.js und chargingManagement.* States.
+  - Feature-Sichtbarkeit kommt aus Installer-Konfiguration.
+  Wartungshinweise:
+  - Bei Anlagen ohne Wallbox ausblenden.
+-->
 <html lang="de">
 <head>
 <script>
@@ -21,6 +36,7 @@
   <link href="/static/styles.css" rel="stylesheet"/>
 </head>
 <body class="nw-cockpit-page nw-cockpit-skin nw-page-evcs">
+<!-- Abschnitt: Kopfbereich/Navigation. Wird durch CSS und teils durch JS-Menülogik gesteuert. -->
 <header class="topbar">
   <div class="brand">
     <a href="/"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></a>
@@ -45,6 +61,7 @@
   </div>
 </header>
 
+<!-- Abschnitt: Hauptinhalt der Seite. DOM-IDs in diesem Bereich werden durch zugehörige JS-Dateien befüllt. -->
 <main class="content nw-page-shell nw-evcs-page nw-subpage" style="grid-template-columns: 1fr;">
   <section class="nw-page-hero" aria-label="EVCS Übersicht">
     <div>

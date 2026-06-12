@@ -1,3 +1,28 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: www/rfid-report.js
+ * Rolle im Projekt: Frontend-Skript.
+ * Zweck: Browserseitiger Code für eine Kunden-/Installerseite; liest APIs und aktualisiert DOM/UI.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Frontend-Skript einer VIS-/Kundenseite oder eines Reports.
+ * Zusammenhänge:
+ * - Spricht mit APIs aus main.js und rendert Daten aus /api/state, /config oder Reports.
+ * - Styles liegen in www/styles.css bzw. Report-CSS-Dateien.
+ * Wartungshinweise:
+ * - Feature-Sichtbarkeit und Rollen beachten; Kundenfrontend darf keine Installerfunktionen öffnen.
+ */
+
 /* NexoWatt – RFID/Ladekarten Abrechnung (Print/PDF view) */
 (function () {
   'use strict';
@@ -23,7 +48,12 @@
   const nfKwh = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
   const nfKw = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const nfInt = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
-
+  /**
+   * Code-Teil: fmtDateRange
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function fmtDateRange(fromMs, toMs) {
     const f = Number(fromMs);
     const t = Number(toMs);
@@ -33,12 +63,22 @@
     const sT = dt ? dt.toLocaleDateString('de-DE') : '--';
     return sF + ' – ' + sT;
   }
-
+  /**
+   * Code-Teil: setMeta
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setMeta(text) {
     if (elMeta) elMeta.textContent = text || '';
     if (elMetaPrint) elMetaPrint.textContent = text || '';
   }
-
+  /**
+   * Code-Teil: setError
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setError(msg) {
     setMeta(msg || 'Fehler');
     if (tbody) {
@@ -51,7 +91,12 @@
       tbody.appendChild(tr);
     }
   }
-
+  /**
+   * Code-Teil: render
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function render(report) {
     if (!report || !tbody) return;
 
@@ -97,7 +142,12 @@
     if (elSumKwh) elSumKwh.textContent = nfKwh.format(Number(report.totalKwh) || 0);
     if (elSumPeakKw) elSumPeakKw.textContent = nfKw.format(Number(report.peakKw) || 0);
   }
-
+  /**
+   * Code-Teil: load
+   * Zweck: Lädt Daten aus API, States oder Konfiguration.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function load() {
     if (!rfid) {
       setError('RFID fehlt. Bitte Bericht über die Einstellungen öffnen.');
@@ -121,7 +171,12 @@
       setError('Fehler beim Laden des Reports.');
     }
   }
-
+  /**
+   * Code-Teil: openCsv
+   * Zweck: Öffnet Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function openCsv() {
     if (!rfid) return;
     const url = '/api/evcs/rfid/report.csv?rfid=' + encodeURIComponent(rfid)
@@ -129,7 +184,12 @@
       + (to ? ('&to=' + encodeURIComponent(to)) : '');
     window.open(url, '_blank');
   }
-
+  /**
+   * Code-Teil: openCsvSessions
+   * Zweck: Öffnet Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function openCsvSessions() {
     if (!rfid) return;
     const url = '/api/evcs/sessions.csv?rfid=' + encodeURIComponent(rfid)

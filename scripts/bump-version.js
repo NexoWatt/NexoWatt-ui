@@ -1,4 +1,29 @@
 #!/usr/bin/env node
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: scripts/bump-version.js
+ * Rolle im Projekt: Build-/Wartungsskript.
+ * Zweck: Hilfsskript für Versionierung, Publish-Prüfung, Hooks oder Sicherheit im Releaseprozess.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Wartungs-/Release-Skript für Versionierung, Prüfung oder Sicherheits-/Publish-Aufgaben.
+ * Zusammenhänge:
+ * - Wird über npm scripts oder Release-Prozess aufgerufen.
+ * - Prüft bzw. verändert Metadaten, aber keine EMS-Laufzeitlogik.
+ * Wartungshinweise:
+ * - Skripte müssen auf Windows und Linux robust laufen.
+ */
+
 /*
   NexoWatt UI – version bump helper
 
@@ -17,17 +42,32 @@
 
 const fs = require('fs');
 const path = require('path');
-
+/**
+ * Code-Teil: readJson
+ * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+ * Zusammenhang: Teil von Build-/Prüfskript; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function readJson(filePath) {
   const raw = fs.readFileSync(filePath, 'utf8');
   return { raw, json: JSON.parse(raw) };
 }
-
+/**
+ * Code-Teil: writeJson
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Build-/Prüfskript; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function writeJson(filePath, obj) {
   const out = JSON.stringify(obj, null, 2) + '\n';
   fs.writeFileSync(filePath, out, 'utf8');
 }
-
+/**
+ * Code-Teil: parseSemver
+ * Zweck: Parst Rohdaten in ein sicheres internes Format.
+ * Zusammenhang: Teil von Build-/Prüfskript; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function parseSemver(v) {
   const s = String(v || '').trim();
   const m = /^([0-9]+)\.([0-9]+)\.([0-9]+)$/.exec(s);
@@ -38,7 +78,12 @@ function parseSemver(v) {
     patch: Number(m[3])
   };
 }
-
+/**
+ * Code-Teil: bumpSemver
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Build-/Prüfskript; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function bumpSemver(v, type) {
   const p = parseSemver(v);
   if (!p) {
@@ -50,9 +95,20 @@ function bumpSemver(v, type) {
   if (t === 'major') return `${p.major + 1}.0.0`;
   throw new Error(`Unknown bump type: "${type}" (use patch|minor|major)`);
 }
-
+/**
+ * Code-Teil: main
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Build-/Prüfskript; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function main() {
   const args = process.argv.slice(2);
+  /**
+   * Code-Teil: bumpType
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Build-/Prüfskript; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const bumpType = (args.find((a) => !a.startsWith('--')) || 'patch').toLowerCase();
   const dryRun = args.includes('--dry-run');
   const quiet = args.includes('--quiet');

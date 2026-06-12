@@ -1,6 +1,67 @@
 
+/**
+ * Datenvertrag: LiveDashboardState
+ * Zweck: Beschreibt die Werte, die www/app.js aus /api/state für das LIVE-Dashboard erwartet.
+ * Zusammenhang: Diese Struktur wird durch main.js und EMS-Module gefüllt und im DOM von index.html angezeigt.
+ * TypeScript-Ziel:
+ * interface LiveDashboardState { productionTotal?: number; gridBuyPower?: number; gridSellPower?: number; storageSoc?: number; storageChargePower?: number; storageDischargePower?: number; }
+ */
+
+/**
+ * Vertragsstelle: Feature-Sichtbarkeit im Kundenfrontend
+ * Zweck: EVCS, Speicherfarm und SmartHome dürfen nur angezeigt werden, wenn /config echte aktivierte Hardware/Funktionen meldet.
+ * Zusammenhang: Verhindert falsche Tabs/Kacheln bei Anlagen ohne Wallbox oder Speicherfarm.
+ * TypeScript-Ziel: FeatureVisibility-Interface aus docs/CODE_CONTRACTS_DE.md übernehmen.
+ */
+
+/**
+ * Vertragsstelle: Energiefluss-Anzeige
+ * Zweck: Frontend darf Speicher-/Netz-/PV-Werte nur so darstellen, wie Backend/EMS sie normalisiert haben.
+ * Wichtig: Keine eigenständige aggressive Ersatzrechnung einbauen, sonst laufen LIVE und History auseinander.
+ */
+
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: www/app.js
+ * Rolle im Projekt: LIVE-Frontend.
+ * Zweck: Rendert Dashboard, Energiefluss, Schnellsteuerungen, KI-Berater und Kundeneinstellungen aus /api/state.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Hauptlogik des Kunden-Frontends: LIVE-Dashboard, Energiefluss, Einstellungen, SSE-Liveupdates, Feature-Sichtbarkeit und Schnellsteuerungen.
+ * Zusammenhänge:
+ * - Liest States über /api/state und Live-Events über /events aus main.js.
+ * - Verwendet Config aus /config, um EVCS, Speicherfarm, SmartHome und optionale Flussknoten ein- oder auszublenden.
+ * - Schreibt Einstellungen/Kommandos über /api/set und spezielle API-Endpunkte zurück.
+ * Wartungshinweise:
+ * - Die Energieflusswerte müssen mit den Backend-Resolvern in main.js/ems/modules konsistent bleiben.
+ * - DP-Fallbacks nur sehr vorsichtig ändern, weil sonst Live-Anzeige und Historie auseinanderlaufen.
+ */
+
+
 // --- Precise donut placement (anchor angles like a reference UI) ---
+/**
+ * Code-Teil: arcLenFromDeg
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function arcLenFromDeg(r, deg){ return 2 * Math.PI * r * (deg/360); }
+/**
+ * Code-Teil: setArcAtAngle
+ * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function setArcAtAngle(selector, r, angleDeg, arcDeg){
   const C = 2 * Math.PI * r;
   const Ldeg = Math.max(0, Math.min(359.9, arcDeg));
@@ -11,6 +72,12 @@ function setArcAtAngle(selector, r, angleDeg, arcDeg){
   el.setAttribute('stroke-dasharray', dash.toFixed(1) + ' ' + (C - dash).toFixed(1));
   el.setAttribute('stroke-dashoffset', offset.toFixed(1));
 }
+/**
+ * Code-Teil: placeIconAtAngle
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function placeIconAtAngle(sel, angleDeg){
   const wrap = document.querySelector('.card.energy-donut .donut-wrap');
   const el = document.querySelector(sel);
@@ -29,6 +96,12 @@ function placeIconAtAngle(sel, angleDeg){
 }
 
 // Draw an arc inside a quadrant slot with small gaps between quadrants
+/**
+ * Code-Teil: setArcInSlot
+ * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function setArcInSlot(selector, r, slotIndex, slotFillPct){
   const C = 2 * Math.PI * r;
   const Q = C / 4;               // quarter length
@@ -42,7 +115,12 @@ function setArcInSlot(selector, r, slotIndex, slotFillPct){
   el.setAttribute('stroke-dasharray', L.toFixed(1) + ' ' + (C-L).toFixed(1));
   el.setAttribute('stroke-dashoffset', start.toFixed(1));
 }
-
+/**
+ * Code-Teil: setArc
+ * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function setArc(selector, r, valuePct){
   const max = 2 * Math.PI * r;
   const v = Math.max(0, Math.min(100, valuePct||0));
@@ -51,7 +129,12 @@ function setArc(selector, r, valuePct){
   if(!el) return;
   el.setAttribute('stroke-dasharray', dash.toFixed(1)+' '+rest.toFixed(1));
 }
-
+/**
+ * Code-Teil: setDonut
+ * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function setDonut(cls, pct, inner=false) {
   const r = inner ? 34 : 42;
   const max = 2 * Math.PI * r;
@@ -65,6 +148,12 @@ function setDonut(cls, pct, inner=false) {
 }
 
 // Format hours to "h:mm"
+/**
+ * Code-Teil: formatHours
+ * Zweck: Formatiert Daten für Anzeige oder Logs.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function formatHours(h) {
   if (!h || !isFinite(h) || h <= 0) return '--';
   const totalMin = Math.round(h * 60);
@@ -81,7 +170,12 @@ let flowSlotsCfg = null; // comes from /config
 let flowExtras = { consumers: [], producers: [], special: [], meta: { evcsAvailable: false } };
 let _flowResponsiveCfg = { consumers: 0, producers: 0, special: 0, evcsVisible: false };
 let _flowResponsiveRaf = 0;
-
+/**
+ * Code-Teil: applyEnergyWebResponsiveLayout
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function applyEnergyWebResponsiveLayout(nextCfg) {
   if (nextCfg && typeof nextCfg === 'object') {
     _flowResponsiveCfg = Object.assign({}, _flowResponsiveCfg, nextCfg);
@@ -129,7 +223,12 @@ function applyEnergyWebResponsiveLayout(nextCfg) {
   if (visibleSlots >= 9) minH += 24;
   wrap.style.setProperty('--flowMinH', `${Math.round(minH)}px`);
 }
-
+/**
+ * Code-Teil: scheduleEnergyWebResponsiveLayout
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function scheduleEnergyWebResponsiveLayout(nextCfg) {
   if (nextCfg && typeof nextCfg === 'object') {
     _flowResponsiveCfg = Object.assign({}, _flowResponsiveCfg, nextCfg);
@@ -142,6 +241,7 @@ function scheduleEnergyWebResponsiveLayout(nextCfg) {
   });
 }
 
+// Ereignis-Kommentar: Bindet das UI-Ereignis 'resize' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
 window.addEventListener('resize', () => scheduleEnergyWebResponsiveLayout(), { passive: true });
 
 // Energiefluss-Anzeige: leichte Hysterese nur für die VIS.
@@ -155,12 +255,22 @@ const FLOW_UI_STABILITY = Object.freeze({
   signSwitchW: 180,
 });
 const _flowUiStable = Object.create(null);
-
+/**
+ * Code-Teil: _flowUiNum
+ * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _flowUiNum(v, fallback = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }
-
+/**
+ * Code-Teil: stabilizeFlowSigned
+ * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function stabilizeFlowSigned(key, rawW, opts) {
   const cfg = {
     zeroOnW: _flowUiNum(opts && opts.zeroOnW, FLOW_UI_STABILITY.zeroOnW),
@@ -201,13 +311,23 @@ function stabilizeFlowSigned(key, rawW, opts) {
   _flowUiStable[key] = { value: next, ts: Date.now() };
   return next;
 }
-
+/**
+ * Code-Teil: stabilizeFlowAbs
+ * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function stabilizeFlowAbs(key, rawW, opts) {
   const absRaw = Math.max(0, _flowUiNum(rawW, 0));
   const absOpts = Object.assign({}, opts, { signSwitchW: Number.MAX_SAFE_INTEGER });
   return Math.max(0, Math.abs(stabilizeFlowSigned(`abs:${key}`, absRaw, absOpts)));
 }
-
+/**
+ * Code-Teil: applyFlowCoreLabels
+ * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function applyFlowCoreLabels() {
   // Optional PV name override from App-Center (Energiefluss-Monitor -> Basis).
   // If not provided, we keep the default label "PV".
@@ -225,7 +345,12 @@ let _lastRenderTs = 0;
 // UI performance: throttle expensive full-page renders a bit.
 // (SSE/state updates can arrive very frequently and would otherwise make the UI feel laggy.)
 const _RENDER_MIN_INTERVAL_MS = 120;
-
+/**
+ * Code-Teil: scheduleRender
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function scheduleRender(force = false){
   if (_renderScheduled && !force) return;
   _renderScheduled = true;
@@ -244,8 +369,12 @@ function scheduleRender(force = false){
     try{ render(); }catch(_e){}
   }, wait);
 }
-
-
+/**
+ * Code-Teil: formatPower
+ * Zweck: Formatiert Daten für Anzeige oder Logs.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function formatPower(v) {
   if (v === undefined || v === null || isNaN(v)) return '--';
   const n = Number(v);
@@ -257,6 +386,12 @@ function formatPower(v) {
 }
 
 // Energy formatting for KPI tiles (keep values readable on mobile)
+/**
+ * Code-Teil: formatEnergyKwh
+ * Zweck: Formatiert Daten für Anzeige oder Logs.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function formatEnergyKwh(v){
   if (v === undefined || v === null || isNaN(v)) return '--';
   const n = Number(v);
@@ -266,7 +401,12 @@ function formatEnergyKwh(v){
   if (abs >= 1000) return (n/1000).toFixed(2) + ' MWh';
   return n.toFixed(2) + ' kWh';
 }
-
+/**
+ * Code-Teil: formatPowerSigned
+ * Zweck: Formatiert Daten für Anzeige oder Logs.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function formatPowerSigned(v){
   if (v === undefined || v === null || isNaN(v)) return '--';
   const n = Number(v);
@@ -275,7 +415,12 @@ function formatPowerSigned(v){
   if (units.power === 'kW') return sign + (abs/1000).toFixed(2) + ' kW';
   return sign + abs.toFixed(0) + ' W';
 }
-
+/**
+ * Code-Teil: formatFlowPower
+ * Zweck: Formatiert Daten für Anzeige oder Logs.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function formatFlowPower(v, decimals){
   // Energy-flow monitor: always show power values in kW (input is expected in W)
   if (v === undefined || v === null || isNaN(v)) return '--';
@@ -283,7 +428,12 @@ function formatFlowPower(v, decimals){
   const d = (decimals === undefined || decimals === null || isNaN(decimals)) ? FLOW_UI_STABILITY.decimals : Number(decimals);
   return (n / 1000).toFixed(d) + ' kW';
 }
-
+/**
+ * Code-Teil: formatNum
+ * Zweck: Formatiert Daten für Anzeige oder Logs.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function formatNum(v, suffix='') {
 
   if (v === undefined || v === null || isNaN(v)) return '--';
@@ -294,14 +444,23 @@ function formatNum(v, suffix='') {
   }
   return n.toFixed(0) + ' W';
 }
-
+/**
+ * Code-Teil: formatNum
+ * Zweck: Formatiert Daten für Anzeige oder Logs.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function formatNum(v, suffix='') {
 
   if (v === undefined || v === null || isNaN(v)) return '--';
   return Number(v).toFixed(1) + (suffix || '');
 }
-
-
+/**
+ * Code-Teil: formatPricePerKwh
+ * Zweck: Formatiert Daten für Anzeige oder Logs.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function formatPricePerKwh(v){
   if (v===undefined || v===null || isNaN(v)) return '--';
   const n = Number(v);
@@ -318,6 +477,12 @@ function formatPricePerKwh(v){
 // Expected schema (examples):
 //  - [{ total: 0.318, startsAt: "2026-01-21T00:00:00.000Z", endsAt: "..." }, ...]
 //  - { prices: [ ... ] }
+/**
+ * Code-Teil: nwParsePriceCurve
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwParsePriceCurve(raw) {
   if (raw === null || raw === undefined) return [];
 
@@ -336,7 +501,12 @@ function nwParsePriceCurve(raw) {
   }
 
   if (!Array.isArray(data)) return [];
-
+  /**
+   * Code-Teil: normalizePriceEurPerKwh
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function normalizePriceEurPerKwh(v){
     if (v === null || v === undefined) return null;
     let n = Number(v);
@@ -407,7 +577,12 @@ function nwParsePriceCurve(raw) {
   out.sort((a,b)=> a.startMs - b.startMs);
   return out;
 }
-
+/**
+ * Code-Teil: nwNiceStep
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwNiceStep(range, targetTicks){
   const r = Math.max(1e-9, Number(range) || 0);
   const t = Math.max(2, Number(targetTicks) || 6);
@@ -420,13 +595,23 @@ function nwNiceStep(range, targetTicks){
   else if (err >= 1.5) step = 2 * pow10;
   return step;
 }
-
+/**
+ * Code-Teil: nwClamp
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwClamp(v, lo, hi){
   const n = Number(v);
   if (!Number.isFinite(n)) return lo;
   return Math.max(lo, Math.min(hi, n));
 }
-
+/**
+ * Code-Teil: nwQuantile
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwQuantile(arr, q){
   try {
     const a = (Array.isArray(arr) ? arr : []).map(Number).filter(Number.isFinite).sort((x,y)=>x-y);
@@ -439,11 +624,21 @@ function nwQuantile(arr, q){
     return a[base] + rest * (a[base + 1] - a[base]);
   } catch(_e) { return null; }
 }
-
+/**
+ * Code-Teil: nwMedian
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwMedian(arr){
   return nwQuantile(arr, 0.5);
 }
-
+/**
+ * Code-Teil: nwResolveTariffThresholds
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwResolveTariffThresholds(pricesEur, cheapCandidate, expensiveCandidate){
   // Validate optional thresholds and compute sensible fallbacks from the day's distribution.
   const prices = (Array.isArray(pricesEur) ? pricesEur : []).map(Number).filter(Number.isFinite);
@@ -452,6 +647,18 @@ function nwResolveTariffThresholds(pricesEur, cheapCandidate, expensiveCandidate
   const min = Math.min(...prices);
   const max = Math.max(...prices);
 
+  /**
+   * Code-Teil: Arrow-Funktion `isValid`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: isValid
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const isValid = (v) => Number.isFinite(v) && v > 0 && v >= (min - 1e-12) && v <= (max + 1e-12);
 
   let cheapThr = Number(cheapCandidate);
@@ -477,7 +684,12 @@ function nwResolveTariffThresholds(pricesEur, cheapCandidate, expensiveCandidate
 
   return { cheapThr, expensiveThr };
 }
-
+/**
+ * Code-Teil: nwAggregateCurve
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwAggregateCurve(curve, dayStartMs, dayEndMs, targetIntervalMs){
   // Aggregate (e.g. 15-min) curves into cleaner slots (e.g. 60-min) using weighted average.
   const src = (Array.isArray(curve) ? curve : [])
@@ -522,11 +734,22 @@ function nwAggregateCurve(curve, dayStartMs, dayEndMs, targetIntervalMs){
   }
   return out.length ? out : src;
 }
+/**
+ * Code-Teil: nwFormatCt
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwFormatCt(vEurKwh){
   if (vEurKwh === undefined || vEurKwh === null || isNaN(Number(vEurKwh))) return '--';
   return (Number(vEurKwh) * 100).toFixed(1) + ' ct/kWh';
 }
-
+/**
+ * Code-Teil: nwTariffColorForPrice
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwTariffColorForPrice(priceEurKwh, cheapThr, expensiveThr){
   const p = Number(priceEurKwh);
   const cheap = Number(cheapThr);
@@ -536,7 +759,12 @@ function nwTariffColorForPrice(priceEurKwh, cheapThr, expensiveThr){
   // neutral
   return '#facc15'; // yellow
 }
-
+/**
+ * Code-Teil: nwDrawTariffForecastChart
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwDrawTariffForecastChart(canvas, curve, opts){
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -592,7 +820,6 @@ function nwDrawTariffForecastChart(canvas, curve, opts){
     ctx.fillText('Keine Preisdaten', W/2, H/2);
     return;
   }
-
   const pricesCt = items.map(x => x.priceEurKwh * 100);
   let minCt = Math.min(...pricesCt);
   let maxCt = Math.max(...pricesCt);
@@ -606,10 +833,28 @@ function nwDrawTariffForecastChart(canvas, curve, opts){
   const tickMax = Math.ceil(maxCt / step) * step;
   const yDigits = (step < 1) ? 1 : 0;
 
+  /**
+   * Code-Teil: Arrow-Funktion `xOf`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: xOf
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const xOf = (tMs) => {
     const frac = (tMs - dayStartMs) / (dayEndMs - dayStartMs);
     return m.L + nwClamp(frac, 0, 1) * plotW;
   };
+  /**
+   * Code-Teil: yOf
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const yOf = (pCt) => {
     const frac = (pCt - tickMin) / (tickMax - tickMin);
     return m.T + (1 - nwClamp(frac, 0, 1)) * plotH;
@@ -688,7 +933,12 @@ function nwDrawTariffForecastChart(canvas, curve, opts){
     }
   }
 }
-
+/**
+ * Code-Teil: initTariffForecastTooltip
+ * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function initTariffForecastTooltip(){
   const card = document.getElementById('tariffCard');
   const btn = document.getElementById('tariffForecastBtn');
@@ -726,23 +976,50 @@ function initTariffForecastTooltip(){
   let hoverTimer = null;
   let poll = null;
 
+  /**
+   * Code-Teil: Arrow-Funktion `v`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: v
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const v = (k) => {
     const st = window.latestState || {};
     return (st && st[k] && st[k].value !== undefined) ? st[k].value : null;
   };
-
+  /**
+   * Code-Teil: tsOf
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const tsOf = (k) => {
     const st = window.latestState || {};
     return (st && st[k] && st[k].ts !== undefined) ? Number(st[k].ts) : null;
   };
-
+  /**
+   * Code-Teil: getTodayRange
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function getTodayRange(){
     const d0 = new Date();
     d0.setHours(0,0,0,0);
     const d1 = new Date(d0.getTime() + 24*60*60*1000);
     return { startMs: d0.getTime(), endMs: d1.getTime() };
   }
-
+  /**
+   * Code-Teil: update
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function update(){
     const { startMs, endMs } = getTodayRange();
     const rawToday = v('priceTodayJson') || v('tarif.pricesTodayJson') || v('pricesTodayJson');
@@ -753,7 +1030,6 @@ function initTariffForecastTooltip(){
     if ((!curve || curve.length === 0) && rawTomorrow) {
       curve = nwParsePriceCurve(rawTomorrow);
     }
-
     const curveToday = (Array.isArray(curve) ? curve : []).filter(x => {
       if (!x || !Number.isFinite(x.startMs) || !Number.isFinite(x.endMs)) return false;
       // any overlap with today
@@ -812,7 +1088,12 @@ function initTariffForecastTooltip(){
       nowMs: Date.now(),
     });
   }
-
+  /**
+   * Code-Teil: place
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function place(){
     if (!tip) return;
     const anchor = anchorEl || card || btn;
@@ -850,7 +1131,12 @@ function initTariffForecastTooltip(){
   }
 
   let anchorEl = null;
-
+  /**
+   * Code-Teil: show
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function show(anchor){
     if (open) return;
     open = true;
@@ -864,26 +1150,42 @@ function initTariffForecastTooltip(){
     if (poll) clearInterval(poll);
     poll = setInterval(()=>{ try{ if (open) update(); } catch(_e){} }, 15000);
   }
+  /**
+   * Code-Teil: hide
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function hide(){
     open = false;
     if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
     if (poll) { clearInterval(poll); poll = null; }
     if (tip) tip.classList.remove('nw-tooltip--show');
   }
+  /**
+   * Code-Teil: toggle
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function toggle(anchor){ if (open) hide(); else show(anchor); }
 
   // Tooltip controls (icon + whole tile click)
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   btn.addEventListener('click', (e)=>{
     e.preventDefault();
     e.stopPropagation();
     toggle(btn);
   });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'mousedown' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   btn.addEventListener('mousedown', (e)=>{ e.stopPropagation(); });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchstart' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   btn.addEventListener('touchstart', (e)=>{ try{ e.stopPropagation(); }catch(_e){} }, { passive: true });
 
 
   // Click on the whole tile toggles the forecast when tariff is active.
   // EMS modal is opened via the EMS badge button.
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an card. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   card.addEventListener('click', (e)=>{
     const t = e && e.target;
     try {
@@ -899,6 +1201,7 @@ function initTariffForecastTooltip(){
     try { if (e) e.preventDefault(); } catch(_e) {}
     toggle(card);
   });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an card. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   card.addEventListener('keydown', (e)=>{
     if (!e) return;
     if (e.key === 'Enter' || e.key === ' ') {
@@ -912,52 +1215,84 @@ function initTariffForecastTooltip(){
   });
 
   // Desktop hover support (optional)
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'mouseenter' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   btn.addEventListener('mouseenter', ()=>{
     if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
     show(btn);
   });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'mouseleave' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   btn.addEventListener('mouseleave', ()=>{
     if (hoverTimer) clearTimeout(hoverTimer);
     hoverTimer = setTimeout(()=>{ if (!tip.matches(':hover')) hide(); }, 250);
   });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'mouseenter' an tip. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   tip.addEventListener('mouseenter', ()=>{
     if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
   });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'mouseleave' an tip. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   tip.addEventListener('mouseleave', ()=>{
     if (hoverTimer) clearTimeout(hoverTimer);
     hoverTimer = setTimeout(()=> hide(), 250);
   });
 
   // Close on outside click / Esc
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('click', (e)=>{
     if (!open) return;
     const t = e && e.target;
     if (t && (t === btn || tip.contains(t) || card.contains(t))) return;
     hide();
   }, true);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('keydown', (e)=>{
     if (!open) return;
     if (e && (e.key === 'Escape' || e.key === 'Esc')) hide();
   });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'resize' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   window.addEventListener('resize', ()=>{ if (open) { try{ place(); update(); } catch(_e){} } });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'scroll' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   window.addEventListener('scroll', ()=>{ if (open) { try{ place(); } catch(_e){} } }, true);
 }
 
 // ------------------------------
 // Wetter (optional)
 // ------------------------------
+/**
+ * Code-Teil: _fmtTempC
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _fmtTempC(v){
   if (v === undefined || v === null || isNaN(v)) return '-- °C';
   return Number(v).toFixed(1) + ' °C';
 }
+/**
+ * Code-Teil: _fmtPct
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _fmtPct(v){
   if (v === undefined || v === null || isNaN(v)) return '-- %';
   return Number(v).toFixed(0) + ' %';
 }
+/**
+ * Code-Teil: _fmtKmh
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _fmtKmh(v){
   if (v === undefined || v === null || isNaN(v)) return '-- km/h';
   return Number(v).toFixed(0) + ' km/h';
 }
+/**
+ * Code-Teil: _fmtNumLocal
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _fmtNumLocal(v, digits=1){
   if (v === undefined || v === null || isNaN(v)) return '--';
   const n = Number(v);
@@ -968,6 +1303,12 @@ function _fmtNumLocal(v, digits=1){
     return n.toFixed(d).replace('.', ',');
   }
 }
+/**
+ * Code-Teil: _fmtTimeHHmm
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _fmtTimeHHmm(ts){
   if (!ts || isNaN(Number(ts))) return '—';
   const d = new Date(Number(ts));
@@ -975,6 +1316,12 @@ function _fmtTimeHHmm(ts){
   const mm = String(d.getMinutes()).padStart(2,'0');
   return hh + ':' + mm;
 }
+/**
+ * Code-Teil: _pickWeatherIcon
+ * Zweck: Verarbeitet Wetter-/Prognosedaten für Anzeige oder KI-Beratung.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _pickWeatherIcon(code, text){
   const t = (text == null ? '' : String(text)).toLowerCase();
   const c = (code == null || isNaN(Number(code))) ? null : Number(code);
@@ -1000,31 +1347,56 @@ function _pickWeatherIcon(code, text){
   if (t.includes('gewitter') || t.includes('thunder') || t.includes('storm')) return '⛈️';
   return '🌤️';
 }
+/**
+ * Code-Teil: setWidth
+ * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function setWidth(id, pct) {
   const el = document.getElementById(id);
   if (!el) return;
   el.style.width = Math.max(0, Math.min(100, pct || 0)) + '%';
 }
-
+/**
+ * Code-Teil: setText
+ * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function setText(id, text) {
   const el = document.getElementById(id);
   if (!el) return;
   el.textContent = text;
 }
-
-
+/**
+ * Code-Teil: nwSetDisplay
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSetDisplay(id, visible, displayValue) {
   const el = document.getElementById(id);
   if (!el) return;
   el.style.display = visible ? (displayValue || '') : 'none';
 }
-
+/**
+ * Code-Teil: nwSetElementVisible
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSetElementVisible(el, visible, displayValue) {
   if (!el) return;
   try { el.classList.toggle('hidden', !visible); } catch (_e) {}
   el.style.display = visible ? (displayValue || '') : 'none';
 }
-
+/**
+ * Code-Teil: nwAsBool
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwAsBool(v, def) {
   if (typeof v === 'boolean') return v;
   if (v === undefined || v === null || v === '') return !!def;
@@ -1034,7 +1406,12 @@ function nwAsBool(v, def) {
   if (['false', '0', 'no', 'nein', 'off', 'aus'].includes(s)) return false;
   return !!def;
 }
-
+/**
+ * Code-Teil: nwFeatureMappedRow
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwFeatureMappedRow(row) {
   if (!row || row.enabled === false) return false;
   // Nur echte Ladepunkt-Zuordnungen zählen. Legacy-Aggregate wie consumptionEvcs
@@ -1042,7 +1419,12 @@ function nwFeatureMappedRow(row) {
   const fields = ['powerId','energyTotalId','energySessionId','statusId','activeId','onlineId','setCurrentAId','setPowerWId','enableWriteId','lockWriteId','rfidReadId','vehicleSocId'];
   return fields.some((key) => String(row[key] || '').trim());
 }
-
+/**
+ * Code-Teil: nwConfiguredEvcsRows
+ * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwConfiguredEvcsRows(inputCfg) {
   const c = inputCfg || window.__nwCfg || {};
   try {
@@ -1055,7 +1437,12 @@ function nwConfiguredEvcsRows(inputCfg) {
     return [];
   }
 }
-
+/**
+ * Code-Teil: nwEvcsFeatureFromConfig
+ * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwEvcsFeatureFromConfig(inputCfg) {
   const c = inputCfg || window.__nwCfg || {};
   try {
@@ -1070,7 +1457,12 @@ function nwEvcsFeatureFromConfig(inputCfg) {
     return false;
   }
 }
-
+/**
+ * Code-Teil: nwEvcsCountFromConfig
+ * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwEvcsCountFromConfig(inputCfg) {
   const c = inputCfg || window.__nwCfg || {};
   try {
@@ -1081,7 +1473,12 @@ function nwEvcsCountFromConfig(inputCfg) {
     return 0;
   }
 }
-
+/**
+ * Code-Teil: nwStorageFarmFeatureFromConfig
+ * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwStorageFarmFeatureFromConfig(inputCfg, stateSnapshot) {
   const c = inputCfg || window.__nwCfg || {};
   if (typeof c.storageFarmEnabled === 'boolean') return c.storageFarmEnabled;
@@ -1095,7 +1492,12 @@ function nwStorageFarmFeatureFromConfig(inputCfg, stateSnapshot) {
     return false;
   }
 }
-
+/**
+ * Code-Teil: nwApplyCustomerFeatureVisibility
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwApplyCustomerFeatureVisibility(inputCfg, stateSnapshot) {
   const c = inputCfg || window.__nwCfg || {};
   const evcsAvailable = nwEvcsFeatureFromConfig(c);
@@ -1134,7 +1536,12 @@ function nwApplyCustomerFeatureVisibility(inputCfg, stateSnapshot) {
   if (menuStorageFarmLink) menuStorageFarmLink.classList.toggle('hidden', !storageFarmAvailable);
   if (tabStorageFarm) tabStorageFarm.classList.toggle('hidden', !storageFarmAvailable);
 }
-
+/**
+ * Code-Teil: nwFormatDashboardTimestamp
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwFormatDashboardTimestamp(ts) {
   const n = Number(ts);
   if (!Number.isFinite(n) || n <= 0) return '--';
@@ -1147,10 +1554,21 @@ function nwFormatDashboardTimestamp(ts) {
   const ss = String(d.getSeconds()).padStart(2, '0');
   return `${dd}.${mm}.${yyyy} ${hh}:${mi}:${ss}`;
 }
-
+/**
+ * Code-Teil: nwLatestStateTimestamp
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwLatestStateTimestamp(keys) {
   const st = window.latestState || state || {};
   let best = 0;
+  /**
+   * Code-Teil: scanKey
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const scanKey = (k) => {
     const rec = st && st[k];
     const ts = rec && Number(rec.ts);
@@ -1167,7 +1585,12 @@ function nwLatestStateTimestamp(keys) {
   }
   return best || Date.now();
 }
-
+/**
+ * Code-Teil: nwSetLiveOnline
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function nwSetLiveOnline(isOnline) {
   const online = !!isOnline;
   setText('sideConnection', online ? 'Online' : 'Offline');
@@ -1175,7 +1598,12 @@ function nwSetLiveOnline(isOnline) {
   const dot = document.getElementById('sideLiveDot');
   if (dot) dot.classList.toggle('is-offline', !online);
 }
-
+/**
+ * Code-Teil: updateDashboardShellUi
+ * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function updateDashboardShellUi(data) {
   const snap = data || {};
   const d = typeof snap.d === 'function' ? snap.d : ((k) => (window.latestState || state || {})[k]?.value);
@@ -1227,6 +1655,12 @@ function updateDashboardShellUi(data) {
 // ------------------------------
 // Energiefluss: dynamische Extra-Kreise (Verbraucher/Erzeuger)
 // ------------------------------
+/**
+ * Code-Teil: _svgEl
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _svgEl(tag, attrs){
   const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
   if (attrs) {
@@ -1237,7 +1671,12 @@ function _svgEl(tag, attrs){
   }
   return el;
 }
-
+/**
+ * Code-Teil: initEnergyWebExtras
+ * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function initEnergyWebExtras(flowSlots){
   // Optional additional producers/consumers for the Energy-Flow monitor.
   // They are configured in the App-Center (Energiefluss-Monitor -> Verbraucher/Erzeuger).
@@ -1249,7 +1688,6 @@ function initEnergyWebExtras(flowSlots){
   // Backward compatible: older builds used flowOptionalConsumers/flowOptionalProducers
   const consumersAll = (flowSlots && (flowSlots.consumers || flowSlots.flowOptionalConsumers)) ? (flowSlots.consumers || flowSlots.flowOptionalConsumers) : [];
   const producersAll = (flowSlots && (flowSlots.producers || flowSlots.flowOptionalProducers)) ? (flowSlots.producers || flowSlots.flowOptionalProducers) : [];
-
   const consumers = consumersAll.filter(x => x && x.mapped).slice(0, maxConsumers);
   const producers = producersAll.filter(x => x && x.mapped).slice(0, maxProducers);
 
@@ -1328,6 +1766,18 @@ function initEnergyWebExtras(flowSlots){
   const VB_MAX_X = VB_MIN_X + VB_W;
   const VB_MAX_Y = VB_MIN_Y + VB_H;
 
+  /**
+   * Code-Teil: Arrow-Funktion `placeItem`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: placeItem
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const placeItem = (item, x, y, kind, idx, rNode) => {
     const isProducer = kind === 'producer';
     const idBase = `${kind}${idx + 1}`;
@@ -1405,6 +1855,7 @@ function initEnergyWebExtras(flowSlots){
       if (item && item.qc && item.qc.enabled) {
         g.classList.add('clickable');
         g.style.cursor = 'pointer';
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an g. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         g.addEventListener('click', (ev) => {
           ev.stopPropagation();
           const openKind = (kind === 'producers' || kind === 'producer') ? 'producer' : 'consumer';
@@ -1436,6 +1887,18 @@ function initEnergyWebExtras(flowSlots){
 
 // --- Special producers (BHKW / Generator) ---
 // Reserved lower-left area between grid and battery.
+/**
+ * Code-Teil: Arrow-Funktion `_readTranslate`
+ * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+ * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+/**
+ * Code-Teil: _readTranslate
+ * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const _readTranslate = (id, fallback) => {
   try {
     const el = document.getElementById(id);
@@ -1451,6 +1914,18 @@ const _readTranslate = (id, fallback) => {
   return fallback;
 };
 
+/**
+ * Code-Teil: Arrow-Funktion `placeSpecialProducer`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+/**
+ * Code-Teil: placeSpecialProducer
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const placeSpecialProducer = (item, x, y, role, rNode) => {
   const safeRole = String(role || 'special').replace(/[^a-zA-Z0-9_-]/g, '');
   const nodeId = `node_special_${safeRole}`;
@@ -1514,6 +1989,18 @@ const placeSpecialProducer = (item, x, y, role, rNode) => {
   });
 };
 
+/**
+ * Code-Teil: Arrow-Funktion `placeSpecialLowerLeftArc`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+/**
+ * Code-Teil: placeSpecialLowerLeftArc
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const placeSpecialLowerLeftArc = (items) => {
   const list = Array.isArray(items) ? items.filter(Boolean) : [];
   if (!list.length) return;
@@ -1592,11 +2079,28 @@ const placeSpecialLowerLeftArc = (items) => {
   const yMinNode = VB_MIN_Y + margin + rMaxNode + 26; // room for value text above
   const yMaxNode = VB_MAX_Y - margin - rMaxNode - 34; // room for label text below
 
+  /**
+   * Code-Teil: Arrow-Funktion `clampFlowPoint`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: clampFlowPoint
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const clampFlowPoint = (pt) => ({
     x: Math.max(xMinNode, Math.min(xMaxNode, pt.x)),
     y: Math.max(yMinNode, Math.min(yMaxNode, pt.y))
   });
-
+  /**
+   * Code-Teil: sampleAngles
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const sampleAngles = (startDeg, endDeg, count) => {
     if (count <= 0) return [];
     if (count === 1) return [Math.round((startDeg + endDeg) / 2)];
@@ -1604,6 +2108,18 @@ const placeSpecialLowerLeftArc = (items) => {
     return Array.from({ length: count }, (_, i) => startDeg + step * i);
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `buildConsumerAngles`
+   * Zweck: baut aus Rohdaten eine strukturierte Konfiguration, Liste oder Empfehlung.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: buildConsumerAngles
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const buildConsumerAngles = (count) => {
     if (count <= 0) return [];
     const evcsVisibleNow = !!(flowExtras && flowExtras.meta && flowExtras.meta.evcsAvailable);
@@ -1623,6 +2139,18 @@ const placeSpecialLowerLeftArc = (items) => {
     return upper.concat(lower);
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `nudgeAway`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: nudgeAway
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const nudgeAway = (pt, blocker, minDist) => {
     let dx = pt.x - blocker.x;
     let dy = pt.y - blocker.y;
@@ -1639,6 +2167,18 @@ const placeSpecialLowerLeftArc = (items) => {
     return true;
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `resolveExtraNodePoint`
+   * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: resolveExtraNodePoint
+   * Zweck: Wählt die richtige Datenquelle/Fallback-Logik aus.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const resolveExtraNodePoint = (kind, x, y, rNode, placed) => {
     const pt = clampFlowPoint({ x, y });
     const fixedBlockers = [
@@ -1669,6 +2209,18 @@ const placeSpecialLowerLeftArc = (items) => {
   };
 
   // Consumers: right side, collision-safe.
+  /**
+   * Code-Teil: Arrow-Funktion `placeConsumersRightArc`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: placeConsumersRightArc
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const placeConsumersRightArc = (items) => {
     const n = items.length;
     if (!n) return;
@@ -1688,6 +2240,18 @@ const placeSpecialLowerLeftArc = (items) => {
 
   // Producers: upper-left arc (top-left -> left-middle)
   // Lower-left is reserved for future Generator/BHKW nodes.
+  /**
+   * Code-Teil: Arrow-Funktion `placeProducersLeftArc`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: placeProducersLeftArc
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const placeProducersLeftArc = (items) => {
     const n = items.length;
     if (!n) return;
@@ -1753,8 +2317,12 @@ try {
     evcsVisible: !!flowExtras.meta.evcsAvailable
   });
 }
-
-
+/**
+ * Code-Teil: isHeatingRodFlowItem
+ * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function isHeatingRodFlowItem(it){
   try {
     const t = String((it && (it.consumerType || it.type || it.category)) || '').toLowerCase();
@@ -1762,9 +2330,20 @@ function isHeatingRodFlowItem(it){
     return t === 'heatingrod' || t === 'heating_rod' || t === 'heating-rod' || t === 'heizstab' || ck === 'heatingrod' || ck === 'heating_rod' || ck === 'heating-rod';
   } catch(_e) { return false; }
 }
-
+/**
+ * Code-Teil: resolveHeatingRodFlowPower
+ * Zweck: Wählt die richtige Datenquelle/Fallback-Logik aus.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function resolveHeatingRodFlowPower(it, d, fallbackRaw){
   const idx = Math.max(1, Math.round(Number(it && it.idx) || 0));
+  /**
+   * Code-Teil: readN
+   * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const readN = (key) => {
     try {
       const n = Number(d(key));
@@ -1787,10 +2366,20 @@ function resolveHeatingRodFlowPower(it, d, fallbackRaw){
     maxPowerW: Number.isFinite(maxPower) && maxPower > 0 ? maxPower : 0
   };
 }
-
-
+/**
+ * Code-Teil: updateEnergyWebExtras
+ * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function updateEnergyWebExtras(d){
   let consumersSum = 0;
+  /**
+   * Code-Teil: show
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const show = (id, abs) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -1799,11 +2388,29 @@ function updateEnergyWebExtras(d){
     const v = Math.min(1, a / 2000);
     el.style.opacity = (a > 1) ? String(0.15 + 0.85 * v) : '0.15';
   };
+  /**
+   * Code-Teil: Arrow-Funktion `setRev`
+   * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: setRev
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const setRev = (id, rev) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.toggle('rev', !!rev);
   };
+  /**
+   * Code-Teil: setNodeActive
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const setNodeActive = (nodeId, active) => {
     const el = document.getElementById(nodeId);
     if (!el) return;
@@ -1827,6 +2434,18 @@ function updateEnergyWebExtras(d){
 
 
 // BHKW / Generator (special producers)
+/**
+ * Code-Teil: Arrow-Funktion `sumSpecialPower`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+/**
+ * Code-Teil: sumSpecialPower
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const sumSpecialPower = (role, devices) => {
   const r = String(role || '').toLowerCase();
   const pre = (r === 'bhkw') ? 'bhkw.devices.b' : (r === 'generator') ? 'generator.devices.g' : '';
@@ -1882,7 +2501,12 @@ if (flowExtras && Array.isArray(flowExtras.special)) {
 
   return consumersSum;
 }
-
+/**
+ * Code-Teil: setRingSegment
+ * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function setRingSegment(cls, pct) {
   const max = 2 * Math.PI * 42; // circumference
   const v = Math.max(0, Math.min(100, pct || 0));
@@ -1892,6 +2516,13 @@ function setRingSegment(cls, pct) {
   if (el) el.setAttribute('stroke-dasharray', `${dash} ${rest}`);
 }
 
+// Abschnitt: Ableitung der zentralen LIVE-Werte. Hier werden PV, Netz, Speicher, Verbrauch und KPIs für das Dashboard zusammengeführt.
+/**
+ * Code-Teil: computeDerived
+ * Zweck: Berechnet abgeleitete Werte.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function computeDerived() {
   // derive some percentages if not provided
   const pv = pick('pvPower', 'productionTotal');
@@ -1899,7 +2530,6 @@ function computeDerived() {
   const batteryFlow = getNormalizedBatteryFlow();
   const charge = Number(batteryFlow.chargeW) || 0;
   const discharge = Number(batteryFlow.dischargeW) || 0;
-
   const gridMeta = getGridImportExport((k) => get(k));
   const rawBuy = gridMeta.rawBuy;
   const rawSell = gridMeta.rawSell;
@@ -1933,8 +2563,19 @@ function computeDerived() {
     res.selfConsumption = Math.max(0, Math.min(100, pct));
   }
   return res;
-
+  /**
+   * Code-Teil: get
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function get(k){ return state[k]?.value; }
+  /**
+   * Code-Teil: pick
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function pick(...keys){
     for (const k of keys) {
       const n = coerceNumber(get(k));
@@ -1943,8 +2584,12 @@ function computeDerived() {
     return null;
   }
 }
-
-
+/**
+ * Code-Teil: coerceNumber
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function coerceNumber(v){
   if (v === undefined || v === null) return null;
   if (typeof v === 'number') return Number.isFinite(v) ? v : null;
@@ -1955,11 +2600,22 @@ function coerceNumber(v){
   const n = parseFloat(cleaned);
   return Number.isFinite(n) ? n : null;
 }
+/**
+ * Code-Teil: clamp01
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function clamp01(v, lo, hi){
   if (v === null || v === undefined || !Number.isFinite(v)) return null;
   return Math.max(lo, Math.min(hi, v));
 }
-
+/**
+ * Code-Teil: isMappedDatapoint
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function isMappedDatapoint(key) {
   try {
     const cfg = window.__nwCfg || {};
@@ -1974,7 +2630,12 @@ function isMappedDatapoint(key) {
   } catch (_e) {}
   return false;
 }
-
+/**
+ * Code-Teil: getGridImportExport
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function getGridImportExport(read) {
   const getter = (typeof read === 'function') ? read : (k) => read?.[k]?.value;
   const buyMapped = isMappedDatapoint('gridBuyPower');
@@ -2005,7 +2666,12 @@ function getGridImportExport(read) {
     net: net !== null ? net : (Math.max(0, buy ?? 0) - Math.max(0, sell ?? 0)),
   };
 }
-
+/**
+ * Code-Teil: getStateAgeMs
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function getStateAgeMs(key) {
   try {
     const rec = state && state[key];
@@ -2016,7 +2682,12 @@ function getStateAgeMs(key) {
     return null;
   }
 }
-
+/**
+ * Code-Teil: getFlowFreshMaxAgeMs
+ * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function getFlowFreshMaxAgeMs() {
   try {
     const stateVal = coerceNumber(state && state['settings.deviceStaleTimeoutSec'] && state['settings.deviceStaleTimeoutSec'].value);
@@ -2027,7 +2698,12 @@ function getFlowFreshMaxAgeMs() {
     return 300000;
   }
 }
-
+/**
+ * Code-Teil: getFreshFlowNumber
+ * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function getFreshFlowNumber(key, opts = {}) {
   if (opts.onlyIfMapped && !isMappedDatapoint(key)) return null;
   const rec = state && state[key];
@@ -2039,7 +2715,23 @@ function getFreshFlowNumber(key, opts = {}) {
   if (Number.isFinite(Number(maxAgeMs)) && Number(maxAgeMs) > 0 && age !== null && age > Number(maxAgeMs)) return null;
   return n;
 }
-
+/**
+ * Code-Teil: getStableFlowNumber
+ * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
+function getStableFlowNumber(key, opts = {}) {
+  // Kern-Energiefluss-DPs dürfen nicht als fehlend gelten, nur weil ein konstanter
+  // Wert (typisch 0 W bei Speicher Laden/Entladen) lange nicht geändert wurde.
+  return getFreshFlowNumber(key, Object.assign({}, opts, { maxAgeMs: null }));
+}
+/**
+ * Code-Teil: getConfiguredDatapointId
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function getConfiguredDatapointId(key) {
   try {
     const cfg = window.__nwCfg || {};
@@ -2049,15 +2741,26 @@ function getConfiguredDatapointId(key) {
     return '';
   }
 }
-
+/**
+ * Code-Teil: getBalanceDerivedBatteryFlow
+ * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function getBalanceDerivedBatteryFlow(opts = {}) {
   try {
     const deadbandW = Number.isFinite(Number(opts.deadbandW)) ? Math.max(0, Number(opts.deadbandW)) : 180;
     const st = state || window.latestState || {};
+    /**
+     * Code-Teil: read
+     * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const read = (k) => st && st[k] ? st[k].value : undefined;
 
     // In Speicherfarm-Anlagen sind die Farm-Summen die Quelle der Wahrheit.
-    if (nwAsBool(read('storageFarm.enabled'), false)) return null;
+    if (nwStorageFarmFeatureFromConfig(window.__nwCfg || {}, st)) return null;
 
     const soc = coerceNumber(read('storageSoc') ?? read('batterySOC'));
     if (soc === null) return null;
@@ -2105,22 +2808,36 @@ function getBalanceDerivedBatteryFlow(opts = {}) {
     return null;
   }
 }
-
+/**
+ * Code-Teil: preferBalanceDerivedBatteryFlow
+ * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function preferBalanceDerivedBatteryFlow(current, opts = {}) {
   try {
     const deadbandW = Number.isFinite(Number(opts.deadbandW)) ? Math.max(180, Number(opts.deadbandW)) : 180;
-    const measured = Math.max(0, Math.abs(Number(current && current.chargeW) || 0) + Math.abs(Number(current && current.dischargeW) || 0));
     const src = String(current && current.src || '');
-    const missingLike = !current || src === 'missing' || src === 'stale-or-missing';
+    const missingLike = !current || src === 'missing' || src === 'stale-or-missing' || current.incomplete === true;
+    if (!missingLike) return current;
     const derived = getBalanceDerivedBatteryFlow({ deadbandW });
     if (!derived) return current;
-    if (missingLike || measured <= deadbandW) return derived;
-    return current;
+    return Object.assign({}, derived, {
+      src: String(derived.src || 'balanceDerived') + (current && current.incomplete ? '+missing-side' : ''),
+      fallbackFor: src || 'missing'
+    });
   } catch (_e) {
     return current;
   }
 }
 
+// Abschnitt: Speicher-DP-Auflösung im Frontend. Unterstützt signed DP, getrennte Lade-/Entlade-DPs und Fallbacks; muss mit Backend-Resolvern konsistent bleiben.
+/**
+ * Code-Teil: getNormalizedBatteryFlow
+ * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function getNormalizedBatteryFlow() {
   const deadbandW = 25;
   const inv = !!(state && state['settings.flowInvertBattery'] && state['settings.flowInvertBattery'].value);
@@ -2130,8 +2847,21 @@ function getNormalizedBatteryFlow() {
   const chargeMapped = !!chargeId;
   const dischargeMapped = !!dischargeId;
   const batteryMapped = !!batteryId;
+  const anyStorageMapped = chargeMapped || dischargeMapped || batteryMapped;
   const samePair = !!(chargeMapped && dischargeMapped && chargeId === dischargeId);
 
+  /**
+   * Code-Teil: Arrow-Funktion `fromSigned`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: fromSigned
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const fromSigned = (raw, src) => {
     let signed = Number(raw);
     if (!Number.isFinite(signed)) signed = 0;
@@ -2143,58 +2873,71 @@ function getNormalizedBatteryFlow() {
       signedW: signed,
       src,
       inverted: inv,
+      fromSigned: true,
+      derived: false,
     };
   };
 
-  const sfEnabled = !!(state && state['storageFarm.enabled'] && state['storageFarm.enabled'].value);
+  const sfEnabled = nwStorageFarmFeatureFromConfig(window.__nwCfg || {}, state || window.latestState || {});
   if (sfEnabled) {
-    const fc = getFreshFlowNumber('storageFarm.totalChargePowerW');
-    const fd = getFreshFlowNumber('storageFarm.totalDischargePowerW');
+    const fc = getStableFlowNumber('storageFarm.totalChargePowerW');
+    const fd = getStableFlowNumber('storageFarm.totalDischargePowerW');
     if (fc !== null || fd !== null) {
       let c = Math.max(0, Math.abs(Number(fc || 0)));
       let d = Math.max(0, Math.abs(Number(fd || 0)));
       if (inv) { const t = c; c = d; d = t; }
       if (c <= deadbandW) c = 0;
       if (d <= deadbandW) d = 0;
-      return { chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'storageFarm(inv)' : 'storageFarm', inverted: inv };
+      return { chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'storageFarm(inv)' : 'storageFarm', inverted: inv, fromSigned: false, derived: false };
     }
   }
 
-  const signedBattery = batteryMapped ? getFreshFlowNumber('batteryPower') : null;
-  const charge = chargeMapped ? getFreshFlowNumber('storageChargePower') : null;
-  const discharge = dischargeMapped ? getFreshFlowNumber('storageDischargePower') : null;
+  // Gemappte Speicher-DPs stabil lesen: ein unveränderter 0-Wert darf nicht wegen
+  // seines Alters verworfen und durch eine Bilanzrechnung ersetzt werden.
+  const signedBattery = batteryMapped ? getStableFlowNumber('batteryPower') : null;
+  const charge = chargeMapped ? getStableFlowNumber('storageChargePower') : null;
+  const discharge = dischargeMapped ? getStableFlowNumber('storageDischargePower') : null;
 
-  if (samePair && signedBattery !== null) return preferBalanceDerivedBatteryFlow(fromSigned(signedBattery, 'batterySignedForSamePair'), { deadbandW });
+  if (samePair && charge !== null) return fromSigned(charge, 'sameChargeDischargeSigned');
 
-  const separateAvailable = (charge !== null || discharge !== null);
-  const bothDirections = Math.abs(Number(charge || 0)) > deadbandW && Math.abs(Number(discharge || 0)) > deadbandW;
-  const bothEqualish = bothDirections && Math.abs(Math.abs(Number(charge || 0)) - Math.abs(Number(discharge || 0))) <= Math.max(2, deadbandW);
-
-  if (signedBattery !== null && (!separateAvailable || bothEqualish || (!chargeMapped && !dischargeMapped))) {
-    return preferBalanceDerivedBatteryFlow(fromSigned(signedBattery, bothEqualish ? 'batterySignedOverrideDual' : 'batterySigned'), { deadbandW });
-  }
-
-  if (separateAvailable) {
+  if (charge !== null || discharge !== null) {
     let c = Math.max(0, Math.abs(Number(charge || 0)));
     let d = Math.max(0, Math.abs(Number(discharge || 0)));
     if (c <= deadbandW) c = 0;
     if (d <= deadbandW) d = 0;
     if (inv) { const t = c; c = d; d = t; }
-    return preferBalanceDerivedBatteryFlow({ chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'chargeDischarge(inv)' : 'chargeDischarge', inverted: inv }, { deadbandW });
+    return { chargeW: c, dischargeW: d, signedW: d - c, src: inv ? 'chargeDischarge(inv)' : 'chargeDischarge', inverted: inv, fromSigned: false, derived: false };
   }
 
-  if (signedBattery !== null) return preferBalanceDerivedBatteryFlow(fromSigned(signedBattery, 'batterySigned'), { deadbandW });
+  if (signedBattery !== null) return fromSigned(signedBattery, 'batterySigned');
 
-  return preferBalanceDerivedBatteryFlow({ chargeW: 0, dischargeW: 0, signedW: 0, src: (batteryMapped || chargeMapped || dischargeMapped) ? 'stale-or-missing' : 'missing', inverted: inv }, { deadbandW });
+  // Rechen-Fallback nur bei wirklich nicht konfiguriertem Speicher-DP.
+  if (!anyStorageMapped) {
+    const derived = getBalanceDerivedBatteryFlow({ deadbandW: Math.max(180, deadbandW) });
+    if (derived) return derived;
+  }
+
+  return { chargeW: 0, dischargeW: 0, signedW: 0, src: anyStorageMapped ? 'mapped-missing' : 'missing', inverted: inv, fromSigned: false, derived: false };
 }
-
+// Abschnitt: Haupt-Renderlauf des LIVE-Dashboards. Alle DOM-Werte für Energiefluss, KPIs, KI-Berater und Schnellzugriffe werden hier aktualisiert.
+/**
+ * Code-Teil: render
+ * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function render() {
   const s = state;
-
+  /**
+   * Code-Teil: d
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const d = (k) => s[k]?.value;
 
   // Top ring values: map PV, Grid, Load, Bat flows to percent of max for visualization
-  const sfEnabled = !!(s['storageFarm.enabled']?.value);
+  const sfEnabled = nwStorageFarmFeatureFromConfig(window.__nwCfg || {}, s || state || {});
   const pvMapped = isMappedDatapoint('pvPower') || isMappedDatapoint('productionTotal');
 
   // PV (W): primary from mapped PV datapoint; fallback to productionTotal if used as power DP.
@@ -2232,8 +2975,19 @@ function render() {
     if (socAvg != null && !isNaN(Number(socAvg))) soc = socAvg;
     else if (socMedian != null && !isNaN(Number(socMedian))) soc = socMedian;
   }
-
   const maxVal = Math.max(1, ...[pv, load, buy, sell, charge, discharge].filter(x => typeof x === 'number').map(Math.abs));
+  /**
+   * Code-Teil: Arrow-Funktion `pct`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: pct
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const pct = (v) => typeof v === 'number' ? (Math.abs(v) / maxVal) * 100 : 0;
 
   setRingSegment('pv', pct(pv));
@@ -2437,6 +3191,13 @@ function render() {
   try { if (typeof storageFarmApply === 'function') storageFarmApply(); } catch (_e) {}
 }
 
+// Abschnitt: Frontend-Bootstrap. Lädt Config/States, setzt Feature-Sichtbarkeit und startet Live-Events.
+/**
+ * Code-Teil: bootstrap
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function bootstrap() {
   let cfg = {};
   try {
@@ -2503,6 +3264,18 @@ let lastInstallerConfigJson = null;
 let cfgReloadInFlight = false;
 let cfgReloadPending = false;
 
+/**
+ * Code-Teil: Arrow-Funktion `applyConfigSnapshot`
+ * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+ * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+/**
+ * Code-Teil: applyConfigSnapshot
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const applyConfigSnapshot = (nextCfg) => {
   cfg = nextCfg || {};
   try { window.__nwCfg = cfg || {}; } catch (_e) { window.__nwCfg = {}; }
@@ -2568,6 +3341,18 @@ const applyConfigSnapshot = (nextCfg) => {
   }
 };
 
+/**
+ * Code-Teil: Arrow-Funktion `refreshConfig`
+ * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+ * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+/**
+ * Code-Teil: refreshConfig
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const refreshConfig = async () => {
   if (cfgReloadInFlight) { cfgReloadPending = true; return; }
   cfgReloadInFlight = true;
@@ -2585,8 +3370,6 @@ const refreshConfig = async () => {
     }
   }
 };
-
-
   const snap = await fetch('/api/state').then(r => r.json());
   state = snap || {};
   try { lastInstallerConfigJson = (state && state['installer.configJson'] && state['installer.configJson'].value) || null; } catch (_e) {}
@@ -2614,7 +3397,12 @@ const refreshConfig = async () => {
   try { if (typeof initRelayModal === 'function') initRelayModal(); } catch (_e) {}
   try { if (typeof initBhkwModal === 'function') initBhkwModal(); } catch (_e) {}
   try { if (typeof initGeneratorModal === 'function') initGeneratorModal(); } catch (_e) {}
-
+  /**
+   * Code-Teil: startEvents
+   * Zweck: Startet Prozess, Timer, Engine oder Verbindung.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function startEvents(){
   try{
     const es = new EventSource('/events');
@@ -2648,15 +3436,37 @@ startEvents();
 
 
 // --- Menu & Settings ---
+/**
+ * Code-Teil: initMenu
+ * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function initMenu(){
   const btn = document.getElementById('menuBtn');
   const menu = document.getElementById('menuDropdown');
   if (!btn || !menu) return;
+  /**
+   * Code-Teil: open
+   * Zweck: Öffnet Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const open = ()=> menu.classList.toggle('hidden');
+  /**
+   * Code-Teil: close
+   * Zweck: Schließt Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const close = ()=> menu.classList.add('hidden');
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   btn.addEventListener('click', (e)=>{ e.stopPropagation(); open(); });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menu. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   menu.addEventListener('click', (e)=> e.stopPropagation());
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') close(); });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('click', ()=> close());
   const settingsBtn = document.getElementById('menuOpenSettings');
   const installerBtn = document.getElementById('menuOpenInstaller');
@@ -2682,8 +3492,12 @@ function initMenu(){
   try { initEmsControlModal(); } catch(_e) {}
   });
   }
-
-
+/**
+ * Code-Teil: initSettingsPanel
+ * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function initSettingsPanel(){
   // Wichtig: diese Funktion wird an mehreren Stellen aufgerufen
   // (Menü, initial, ggf. nach State-Updates). Sie muss daher idempotent sein.
@@ -2700,16 +3514,46 @@ function initSettingsPanel(){
   const dynToggle = document.getElementById('s_dyn_toggle');
   const dynBlock = document.getElementById('dyn_settings_block');
 
+  /**
+   * Code-Teil: Arrow-Funktion `updatePriorityLabel`
+   * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: updatePriorityLabel
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const updatePriorityLabel = ()=>{
     if (!p || !prLabel) return;
     const v = Number(p.value || 2);
     prLabel.textContent = (v === 1) ? 'Speicher' : (v === 3) ? 'Ladestation' : 'Auto';
   };
+  /**
+   * Code-Teil: updateTariffModeLabel
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const updateTariffModeLabel = ()=>{
     if (!t || !tmLabel) return;
     const v = Number(t.value || 1);
     tmLabel.textContent = (v === 2) ? 'Automatisch' : 'Manuell';
   };
+  /**
+   * Code-Teil: Arrow-Funktion `updateDynVisibility`
+   * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: updateDynVisibility
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const updateDynVisibility = ()=>{
     if (!dynBlock) return;
     // Netzentgelt / Tarifhistorie must remain configurable even if the dynamic tariff toggle is off.
@@ -2718,6 +3562,18 @@ function initSettingsPanel(){
     try { if (dynToggle) syncToggleButtonsForInputId('s_dyn_toggle'); } catch (_e) {}
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `normalizePriorityValue`
+   * Zweck: normalisiert Eingaben/Anzeigeformate und schützt gegen ungültige Werte.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: normalizePriorityValue
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const normalizePriorityValue = ()=>{
     if (!p) return;
     let v = Number(p.value);
@@ -2733,6 +3589,18 @@ function initSettingsPanel(){
     if (v > 3) v = 2;
     p.value = String(v);
   };
+  /**
+   * Code-Teil: Arrow-Funktion `snapPriority`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: snapPriority
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const snapPriority = ()=>{
     if (!p) return;
     let v = Number(p.value);
@@ -2743,6 +3611,18 @@ function initSettingsPanel(){
     p.value = String(v);
     updatePriorityLabel();
   };
+  /**
+   * Code-Teil: Arrow-Funktion `snapTariffMode`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: snapTariffMode
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const snapTariffMode = ()=>{
     if (!t) return;
     let v = Number(t.value);
@@ -2765,6 +3645,18 @@ function initSettingsPanel(){
   const netFeeSimpleBlock = document.getElementById('netFeeSimpleBlock');
   const netFeeQuarterBlock = document.getElementById('netFeeQuarterBlock');
 
+  /**
+   * Code-Teil: Arrow-Funktion `setDynSubTab`
+   * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: setDynSubTab
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const setDynSubTab = (tab) => {
     const t = (tab === 'netfee') ? 'netfee' : 'tariff';
     if (netFeeTabs) netFeeTabs.dataset.active = t;
@@ -2778,6 +3670,12 @@ function initSettingsPanel(){
     }
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `updateNetFeeUi`
+   * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
   const updateNetFeeUi = (opts = {}) => {
     const enabled = netFeeToggle ? !!netFeeToggle.checked : false;
 
@@ -2821,6 +3719,18 @@ function initSettingsPanel(){
 
   let pvSeasonManualOpen = false;
 
+  /**
+   * Code-Teil: Arrow-Funktion `updatePvSeasonUi`
+   * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: updatePvSeasonUi
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const updatePvSeasonUi = () => {
     if (!pvSeasonToggle || !pvSeasonBlock) return;
 
@@ -2874,12 +3784,29 @@ function initSettingsPanel(){
   const weatherApiMissing = document.getElementById('weatherApiKeyMissing');
 
 
+  /**
+   * Code-Teil: Arrow-Funktion `_nwBool`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _nwBool
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const _nwBool = (v) => {
     if (v === true || v === 1 || v === '1') return true;
     const s = String(v || '').toLowerCase().trim();
     return s === 'true' || s === 'yes' || s === 'on';
   };
-
+  /**
+   * Code-Teil: updateWeatherVisibility
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const updateWeatherVisibility = () => {
     if (!weatherBlock || !weatherToggle) return;
     // IMPORTANT:
@@ -2893,6 +3820,18 @@ function initSettingsPanel(){
     try { syncToggleButtonsForInputId('s_weather_enabled'); } catch (_e) {}
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `updateWeatherModeUi`
+   * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: updateWeatherModeUi
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const updateWeatherModeUi = () => {
     if (!weatherUsageInput) return;
 
@@ -2932,35 +3871,45 @@ function initSettingsPanel(){
   if (p) {
     p.min = 1; p.max = 3; p.step = 1;
     normalizePriorityValue();
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an p. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     p.addEventListener('input', snapPriority);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an p. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     p.addEventListener('change', snapPriority);
   }
   if (t) {
     t.min = 1; t.max = 2; t.step = 1;
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an t. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     t.addEventListener('input', snapTariffMode);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an t. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     t.addEventListener('change', snapTariffMode);
   }
   if (dynToggle) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an dynToggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     dynToggle.addEventListener('change', updateDynVisibility);
   }
 
   // PV Saisonprofil
   if (pvSeasonToggle) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an pvSeasonToggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     pvSeasonToggle.addEventListener('change', updatePvSeasonUi);
   }
   if (pvSeasonAiToggle) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an pvSeasonAiToggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     pvSeasonAiToggle.addEventListener('change', updatePvSeasonUi);
   }
 
   // Netzentgelt: Aktivierung & Tabs
   if (netFeeToggle) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an netFeeToggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     netFeeToggle.addEventListener('change', () => updateNetFeeUi({ openNetFee: !!netFeeToggle.checked }));
   }
   if (netFeeModelSel) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an netFeeModelSel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     netFeeModelSel.addEventListener('change', () => updateNetFeeUi({}));
   }
   if (netFeeTabs) {
     [...netFeeTabs.querySelectorAll('button[data-dyntab]')].forEach(btn => {
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       btn.addEventListener('click', () => {
         const t = btn.dataset.dyntab || 'tariff';
         setDynSubTab(t);
@@ -2972,6 +3921,7 @@ function initSettingsPanel(){
   if (weatherToggle) weatherToggle.addEventListener('change', updateWeatherVisibility);
   if (weatherBtns && weatherUsageInput) {
     [...weatherBtns.querySelectorAll('button')].forEach(btn => {
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       btn.addEventListener('click', () => {
         const v = btn.dataset.value || 'private';
         weatherUsageInput.value = v;
@@ -2988,6 +3938,7 @@ function initSettingsPanel(){
   const notifyTestBtn = document.getElementById('notifyTestBtn');
   const notifyTestMsg = document.getElementById('notifyTestMsg');
   if (notifyTestBtn) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an notifyTestBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     notifyTestBtn.addEventListener('click', async ()=>{
       try {
         notifyTestBtn.disabled = true;
@@ -3020,10 +3971,23 @@ function initSettingsPanel(){
   if (elSoc) {
     if (typeof opts.showSocBadge === 'undefined') opts.showSocBadge = true;
     elSoc.checked = !!opts.showSocBadge;
+    /**
+     * Code-Teil: Arrow-Funktion `applySoc`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: applySoc
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const applySoc = ()=> {
       const t = document.getElementById('batterySocIn');
       if (t) t.style.display = elSoc.checked ? '' : 'none';
     };
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an elSoc. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     elSoc.addEventListener('change', ()=>{
       opts.showSocBadge = elSoc.checked;
       localStorage.setItem(LS_KEY, JSON.stringify(opts));
@@ -3036,6 +4000,7 @@ function initSettingsPanel(){
   if (elRef) {
     if (typeof opts.refreshSec === 'undefined') opts.refreshSec = 1;
     elRef.value = opts.refreshSec;
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an elRef. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     elRef.addEventListener('change', ()=>{
       const v = Math.max(1, parseInt(elRef.value||'1', 10));
       opts.refreshSec = v;
@@ -3043,9 +4008,12 @@ function initSettingsPanel(){
     });
   }
 }
-
-
-
+/**
+ * Code-Teil: applyInitialTabFromUrl
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function applyInitialTabFromUrl(){
   try {
     const params = new URLSearchParams(window.location.search || '');
@@ -3059,6 +4027,18 @@ function applyInitialTabFromUrl(){
 
     let tries = 0;
     const maxTries = 20;
+    /**
+     * Code-Teil: Arrow-Funktion `tryActivate`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: tryActivate
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const tryActivate = () => {
       tries++;
       const btn = document.querySelector(`.tabs .tab[data-tab="${tab}"]`);
@@ -3073,8 +4053,12 @@ function applyInitialTabFromUrl(){
     tryActivate();
   } catch (_e) {}
 }
-
-
+/**
+ * Code-Teil: _nwCssEscapeIdent
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _nwCssEscapeIdent(s){
   try{
     if (window && typeof window.CSS !== 'undefined' && CSS && typeof CSS.escape === 'function') return CSS.escape(String(s));
@@ -3082,7 +4066,12 @@ function _nwCssEscapeIdent(s){
   // minimal escape fallback
   return String(s).replace(/[^a-zA-Z0-9_\-]/g, '\\$&');
 }
-
+/**
+ * Code-Teil: syncToggleGroup
+ * Zweck: Synchronisiert zwei Datenquellen bzw. UI und State.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function syncToggleGroup(groupEl, checked){
   if (!groupEl) return;
   const btns = Array.from(groupEl.querySelectorAll('button[data-value]'));
@@ -3092,7 +4081,12 @@ function syncToggleGroup(groupEl, checked){
     b.classList.toggle('active', checked ? isTrue : !isTrue);
   });
 }
-
+/**
+ * Code-Teil: syncToggleButtonsForInputId
+ * Zweck: Synchronisiert zwei Datenquellen bzw. UI und State.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function syncToggleButtonsForInputId(inputId){
   if (!inputId) return;
   const inp = document.getElementById(inputId);
@@ -3100,7 +4094,12 @@ function syncToggleButtonsForInputId(inputId){
   const sel = '.nw-toggle[data-toggle-for="' + _nwCssEscapeIdent(inputId) + '"]';
   document.querySelectorAll(sel).forEach(g => syncToggleGroup(g, !!inp.checked));
 }
-
+/**
+ * Code-Teil: syncAllToggleButtons
+ * Zweck: Synchronisiert zwei Datenquellen bzw. UI und State.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function syncAllToggleButtons(){
   document.querySelectorAll('.nw-toggle[data-toggle-for]').forEach(g=>{
     const id = g.getAttribute('data-toggle-for');
@@ -3114,6 +4113,12 @@ function syncAllToggleButtons(){
  * Implementierung: Wir behalten die zugrunde liegenden Checkbox-Inputs (API-Bindings bleiben stabil),
  * blenden sie aber aus und steuern sie über Button-Gruppen.
  */
+/**
+ * Code-Teil: bindToggleButtonGroups
+ * Zweck: Verbindet Event-Handler mit DOM oder Runtime-Objekten.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function bindToggleButtonGroups(){
   if (window.__nwToggleButtonsBound) {
     try{ syncAllToggleButtons(); }catch(_e){}
@@ -3125,6 +4130,7 @@ function bindToggleButtonGroups(){
   window.nwSyncToggleButtons = syncToggleButtonsForInputId;
   window.nwSyncAllToggleButtons = syncAllToggleButtons;
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('click', (e)=>{
     const btn = e && e.target ? e.target.closest('.nw-toggle button[data-value]') : null;
     if (!btn) return;
@@ -3153,6 +4159,7 @@ function bindToggleButtonGroups(){
 }
 
 
+// Ereignis-Kommentar: Bindet das UI-Ereignis 'DOMContentLoaded' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
 window.addEventListener('DOMContentLoaded', ()=> {
   bootstrap();
   initMenu();
@@ -3181,14 +4188,24 @@ window.addEventListener('DOMContentLoaded', ()=> {
 
 
  // --- Settings & Installer logic ---
-
+/**
+ * Code-Teil: hideAllPanels
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function hideAllPanels(){
   document.body && document.body.classList.remove('nw-storagefarm-only');
   document.querySelectorAll('[data-tab-content]').forEach(el=> el.classList.add('hidden'));
   const c = document.querySelector('.content.nw-dashboard') || document.querySelector('.content');
   if(c) c.style.display = 'grid';
 }
-
+/**
+ * Code-Teil: showDashboardTab
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function showDashboardTab(tab){
   tab = String(tab || 'live').trim().toLowerCase() || 'live';
   const live = document.querySelector('.content.nw-dashboard') || document.querySelector('main.content') || document.querySelector('.content');
@@ -3215,7 +4232,12 @@ function showDashboardTab(tab){
 try { window.nwShowDashboardTab = showDashboardTab; } catch(_e) {}
 
 let SERVER_CFG = { adminUrl: null, installerLocked: false };
-
+/**
+ * Code-Teil: loadConfig
+ * Zweck: Lädt Daten aus API, States oder Konfiguration.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function loadConfig() {
   try {
     const r = await fetch('/config');
@@ -3224,7 +4246,12 @@ async function loadConfig() {
     try { window.__nwEmsCfg = (SERVER_CFG && SERVER_CFG.ems) ? SERVER_CFG.ems : (window.__nwEmsCfg || {}); } catch(_e) {}
   } catch(e) { console.warn('cfg', e); }
 }
-
+/**
+ * Code-Teil: bindInputValue
+ * Zweck: Verbindet Event-Handler mit DOM oder Runtime-Objekten.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function bindInputValue(el, stateKey) {
   // Always refresh the input from the latest snapshot first
   const st = window.latestState || {};
@@ -3262,6 +4289,7 @@ function bindInputValue(el, stateKey) {
   if (el.dataset.nwBound === '1') return;
   el.dataset.nwBound = '1';
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an el. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   el.addEventListener('change', async () => {
     let val;
     if (el.type === 'checkbox') val = !!el.checked;
@@ -3291,13 +4319,23 @@ function bindInputValue(el, stateKey) {
     } catch (e) { /* ignore */ }
   });
 }
-
+/**
+ * Code-Teil: initSettingsPageTabs
+ * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function initSettingsPageTabs(){
   const wrap = document.querySelector('.settings-wrap[data-tab-content="settings"]');
   if (!wrap) return;
   const buttons = Array.from(wrap.querySelectorAll('[data-settings-page-target]'));
   if (!buttons.length) return;
-
+  /**
+   * Code-Teil: normalizePage
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const normalizePage = (value) => {
     const wanted = String(value || '').trim().toLowerCase();
     const allowed = buttons.map(btn => String(btn.dataset.settingsPageTarget || '').trim().toLowerCase()).filter(Boolean);
@@ -3305,6 +4343,18 @@ function initSettingsPageTabs(){
     return allowed[0] || 'general';
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `activatePage`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: activatePage
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const activatePage = (value) => {
     const page = normalizePage(value);
     wrap.dataset.settingsPage = page;
@@ -3323,6 +4373,7 @@ function initSettingsPageTabs(){
   buttons.forEach((btn) => {
     if (btn.dataset.nwPageBound === '1') return;
     btn.dataset.nwPageBound = '1';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btn.addEventListener('click', () => activatePage(btn.dataset.settingsPageTarget));
   });
 
@@ -3331,18 +4382,33 @@ function initSettingsPageTabs(){
     try { return sessionStorage.getItem('nexowatt.settings.page') || 'general'; } catch (_e) { return 'general'; }
   })());
 }
-
+/**
+ * Code-Teil: _nwSettingsStateValue
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _nwSettingsStateValue(key){
   const st = window.latestState || {};
   return st[key] ? st[key].value : undefined;
 }
-
+/**
+ * Code-Teil: _nwSettingsText
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _nwSettingsText(value, fallback = '—'){
   if (value === undefined || value === null) return fallback;
   const txt = String(value).trim();
   return txt ? txt : fallback;
 }
-
+/**
+ * Code-Teil: _nwSettingsBool
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _nwSettingsBool(value){
   if (value === undefined || value === null) return '—';
   if (value === true || value === 1 || value === '1') return 'Ja';
@@ -3351,34 +4417,64 @@ function _nwSettingsBool(value){
   if (txt === 'false' || txt === 'off' || txt === 'no' || txt === 'nein' || txt === '0') return 'Nein';
   return value ? 'Ja' : 'Nein';
 }
-
+/**
+ * Code-Teil: _nwSettingsCount
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _nwSettingsCount(value){
   const num = Number(value);
   return Number.isFinite(num) ? String(Math.round(num)) : '—';
 }
-
+/**
+ * Code-Teil: _nwSettingsTs
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _nwSettingsTs(value){
   const num = Number(value);
   if (!Number.isFinite(num) || num <= 0) return '—';
   try { return new Date(num).toLocaleString('de-DE'); } catch (_e) { return '—'; }
 }
-
+/**
+ * Code-Teil: _nwSettingsPower
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _nwSettingsPower(value){
   const num = Number(value);
   return Number.isFinite(num) ? formatPower(num) : '—';
 }
-
+/**
+ * Code-Teil: _nwSettingsDays
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _nwSettingsDays(value){
   const num = Number(value);
   return Number.isFinite(num) && num > 0 ? (Math.round(num) + ' Tage') : '—';
 }
-
+/**
+ * Code-Teil: _nwSettingsJson
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _nwSettingsJson(value){
   const raw = _nwSettingsText(value, '');
   if (!raw) return '—';
   try { return JSON.stringify(JSON.parse(raw), null, 2); } catch (_e) { return raw; }
 }
-
+/**
+ * Code-Teil: renderSettingsLogPanel
+ * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function renderSettingsLogPanel(){
   const panel = document.querySelector('[data-settings-panel="log"]');
   if (!panel) return;
@@ -3394,6 +4490,18 @@ function renderSettingsLogPanel(){
   const missing = document.getElementById('settingsPara14aMissing');
   if (missing) missing.style.display = (!installed && !hasData) ? '' : 'none';
 
+  /**
+   * Code-Teil: Arrow-Funktion `set`
+   * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: set
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const set = (id, value) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -3472,11 +4580,17 @@ function renderSettingsLogPanel(){
   const jsonEl = document.getElementById('settingsPara14aLastJson');
   if (jsonEl) jsonEl.textContent = _nwSettingsJson(_nwSettingsStateValue('para14a.audit.lastJson'));
 }
-
+/**
+ * Code-Teil: setupSettingsReportButtons
+ * Zweck: Bereitet Konfiguration/Eventbindung für diesen Bereich vor.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function setupSettingsReportButtons(){
   const btn = document.getElementById('settingsPara14aReportBtn');
   if (!btn || btn.dataset.bound === '1') return;
   btn.dataset.bound = '1';
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   btn.addEventListener('click', () => {
     const toMs = Date.now();
     const fromMs = toMs - (30 * 24 * 3600 * 1000);
@@ -3484,6 +4598,13 @@ function setupSettingsReportButtons(){
   });
 }
 
+// Abschnitt: Kunden-Einstellungen. data-scope/data-key-Felder werden an /api/set gebunden; nur kundenverständliche Optionen gehören hierher.
+/**
+ * Code-Teil: setupSettings
+ * Zweck: Bereitet Konfiguration/Eventbindung für diesen Bereich vor.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function setupSettings(){
   document.querySelectorAll('[data-scope="settings"]').forEach(el=> bindInputValue(el, 'settings.'+el.dataset.key));
   document.querySelectorAll('[data-scope="rfid"]').forEach(el=> bindInputValue(el, 'evcs.rfid.'+el.dataset.key));
@@ -3500,7 +4621,12 @@ function setupSettings(){
 // WICHTIG: Die Konfiguration der Speicherfarm (Speicher hinzufügen, DP-Zuordnung, Gruppen)
 // erfolgt ausschließlich im Installateur-/Admin-Bereich.
 // In der VIS zeigen wir nur Status/Übersicht für Endverbraucher an.
-
+/**
+ * Code-Teil: parseJsonSafe
+ * Zweck: Parst Rohdaten in ein sicheres internes Format.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function parseJsonSafe(raw, fallback){
   try{
     if (raw === null || raw === undefined) return fallback;
@@ -3508,14 +4634,24 @@ function parseJsonSafe(raw, fallback){
     return s ? JSON.parse(s) : fallback;
   } catch(_e){ return fallback; }
 }
-
+/**
+ * Code-Teil: storageFarmGetStatusList
+ * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function storageFarmGetStatusList(){
   const st = window.latestState || {};
   const raw = st['storageFarm.storagesStatusJson'] && st['storageFarm.storagesStatusJson'].value;
   const list = parseJsonSafe(raw, []);
   return Array.isArray(list) ? list : [];
 }
-
+/**
+ * Code-Teil: storageFarmUpdateModeLabel
+ * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function storageFarmUpdateModeLabel(){
   const el = document.getElementById('sf_mode_label');
   if (!el) return;
@@ -3523,7 +4659,12 @@ function storageFarmUpdateModeLabel(){
   const mode = st['storageFarm.mode'] && st['storageFarm.mode'].value;
   el.textContent = 'Modus: ' + (String(mode||'pool').toLowerCase() === 'groups' ? 'Gruppen' : 'Pool');
 }
-
+/**
+ * Code-Teil: storageFarmUpdateSummary
+ * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function storageFarmUpdateSummary(){
   const sum = document.getElementById('sf_summary');
   if (!sum) return;
@@ -3537,7 +4678,12 @@ function storageFarmUpdateSummary(){
   const tot = st['storageFarm.storagesTotal'] && st['storageFarm.storagesTotal'].value;
   sum.textContent = `SoC Ø: ${soc!==undefined?soc:'--'} % | Laden: ${chg!==undefined?formatPower(chg):'--'} | Entladen: ${dchg!==undefined?formatPower(dchg):'--'} | Online: ${on!==undefined?on:'--'}/${tot!==undefined?tot:'--'} | Regelbar: ${disp!==undefined?disp:'--'}/${tot!==undefined?tot:'--'}${(deg!==undefined && Number(deg)>0) ? (' | Degraded: ' + deg) : ''}`;
 }
-
+/**
+ * Code-Teil: storageFarmRenderStatusRows
+ * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function storageFarmRenderStatusRows(list){
   const wrap = document.getElementById('sf_status_rows');
   const msg = document.getElementById('sf_msg');
@@ -3551,6 +4697,18 @@ function storageFarmRenderStatusRows(list){
   }
   if (msg) msg.textContent = '';
 
+  /**
+   * Code-Teil: Arrow-Funktion `mkCell`
+   * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: mkCell
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const mkCell = (txt, label) => {
     const d = document.createElement('div');
     d.className = 'sf-cell';
@@ -3608,7 +4766,12 @@ function storageFarmRenderStatusRows(list){
     wrap.appendChild(r);
   });
 }
-
+/**
+ * Code-Teil: storageFarmApply
+ * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function storageFarmApply(){
   try { storageFarmUpdateModeLabel(); } catch(_e) {}
   try { storageFarmUpdateSummary(); } catch(_e) {}
@@ -3617,19 +4780,28 @@ function storageFarmApply(){
     storageFarmRenderStatusRows(list);
   } catch(_e) {}
 }
-
+/**
+ * Code-Teil: initStorageFarmPanel
+ * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function initStorageFarmPanel(){
   const btnReload = document.getElementById('sf_reload');
   if (btnReload && !btnReload.dataset.bound){
     btnReload.dataset.bound='1';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnReload. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btnReload.addEventListener('click', (e)=>{ e.preventDefault(); storageFarmApply(); });
   }
   // Initial render
   storageFarmApply();
 }
-
-
-
+/**
+ * Code-Teil: setupRfidWhitelistUi
+ * Zweck: Bereitet Konfiguration/Eventbindung für diesen Bereich vor.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function setupRfidWhitelistUi(){
   const rowsEl = document.getElementById('rfidWhitelistRows');
   if (!rowsEl) return;
@@ -3637,10 +4809,26 @@ function setupRfidWhitelistUi(){
   const btnAdd = document.getElementById('rfidAddRow');
   const btnSave = document.getElementById('rfidSaveWhitelist');
   const btnReload = document.getElementById('rfidReloadWhitelist');
-
+  /**
+   * Code-Teil: normRfid
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function normRfid(v){ return String(v||'').trim().replace(/\s+/g,'').toUpperCase(); }
+  /**
+   * Code-Teil: safeText
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function safeText(v){ return String(v||'').trim(); }
-
+  /**
+   * Code-Teil: readWhitelistFromState
+   * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function readWhitelistFromState(){
     try {
       const st = window.latestState || {};
@@ -3661,9 +4849,19 @@ function setupRfidWhitelistUi(){
   }
 
   let list = readWhitelistFromState();
-
+  /**
+   * Code-Teil: setMsg
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setMsg(t){ if (msgEl) msgEl.textContent = t || ''; }
-
+  /**
+   * Code-Teil: render
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function render(){
     rowsEl.innerHTML = '';
     (list || []).forEach((it, idx) => {
@@ -3674,18 +4872,21 @@ function setupRfidWhitelistUi(){
       inRfid.type = 'text';
       inRfid.placeholder = 'z.B. 04A1B2C3';
       inRfid.value = it.rfid || '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an inRfid. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       inRfid.addEventListener('input', () => { it.rfid = normRfid(inRfid.value); });
 
       const inName = document.createElement('input');
       inName.type = 'text';
       inName.placeholder = 'Name / Person';
       inName.value = it.name || '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an inName. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       inName.addEventListener('input', () => { it.name = safeText(inName.value); });
 
       const inComment = document.createElement('input');
       inComment.type = 'text';
       inComment.placeholder = 'Kommentar (optional)';
       inComment.value = it.comment || '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an inComment. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       inComment.addEventListener('input', () => { it.comment = safeText(inComment.value); });
 
       const del = document.createElement('button');
@@ -3693,6 +4894,7 @@ function setupRfidWhitelistUi(){
       del.type = 'button';
       del.textContent = '✕';
       del.title = 'Entfernen';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an del. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       del.addEventListener('click', () => { list.splice(idx, 1); render(); });
 
       row.appendChild(inRfid);
@@ -3704,7 +4906,12 @@ function setupRfidWhitelistUi(){
 
     setMsg((list && list.length ? (list.length + ' Einträge in der Whitelist') : 'Whitelist ist leer') );
   }
-
+  /**
+   * Code-Teil: save
+   * Zweck: Speichert Benutzereingaben oder Konfiguration.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function save(){
     const cleaned = [];
     const seen = new Set();
@@ -3732,7 +4939,12 @@ function setupRfidWhitelistUi(){
       setMsg('Fehler beim Speichern der Whitelist.');
     }
   }
-
+  /**
+   * Code-Teil: reload
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function reload(){
     try {
       const snap = await fetch('/api/state', { cache: 'no-store' }).then(r => r.json());
@@ -3747,6 +4959,7 @@ function setupRfidWhitelistUi(){
 
   if (btnAdd && btnAdd.dataset.nwBound !== '1') {
     btnAdd.dataset.nwBound = '1';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnAdd. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btnAdd.addEventListener('click', () => {
       list.push({ rfid: '', name: '', comment: '' });
       render();
@@ -3758,10 +4971,12 @@ function setupRfidWhitelistUi(){
   }
   if (btnSave && btnSave.dataset.nwBound !== '1') {
     btnSave.dataset.nwBound = '1';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnSave. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btnSave.addEventListener('click', save);
   }
   if (btnReload && btnReload.dataset.nwBound !== '1') {
     btnReload.dataset.nwBound = '1';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnReload. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btnReload.addEventListener('click', reload);
   }
 
@@ -3798,7 +5013,12 @@ function setupRfidWhitelistUi(){
 
   render();
 }
-
+/**
+ * Code-Teil: setupRfidLearningUi
+ * Zweck: Bereitet Konfiguration/Eventbindung für diesen Bereich vor.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function setupRfidLearningUi(){
   const btnLearn = document.getElementById('rfidLearnBtn');
   if (!btnLearn) return;
@@ -3807,9 +5027,19 @@ function setupRfidLearningUi(){
   const inComment = document.getElementById('rfidLearnComment');
   const btnAdd = document.getElementById('rfidLearnAdd');
   const msgEl = document.getElementById('rfidLearnMsg');
-
+  /**
+   * Code-Teil: setMsg
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setMsg(t){ if (msgEl) msgEl.textContent = t || ''; }
-
+  /**
+   * Code-Teil: setLearningActive
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function setLearningActive(active){
     try{
       await fetch('/api/set', {
@@ -3821,12 +5051,22 @@ function setupRfidLearningUi(){
       window.latestState['evcs.rfid.learning.active'] = { value: !!active };
     }catch(_e){}
   }
-
+  /**
+   * Code-Teil: readStateVal
+   * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function readStateVal(key){
     const st = window.latestState || {};
     return st[key] ? st[key].value : undefined;
   }
-
+  /**
+   * Code-Teil: applyUi
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function applyUi(){
     const active = !!readStateVal('evcs.rfid.learning.active');
     const last = readStateVal('evcs.rfid.learning.lastCaptured');
@@ -3851,6 +5091,7 @@ function setupRfidLearningUi(){
   // Prevent duplicate listeners
   if (btnLearn && btnLearn.dataset.nwBound !== '1') {
     btnLearn.dataset.nwBound = '1';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnLearn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btnLearn.addEventListener('click', async () => {
       const active = !!readStateVal('evcs.rfid.learning.active');
       setMsg('');
@@ -3862,6 +5103,7 @@ function setupRfidLearningUi(){
 
   if (btnAdd && btnAdd.dataset.nwBound !== '1') {
     btnAdd.dataset.nwBound = '1';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnAdd. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btnAdd.addEventListener('click', () => {
       const last = readStateVal('evcs.rfid.learning.lastCaptured');
       const rfid = String(last || '').trim();
@@ -3888,8 +5130,12 @@ function setupRfidLearningUi(){
 
   applyUi();
 }
-
-
+/**
+ * Code-Teil: setupRfidBillingUi
+ * Zweck: Bereitet Konfiguration/Eventbindung für diesen Bereich vor.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function setupRfidBillingUi(){
   const btnOpen = document.getElementById('rfidBillingOpen');
   const sel = document.getElementById('rfidBillingCard');
@@ -3901,10 +5147,26 @@ function setupRfidBillingUi(){
   const msgEl = document.getElementById('rfidBillingMsg');
 
   if (!btnOpen || !sel) return;
-
+  /**
+   * Code-Teil: pad2
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function pad2(n){ return String(Number(n)||0).padStart(2,'0'); }
+  /**
+   * Code-Teil: setMsg
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setMsg(t){ if (msgEl) msgEl.textContent = t || ''; }
-
+  /**
+   * Code-Teil: getWhitelist
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function getWhitelist(){
     // Prefer the editor API (keeps same parsing logic)
     try{
@@ -3925,7 +5187,12 @@ function setupRfidBillingUi(){
     }catch(_e){}
     return [];
   }
-
+  /**
+   * Code-Teil: renderOptions
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function renderOptions(){
     const list = getWhitelist();
     const prev = String(sel.value || '');
@@ -3970,6 +5237,12 @@ function setupRfidBillingUi(){
   }
 
   let mode = 'month';
+  /**
+   * Code-Teil: applyMode
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function applyMode(m){
     mode = (m === 'year') ? 'year' : 'month';
 
@@ -3989,6 +5262,7 @@ function setupRfidBillingUi(){
   if (modeWrap && modeWrap.dataset.nwBound !== '1') {
     modeWrap.dataset.nwBound = '1';
     modeWrap.querySelectorAll('button[data-value]').forEach(btn => {
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       btn.addEventListener('click', () => applyMode(btn.dataset.value));
     });
   }
@@ -4006,6 +5280,7 @@ function setupRfidBillingUi(){
   // Bind open button
   if (btnOpen && btnOpen.dataset.nwBound !== '1') {
     btnOpen.dataset.nwBound = '1';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnOpen. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btnOpen.addEventListener('click', () => {
       try{ renderOptions(); } catch(_e){}
       const rfid = String(sel.value || '').trim();
@@ -4049,9 +5324,12 @@ function setupRfidBillingUi(){
     });
   }
 }
-
-
-
+/**
+ * Code-Teil: setupInstaller
+ * Zweck: Bereitet Konfiguration/Eventbindung für diesen Bereich vor.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function setupInstaller(){
   const loginBox = document.getElementById('installerLoginBox');
   const formBox  = document.getElementById('installerForm');
@@ -4059,7 +5337,12 @@ function setupInstaller(){
   const btn      = document.getElementById('inst_login');
   const cancel   = document.getElementById('inst_cancel');
   const pw       = document.getElementById('inst_pw');
-
+  /**
+   * Code-Teil: refreshLock
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function refreshLock(){
     try {
       const r = await fetch('/config', { cache:'no-store', credentials:'same-origin' });
@@ -4074,7 +5357,12 @@ function setupInstaller(){
       }
     } catch(_) {}
   }
-
+  /**
+   * Code-Teil: doLogin
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function doLogin(){
     try{
       const pass = String((pw && pw.value) || '');
@@ -4098,6 +5386,7 @@ function setupInstaller(){
   if (form && !form.dataset.bound){ form.dataset.bound='1'; form.addEventListener('submit', (e)=>{ e.preventDefault(); doLogin(); }); }
   if (cancel && !cancel.dataset.bound){
     cancel.dataset.bound = '1';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an cancel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     cancel.addEventListener('click', (e)=>{
       e.preventDefault();
       const installerSec = document.querySelector('[data-tab-content="installer"]');
@@ -4112,7 +5401,12 @@ function setupInstaller(){
 
   refreshLock();
 }
-
+/**
+ * Code-Teil: initInstallerPanel
+ * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function initInstallerPanel(){
   if (SERVER_CFG && SERVER_CFG.installerLocked && !null) return;
   document.querySelectorAll('#installerForm [data-scope="installer"]').forEach(el=>{
@@ -4123,6 +5417,12 @@ function initInstallerPanel(){
 }
 
 // Simple tab switching
+/**
+ * Code-Teil: initTabs
+ * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function initTabs(){
   const buttons = document.querySelectorAll('.tabs .tab[data-tab]');
   buttons.forEach(btn => btn.addEventListener('click', () => {
@@ -4136,10 +5436,33 @@ function initTabs(){
     showDashboardTab(tab);
   }));
 }
-
+/**
+ * Code-Teil: renderSmartHome
+ * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function renderSmartHome(){
+  /**
+   * Code-Teil: onTxt
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const onTxt = (v)=> v ? 'AN' : 'AUS';
+  /**
+   * Code-Teil: d
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const d = (k)=> state[k]?.value;
+  /**
+   * Code-Teil: get
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const get = (path) => {
     // allow mapping from smartHome.datapoints.* in the future
     return d(path);
@@ -4160,6 +5483,18 @@ render = function(){
 
   // ---- Energy donut update ----
   try {
+    /**
+     * Code-Teil: Arrow-Funktion `d`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: d
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const d = (k) => state[k]?.value;
     const pv = +(d('pvPower') ?? 0);
     const load = +(d('consumptionTotal') ?? 0);
@@ -4173,6 +5508,18 @@ render = function(){
     const A = { pv: 330, load: 30, bat: 180, grid: 210 };
     const MAX = { pv: 110, load: 45, bat: 60, grid: 45 };
     const total = Math.max(1, pv + buy + load + (chg + dchg));
+    /**
+     * Code-Teil: Arrow-Funktion `pctDeg`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: pctDeg
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const pctDeg = (val, maxDeg) => Math.max(2, Math.min(maxDeg, (val/total) * maxDeg));
 
     setArcAtAngle('.donut .arc.pv',   42, A.pv,   pctDeg(pv,   MAX.pv));
@@ -4180,6 +5527,18 @@ render = function(){
     setArcAtAngle('.donut .arc.bat',  42, A.bat,  pctDeg(chg + dchg, MAX.bat));
     setArcAtAngle('.donut .arc.grid', 42, A.grid, pctDeg(buy,  MAX.grid));
 
+    /**
+     * Code-Teil: Arrow-Funktion `setText`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: setText
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const setText = (id, t) => { const el=document.getElementById(id); if (el) el.textContent=t; };
     setText('pvLbl', formatPower(pv));
     setText('gridLbl', formatPower(buy));
@@ -4208,6 +5567,18 @@ render = function(){
 
   // --- Runde Energieanzeige ---
   try {
+    /**
+     * Code-Teil: Arrow-Funktion `d`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: d
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const d = (k) => state[k]?.value;
     const pv = +(d('pvPower') ?? 0);
     const load = +(d('consumptionTotal') ?? 0);
@@ -4219,6 +5590,18 @@ render = function(){
     const cap = +(d('storageCapacityKwh') ?? 0);
 
     // Values
+    /**
+     * Code-Teil: Arrow-Funktion `setText`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: setText
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const setText = (id, t) => { const el=document.getElementById(id); if (el) el.textContent=t; };
     setText('pvVal', formatPower(pv));
     setText('gridBuyVal', formatPower(buy));
@@ -4245,6 +5628,18 @@ render = function(){
 
     // Arcs relative to max flow
     const totalFlow = Math.max(1, pv + buy + load + (charge + discharge));
+    /**
+     * Code-Teil: Arrow-Funktion `pct`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: pct
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const pct = (v) => Math.min(100, Math.max(0, (v / totalFlow) * 100));
     setDonut('pv', pct(pv));
     setDonut('gridbuy', pct(buy));
@@ -4264,6 +5659,18 @@ render = function(){
 
   // ---- Energy donut update ----
   try {
+    /**
+     * Code-Teil: Arrow-Funktion `d`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: d
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const d = (k) => state[k]?.value;
     const pv = +(d('pvPower') ?? 0);
     const load = +(d('consumptionTotal') ?? 0);
@@ -4277,6 +5684,18 @@ render = function(){
     const A = { pv: 330, load: 30, bat: 180, grid: 210 };
     const MAX = { pv: 110, load: 45, bat: 60, grid: 45 };
     const total = Math.max(1, pv + buy + load + (chg + dchg));
+    /**
+     * Code-Teil: Arrow-Funktion `pctDeg`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: pctDeg
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const pctDeg = (val, maxDeg) => Math.max(2, Math.min(maxDeg, (val/total) * maxDeg));
 
     setArcAtAngle('.donut .arc.pv',   42, A.pv,   pctDeg(pv,   MAX.pv));
@@ -4284,6 +5703,18 @@ render = function(){
     setArcAtAngle('.donut .arc.bat',  42, A.bat,  pctDeg(chg + dchg, MAX.bat));
     setArcAtAngle('.donut .arc.grid', 42, A.grid, pctDeg(buy,  MAX.grid));
 
+    /**
+     * Code-Teil: Arrow-Funktion `setText`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: setText
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const setText = (id, t) => { const el=document.getElementById(id); if (el) el.textContent=t; };
     setText('pvLbl', formatPower(pv));
     setText('gridLbl', formatPower(buy));
@@ -4312,6 +5743,18 @@ render = function(){
 
   // --- Runde Energieanzeige ---
   try {
+    /**
+     * Code-Teil: Arrow-Funktion `d`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: d
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const d = (k) => state[k]?.value;
     const pv = +(d('pvPower') ?? 0);
     const load = +(d('consumptionTotal') ?? 0);
@@ -4323,6 +5766,18 @@ render = function(){
     const cap = +(d('storageCapacityKwh') ?? 0);
 
     // Values
+    /**
+     * Code-Teil: Arrow-Funktion `setText`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: setText
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const setText = (id, t) => { const el=document.getElementById(id); if (el) el.textContent=t; };
     setText('pvVal', formatPower(pv));
     setText('gridBuyVal', formatPower(buy));
@@ -4349,6 +5804,18 @@ render = function(){
 
     // Arcs relative to max flow
     const totalFlow = Math.max(1, pv + buy + load + (charge + discharge));
+    /**
+     * Code-Teil: Arrow-Funktion `pct`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: pct
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const pct = (v) => Math.min(100, Math.max(0, (v / totalFlow) * 100));
     setDonut('pv', pct(pv));
     setDonut('gridbuy', pct(buy));
@@ -4360,9 +5827,27 @@ render = function(){
   _renderEF();
   try {
     const s = state;
+    /**
+     * Code-Teil: Arrow-Funktion `d`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: d
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const d = (k) => s[k]?.value;
     const pv = d('pvPower') ?? d('productionTotal');
     const load = d('consumptionTotal');
+    /**
+     * Code-Teil: setText
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function setText(id, txt){ const el = document.getElementById(id); if (el) el.textContent = txt; }
     setText('pvPowerBig', (pv===undefined?'--':formatPower(pv)));
     setText('consumptionTotalBig', (load===undefined?'--':formatPower(load)));
@@ -4372,13 +5857,37 @@ render = function(){
 }
 
 // SIDE-VALUES
+/**
+ * Code-Teil: setSideValue
+ * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function setSideValue(id, val){ const el=document.getElementById(id); if(el) el.textContent = val; }
 
 
 // ---- EMS Control UI (Optimierung) ----
+/**
+ * Code-Teil: updateEmsControlUi
+ * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function updateEmsControlUi() {
   try {
     const st = window.latestState || {};
+    /**
+     * Code-Teil: Arrow-Funktion `v`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: v
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const v = (k) => (st && st[k] && st[k].value !== undefined) ? st[k].value : null;
 
     const emsCfg = (window.__nwEmsCfg && typeof window.__nwEmsCfg === 'object') ? window.__nwEmsCfg : {};
@@ -4395,6 +5904,18 @@ function updateEmsControlUi() {
     const priceNow = v('priceCurrent');
     const priceAvg = v('priceAverage');
 
+    /**
+     * Code-Teil: Arrow-Funktion `setText`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: setText
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
 
     // Price display
@@ -4554,7 +6075,12 @@ function updateEmsControlUi() {
     }
   } catch (_e) {}
 }
-
+/**
+ * Code-Teil: initEmsControlModal
+ * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function initEmsControlModal() {
   if (window.__nwEmsControlModalInit) return;
   const card = document.getElementById('tariffCard');
@@ -4564,6 +6090,18 @@ function initEmsControlModal() {
   const closeBtn = document.getElementById('emsClose');
   const openSettingsBtn = document.getElementById('emsModalOpenSettings');
 
+  /**
+   * Code-Teil: Arrow-Funktion `setSetting`
+   * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: setSetting
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const setSetting = async (key, value) => {
     try {
       await fetch('/api/set', {
@@ -4575,27 +6113,48 @@ function initEmsControlModal() {
     } catch (_e) {}
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `open`
+   * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: open
+   * Zweck: Öffnet Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const open = (e) => {
     try { if (e) e.preventDefault(); } catch(_e) {}
     modal.classList.remove('hidden');
     try { updateEmsControlUi(); } catch(_e) {}
   };
+  /**
+   * Code-Teil: close
+   * Zweck: Schließt Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const close = () => modal.classList.add('hidden');
 
   // Expose for other UI handlers (e.g. tariff tile click routing)
   try { window.__nwEmsControlModal = { open, close }; } catch(_e) {}
 
   const openBtn = document.getElementById('tariffEmsBtn') || card;
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an openBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   openBtn.addEventListener('click', (e)=>{ try{ if (e){ e.preventDefault(); e.stopPropagation(); } }catch(_e){} open(e); });
   const energyDetailsBtn = document.getElementById('energyTariffDetailsBtn');
   if (energyDetailsBtn) energyDetailsBtn.addEventListener('click', (e)=>{ try{ if (e){ e.preventDefault(); e.stopPropagation(); } }catch(_e){} open(e); });
 
   if (closeBtn) closeBtn.addEventListener('click', close);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an modal. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   modal.addEventListener('click', (e) => { if (e && e.target === modal) close(); });
 
   // Tariff toggle
   const tariffToggle = document.getElementById('emsTariffToggle');
   if (tariffToggle) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an tariffToggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     tariffToggle.addEventListener('change', () => setSetting('dynamicTariff', !!tariffToggle.checked));
   }
 
@@ -4604,6 +6163,7 @@ function initEmsControlModal() {
   const prioWrap = document.getElementById('emsTariffPriorityButtons');
   if (prioWrap) {
     prioWrap.querySelectorAll('button').forEach(btn => {
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       btn.addEventListener('click', () => {
         const p = Number(btn.getAttribute('data-prio') || '');
         if (Number.isFinite(p) && p > 0) setSetting('priority', p);
@@ -4615,6 +6175,7 @@ function initEmsControlModal() {
   const modeWrap = document.getElementById('emsTariffModeButtons');
   if (modeWrap) {
     modeWrap.querySelectorAll('button').forEach(btn => {
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       btn.addEventListener('click', () => {
         const m = Number(btn.getAttribute('data-mode') || '');
         if (Number.isFinite(m) && m > 0) setSetting('tariffMode', m);
@@ -4623,13 +6184,18 @@ function initEmsControlModal() {
   }
 
   if (openSettingsBtn) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an openSettingsBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     openSettingsBtn.addEventListener('click', () => { window.location.href = '/settings.html'; });
   }
 
   window.__nwEmsControlModalInit = true;
 }
-
-
+/**
+ * Code-Teil: initThresholdModal
+ * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function initThresholdModal() {
   if (window.__nwThresholdModalInit) return;
 
@@ -4641,12 +6207,23 @@ function initThresholdModal() {
 
   if (!card || !modal || !closeBtn || !listEl) return;
 
+  /**
+   * Code-Teil: Arrow-Funktion `setHint`
+   * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
   const setHint = (msg, isError = false) => {
     if (!hintEl) return;
     hintEl.textContent = String(msg || '');
     hintEl.style.color = isError ? '#fca5a5' : '';
   };
-
+  /**
+   * Code-Teil: apiSet
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const apiSet = async (key, value) => {
     try {
       const resp = await fetch('/api/set', {
@@ -4667,15 +6244,32 @@ function initThresholdModal() {
     }
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `renderModal`
+   * Zweck: rendert sichtbare UI-/Diagramm-Elemente aus bereits normalisierten Daten.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: renderModal
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const renderModal = () => {
     const cfg = window.__nwCfg || {};
     const rules = Array.isArray(cfg.thresholdRules) ? cfg.thresholdRules : (Array.isArray(window.__nwThresholdRules) ? window.__nwThresholdRules : []);
 
     const s = window.latestState || {};
+    /**
+     * Code-Teil: v
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const v = (k) => (s && s[k]) ? s[k].value : undefined;
 
     listEl.innerHTML = '';
-
     const configured = (rules || []).filter(r => r && r.configured);
     if (!configured.length) {
       const empty = document.createElement('div');
@@ -4689,6 +6283,18 @@ function initThresholdModal() {
 
     setHint('Nur freigegebene Felder sind veränderbar (pro Regel konfigurierbar).', false);
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkRow`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkRow
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkRow = (r) => {
       const idx = Number(r.idx);
       const row = document.createElement('div');
@@ -4712,6 +6318,18 @@ function initThresholdModal() {
       badge.style.opacity = '0.9';
       const active = !!v(`threshold.rules.r${idx}.active`);
       const status = String(v(`threshold.rules.r${idx}.status`) || '').trim();
+      /**
+       * Code-Teil: Arrow-Funktion `prettyStatus`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: prettyStatus
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const prettyStatus = (raw) => {
         const t = String(raw || '').trim().toLowerCase();
         if (!t) return '';
@@ -4745,6 +6363,18 @@ function initThresholdModal() {
       body.style.gridTemplateColumns = 'repeat(auto-fit, minmax(160px, 1fr))';
       body.style.gap = '10px';
 
+      /**
+       * Code-Teil: Arrow-Funktion `mkKpi`
+       * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: mkKpi
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const mkKpi = (label, valueText) => {
         const box = document.createElement('div');
         const l = document.createElement('div');
@@ -4789,6 +6419,18 @@ function initThresholdModal() {
         btnWrap.className = 'nw-evcs-mode-buttons';
         btnWrap.style.width = '100%';
 
+        /**
+         * Code-Teil: Arrow-Funktion `setActive`
+         * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+         * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: setActive
+         * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+         * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const setActive = (uiVal) => {
           curModeUi = uiVal;
           Array.from(btnWrap.querySelectorAll('button')).forEach((b) => {
@@ -4796,12 +6438,25 @@ function initThresholdModal() {
           });
         };
 
+        /**
+         * Code-Teil: Arrow-Funktion `mkBtn`
+         * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+         * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: mkBtn
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const mkBtn = (label, uiVal, sendMode) => {
           const b = document.createElement('button');
           b.type = 'button';
           b.textContent = label;
           b.dataset.mode = String(uiVal);
           if (curModeUi === uiVal) b.classList.add('active');
+          // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
           b.addEventListener('click', async () => {
             if (curModeUi === uiVal) return;
             const ok = await apiSet(`r${idx}.mode`, sendMode);
@@ -4835,6 +6490,7 @@ function initThresholdModal() {
         inp.style.width = '100%';
         const current = v(`threshold.user.r${idx}.threshold`);
         inp.value = (current === undefined || current === null) ? '' : String(current);
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         inp.addEventListener('change', () => {
           const n = Number(inp.value);
           if (!Number.isFinite(n)) {
@@ -4868,6 +6524,7 @@ function initThresholdModal() {
         inp.style.width = '100%';
         const current = v(`threshold.user.r${idx}.minOnSec`);
         inp.value = (current === undefined || current === null) ? '' : String(current);
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         inp.addEventListener('change', () => {
           const n = Number(inp.value);
           if (!Number.isFinite(n) || n < 0) {
@@ -4897,6 +6554,7 @@ function initThresholdModal() {
         inp.style.width = '100%';
         const current = v(`threshold.user.r${idx}.minOffSec`);
         inp.value = (current === undefined || current === null) ? '' : String(current);
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         inp.addEventListener('change', () => {
           const n = Number(inp.value);
           if (!Number.isFinite(n) || n < 0) {
@@ -4922,16 +6580,38 @@ function initThresholdModal() {
     configured.forEach(r => listEl.appendChild(mkRow(r)));
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `open`
+   * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: open
+   * Zweck: Öffnet Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const open = (e) => {
     try { if (e) e.preventDefault(); } catch(_e) {}
     modal.classList.remove('hidden');
     renderModal();
   };
+  /**
+   * Code-Teil: close
+   * Zweck: Schließt Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const close = () => modal.classList.add('hidden');
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an card. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   card.addEventListener('click', open);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an closeBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   closeBtn.addEventListener('click', close);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an modal. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   modal.addEventListener('click', (e) => { if (e && e.target === modal) close(); });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('keydown', (e) => { if (e && e.key === 'Escape') close(); });
 
   window.__thrApply = () => {
@@ -4942,10 +6622,12 @@ function initThresholdModal() {
 
   window.__nwThresholdModalInit = true;
 }
-
-
-
-
+/**
+ * Code-Teil: initRelayModal
+ * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function initRelayModal() {
   if (window.__nwRelayModalInit) return;
 
@@ -4959,12 +6641,23 @@ function initRelayModal() {
 
   let pollTimer = null;
 
+  /**
+   * Code-Teil: Arrow-Funktion `setHint`
+   * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
   const setHint = (msg, isError = false) => {
     if (!hintEl) return;
     hintEl.textContent = String(msg || '');
     hintEl.style.color = isError ? '#fca5a5' : '';
   };
-
+  /**
+   * Code-Teil: apiSet
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const apiSet = async (idx, prop, value) => {
     try {
       const resp = await fetch('/api/set', {
@@ -4985,6 +6678,18 @@ function initRelayModal() {
     }
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `fetchSnapshot`
+   * Zweck: lädt Daten aus API, State-Cache oder Konfiguration und stößt danach Rendering an.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: fetchSnapshot
+   * Zweck: Holt Daten über HTTP/API oder aus externen Quellen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const fetchSnapshot = async () => {
     try {
       const r = await fetch('/api/relay/snapshot', { credentials: 'same-origin' });
@@ -4996,6 +6701,18 @@ function initRelayModal() {
     }
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `renderModal`
+   * Zweck: rendert sichtbare UI-/Diagramm-Elemente aus bereits normalisierten Daten.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: renderModal
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const renderModal = async () => {
     const relays = await fetchSnapshot();
     listEl.innerHTML = '';
@@ -5009,7 +6726,6 @@ function initRelayModal() {
       setHint('Verbindung prüfen.', true);
       return;
     }
-
     const shown = relays.filter(r => r && r.enabled !== false && r.showInLive !== false && r.configured);
 
     if (!shown.length) {
@@ -5024,6 +6740,18 @@ function initRelayModal() {
 
     setHint('Nur freigegebene Ausgänge sind steuerbar (pro Ausgang konfigurierbar).', false);
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkRow`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkRow
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkRow = (r) => {
       const idx = Number(r.idx);
       const row = document.createElement('div');
@@ -5056,6 +6784,18 @@ function initRelayModal() {
       body.style.gridTemplateColumns = 'repeat(auto-fit, minmax(180px, 1fr))';
       body.style.gap = '10px';
 
+      /**
+       * Code-Teil: Arrow-Funktion `mkKpi`
+       * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: mkKpi
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const mkKpi = (label, valueText) => {
         const box = document.createElement('div');
         const l = document.createElement('div');
@@ -5089,11 +6829,24 @@ function initRelayModal() {
         btnWrap.style.alignSelf = 'flex-start';
 
         const curBool = !!r.val;
+        /**
+         * Code-Teil: Arrow-Funktion `mkBtn`
+         * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+         * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: mkBtn
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const mkBtn = (label, val) => {
           const b = document.createElement('button');
           b.className = 'nw-evcs-mode-btn' + ((curBool === val) ? ' nw-active' : '');
           b.textContent = label;
           b.disabled = !can;
+          // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
           b.addEventListener('click', async () => {
             if (!can) return;
             if ((!!r.val) === val) return;
@@ -5130,6 +6883,7 @@ function initRelayModal() {
         if (Number.isFinite(Number(r.step))) inp.step = String(r.step);
         inp.disabled = !can;
         inp.value = (r.val === undefined || r.val === null) ? '' : String(r.val);
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         inp.addEventListener('change', async () => {
           const n = Number(inp.value);
           if (!Number.isFinite(n)) {
@@ -5154,6 +6908,18 @@ function initRelayModal() {
     shown.forEach(r => listEl.appendChild(mkRow(r)));
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `open`
+   * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: open
+   * Zweck: Öffnet Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const open = (e) => {
     try { if (e) e.preventDefault(); } catch(_e) {}
     modal.classList.remove('hidden');
@@ -5165,15 +6931,31 @@ function initRelayModal() {
     } catch (_e) {}
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `close`
+   * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: close
+   * Zweck: Schließt Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const close = () => {
     modal.classList.add('hidden');
     try { if (pollTimer) clearInterval(pollTimer); } catch(_e) {}
     pollTimer = null;
   };
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an card. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   card.addEventListener('click', open);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an closeBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   closeBtn.addEventListener('click', close);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an modal. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   modal.addEventListener('click', (e) => { if (e && e.target === modal) close(); });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('keydown', (e) => { if (e && e.key === 'Escape') close(); });
 
   window.__relayApply = () => {
@@ -5182,9 +6964,12 @@ function initRelayModal() {
 
   window.__nwRelayModalInit = true;
 }
-
-
-
+/**
+ * Code-Teil: initBhkwModal
+ * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function initBhkwModal() {
   if (window.__nwBhkwModalInit) return;
 
@@ -5198,12 +6983,23 @@ function initBhkwModal() {
 
   let pollTimer = null;
 
+  /**
+   * Code-Teil: Arrow-Funktion `setHint`
+   * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
   const setHint = (msg, isError = false) => {
     if (!hintEl) return;
     hintEl.textContent = String(msg || '');
     hintEl.style.color = isError ? '#fca5a5' : '';
   };
-
+  /**
+   * Code-Teil: apiSet
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const apiSet = async (idx, prop, value) => {
     try {
       const resp = await fetch('/api/set', {
@@ -5224,6 +7020,18 @@ function initBhkwModal() {
     }
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `fetchSnapshot`
+   * Zweck: lädt Daten aus API, State-Cache oder Konfiguration und stößt danach Rendering an.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: fetchSnapshot
+   * Zweck: Holt Daten über HTTP/API oder aus externen Quellen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const fetchSnapshot = async () => {
     try {
       const r = await fetch('/api/bhkw/snapshot', { credentials: 'same-origin' });
@@ -5235,6 +7043,18 @@ function initBhkwModal() {
     }
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `renderModal`
+   * Zweck: rendert sichtbare UI-/Diagramm-Elemente aus bereits normalisierten Daten.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: renderModal
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const renderModal = async () => {
     const devices = await fetchSnapshot();
     listEl.innerHTML = '';
@@ -5264,6 +7084,18 @@ function initBhkwModal() {
 
     setHint('Modus: Auto/Manuell/Aus. Start/Stop ist nur im Modus „Manuell“ aktiv.', false);
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkKpi`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkKpi
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkKpi = (label, valueText) => {
       const box = document.createElement('div');
       const l = document.createElement('div');
@@ -5278,6 +7110,18 @@ function initBhkwModal() {
       return box;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkRow`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkRow
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkRow = (d) => {
       const idx = Number(d.idx);
       const row = document.createElement('div');
@@ -5337,12 +7181,25 @@ function initBhkwModal() {
       const grp = document.createElement('div');
       grp.className = 'nw-evcs-mode-buttons nw-evcs-mode-buttons-3';
 
+      /**
+       * Code-Teil: Arrow-Funktion `addBtn`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: addBtn
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const addBtn = (val, label) => {
         const b = document.createElement('button');
         b.type = 'button';
         b.textContent = label;
         b.classList.toggle('active', mode === val);
         b.disabled = !canControl;
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         b.addEventListener('click', async () => {
           const ok = await apiSet(idx, 'mode', val);
           if (ok) setTimeout(() => { try { renderModal(); } catch(_e) {} }, 150);
@@ -5369,6 +7226,7 @@ function initBhkwModal() {
       startBtn.className = 'btn';
       startBtn.textContent = 'Start';
       startBtn.disabled = !canControl;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an startBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       startBtn.addEventListener('click', async () => {
         const ok = await apiSet(idx, 'command', 'start');
         if (ok) setTimeout(() => { try { renderModal(); } catch(_e) {} }, 150);
@@ -5379,6 +7237,7 @@ function initBhkwModal() {
       stopBtn.className = 'btn';
       stopBtn.textContent = 'Stop';
       stopBtn.disabled = !canControl;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an stopBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       stopBtn.addEventListener('click', async () => {
         const ok = await apiSet(idx, 'command', 'stop');
         if (ok) setTimeout(() => { try { renderModal(); } catch(_e) {} }, 150);
@@ -5398,6 +7257,18 @@ function initBhkwModal() {
     shown.forEach(d => listEl.appendChild(mkRow(d)));
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `open`
+   * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: open
+   * Zweck: Öffnet Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const open = (e) => {
     try { if (e) e.preventDefault(); } catch(_e) {}
     modal.classList.remove('hidden');
@@ -5408,22 +7279,41 @@ function initBhkwModal() {
     } catch (_e) {}
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `close`
+   * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: close
+   * Zweck: Schließt Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const close = () => {
     modal.classList.add('hidden');
     try { if (pollTimer) clearInterval(pollTimer); } catch(_e) {}
     pollTimer = null;
   };
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an card. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   card.addEventListener('click', open);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an closeBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   closeBtn.addEventListener('click', close);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an modal. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   modal.addEventListener('click', (e) => { if (e && e.target === modal) close(); });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('keydown', (e) => { if (e && e.key === 'Escape') close(); });
 
   window.__nwBhkwModalInit = true;
 }
-
-
-
+/**
+ * Code-Teil: initGeneratorModal
+ * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function initGeneratorModal() {
   if (window.__nwGeneratorModalInit) return;
 
@@ -5437,12 +7327,23 @@ function initGeneratorModal() {
 
   let pollTimer = null;
 
+  /**
+   * Code-Teil: Arrow-Funktion `setHint`
+   * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
   const setHint = (msg, isError = false) => {
     if (!hintEl) return;
     hintEl.textContent = String(msg || '');
     hintEl.style.color = isError ? '#fca5a5' : '';
   };
-
+  /**
+   * Code-Teil: apiSet
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const apiSet = async (idx, prop, value) => {
     try {
       const resp = await fetch('/api/set', {
@@ -5463,6 +7364,18 @@ function initGeneratorModal() {
     }
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `fetchSnapshot`
+   * Zweck: lädt Daten aus API, State-Cache oder Konfiguration und stößt danach Rendering an.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: fetchSnapshot
+   * Zweck: Holt Daten über HTTP/API oder aus externen Quellen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const fetchSnapshot = async () => {
     try {
       const r = await fetch('/api/generator/snapshot', { credentials: 'same-origin' });
@@ -5474,6 +7387,18 @@ function initGeneratorModal() {
     }
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `renderModal`
+   * Zweck: rendert sichtbare UI-/Diagramm-Elemente aus bereits normalisierten Daten.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: renderModal
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const renderModal = async () => {
     const devices = await fetchSnapshot();
     listEl.innerHTML = '';
@@ -5503,6 +7428,18 @@ function initGeneratorModal() {
 
     setHint('Modus: Auto/Manuell/Aus. Start/Stop ist nur im Modus „Manuell“ aktiv.', false);
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkKpi`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkKpi
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkKpi = (label, valueText) => {
       const box = document.createElement('div');
       const l = document.createElement('div');
@@ -5517,6 +7454,18 @@ function initGeneratorModal() {
       return box;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkRow`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkRow
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkRow = (d) => {
       const idx = Number(d.idx);
       const row = document.createElement('div');
@@ -5576,12 +7525,25 @@ function initGeneratorModal() {
       const grp = document.createElement('div');
       grp.className = 'nw-evcs-mode-buttons nw-evcs-mode-buttons-3';
 
+      /**
+       * Code-Teil: Arrow-Funktion `addBtn`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: addBtn
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const addBtn = (val, label) => {
         const b = document.createElement('button');
         b.type = 'button';
         b.textContent = label;
         b.classList.toggle('active', mode === val);
         b.disabled = !canControl;
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         b.addEventListener('click', async () => {
           const ok = await apiSet(idx, 'mode', val);
           if (ok) setTimeout(() => { try { renderModal(); } catch(_e) {} }, 150);
@@ -5608,6 +7570,7 @@ function initGeneratorModal() {
       startBtn.className = 'btn';
       startBtn.textContent = 'Start';
       startBtn.disabled = !canControl;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an startBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       startBtn.addEventListener('click', async () => {
         const ok = await apiSet(idx, 'command', 'start');
         if (ok) setTimeout(() => { try { renderModal(); } catch(_e) {} }, 150);
@@ -5618,6 +7581,7 @@ function initGeneratorModal() {
       stopBtn.className = 'btn';
       stopBtn.textContent = 'Stop';
       stopBtn.disabled = !canControl;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an stopBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       stopBtn.addEventListener('click', async () => {
         const ok = await apiSet(idx, 'command', 'stop');
         if (ok) setTimeout(() => { try { renderModal(); } catch(_e) {} }, 150);
@@ -5637,6 +7601,18 @@ function initGeneratorModal() {
     shown.forEach(d => listEl.appendChild(mkRow(d)));
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `open`
+   * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: open
+   * Zweck: Öffnet Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const open = (e) => {
     try { if (e) e.preventDefault(); } catch(_e) {}
     modal.classList.remove('hidden');
@@ -5647,22 +7623,41 @@ function initGeneratorModal() {
     } catch (_e) {}
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `close`
+   * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: close
+   * Zweck: Schließt Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const close = () => {
     modal.classList.add('hidden');
     try { if (pollTimer) clearInterval(pollTimer); } catch(_e) {}
     pollTimer = null;
   };
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an card. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   card.addEventListener('click', open);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an closeBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   closeBtn.addEventListener('click', close);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an modal. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   modal.addEventListener('click', (e) => { if (e && e.target === modal) close(); });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('keydown', (e) => { if (e && e.key === 'Escape') close(); });
 
   window.__nwGeneratorModalInit = true;
 }
-
-
-
+/**
+ * Code-Teil: updateRelayUi
+ * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function updateRelayUi(){
   const cfg = window.__nwCfg || {};
   const apps = window.__nwEmsApps || { apps: {} };
@@ -5691,15 +7686,17 @@ function updateRelayUi(){
 
   card.classList.remove('hidden');
   card.style.display = '';
-
   const onCount = visible.filter(r => r.on).length;
   setText('relayOnCount', String(onCount));
   setText('relayCount', String(visible.length));
   setText('relayStatusShort', enabled ? (visible.length ? 'aktiv' : 'bereit') : 'aus');
 }
-
-
-
+/**
+ * Code-Teil: updateThresholdUi
+ * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function updateThresholdUi(){
   const cfg = window.__nwCfg || {};
   const apps = window.__nwEmsApps || { apps: {} };
@@ -5728,17 +7725,17 @@ function updateThresholdUi(){
 
   card.classList.remove('hidden');
   card.style.display = '';
-
   const activeCount = configured.filter(r => r.active).length;
   setText('thrActiveCount', String(activeCount));
   setText('thrRuleCount', String(configured.length));
   setText('thrStatusShort', enabled ? (configured.length ? 'aktiv' : 'bereit') : 'aus');
 }
-
-
-
-
-
+/**
+ * Code-Teil: updateBhkwUi
+ * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function updateBhkwUi(){
   const cfg = window.__nwCfg || {};
   const apps = window.__nwEmsApps || { apps: {} };
@@ -5770,6 +7767,18 @@ function updateBhkwUi(){
 
   // Running count from live states
   const st = window.latestState || {};
+  /**
+   * Code-Teil: Arrow-Funktion `sv`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: sv
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const sv = (k) => (st && st[k] && st[k].value !== undefined) ? st[k].value : undefined;
 
   let runCount = 0;
@@ -5784,10 +7793,12 @@ function updateBhkwUi(){
   setText('bhkwCount', String(visible.length));
   setText('bhkwStatusShort', enabled ? (visible.length ? 'aktiv' : 'bereit') : 'aus');
 }
-
-
-
-
+/**
+ * Code-Teil: updateGeneratorUi
+ * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function updateGeneratorUi(){
   const cfg = window.__nwCfg || {};
   const apps = window.__nwEmsApps || { apps: {} };
@@ -5818,6 +7829,18 @@ function updateGeneratorUi(){
   card.style.display = '';
 
   const st = window.latestState || {};
+  /**
+   * Code-Teil: Arrow-Funktion `sv`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: sv
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const sv = (k) => (st && st[k] && st[k].value !== undefined) ? st[k].value : undefined;
 
   let runCount = 0;
@@ -5837,7 +7860,12 @@ function updateGeneratorUi(){
 
 // ---- Thermik / Verbraucher Quick-Tiles (dynamisch je Slot) ----
 const _thermalConsTiles = new Map();
-
+/**
+ * Code-Teil: _ensureThermalConsumerTiles
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _ensureThermalConsumerTiles(){
   const grid = document.getElementById('liveQuickTiles');
   if (!grid) return;
@@ -5874,11 +7902,25 @@ function _ensureThermalConsumerTiles(){
       </div>
     `;
 
+    /**
+     * Code-Teil: Arrow-Funktion `open`
+     * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: open
+     * Zweck: Öffnet Dialoge/Seiten/Popovers.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const open = () => {
       // Re-use der bestehenden Flow-QuickControl (Modal)
       try { openFlowQc('consumers', idx); } catch (e) { console.warn('openFlowQc failed', e); }
     };
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an tile. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     tile.addEventListener('click', open);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an tile. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     tile.addEventListener('keydown', (ev) => {
       if (ev.key === 'Enter' || ev.key === ' ') {
         ev.preventDefault();
@@ -5900,7 +7942,12 @@ function _ensureThermalConsumerTiles(){
     });
   }
 }
-
+/**
+ * Code-Teil: _labelThermalMode
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _labelThermalMode(mode){
   const m = String(mode || '').trim();
   const k = m.toLowerCase();
@@ -5916,7 +7963,12 @@ function _labelThermalMode(mode){
   if (k === 'off') return 'Aus';
   return m;
 }
-
+/**
+ * Code-Teil: updateThermalConsumerUi
+ * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function updateThermalConsumerUi(){
   _ensureThermalConsumerTiles();
 
@@ -5932,6 +7984,18 @@ function updateThermalConsumerUi(){
   const thermalDevices = Array.isArray(thermalCfg.devices) ? thermalCfg.devices : [];
   const rodDevices = Array.isArray(rodCfg.devices) ? rodCfg.devices : [];
 
+  /**
+   * Code-Teil: Arrow-Funktion `normalizeConsumerType`
+   * Zweck: normalisiert Eingaben/Anzeigeformate und schützt gegen ungültige Werte.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: normalizeConsumerType
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const normalizeConsumerType = (raw) => {
     const s = String(raw || '').trim().toLowerCase();
     if (!s) return 'generic';
@@ -5941,6 +8005,18 @@ function updateThermalConsumerUi(){
   };
 
   const st = window.latestState || {};
+  /**
+   * Code-Teil: Arrow-Funktion `sv`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: sv
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const sv = (k) => (st && st[k] && st[k].value !== undefined) ? st[k].value : undefined;
 
   for (let idx = 1; idx <= 9; idx++) {
@@ -6018,12 +8094,24 @@ function updateThermalConsumerUi(){
 
 
 // ---- Energy Web update ----
+/**
+ * Code-Teil: updateEnergyWeb
+ * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function updateEnergyWeb() {
+  /**
+   * Code-Teil: d
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const d = (k) => state[k]?.value;
   const s = window.latestState || {};
 
   // Raw datapoints (1:1)
-  const sfEnabled = !!(s['storageFarm.enabled']?.value);
+  const sfEnabled = nwStorageFarmFeatureFromConfig(window.__nwCfg || {}, s || state || {});
   const pvMapped = isMappedDatapoint('pvPower') || isMappedDatapoint('productionTotal');
 
   // PV (W): primary from mapped PV datapoint; fallback to productionTotal if used as power DP.
@@ -6165,6 +8253,18 @@ function updateEnergyWeb() {
 
 
 // ---------- Ausgabe ----------
+  /**
+   * Code-Teil: Arrow-Funktion `T`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: T
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const T = (id, t) => { const el=document.getElementById(id); if (el) el.textContent=t; };
 
   T('pvVal', formatFlowPower(pvValNum));
@@ -6177,6 +8277,18 @@ function updateEnergyWeb() {
   if (soc===undefined || isNaN(Number(soc))) { T('batterySocIn','-- %'); } else { T('batterySocIn', Number(soc).toFixed(0)+' %'); }
 
   // Sichtbarkeit
+  /**
+   * Code-Teil: Arrow-Funktion `show`
+   * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: show
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const show = (id, on)=>{ const el=document.getElementById(id); if(el) el.style.opacity = on ? 1 : 0.15; };
   const evcsNode = document.getElementById('nodeEvcs');
   if (evcsNode) evcsNode.style.display = evAvail ? '' : 'none';
@@ -6188,6 +8300,18 @@ function updateEnergyWeb() {
   show('lineRest', batShowVal>0);
 
   // Richtung
+  /**
+   * Code-Teil: Arrow-Funktion `toggleRev`
+   * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: toggleRev
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const toggleRev = (id, on)=>{ const el=document.getElementById(id); if (el) el.classList.toggle('rev', !!on); };
   toggleRev('linePV', pvRev);
   toggleRev('lineGrid', gridRev);
@@ -6284,6 +8408,12 @@ statusEl.textContent = msg;
 
 
 // KI‑Energieberater: beratende Optimierungsvorschläge auf der LIVE-Seite
+/**
+ * Code-Teil: _nwAiAdvisorStateValue
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _nwAiAdvisorStateValue(key, fallback = null) {
   try {
     const rec = state && state[key];
@@ -6293,7 +8423,12 @@ function _nwAiAdvisorStateValue(key, fallback = null) {
     return fallback;
   }
 }
-
+/**
+ * Code-Teil: _nwAiAdvisorBool
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _nwAiAdvisorBool(key, fallback = false) {
   const v = _nwAiAdvisorStateValue(key, fallback);
   if (typeof v === 'boolean') return v;
@@ -6303,7 +8438,12 @@ function _nwAiAdvisorBool(key, fallback = false) {
   if (['false','0','off','no','nein','inactive','inaktiv'].includes(s)) return false;
   return !!fallback;
 }
-
+/**
+ * Code-Teil: _nwAiAdvisorPriorityLabel
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _nwAiAdvisorPriorityLabel(p) {
   const s = String(p || 'info').toLowerCase();
   if (s === 'critical') return 'Kritisch';
@@ -6318,7 +8458,12 @@ function _nwAiAdvisorPriorityLabel(p) {
   }
   return 'Info';
 }
-
+/**
+ * Code-Teil: _nwAiAdvisorCategoryLabel
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _nwAiAdvisorCategoryLabel(c) {
   const s = String(c || '').toLowerCase();
   if (s === 'tariff') return 'Tarif';
@@ -6338,7 +8483,12 @@ function _nwAiAdvisorCategoryLabel(c) {
   if (s === 'co2' || s === 'co₂') return 'CO₂';
   return 'System';
 }
-
+/**
+ * Code-Teil: _nwAiAdvisorParseSuggestions
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _nwAiAdvisorParseSuggestions() {
   const raw = _nwAiAdvisorStateValue('aiAdvisor.suggestionsJson', '[]');
   try {
@@ -6348,7 +8498,12 @@ function _nwAiAdvisorParseSuggestions() {
     return [];
   }
 }
-
+/**
+ * Code-Teil: updateAiAdvisorLiveUi
+ * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function updateAiAdvisorLiveUi() {
   const card = document.getElementById('aiAdvisorLiveCard');
   if (!card) return;
@@ -6432,6 +8587,7 @@ function updateAiAdvisorLiveUi() {
   try {
     if (toggleBtn && !toggleBtn.dataset.boundAiAdvisor) {
       toggleBtn.dataset.boundAiAdvisor = '1';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an toggleBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       toggleBtn.addEventListener('click', () => {
         const l = document.getElementById('aiAdvisorLiveList');
         if (!l) return;
@@ -6464,6 +8620,12 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
 
 // open settings automatically if '?settings=1' is present
 (function(){
+  /**
+   * Code-Teil: openSettings
+   * Zweck: Öffnet Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function openSettings(){
     try{
       const sbtn = document.getElementById('menuOpenSettings');
@@ -6486,6 +8648,7 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
     const isSettingsPage = /settings\.html$/i.test(window.location.pathname || '');
     if (isSettingsPage || params.get('settings') === '1') {
       if (document.readyState === 'loading') {
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'DOMContentLoaded' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         document.addEventListener('DOMContentLoaded', openSettings);
       } else {
         openSettings();
@@ -6496,6 +8659,12 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
 
 // --- EVCS modal ---
 (function(){
+  /**
+   * Code-Teil: qs
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function qs(id){ return document.getElementById(id); }
   const card = qs('evcsCard');
   const modal = qs('evcsModal');
@@ -6517,6 +8686,12 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
   const goalHint = qs('evcsGoalHint');
 
   // Unified /api/set helper for the EVCS modal (single wallbox)
+  /**
+   * Code-Teil: apiSet
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const apiSet = async (scope, key, value) => {
     const r = await fetch('/api/set', {
       method: 'POST',
@@ -6570,45 +8745,92 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
   // If we overwrite the input value during that window, the picker closes.
   // We therefore lock UI updates for a short period after user interaction.
   let goalEditUntil = 0;
+  /**
+   * Code-Teil: touchGoalEdit
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function touchGoalEdit(ms){
     const until = Date.now() + (ms || 12000);
     if (until > goalEditUntil) goalEditUntil = until;
   }
+  /**
+   * Code-Teil: goalEditLocked
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function goalEditLocked(){
     return Date.now() < goalEditUntil;
   }
-
+  /**
+   * Code-Teil: bindGoalLock
+   * Zweck: Verbindet Event-Handler mit DOM oder Runtime-Objekten.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function bindGoalLock(el, ms){
     if (!el) return;
+    /**
+     * Code-Teil: bump
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const bump = () => touchGoalEdit(ms);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'focusin' an el. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     el.addEventListener('focusin', bump);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an el. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     el.addEventListener('click', bump);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointerdown' an el. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     el.addEventListener('pointerdown', bump, { passive: true });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'mousedown' an el. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     el.addEventListener('mousedown', bump, { passive: true });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchstart' an el. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     el.addEventListener('touchstart', bump, { passive: true });
   }
-
-
+  /**
+   * Code-Teil: clampUiMode
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function clampUiMode(v){
     const n = Number(v);
     if (!isFinite(n)) return 1;
     return Math.max(1, Math.min(3, Math.round(n)));
   }
-
+  /**
+   * Code-Teil: normalizeEmsMode
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function normalizeEmsMode(raw){
     const s = String(raw ?? '').trim().toLowerCase();
     if (s === 'min+pv') return 'minpv';
     if (s === 'auto' || s === 'boost' || s === 'minpv' || s === 'pv') return s;
     return 'auto';
   }
-
+  /**
+   * Code-Teil: legacyNumToMode
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function legacyNumToMode(n){
     const v = clampUiMode(n);
     if (v === 2) return 'minpv';
     if (v === 3) return 'pv';
     return 'boost';
   }
-
+  /**
+   * Code-Teil: nextTsFromTimeInput
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function nextTsFromTimeInput(hhmm){
     const snapped = snapHhmmTo15Min(hhmm);
     const s = String(snapped ?? '').trim();
@@ -6627,6 +8849,12 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
 
   // Snap a HH:MM time string to a 15‑minute grid (00/15/30/45).
   // Returns '' on invalid input.
+  /**
+   * Code-Teil: snapHhmmTo15Min
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function snapHhmmTo15Min(hhmm){
     const s = String(hhmm ?? '').trim();
     if (!s || !/^\d{2}:\d{2}$/.test(s)) return '';
@@ -6642,7 +8870,12 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
     const sm = snapped % 60;
     return String(sh).padStart(2,'0') + ':' + String(sm).padStart(2,'0');
   }
-
+  /**
+   * Code-Teil: clockValueFromTs
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function clockValueFromTs(ts){
     const n = Number(ts);
     if (!Number.isFinite(n) || n <= 0) return '';
@@ -6655,20 +8888,35 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
       return '';
     }
   }
-
+  /**
+   * Code-Teil: modeToLegacyNum
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function modeToLegacyNum(mode){
     const s = normalizeEmsMode(mode);
     if (s === 'minpv') return 2;
     if (s === 'pv') return 3;
     return 1; // boost (auto -> boost fallback for legacy)
   }
-
+  /**
+   * Code-Teil: ensureAutoVisibility
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function ensureAutoVisibility(){
     if (!buttons) return;
     const autoBtn = buttons.querySelector('button[data-mode="auto"]');
     if (autoBtn) autoBtn.classList.toggle('hidden', !modalHasEms);
   }
-
+  /**
+   * Code-Teil: applyModeUi
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function applyModeUi(mode){
     if (!buttons) return;
     const m = normalizeEmsMode(mode);
@@ -6677,6 +8925,7 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
   }
 
   if (card){
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an card. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     card.addEventListener('click', ()=>{
       const c = Number(window.__nwEvcsCount || 0) || 0;
       if (!nwEvcsFeatureFromConfig()) return;
@@ -6685,11 +8934,14 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
     });
   }
   if (close){
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an close. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     close.addEventListener('click', ()=> modal && modal.classList.add('hidden'));
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal) modal.classList.add('hidden'); });
   }
 
   if (toggle){
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an toggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     toggle.addEventListener('change', async ()=>{
       const desired = !!toggle.checked;
       pendingActive = desired;
@@ -6706,6 +8958,7 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
 
 
   if (regToggle){
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an regToggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     regToggle.addEventListener('change', async ()=>{
       const desired = !!regToggle.checked;
       pendingReg = desired;
@@ -6718,6 +8971,7 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
   }
 
   if (goalToggle){
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an goalToggle. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     goalToggle.addEventListener('change', async ()=>{
       const b = !!goalToggle.checked;
       pendingGoalEnabled = b;
@@ -6735,6 +8989,7 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
   }
 
   if (goalSoc){
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an goalSoc. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     goalSoc.addEventListener('change', async ()=>{
       const n = Number(goalSoc.value);
       if (!Number.isFinite(n)) return;
@@ -6753,6 +9008,7 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
   }
 
   if (goalTime){
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an goalTime. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     goalTime.addEventListener('change', async ()=>{
       // Enforce 15‑minute raster even if the browser allows free typing.
       const snapped = snapHhmmTo15Min(goalTime.value) || goalTime.value;
@@ -6773,6 +9029,7 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
   }
 
   if (goalKwh){
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an goalKwh. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     goalKwh.addEventListener('change', async ()=>{
       const n = Number(goalKwh.value);
       const v = Number.isFinite(n) ? Math.max(0, Math.min(2000, Math.round(n * 10) / 10)) : 0;
@@ -6790,6 +9047,7 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
   }
 
   if (buttons){
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an buttons. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     buttons.addEventListener('click', async (e)=>{
       const b = e.target && e.target.closest ? e.target.closest('button[data-mode]') : null;
       if (!b) return;
@@ -6863,7 +9121,12 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
       const uiFromState = clampUiMode(modeRaw);
       modeStrFromState = legacyNumToMode(uiFromState);
     }
-
+    /**
+     * Code-Teil: fmtP
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const fmtP = (val)=> {
       const u = (window.units && window.units.power) || 'W';
       const n = Number(val) || 0;
@@ -7065,6 +9328,12 @@ render = function(){ try{ _renderOld(); }catch(e){ console.warn('render', e); } 
 // Energiefluss: Schnellsteuerung (optionale Verbraucher/Erzeuger)
 // - Kreis wird nur klickbar, wenn im App-Center (Installer) mindestens ein Write-Datenpunkt gesetzt ist
 // - Readback ist optional (für Status/Feedback)
+/**
+ * Code-Teil: openFlowQc
+ * Zweck: Öffnet Dialoge/Seiten/Popovers.
+ * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function openFlowQc(kind, idx){
   try {
     if (typeof window.__nwFlowQcOpen === 'function') window.__nwFlowQcOpen(kind, idx);
@@ -7120,7 +9389,12 @@ function openFlowQc(kind, idx){
   let gaugeDisplayMaxW = 0;
   let gaugeZeroConfirm = 0;
   let gaugeLastFillDeg = '';
-
+  /**
+   * Code-Teil: resetGaugeSmoothing
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const resetGaugeSmoothing = () => {
     gaugeDisplayW = 0;
     gaugeDisplayMaxW = 0;
@@ -7128,6 +9402,12 @@ function openFlowQc(kind, idx){
     gaugeLastFillDeg = '';
   };
 
+  /**
+   * Code-Teil: smoothGaugePower
+   * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+   * Zusammenhang: Gehört zu Kunden-LIVE-Frontend (Dashboard, Energiefluss, Feature-Sichtbarkeit, Einstellungen und Schnellsteuerungen) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+   * Wartung/TypeScript: Änderungen können LIVE-Energiefluss, aktuelle Werte und History beeinflussen; DP-Fallbacks nur mit Regressionstest ändern. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+   */
   const smoothGaugePower = (valueW, maxW, opts = {}) => {
     const raw = Math.max(0, Math.abs(Number(valueW) || 0));
     const max = Math.max(0, Number(maxW) || 0);
@@ -7156,13 +9436,23 @@ function openFlowQc(kind, idx){
     if (max > 0) gaugeDisplayMaxW = max;
     return { valueW: gaugeDisplayW, maxW: gaugeDisplayMaxW || max };
   };
-
+  /**
+   * Code-Teil: showMsg
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const showMsg = (t, kind) => {
     if (!msgEl) return;
     msgEl.textContent = t || '';
     msgEl.style.color = (kind === 'error') ? '#fca5a5' : (kind === 'ok') ? '#6ee7b7' : 'var(--muted)';
   };
-
+  /**
+   * Code-Teil: modeLabel
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const modeLabel = (m) => {
     const s = String(m || '').trim();
     const k = s.toLowerCase();
@@ -7176,20 +9466,36 @@ function openFlowQc(kind, idx){
     if (k === 'boost') return 'Boost';
     return s || '—';
   };
-
+  /**
+   * Code-Teil: getSlotMeta
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const getSlotMeta = (k, i) => {
     const cfg = flowSlotsCfg || {};
     const arr = (k === 'producer') ? (cfg.producers || []) : (cfg.consumers || []);
     const n = Number(i) || 0;
     return arr.find(x => Number(x && x.idx) === n) || null;
   };
-
+  /**
+   * Code-Teil: getEntry
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const getEntry = (k, i) => {
     const arr = (k === 'producer') ? flowExtras.producers : flowExtras.consumers;
     const n = Number(i) || 0;
     return arr.find(x => Number(x && x.idx) === n) || null;
   };
 
+  /**
+   * Code-Teil: readStateNumber
+   * Zweck: Liest einen Wert aus Cache, Konfiguration, DOM oder ioBroker-State mit passenden Fallbacks.
+   * Zusammenhang: Gehört zu Kunden-LIVE-Frontend (Dashboard, Energiefluss, Feature-Sichtbarkeit, Einstellungen und Schnellsteuerungen) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+   * Wartung/TypeScript: Änderungen können LIVE-Energiefluss, aktuelle Werte und History beeinflussen; DP-Fallbacks nur mit Regressionstest ändern. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+   */
   const readStateNumber = (key, fallback = NaN) => {
     if (!key) return fallback;
     const stores = [state, window.latestState || {}];
@@ -7201,7 +9507,12 @@ function openFlowQc(kind, idx){
     }
     return fallback;
   };
-
+  /**
+   * Code-Teil: getHeatingRodDeviceCfg
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const getHeatingRodDeviceCfg = (idx) => {
     const rodCfg = (window.__nwEmsApps && window.__nwEmsApps.heatingRod) ? window.__nwEmsApps.heatingRod : {};
     const devices = Array.isArray(rodCfg.devices) ? rodCfg.devices : [];
@@ -7211,7 +9522,12 @@ function openFlowQc(kind, idx){
     if (!dev) dev = devices.find(d => d && Math.round(Number(d.slot ?? d.consumerSlot ?? 0)) === n) || null;
     return dev || {};
   };
-
+  /**
+   * Code-Teil: setFlowGaugeFill
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const setFlowGaugeFill = (valueW, maxW) => {
     if (!flowGauge) return;
     const val = Math.max(0, Math.abs(Number(valueW) || 0));
@@ -7226,6 +9542,12 @@ function openFlowQc(kind, idx){
     flowGauge.title = max > 0 ? `${formatPower(val)} von ${formatPower(max)}` : formatPower(val);
   };
 
+  /**
+   * Code-Teil: resolveFlowPower
+   * Zweck: Berechnet abgeleitete Energie-/Budget-/Flusswerte aus Datenpunkten und Fallbacks.
+   * Zusammenhang: Gehört zu Kunden-LIVE-Frontend (Dashboard, Energiefluss, Feature-Sichtbarkeit, Einstellungen und Schnellsteuerungen) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+   * Wartung/TypeScript: Änderungen können LIVE-Energiefluss, aktuelle Werte und History beeinflussen; DP-Fallbacks nur mit Regressionstest ändern. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+   */
   const resolveFlowPower = (readbackData = null) => {
     if (!ctx) return { valueW: 0, maxW: 0 };
     const entry = getEntry(ctx.kind, ctx.idx);
@@ -7259,6 +9581,12 @@ function openFlowQc(kind, idx){
     return { valueW: n, maxW };
   };
 
+  /**
+   * Code-Teil: updatePower
+   * Zweck: Synchronisiert vorhandene Daten mit UI, Runtime-State oder abhängigen Modulen.
+   * Zusammenhang: Gehört zu Kunden-LIVE-Frontend (Dashboard, Energiefluss, Feature-Sichtbarkeit, Einstellungen und Schnellsteuerungen) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+   * Wartung/TypeScript: Änderungen können LIVE-Energiefluss, aktuelle Werte und History beeinflussen; DP-Fallbacks nur mit Regressionstest ändern. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+   */
   const updatePower = (readbackData = null) => {
     if (!ctx || !powerEl) return;
     const resolved = resolveFlowPower(readbackData);
@@ -7271,7 +9599,12 @@ function openFlowQc(kind, idx){
     powerEl.textContent = (ctx.kind === 'consumer') ? formatPower(Math.abs(n)) : formatPowerSigned(n);
     setFlowGaugeFill(n, smoothed.maxW);
   };
-
+  /**
+   * Code-Teil: renderModeButtons
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const renderModeButtons = (modes, activeMode) => {
     if (!modeButtons) return;
     const list = Array.isArray(modes) ? modes : [];
@@ -7288,7 +9621,12 @@ function openFlowQc(kind, idx){
       modeButtons.appendChild(btn);
     });
   };
-
+  /**
+   * Code-Teil: readback
+   * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const readback = async () => {
     if (!ctx) return;
     try {
@@ -7406,7 +9744,12 @@ function openFlowQc(kind, idx){
       }
     } catch(_e) {}
   };
-
+  /**
+   * Code-Teil: setSwitch
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const setSwitch = async (v) => {
     if (!ctx) return;
     pendingSwitch = !!v;
@@ -7425,7 +9768,12 @@ function openFlowQc(kind, idx){
       setTimeout(() => { pendingSwitch = null; }, 900);
     }
   };
-
+  /**
+   * Code-Teil: setSetpoint
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const setSetpoint = async (v) => {
     if (!ctx) return;
     const n = Number(v);
@@ -7446,7 +9794,12 @@ function openFlowQc(kind, idx){
       setTimeout(() => { pendingSetpoint = null; }, 900);
     }
   };
-
+  /**
+   * Code-Teil: setRegEnabled
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const setRegEnabled = async (enable) => {
     if (!ctx) return;
     pendingReg = !!enable;
@@ -7466,7 +9819,12 @@ function openFlowQc(kind, idx){
       setTimeout(() => { pendingReg = null; }, 900);
     }
   };
-
+  /**
+   * Code-Teil: setMode
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const setMode = async (mode) => {
     if (!ctx) return;
     const m = String(mode || '').trim();
@@ -7488,7 +9846,12 @@ function openFlowQc(kind, idx){
       setTimeout(() => { pendingMode = null; }, 900);
     }
   };
-
+  /**
+   * Code-Teil: setBoost
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const setBoost = async (enable) => {
     if (!ctx) return;
     pendingBoost = !!enable;
@@ -7508,7 +9871,12 @@ function openFlowQc(kind, idx){
       setTimeout(() => { pendingBoost = null; }, 900);
     }
   };
-
+  /**
+   * Code-Teil: open
+   * Zweck: Öffnet Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const open = (kind, idx) => {
     const k = (kind === 'producer' || kind === 'producers') ? 'producer' : 'consumer';
     const meta = getSlotMeta(k, idx);
@@ -7598,7 +9966,12 @@ function openFlowQc(kind, idx){
     poll = setInterval(() => { readback(); }, 1000);
     modal.classList.remove('hidden');
   };
-
+  /**
+   * Code-Teil: close
+   * Zweck: Schließt Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von Kunden-LIVE-Frontend: Dashboard, Energiefluss, Schnellsteuerung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const close = () => {
     if (poll) { clearInterval(poll); poll = null; }
     ctx = null;
@@ -7613,6 +9986,7 @@ function openFlowQc(kind, idx){
   };
 
   if (closeBtn) closeBtn.addEventListener('click', close);
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an modal. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   modal.addEventListener('click', (e) => { if (e && e.target === modal) close(); });
 
   window.__nwFlowQcOpen = open;
@@ -7625,6 +9999,7 @@ function openFlowQc(kind, idx){
   if (n && modal){
     // mark clickable
     n.classList.add('clickable');
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an n. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     n.addEventListener('click', ()=>{
       const c = Number(window.__nwEvcsCount || 0) || 0;
       if (!nwEvcsFeatureFromConfig()) return;

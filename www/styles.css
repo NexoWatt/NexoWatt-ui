@@ -1,3 +1,26 @@
+/*
+ * NexoWatt Detail-Kommentar (DE)
+ * Datei: www/styles.css
+ * Zweck: Globale VIS-Styles: Dashboard, Subpages, History, SmartHome und responsive Regeln. Klassen werden von allen www/*.html/js genutzt.
+ * Wartung/TypeScript: CSS wird nicht nach TypeScript migriert, aber Klassen/IDs sind Vertragsstellen für TS-Komponenten.
+ */
+
+/*
+ * Datei: www/styles.css
+ * Rolle: Code-Datei
+ * Zweck: Allgemeiner Projektcode; genaue Verantwortung ergibt sich aus Pfad und Funktionsnamen.
+ * Wartung: Diese Styles hängen an festen HTML-Klassen/IDs. Vor Änderungen betroffene Seiten mobil und Desktop prüfen.
+ */
+/*
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Stylesheet für Kunden-/VIS-Seiten, Reports oder mobile Layouts.
+ * Zusammenhänge:
+ * - HTML-Struktur liegt in www/*.html, Logik in www/*.js.
+ * - Responsivität muss Desktop, Tablet und Smartphone abdecken.
+ * Wartungshinweise:
+ * - Keine fachliche Logik hier; nur Darstellung und Sichtbarkeit.
+ */
+
 
 :root {
   --nx-green: #00c853;
@@ -10752,3 +10775,534 @@ body.nw-page-smarthome .nw-sh-gauge--level + .nw-sh-slider--big{
   .nw-ai-setting-row select,
   .nw-ai-setting-row input{width:100%;}
 }
+
+/* =====================================================================
+   NexoWatt EMS 0.7.45 – App-Center Heizstab UI Responsiveness Hotfix
+   ===================================================================== */
+body.nw-page-ems-apps main.nw-appcenter-page,
+body.nw-page-ems-apps main.nw-page-shell{
+  width:min(var(--nx-page-max, 1580px), calc(100vw - clamp(20px, 3vw, 54px))) !important;
+  max-width:none !important;
+  overflow:visible !important;
+}
+
+body.nw-page-ems-apps .nw-smarthome-tabs{
+  max-width:100% !important;
+  overflow-x:auto !important;
+}
+
+/* Der Heizstab-Konfigurator braucht wegen 1–12 Stufen und DP-Zeilen bewusst
+   die volle Breite. Die Hinweis-Kachel rutscht unter die Gerätekarte, damit
+   keine Eingabefelder mehr über angrenzende Karten laufen. */
+body.nw-page-ems-apps #nw-tabpanel-heatingrod > .nw-grid{
+  grid-template-columns:1fr !important;
+  align-items:start !important;
+}
+body.nw-page-ems-apps #nw-tabpanel-heatingrod .nw-card,
+body.nw-page-ems-apps #heatingRodDevices,
+body.nw-page-ems-apps #heatingRodDevices *{
+  box-sizing:border-box !important;
+}
+body.nw-page-ems-apps #nw-tabpanel-heatingrod .nw-card{
+  min-width:0 !important;
+  overflow:hidden !important;
+}
+body.nw-page-ems-apps #heatingRodDevices{
+  display:grid !important;
+  grid-template-columns:1fr !important;
+  gap:12px !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  overflow:hidden !important;
+}
+body.nw-page-ems-apps #heatingRodDevices > .nw-config-group,
+body.nw-page-ems-apps #heatingRodDevices > details.nw-config-group{
+  width:100% !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  flex:1 1 auto !important;
+  overflow:hidden !important;
+}
+body.nw-page-ems-apps #heatingRodDevices > .nw-config-item,
+body.nw-page-ems-apps #heatingRodDevices > .nw-heatingrod-device-row{
+  width:100% !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  grid-template-columns:1fr !important;
+  gap:12px !important;
+  align-items:start !important;
+  overflow:hidden !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-device-left,
+body.nw-page-ems-apps .nw-heatingrod-device-right{
+  width:100% !important;
+  max-width:100% !important;
+  min-width:0 !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-device-left{
+  padding-bottom:2px !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-device-right{
+  align-items:stretch !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-device-right > .nw-config-group,
+body.nw-page-ems-apps .nw-heatingrod-device-right > details.nw-config-group{
+  width:100% !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  flex:1 1 auto !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-device-right > .nw-config-field-hint{
+  max-width:100% !important;
+  overflow-wrap:anywhere !important;
+}
+body.nw-page-ems-apps .nw-config-mini-field{
+  min-width:min(130px, 100%) !important;
+  max-width:100% !important;
+}
+body.nw-page-ems-apps .nw-config-group .nw-config-input,
+body.nw-page-ems-apps .nw-config-group .nw-config-select,
+body.nw-page-ems-apps .nw-config-group .nw-config-dp-input{
+  max-width:100% !important;
+}
+
+/* Stage-Tabelle: Desktop kompakt als Grid, bei kleiner Breite automatisch
+   lesbar ohne Überlagerung und mit horizontaler Sicherheits-Scrollfläche. */
+body.nw-page-ems-apps .nw-heatingrod-stage-wrap{
+  width:100% !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  overflow-x:auto !important;
+  overflow-y:hidden !important;
+  -webkit-overflow-scrolling:touch !important;
+  scrollbar-width:thin !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-stage-head{
+  min-width:0 !important;
+  max-width:100% !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-stage-head .nw-config-field-hint{
+  max-width:100% !important;
+  overflow-wrap:anywhere !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-stage-row{
+  width:100% !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  grid-template-columns:minmax(78px, .55fr) repeat(3, minmax(90px, 1fr)) !important;
+  gap:8px !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-stage-dp-row{
+  grid-template-columns:minmax(78px, .45fr) repeat(2, minmax(170px, 1fr)) !important;
+  align-items:start !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-stage-row .nw-config-input,
+body.nw-page-ems-apps .nw-heatingrod-stage-row .nw-config-dp-input{
+  min-width:0 !important;
+  width:100% !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-stage-dp-row .nw-config-dp-input-wrapper{
+  max-width:100% !important;
+}
+body.nw-page-ems-apps .nw-heatingrod-stage-dp-row .nw-config-dp-input-wrapper .nw-config-dp-input{
+  flex:1 1 150px !important;
+}
+
+@media (max-width: 980px){
+  body.nw-page-ems-apps main.nw-appcenter-page,
+  body.nw-page-ems-apps main.nw-page-shell{
+    width:calc(100vw - 20px) !important;
+    padding:12px !important;
+  }
+  body.nw-page-ems-apps .nw-heatingrod-stage-row,
+  body.nw-page-ems-apps .nw-heatingrod-stage-dp-row{
+    min-width:560px !important;
+  }
+}
+@media (max-width: 640px){
+  body.nw-page-ems-apps main.nw-appcenter-page,
+  body.nw-page-ems-apps main.nw-page-shell{
+    width:calc(100vw - 12px) !important;
+    padding:8px !important;
+  }
+  body.nw-page-ems-apps #heatingRodDevices{
+    gap:10px !important;
+  }
+  body.nw-page-ems-apps #heatingRodDevices > .nw-config-item,
+  body.nw-page-ems-apps #heatingRodDevices > .nw-heatingrod-device-row{
+    padding:10px !important;
+  }
+  body.nw-page-ems-apps .nw-heatingrod-stage-wrap{
+    padding:10px !important;
+  }
+  body.nw-page-ems-apps .nw-heatingrod-stage-row,
+  body.nw-page-ems-apps .nw-heatingrod-stage-dp-row{
+    min-width:520px !important;
+  }
+}
+
+/* =====================================================================
+   NexoWatt EMS 0.7.49 – Mobile VIS Hotfix
+   - History toolbar ohne horizontales Wegscrollen auf Smartphone
+   - SmartHome Mobile Drawer/Content wird zuverlässig sichtbar
+   - EVCS-History-Aktionen nur anzeigen, wenn wirklich Ladepunkte vorhanden sind
+   ===================================================================== */
+body.nw-page-history,
+body.nw-page-smarthome{
+  overflow-x:hidden !important;
+}
+
+/* History: strukturiert statt langer, horizontaler Button-Leiste. */
+body.nw-page-history .history-toolbar,
+body.nw-cockpit-page.nw-page-history .history-toolbar{
+  display:grid !important;
+  grid-template-columns:minmax(260px, auto) minmax(280px, 1fr) minmax(260px, auto) !important;
+  align-items:center !important;
+  gap:10px !important;
+  overflow:visible !important;
+  flex-wrap:unset !important;
+}
+body.nw-page-history .history-toolbar__range,
+body.nw-cockpit-page.nw-page-history .history-toolbar__range,
+body.nw-page-history .history-toolbar__date,
+body.nw-cockpit-page.nw-page-history .history-toolbar__date,
+body.nw-page-history .history-toolbar__actions,
+body.nw-cockpit-page.nw-page-history .history-toolbar__actions{
+  min-width:0 !important;
+  width:100% !important;
+}
+body.nw-page-history .history-toolbar__range,
+body.nw-cockpit-page.nw-page-history .history-toolbar__range{
+  display:grid !important;
+  grid-template-columns:repeat(4, minmax(0, 1fr)) !important;
+  gap:8px !important;
+}
+body.nw-page-history .history-toolbar__date,
+body.nw-cockpit-page.nw-page-history .history-toolbar__date{
+  display:grid !important;
+  grid-template-columns:44px minmax(160px, 1fr) 44px !important;
+  gap:8px !important;
+  align-items:stretch !important;
+}
+body.nw-page-history .history-toolbar__date label,
+body.nw-cockpit-page.nw-page-history .history-toolbar__date label{
+  display:grid !important;
+  grid-template-columns:auto minmax(0, 1fr) !important;
+  gap:8px !important;
+  align-items:center !important;
+  width:100% !important;
+  min-width:0 !important;
+}
+body.nw-page-history .history-toolbar__date label span,
+body.nw-cockpit-page.nw-page-history .history-toolbar__date label span{
+  font-size:12px !important;
+  font-weight:850 !important;
+  color:rgba(203,213,225,.78) !important;
+  white-space:nowrap !important;
+}
+body.nw-page-history .history-toolbar__actions,
+body.nw-cockpit-page.nw-page-history .history-toolbar__actions{
+  display:flex !important;
+  justify-content:flex-end !important;
+  gap:8px !important;
+  flex-wrap:wrap !important;
+}
+body.nw-page-history .history-toolbar .btn,
+body.nw-cockpit-page.nw-page-history .history-toolbar .btn{
+  min-height:38px !important;
+  min-width:0 !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  white-space:nowrap !important;
+}
+body.nw-page-history .history-toolbar input[type="date"],
+body.nw-cockpit-page.nw-page-history .history-toolbar input[type="date"]{
+  min-width:0 !important;
+  width:100% !important;
+}
+
+@media (max-width: 1060px){
+  body.nw-page-history .history-toolbar,
+  body.nw-cockpit-page.nw-page-history .history-toolbar{
+    grid-template-columns:1fr !important;
+  }
+  body.nw-page-history .history-toolbar__actions,
+  body.nw-cockpit-page.nw-page-history .history-toolbar__actions{
+    justify-content:stretch !important;
+  }
+  body.nw-page-history .history-toolbar__actions > .btn,
+  body.nw-cockpit-page.nw-page-history .history-toolbar__actions > .btn{
+    flex:1 1 140px !important;
+  }
+}
+
+@media (max-width: 640px){
+  body.nw-page-history .hist-wrap,
+  body.nw-cockpit-page.nw-page-history .hist-wrap{
+    width:100% !important;
+    max-width:100% !important;
+    padding:8px !important;
+  }
+  body.nw-page-history .nw-page-hero,
+  body.nw-cockpit-page.nw-page-history .nw-page-hero{
+    padding:14px !important;
+    border-radius:20px !important;
+  }
+  body.nw-page-history .nw-page-hero h1,
+  body.nw-page-history .nw-page-hero h2,
+  body.nw-cockpit-page.nw-page-history .nw-page-hero h1,
+  body.nw-cockpit-page.nw-page-history .nw-page-hero h2{
+    font-size:clamp(26px, 8.2vw, 34px) !important;
+    line-height:1.04 !important;
+  }
+  body.nw-page-history .nw-page-hero__actions,
+  body.nw-cockpit-page.nw-page-history .nw-page-hero__actions{
+    display:grid !important;
+    grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+    gap:8px !important;
+    width:100% !important;
+  }
+  body.nw-page-history .nw-page-hero__actions .btn,
+  body.nw-cockpit-page.nw-page-history .nw-page-hero__actions .btn{
+    min-height:46px !important;
+    border-radius:16px !important;
+  }
+  body.nw-page-history .history-toolbar,
+  body.nw-cockpit-page.nw-page-history .history-toolbar{
+    padding:12px !important;
+    border-radius:20px !important;
+    overflow:visible !important;
+  }
+  body.nw-page-history .history-toolbar__range,
+  body.nw-cockpit-page.nw-page-history .history-toolbar__range{
+    grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+  }
+  body.nw-page-history .history-toolbar__date,
+  body.nw-cockpit-page.nw-page-history .history-toolbar__date{
+    grid-template-columns:46px minmax(0, 1fr) 46px !important;
+  }
+  body.nw-page-history .history-toolbar__date label,
+  body.nw-cockpit-page.nw-page-history .history-toolbar__date label{
+    grid-template-columns:1fr !important;
+    gap:5px !important;
+  }
+  body.nw-page-history .history-toolbar__actions,
+  body.nw-cockpit-page.nw-page-history .history-toolbar__actions{
+    display:grid !important;
+    grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+    gap:8px !important;
+  }
+  body.nw-page-history .history-toolbar__actions > .btn,
+  body.nw-cockpit-page.nw-page-history .history-toolbar__actions > .btn{
+    width:100% !important;
+    min-height:46px !important;
+    border-radius:16px !important;
+    padding:0 10px !important;
+  }
+  body.nw-page-history .legend,
+  body.nw-cockpit-page.nw-page-history .legend{
+    display:grid !important;
+    grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+    gap:8px !important;
+  }
+  body.nw-page-history .legend .lg,
+  body.nw-cockpit-page.nw-page-history .legend .lg{
+    min-width:0 !important;
+    justify-content:center !important;
+    padding:8px 10px !important;
+    overflow:hidden !important;
+  }
+  body.nw-page-history .legend .lg span,
+  body.nw-cockpit-page.nw-page-history .legend .lg span{
+    overflow:hidden !important;
+    text-overflow:ellipsis !important;
+    white-space:nowrap !important;
+  }
+}
+
+@media (max-width: 390px){
+  body.nw-page-history .history-toolbar__actions,
+  body.nw-cockpit-page.nw-page-history .history-toolbar__actions,
+  body.nw-page-history .legend,
+  body.nw-cockpit-page.nw-page-history .legend{
+    grid-template-columns:1fr !important;
+  }
+}
+
+/* SmartHome Mobile: Der linke Bereich ist auf Smartphone ein Drawer, nicht
+   Teil des Seitenflusses. So verschwindet die eigentliche Geräteansicht nicht
+   unter einer großen leeren Fläche. */
+#nw-smarthome-empty.nw-sh-empty--loading{
+  display:block !important;
+  min-height:96px !important;
+  padding:18px !important;
+  color:rgba(226,232,240,.86) !important;
+}
+
+@media (max-width: 900px){
+  body.nw-page-smarthome main.nw-page-shell,
+  body.nw-cockpit-page.nw-page-smarthome main.nw-page-shell{
+    width:100% !important;
+    max-width:100% !important;
+    padding:8px !important;
+    gap:12px !important;
+    overflow:hidden !important;
+  }
+  body.nw-page-smarthome #nw-smarthome-root,
+  body.nw-cockpit-page.nw-page-smarthome #nw-smarthome-root{
+    min-height:0 !important;
+    width:100% !important;
+    padding:0 !important;
+    overflow:visible !important;
+  }
+  body.nw-page-smarthome .nw-sh-layout,
+  body.nw-cockpit-page.nw-page-smarthome .nw-sh-layout{
+    display:block !important;
+    grid-template-columns:1fr !important;
+    gap:0 !important;
+    min-width:0 !important;
+    width:100% !important;
+  }
+  body.nw-page-smarthome .nw-sh-main,
+  body.nw-cockpit-page.nw-page-smarthome .nw-sh-main{
+    display:block !important;
+    width:100% !important;
+    min-width:0 !important;
+    min-height:0 !important;
+    padding:0 !important;
+  }
+  body.nw-page-smarthome .nw-sh-topbar,
+  body.nw-cockpit-page.nw-page-smarthome .nw-sh-topbar{
+    display:flex !important;
+    flex-direction:row !important;
+    align-items:center !important;
+    justify-content:space-between !important;
+    width:100% !important;
+    min-height:54px !important;
+    margin:0 0 12px !important;
+    padding:10px 12px !important;
+    border-radius:18px !important;
+  }
+  body.nw-page-smarthome .nw-sh-topbar-title,
+  body.nw-cockpit-page.nw-page-smarthome .nw-sh-topbar-title{
+    min-width:0 !important;
+    text-align:right !important;
+  }
+  body.nw-page-smarthome #nwShPageTitle,
+  body.nw-cockpit-page.nw-page-smarthome #nwShPageTitle{
+    overflow:hidden !important;
+    text-overflow:ellipsis !important;
+    white-space:nowrap !important;
+    font-size:1rem !important;
+  }
+  body.nw-page-smarthome .nw-sh-nav-toggle,
+  body.nw-cockpit-page.nw-page-smarthome .nw-sh-nav-toggle{
+    display:inline-flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    width:42px !important;
+    height:42px !important;
+    min-width:42px !important;
+    min-height:42px !important;
+    padding:0 !important;
+  }
+  body.nw-page-smarthome .nw-sh-sidebar,
+  body.nw-cockpit-page.nw-page-smarthome .nw-sh-sidebar{
+    position:fixed !important;
+    z-index:2300 !important;
+    top:var(--topbar-h, 64px) !important;
+    bottom:0 !important;
+    left:0 !important;
+    width:min(86vw, 330px) !important;
+    max-width:330px !important;
+    max-height:none !important;
+    overflow:auto !important;
+    -webkit-overflow-scrolling:touch !important;
+    transform:translateX(-110%) !important;
+    transition:transform 190ms ease !important;
+    border-radius:0 22px 22px 0 !important;
+    box-shadow:20px 0 60px rgba(0,0,0,.42) !important;
+  }
+  body.nw-page-smarthome .nw-sh-sidebar.nw-sh-sidebar--open,
+  body.nw-cockpit-page.nw-page-smarthome .nw-sh-sidebar.nw-sh-sidebar--open{
+    transform:translateX(0) !important;
+  }
+  body.nw-page-smarthome .nw-sh-overlay,
+  body.nw-cockpit-page.nw-page-smarthome .nw-sh-overlay{
+    position:fixed !important;
+    inset:var(--topbar-h, 64px) 0 0 0 !important;
+    z-index:2290 !important;
+    background:rgba(0,0,0,.56) !important;
+    backdrop-filter:blur(3px) !important;
+  }
+  body.nw-page-smarthome .nw-sh-rooms,
+  body.nw-cockpit-page.nw-page-smarthome .nw-sh-rooms{
+    display:block !important;
+    width:100% !important;
+    min-width:0 !important;
+  }
+  body.nw-page-smarthome .nw-sh-empty,
+  body.nw-cockpit-page.nw-page-smarthome .nw-sh-empty{
+    display:block;
+    width:100% !important;
+    min-height:auto !important;
+    padding:16px !important;
+    border-radius:18px !important;
+  }
+  body.nw-page-smarthome .nw-sh-floor,
+  body.nw-page-smarthome .nw-sh-room,
+  body.nw-page-smarthome .nw-sh-home__info,
+  body.nw-page-smarthome .nw-sh-home__section,
+  body.nw-cockpit-page.nw-page-smarthome .nw-sh-floor,
+  body.nw-cockpit-page.nw-page-smarthome .nw-sh-room,
+  body.nw-cockpit-page.nw-page-smarthome .nw-sh-home__info,
+  body.nw-cockpit-page.nw-page-smarthome .nw-sh-home__section{
+    width:100% !important;
+    min-width:0 !important;
+    margin-inline:0 !important;
+  }
+}
+
+@media (max-width: 520px){
+  body.nw-page-smarthome .nw-page-hero,
+  body.nw-cockpit-page.nw-page-smarthome .nw-page-hero{
+    width:100% !important;
+    padding:16px !important;
+    border-radius:20px !important;
+  }
+  body.nw-page-smarthome .nw-page-hero h1,
+  body.nw-page-smarthome .nw-page-hero h2,
+  body.nw-cockpit-page.nw-page-smarthome .nw-page-hero h1,
+  body.nw-cockpit-page.nw-page-smarthome .nw-page-hero h2{
+    font-size:clamp(28px, 8.6vw, 36px) !important;
+    line-height:1.04 !important;
+  }
+  body.nw-page-smarthome .nw-page-hero p,
+  body.nw-page-smarthome .nw-page-hero__subtitle,
+  body.nw-cockpit-page.nw-page-smarthome .nw-page-hero p,
+  body.nw-cockpit-page.nw-page-smarthome .nw-page-hero__subtitle{
+    font-size:15px !important;
+    line-height:1.42 !important;
+  }
+  body.nw-page-smarthome .nw-sh-grid,
+  body.nw-cockpit-page.nw-page-smarthome .nw-sh-grid,
+  body.nw-page-smarthome .nw-sh-home__floors,
+  body.nw-cockpit-page.nw-page-smarthome .nw-sh-home__floors{
+    display:grid !important;
+    grid-template-columns:1fr !important;
+    gap:10px !important;
+  }
+  body.nw-page-smarthome .nw-sh-tile,
+  body.nw-cockpit-page.nw-page-smarthome .nw-sh-tile{
+    min-height:138px !important;
+  }
+}
+
+
+/*
+ * NexoWatt Detail-Kommentar CSS (DE)
+ * Zweck: Die Styles bündeln Kunden-Dashboard, Installer-App-Center, History, SmartHome und Reports.
+ * Zusammenhang: Viele Klassen werden dynamisch von www/app.js, www/history.js und www/smarthome.js gesetzt.
+ * Wartung: Beim TypeScript-/Komponentenumbau sollten Styles schrittweise in klar benannte Komponentenbereiche aufgeteilt werden.
+ */

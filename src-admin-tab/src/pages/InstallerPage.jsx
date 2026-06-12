@@ -1,3 +1,28 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: src-admin-tab/src/pages/InstallerPage.jsx
+ * Rolle im Projekt: Admin-React-Quelle.
+ * Zweck: React-Quellcode für ioBroker-Admin-Tab und Installer-Einstiegsseiten.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Quellcode der React-Admin-Tab-Oberfläche.
+ * Zusammenhänge:
+ * - Baut nach admin/react/ und öffnet Installer-/Lizenz-/Redirect-Seiten.
+ * - Kommuniziert über AdminConnection/ioBroker Admin APIs.
+ * Wartungshinweise:
+ * - Bei UI-Änderungen anschließend admin:build ausführen.
+ */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageShell from './PageShell';
@@ -33,7 +58,6 @@ export default function InstallerPage() {
       active = false;
     };
   }, [instance]);
-
   const baseUrl = useMemo(() => buildRuntimeBaseUrl(port), [port]);
 
   const actions = [

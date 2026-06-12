@@ -1,3 +1,28 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: src-admin-tab/src/pages/LicensePage.jsx
+ * Rolle im Projekt: Admin-React-Quelle.
+ * Zweck: React-Quellcode für ioBroker-Admin-Tab und Installer-Einstiegsseiten.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Quellcode der React-Admin-Tab-Oberfläche.
+ * Zusammenhänge:
+ * - Baut nach admin/react/ und öffnet Installer-/Lizenz-/Redirect-Seiten.
+ * - Kommuniziert über AdminConnection/ioBroker Admin APIs.
+ * Wartungshinweise:
+ * - Bei UI-Änderungen anschließend admin:build ausführen.
+ */
+
 import React, { useCallback, useEffect, useState } from 'react';
 import PageShell from './PageShell';
 import {
@@ -11,23 +36,66 @@ import {
   saveRuntimeLicenseKey,
   setObject,
 } from '../lib/adminConnection';
-
+/**
+ * Code-Teil: looksLikeMaskedLicenseKey
+ * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
+function looksLikeMaskedLicenseKey(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return false;
+  const normalized = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (/^NW1(T)?[0-9A-Z]+$/.test(normalized)) return false;
+  if (/^[*•·xX_\-.\s]+$/.test(raw) && raw.replace(/\s+/g, '').length >= 3) return true;
+  if (/^(hidden|protected|encrypted|password|secret|redacted|undefined|null)$/i.test(raw)) return true;
+  if (/^\*{3,}/.test(raw) || /\*{3,}$/.test(raw)) return true;
+  if (/^\$\/?[a-z0-9_-]*:/i.test(raw)) return true;
+  if (/^\{\s*"encrypted"\s*:/i.test(raw)) return true;
+  return false;
+}
+/**
+ * Code-Teil: normalizeVisibleLicenseKey
+ * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
+function normalizeVisibleLicenseKey(value) {
+  const raw = String(value || '').trim();
+  return looksLikeMaskedLicenseKey(raw) ? '' : raw;
+}
+/**
+ * Code-Teil: getLicenseStorageKey
+ * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function getLicenseStorageKey(instance) {
   return `nexowatt-ui.licenseKey.${instance}`;
 }
-
+/**
+ * Code-Teil: readCachedLicenseKey
+ * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function readCachedLicenseKey(instance) {
   try {
-    return String(window.localStorage.getItem(getLicenseStorageKey(instance)) || '').trim();
+    return normalizeVisibleLicenseKey(window.localStorage.getItem(getLicenseStorageKey(instance)) || '');
   } catch {
     return '';
   }
 }
-
+/**
+ * Code-Teil: writeCachedLicenseKey
+ * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function writeCachedLicenseKey(instance, key) {
   try {
     const clean = String(key || '').trim();
-    if (clean) window.localStorage.setItem(getLicenseStorageKey(instance), clean);
+    if (clean && !looksLikeMaskedLicenseKey(clean)) window.localStorage.setItem(getLicenseStorageKey(instance), clean);
     else window.localStorage.removeItem(getLicenseStorageKey(instance));
   } catch {
     // Browser storage may be blocked inside some ioBroker/Admin iframes. Ignore.
@@ -40,7 +108,6 @@ export default function LicensePage() {
   const [licenseKey, setLicenseKey] = useState(() => readCachedLicenseKey(getInstance()));
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState({ ok: true, text: 'Lade Daten…' });
-
   const loadAll = useCallback(async () => {
     setBusy(true);
     setStatus({ ok: true, text: 'Lade Daten…' });
@@ -62,9 +129,11 @@ export default function LicensePage() {
       runtimeInfo = await readRuntimeLicenseInfo(instance, null);
       if (runtimeInfo?.uuid) resolvedUuid = String(runtimeInfo.uuid);
       if (runtimeInfo?.licenseKey) {
-        const runtimeKey = String(runtimeInfo.licenseKey).trim();
-        setLicenseKey(runtimeKey);
-        writeCachedLicenseKey(instance, runtimeKey);
+        const runtimeKey = normalizeVisibleLicenseKey(runtimeInfo.licenseKey);
+        if (runtimeKey) {
+          setLicenseKey(runtimeKey);
+          writeCachedLicenseKey(instance, runtimeKey);
+        }
       }
       if (runtimeInfo) {
         licenseStatus = {
@@ -139,9 +208,9 @@ export default function LicensePage() {
     }
 
     setUuid(resolvedUuid || 'Nicht verfügbar');
-    const configuredKey = adapterObject?.native?.licenseKey
-      ? String(adapterObject.native.licenseKey).trim()
-      : (runtimeInfo?.licenseKey ? String(runtimeInfo.licenseKey).trim() : cachedKey);
+    const adapterNativeKey = normalizeVisibleLicenseKey(adapterObject?.native?.licenseKey || '');
+    const runtimeVisibleKey = normalizeVisibleLicenseKey(runtimeInfo?.licenseKey || '');
+    const configuredKey = adapterNativeKey || runtimeVisibleKey || cachedKey;
     if (configuredKey) {
       setLicenseKey(configuredKey);
       writeCachedLicenseKey(instance, configuredKey);
@@ -168,6 +237,18 @@ export default function LicensePage() {
     loadAll();
   }, [loadAll]);
 
+  /**
+   * Code-Teil: Arrow-Funktion `copyUuid`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an Admin-/JSONConfig-Bridge und Installer-Weiterleitungen; Änderungen müssen mit admin/* und main.js kompatibel bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: copyUuid
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const copyUuid = async () => {
     try {
       await navigator.clipboard.writeText(uuid || '');
@@ -177,10 +258,27 @@ export default function LicensePage() {
     }
   };
 
+  /**
+   * Code-Teil: Arrow-Funktion `save`
+   * Zweck: speichert Konfiguration oder Zustände; hier keine Werte ungeprüft überschreiben.
+   * Zusammenhang: Hängt an Admin-/JSONConfig-Bridge und Installer-Weiterleitungen; Änderungen müssen mit admin/* und main.js kompatibel bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: save
+   * Zweck: Speichert Benutzereingaben oder Konfiguration.
+   * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const save = async () => {
     setBusy(true);
 
     const key = String(licenseKey || '').trim();
+    if (looksLikeMaskedLicenseKey(key)) {
+      setStatus({ ok: false, text: 'Dieser Wert ist nur ein geschützter Platzhalter. Bitte echten Lizenzschlüssel neu eintragen.' });
+      setBusy(false);
+      return;
+    }
     setLicenseKey(key);
     let adminError = null;
 

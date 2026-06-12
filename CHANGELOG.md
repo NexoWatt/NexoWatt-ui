@@ -1,3 +1,173 @@
+# 0.7.61 - TypeScript Energiefluss-Resolver und Regressionen
+
+- Produktionsnahe TypeScript-Vorbereitung für Speicher-, Netz- und Gebäudelast-Resolver ergänzt.
+- Neue TypeScript-Resolverbasis für `resolveStorageFlow`, `resolveGridFlow`, `calculateBuildingLoadFromBalance` und Snapshot-Aufbau vorbereitet.
+- Energiefluss-Regressionsfälle für Split-DP 0 W, signed Speicher-DP, Bilanz-Fallback, Quellenpriorität und signed/split Netzfluss ergänzt.
+- Runtime-Test `npm run test:energy-flow-regression-runtime` ergänzt: TypeScript wird in einen Test-Build kompiliert und mit Node ausgeführt.
+- Strukturchecks `test:energy-flow-regressions`, `test:energy-flow-regression` und `test:energy-flow-resolver` halten Kommentare, Anker und neue Dateien fest.
+- `publish:check` bleibt ohne TypeScript-Build nutzbar und prüft zusätzlich die Regressionstest-Struktur.
+- Keine produktive Energiefluss-, Speicher-, Heizstab-, History-, KI-, Lizenz-, SmartHome- oder Frontend-Logik geändert.
+- Service-Worker Cache auf `nexowatt-cache-v229` erhöht.
+
+## 0.7.60 - TypeScript Energiefluss-Helfer
+
+- Erste reine TypeScript-Helfer für Speicher- und Netzfluss ergänzt.
+- `splitSignedStoragePower`, `resolveSplitStorageDps`, `calculateStorageFromBalance`, `chooseStorageFlowResult`, `splitSignedGridPower` und `resolveSplitGridDps` vorbereitet.
+- Deutsche Kommentare direkt an den neuen Code-Teilen ergänzt, damit Zweck, Zusammenhänge und spätere Runtime-Migration nachvollziehbar bleiben.
+- Compile-only Smoke-Test `src-ts/tests/energy-flow-utils-smoke.ts` ergänzt.
+- TypeScript-/Scaffold-Prüfungen um die neuen Energiefluss-Helfer erweitert.
+- Keine produktive Energiefluss-, Speicher-, Heizstab-, History-, KI- oder SmartHome-Logik geändert.
+- Service-Worker Cache auf `nexowatt-cache-v228` erhöht.
+
+## 0.7.59 - Erste JS-zu-TS-Migration für Wartungsskripte
+
+- Erste kleine JavaScript-Logik aus dem Publish-Check typisiert vorbereitet: `src-ts/scripts/publish-check-rules.ts`.
+- Node-kompatible JS-Spiegeldatei `scripts/publish-check-rules.js` ergänzt, damit `publish:check` weiterhin ohne TypeScript-Build funktioniert.
+- `scripts/verify-publish.js` nutzt die ausgelagerten Publish-Regeln und ist dadurch ein erster echter Migrationsschritt ohne EMS-/VIS-Risiko.
+- Neue TypeScript-Smoke-Datei `src-ts/tests/publish-check-rules-smoke.ts` ergänzt.
+- Deutsche Kommentare direkt an den neuen Code-Teilen ergänzt, damit die Migration nachvollziehbar bleibt.
+- Keine Änderungen an Energiefluss, Speicher-DP, Heizstab, KI, History, SmartHome oder Lizenzlogik.
+- Service-Worker Cache auf `nexowatt-cache-v227` erhöht.
+
+# 0.7.58 - TypeScript Build- und Testbasis
+
+- TypeScript-Migrationsbasis stabilisiert: Basis-, Check-, Build-, Frontend-JS- und Backend-JS-Konfigurationen ergänzt.
+- `npm run typecheck` prüft weiterhin nur die TypeScript-Quellen unter `src-ts`; produktive JavaScript-Laufzeit bleibt unverändert.
+- `npm run build:ts` erzeugt nur TypeScript-Declaration-Artefakte (`.d.ts`) und keine produktive Runtime-Ausgabe.
+- `scripts/verify-ts-scaffold.js` und `scripts/clean-ts-build.js` für eine saubere Build-/Testbasis ergänzt.
+- `src-ts/contracts/testing.ts` und `tests/fixtures/regression-plan.de.json` als Grundlage für spätere Regressionstests ergänzt.
+- Dokumentation `docs/TYPESCRIPT_BUILD_BASIS_0758_DE.md` ergänzt.
+- Keine Änderung an Energiefluss, Speicher-DP, Heizstab, History, SmartHome, KI, Lizenz oder ioBroker-Verbindungslogik.
+- Service-Worker Cache auf `nexowatt-cache-v226` erhöht.
+
+## 0.7.57 - TypeScript-Publish-Check getrennt
+
+- `publish:check` wieder npm-stabil gemacht: Es prüft jetzt JSON/ioBroker-Metadaten/Konfliktmarker/JS-Syntax, ruft aber kein `tsc` mehr direkt auf.
+- `typecheck` bleibt als eigener TypeScript-Qualitätscheck erhalten.
+- Neues Skript `test:all`: `publish:check` + `typecheck` + `npm pack --dry-run`.
+- `prepublishOnly` nutzt nur `publish:check`, damit lokales `npm publish` nicht wegen fehlendem `node_modules/.bin/tsc` scheitert.
+- GitHub Actions führen weiterhin strikt `npm ci`, `publish:check`, `typecheck` und `npm pack --dry-run` aus.
+- Workflow-Fallback `npm ci || npm install` entfernt, damit CI-Fehler nicht mehr versteckt werden.
+- Neue Doku: `docs/TYPESCRIPT_PUBLISH_STRATEGY_0757_DE.md`.
+- Service-Worker Cache auf `nexowatt-cache-v225` erhöht.
+
+# 0.7.56 - TypeScript Migration Scaffold
+
+- TypeScript-Migrationsbasis ergänzt: `tsconfig.json` und erster `src-ts`-Bereich.
+- Erste TypeScript-Verträge für Einheiten, Energiefluss, Speicherauflösung, Feature-Sichtbarkeit, KI-Berater, Lizenz, Datenpunkte und ioBroker-State-Cache ergänzt.
+- Neue npm-Skripte `typecheck` und `test:types` ergänzt; `publish:check` führt jetzt zusätzlich den TypeScript-Typecheck aus.
+- Dokumentation zur TypeScript-Migrationsbasis unter `docs/TYPESCRIPT_SCAFFOLD_0756_DE.md` ergänzt.
+- Keine Produktivlogik geändert: Energiefluss, Speicher-DP-Resolver, Heizstab, KI, History, SmartHome, Lizenz und Connection-State bleiben unverändert.
+- Service-Worker Cache auf `nexowatt-cache-v224` erhöht.
+
+# 0.7.55 - Architektur-, Datenfluss- und TypeScript-Dokumentation
+
+- Dokumentationsvertiefung ohne Funktionsänderungen.
+- Neue Dokumente ergänzt: `ARCHITECTURE_DE.md`, `DATAFLOW_DE.md`, `STATES_AND_DATAPOINTS_DE.md`, `CRITICAL_RULES_DE.md`, `TYPESCRIPT_MIGRATION_DE.md`, `MODULE_CHECKLISTS_DE.md` und `CODE_CONTRACTS_DE.md`.
+- JSDoc-Vertragsblöcke für zentrale Bereiche ergänzt: Adapter-State/API, LIVE-Dashboard, Core-Limits, Heizstab, KI-Berater, App-Center, History und SmartHome.
+- Dokumentiert wurden Datenflüsse, State-/DP-Bedeutungen, kritische Nicht-kaputt-machen-Regeln und Checklisten für spätere Änderungen.
+- Keine Änderung an Energiefluss, Heizstab, KI, Lizenz, History, SmartHome oder ioBroker-Verbindungslogik.
+- Service-Worker Cache auf `nexowatt-cache-v223` erhöht.
+
+# 0.7.54 - Detail-Kommentare für Wartbarkeit und TypeScript-Migration
+
+- Detail-Kommentare vor Funktionen, Methoden, Express-Routen und UI-Ereignisbindungen ergänzt.
+- Kommentare beschreiben Aufgabe, Zusammenhang zu APIs/States/Datenpunkten und Hinweise für die spätere TypeScript-Umstellung.
+- HTML/CSS-Vertragsstellen zusätzlich dokumentiert.
+- `docs/COMMENTING_STANDARD_DE.md` als Kommentarstandard ergänzt.
+- Keine Funktionslogik geändert.
+- Service-Worker Cache auf `nexowatt-cache-v222` erhöht.
+
+## 0.7.54 - Detaillierte deutsche Code-Kommentare
+
+- Reine Wartbarkeitsversion ohne Funktionsänderungen.
+- Deutsche Abschnittskommentare vor Klassen, Funktionen, Methoden und wichtigen Code-Teilen ergänzt.
+- Kommentare erklären Zweck, fachlichen Zusammenhang und TypeScript-Hinweise.
+- Kommentarstandard unter `docs/COMMENTING_STANDARD_DE.md` ergänzt.
+- Service-Worker Cache auf `nexowatt-cache-v222` erhöht.
+
+## 0.7.53 - Deutsche Code-Kommentare und Wartbarkeitsbasis
+
+- Reines Dokumentationsrelease ohne Funktionsänderungen.
+- Deutsche Datei-Kommentare für zentrale Backend-, EMS-, Frontend-, Admin-, Report- und Skriptdateien ergänzt.
+- Zusätzliche Abschnittskommentare in `main.js`, `www/app.js`, `www/ems-apps.js`, `www/history.js` und `www/smarthome.js` ergänzt.
+- `docs/CODEMAP_DE.md` als Code-Landkarte für Wartung und spätere TypeScript-Migration ergänzt.
+- Service-Worker Cache auf `nexowatt-cache-v221` erhöht.
+
+## 0.7.52 - info.connection Hotfix
+
+- `info.connection` wird jetzt über eine zentrale Helper-Funktion gesetzt und zusätzlich im `/api/state`/SSE-Cache gespiegelt.
+- Nach erfolgreichem HTTP-/SSE-Webserverstart bleibt der Verbindungsstatus per Heartbeat auf `true`, solange der Server erreichbar ist.
+- Optionale Teilfehler nach dem Webserverstart setzen die Verbindung nicht mehr fälschlich auf `false`; stattdessen wird eine Warnung geloggt.
+- Webserver-`error`/`close`-Events setzen `info.connection` sauber auf `false`.
+- Beim Adapter-Unload wird der Heartbeat gestoppt und `info.connection` auf `false` gesetzt.
+- Keine Änderung an Energiefluss-, Speicher-, Heizstab-, KI-, History- oder VIS-Logik.
+- Service-Worker Cache auf `nexowatt-cache-v220` erhöht.
+
+## 0.7.51 - Lizenz-Hotfix nach ioBroker-Stabilitätsupdate
+
+- Regression aus 0.7.50 behoben: `licenseKey` wird vorübergehend wieder ohne `protectedNative`/`encryptedNative` geführt, weil maskierte ioBroker/Admin-Platzhalter gültige Lizenzschlüssel überschreiben konnten.
+- Runtime-Lizenzprüfung liest konfigurierte Schlüssel robuster aus `this.config` und dem Adapter-Objekt.
+- `/api/license/save` weist maskierte/geschützte Platzhalter ab und überschreibt damit keine echte Lizenz mehr.
+- Admin-Lizenzseite ignoriert maskierte Lizenzwerte beim Laden/Speichern.
+- Legacy-Lizenzfeld `common.license` wieder auf `UNLICENSED` gesetzt; `licenseInformation` bleibt für spätere ioBroker-Kompatibilität erhalten.
+- Keine Änderung an Energiefluss-, Speicher-, Heizstab-, KI- oder VIS-Logik.
+- Service-Worker Cache auf `nexowatt-cache-v219` erhöht.
+
+## 0.7.50 - ioBroker Stability Maintenance
+
+- Node.js Engine auf `>=22` angehoben.
+- CI/GitHub-Actions auf Node.js 22.x und 24.x vorbereitet.
+- ioBroker-Metadaten ergänzt: `tier`, `dependencies`, `globalDependencies`, `licenseInformation`.
+- `licenseKey` via `protectedNative` und `encryptedNative` geschützt.
+- `info.connection` State ergänzt und beim Start/Stop gesetzt.
+- Admin-Konfiguration nutzt jetzt `native.ip`; `native.bind` bleibt als Legacy-Fallback erhalten.
+- `common.news` auf die letzten 7 Einträge gekürzt; doppelte Top-Level-News entfernt.
+- Publish-/Stabilitätsprüfung erweitert.
+- README auf Englisch als primäre ioBroker-Dokumentation umgestellt.
+- Service-Worker Cache auf `nexowatt-cache-v218` erhöht.
+
+## 0.7.49 - Mobile VIS Hotfix History/SmartHome
+
+- History-Seite auf Smartphone/Tablet korrigiert: Zeitraum, Datum, Navigation und Aktionen werden jetzt als responsive Gruppen dargestellt statt als horizontal wegscrollende Riesenkacheln.
+- EVCS-PDF und E-Mobilitäts-Legende in History werden nur noch angezeigt, wenn wirklich Ladepunkte konfiguriert sind.
+- SmartHome-Mobile-Layout gehärtet: Gebäudenavigation ist wieder ein Drawer und nimmt nicht mehr den Seitenfluss ein.
+- SmartHome zeigt einen Lade-/Fehlerzustand statt einer leeren Fläche, falls die Geräte-API langsam ist oder nicht antwortet.
+- Service-Worker Cache auf `nexowatt-cache-v217` erhöht.
+
+## 0.7.48 - Speicher-DP/Historie-Hotfix
+
+- Speicher-Lade-/Entlade-DPs werden wieder dauerhaft als Quelle der Wahrheit genutzt, auch wenn ein konstanter 0-Wert lange keinen neuen Zeitstempel bekommt.
+- Signed Batterie-DP bleibt unterstützt; getrennte Lade-/Entlade-DPs bleiben unterstützt.
+- Rechen-Fallback für Speicherleistung greift nur noch, wenn wirklich kein Speicher-DP konfiguriert ist und eine belastbare Bilanz möglich ist.
+- Speicherfarm-Werte übernehmen normale Einzelanlagen nicht mehr über alte Runtime-States.
+- Der Energiefluss, Core-Limits, Heizstab-Regelung und Historie verwenden wieder dieselbe konservative Speicherauflösung.
+
+## 0.7.47 - Energiefluss-DP-Resolver und Heizstab-Config-Hotfix
+
+- Energiefluss-Resolver korrigiert: getrennte Lade-/Entlade-DPs bleiben wieder autoritativ und werden nicht mehr pauschal bei Netzeinspeisung unterdrückt.
+- Signed Batterie-DP bleibt unterstützt (`-` = Laden, `+` = Entladen, inklusive Invert-Option).
+- Rechen-Fallback für Speicherleistung greift nur noch, wenn keine frische Messquelle vorhanden ist bzw. eine Seite fehlt und ein direkter Verbrauchszähler vorhanden ist.
+- Core-Limits und Heizstab-Regelung verwenden jetzt dieselbe zentrale Speicherfluss-Auflösung wie der Live-Energiefluss.
+- Heizstab-App-Center: Speicher-Reserve und weitere Zahlenfelder werden direkt aus dem DOM vor dem Speichern geflusht, damit Werte nicht auf Defaults zurückspringen.
+- Service-Worker Cache auf `nexowatt-cache-v215` erhöht.
+
+## 0.7.46 - Energiefluss- und Heizstab-Budget-Hotfix
+
+- Energiefluss-Bilanz gehärtet: getrennte Batterie-Laden/Entladen-Datenpunkte werden bei gleichzeitigem Netzeinspeisen ohne direkten Hauslast-Zähler gegen Ghost-Entladung plausibilisiert. Dadurch bläht ein falscher `powerDischarge`-Alias nicht mehr Gebäudelast, PV-Budget, KI-Berater und Heizstab-Budget auf.
+- Core-Limits und Heizstab-Regelung nutzen dieselbe Schutzlogik, damit Status, PV-Budget und Live-Dashboard identisch rechnen.
+- App-Center Schnell-Inbetriebnahme bevorzugt beim Speicher jetzt den signed Batterie-Leistungs-Datenpunkt vor getrennten Lade-/Entlade-Aliasen.
+- Heizstab-Konfiguration korrigiert: numerische Felder schreiben sofort in die aktive Konfiguration; `Speicher-Reserve (W)` springt nicht mehr auf den Default `1000 W` zurück.
+- Service-Worker Cache auf `nexowatt-cache-v214` erhöht.
+
+## 0.7.45 - App-Center Heizstab-UI Hotfix
+
+- App-Center/Installerseiten erhalten die Installer-Seitenklasse, damit Hero und Hauptcontainer wieder auf derselben breiten Cockpit-Achse liegen.
+- Heizstab-Tab auf volle Breite umgestellt: Gerätekarte und Hinweis liegen nicht mehr nebeneinander, damit 1-12 Stufen und DP-Zeilen nicht in die rechte Karte laufen.
+- Heizstab-Stufenparameter und Write-/Read-DP-Zuordnung responsiv gehärtet: Karten, Gruppen, Felder und Stage-Grid begrenzen sich sauber auf die verfügbare Breite.
+- Seitliches Überlaufen/Überlagern der Heizstab-Konfiguration bei PC-, Tablet- und Smartphone-Breiten behoben.
+- Service-Worker Cache auf `nexowatt-cache-v213` erhöht.
+
 ## 0.7.44 - Publish-/Package-Hotfix
 
 - `package.json` sauber neu geschrieben und Version auf `0.7.44` gesetzt.

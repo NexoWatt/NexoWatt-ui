@@ -1,5 +1,58 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: main.js
+ * Rolle im Projekt: Adapter-Kernlaufzeit.
+ * Zweck: Startet den ioBroker-Adapter, legt States an, startet Web/API/SSE und verbindet Frontend mit EMS-Modulen.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/* GENERIERTER BUILD-HINWEIS: Diese Datei wird aus src-admin-tab gebaut. Fachliche Änderungen bitte in den Quellen dokumentieren/ändern, nicht im Bundle. */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Adapter-Einstiegspunkt: startet ioBroker-Adapter, Webserver, REST-/SSE-APIs, Lizenzprüfung, State-Anlage und EMS-Engine.
+ * Zusammenhänge:
+ * - www/* nutzt die hier bereitgestellten APIs wie /api/state, /config, /events und /api/set.
+ * - ems/modules/* berechnen Regelungs- und Diagnosewerte, die hier als States und Live-Snapshots veröffentlicht werden.
+ * - io-package.json definiert Default-Konfiguration und Adapter-Metadaten.
+ * Wartungshinweise:
+ * - Änderungen an State-Namen, API-Antworten oder Mapping-Keys können Dashboard, History, Heizstab, KI-Berater und SmartHome direkt beeinflussen.
+ * - Webserver, Timer und SSE-Verbindungen müssen im unload sauber beendet werden.
+ */
+
 
 'use strict';
+
+
+/**
+ * Datenvertrag: AdapterStateCacheEntry
+ * Zweck: Beschreibt die Struktur, die main.js intern für gelesene ioBroker-States verwendet.
+ * Zusammenhang: /api/state, SSE-Liveupdates, EMS-Module und Frontend greifen indirekt auf diese Werte zu.
+ * TypeScript-Ziel:
+ * interface AdapterStateCacheEntry { value: unknown; ts?: number; lc?: number; ack?: boolean; }
+ */
+
+/**
+ * Datenvertrag: ApiStateResponse
+ * Zweck: Beschreibt die Antwort von /api/state für www/app.js, history.js und weitere Frontendbereiche.
+ * Zusammenhang: Wenn hier Struktur oder Namen geändert werden, müssen Frontend, History und Reports mitgeprüft werden.
+ * TypeScript-Ziel:
+ * interface ApiStateResponse { states: Record<string, AdapterStateCacheEntry>; config?: AdapterConfig; ts?: number; }
+ */
+
+/**
+ * Vertragsstelle: Mapping- und State-Namen
+ * Zweck: main.js normalisiert externe Datenpunkte in interne States.
+ * Wichtig: State-Namen sind ein Vertrag mit www/app.js, www/history.js und ems/modules/*.
+ * Nicht ändern ohne Migration: Speicher-, Netz-, PV-, Heizstab-, EVCS-, Speicherfarm- und aiAdvisor.* Namen.
+ */
+
 
 const utils = require('@iobroker/adapter-core');
 const express = require('express');
@@ -30,6 +83,13 @@ const { EmsEngine } = require('./ems/engine');
 // NexoLogic (node/graph) runtime engine
 const { NexoLogicEngine } = require('./ems/nexologic-engine');
 
+// Abschnitt: Kleine HTTP-/Auth-Helfer. Diese Funktionen werden von Login-, Lizenz- und Installer-Endpunkten genutzt.
+/**
+ * Code-Teil: parseCookies
+ * Zweck: Parst Rohdaten in ein sicheres internes Format.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function parseCookies(req) {
   const raw = req.headers.cookie || '';
   const out = {};
@@ -43,7 +103,12 @@ function parseCookies(req) {
   });
   return out;
 }
-
+/**
+ * Code-Teil: createToken
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function createToken() {
   return crypto.randomBytes(24).toString('base64url');
 }
@@ -51,7 +116,22 @@ function createToken() {
 
 
 
+
+// Abschnitt: Hauptklasse des ioBroker-Adapters. Hier laufen Lifecycle, Webserver, State-Anlage, EMS-Engine und APIs zusammen.
+// Klassen-Kommentar: Klasse: NexoWattVis. Aufgabe: kapselt eine fachliche Teilaufgabe dieser Datei. Beim TypeScript-Umbau Eingaben, Rückgaben und Seiteneffekte typisieren. Zusammenhang: Adapter-Lifecycle, Webserver, REST-/SSE-APIs, Lizenz, States und EMS-Startlogik.
+/**
+ * Klasse: NexoWattVis
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 class NexoWattVis extends utils.Adapter {
+  /**
+   * Code-Teil: constructor
+   * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
+   * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+   * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+   */
   constructor(options) {
     super({
       ...options,
@@ -68,6 +148,8 @@ class NexoWattVis extends utils.Adapter {
     this._sseFlushTimer = null;
     this._serverSockets = new Set();
     this._serverClosing = false;
+    this._nwConnectionOnline = false;
+    this._nwConnectionHeartbeatTimer = null;
     this.smartHomeDevices = [];
 
     // SmartHome: Zeitschaltuhren (Endkunde) – persisted in adapter states (no instance restart)
@@ -198,8 +280,142 @@ class NexoWattVis extends utils.Adapter {
     this.on('stateChange', this.onStateChange.bind(this));
     this.on('unload', this.onUnload.bind(this));
   }
+  /**
+   * Code-Teil: _nwSetTimeout
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  _nwSetTimeout(fn, ms, ...args) {
+    return (typeof this.setTimeout === 'function') ? this.setTimeout(fn, ms, ...args) : setTimeout(fn, ms, ...args);
+  }
+  /**
+   * Code-Teil: _nwSetInterval
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  _nwSetInterval(fn, ms, ...args) {
+    return (typeof this.setInterval === 'function') ? this.setInterval(fn, ms, ...args) : setInterval(fn, ms, ...args);
+  }
+  /**
+   * Code-Teil: _nwClearTimeout
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  _nwClearTimeout(timer) {
+    if (!timer) return;
+    if (typeof this.clearTimeout === 'function') this.clearTimeout(timer);
+    else clearTimeout(timer);
+  }
+  /**
+   * Code-Teil: _nwClearInterval
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  _nwClearInterval(timer) {
+    if (!timer) return;
+    if (typeof this.clearInterval === 'function') this.clearInterval(timer);
+    else clearInterval(timer);
+  }
+  /**
+   * Code-Teil: _nwSleep
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  _nwSleep(ms) {
+    return new Promise((resolve) => this._nwSetTimeout(resolve, ms));
+  }
+  /**
+   * Code-Teil: ensureInfoConnectionState
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  async ensureInfoConnectionState() {
+    await this.setObjectNotExistsAsync('info', {
+      type: 'channel',
+      common: { name: 'Adapter information' },
+      native: {},
+    });
+    await this.setObjectNotExistsAsync('info.connection', {
+      type: 'state',
+      common: {
+        name: 'Adapter connection',
+        type: 'boolean',
+        role: 'indicator.connected',
+        read: true,
+        write: false,
+        def: false,
+      },
+      native: {},
+    });
+  }
+  /**
+   * Code-Teil: _nwIsHttpServerListening
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  _nwIsHttpServerListening() {
+    return !!(this.server && this.server.listening && !this._serverClosing);
+  }
+  /**
+   * Code-Teil: _nwSetInfoConnection
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  async _nwSetInfoConnection(online, reason = '') {
+    const val = !!online;
+    this._nwConnectionOnline = val;
+    const ts = Date.now();
 
-  
+    try {
+      await this.setStateAsync('info.connection', { val, ack: true });
+    } catch (e) {
+      try { this.log.debug('info.connection update failed' + (reason ? ` (${reason})` : '') + ': ' + (e && e.message ? e.message : e)); } catch (_eLog) {}
+    }
+
+    // Keep /api/state + SSE clients aligned with the ioBroker state. This prevents the
+    // customer UI from showing "Offline" until the next unrelated datapoint changes.
+    try { this.updateValue('info.connection', val, ts, { raw: false }); } catch (_eUpd) {}
+  }
+  /**
+   * Code-Teil: _nwStartConnectionHeartbeat
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  _nwStartConnectionHeartbeat() {
+    if (this._nwConnectionHeartbeatTimer) return;
+    this._nwConnectionHeartbeatTimer = this._nwSetInterval(() => {
+      const online = this._nwIsHttpServerListening();
+      // Re-assert the state regularly. ioBroker/Admin updates or failed optional startup
+      // blocks must not leave info.connection false while the HTTP/SSE service is alive.
+      this._nwSetInfoConnection(online, online ? 'heartbeat' : 'heartbeat-offline').catch(() => {});
+    }, 30000);
+  }
+  /**
+   * Code-Teil: _nwStopConnectionHeartbeat
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  _nwStopConnectionHeartbeat() {
+    if (!this._nwConnectionHeartbeatTimer) return;
+    try { this._nwClearInterval(this._nwConnectionHeartbeatTimer); } catch (_e) {}
+    this._nwConnectionHeartbeatTimer = null;
+  }
+  /**
+   * Code-Teil: ensureInstallerStates
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async ensureInstallerStates() {
     const defs = {
       adminUrl:     { type: 'string', role: 'state', def: '' },
@@ -227,6 +443,12 @@ class NexoWattVis extends utils.Adapter {
 
 
   // --- SmartHome: Zeitschaltuhren (Endkunde) ---
+  /**
+   * Code-Teil: ensureSmartHomeUserStates
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async ensureSmartHomeUserStates() {
     // Keep user-editable SmartHome features (timers) in states so no ioBroker instance restart is required.
     await this.setObjectNotExistsAsync('smarthome', {
@@ -322,7 +544,12 @@ class NexoWattVis extends utils.Adapter {
       native: {},
     });
   }
-
+  /**
+   * Code-Teil: _nwParseTimeToMinutes
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwParseTimeToMinutes(hhmm) {
     const s = String(hhmm || '').trim();
     if (!s) return null;
@@ -335,7 +562,12 @@ class NexoWattVis extends utils.Adapter {
     if (mm < 0 || mm > 59) return null;
     return (hh * 60) + mm;
   }
-
+  /**
+   * Code-Teil: _nwNormalizeDaysArray
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwNormalizeDaysArray(days) {
     const out = [];
     const seen = new Set();
@@ -353,7 +585,12 @@ class NexoWattVis extends utils.Adapter {
     out.sort((a, b) => a - b);
     return out;
   }
-
+  /**
+   * Code-Teil: _nwNormalizeSmartHomeTimersConfig
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwNormalizeSmartHomeTimersConfig(rawCfg) {
     const base = (rawCfg && typeof rawCfg === 'object') ? rawCfg : {};
     const version = typeof base.version === 'number' ? base.version : 1;
@@ -404,7 +641,12 @@ class NexoWattVis extends utils.Adapter {
       timers: outTimers,
     };
   }
-
+  /**
+   * Code-Teil: loadSmartHomeTimersFromState
+   * Zweck: Lädt Daten aus API, States oder Konfiguration.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async loadSmartHomeTimersFromState() {
     let raw = '';
     try {
@@ -432,11 +674,21 @@ class NexoWattVis extends utils.Adapter {
 
     this._nwScheduleNextSmartHomeTimer('load');
   }
-
+  /**
+   * Code-Teil: getSmartHomeTimersConfig
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   getSmartHomeTimersConfig() {
     return this._nwShTimersCfg || { version: 1, updatedAt: 0, timers: [] };
   }
-
+  /**
+   * Code-Teil: persistSmartHomeTimersToState
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async persistSmartHomeTimersToState(cfg) {
     const normalized = this._nwNormalizeSmartHomeTimersConfig(cfg);
     normalized.updatedAt = Date.now();
@@ -452,7 +704,12 @@ class NexoWattVis extends utils.Adapter {
     this._nwScheduleNextSmartHomeTimer('persist');
     return normalized;
   }
-
+  /**
+   * Code-Teil: _nwComputeNextOccurrence
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwComputeNextOccurrence(nowTs, daysArr, timeMinutes) {
     if (typeof nowTs !== 'number' || !Number.isFinite(nowTs)) nowTs = Date.now();
     if (typeof timeMinutes !== 'number' || !Number.isFinite(timeMinutes)) return null;
@@ -474,7 +731,12 @@ class NexoWattVis extends utils.Adapter {
     }
     return null;
   }
-
+  /**
+   * Code-Teil: _nwComputeNextSmartHomeTimerEvents
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwComputeNextSmartHomeTimerEvents(nowTs) {
     const cfg = this.getSmartHomeTimersConfig();
     const nextByDev = Object.create(null);
@@ -510,15 +772,25 @@ class NexoWattVis extends utils.Adapter {
 
     return { earliest, nextByDev };
   }
-
+  /**
+   * Code-Teil: _nwClearSmartHomeTimerSchedule
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwClearSmartHomeTimerSchedule() {
     if (this._nwShTimersTimeout) {
-      try { clearTimeout(this._nwShTimersTimeout); } catch (_e) {}
+      try { this._nwClearTimeout(this._nwShTimersTimeout); } catch (_e) {}
       this._nwShTimersTimeout = null;
     }
     this._nwShTimersNextEvent = null;
   }
-
+  /**
+   * Code-Teil: _nwScheduleNextSmartHomeTimer
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwScheduleNextSmartHomeTimer(reason) {
     this._nwClearSmartHomeTimerSchedule();
     const now = Date.now();
@@ -535,7 +807,7 @@ class NexoWattVis extends utils.Adapter {
     if (!earliest || typeof earliest.at !== 'number') return;
     const delay = Math.max(250, earliest.at - now);
 
-    this._nwShTimersTimeout = setTimeout(() => {
+    this._nwShTimersTimeout = this._nwSetTimeout(() => {
       this._nwRunDueSmartHomeTimer().catch((e) => {
         this.log.warn('SmartHome timer run error: ' + (e && e.message ? e.message : e));
         // best-effort reschedule
@@ -547,7 +819,12 @@ class NexoWattVis extends utils.Adapter {
       this.log.debug && this.log.debug(`SmartHome timers: scheduled next (${reason}) at ${new Date(earliest.at).toISOString()} (${earliest.deviceId}/${earliest.kind})`);
     }
   }
-
+  /**
+   * Code-Teil: _nwRunDueSmartHomeTimer
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwRunDueSmartHomeTimer() {
     const ev = this._nwShTimersNextEvent;
     if (!ev || !ev.deviceId || typeof ev.at !== 'number' || !ev.kind) {
@@ -573,7 +850,12 @@ class NexoWattVis extends utils.Adapter {
     // Reschedule
     this._nwScheduleNextSmartHomeTimer('executed');
   }
-
+  /**
+   * Code-Teil: _nwExecuteSmartHomeTimerAction
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwExecuteSmartHomeTimerAction(timer, kind) {
     if (!timer || !timer.deviceId) return false;
     const deviceId = String(timer.deviceId);
@@ -670,7 +952,19 @@ class NexoWattVis extends utils.Adapter {
 
 
   // --- SmartHome Logik-Uhren (Installer / Logic editor inputs) ---
+  /**
+   * Code-Teil: _nwNormalizeSmartHomeLogicClocksConfig
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwNormalizeSmartHomeLogicClocksConfig(rawCfg) {
+    /**
+     * Code-Teil: toSafeIdPart
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const toSafeIdPart = (input) => {
       const s = String(input || '').trim();
       if (!s) return '';
@@ -717,11 +1011,21 @@ class NexoWattVis extends utils.Adapter {
 
     return { version, updatedAt, clocks: outClocks };
   }
-
+  /**
+   * Code-Teil: getSmartHomeLogicClocksConfig
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   getSmartHomeLogicClocksConfig() {
     return this._nwShLogicClocksCfg || { version: 1, updatedAt: 0, clocks: [] };
   }
-
+  /**
+   * Code-Teil: loadSmartHomeLogicClocksFromState
+   * Zweck: Lädt Daten aus API, States oder Konfiguration.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async loadSmartHomeLogicClocksFromState() {
     let raw = '';
     try {
@@ -752,7 +1056,12 @@ class NexoWattVis extends utils.Adapter {
 
     this._nwScheduleNextSmartHomeLogicClock('load');
   }
-
+  /**
+   * Code-Teil: persistSmartHomeLogicClocksToState
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async persistSmartHomeLogicClocksToState(cfg) {
     const normalized = this._nwNormalizeSmartHomeLogicClocksConfig(cfg);
     normalized.updatedAt = Date.now();
@@ -770,7 +1079,12 @@ class NexoWattVis extends utils.Adapter {
     this._nwScheduleNextSmartHomeLogicClock('persist');
     return normalized;
   }
-
+  /**
+   * Code-Teil: _nwShiftDays
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwShiftDays(daysArr, shift) {
     const out = [];
     const seen = new Set();
@@ -787,7 +1101,12 @@ class NexoWattVis extends utils.Adapter {
     out.sort((a, b) => a - b);
     return out;
   }
-
+  /**
+   * Code-Teil: _nwIsLogicClockActive
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwIsLogicClockActive(clock, nowTs) {
     if (!clock || !clock.id || !clock.enabled) return false;
     const fromMin = this._nwParseTimeToMinutes(clock.fromTime);
@@ -811,7 +1130,12 @@ class NexoWattVis extends utils.Adapter {
     const early = set.has(prevDow) && nowMin < toMin;
     return late || early;
   }
-
+  /**
+   * Code-Teil: _nwEnsureLogicClockObjects
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwEnsureLogicClockObjects(clock) {
     if (!clock || !clock.id) return;
     const id = String(clock.id);
@@ -836,7 +1160,12 @@ class NexoWattVis extends utils.Adapter {
       native: {},
     });
   }
-
+  /**
+   * Code-Teil: _nwRefreshLogicClockStatesNow
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwRefreshLogicClockStatesNow(reason) {
     const cfg = this.getSmartHomeLogicClocksConfig();
     const clocks = Array.isArray(cfg.clocks) ? cfg.clocks : [];
@@ -862,7 +1191,12 @@ class NexoWattVis extends utils.Adapter {
       this.log.debug && this.log.debug(`SmartHome logic clocks: refreshed (${reason})`);
     }
   }
-
+  /**
+   * Code-Teil: _nwComputeNextSmartHomeLogicClockEvents
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwComputeNextSmartHomeLogicClockEvents(nowTs) {
     const cfg = this.getSmartHomeLogicClocksConfig();
     const nextById = Object.create(null);
@@ -896,15 +1230,25 @@ class NexoWattVis extends utils.Adapter {
 
     return { earliest, nextById };
   }
-
+  /**
+   * Code-Teil: _nwClearSmartHomeLogicClockSchedule
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwClearSmartHomeLogicClockSchedule() {
     if (this._nwShLogicClocksTimeout) {
-      try { clearTimeout(this._nwShLogicClocksTimeout); } catch (_e) {}
+      try { this._nwClearTimeout(this._nwShLogicClocksTimeout); } catch (_e) {}
       this._nwShLogicClocksTimeout = null;
     }
     this._nwShLogicClocksNextEvent = null;
   }
-
+  /**
+   * Code-Teil: _nwScheduleNextSmartHomeLogicClock
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwScheduleNextSmartHomeLogicClock(reason) {
     this._nwClearSmartHomeLogicClockSchedule();
     const now = Date.now();
@@ -920,7 +1264,7 @@ class NexoWattVis extends utils.Adapter {
     if (!earliest || typeof earliest.at !== 'number') return;
     const delay = Math.max(250, earliest.at - now);
 
-    this._nwShLogicClocksTimeout = setTimeout(() => {
+    this._nwShLogicClocksTimeout = this._nwSetTimeout(() => {
       this._nwRunDueSmartHomeLogicClock().catch((e) => {
         this.log.warn('SmartHome logic clock run error: ' + (e && e.message ? e.message : e));
         try { this._nwScheduleNextSmartHomeLogicClock('error'); } catch (_e2) {}
@@ -931,7 +1275,12 @@ class NexoWattVis extends utils.Adapter {
       this.log.debug && this.log.debug(`SmartHome logic clocks: scheduled next (${reason}) at ${new Date(earliest.at).toISOString()} (${earliest.clockId}/${earliest.kind})`);
     }
   }
-
+  /**
+   * Code-Teil: _nwRunDueSmartHomeLogicClock
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwRunDueSmartHomeLogicClock() {
     const ev = this._nwShLogicClocksNextEvent;
     if (!ev || !ev.clockId || typeof ev.at !== 'number' || !ev.kind) {
@@ -965,6 +1314,12 @@ class NexoWattVis extends utils.Adapter {
 
 
   // --- SmartHome Scenes (Adapter-executed) ---
+  /**
+   * Code-Teil: _nwRunSmartHomeSceneById
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwRunSmartHomeSceneById(sceneId) {
     const id = String(sceneId || '').trim();
     if (!id) return { ok: false, error: 'missing id' };
@@ -986,7 +1341,6 @@ class NexoWattVis extends utils.Adapter {
       if (!a || typeof a !== 'object') continue;
       const deviceId = String(a.deviceId || a.id || '').trim();
       if (!deviceId) continue;
-
       const dev = devices.find((d) => d && d.id === deviceId);
       if (!dev) {
         errors.push({ deviceId, error: 'device not found' });
@@ -1017,7 +1371,12 @@ class NexoWattVis extends utils.Adapter {
       errors,
     };
   }
-
+  /**
+   * Code-Teil: _nwExecuteSmartHomeSceneAction
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwExecuteSmartHomeSceneAction(dev, kind, value) {
     if (!dev || !kind) return false;
     const k = String(kind).trim();
@@ -1133,8 +1492,12 @@ class NexoWattVis extends utils.Adapter {
 
     return false;
   }
-
-
+  /**
+   * Code-Teil: ensureLicenseStates
+   * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async ensureLicenseStates() {
     const defs = {
       uuid: { type: 'string', role: 'text', def: '' },
@@ -1164,16 +1527,112 @@ class NexoWattVis extends utils.Adapter {
   /* --------------------------------------------------------------------- */
   /* Lizenz (Adapter-Freischaltung)                                        */
   /* --------------------------------------------------------------------- */
-
+  /**
+   * Code-Teil: _nwNormalizeLicenseKey
+   * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwNormalizeLicenseKey(key) {
     // Keep only A-Z0-9, uppercase (hyphens/spaces don't matter)
     return String(key || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   }
+  /**
+   * Code-Teil: _nwLooksLikeMaskedLicenseKey
+   * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  _nwLooksLikeMaskedLicenseKey(key) {
+    const raw = String(key || '').trim();
+    if (!raw) return false;
+    const normalized = this._nwNormalizeLicenseKey(raw);
+    // Real NexoWatt keys always start with NW1/NW1T after normalization.
+    if (/^NW1(T)?[0-9A-Z]+$/.test(normalized)) return false;
 
+    // ioBroker/Admin may return protected/encrypted native values as masks.
+    // Never treat those placeholders as a real license key and never save them.
+    if (/^[*•·xX_\-.\s]+$/.test(raw) && raw.replace(/\s+/g, '').length >= 3) return true;
+    if (/^(hidden|protected|encrypted|password|secret|redacted|undefined|null)$/i.test(raw)) return true;
+    if (/^\*{3,}/.test(raw) || /\*{3,}$/.test(raw)) return true;
+    if (/^\$\/?[a-z0-9_-]*:/i.test(raw)) return true; // typical encrypted placeholder/cipher marker
+    if (/^\{\s*"encrypted"\s*:/i.test(raw)) return true;
+    return false;
+  }
+  /**
+   * Code-Teil: _nwCleanLicenseKeyInput
+   * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  _nwCleanLicenseKeyInput(key) {
+    const raw = String(key || '').trim();
+    if (!raw) return '';
+    if (this._nwLooksLikeMaskedLicenseKey(raw)) return '';
+    return raw;
+  }
+  /**
+   * Code-Teil: _nwReadNativeLicenseKeyFromObject
+   * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  async _nwReadNativeLicenseKeyFromObject() {
+    try {
+      const obj = await this.getForeignObjectAsync(`system.adapter.${this.namespace}`);
+      const key = obj && obj.native && obj.native.licenseKey !== undefined ? String(obj.native.licenseKey || '').trim() : '';
+      return key;
+    } catch (_e) {
+      return '';
+    }
+  }
+  /**
+   * Code-Teil: _nwGetConfiguredLicenseKey
+   * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  async _nwGetConfiguredLicenseKey() {
+    const candidates = [];
+    try { candidates.push(String((this.config && this.config.licenseKey) || '').trim()); } catch (_e) {}
+    try {
+      const objKey = await this._nwReadNativeLicenseKeyFromObject();
+      if (objKey) candidates.push(objKey);
+    } catch (_e) {}
+
+    let sawMasked = false;
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      if (this._nwLooksLikeMaskedLicenseKey(candidate)) {
+        sawMasked = true;
+        continue;
+      }
+      return { key: candidate, sawMasked };
+    }
+    return { key: '', sawMasked };
+  }
+  /**
+   * Code-Teil: _nwGetSystemUuid
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwGetSystemUuid() {
+    /**
+     * Code-Teil: pickUuidFromObject
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const pickUuidFromObject = (obj) => {
       const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const seen = new Set();
+      /**
+       * Code-Teil: scan
+       * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+       * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+       * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+       */
       const scan = (value, key = '') => {
         if (value === undefined || value === null) return '';
         if (typeof value === 'string') {
@@ -1234,7 +1693,12 @@ class NexoWattVis extends utils.Adapter {
 
     return '';
   }
-
+  /**
+   * Code-Teil: _nwExpectedLicenseKey
+   * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwExpectedLicenseKey(uuid) {
     // Voll-Lizenz (unbegrenzt)
     // Format: NW1-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX
@@ -1249,7 +1713,12 @@ class NexoWattVis extends utils.Adapter {
     const groups = core.match(/.{1,4}/g) || [core];
     return `NW1-${groups.join('-')}`;
   }
-
+  /**
+   * Code-Teil: _nwExpectedTrialSig
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwExpectedTrialSig(uuid, daysStr) {
     // Test-Lizenz (zeitlich begrenzt)
     // Signature: HMAC_SHA256(secret, `${uuid}|TRIAL|${daysStr}`) -> first 32 hex chars
@@ -1263,7 +1732,12 @@ class NexoWattVis extends utils.Adapter {
     const hex = crypto.createHmac('sha256', secret).update(msg).digest('hex').toUpperCase();
     return hex.slice(0, 32);
   }
-
+  /**
+   * Code-Teil: _nwExpectedTrialKey
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwExpectedTrialKey(uuid, daysStr) {
     // Format: NW1T-DDD-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX
     const core = this._nwExpectedTrialSig(uuid, daysStr);
@@ -1272,7 +1746,12 @@ class NexoWattVis extends utils.Adapter {
     const ds = String(daysStr || '').trim();
     return `NW1T-${ds}-${groups.join('-')}`;
   }
-
+  /**
+   * Code-Teil: _nwParseTrialKey
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwParseTrialKey(enteredKey) {
     const n = this._nwNormalizeLicenseKey(enteredKey);
     const m = n.match(/^NW1T(\d{3})([0-9A-F]{32})$/);
@@ -1283,21 +1762,36 @@ class NexoWattVis extends utils.Adapter {
     if (!days || days < 1) return null;
     return { daysStr, days, sig };
   }
-
+  /**
+   * Code-Teil: _nwIsLicenseValid
+   * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwIsLicenseValid(uuid, enteredKey) {
     // Voll-Lizenz
     const expected = this._nwExpectedLicenseKey(uuid);
     if (!expected) return false;
     return this._nwNormalizeLicenseKey(expected) === this._nwNormalizeLicenseKey(enteredKey);
   }
-
+  /**
+   * Code-Teil: _nwClearTrialState
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwClearTrialState() {
     try { await this.setStateAsync('license.trialStartTs', { val: 0, ack: true }); } catch (_e) {}
     try { await this.setStateAsync('license.trialLastSeenTs', { val: 0, ack: true }); } catch (_e) {}
     try { await this.setStateAsync('license.trialDays', { val: 0, ack: true }); } catch (_e) {}
     try { await this.setStateAsync('license.trialSig', { val: '', ack: true }); } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: _nwCheckTrialLicense
+   * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwCheckTrialLicense(uuid, enteredKey) {
     const u = String(uuid || '').trim();
     if (!u) return { ok: false, type: 'invalid', msg: 'UUID nicht verfügbar' };
@@ -1367,7 +1861,12 @@ class NexoWattVis extends utils.Adapter {
       daysRemaining: 0,
     };
   }
-
+  /**
+   * Code-Teil: _nwEvaluateLicense
+   * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwEvaluateLicense(uuid, enteredKey) {
     const u = String(uuid || '').trim();
     if (!u) return { ok: false, type: 'invalid', msg: 'UUID nicht verfügbar' };
@@ -1389,12 +1888,25 @@ class NexoWattVis extends utils.Adapter {
     // 3) Ungültig
     return { ok: false, type: 'invalid', msg: 'Lizenz ungültig' };
   }
-
+  /**
+   * Code-Teil: _nwInitLicense
+   * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwInitLicense() {
     this._nwSystemUuid = await this._nwGetSystemUuid();
-    const entered = String(this.config.licenseKey || '').trim();
+    const licenseSource = await this._nwGetConfiguredLicenseKey();
+    const entered = licenseSource.key;
 
-    const info = await this._nwEvaluateLicense(this._nwSystemUuid, entered);
+    let info = await this._nwEvaluateLicense(this._nwSystemUuid, entered);
+    if (!info.ok && licenseSource.sawMasked && !entered) {
+      info = {
+        ok: false,
+        type: 'invalid',
+        msg: 'Lizenzschlüssel ist nur als geschützter Platzhalter gespeichert. Bitte echten Lizenzschlüssel neu eintragen.',
+      };
+    }
     this._nwLicenseInfo = info;
     this._nwLicenseOk = !!info.ok;
 
@@ -1408,17 +1920,24 @@ class NexoWattVis extends utils.Adapter {
 
     if (this._nwLicenseOk) {
       if (info.type === 'trial') {
-        this.log.info(`Lizenz: gültig ✅ (Testlizenz, ${info.daysRemaining} Tage übrig)`);
+        this.log.info(`License valid (test license, ${info.daysRemaining} days remaining).`);
       } else {
-        this.log.info('Lizenz: gültig ✅');
+        this.log.info('License valid.');
       }
     } else {
       // Keep message short; details are in Admin license tab.
-      this.log.warn(`Lizenz: ${info.msg || 'fehlt oder ungültig'} – VIS/API ist gesperrt. Bitte Lizenz im Admin eintragen.`);
+      this.log.warn(`License check failed: ${info.msg || 'missing or invalid'}; VIS/API is locked. Please enter a license in admin.`);
     }
   }
 
 
+  // Abschnitt: Anlage der kunden- und installerbezogenen Settings-States. Neue data-scope="settings"-Felder aus der UI müssen hier als State bekannt sein.
+  /**
+   * Code-Teil: ensureSettingsStates
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async ensureSettingsStates() {
     // NOTE: These are user-facing runtime settings that the VIS UI reads via /api/state.
     // Keep this list in sync with syncSettingsToStates() and the frontend (www/app.js, www/ems-apps.js).
@@ -1546,6 +2065,12 @@ class NexoWattVis extends utils.Adapter {
   // --- Simulation (NexoWatt Sim-Adapter Integration) ---
   // Provides an Admin-startable simulation mode that auto-maps datapoints from nexowatt-sim.*
   // into the App-Center configuration so EMS logic can be tested without real hardware.
+  /**
+   * Code-Teil: ensureSimulationStates
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async ensureSimulationStates() {
     try {
       await this.setObjectNotExistsAsync('simulation', {
@@ -1593,6 +2118,12 @@ class NexoWattVis extends utils.Adapter {
   //
   // IMPORTANT: App‑Center mapping can still override these keys. If the customer
   // maps e.g. weatherTempC to a different datapoint, the UI will use that mapping.
+  /**
+   * Code-Teil: ensureWeatherStates
+   * Zweck: Verarbeitet Wetter-/Prognosedaten für Anzeige oder KI-Beratung.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async ensureWeatherStates() {
     const defs = {
       weatherTempC:     { type: 'number', role: 'value.temperature', def: null },
@@ -1640,6 +2171,12 @@ class NexoWattVis extends utils.Adapter {
   // selected KPIs. These values are provided by the NexoWatt EMS by default and
   // are only used from external datapoints if the customer configures an
   // App-Center override mapping.
+  /**
+   * Code-Teil: ensureEnergyTotalStates
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async ensureEnergyTotalStates() {
     const defs = {
       productionEnergyKwh: { name: 'PV Energie gesamt (kWh)', type: 'number', role: 'value.energy', unit: 'kWh' },
@@ -1687,8 +2224,12 @@ class NexoWattVis extends utils.Adapter {
       } catch (_e) {}
     }
   }
-
-
+  /**
+   * Code-Teil: _nwHttpsGetJson
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwHttpsGetJson(url, timeoutMs = 10000) {
     return new Promise((resolve, reject) => {
       try {
@@ -1724,7 +2265,12 @@ class NexoWattVis extends utils.Adapter {
       }
     });
   }
-
+  /**
+   * Code-Teil: _nwGetSystemGeo
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwGetSystemGeo() {
     try {
       const sys = await this.getForeignObjectAsync('system.config');
@@ -1746,7 +2292,12 @@ class NexoWattVis extends utils.Adapter {
       return { lat: null, lon: null, locName: '' };
     }
   }
-
+  /**
+   * Code-Teil: _nwWeatherTextDe
+   * Zweck: Verarbeitet Wetter-/Prognosedaten für Anzeige oder KI-Beratung.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwWeatherTextDe(code) {
     const c = Number(code);
     if (!Number.isFinite(c)) return '';
@@ -1787,14 +2338,24 @@ class NexoWattVis extends utils.Adapter {
 
     return map[c] || `Code ${c}`;
   }
-
+  /**
+   * Code-Teil: nwUpdateWeather
+   * Zweck: Verarbeitet Wetter-/Prognosedaten für Anzeige oder KI-Beratung.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async nwUpdateWeather(reason = 'interval') {
     // Weather-App is optional and must be explicitly enabled in FIS → Einstellungen.
     if (!this._notifyGetSettingBool('weatherEnabled', false)) return;
 
     if (this._nwWeatherUpdating) return;
     this._nwWeatherUpdating = true;
-
+    /**
+     * Code-Teil: setIfUnmapped
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const setIfUnmapped = async (key, val) => {
       try {
         if (!this._nwHasMappedDatapoint(key)) {
@@ -1802,7 +2363,12 @@ class NexoWattVis extends utils.Adapter {
         }
       } catch (_e) {}
     };
-
+    /**
+     * Code-Teil: clearAll
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const clearAll = async () => {
       await setIfUnmapped('weatherTempC', null);
       await setIfUnmapped('weatherCode', null);
@@ -1910,20 +2476,30 @@ class NexoWattVis extends utils.Adapter {
       this._nwWeatherUpdating = false;
     }
   }
-
+  /**
+   * Code-Teil: stopWeatherService
+   * Zweck: Stoppt Prozess, Timer, Engine oder Verbindung.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   stopWeatherService() {
     try {
       if (this._nwWeatherStartupTimer) {
-        clearTimeout(this._nwWeatherStartupTimer);
+        this._nwClearTimeout(this._nwWeatherStartupTimer);
         this._nwWeatherStartupTimer = null;
       }
       if (this._nwWeatherTimer) {
-        clearInterval(this._nwWeatherTimer);
+        this._nwClearInterval(this._nwWeatherTimer);
         this._nwWeatherTimer = null;
       }
     } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: startWeatherService
+   * Zweck: Startet Prozess, Timer, Engine oder Verbindung.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   startWeatherService() {
     try {
       const enabled = this._notifyGetSettingBool('weatherEnabled', false);
@@ -1933,14 +2509,24 @@ class NexoWattVis extends utils.Adapter {
       }
       if (this._nwWeatherTimer) return;
       const intervalMs = 15 * 60 * 1000;
+      /**
+       * Code-Teil: run
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const run = () => this.nwUpdateWeather('interval').catch(() => {});
       // First update shortly after activation/startup so UI gets fresh values quickly
-      this._nwWeatherStartupTimer = setTimeout(run, 1000);
-      this._nwWeatherTimer = setInterval(run, intervalMs);
+      this._nwWeatherStartupTimer = this._nwSetTimeout(run, 1000);
+      this._nwWeatherTimer = this._nwSetInterval(run, intervalMs);
     } catch (_e) {}
   }
-
-
+  /**
+   * Code-Teil: ensureNotificationStates
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async ensureNotificationStates() {
     // Debug / runtime states for notifications (emails). These are optional, but
     // extremely helpful when commissioning and diagnosing alert behaviour.
@@ -1976,6 +2562,12 @@ class NexoWattVis extends utils.Adapter {
    * - Arrays are replaced (not concatenated).
    * - Objects are merged recursively.
    * - Primitive values overwrite.
+   */
+  /**
+   * Code-Teil: nwDeepMerge
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   nwDeepMerge(target, patch) {
     if (patch === undefined) return target;
@@ -2018,6 +2610,12 @@ class NexoWattVis extends utils.Adapter {
    * Keys that are managed via the App‑Center (installer.configJson) and should be treated
    * as installer single source of truth (SoT).
    */
+  /**
+   * Code-Teil: nwInstallerManagedKeys
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   nwInstallerManagedKeys() {
     return [
       // Base
@@ -2055,16 +2653,31 @@ class NexoWattVis extends utils.Adapter {
       'diagnostics',
     ];
   }
-
+  /**
+   * Code-Teil: _nwIsPlainObject
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwIsPlainObject(v) {
     return !!v && typeof v === 'object' && !Array.isArray(v);
   }
-
+  /**
+   * Code-Teil: _nwDeepClone
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwDeepClone(v) {
     if (v === undefined) return undefined;
     return this.nwDeepMerge(Array.isArray(v) ? [] : {}, v);
   }
-
+  /**
+   * Code-Teil: _nwCountNonEmptyStrings
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwCountNonEmptyStrings(obj) {
     let c = 0;
     if (!obj || typeof obj !== 'object') return 0;
@@ -2073,7 +2686,12 @@ class NexoWattVis extends utils.Adapter {
     }
     return c;
   }
-
+  /**
+   * Code-Teil: _nwPatchScore
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwPatchScore(patchObj) {
     const p = this._nwIsPlainObject(patchObj) ? patchObj : {};
     let score = 0;
@@ -2110,6 +2728,12 @@ class NexoWattVis extends utils.Adapter {
    *
    * Returns { patch, changed }.
    */
+  /**
+   * Code-Teil: nwNormalizeInstallerPatch
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   nwNormalizeInstallerPatch(patchIn, baseNative) {
     const base = this._nwIsPlainObject(baseNative) ? baseNative : {};
     const patch = this._nwIsPlainObject(patchIn) ? patchIn : {};
@@ -2118,6 +2742,12 @@ class NexoWattVis extends utils.Adapter {
     const out = this._nwDeepClone(patch) || {};
     let changed = false;
 
+    /**
+     * Code-Teil: ensurePlainObj
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const ensurePlainObj = (key, defObj = {}) => {
       const cur = out[key];
       if (cur === undefined) {
@@ -2281,6 +2911,12 @@ class NexoWattVis extends utils.Adapter {
    * - managed keys from patch REPLACE the base values to avoid admin leftovers.
    * - legacy enable flags are derived from emsApps afterwards.
    */
+  /**
+   * Code-Teil: nwApplyInstallerPatchToRuntimeConfig
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   nwApplyInstallerPatchToRuntimeConfig(baseConfig, patch) {
     const base = this._nwIsPlainObject(baseConfig) ? baseConfig : {};
     const p = this._nwIsPlainObject(patch) ? patch : {};
@@ -2325,6 +2961,12 @@ class NexoWattVis extends utils.Adapter {
    * - The App‑Center stores its configuration patch in adapter states and we merge that patch during startup.
    *
    * We also support legacy key names from older versions (e.g. peakShaving/storageFarm).
+   */
+  /**
+   * Code-Teil: nwNormalizeEmsApps
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   nwNormalizeEmsApps(nativeObj) {
     const n = (nativeObj && typeof nativeObj === 'object') ? nativeObj : {};
@@ -2430,6 +3072,12 @@ class NexoWattVis extends utils.Adapter {
    * We keep the legacy flags because other parts of the adapter still check
    * enableXyz booleans.
    */
+  /**
+   * Code-Teil: nwApplyEmsAppsToLegacyFlags
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   nwApplyEmsAppsToLegacyFlags(nativeObj) {
     if (!nativeObj || typeof nativeObj !== 'object') return nativeObj;
     const n = nativeObj;
@@ -2506,6 +3154,12 @@ class NexoWattVis extends utils.Adapter {
    *     selfToSocPct: 100
    *   }
    */
+  /**
+   * Code-Teil: nwApplyStorageMultiUsePolicy
+   * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   nwApplyStorageMultiUsePolicy(nativeObj) {
     try {
       if (!nativeObj || typeof nativeObj !== 'object') return nativeObj;
@@ -2524,7 +3178,12 @@ class NexoWattVis extends utils.Adapter {
       if (!nativeObj.enableStorageControl) {
         nativeObj.enableStorageControl = true;
       }
-
+      /**
+       * Code-Teil: clampInt
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const clampInt = (v, min, max, def) => {
         const n = Number.parseInt(v, 10);
         if (Number.isFinite(n)) return Math.min(max, Math.max(min, n));
@@ -2598,7 +3257,12 @@ class NexoWattVis extends utils.Adapter {
       return nativeObj;
     }
   }
-
+  /**
+   * Code-Teil: loadInstallerConfigFromState
+   * Zweck: Lädt Daten aus API, States oder Konfiguration.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async loadInstallerConfigFromState() {
     try {
       const baseNative = (this.config && typeof this.config === 'object') ? this.config : {};
@@ -2684,8 +3348,12 @@ class NexoWattVis extends utils.Adapter {
       this.log.warn('loadInstallerConfigFromState failed: ' + (e && e.message ? e.message : e));
     }
   }
-
-
+  /**
+   * Code-Teil: persistInstallerConfigToState
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async persistInstallerConfigToState(patchObj) {
     try {
       const obj = (patchObj && typeof patchObj === 'object') ? patchObj : {};
@@ -2701,6 +3369,12 @@ class NexoWattVis extends utils.Adapter {
   // --- App‑Center Backup (Export/Import) ---
   // Stores a persistent copy of the installer configuration in 0_userdata.0 so that
   // it can survive adapter uninstall/reinstall.
+  /**
+   * Code-Teil: nwEnsureUserdataBackupObjects
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async nwEnsureUserdataBackupObjects() {
     const base = '0_userdata.0.nexowattVis';
 
@@ -2717,7 +3391,12 @@ class NexoWattVis extends utils.Adapter {
       // 0_userdata might not exist or permissions might be missing
       return false;
     }
-
+    /**
+     * Code-Teil: ensureState
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const ensureState = async (id, common) => {
       try {
         const obj = await this.getForeignObjectAsync(id);
@@ -2766,7 +3445,12 @@ class NexoWattVis extends utils.Adapter {
 
     return true;
   }
-
+  /**
+   * Code-Teil: nwWriteUserdataBackup
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async nwWriteUserdataBackup(patchObj, reason) {
     try {
       const ok = await this.nwEnsureUserdataBackupObjects();
@@ -2829,7 +3513,12 @@ class NexoWattVis extends utils.Adapter {
       return false;
     }
   }
-
+  /**
+   * Code-Teil: nwReadUserdataBackup
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async nwReadUserdataBackup() {
     const base = '0_userdata.0.nexowattVis';
     const candidates = ['backupJson', 'backupJsonPrev'];
@@ -2862,6 +3551,12 @@ class NexoWattVis extends utils.Adapter {
   // ---------------------------------------------------------------------------
   // Simulation helper (nexowatt-sim adapter)
   // ---------------------------------------------------------------------------
+  /**
+   * Code-Teil: nwSimListInstances
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async nwSimListInstances() {
     try {
       const objs = await this.getForeignObjectsAsync('system.adapter.nexowatt-sim.*', 'instance').catch(() => ({}));
@@ -2887,7 +3582,12 @@ class NexoWattVis extends utils.Adapter {
       return [];
     }
   }
-
+  /**
+   * Code-Teil: nwSimPickDefaultInstance
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async nwSimPickDefaultInstance(instances) {
     const arr = Array.isArray(instances) ? instances : [];
     const enabled = arr.find((it) => it && it.enabled);
@@ -2895,8 +3595,12 @@ class NexoWattVis extends utils.Adapter {
     const any = arr.find((it) => it && it.instanceId);
     return any ? String(any.instanceId) : '';
   }
-
-
+  /**
+   * Code-Teil: nwSimSetInstanceEnabled
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async nwSimSetInstanceEnabled(simInstanceId, enabled) {
     const inst = String(simInstanceId || '').trim();
     if (!inst) return false;
@@ -2920,7 +3624,12 @@ class NexoWattVis extends utils.Adapter {
       return false;
     }
   }
-
+  /**
+   * Code-Teil: nwSimWaitAlive
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async nwSimWaitAlive(simInstanceId, timeoutMs = 8000) {
     const inst = String(simInstanceId || '').trim();
     if (!inst) return false;
@@ -2932,11 +3641,16 @@ class NexoWattVis extends utils.Adapter {
         const st = await this.getForeignStateAsync(aliveId).catch(() => null);
         if (st && st.val === true) return true;
       } catch (_e) {}
-      await new Promise((r) => setTimeout(r, 500));
+      await this._nwSleep(500);
     }
     return false;
   }
-
+  /**
+   * Code-Teil: nwSimReadBackupPatchFromState
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async nwSimReadBackupPatchFromState() {
     try {
       const st = await this.getStateAsync('simulation.backupConfigJson');
@@ -2950,7 +3664,12 @@ class NexoWattVis extends utils.Adapter {
       return null;
     }
   }
-
+  /**
+   * Code-Teil: nwSimReadBackupSettingsFromState
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async nwSimReadBackupSettingsFromState() {
     try {
       const st = await this.getStateAsync('simulation.backupSettingsJson');
@@ -2964,7 +3683,12 @@ class NexoWattVis extends utils.Adapter {
       return null;
     }
   }
-
+  /**
+   * Code-Teil: nwSimWriteStatus
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async nwSimWriteStatus(update) {
     const u = (update && typeof update === 'object') ? update : {};
     const now = Date.now();
@@ -2978,7 +3702,12 @@ class NexoWattVis extends utils.Adapter {
       await this.setStateAsync('simulation.lastTs', { val: now, ack: true });
     } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: nwSimBuildPatch
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async nwSimBuildPatch(simInstanceId) {
     const inst = String(simInstanceId || '').trim();
     if (!inst) throw new Error('missing sim instance');
@@ -3005,7 +3734,12 @@ class NexoWattVis extends utils.Adapter {
     // Try to read per-charger max power from meta states (fallback to 11kW)
     let evcsMaxPowerKwSum = 0;
     const evcsList = [];
-
+    /**
+     * Code-Teil: pad2
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const pad2 = (n) => String(n).padStart(2, '0');
 
     for (let i = 1; i <= evcsCount; i++) {
@@ -3138,7 +3872,12 @@ class NexoWattVis extends utils.Adapter {
 
     return { patch, meta: { simInstanceId: inst, evcsCount, evcsMaxPowerKwSum, storageMaxChKw, storageMaxDisKw } };
   }
-
+  /**
+   * Code-Teil: nwSimEnable
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async nwSimEnable(simInstanceId, restartEmsFn) {
     // Safety: do not overwrite an existing backup (would make restore impossible).
     try {
@@ -3249,7 +3988,12 @@ class NexoWattVis extends utils.Adapter {
 
     return { ok: true, instanceId: inst, meta: built.meta };
   }
-
+  /**
+   * Code-Teil: nwSimDisable
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async nwSimDisable(restartEmsFn) {
     const backupPatch = await this.nwSimReadBackupPatchFromState();
     if (!backupPatch) throw new Error('no simulation backup found');
@@ -3319,6 +4063,12 @@ class NexoWattVis extends utils.Adapter {
   }
 
   // Speicherfarm (mehrere Speichersysteme als Pool/Gruppe)
+  /**
+   * Code-Teil: ensureStorageFarmStates
+   * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async ensureStorageFarmStates() {
     await this.setObjectNotExistsAsync('storageFarm', {
       type: 'channel',
@@ -3374,6 +4124,12 @@ class NexoWattVis extends utils.Adapter {
    * The VIS frontend reads from /api/state (stateCache). If the states have never
    * been written, the UI will show empty values (especially after restart).
    */
+  /**
+   * Code-Teil: syncStorageFarmDefaultsToStates
+   * Zweck: Synchronisiert zwei Datenquellen bzw. UI und State.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async syncStorageFarmDefaultsToStates() {
     const defaults = {
       enabled: false,
@@ -3419,6 +4175,12 @@ class NexoWattVis extends utils.Adapter {
    * Synchronisiert die Speicherfarm-Konfiguration aus dem Admin (jsonConfig) in Runtime-States unter storageFarm.*.
    * Hintergrund: Das VIS-Frontend liest über /api/state aus dem stateCache. Ohne diese Spiegelung wären die
    * Werte nach Reload/Restart ggf. leer oder nicht konsistent.
+   */
+  /**
+   * Code-Teil: syncStorageFarmConfigFromAdmin
+   * Zweck: Synchronisiert zwei Datenquellen bzw. UI und State.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   async syncStorageFarmConfigFromAdmin() {
     try {
@@ -3512,7 +4274,12 @@ class NexoWattVis extends utils.Adapter {
       this.log.debug('storageFarm admin sync failed: ' + (e && e.message ? e.message : e));
     }
   }
-
+  /**
+   * Code-Teil: updateStorageFarmDerived
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async updateStorageFarmDerived(reason = 'timer') {
     try {
       // Only compute if feature is enabled in Admin (EMS) AND at least one storage is configured.
@@ -3539,6 +4306,12 @@ class NexoWattVis extends utils.Adapter {
 
       // Local read cache (per tick) to avoid repeating getForeignStateAsync calls.
       const _stCache = new Map();
+      /**
+       * Code-Teil: getState
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const getState = async (id) => {
         const sid = String(id || '').trim();
         if (!sid) return null;
@@ -3547,7 +4320,12 @@ class NexoWattVis extends utils.Adapter {
         _stCache.set(sid, st);
         return st;
       };
-
+      /**
+       * Code-Teil: toBool
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const toBool = (v) => {
         if (v === null || v === undefined) return null;
         if (typeof v === 'boolean') return v;
@@ -3561,6 +4339,12 @@ class NexoWattVis extends utils.Adapter {
 
       // If datapoints come from nexowatt-devices, we can infer a stable device base path
       // and use its connected/offline signals for status.
+      /**
+       * Code-Teil: inferDeviceBases
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const inferDeviceBases = (id) => {
         const sid = String(id || '').trim();
         if (!sid) return [];
@@ -3583,6 +4367,12 @@ class NexoWattVis extends utils.Adapter {
       };
 
       // Robust number parsing (some adapters deliver strings like "4,62 kW")
+      /**
+       * Code-Teil: parseNum
+       * Zweck: Parst Rohdaten in ein sicheres internes Format.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const parseNum = (val) => {
         try {
           if (val === null || val === undefined) return NaN;
@@ -3632,7 +4422,12 @@ class NexoWattVis extends utils.Adapter {
 
       // Cache units of datapoints (for kW → W conversion, etc.)
       const _unitCache = this._nwDpUnitCache || (this._nwDpUnitCache = new Map());
-
+      /**
+       * Code-Teil: getUnit
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const getUnit = async (id) => {
         const sid = String(id || '').trim();
         if (!sid) return '';
@@ -3648,7 +4443,12 @@ class NexoWattVis extends utils.Adapter {
         _unitCache.set(sid, unit);
         return unit;
       };
-
+      /**
+       * Code-Teil: scalePowerToW
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const scalePowerToW = (n, unit) => {
         if (!Number.isFinite(n)) return NaN;
         const u = String(unit || '').trim();
@@ -3665,6 +4465,12 @@ class NexoWattVis extends utils.Adapter {
         return n;
       };
 
+      /**
+       * Code-Teil: readNumber
+       * Zweck: Liest einen Wert aus Cache, Konfiguration, DOM oder ioBroker-State mit passenden Fallbacks.
+       * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+       * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+       */
       const readNumber = async (id, kind, opts = {}) => {
         const sid = String(id || '').trim();
         if (!sid) return NaN;
@@ -3812,6 +4618,12 @@ class NexoWattVis extends utils.Adapter {
         // Infer device base from nexowatt-devices datapoints
         // Support both: "...devices.X.aliases...." and direct "...devices.X...." mappings.
         const devBases = [];
+        /**
+         * Code-Teil: addBases
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const addBases = (id) => {
           for (const b of inferDeviceBases(id)) {
             if (b && !devBases.includes(b)) devBases.push(b);
@@ -3827,7 +4639,12 @@ class NexoWattVis extends utils.Adapter {
         addBases(faultId);
         addBases(chargeAllowedId);
         addBases(dischargeAllowedId);
-
+        /**
+         * Code-Teil: pickFirstState
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const pickFirstState = async (candidates) => {
           for (const cid of candidates) {
             if (!cid) continue;
@@ -3875,6 +4692,12 @@ class NexoWattVis extends utils.Adapter {
         // Heartbeat ts: prefer device adapter status + power states.
         // NOTE: We intentionally exclude SoC as primary heartbeat because it may update slowly.
         let heartbeatTs = NaN;
+        /**
+         * Code-Teil: considerTs
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const considerTs = (st) => {
           if (st && typeof st.ts === 'number' && Number.isFinite(st.ts)) {
             heartbeatTs = Number.isFinite(heartbeatTs) ? Math.max(heartbeatTs, st.ts) : st.ts;
@@ -3937,6 +4760,12 @@ class NexoWattVis extends utils.Adapter {
         // Sie sind bewusst optional: leer = keine Sperre. Stale Werte werden als Warnung
         // dokumentiert, aber nicht automatisch als Sperre gewertet, weil viele Systeme diese
         // Flags nur bei Änderung aktualisieren.
+        /**
+         * Code-Teil: readBoolDp
+         * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const readBoolDp = async (id) => {
           const sid = String(id || '').trim();
           if (!sid) return { configured: false, value: null, fresh: true, missing: false, invalid: false };
@@ -3947,7 +4776,12 @@ class NexoWattVis extends utils.Adapter {
           const fresh = (age === null || age <= staleMs);
           return { configured: true, value: b, fresh, missing: false, invalid: b === null, ageMs: age };
         };
-
+        /**
+         * Code-Teil: normalizeLimitW
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const normalizeLimitW = (v) => {
           // Leer / nicht gesetzt bedeutet: keine harte Begrenzung.
           // Wichtig: Number(null) und Number('') wären 0 und würden den Speicher
@@ -3958,7 +4792,12 @@ class NexoWattVis extends utils.Adapter {
           if (!Number.isFinite(n) || n < 0) return null;
           return Math.round(n);
         };
-
+        /**
+         * Code-Teil: readLimitW
+         * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const readLimitW = async (staticValue) => {
           const staticLimit = normalizeLimitW(staticValue);
           return { limitW: staticLimit, configured: false, fresh: true, missing: false, invalid: false };
@@ -4182,6 +5021,12 @@ class NexoWattVis extends utils.Adapter {
         statusRows.push(status);
         available++;
       }
+      /**
+       * Code-Teil: medianSoc
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const medianSoc = (() => {
         if (!socListAll || !socListAll.length) return 0;
         const arr = socListAll.slice().sort((a, b) => a - b);
@@ -4264,7 +5109,12 @@ try {
   // ---------------------------------------------------------------------------
   // StorageFarm: Sollwert-Verteilung (Pool/Gruppen)
   // ---------------------------------------------------------------------------
-
+  /**
+   * Code-Teil: _sfGetNormalizedFarmConfig
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _sfGetNormalizedFarmConfig() {
     const cfg = this.config || {};
     const enabled = !!cfg.enableStorageFarm;
@@ -4310,7 +5160,12 @@ try {
 
     return { enabled, mode, storages, groups };
   }
-
+  /**
+   * Code-Teil: _sfGetStorageDispatchKey
+   * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _sfGetStorageDispatchKey(storage, index = 0) {
     const s = (storage && typeof storage === 'object') ? storage : {};
     const parts = [
@@ -4326,7 +5181,12 @@ try {
     ].filter(Boolean);
     return parts.join('|');
   }
-
+  /**
+   * Code-Teil: _sfGetDischargeFloorSocPct
+   * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _sfGetDischargeFloorSocPct(source = '') {
     const storageCfg = (this.config && this.config.storage && typeof this.config.storage === 'object') ? this.config.storage : {};
     const src = String(source || '').toLowerCase().trim();
@@ -4353,6 +5213,12 @@ try {
     return Math.max(0, Math.min(100, Math.max(reserveFloor, selfFloor, lskFloor)));
   }
 
+  /**
+   * Code-Teil: _sfGetResponseLimitFactor
+   * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+   * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+   * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+   */
   _sfGetResponseLimitFactor(storage, direction, now = Date.now()) {
     if (!storage || direction !== 'discharge') return 1;
     if (!(this._sfDispatchState instanceof Map)) return 1;
@@ -4391,7 +5257,12 @@ try {
     if (cooldownUntil > now) return 0.05;
     return 1;
   }
-
+  /**
+   * Code-Teil: _sfRememberDispatchSnapshot
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _sfRememberDispatchSnapshot(storage, direction, requestW) {
     if (!storage || !(this._sfDispatchState instanceof Map)) return;
 
@@ -4412,7 +5283,12 @@ try {
       cooldownUntil: keepCooldown ? Number(prev.cooldownUntil) : 0,
     });
   }
-
+  /**
+   * Code-Teil: _sfWriteIfChanged
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _sfWriteIfChanged(objectId, value) {
     // Writes a setpoint only when it changed OR a keepalive interval has elapsed.
     // Returns an object so callers can reliably detect success/failure.
@@ -4453,8 +5329,6 @@ try {
       return { ok: false, skipped: false, changed: false, error: msg };
     }
   }
-
-
   async applyStorageFarmTargetW(targetW, meta = {}) {
     const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
     const sf = this._sfGetNormalizedFarmConfig();
@@ -4477,7 +5351,12 @@ try {
       const parsed = raw ? JSON.parse(raw) : [];
       status = Array.isArray(parsed) ? parsed : [];
     } catch (_e) { status = []; }
-
+    /**
+     * Code-Teil: finiteLimitOrNull
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const finiteLimitOrNull = (v) => {
       // Leer / null / undefined = unlimitiert. Nicht als 0 interpretieren.
       if (v === undefined || v === null) return null;
@@ -4486,7 +5365,6 @@ try {
       if (!Number.isFinite(n) || n < 0) return null;
       return Math.round(n);
     };
-
     const storages = sf.storages.map((s, i) => {
       const st = (status && status[i] && typeof status[i] === 'object') ? status[i] : {};
       const soc = (st && Number.isFinite(Number(st.soc))) ? Number(st.soc) : null;
@@ -4526,7 +5404,12 @@ try {
         _sfKey: this._sfGetStorageDispatchKey(s, i),
       };
     });
-
+    /**
+     * Code-Teil: getLimitW
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const getLimitW = (storage, dir) => {
       const raw = (dir === 'charge') ? (storage && storage.maxChargeW) : (storage && storage.maxDischargeW);
       // Leer / null / undefined = unlimitiert. 0 ist nur dann Sperre, wenn bewusst 0 eingetragen wurde.
@@ -4536,7 +5419,12 @@ try {
       if (Number.isFinite(v) && v >= 0) return Math.round(v);
       return Number.POSITIVE_INFINITY;
     };
-
+    /**
+     * Code-Teil: sumLimitW
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const sumLimitW = (items, dir) => {
       let sum = 0;
       let hasInfinity = false;
@@ -4547,7 +5435,12 @@ try {
       }
       return hasInfinity ? Number.POSITIVE_INFINITY : sum;
     };
-
+    /**
+     * Code-Teil: buildWeights
+     * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const buildWeights = (items, dir) => {
       const list = (items || []).slice();
       const finiteSocs = list
@@ -4593,7 +5486,12 @@ try {
         return base * cap;
       });
     };
-
+    /**
+     * Code-Teil: normalizeWeights
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const normalizeWeights = (list, weights, dir) => {
       let out = (Array.isArray(weights) ? weights.slice() : []).map(v => (Number.isFinite(v) && v > 0) ? v : 0);
       let sumW = out.reduce((a, b) => a + b, 0);
@@ -4621,7 +5519,12 @@ try {
 
       return { weights: out, sumW };
     };
-
+    /**
+     * Code-Teil: allocateWeightedCapped
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const allocateWeightedCapped = (total, items, dir) => {
       const list = (items || []).slice();
       const requestedW = Math.max(0, Math.round(Number(total) || 0));
@@ -4696,7 +5599,12 @@ try {
 
       return { allocMap, weightMap, requestedW, deliveredW, unservedW: Math.max(0, requestedW - deliveredW) };
     };
-
+    /**
+     * Code-Teil: canUse
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const canUse = (s) => {
       if (direction === 'charge') return !!(s.setSignedPowerId || s.setChargePowerId);
       if (direction === 'discharge') return !!(s.setSignedPowerId || s.setDischargePowerId);
@@ -4739,7 +5647,6 @@ try {
           }
           groupBuckets.get(gname).push(s);
         }
-
         const activeGroups = groups.filter(g => (groupBuckets.get(g.name) || []).length > 0);
         if (activeGroups.length === 0) {
           const res = allocateWeightedCapped(absW, eligibleForDispatch, direction);
@@ -4901,7 +5808,12 @@ try {
 
     return { applied: !!anyOkRelevant, direction, targetW: w, deliveredW: direction === 'charge' ? -deliveredAbsW : deliveredAbsW, unservedW: unservedAbsW, results };
   }
-
+  /**
+   * Code-Teil: syncInstallerConfigToStates
+   * Zweck: Synchronisiert zwei Datenquellen bzw. UI und State.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async syncInstallerConfigToStates() {
     const cfg = (this.config && this.config.installerConfig) || {};
     const toSet = {
@@ -4922,11 +5834,21 @@ try {
       await this.setStateAsync(`installer.${k}`, { val: v, ack: true });
     }
   }
-
+  /**
+   * Code-Teil: syncSettingsToStates
+   * Zweck: Synchronisiert zwei Datenquellen bzw. UI und State.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async syncSettingsToStates() {
     // Mirror selected native.settings values into adapter states (used by VIS)
     const s = (this.config && this.config.settings && typeof this.config.settings === 'object') ? this.config.settings : {};
-
+    /**
+     * Code-Teil: getBool
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const getBool = (key, def) => {
       const raw = s[key];
       if (raw === undefined || raw === null) return !!def;
@@ -4948,7 +5870,12 @@ try {
       } catch (_e) {}
     }
   }
-
+  /**
+   * Code-Teil: syncSettingsConfigToStates
+   * Zweck: Synchronisiert zwei Datenquellen bzw. UI und State.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async syncSettingsConfigToStates() {
     const cfg = (this.config && this.config.settingsConfig) || {};
     const ratedKw = Number(cfg.evcsMaxPowerKw || 11); // default 11 kW
@@ -5075,7 +6002,12 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       this.log.warn('syncSettingsConfigToStates: ' + e.message);
     }
   }
-
+  /**
+   * Code-Teil: ensureEvcsStates
+   * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async ensureEvcsStates() {
     const count = Math.max(0, Math.round(Number(this.evcsCount || 0) || 0));
 
@@ -5163,6 +6095,12 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       this.log.debug('ensureEvcsStates write meta failed: ' + e.message);
     }
   }
+  /**
+   * Code-Teil: ensureRfidStates
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async ensureRfidStates() {
     // Base RFID states for EVCS access control (Whitelist + Learning)
     await this.setObjectNotExistsAsync('evcs.rfid', {
@@ -5262,7 +6200,12 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
     } catch(_e) {}
 
   }
-
+  /**
+   * Code-Teil: ensureEvcsSessionsStates
+   * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async ensureEvcsSessionsStates() {
     // Session log for EVCS (RFID/person accounting)
     await this.setObjectNotExistsAsync('evcs.sessions', {
@@ -5312,7 +6255,12 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       native: {}
     });
   }
-
+  /**
+   * Code-Teil: loadEvcsSessionsCache
+   * Zweck: Lädt Daten aus API, States oder Konfiguration.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async loadEvcsSessionsCache() {
     try {
       const st = await this.getStateAsync('evcs.sessionsJson');
@@ -5342,7 +6290,12 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       this.log.warn('loadEvcsSessionsCache: ' + e.message);
     }
   }
-
+  /**
+   * Code-Teil: persistEvcsSessions
+   * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   persistEvcsSessions(nowTs) {
     const now = Number(nowTs) || Date.now();
     try {
@@ -5354,7 +6307,12 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       this.log.warn('persistEvcsSessions: ' + e.message);
     }
   }
-
+  /**
+   * Code-Teil: appendEvcsSession
+   * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   appendEvcsSession(entry, nowTs) {
     const now = Number(nowTs) || Date.now();
     try {
@@ -5370,7 +6328,12 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       this.log.warn('appendEvcsSession: ' + e.message);
     }
   }
-
+  /**
+   * Code-Teil: maybeUpdateEvcsSessionTracker
+   * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   maybeUpdateEvcsSessionTracker(key, tsMs) {
     try {
       const m = key && key.match(/^evcs\.(\d+)\.(powerW|energyTotalKwh)$/);
@@ -5408,12 +6371,16 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       this._evcsCharging[idx] = chargingNow;
     } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: _startEvcsSession
+   * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _startEvcsSession(idx, tsMs, pW, energyTotalKwh) {
     try {
       if (!this._evcsActiveSessions) this._evcsActiveSessions = {};
       if (this._evcsActiveSessions[idx]) return; // already active
-
       const wb = (this.evcsList || []).find(w => Number(w.index) === Number(idx));
       const wbName = (wb && wb.name) ? String(wb.name) : (this.stateCache[`evcs.${idx}.name`]?.value ? String(this.stateCache[`evcs.${idx}.name`].value) : `Ladepunkt ${idx}`);
 
@@ -5443,7 +6410,12 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       this._evcsActiveSessions[idx] = sess;
     } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: _updateEvcsSession
+   * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _updateEvcsSession(idx, tsMs, pW, energyTotalKwh) {
     try {
       if (!this._evcsActiveSessions || !this._evcsActiveSessions[idx]) return;
@@ -5481,7 +6453,12 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       sess.authorized = authNow ? true : false;
     } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: _stopEvcsSession
+   * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _stopEvcsSession(idx, tsMs, pW, energyTotalKwh) {
     try {
       if (!this._evcsActiveSessions || !this._evcsActiveSessions[idx]) return;
@@ -5534,12 +6511,12 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       this.log.warn('_stopEvcsSession: ' + e.message);
     }
   }
-
-
-
-
-
-
+  /**
+   * Code-Teil: seedEvcsDayBaseCache
+   * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async seedEvcsDayBaseCache() {
     try {
       const count = Math.max(0, Math.round(Number(this.evcsCount || 0) || 0));
@@ -5555,7 +6532,12 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       this.log.debug('seedEvcsDayBaseCache failed: ' + e.message);
     }
   }
-
+  /**
+   * Code-Teil: subscribeEvcsMappedStates
+   * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async subscribeEvcsMappedStates() {
     if (!Array.isArray(this.evcsList)) return;
 
@@ -5587,6 +6569,12 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
    * - On upgrades, missing config flags and missing subscriptions could lead to
    *   legacy fallbacks (3-button mode) or "flattering" UI.
    */
+  /**
+   * Code-Teil: subscribeEmsUiStates
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async subscribeEmsUiStates() {
     try {
       const cfg = this.config || {};
@@ -5600,7 +6588,12 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       try { await this.subscribeForeignStatesAsync(`${ns}.chargingManagement.wallboxes.*`); } catch (_e) {}
       try { await this.subscribeForeignStatesAsync(`${ns}.chargingManagement.stations.*`); } catch (_e) {}
       try { await this.subscribeForeignStatesAsync(`${ns}.ems.*`); } catch (_e) {}
-
+      /**
+       * Code-Teil: prime
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const prime = async (key) => {
         try {
           const st = await this.getStateAsync(key);
@@ -5646,6 +6639,12 @@ evcsList.push({ index: i+1, enabled, priority, name, note, powerId, energyTotalI
       }
 
       // Prime station states (max/remaining) if station keys are known in config.
+      /**
+       * Code-Teil: toSafe
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const toSafe = (s) => {
         try {
           return String(s || '')
@@ -5728,6 +6727,12 @@ getSmartHomeConfig() {
       ids.push(fid);
     }
     if (ids.length) {
+      /**
+       * Code-Teil: pretty
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const pretty = (s) => {
         const raw = String(s || '').trim();
         if (!raw) return '';
@@ -5777,7 +6782,19 @@ getLogicEditorConfig() {
  * (This prevents broken configs from breaking runtime logic.)
  */
 nwNormalizeLogicEditorConfig(inCfg) {
+  /**
+   * Code-Teil: isPlain
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const isPlain = (o) => this._nwIsPlainObject(o);
+  /**
+   * Code-Teil: safeStr
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const safeStr = (s, maxLen) => {
     if (s === null || s === undefined) return '';
     const str = String(s);
@@ -5785,6 +6802,12 @@ nwNormalizeLogicEditorConfig(inCfg) {
   };
 
   const cfg = isPlain(inCfg) ? inCfg : {};
+  /**
+   * Code-Teil: mkId
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const mkId = (prefix) => {
     const rnd = Math.random().toString(36).slice(2, 8);
     return `${prefix}_${Date.now().toString(36)}_${rnd}`;
@@ -5794,8 +6817,19 @@ nwNormalizeLogicEditorConfig(inCfg) {
     updatedAt: (typeof cfg.updatedAt === 'number' && Number.isFinite(cfg.updatedAt)) ? cfg.updatedAt : Date.now(),
     graphs: [],
   };
-
+  /**
+   * Code-Teil: clamp
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  /**
+   * Code-Teil: toNum
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const toNum = (v, def) => {
     const n = Number(v);
     return Number.isFinite(n) ? n : def;
@@ -5875,6 +6909,12 @@ nwNormalizeLogicEditorConfig(inCfg) {
   return out;
 }
 
+/**
+ * Code-Teil: buildSmartHomeDevicesFromConfig
+ * Zweck: Erzeugt oder aktualisiert die sichtbare Darstellung bzw. das dazugehörige Datenmodell.
+ * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+ * Wartung/TypeScript: Änderungen können Gebäudestruktur, Kachelbedienung und Popover-Verhalten beeinflussen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+ */
 buildSmartHomeDevicesFromConfig() {
   const smCfg = (this.config && this.config.smartHome) || {};
   const enabled = !!smCfg.enabled;
@@ -5894,25 +6934,45 @@ buildSmartHomeDevicesFromConfig() {
   const cfgDevices = (shc && Array.isArray(shc.devices)) ? shc.devices : [];
   const cfgScenes = (shc && Array.isArray(shc.scenes)) ? shc.scenes : [];
   const hasConfigDevices = cfgDevices.length > 0;
-
+  /**
+   * Code-Teil: resolveRoomName
+   * Zweck: Wählt die richtige Datenquelle/Fallback-Logik aus.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const resolveRoomName = (roomId) => {
     if (!roomId) return '';
     const r = rooms.find(rm => rm && rm.id === roomId);
     return (r && r.name) || roomId;
   };
-
+  /**
+   * Code-Teil: resolveRoomFloorId
+   * Zweck: Wählt die richtige Datenquelle/Fallback-Logik aus.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const resolveRoomFloorId = (roomId) => {
     if (!roomId) return '';
     const r = rooms.find(rm => rm && rm.id === roomId);
     return (r && r.floorId) ? String(r.floorId) : '';
   };
-
+  /**
+   * Code-Teil: resolveFloorName
+   * Zweck: Wählt die richtige Datenquelle/Fallback-Logik aus.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const resolveFloorName = (floorId) => {
     if (!floorId) return '';
     const f = floors.find(fl => fl && String(fl.id) === String(floorId));
     return (f && f.name) ? String(f.name) : String(floorId);
   };
-
+  /**
+   * Code-Teil: resolveFunctionName
+   * Zweck: Wählt die richtige Datenquelle/Fallback-Logik aus.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const resolveFunctionName = (fnId) => {
     if (!fnId) return '';
     const f = funcs.find(fn => fn && fn.id === fnId);
@@ -6160,6 +7220,12 @@ buildSmartHomeDevicesFromConfig() {
   }
 
   // --- Fallback: altes SmartHome-Modell über smartHome.datapoints.* (A-Reihe) ---
+  /**
+   * Code-Teil: pushSwitch
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const pushSwitch = (id, opts) => {
     if (!id) return;
     const dev = {
@@ -6191,7 +7257,12 @@ buildSmartHomeDevicesFromConfig() {
     };
     devices.push(dev);
   };
-
+  /**
+   * Code-Teil: pushDimmer
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const pushDimmer = (id, opts) => {
     if (!id) return;
     const dev = {
@@ -6225,7 +7296,12 @@ buildSmartHomeDevicesFromConfig() {
     };
     devices.push(dev);
   };
-
+  /**
+   * Code-Teil: pushBlind
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const pushBlind = (positionId, upId, downId, stopId, opts) => {
     if (!positionId && !upId && !downId && !stopId) return;
     const dev = {
@@ -6269,7 +7345,12 @@ buildSmartHomeDevicesFromConfig() {
 
     devices.push(dev);
   };
-
+  /**
+   * Code-Teil: pushRtr
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const pushRtr = (currentId, setpointId, modeId, humidityId, opts) => {
     if (!currentId && !setpointId && !modeId && !humidityId) return;
     const dev = {
@@ -6305,7 +7386,12 @@ buildSmartHomeDevicesFromConfig() {
     };
     devices.push(dev);
   };
-
+  /**
+   * Code-Teil: pushSensor
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const pushSensor = (id, opts) => {
     if (!id) return;
     const dev = {
@@ -6336,7 +7422,12 @@ buildSmartHomeDevicesFromConfig() {
     };
     devices.push(dev);
   };
-
+  /**
+   * Code-Teil: pushScene
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const pushScene = (id, opts) => {
     if (!id) return;
     const dev = {
@@ -6552,6 +7643,12 @@ buildSmartHomeDevicesFromConfig() {
   return this.smartHomeDevices;
 }
 
+/**
+ * Code-Teil: getSmartHomeDevicesWithState
+ * Zweck: Liest einen Wert aus Cache, Konfiguration, DOM oder ioBroker-State mit passenden Fallbacks.
+ * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+ * Wartung/TypeScript: Änderungen können Gebäudestruktur, Kachelbedienung und Popover-Verhalten beeinflussen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+ */
 async getSmartHomeDevicesWithState() {
   const devices = (this.smartHomeDevices && this.smartHomeDevices.length)
     ? this.smartHomeDevices
@@ -6592,12 +7689,23 @@ async getSmartHomeDevicesWithState() {
       try {
         const st = await this.getForeignStateAsync(cCfg.readId);
         const v = st && typeof st.val !== 'undefined' ? st.val : null;
-
+        /**
+         * Code-Teil: clamp
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const clamp = (n) => {
           const x = Number(n);
           if (!Number.isFinite(x)) return 0;
           return Math.max(0, Math.min(255, Math.round(x)));
         };
+        /**
+         * Code-Teil: toHex2
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const toHex2 = (n) => clamp(n).toString(16).padStart(2, '0');
 
         let hex = null;
@@ -6774,6 +7882,12 @@ if (copy.type === 'scene' && typeof copy.state.on !== 'undefined') {
     // Sensor-Werte lesen (read-only)
     if (copy.io && copy.io.player) {
       const pl = copy.io.player || {};
+      /**
+       * Code-Teil: getStr
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const getStr = async (id) => {
         if (!id) return '';
         try {
@@ -6787,6 +7901,12 @@ if (copy.type === 'scene' && typeof copy.state.on !== 'undefined') {
           return '';
         }
       };
+      /**
+       * Code-Teil: getNum
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const getNum = async (id) => {
         if (!id) return null;
         try {
@@ -6888,6 +8008,12 @@ if (copy.type === 'scene' && typeof copy.state.on !== 'undefined') {
   return result;
 }
 
+/**
+ * Code-Teil: migrateNativeConfig
+ * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+ * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+ * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+ */
 async migrateNativeConfig() {
     // IMPORTANT:
     // We ONLY normalize values in-memory for the current runtime.
@@ -6897,8 +8023,20 @@ async migrateNativeConfig() {
       this.config = this.config || {};
       const nat = this.config;
 
-      let changed = false;
+      // ioBroker convention: use native.ip for network binding.
+      // Older NexoWatt versions used native.bind; keep it as a legacy fallback
+      // but migrate the runtime config so JSONConfig/Admin can use ip going forward.
+      if (!nat.ip && nat.bind) nat.ip = nat.bind;
+      if (!nat.ip) nat.ip = '0.0.0.0';
+      if (!nat.bind) nat.bind = nat.ip;
 
+      let changed = false;
+      /**
+       * Code-Teil: ensureObject
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const ensureObject = (key) => {
         const v = nat[key];
         if (!v || typeof v !== 'object' || Array.isArray(v)) {
@@ -6906,7 +8044,12 @@ async migrateNativeConfig() {
           changed = true;
         }
       };
-
+      /**
+       * Code-Teil: setNumber
+       * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const setNumber = (path, def) => {
         const parts = String(path).split('.');
         if (!parts.length) return;
@@ -6941,7 +8084,12 @@ async migrateNativeConfig() {
           changed = true;
         }
       };
-
+      /**
+       * Code-Teil: setBoolean
+       * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const setBoolean = (path, def) => {
         const parts = String(path).split('.');
         let cur = nat;
@@ -7017,9 +8165,21 @@ async migrateNativeConfig() {
    * - We only delete well-known dynamic branches where the desired existence is
    *   unambiguously derived from the current config.
    */
+  /**
+   * Code-Teil: cleanupOrphanedObjects
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async cleanupOrphanedObjects() {
     try {
       // Keep in sync with ems/modules/charging-management.js (toSafeIdPart)
+      /**
+       * Code-Teil: toSafeIdPart
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const toSafeIdPart = (input) => {
         const s = String(input || '').trim();
         if (!s) return '';
@@ -7027,7 +8187,12 @@ async migrateNativeConfig() {
       };
 
       const dps = (this.config && this.config.datapoints) || {};
-
+      /**
+       * Code-Teil: delRec
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const delRec = async (id) => {
         try {
           // recursive removes child states/channels
@@ -7108,9 +8273,18 @@ async migrateNativeConfig() {
   }
 
 
+  // Abschnitt: Startablauf. Reihenfolge beachten: States anlegen, Lizenz/Config laden, Webserver starten, EMS initialisieren, Live-State veröffentlichen.
+/**
+ * Code-Teil: onReady
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async onReady() {
     try {
       await this.migrateNativeConfig();
+      await this.ensureInfoConnectionState();
+      await this._nwSetInfoConnection(false, 'startup');
       await this.ensureLicenseStates();
 
       // License gate must be initialized before we start the web server,
@@ -7118,6 +8292,8 @@ async onReady() {
       await this._nwInitLicense();
       // start web server
       await this.startServer();
+      await this._nwSetInfoConnection(true, 'http-server-listening');
+      this._nwStartConnectionHeartbeat();
 
       // create states first, then write config defaults
       await this.ensureInstallerStates();
@@ -7208,11 +8384,11 @@ async onReady() {
         const intervalRaw = Number(sfCfg.schedulerIntervalMs);
         const interval = Number.isFinite(intervalRaw) ? Math.max(250, Math.min(60000, Math.round(intervalRaw))) : 2000;
 
-        if (this._nwStorageFarmTimer) { try { clearInterval(this._nwStorageFarmTimer); } catch (_e) {} this._nwStorageFarmTimer = null; }
+        if (this._nwStorageFarmTimer) { try { this._nwClearInterval(this._nwStorageFarmTimer); } catch (_e) {} this._nwStorageFarmTimer = null; }
 
         if (sfEnabled) {
           await this.updateStorageFarmDerived('startup');
-          this._nwStorageFarmTimer = setInterval(() => {
+          this._nwStorageFarmTimer = this._nwSetInterval(() => {
             this.updateStorageFarmDerived('timer').catch(() => {});
           }, interval);
         }
@@ -7241,8 +8417,8 @@ async onReady() {
       // Energy totals: if no kWh counters are mapped, derive totals from history/influxdb
       try { await this.updateEnergyTotalsFromInflux('startup'); } catch (_e) {}
       try {
-        if (this._nwEnergyTotalsTimer) clearInterval(this._nwEnergyTotalsTimer);
-        this._nwEnergyTotalsTimer = setInterval(() => {
+        if (this._nwEnergyTotalsTimer) this._nwClearInterval(this._nwEnergyTotalsTimer);
+        this._nwEnergyTotalsTimer = this._nwSetInterval(() => {
           this.updateEnergyTotalsFromInflux('timer').catch(() => {});
         }, 60 * 60 * 1000);
       } catch (_e2) {}
@@ -7260,10 +8436,30 @@ async onReady() {
       try { await this.initLogicEngine(); } catch (e) { this.log.warn('NexoLogic init failed: ' + (e && e.message ? e.message : e)); }
       this.log.info('NexoWatt UI adapter ready.');
     } catch (e) {
-      this.log.error(`onReady error: ${e.message}`);
+      // info.connection describes the adapter web/API connectivity. If the HTTP server
+      // is already listening, keep the connection online even when a non-critical
+      // startup module failed later. Otherwise users see "Offline" although the
+      // customer frontend/API is reachable and they have to set the state manually.
+      try {
+        if (this._nwIsHttpServerListening()) {
+          await this._nwSetInfoConnection(true, 'startup-partial-but-server-online');
+          this._nwStartConnectionHeartbeat();
+          this.log.warn(`onReady partial init error after web server start: ${e && e.message ? e.message : e}`);
+        } else {
+          await this._nwSetInfoConnection(false, 'startup-failed-before-server');
+          this.log.error(`onReady error: ${e && e.message ? e.message : e}`);
+        }
+      } catch (_eConn) {
+        this.log.error(`onReady error: ${e && e.message ? e.message : e}`);
+      }
     }
   }
-
+  /**
+   * Code-Teil: initLogicEngine
+   * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async initLogicEngine(force) {
     const doForce = !!force;
 
@@ -7284,7 +8480,12 @@ async onReady() {
       throw e;
     }
   }
-
+  /**
+   * Code-Teil: initEmsEngine
+   * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async initEmsEngine(force) {
     const doForce = !!force;
 
@@ -7318,6 +8519,12 @@ async onReady() {
    * Init / reload the NexoLogic runtime engine (node/graph editor).
    * The engine is event-driven and reacts on stateChanges of configured input datapoints.
    */
+  /**
+   * Code-Teil: initLogicEngine
+   * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async initLogicEngine(force) {
     const doForce = !!force;
 
@@ -7349,6 +8556,12 @@ async onReady() {
    * This fixes the multi-ladepunkt "mode buttons only appear if mode DP is mapped" issue,
    * because the EVCS UI can reliably use the embedded EMS userMode states.
    */
+  /**
+   * Code-Teil: subscribeEmsUiStates
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async subscribeEmsUiStates() {
     const cfg = this.config || {};
 
@@ -7365,6 +8578,12 @@ async onReady() {
     try { await this.subscribeForeignStatesAsync(`${this.namespace}.ems.*`); } catch (_e2) {}
 
     // Prime a minimal subset that the UI uses on first render.
+    /**
+     * Code-Teil: primeKey
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const primeKey = async (key) => {
       if (!key) return;
       try {
@@ -7422,13 +8641,24 @@ async onReady() {
     // Stations: subscribe wildcard; values will stream in once computed.
     try { await this.subscribeForeignStatesAsync(`${this.namespace}.chargingManagement.stations.*`); } catch (_e3) {}
   }
-
+  /**
+   * Code-Teil: startServer
+   * Zweck: Startet Prozess, Timer, Engine oder Verbindung.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async startServer() {
     const app = express();
 
     // Public license information endpoint for the Admin license page.
     // Must be registered before the license gate so the UUID can be copied
     // even when the adapter/VIS itself is still locked.
+    /**
+     * Code-Teil: sendLicenseCors
+     * Zweck: Verarbeitet Lizenzdaten und schützt echte Schlüssel vor Platzhaltern.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const sendLicenseCors = (res) => {
       try {
         res.setHeader('Access-Control-Allow-Origin', '*');
@@ -7440,13 +8670,16 @@ async onReady() {
       sendLicenseCors(res);
       res.status(204).end();
     });
+    // Abschnitt: Lizenz-API. Maskierte Platzhalter dürfen hier nie als echter Lizenzschlüssel gespeichert oder geprüft werden.
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/license/info', async (_req, res) => {
     app.get('/api/license/info', async (_req, res) => {
       sendLicenseCors(res);
       if (!this._nwSystemUuid) {
         try { this._nwSystemUuid = await this._nwGetSystemUuid(); } catch (_e) {}
       }
       const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
-      const currentLicenseKey = String((this.config && this.config.licenseKey) || '').trim();
+      const keyInfo = await this._nwGetConfiguredLicenseKey();
+      const currentLicenseKey = keyInfo.key;
       const maskedLicenseKey = currentLicenseKey
         ? `${currentLicenseKey.slice(0, 8)}…${currentLicenseKey.slice(-6)}`
         : '';
@@ -7472,10 +8705,25 @@ async onReady() {
       sendLicenseCors(res);
       res.status(204).end();
     });
+    // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/license/save', express.json({ limit: '64kb' }), async (req, res) => {
     app.post('/api/license/save', express.json({ limit: '64kb' }), async (req, res) => {
       sendLicenseCors(res);
       try {
-        const licenseKey = String((req.body && (req.body.licenseKey || req.body.key)) || '').trim();
+        const licenseKeyRaw = String((req.body && (req.body.licenseKey || req.body.key)) || '').trim();
+        if (this._nwLooksLikeMaskedLicenseKey(licenseKeyRaw)) {
+          const info = (this._nwLicenseInfo && typeof this._nwLicenseInfo === 'object') ? this._nwLicenseInfo : {};
+          res.status(400).json({
+            ok: false,
+            adapter: this.namespace,
+            uuid: String(this._nwSystemUuid || ''),
+            valid: !!this._nwLicenseOk,
+            type: String(info.type || 'none'),
+            message: 'Maskierter/geschützter Lizenz-Platzhalter wurde nicht gespeichert. Bitte den echten Lizenzschlüssel neu eintragen.',
+            licenseKeyConfigured: false,
+          });
+          return;
+        }
+        const licenseKey = licenseKeyRaw;
         const adapterObjectId = `system.adapter.${this.namespace}`;
         const adapterObj = await this.getForeignObjectAsync(adapterObjectId);
         if (!adapterObj) throw new Error(`Adapter-Objekt nicht gefunden: ${adapterObjectId}`);
@@ -7517,6 +8765,7 @@ async onReady() {
     // License gate: the adapter/UI is locked until a valid license key is
     // configured in the ioBroker Admin (Lizenz-Seite).
     // -------------------------------------------------------------------
+    // API-Kommentar: USE-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: (req, res, next) => {
     app.use((req, res, next) => {
       if (this._nwLicenseOk) return next();
 
@@ -7530,7 +8779,12 @@ async onReady() {
       const daysRemaining = (info.daysRemaining !== undefined && info.daysRemaining !== null) ? Number(info.daysRemaining) : null;
       const isTrial = (lType === 'trial');
       const isTrialExpired = isTrial && /abgelaufen/i.test(lMsg);
-
+      /**
+       * Code-Teil: esc
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const esc = (s) => String(s)
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
@@ -7593,41 +8847,51 @@ async onReady() {
     });
 
     // --- Static UI pages ---------------------------------------------------
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/storagefarm.html','/storagefarm','/speicherfarm.html','/speicherfarm'], (_req, res) => {
     app.get(['/storagefarm.html','/storagefarm','/speicherfarm.html','/speicherfarm'], (_req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'storagefarm.html'));
     });
 
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/', (_req, res) => {
     app.get('/', (_req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'index.html'));
     });
 
+    // API-Kommentar: USE-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/static', express.static(path.join(__dirname, 'www')));
     app.use('/static', express.static(path.join(__dirname, 'www')));
 
 // --- Static PWA assets ---
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/manifest.webmanifest', (_req, res) => {
 app.get('/manifest.webmanifest', (_req, res) => {
   res.type('application/manifest+json');
   res.sendFile(path.join(__dirname, 'www', 'manifest.webmanifest'));
 });
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/sw.js', (_req, res) => {
 app.get('/sw.js', (_req, res) => {
   res.type('application/javascript');
   res.sendFile(path.join(__dirname, 'www', 'sw.js'));
 });
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/apple-touch-icon.png', (_req, res) => {
 app.get('/apple-touch-icon.png', (_req, res) => {
   res.type('image/png');
   res.sendFile(path.join(__dirname, 'www', 'apple-touch-icon.png'));
 });
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/favicon.ico', (_req, res) => {
 app.get('/favicon.ico', (_req, res) => {
   res.type('image/x-icon');
   res.sendFile(path.join(__dirname, 'www', 'assets', 'icons', 'nexowatt-32.png'));
 });
+// API-Kommentar: USE-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/assets', express.static(path.join(__dirname, 'www', 'assets')));
 app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
 
 
     // JSON body parser
+    // API-Kommentar: USE-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: bodyParser);
     app.use(bodyParser);
 
     // Ensure JSON error responses for oversized payloads (important for the App-Center save call)
     // so the frontend can show a meaningful message instead of failing JSON parsing.
+    // API-Kommentar: USE-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: (err, req, res, next) => {
     app.use((err, req, res, next) => {
       try {
         if (err && (err.type === 'entity.too.large' || err.status === 413)) {
@@ -7655,7 +8919,12 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
     const COOKIE_NAME = 'nw_session';
     const LEGACY_COOKIE_NAME = 'installer_session';
     this._authSessions = this._authSessions || new Map();
-
+    /**
+     * Code-Teil: pruneSessions
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const pruneSessions = () => {
       const now = Date.now();
       try {
@@ -7666,7 +8935,12 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
         // ignore
       }
     };
-
+    /**
+     * Code-Teil: getSession
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const getSession = (req) => {
       if (!authEnabled) return { user: null, isInstaller: true, exp: Date.now() + sessionTtlMs, _bypass: true };
       pruneSessions();
@@ -7681,7 +8955,12 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
       }
       return s;
     };
-
+    /**
+     * Code-Teil: setSessionCookie
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const setSessionCookie = (res, token, ttlMs) => {
       const maxAge = Math.max(1, Math.floor(ttlMs / 1000));
       const base = `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
@@ -7689,14 +8968,24 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
       const legacy = `${LEGACY_COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
       res.setHeader('Set-Cookie', [base, legacy]);
     };
-
+    /**
+     * Code-Teil: clearSessionCookie
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const clearSessionCookie = (res) => {
       res.setHeader('Set-Cookie', [
         `${COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`,
         `${LEGACY_COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`,
       ]);
     };
-
+    /**
+     * Code-Teil: requireAuth
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const requireAuth = (req, res, next) => {
       if (!authEnabled || !protectWrites) return next();
       const s = getSession(req);
@@ -7704,7 +8993,12 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
       req.nwSession = s;
       next();
     };
-
+    /**
+     * Code-Teil: requireInstaller
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const requireInstaller = (req, res, next) => {
       if (!authEnabled || !protectWrites) return next();
       const s = getSession(req);
@@ -7713,7 +9007,12 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
       req.nwSession = s;
       next();
     };
-
+    /**
+     * Code-Teil: checkPasswordAsync
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const checkPasswordAsync = (user, pass) => new Promise((resolve) => {
       try {
         this.checkPassword(String(user || '').trim(), String(pass || ''), (ok) => resolve(!!ok));
@@ -7721,7 +9020,12 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
         resolve(false);
       }
     });
-
+    /**
+     * Code-Teil: isUserInGroup
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const isUserInGroup = async (user, groupId) => {
       try {
         const gid = String(groupId || '').trim();
@@ -7734,7 +9038,12 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
         return false;
       }
     };
-
+    /**
+     * Code-Teil: computeIsInstaller
+     * Zweck: Berechnet abgeleitete Werte.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const computeIsInstaller = async (user) => {
       const u = String(user || '').trim();
       if (!u) return false;
@@ -7750,6 +9059,7 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
     };
 
     // Auth status (used by UI)
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/auth/status', (req, res) => {
     app.get('/api/auth/status', (req, res) => {
       const s = getSession(req);
       res.json({
@@ -7761,7 +9071,12 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
         protectWrites: !!protectWrites,
       });
     });
-
+    /**
+     * Code-Teil: doAuthLogin
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const doAuthLogin = async (req, res) => {
       try {
         if (!authEnabled) return res.json({ ok: true, enabled: false, authed: true, user: null, isInstaller: true });
@@ -7785,9 +9100,11 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
     };
 
     // Login via user/password
+    // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/auth/login', doAuthLogin);
     app.post('/api/auth/login', doAuthLogin);
 
     // Logout
+    // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/auth/logout', (req, res) => {
     app.post('/api/auth/logout', (req, res) => {
       try {
         const cookies = parseCookies(req);
@@ -7801,7 +9118,9 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
     });
 
     // Backwards compatible endpoints (older UI)
+    // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/installer/login', doAuthLogin);
     app.post('/api/installer/login', doAuthLogin);
+    // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/installer/logout', (req, res) => {
     app.post('/api/installer/logout', (req, res) => {
       try {
         const cookies = parseCookies(req);
@@ -7816,11 +9135,14 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
 
 
     // --- SmartHome page & API (erste Switch-Kachel) ---
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/smarthome.html', '/smarthome'], (_req, res) => {
     app.get(['/smarthome.html', '/smarthome'], (_req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'smarthome.html'));
     });
 
-    app.get('/api/smarthome/devices', async (_req, res) => {
+        // Abschnitt: SmartHome-Kunden-APIs. Diese Endpunkte liefern Geräte, Szenen und Steuersignale für www/smarthome.js.
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/devices', async (_req, res) => {
+app.get('/api/smarthome/devices', async (_req, res) => {
       try {
         const devices = await this.getSmartHomeDevicesWithState();
         res.json({ ok: true, devices });
@@ -7831,6 +9153,7 @@ app.use('/assets', express.static(path.join(__dirname, 'www', 'assets')));
     });
 
     
+// API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/toggle', requireAuth, async (req, res) => {
 app.post('/api/smarthome/toggle', requireAuth, async (req, res) => {
   try {
     const id = req.body && req.body.id;
@@ -7873,7 +9196,12 @@ app.post('/api/smarthome/toggle', requireAuth, async (req, res) => {
       if (dev.behavior && dev.behavior.readOnly) {
         return res.status(403).json({ ok: false, error: 'readOnly' });
       }
-
+      /**
+       * Code-Teil: parsePlaying
+       * Zweck: Parst Rohdaten in ein sicheres internes Format.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const parsePlaying = (val) => {
         if (typeof val === 'boolean') return val;
         if (typeof val === 'number') return val > 0;
@@ -7884,7 +9212,12 @@ app.post('/api/smarthome/toggle', requireAuth, async (req, res) => {
         }
         return null;
       };
-
+      /**
+       * Code-Teil: pulse
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const pulse = async (dpId) => {
         if (!dpId) return false;
         await this.setForeignStateAsync(dpId, true, false);
@@ -7952,6 +9285,7 @@ app.post('/api/smarthome/toggle', requireAuth, async (req, res) => {
 });
 
 // Level-API für Dimmer und Jalousie/Rollladen (Slider 0..100 %)
+// API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/level', requireAuth, async (req, res) => {
 app.post('/api/smarthome/level', requireAuth, async (req, res) => {
   try {
     const id = req.body && req.body.id;
@@ -8002,6 +9336,7 @@ app.post('/api/smarthome/level', requireAuth, async (req, res) => {
 
 
 // Color-API für Farblicht (RGB)
+// API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/color', requireAuth, async (req, res) => {
 app.post('/api/smarthome/color', requireAuth, async (req, res) => {
   try {
     const id = req.body && req.body.id;
@@ -8057,6 +9392,7 @@ app.post('/api/smarthome/color', requireAuth, async (req, res) => {
 
 
 // Cover-API für Jalousie/Rollladen (Auf/Ab/Stop)
+// API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/cover', requireAuth, async (req, res) => {
 app.post('/api/smarthome/cover', requireAuth, async (req, res) => {
   try {
     const id = req.body && req.body.id;
@@ -8095,7 +9431,12 @@ app.post('/api/smarthome/cover', requireAuth, async (req, res) => {
     if (!dpId) {
       return res.status(404).json({ ok: false, error: 'no datapoint for action' });
     }
-
+    /**
+     * Code-Teil: coercePayloadForDp
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const coercePayloadForDp = async (targetDpId, payload) => {
       if (action !== 'up' && action !== 'down') return payload;
       try {
@@ -8118,6 +9459,7 @@ app.post('/api/smarthome/cover', requireAuth, async (req, res) => {
 
 
 // Player-API (Transport + Volume + Radiosender)
+// API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/player', requireAuth, async (req, res) => {
 app.post('/api/smarthome/player', requireAuth, async (req, res) => {
   try {
     const id = req.body && req.body.id;
@@ -8139,12 +9481,23 @@ app.post('/api/smarthome/player', requireAuth, async (req, res) => {
     }
 
     const p = dev.io.player;
+    /**
+     * Code-Teil: pulse
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const pulse = async (dpId) => {
       if (!dpId) return false;
       await this.setForeignStateAsync(dpId, true);
       return true;
     };
-
+    /**
+     * Code-Teil: parsePlaying
+     * Zweck: Parst Rohdaten in ein sicheres internes Format.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const parsePlaying = (val) => {
       if (typeof val === 'boolean') return val;
       if (typeof val === 'number') return val > 0;
@@ -8236,6 +9589,7 @@ app.post('/api/smarthome/player', requireAuth, async (req, res) => {
 
 
 // RTR-Setpoint-API (Solltemperatur einstellen)
+// API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
 app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
   try {
     const id = req.body && req.body.id;
@@ -8275,6 +9629,7 @@ app.post('/api/smarthome/rtrSetpoint', requireAuth, async (req, res) => {
 
 
 // --- SmartHome Szenen (Adapter-executed) ---
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/scenes', requireAuth, async (_req, res) => {
 app.get('/api/smarthome/scenes', requireAuth, async (_req, res) => {
   try {
     const cfg = this.getSmartHomeConfig ? this.getSmartHomeConfig() : (this.config && this.config.smartHomeConfig) || {};
@@ -8286,6 +9641,7 @@ app.get('/api/smarthome/scenes', requireAuth, async (_req, res) => {
   }
 });
 
+// API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/scene/run', requireAuth, async (req, res) => {
 app.post('/api/smarthome/scene/run', requireAuth, async (req, res) => {
   try {
     const id = req.body && (req.body.id || req.body.sceneId);
@@ -8300,6 +9656,7 @@ app.post('/api/smarthome/scene/run', requireAuth, async (req, res) => {
 
 
 // --- SmartHome Zeitschaltuhren (Endkunde) ---
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/timers', requireAuth, async (_req, res) => {
 app.get('/api/smarthome/timers', requireAuth, async (_req, res) => {
   try {
     const cfg = this.getSmartHomeTimersConfig();
@@ -8310,6 +9667,7 @@ app.get('/api/smarthome/timers', requireAuth, async (_req, res) => {
   }
 });
 
+// API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/timers', requireAuth, async (req, res) => {
 app.post('/api/smarthome/timers', requireAuth, async (req, res) => {
   try {
     const body = req.body || {};
@@ -8359,6 +9717,7 @@ app.post('/api/smarthome/timers', requireAuth, async (req, res) => {
 
 
 // --- SmartHome Logik-Uhren (Installer) ---
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/logic-clocks', requireInstaller, async (_req, res) => {
 app.get('/api/smarthome/logic-clocks', requireInstaller, async (_req, res) => {
   try {
     const cfg = this.getSmartHomeLogicClocksConfig();
@@ -8369,6 +9728,7 @@ app.get('/api/smarthome/logic-clocks', requireInstaller, async (_req, res) => {
   }
 });
 
+// API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/logic-clocks', requireInstaller, async (req, res) => {
 app.post('/api/smarthome/logic-clocks', requireInstaller, async (req, res) => {
   try {
     const body = req.body || {};
@@ -8455,9 +9815,19 @@ const NW_SHCFG_TD_ICON_MAP = Object.freeze({
   camera: '3d-camera',
   sensor: '3d-sensor',
 });
-
+/**
+ * Code-Teil: nwShcfgTdIsPlainObject
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwShcfgTdIsPlainObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
-
+/**
+ * Code-Teil: nwShcfgTdNormName
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwShcfgTdNormName = (value) => {
   try {
     if (typeof value === 'string') return value.trim();
@@ -8470,16 +9840,31 @@ const nwShcfgTdNormName = (value) => {
   } catch (_e) {}
   return '';
 };
-
+/**
+ * Code-Teil: nwShcfgTdParentId
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwShcfgTdParentId = (id) => {
   const parts = String(id || '').trim().split('.').filter(Boolean);
   if (parts.length <= 1) return '';
   parts.pop();
   return parts.join('.');
 };
-
+/**
+ * Code-Teil: nwShcfgTdHash
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwShcfgTdHash = (value) => crypto.createHash('sha1').update(String(value || '')).digest('hex').slice(0, 16);
-
+/**
+ * Code-Teil: nwShcfgTdStateEntry
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwShcfgTdStateEntry = (objects, state, keyOverride) => {
   if (!state || !state.id) return null;
   const id = String(state.id || '').trim();
@@ -8497,7 +9882,12 @@ const nwShcfgTdStateEntry = (objects, state, keyOverride) => {
     write: !!common.write,
   };
 };
-
+/**
+ * Code-Teil: nwShcfgTdFindState
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwShcfgTdFindState = (control, names, predicate) => {
   const list = Array.isArray(control && control.states) ? control.states : [];
   const wanted = (Array.isArray(names) ? names : [names])
@@ -8514,9 +9904,20 @@ const nwShcfgTdFindState = (control, names, predicate) => {
   }
   return null;
 };
-
+/**
+ * Code-Teil: nwShcfgTdCollectConfiguredDpIds
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwShcfgTdCollectConfiguredDpIds = (cfg) => {
   const out = new Set();
+  /**
+   * Code-Teil: visit
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const visit = (value, keyName) => {
     if (typeof value === 'string') {
       const str = value.trim();
@@ -8536,6 +9937,12 @@ const nwShcfgTdCollectConfiguredDpIds = (cfg) => {
   return out;
 };
 
+/**
+ * Code-Teil: nwShcfgTdGetObjectsCache
+ * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+ * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+ * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+ */
 const nwShcfgTdGetObjectsCache = async (force = false) => {
   const ttlMs = 30000;
   const now = Date.now();
@@ -8547,10 +9954,21 @@ const nwShcfgTdGetObjectsCache = async (force = false) => {
   this._nwTypeDetectorObjectsCache = { ts: now, objects: objects || {}, keys };
   return this._nwTypeDetectorObjectsCache;
 };
-
+/**
+ * Code-Teil: nwShcfgTdCollectCandidateRoots
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwShcfgTdCollectCandidateRoots = (objects) => {
   const out = [];
   const ownPrefix = this.namespace ? `${this.namespace}.` : '';
+  /**
+   * Code-Teil: skip
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const skip = (id) => {
     const sid = String(id || '').trim();
     if (!sid) return true;
@@ -8580,7 +9998,12 @@ const nwShcfgTdCollectCandidateRoots = (objects) => {
   out.sort((a, b) => a.localeCompare(b));
   return out;
 };
-
+/**
+ * Code-Teil: nwShcfgTdBestSourceId
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwShcfgTdBestSourceId = (objects, rootId, control) => {
   const root = String(rootId || '').trim();
   const rootObj = root ? objects[root] : null;
@@ -8598,14 +10021,24 @@ const nwShcfgTdBestSourceId = (objects, rootId, control) => {
   }
   return root;
 };
-
+/**
+ * Code-Teil: nwShcfgTdSuggestionScore
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwShcfgTdSuggestionScore = (item) => {
   const typeWeight = item && item.sourceType === 'device' ? 3 : (item && item.sourceType === 'channel' ? 2 : 1);
   const importableWeight = item && item.importable ? 8 : 0;
   const configuredPenalty = item && item.alreadyConfigured ? -3 : 0;
   return (typeWeight * 1000) + (Number(item && item.matchCount || 0) * 10) + importableWeight + configuredPenalty;
 };
-
+/**
+ * Code-Teil: nwShcfgTdMergeSuggestion
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwShcfgTdMergeSuggestion = (current, next) => {
   if (!current) return next;
   if (!next) return current;
@@ -8624,7 +10057,12 @@ const nwShcfgTdMergeSuggestion = (current, next) => {
   }
   return merged;
 };
-
+/**
+ * Code-Teil: nwShcfgTdBuildSuggestion
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwShcfgTdBuildSuggestion = async ({ control, rootId, objects, configuredIds }) => {
   if (!control || !control.type) return null;
   const detectorType = String(control.type || '').trim();
@@ -8647,9 +10085,26 @@ const nwShcfgTdBuildSuggestion = async ({ control, rootId, objects, configuredId
   const sourceType = String((sourceObj && sourceObj.type) || (objects[rootId] && objects[rootId].type) || 'state').trim() || 'state';
   const sourceName = nwShcfgTdNormName(sourceObj && sourceObj.common && sourceObj.common.name) || (sourceId ? sourceId.split('.').slice(-1)[0] : 'Gerät');
   const notes = [];
-
+  /**
+   * Code-Teil: getMeta
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const getMeta = (state) => nwShcfgTdStateEntry(objects, state, state && state.name);
+  /**
+   * Code-Teil: pick
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const pick = (names, predicate) => getMeta(nwShcfgTdFindState(control, names, predicate));
+  /**
+   * Code-Teil: numberOr
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const numberOr = (value, fallback) => {
     const num = Number(value);
     return Number.isFinite(num) ? num : fallback;
@@ -8832,7 +10287,6 @@ const nwShcfgTdBuildSuggestion = async ({ control, rootId, objects, configuredId
   if (detectorType !== targetType) {
     notes.push(`Erkannt als ${detectorType} und für die SmartHome-Oberfläche als ${targetType} vorgeschlagen.`);
   }
-
   const configuredOverlap = states.filter((entry) => entry && entry.id && configuredIds && configuredIds.has(entry.id)).map((entry) => entry.id);
   if (configuredOverlap.length) {
     notes.push('Mindestens ein gemappter Datenpunkt ist bereits einem bestehenden SmartHome-Gerät zugeordnet.');
@@ -8861,6 +10315,7 @@ const nwShcfgTdBuildSuggestion = async ({ control, rootId, objects, configuredId
   };
 };
 
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
   try {
     if (!NwChannelDetector || typeof NwChannelDetector !== 'function') {
@@ -8901,7 +10356,6 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         detected = null;
       }
       if (!Array.isArray(detected) || !detected.length) continue;
-
       const control = detected.find((entry) => entry && entry.type && NW_SHCFG_TD_TYPE_MAP[String(entry.type || '').trim()]);
       if (!control) continue;
       matchedRoots += 1;
@@ -8952,6 +10406,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
 
 // --- SmartHomeConfig API (VIS-Konfig & Editor) ---
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/config', (req, res) => {
     app.get('/api/smarthome/config', (req, res) => {
       try {
         const cfg = this.getSmartHomeConfig ? this.getSmartHomeConfig() : (this.config && this.config.smartHomeConfig) || {};
@@ -8962,6 +10417,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       }
     });
 
+    // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/config', requireInstaller, async (req, res) => {
     app.post('/api/smarthome/config', requireInstaller, async (req, res) => {
       try {
         const body = req.body || {};
@@ -9012,6 +10468,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
             ids.push(fid);
           }
           if (ids.length) {
+            /**
+             * Code-Teil: pretty
+             * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+             * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+             * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+             */
             const pretty = (s) => {
               const raw = String(s || '').trim();
               if (!raw) return '';
@@ -9052,7 +10514,19 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         // Sanitize scenes to avoid runtime issues in the SmartHome UI
         // Schema (minimal): { id, alias, roomId, functionId, icon, order, ui:{size}, behavior:{favorite}, actions:[{deviceId, kind, value}] }
         {
+          /**
+           * Code-Teil: isPlain
+           * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const isPlain = (o) => this._nwIsPlainObject(o);
+          /**
+           * Code-Teil: safeStr
+           * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const safeStr = (v, maxLen) => {
             if (v === null || v === undefined) return '';
             const s = String(v).trim();
@@ -9167,6 +10641,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     });
 
     
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/dpsearch', requireInstaller, async (req, res) => {
     app.get('/api/smarthome/dpsearch', requireInstaller, async (req, res) => {
       try {
         const qRaw = (req.query && req.query.q) || '';
@@ -9277,8 +10752,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
 
           // Build a lightweight trie for folder-like browsing (dot-separated IDs)
-
-
+          /**
+           * Code-Teil: makeNode
+           * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const makeNode = () => ({ children: Object.create(null), item: null });
 
 
@@ -9330,7 +10809,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         const results = [];
         const seen = new Set();
-
+        /**
+         * Code-Teil: pushItem
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         function pushItem(it) {
           if (!it || !it.id || seen.has(it.id)) return;
           seen.add(it.id);
@@ -9382,6 +10866,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
     // --- SmartHomeConfig DP-Test (Installer): read/write a datapoint quickly ---
     // Read current foreign state
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/dpget', requireInstaller, async (req, res) => {
     app.get('/api/smarthome/dpget', requireInstaller, async (req, res) => {
       try {
         const idRaw = (req.query && req.query.id) || '';
@@ -9414,6 +10899,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     });
 
     // Write foreign state (installer only). Use with care.
+    // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/smarthome/dpset', requireInstaller, async (req, res) => {
     app.post('/api/smarthome/dpset', requireInstaller, async (req, res) => {
       try {
         const body = req.body || {};
@@ -9450,7 +10936,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     // --- Installer / EMS Apps API ---
     // Diese API dient dazu, die Konfiguration (native) auch direkt über die Installer-Webseite
     // zu pflegen. Änderungen werden in system.adapter.<namespace>.native persistiert.
-
+    /**
+     * Code-Teil: _nwDeepMerge
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const _nwDeepMerge = (target, patch) => {
       if (!patch || typeof patch !== 'object') return target;
       if (!target || typeof target !== 'object') target = {};
@@ -9485,7 +10976,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       { id: 'para14a', label: '§14a Steuerung', desc: 'Abregelung/Leistungsdeckel für steuerbare Verbraucher (falls aktiviert)', enableFlag: null, mandatory: false },
       { id: 'multiuse', label: 'MultiUse', desc: 'Weitere interne Logik-Bausteine', enableFlag: 'enableMultiUse', mandatory: false },
     ];
-
+    /**
+     * Code-Teil: _nwNormalizeEmsApps
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const _nwNormalizeEmsApps = (nativeObj) => {
       const n = nativeObj && typeof nativeObj === 'object' ? nativeObj : {};
       const stored = (n.emsApps && typeof n.emsApps === 'object') ? n.emsApps : {};
@@ -9549,7 +11045,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
       return out;
     };
-
+    /**
+     * Code-Teil: _nwApplyEmsAppsToLegacyFlags
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const _nwApplyEmsAppsToLegacyFlags = (nativeObj) => {
       const n = nativeObj && typeof nativeObj === 'object' ? nativeObj : {};
       const emsApps = _nwNormalizeEmsApps(n);
@@ -9576,7 +11077,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       n.emsApps = _nwNormalizeEmsApps(n);
       return n;
     };
-
+    /**
+     * Code-Teil: _nwPickInstallerConfig
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const _nwPickInstallerConfig = (nativeObj) => {
       const n = nativeObj && typeof nativeObj === 'object' ? nativeObj : {};
       return {
@@ -9635,7 +11141,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         aiOptimization: (n.aiOptimization && typeof n.aiOptimization === 'object') ? n.aiOptimization : {},
       };
     };
-
+    /**
+     * Code-Teil: _nwRestartEms
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const _nwRestartEms = async () => {
       try {
         await this.initEmsEngine(true);
@@ -9644,6 +11155,8 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       }
     };
 
+    // Abschnitt: Installer/App-Center-APIs. Änderungen wirken direkt auf EMS-Module und DP-Mapping.
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/installer/config', requireInstaller, async (_req, res) => {
     app.get('/api/installer/config', requireInstaller, async (_req, res) => {
       try {
         // IMPORTANT: App‑Center config is persisted in adapter states (installer.configJson), not in
@@ -9657,6 +11170,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       }
     });
 
+    // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/installer/config', requireInstaller, async (req, res) => {
     app.post('/api/installer/config', requireInstaller, async (req, res) => {
       try {
         const body = req.body || {};
@@ -9749,7 +11263,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         try { await this.syncStorageFarmConfigFromAdmin(); } catch (_e) {}
         try {
           if (this._nwStorageFarmTimer) {
-            clearInterval(this._nwStorageFarmTimer);
+            this._nwClearInterval(this._nwStorageFarmTimer);
             this._nwStorageFarmTimer = null;
           }
 
@@ -9761,7 +11275,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
           if (enabledSf) {
             await this.updateStorageFarmDerived('config-save');
-            this._nwStorageFarmTimer = setInterval(() => { this.updateStorageFarmDerived('timer').catch(() => {}); }, interval);
+            this._nwStorageFarmTimer = this._nwSetInterval(() => { this.updateStorageFarmDerived('timer').catch(() => {}); }, interval);
           }
         } catch (_e) {}
 
@@ -9783,6 +11297,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     // Export creates a portable JSON file containing the full installer config patch.
     // Import restores the patch (optionally replacing or merging) and re-syncs runtime states.
     // Additionally, every save/import writes a backup into 0_userdata.0 (survives uninstall/reinstall).
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/installer/backup/export', requireInstaller, async (_req, res) => {
     app.get('/api/installer/backup/export', requireInstaller, async (_req, res) => {
       try {
         const patch = (this._nwInstallerConfigPatch && typeof this._nwInstallerConfigPatch === 'object') ? this._nwInstallerConfigPatch : {};
@@ -9801,6 +11316,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       }
     });
 
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/installer/backup/userdata', requireInstaller, async (_req, res) => {
     app.get('/api/installer/backup/userdata', requireInstaller, async (_req, res) => {
       try {
         const backup = await this.nwReadUserdataBackup();
@@ -9831,6 +11347,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       }
     });
 
+    // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/installer/backup/import', requireInstaller, async (req, res) => {
     app.post('/api/installer/backup/import', requireInstaller, async (req, res) => {
       try {
         const body = req.body || {};
@@ -9961,6 +11478,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     // --- Simulation (nexowatt-sim) ---
     // Provides an Admin-triggered simulation mode that automatically maps the
     // simulation adapter datapoints to the App-Center configuration.
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/sim/discover', requireInstaller, async (_req, res) => {
     app.get('/api/sim/discover', requireInstaller, async (_req, res) => {
       try {
         const instances = await this.nwSimListInstances();
@@ -9971,6 +11489,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       }
     });
 
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/sim/status', requireInstaller, async (_req, res) => {
     app.get('/api/sim/status', requireInstaller, async (_req, res) => {
       try {
         const stActive = await this.getStateAsync('simulation.active').catch(() => null);
@@ -9994,6 +11513,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       }
     });
 
+    // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/sim/enable', requireInstaller, async (req, res) => {
     app.post('/api/sim/enable', requireInstaller, async (req, res) => {
       try {
         const instanceId = req && req.body && req.body.instanceId ? String(req.body.instanceId) : '';
@@ -10005,6 +11525,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       }
     });
 
+    // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/sim/disable', requireInstaller, async (_req, res) => {
     app.post('/api/sim/disable', requireInstaller, async (_req, res) => {
       try {
         const result = await this.nwSimDisable(_nwRestartEms);
@@ -10019,6 +11540,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
     // --- Simulation Scenarios (nexowatt-sim v0.4.x) ---
     // Exposes scenario catalog + start/stop/reset convenience endpoints for the Simulation UI.
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/sim/scenarios', requireInstaller, async (req, res) => {
     app.get('/api/sim/scenarios', requireInstaller, async (req, res) => {
       try {
         const q = (req && req.query && typeof req.query === 'object') ? req.query : {};
@@ -10037,7 +11559,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         if (!inst) {
           return res.json({ ok: true, instanceId: '', catalog: [], status: {} });
         }
-
+        /**
+         * Code-Teil: read
+         * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const read = async (relId, fallback) => {
           try {
             const st = await this.getForeignStateAsync(`${inst}.${relId}`).catch(() => null);
@@ -10057,7 +11584,6 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         } catch (_e) {
           catalog = [];
         }
-
         const outCatalog = (Array.isArray(catalog) ? catalog : []).map((s) => {
           const id = (s && (s.id || s.key || s.name)) ? String(s.id || s.key || s.name) : '';
           return {
@@ -10084,6 +11610,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       }
     });
 
+    // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/sim/scenario/start', requireInstaller, async (req, res) => {
     app.post('/api/sim/scenario/start', requireInstaller, async (req, res) => {
       try {
         const body = (req && req.body && typeof req.body === 'object') ? req.body : {};
@@ -10127,6 +11654,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       }
     });
 
+    // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/sim/scenario/stop', requireInstaller, async (req, res) => {
     app.post('/api/sim/scenario/stop', requireInstaller, async (req, res) => {
       try {
         const body = (req && req.body && typeof req.body === 'object') ? req.body : {};
@@ -10143,6 +11671,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
       }
     });
 
+    // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/sim/scenario/reset', requireInstaller, async (req, res) => {
     app.post('/api/sim/scenario/reset', requireInstaller, async (req, res) => {
       try {
         const body = (req && req.body && typeof req.body === 'object') ? req.body : {};
@@ -10166,6 +11695,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     //
     // NOTE: This endpoint does NOT change configuration. The frontend applies the proposed
     // mapping to settingsConfig.evcsList and the installer then persists it via /api/installer/config.
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/ocpp/discover', requireInstaller, async (req, res) => {
     app.get('/api/ocpp/discover', requireInstaller, async (req, res) => {
       try {
         const now = Date.now();
@@ -10218,7 +11748,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           'connectors','connector',
           'ports','port'
         ]);
-
+        /**
+         * Code-Teil: deriveStationKey
+         * Zweck: Leitet Werte aus anderen Messwerten ab.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const deriveStationKey = (parts) => {
           const clean = [];
           for (const p of parts || []) {
@@ -10238,7 +11773,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           }
           return '';
         };
-
+        /**
+         * Code-Teil: parseConnector
+         * Zweck: Parst Rohdaten in ein sicheres internes Format.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const parseConnector = (id) => {
           const sid = String(id || '').trim();
           if (!sid) return null;
@@ -10321,7 +11861,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
             common: (obj && obj.common) ? obj.common : {},
           });
         }
-
+        /**
+         * Code-Teil: scoreState
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const scoreState = (it, kind) => {
           try {
             const id = String((it && it.id) || '');
@@ -10406,7 +11951,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
             return 0;
           }
         };
-
+        /**
+         * Code-Teil: pickBestId
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const pickBestId = (states, kind) => {
           let best = '';
           let bestScore = 0;
@@ -10436,7 +11986,6 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
             enableWriteId: pickBestId(st, 'enableWrite'),
             activeId: pickBestId(st, 'active'),
           };
-
           const hasAny = Object.values(ids).some(v => v && String(v).trim());
           if (!hasAny) continue;
 
@@ -10528,6 +12077,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     // auto-fill App-Center mappings (EVCS / PV‑Regelung / Thermik / §14a).
     //
     // IMPORTANT: This endpoint only discovers; it never writes config.
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/nwdevices/discover', requireInstaller, async (_req, res) => {
     app.get('/api/nwdevices/discover', requireInstaller, async (_req, res) => {
       try {
         const now = Date.now();
@@ -10558,7 +12108,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           if (!statesByDev.has(base)) statesByDev.set(base, {});
           statesByDev.get(base)[sid] = obj;
         }
-
+        /**
+         * Code-Teil: normName
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const normName = (v) => {
           try {
             if (typeof v === 'string') return v.trim();
@@ -10576,12 +12131,29 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         const devices = [];
         const counts = { total: 0, evcs: 0, pvInverter: 0, heat: 0 };
         const instances = new Set();
-
+        /**
+         * Code-Teil: isEvcsCat
+         * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const isEvcsCat = (c) => {
           const s = String(c || '').trim().toUpperCase();
           return (s === 'EVCS' || s === 'CHARGER' || s === 'DC_CHARGER' || s === 'EVSE');
         };
+        /**
+         * Code-Teil: isPvInvCat
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const isPvInvCat = (c) => String(c || '').trim().toUpperCase() === 'PV_INVERTER';
+        /**
+         * Code-Teil: isHeatCat
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const isHeatCat = (c) => String(c || '').trim().toUpperCase() === 'HEAT';
 
         for (const [base, chObj] of Object.entries(devChannels || {})) {
@@ -10617,6 +12189,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           }
 
           const basePrefix = id + '.';
+          /**
+           * Code-Teil: hasState
+           * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const hasState = (suffix) => {
             const sid = basePrefix + suffix;
             return (devStates && devStates[sid]) ? sid : '';
@@ -10679,6 +12257,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     });
 
 // --- EMS Status (Phase 2) ---
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/ems/status', requireInstaller, async (req, res) => {
     app.get('/api/ems/status', requireInstaller, async (req, res) => {
       try {
         const engine = this.emsEngine;
@@ -10710,6 +12289,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
     // --- Object validation (Phase 3.3) ---
     // Used by the Installer UI to quickly verify datapoint existence + freshness.
+    // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/object/validate', requireInstaller, async (req, res) => {
     app.post('/api/object/validate', requireInstaller, async (req, res) => {
       try {
         const now = Date.now();
@@ -10790,6 +12370,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
     // --- Charging diagnostics (Phase 3.3) ---
     // Provides a compact per-ladepunkt overview (mapping + freshness + runtime decisions).
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/ems/charging/diagnostics', requireInstaller, async (req, res) => {
     app.get('/api/ems/charging/diagnostics', requireInstaller, async (req, res) => {
       try {
         const now = Date.now();
@@ -10811,6 +12392,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         /** @type {Record<string, any>} */
         const mappingChecks = {};
+        /**
+         * Code-Teil: addId
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const addId = (id) => {
           const s = (id === null || id === undefined) ? '' : String(id).trim();
           if (!s) return;
@@ -10861,7 +12448,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           } catch (_e) {}
           mappingChecks[id] = info;
         }
-
+        /**
+         * Code-Teil: getOwn
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const getOwn = async (id) => {
           try {
             const s = await this.getStateAsync(id);
@@ -10925,6 +12517,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           };
 
           // attach per-id checks (existence + freshness)
+          /**
+           * Code-Teil: mkCheck
+           * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const mkCheck = (id) => (id && mappingChecks[id]) ? mappingChecks[id] : null;
           item.mapping.checks = {
             powerId: mkCheck(item.mapping.powerId),
@@ -10943,6 +12541,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         list.sort((a, b) => (a.index || 0) - (b.index || 0));
 
         // --- Station diagnostics (multi-connector DC stations) ---
+        /**
+         * Code-Teil: toSafeIdPart
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const toSafeIdPart = (x) => {
           const s = String(x || '').trim().toLowerCase()
             .replace(/[^a-z0-9_]+/g, '_')
@@ -10974,7 +12578,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         for (const sk of Array.from(stationKeys)) {
           const safe = toSafeIdPart(sk);
           const base = `chargingManagement.stations.${safe}`;
-
+          /**
+           * Code-Teil: readNum
+           * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const readNum = async (id) => {
             try {
               const st = await this.getStateAsync(id);
@@ -10984,7 +12593,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
               return null;
             }
           };
-
+          /**
+           * Code-Teil: readBool
+           * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const readBool = async (id) => {
             try {
               const st = await this.getStateAsync(id);
@@ -10993,7 +12607,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
               return false;
             }
           };
-
+          /**
+           * Code-Teil: readStr
+           * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const readStr = async (id) => {
             try {
               const st = await this.getStateAsync(id);
@@ -11164,6 +12783,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     });
 
     // --- Datenpunkt-Objekt-Browser (Tree) ---
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/object/tree', requireInstaller, async (req, res) => {
     app.get('/api/object/tree', requireInstaller, async (req, res) => {
       try {
         const prefixRaw = (req.query && req.query.prefix) || '';
@@ -11199,6 +12819,12 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           for (const it of items) {
             if (it && it.id) byId[it.id] = it;
           }
+          /**
+           * Code-Teil: makeNode
+           * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const makeNode = () => ({ children: Object.create(null), item: null });
           const root = makeNode();
           for (const it of items) {
@@ -11254,6 +12880,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     });
 
 // --- EMS Apps / Installer Page ---
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/ems-apps.html', '/ems-apps'], (req, res) => {
     app.get(['/ems-apps.html', '/ems-apps'], (req, res) => {
       try {
         const file = require('path').join(__dirname, 'www', 'ems-apps.html');
@@ -11265,6 +12892,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     });
 
 // --- Simulation Page ---
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/simulation.html', '/simulation'], (req, res) => {
     app.get(['/simulation.html', '/simulation'], (req, res) => {
       try {
         const file = require('path').join(__dirname, 'www', 'simulation.html');
@@ -11276,6 +12904,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     });
 
 // --- SmartHomeConfig Page (VIS-Konfig-Ansicht) ---
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/smarthome-config.html', '/smarthome-config'], (req, res) => {
     app.get(['/smarthome-config.html', '/smarthome-config'], (req, res) => {
       try {
         const file = require('path').join(__dirname, 'www', 'smarthome-config.html');
@@ -11287,6 +12916,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
     });
 
 // --- Logic (NexoLogic) API ---
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/logic/blocks', async (_req, res) => {
 app.get('/api/logic/blocks', async (_req, res) => {
   try {
     const blocks = [];
@@ -11297,13 +12927,23 @@ app.get('/api/logic/blocks', async (_req, res) => {
       const rooms = Array.isArray(shc && shc.rooms) ? shc.rooms : [];
       const funcs = Array.isArray(shc && shc.functions) ? shc.functions : [];
       const devices = Array.isArray(shc && shc.devices) ? shc.devices : [];
-
+      /**
+       * Code-Teil: resolveRoomName
+       * Zweck: Wählt die richtige Datenquelle/Fallback-Logik aus.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const resolveRoomName = (roomId) => {
         if (!roomId) return '';
         const r = rooms.find(rm => rm && rm.id === roomId);
         return (r && r.name) || roomId;
       };
-
+      /**
+       * Code-Teil: resolveFunctionName
+       * Zweck: Wählt die richtige Datenquelle/Fallback-Logik aus.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const resolveFunctionName = (fnId) => {
         if (!fnId) return '';
         const f = funcs.find(fn => fn && fn.id === fnId);
@@ -11344,7 +12984,12 @@ app.get('/api/logic/blocks', async (_req, res) => {
       const cfg = this.config || {};
       const smCfg = cfg.smartHome || {};
       const dps = smCfg.datapoints || {};
-
+      /**
+       * Code-Teil: addSceneBlock
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const addSceneBlock = (dpId, id, alias) => {
         if (!dpId) return;
         blocks.push({
@@ -11378,6 +13023,7 @@ app.get('/api/logic/blocks', async (_req, res) => {
 });
 
 // --- NexoLogic (node/graph) editor config API ---
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/logic/editor', async (_req, res) => {
 app.get('/api/logic/editor', async (_req, res) => {
   try {
     const cfg = (typeof this.getLogicEditorConfig === 'function')
@@ -11391,6 +13037,7 @@ app.get('/api/logic/editor', async (_req, res) => {
   }
 });
 
+// API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/logic/editor', requireInstaller, async (req, res) => {
 app.post('/api/logic/editor', requireInstaller, async (req, res) => {
   try {
     const body = (req && req.body) || {};
@@ -11420,6 +13067,7 @@ app.post('/api/logic/editor', requireInstaller, async (req, res) => {
 });
 
 // --- Logic (NexoLogic) Page ---
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/logic.html','/logic'], (req, res) => {
 app.get(['/logic.html','/logic'], (req, res) => {
   try {
     const file = require('path').join(__dirname, 'www', 'logic.html');
@@ -11432,47 +13080,56 @@ app.get(['/logic.html','/logic'], (req, res) => {
 
 
 // --- History page & API ---
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/history.html','/history'], (req, res) => {
     app.get(['/history.html','/history'], (req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'history.html'));
     });
 
 
     // --- Settings page ---
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/settings.html','/settings'], (_req, res) => {
     app.get(['/settings.html','/settings'], (_req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'settings.html'));
     });
 
     
     // --- EVCS page ---
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/evcs', '/evcs.html', '/history/evcs', '/history/evcs.html'], (_req, res) => {
     app.get(['/evcs', '/evcs.html', '/history/evcs', '/history/evcs.html'], (_req, res) => {
       res.sendFile(path.join(__dirname, 'www', 'evcs.html'));
     });
 
 
     // --- EVCS report page ---
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/evcs-report.html','/evcs-report'], (req, res) => {
     app.get(['/evcs-report.html','/evcs-report'], (req, res) => {
       const qs = (req && req.url && req.url.includes('?')) ? req.url.slice(req.url.indexOf('?')) : '';
       res.redirect('/static/evcs-report.html' + qs);
     });
 
     // --- Year report page (History: Jahresreport) ---
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/year-report.html','/year-report','/history/year-report','/history/year-report.html'], (req, res)
     app.get(['/year-report.html','/year-report','/history/year-report','/history/year-report.html'], (req, res) => {
       const qs = (req && req.url && req.url.includes('?')) ? req.url.slice(req.url.indexOf('?')) : '';
       res.redirect('/static/year-report.html' + qs);
     });
 
     // --- Tariff / net fee report page ---
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/tariff-report.html','/tariff-report','/history/tariff-report','/history/tariff-report.html'], (re
     app.get(['/tariff-report.html','/tariff-report','/history/tariff-report','/history/tariff-report.html'], (req, res) => {
       const qs = (req && req.url && req.url.includes('?')) ? req.url.slice(req.url.indexOf('?')) : '';
       res.redirect('/static/tariff-report.html' + qs);
     });
 
     // --- §14a report page ---
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/para14a-report.html','/para14a-report','/settings/para14a-report','/settings/para14a-report.html'
     app.get(['/para14a-report.html','/para14a-report','/settings/para14a-report','/settings/para14a-report.html'], (req, res) => {
       const qs = (req && req.url && req.url.includes('?')) ? req.url.slice(req.url.indexOf('?')) : '';
       res.redirect('/static/para14a-report.html' + qs);
     });
 
+    // Abschnitt: History-API. Liefert Zeitreihen/Reports; Werte müssen dieselbe Bedeutung wie im LIVE-Dashboard behalten.
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/history', async (req, res) => {
 app.get('/api/history', async (req, res) => {
       const start = Number(req.query.from || (Date.now() - 24*3600*1000));
       const end   = Number(req.query.to   || Date.now());
@@ -11497,7 +13154,12 @@ app.get('/api/history', async (req, res) => {
           if (inflightPayload) return res.json(inflightPayload);
         } catch (_e) {}
       }
-
+      /**
+       * Code-Teil: computeHistoryPayload
+       * Zweck: Berechnet abgeleitete Werte.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const computeHistoryPayload = (async () => {
       try {
         const inst = this._nwGetHistoryInstance();
@@ -11513,6 +13175,12 @@ app.get('/api/history', async (req, res) => {
         // kWh integration in the frontend.
         const stepMs = (Number.isFinite(stepS) && stepS > 0) ? (stepS * 1000) : 60_000;
         const requestSeriesCache = new Map();
+        /**
+         * Code-Teil: densifyHoldLast
+         * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+         * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+         * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+         */
         const densifyHoldLast = (values, rangeStart = start, rangeEnd = end, rangeStepMs = stepMs) => {
           const rStart = Number(rangeStart);
           const rEnd = Number(rangeEnd);
@@ -11608,7 +13276,12 @@ app.get('/api/history', async (req, res) => {
           const candidates = this._nwGetHistoryDpCandidates(dpKey);
           extraProducerReq.push({ idx: i, name, candidates });
         }
-
+        /**
+         * Code-Teil: normTsMs
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const normTsMs = (ts) => {
           if (ts === null || ts === undefined) return null;
           if (typeof ts === 'number') {
@@ -11638,6 +13311,12 @@ app.get('/api/history', async (req, res) => {
           return null;
         };
 
+        /**
+         * Code-Teil: ask
+         * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+         * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+         * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+         */
         const ask = (id, query = {}) => {
           const sid = this._nwTrimId(id);
           const queryStart = Number.isFinite(Number(query.start)) ? Number(query.start) : start;
@@ -11646,7 +13325,6 @@ app.get('/api/history', async (req, res) => {
           const cacheId = sid || String(id || '');
           const cacheKey = `${cacheId}|${queryStart}|${queryEnd}|${queryStepMs}`;
           if (requestSeriesCache.has(cacheKey)) return requestSeriesCache.get(cacheKey);
-
           const promise = new Promise(resolve => {
             if (!sid) return resolve({ id: sid || id, values: [] });
             const options = { start: queryStart, end: queryEnd, step: queryStepMs, aggregate: 'average', addId: false, ignoreNull: true };
@@ -11700,6 +13378,12 @@ app.get('/api/history', async (req, res) => {
           return promise;
         };
 
+        /**
+         * Code-Teil: askCandidates
+         * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+         * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+         * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+         */
         const askCandidates = async (candidates, query = {}) => {
           const list = Array.isArray(candidates) ? candidates : [candidates];
           let first = null;
@@ -11738,7 +13422,12 @@ app.get('/api/history', async (req, res) => {
           pricingActiveNow ? askCandidates(idCandidates.priceTotal) : Promise.resolve(emptySeries),
           pricingActiveNow ? askCandidates(grossPriceCandidates) : Promise.resolve(emptySeries)
         ]);
-
+        /**
+         * Code-Teil: _normalizeHistoryPairs
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const _normalizeHistoryPairs = (values) => {
           const out = [];
           const src = Array.isArray(values) ? values : [];
@@ -11752,6 +13441,12 @@ app.get('/api/history', async (req, res) => {
           out.sort((a, b) => a[0] - b[0]);
           return out;
         };
+        /**
+         * Code-Teil: _valueAtHold
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const _valueAtHold = (pairs, ts) => {
           const src = Array.isArray(pairs) ? pairs : [];
           let last = null;
@@ -11764,6 +13459,12 @@ app.get('/api/history', async (req, res) => {
           }
           return last;
         };
+        /**
+         * Code-Teil: _buildNormalizedPricingSeries
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const _buildNormalizedPricingSeries = ({ startTs, endTs, grossSeries, baseSeries, totalSeries, netFeeSeries, manualGrossPrice, dynamicTariffActive }) => {
           const grossVals = _normalizeHistoryPairs(grossSeries?.values);
           const baseVals = _normalizeHistoryPairs(baseSeries?.values);
@@ -11833,6 +13534,12 @@ app.get('/api/history', async (req, res) => {
         //     Historie-DPs `${namespace}.historie.evcs.lpX.powerW`.
         //
         // Damit bekommen wir in jedem Fall eine belastbare Zeitreihe für "E‑Mobilität".
+        /**
+         * Code-Teil: evcsHasData
+         * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const evcsHasData = (s) => Array.isArray(s?.values) && s.values.length >= 2;
         if (!evcsHasData(evcs)) {
           const canonicalEvcsId = `${this.namespace}.historie.core.ev.totalW`;
@@ -11893,6 +13600,12 @@ app.get('/api/history', async (req, res) => {
 // This removes sampling / bucket effects and aligns better with other EMS.
 const energy = {};
 const energyEnd = Math.min(end, Date.now());
+/**
+ * Code-Teil: readCounterPoint
+ * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const readCounterPoint = (id, newest) => new Promise(resolve => {
   if (!id) return resolve(null);
   const options = {
@@ -11951,7 +13664,12 @@ const readCounterPoint = (id, newest) => new Promise(resolve => {
     resolve(null);
   }
 });
-
+/**
+ * Code-Teil: readCurrentCounterPoint
+ * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const readCurrentCounterPoint = async (id) => {
   try {
     const st = await this.getForeignStateAsync(id);
@@ -11963,7 +13681,12 @@ const readCurrentCounterPoint = async (id) => {
     return null;
   }
 };
-
+/**
+ * Code-Teil: counterDelta
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const counterDelta = async (id) => {
   const a = await readCounterPoint(id, false);
   let b = null;
@@ -12013,6 +13736,12 @@ energy.__endMs = energyEnd;
 const energyExact = {};
 const energyExactEnd = Math.min(end, Date.now());
 const energyExactStepMs = Math.max(60 * 1000, stepMs);
+/**
+ * Code-Teil: integrateSeriesKwh
+ * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+ * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+ * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+ */
 const integrateSeriesKwh = (series, defaultEndMs, stepMsForSeries, positiveOnly = true) => {
   const vals = Array.isArray(series?.values) ? series.values : [];
   if (!vals.length) return null;
@@ -12036,6 +13765,12 @@ const integrateSeriesKwh = (series, defaultEndMs, stepMsForSeries, positiveOnly 
   }
   return kwh;
 };
+/**
+ * Code-Teil: clipSeriesForIntegration
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const clipSeriesForIntegration = (series, clipEndMs) => {
   const vals = Array.isArray(series?.values) ? series.values : [];
   if (!vals.length || !Number.isFinite(Number(clipEndMs))) return { id: series?.id || '', values: [] };
@@ -12057,6 +13792,12 @@ const clipSeriesForIntegration = (series, clipEndMs) => {
   }
   return { id: series?.id || '', values: out };
 };
+/**
+ * Code-Teil: buildEnergyExact
+ * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const buildEnergyExact = async () => {
   const pvExact = clipSeriesForIntegration(pv, energyExactEnd);
   const loadExact = clipSeriesForIntegration(load, energyExactEnd);
@@ -12135,9 +13876,16 @@ try { await buildEnergyExact(); } catch (_e) {}
     });
 
     
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/tariff/report', async (req, res) => {
     app.get('/api/tariff/report', async (req, res) => {
       try {
         const intervalMs = 15 * 60 * 1000;
+        /**
+         * Code-Teil: parseTs
+         * Zweck: Wandelt Rohwerte in ein stabiles internes Format um, damit spätere Logik konsistent arbeiten kann.
+         * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+         * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+         */
         const parseTs = (raw, { endOfDay = false } = {}) => {
           if (raw === null || raw === undefined || raw === '') return null;
           if (typeof raw === 'number' && Number.isFinite(raw)) return raw < 1e12 ? raw * 1000 : raw;
@@ -12157,15 +13905,38 @@ try { await buildEnergyExact(); } catch (_e) {}
           const p = Date.parse(s);
           return Number.isNaN(p) ? null : p;
         };
+        /**
+         * Code-Teil: alignDown
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const alignDown = (ts) => Math.floor(Number(ts) / intervalMs) * intervalMs;
+        /**
+         * Code-Teil: alignUp
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const alignUp = (ts) => Math.ceil(Number(ts) / intervalMs) * intervalMs;
         const now = Date.now();
+        /**
+         * Code-Teil: defaultFrom
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const defaultFrom = (() => { const d = new Date(now); d.setHours(0, 0, 0, 0); return d.getTime(); })();
         const requestedFrom = parseTs(req.query.from) ?? defaultFrom;
         const requestedTo = parseTs(req.query.to, { endOfDay: true }) ?? now;
         const start = alignDown(requestedFrom);
         const end = Math.max(start + intervalMs, alignUp(requestedTo));
-
+        /**
+         * Code-Teil: densifyHoldLast
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const densifyHoldLast = (series) => {
           const src = Array.isArray(series) ? series : [];
           const count = Math.max(1, Math.ceil((end - start) / intervalMs));
@@ -12202,7 +13973,19 @@ try { await buildEnergyExact(); } catch (_e) {}
           `${this.namespace}.historie.tariff.providerCurrentEurPerKwh`,
           `${this.namespace}.tarif.preisAktuellEurProKwh`,
         ];
+        /**
+         * Code-Teil: seriesFor
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const seriesFor = async (name) => densifyHoldLast(await this._nwGetHistoryAvgSeriesAny(this._nwGetHistoryDpCandidates(name), Math.max(0, start - intervalMs), end, intervalMs));
+        /**
+         * Code-Teil: seriesForIds
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const seriesForIds = async (ids) => densifyHoldLast(await this._nwGetHistoryAvgSeriesAny(ids, Math.max(0, start - intervalMs), end, intervalMs));
         const [baseSeries, netFeeSeries, totalSeries, grossSeries, buySeries] = await Promise.all([
           seriesFor('priceBase'),
@@ -12256,7 +14039,6 @@ try { await buildEnergyExact(); } catch (_e) {}
             totalCostEur,
           });
         }
-
         const prices = intervals.map((row) => Number(row.totalEurPerKwh)).filter(Number.isFinite);
         const totalImportKwh = intervals.reduce((sum, row) => sum + (Number(row.importKwh) || 0), 0);
         const totalBaseCost = intervals.reduce((sum, row) => sum + (Number(row.baseCostEur) || 0), 0);
@@ -12298,8 +14080,15 @@ try { await buildEnergyExact(); } catch (_e) {}
       }
     });
 
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/para14a/report', async (req, res) => {
     app.get('/api/para14a/report', async (req, res) => {
       try {
+        /**
+         * Code-Teil: parseTs
+         * Zweck: Wandelt Rohwerte in ein stabiles internes Format um, damit spätere Logik konsistent arbeiten kann.
+         * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+         * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+         */
         const parseTs = (raw, { endOfDay = false } = {}) => {
           if (raw === null || raw === undefined || raw === '') return null;
           if (typeof raw === 'number' && Number.isFinite(raw)) return raw < 1e12 ? raw * 1000 : raw;
@@ -12326,7 +14115,12 @@ try { await buildEnergyExact(); } catch (_e) {}
         const start = requestedFrom;
         const end = Math.max(start + 60000, requestedTo);
         const historyInstance = String(this._nwGetHistoryInstance() || '').trim();
-
+        /**
+         * Code-Teil: getRawHistory
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const getRawHistory = (id) => new Promise((resolve) => {
           const sid = this._nwTrimId(id);
           if (!historyInstance || !sid) return resolve([]);
@@ -12452,10 +14246,22 @@ try { await buildEnergyExact(); } catch (_e) {}
 
 
 // --- EVCS Report Builder (shared for JSON + CSV) ---
+/**
+ * Code-Teil: nwBuildEvcsReport
+ * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwBuildEvcsReport = async (query = {}) => {
   const hcfg = (this.config && this.config.history) || {};
   const inst = hcfg.instance || 'influxdb.0';
 
+  /**
+   * Code-Teil: parseTs
+   * Zweck: Wandelt Rohwerte in ein stabiles internes Format um, damit spätere Logik konsistent arbeiten kann.
+   * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+   * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+   */
   const parseTs = (raw, { endOfDay = false } = {}) => {
     if (raw === null || raw === undefined || raw === '') return null;
 
@@ -12500,7 +14306,12 @@ const nwBuildEvcsReport = async (query = {}) => {
   const d1 = new Date(toQ); d1.setHours(23, 59, 59, 999);
   const start = +d0;
   const end = +d1;
-
+  /**
+   * Code-Teil: dayKeyOf
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const dayKeyOf = (ts) => {
     const d = new Date(ts);
     return String(d.getFullYear()) + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -12519,7 +14330,12 @@ const nwBuildEvcsReport = async (query = {}) => {
   // ---- history helpers ----
   const MAX_HISTORY_POINTS = 60000;
   const DAY_MS = 24 * 60 * 60 * 1000;
-
+  /**
+   * Code-Teil: calcCount
+   * Zweck: Berechnet abgeleitete Werte.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const calcCount = (startMs, endMs, stepMs) => {
     const s = Number(startMs);
     const e = Number(endMs);
@@ -12529,7 +14345,12 @@ const nwBuildEvcsReport = async (query = {}) => {
     const c = Math.ceil(span / step) + 10; // buffer
     return Math.min(MAX_HISTORY_POINTS, Math.max(50, c));
   };
-
+  /**
+   * Code-Teil: chooseStepMs
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const chooseStepMs = (spanMs, baseStepMs) => {
     const base = Math.max(1000, Number(baseStepMs || 120000));
     const span = Math.max(0, Number(spanMs || 0));
@@ -12540,7 +14361,12 @@ const nwBuildEvcsReport = async (query = {}) => {
     const rounded = Math.ceil(neededStep / 60000) * 60000; // round to minutes
     return Math.max(base, rounded);
   };
-
+  /**
+   * Code-Teil: normTsMs
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const normTsMs = (ts) => {
     const p = parseTs(ts);
     if (p != null) return p;
@@ -12549,6 +14375,12 @@ const nwBuildEvcsReport = async (query = {}) => {
     return n < 1e12 ? n * 1000 : n;
   };
 
+  /**
+   * Code-Teil: getHist
+   * Zweck: Liest einen Wert aus Cache, Konfiguration, DOM oder ioBroker-State mit passenden Fallbacks.
+   * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+   * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+   */
   const getHist = (id, startMs, endMs, aggregate = 'none', step = 0) => new Promise(resolve => {
     if (!id) return resolve([]);
     const agg = aggregate || 'none';
@@ -12619,7 +14451,6 @@ const nwBuildEvcsReport = async (query = {}) => {
       pAvg = await getHist(wb.powerId, start, end, 'average', reportStepMs);
       pMax = await getHist(wb.powerId, start, end, 'max', reportStepMs);
     }
-
     const pAgg = buckets.map(_b => ({ kwh: 0, maxW: 0 }));
 
     
@@ -12755,6 +14586,7 @@ if (pMax && pMax.length) {
   return { start, end, wallboxes, days };
 };
 
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/evcs/report', async (req, res) => {
 app.get('/api/evcs/report', async (req, res) => {
   try {
     const report = await nwBuildEvcsReport(req.query || {});
@@ -12765,12 +14597,23 @@ app.get('/api/evcs/report', async (req, res) => {
 });
 
 // ---- EVCS CSV helpers ----
+/**
+ * Code-Teil: nwWbLabel
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwWbLabel = (wb) => {
   if (!wb) return 'Ladepunkt';
   if (wb.name && String(wb.name).trim()) return String(wb.name).trim();
   return `Ladepunkt ${wb.index}`;
 };
-
+/**
+ * Code-Teil: nwCsvEscape
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwCsvEscape = (v) => {
   if (v === null || v === undefined) return '';
   const s = String(v);
@@ -12781,6 +14624,12 @@ const nwCsvEscape = (v) => {
   return s;
 };
 
+/**
+ * Code-Teil: nwFormatDe
+ * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+ * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+ * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+ */
 const nwFormatDe = (num, digits = 2) => {
   const n = Number(num);
   if (!Number.isFinite(n)) {
@@ -12793,7 +14642,12 @@ const nwFormatDe = (num, digits = 2) => {
     return n.toFixed(digits).replace('.', ',');
   }
 };
-
+/**
+ * Code-Teil: nwEvcsReportToCsv
+ * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwEvcsReportToCsv = (report) => {
   const wallboxes = Array.isArray(report.wallboxes) ? report.wallboxes : [];
   const days = Array.isArray(report.days) ? report.days : [];
@@ -12855,6 +14709,7 @@ const nwEvcsReportToCsv = (report) => {
   return lines.join('\r\n');
 };
 
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/evcs/report.csv', async (req, res) => {
 app.get('/api/evcs/report.csv', async (req, res) => {
   try {
     const report = await nwBuildEvcsReport(req.query || {});
@@ -12872,15 +14727,39 @@ app.get('/api/evcs/report.csv', async (req, res) => {
 });
 
 // ---- EVCS Sessions CSV helpers ----
+/**
+ * Code-Teil: nwPad2
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwPad2 = (n) => String(Number(n) || 0).padStart(2, '0');
+/**
+ * Code-Teil: nwDayKey
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwDayKey = (tsMs) => {
   const d = new Date(Number(tsMs) || 0);
   return `${d.getFullYear()}-${nwPad2(d.getMonth() + 1)}-${nwPad2(d.getDate())}`;
 };
+/**
+ * Code-Teil: nwTimeHhMm
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwTimeHhMm = (tsMs) => {
   const d = new Date(Number(tsMs) || 0);
   return `${nwPad2(d.getHours())}:${nwPad2(d.getMinutes())}`;
 };
+/**
+ * Code-Teil: nwParseTsLoose
+ * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+ * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+ * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+ */
 const nwParseTsLoose = (raw, { endOfDay = false } = {}) => {
   if (raw === null || raw === undefined || raw === '') return null;
 
@@ -12909,7 +14788,12 @@ const nwParseTsLoose = (raw, { endOfDay = false } = {}) => {
 
   return null;
 };
-
+/**
+ * Code-Teil: nwEvcsSessionsToCsv
+ * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwEvcsSessionsToCsv = (sessions) => {
   const header = [
     'Datum',
@@ -12959,6 +14843,7 @@ const nwEvcsSessionsToCsv = (sessions) => {
   return lines.join('\r\n');
 };
 
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/evcs/sessions.csv', async (req, res) => {
 app.get('/api/evcs/sessions.csv', async (req, res) => {
   try {
     const fromMs = nwParseTsLoose(req.query && req.query.from) ?? null;
@@ -12966,7 +14851,12 @@ app.get('/api/evcs/sessions.csv', async (req, res) => {
 
     const from = Number.isFinite(Number(fromMs)) ? Number(fromMs) : 0;
     const to = Number.isFinite(Number(toMs)) ? Number(toMs) : Date.now();
-
+    /**
+     * Code-Teil: wantRfid
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const wantRfid = (() => {
       const raw = req.query && req.query.rfid;
       if (raw === undefined || raw === null || raw === '') return '';
@@ -13036,6 +14926,12 @@ app.get('/api/evcs/sessions.csv', async (req, res) => {
 
 
 // ---- RFID / Ladekarten Abrechnung ----
+/**
+ * Code-Teil: nwNormalizeRfid
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwNormalizeRfid = (ctx, raw) => {
   if (raw === null || raw === undefined) return '';
   try {
@@ -13046,7 +14942,12 @@ const nwNormalizeRfid = (ctx, raw) => {
     return String(raw).trim().replace(/\s+/g, '').toUpperCase();
   }
 };
-
+/**
+ * Code-Teil: nwLoadEvcsSessions
+ * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwLoadEvcsSessions = async (ctx) => {
   // Prefer in-memory ring buffer
   let sessions = Array.isArray(ctx && ctx._evcsSessionsBuf) ? ctx._evcsSessionsBuf.slice() : [];
@@ -13064,7 +14965,12 @@ const nwLoadEvcsSessions = async (ctx) => {
 
   return Array.isArray(sessions) ? sessions : [];
 };
-
+/**
+ * Code-Teil: nwGetRfidNameFromWhitelist
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwGetRfidNameFromWhitelist = async (ctx, rfidNorm) => {
   if (!rfidNorm || !ctx || !ctx.getStateAsync) return '';
   try {
@@ -13088,18 +14994,34 @@ const nwGetRfidNameFromWhitelist = async (ctx, rfidNorm) => {
   } catch (_e) {}
   return '';
 };
-
+/**
+ * Code-Teil: nwStartOfLocalDay
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwStartOfLocalDay = (ms) => {
   const d = new Date(Number(ms) || 0);
   d.setHours(0, 0, 0, 0);
   return d.getTime();
 };
+/**
+ * Code-Teil: nwEndOfLocalDay
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwEndOfLocalDay = (ms) => {
   const d = new Date(Number(ms) || 0);
   d.setHours(23, 59, 59, 999);
   return d.getTime();
 };
-
+/**
+ * Code-Teil: nwBuildRfidDailyReport
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwBuildRfidDailyReport = async (ctx, query) => {
   const q = query || {};
   const DAY_MS = 24 * 60 * 60 * 1000;
@@ -13188,7 +15110,12 @@ const nwBuildRfidDailyReport = async (ctx, query) => {
     days
   };
 };
-
+/**
+ * Code-Teil: nwRfidReportToCsv
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nwRfidReportToCsv = (report) => {
   const days = Array.isArray(report && report.days) ? report.days : [];
   const header = ['Datum', 'Sessions', 'Energie_kWh', 'Max_kW'];
@@ -13231,6 +15158,7 @@ const nwRfidReportToCsv = (report) => {
   return lines.join('\r\n');
 };
 
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/evcs/rfid/report', async (req, res) => {
 app.get('/api/evcs/rfid/report', async (req, res) => {
   try {
     const report = await nwBuildRfidDailyReport(this, req.query || {});
@@ -13240,6 +15168,7 @@ app.get('/api/evcs/rfid/report', async (req, res) => {
   }
 });
 
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/evcs/rfid/report.csv', async (req, res) => {
 app.get('/api/evcs/rfid/report.csv', async (req, res) => {
   try {
     const report = await nwBuildRfidDailyReport(this, req.query || {});
@@ -13258,12 +15187,18 @@ app.get('/api/evcs/rfid/report.csv', async (req, res) => {
 });
 
 
+// API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/config', (req, res) => {
 app.get('/config', (req, res) => {
       // UI flags: treat missing (undefined) EMS module flags as sensible defaults.
       // This avoids "legacy" fallbacks in the EVCS UI on upgrades where config flags
       // were not persisted yet.
       const cfg = this.config || {};
-
+      /**
+       * Code-Teil: boolOr
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const boolOr = (val, def) => (typeof val === 'boolean' ? val : !!def);
       const datapoints = (cfg && cfg.datapoints && typeof cfg.datapoints === 'object') ? cfg.datapoints : {};
       const datapointFlags = Object.fromEntries(Object.entries(datapoints).map(([k, v]) => [k, !!String(v == null ? '' : v).trim()]));
@@ -13285,7 +15220,12 @@ app.get('/config', (req, res) => {
       const evcsCountForConfig = evcsAvailable
         ? Math.max(evcsConfiguredCount, Math.max(0, Math.round(Number(this.evcsCount || 0) || 0)))
         : 0;
-
+      /**
+       * Code-Teil: parseJsonArraySafe
+       * Zweck: Parst Rohdaten in ein sicheres internes Format.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const parseJsonArraySafe = (raw) => {
         try {
           if (Array.isArray(raw)) return raw;
@@ -13301,7 +15241,12 @@ app.get('/config', (req, res) => {
       // The page is visible only when the installer configured at least one active storage row.
       const storageFarmConfigured = storageRowsFromConfig.some((row) => row && row.enabled !== false);
       const storageFarmAvailable = !!(cfg.enableStorageFarm && storageFarmConfigured);
-
+      /**
+       * Code-Teil: inferChargingEnabled
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const inferChargingEnabled = () => {
         const v = cfg.enableChargingManagement;
         if (typeof v === 'boolean') return v && evcsAvailable;
@@ -13336,26 +15281,51 @@ app.get('/config', (req, res) => {
           const core = {
             pvName: (coreStored.pvName !== undefined && coreStored.pvName !== null) ? String(coreStored.pvName).trim() : '',
           };
-
+          /**
+           * Code-Teil: getArr
+           * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const getArr = (k) => (Array.isArray(stored[k]) ? stored[k] : []);
-
+          /**
+           * Code-Teil: defName
+           * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const defName = (kind, idx) => {
             if (kind === 'consumers' && idx === 1) return 'Heizung/Wärmepumpe';
             return (kind === 'consumers') ? `Verbraucher ${idx}` : `Erzeuger ${idx}`;
           };
-
+          /**
+           * Code-Teil: pickName
+           * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const pickName = (arr, idx, kind) => {
             const it = arr[idx - 1];
             const n = it && typeof it === 'object' && it.name !== undefined && it.name !== null ? String(it.name).trim() : '';
             return n || defName(kind, idx);
           };
-
+          /**
+           * Code-Teil: pickIcon
+           * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const pickIcon = (arr, idx) => {
             const it = arr[idx - 1];
             const ico = (it && typeof it === 'object' && it.icon !== undefined && it.icon !== null) ? String(it.icon).trim() : '';
             return ico || '';
           };
-
+          /**
+           * Code-Teil: pickQuick
+           * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const pickQuick = (arr, idx, kind) => {
             const it = arr[idx - 1];
             const ctrl = (it && typeof it === 'object' && it.ctrl && typeof it.ctrl === 'object') ? it.ctrl : {};
@@ -13365,7 +15335,12 @@ app.get('/config', (req, res) => {
             // Optional SG-Ready actuation (2 relays)
             const sgAW = String(ctrl.sgReadyAWriteId || ctrl.sgReady1WriteId || '').trim();
             const sgBW = String(ctrl.sgReadyBWriteId || ctrl.sgReady2WriteId || '').trim();
-
+            /**
+             * Code-Teil: resolveHeatingRodDev
+             * Zweck: Wählt die richtige Datenquelle/Fallback-Logik aus.
+             * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+             * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+             */
             const resolveHeatingRodDev = () => {
               const h = (cfg && cfg.heatingRod && typeof cfg.heatingRod === 'object') ? cfg.heatingRod : {};
               const hlist = Array.isArray(h.devices) ? h.devices : [];
@@ -13377,7 +15352,12 @@ app.get('/config', (req, res) => {
               if (!dev) dev = hlist.find(r => r && Math.round(Number(r.slot ?? r.consumerSlot ?? 0)) === idx) || null;
               return dev;
             };
-
+            /**
+             * Code-Teil: stageWriteCount
+             * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+             * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+             * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+             */
             const stageWriteCount = (() => {
               const dev = resolveHeatingRodDev();
               const stages = Array.isArray(dev && dev.stages) ? dev.stages : [];
@@ -13389,7 +15369,12 @@ app.get('/config', (req, res) => {
               }
               return cnt;
             })();
-
+            /**
+             * Code-Teil: normalizeConsumerType
+             * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+             * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+             * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+             */
             const normalizeConsumerType = (raw) => {
               const s = String(raw || '').trim().toLowerCase();
               if (!s) return 'generic';
@@ -13402,7 +15387,12 @@ app.get('/config', (req, res) => {
             const rodActuation = !!(stageWriteCount || swW);
             let enabled = !!(swW || spW || sgAW || sgBW);
             if (kind === 'consumers' && slotType === 'heatingRod' && cfg && cfg.enableHeatingRodControl && rodActuation) enabled = true;
-
+            /**
+             * Code-Teil: numOrNull
+             * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+             * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+             * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+             */
             const numOrNull = (v) => {
               const n = Number(v);
               return Number.isFinite(n) ? n : null;
@@ -13488,7 +15478,12 @@ app.get('/config', (req, res) => {
 
             return meta;
           };
-
+          /**
+           * Code-Teil: buildSlots
+           * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const buildSlots = (kind) => {
             const arr = getArr(kind);
 	            const out = [];
@@ -13766,25 +15761,61 @@ settingsConfig: {
     // ---------------------------------------------------------------------------
     // Peak-Shaving / atypische HLZF-Nachkontrolle: Influx-basierter Nachweisexport
     // ---------------------------------------------------------------------------
+    /**
+     * Code-Teil: nwPsAtCsvEscape
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const nwPsAtCsvEscape = (v) => {
       const s = String(v === null || v === undefined ? '' : v);
       return /[";\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     };
+    /**
+     * Code-Teil: nwPsAtFmtNum
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const nwPsAtFmtNum = (v, digits = 2) => {
       const n = Number(v);
       if (!Number.isFinite(n)) return '';
       const d = Number.isFinite(Number(digits)) ? Math.max(0, Math.min(6, Math.round(Number(digits)))) : 2;
       return n.toFixed(d).replace('.', ',');
     };
+    /**
+     * Code-Teil: nwPsAtPad2
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const nwPsAtPad2 = (n) => String(Number(n) || 0).padStart(2, '0');
+    /**
+     * Code-Teil: nwPsAtIsoLocal
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const nwPsAtIsoLocal = (ts) => {
       const d = new Date(Number(ts) || Date.now());
       return `${d.getFullYear()}-${nwPsAtPad2(d.getMonth() + 1)}-${nwPsAtPad2(d.getDate())} ${nwPsAtPad2(d.getHours())}:${nwPsAtPad2(d.getMinutes())}:${nwPsAtPad2(d.getSeconds())}`;
     };
+    /**
+     * Code-Teil: nwPsAtYmd
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const nwPsAtYmd = (ts) => {
       const d = new Date(Number(ts) || Date.now());
       return `${d.getFullYear()}-${nwPsAtPad2(d.getMonth() + 1)}-${nwPsAtPad2(d.getDate())}`;
     };
+    /**
+     * Code-Teil: nwPsAtParseTs
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const nwPsAtParseTs = (raw, { endOfDay = false } = {}) => {
       if (raw === null || raw === undefined || raw === '') return null;
       if (typeof raw === 'number' && Number.isFinite(raw)) return raw < 1e12 ? raw * 1000 : raw;
@@ -13804,6 +15835,12 @@ settingsConfig: {
       const p = Date.parse(s);
       return Number.isNaN(p) ? null : p;
     };
+    /**
+     * Code-Teil: nwPsAtStateVal
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const nwPsAtStateVal = async (localId, fallback = null) => {
       try {
         const rec = this.stateCache && this.stateCache[localId];
@@ -13815,11 +15852,23 @@ settingsConfig: {
       } catch (_e2) {}
       return fallback;
     };
+    /**
+     * Code-Teil: nwPsAtStateNum
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const nwPsAtStateNum = async (localId, fallback = null) => {
       const v = await nwPsAtStateVal(localId, fallback);
       const n = Number(v);
       return Number.isFinite(n) ? n : fallback;
     };
+    /**
+     * Code-Teil: nwPsAtStateBool
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const nwPsAtStateBool = async (localId, fallback = false) => {
       const v = await nwPsAtStateVal(localId, fallback);
       if (v === true || v === 1 || v === '1') return true;
@@ -13829,16 +15878,34 @@ settingsConfig: {
       if (['false', 'off', 'no', 'nein', 'inactive'].includes(s)) return false;
       return !!fallback;
     };
+    /**
+     * Code-Teil: nwPsAtStateStr
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const nwPsAtStateStr = async (localId, fallback = '') => {
       const v = await nwPsAtStateVal(localId, fallback);
       if (v === null || v === undefined) return fallback;
       return String(v);
     };
+    /**
+     * Code-Teil: nwPsAtSafeFile
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const nwPsAtSafeFile = (s) => String(s || '')
       .replace(/[^a-z0-9_.-]+/gi, '_')
       .replace(/^_+|_+$/g, '')
       .slice(0, 80) || 'nachweis';
 
+    /**
+     * Code-Teil: nwPsAtBuildReport
+     * Zweck: Erzeugt oder aktualisiert die sichtbare Darstellung bzw. das dazugehörige Datenmodell.
+     * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können historische Anzeigen/Exporte verfälschen; Datenquellen und Einheiten prüfen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const nwPsAtBuildReport = async (query = {}) => {
       const now = Date.now();
       const cfg = (this.config && this.config.peakShaving && this.config.peakShaving.atypical && typeof this.config.peakShaving.atypical === 'object')
@@ -13899,7 +15966,6 @@ settingsConfig: {
           tsSet.add(ts);
         }
       }));
-
       const timestamps = Array.from(tsSet).sort((a, b) => a - b);
       let rows = timestamps.map((ts) => {
         const r = { ts };
@@ -13988,9 +16054,20 @@ settingsConfig: {
         rows,
       };
     };
-
+    /**
+     * Code-Teil: nwPsAtReportToCsv
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const nwPsAtReportToCsv = (report) => {
       const lines = [];
+      /**
+       * Code-Teil: pushMeta
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const pushMeta = (k, v) => lines.push(['# ' + k, v == null ? '' : String(v)].map(nwPsAtCsvEscape).join(';'));
       pushMeta('NexoWatt §19 Nachweisexport', 'Atypische Lastspitzenkappung / HLZF');
       pushMeta('Erzeugt am', nwPsAtIsoLocal(report.generatedAt));
@@ -14044,14 +16121,31 @@ settingsConfig: {
       }
       return lines.join('\r\n');
     };
-
+    /**
+     * Code-Teil: nwPsAtPdfAscii
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const nwPsAtPdfAscii = (value) => String(value == null ? '' : value)
       .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue')
       .replace(/Ä/g, 'Ae').replace(/Ö/g, 'Oe').replace(/Ü/g, 'Ue')
       .replace(/ß/g, 'ss').replace(/€/g, 'EUR').replace(/§/g, 'Paragraph ')
       .replace(/[–—]/g, '-').replace(/\u00a0/g, ' ')
       .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, '?');
+    /**
+     * Code-Teil: nwPsAtPdfEscape
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const nwPsAtPdfEscape = (value) => nwPsAtPdfAscii(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+    /**
+     * Code-Teil: nwPsAtWrap
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const nwPsAtWrap = (line, max = 95) => {
       const s = nwPsAtPdfAscii(line);
       if (s.length <= max) return [s];
@@ -14069,6 +16163,12 @@ settingsConfig: {
       if (cur) out.push(cur);
       return out.length ? out : [''];
     };
+    /**
+     * Code-Teil: nwPsAtBuildPdf
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const nwPsAtBuildPdf = (title, lines) => {
       const pageWidth = 595;
       const pageHeight = 842;
@@ -14090,6 +16190,12 @@ settingsConfig: {
       const pageIds = [];
       const contentIds = [];
       const objects = [];
+      /**
+       * Code-Teil: addObj
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const addObj = (id, body) => { objects[id] = `${id} 0 obj\n${body}\nendobj\n`; };
       addObj(1, '<< /Type /Catalog /Pages 2 0 R >>');
       addObj(3, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
@@ -14128,7 +16234,12 @@ settingsConfig: {
       pdf += `trailer\n<< /Size ${maxId + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
       return Buffer.from(pdf, 'ascii');
     };
-
+    /**
+     * Code-Teil: nwPsAtReportToPdf
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const nwPsAtReportToPdf = (report) => {
       const s = report.summary || {};
       const src = report.source || {};
@@ -14174,6 +16285,7 @@ settingsConfig: {
       return nwPsAtBuildPdf('NexoWatt - §19 Nachweis atypische Lastspitzenkappung', lines);
     };
 
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/api/peakshaving/atypical/review', '/api/peak-shaving/atypical/review', '/api/peak-shaving/atypica
     app.get(['/api/peakshaving/atypical/review', '/api/peak-shaving/atypical/review', '/api/peak-shaving/atypical/review/report'], requireInstaller, async (req, res) => {
       try {
         const report = await nwPsAtBuildReport(req.query || {});
@@ -14183,6 +16295,7 @@ settingsConfig: {
       }
     });
 
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/api/peakshaving/atypical/review.csv', '/api/peak-shaving/atypical/review.csv'], requireInstaller,
     app.get(['/api/peakshaving/atypical/review.csv', '/api/peak-shaving/atypical/review.csv'], requireInstaller, async (req, res) => {
       try {
         const report = await nwPsAtBuildReport(req.query || {});
@@ -14196,6 +16309,7 @@ settingsConfig: {
       }
     });
 
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: ['/api/peakshaving/atypical/review.pdf', '/api/peak-shaving/atypical/review.pdf'], requireInstaller,
     app.get(['/api/peakshaving/atypical/review.pdf', '/api/peak-shaving/atypical/review.pdf'], requireInstaller, async (req, res) => {
       try {
         const report = await nwPsAtBuildReport(req.query || {});
@@ -14209,11 +16323,14 @@ settingsConfig: {
       }
     });
 
+    // Abschnitt: Live-State-Snapshot. Diese Antwort ist die wichtigste Datenquelle für Dashboard, Settings und viele Unterseiten.
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/state', (_req, res) => {
     app.get('/api/state', (_req, res) => {
       res.json(this.stateCache);
     });
 
     // Test email for notification commissioning
+    // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/notify/test', requireAuth, async (req, res) => {
     app.post('/api/notify/test', requireAuth, async (req, res) => {
       try {
         const body = (req && req.body) ? req.body : {};
@@ -14238,6 +16355,7 @@ settingsConfig: {
     });
 
     // generic setter for settings/installer datapoints
+    // API-Kommentar: POST-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/set', requireAuth, async (req, res) => {
     app.post('/api/set', requireAuth, async (req, res) => {
       try {
         const scope = req.body && req.body.scope;
@@ -14896,7 +17014,12 @@ settingsConfig: {
           const arr = Array.isArray(fs[kind]) ? fs[kind] : [];
           const slot = (arr[idx - 1] && typeof arr[idx - 1] === 'object') ? arr[idx - 1] : {};
           const ctrl = (slot.ctrl && typeof slot.ctrl === 'object') ? slot.ctrl : {};
-
+          /**
+           * Code-Teil: normalizeConsumerType
+           * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const normalizeConsumerType = (raw) => {
             const s = String(raw || '').trim().toLowerCase();
             if (!s) return 'generic';
@@ -14906,7 +17029,12 @@ settingsConfig: {
           };
 
           const slotType = (kind === 'consumers') ? normalizeConsumerType(slot.consumerType || slot.type || slot.category) : 'generic';
-
+          /**
+           * Code-Teil: resolveThermalDev
+           * Zweck: Wählt die richtige Datenquelle/Fallback-Logik aus.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const resolveThermalDev = () => {
             const t = (cfg.thermal && typeof cfg.thermal === 'object') ? cfg.thermal : {};
             const tlist = Array.isArray(t.devices) ? t.devices : [];
@@ -14918,7 +17046,12 @@ settingsConfig: {
             if (!dev) dev = tlist.find(r => r && Math.round(Number(r.slot ?? r.consumerSlot ?? 0)) === idx) || null;
             return dev;
           };
-
+          /**
+           * Code-Teil: resolveHeatingRodDev
+           * Zweck: Wählt die richtige Datenquelle/Fallback-Logik aus.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const resolveHeatingRodDev = () => {
             const h = (cfg.heatingRod && typeof cfg.heatingRod === 'object') ? cfg.heatingRod : {};
             const hlist = Array.isArray(h.devices) ? h.devices : [];
@@ -14930,7 +17063,12 @@ settingsConfig: {
             if (!dev) dev = hlist.find(r => r && Math.round(Number(r.slot ?? r.consumerSlot ?? 0)) === idx) || null;
             return dev;
           };
-
+          /**
+           * Code-Teil: syncHeatingRodUserState
+           * Zweck: Synchronisiert zwei Datenquellen bzw. UI und State.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const syncHeatingRodUserState = (localId, val) => {
             try {
               const fullId = `${this.namespace}.${localId}`;
@@ -14941,7 +17079,12 @@ settingsConfig: {
             } catch (_e) {}
             try { this.updateValue(localId, val, Date.now()); } catch (_e2) {}
           };
-
+          /**
+           * Code-Teil: normalizeHeatingRodQuickMode
+           * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const normalizeHeatingRodQuickMode = (raw) => {
             const s = String(raw === null || raw === undefined ? '' : raw).trim().toLowerCase();
             if (!s || s === 'inherit' || s === 'system') return 'inherit';
@@ -14952,7 +17095,12 @@ settingsConfig: {
             if (s === 'off' || s === 'aus' || s === '0') return 'off';
             return 'inherit';
           };
-
+          /**
+           * Code-Teil: getHeatingRodStoredUserMode
+           * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const getHeatingRodStoredUserMode = async () => {
             try {
               const st = await this.getStateAsync(`heatingRod.user.c${idx}.mode`);
@@ -14961,7 +17109,12 @@ settingsConfig: {
               return 'inherit';
             }
           };
-
+          /**
+           * Code-Teil: heatingRodManualStageForMode
+           * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const heatingRodManualStageForMode = (dev, rawMode) => {
             const mode = normalizeHeatingRodQuickMode(rawMode);
             if (mode === 'off') return 0;
@@ -14973,7 +17126,12 @@ settingsConfig: {
             const fractions = { manual1: 0.25, manual2: 0.5, manual3: 0.75 };
             return Math.max(1, Math.min(maxStage, Math.ceil(cnt * fractions[mode])));
           };
-
+          /**
+           * Code-Teil: writeHeatingRodStagesOnce
+           * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+           * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+           * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+           */
           const writeHeatingRodStagesOnce = async (dev, rawTargetStage) => {
             if (!dev || typeof dev !== 'object') return { targetStage: 0, writes: 0 };
             const stages = Array.isArray(dev.stages) ? dev.stages : [];
@@ -14983,7 +17141,12 @@ settingsConfig: {
             const targetStage = Math.max(0, Math.min(maxStage, Math.round(Number(rawTargetStage) || 0)));
             const emsDp = this.emsEngine && this.emsEngine.dp;
             const grouped = new Map();
-
+            /**
+             * Code-Teil: addWrite
+             * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+             * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+             * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+             */
             const addWrite = (stageIndex, rawId, physicalOn) => {
               const fallbackId = String(rawId || '').trim();
               const entryKey = `hr.c${idx}.s${stageIndex}.w`;
@@ -15092,7 +17255,12 @@ settingsConfig: {
                 await this.setObjectNotExistsAsync(`heatingRod.user.c${idx}.regEnabled`, { type: 'state', common: { name: 'Regelung aktiv', type: 'boolean', role: 'switch.enable', read: true, write: true, def: true }, native: {} });
                 await this.setObjectNotExistsAsync(`heatingRod.user.c${idx}.mode`, { type: 'state', common: { name: 'Betriebsmodus', type: 'string', role: 'text', read: true, write: true, def: 'inherit' }, native: {} });
               } catch (_e) {}
-
+              /**
+               * Code-Teil: clearBoost
+               * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+               * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+               * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+               */
               const clearBoost = async () => {
                 try {
                   if (!this._heatingRodOverrides || typeof this._heatingRodOverrides !== 'object') this._heatingRodOverrides = {};
@@ -15166,7 +17334,12 @@ settingsConfig: {
               await this.setObjectNotExistsAsync(`thermal.user.c${idx}.regEnabled`, { type: 'state', common: { name: 'Regelung aktiv', type: 'boolean', role: 'switch.enable', read: true, write: true, def: true }, native: {} });
               await this.setObjectNotExistsAsync(`thermal.user.c${idx}.mode`, { type: 'state', common: { name: 'Betriebsmodus', type: 'string', role: 'text', read: true, write: true, def: 'inherit' }, native: {} });
             } catch (_e) {}
-
+            /**
+             * Code-Teil: clearOverrides
+             * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+             * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+             * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+             */
             const clearOverrides = async () => {
               try {
                 if (!this._thermalOverrides || typeof this._thermalOverrides !== 'object') this._thermalOverrides = {};
@@ -15308,6 +17481,7 @@ settingsConfig: {
     // Energiefluss-Schnellsteuerung: optionaler Readback (Status/Setpoint)
     // Der Client ruft diese Route z.B. beim Öffnen des Modals auf, um aktuelle Werte zu sehen.
     // Es werden ausschließlich die in vis.flowSlots.*.ctrl konfigurierten Read-IDs gelesen.
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/flow/qc/read', requireAuth, async (req, res) => {
     app.get('/api/flow/qc/read', requireAuth, async (req, res) => {
       try {
         const kindRaw = String((req.query && req.query.kind) || '').trim().toLowerCase();
@@ -15372,7 +17546,12 @@ settingsConfig: {
             out.setpoint = null;
           }
         }
-
+        /**
+         * Code-Teil: normalizeConsumerType
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const normalizeConsumerType = (raw) => {
           const s = String(raw || '').trim().toLowerCase();
           if (!s) return 'generic';
@@ -15382,7 +17561,12 @@ settingsConfig: {
         };
 
         const slotType = (kind === 'consumers') ? normalizeConsumerType(slot.consumerType || slot.type || slot.category) : 'generic';
-
+        /**
+         * Code-Teil: resolveThermalDev
+         * Zweck: Wählt die richtige Datenquelle/Fallback-Logik aus.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const resolveThermalDev = () => {
           const cfg = this.config || {};
           const t = (cfg.thermal && typeof cfg.thermal === 'object') ? cfg.thermal : {};
@@ -15397,7 +17581,12 @@ settingsConfig: {
           if (!dev) dev = tlist.find(r => r && Math.round(Number(r.slot ?? r.consumerSlot ?? 0)) === idx) || null;
           return dev;
         };
-
+        /**
+         * Code-Teil: resolveHeatingRodDev
+         * Zweck: Wählt die richtige Datenquelle/Fallback-Logik aus.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const resolveHeatingRodDev = () => {
           const cfg = this.config || {};
           const h = (cfg.heatingRod && typeof cfg.heatingRod === 'object') ? cfg.heatingRod : {};
@@ -15464,7 +17653,12 @@ settingsConfig: {
                 const s = await this.getStateAsync(`heatingRod.user.c${idx}.mode`);
                 if (s && s.val !== undefined && s.val !== null) userMode = String(s.val || '').trim() || 'inherit';
               } catch (_e) {}
-
+              /**
+               * Code-Teil: normMode
+               * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+               * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+               * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+               */
               const normMode = (m) => {
                 const s = String(m || '').trim().toLowerCase();
                 if (!s || s === 'inherit' || s === 'system') return 'inherit';
@@ -15477,6 +17671,12 @@ settingsConfig: {
               };
               userMode = normMode(userMode);
 
+              /**
+               * Code-Teil: readNumState
+               * Zweck: Liest einen Wert aus Cache, Konfiguration, DOM oder ioBroker-State mit passenden Fallbacks.
+               * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+               * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+               */
               const readNumState = async (id, fallback = 0) => {
                 try {
                   const s = await this.getStateAsync(id);
@@ -15579,7 +17779,12 @@ settingsConfig: {
                 const s = await this.getStateAsync(`thermal.user.c${idx}.mode`);
                 if (s && s.val !== undefined && s.val !== null) userMode = String(s.val || '').trim() || 'inherit';
               } catch (_e) {}
-
+              /**
+               * Code-Teil: normMode
+               * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+               * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+               * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+               */
               const normMode = (m) => {
                 const s = String(m || '').trim().toLowerCase();
                 if (!s || s === 'inherit' || s === 'system') return 'inherit';
@@ -15622,6 +17827,7 @@ return res.json(out);
     });
 
     // Relaissteuerung (manuell): Status/Readback (für VIS)
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/relay/summary', requireAuth, async (req, res) => {
     app.get('/api/relay/summary', requireAuth, async (req, res) => {
       try {
         const cfg = this.config || {};
@@ -15679,6 +17885,7 @@ return res.json(out);
       }
     });
 
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/relay/snapshot', requireAuth, async (req, res) => {
     app.get('/api/relay/snapshot', requireAuth, async (req, res) => {
       try {
         const cfg = this.config || {};
@@ -15754,6 +17961,7 @@ return res.json(out);
     });
 
     // BHKW Snapshot für VIS (Schnellsteuerung)
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/bhkw/snapshot', requireAuth, async (req, res) => {
     app.get('/api/bhkw/snapshot', requireAuth, async (req, res) => {
       try {
         const cfg = this.config || {};
@@ -15822,6 +18030,7 @@ return res.json(out);
     });
 
     // Generator Snapshot für VIS (Schnellsteuerung)
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/api/generator/snapshot', requireAuth, async (req, res) => {
     app.get('/api/generator/snapshot', requireAuth, async (req, res) => {
       try {
         const cfg = this.config || {};
@@ -15895,6 +18104,8 @@ return res.json(out);
 
 
     // server-sent events for live updates
+    // Abschnitt: SSE-Livekanal. Push für /api/state-Änderungen; Verbindungen im unload sauber schließen.
+    // API-Kommentar: GET-Route. Zweck: stellt einen Web-/API-Endpunkt bereit. Zusammenhang: Frontend-Dateien in www/* können diesen Endpunkt direkt nutzen. Route/Handler: '/events', (req, res) => {
     app.get('/events', (req, res) => {
       res.set({
         'Content-Type': 'text/event-stream',
@@ -15914,16 +18125,46 @@ return res.json(out);
       });
     });
 
-    const bind = (this.config && this.config.bind) || '0.0.0.0';
+    const bind = (this.config && (this.config.ip || this.config.bind)) || '0.0.0.0';
     const port = (this.config && this.config.port) || 8188;
 
-    await new Promise((resolve) => {
-      this.server = app.listen(port, bind, () => {
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      /**
+       * Code-Teil: finishOk
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
+      const finishOk = () => {
+        if (settled) return;
+        settled = true;
         this.log.info(`Dashboard available at http://${bind}:${port}`);
         resolve();
-      });
+      };
+      /**
+       * Code-Teil: finishErr
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
+      const finishErr = (err) => {
+        if (settled) {
+          this.log.error('Dashboard web server error after startup: ' + (err && err.message ? err.message : err));
+          this._nwSetInfoConnection(false, 'server-error-after-startup').catch(() => {});
+          return;
+        }
+        settled = true;
+        reject(err);
+      };
+
+      this.server = app.listen(port, bind, finishOk);
 
       try {
+        this.server.on('error', finishErr);
+        this.server.on('close', () => {
+          this._nwSetInfoConnection(false, 'server-close').catch(() => {});
+        });
         this.server.on('connection', (socket) => {
           try { this._serverSockets.add(socket); } catch (_e0) {}
           try {
@@ -15935,24 +18176,42 @@ return res.json(out);
       } catch (_e3) {}
     });
   }
-
-
-
+  /**
+   * Code-Teil: _nwNormalizeFlowSlotKind
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwNormalizeFlowSlotKind(kind) {
     const k = String(kind || '').trim().toLowerCase();
     return k.startsWith('prod') ? 'producers' : 'consumers';
   }
-
+  /**
+   * Code-Teil: _nwFlowSlotCount
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwFlowSlotCount(kind) {
     return this._nwNormalizeFlowSlotKind(kind) === 'producers' ? 5 : 10;
   }
-
+  /**
+   * Code-Teil: _nwFlowSlotKey
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwFlowSlotKey(kind, index) {
     const k = this._nwNormalizeFlowSlotKind(kind);
     const idx = Math.max(1, Math.round(Number(index) || 1));
     return k === 'producers' ? `producer${idx}Power` : `consumer${idx}Power`;
   }
-
+  /**
+   * Code-Teil: _nwGetFlowSlotsRoot
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwGetFlowSlotsRoot() {
     try {
       const cfg = (this.config && typeof this.config === 'object') ? this.config : {};
@@ -15962,7 +18221,12 @@ return res.json(out);
     } catch (_e) {}
     return {};
   }
-
+  /**
+   * Code-Teil: _nwFlowSlotPowerIdFromSlot
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwFlowSlotPowerIdFromSlot(slot) {
     try {
       if (!slot || typeof slot !== 'object') return '';
@@ -15987,7 +18251,12 @@ return res.json(out);
     } catch (_e) {}
     return '';
   }
-
+  /**
+   * Code-Teil: _nwGetFlowSlotInfo
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwGetFlowSlotInfo(kind, index) {
     const k = this._nwNormalizeFlowSlotKind(kind);
     const idx = Math.max(1, Math.min(this._nwFlowSlotCount(k), Math.round(Number(index) || 1)));
@@ -16025,13 +18294,23 @@ return res.json(out);
       slot,
     };
   }
-
+  /**
+   * Code-Teil: prepareFlowSlots
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   prepareFlowSlots(flowSlotsCfg) {
     try {
       const out = [];
       const seen = new Set();
       const counts = { consumers: 10, producers: 5 };
-
+      /**
+       * Code-Teil: add
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const add = (objectId, stateKey) => {
         const id = String(objectId || '').trim();
         const key = String(stateKey || '').trim();
@@ -16073,10 +18352,21 @@ return res.json(out);
       return [];
     }
   }
+  /**
+   * Code-Teil: _nwNormalizeUnit
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwNormalizeUnit(unit) {
     return String(unit || '').replace(/\s+/g, '').toLowerCase();
   }
-
+  /**
+   * Code-Teil: _nwPowerScaleToWFromUnit
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwPowerScaleToWFromUnit(unit) {
     const u = this._nwNormalizeUnit(unit);
     if (u === 'w') return 1;
@@ -16085,6 +18375,12 @@ return res.json(out);
     if (u === 'gw') return 1000000000;
     return 1;
   }
+  /**
+   * Code-Teil: _nwIsMappedPowerKey
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwIsMappedPowerKey(key) {
     if (!key) return false;
 
@@ -16110,7 +18406,12 @@ return res.json(out);
 
     return false;
   }
-
+  /**
+   * Code-Teil: _nwScaleMappedValue
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwScaleMappedValue(key, objectId, val) {
     // Skalierung fuer gemappte Leistungswerte (Power).
     // Intern arbeitet das EMS in Watt (W). Die UI zeigt i.d.R. kW an (W/1000).
@@ -16142,7 +18443,12 @@ return res.json(out);
     if (typeof factor === 'number' && Number.isFinite(factor) && factor !== 1) return val * factor;
     return val;
   }
-
+  /**
+   * Code-Teil: _nwPrimeForeignPowerScale
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwPrimeForeignPowerScale(objectId) {
     if (!objectId || typeof objectId !== 'string') return;
 
@@ -16167,16 +18473,32 @@ return res.json(out);
       this._nwForeignPowerScaleCache.set(objectId, 1);
     }
   }
-
+  /**
+   * Code-Teil: _nwIsOwnStateId
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwIsOwnStateId(id) {
     const sid = (typeof id === 'string') ? id.trim() : '';
     if (!sid || !this.namespace) return false;
     return sid.startsWith(`${this.namespace}.`);
   }
-
+  /**
+   * Code-Teil: _nwBuildLiveCoreRefreshPlan
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwBuildLiveCoreRefreshPlan() {
     const byId = new Map();
 
+    /**
+     * Code-Teil: add
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const add = (id, key = '') => {
       const sid = (typeof id === 'string') ? id.trim() : '';
       if (!sid) return;
@@ -16258,7 +18580,12 @@ return res.json(out);
 
     return this._nwLiveCoreRefreshPlan;
   }
-
+  /**
+   * Code-Teil: _nwRefreshLiveCoreDatapoints
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwRefreshLiveCoreDatapoints(reason = 'interval') {
     if (this._nwLiveCoreRefreshRunning) return;
 
@@ -16274,7 +18601,12 @@ return res.json(out);
       const emsDp = (this.emsEngine && this.emsEngine.dp && typeof this.emsEngine.dp.handleStateChange === 'function')
         ? this.emsEngine.dp
         : null;
-
+      /**
+       * Code-Teil: applyState
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const applyState = async (entry) => {
         if (!entry || !entry.id) return;
 
@@ -16320,15 +18652,25 @@ return res.json(out);
       this._nwLiveCoreRefreshRunning = false;
     }
   }
-
+  /**
+   * Code-Teil: _nwStopLiveCoreRefresh
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwStopLiveCoreRefresh() {
     if (this._nwLiveCoreRefreshTimer) {
-      try { clearInterval(this._nwLiveCoreRefreshTimer); } catch (_e) {}
+      try { this._nwClearInterval(this._nwLiveCoreRefreshTimer); } catch (_e) {}
       this._nwLiveCoreRefreshTimer = null;
     }
     this._nwLiveCoreRefreshRunning = false;
   }
-
+  /**
+   * Code-Teil: _nwStartLiveCoreRefresh
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwStartLiveCoreRefresh() {
     const plan = this._nwBuildLiveCoreRefreshPlan();
 
@@ -16336,11 +18678,16 @@ return res.json(out);
     if (!Array.isArray(plan) || !plan.length) return;
 
     const intervalMs = Math.max(3000, Number(this._nwLiveCoreRefreshIntervalMs) || 3000);
-    this._nwLiveCoreRefreshTimer = setInterval(() => {
+    this._nwLiveCoreRefreshTimer = this._nwSetInterval(() => {
       this._nwRefreshLiveCoreDatapoints('interval').catch(() => {});
     }, intervalMs);
   }
-
+  /**
+   * Code-Teil: subscribeConfiguredStates
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async subscribeConfiguredStates() {
     // Safety: ensure caches exist (older builds might miss these initializations).
     if (!this._nwForeignUnitCache || typeof this._nwForeignUnitCache.clear !== 'function') {
@@ -16504,7 +18851,12 @@ return res.json(out);
       this._nwRefreshLiveCoreDatapoints('subscribe').catch(() => {});
     } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: onStateChange
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   onStateChange(id, state) {
     if (!state) return;
     // Feed EMS datapoint cache (for embedded charging engine)
@@ -16590,7 +18942,12 @@ return res.json(out);
       this.log.error(`onStateChange error: ${e.message}`);
     }
   }
-
+  /**
+   * Code-Teil: keyFromId
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   keyFromId(id) {
     if (this.evcsIdToKey && id && this.evcsIdToKey[id]) return this.evcsIdToKey[id];
     if (this.flowIdToKey && id && this.flowIdToKey[id]) return this.flowIdToKey[id];
@@ -16638,7 +18995,12 @@ return res.json(out);
     } catch (_e) {}
     return null;
   }
-
+  /**
+   * Code-Teil: normalizeRfidCandidate
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   normalizeRfidCandidate(val) {
     if (val === null || val === undefined) return '';
     let s = '';
@@ -16659,7 +19021,12 @@ return res.json(out);
     if (!s || s === '0' || s === '0000' || s === 'UNKNOWN' || s === 'NONE') return '';
     return s;
   }
-
+  /**
+   * Code-Teil: maybeCaptureRfidLearning
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   maybeCaptureRfidLearning(sourceId, rawVal, ts) {
     // Capture ONLY while learning is active, and ONLY from configured RFID reader datapoints.
     if (!sourceId || !this.evcsRfidReadIds || !this.evcsRfidReadIds.size) return;
@@ -16687,8 +19054,12 @@ return res.json(out);
 
     this.log.info(`[EVCS RFID] Karte erkannt: ${code} (Quelle: ${sourceId})`);
   }
-
-
+  /**
+   * Code-Teil: parseRfidWhitelist
+   * Zweck: Parst Rohdaten in ein sicheres internes Format.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   parseRfidWhitelist(jsonStr) {
     // Returns map: { CODE: { name, comment } }
     const out = {};
@@ -16709,7 +19080,12 @@ return res.json(out);
     }
     return out;
   }
-
+  /**
+   * Code-Teil: refreshRfidWhitelistFromCache
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   refreshRfidWhitelistFromCache() {
     const raw = this.stateCache['evcs.rfid.whitelistJson'] ? this.stateCache['evcs.rfid.whitelistJson'].value : '[]';
     const s = (typeof raw === 'string') ? raw : JSON.stringify(raw || []);
@@ -16717,11 +19093,21 @@ return res.json(out);
     this._rfidWhitelistJson = s;
     this._rfidWhitelistMap = this.parseRfidWhitelist(s);
   }
-
+  /**
+   * Code-Teil: isRfidEnabled
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   isRfidEnabled() {
     return !!(this.stateCache['evcs.rfid.enabled'] && this.stateCache['evcs.rfid.enabled'].value);
   }
-
+  /**
+   * Code-Teil: setLocalStateWithCache
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   setLocalStateWithCache(id, val, ts) {
     const t = Number(ts) || Date.now();
     this.setStateAsync(id, val, true).catch(()=>{});
@@ -16729,15 +19115,27 @@ return res.json(out);
   }
 
   // --- Notifications / Monitoring (E-Mail) ---
+  /**
+   * Code-Teil: startNotificationMonitor
+   * Zweck: Startet Prozess, Timer, Engine oder Verbindung.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   startNotificationMonitor() {
     try {
       if (this._notifyTimer) {
-        try { clearInterval(this._notifyTimer); } catch (_e) {}
+        try { this._nwClearInterval(this._notifyTimer); } catch (_e) {}
         this._notifyTimer = null;
       }
 
       // Lightweight periodic checks. Default: 30 seconds.
       const intervalMs = 30 * 1000;
+      /**
+       * Code-Teil: tick
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const tick = () => {
         this.notificationTick().catch((_e) => {
           // keep timer alive
@@ -16745,20 +19143,30 @@ return res.json(out);
       };
 
       // Start a bit delayed to allow states/config to settle.
-      setTimeout(tick, 5 * 1000);
-      this._notifyTimer = setInterval(tick, intervalMs);
+      this._nwSetTimeout(tick, 5 * 1000);
+      this._notifyTimer = this._nwSetInterval(tick, intervalMs);
     } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: stopNotificationMonitor
+   * Zweck: Stoppt Prozess, Timer, Engine oder Verbindung.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   stopNotificationMonitor() {
     try {
       if (this._notifyTimer) {
-        try { clearInterval(this._notifyTimer); } catch (_e) {}
+        try { this._nwClearInterval(this._notifyTimer); } catch (_e) {}
         this._notifyTimer = null;
       }
     } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: _notifyParseBool
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _notifyParseBool(val, def) {
     if (val === undefined || val === null) return !!def;
     if (typeof val === 'boolean') return val;
@@ -16769,7 +19177,12 @@ return res.json(out);
     if (s === 'false' || s === '0' || s === 'no' || s === 'nein' || s === 'off') return false;
     return !!def;
   }
-
+  /**
+   * Code-Teil: _notifyGetCached
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _notifyGetCached(key, def) {
     try {
       const e = this.stateCache[key];
@@ -16777,24 +19190,44 @@ return res.json(out);
     } catch (_e) {}
     return def;
   }
-
+  /**
+   * Code-Teil: _notifyGetSettingBool
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _notifyGetSettingBool(key, def = false) {
     const v = this._notifyGetCached(`settings.${key}`, def);
     return this._notifyParseBool(v, def);
   }
-
+  /**
+   * Code-Teil: _notifyGetSettingString
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _notifyGetSettingString(key, def = '') {
     const v = this._notifyGetCached(`settings.${key}`, def);
     if (v === undefined || v === null) return String(def || '');
     return String(v).trim();
   }
-
+  /**
+   * Code-Teil: _notifyGetSettingNumber
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _notifyGetSettingNumber(key, def = 0) {
     const v = this._notifyGetCached(`settings.${key}`, def);
     const n = Number(v);
     return Number.isFinite(n) ? n : def;
   }
-
+  /**
+   * Code-Teil: _notifySetDebugState
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _notifySetDebugState(key, val) {
     try {
       const id = `notifications.${key}`;
@@ -16802,7 +19235,12 @@ return res.json(out);
       try { this.updateValue(id, val, Date.now()); } catch (_e) {}
     } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: _notifySendEmail
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _notifySendEmail(to, subject, text) {
     const payload = {
       to: String(to || '').trim(),
@@ -16812,6 +19250,12 @@ return res.json(out);
     if (!payload.to) return { ok: false, error: 'missing recipient' };
 
     // Try sendTo('email') (all instances) first, then fallback to 'email.0'.
+    /**
+     * Code-Teil: trySend
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const trySend = (target) => new Promise((resolve) => {
       let done = false;
       try {
@@ -16819,7 +19263,7 @@ return res.json(out);
           done = true;
           resolve({ ok: true, resp });
         });
-        setTimeout(() => {
+        this._nwSetTimeout(() => {
           if (!done) resolve({ ok: true, resp: null });
         }, 2000);
       } catch (e) {
@@ -16831,10 +19275,21 @@ return res.json(out);
     if (!r.ok) r = await trySend('email.0');
     return r;
   }
-
+  /**
+   * Code-Teil: _notifyCollectObjectIdsFromConfig
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _notifyCollectObjectIdsFromConfig() {
     const ids = new Set();
     const re = /^([a-zA-Z0-9_-]+\.[0-9]+)\./;
+    /**
+     * Code-Teil: walk
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const walk = (v) => {
       if (v === null || v === undefined) return;
       if (typeof v === 'string') {
@@ -16854,7 +19309,12 @@ return res.json(out);
     try { walk(this.config || {}); } catch (_e) {}
     return Array.from(ids);
   }
-
+  /**
+   * Code-Teil: _notifyRefreshWatchedInstances
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _notifyRefreshWatchedInstances(force = false) {
     try {
       const now = Date.now();
@@ -16890,7 +19350,12 @@ return res.json(out);
       this._notify.watchedInstances = cache;
     } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: _notifyRefreshNwDevicesCache
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _notifyRefreshNwDevicesCache(force = false) {
     try {
       const now = Date.now();
@@ -16900,12 +19365,22 @@ return res.json(out);
       // Discover PV inverters from nexowatt-devices adapter
       const channels = await this.getForeignObjectsAsync('nexowatt-devices.*.devices.*', 'channel');
       const states = await this.getForeignObjectsAsync('nexowatt-devices.*.devices.*.*', 'state');
-
+      /**
+       * Code-Teil: hasState
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const hasState = (baseId, suffix) => {
         const id = `${baseId}.${suffix}`;
         return !!(states && states[id]);
       };
-
+      /**
+       * Code-Teil: getAlias
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const getAlias = (obj, key) => {
         try {
           const a = obj && obj.native && obj.native.aliases;
@@ -16936,7 +19411,12 @@ return res.json(out);
       // keep old cache
     }
   }
-
+  /**
+   * Code-Teil: _notifyFormatDuration
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _notifyFormatDuration(ms) {
     const s = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
     const m = Math.floor(s / 60);
@@ -16947,7 +19427,12 @@ return res.json(out);
     if (m > 0) return `${m}m`;
     return `${s}s`;
   }
-
+  /**
+   * Code-Teil: notificationTick
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async notificationTick() {
     const enabled = this._notifyGetSettingBool('notifyEnabled', false);
     const to = this._notifyGetSettingString('email', '');
@@ -17234,7 +19719,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     } catch (_e) {}
 
     if (!alertsToSend.length && !recoveriesToSend.length) return;
-
+    /**
+     * Code-Teil: fmt
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const fmt = (sev) => {
       const s = String(sev || '').toLowerCase();
       if (s === 'critical') return 'STÖRUNG';
@@ -17264,7 +19754,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         parts.push(`- ${r.title}`);
       }
     }
-
+    /**
+     * Code-Teil: subject
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const subject = (() => {
       const c = alertsToSend.filter(a => String(a.severity).toLowerCase() === 'critical').length;
       const w = alertsToSend.filter(a => String(a.severity).toLowerCase() === 'warning').length;
@@ -17288,6 +19783,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
   }
 
   // --- Historie / Influx: canonical export states (no extra mapping required) ---
+  /**
+   * Code-Teil: startHistorieExportTimer
+   * Zweck: Startet Prozess, Timer, Engine oder Verbindung.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   startHistorieExportTimer() {
     try {
       const hcfg = (this.config && this.config.history) || {};
@@ -17301,14 +19802,19 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
       // Clear previous timers
       if (this._nwHistorieTimer) {
-        try { clearInterval(this._nwHistorieTimer); } catch (_e) {}
+        try { this._nwClearInterval(this._nwHistorieTimer); } catch (_e) {}
         this._nwHistorieTimer = null;
       }
       if (this._nwHistorieTimerOnce) {
-        try { clearTimeout(this._nwHistorieTimerOnce); } catch (_e) {}
+        try { this._nwClearTimeout(this._nwHistorieTimerOnce); } catch (_e) {}
         this._nwHistorieTimerOnce = null;
       }
-
+      /**
+       * Code-Teil: tick
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const tick = () => {
         this.updateHistorieExportStates('timer').catch(() => {});
       };
@@ -17320,24 +19826,40 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       // Avoid immediate double-write (startup already writes once)
       if (delay < 1000) delay += intervalMs;
 
-      this._nwHistorieTimerOnce = setTimeout(() => {
+      this._nwHistorieTimerOnce = this._nwSetTimeout(() => {
         this._nwHistorieTimerOnce = null;
         tick();
-        this._nwHistorieTimer = setInterval(tick, intervalMs);
+        this._nwHistorieTimer = this._nwSetInterval(tick, intervalMs);
       }, delay);
     } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: ensureHistorieExportStates
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async ensureHistorieExportStates() {
     try { await this._nwDetectInfluxInstance(); } catch (_e) {}
     const inst = this._nwGetHistoryInstance();
     const enableInfluxCustom = true; // user default: always use InfluxDB
-
+    /**
+     * Code-Teil: ensureChannel
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const ensureChannel = async (id, name) => {
       await this.setObjectNotExistsAsync(id, { type: 'channel', common: { name }, native: {} });
       try { await this.extendObjectAsync(id, { common: { name } }); } catch (_e) {}
     };
 
+    /**
+     * Code-Teil: ensureState
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const ensureState = async (id, name, role, unit, type = 'number', influxOpts = null) => {
       await this.setObjectNotExistsAsync(id, {
         type: 'state',
@@ -17510,7 +20032,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       await ensureState(`historie.producers.p${i}.powerW`, `${label} Leistung`, 'value.power', 'W');
     }
   }
-
+  /**
+   * Code-Teil: _nwEnsureInfluxCustom
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwEnsureInfluxCustom(localId, inst, opts = null) {
     try {
       const instance = String(inst || '').trim();
@@ -17535,7 +20062,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       await this.extendObjectAsync(localId, { common: { custom } });
     } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: _nwGetNumberFromCache
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwGetNumberFromCache(key) {
     try {
       const rec = this.stateCache && this.stateCache[key];
@@ -17547,6 +20079,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
   }
 
+  /**
+   * Code-Teil: _nwGetCacheAgeMs
+   * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+   * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+   * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+   */
   _nwGetCacheAgeMs(key, now = Date.now()) {
     try {
       const rec = this.stateCache && this.stateCache[key];
@@ -17559,6 +20097,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
   }
 
+  /**
+   * Code-Teil: _nwGetNumberFromCacheFresh
+   * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+   * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+   * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+   */
   _nwGetNumberFromCacheFresh(key, maxAgeMs = null, fallback = null, now = Date.now()) {
     try {
       const rec = this.stateCache && this.stateCache[key];
@@ -17576,6 +20120,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
   }
 
+  /**
+   * Code-Teil: _nwGetRawNumberFromCache
+   * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+   * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+   * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+   */
   _nwGetRawNumberFromCache(key, maxAgeMs = null, fallback = null, now = Date.now()) {
     try {
       const rec = (this._nwRawValueCache && this._nwRawValueCache[key]) || (this.stateCache && this.stateCache[key]);
@@ -17592,7 +20142,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       return fallback;
     }
   }
-
+  /**
+   * Code-Teil: _nwLiveInputMaxAgeMs
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwLiveInputMaxAgeMs() {
     try {
       const fromState = Number(this.stateCache && this.stateCache['settings.deviceStaleTimeoutSec'] ? this.stateCache['settings.deviceStaleTimeoutSec'].value : NaN);
@@ -17603,7 +20158,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       return 300_000;
     }
   }
-
+  /**
+   * Code-Teil: _nwIsBatterySignInverted
+   * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwIsBatterySignInverted() {
     try {
       if (typeof this._notifyGetSettingBool === 'function') {
@@ -17616,29 +20176,88 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       return false;
     }
   }
+  /**
+   * Code-Teil: _nwStorageFarmIsActiveFromCache
+   * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  _nwStorageFarmIsActiveFromCache() {
+    try {
+      const cfg = this.config || {};
+      const sf = (cfg.storageFarm && typeof cfg.storageFarm === 'object') ? cfg.storageFarm : {};
+      const rows = Array.isArray(sf.storages) ? sf.storages : [];
+      const configured = rows.some(r => r && typeof r === 'object' && r.enabled !== false);
+      if (!cfg.enableStorageFarm || !configured) return false;
 
+      const rec = this.stateCache && this.stateCache['storageFarm.enabled'];
+      if (rec && rec.value === false) return false;
+
+      const totalRec = this.stateCache && this.stateCache['storageFarm.storagesTotal'];
+      if (totalRec && totalRec.value !== undefined && totalRec.value !== null) {
+        const total = Number(totalRec.value);
+        if (Number.isFinite(total) && total <= 0) return false;
+      }
+      return true;
+    } catch (_e) {
+      return false;
+    }
+  }
   _nwResolveBatteryFlowFromCache(opts = {}) {
     const now = Number.isFinite(Number(opts.now)) ? Number(opts.now) : Date.now();
     const maxAgeMs = opts.maxAgeMs === undefined ? this._nwLiveInputMaxAgeMs() : opts.maxAgeMs;
     const deadbandW = Number.isFinite(Number(opts.deadbandW)) ? Math.max(0, Number(opts.deadbandW)) : 25;
+    const strictStale = opts.strictStale === true;
 
     const dps = (this.config && this.config.datapoints && typeof this.config.datapoints === 'object') ? this.config.datapoints : {};
+    /**
+     * Code-Teil: idOf
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const idOf = (key) => String(dps[key] || '').trim();
     const chargeMapped = !!idOf('storageChargePower');
     const dischargeMapped = !!idOf('storageDischargePower');
     const batteryMapped = !!idOf('batteryPower');
+    const anyStorageMapped = chargeMapped || dischargeMapped || batteryMapped;
     const sameChargeDischargeId = !!(chargeMapped && dischargeMapped && idOf('storageChargePower') === idOf('storageDischargePower'));
     const inv = this._nwIsBatterySignInverted();
 
-    const fresh = (key, onlyIfMapped) => {
+    // Wichtig: Gemappte Kern-DPs werden als Quelle der Wahrheit behandelt, auch wenn
+    // sich der Wert lange nicht geändert hat. Viele ioBroker-Adapter aktualisieren bei
+    // konstant 0 W nur lc/ts selten oder gar nicht. Diese 0-Werte dürfen deshalb nicht
+    // als "fehlend" verworfen und durch eine Bilanzrechnung ersetzt werden.
+    /**
+     * Code-Teil: readMapped
+     * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    const readMapped = (key, onlyIfMapped, raw = false) => {
       if (onlyIfMapped && !idOf(key)) return null;
-      return this._nwGetNumberFromCacheFresh(key, maxAgeMs, null, now);
+      return raw
+        ? this._nwGetRawNumberFromCache(key, strictStale ? maxAgeMs : null, null, now)
+        : this._nwGetNumberFromCacheFresh(key, strictStale ? maxAgeMs : null, null, now);
     };
-    const rawFresh = (key, onlyIfMapped) => {
-      if (onlyIfMapped && !idOf(key)) return null;
-      return this._nwGetRawNumberFromCache(key, maxAgeMs, null, now);
-    };
+    /**
+     * Code-Teil: ageInfo
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    const ageInfo = () => ({
+      batteryPower: this._nwGetCacheAgeMs('batteryPower', now),
+      storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
+      storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
+    });
 
+    /**
+     * Code-Teil: fromSigned
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const fromSigned = (signedRaw, src, opts2 = {}) => {
       let signed = Number(signedRaw);
       if (!Number.isFinite(signed)) signed = 0;
@@ -17654,24 +20273,27 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         inverted: inv,
         fromSigned: true,
         mirror: opts2.mirror !== false,
-        staleMs: {
-          batteryPower: this._nwGetCacheAgeMs('batteryPower', now),
-          storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
-          storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
-        },
+        derived: false,
+        staleMs: ageInfo(),
       };
     };
-
+    /**
+     * Code-Teil: fromBalance
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const fromBalance = () => {
       try {
         const balanceDeadbandW = Math.max(180, deadbandW);
-        if (this.stateCache && this.stateCache['storageFarm.enabled'] && this.stateCache['storageFarm.enabled'].value) return null;
+        if (this._nwStorageFarmIsActiveFromCache && this._nwStorageFarmIsActiveFromCache()) return null;
 
         const soc = this._nwGetNumberFromCache('storageSoc');
         if (!Number.isFinite(Number(soc))) return null;
 
-        // Nur mit direkt gemessenem Hausverbrauch ableiten. Ohne Direktmessung wäre
-        // consumptionTotal evtl. schon aus derselben Bilanz berechnet und damit zirkulär.
+        // Nur wenn eine echte Verbrauchsleistung als DP gemappt ist, kann Speicherleistung
+        // zuverlässig aus der Bilanz abgeleitet werden. Sonst wäre consumptionTotal ggf.
+        // bereits aus derselben Bilanz erzeugt und die Rechnung zirkulär.
         const hasDirectLoad = this._nwHasMappedDatapoint('consumptionTotal') || this._nwHasMappedDatapoint('housePower');
         if (!hasDirectLoad) return null;
 
@@ -17712,39 +20334,22 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
           src: 'balanceDerived',
           inverted: false,
           fromSigned: false,
+          derived: true,
           mirror: true,
-          staleMs: {
-            balance: 0,
-            batteryPower: this._nwGetCacheAgeMs('batteryPower', now),
-            storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
-            storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
-          },
+          staleMs: Object.assign({ balance: 0 }, ageInfo()),
         };
       } catch (_eBalance) {
         return null;
       }
     };
 
-    const preferBalance = (current) => {
-      try {
-        const measured = Math.max(0, Math.abs(Number(current && current.chargeW) || 0) + Math.abs(Number(current && current.dischargeW) || 0));
-        const srcCur = String(current && current.src || '');
-        const missingLike = !current || srcCur === 'missing' || srcCur === 'stale-or-missing';
-        const derived = fromBalance();
-        if (!derived) return current;
-        if (missingLike || measured <= Math.max(180, deadbandW)) return derived;
-        return current;
-      } catch (_ePrefer) {
-        return current;
-      }
-    };
-
-    // Speicherfarm already provides normalized charge/discharge totals. Keep it authoritative
-    // unless a signed single battery datapoint is explicitly mapped for a non-farm setup.
-    const sfEnabled = !!(this.stateCache && this.stateCache['storageFarm.enabled'] && this.stateCache['storageFarm.enabled'].value);
+    // Speicherfarm nur dann als Quelle verwenden, wenn sie in der Admin-Konfiguration
+    // wirklich aktiv ist und konfigurierte Speicher enthält. Ein alter stateCache-Wert
+    // "storageFarm.enabled=true" darf normale Einzelanlagen nicht übernehmen.
+    const sfEnabled = this._nwStorageFarmIsActiveFromCache && this._nwStorageFarmIsActiveFromCache();
     if (sfEnabled) {
-      const farmCharge = fresh('storageFarm.totalChargePowerW', false);
-      const farmDischarge = fresh('storageFarm.totalDischargePowerW', false);
+      const farmCharge = readMapped('storageFarm.totalChargePowerW', false, false);
+      const farmDischarge = readMapped('storageFarm.totalDischargePowerW', false, false);
       if (farmCharge !== null || farmDischarge !== null) {
         let c = Math.max(0, Math.abs(Number(farmCharge || 0)));
         let d = Math.max(0, Math.abs(Number(farmDischarge || 0)));
@@ -17756,6 +20361,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
           src: inv ? 'storageFarm(inv)' : 'storageFarm',
           inverted: inv,
           fromSigned: false,
+          derived: false,
           mirror: true,
           staleMs: {
             farmCharge: this._nwGetCacheAgeMs('storageFarm.totalChargePowerW', now),
@@ -17765,30 +20371,19 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     }
 
-    const batterySigned = batteryMapped ? rawFresh('batteryPower', true) : null;
-    const chargeRaw = chargeMapped ? rawFresh('storageChargePower', true) : null;
-    const dischargeRaw = dischargeMapped ? rawFresh('storageDischargePower', true) : null;
+    const batterySigned = batteryMapped ? readMapped('batteryPower', true, true) : null;
+    const chargeRaw = chargeMapped ? readMapped('storageChargePower', true, true) : null;
+    const dischargeRaw = dischargeMapped ? readMapped('storageDischargePower', true, true) : null;
 
-    // If charge/discharge were both mapped to the same signed datapoint, keep the sign.
-    // updateValue() normalizes their public state values to magnitudes, so the private raw cache is used here.
+    // Beide Split-Felder auf denselben DP gemappt = tatsächlich ein signed DP.
     if (sameChargeDischargeId && chargeRaw !== null) {
-      return preferBalance(fromSigned(chargeRaw, 'sameChargeDischargeSigned', { mirror: true }));
+      return fromSigned(chargeRaw, 'sameChargeDischargeSigned', { mirror: true });
     }
 
-    // Canonical single signed DP fallback: exactly like NVP signed handling.
-    // Use it when no separate channels are mapped, when separate channels are missing/stale,
-    // or when stale/legacy mirrored values would otherwise show both directions at once.
-    const separateAvailable = (chargeRaw !== null || dischargeRaw !== null);
-    const publicCharge = chargeMapped ? fresh('storageChargePower', true) : null;
-    const publicDischarge = dischargeMapped ? fresh('storageDischargePower', true) : null;
-    const bothPublicDirections = (Number(publicCharge || 0) > deadbandW && Number(publicDischarge || 0) > deadbandW);
-    const bothEqualish = bothPublicDirections && Math.abs(Math.abs(Number(publicCharge || 0)) - Math.abs(Number(publicDischarge || 0))) <= Math.max(2, deadbandW);
-
-    if (batterySigned !== null && (!separateAvailable || bothEqualish || (!chargeMapped && !dischargeMapped))) {
-      return preferBalance(fromSigned(batterySigned, bothEqualish ? 'batterySignedOverrideDual' : 'batterySigned', { mirror: true }));
-    }
-
-    if (separateAvailable) {
+    // Getrennte Lade-/Entlade-DPs sind autoritativ. Eine fehlende Seite wird als 0 W
+    // behandelt; sie wird nicht durch Bilanzwerte ersetzt. Das schützt Historie und
+    // Regelung vor verfälschten Speicherwerten bei konstantem/stalem 0-Wert.
+    if (chargeRaw !== null || dischargeRaw !== null) {
       let c = chargeRaw !== null ? Math.abs(Number(chargeRaw)) : 0;
       let d = dischargeRaw !== null ? Math.abs(Number(dischargeRaw)) : 0;
       if (!Number.isFinite(c)) c = 0;
@@ -17796,41 +20391,50 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       if (c <= deadbandW) c = 0;
       if (d <= deadbandW) d = 0;
       if (inv) { const t = c; c = d; d = t; }
-      return preferBalance({
+      return {
         chargeW: Math.round(c),
         dischargeW: Math.round(d),
         signedW: Math.round(d - c),
         src: inv ? 'chargeDischarge(inv)' : 'chargeDischarge',
         inverted: inv,
         fromSigned: false,
-        mirror: sameChargeDischargeId || !chargeMapped || !dischargeMapped,
-        staleMs: {
-          storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
-          storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
-        },
-      });
+        derived: false,
+        mirror: false,
+        staleMs: ageInfo(),
+      };
     }
 
+    // Signed Batterie-DP ist der Fallback, wenn keine Split-DPs einen Wert liefern.
     if (batterySigned !== null) {
-      return preferBalance(fromSigned(batterySigned, 'batterySigned', { mirror: true }));
+      return fromSigned(batterySigned, 'batterySigned', { mirror: true });
     }
 
-    return preferBalance({
+    // Rechen-Fallback nur, wenn überhaupt kein Speicher-DP konfiguriert ist.
+    // Wenn ein Speicher-DP konfiguriert, aber aktuell nicht lesbar ist, zeigen wir keinen
+    // geratenen Wert, damit Historie/Regelung nicht verfälscht werden.
+    if (!anyStorageMapped) {
+      const derived = fromBalance();
+      if (derived) return derived;
+    }
+
+    return {
       chargeW: 0,
       dischargeW: 0,
       signedW: 0,
-      src: (batteryMapped || chargeMapped || dischargeMapped) ? 'stale-or-missing' : 'missing',
+      src: anyStorageMapped ? 'mapped-missing' : 'missing',
       inverted: inv,
       fromSigned: false,
-      mirror: (!chargeMapped || !dischargeMapped),
-      staleMs: {
-        batteryPower: this._nwGetCacheAgeMs('batteryPower', now),
-        storageChargePower: this._nwGetCacheAgeMs('storageChargePower', now),
-        storageDischargePower: this._nwGetCacheAgeMs('storageDischargePower', now),
-      },
-    });
+      derived: false,
+      mirror: !anyStorageMapped,
+      staleMs: ageInfo(),
+    };
   }
-
+  /**
+   * Code-Teil: _nwResolveGridImportExportFromCache
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwResolveGridImportExportFromCache() {
     const gridBuyMapped = this._nwHasMappedDatapoint('gridBuyPower');
     const gridSellMapped = this._nwHasMappedDatapoint('gridSellPower');
@@ -17871,7 +20475,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       gridNetMapped,
     };
   }
-
+  /**
+   * Code-Teil: _nwSetHistorieValue
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwSetHistorieValue(localId, val, ts, tolAbs = 1) {
     try {
       const n = Number(val);
@@ -17884,8 +20493,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       this.setLocalStateWithCache(localId, n, ts);
     } catch (_e) {}
   }
-
-
+  /**
+   * Code-Teil: ensureDerivedFlowStates
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async ensureDerivedFlowStates() {
     // Derived / calculated live states (used as fallbacks for UI, optional for mapping)
     await this.setObjectNotExistsAsync('derived', {
@@ -18003,7 +20616,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       native: {},
     });
   }
-
+  /**
+   * Code-Teil: updateHistorieExportStates
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async updateHistorieExportStates(reason = 'timer') {
     const now = Date.now();
 
@@ -18028,7 +20646,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     // In Farm-/DC-Speicher-Setups kommt ein Teil der PV-Leistung direkt aus den Speichersystemen (DC-PV).
     // Diese Summe wird unter storageFarm.totalPvPowerW bereitgestellt und soll auch in der Historie/Abrechnung
     // zur PV-Erzeugung addiert werden (mit einfacher Double-Count-Heuristik analog zum Energiefluss-Monitor).
-    const sfEnabled = !!this._nwGetNumberFromCache('storageFarm.enabled');
+    const sfEnabled = this._nwStorageFarmIsActiveFromCache ? this._nwStorageFarmIsActiveFromCache() : !!this._nwGetNumberFromCache('storageFarm.enabled');
     const pvFarmW = this._nwGetNumberFromCache('storageFarm.totalPvPowerW');
     if (sfEnabled && Number.isFinite(pvFarmW) && pvFarmW > 0) {
       const farmAbs = Math.abs(pvFarmW);
@@ -18070,7 +20688,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       extrasConsumersSum += Math.max(0, Math.abs(v));
     }
     const loadRest = Math.max(0, (loadTotal || 0) - evAbs - extrasConsumersSum);
-
+    /**
+     * Code-Teil: _rawCacheValue
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const _rawCacheValue = (key) => {
       try {
         const rec = this.stateCache && this.stateCache[key];
@@ -18079,6 +20702,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         return null;
       }
     };
+    /**
+     * Code-Teil: _numOr
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const _numOr = (key, fallback = null) => {
       try {
         const n = Number(_rawCacheValue(key));
@@ -18087,6 +20716,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         return fallback;
       }
     };
+    /**
+     * Code-Teil: _boolOr
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const _boolOr = (key, fallback = false) => {
       const raw = _rawCacheValue(key);
       if (raw === true || raw === 1 || raw === '1') return true;
@@ -18096,11 +20731,23 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       if (s === 'false' || s === 'off' || s === 'no') return false;
       return !!fallback;
     };
+    /**
+     * Code-Teil: _strOr
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const _strOr = (key, fallback = '') => {
       const raw = _rawCacheValue(key);
       if (raw === null || raw === undefined) return fallback;
       return String(raw);
     };
+    /**
+     * Code-Teil: _parseTimeMinutes
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const _parseTimeMinutes = (raw, defMinutes) => {
       const s = String(raw == null ? '' : raw).trim();
       if (!s) return Number.isFinite(defMinutes) ? defMinutes : null;
@@ -18110,12 +20757,24 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       const mm = Math.max(0, Math.min(59, Number(m[2]) || 0));
       return hh * 60 + mm;
     };
+    /**
+     * Code-Teil: _isInWindow
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const _isInWindow = (nowMin, startMin, endMin) => {
       if (!Number.isFinite(nowMin) || !Number.isFinite(startMin) || !Number.isFinite(endMin)) return false;
       if (startMin === endMin) return false;
       if (startMin < endMin) return nowMin >= startMin && nowMin < endMin;
       return nowMin >= startMin || nowMin < endMin;
     };
+    /**
+     * Code-Teil: _quarterOf
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const _quarterOf = (tsMs) => {
       try {
         const d = new Date(Number(tsMs) || Date.now());
@@ -18124,6 +20783,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         return 1;
       }
     };
+    /**
+     * Code-Teil: _nowMinutesLocal
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const _nowMinutesLocal = (tsMs) => {
       try {
         const d = new Date(Number(tsMs) || Date.now());
@@ -18132,6 +20797,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         return 0;
       }
     };
+    /**
+     * Code-Teil: _computeNetFeeModeNow
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const _computeNetFeeModeNow = () => {
       if (!_boolOr('settings.netFeeEnabled', false)) return 'off';
       const cachedMode = _strOr('tarif.netFeeMode', '').trim();
@@ -18242,7 +20913,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       this._nwSetHistorieValue('historie.peakShaving.atypical.minShiftOk', atMinShiftOk ? 1 : 0, now, 0);
       this._nwSetHistorieValue('historie.peakShaving.atypical.savingsEur', Number.isFinite(atSavingsEur) ? atSavingsEur : 0, now, 0.01);
       this._nwSetHistorieValue('historie.peakShaving.atypical.eligible', atEligible ? 1 : 0, now, 0);
-
+      /**
+       * Code-Teil: parseJsonSafe
+       * Zweck: Parst Rohdaten in ein sicheres internes Format.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const parseJsonSafe = (raw) => {
         try {
           const txt = String(raw || '').trim();
@@ -18337,14 +21013,19 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       if (Number.isFinite(v)) this._nwSetHistorieValue(`historie.producers.p${i}.powerW`, Math.abs(v), now, 0);
     }
   }
-
+  /**
+   * Code-Teil: scheduleRfidPolicyApply
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   scheduleRfidPolicyApply(reason, onlyIndex) {
     // Coalesce bursts of RFID scans / UI writes
     try {
       this._rfidApplyReason = reason || this._rfidApplyReason || 'rfid';
       if (onlyIndex) this._rfidApplyOnlyIndex = Number(onlyIndex) || this._rfidApplyOnlyIndex || null;
       if (this._rfidApplyTimer) return;
-      this._rfidApplyTimer = setTimeout(() => {
+      this._rfidApplyTimer = this._nwSetTimeout(() => {
         this._rfidApplyTimer = null;
         const idx = this._rfidApplyOnlyIndex;
         this._rfidApplyOnlyIndex = null;
@@ -18357,7 +21038,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }, 150);
     } catch(_e) {}
   }
-
+  /**
+   * Code-Teil: applyRfidPolicyAll
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   applyRfidPolicyAll(reason) {
     this.refreshRfidWhitelistFromCache();
     const enabled = this.isRfidEnabled();
@@ -18368,7 +21054,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       this.applyRfidPolicyForIndex(wb.index, reason, enabled);
     }
   }
-
+  /**
+   * Code-Teil: applyRfidPolicyForIndex
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   applyRfidPolicyForIndex(index, reason, enabledOverride) {
     const idx = Number(index) || 0;
     if (!idx) return;
@@ -18450,12 +21141,23 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
 
   // --- Energy totals fallback: derive kWh values from history (InfluxDB) when no kWh counters are mapped ---
+  /**
+   * Code-Teil: _nwTrimId
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwTrimId(v) {
     if (typeof v !== 'string') return '';
     const s = v.trim();
     return s ? s : '';
   }
-
+  /**
+   * Code-Teil: _nwDetectInfluxInstance
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwDetectInfluxInstance() {
     try {
       // If user did not specify a history instance, try to detect an installed influxdb.X instance.
@@ -18472,26 +21174,51 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     } catch (_e) {}
     return null;
   }
-
+  /**
+   * Code-Teil: _nwGetHistoryInstance
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwGetHistoryInstance() {
     const hcfg = (this.config && this.config.history) || {};
     const inst = this._nwTrimId(hcfg.instance) || this._nwTrimId(this._nwDetectedInfluxInstance) || 'influxdb.0';
     return inst;
   }
-
+  /**
+   * Code-Teil: _nwGetPara14aInfluxTargetDays
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwGetPara14aInfluxTargetDays() {
     return 730;
   }
-
+  /**
+   * Code-Teil: _nwGetPara14aInfluxTargetRetentionSeconds
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwGetPara14aInfluxTargetRetentionSeconds() {
     return this._nwGetPara14aInfluxTargetDays() * 24 * 60 * 60;
   }
-
+  /**
+   * Code-Teil: _nwGetPara14aInfluxDbName
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwGetPara14aInfluxDbName() {
     const inst = Number.isFinite(Number(this.instance)) ? Math.max(0, Math.round(Number(this.instance))) : 0;
     return `nexowatt_para14a_${inst}`;
   }
-
+  /**
+   * Code-Teil: _nwGetOwnHostName
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwGetOwnHostName() {
     try {
       const direct = this._nwTrimId(this.host || '');
@@ -18511,7 +21238,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
     return '';
   }
-
+  /**
+   * Code-Teil: _nwListAdapterInstances
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwListAdapterInstances(adapterName) {
     const out = [];
     try {
@@ -18532,7 +21264,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     } catch (_e) {}
     return out;
   }
-
+  /**
+   * Code-Teil: _nwPickFreeAdapterInstanceNumber
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwPickFreeAdapterInstanceNumber(existingNums, preferred = 20) {
     const used = new Set(
       (Array.isArray(existingNums) ? existingNums : [])
@@ -18552,7 +21289,6 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
     return -1;
   }
-
   _nwBuildPara14aInfluxNative(baseNative = {}, meta = {}) {
     const native = JSON.parse(JSON.stringify((baseNative && typeof baseNative === 'object') ? baseNative : {}));
     const targetDays = this._nwGetPara14aInfluxTargetDays();
@@ -18576,7 +21312,6 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
     return native;
   }
-
   _nwBuildPara14aInfluxCommon(baseCommon = {}, host = '') {
     const common = JSON.parse(JSON.stringify((baseCommon && typeof baseCommon === 'object') ? baseCommon : {}));
     common.name = 'influxdb';
@@ -18592,7 +21327,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     });
     return common;
   }
-
+  /**
+   * Code-Teil: _nwEnsurePara14aInfluxInstance
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwEnsurePara14aInfluxInstance(force = false) {
     const now = Date.now();
     const cached = this._nwPara14aInfluxProvision;
@@ -18600,6 +21340,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       return cached.result;
     }
 
+    /**
+     * Code-Teil: finish
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const finish = (partial = {}) => {
       const out = Object.assign({
         instance: '',
@@ -18614,20 +21360,29 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       this._nwPara14aInfluxProvision = { ts: Date.now(), result: out };
       return out;
     };
-
+    /**
+     * Code-Teil: isManagedPara14aInstance
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const isManagedPara14aInstance = (it) => {
       const native = (it && it.obj && it.obj.native && typeof it.obj.native === 'object') ? it.obj.native : {};
       return native.nexowattDedicatedPara14a === true
         && String(native.nexowattManagedFor || '') === 'para14a'
         && String(native.nexowattManagedBy || '') === this.namespace;
     };
-
+    /**
+     * Code-Teil: pickSharedInfluxInstance
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const pickSharedInfluxInstance = (instances) => {
       const arr = Array.isArray(instances)
         ? instances.filter((it) => !isManagedPara14aInstance(it))
         : [];
       if (!arr.length) return null;
-
       const enabled = arr.filter((it) => !!(it && it.obj && it.obj.common && it.obj.common.enabled));
       return enabled.find((it) => it.num === 0)
         || enabled[0]
@@ -18636,6 +21391,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         || null;
     };
 
+    /**
+     * Code-Teil: disableManagedDedicatedInstances
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu ioBroker-Adapterkern (Adapter-Lifecycle, Webserver, REST-/SSE-API, State-Anlage, Lizenz und EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können Adapterstart, APIs, States und Webserver beeinflussen; unload/connection immer mittesten. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const disableManagedDedicatedInstances = async (instances, keepInstanceId = '') => {
       const keep = this._nwTrimId(keepInstanceId);
       for (const it of Array.isArray(instances) ? instances : []) {
@@ -18698,7 +21459,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       });
     }
   }
-
+  /**
+   * Code-Teil: _nwGetCanonicalHistorieId
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwGetCanonicalHistorieId(legacyKey) {
     const k = String(legacyKey || '').trim();
     if (!k) return '';
@@ -18724,7 +21490,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     }
   }
-
+  /**
+   * Code-Teil: _nwGetHistoryDpCandidates
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwGetHistoryDpCandidates(name) {
     const hcfg = (this.config && this.config.history) || {};
     const dp = Object.assign({}, hcfg.datapoints || {}, hcfg.dp || {});
@@ -18732,6 +21503,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const explicitForced = raw.startsWith('!') ? this._nwTrimId(raw.slice(1)) : '';
     const explicit = this._nwTrimId(raw);
     const canon = this._nwTrimId(this._nwGetCanonicalHistorieId(name));
+    /**
+     * Code-Teil: liveMapped
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const liveMapped = (() => {
       try {
         const n = String(name || '');
@@ -18755,6 +21532,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const dynamicTariffActive = !!(this.stateCache && this.stateCache['settings.dynamicTariff'] && this.stateCache['settings.dynamicTariff'].value);
 
     const out = [];
+    /**
+     * Code-Teil: add
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const add = (id) => {
       const sid = this._nwTrimId(id);
       if (sid && !out.includes(sid)) out.push(sid);
@@ -18820,12 +21603,22 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
     return out;
   }
-
+  /**
+   * Code-Teil: _nwGetHistoryDpId
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwGetHistoryDpId(name) {
     const list = this._nwGetHistoryDpCandidates(name);
     return list[0] || '';
   }
-
+  /**
+   * Code-Teil: _nwGetHistoryApiCached
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwGetHistoryApiCached(key, maxAgeMs = 5000) {
     try {
       const cache = this._nwHistoryApiCache;
@@ -18844,7 +21637,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       return null;
     }
   }
-
+  /**
+   * Code-Teil: _nwSetHistoryApiCached
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwSetHistoryApiCached(key, payload) {
     try {
       if (!(this._nwHistoryApiCache instanceof Map)) this._nwHistoryApiCache = new Map();
@@ -18856,8 +21654,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     } catch (_e) {}
   }
-
-
+  /**
+   * Code-Teil: _derivedRefreshPvInvertersCache
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _derivedRefreshPvInvertersCache(force = false) {
     try {
       const cache = this._derivedFlow?.auto?.pvInverters;
@@ -18867,6 +21669,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       try {
         const gc = this.config?.gridConstraints;
         const ids = [];
+        /**
+         * Code-Teil: collect
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const collect = (arr) => {
           if (!Array.isArray(arr)) return;
           for (const inv of arr) {
@@ -18921,6 +21729,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       try {
         const gc = this.config?.gridConstraints;
         const seenPower = new Set(list.map((d) => d.powerId).filter(Boolean));
+        /**
+         * Code-Teil: addCfg
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const addCfg = (arr, tag) => {
           if (!Array.isArray(arr)) return;
           for (let i = 0; i < arr.length; i++) {
@@ -18972,8 +21786,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       this.log.debug(`[derivedFlow] PV inverter cache refresh failed: ${e?.message || e}`);
     }
   }
-
-
+  /**
+   * Code-Teil: scheduleDerivedFlowUpdate
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   scheduleDerivedFlowUpdate(reason = '') {
     // Throttle derived calculations to avoid excessive state writes on high-frequency meters.
     const now = Date.now();
@@ -18988,15 +21806,19 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const delay = since >= minMs ? 0 : (minMs - since);
 
     this._derivedFlow.pending = true;
-    setTimeout(() => {
+    this._nwSetTimeout(() => {
       this._derivedFlow.pending = false;
       this._derivedFlow.lastRunMs = Date.now();
       this.updateDerivedFlowStates(this._derivedFlow.lastReason || 'scheduled')
         .catch((e) => this.log.debug(`[derivedFlow] ${e?.message || e}`));
     }, delay);
   }
-
-
+  /**
+   * Code-Teil: updateDerivedFlowStates
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async updateDerivedFlowStates(reason = '') {
     // Building consumption can be derived from the power balance at NVP:
     // load = (PV + other production) + gridImport + batteryDischarge - gridExport - batteryCharge
@@ -19106,7 +21928,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
 
     // --- PV (DC) from Speicherfarm (optional) ---
-    const sfEnabled = !!(this.stateCache?.['storageFarm.enabled'] && this.stateCache['storageFarm.enabled'].value);
+    const sfEnabled = this._nwStorageFarmIsActiveFromCache ? this._nwStorageFarmIsActiveFromCache() : !!(this.stateCache?.['storageFarm.enabled'] && this.stateCache['storageFarm.enabled'].value);
     let pvDcW = 0;
     if (sfEnabled) {
       const dc = this._nwGetNumberFromCache('storageFarm.totalPvPowerW');
@@ -19154,6 +21976,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
     // Timestamp skew between inputs (debug only)
     const tsList = [];
+    /**
+     * Code-Teil: pushTs
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const pushTs = (k) => {
       const rec = this.stateCache && this.stateCache[k];
       const t = rec && rec.ts;
@@ -19348,36 +22176,67 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     }
 
-    // 4) If storage is resolved from a signed fallback (or farm/auto values), mirror the
-    // normalized pair into the public keys. This is the battery equivalent of the NVP
-    // import/export fallback and keeps tiles, history and downstream modules aligned.
+    // 4) Mirror normalized storage values only where it is safe:
+    //    - signed DP -> public split states (when split DPs are not mapped)
+    //    - storage farm / calculated fallback -> public states (when no real split DP owns them)
+    //    - same DP in charge+discharge fields -> overwrite both with the normalized split
+    // Real separate charge/discharge DPs are never overwritten by a fallback calculation.
     try {
       const dps = (this.config && this.config.datapoints) || {};
       const chargeMapped = !!String(dps.storageChargePower || '').trim();
       const dischargeMapped = !!String(dps.storageDischargePower || '').trim();
+      const batteryMapped = !!String(dps.batteryPower || '').trim();
       const samePair = chargeMapped && dischargeMapped && String(dps.storageChargePower || '').trim() === String(dps.storageDischargePower || '').trim();
-      const shouldMirrorStorage = !!(storageFlow && (storageFlow.mirror || samePair || !chargeMapped || !dischargeMapped));
+      const src = String(storageFlow && storageFlow.src || '');
+      const fromSignedOnly = !!(storageFlow && storageFlow.fromSigned && !chargeMapped && !dischargeMapped);
+      const fromFarmOrBalance = !!(storageFlow && (src.indexOf('storageFarm') === 0 || src.indexOf('balanceDerived') === 0));
+      const noSplitMapped = !chargeMapped && !dischargeMapped;
+      const shouldMirrorBoth = !!(samePair || fromSignedOnly || (noSplitMapped && fromFarmOrBalance));
+      const shouldZeroMissingSide = !!(storageFlow && !storageFlow.derived && (chargeMapped !== dischargeMapped));
       const chargeRound = Math.round(chargeW);
       const dischargeRound = Math.round(dischargeW);
-      if (shouldMirrorStorage) {
-        const curC = Number(this.stateCache?.storageChargePower?.value);
-        const curD = Number(this.stateCache?.storageDischargePower?.value);
-        if (!Number.isFinite(curC) || curC !== chargeRound) this.updateValue('storageChargePower', chargeRound, ts, { raw: false });
-        if (!Number.isFinite(curD) || curD !== dischargeRound) this.updateValue('storageDischargePower', dischargeRound, ts, { raw: false });
+      /**
+       * Code-Teil: updateLocal
+       * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
+      const updateLocal = (k, v) => {
+        const cur = Number(this.stateCache?.[k]?.value);
+        if (!Number.isFinite(cur) || cur !== v) this.updateValue(k, v, ts, { raw: false });
+      };
+      if (shouldMirrorBoth) {
+        updateLocal('storageChargePower', chargeRound);
+        updateLocal('storageDischargePower', dischargeRound);
+      } else if (shouldZeroMissingSide) {
+        if (!chargeMapped) updateLocal('storageChargePower', chargeRound);
+        if (!dischargeMapped) updateLocal('storageDischargePower', dischargeRound);
       }
-      if (!this._nwHasMappedDatapoint('batteryPower') || (storageFlow && storageFlow.src === 'balanceDerived')) {
+      // batteryPower is an internal signed convenience value when no signed DP is mapped.
+      // It may be derived from valid split DPs, farm totals or a calculated fallback, but
+      // it must never overwrite a configured signed battery DP.
+      if (!batteryMapped) {
         const signedRound = Math.round(dischargeW - chargeW);
-        const curB = Number(this.stateCache?.batteryPower?.value);
-        if (!Number.isFinite(curB) || curB !== signedRound) this.updateValue('batteryPower', signedRound, ts, { raw: false });
+        updateLocal('batteryPower', signedRound);
       }
     } catch (_eStorageMirror) {}
   }
-
+  /**
+   * Code-Teil: _nwHasMappedDatapoint
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwHasMappedDatapoint(key) {
     const dps = (this.config && this.config.datapoints) || {};
     return !!this._nwTrimId(dps[key]);
   }
-
+  /**
+   * Code-Teil: _nwNormTsMs
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwNormTsMs(tRaw) {
     if (tRaw == null) return null;
     if (tRaw instanceof Date) return tRaw.getTime();
@@ -19389,7 +22248,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     if (!Number.isFinite(n)) return null;
     return n < 1e12 ? n * 1000 : n;
   }
-
+  /**
+   * Code-Teil: _nwChooseStepMs
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwChooseStepMs(spanMs, targetPoints = 3000, minStepMs = 60 * 1000) {
     const s = Math.max(1, Number(spanMs) || 1);
     const t = Math.max(100, Number(targetPoints) || 3000);
@@ -19407,13 +22271,23 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const hour = 3600e3;
     return Math.ceil(step / hour) * hour;
   }
-
+  /**
+   * Code-Teil: _nwChooseEnergyIntegrationStepMs
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwChooseEnergyIntegrationStepMs(spanMs, minStepMs = 10 * 60 * 1000, maxStepMs = 60 * 60 * 1000) {
     const chosen = this._nwChooseStepMs(spanMs, 50000, minStepMs);
     const maxStep = Math.max(minStepMs, Number(maxStepMs) || maxStepMs);
     return Math.max(minStepMs, Math.min(chosen, maxStep));
   }
-
+  /**
+   * Code-Teil: _nwNormalizeHistoryResult
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwNormalizeHistoryResult(resu) {
     let arr = [];
     if (!resu) return arr;
@@ -19429,7 +22303,6 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     } else if (resu && Array.isArray(resu.data)) {
       arr = resu.data;
     }
-
     const norm = (arr || []).map(p => {
       const tRaw = Array.isArray(p) ? p[0] : (p.ts ?? p.time ?? p.t ?? p[0]);
       const vRaw = Array.isArray(p) ? p[1] : (p.val ?? p.value ?? p[1]);
@@ -19442,7 +22315,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     norm.sort((a, b) => a.ts - b.ts);
     return norm;
   }
-
+  /**
+   * Code-Teil: _nwGetHistoryAvgSeries
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwGetHistoryAvgSeries(id, startMs, endMs, stepMs) {
     return new Promise(resolve => {
       const inst = this._nwGetHistoryInstance();
@@ -19458,7 +22336,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     });
   }
-
+  /**
+   * Code-Teil: _nwGetHistoryAvgSeriesAny
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwGetHistoryAvgSeriesAny(candidates, startMs, endMs, stepMs) {
     const list = Array.isArray(candidates) ? candidates : [candidates];
     let first = [];
@@ -19471,9 +22354,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
     return first;
   }
-
-
-
+  /**
+   * Code-Teil: _nwAtypicalReviewParseTs
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwAtypicalReviewParseTs(raw, fallback, endOfDay = false) {
     if (raw === null || raw === undefined || raw === '') return fallback;
     if (typeof raw === 'number' && Number.isFinite(raw)) return raw < 1e12 ? Math.round(raw * 1000) : Math.round(raw);
@@ -19492,29 +22378,55 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const parsed = Date.parse(s);
     return Number.isNaN(parsed) ? fallback : parsed;
   }
-
+  /**
+   * Code-Teil: _nwAtypicalReviewDateTime
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwAtypicalReviewDateTime(ts) {
     try {
       const d = new Date(Number(ts) || Date.now());
+      /**
+       * Code-Teil: pad
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const pad = (n) => String(n).padStart(2, '0');
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
     } catch (_e) {
       return '';
     }
   }
-
+  /**
+   * Code-Teil: _nwAtypicalReviewCsvCell
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwAtypicalReviewCsvCell(v) {
     if (v === null || v === undefined) return '';
     const s = String(v).replace(/\r?\n/g, ' ').replace(/"/g, '""');
     return `"${s}"`;
   }
-
+  /**
+   * Code-Teil: _nwAtypicalReviewNumber
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwAtypicalReviewNumber(v, digits = 0) {
     const n = Number(v);
     if (!Number.isFinite(n)) return '';
     return digits > 0 ? n.toFixed(digits) : String(Math.round(n));
   }
-
+  /**
+   * Code-Teil: _nwAtypicalReviewReadState
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwAtypicalReviewReadState(localId, fallback = null) {
     try {
       const key = String(localId || '').replace(new RegExp('^' + this.namespace.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.'), '');
@@ -19529,13 +22441,23 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       return fallback;
     }
   }
-
+  /**
+   * Code-Teil: _nwAtypicalReviewReadNumber
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwAtypicalReviewReadNumber(localId, fallback = 0) {
     const raw = await this._nwAtypicalReviewReadState(localId, fallback);
     const n = Number(raw);
     return Number.isFinite(n) ? n : fallback;
   }
-
+  /**
+   * Code-Teil: _nwAtypicalReviewReadBool
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwAtypicalReviewReadBool(localId, fallback = false) {
     const raw = await this._nwAtypicalReviewReadState(localId, fallback);
     if (raw === true || raw === 1 || raw === '1') return true;
@@ -19545,13 +22467,17 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     if (['false', 'off', 'no', 'nein'].includes(s)) return false;
     return !!fallback;
   }
-
+  /**
+   * Code-Teil: _nwAtypicalReviewReadString
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _nwAtypicalReviewReadString(localId, fallback = '') {
     const raw = await this._nwAtypicalReviewReadState(localId, fallback);
     if (raw === null || raw === undefined) return fallback;
     return String(raw);
   }
-
   async _nwBuildAtypicalReviewExportPayload(query = {}) {
     const now = Date.now();
     const cfg = (this.config && this.config.peakShaving && typeof this.config.peakShaving === 'object') ? this.config.peakShaving : {};
@@ -19708,12 +22634,23 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       seriesRows: rows,
     };
   }
-
+  /**
+   * Code-Teil: _nwAtypicalReviewPayloadToCsv
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwAtypicalReviewPayloadToCsv(payload) {
     const p = payload || {};
     const s = p.snapshot || {};
     const src = s.source || {};
     const rows = [];
+    /**
+     * Code-Teil: add
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const add = (cols) => rows.push((cols || []).map((v) => this._nwAtypicalReviewCsvCell(v)).join(';'));
     add(['NexoWatt - Nachweis atypische Lastspitzenkappung / §19-Prüfung']);
     add(['Exportzeit', this._nwAtypicalReviewDateTime(p.generatedAt || Date.now())]);
@@ -19765,7 +22702,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
     return '\ufeff' + rows.join('\r\n');
   }
-
+  /**
+   * Code-Teil: _nwAtypicalReviewAscii
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwAtypicalReviewAscii(text) {
     return String(text == null ? '' : text)
       .replace(/[€]/g, 'EUR')
@@ -19778,11 +22720,21 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       .replace(/[✖❌]/g, 'NEIN')
       .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, ' ');
   }
-
+  /**
+   * Code-Teil: _nwAtypicalReviewPdfEscape
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwAtypicalReviewPdfEscape(text) {
     return this._nwAtypicalReviewAscii(text).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
   }
-
+  /**
+   * Code-Teil: _nwAtypicalReviewWrap
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwAtypicalReviewWrap(text, maxLen = 95) {
     const s = this._nwAtypicalReviewAscii(text).trim();
     if (!s) return [''];
@@ -19796,12 +22748,23 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     if (line) out.push(line);
     return out.length ? out : [''];
   }
-
+  /**
+   * Code-Teil: _nwAtypicalReviewPayloadToPdf
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwAtypicalReviewPayloadToPdf(payload) {
     const p = payload || {};
     const s = p.snapshot || {};
     const src = s.source || {};
     const lines = [];
+    /**
+     * Code-Teil: yesNo
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const yesNo = (v) => v ? 'ja' : 'nein';
     lines.push('NexoWatt - Nachweis atypische Lastspitzenkappung / Par.19-Pruefung');
     lines.push(`Exportzeit: ${this._nwAtypicalReviewDateTime(p.generatedAt || Date.now())}`);
@@ -19858,6 +22821,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     if (!pages.length) pages.push(['Kein Inhalt']);
 
     const objects = [];
+    /**
+     * Code-Teil: addObj
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const addObj = (body) => { objects.push(Buffer.isBuffer(body) ? body : Buffer.from(String(body), 'latin1')); return objects.length; };
     addObj('<< /Type /Catalog /Pages 2 0 R >>');
     addObj('');
@@ -19902,7 +22871,12 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     chunks.push(Buffer.from(xref.join('\n') + '\n', 'latin1'));
     return Buffer.concat(chunks);
   }
-
+  /**
+   * Code-Teil: _nwIntegrateKwh
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwIntegrateKwh(series, endMs, defaultStepMs, positiveOnly = true) {
     if (!Array.isArray(series) || !series.length) return null;
     let kwh = 0;
@@ -19927,13 +22901,23 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
     return kwh;
   }
-
+  /**
+   * Code-Teil: updateEnergyTotalsFromInflux
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async updateEnergyTotalsFromInflux(reason = 'periodic') {
     const now = Date.now();
     const LOOKBACK_DAYS = 3650; // "Gesamt" = so weit wie Influx es hergibt (typisch Retention-basiert)
     const startMs = now - LOOKBACK_DAYS * 24 * 3600 * 1000;
     const spanMs = now - startMs;
-
+    /**
+     * Code-Teil: persistLocal
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const persistLocal = (key, val) => {
       try {
         this.setStateAsync(key, val, true).catch(() => {});
@@ -20067,10 +23051,6 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     }
   }
-
-
-
-
   updateValue(key, value, ts, opts = {}) {
     const rawValue = value;
     try {
@@ -20165,7 +23145,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
       if (!this._sseFlushTimer) {
         const batchMs = (this.config && Number(this.config.sseBatchMs)) || 120;
-        this._sseFlushTimer = setTimeout(() => {
+        this._sseFlushTimer = this._nwSetTimeout(() => {
           const p = this._ssePendingPayload || {};
           this._ssePendingPayload = {};
           this._sseFlushTimer = null;
@@ -20182,17 +23162,26 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       }
     } catch (_e) {}
   }
-
-
+  /**
+   * Code-Teil: _nwClearTimer
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwClearTimer(refName) {
     try {
       if (!this[refName]) return;
-      try { clearTimeout(this[refName]); } catch (_e0) {}
-      try { clearInterval(this[refName]); } catch (_e1) {}
+      try { this._nwClearTimeout(this[refName]); } catch (_e0) {}
+      try { this._nwClearInterval(this[refName]); } catch (_e1) {}
       this[refName] = null;
     } catch (_e2) {}
   }
-
+  /**
+   * Code-Teil: _nwCloseSseClients
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwCloseSseClients() {
     try {
       for (const client of Array.from(this.sseClients || [])) {
@@ -20209,8 +23198,19 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     try { this.sseClients.clear(); } catch (_e4) {}
     try { this._ssePendingPayload = {}; } catch (_e5) {}
   }
-
+  /**
+   * Code-Teil: _nwCloseServer
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _nwCloseServer(callback) {
+    /**
+     * Code-Teil: done
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const done = (() => {
       let called = false;
       return () => {
@@ -20235,12 +23235,24 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
     let destroyTimer = null;
     let guardTimer = null;
+    /**
+     * Code-Teil: clearTimers
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const clearTimers = () => {
       try { if (destroyTimer) clearTimeout(destroyTimer); } catch (_e2) {}
       try { if (guardTimer) clearTimeout(guardTimer); } catch (_e3) {}
       destroyTimer = null;
       guardTimer = null;
     };
+    /**
+     * Code-Teil: finish
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const finish = () => {
       clearTimers();
       try { this._serverClosing = false; } catch (_e4) {}
@@ -20269,7 +23281,22 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     guardTimer = setTimeout(() => finish(), 1200);
   }
 
+  // Abschnitt: ioBroker-Unload. Hier müssen Webserver, SSE-Clients, Timer und EMS-Scheduler zuverlässig beendet werden.
+  /**
+   * Code-Teil: onUnload
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   onUnload(callback) {
+    try { this._nwStopConnectionHeartbeat(); } catch (_eBeat) {}
+    try { this._nwSetInfoConnection(false, 'unload').catch(() => {}); } catch (_eConn) {}
+    /**
+     * Code-Teil: done
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const done = (() => {
       let called = false;
       return () => {

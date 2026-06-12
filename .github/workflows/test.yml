@@ -2,21 +2,27 @@ name: Test
 
 on:
   push:
+    branches: [main, master]
   pull_request:
+    branches: [main, master]
 
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        node-version: [16.x, 18.x, 20.x]
+        node-version: [22.x, 24.x]
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+          cache: npm
       - name: Install dependencies
-        run: npm install
-      - name: Pack (dry run)
-        run: npm pack --dry-run
+        run: npm ci
+      - name: Runtime versions
+        run: node -v && npm -v
+      - name: NexoWatt CI check
+        run: npm run ci:check
