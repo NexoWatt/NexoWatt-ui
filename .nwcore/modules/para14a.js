@@ -1,13 +1,48 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: .nwcore/modules/para14a.js
+ * Rolle im Projekt: EMS-Modul para14a.
+ * Zweck: Führt eine fachliche EMS-Funktion zyklisch aus und veröffentlicht States für Frontend/Regelung.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Interne EMS-Kern-/Referenzdatei im .nwcore-Bereich. Dieser Bereich spiegelt wiederverwendbare EMS-Logik.
+ * Zusammenhänge:
+ * - Die produktive Variante liegt häufig parallel unter ems/.
+ * - Änderungen müssen mit dem produktiven ems/-Pfad abgeglichen werden.
+ * Wartungshinweise:
+ * - Nicht isoliert ändern, sonst laufen .nwcore und ems auseinander.
+ */
+
 'use strict';
 
 const { BaseModule } = require('./base');
 const { applySetpoint } = require('../consumers');
-
+/**
+ * Code-Teil: num
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function num(v, dflt = 0) {
     const n = Number(v);
     return Number.isFinite(n) ? n : dflt;
 }
-
+/**
+ * Code-Teil: clamp
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function clamp(v, minV, maxV) {
     const n = Number(v);
     if (!Number.isFinite(n)) return minV;
@@ -15,14 +50,24 @@ function clamp(v, minV, maxV) {
     if (n > maxV) return maxV;
     return n;
 }
-
+/**
+ * Code-Teil: safeIdPart
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function safeIdPart(s) {
     const v = String(s || '').trim();
     if (!v) return '';
     // Keep in sync with Charging-Management's toSafeIdPart()
     return v.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64);
 }
-
+/**
+ * Code-Teil: normalizeConsumerType
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function normalizeConsumerType(t) {
     const s = String(t || '').trim().toLowerCase();
     if (s === 'wärmepumpe' || s === 'waermepumpe' || s === 'heatpump' || s === 'hp' || s === 'wp') return 'heatPump';
@@ -31,13 +76,23 @@ function normalizeConsumerType(t) {
     if (s === 'speicher' || s === 'storage' || s === 'battery') return 'storage';
     return 'custom';
 }
-
+/**
+ * Code-Teil: normalizeControlType
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function normalizeControlType(t) {
     const s = String(t || '').trim().toLowerCase();
     if (s === 'onoff' || s === 'on/off' || s === 'switch' || s === 'enable' || s === 'aus' || s === 'sperren') return 'onOff';
     return 'limitW';
 }
-
+/**
+ * Code-Teil: getGzf
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function getGzf(nSteuVE) {
     const n = Math.max(1, Math.round(Number(nSteuVE) || 1));
     if (n <= 1) return 1;
@@ -60,7 +115,26 @@ function getGzf(nSteuVE) {
  * - Expose per-wallbox caps via adapter._para14a for Charging-Management
  * - Optionally write setpoints to additional "steuerbare Verbrauchseinrichtungen" (e.g. WP/Heizstab/Klima)
  */
+/**
+ * Code-Teil: Klasse `Para14aModule`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+// Klassen-Kommentar: Klasse: Para14aModule. Aufgabe: kapselt eine fachliche Teilaufgabe dieser Datei. Beim TypeScript-Umbau Eingaben, Rückgaben und Seiteneffekte typisieren. Zusammenhang: Projekt-Quellcode des NexoWatt-Adapters.
+/**
+ * Klasse: Para14aModule
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 class Para14aModule extends BaseModule {
+    /**
+     * Code-Teil: constructor
+     * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
+     * Zusammenhang: Gehört zu NWCore-Vorlage (interner Core-/Template-Code, der mit EMS-Strukturen zusammenhängt) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen an Signatur oder Rückgabe können abhängige Aufrufer beeinflussen; Aufrufstellen mitprüfen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     constructor(adapter, dpRegistry) {
         super(adapter, dpRegistry);
 
@@ -84,15 +158,38 @@ class Para14aModule extends BaseModule {
         };
     }
 
+    /**
+     * Code-Teil: Methode `_isEnabled`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _isEnabled
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _isEnabled() {
         return !!this.adapter?.config?.installerConfig?.para14a;
     }
-
+    /**
+     * Code-Teil: _getCfg
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _getCfg() {
         const cfg = this.adapter?.config?.installerConfig || {};
         return cfg && typeof cfg === 'object' ? cfg : {};
     }
 
+    /**
+     * Code-Teil: Methode `_setState`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
     async _setState(id, val, options = {}) {
         const force = !!options.force;
         const ts = Number(options.ts) || Date.now();
@@ -111,19 +208,53 @@ class Para14aModule extends BaseModule {
         return true;
     }
 
+    /**
+     * Code-Teil: Methode `_setStateIfChanged`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _setStateIfChanged
+     * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _setStateIfChanged(id, val) {
         return this._setState(id, val, { force: false });
     }
-
+    /**
+     * Code-Teil: _setStateForced
+     * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _setStateForced(id, val, ts) {
         return this._setState(id, val, { force: true, ts });
     }
 
+    /**
+     * Code-Teil: Methode `_roundW`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _roundW
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _roundW(v, dflt = 0) {
         const n = Number(v);
         return Number.isFinite(n) ? Math.round(n) : dflt;
     }
-
+    /**
+     * Code-Teil: _limitJsonText
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _limitJsonText(v, maxLen = 6000) {
         let s = '';
         try {
@@ -135,6 +266,18 @@ class Para14aModule extends BaseModule {
         return s.length > maxLen ? `${s.slice(0, maxLen)}...` : s;
     }
 
+    /**
+     * Code-Teil: Methode `_getAdapterNumberFromCache`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _getAdapterNumberFromCache
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _getAdapterNumberFromCache(key, dflt = 0) {
         try {
             if (this.adapter && typeof this.adapter._nwGetNumberFromCache === 'function') {
@@ -156,10 +299,28 @@ class Para14aModule extends BaseModule {
         return dflt;
     }
 
+    /**
+     * Code-Teil: _newAuditSessionId
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu NWCore-Vorlage (interner Core-/Template-Code, der mit EMS-Strukturen zusammenhängt) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen an Signatur oder Rückgabe können abhängige Aufrufer beeinflussen; Aufrufstellen mitprüfen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     _newAuditSessionId(ts = Date.now()) {
         return `p14a-${Math.round(ts).toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     }
 
+    /**
+     * Code-Teil: Methode `_getAuditControlSignature`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _getAuditControlSignature
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _getAuditControlSignature(snapshot) {
         const s = snapshot && typeof snapshot === 'object' ? snapshot : {};
         return JSON.stringify({
@@ -175,6 +336,18 @@ class Para14aModule extends BaseModule {
         });
     }
 
+    /**
+     * Code-Teil: Methode `_buildAuditSnapshot`
+     * Zweck: baut aus Rohdaten eine strukturierte Konfiguration, Liste oder Empfehlung.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _buildAuditSnapshot
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _buildAuditSnapshot(data) {
         const s = data && typeof data === 'object' ? data : {};
         const active = !!s.active;
@@ -202,6 +375,18 @@ class Para14aModule extends BaseModule {
         };
     }
 
+    /**
+     * Code-Teil: Methode `_getAuditChangeReason`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _getAuditChangeReason
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _getAuditChangeReason(prev, next, fallback = 'update') {
         const p = prev && typeof prev === 'object' ? prev : null;
         const n = next && typeof next === 'object' ? next : {};
@@ -222,6 +407,18 @@ class Para14aModule extends BaseModule {
         return reasons.length ? reasons.slice(0, 3).join('+') : fallback;
     }
 
+    /**
+     * Code-Teil: Methode `_initAuditLoggingStates`
+     * Zweck: initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _initAuditLoggingStates
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _initAuditLoggingStates(mk) {
         await this.adapter.setObjectNotExistsAsync('para14a.audit', {
             type: 'channel',
@@ -281,6 +478,18 @@ class Para14aModule extends BaseModule {
         await mk('para14a.trace.gridPowerW', 'Netzleistung (W)', 'number', 'value.power', false, 'W');
     }
 
+    /**
+     * Code-Teil: Methode `_setupAuditHistory`
+     * Zweck: initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _setupAuditHistory
+     * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _setupAuditHistory() {
         let historyInstance = '';
         let dedicatedHistory = false;
@@ -388,6 +597,18 @@ class Para14aModule extends BaseModule {
         }
     }
 
+    /**
+     * Code-Teil: Methode `_emitAuditEvent`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _emitAuditEvent
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _emitAuditEvent(snapshot, eventType, reason, result) {
         const ts = Date.now();
         const eventSeq = Math.max(1, Math.round(num(this._audit.eventSeq, 0)) + 1);
@@ -450,6 +671,18 @@ class Para14aModule extends BaseModule {
         }
     }
 
+    /**
+     * Code-Teil: Methode `_writeAuditTrace`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _writeAuditTrace
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _writeAuditTrace(snapshot, force = false) {
         const now = Date.now();
         const shouldWrite = !!force || (!!snapshot.active && (now - Number(this._audit.lastTraceAt || 0) >= 60000));
@@ -476,6 +709,18 @@ class Para14aModule extends BaseModule {
         await this._setStateForced('para14a.trace.gridPowerW', this._roundW(snapshot.gridPowerW, 0), ts);
     }
 
+    /**
+     * Code-Teil: Methode `_handleAuditLogging`
+     * Zweck: behandelt ein Ereignis oder einen API-/UI-Callback.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _handleAuditLogging
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _handleAuditLogging(snapshot) {
         const prev = this._audit.lastControlSnapshot;
         const sig = this._getAuditControlSignature(snapshot);
@@ -523,6 +768,18 @@ class Para14aModule extends BaseModule {
         this._audit.lastControlSignature = sig;
     }
 
+    /**
+     * Code-Teil: Methode `_buildLoadsFromConfig`
+     * Zweck: baut aus Rohdaten eine strukturierte Konfiguration, Liste oder Empfehlung.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _buildLoadsFromConfig
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _buildLoadsFromConfig() {
         const cfg = this._getCfg();
         const rows = Array.isArray(cfg.para14aConsumers) ? cfg.para14aConsumers : [];
@@ -580,6 +837,18 @@ class Para14aModule extends BaseModule {
         this._loads = loads;
     }
 
+    /**
+     * Code-Teil: Methode `init`
+     * Zweck: initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: init
+     * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async init() {
         // Create states always (even if the module is disabled) to make troubleshooting easier.
         await this.adapter.setObjectNotExistsAsync('para14a', {
@@ -588,6 +857,12 @@ class Para14aModule extends BaseModule {
             native: {},
         });
 
+        /**
+         * Code-Teil: Arrow-Funktion `mk`
+         * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
         const mk = async (id, name, type, role, writable = false, unit = undefined) => {
             await this.adapter.setObjectNotExistsAsync(id, {
                 type: 'state',
@@ -671,6 +946,18 @@ class Para14aModule extends BaseModule {
         await this._setupAuditHistory();
     }
 
+    /**
+     * Code-Teil: Methode `_readActiveSignal`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _readActiveSignal
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _readActiveSignal() {
         const cfg = this._getCfg();
 
@@ -699,6 +986,12 @@ class Para14aModule extends BaseModule {
         return { active: assumeActive, source: assumeActive ? 'config' : 'no_signal' };
     }
 
+    /**
+     * Code-Teil: Methode `_computeDistribution`
+     * Zweck: berechnet abgeleitete Werte; Änderungen können Energiefluss/History/Regelungen beeinflussen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
     _computeDistribution({ mode, minPerDeviceW, evcsCount, hasWP, hasKlima, pSumWP, pSumKlima, externalTotalSetpointW }) {
         const baseW = Math.max(0, minPerDeviceW);
         const nSteuVE = Math.max(0, Math.round(evcsCount)) + (hasWP ? 1 : 0) + (hasKlima ? 1 : 0);
@@ -723,6 +1016,18 @@ class Para14aModule extends BaseModule {
         return { nSteuVE: n, gzf, pMinW, primaryW, secondaryW, totalBudgetW };
     }
 
+    /**
+     * Code-Teil: Methode `tick`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: tick
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async tick() {
         // Always keep adapter._para14a up to date, so other modules can safely read it.
         if (!this.adapter) return;

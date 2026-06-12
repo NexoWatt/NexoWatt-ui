@@ -1,6 +1,31 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: www/sw.js
+ * Rolle im Projekt: Service Worker.
+ * Zweck: Cache-Schicht für PWA/Offline-Shell; muss bei jeder Version gebumpt werden.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Service Worker/PWA-Cache: legt fest, welche UI-Dateien offline bzw. schneller geladen werden.
+ * Zusammenhänge:
+ * - Cache-Version muss bei jedem Frontend-Release erhöht werden.
+ * - Greift auf Dateien aus www/ zu.
+ * Wartungshinweise:
+ * - Fehlerhafte Cache-Listen können alte UI-Dateien ausliefern; nach Änderungen immer Cache-Version erhöhen.
+ */
+
 // Increment cache name on releases so browser updates JS/HTML reliably.
 // NOTE: Keep this monotonic to force SW updates on hotfixes.
-const CACHE_NAME = 'nexowatt-cache-v219';
+const CACHE_NAME = 'nexowatt-cache-v223';
 
 const OFFLINE_URLS = [
   './',
@@ -12,6 +37,7 @@ const OFFLINE_URLS = [
   'assets/icons/nexowatt-512.png'
 ];
 
+// Ereignis-Kommentar: Bindet das UI-Ereignis 'install' an self. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(OFFLINE_URLS))
@@ -19,6 +45,7 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
+// Ereignis-Kommentar: Bindet das UI-Ereignis 'activate' an self. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => Promise.all(
@@ -28,6 +55,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Ereignis-Kommentar: Bindet das UI-Ereignis 'fetch' an self. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
 self.addEventListener('fetch', (event) => {
   const req = event.request;
 

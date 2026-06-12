@@ -1,4 +1,19 @@
+<!--
+  Datei: www/logic.html
+  Rolle: Code-Datei
+  Zweck: Allgemeiner Projektcode; genaue Verantwortung ergibt sich aus Pfad und Funktionsnamen.
+  Wartung: HTML-IDs/Klassen sind Vertragsstellen für www/*.js und CSS. Nicht ohne Suche nach Referenzen ändern.
+-->
 <!DOCTYPE html>
+<!--
+  NexoWatt Code-Kommentar (DE)
+  Zweck: HTML-Seite des NexoWatt-Adapters.
+  Zusammenhänge:
+  - JavaScript-Logik liegt meist in einer gleichnamigen .js-Datei.
+  - Styles liegen in www/styles.css oder spezifischen CSS-Dateien.
+  Wartungshinweise:
+  - IDs und data-Attribute sind oft direkte Schnittstellen zum JS.
+-->
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
@@ -22,7 +37,8 @@
 </head>
 
 <body class="nw-cockpit-page nw-cockpit-skin nw-installer-page nw-page-logic">
-  <header class="topbar">
+  <!-- Abschnitt: Kopfbereich/Navigation. Wird durch CSS und teils durch JS-Menülogik gesteuert. -->
+<header class="topbar">
   <div class="brand">
     <a href="/" aria-label="NexoWatt Live"><img alt="NexoWatt" src="/static/nexowatt-logo.png"/></a>
   </div>
@@ -48,7 +64,8 @@
   </div>
 </header>
 
-  <main class="container nw-page-shell nw-logic-page nw-subpage nw-subpage-logic" style="max-width: 96vw;">
+  <!-- Abschnitt: Hauptinhalt der Seite. DOM-IDs in diesem Bereich werden durch zugehörige JS-Dateien befüllt. -->
+<main class="container nw-page-shell nw-logic-page nw-subpage nw-subpage-logic" style="max-width: 96vw;">
     <section class="nw-page-hero" aria-label="NexoLogic Übersicht">
       <div>
         <div class="nw-page-hero__eyebrow">NexoLogic</div>

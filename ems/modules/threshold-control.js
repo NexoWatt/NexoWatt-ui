@@ -1,12 +1,47 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: ems/modules/threshold-control.js
+ * Rolle im Projekt: Schwellwertsteuerung.
+ * Zweck: Verarbeitet konfigurierbare Ein/Aus-Regeln auf Basis von Messwerten.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Schwellwertsteuerung: generische Regeln, die bei Messwertgrenzen Ausgänge/States schalten können.
+ * Zusammenhänge:
+ * - Wird im App-Center konfiguriert und im LIVE-Schnellzugriff angezeigt.
+ * - Kann optionale Verbraucher/Relais steuern.
+ * Wartungshinweise:
+ * - Regelbedingungen klar dokumentieren, weil falsche Schwellen reale Ausgänge schalten können.
+ */
+
 'use strict';
 
 const { BaseModule } = require('./base');
-
+/**
+ * Code-Teil: num
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function num(v, fallback = null) {
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
 }
-
+/**
+ * Code-Teil: clamp
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function clamp(v, minV, maxV, fallback = null) {
     const n = num(v, fallback);
     if (n === null) return fallback;
@@ -14,7 +49,12 @@ function clamp(v, minV, maxV, fallback = null) {
     if (Number.isFinite(maxV) && n > maxV) return maxV;
     return n;
 }
-
+/**
+ * Code-Teil: safeIndex
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function safeIndex(i) {
     const n = Math.round(Number(i) || 0);
     if (n < 1) return 1;
@@ -32,7 +72,26 @@ function safeIndex(i) {
  * - fehlende/alte Daten -> keine Schreibaktionen
  * - idempotente Writes (nur bei Änderung)
  */
+/**
+ * Code-Teil: Klasse `ThresholdControlModule`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+// Klassen-Kommentar: Klasse: ThresholdControlModule. Aufgabe: kapselt eine fachliche Teilaufgabe dieser Datei. Beim TypeScript-Umbau Eingaben, Rückgaben und Seiteneffekte typisieren. Zusammenhang: EMS-Modul mit eigener Regelungs-/Diagnoseaufgabe; wird durch ems/module-manager.js und ems/engine.js ausgeführt.
+/**
+ * Klasse: ThresholdControlModule
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 class ThresholdControlModule extends BaseModule {
+    /**
+     * Code-Teil: constructor
+     * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
+     * Zusammenhang: Gehört zu EMS-Modul (Regelungs-, Diagnose- oder Beratungslogik innerhalb der EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen an Signatur oder Rückgabe können abhängige Aufrufer beeinflussen; Aufrufstellen mitprüfen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     constructor(adapter, dpRegistry) {
         super(adapter, dpRegistry);
 
@@ -44,10 +103,27 @@ class ThresholdControlModule extends BaseModule {
         this._stateCache = new Map();
     }
 
+    /**
+     * Code-Teil: Methode `_isEnabled`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _isEnabled
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _isEnabled() {
         return !!(this.adapter && this.adapter.config && this.adapter.config.enableThresholdControl);
     }
-
+    /**
+     * Code-Teil: _getCfg
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _getCfg() {
         const cfg = (this.adapter && this.adapter.config && this.adapter.config.threshold && typeof this.adapter.config.threshold === 'object')
             ? this.adapter.config.threshold
@@ -55,6 +131,18 @@ class ThresholdControlModule extends BaseModule {
         return cfg;
     }
 
+    /**
+     * Code-Teil: Methode `_setStateIfChanged`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _setStateIfChanged
+     * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _setStateIfChanged(id, val) {
         const v = (typeof val === 'number' && !Number.isFinite(val)) ? null : val;
         const prev = this._stateCache.get(id);
@@ -67,18 +155,47 @@ class ThresholdControlModule extends BaseModule {
         }
     }
 
+    /**
+     * Code-Teil: Methode `_normalizeCompare`
+     * Zweck: normalisiert Eingaben/Anzeigeformate und schützt gegen ungültige Werte.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _normalizeCompare
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _normalizeCompare(raw) {
         const s = String(raw || '').trim().toLowerCase();
         if (s === 'below' || s === '<' || s === 'lt' || s === 'less' || s === 'kleiner') return 'below';
         return 'above';
     }
-
+    /**
+     * Code-Teil: _normalizeOutType
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _normalizeOutType(raw) {
         const s = String(raw || '').trim().toLowerCase();
         if (s === 'bool' || s === 'boolean' || s === 'switch') return 'boolean';
         return 'number';
     }
 
+    /**
+     * Code-Teil: Methode `_buildRulesFromConfig`
+     * Zweck: baut aus Rohdaten eine strukturierte Konfiguration, Liste oder Empfehlung.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _buildRulesFromConfig
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _buildRulesFromConfig() {
         const cfg = this._getCfg();
         const list = Array.isArray(cfg.rules) ? cfg.rules : [];
@@ -150,10 +267,27 @@ class ThresholdControlModule extends BaseModule {
         this._rules = out;
     }
 
+    /**
+     * Code-Teil: Methode `_getRule`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _getRule
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _getRule(idx) {
         return this._rules.find(r => r && r.idx === idx) || null;
     }
-
+    /**
+     * Code-Teil: init
+     * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async init() {
         // Always create a stable channel tree.
         await this.adapter.setObjectNotExistsAsync('threshold', {
@@ -174,6 +308,12 @@ class ThresholdControlModule extends BaseModule {
             native: {},
         });
 
+        /**
+         * Code-Teil: Arrow-Funktion `mk`
+         * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
         const mk = async (id, name, type, role, unit = undefined, write = false, def = undefined) => {
             await this.adapter.setObjectNotExistsAsync(id, {
                 type: 'state',
@@ -190,6 +330,18 @@ class ThresholdControlModule extends BaseModule {
             });
         };
 
+        /**
+         * Code-Teil: Arrow-Funktion `ensureDefault`
+         * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: ensureDefault
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const ensureDefault = async (id, val) => {
             try {
                 const s = await this.adapter.getStateAsync(id);
@@ -301,6 +453,18 @@ class ThresholdControlModule extends BaseModule {
         }
     }
 
+    /**
+     * Code-Teil: Methode `tick`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: tick
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async tick() {
         const enabled = this._isEnabled();
         const now = Date.now();

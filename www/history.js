@@ -1,9 +1,53 @@
+
+/**
+ * Datenvertrag: HistorySeries
+ * Zweck: Beschreibt Zeitreihen, die für Diagramme und Reports verwendet werden.
+ * Zusammenhang: History muss dieselbe Semantik wie LIVE-Dashboard verwenden, damit keine falschen historischen Werte entstehen.
+ * TypeScript-Ziel: Zeitstempel, Wert, Einheit und Quelle typisieren.
+ */
+
+/**
+ * Vertragsstelle: Featureabhängige History-Anzeige
+ * Zweck: EVCS- und Speicherfarm-Reihen dürfen nur sichtbar sein, wenn diese Features in der Anlage vorhanden sind.
+ */
+
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: www/history.js
+ * Rolle im Projekt: Historie-Frontend.
+ * Zweck: Lädt und visualisiert historische Messwerte, Reports und Legenden für PC/Tablet/Smartphone.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Historien-Frontend: lädt Zeitreihen über /api/history, zeichnet Charts und öffnet Reports/Exports.
+ * Zusammenhänge:
+ * - Nutzen dieselben Flow-/KPI-State-Namen wie LIVE-Dashboard und Backend-History-API.
+ * - Feature-Sichtbarkeit für EVCS/Farm muss mit /config übereinstimmen.
+ * Wartungshinweise:
+ * - Keine abgeleiteten Werte anders interpretieren als app.js oder main.js, sonst entstehen widersprüchliche Verläufe.
+ */
+
 (function(){
   // simple line chart renderer on canvas
   const canvas = document.getElementById('chart');
   const ctx = canvas.getContext('2d');
   const priceCanvas = document.getElementById('priceChart');
   const priceCtx = priceCanvas ? priceCanvas.getContext('2d') : null;
+  /**
+   * Code-Teil: resize
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function resize(){
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
@@ -12,7 +56,14 @@
       priceCanvas.height = priceCanvas.clientHeight;
     }
   }
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'resize' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   window.addEventListener('resize', ()=>{ resize(); draw(); drawPricingHistoryChart(); });
+  /**
+   * Code-Teil: fmt
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function fmt(ts){ const d=new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
 
   let data=null;
@@ -24,8 +75,19 @@
   let historyInFlightPromise = null;
   let historyLastLoadedKey = '';
   let historyLastLoadedAt = 0;
-
+  /**
+   * Code-Teil: scheduleHistoryRenderBurst
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function scheduleHistoryRenderBurst(){
+    /**
+     * Code-Teil: doRender
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const doRender = ()=>{
       try { resize(); } catch(_e){}
       try { draw(); } catch(_e){}
@@ -35,9 +97,20 @@
     setTimeout(doRender, 80);
     setTimeout(doRender, 260);
   }
-
+  /**
+   * Code-Teil: countRenderableHistoryPoints
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function countRenderableHistoryPoints(res){
     let count = 0;
+    /**
+     * Code-Teil: scan
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const scan = (arr)=>{
       if (!Array.isArray(arr)) return;
       for (const p of arr){
@@ -59,7 +132,12 @@
     });
     return count;
   }
-
+  /**
+   * Code-Teil: scheduleHistoryRetry
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function scheduleHistoryRetry(delayMs = 900){
     if (historyRetryTimer || historyRetryCount >= 2) return;
     historyRetryCount += 1;
@@ -68,7 +146,12 @@
       load();
     }, Math.max(250, Number(delayMs) || 900));
   }
-
+  /**
+   * Code-Teil: bootHistoryOnce
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function bootHistoryOnce(){
     if (historyBooted) return;
     historyBooted = true;
@@ -88,13 +171,30 @@
   let pricingChartState = null;
   let priceCrossX = null;
   const hiddenPriceSeries = new Set();
-
+  /**
+   * Code-Teil: isPriceSeriesVisible
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function isPriceSeriesVisible(key){ return !hiddenPriceSeries.has(String(key || '')); }
+  /**
+   * Code-Teil: setPriceSeriesVisible
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setPriceSeriesVisible(key, visible){
     const k = String(key || '');
     if (!k) return;
     if (visible) hiddenPriceSeries.delete(k); else hiddenPriceSeries.add(k);
   }
+  /**
+   * Code-Teil: applyPriceLegendState
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function applyPriceLegendState(){
     const items = Array.from(document.querySelectorAll('#priceLegend .lg[data-series]'));
     items.forEach((el)=>{
@@ -106,11 +206,18 @@
       el.title = `${label}: ${visible ? 'sichtbar' : 'ausgeblendet'} — klicken zum Umschalten`;
     });
   }
+  /**
+   * Code-Teil: bindPriceLegendItem
+   * Zweck: Verbindet Event-Handler mit DOM oder Runtime-Objekten.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function bindPriceLegendItem(el){
     if (!el || el.dataset.bound === '1') return;
     el.dataset.bound = '1';
     if (!el.hasAttribute('tabindex')) el.tabIndex = 0;
     el.setAttribute('role', 'button');
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an el. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     el.addEventListener('click', (ev)=>{
       ev.preventDefault();
       ev.stopPropagation();
@@ -121,6 +228,7 @@
       applyPriceLegendState();
       drawPricingHistoryChart();
     });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an el. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     el.addEventListener('keydown', (ev)=>{
       if (ev.key !== 'Enter' && ev.key !== ' ') return;
       ev.preventDefault();
@@ -130,12 +238,30 @@
 
   // --- Legend / series visibility ---
   const hiddenSeries = new Set();
+  /**
+   * Code-Teil: isSeriesVisible
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function isSeriesVisible(key){ return !hiddenSeries.has(String(key || '')); }
+  /**
+   * Code-Teil: setSeriesVisible
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setSeriesVisible(key, visible){
     const k = String(key || '');
     if (!k) return;
     if (visible) hiddenSeries.delete(k); else hiddenSeries.add(k);
   }
+  /**
+   * Code-Teil: applyLegendState
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function applyLegendState(){
     const items = Array.from(document.querySelectorAll('#mainLegend .lg[data-series]'));
     items.forEach((el)=>{
@@ -147,11 +273,18 @@
       el.title = `${label}: ${visible ? 'sichtbar' : 'ausgeblendet'} — klicken zum Umschalten`;
     });
   }
+  /**
+   * Code-Teil: bindLegendItem
+   * Zweck: Verbindet Event-Handler mit DOM oder Runtime-Objekten.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function bindLegendItem(el){
     if (!el || el.dataset.bound === '1') return;
     el.dataset.bound = '1';
     if (!el.hasAttribute('tabindex')) el.tabIndex = 0;
     el.setAttribute('role', 'button');
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an el. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     el.addEventListener('click', (ev)=>{
       ev.preventDefault();
       ev.stopPropagation();
@@ -162,6 +295,7 @@
       applyLegendState();
       draw();
     });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an el. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     el.addEventListener('keydown', (ev)=>{
       if (ev.key !== 'Enter' && ev.key !== ' ') return;
       ev.preventDefault();
@@ -177,7 +311,12 @@
   let zoomDragging = false;
   let zoomDragStartX = 0;
   let zoomSuppressClickUntil = 0;
-
+  /**
+   * Code-Teil: getChartMargins
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function getChartMargins(){
     const W = canvas.width;
     const L = (W < 520) ? 54 : 64;
@@ -188,6 +327,12 @@
   }
 
   // --- Optional Energiefluss series (Verbraucher/Erzeuger) ---
+  /**
+   * Code-Teil: getExtras
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function getExtras(){
     const ex = (data && data.extras && typeof data.extras === 'object') ? data.extras : null;
     return {
@@ -195,7 +340,12 @@
       producers: Array.isArray(ex && ex.producers) ? ex.producers : []
     };
   }
-
+  /**
+   * Code-Teil: buildSeriesAll
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildSeriesAll(){
     const base = (data && data.series && typeof data.series === 'object') ? data.series : {};
     const ex = getExtras();
@@ -220,13 +370,23 @@
     // 5 Erzeuger
     producer: ['#a3e635','#84cc16','#22c55e','#10b981','#14b8a6']
   };
-
+  /**
+   * Code-Teil: colorForExtra
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function colorForExtra(kind, idx){
     const list = EXTRA_COLORS[kind] || [];
     const i = Math.max(0, Math.min(list.length-1, (Number(idx)||1)-1));
     return list[i] || '#cbd3db';
   }
-
+  /**
+   * Code-Teil: updateLegend
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function updateLegend(){
     const legend = document.getElementById('mainLegend');
     if (!legend) return;
@@ -235,7 +395,12 @@
 
     if (chartMode === 'day') {
       const ex = getExtras();
-
+      /**
+       * Code-Teil: addItem
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       function addItem(label, color, key){
         const el = document.createElement('div');
         el.className = 'lg lg-extra';
@@ -268,7 +433,12 @@
 
     applyLegendState();
   }
-  
+  /**
+   * Code-Teil: drawBars
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function drawBars(){
       const {start, end} = data;
       const series = buildSeriesAll();
@@ -282,10 +452,21 @@
     const colors={'pv':'#f1c40f','chg':'#27ae60','dchg':'#e67e22','sell':'#3498db','buy':'#e74c3c','evcs':'#ff6bd6','load':'#9b59b6'};
     const seriesAgg = {};
     allKeys.forEach(k=>{ seriesAgg[k] = aggregateEnergyKWh(series[k]?.values||[], buckets); });
-
     const totals = buckets.map((_,i)=> keys.reduce((sum,k)=> sum + (seriesAgg[k][i]?.kwh||0), 0));
     let maxKWh = Math.max(1, ...totals);
     const pad = Math.max(0.05, maxKWh*0.1);
+    /**
+     * Code-Teil: Arrow-Funktion `y`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: y
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const y = (val)=> T + (H-B-T) * (1 - ((val)/(maxKWh+pad)));
 
     const n = buckets.length;
@@ -324,6 +505,12 @@
 
     barState = { buckets, chartMode, L, R, T, B, groupW, barW, seriesAgg, visibleKeys: keys.slice() };
   }
+/**
+ * Code-Teil: draw
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function draw(){
     if(!data){ ctx.clearRect(0,0,canvas.width,canvas.height); return; }
     if(chartMode!=='day'){ return drawBars(); }
@@ -346,6 +533,18 @@ function draw(){
     // Y scales
     // compute max power (kW)
     // X scale
+    /**
+     * Code-Teil: Arrow-Funktion `x`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: x
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const x = t => L + (t-start)/(end-start)*(W-L-R);
 
     // compute min/max (kW) across power series using mapped signs
@@ -371,6 +570,18 @@ function draw(){
         valMap[k] = m;
       });
 
+      /**
+       * Code-Teil: Arrow-Funktion `isNeg`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: isNeg
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const isNeg = (k)=> (k === 'load' || k === 'evcs' || k === 'chg' || k === 'sell');
       const posKeys = stackKeys.filter(k=>!isNeg(k));
       const negKeys = stackKeys.filter(isNeg);
@@ -400,6 +611,18 @@ function draw(){
     }
     const pad = Math.max(0.05, (maxKW-minKW)*0.08);
     minKW -= pad; maxKW += pad;
+    /**
+     * Code-Teil: Arrow-Funktion `yPow`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: yPow
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const yPow = (kw)=> T + (H-B-T)*(1 - ((kw - minKW)/((maxKW-minKW)||1)));
     const y0 = yPow(0);
 
@@ -408,6 +631,18 @@ function draw(){
     // (This is independent from the power 0‑line.)
     const ySocTop = T;
     const ySocBottom = H - B;
+    /**
+     * Code-Teil: Arrow-Funktion `ySoc`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: ySoc
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const ySoc = (pct)=> {
       const p = Math.max(0, Math.min(100, Number(pct) || 0));
       return ySocBottom - (p / 100) * (ySocBottom - ySocTop);
@@ -420,6 +655,12 @@ function draw(){
     ctx.save(); ctx.strokeStyle='#2a323b'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(L,y0); ctx.lineTo(W-R,y0); ctx.stroke(); ctx.restore();
 
     // value mapping for sign conventions
+    /**
+     * Code-Teil: mapKW
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function mapKW(k, w){
       // w in Watts -> return kW with desired sign
       const val = Number(w)||0;
@@ -438,6 +679,12 @@ function draw(){
     }
 
     // small helpers for stacked fills
+    /**
+     * Code-Teil: hexToRgba
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function hexToRgba(hex, a){
       const h = String(hex || '').trim();
       const m = h.match(/^#?([0-9a-f]{6})$/i);
@@ -460,6 +707,12 @@ function draw(){
     };
 
     // helpers
+    /**
+     * Code-Teil: line
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function line(k, color, accessor='val', dash, width){
       const vals = (series[k] && series[k].values) || [];
       if(!vals.length) return;
@@ -480,7 +733,12 @@ function draw(){
       }
       ctx.stroke(); ctx.restore();
     }
-
+    /**
+     * Code-Teil: drawStackedAreas
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function drawStackedAreas(){
       if (!stackCtx) return;
       const { posKeys, negKeys, valMap } = stackCtx;
@@ -509,6 +767,18 @@ function draw(){
         }
       }
 
+      /**
+       * Code-Teil: Arrow-Funktion `drawArea`
+       * Zweck: rendert sichtbare UI-/Diagramm-Elemente aus bereits normalisierten Daten.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: drawArea
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const drawArea = (k) => {
         const seg = stack[k];
         if (!seg) return;
@@ -579,6 +849,18 @@ function draw(){
     // ------------------------------
     // Axes: labels + tick values
     // ------------------------------
+    /**
+     * Code-Teil: Arrow-Funktion `fmtKWAxis`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: fmtKWAxis
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const fmtKWAxis = (v) => {
       const n = Number(v);
       if (!Number.isFinite(n)) return '';
@@ -634,12 +916,22 @@ function draw(){
       ctx.fillText(fmt(tt), x(tt), H-6);
     }
   }
-
-  
+  /**
+   * Code-Teil: bucketizeRange
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function bucketizeRange(fromMs, toMs, mode){
     const start = new Date(fromMs);
     const end = new Date(toMs);
     let buckets = [];
+    /**
+     * Code-Teil: pushBucket
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function pushBucket(s, e){ buckets.push({start:+s, end:+e}); }
 
     if (mode==='week' || mode==='month'){
@@ -670,6 +962,12 @@ function draw(){
     buckets = buckets.filter(b => b.end>fromMs && b.start<toMs).map(b=>({start:Math.max(b.start, fromMs), end:Math.min(b.end,toMs)}));
     return buckets;
   }
+  /**
+   * Code-Teil: aggregateEnergyKWh
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function aggregateEnergyKWh(vals, buckets){
     // vals: [ [ts, W], ... ], buckets: [{start,end}]
     const out = buckets.map(b=>({mid: (b.start+b.end)/2, kwh:0}));
@@ -697,7 +995,12 @@ function draw(){
     }
     return out;
   }
-
+    /**
+     * Code-Teil: toTsMs
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function toTsMs(t){
     if(t === null || t === undefined) return NaN;
     if(typeof t === 'number'){
@@ -718,7 +1021,12 @@ function draw(){
     if(Number.isFinite(n)) return (n > 0 && n < 1e12) ? n * 1000 : n;
     return NaN;
   }
-
+  /**
+   * Code-Teil: sumEnergyKWh
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function sumEnergyKWh(vals){
     if(!Array.isArray(vals) || vals.length < 2) return 0;
     const points = vals
@@ -739,7 +1047,12 @@ function draw(){
     }
     return eWh / 1000;
   }
-
+  /**
+   * Code-Teil: pickEnergyKwh
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function pickEnergyKwh(counterVal, integratedVal){
     const counter = Number(counterVal);
     const integrated = Number(integratedVal);
@@ -751,11 +1064,33 @@ function draw(){
     if (integrated > 0.25 && counterTooSmall) return integrated;
     return counter;
   }
-
+  /**
+   * Code-Teil: formatMoney2
+   * Zweck: Formatiert Daten für Anzeige oder Logs.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function formatMoney2(v){ return Number.isFinite(Number(v)) ? (Number(v).toFixed(2) + ' €') : '--'; }
+  /**
+   * Code-Teil: formatPrice2
+   * Zweck: Formatiert Daten für Anzeige oder Logs.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function formatPrice2(v){ return Number.isFinite(Number(v)) ? (Number(v).toFixed(2) + ' €/kWh') : '--'; }
+  /**
+   * Code-Teil: formatKwh2
+   * Zweck: Formatiert Daten für Anzeige oder Logs.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function formatKwh2(v){ return Number.isFinite(Number(v)) ? (Number(v).toFixed(2) + ' kWh') : '--'; }
-
+  /**
+   * Code-Teil: normalizeNumericSeries
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function normalizeNumericSeries(vals){
     const arr = (Array.isArray(vals) ? vals : [])
       .map(p => [toTsMs(p && p[0]), Number(p && p[1])])
@@ -768,7 +1103,12 @@ function draw(){
     }
     return out;
   }
-
+  /**
+   * Code-Teil: valueAtHold
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function valueAtHold(points, ts){
     if (!Array.isArray(points) || !points.length || !Number.isFinite(ts)) return NaN;
     if (ts <= points[0][0]) return Number(points[0][1]);
@@ -779,7 +1119,12 @@ function draw(){
     }
     return Number(points[lo] && points[lo][1]);
   }
-
+  /**
+   * Code-Teil: buildPricingIntervals
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildPricingIntervals(res){
     const start = Number(res && res.start);
     const end = Number(res && res.end);
@@ -839,7 +1184,12 @@ function draw(){
       };
     });
   }
-
+  /**
+   * Code-Teil: aggregatePricingIntervals
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function aggregatePricingIntervals(intervals, fromMs, toMs, mode){
     const src = Array.isArray(intervals) ? intervals : [];
     if (!src.length) return [];
@@ -877,7 +1227,12 @@ function draw(){
       };
     });
   }
-
+  /**
+   * Code-Teil: summarizePricingIntervals
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function summarizePricingIntervals(intervals){
     const src = Array.isArray(intervals) ? intervals : [];
     if (!src.length) {
@@ -906,11 +1261,22 @@ function draw(){
       netFeeCost,
     };
   }
-
+  /**
+   * Code-Teil: renderPricingCards
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function renderPricingCards(summary){
     const cards = document.getElementById('priceCards');
     if (!cards) return;
     cards.innerHTML = '';
+    /**
+     * Code-Teil: card
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function card(title, val){
       const el = document.createElement('div');
       el.className = 'card';
@@ -925,7 +1291,12 @@ function draw(){
     card('Kosten', formatMoney2(s.totalCost));
     card('Netzentgelt-Anteil', formatMoney2(s.netFeeCost));
   }
-
+  /**
+   * Code-Teil: buildPricingNote
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildPricingNote(pricing, intervals){
     const src = (pricing && typeof pricing === 'object') ? pricing : {};
     const parts = [];
@@ -936,12 +1307,22 @@ function draw(){
     else parts.push('Preis-Historie füllt sich ab diesem Update und dient später zum Gegenprüfen der Abrechnung');
     return parts.join(' · ');
   }
-
+  /**
+   * Code-Teil: syncPricingLegend
+   * Zweck: Synchronisiert zwei Datenquellen bzw. UI und State.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function syncPricingLegend(){
     Array.from(document.querySelectorAll('#priceLegend .lg[data-series]')).forEach(bindPriceLegendItem);
     applyPriceLegendState();
   }
-
+  /**
+   * Code-Teil: renderPricingHistory
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function renderPricingHistory(res){
     const section = document.getElementById('pricingSection');
     const noticeEl = document.getElementById('pricingNotice');
@@ -991,7 +1372,12 @@ function draw(){
     try { if (typeof window.__nxHistoryHidePriceTip === 'function') window.__nxHistoryHidePriceTip(true); } catch(_e){}
     drawPricingHistoryChart();
   }
-
+  /**
+   * Code-Teil: drawPricingHistoryChart
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function drawPricingHistoryChart(){
     if (!priceCanvas || !priceCtx) return;
     const W = priceCanvas.width || 0;
@@ -1048,11 +1434,35 @@ function draw(){
     let rightMax = rightVals.length ? Math.max(...rightVals) : 1;
     rightMax = Math.max(0.05, rightMax * 1.15);
 
+    /**
+     * Code-Teil: Arrow-Funktion `x`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: x
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const x = (ts) => {
       const frac = (ts - start) / Math.max(1, (end - start));
       return L + Math.max(0, Math.min(1, frac)) * (W - L - R);
     };
+    /**
+     * Code-Teil: yLeft
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const yLeft = (val) => T + (H - B - T) * (1 - ((Number(val) - leftMin) / Math.max(0.00001, (leftMax - leftMin))));
+    /**
+     * Code-Teil: yRight
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const yRight = (val) => T + (H - B - T) * (1 - (Math.max(0, Number(val) || 0) / rightMax));
 
     // grid
@@ -1125,7 +1535,12 @@ function draw(){
       });
       priceCtx.restore();
     }
-
+    /**
+     * Code-Teil: drawLine
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function drawLine(key, accessor, color, dash){
       if (!isPriceSeriesVisible(key)) return;
       const vals = points.map(accessor).filter(Number.isFinite);
@@ -1189,7 +1604,12 @@ function draw(){
     tip.style.zIndex = '5';
     wrap.style.position = 'relative';
     wrap.appendChild(tip);
-
+    /**
+     * Code-Teil: hidePriceTip
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function hidePriceTip(silent){
       const wasVisible = tip.style.display !== 'none';
       tip.style.display = 'none';
@@ -1197,18 +1617,33 @@ function draw(){
       if (!silent && wasVisible) drawPricingHistoryChart();
     }
     window.__nxHistoryHidePriceTip = hidePriceTip;
-
+    /**
+     * Code-Teil: formatHeader
+     * Zweck: Formatiert Daten für Anzeige oder Logs.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function formatHeader(ts){
       const d = new Date(ts);
       if (chartMode === 'day') return d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
       if (chartMode === 'year') return d.toLocaleDateString([], { month:'long' });
       return d.toLocaleDateString([], { day:'2-digit', month:'2-digit' });
     }
-
+    /**
+     * Code-Teil: row
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function row(label, val){
       return `<div style="display:flex;justify-content:space-between;gap:8px"><span>${label}</span><b>${val}</b></div>`;
     }
-
+    /**
+     * Code-Teil: showPriceTipFromEvent
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function showPriceTipFromEvent(ev){
       if (!pricingChartState || !Array.isArray(pricingChartState.points) || !pricingChartState.points.length) return;
       const rect = priceCanvas.getBoundingClientRect();
@@ -1249,18 +1684,28 @@ function draw(){
       drawPricingHistoryChart();
     }
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointerdown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('pointerdown', (ev)=>{
       if (tip.style.display === 'none') return;
       const target = ev.target;
       if (target === priceCanvas) return;
       hidePriceTip();
     }, true);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('keydown', (ev)=>{ if (ev.key === 'Escape') hidePriceTip(); });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'mouseleave' an priceCanvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     priceCanvas.addEventListener('mouseleave', ()=> hidePriceTip());
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an priceCanvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     priceCanvas.addEventListener('click', (ev)=> showPriceTipFromEvent(ev));
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchend' an priceCanvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     priceCanvas.addEventListener('touchend', (ev)=> showPriceTipFromEvent(ev), { passive:true });
   })();
-
+/**
+ * Code-Teil: load
+ * Zweck: Lädt Daten aus API, States oder Konfiguration.
+ * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function load(force = false){
     const from = new Date(document.getElementById('from').value || new Date(Date.now()-24*3600*1000).toISOString().slice(0,16));
     const to   = new Date(document.getElementById('to').value   || new Date().toISOString().slice(0,16));
@@ -1287,6 +1732,18 @@ async function load(force = false){
       return data;
     }
 
+    /**
+     * Code-Teil: Arrow-Funktion `reqPromise`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: reqPromise
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const reqPromise = (async()=>{
       const res = await fetch(url).then(r=>r.json()).catch(()=>null);
       if(!res || !res.ok){ alert('History kann nicht geladen werden'); return null; }
@@ -1318,6 +1775,18 @@ async function load(force = false){
     const clipFuture = (fromMs <= nowMs && toMs > nowMs);
     if (clipFuture) {
       const cutoff = nowMs;
+      /**
+       * Code-Teil: Arrow-Funktion `clipArr`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: clipArr
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const clipArr = (arr) => {
         if (!Array.isArray(arr)) return [];
         return arr.filter(p => {
@@ -1360,6 +1829,18 @@ async function load(force = false){
     // statt den restlichen Tag bis 24:00 leer anzuzeigen.
     if (chartMode === 'day' && clipFuture && (!zoomStack || zoomStack.length === 0)) {
       let maxTs = NaN;
+      /**
+       * Code-Teil: Arrow-Funktion `scan`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: scan
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const scan = (arr) => {
         if (!Array.isArray(arr)) return;
         for (const p of arr) {
@@ -1405,11 +1886,29 @@ async function load(force = false){
     // fill=previous artefacts) and sum only from the clipped series.
     const e = (!res.__cutoffNowMs && res && res.energy && typeof res.energy === 'object') ? res.energy : {};
     const exact = (res && res.energyExact && typeof res.energyExact === 'object') ? res.energyExact : {};
+    /**
+     * Code-Teil: Arrow-Funktion `exactNum`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: exactNum
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const exactNum = (key) => {
       const n = Number(exact && exact[key]);
       return Number.isFinite(n) && n >= 0 ? n : null;
     };
     const cards = document.getElementById('cards');
+    /**
+     * Code-Teil: card
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function card(title, val){ const el=document.createElement('div'); el.className='card'; el.innerHTML = `<small>${title}</small><b>${val}</b>`; cards.appendChild(el); }
     cards.innerHTML='';
     const pvKwh = exactNum('productionKwh') ?? pickEnergyKwh(e.productionKwh, sumEnergyKWh(s.pv && s.pv.values));
@@ -1477,17 +1976,40 @@ async function load(force = false){
   const now = new Date();
   const today = new Date();
   today.setHours(0,0,0,0);
-
+  /**
+   * Code-Teil: toLocal
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function toLocal(dt){
     const z = dt.getTimezoneOffset();
     const d = new Date(dt.getTime() - z*60000);
     return d.toISOString().slice(0,16);
   }
+  /**
+   * Code-Teil: pad2
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function pad2(n){ return String(n).padStart(2,'0'); }
+  /**
+   * Code-Teil: toDateInput
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function toDateInput(dt){
     const d = new Date(dt);
     return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
   }
+  /**
+   * Code-Teil: fromDateInput
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function fromDateInput(str){
     if (!str || typeof str !== 'string') return null;
     const m = String(str).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -1499,18 +2021,34 @@ async function load(force = false){
     const d = new Date(y, mo - 1, da, 0,0,0,0);
     return Number.isFinite(d.getTime()) ? d : null;
   }
-
+  /**
+   * Code-Teil: getAnchorDate
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function getAnchorDate(){
     const el = document.getElementById('day');
     const d = el && el.value ? fromDateInput(el.value) : null;
     return d || new Date();
   }
+  /**
+   * Code-Teil: setAnchorDate
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setAnchorDate(d){
     const el = document.getElementById('day');
     if (!el) return;
     el.value = toDateInput(d);
   }
-
+  /**
+   * Code-Teil: applyRangeForMode
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function applyRangeForMode(mode){
     const fromEl = document.getElementById('from');
     const toEl = document.getElementById('to');
@@ -1548,6 +2086,7 @@ async function load(force = false){
 
   const dayEl = document.getElementById('day');
   if (dayEl) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an dayEl. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     dayEl.addEventListener('change', ()=>{
       // Date switch resets zoom (day view) and refreshes.
       zoomStack = [];
@@ -1559,13 +2098,27 @@ async function load(force = false){
     });
   }
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document.getElementById('loadBtn'). Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.getElementById('loadBtn').addEventListener('click', load);
 
   // stacked/line toggle (day view)
   const stackBtn = document.getElementById('stackToggle');
   if (stackBtn) {
+    /**
+     * Code-Teil: Arrow-Funktion `apply`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: apply
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const apply = ()=> stackBtn.classList.toggle('active', !!stackMode);
     apply();
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an stackBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     stackBtn.addEventListener('click', ()=>{
       stackMode = !stackMode;
       apply();
@@ -1575,6 +2128,7 @@ async function load(force = false){
 
   const evcsReportBtn = document.getElementById('evcsReportBtn');
   if (evcsReportBtn) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an evcsReportBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     evcsReportBtn.addEventListener('click', ()=>{
       const fromEl = document.getElementById('from');
       const toEl = document.getElementById('to');
@@ -1588,6 +2142,7 @@ async function load(force = false){
 
   const tariffReportBtn = document.getElementById('tariffReportBtn');
   if (tariffReportBtn) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an tariffReportBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     tariffReportBtn.addEventListener('click', ()=>{
       const fromEl = document.getElementById('from');
       const toEl = document.getElementById('to');
@@ -1601,6 +2156,7 @@ async function load(force = false){
   // Jahresreport (Mehrjahresübersicht) – öffnet eine Tabelle ähnlich EVCS-Abrechnung
   const yearReportBtn = document.getElementById('yearReportBtn');
   if (yearReportBtn) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an yearReportBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     yearReportBtn.addEventListener('click', ()=>{
       const anchor = getAnchorDate();
       const y = (anchor && Number.isFinite(anchor.getTime())) ? anchor.getFullYear() : (new Date()).getFullYear();
@@ -1612,6 +2168,12 @@ async function load(force = false){
 // range buttons
   (function(){
     const btns = Array.from(document.querySelectorAll('.range-btn'));
+    /**
+     * Code-Teil: setActive
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function setActive(mode){
       chartMode = mode;
       btns.forEach(b=> b.classList.toggle('active', b.dataset.range===mode));
@@ -1655,7 +2217,12 @@ async function load(force = false){
     wrap.appendChild(tip);
 
     let crossX = null;
-
+    /**
+     * Code-Teil: hideTip
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function hideTip(silent){
       const wasVisible = tip.style.display !== 'none';
       tip.style.display = 'none';
@@ -1663,18 +2230,32 @@ async function load(force = false){
       if (!silent && wasVisible) draw();
     }
     window.__nxHistoryHideTip = hideTip;
-
+    /**
+     * Code-Teil: xToTs
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function xToTs(x, start, end, L, R, W){
       const frac = (x - L) / (W - L - R);
       return start + Math.max(0, Math.min(1, frac)) * (end - start);
     }
+    /**
+     * Code-Teil: tsToX
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function tsToX(ts, start, end, L, R, W){
       const frac = (ts - start) / (end - start);
       return L + frac * (W - L - R);
     }
-
-    
-    
+    /**
+     * Code-Teil: showTipFromEvent
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function showTipFromEvent(ev){
       if (!data) return;
       const rect = canvas.getBoundingClientRect();
@@ -1714,7 +2295,12 @@ async function load(force = false){
 
         const d = new Date(buckets[idx].start);
         let header = (chartMode==='year') ? d.toLocaleDateString([], {month:'long'}) : d.toLocaleDateString([], {day:'2-digit', month:'2-digit'});
-
+        /**
+         * Code-Teil: kv
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         function kv(label, val, unit='kWh'){ 
           const v = Number(val||0).toFixed(2);
           return `<div style="display:flex;justify-content:space-between;gap:8px"><span>${label}</span><b>${v} ${unit}</b></div>`; 
@@ -1774,6 +2360,12 @@ async function load(force = false){
 
       const dt = new Date(nearTs);
       const hh = dt.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      /**
+       * Code-Teil: kv2
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       function kv2(label, val, unit='kW'){ 
         const v = Number(val||0).toFixed(2);
         return `<div style="display:flex;justify-content:space-between;gap:8px"><span>${label}</span><b>${v} ${unit}</b></div>`; 
@@ -1845,21 +2437,26 @@ async function load(force = false){
     // expose for touch drag/tap handling (used by drag-to-zoom on mobile)
     window.__nxHistoryShowTipFromEvent = showTipFromEvent;
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'pointerdown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('pointerdown', (ev)=>{
       if (tip.style.display === 'none') return;
       const target = ev.target;
       if (target === canvas) return;
       hideTip();
     }, true);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('keydown', (ev)=>{
       if (ev.key === 'Escape') hideTip();
     });
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'mouseleave' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     canvas.addEventListener('mouseleave', ()=>{ hideTip(); });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     canvas.addEventListener('click', (ev)=>{ 
       if (Date.now() < zoomSuppressClickUntil) return;
       showTipFromEvent(ev);
     });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchend' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     canvas.addEventListener('touchend', (ev)=>{ 
       if (Date.now() < zoomSuppressClickUntil) return;
       // In day view, touch is used for drag-to-zoom; tap-to-inspect is handled there.
@@ -1912,13 +2509,23 @@ async function load(force = false){
     const prevBtn = document.getElementById('navPrev');
     const nextBtn = document.getElementById('navNext');
     const resetBtn = document.getElementById('resetZoomBtn');
-
+    /**
+     * Code-Teil: showReset
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function showReset(){
       if (!resetBtn) return;
       resetBtn.classList.toggle('hidden', zoomStack.length === 0);
     }
     showReset();
-
+    /**
+     * Code-Teil: addMonths
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function addMonths(date, delta){
       const d = new Date(date);
       const day = d.getDate();
@@ -1928,7 +2535,12 @@ async function load(force = false){
       d.setDate(Math.min(day, maxDay));
       return d;
     }
-
+    /**
+     * Code-Teil: shiftRange
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function shiftRange(dir){
       // Navigation is based on the selected anchor date (no time tweaking in the UI).
       let anchor = getAnchorDate();
@@ -1979,13 +2591,24 @@ async function load(force = false){
 
   // --- Drag-to-zoom (day chart) ---
   (function(){
+    /**
+     * Code-Teil: xToTs
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function xToTs(x, start, end){
       const { L, R } = getChartMargins();
       const W = canvas.width;
       const frac = (x - L) / (W - L - R);
       return start + Math.max(0, Math.min(1, frac)) * (end - start);
     }
-
+    /**
+     * Code-Teil: setInputs
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function setInputs(fromMs, toMs){
       const fromEl = document.getElementById('from');
       const toEl = document.getElementById('to');
@@ -1993,13 +2616,19 @@ async function load(force = false){
       fromEl.value = toLocal(new Date(fromMs));
       toEl.value = toLocal(new Date(toMs));
     }
-
+    /**
+     * Code-Teil: clearSel
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function clearSel(){
       zoomSel = null;
       zoomDragging = false;
       draw();
     }
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'mousedown' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     canvas.addEventListener('mousedown', (ev)=>{
       if (chartMode !== 'day') return;
       if (!data) return;
@@ -2014,6 +2643,7 @@ async function load(force = false){
 
 
     // Touch: drag-to-zoom + tap-to-inspect (Tag-Ansicht)
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchstart' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     canvas.addEventListener('touchstart', (ev)=>{
       if (chartMode !== 'day') return;
       if (!data) return;
@@ -2027,6 +2657,7 @@ async function load(force = false){
       draw();
     }, {passive:false});
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchmove' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     canvas.addEventListener('touchmove', (ev)=>{
       if (!zoomDragging) return;
       if (!ev.touches || !ev.touches[0]) return;
@@ -2038,6 +2669,7 @@ async function load(force = false){
       draw();
     }, {passive:false});
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchend' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     canvas.addEventListener('touchend', (ev)=>{
       if (chartMode !== 'day') return;
       if (!zoomDragging) return;
@@ -2079,11 +2711,13 @@ async function load(force = false){
       load();
     }, {passive:false});
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'touchcancel' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     canvas.addEventListener('touchcancel', ()=>{ if (zoomDragging) clearSel(); });
 
     // Optional: Ctrl/⌘ + Wheel zoom (Tag) – allows trackpad pinch (ctrlKey) without breaking normal page scroll.
     let __wheelTimer = null;
     let __wheelLast = 0;
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'wheel' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     canvas.addEventListener('wheel', (ev)=>{
       if (chartMode !== 'day') return;
       if (!data) return;
@@ -2125,6 +2759,7 @@ async function load(force = false){
       __wheelTimer = setTimeout(()=>{ load(); }, 200);
     }, {passive:false});
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'mousemove' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     window.addEventListener('mousemove', (ev)=>{
       if (!zoomDragging) return;
       const rect = canvas.getBoundingClientRect();
@@ -2134,6 +2769,7 @@ async function load(force = false){
       draw();
     });
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'mouseup' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     window.addEventListener('mouseup', (ev)=>{
       if (!zoomDragging) return;
       if (!data){ clearSel(); return; }
@@ -2174,17 +2810,22 @@ async function load(force = false){
       load();
     });
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'dblclick' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     canvas.addEventListener('dblclick', ()=>{
       if (!zoomStack.length) return;
       const resetBtn = document.getElementById('resetZoomBtn');
       if (resetBtn && !resetBtn.classList.contains('hidden')) resetBtn.click();
     });
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'mouseleave' an canvas. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     canvas.addEventListener('mouseleave', ()=>{ if (zoomDragging) clearSel(); });
   })();
   bootHistoryOnce();
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'load' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   window.addEventListener('load', ()=>{ scheduleHistoryRenderBurst(); if (!data) load(); }, { once: true });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'pageshow' an window. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   window.addEventListener('pageshow', ()=>{ scheduleHistoryRenderBurst(); if (!data) load(); });
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'visibilitychange' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('visibilitychange', ()=>{
     if (document.hidden) return;
     scheduleHistoryRenderBurst();
@@ -2193,12 +2834,42 @@ async function load(force = false){
   // --- Auto-advance when 'Bis'≈Jetzt (no UI) ---
   let __autoTimer = null;
   let __autoLive = false;
+  /**
+   * Code-Teil: __toLocal
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function __toLocal(dt){ const z=dt.getTimezoneOffset(); const d=new Date(dt.getTime()-z*60000); return d.toISOString().slice(0,16); }
+  /**
+   * Code-Teil: __setToNow
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function __setToNow(){ const toEl = document.getElementById('to'); if (toEl) toEl.value = __toLocal(new Date()); }
+  /**
+   * Code-Teil: __startAuto
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function __startAuto(){ __stopAuto(); __autoLive=true; __setToNow(); __autoTimer=setInterval(()=>{ if(__autoLive){ __setToNow(); load(); } }, 15000); }
+  /**
+   * Code-Teil: __stopAuto
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function __stopAuto(){ __autoLive=false; if(__autoTimer){ clearInterval(__autoTimer); __autoTimer=null; } }
   (function(){
     const toEl=document.getElementById('to'); const fromEl=document.getElementById('from'); const btn=document.getElementById('loadBtn');
+    /**
+     * Code-Teil: isNearNow
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function isNearNow(){ try{ const t=new Date(toEl.value).getTime(); return isFinite(t) && Math.abs(Date.now()-t)<5*60*1000; }catch(_){ return true; } }
     if (isNearNow()) __startAuto();
     ['input','change'].forEach(ev=>{ toEl.addEventListener(ev,__stopAuto); fromEl.addEventListener(ev,__stopAuto); });
@@ -2210,6 +2881,12 @@ async function load(force = false){
   (function(){
     const dot = document.getElementById('liveDot');
     if (!dot) return;
+    /**
+     * Code-Teil: connect
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function connect(){
       try{
         const es = new EventSource('/events');
@@ -2227,11 +2904,33 @@ async function load(force = false){
     const menuBtn = document.getElementById('menuBtn');
     const menu = document.getElementById('menuDropdown');
     if (menuBtn && menu) {
+      /**
+       * Code-Teil: Arrow-Funktion `close`
+       * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: close
+       * Zweck: Schließt Dialoge/Seiten/Popovers.
+       * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const close = ()=> menu.classList.add('hidden');
+      /**
+       * Code-Teil: toggle
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const toggle = ()=> menu.classList.toggle('hidden');
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menuBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       menuBtn.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); toggle(); });
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menu. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       menu.addEventListener('click', (e)=> e.stopPropagation());
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') close(); });
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       document.addEventListener('click', ()=> close());
     }
     const liveBtn = document.getElementById('liveTabBtn');

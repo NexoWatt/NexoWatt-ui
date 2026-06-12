@@ -1,3 +1,28 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: ems/module-manager.js
+ * Rolle im Projekt: EMS-Modulmanager.
+ * Zweck: Initialisiert optionale EMS-Module abhängig von Konfiguration und Lizenz.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Modulverwaltung: registriert, initialisiert und tickt die einzelnen EMS-Module.
+ * Zusammenhänge:
+ * - Module liegen unter ems/modules/*.js und erben meist von BaseModule.
+ * - Fehler in einem Modul dürfen den gesamten Adapter möglichst nicht abschießen.
+ * Wartungshinweise:
+ * - Neue Module hier nur mit klaren Lifecycle-Methoden einhängen.
+ */
+
 'use strict';
 
 const { SpeicherMappingModule } = require('./modules/storage-mapping');
@@ -17,6 +42,19 @@ const { GeneratorControlModule } = require('./modules/generator-control');
 const { ThresholdControlModule } = require('./modules/threshold-control');
 const { AiAdvisorModule } = require('./modules/ai-advisor');
 
+/**
+ * Code-Teil: Klasse `ModuleManager`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+// Klassen-Kommentar: Klasse: ModuleManager. Aufgabe: kapselt eine fachliche Teilaufgabe dieser Datei. Beim TypeScript-Umbau Eingaben, Rückgaben und Seiteneffekte typisieren. Zusammenhang: Modulverwaltung für installierte EMS-Apps und Modul-Lifecycle.
+/**
+ * Klasse: ModuleManager
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 class ModuleManager {
     /**
      * @param {any} adapter
@@ -45,6 +83,18 @@ class ModuleManager {
         this.lastTickDiag = null;
     }
 
+    /**
+     * Code-Teil: Methode `_getDiagCfg`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _getDiagCfg
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _getDiagCfg() {
         const cfg = (this.adapter && this.adapter.config && this.adapter.config.diagnostics) ? this.adapter.config.diagnostics : null;
         const enabled = !!(cfg && cfg.enabled);
@@ -68,6 +118,18 @@ class ModuleManager {
     }
 
 
+    /**
+     * Code-Teil: Methode `_diagLog`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _diagLog
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _diagLog(level, msg) {
         const lvl = (level === 'info' || level === 'debug') ? level : 'debug';
         const fn = (this.adapter && this.adapter.log && typeof this.adapter.log[lvl] === 'function')
@@ -80,6 +142,18 @@ class ModuleManager {
         }
     }
 
+    /**
+     * Code-Teil: Methode `_limitJson`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _limitJson
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _limitJson(obj, maxLen) {
         let s = '';
         try {
@@ -91,6 +165,18 @@ class ModuleManager {
         return s.length > maxLen ? (s.slice(0, maxLen) + '...') : s;
     }
 
+    /**
+     * Code-Teil: Methode `init`
+     * Zweck: initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: init
+     * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+     * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async init() {
         // Speicher-Zuordnung (Installateur) – registriert st.* Datenpunkte
         this.modules.push({
@@ -256,6 +342,18 @@ class ModuleManager {
     }
 
     
+    /**
+     * Code-Teil: Methode `tick`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: tick
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async tick() {
         const diag = this._getDiagCfg();
         const now = Date.now();

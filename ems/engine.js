@@ -1,8 +1,38 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: ems/engine.js
+ * Rolle im Projekt: EMS-Engine.
+ * Zweck: Koordiniert zyklische EMS-Ausführung und reicht Messbasis an Module weiter.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: EMS-Engine-Kapsel: verbindet DatapointRegistry, ModuleManager und zyklische EMS-Berechnungen.
+ * Zusammenhänge:
+ * - Lädt Module aus ems/modules/* und nutzt ems/datapoints.js.
+ * - Wird von main.js initialisiert und gesteuert.
+ * Wartungshinweise:
+ * - Scheduler/Timer müssen beim Adapter-Unload sauber beendet werden.
+ */
+
 'use strict';
 
 const { DatapointRegistry } = require('./datapoints');
 const { ModuleManager } = require('./module-manager');
-
+/**
+ * Code-Teil: clampNumber
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function clampNumber(n, min, max, fallback) {
   const v = Number(n);
   if (!Number.isFinite(v)) return fallback;
@@ -22,6 +52,19 @@ function clampNumber(n, min, max, fallback) {
  * Sprint 3:
  * - Weitere Multiuse-Module (z.B. Peak Shaving) via ModuleManager
  * - Konfiguration in Admin-UI (jsonConfig) über enablePeakShaving / peakShaving.*
+ */
+/**
+ * Code-Teil: Klasse `EmsEngine`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+// Klassen-Kommentar: Klasse: EmsEngine. Aufgabe: kapselt eine fachliche Teilaufgabe dieser Datei. Beim TypeScript-Umbau Eingaben, Rückgaben und Seiteneffekte typisieren. Zusammenhang: EMS-Engine/Scheduler, der Regelungsmodule zyklisch ausführt.
+/**
+ * Klasse: EmsEngine
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 class EmsEngine {
   /**
@@ -48,11 +91,28 @@ class EmsEngine {
     this._gridPowerLastTs = 0;
   }
 
+  /**
+   * Code-Teil: Methode `_setInterval`
+   * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _setInterval
+   * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
+   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _setInterval(fn, ms) {
     const a = this.adapter;
     return (a && typeof a.setInterval === 'function') ? a.setInterval(fn, ms) : setInterval(fn, ms);
   }
-
+  /**
+   * Code-Teil: _clearInterval
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _clearInterval(timer) {
     if (!timer) return;
     const a = this.adapter;
@@ -62,6 +122,18 @@ class EmsEngine {
 
   /**
    * Ensure small internal helper states (derived values) exist.
+   */
+  /**
+   * Code-Teil: Methode `_ensureInternalStates`
+   * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _ensureInternalStates
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   async _ensureInternalStates() {
     const a = this.adapter;
@@ -195,6 +267,18 @@ class EmsEngine {
 
   /**
    * Build a multiuse-compatible charging config from VIS config/table.
+   */
+  /**
+   * Code-Teil: Methode `_buildChargingConfig`
+   * Zweck: baut aus Rohdaten eine strukturierte Konfiguration, Liste oder Empfehlung.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _buildChargingConfig
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
    */
   _buildChargingConfig() {
     const adapter = this.adapter;
@@ -584,6 +668,18 @@ class EmsEngine {
     return { anyControl, chargingCfg, stationGroups, stationGroupMap };
   }
 
+  /**
+   * Code-Teil: Methode `init`
+   * Zweck: initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: init
+   * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async init() {
     const adapter = this.adapter;
 
@@ -756,6 +852,18 @@ class EmsEngine {
     adapter.log.info(`[EMS] Embedded engine started (interval ${this._intervalMs}ms) — CM=${adapter.config.enableChargingManagement ? 'ON' : 'OFF'} PS=${adapter.config.enablePeakShaving ? 'ON' : 'OFF'}`);
   }
 
+  /**
+   * Code-Teil: Methode `tick`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: tick
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async tick() {
     if (!this.adapter || !this.dp || !this.mm) return;
 
@@ -838,6 +946,18 @@ class EmsEngine {
 	        const importFresh = invGrid ? rawSellFresh : rawBuyFresh;
 	        const exportFresh = invGrid ? rawBuyFresh : rawSellFresh;
 
+	        /**
+	         * Code-Teil: Arrow-Funktion `isFiniteNum`
+	         * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+	         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+	         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+	         */
+	        /**
+	         * Code-Teil: isFiniteNum
+	         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+	         * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+	         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+	         */
 	        const isFiniteNum = (v) => (typeof v === 'number' && Number.isFinite(v));
 	        const impValid = isFiniteNum(importVal);
 	        const expValid = isFiniteNum(exportVal);
@@ -950,6 +1070,18 @@ class EmsEngine {
     }
   }
 
+  /**
+   * Code-Teil: Methode `stop`
+   * Zweck: verwaltet Lifecycle/Ressourcen wie Server, Timer oder SSE-Verbindungen.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: stop
+   * Zweck: Stoppt Prozess, Timer, Engine oder Verbindung.
+   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   stop() {
     if (this._timer) {
       this._clearInterval(this._timer);

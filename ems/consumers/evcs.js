@@ -1,3 +1,27 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: ems/consumers/evcs.js
+ * Rolle im Projekt: EMS-Verbraucheradapter.
+ * Zweck: Kapselt einen regelbaren Verbraucher und übersetzt EMS-Freigaben in konkrete Zustände/Setpoints.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Consumer-Adapter der EMS-Schicht: kapselt eine Verbraucher-/Setpoint-/Schaltlogik für EMS-Module.
+ * Zusammenhänge:
+ * - Wird von ems/modules/* genutzt, um reale oder simulierte Verbraucher anzusprechen.
+ * Wartungshinweise:
+ * - DP-Einheiten und Invertierungen müssen zur Installer-Konfiguration passen.
+ */
+
 'use strict';
 
 /**
@@ -14,7 +38,12 @@
  *   enableKey?: string // DatapointRegistry key (boolean)
  * }
  */
-
+/**
+ * Code-Teil: _basis
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _basis(b) {
     const s = String(b || '').trim().toLowerCase();
     if (s === 'currenta' || s === 'current') return 'currentA';
@@ -29,6 +58,12 @@ function _basis(b) {
  * @param {any} consumer
  * @param {{targetW:number, targetA:number, basis?:string}} target
  * @returns {Promise<{applied:boolean, status:string, writes:{setA:boolean,setW:boolean,enable:boolean}}>}
+ */
+/**
+ * Code-Teil: applyEvcsSetpoint
+ * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
  */
 async function applyEvcsSetpoint(ctx, consumer, target) {
     const adapter = ctx && ctx.adapter;
@@ -101,7 +136,6 @@ async function applyEvcsSetpoint(ctx, consumer, target) {
             wroteEnable = null;
         }
     }
-
     const results = [wroteA, wroteW, wroteEnable].filter(v => v !== null && v !== undefined);
     const anyFalse = results.some(v => v === false);
     const anyTrue = results.some(v => v === true);

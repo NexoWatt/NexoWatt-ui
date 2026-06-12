@@ -1,4 +1,19 @@
+<!--
+  Datei: www/history.html
+  Rolle: Code-Datei
+  Zweck: Allgemeiner Projektcode; genaue Verantwortung ergibt sich aus Pfad und Funktionsnamen.
+  Wartung: HTML-IDs/Klassen sind Vertragsstellen für www/*.js und CSS. Nicht ohne Suche nach Referenzen ändern.
+-->
 <!DOCTYPE html>
+<!--
+  NexoWatt Code-Kommentar (DE)
+  Zweck: Historie-Seite: Zeitbereich, Toolbar, Chart, KPI-Karten und Report-Links.
+  Zusammenhänge:
+  - Logik in www/history.js, Daten aus /api/history.
+  - Reports nutzen eigene HTML/JS-Dateien.
+  Wartungshinweise:
+  - Mobile Toolbar und EVCS-/Farm-Sichtbarkeit beachten.
+-->
 <html lang="de">
 
 <link rel="icon" type="image/png" href="./assets/icons/nexowatt-32.png" sizes="32x32">
@@ -154,8 +169,11 @@
     <link rel="apple-touch-icon" sizes="152x152" href="./assets/icons/nexowatt-152.png">
     <link rel="apple-touch-icon" sizes="120x120" href="./assets/icons/nexowatt-120.png">
 </head>
+<!-- NexoWatt Detail-Kommentar (DE) -->
+<!-- History-Seite. Canvas-/Button-IDs werden von www/history.js verwendet; Report-Buttons hängen an Backend-History-APIs. -->
 <body class="nw-cockpit-page nw-cockpit-skin nw-page-history">
-  <header class="topbar">
+  <!-- Abschnitt: Kopfbereich/Navigation. Wird durch CSS und teils durch JS-Menülogik gesteuert. -->
+<header class="topbar">
 <script>
 /* NexoWatt: normalize base path so relative links work even if opened without trailing slash */
 (function () {
@@ -182,7 +200,8 @@
 <a class="topbar-gear" href="settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
 <div class="menu hidden" id="menuDropdown"><a class="menu-item" href="./">Live</a><a class="menu-item" href="history.html">History</a>
 <a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item hidden" id="menuSmartHomeLink" href="smarthome.html">SmartHome</a><a class="menu-item hidden" id="menuStorageFarmLink" href="storagefarm.html">Speicherfarm</a><a class="menu-item" href="settings.html">Einstellungen</a></div></header>
-  <main class="hist-wrap nw-page-shell nw-history-page">
+  <!-- Abschnitt: Hauptinhalt der Seite. DOM-IDs in diesem Bereich werden durch zugehörige JS-Dateien befüllt. -->
+<main class="hist-wrap nw-page-shell nw-history-page">
     <section class="nw-page-hero" aria-label="Historie Übersicht">
       <div>
         <div class="nw-page-hero__eyebrow">History</div>

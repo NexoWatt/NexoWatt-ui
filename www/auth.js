@@ -1,3 +1,28 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: www/auth.js
+ * Rolle im Projekt: Frontend-Skript.
+ * Zweck: Browserseitiger Code für eine Kunden-/Installerseite; liest APIs und aktualisiert DOM/UI.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Frontend-Skript einer VIS-/Kundenseite oder eines Reports.
+ * Zusammenhänge:
+ * - Spricht mit APIs aus main.js und rendert Daten aus /api/state, /config oder Reports.
+ * - Styles liegen in www/styles.css bzw. Report-CSS-Dateien.
+ * Wartungshinweise:
+ * - Feature-Sichtbarkeit und Rollen beachten; Kundenfrontend darf keine Installerfunktionen öffnen.
+ */
+
 /* NexoWatt Auth Helper
  * - Login gegen Benutzerkonto (Adapter checkPassword)
  * - Session Cookie: nw_session (HttpOnly, SameSite=Lax)
@@ -29,7 +54,12 @@
   let passEl = null;
   let btnEl = null;
   let cancelEl = null;
-
+  /**
+   * Code-Teil: ensureStyles
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function ensureStyles() {
     if (document.getElementById('nw-auth-styles')) return;
     const st = document.createElement('style');
@@ -50,7 +80,12 @@
     `;
     document.head.appendChild(st);
   }
-
+  /**
+   * Code-Teil: ensureOverlay
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function ensureOverlay() {
     if (overlayEl) return overlayEl;
     ensureStyles();
@@ -123,6 +158,18 @@
     } catch (_e) {}
 
     // Handlers
+    /**
+     * Code-Teil: Arrow-Funktion `doLogin`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: doLogin
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const doLogin = async () => {
       const u = String(userEl ? userEl.value : '').trim();
       const p = String(passEl ? passEl.value : '');
@@ -137,33 +184,49 @@
       }
     };
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnEl. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     btnEl.addEventListener('click', doLogin);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an passEl. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     passEl.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') doLogin();
       if (e.key === 'Escape') hideOverlay();
     });
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an userEl. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     userEl.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') hideOverlay();
     });
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an cancelEl. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     cancelEl.addEventListener('click', () => hideOverlay());
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an overlayEl. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     overlayEl.addEventListener('click', (e) => {
       // click outside dialog closes
       if (e.target === overlayEl) hideOverlay();
     });
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') hideOverlay();
     });
 
     return overlayEl;
   }
-
+  /**
+   * Code-Teil: setMsg
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setMsg(text) {
     if (msgEl) msgEl.textContent = String(text || '');
   }
-
+  /**
+   * Code-Teil: showOverlay
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function showOverlay(message) {
     ensureOverlay();
     if (message) setMsg(message);
@@ -174,14 +237,24 @@
       else if (userEl) userEl.focus();
     } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: hideOverlay
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function hideOverlay() {
     if (!overlayEl) return;
     overlayEl.classList.remove('show');
     setMsg('');
     try { if (passEl) passEl.value = ''; } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: refreshStatus
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function refreshStatus() {
     try {
       const r = await ORIG_FETCH(AUTH_STATUS_URL, { cache: 'no-store', credentials: 'same-origin' });
@@ -207,7 +280,12 @@
       return state;
     }
   }
-
+  /**
+   * Code-Teil: login
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function login(user, password) {
     try {
       const u = String(user || '').trim();
@@ -237,14 +315,24 @@
       return false;
     }
   }
-
+  /**
+   * Code-Teil: logout
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function logout() {
     try {
       await ORIG_FETCH(AUTH_LOGOUT_URL, { method: 'POST', credentials: 'same-origin' });
     } catch (_e) {}
     await refreshStatus();
   }
-
+  /**
+   * Code-Teil: updateHeader
+   * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function updateHeader() {
     try {
       const header = document.querySelector('header.topbar');
@@ -273,6 +361,7 @@
       btn.className = 'btn small nw-auth-btn';
       btn.type = 'button';
       btn.textContent = state.authed ? 'Abmelden' : 'Anmelden';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       btn.addEventListener('click', () => {
         if (state.authed) logout();
         else showOverlay('Bitte anmelden.');
@@ -327,6 +416,7 @@
     logout,
   };
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'DOMContentLoaded' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('DOMContentLoaded', () => {
     refreshStatus();
   });

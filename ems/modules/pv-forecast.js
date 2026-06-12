@@ -1,3 +1,28 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: ems/modules/pv-forecast.js
+ * Rolle im Projekt: PV-Prognose.
+ * Zweck: Erzeugt PV-Ertragsprognosen als Grundlage für KI, Speicher und flexible Lasten.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: PV-Prognosemodul: verarbeitet Prognosewerte, Peaks und Energieerwartung für EMS und KI-Berater.
+ * Zusammenhänge:
+ * - Wetter/Forecast-States fließen in ai-advisor.js und core-limits.js ein.
+ * - App-Center konfiguriert Quellen und Schwellwerte.
+ * Wartungshinweise:
+ * - Prognosequalität/Fallbacks müssen konservativ bleiben, damit Regelungen nicht überoptimieren.
+ */
+
 'use strict';
 
 const { BaseModule } = require('./base');
@@ -15,7 +40,26 @@ const { BaseModule } = require('./base');
  * - Provider-agnostic (supports common schemas like forecast.solar, Solcast, custom JSON)
  * - Fail-safe: if parsing fails, the EMS keeps working (forecast is simply marked invalid)
  */
+/**
+ * Code-Teil: Klasse `PvForecastModule`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+// Klassen-Kommentar: Klasse: PvForecastModule. Aufgabe: berechnet oder normalisiert Energiefluss-/Leistungswerte. Signed-DP, Split-DP und Fallback-Rechnung dürfen nicht vermischt werden. Zusammenhang: PV-Prognose und Forecast-Daten für EMS/KI.
+/**
+ * Klasse: PvForecastModule
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 class PvForecastModule extends BaseModule {
+  /**
+   * Code-Teil: constructor
+   * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
+   * Zusammenhang: Gehört zu EMS-Modul (Regelungs-, Diagnose- oder Beratungslogik innerhalb der EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+   * Wartung/TypeScript: Änderungen an Signatur oder Rückgabe können abhängige Aufrufer beeinflussen; Aufrufstellen mitprüfen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+   */
   constructor(adapter, dpRegistry) {
     super(adapter, dpRegistry);
 
@@ -26,6 +70,18 @@ class PvForecastModule extends BaseModule {
     this._warnedNoMapping = false;
   }
 
+  /**
+   * Code-Teil: Methode `init`
+   * Zweck: initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: init
+   * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+   * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async init() {
     // States (diagnostics)
     await this.adapter.setObjectNotExistsAsync('forecast', {
@@ -40,6 +96,18 @@ class PvForecastModule extends BaseModule {
       native: {},
     });
 
+    /**
+     * Code-Teil: Arrow-Funktion `mk`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mk
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mk = async (id, name, type, role) => {
       await this.adapter.setObjectNotExistsAsync(id, {
         type: 'state',
@@ -80,6 +148,18 @@ class PvForecastModule extends BaseModule {
   // Helpers
   // ---------------------------------------------------------------------------
 
+  /**
+   * Code-Teil: Methode `_safeJsonParse`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _safeJsonParse
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _safeJsonParse(v) {
     if (v === null || v === undefined) return { ok: false, value: null, err: 'empty' };
     if (typeof v === 'object') return { ok: true, value: v, err: null };
@@ -92,6 +172,18 @@ class PvForecastModule extends BaseModule {
     }
   }
 
+  /**
+   * Code-Teil: Methode `_parseTimeMs`
+   * Zweck: normalisiert Eingaben/Anzeigeformate und schützt gegen ungültige Werte.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _parseTimeMs
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _parseTimeMs(x) {
     if (x === null || x === undefined) return null;
     if (typeof x === 'number' && Number.isFinite(x)) {
@@ -164,6 +256,18 @@ class PvForecastModule extends BaseModule {
     return null;
   }
 
+  /**
+   * Code-Teil: Methode `_num`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _num
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _num(v) {
     if (v === null || v === undefined) return NaN;
     if (typeof v === 'number') return v;
@@ -180,6 +284,18 @@ class PvForecastModule extends BaseModule {
     return Number.isFinite(n) ? n : NaN;
   }
 
+  /**
+   * Code-Teil: Methode `_powerToW`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _powerToW
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _powerToW(n, keyHint) {
     const v = Number(n);
     if (!Number.isFinite(v)) return NaN;
@@ -190,6 +306,18 @@ class PvForecastModule extends BaseModule {
     return v;
   }
 
+  /**
+   * Code-Teil: Methode `_extractSegmentsFromParsed`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _extractSegmentsFromParsed
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _extractSegmentsFromParsed(parsed) {
     if (parsed === null || parsed === undefined) return [];
 
@@ -237,6 +365,18 @@ class PvForecastModule extends BaseModule {
     return [];
   }
 
+  /**
+   * Code-Teil: Methode `_looksLikeTimeMap`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _looksLikeTimeMap
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _looksLikeTimeMap(obj) {
     if (!obj || typeof obj !== 'object') return false;
     const keys = Object.keys(obj);
@@ -251,6 +391,18 @@ class PvForecastModule extends BaseModule {
     return timeKeys >= Math.max(1, Math.floor(sample.length / 2));
   }
 
+  /**
+   * Code-Teil: Methode `_segmentsFromArray`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _segmentsFromArray
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _segmentsFromArray(arr) {
     const out = [];
     if (!Array.isArray(arr)) return out;
@@ -260,6 +412,18 @@ class PvForecastModule extends BaseModule {
 
       const keys = Object.keys(it);
 
+      /**
+       * Code-Teil: Arrow-Funktion `pick`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: pick
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const pick = (candidates) => {
         for (const c of candidates) {
           if (Object.prototype.hasOwnProperty.call(it, c) && it[c] !== null && it[c] !== undefined) {
@@ -325,6 +489,18 @@ class PvForecastModule extends BaseModule {
     return this._inferDtForAnchors(out);
   }
 
+  /**
+   * Code-Teil: Methode `_segmentsFromTimeMap`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _segmentsFromTimeMap
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _segmentsFromTimeMap(mapObj) {
     const anchors = [];
     if (!mapObj || typeof mapObj !== 'object') return [];
@@ -341,6 +517,18 @@ class PvForecastModule extends BaseModule {
     return this._inferDtForAnchors(anchors);
   }
 
+  /**
+   * Code-Teil: Methode `_segmentsFromEnergyMap`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _segmentsFromEnergyMap
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _segmentsFromEnergyMap(energyMapObj, defaultDtMs) {
     const anchors = [];
     if (!energyMapObj || typeof energyMapObj !== 'object') return [];
@@ -360,6 +548,18 @@ class PvForecastModule extends BaseModule {
     return anchors;
   }
 
+  /**
+   * Code-Teil: Methode `_inferDtForAnchors`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _inferDtForAnchors
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _inferDtForAnchors(list) {
     if (!Array.isArray(list) || !list.length) return [];
     const explicit = list.filter((p) => Number.isFinite(p.dtMs) && p.dtMs > 0);
@@ -402,6 +602,18 @@ class PvForecastModule extends BaseModule {
     return segs.filter((s) => Number.isFinite(s.t) && Number.isFinite(s.dtMs) && s.dtMs > 0 && Number.isFinite(s.w));
   }
 
+  /**
+   * Code-Teil: Methode `_integrateKwh`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _integrateKwh
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _integrateKwh(segments, fromMs, toMs, clampW) {
     if (!Array.isArray(segments) || !segments.length) return 0;
     const a = Number(fromMs);
@@ -430,6 +642,18 @@ class PvForecastModule extends BaseModule {
     return wh / 1000;
   }
 
+  /**
+   * Code-Teil: Methode `_setIfChanged`
+   * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _setIfChanged
+   * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
+   * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async _setIfChanged(id, val) {
     const v = (val === undefined) ? null : val;
     try {
@@ -447,6 +671,18 @@ class PvForecastModule extends BaseModule {
   // Tick
   // ---------------------------------------------------------------------------
 
+  /**
+   * Code-Teil: Methode `tick`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: tick
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async tick() {
     const now = Date.now();
 
@@ -556,7 +792,6 @@ class PvForecastModule extends BaseModule {
       if (t1 <= now || t0 >= t24) continue;
       if (s.w > peakW) peakW = s.w;
     }
-
     const anyFuture = segs.some((s) => (s.t + s.dtMs) > now);
     const valid = anyFuture && segs.length > 0;
 

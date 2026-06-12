@@ -1,6 +1,37 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: www/admin-guard.js
+ * Rolle im Projekt: Frontend-Skript.
+ * Zweck: Browserseitiger Code für eine Kunden-/Installerseite; liest APIs und aktualisiert DOM/UI.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Frontend-Skript einer VIS-/Kundenseite oder eines Reports.
+ * Zusammenhänge:
+ * - Spricht mit APIs aus main.js und rendert Daten aus /api/state, /config oder Reports.
+ * - Styles liegen in www/styles.css bzw. Report-CSS-Dateien.
+ * Wartungshinweise:
+ * - Feature-Sichtbarkeit und Rollen beachten; Kundenfrontend darf keine Installerfunktionen öffnen.
+ */
+
 (function () {
   'use strict';
   var KEY = 'nexowatt.adminFrontendAccess';
+  /**
+   * Code-Teil: adminUrl
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function adminUrl() {
     var proto = window.location.protocol || 'http:';
     var host = window.location.hostname;
@@ -10,6 +41,12 @@
     }
     return proto + '//' + host + ':8081/';
   }
+  /**
+   * Code-Teil: allowed
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function allowed() {
     try {
       var qs = new URLSearchParams(window.location.search || '');

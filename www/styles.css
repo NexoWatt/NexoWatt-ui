@@ -1,3 +1,26 @@
+/*
+ * NexoWatt Detail-Kommentar (DE)
+ * Datei: www/styles.css
+ * Zweck: Globale VIS-Styles: Dashboard, Subpages, History, SmartHome und responsive Regeln. Klassen werden von allen www/*.html/js genutzt.
+ * Wartung/TypeScript: CSS wird nicht nach TypeScript migriert, aber Klassen/IDs sind Vertragsstellen für TS-Komponenten.
+ */
+
+/*
+ * Datei: www/styles.css
+ * Rolle: Code-Datei
+ * Zweck: Allgemeiner Projektcode; genaue Verantwortung ergibt sich aus Pfad und Funktionsnamen.
+ * Wartung: Diese Styles hängen an festen HTML-Klassen/IDs. Vor Änderungen betroffene Seiten mobil und Desktop prüfen.
+ */
+/*
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Stylesheet für Kunden-/VIS-Seiten, Reports oder mobile Layouts.
+ * Zusammenhänge:
+ * - HTML-Struktur liegt in www/*.html, Logik in www/*.js.
+ * - Responsivität muss Desktop, Tablet und Smartphone abdecken.
+ * Wartungshinweise:
+ * - Keine fachliche Logik hier; nur Darstellung und Sichtbarkeit.
+ */
+
 
 :root {
   --nx-green: #00c853;
@@ -11275,3 +11298,11 @@ body.nw-cockpit-page.nw-page-history .history-toolbar input[type="date"]{
     min-height:138px !important;
   }
 }
+
+
+/*
+ * NexoWatt Detail-Kommentar CSS (DE)
+ * Zweck: Die Styles bündeln Kunden-Dashboard, Installer-App-Center, History, SmartHome und Reports.
+ * Zusammenhang: Viele Klassen werden dynamisch von www/app.js, www/history.js und www/smarthome.js gesetzt.
+ * Wartung: Beim TypeScript-/Komponentenumbau sollten Styles schrittweise in klar benannte Komponentenbereiche aufgeteilt werden.
+ */

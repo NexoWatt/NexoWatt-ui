@@ -1,3 +1,28 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: www/cockpit-shell.js
+ * Rolle im Projekt: Frontend-Skript.
+ * Zweck: Browserseitiger Code für eine Kunden-/Installerseite; liest APIs und aktualisiert DOM/UI.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Gemeinsame Shell-Hilfe für Unterseiten: Topbar, aktive Navigation, mobile Menüs und sichtbare Kundenfeatures.
+ * Zusammenhänge:
+ * - Ergänzt Einzelseiten, die nicht komplett über www/app.js laufen.
+ * - Feature-Sichtbarkeit muss zu /config passen.
+ * Wartungshinweise:
+ * - Keine fachliche EMS-Logik hier einbauen; nur UI-Shell und Navigation.
+ */
+
 (function(){
   'use strict';
   try{
@@ -36,12 +61,14 @@
       var dropdown = topbar.querySelector('#menuDropdown');
       if(btn && dropdown && btn.dataset.nwMenuFallback === '1' && !btn.dataset.nwFallbackMenu && !btn.dataset.nwShellBound){
         btn.dataset.nwFallbackMenu = '1';
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         btn.addEventListener('click', function(e){
           if(btn.dataset.nwAppMenu === '1') return;
           e.preventDefault();
           e.stopPropagation();
           dropdown.classList.toggle('hidden');
         }, { once:false });
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         document.addEventListener('click', function(e){
           if(dropdown.classList.contains('hidden')) return;
           if(!topbar.contains(e.target)) dropdown.classList.add('hidden');

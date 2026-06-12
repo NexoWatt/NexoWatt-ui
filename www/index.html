@@ -1,6 +1,21 @@
+<!--
+  Datei: www/index.html
+  Rolle: Code-Datei
+  Zweck: Allgemeiner Projektcode; genaue Verantwortung ergibt sich aus Pfad und Funktionsnamen.
+  Wartung: HTML-IDs/Klassen sind Vertragsstellen für www/*.js und CSS. Nicht ohne Suche nach Referenzen ändern.
+-->
 
 <!DOCTYPE html>
 
+<!--
+  NexoWatt Code-Kommentar (DE)
+  Zweck: Kunden-LIVE-Dashboard: Grundstruktur für Topbar, Energiefluss, KI-Berater, KPIs und Schnellzugriffe.
+  Zusammenhänge:
+  - Logik in www/app.js, Styles in www/styles.css.
+  - Sichtbarkeit kommt aus /config und /api/state.
+  Wartungshinweise:
+  - IDs nicht umbenennen, weil app.js direkt darauf zugreift.
+-->
 <html lang="de">
 
 <link rel="icon" type="image/png" href="./assets/icons/nexowatt-32.png" sizes="32x32">
@@ -32,7 +47,10 @@
     <link rel="apple-touch-icon" sizes="152x152" href="./assets/icons/nexowatt-152.png">
     <link rel="apple-touch-icon" sizes="120x120" href="./assets/icons/nexowatt-120.png">
 </head>
+<!-- NexoWatt Detail-Kommentar (DE) -->
+<!-- Hauptseite des Kunden-Dashboards. IDs und data-tab-content-Werte sind Verträge mit www/app.js; nicht umbenennen ohne JS-Anpassung. -->
 <body>
+<!-- Abschnitt: Kopfbereich/Navigation. Wird durch CSS und teils durch JS-Menülogik gesteuert. -->
 <header class="topbar">
 <script>
 /* NexoWatt: normalize base path so relative links work even if opened without trailing slash */
@@ -60,6 +78,7 @@
 <a class="topbar-gear" href="settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
 <div class="menu hidden" id="menuDropdown"><a class="menu-item" href="./">Live</a><a class="menu-item" href="history.html">History</a>
 <a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item hidden" id="menuSmartHomeLink" href="smarthome.html">SmartHome</a><a class="menu-item hidden" id="menuStorageFarmLink" href="storagefarm.html">Speicherfarm</a><a class="menu-item" href="settings.html">Einstellungen</a></div></header>
+<!-- Abschnitt: Hauptinhalt der Seite. DOM-IDs in diesem Bereich werden durch zugehörige JS-Dateien befüllt. -->
 <main class="content nw-dashboard">
 <aside class="nw-dashboard-rail nw-dashboard-left" aria-label="System- und Liveübersicht">
   <section class="card nw-panel nw-panel-status">

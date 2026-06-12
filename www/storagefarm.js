@@ -1,18 +1,66 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: www/storagefarm.js
+ * Rolle im Projekt: Speicherfarm-Kundenseite.
+ * Zweck: Zeigt reine read-only Status-Tabelle der Speicherfarm ohne Installer-Konfiguration.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Kundenansicht der Speicherfarm: zeigt nur Status-/Tabellenwerte, keine Installer-Konfiguration.
+ * Zusammenhänge:
+ * - Liest storageFarm.* States über /api/state und Config über /config.
+ * - Die eigentliche Speicherfarm-Konfiguration liegt im App-Center.
+ * Wartungshinweise:
+ * - Diese Seite muss ausgeblendet oder leer bleiben, wenn keine Speicherfarm konfiguriert ist.
+ */
+
 (function () {
   'use strict';
 
   var state = {};
   var pollTimer = null;
-
+  /**
+   * Code-Teil: el
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function el(id) { return document.getElementById(id); }
+  /**
+   * Code-Teil: stateVal
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function stateVal(key) {
     var it = state && state[key];
     return it && Object.prototype.hasOwnProperty.call(it, 'value') ? it.value : undefined;
   }
+  /**
+   * Code-Teil: num
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function num(v) {
     var n = Number(v);
     return Number.isFinite(n) ? n : null;
   }
+  /**
+   * Code-Teil: formatPower
+   * Zweck: Formatiert Daten für Anzeige oder Logs.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function formatPower(v) {
     var n = num(v);
     if (n === null) return '--';
@@ -22,6 +70,12 @@
     if (a >= 1000) return sign + (a / 1000).toFixed(1) + ' kW';
     return sign + Math.round(a) + ' W';
   }
+  /**
+   * Code-Teil: parseJsonSafe
+   * Zweck: Parst Rohdaten in ein sicheres internes Format.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function parseJsonSafe(raw, fallback) {
     try {
       if (raw === null || raw === undefined || raw === '') return fallback;
@@ -31,18 +85,42 @@
       return fallback;
     }
   }
+  /**
+   * Code-Teil: statusList
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function statusList() {
     var list = parseJsonSafe(stateVal('storageFarm.storagesStatusJson'), []);
     return Array.isArray(list) ? list : [];
   }
+  /**
+   * Code-Teil: setLive
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setLive(ok) {
     var dot = el('liveDot');
     if (dot) dot.classList.toggle('live', !!ok);
   }
+  /**
+   * Code-Teil: setMsg
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setMsg(text) {
     var m = el('sf_msg');
     if (m) m.textContent = text || '';
   }
+  /**
+   * Code-Teil: statusText
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function statusText(row) {
     var online = !!(row && (row.online === true || row.displayOnline === true || row.dispatchAvailable === true));
     var degraded = !!(row && (row.degraded === true || row.state === 'degraded'));
@@ -63,6 +141,12 @@
     if (row && row.dispatchAvailable) return 'Regelbar';
     return 'Offline';
   }
+  /**
+   * Code-Teil: cell
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function cell(rowEl, text, label) {
     var d = document.createElement('div');
     d.setAttribute('role', 'cell');
@@ -70,6 +154,12 @@
     d.textContent = (text === undefined || text === null || text === '') ? '--' : String(text);
     rowEl.appendChild(d);
   }
+  /**
+   * Code-Teil: renderRows
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function renderRows(list) {
     var wrap = el('sf_status_rows');
     if (!wrap) return;
@@ -96,6 +186,12 @@
       wrap.appendChild(r);
     });
   }
+  /**
+   * Code-Teil: renderSummary
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function renderSummary() {
     var modeLabel = el('sf_mode_label');
     var mode = String(stateVal('storageFarm.mode') || 'pool').toLowerCase();
@@ -114,10 +210,22 @@
     var summary = el('sf_summary');
     if (summary) summary.textContent = text;
   }
+  /**
+   * Code-Teil: render
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function render() {
     renderSummary();
     renderRows(statusList());
   }
+  /**
+   * Code-Teil: loadConfig
+   * Zweck: Lädt Daten aus API, States oder Konfiguration.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function loadConfig() {
     try {
       var cfg = await fetch('/config', { cache: 'no-store' }).then(function (r) { return r.json(); });
@@ -145,6 +253,12 @@
       }
     } catch (_e) {}
   }
+  /**
+   * Code-Teil: loadState
+   * Zweck: Lädt Daten aus API, States oder Konfiguration.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function loadState() {
     try {
       var snap = await fetch('/api/state', { cache: 'no-store' }).then(function (r) { return r.json(); });
@@ -157,6 +271,12 @@
       setMsg('Statusdaten konnten nicht geladen werden.');
     }
   }
+  /**
+   * Code-Teil: startEvents
+   * Zweck: Startet Prozess, Timer, Engine oder Verbindung.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function startEvents() {
     try {
       var es = new EventSource('/events');
@@ -180,14 +300,38 @@
       if (!pollTimer) pollTimer = window.setInterval(loadState, 5000);
     }
   }
+  /**
+   * Code-Teil: bind
+   * Zweck: Verbindet Event-Handler mit DOM oder Runtime-Objekten.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function bind() {
     var reload = el('sf_reload');
     if (reload) reload.addEventListener('click', function (e) { e.preventDefault(); loadState(); });
   }
+  /**
+   * Code-Teil: ready
+   * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function ready(fn) {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
     else fn();
   }
+  /**
+   * Code-Teil: Methode `ready`
+   * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+   * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: ready
+   * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+   * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   ready(function () {
     bind();
     loadConfig();

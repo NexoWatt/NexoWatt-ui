@@ -1,4 +1,19 @@
+<!--
+  Datei: www/settings.html
+  Rolle: Code-Datei
+  Zweck: Allgemeiner Projektcode; genaue Verantwortung ergibt sich aus Pfad und Funktionsnamen.
+  Wartung: HTML-IDs/Klassen sind Vertragsstellen für www/*.js und CSS. Nicht ohne Suche nach Referenzen ändern.
+-->
 <!doctype html>
+<!--
+  NexoWatt Code-Kommentar (DE)
+  Zweck: Kunden-Einstellungen: sichtbare Betreiberparameter, KI-Schalter, Wetter, Reports und RFID-Einstellungen.
+  Zusammenhänge:
+  - Werte werden über data-scope/data-key in www/app.js an /api/set gebunden.
+  - Installerfunktionen bleiben im App-Center.
+  Wartungshinweise:
+  - Nur kundenverständliche Optionen anzeigen; tiefe Regelungsparameter gehören ins App-Center.
+-->
 <html lang="de">
 <head>
   <meta charset="utf-8"/>
@@ -7,7 +22,10 @@
   <link rel="manifest" href="./manifest.webmanifest"/>
   <link rel="stylesheet" href="/static/styles.css"/>
 </head>
+<!-- NexoWatt Detail-Kommentar (DE) -->
+<!-- Kundeneinstellungen. data-scope/data-key-Felder werden generisch von www/app.js an /api/set gebunden und in main.js als States geführt. -->
 <body class="nw-cockpit-page nw-cockpit-skin nw-page-settings">
+<!-- Abschnitt: Kopfbereich/Navigation. Wird durch CSS und teils durch JS-Menülogik gesteuert. -->
 <header class="topbar">
 <script>
 /* NexoWatt: normalize base path so relative links work even if opened without trailing slash */
@@ -34,6 +52,7 @@
 <a class="topbar-gear is-active" href="settings.html" aria-label="Einstellungen" title="Einstellungen">⚙️</a>
 <div class="menu hidden" id="menuDropdown"><a class="menu-item" href="./">Live</a><a class="menu-item" href="history.html">History</a>
 <a class="menu-item hidden" id="menuEvcsLink" href="evcs.html">EVCS</a><a class="menu-item hidden" id="menuSmartHomeLink" href="smarthome.html">SmartHome</a><a class="menu-item" href="settings.html">Einstellungen</a></div></header>
+<!-- Abschnitt: Hauptinhalt der Seite. DOM-IDs in diesem Bereich werden durch zugehörige JS-Dateien befüllt. -->
 <main class="content nw-empty-content nw-subpage nw-subpage-settings">
   <!-- Inhalt bewusst leer: Einstellungen werden als eigener Bereich darunter gerendert -->
 </main>

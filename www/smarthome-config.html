@@ -1,4 +1,19 @@
+<!--
+  Datei: www/smarthome-config.html
+  Rolle: Code-Datei
+  Zweck: Allgemeiner Projektcode; genaue Verantwortung ergibt sich aus Pfad und Funktionsnamen.
+  Wartung: HTML-IDs/Klassen sind Vertragsstellen für www/*.js und CSS. Nicht ohne Suche nach Referenzen ändern.
+-->
 <!DOCTYPE html>
+<!--
+  NexoWatt Code-Kommentar (DE)
+  Zweck: SmartHome-Installer: Gebäude/Räume/Geräte/Funktionen und DP-Zuordnung.
+  Zusammenhänge:
+  - Logik in www/smarthome-config.js, APIs unter /api/smarthome/*.
+  - Kundenansicht rendert die gespeicherte Struktur.
+  Wartungshinweise:
+  - Nur Installerbereich; gespeicherte IDs nicht ohne Migration ändern.
+-->
 <html lang="de">
 <head>
   <meta charset="utf-8"/>
@@ -14,6 +29,7 @@
   <script src="/static/admin-guard.js" data-nw-admin-page="smarthome-config"></script>
 </head>
 <body class="nw-cockpit-page nw-cockpit-skin nw-installer-page nw-page-smarthome-config">
+<!-- Abschnitt: Kopfbereich/Navigation. Wird durch CSS und teils durch JS-Menülogik gesteuert. -->
 <header class="topbar nw-cockpit-topbar">
   <script>
   (function () {
@@ -60,6 +76,7 @@
   </section>
 
 
+<!-- Abschnitt: Hauptinhalt der Seite. DOM-IDs in diesem Bereich werden durch zugehörige JS-Dateien befüllt. -->
 <main class="content nw-page-shell nw-smarthome-config-page nw-subpage">
   <div id="nw-smarthome-config-root">
     <div class="nw-smarthome-header">

@@ -1,29 +1,74 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: www/tariff-report.js
+ * Rolle im Projekt: Frontend-Skript.
+ * Zweck: Browserseitiger Code für eine Kunden-/Installerseite; liest APIs und aktualisiert DOM/UI.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Frontend-Skript einer VIS-/Kundenseite oder eines Reports.
+ * Zusammenhänge:
+ * - Spricht mit APIs aus main.js und rendert Daten aus /api/state, /config oder Reports.
+ * - Styles liegen in www/styles.css bzw. Report-CSS-Dateien.
+ * Wartungshinweise:
+ * - Feature-Sichtbarkeit und Rollen beachten; Kundenfrontend darf keine Installerfunktionen öffnen.
+ */
+
 (function(){
   const C = window.NWReportCommon;
   if (!C) return;
 
   const state = { data: null };
   const INTERVAL_MINUTES = 15;
-
+  /**
+   * Code-Teil: defaultFromMs
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function defaultFromMs(){
     const q = C.getQuery('from');
     if (q) return C.parseInputValue(q, Date.now() - 24 * 3600 * 1000);
     return Date.now() - 24 * 3600 * 1000;
   }
-
+  /**
+   * Code-Teil: defaultToMs
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function defaultToMs(){
     const q = C.getQuery('to');
     if (q) return C.parseInputValue(q, Date.now());
     return Date.now();
   }
-
+  /**
+   * Code-Teil: fillInputs
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function fillInputs(){
     const fromInput = C.el('fromInput');
     const toInput = C.el('toInput');
     if (fromInput) fromInput.value = C.toInputValue(defaultFromMs());
     if (toInput) toInput.value = C.toInputValue(defaultToMs());
   }
-
+  /**
+   * Code-Teil: getRange
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function getRange(){
     const fromInput = C.el('fromInput');
     const toInput = C.el('toInput');
@@ -34,7 +79,12 @@
       toMs: Math.max(fromMs + 60000, toMs),
     };
   }
-
+  /**
+   * Code-Teil: renderFlags
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function renderFlags(meta){
     const wrap = C.el('reportFlags');
     if (!wrap) return;
@@ -51,7 +101,12 @@
       wrap.appendChild(el);
     });
   }
-
+  /**
+   * Code-Teil: renderSummary
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function renderSummary(summary, meta){
     const grid = C.el('summaryGrid');
     if (!grid) return;
@@ -76,7 +131,12 @@
       grid.appendChild(card);
     });
   }
-
+  /**
+   * Code-Teil: renderTable
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function renderTable(intervals){
     const tbody = C.el('tbody');
     const empty = C.el('emptyState');
@@ -102,7 +162,12 @@
       tbody.appendChild(tr);
     });
   }
-
+  /**
+   * Code-Teil: renderMeta
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function renderMeta(meta){
     const rangeMeta = C.el('rangeMeta');
     const note = C.el('reportNote');
@@ -119,7 +184,12 @@
     }
     renderFlags(meta);
   }
-
+  /**
+   * Code-Teil: load
+   * Zweck: Lädt Daten aus API, States oder Konfiguration.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function load(){
     const { fromMs, toMs } = getRange();
     C.setUrlParams({ from: fromMs, to: toMs });
@@ -147,7 +217,12 @@
     renderTable(res.intervals || []);
     return true;
   }
-
+  /**
+   * Code-Teil: loadAndPrint
+   * Zweck: Lädt Daten aus API, States oder Konfiguration.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function loadAndPrint(){
     const ok = await load();
     if (!ok) return;
@@ -155,7 +230,12 @@
     await new Promise((resolve) => setTimeout(resolve, 80));
     window.print();
   }
-
+  /**
+   * Code-Teil: exportCsv
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function exportCsv(){
     const rows = Array.isArray(state.data && state.data.intervals) ? state.data.intervals : [];
     if (!rows.length) return;
@@ -179,7 +259,12 @@
     const file = `nexowatt-tarif-nachweis-${start.getFullYear()}${String(start.getMonth()+1).padStart(2,'0')}${String(start.getDate()).padStart(2,'0')}.csv`;
     C.downloadText(file, lines.join('\n'), 'text/csv;charset=utf-8');
   }
-
+  /**
+   * Code-Teil: init
+   * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function init(){
     fillInputs();
     C.setupTopbar('history');

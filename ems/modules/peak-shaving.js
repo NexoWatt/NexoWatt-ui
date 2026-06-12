@@ -1,15 +1,71 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: ems/modules/peak-shaving.js
+ * Rolle im Projekt: Lastspitzenkappung.
+ * Zweck: Berechnet Peak-Shaving-Freigaben und Schutzlogik für Netzanschluss/Hochlastfenster.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Peak-Shaving/Lastspitzenkappung: überwacht Netzanschluss, Limits, Hysterese und HLZF/§19-Fenster.
+ * Zusammenhänge:
+ * - Wird von core-limits.js und ai-advisor.js ausgewertet.
+ * - Konfiguration kommt aus App-Center/Installer.
+ * Wartungshinweise:
+ * - Netzanschlussleistung und Warnschwellen müssen konsistent in W/% geführt werden.
+ */
+
 'use strict';
 
 const { BaseModule } = require('./base');
 const { ReasonCodes, reasonToGerman } = require('../reasons');
 
+/**
+ * Code-Teil: Klasse `SlidingWindow`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+// Klassen-Kommentar: Klasse: SlidingWindow. Aufgabe: kapselt eine fachliche Teilaufgabe dieser Datei. Beim TypeScript-Umbau Eingaben, Rückgaben und Seiteneffekte typisieren. Zusammenhang: Lastspitzenkappung, Netzanschlusslimit und HLZF-Logik.
+/**
+ * Klasse: SlidingWindow
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 class SlidingWindow {
+    /**
+     * Code-Teil: constructor
+     * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
+     * Zusammenhang: Gehört zu EMS-Modul (Regelungs-, Diagnose- oder Beratungslogik innerhalb der EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen an Signatur oder Rückgabe können abhängige Aufrufer beeinflussen; Aufrufstellen mitprüfen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     constructor(maxSeconds) {
         this.maxSeconds = Math.max(1, Number(maxSeconds) || 30);
         /** @type {Array<{t:number, v:number}>} */
         this.samples = [];
     }
 
+    /**
+     * Code-Teil: Methode `setMaxSeconds`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: setMaxSeconds
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     setMaxSeconds(maxSeconds) {
         const s = Math.max(1, Number(maxSeconds) || 30);
         if (s !== this.maxSeconds) {
@@ -18,12 +74,30 @@ class SlidingWindow {
         }
     }
 
+    /**
+     * Code-Teil: push
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu EMS-Modul (Regelungs-, Diagnose- oder Beratungslogik innerhalb der EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen an Signatur oder Rückgabe können abhängige Aufrufer beeinflussen; Aufrufstellen mitprüfen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     push(v, t = Date.now()) {
         if (!Number.isFinite(v)) return;
         this.samples.push({ t, v });
         this.prune(t);
     }
 
+    /**
+     * Code-Teil: Methode `prune`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: prune
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     prune(nowTs) {
         const cutoff = nowTs - this.maxSeconds * 1000;
         while (this.samples.length && this.samples[0].t < cutoff) {
@@ -31,6 +105,18 @@ class SlidingWindow {
         }
     }
 
+    /**
+     * Code-Teil: Methode `mean`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mean
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     mean() {
         if (!this.samples.length) return null;
         let sum = 0;
@@ -38,6 +124,18 @@ class SlidingWindow {
         return sum / this.samples.length;
     }
 
+    /**
+     * Code-Teil: Methode `max`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: max
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     max() {
         if (!this.samples.length) return null;
         let m = Number.NEGATIVE_INFINITY;
@@ -47,16 +145,38 @@ class SlidingWindow {
         return Number.isFinite(m) ? m : null;
     }
 
+    /**
+     * Code-Teil: Methode `count`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: count
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     count() {
         return this.samples.length;
     }
 }
-
+/**
+ * Code-Teil: num
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function num(v, fallback = null) {
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
 }
-
+/**
+ * Code-Teil: clamp
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function clamp(n, min, max) {
     if (!Number.isFinite(n)) return n;
     if (Number.isFinite(min)) n = Math.max(min, n);
@@ -74,7 +194,12 @@ const ATYPICAL_THRESHOLD_PERCENT_BY_VOLTAGE_LEVEL = Object.freeze({
     MSNS: 30,
     NS: 30,
 });
-
+/**
+ * Code-Teil: normalizeVoltageLevelKey
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function normalizeVoltageLevelKey(v) {
     return String(v || '')
         .normalize('NFD')
@@ -82,7 +207,12 @@ function normalizeVoltageLevelKey(v) {
         .toUpperCase()
         .replace(/[^A-Z0-9]+/g, '');
 }
-
+/**
+ * Code-Teil: atypicalThresholdPercent
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function atypicalThresholdPercent(voltageLevel, fallback = 20) {
     const key = normalizeVoltageLevelKey(voltageLevel);
     if (Object.prototype.hasOwnProperty.call(ATYPICAL_THRESHOLD_PERCENT_BY_VOLTAGE_LEVEL, key)) {
@@ -90,7 +220,12 @@ function atypicalThresholdPercent(voltageLevel, fallback = 20) {
     }
     return fallback;
 }
-
+/**
+ * Code-Teil: isPeakShavingRuntimeEnabled
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function isPeakShavingRuntimeEnabled(config) {
     const cfg = (config && typeof config === 'object') ? config : {};
     if (cfg.enablePeakShaving === true) return true;
@@ -98,7 +233,12 @@ function isPeakShavingRuntimeEnabled(config) {
     const atypical = (ps.atypical && typeof ps.atypical === 'object') ? ps.atypical : {};
     return atypical.enabled === true;
 }
-
+/**
+ * Code-Teil: parseHmToMinutes
+ * Zweck: Parst Rohdaten in ein sicheres internes Format.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function parseHmToMinutes(value) {
     const s = String(value || '').trim();
     const m = s.match(/^(\d{1,2}):(\d{2})$/);
@@ -108,7 +248,12 @@ function parseHmToMinutes(value) {
     if (!Number.isInteger(h) || !Number.isInteger(min) || h < 0 || h > 23 || min < 0 || min > 59) return null;
     return h * 60 + min;
 }
-
+/**
+ * Code-Teil: localYmd
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function localYmd(date) {
     const d = (date instanceof Date) ? date : new Date(date);
     if (!(d instanceof Date) || Number.isNaN(d.getTime())) return '';
@@ -117,7 +262,12 @@ function localYmd(date) {
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
 }
-
+/**
+ * Code-Teil: normalizeYmd
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function normalizeYmd(value) {
     if (value instanceof Date) return localYmd(value);
     const s = String(value || '').trim();
@@ -129,14 +279,24 @@ function normalizeYmd(value) {
     const d = new Date(s);
     return Number.isNaN(d.getTime()) ? '' : localYmd(d);
 }
-
+/**
+ * Code-Teil: asArray
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function asArray(value) {
     if (Array.isArray(value)) return value;
     if (typeof value === 'string') return value.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
     if (value === null || value === undefined || value === '') return [];
     return [value];
 }
-
+/**
+ * Code-Teil: toNumberArray
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function toNumberArray(value) {
     const out = [];
     const seen = new Set();
@@ -150,7 +310,12 @@ function toNumberArray(value) {
     }
     return out;
 }
-
+/**
+ * Code-Teil: toDateSet
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function toDateSet(value) {
     const set = new Set();
     for (const item of asArray(value)) {
@@ -163,12 +328,22 @@ function toDateSet(value) {
     }
     return set;
 }
-
+/**
+ * Code-Teil: isoWeekday
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function isoWeekday(date) {
     const js = date.getDay();
     return js === 0 ? 7 : js;
 }
-
+/**
+ * Code-Teil: isChristmasNewYearPeriod
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function isChristmasNewYearPeriod(date) {
     const month = date.getMonth() + 1;
     const day = date.getDate();
@@ -176,7 +351,26 @@ function isChristmasNewYearPeriod(date) {
 }
 
 
+/**
+ * Code-Teil: Klasse `PeakShavingModule`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+// Klassen-Kommentar: Klasse: PeakShavingModule. Aufgabe: gehört zur KI-/Prognose-/Peak-Beratung. Die KI bleibt beratend und darf keine Verbraucher direkt schalten. Zusammenhang: Lastspitzenkappung, Netzanschlusslimit und HLZF-Logik.
+/**
+ * Klasse: PeakShavingModule
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 class PeakShavingModule extends BaseModule {
+    /**
+     * Code-Teil: constructor
+     * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
+     * Zusammenhang: Gehört zu EMS-Modul (Regelungs-, Diagnose- oder Beratungslogik innerhalb der EMS-Engine) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen an Signatur oder Rückgabe können abhängige Aufrufer beeinflussen; Aufrufstellen mitprüfen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     constructor(adapter, dpRegistry) {
         super(adapter, dpRegistry);
 
@@ -208,10 +402,27 @@ class PeakShavingModule extends BaseModule {
         this._atypicalAuditLastHistorySetupMs = 0;
     }
 
+    /**
+     * Code-Teil: Methode `_isEnabled`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _isEnabled
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _isEnabled() {
         return isPeakShavingRuntimeEnabled(this.adapter && this.adapter.config);
     }
-
+    /**
+     * Code-Teil: init
+     * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async init() {
         if (!this._isEnabled()) return;
 
@@ -231,6 +442,18 @@ class PeakShavingModule extends BaseModule {
         }
 
         // States (created lazily too, but create the core set)
+        /**
+         * Code-Teil: Arrow-Funktion `mk`
+         * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: mk
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const mk = async (id, name, type, role) => {
             await this.adapter.setObjectNotExistsAsync(id, {
                 type: 'state',
@@ -330,6 +553,18 @@ class PeakShavingModule extends BaseModule {
     }
 
 
+    /**
+     * Code-Teil: Methode `_atypicalSeasonMonths`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _atypicalSeasonMonths
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _atypicalSeasonMonths(season) {
         const s = String(season || '').trim().toLowerCase();
         if (!s) return [];
@@ -339,6 +574,18 @@ class PeakShavingModule extends BaseModule {
         return [];
     }
 
+    /**
+     * Code-Teil: Methode `_atypicalWindowLabel`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _atypicalWindowLabel
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _atypicalWindowLabel(win) {
         if (win && typeof win === 'object') {
             const explicit = String(win.label || win.name || win.id || '').trim();
@@ -350,6 +597,18 @@ class PeakShavingModule extends BaseModule {
         return '';
     }
 
+    /**
+     * Code-Teil: Methode `_atypicalWindowMatches`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _atypicalWindowMatches
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _atypicalWindowMatches(win, nowDate) {
         if (!win || typeof win !== 'object') return false;
         if (win.enabled === false || win.active === false) return false;
@@ -385,6 +644,18 @@ class PeakShavingModule extends BaseModule {
         return nowMin >= fromMin || nowMin < toMin;
     }
 
+    /**
+     * Code-Teil: Methode `_evaluateAtypicalSchedule`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _evaluateAtypicalSchedule
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _evaluateAtypicalSchedule(atypicalCfg, now) {
         const cfg = (atypicalCfg && typeof atypicalCfg === 'object') ? atypicalCfg : {};
         const enabled = !!cfg.enabled;
@@ -430,6 +701,18 @@ class PeakShavingModule extends BaseModule {
         return { enabled: true, active: false, reason: 'outside-high-load-window', ymd, windowLabel: '' };
     }
 
+    /**
+     * Code-Teil: Methode `_calculateAtypicalTarget`
+     * Zweck: berechnet abgeleitete Werte; Änderungen können Energiefluss/History/Regelungen beeinflussen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _calculateAtypicalTarget
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _calculateAtypicalTarget(atypicalCfg) {
         const cfg = (atypicalCfg && typeof atypicalCfg === 'object') ? atypicalCfg : {};
         const voltageLevel = String(
@@ -494,6 +777,18 @@ class PeakShavingModule extends BaseModule {
         };
     }
 
+    /**
+     * Code-Teil: Methode `_getAtypicalSourceInfo`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _getAtypicalSourceInfo
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _getAtypicalSourceInfo(atypicalCfg) {
         const cfg = (atypicalCfg && typeof atypicalCfg === 'object') ? atypicalCfg : {};
         const yearRaw = Number(cfg.year ?? cfg.validityYear ?? cfg.calendarYear ?? 0);
@@ -507,6 +802,18 @@ class PeakShavingModule extends BaseModule {
         };
     }
 
+    /**
+     * Code-Teil: Methode `_readOwnNumber`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _readOwnNumber
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _readOwnNumber(id, fallback = 0) {
         try {
             const st = await this.adapter.getStateAsync(id);
@@ -517,6 +824,18 @@ class PeakShavingModule extends BaseModule {
         }
     }
 
+    /**
+     * Code-Teil: Methode `_readOwnString`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _readOwnString
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _readOwnString(id, fallback = '') {
         try {
             const st = await this.adapter.getStateAsync(id);
@@ -527,6 +846,18 @@ class PeakShavingModule extends BaseModule {
         }
     }
 
+    /**
+     * Code-Teil: Methode `_ensureAtypicalReviewLoaded`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _ensureAtypicalReviewLoaded
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _ensureAtypicalReviewLoaded(resetIdentity) {
         const identity = String(resetIdentity || '');
         const st = this._atypicalReviewState || { resetIdentity: '', pAbsMaxW: 0, pHlzfMaxW: 0, lastUpdate: 0 };
@@ -548,6 +879,12 @@ class PeakShavingModule extends BaseModule {
         this._atypicalReviewLoaded = true;
     }
 
+    /**
+     * Code-Teil: Methode `_buildAtypicalReviewContext`
+     * Zweck: baut aus Rohdaten eine strukturierte Konfiguration, Liste oder Empfehlung.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
     async _buildAtypicalReviewContext({ atypicalCfg, schedule, target, gridPowerRaw, effPower, staleMeter, now }) {
         const cfg = (atypicalCfg && typeof atypicalCfg === 'object') ? atypicalCfg : {};
         const review = (cfg.review && typeof cfg.review === 'object') ? cfg.review : ((cfg.nachkontrolle && typeof cfg.nachkontrolle === 'object') ? cfg.nachkontrolle : {});
@@ -637,6 +974,18 @@ class PeakShavingModule extends BaseModule {
         };
     }
 
+    /**
+     * Code-Teil: Methode `_setupAtypicalAuditHistory`
+     * Zweck: initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _setupAtypicalAuditHistory
+     * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _setupAtypicalAuditHistory() {
         let historyInstance = '';
         let provisionState = 'missing';
@@ -664,6 +1013,18 @@ class PeakShavingModule extends BaseModule {
         }
 
         const historyReady = !!historyInstance && !!(this.adapter && typeof this.adapter._nwEnsureInfluxCustom === 'function');
+        /**
+         * Code-Teil: Arrow-Funktion `set`
+         * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: set
+         * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const set = async (id, val) => {
             try { await this.adapter.setStateAsync(id, val, true); } catch { /* optional */ }
         };
@@ -730,6 +1091,18 @@ class PeakShavingModule extends BaseModule {
         }
     }
 
+    /**
+     * Code-Teil: Methode `_getAtypicalAuditIntervalMs`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _getAtypicalAuditIntervalMs
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     _getAtypicalAuditIntervalMs(atypicalCfg) {
         const cfg = (atypicalCfg && typeof atypicalCfg === 'object') ? atypicalCfg : {};
         const review = (cfg.review && typeof cfg.review === 'object') ? cfg.review : ((cfg.nachkontrolle && typeof cfg.nachkontrolle === 'object') ? cfg.nachkontrolle : {});
@@ -738,6 +1111,18 @@ class PeakShavingModule extends BaseModule {
         return Math.round((Number.isFinite(clamped) ? clamped : 15) * 60 * 1000);
     }
 
+    /**
+     * Code-Teil: Methode `_publishAtypicalAuditSample`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _publishAtypicalAuditSample
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _publishAtypicalAuditSample(ctx) {
         const c = (ctx && typeof ctx === 'object') ? ctx : {};
         const review = (c.review && typeof c.review === 'object') ? c.review : {};
@@ -760,6 +1145,18 @@ class PeakShavingModule extends BaseModule {
 
         const rawW = Number.isFinite(Number(c.gridPowerRaw)) ? Number(c.gridPowerRaw) : (Number.isFinite(Number(c.effPower)) ? Number(c.effPower) : 0);
         const gridImportW = Math.max(0, rawW);
+        /**
+         * Code-Teil: Arrow-Funktion `set`
+         * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: set
+         * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const set = async (id, val) => {
             try { await this.adapter.setStateAsync(id, val, true); } catch { /* audit only */ }
         };
@@ -813,12 +1210,30 @@ class PeakShavingModule extends BaseModule {
         await set('peakShaving.atypical.audit.snapshotJson', JSON.stringify(snapshot));
     }
 
+    /**
+     * Code-Teil: Methode `_publishAtypicalDiagnostics`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _publishAtypicalDiagnostics
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _publishAtypicalDiagnostics(ctx) {
         const c = (ctx && typeof ctx === 'object') ? ctx : {};
         const schedule = (c.schedule && typeof c.schedule === 'object') ? c.schedule : {};
         const target = (c.target && typeof c.target === 'object') ? c.target : {};
         const source = (c.source && typeof c.source === 'object') ? c.source : {};
         const review = (c.review && typeof c.review === 'object') ? c.review : {};
+        /**
+         * Code-Teil: set
+         * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const set = async (id, val) => {
             try { await this.adapter.setStateAsync(id, val, true); } catch { /* diagnostics only */ }
         };
@@ -887,6 +1302,18 @@ class PeakShavingModule extends BaseModule {
         await this._publishAtypicalAuditSample(c);
     }
 
+    /**
+     * Code-Teil: Methode `tick`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: tick
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async tick() {
         if (!this._isEnabled()) return;
 
@@ -1320,6 +1747,18 @@ class PeakShavingModule extends BaseModule {
         this._wasActive = active;
     }
 
+    /**
+     * Code-Teil: Methode `_ensureActuatorChannel`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _ensureActuatorChannel
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _ensureActuatorChannel(idPart) {
         const ch = `peakShaving.actuators.${idPart}`;
         await this.adapter.setObjectNotExistsAsync(ch, {
@@ -1327,6 +1766,18 @@ class PeakShavingModule extends BaseModule {
             common: { name: idPart },
             native: {},
         });
+        /**
+         * Code-Teil: Arrow-Funktion `mk`
+         * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: mk
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const mk = async (sid, name, type, role) => {
             await this.adapter.setObjectNotExistsAsync(`${ch}.${sid}`, {
                 type: 'state',
@@ -1341,6 +1792,18 @@ class PeakShavingModule extends BaseModule {
         return ch;
     }
 
+    /**
+     * Code-Teil: Methode `_applyActuators`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _applyActuators
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _applyActuators(actuators, requestedReductionW, voltageV) {
         let remainingW = requestedReductionW;
 
@@ -1469,6 +1932,18 @@ class PeakShavingModule extends BaseModule {
         }
     }
 
+    /**
+     * Code-Teil: Methode `_restoreActuators`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _restoreActuators
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     async _restoreActuators(actuators) {
         const list = (Array.isArray(actuators) ? actuators : [])
             .filter(a => a && a.enabled !== false)

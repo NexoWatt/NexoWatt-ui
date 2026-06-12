@@ -1,3 +1,27 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: ems/nexologic-engine.js
+ * Rolle im Projekt: Code-Datei.
+ * Zweck: Allgemeiner Projektcode; genaue Verantwortung ergibt sich aus Pfad und Funktionsnamen.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: JavaScript-/JSX-Datei des NexoWatt-Adapters.
+ * Zusammenhänge:
+ * - Teil des Adaptercodes; genaue Nutzung ergibt sich aus Importen und Dateipfad.
+ * Wartungshinweise:
+ * - Vor Änderungen prüfen, welche Datei diese Logik importiert oder über API nutzt.
+ */
+
 'use strict';
 
 /**
@@ -12,7 +36,26 @@
  * - Bewusst schlank gehalten (ohne externe Dependencies).
  */
 
+/**
+ * Code-Teil: Klasse `NexoLogicEngine`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+// Klassen-Kommentar: Klasse: NexoLogicEngine. Aufgabe: kapselt eine fachliche Teilaufgabe dieser Datei. Beim TypeScript-Umbau Eingaben, Rückgaben und Seiteneffekte typisieren. Zusammenhang: Projekt-Quellcode des NexoWatt-Adapters.
+/**
+ * Klasse: NexoLogicEngine
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 class NexoLogicEngine {
+  /**
+   * Code-Teil: constructor
+   * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
+   * Zusammenhang: Gehört zu EMS-Kern (Modulsteuerung, Datenpunktdefinitionen und zentrale EMS-Ausführung) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+   * Wartung/TypeScript: Änderungen an Signatur oder Rückgabe können abhängige Aufrufer beeinflussen; Aufrufstellen mitprüfen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+   */
   constructor(adapter) {
     this.adapter = adapter;
     this.runners = [];
@@ -21,6 +64,18 @@ class NexoLogicEngine {
     this._stopped = false;
   }
 
+  /**
+   * Code-Teil: Methode `stop`
+   * Zweck: verwaltet Lifecycle/Ressourcen wie Server, Timer oder SSE-Verbindungen.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: stop
+   * Zweck: Stoppt Prozess, Timer, Engine oder Verbindung.
+   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async stop() {
     this._stopped = true;
     try {
@@ -41,6 +96,18 @@ class NexoLogicEngine {
     this.runners = [];
   }
 
+  /**
+   * Code-Teil: Methode `init`
+   * Zweck: initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: init
+   * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async init(config) {
     // Reload
     await this.stop();
@@ -84,6 +151,18 @@ class NexoLogicEngine {
     }
   }
 
+  /**
+   * Code-Teil: Methode `handleStateChange`
+   * Zweck: behandelt ein Ereignis oder einen API-/UI-Callback.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: handleStateChange
+   * Zweck: Verarbeitet Events oder API-/Benutzeraktionen.
+   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   handleStateChange(id, state) {
     if (this._stopped) return;
     const dpId = String(id || '').trim();
@@ -109,7 +188,26 @@ class NexoLogicEngine {
 // Graph Runner (single graph)
 // -----------------------------
 
+/**
+ * Code-Teil: Klasse `GraphRunner`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+// Klassen-Kommentar: Klasse: GraphRunner. Aufgabe: ist zyklische Laufzeitlogik. Timer müssen im unload sauber beendet werden und dürfen keine Doppelinstanzen erzeugen. Zusammenhang: Projekt-Quellcode des NexoWatt-Adapters.
+/**
+ * Klasse: GraphRunner
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 class GraphRunner {
+  /**
+   * Code-Teil: constructor
+   * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
+   * Zusammenhang: Gehört zu EMS-Kern (Modulsteuerung, Datenpunktdefinitionen und zentrale EMS-Ausführung) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+   * Wartung/TypeScript: Änderungen an Signatur oder Rückgabe können abhängige Aufrufer beeinflussen; Aufrufstellen mitprüfen. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+   */
   constructor(adapter, graph) {
     this.adapter = adapter;
     this.graph = graph;
@@ -124,6 +222,18 @@ class GraphRunner {
     this._build();
   }
 
+  /**
+   * Code-Teil: Methode `stop`
+   * Zweck: verwaltet Lifecycle/Ressourcen wie Server, Timer oder SSE-Verbindungen.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: stop
+   * Zweck: Stoppt Prozess, Timer, Engine oder Verbindung.
+   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   stop() {
     // Clear any running timers/intervals
     try {
@@ -145,6 +255,18 @@ class GraphRunner {
     } catch (_e4) {}
   }
 
+  /**
+   * Code-Teil: Methode `_build`
+   * Zweck: baut aus Rohdaten eine strukturierte Konfiguration, Liste oder Empfehlung.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _build
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _build() {
     const nodesArr = Array.isArray(this.graph.nodes) ? this.graph.nodes : [];
     for (const n of nodesArr) {
@@ -196,10 +318,27 @@ class GraphRunner {
     }
   }
 
+  /**
+   * Code-Teil: Methode `getDpInputs`
+   * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: getDpInputs
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   getDpInputs() {
     return this._dpInputNodes.slice();
   }
-
+  /**
+   * Code-Teil: setDpInputValue
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   setDpInputValue(nodeId, value) {
     const node = this.nodes.get(nodeId);
     if (!node) return;
@@ -215,6 +354,18 @@ class GraphRunner {
     }
   }
 
+  /**
+   * Code-Teil: Methode `evaluateAll`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: evaluateAll
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   evaluateAll() {
     // Evaluate all nodes once so constants propagate + timer nodes arm themselves.
     for (const [id, node] of this.nodes.entries()) {
@@ -226,6 +377,18 @@ class GraphRunner {
     }
   }
 
+  /**
+   * Code-Teil: Methode `_propagateFrom`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _propagateFrom
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _propagateFrom(fromNodeId, fromPort) {
     const q = [];
     const seen = new Set();
@@ -267,6 +430,18 @@ class GraphRunner {
     }
   }
 
+  /**
+   * Code-Teil: Methode `_evalNode`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: _evalNode
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   _evalNode(nodeId, queue /* optional */) {
     const node = this.nodes.get(nodeId);
     if (!node || !node.enabled) return;
@@ -313,6 +488,18 @@ class GraphRunner {
 // Helpers (conversion, parsing)
 // -----------------------------
 
+/**
+ * Code-Teil: Arrow-Funktion `toBool`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+/**
+ * Code-Teil: toBool
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const toBool = (v) => {
   if (v === true) return true;
   if (v === false) return false;
@@ -331,6 +518,12 @@ const toBool = (v) => {
   return !!v;
 };
 
+/**
+ * Code-Teil: Arrow-Funktion `toNum`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
 const toNum = (v, def = 0) => {
   if (typeof v === 'number' && Number.isFinite(v)) return v;
   if (typeof v === 'string') {
@@ -343,12 +536,29 @@ const toNum = (v, def = 0) => {
   return Number.isFinite(n) ? n : def;
 };
 
+/**
+ * Code-Teil: Arrow-Funktion `isEqual`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+/**
+ * Code-Teil: isEqual
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const isEqual = (a, b) => {
   // primitives + NaN handling
   if (Number.isNaN(a) && Number.isNaN(b)) return true;
   return a === b;
 };
-
+/**
+ * Code-Teil: castValue
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const castValue = (value, cast) => {
   const c = String(cast || 'auto').toLowerCase();
   if (c === 'bool' || c === 'boolean') return toBool(value);
@@ -374,8 +584,25 @@ const castValue = (value, cast) => {
   return value;
 };
 
+/**
+ * Code-Teil: Arrow-Funktion `clamp`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+/**
+ * Code-Teil: clamp
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-
+/**
+ * Code-Teil: parseTimeToMin
+ * Zweck: Parst Rohdaten in ein sicheres internes Format.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const parseTimeToMin = (s) => {
   if (s === null || s === undefined) return null;
   const str = String(s).trim();
@@ -387,6 +614,18 @@ const parseTimeToMin = (s) => {
   return (hh * 60) + mm;
 };
 
+/**
+ * Code-Teil: Arrow-Funktion `parseDays`
+ * Zweck: normalisiert Eingaben/Anzeigeformate und schützt gegen ungültige Werte.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+/**
+ * Code-Teil: parseDays
+ * Zweck: Parst Rohdaten in ein sicheres internes Format.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const parseDays = (s) => {
   // returns Set of 1..7 (Mo=1..So=7)
   const out = new Set();
@@ -417,14 +656,43 @@ const parseDays = (s) => {
   return out;
 };
 
+/**
+ * Code-Teil: Arrow-Funktion `nowLocal`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+/**
+ * Code-Teil: nowLocal
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const nowLocal = () => new Date();
-
+/**
+ * Code-Teil: getIsoDay
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const getIsoDay = (d) => {
   // JS: 0=So..6=Sa -> ISO: 1=Mo..7=So
   const dow = d.getDay();
   return (dow === 0) ? 7 : dow;
 };
 
+/**
+ * Code-Teil: Arrow-Funktion `scheduleNextMinuteTick`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+/**
+ * Code-Teil: scheduleNextMinuteTick
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const scheduleNextMinuteTick = ({ internal, runner, nodeId }) => {
   const now = Date.now();
   const msToNextMinute = 60_000 - (now % 60_000);
@@ -435,6 +703,18 @@ const scheduleNextMinuteTick = ({ internal, runner, nodeId }) => {
   }, delay);
 };
 
+/**
+ * Code-Teil: Arrow-Funktion `triggerShortPulse`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+/**
+ * Code-Teil: triggerShortPulse
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 const triggerShortPulse = ({ internal, key, widthMs, runner, nodeId }) => {
   const w = Math.max(10, Math.min(2000, Math.round(toNum(widthMs, 60))));
   // store pulses under internal.pulses map
@@ -493,6 +773,18 @@ const NODE_TYPES = {
         internal.pendingAck = undefined;
       }
 
+      /**
+       * Code-Teil: Arrow-Funktion `schedulePending`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: schedulePending
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const schedulePending = () => {
         if (minIntervalMs <= 0) return;
 
@@ -517,6 +809,18 @@ const NODE_TYPES = {
         }, dueIn);
       };
 
+      /**
+       * Code-Teil: Arrow-Funktion `sideEffect`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: sideEffect
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const sideEffect = () => {
         if (!changed) return;
 
@@ -986,6 +1290,18 @@ const NODE_TYPES = {
       if (!Number.isFinite(internal.lastTs)) internal.lastTs = Date.now();
       if (!Number.isFinite(internal.iTerm)) internal.iTerm = 0;
 
+      /**
+       * Code-Teil: Arrow-Funktion `clearIntervalSafe`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: clearIntervalSafe
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const clearIntervalSafe = () => {
         if (internal.i) { try { clearInterval(internal.i); } catch (_e) {} internal.i = null; }
         internal.iMs = null;
@@ -1048,6 +1364,18 @@ const NODE_TYPES = {
       internal.iTerm = iNext;
 
       const f = Math.pow(10, prec);
+      /**
+       * Code-Teil: Arrow-Funktion `round`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: round
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const round = (x) => Math.round(x * f) / f;
 
       return { out: { out: round(u), delta: round(delta), p: round(p), i: round(iNext) }, internal };
@@ -1105,6 +1433,18 @@ const NODE_TYPES = {
 
       if (internal.blocked === undefined) internal.blocked = false;
 
+      /**
+       * Code-Teil: Arrow-Funktion `clearTimers`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: clearTimers
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const clearTimers = () => {
         if (internal.t) { try { clearTimeout(internal.t); } catch (_e) {} internal.t = null; }
         if (internal.t2) { try { clearTimeout(internal.t2); } catch (_e2) {} internal.t2 = null; }
@@ -1244,6 +1584,18 @@ const NODE_TYPES = {
       if (!Number.isFinite(internal.lastActionTs)) internal.lastActionTs = 0;
       internal.pulses = (internal.pulses && typeof internal.pulses === 'object') ? internal.pulses : { open: false, close: false };
 
+      /**
+       * Code-Teil: Arrow-Funktion `clearPulses`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: clearPulses
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const clearPulses = () => {
         try {
           if (internal.pulseTimers && typeof internal.pulseTimers === 'object') {
@@ -1301,6 +1653,18 @@ const NODE_TYPES = {
       if (!Number.isFinite(duty)) duty = 0;
       duty = clamp(duty, 0, 100);
 
+      /**
+       * Code-Teil: Arrow-Funktion `clearTimers`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: clearTimers
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const clearTimers = () => {
         if (internal.t) { try { clearTimeout(internal.t); } catch (_e) {} internal.t = null; }
         if (internal.t2) { try { clearTimeout(internal.t2); } catch (_e2) {} internal.t2 = null; }
@@ -1781,6 +2145,18 @@ const NODE_TYPES = {
       const pulseMs = Math.max(0, Math.min(10_000, Math.round(toNum(params.pulseMs, 0))));
       const payload = String(params.payload || 'true').toLowerCase();
 
+      /**
+       * Code-Teil: Arrow-Funktion `resolveSceneDpId`
+       * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+       * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: resolveSceneDpId
+       * Zweck: Wählt die richtige Datenquelle/Fallback-Logik aus.
+       * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const resolveSceneDpId = () => {
         // 1) SmartHomeConfig devices
         try {
@@ -1809,6 +2185,18 @@ const NODE_TYPES = {
 
       const dpId = resolveSceneDpId();
 
+      /**
+       * Code-Teil: Arrow-Funktion `sideEffect`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: sideEffect
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von EMS-Kern: Engine, Module, Datenpunkte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const sideEffect = () => {
         if (!fire) return;
         if (!dpId) return;

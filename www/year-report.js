@@ -1,6 +1,42 @@
-(function(){
-  function el(id){ return document.getElementById(id); }
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
 
+/**
+ * Datei: www/year-report.js
+ * Rolle im Projekt: Frontend-Skript.
+ * Zweck: Browserseitiger Code für eine Kunden-/Installerseite; liest APIs und aktualisiert DOM/UI.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Frontend-Skript einer VIS-/Kundenseite oder eines Reports.
+ * Zusammenhänge:
+ * - Spricht mit APIs aus main.js und rendert Daten aus /api/state, /config oder Reports.
+ * - Styles liegen in www/styles.css bzw. Report-CSS-Dateien.
+ * Wartungshinweise:
+ * - Feature-Sichtbarkeit und Rollen beachten; Kundenfrontend darf keine Installerfunktionen öffnen.
+ */
+
+(function(){
+  /**
+   * Code-Teil: el
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
+  function el(id){ return document.getElementById(id); }
+  /**
+   * Code-Teil: q
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function q(name){
     try {
       const u = new URL(window.location.href);
@@ -9,14 +45,24 @@
       return null;
     }
   }
-
+  /**
+   * Code-Teil: clampInt
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function clampInt(v, min, max, def){
     const n = Number(v);
     if (!Number.isFinite(n)) return def;
     const i = Math.trunc(n);
     return Math.max(min, Math.min(max, i));
   }
-
+  /**
+   * Code-Teil: toIsoDate
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function toIsoDate(ms){
     const d = new Date(ms);
     const y = d.getFullYear();
@@ -24,23 +70,43 @@
     const dd = String(d.getDate()).padStart(2,'0');
     return `${y}-${m}-${dd}`;
   }
-
+  /**
+   * Code-Teil: fmtKwh
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function fmtKwh(n){
     const x = Number(n);
     if (!Number.isFinite(x)) return '0.0';
     return x.toFixed(1);
   }
-
+  /**
+   * Code-Teil: fmtPct
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function fmtPct(n){
     const x = Number(n);
     if (!Number.isFinite(x)) return '0.0';
     return x.toFixed(1);
   }
-
+  /**
+   * Code-Teil: isFiniteNum
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function isFiniteNum(n){
     return Number.isFinite(Number(n));
   }
-
+  /**
+   * Code-Teil: pickEnergyKwh
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function pickEnergyKwh(counterVal, integratedVal){
     const counter = Number(counterVal);
     const integrated = Number(integratedVal);
@@ -58,6 +124,12 @@
 
   // Integrate a power series (W) to energy (kWh).
   // Input: [[ts, W], ...] where ts can be ms/seconds/string.
+  /**
+   * Code-Teil: toTsMs
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function toTsMs(t){
     if (t === null || t === undefined) return NaN;
     if (typeof t === 'number') {
@@ -76,7 +148,12 @@
     const n = Number(t);
     return Number.isFinite(n) ? ((n > 0 && n < 1e12) ? n * 1000 : n) : NaN;
   }
-
+  /**
+   * Code-Teil: sumEnergyKWh
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function sumEnergyKWh(vals){
     if(!Array.isArray(vals) || vals.length < 2) return 0;
     const pts = vals
@@ -107,7 +184,12 @@
   // The other tabs act as optional filters.
   let activeTab = 'all';
   let report = null; // computed data
-
+  /**
+   * Code-Teil: setError
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setError(msg){
     const err = el('err');
     if (!err) return;
@@ -119,25 +201,45 @@
     err.textContent = msg;
     err.classList.remove('hidden');
   }
-
+  /**
+   * Code-Teil: setHint
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setHint(html){
     const h = el('hint');
     if (!h) return;
     h.innerHTML = html || '';
   }
-
+  /**
+   * Code-Teil: setMeta
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setMeta(text){
     const m = el('rangeMeta');
     if (m) m.textContent = text || '';
   }
-
+  /**
+   * Code-Teil: setTableLoading
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setTableLoading(){
     const thead = el('thead');
     const tbody = el('tbody');
     if (thead) thead.innerHTML = '';
     if (tbody) tbody.innerHTML = '<tr><td colspan="99" style="text-align:left;color:#9aa4ad;">Lade Daten…</td></tr>';
   }
-
+  /**
+   * Code-Teil: getYearsFromQuery
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function getYearsFromQuery(){
     const now = new Date();
     const endYear = clampInt(q('y'), 2000, 2100, now.getFullYear());
@@ -146,7 +248,12 @@
     for (let y = endYear - span + 1; y <= endYear; y++) years.push(y);
     return { endYear, span, years };
   }
-
+  /**
+   * Code-Teil: fetchYear
+   * Zweck: Holt Daten über HTTP/API oder aus externen Quellen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function fetchYear(year){
     const nowMs = Date.now();
     const fromMs = new Date(year, 0, 1, 0, 0, 0, 0).getTime();
@@ -162,7 +269,12 @@
     if (!res || !res.ok) return { ok:false, year, fromMs, toMs, res };
     return { ok:true, year, fromMs, toMs, res };
   }
-
+  /**
+   * Code-Teil: computeYearTotals
+   * Zweck: Berechnet abgeleitete Werte.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function computeYearTotals(item){
     const year = item.year;
     const res = item.res || {};
@@ -253,7 +365,12 @@
       }
     };
   }
-
+  /**
+   * Code-Teil: collectDefs
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function collectDefs(years, byYear, kind){
     // kind: 'producers' | 'consumers'
     const map = new Map(); // idx -> name
@@ -271,12 +388,22 @@
       .map(([idx, name]) => ({ idx, name }))
       .sort((a,b) => a.idx - b.idx);
   }
-
+  /**
+   * Code-Teil: getYearVal
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function getYearVal(yearObj, key){
     const v = yearObj ? yearObj[key] : 0;
     return Number.isFinite(Number(v)) ? Number(v) : 0;
   }
-
+  /**
+   * Code-Teil: renderTable
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function renderTable(rows, years, byYear, { unit = 'kWh', decimals = 1 } = {}){
     const thead = el('thead');
     const tbody = el('tbody');
@@ -293,6 +420,18 @@
       return;
     }
 
+    /**
+     * Code-Teil: Arrow-Funktion `fmt`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: fmt
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const fmt = (n) => {
       const x = Number(n);
       if (!Number.isFinite(x)) return (0).toFixed(decimals);
@@ -318,7 +457,12 @@
     const suffix = u ? ` <span style="opacity:.7">[${u}]</span>` : '';
     // (We put the unit into the hint below, to keep the table clean.)
   }
-
+  /**
+   * Code-Teil: renderGroupedTable
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function renderGroupedTable(sections, years, byYear){
     const thead = el('thead');
     const tbody = el('tbody');
@@ -331,6 +475,18 @@
     thead.innerHTML = h;
 
     const colSpan = years.length + 1;
+    /**
+     * Code-Teil: Arrow-Funktion `esc`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: esc
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const esc = (s) => String(s || '').replace(/</g,'&lt;');
 
     if (!Array.isArray(sections) || sections.length === 0){
@@ -372,7 +528,12 @@
 
     tbody.innerHTML = html;
   }
-
+  /**
+   * Code-Teil: renderActiveTab
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function renderActiveTab(){
     if (!report) return;
     const years = report.years;
@@ -413,7 +574,6 @@
       })),
       hint: 'Erzeuger‑Aufschlüsselung basiert auf den im Energiefluss‑Monitor gemappten Erzeuger‑Slots.'
     };
-
     const consumerRows = defsC.map(d => ({
       label: d.name,
       get: (yr) => {
@@ -503,21 +663,36 @@
     renderTable(sec.rows, years, byYear, { unit: sec.unit, decimals: sec.decimals });
     setHint(sec.hint || '');
   }
-
+  /**
+   * Code-Teil: setActiveTab
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setActiveTab(tab){
     activeTab = tab;
     const btns = Array.from(document.querySelectorAll('.rep-tab'));
     btns.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     renderActiveTab();
   }
-
+  /**
+   * Code-Teil: buildCsv
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildCsv(){
     if (!report) return '';
     const years = report.years;
     const byYear = report.byYear;
 
     const lines = [];
-
+    /**
+     * Code-Teil: addSection
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function addSection(title, rows){
       lines.push(title);
       lines.push(['', ...years].join(';'));
@@ -584,7 +759,12 @@
 
     return lines.join('\n');
   }
-
+  /**
+   * Code-Teil: downloadCsv
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function downloadCsv(){
     const csv = buildCsv();
     if (!csv) return;
@@ -598,7 +778,12 @@
     a.remove();
     setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(_e){} }, 2500);
   }
-
+  /**
+   * Code-Teil: load
+   * Zweck: Lädt Daten aus API, States oder Konfiguration.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function load(){
     setError('');
     setTableLoading();
@@ -643,10 +828,16 @@
 
     renderActiveTab();
   }
-
+  /**
+   * Code-Teil: init
+   * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+   * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function init(){
     // Tabs
     Array.from(document.querySelectorAll('.rep-tab')).forEach(btn => {
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       btn.addEventListener('click', ()=> setActiveTab(btn.dataset.tab));
     });
 
@@ -729,11 +920,33 @@
       const menuBtn = document.getElementById('menuBtn');
       const menuDropdown = document.getElementById('menuDropdown');
       if (menuBtn && menuDropdown){
+        /**
+         * Code-Teil: Arrow-Funktion `close`
+         * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
+         * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: close
+         * Zweck: Schließt Dialoge/Seiten/Popovers.
+         * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const close = () => menuDropdown.classList.add('hidden');
+        /**
+         * Code-Teil: toggle
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von History/Reports: Charts, Zeiträume, Exporte; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const toggle = () => menuDropdown.classList.toggle('hidden');
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menuBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         menuBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); toggle(); });
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an menuDropdown. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         menuDropdown.addEventListener('click', (e) => e.stopPropagation());
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         document.addEventListener('click', () => close());
       }
     })();

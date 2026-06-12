@@ -1,4 +1,29 @@
 #!/usr/bin/env node
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: scripts/verify-publish.js
+ * Rolle im Projekt: Build-/Wartungsskript.
+ * Zweck: Hilfsskript für Versionierung, Publish-Prüfung, Hooks oder Sicherheit im Releaseprozess.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Wartungs-/Release-Skript für Versionierung, Prüfung oder Sicherheits-/Publish-Aufgaben.
+ * Zusammenhänge:
+ * - Wird über npm scripts oder Release-Prozess aufgerufen.
+ * - Prüft bzw. verändert Metadaten, aber keine EMS-Laufzeitlogik.
+ * Wartungshinweise:
+ * - Skripte müssen auf Windows und Linux robust laufen.
+ */
+
 'use strict';
 
 const fs = require('fs');
@@ -9,16 +34,31 @@ const root = path.resolve(__dirname, '..');
 const conflictRe = /^(<<<<<<<|=======|>>>>>>>)(\s|$)/;
 const skipDirs = new Set(['.git', 'node_modules', 'dist', 'build', '.cache']);
 const skipExt = new Set(['.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.zip', '.tgz', '.gz', '.br', '.pdf', '.woff', '.woff2', '.ttf', '.eot']);
-
+/**
+ * Code-Teil: fail
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Build-/Prüfskript; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function fail(msg) {
   console.error(`[publish-check] ERROR: ${msg}`);
   process.exitCode = 1;
 }
-
+/**
+ * Code-Teil: warn
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Build-/Prüfskript; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function warn(msg) {
   console.warn(`[publish-check] WARN: ${msg}`);
 }
-
+/**
+ * Code-Teil: readJson
+ * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+ * Zusammenhang: Teil von Build-/Prüfskript; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function readJson(rel) {
   const file = path.join(root, rel);
   try {
@@ -28,7 +68,12 @@ function readJson(rel) {
     return null;
   }
 }
-
+/**
+ * Code-Teil: walk
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Build-/Prüfskript; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function walk(dir, out = []) {
   let entries = [];
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return out; }
@@ -40,11 +85,21 @@ function walk(dir, out = []) {
   }
   return out;
 }
-
+/**
+ * Code-Teil: hasNativeProtection
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Build-/Prüfskript; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function hasNativeProtection(io, key) {
   return Array.isArray(io && io[key]) && io[key].includes('licenseKey');
 }
-
+/**
+ * Code-Teil: ensureScriptSyntax
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Build-/Prüfskript; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function ensureScriptSyntax(rel) {
   const full = path.join(root, rel);
   if (!fs.existsSync(full)) return;

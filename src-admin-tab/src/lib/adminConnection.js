@@ -1,8 +1,38 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: src-admin-tab/src/lib/adminConnection.js
+ * Rolle im Projekt: Admin-React-Quelle.
+ * Zweck: React-Quellcode für ioBroker-Admin-Tab und Installer-Einstiegsseiten.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Quellcode der React-Admin-Tab-Oberfläche.
+ * Zusammenhänge:
+ * - Baut nach admin/react/ und öffnet Installer-/Lizenz-/Redirect-Seiten.
+ * - Kommuniziert über AdminConnection/ioBroker Admin APIs.
+ * Wartungshinweise:
+ * - Bei UI-Änderungen anschließend admin:build ausführen.
+ */
+
 const ADAPTER_NAME = 'nexowatt-ui';
 const DEFAULT_PORT = 8188;
 const ADMIN_CALL_TIMEOUT_MS = 5000;
 const RUNTIME_FETCH_TIMEOUT_MS = 1500;
-
+/**
+ * Code-Teil: withTimeout
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function withTimeout(promise, ms, label) {
   let timer = null;
   const timeout = new Promise((_, reject) => {
@@ -12,7 +42,12 @@ function withTimeout(promise, ms, label) {
     if (timer) clearTimeout(timer);
   });
 }
-
+/**
+ * Code-Teil: callbackPromise
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function callbackPromise(fn, label, ms = ADMIN_CALL_TIMEOUT_MS) {
   return withTimeout(new Promise((resolve, reject) => {
     try {
@@ -23,6 +58,12 @@ function callbackPromise(fn, label, ms = ADMIN_CALL_TIMEOUT_MS) {
   }), ms, label);
 }
 
+/**
+ * Code-Teil: getInstance
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 export function getInstance() {
   try {
     return new URLSearchParams(window.location.search || '').get('instance') || '0';
@@ -31,16 +72,33 @@ export function getInstance() {
   }
 }
 
+/**
+ * Code-Teil: getAdapterObjectId
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 export function getAdapterObjectId(instance = getInstance()) {
   return `system.adapter.${ADAPTER_NAME}.${instance}`;
 }
 
+/**
+ * Code-Teil: buildRuntimeBaseUrl
+ * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 export function buildRuntimeBaseUrl(port = DEFAULT_PORT) {
   const protocol = window.location.protocol || 'http:';
   const host = window.location.hostname || 'localhost';
   return `${protocol}//${host}:${port}`;
 }
-
+/**
+ * Code-Teil: safeWindowAccess
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function safeWindowAccess(getter) {
   try {
     return getter();
@@ -48,7 +106,12 @@ function safeWindowAccess(getter) {
     return null;
   }
 }
-
+/**
+ * Code-Teil: isErrorLike
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function isErrorLike(value) {
   if (!value) return false;
   if (value instanceof Error) return true;
@@ -63,7 +126,12 @@ function isErrorLike(value) {
 
   return !!(value.error || value.err || value.message);
 }
-
+/**
+ * Code-Teil: normalizeIoBrokerCallback
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function normalizeIoBrokerCallback(cb) {
   return (arg1, arg2) => {
     // ioBroker admin APIs are inconsistent across versions:
@@ -81,7 +149,12 @@ function normalizeIoBrokerCallback(cb) {
     cb(null, arg1 || null);
   };
 }
-
+/**
+ * Code-Teil: pickServConn
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function pickServConn() {
   return (
     safeWindowAccess(() => window.servConn)
@@ -90,7 +163,12 @@ function pickServConn() {
     || null
   );
 }
-
+/**
+ * Code-Teil: pickSocket
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function pickSocket() {
   return (
     safeWindowAccess(() => window.socket)
@@ -100,7 +178,12 @@ function pickSocket() {
     || null
   );
 }
-
+/**
+ * Code-Teil: ensureSocketIo
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function ensureSocketIo() {
   if (window.io || pickSocket()) {
     return true;
@@ -116,10 +199,21 @@ async function ensureSocketIo() {
 
   return !!window.io || !!pickSocket();
 }
-
+/**
+ * Code-Teil: wrapServConn
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function wrapServConn(servConn) {
   return {
     type: 'servConn',
+    /**
+     * Code-Teil: getObject
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     getObject(id, cb) {
       try {
         servConn.getObject(id, normalizeIoBrokerCallback(cb));
@@ -127,6 +221,18 @@ function wrapServConn(servConn) {
         cb(error, null);
       }
     },
+    /**
+     * Code-Teil: Methode `getState`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt an Admin-/JSONConfig-Bridge und Installer-Weiterleitungen; Änderungen müssen mit admin/* und main.js kompatibel bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: getState
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     getState(id, cb) {
       if (typeof servConn.getState !== 'function') {
         cb(null, null);
@@ -138,6 +244,18 @@ function wrapServConn(servConn) {
         cb(error, null);
       }
     },
+    /**
+     * Code-Teil: Methode `setObject`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt an Admin-/JSONConfig-Bridge und Installer-Weiterleitungen; Änderungen müssen mit admin/* und main.js kompatibel bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: setObject
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     setObject(id, obj, cb) {
       try {
         servConn.setObject(id, obj, err => cb(err || null));
@@ -147,10 +265,21 @@ function wrapServConn(servConn) {
     },
   };
 }
-
+/**
+ * Code-Teil: wrapSocket
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function wrapSocket(socket) {
   return {
     type: 'socket',
+    /**
+     * Code-Teil: getObject
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     getObject(id, cb) {
       try {
         socket.emit('getObject', id, normalizeIoBrokerCallback(cb));
@@ -158,6 +287,18 @@ function wrapSocket(socket) {
         cb(error, null);
       }
     },
+    /**
+     * Code-Teil: Methode `getState`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt an Admin-/JSONConfig-Bridge und Installer-Weiterleitungen; Änderungen müssen mit admin/* und main.js kompatibel bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: getState
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     getState(id, cb) {
       try {
         socket.emit('getState', id, normalizeIoBrokerCallback(cb));
@@ -165,6 +306,18 @@ function wrapSocket(socket) {
         cb(error, null);
       }
     },
+    /**
+     * Code-Teil: Methode `setObject`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt an Admin-/JSONConfig-Bridge und Installer-Weiterleitungen; Änderungen müssen mit admin/* und main.js kompatibel bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: setObject
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     setObject(id, obj, cb) {
       try {
         socket.emit('setObject', id, obj, result => {
@@ -189,6 +342,12 @@ function wrapSocket(socket) {
   };
 }
 
+/**
+ * Code-Teil: getAdminConnection
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 export async function getAdminConnection() {
   const servConn = pickServConn();
   if (servConn && typeof servConn.getObject === 'function' && typeof servConn.setObject === 'function') {
@@ -218,10 +377,22 @@ export async function getAdminConnection() {
   return null;
 }
 
+/**
+ * Code-Teil: extractUuid
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 export function extractUuid(obj) {
   const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const seen = new Set();
 
+  /**
+   * Code-Teil: Arrow-Funktion `scan`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an Admin-/JSONConfig-Bridge und Installer-Weiterleitungen; Änderungen müssen mit admin/* und main.js kompatibel bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
   const scan = (value, key = '') => {
     if (value === undefined || value === null) return '';
     if (typeof value === 'string') {
@@ -251,6 +422,12 @@ export function extractUuid(obj) {
   return scan(obj);
 }
 
+/**
+ * Code-Teil: getObject
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 export async function getObject(id, conn = null) {
   const resolvedConn = conn || (await getAdminConnection());
   if (!resolvedConn) {
@@ -259,6 +436,12 @@ export async function getObject(id, conn = null) {
   return callbackPromise(cb => resolvedConn.getObject(id, cb), `getObject ${id}`);
 }
 
+/**
+ * Code-Teil: getState
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 export async function getState(id, conn = null) {
   const resolvedConn = conn || (await getAdminConnection());
   if (!resolvedConn || typeof resolvedConn.getState !== 'function') {
@@ -267,6 +450,12 @@ export async function getState(id, conn = null) {
   return callbackPromise(cb => resolvedConn.getState(id, cb), `getState ${id}`);
 }
 
+/**
+ * Code-Teil: setObject
+ * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 export async function setObject(id, obj, conn = null) {
   const resolvedConn = conn || (await getAdminConnection());
   if (!resolvedConn) {
@@ -275,6 +464,12 @@ export async function setObject(id, obj, conn = null) {
   await callbackPromise(cb => resolvedConn.setObject(id, obj, cb), `setObject ${id}`);
 }
 
+/**
+ * Code-Teil: readAdapterPort
+ * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 export async function readAdapterPort(instance = getInstance(), conn = null) {
   try {
     const adapterObj = await getObject(getAdapterObjectId(instance), conn);
@@ -285,6 +480,12 @@ export async function readAdapterPort(instance = getInstance(), conn = null) {
   }
 }
 
+/**
+ * Code-Teil: readSystemUuid
+ * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 export async function readSystemUuid(conn = null, instance = getInstance()) {
   const adapterBase = `${ADAPTER_NAME}.${instance}.license.uuid`;
 
@@ -324,7 +525,12 @@ export async function readSystemUuid(conn = null, instance = getInstance()) {
 
   return '';
 }
-
+/**
+ * Code-Teil: fetchJsonWithTimeout
+ * Zweck: Holt Daten über HTTP/API oder aus externen Quellen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function fetchJsonWithTimeout(url, ms = RUNTIME_FETCH_TIMEOUT_MS) {
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
   let timer = null;
@@ -342,7 +548,12 @@ async function fetchJsonWithTimeout(url, ms = RUNTIME_FETCH_TIMEOUT_MS) {
     if (timer) clearTimeout(timer);
   }
 }
-
+/**
+ * Code-Teil: postJsonWithTimeout
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 async function postJsonWithTimeout(url, payload, ms = RUNTIME_FETCH_TIMEOUT_MS) {
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
   let timer = null;
@@ -366,10 +577,28 @@ async function postJsonWithTimeout(url, payload, ms = RUNTIME_FETCH_TIMEOUT_MS) 
   }
 }
 
+/**
+ * Code-Teil: readRuntimeLicenseInfo
+ * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 export async function readRuntimeLicenseInfo(instance = getInstance(), conn = null) {
   const tried = new Set();
   let lastError = null;
 
+  /**
+   * Code-Teil: Arrow-Funktion `tryPort`
+   * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+   * Zusammenhang: Hängt an Admin-/JSONConfig-Bridge und Installer-Weiterleitungen; Änderungen müssen mit admin/* und main.js kompatibel bleiben.
+   * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+   */
+  /**
+   * Code-Teil: tryPort
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   const tryPort = async (port) => {
     const p = Number(port) || 0;
     if (!p || tried.has(p)) return null;
@@ -402,6 +631,12 @@ export async function readRuntimeLicenseInfo(instance = getInstance(), conn = nu
   return null;
 }
 
+/**
+ * Code-Teil: saveRuntimeLicenseKey
+ * Zweck: Speichert Benutzereingaben oder Konfiguration.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 export async function saveRuntimeLicenseKey(instance = getInstance(), licenseKey = '', conn = null) {
   const ports = [];
   try {
@@ -411,7 +646,6 @@ export async function saveRuntimeLicenseKey(instance = getInstance(), licenseKey
     // ignore
   }
   ports.push(DEFAULT_PORT);
-
   const uniquePorts = ports.filter((port, idx, arr) => port && arr.indexOf(port) === idx);
   let lastError = null;
   for (const port of uniquePorts) {
@@ -430,6 +664,12 @@ export async function saveRuntimeLicenseKey(instance = getInstance(), licenseKey
   return null;
 }
 
+/**
+ * Code-Teil: readLicenseStatus
+ * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 export async function readLicenseStatus(instance = getInstance(), conn = null) {
   const resolvedConn = conn || (await getAdminConnection());
   if (!resolvedConn) {
@@ -483,6 +723,12 @@ export async function readLicenseStatus(instance = getInstance(), conn = null) {
   }
 }
 
+/**
+ * Code-Teil: openExternal
+ * Zweck: Öffnet Dialoge/Seiten/Popovers.
+ * Zusammenhang: Teil von React-Admin-Quelle; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 export function openExternal(url) {
   try {
     window.top.location.href = url;

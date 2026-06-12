@@ -1,8 +1,24 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.51",
+    "version": "0.7.55",
     "news": {
+      "0.7.55": {
+        "de": "Dokumentationsvertiefung: Architektur, Datenflüsse, State-/DP-Katalog, kritische Regeln, TypeScript-Migrationsplan, Modul-Checklisten und Code-Verträge ergänzt. Keine Funktionslogik geändert.",
+        "en": "Documentation deepening: added architecture, data flows, state/datapoint catalog, critical rules, TypeScript migration plan, module checklists and code contracts. No functional logic changed."
+      },
+      "0.7.54": {
+        "de": "Wartbarkeitsversion: detaillierte deutsche Abschnittskommentare in Code-Dateien und Kommentarstandard für spätere TypeScript-Migration ergänzt.",
+        "en": "Maintainability release: added detailed German section comments to code files and a commenting standard for the later TypeScript migration."
+      },
+      "0.7.53": {
+        "de": "Wartbarkeitsrelease: deutsche Code-Kommentare und Code-Landkarte ergänzt. Keine Funktionslogik geändert.",
+        "en": "Maintainability release: added German code comments and a code map. No functional logic changed."
+      },
+      "0.7.52": {
+        "en": "Hotfix: info.connection now follows the adapter HTTP/SSE service and is kept online by a heartbeat while the web server is reachable; partial optional startup errors no longer leave the customer frontend falsely offline.",
+        "de": "Hotfix: info.connection folgt jetzt dem Adapter-HTTP/SSE-Dienst und wird per Heartbeat online gehalten, solange der Webserver erreichbar ist; optionale Teilfehler beim Start lassen das Kundenfrontend nicht mehr fälschlich offline stehen."
+      },
       "0.7.51": {
         "en": "Hotfix: license regression fixed. licenseKey native protection/encryption is temporarily disabled again because ioBroker/Admin masked values could overwrite existing keys; runtime license save now rejects masked placeholders.",
         "de": "Hotfix: Lizenz-Regression behoben. licenseKey Native-Schutz/Verschlüsselung ist vorübergehend wieder deaktiviert, weil ioBroker/Admin maskierte Werte bestehende Schlüssel überschreiben konnten; Runtime-Speichern weist maskierte Platzhalter zurück."
@@ -14,22 +30,6 @@
       "0.7.49": {
         "en": "Mobile VIS hotfix: History controls no longer overflow on smartphones; SmartHome uses a reliable mobile drawer/loading state.",
         "de": "Mobile-VIS-Hotfix: History-Bedienleiste läuft auf Smartphones nicht mehr seitlich weg; SmartHome nutzt einen zuverlässigen mobilen Drawer/Ladezustand."
-      },
-      "0.7.48": {
-        "en": "Hotfix: core energy-flow datapoints are no longer discarded as stale, storage split/signed DPs remain authoritative, and balance-derived battery values are only used when no storage DP is configured.",
-        "de": "Hotfix: Kern-Datenpunkte im Energiefluss werden nicht mehr wegen altem Zeitstempel verworfen, getrennte/signed Speicher-DPs bleiben autoritativ und berechnete Speicherwerte werden nur genutzt, wenn kein Speicher-DP konfiguriert ist."
-      },
-      "0.7.47": {
-        "en": "Energy-flow datapoint resolver fixed: split charge/discharge datapoints and signed battery power are supported consistently again; calculated fallback is only used when a fresh measurement source is missing. Heating-rod reserve inputs are flushed before save.",
-        "de": "Energiefluss-Datenpunktauflösung korrigiert: getrennte Lade-/Entlade-Datenpunkte und signed Batterie-Leistung werden wieder konsistent unterstützt; der rechnerische Fallback greift nur, wenn keine frische Messquelle vorhanden ist. Heizstab-Reservefelder werden vor dem Speichern direkt übernommen."
-      },
-      "0.7.46": {
-        "en": "Hotfix: energy-flow and EMS budget calculation stabilized after split/signed storage datapoint handling; heating-rod reserve input is flushed before save.",
-        "de": "Hotfix: Energiefluss- und EMS-Budgetberechnung nach Split-/Signed-Speicher-Datenpunkten stabilisiert; Heizstab-Reservefeld wird vor dem Speichern übernommen."
-      },
-      "0.7.45": {
-        "en": "App-Center heating-rod UI hotfix: configurator cards no longer overlap and installer cockpit width is restored.",
-        "de": "App-Center Heizstab-UI-Hotfix: Konfigurator-Karten überlappen nicht mehr und die breite Installer-Cockpit-Achse ist wiederhergestellt."
       }
     },
     "title": "NexoWatt UI",

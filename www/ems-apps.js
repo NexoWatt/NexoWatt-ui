@@ -1,6 +1,46 @@
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: www/ems-apps.js
+ * Rolle im Projekt: Installer/App-Center Frontend.
+ * Zweck: Verwaltet Admin-Konfigurationen für EMS-Apps, Datenpunkte, Speicherfarm, Heizstab, KI und Mapping.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Installer/App-Center-Logik: liest und schreibt die EMS-App-Konfiguration, DP-Zuordnungen, Verbrauchergruppen und KI-/Regelungsparameter.
+ * Zusammenhänge:
+ * - Kommuniziert mit /api/installer/config und weiteren Installer-APIs aus main.js.
+ * - Viele Config-Werte werden später in ems/modules/* verarbeitet.
+ * Wartungshinweise:
+ * - UI-Felder müssen exakt zu den Config-Schlüsseln passen; ein falscher Key kann Regelungslogik oder DP-Mapping brechen.
+ */
+
 /* NexoWatt EMS Apps (Installer) – Web UI */
 (function () {
   'use strict';
+
+
+/**
+ * Datenvertrag: AppCenterConfigPatch
+ * Zweck: Beschreibt die Config-Objekte, die der Installer über das App-Center speichert.
+ * Zusammenhang: main.js übernimmt diese Config; EMS-Module lesen daraus Schwellwerte, Mappings und Freigaben.
+ * TypeScript-Ziel: Pro App/Modul eigene Config-Interfaces statt untypisierter Objekt-Patches.
+ */
+
+/**
+ * Vertragsstelle: HTML-ID zu Config-Key
+ * Zweck: Jedes Eingabefeld in ems-apps.html muss in ems-apps.js gelesen, validiert und gespeichert werden.
+ * Wichtig: Neue Felder immer in HTML, Element-Mapping, UI-Build und Collect-Funktion ergänzen.
+ */
+
 
   const els = {
     status: document.getElementById('nw-emsapps-status'),
@@ -250,12 +290,26 @@
 
   // Keep grid sign checkboxes in sync (Allgemein vs Energiefluss)
   if (els.gridInvertGrid && els.flowInvertGrid) {
+    /**
+     * Code-Teil: Arrow-Funktion `syncGridInvert`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: syncGridInvert
+     * Zweck: Synchronisiert zwei Datenquellen bzw. UI und State.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const syncGridInvert = (val) => {
       els.gridInvertGrid.checked = !!val;
       els.flowInvertGrid.checked = !!val;
     };
 
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.gridInvertGrid. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.gridInvertGrid.addEventListener('change', () => syncGridInvert(els.gridInvertGrid.checked));
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.flowInvertGrid. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.flowInvertGrid.addEventListener('change', () => syncGridInvert(els.flowInvertGrid.checked));
   }
 
@@ -288,7 +342,12 @@
     'MS/NS': 30,
     NS: 30,
   });
-
+  /**
+   * Code-Teil: _psVoltageKey
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psVoltageKey(v) {
     const s = String(v || 'MS').trim().toUpperCase().replace(/Ö/g, 'O').replace(/Ü/g, 'U').replace(/Ä/g, 'A');
     if (s === 'HÖS' || s === 'HOS') return 'HOS';
@@ -298,17 +357,32 @@
     if (s === 'HS' || s === 'MS' || s === 'NS') return s;
     return 'MS';
   }
-
+  /**
+   * Code-Teil: _psThresholdForVoltage
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psThresholdForVoltage(v) {
     const k = _psVoltageKey(v);
     return Object.prototype.hasOwnProperty.call(PS_VOLTAGE_THRESHOLDS, k) ? PS_VOLTAGE_THRESHOLDS[k] : 20;
   }
-
+  /**
+   * Code-Teil: _psNumOrNull
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psNumOrNull(v) {
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
   }
-
+  /**
+   * Code-Teil: _psParseNumberList
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psParseNumberList(value, min, max) {
     const out = [];
     const seen = new Set();
@@ -329,11 +403,21 @@
     out.sort((a, b) => a - b);
     return out;
   }
-
+  /**
+   * Code-Teil: _psFormatNumberList
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psFormatNumberList(arr) {
     return Array.isArray(arr) ? arr.map(v => String(v)).join(',') : '';
   }
-
+  /**
+   * Code-Teil: _psNormalizeDateToken
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psNormalizeDateToken(token) {
     const s = String(token || '').trim();
     if (!s) return '';
@@ -341,7 +425,12 @@
     if (m) return `${m[1].padStart(4, '0')}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
     return s;
   }
-
+  /**
+   * Code-Teil: _psParseDateList
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psParseDateList(value) {
     const out = [];
     const seen = new Set();
@@ -358,27 +447,52 @@
     out.sort();
     return out;
   }
-
+  /**
+   * Code-Teil: _psFormatDateList
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psFormatDateList(arr) {
     return Array.isArray(arr) ? arr.map(v => String(v)).filter(Boolean).join('\n') : '';
   }
-
+  /**
+   * Code-Teil: _psSetNumberInput
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psSetNumberInput(el, value) {
     if (!el) return;
     const n = Number(value);
     el.value = Number.isFinite(n) ? String(n) : '';
   }
-
+  /**
+   * Code-Teil: _psSetTextInput
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psSetTextInput(el, value) {
     if (!el) return;
     el.value = (value === null || value === undefined) ? '' : String(value);
   }
-
+  /**
+   * Code-Teil: _psRound2
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psRound2(n) {
     const x = Number(n);
     return Number.isFinite(x) ? Math.round(x * 100) / 100 : 0;
   }
-
+  /**
+   * Code-Teil: _psBuildAtypicalReviewFromUi
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psBuildAtypicalReviewFromUi() {
     const voltageLevel = els.psAtypicalVoltageLevel ? els.psAtypicalVoltageLevel.value : 'MS';
     const thresholdInput = _psNumOrNull(els.psAtypicalThresholdPercent && els.psAtypicalThresholdPercent.value);
@@ -428,7 +542,12 @@
       eligible,
     };
   }
-
+  /**
+   * Code-Teil: _psUpdateAtypicalReviewPreview
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psUpdateAtypicalReviewPreview() {
     if (!els.psAtypicalReviewPreview) return;
     const r = _psBuildAtypicalReviewFromUi();
@@ -450,9 +569,12 @@
       : (r.technicalEligible ? 'Status: technisch erfüllt, wirtschaftliche Prüfung noch offen/negativ ⚠️' : 'Status: Kriterien noch nicht erfüllt ❌');
     els.psAtypicalReviewPreview.textContent = `${parts.join(' · ')} · ${status}`;
   }
-
-
-
+  /**
+   * Code-Teil: _psAtypicalReviewExportUrl
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psAtypicalReviewExportUrl(format) {
     const rawFmt = String(format || 'csv').trim().toLowerCase();
     const fmt = rawFmt === 'pdf' ? 'pdf' : (rawFmt === 'json' ? 'json' : 'csv');
@@ -471,11 +593,21 @@
     const base = fmt === 'json' ? '/api/peakshaving/atypical/review' : `/api/peakshaving/atypical/review.${fmt}`;
     return `${base}${qs ? `?${qs}` : ''}`;
   }
-
+  /**
+   * Code-Teil: _psAtypicalReviewDefaultStatus
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psAtypicalReviewDefaultStatus() {
     return 'Nachweis-Historie wird automatisch in Influx über historie.peakShaving.atypical.* und gedrosselte Audit-Samples unter peakShaving.atypical.audit.* mitgeführt. CSV/PDF exportieren die aktuelle Prüfung plus die Influx-Zeitreihe.';
   }
-
+  /**
+   * Code-Teil: _psOpenAtypicalReviewExport
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psOpenAtypicalReviewExport(format) {
     try {
       if (els.psAtypicalReviewExportStatus) {
@@ -490,7 +622,12 @@
       if (els.psAtypicalReviewExportStatus) els.psAtypicalReviewExportStatus.textContent = 'Export konnte nicht gestartet werden: ' + (e && e.message ? e.message : e);
     }
   }
-
+  /**
+   * Code-Teil: _psRefreshAtypicalReviewExportStatus
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function _psRefreshAtypicalReviewExportStatus() {
     if (!els.psAtypicalReviewExportStatus) return;
     try {
@@ -517,8 +654,12 @@
       els.psAtypicalReviewExportStatus.textContent = 'Nachweis konnte nicht gelesen werden: ' + (e && e.message ? e.message : e);
     }
   }
-
-
+  /**
+   * Code-Teil: _psSetSelect
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psSetSelect(el, value, fallback) {
     if (!el) return;
     const v = String(value || fallback || '').trim();
@@ -667,18 +808,34 @@
 // Energiefluss: Einheit pro Datenpunkt (W/kW)
 // Intern arbeitet der Energiefluss mit Watt; die Live-UI zeigt kW.
 // Hersteller liefern jedoch teils bereits kW. Daher pro DP umschaltbar.
+/**
+ * Code-Teil: _ensureSettingsObj
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _ensureSettingsObj() {
   if (!currentConfig || typeof currentConfig !== 'object') currentConfig = {};
   if (!currentConfig.settings || typeof currentConfig.settings !== 'object') currentConfig.settings = {};
   return currentConfig.settings;
 }
-
+/**
+ * Code-Teil: _ensureFlowPowerDpIsW
+ * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+ * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _ensureFlowPowerDpIsW() {
   const st = _ensureSettingsObj();
   if (!st.flowPowerDpIsW || typeof st.flowPowerDpIsW !== 'object') st.flowPowerDpIsW = {};
   return st.flowPowerDpIsW;
 }
-
+/**
+ * Code-Teil: _getFlowPowerDpIsW
+ * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+ * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _getFlowPowerDpIsW(key) {
   const st = _ensureSettingsObj();
   const map = (st.flowPowerDpIsW && typeof st.flowPowerDpIsW === 'object') ? st.flowPowerDpIsW : null;
@@ -688,7 +845,12 @@ function _getFlowPowerDpIsW(key) {
   // Default: DP liefert Watt
   return true;
 }
-
+/**
+ * Code-Teil: _setFlowPowerDpIsW
+ * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
+ * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _setFlowPowerDpIsW(key, isW) {
   const map = _ensureFlowPowerDpIsW();
   map[key] = !!isW;
@@ -698,7 +860,12 @@ function _setFlowPowerDpIsW(key, isW) {
     }
   });
 }
-
+/**
+ * Code-Teil: _collectFlowPowerDpIsWFromUI
+ * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+ * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
 function _collectFlowPowerDpIsWFromUI() {
   const map = {};
   document.querySelectorAll('input[data-flow-power-unit-key]').forEach((el) => {
@@ -708,23 +875,36 @@ function _collectFlowPowerDpIsWFromUI() {
   return map;
 }
 // ─────────────────────────────────────────────────────────────
-
-
+  /**
+   * Code-Teil: setStatus
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setStatus(msg, kind) {
     if (!els.status) return;
     els.status.textContent = msg || '';
     els.status.style.opacity = msg ? '1' : '0.65';
     els.status.style.color = (kind === 'error') ? '#ffb4b4' : (kind === 'ok' ? '#b8f7c3' : '');
   }
-
-
+  /**
+   * Code-Teil: setBackupStatus
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setBackupStatus(msg, kind) {
     if (!els.backupStatus) return;
     els.backupStatus.textContent = msg || '';
     els.backupStatus.style.opacity = msg ? '1' : '0.65';
     els.backupStatus.style.color = (kind === 'error') ? '#ffb4b4' : (kind === 'ok' ? '#b8f7c3' : '');
   }
-
+  /**
+   * Code-Teil: downloadJsonFile
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function downloadJsonFile(filename, obj) {
     try {
       const json = JSON.stringify(obj, null, 2);
@@ -741,7 +921,12 @@ function _collectFlowPowerDpIsWFromUI() {
       }, 50);
     } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: readFileAsText
+   * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function readFileAsText(file) {
     return new Promise((resolve, reject) => {
       try {
@@ -754,7 +939,12 @@ function _collectFlowPowerDpIsWFromUI() {
       }
     });
   }
-
+  /**
+   * Code-Teil: fetchJson
+   * Zweck: Holt Daten über HTTP/API oder aus externen Quellen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function fetchJson(url, opts) {
     const res = await fetch(url, Object.assign({
       headers: { 'Content-Type': 'application/json' }
@@ -770,7 +960,12 @@ function _collectFlowPowerDpIsWFromUI() {
 
   // --- Datapoint validation (Phase 3.3) ---
   let _validateTimer = null;
-
+  /**
+   * Code-Teil: _fmtAge
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _fmtAge(ageMs) {
     const n = Number(ageMs);
     if (!Number.isFinite(n) || n < 0) return '';
@@ -782,7 +977,12 @@ function _collectFlowPowerDpIsWFromUI() {
     const h = m / 60;
     return `${Math.round(h)}h`;
   }
-
+  /**
+   * Code-Teil: _setBadge
+   * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _setBadge(inputId, kind, text) {
     const el = document.getElementById('val_' + inputId);
     if (!el) return;
@@ -790,13 +990,23 @@ function _collectFlowPowerDpIsWFromUI() {
     el.classList.add('nw-config-badge', 'nw-config-badge--' + (kind || 'idle'));
     el.textContent = text || '—';
   }
-
+  /**
+   * Code-Teil: scheduleValidation
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function scheduleValidation(delayMs) {
     const d = (typeof delayMs === 'number' && Number.isFinite(delayMs)) ? delayMs : 600;
     if (_validateTimer) clearTimeout(_validateTimer);
     _validateTimer = setTimeout(() => { runValidation(false).catch(() => {}); }, d);
   }
-
+  /**
+   * Code-Teil: runValidation
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function runValidation(showStatusMessage) {
     const inputs = Array.from(document.querySelectorAll('input[data-dp-input="1"]'));
     const ids = [];
@@ -873,7 +1083,12 @@ function _collectFlowPowerDpIsWFromUI() {
 
     if (showStatusMessage) setStatus('Validierung: abgeschlossen.', 'ok');
   }
-
+  /**
+   * Code-Teil: deepMerge
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function deepMerge(target, ...patches) {
     const out = (target && typeof target === 'object') ? JSON.parse(JSON.stringify(target)) : {};
     for (const patch of patches) {
@@ -889,35 +1104,66 @@ function _collectFlowPowerDpIsWFromUI() {
     }
     return out;
   }
-
+  /**
+   * Code-Teil: valueOrEmpty
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function valueOrEmpty(v) {
     return (v === null || v === undefined) ? '' : String(v);
   }
-
+  /**
+   * Code-Teil: numOrEmpty
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function numOrEmpty(v) {
     return (typeof v === 'number' && Number.isFinite(v)) ? String(v) : '';
   }
-
-
+  /**
+   * Code-Teil: _aiSetNumberInput
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _aiSetNumberInput(el, value, def) {
     if (!el) return;
     const n = Number(value);
     const d = Number(def);
     el.value = Number.isFinite(n) ? String(n) : (Number.isFinite(d) ? String(d) : '');
   }
-
+  /**
+   * Code-Teil: _aiSetCheckbox
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _aiSetCheckbox(el, value, def = true) {
     if (!el) return;
     el.checked = (typeof value === 'boolean') ? value : !!def;
   }
-
+  /**
+   * Code-Teil: _aiSetInputValue
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _aiSetInputValue(el, value, def = '') {
     if (!el) return;
     const v = (value === null || value === undefined || value === '') ? def : value;
     el.value = String(v === null || v === undefined ? '' : v);
   }
 
-  function buildAiAdvisorUI() {
+    // Abschnitt: KI-Berater-Konfiguration im App-Center. Felder müssen zu main.js-Defaults und ems/modules/ai-advisor.js passen.
+/**
+ * Code-Teil: buildAiAdvisorUI
+ * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+ * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
+function buildAiAdvisorUI() {
     const cfg = (currentConfig && currentConfig.aiAdvisor && typeof currentConfig.aiAdvisor === 'object') ? currentConfig.aiAdvisor : {};
     const cats = (cfg.categories && typeof cfg.categories === 'object') ? cfg.categories : {};
     const prio = (cfg.priorities && typeof cfg.priorities === 'object') ? cfg.priorities : {};
@@ -980,8 +1226,21 @@ function _collectFlowPowerDpIsWFromUI() {
     _aiSetCheckbox(els.aiAdvisorCatSystem, cats.system, true);
   }
 
-  function collectAiAdvisorConfigFromUI(base) {
+    // Abschnitt: KI-Konfiguration aus dem DOM einsammeln. Neue Eingabefelder müssen hier gespeichert werden, sonst gehen sie beim Speichern verloren.
+/**
+ * Code-Teil: collectAiAdvisorConfigFromUI
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
+function collectAiAdvisorConfigFromUI(base) {
     const out = deepMerge({}, (base && typeof base === 'object') ? base : {});
+    /**
+     * Code-Teil: n
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu Installer/App-Center (Admin-Konfiguration, EMS-Apps, DP-Zuordnung und Installer-Funktionen) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen müssen mit main.js/native Config und EMS-Modulen synchron bleiben, sonst speichern Installerwerte falsch. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const n = (el, def, min, max, roundValue = true) => {
       const raw = el ? Number(el.value) : NaN;
       let v = Number.isFinite(raw) ? raw : def;
@@ -989,6 +1248,18 @@ function _collectFlowPowerDpIsWFromUI() {
       if (Number.isFinite(max)) v = Math.min(max, v);
       return roundValue ? Math.round(v) : v;
     };
+    /**
+     * Code-Teil: Arrow-Funktion `str`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: str
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const str = (el, def) => {
       const raw = el ? String(el.value || '').trim() : '';
       return raw || def;
@@ -1065,11 +1336,21 @@ function _collectFlowPowerDpIsWFromUI() {
     };
     return out;
   }
-
+  /**
+   * Code-Teil: buildAppsUI
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildAppsUI() {
     if (!els.appsList) return;
     els.appsList.innerHTML = '';
-
+    /**
+     * Code-Teil: getSt
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const getSt = (appId) => {
       const a = currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps ? currentConfig.emsApps.apps[appId] : null;
       return a && typeof a === 'object' ? a : { installed: false, enabled: false };
@@ -1096,6 +1377,12 @@ function _collectFlowPowerDpIsWFromUI() {
       actions.className = 'nw-config-card__header-actions';
 
       // UI: use button-style toggles (no visible checkboxes)
+      /**
+       * Code-Teil: Arrow-Funktion `mkToggle`
+       * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
       const mkToggle = (id, label, checked, disabled, onLabel = 'An', offLabel = 'Aus') => {
         const wrap = document.createElement('div');
         wrap.className = 'nw-app-toggle-row';
@@ -1151,6 +1438,7 @@ function _collectFlowPowerDpIsWFromUI() {
       const tEnabled = mkToggle(idEnabled, 'Aktiv', st.enabled, app.mandatory || !st.installed, 'An', 'Aus');
 
       // Behaviour: if app is uninstalled, force enabled=false
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an tInstalled.inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       tInstalled.inp.addEventListener('change', () => {
         const installed = !!tInstalled.inp.checked;
         if (!installed) {
@@ -1209,7 +1497,12 @@ function _collectFlowPowerDpIsWFromUI() {
 
     els.appsEmpty.style.display = APP_CATALOG.length ? 'none' : 'block';
   }
-
+  /**
+   * Code-Teil: setAppsFromConfig
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setAppsFromConfig(cfg) {
     if (!cfg) return;
     const apps = (cfg.emsApps && cfg.emsApps.apps && typeof cfg.emsApps.apps === 'object') ? cfg.emsApps.apps : {};
@@ -1235,13 +1528,29 @@ function _collectFlowPowerDpIsWFromUI() {
     // Phase 3.5: Zuordnungskacheln abhängig von installierten Apps ein-/ausblenden
     try { applyAppDependentVisibility(); } catch (_e) {}
   }
-
+  /**
+   * Code-Teil: applyAppDependentVisibility
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function applyAppDependentVisibility() {
+    /**
+     * Code-Teil: isInstalled
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const isInstalled = (appId) => {
       const cb = document.getElementById(`app_${appId}_installed`);
       return cb ? !!cb.checked : false;
     };
-
+    /**
+     * Code-Teil: toggleCard
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const toggleCard = (cardKey, show) => {
       const el = document.querySelector(`.nw-config-card[data-card="${cardKey}"]`);
       if (!el) return;
@@ -1289,8 +1598,12 @@ function _collectFlowPowerDpIsWFromUI() {
       if (appsTab) appsTab.click();
     }
   }
-
-
+  /**
+   * Code-Teil: _psDefaultWindow
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psDefaultWindow() {
     return {
       enabled: true,
@@ -1304,21 +1617,36 @@ function _collectFlowPowerDpIsWFromUI() {
       validTo: '',
     };
   }
-
+  /**
+   * Code-Teil: _psGetPeakCfg
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psGetPeakCfg() {
     currentConfig = currentConfig || {};
     currentConfig.peakShaving = currentConfig.peakShaving && typeof currentConfig.peakShaving === 'object' ? currentConfig.peakShaving : {};
     currentConfig.peakShaving.atypical = currentConfig.peakShaving.atypical && typeof currentConfig.peakShaving.atypical === 'object' ? currentConfig.peakShaving.atypical : {};
     return currentConfig.peakShaving;
   }
-
+  /**
+   * Code-Teil: _psGetWindowsFromCfg
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psGetWindowsFromCfg(cfg) {
     const atypical = (cfg && cfg.atypical && typeof cfg.atypical === 'object') ? cfg.atypical : {};
     if (Array.isArray(atypical.highLoadWindows)) return atypical.highLoadWindows;
     if (Array.isArray(atypical.windows)) return atypical.windows;
     return [];
   }
-
+  /**
+   * Code-Teil: buildAtypicalWindowsUI
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildAtypicalWindowsUI() {
     if (!els.psAtypicalWindows) return;
     const ps = _psGetPeakCfg();
@@ -1411,12 +1739,23 @@ function _collectFlowPowerDpIsWFromUI() {
       }
     });
   }
-
+  /**
+   * Code-Teil: _psCollectWindowRows
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psCollectWindowRows() {
     const out = [];
     if (!els.psAtypicalWindows) return out;
     const rows = Array.from(els.psAtypicalWindows.querySelectorAll('[data-ps-hlzf-row]'));
     for (const row of rows) {
+      /**
+       * Code-Teil: get
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const get = (field) => row.querySelector(`[data-ps-window-field="${field}"]`);
       const enabledEl = get('enabled');
       const label = String((get('label') && get('label').value) || '').trim();
@@ -1442,7 +1781,12 @@ function _collectFlowPowerDpIsWFromUI() {
     }
     return out;
   }
-
+  /**
+   * Code-Teil: _psUpdateAtypicalFieldState
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _psUpdateAtypicalFieldState() {
     const mode = els.psStrategyMode ? String(els.psStrategyMode.value || 'standard') : 'standard';
     const atypicalOn = mode === 'atypical' || mode === 'hybrid' || mode === 'monitor';
@@ -1477,7 +1821,12 @@ function _collectFlowPowerDpIsWFromUI() {
       if (el) el.disabled = !standardOn;
     });
   }
-
+  /**
+   * Code-Teil: buildPeakShavingUI
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildPeakShavingUI() {
     if (!els.psStrategyMode) return;
     const ps = _psGetPeakCfg();
@@ -1545,7 +1894,12 @@ function _collectFlowPowerDpIsWFromUI() {
     _psUpdateAtypicalFieldState();
     _psUpdateAtypicalReviewPreview();
   }
-
+  /**
+   * Code-Teil: collectPeakShavingConfigFromUI
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function collectPeakShavingConfigFromUI(baseCfg) {
     const out = deepMerge({}, baseCfg || {});
     if (!els.psStrategyMode) return out;
@@ -1554,6 +1908,12 @@ function _collectFlowPowerDpIsWFromUI() {
     out.strategyMode = ['standard', 'atypical', 'hybrid', 'monitor'].includes(strategy) ? strategy : 'standard';
     if (els.psStandardMode) out.mode = (els.psStandardMode.value === 'dynamic') ? 'dynamic' : 'static';
 
+    /**
+     * Code-Teil: Arrow-Funktion `setNum`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
     const setNum = (key, el, min = 0, max = Number.POSITIVE_INFINITY) => {
       if (!el) return;
       const n = Number(el.value);
@@ -1595,6 +1955,18 @@ function _collectFlowPowerDpIsWFromUI() {
     a.calendarExceptions = _psParseDateList(els.psAtypicalCalendarExceptions && els.psAtypicalCalendarExceptions.value);
     a.highLoadWindows = _psCollectWindowRows();
 
+    /**
+     * Code-Teil: Arrow-Funktion `setStr`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: setStr
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const setStr = (key, el) => {
       if (!el) return;
       const v = String(el.value || '').trim();
@@ -1639,14 +2011,37 @@ function _collectFlowPowerDpIsWFromUI() {
     out.atypical = a;
     return out;
   }
-
+  /**
+   * Code-Teil: buildDpTable
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildDpTable(container, fields, getter, setter, options) {
     container.innerHTML = '';
 
     const fieldInputs = new Map();
     const metaUpdaters = [];
+    /**
+     * Code-Teil: isRequiredGroupSatisfied
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const isRequiredGroupSatisfied = (groupName) => {
       if (!groupName) return false;
+      /**
+       * Code-Teil: Arrow-Funktion `getVal`
+       * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: getVal
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const getVal = (key) => String(fieldInputs.get(key)?.value || '').trim();
       if (groupName === 'gridPairOrSigned') {
         const signed = getVal('gridPointPower');
@@ -1656,12 +2051,29 @@ function _collectFlowPowerDpIsWFromUI() {
       }
       return false;
     };
+    /**
+     * Code-Teil: Arrow-Funktion `refreshAllMeta`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: refreshAllMeta
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const refreshAllMeta = () => {
       metaUpdaters.forEach((fn) => {
         try { fn(); } catch (_e) {}
       });
     };
-
+    /**
+     * Code-Teil: makeRow
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const makeRow = (field) => {
       const row = document.createElement('div');
       row.className = 'nw-config-item';
@@ -1710,6 +2122,7 @@ function _collectFlowPowerDpIsWFromUI() {
       btn.type = 'button';
       btn.className = 'nw-config-btn nw-config-btn--ghost';
       btn.textContent = 'Auswählen…';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       btn.addEventListener('click', () => openDpModal(input.id));
 
       right.appendChild(input);
@@ -1726,6 +2139,7 @@ function _collectFlowPowerDpIsWFromUI() {
         unitCb.id = 'unit_' + input.id;
         unitCb.checked = _getFlowPowerDpIsW(field.key);
         unitCb.setAttribute('data-flow-power-unit-key', field.key);
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an unitCb. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         unitCb.addEventListener('change', () => {
           _setFlowPowerDpIsW(field.key, unitCb.checked);
         });
@@ -1760,6 +2174,18 @@ function _collectFlowPowerDpIsWFromUI() {
       row.appendChild(left);
       row.appendChild(right);
 
+      /**
+       * Code-Teil: Arrow-Funktion `updateMeta`
+       * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: updateMeta
+       * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const updateMeta = () => {
         const v = String(input.value || '').trim();
         const isSet = !!v;
@@ -1795,7 +2221,9 @@ function _collectFlowPowerDpIsWFromUI() {
       };
 
       input.dataset.dpInput = '1';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       input.addEventListener('input', () => { updateMeta(); refreshAllMeta(); });
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       input.addEventListener('change', () => { setter(field.key, input.value.trim()); updateMeta(); refreshAllMeta(); scheduleValidation(200); });
 
       metaUpdaters.push(updateMeta);
@@ -1822,13 +2250,23 @@ function _collectFlowPowerDpIsWFromUI() {
   // ------------------------------
   // Energiefluss: optionale Slots (Verbraucher/Erzeuger)
   // ------------------------------
-
+  /**
+   * Code-Teil: _ensureVis
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _ensureVis() {
     currentConfig = currentConfig || {};
     currentConfig.vis = (currentConfig.vis && typeof currentConfig.vis === 'object') ? currentConfig.vis : {};
     return currentConfig.vis;
   }
-
+  /**
+   * Code-Teil: _normalizeFlowConsumerType
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _normalizeFlowConsumerType(raw) {
     const s = String(raw || '').trim().toLowerCase();
     if (!s) return 'generic';
@@ -1836,14 +2274,24 @@ function _collectFlowPowerDpIsWFromUI() {
     if (s === 'heatingrod' || s === 'heating_rod' || s === 'heating-rod' || s === 'heizstab' || s === 'rod' || s === 'immersion') return 'heatingRod';
     return 'generic';
   }
-
+  /**
+   * Code-Teil: _getFlowConsumerTypeLabel
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _getFlowConsumerTypeLabel(raw) {
     const t = _normalizeFlowConsumerType(raw);
     if (t === 'heatPump') return 'Wärmepumpe / Klima';
     if (t === 'heatingRod') return 'Heizstab';
     return 'Allgemein';
   }
-
+  /**
+   * Code-Teil: _ensureFlowSlots
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _ensureFlowSlots() {
     const vis = _ensureVis();
     vis.flowSlots = (vis.flowSlots && typeof vis.flowSlots === 'object') ? vis.flowSlots : {};
@@ -1852,6 +2300,18 @@ function _collectFlowPowerDpIsWFromUI() {
     fs.consumers = Array.isArray(fs.consumers) ? fs.consumers : [];
     fs.producers = Array.isArray(fs.producers) ? fs.producers : [];
 
+    /**
+     * Code-Teil: Arrow-Funktion `norm`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: norm
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const norm = (arr, count, kind) => {
       const out = [];
       for (let i = 0; i < count; i++) {
@@ -1859,13 +2319,31 @@ function _collectFlowPowerDpIsWFromUI() {
         const rawCtrl = (it.ctrl && typeof it.ctrl === 'object') ? { ...it.ctrl } : {};
         const ctrl = { ...rawCtrl };
 
+        /**
+         * Code-Teil: Arrow-Funktion `ensureString`
+         * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+         * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
         const ensureString = (key, def = '') => {
           if (ctrl[key] === undefined || ctrl[key] === null) ctrl[key] = def;
           else ctrl[key] = String(ctrl[key]);
         };
+        /**
+         * Code-Teil: ensureValue
+         * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+         * Zusammenhang: Gehört zu Installer/App-Center (Admin-Konfiguration, EMS-Apps, DP-Zuordnung und Installer-Funktionen) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+         * Wartung/TypeScript: Änderungen müssen mit main.js/native Config und EMS-Modulen synchron bleiben, sonst speichern Installerwerte falsch. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+         */
         const ensureValue = (key, def = '') => {
           if (ctrl[key] === undefined || ctrl[key] === null) ctrl[key] = def;
         };
+        /**
+         * Code-Teil: Arrow-Funktion `ensureBool`
+         * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+         * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
         const ensureBool = (key, def = false) => {
           if (ctrl[key] === undefined || ctrl[key] === null) ctrl[key] = def;
           else ctrl[key] = !!ctrl[key];
@@ -1914,12 +2392,22 @@ function _collectFlowPowerDpIsWFromUI() {
     fs.core.pvName = (fs.core.pvName !== undefined && fs.core.pvName !== null) ? String(fs.core.pvName) : '';
     return fs;
   }
-
+  /**
+   * Code-Teil: _defaultSlotName
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _defaultSlotName(kind, idx1based) {
     if (kind === 'consumers' && idx1based === 1) return 'Heizung/Wärmepumpe';
     return (kind === 'consumers' ? `Verbraucher ${idx1based}` : `Erzeuger ${idx1based}`);
   }
-
+  /**
+   * Code-Teil: buildFlowSlotsUI
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildFlowSlotsUI(kind, slotCount = 10) {
     const container = (kind === 'consumers') ? els.flowConsumers : els.flowProducers;
     if (!container) return;
@@ -1982,6 +2470,7 @@ function _collectFlowPowerDpIsWFromUI() {
       nameInput.id = `flow_${kind}_name_${idx}`;
       nameInput.placeholder = 'Name (z.B. Wärmepumpe)';
       nameInput.value = (slots[i] && slots[i].name) ? String(slots[i].name) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an nameInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       nameInput.addEventListener('change', () => {
         const fs2 = _ensureFlowSlots();
         const target = (kind === 'consumers') ? fs2.consumers : fs2.producers;
@@ -2002,6 +2491,7 @@ function _collectFlowPowerDpIsWFromUI() {
         iconSelect.appendChild(o);
       });
       iconSelect.value = (slots[i] && slots[i].icon !== undefined && slots[i].icon !== null) ? String(slots[i].icon) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an iconSelect. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       iconSelect.addEventListener('change', () => {
         const fs2 = _ensureFlowSlots();
         const target = (kind === 'consumers') ? fs2.consumers : fs2.producers;
@@ -2026,6 +2516,7 @@ function _collectFlowPowerDpIsWFromUI() {
           consumerTypeSelect.appendChild(o);
         });
         consumerTypeSelect.value = _normalizeFlowConsumerType(slots[i] && slots[i].consumerType);
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an consumerTypeSelect. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         consumerTypeSelect.addEventListener('change', () => {
           const fs2 = _ensureFlowSlots();
           const target = fs2.consumers;
@@ -2054,6 +2545,7 @@ function _collectFlowPowerDpIsWFromUI() {
       dpInput.placeholder = 'Datenpunkt (W/kW) (optional)';
       dpInput.value = valueOrEmpty(dps[dpKey]);
       dpInput.dataset.dpInput = '1';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an dpInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       dpInput.addEventListener('change', () => {
         currentConfig.datapoints = currentConfig.datapoints || {};
         currentConfig.datapoints[dpKey] = String(dpInput.value || '').trim();
@@ -2074,6 +2566,7 @@ function _collectFlowPowerDpIsWFromUI() {
       unitCb.id = `flow_${kind}_unit_${idx}`;
       unitCb.checked = _getFlowPowerDpIsW(dpKey);
       unitCb.setAttribute('data-flow-power-unit-key', dpKey);
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an unitCb. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       unitCb.addEventListener('change', () => {
         _setFlowPowerDpIsW(dpKey, !!unitCb.checked);
       });
@@ -2114,6 +2607,18 @@ function _collectFlowPowerDpIsWFromUI() {
       const ctrlGrid = document.createElement('div');
       ctrlGrid.className = 'nw-flow-ctrl-grid';
 
+      /**
+       * Code-Teil: Arrow-Funktion `ensureCtrl`
+       * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: ensureCtrl
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const ensureCtrl = () => {
         const fs2 = _ensureFlowSlots();
         const target = (kind === 'consumers') ? fs2.consumers : fs2.producers;
@@ -2124,6 +2629,18 @@ function _collectFlowPowerDpIsWFromUI() {
 
       const ctrl = ensureCtrl();
 
+      /**
+       * Code-Teil: Arrow-Funktion `mkDpField`
+       * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: mkDpField
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const mkDpField = (labelText, id, value, onChange) => {
         const wrap = document.createElement('div');
         wrap.className = 'nw-flow-ctrl-field';
@@ -2144,6 +2661,7 @@ function _collectFlowPowerDpIsWFromUI() {
         input.value = value ? String(value) : '';
         input.dataset.dpInput = '1';
         input.placeholder = 'optional';
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         input.addEventListener('change', () => { onChange(String(input.value || '').trim()); scheduleValidation(200); });
 
         const b = document.createElement('button');
@@ -2166,6 +2684,18 @@ function _collectFlowPowerDpIsWFromUI() {
         return wrap;
       };
 
+      /**
+       * Code-Teil: Arrow-Funktion `mkSimpleField`
+       * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: mkSimpleField
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const mkSimpleField = (labelText, id, type, value, placeholder, onChange) => {
         const wrap = document.createElement('div');
         wrap.className = 'nw-flow-ctrl-field';
@@ -2182,6 +2712,7 @@ function _collectFlowPowerDpIsWFromUI() {
         input.id = id;
         if (placeholder) input.placeholder = placeholder;
         input.value = (value !== undefined && value !== null) ? String(value) : '';
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         input.addEventListener('change', () => { onChange(input.value); });
 
         wrap.appendChild(lbl);
@@ -2189,6 +2720,18 @@ function _collectFlowPowerDpIsWFromUI() {
         return wrap;
       };
 
+      /**
+       * Code-Teil: Arrow-Funktion `mkCheckField`
+       * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: mkCheckField
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const mkCheckField = (labelText, id, checked, onChange) => {
         const wrap = document.createElement('div');
         wrap.className = 'nw-flow-ctrl-field';
@@ -2208,6 +2751,7 @@ function _collectFlowPowerDpIsWFromUI() {
         input.type = 'checkbox';
         input.id = id;
         input.checked = !!checked;
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         input.addEventListener('change', () => { onChange(!!input.checked); });
 
         const txt = document.createElement('div');
@@ -2228,11 +2772,29 @@ function _collectFlowPowerDpIsWFromUI() {
       const ctrlFieldsGeneric = [];
       const ctrlFieldsHeatPump = [];
 
+      /**
+       * Code-Teil: Arrow-Funktion `addGenericField`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: addGenericField
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const addGenericField = (el) => {
         ctrlFieldsGeneric.push(el);
         ctrlGrid.appendChild(el);
         return el;
       };
+      /**
+       * Code-Teil: addHeatPumpField
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const addHeatPumpField = (el) => {
         ctrlFieldsHeatPump.push(el);
         ctrlGrid.appendChild(el);
@@ -2270,11 +2832,28 @@ function _collectFlowPowerDpIsWFromUI() {
       advanced.appendChild(rodInfo);
       advanced.appendChild(hint);
 
+      /**
+       * Code-Teil: Arrow-Funktion `setVisible`
+       * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: setVisible
+       * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const setVisible = (el, visible) => {
         if (!el) return;
         el.style.display = visible ? '' : 'none';
       };
-
+      /**
+       * Code-Teil: updateConsumerControlVisibility
+       * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const updateConsumerControlVisibility = () => {
         const slotType = (kind === 'consumers')
           ? _normalizeFlowConsumerType(consumerTypeSelect ? consumerTypeSelect.value : (slots[i] && slots[i].consumerType))
@@ -2305,6 +2884,7 @@ function _collectFlowPowerDpIsWFromUI() {
       };
 
       updateConsumerControlVisibility();
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an advBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       advBtn.addEventListener('click', () => {
         advanced.classList.toggle('is-open');
       });
@@ -2317,7 +2897,12 @@ function _collectFlowPowerDpIsWFromUI() {
       container.appendChild(row);
     }
   }
-
+  /**
+   * Code-Teil: buildFlowPvNameRow
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildFlowPvNameRow() {
     const fs = _ensureFlowSlots();
 
@@ -2348,6 +2933,7 @@ function _collectFlowPowerDpIsWFromUI() {
     input.maxLength = 24;
     input.placeholder = 'z.B. PV 1 / Anlage 1';
     input.value = (fs.core && fs.core.pvName) ? String(fs.core.pvName) : '';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     input.addEventListener('change', () => {
       const fs2 = _ensureFlowSlots();
       fs2.core = fs2.core && typeof fs2.core === 'object' ? fs2.core : {};
@@ -2364,23 +2950,43 @@ function _collectFlowPowerDpIsWFromUI() {
   // ------------------------------
   // Thermik / Heizstab: PV‑Überschuss‑Regelung für Verbraucher‑Slots
   // ------------------------------
-
+  /**
+   * Code-Teil: _getFlowConsumerSlotCfg
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _getFlowConsumerSlotCfg(slot) {
     const fs = _ensureFlowSlots();
     const arr = Array.isArray(fs.consumers) ? fs.consumers : [];
     return (arr[slot - 1] && typeof arr[slot - 1] === 'object') ? arr[slot - 1] : { name: '', icon: '', ctrl: {}, consumerType: 'generic' };
   }
-
+  /**
+   * Code-Teil: _getFlowConsumerName
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _getFlowConsumerName(slot) {
     const slotCfg = _getFlowConsumerSlotCfg(slot);
     return String(slotCfg.name || '').trim() || `Verbraucher ${slot}`;
   }
-
+  /**
+   * Code-Teil: _getFlowConsumerTypeForSlot
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _getFlowConsumerTypeForSlot(slot) {
     const slotCfg = _getFlowConsumerSlotCfg(slot);
     return _normalizeFlowConsumerType(slotCfg.consumerType || slotCfg.type || slotCfg.category);
   }
-
+  /**
+   * Code-Teil: _getRawHeatingRodDeviceForSlot
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _getRawHeatingRodDeviceForSlot(slot) {
     currentConfig = currentConfig || {};
     const h = (currentConfig.heatingRod && typeof currentConfig.heatingRod === 'object') ? currentConfig.heatingRod : {};
@@ -2393,7 +2999,12 @@ function _collectFlowPowerDpIsWFromUI() {
     if (!dev) dev = arr.find((it) => it && _clampInt(it.slot ?? it.consumerSlot, 1, FLOW_CONSUMER_SLOT_COUNT, 0) === slot) || null;
     return dev;
   }
-
+  /**
+   * Code-Teil: _getHeatingRodStageDpPair
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _getHeatingRodStageDpPair(slot, stageIdx) {
     const dev = _getRawHeatingRodDeviceForSlot(slot);
     const stages = Array.isArray(dev && dev.stages) ? dev.stages : [];
@@ -2410,7 +3021,12 @@ function _collectFlowPowerDpIsWFromUI() {
 
     return { writeId, readId };
   }
-
+  /**
+   * Code-Teil: _countHeatingRodWiredStages
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _countHeatingRodWiredStages(slot) {
     let cnt = 0;
     for (let s = 1; s <= 12; s++) {
@@ -2419,14 +3035,24 @@ function _collectFlowPowerDpIsWFromUI() {
     }
     return cnt;
   }
-
+  /**
+   * Code-Teil: _thermalDefaultSetpoints
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _thermalDefaultSetpoints(profile) {
     const p = String(profile || 'heating').trim().toLowerCase();
     if (p === 'cooling' || p === 'cool') return { on: 20, off: 24, boost: 18 };
     if (p === 'neutral') return { on: 22, off: 22, boost: 22 };
     return { on: 55, off: 45, boost: 60 };
   }
-
+  /**
+   * Code-Teil: _defaultHeatingRodStagePower
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _defaultHeatingRodStagePower(maxPowerW, stageCount, index) {
     const cnt = _clampInt(stageCount, 1, 12, 1);
     const maxW = Math.max(0, Math.round(Number(maxPowerW) || 0));
@@ -2435,7 +3061,12 @@ function _collectFlowPowerDpIsWFromUI() {
     const rest = maxW - (base * cnt);
     return base + (index === (cnt - 1) ? rest : 0);
   }
-
+  /**
+   * Code-Teil: _computeHeatingRodStageDefaults
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _computeHeatingRodStageDefaults(maxPowerW, stageCount) {
     const cnt = _clampInt(stageCount, 1, 12, 1);
     const out = [];
@@ -2453,7 +3084,12 @@ function _collectFlowPowerDpIsWFromUI() {
     }
     return out;
   }
-
+  /**
+   * Code-Teil: _syncHeatingRodDeviceStages
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _syncHeatingRodDeviceStages(dev, opts = {}) {
     if (!dev || typeof dev !== 'object') return dev;
     const count = _clampInt(dev.stageCount, 1, 12, 1);
@@ -2486,7 +3122,12 @@ function _collectFlowPowerDpIsWFromUI() {
     dev.stages = next;
     return dev;
   }
-
+  /**
+   * Code-Teil: _ensureThermalCfg
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _ensureThermalCfg() {
     currentConfig = currentConfig || {};
     currentConfig.thermal = (currentConfig.thermal && typeof currentConfig.thermal === 'object') ? currentConfig.thermal : {};
@@ -2541,7 +3182,12 @@ function _collectFlowPowerDpIsWFromUI() {
     t.devices = out;
     return t;
   }
-
+  /**
+   * Code-Teil: _ensureHeatingRodCfg
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _ensureHeatingRodCfg() {
     currentConfig = currentConfig || {};
     currentConfig.heatingRod = (currentConfig.heatingRod && typeof currentConfig.heatingRod === 'object') ? currentConfig.heatingRod : {};
@@ -2567,6 +3213,18 @@ function _collectFlowPowerDpIsWFromUI() {
       minStageRunSec: ['minStageRunSec', 'minAutoStageRunSec', 'pvMinStageRunSec'],
       cooldownAfterOffSec: ['cooldownAfterOffSec', 'autoCooldownAfterOffSec', 'pvCooldownAfterOffSec'],
     };
+    /**
+     * Code-Teil: Arrow-Funktion `hn`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: hn
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const hn = (key, def, min, max) => {
       let raw = h[key];
       if (raw === undefined || raw === null || raw === '') {
@@ -2592,6 +3250,12 @@ function _collectFlowPowerDpIsWFromUI() {
     hn('cooldownAfterOffSec', 180, 0, 86400);
     h.zeroExport = (h.zeroExport && typeof h.zeroExport === 'object') ? h.zeroExport : {};
     const z = h.zeroExport;
+    /**
+     * Code-Teil: Arrow-Funktion `zn`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
     const zn = (key, def, min, max, integer = true) => {
       const raw = z[key];
       let n = Number(raw);
@@ -2635,6 +3299,18 @@ function _collectFlowPowerDpIsWFromUI() {
       const prev = bySlot.get(slot) || {};
       const slotCfg = _getFlowConsumerSlotCfg(slot);
       const ctrl = (slotCfg.ctrl && typeof slotCfg.ctrl === 'object') ? slotCfg.ctrl : {};
+      /**
+       * Code-Teil: Arrow-Funktion `stageCountDefault`
+       * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: stageCountDefault
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const stageCountDefault = (() => {
         const fromStages = Array.isArray(prev.stages) ? prev.stages.reduce((max, st, idx) => {
           if (!st || typeof st !== 'object') return max;
@@ -2677,7 +3353,12 @@ function _collectFlowPowerDpIsWFromUI() {
     h.devices = out;
     return h;
   }
-
+  /**
+   * Code-Teil: _mkCfgInput
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _mkCfgInput(type, value, onChange, opts = {}) {
     const inp = document.createElement('input');
     inp.type = type || 'text';
@@ -2689,6 +3370,18 @@ function _collectFlowPowerDpIsWFromUI() {
     if (opts.step != null) inp.step = String(opts.step);
     if (opts.width) inp.style.width = opts.width;
     if (opts.disabled) inp.disabled = true;
+    /**
+     * Code-Teil: Arrow-Funktion `commit`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: commit
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const commit = () => {
       const v = (type === 'number') ? Number(inp.value) : (type === 'checkbox' ? !!inp.checked : inp.value);
       onChange(v, inp);
@@ -2696,18 +3389,29 @@ function _collectFlowPowerDpIsWFromUI() {
     // Number/text fields must update the in-memory config immediately. Otherwise a
     // fast save or a reactive UI refresh can write the previous value again (e.g.
     // Heizstab Speicher-Reserve snapped back to the default 1000 W).
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an inp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     inp.addEventListener('change', commit);
     if (type !== 'checkbox') inp.addEventListener('input', commit);
     return inp;
   }
-
+  /**
+   * Code-Teil: _mkHeatingRodNumberInput
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _mkHeatingRodNumberInput(key, value, onChange, opts = {}) {
     const inp = _mkCfgInput('number', value, onChange, opts);
     inp.dataset.heatingRodCfgKey = String(key || '');
     inp.id = `heatingRod_${String(key || '').replace(/[^a-zA-Z0-9_-]/g, '_')}`;
     return inp;
   }
-
+  /**
+   * Code-Teil: flushHeatingRodConfigFromDom
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function flushHeatingRodConfigFromDom() {
     try {
       if (!document || !document.querySelectorAll) return;
@@ -2729,8 +3433,12 @@ function _collectFlowPowerDpIsWFromUI() {
       });
     } catch (_e) {}
   }
-
-
+  /**
+   * Code-Teil: _mkCfgSelect
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _mkCfgSelect(value, options, onChange, opts = {}) {
     const sel = document.createElement('select');
     sel.className = opts.className || 'nw-config-select';
@@ -2743,19 +3451,31 @@ function _collectFlowPowerDpIsWFromUI() {
       sel.appendChild(opt);
     });
     sel.value = value;
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an sel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     sel.addEventListener('change', () => onChange(sel.value, sel));
     return sel;
   }
-
+  /**
+   * Code-Teil: _mkCfgToggle
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _mkCfgToggle(checked, onChange, opts = {}) {
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = !!checked;
     if (opts.disabled) cb.disabled = true;
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an cb. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     cb.addEventListener('change', () => onChange(!!cb.checked, cb));
     return cb;
   }
-
+  /**
+   * Code-Teil: _mkCfgField
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _mkCfgField(label, control, hint) {
     const wrap = document.createElement('div');
     wrap.className = 'nw-config-mini-field';
@@ -2779,7 +3499,12 @@ function _collectFlowPowerDpIsWFromUI() {
     }
     return wrap;
   }
-
+  /**
+   * Code-Teil: _mkCfgGroup
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _mkCfgGroup(title) {
     const wrap = document.createElement('div');
     wrap.className = 'nw-config-group';
@@ -2810,7 +3535,12 @@ function _collectFlowPowerDpIsWFromUI() {
     wrap.appendChild(body);
     return { wrap, body };
   }
-
+  /**
+   * Code-Teil: _mkCfgDetailsGroup
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _mkCfgDetailsGroup(title, open = false) {
     const wrap = document.createElement('details');
     wrap.className = 'nw-config-group nw-config-group--details';
@@ -2844,7 +3574,12 @@ function _collectFlowPowerDpIsWFromUI() {
     wrap.appendChild(body);
     return { wrap, body };
   }
-
+  /**
+   * Code-Teil: _mkCfgBadge
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _mkCfgBadge(text, tone = 'default') {
     const span = document.createElement('span');
     span.textContent = text;
@@ -2865,7 +3600,12 @@ function _collectFlowPowerDpIsWFromUI() {
     }
     return span;
   }
-
+  /**
+   * Code-Teil: _mkDeviceRow
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _mkDeviceRow(title, subtitle, badges = []) {
     const row = document.createElement('div');
     row.className = 'nw-config-item nw-config-item--device-row';
@@ -2910,7 +3650,12 @@ function _collectFlowPowerDpIsWFromUI() {
     row.appendChild(right);
     return { row, left, right, badgeWrap };
   }
-
+  /**
+   * Code-Teil: buildThermalUI
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildThermalUI() {
     if (!els.thermalDevices) return;
     const cfg = _ensureThermalCfg();
@@ -3023,7 +3768,12 @@ function _collectFlowPowerDpIsWFromUI() {
       grpBoost.body.appendChild(_mkCfgField('Boost', boostToggleWrap, 'Erlaubt zeitlich begrenzte manuelle Übersteuerung aus der VIS.'));
       grpBoost.body.appendChild(_mkCfgField('Boost Dauer (min)', _mkCfgInput('number', dev.boostDurationMin, (v) => { dev.boostDurationMin = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 1, width: '130px' }), 'Wie lange Boost aktiv bleibt.'));
       right.appendChild(grpBoost.wrap);
-
+      /**
+       * Code-Teil: syncVisibility
+       * Zweck: Synchronisiert zwei Datenquellen bzw. UI und State.
+       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       function syncVisibility() {
         const type = String(dev.type || 'setpoint');
         grpSetpoint.wrap.style.display = (type === 'setpoint') ? '' : 'none';
@@ -3036,7 +3786,12 @@ function _collectFlowPowerDpIsWFromUI() {
       els.thermalDevices.appendChild(row);
     });
   }
-
+  /**
+   * Code-Teil: buildHeatingRodUI
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildHeatingRodUI() {
     if (!els.heatingRodDevices) return;
     const cfg = _ensureHeatingRodCfg();
@@ -3110,6 +3865,12 @@ function _collectFlowPowerDpIsWFromUI() {
     grpZero.body.appendChild(_mkCfgField('Erneuter Test nach Fehler (s)', _mkCfgInput('number', zeroCfg.probeRetrySec, (v) => { zeroCfg.probeRetrySec = Math.max(0, Math.round(Number(v) || 0)); setDirty(); }, { min: 0, step: 10, width: '170px' }), 'Standard 600 s = 10 Minuten.'));
     els.heatingRodDevices.appendChild(grpZero.wrap);
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkStageDpField`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
     const mkStageDpField = (labelText, inputId, value, onChange, placeholder = 'optional') => {
       const wrap = document.createElement('div');
       wrap.style.display = 'flex';
@@ -3132,6 +3893,7 @@ function _collectFlowPowerDpIsWFromUI() {
       input.value = value ? String(value) : '';
       input.placeholder = placeholder;
       input.dataset.dpInput = '1';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       input.addEventListener('change', () => {
         onChange(String(input.value || '').trim());
         scheduleValidation(200);
@@ -3190,6 +3952,7 @@ function _collectFlowPowerDpIsWFromUI() {
       resetBtn.type = 'button';
       resetBtn.className = 'nw-config-btn nw-config-btn--ghost';
       resetBtn.textContent = 'Stufen aus Max.-Leistung neu verteilen';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an resetBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       resetBtn.addEventListener('click', () => {
         _syncHeatingRodDeviceStages(dev, { resetAll: true });
         buildHeatingRodUI();
@@ -3362,7 +4125,12 @@ function _collectFlowPowerDpIsWFromUI() {
   // ------------------------------
   // BHKW Steuerung
   // ------------------------------
-
+  /**
+   * Code-Teil: _ensureBhkwCfg
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _ensureBhkwCfg() {
     currentConfig = currentConfig || {};
     currentConfig.bhkw = (currentConfig.bhkw && typeof currentConfig.bhkw === 'object') ? currentConfig.bhkw : {};
@@ -3372,6 +4140,18 @@ function _collectFlowPowerDpIsWFromUI() {
     const used = new Set();
     const normalized = [];
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkDefault`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkDefault
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkDefault = (idx) => ({
       idx,
       enabled: false,
@@ -3449,7 +4229,12 @@ function _collectFlowPowerDpIsWFromUI() {
     b.devices = normalized;
     return b;
   }
-
+  /**
+   * Code-Teil: buildBhkwUI
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildBhkwUI() {
     if (!els.bhkwDevices) return;
     // App installed?
@@ -3499,21 +4284,41 @@ function _collectFlowPowerDpIsWFromUI() {
       return row;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkTextInput`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
     const mkTextInput = (value, onChange, placeholder = '') => {
       const i = document.createElement('input');
       i.type = 'text';
       i.className = 'nw-config-input';
       i.value = (value === null || value === undefined) ? '' : String(value);
       if (placeholder) i.placeholder = placeholder;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an i. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       i.addEventListener('input', () => { try { onChange(i.value); } catch(_e) {} scheduleValidation(); });
       return i;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkNumInput`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkNumInput
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkNumInput = (value, onChange) => {
       const i = document.createElement('input');
       i.type = 'number';
       i.className = 'nw-config-input';
       i.value = (value === null || value === undefined) ? '' : String(value);
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an i. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       i.addEventListener('input', () => {
         const n = Number(i.value);
         try { onChange(Number.isFinite(n) ? n : 0); } catch(_e) {}
@@ -3524,6 +4329,18 @@ function _collectFlowPowerDpIsWFromUI() {
 
     // Checkbox helper (label + checkbox). Note: .nw-config-checkbox is the checkbox INPUT styling.
     // Using it on the label would clamp the label size (14x14) and cause overlaps.
+    /**
+     * Code-Teil: Arrow-Funktion `mkCheckbox`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkCheckbox
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkCheckbox = (checked, text, onChange) => {
       const label = document.createElement('label');
       label.className = 'nw-config-checklabel';
@@ -3532,6 +4349,7 @@ function _collectFlowPowerDpIsWFromUI() {
       cb.type = 'checkbox';
       cb.className = 'nw-config-checkbox';
       cb.checked = !!checked;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an cb. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       cb.addEventListener('change', () => { try { onChange(!!cb.checked); } catch(_e) {} scheduleValidation(); });
 
       const span = document.createElement('span');
@@ -3542,6 +4360,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return label;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkSelect`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkSelect
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkSelect = (value, opts, onChange) => {
       const s = document.createElement('select');
       s.className = 'nw-config-input';
@@ -3552,6 +4382,7 @@ function _collectFlowPowerDpIsWFromUI() {
         s.appendChild(op);
       }
       s.value = String(value || opts[0]?.value || '');
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an s. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       s.addEventListener('change', () => { try { onChange(s.value); } catch(_e) {} scheduleValidation(); });
       return s;
     };
@@ -3630,6 +4461,7 @@ function _collectFlowPowerDpIsWFromUI() {
       adv.appendChild(mkFieldRow('Pulse‑Dauer (ms)', mkNumInput(dev.pulseMs, (v) => { dev.pulseMs = v; })));
       body.appendChild(adv);
 
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an advBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       advBtn.addEventListener('click', () => {
         const open = adv.style.display !== 'none';
         adv.style.display = open ? 'none' : '';
@@ -3653,7 +4485,12 @@ function _collectFlowPowerDpIsWFromUI() {
   // ------------------------------
   // Generator Steuerung (Notstrom/Netzparallelbetrieb)
   // ------------------------------
-
+  /**
+   * Code-Teil: _ensureGeneratorCfg
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _ensureGeneratorCfg() {
     currentConfig = currentConfig || {};
     currentConfig.generator = (currentConfig.generator && typeof currentConfig.generator === 'object') ? currentConfig.generator : {};
@@ -3663,6 +4500,18 @@ function _collectFlowPowerDpIsWFromUI() {
     const used = new Set();
     const normalized = [];
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkDefault`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkDefault
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkDefault = (idx) => ({
       idx,
       enabled: false,
@@ -3732,7 +4581,12 @@ function _collectFlowPowerDpIsWFromUI() {
     g.devices = normalized;
     return g;
   }
-
+  /**
+   * Code-Teil: buildGeneratorUI
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildGeneratorUI() {
     if (!els.generatorDevices) return;
 
@@ -3783,21 +4637,41 @@ function _collectFlowPowerDpIsWFromUI() {
       return row;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkTextInput`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
     const mkTextInput = (value, onChange, placeholder = '') => {
       const i = document.createElement('input');
       i.type = 'text';
       i.className = 'nw-config-input';
       i.value = (value === null || value === undefined) ? '' : String(value);
       if (placeholder) i.placeholder = placeholder;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an i. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       i.addEventListener('input', () => { try { onChange(i.value); } catch(_e) {} scheduleValidation(); });
       return i;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkNumInput`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkNumInput
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkNumInput = (value, onChange) => {
       const i = document.createElement('input');
       i.type = 'number';
       i.className = 'nw-config-input';
       i.value = (value === null || value === undefined) ? '' : String(value);
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an i. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       i.addEventListener('input', () => {
         const n = Number(i.value);
         try { onChange(Number.isFinite(n) ? n : 0); } catch(_e) {}
@@ -3806,6 +4680,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return i;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkCheckbox`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkCheckbox
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkCheckbox = (checked, text, onChange) => {
       // Important: `.nw-config-checkbox` is the *input* style (14x14).
       // The label itself must be flexible, otherwise text overlaps.
@@ -3816,6 +4702,7 @@ function _collectFlowPowerDpIsWFromUI() {
       cb.type = 'checkbox';
       cb.className = 'nw-config-checkbox';
       cb.checked = !!checked;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an cb. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       cb.addEventListener('change', () => { try { onChange(!!cb.checked); } catch(_e) {} scheduleValidation(); });
 
       const span = document.createElement('span');
@@ -3826,6 +4713,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return label;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkSelect`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkSelect
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkSelect = (value, opts, onChange) => {
       const s = document.createElement('select');
       s.className = 'nw-config-input';
@@ -3836,6 +4735,7 @@ function _collectFlowPowerDpIsWFromUI() {
         s.appendChild(op);
       }
       s.value = String(value || opts[0]?.value || '');
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an s. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       s.addEventListener('change', () => { try { onChange(s.value); } catch(_e) {} scheduleValidation(); });
       return s;
     };
@@ -3911,6 +4811,7 @@ function _collectFlowPowerDpIsWFromUI() {
       adv.appendChild(mkFieldRow('Pulse‑Dauer (ms)', mkNumInput(dev.pulseMs, (v) => { dev.pulseMs = v; })));
       body.appendChild(adv);
 
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an advBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       advBtn.addEventListener('click', () => {
         const open = adv.style.display !== 'none';
         adv.style.display = open ? 'none' : '';
@@ -3934,7 +4835,12 @@ function _collectFlowPowerDpIsWFromUI() {
   // ------------------------------
   // Schwellwertsteuerung (Regeln)
   // ------------------------------
-
+  /**
+   * Code-Teil: _ensureThresholdCfg
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _ensureThresholdCfg() {
     currentConfig = currentConfig || {};
     currentConfig.threshold = (currentConfig.threshold && typeof currentConfig.threshold === 'object') ? currentConfig.threshold : {};
@@ -3944,11 +4850,28 @@ function _collectFlowPowerDpIsWFromUI() {
     const out = [];
     const used = new Set();
 
+    /**
+     * Code-Teil: Arrow-Funktion `normOutType`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: normOutType
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const normOutType = (v) => {
       const s = String(v || '').trim().toLowerCase();
       return (s === 'boolean' || s === 'bool' || s === 'switch') ? 'boolean' : 'number';
     };
-
+    /**
+     * Code-Teil: normCompare
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const normCompare = (v) => {
       const s = String(v || '').trim().toLowerCase();
       return (s === 'below' || s === '<' || s === 'lt' || s === 'kleiner') ? 'below' : 'above';
@@ -3990,7 +4913,12 @@ function _collectFlowPowerDpIsWFromUI() {
     t.rules = out;
     return t;
   }
-
+  /**
+   * Code-Teil: _nextFreeThresholdIdx
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _nextFreeThresholdIdx() {
     const t = _ensureThresholdCfg();
     const used = new Set((t.rules || []).map(r => Number(r && r.idx)).filter(n => Number.isFinite(n)));
@@ -3999,7 +4927,12 @@ function _collectFlowPowerDpIsWFromUI() {
     }
     return null;
   }
-
+  /**
+   * Code-Teil: buildThresholdUI
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildThresholdUI() {
     if (!els.thresholdRules) return;
 
@@ -4019,6 +4952,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return;
     }
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkHdr`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkHdr
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkHdr = (title, subtitle) => {
       const wrap = document.createElement('div');
       wrap.className = 'nw-help';
@@ -4041,6 +4986,18 @@ function _collectFlowPowerDpIsWFromUI() {
     const listWrap = document.createElement('div');
     listWrap.className = 'nw-config-list';
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkLabel`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkLabel
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkLabel = (text) => {
       const lbl = document.createElement('div');
       lbl.style.fontSize = '0.78rem';
@@ -4050,6 +5007,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return lbl;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkDpField`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkDpField
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkDpField = (labelText, inputId, value, onChange, placeholder) => {
       const wrap = document.createElement('div');
       wrap.className = 'nw-flow-ctrl-field';
@@ -4066,6 +5035,7 @@ function _collectFlowPowerDpIsWFromUI() {
       input.value = value ? String(value) : '';
       input.dataset.dpInput = '1';
       input.placeholder = placeholder || 'Datenpunkt';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       input.addEventListener('change', () => {
         onChange(String(input.value || '').trim());
         scheduleValidation(200);
@@ -4090,6 +5060,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkNumField`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkNumField
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkNumField = (labelText, inputId, value, onChange, placeholder, unit) => {
       const wrap = document.createElement('div');
       wrap.className = 'nw-flow-ctrl-field';
@@ -4106,6 +5088,7 @@ function _collectFlowPowerDpIsWFromUI() {
       input.id = inputId;
       input.placeholder = placeholder || '';
       input.value = (value !== undefined && value !== null) ? String(value) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       input.addEventListener('change', () => {
         const n = Number(input.value);
         onChange(Number.isFinite(n) ? n : 0);
@@ -4123,6 +5106,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkTextField`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkTextField
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkTextField = (labelText, inputId, value, onChange, placeholder) => {
       const wrap = document.createElement('div');
       wrap.className = 'nw-flow-ctrl-field';
@@ -4134,12 +5129,25 @@ function _collectFlowPowerDpIsWFromUI() {
       input.id = inputId;
       input.placeholder = placeholder || '';
       input.value = (value !== undefined && value !== null) ? String(value) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       input.addEventListener('change', () => onChange(String(input.value || '').trim()));
 
       wrap.appendChild(input);
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkSelectField`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkSelectField
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkSelectField = (labelText, inputId, value, options, onChange) => {
       const wrap = document.createElement('div');
       wrap.className = 'nw-flow-ctrl-field';
@@ -4155,12 +5163,25 @@ function _collectFlowPowerDpIsWFromUI() {
         sel.appendChild(op);
       }
       sel.value = String(value || options[0].v);
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an sel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       sel.addEventListener('change', () => onChange(String(sel.value)));
 
       wrap.appendChild(sel);
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkBoolSelect`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkBoolSelect
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkBoolSelect = (labelText, inputId, value, onChange) => {
       return mkSelectField(labelText, inputId, (value ? '1' : '0'), [
         { v: '1', t: 'Ein / True' },
@@ -4168,6 +5189,18 @@ function _collectFlowPowerDpIsWFromUI() {
       ], (v) => onChange(v === '1'));
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkChk`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkChk
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkChk = (labelText, inputId, checked, onChange) => {
       const wrap = document.createElement('div');
       wrap.className = 'nw-flow-ctrl-field';
@@ -4183,6 +5216,7 @@ function _collectFlowPowerDpIsWFromUI() {
       cb.type = 'checkbox';
       cb.id = inputId;
       cb.checked = !!checked;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an cb. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       cb.addEventListener('change', () => onChange(!!cb.checked));
 
       lbl.appendChild(cb);
@@ -4192,6 +5226,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `updateRule`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: updateRule
+     * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const updateRule = (idx, patch) => {
       const t2 = _ensureThresholdCfg();
       const r = t2.rules.find(x => Number(x.idx) === Number(idx));
@@ -4243,6 +5289,7 @@ function _collectFlowPowerDpIsWFromUI() {
       en.type = 'checkbox';
       en.checked = !!r.enabled;
       en.id = `thr_rule_${idx}_enabled`;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an en. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       en.addEventListener('change', () => updateRule(idx, { enabled: !!en.checked }));
       enWrap.appendChild(en);
       enWrap.appendChild(document.createTextNode('Regel an'));
@@ -4252,6 +5299,7 @@ function _collectFlowPowerDpIsWFromUI() {
       del.type = 'button';
       del.className = 'nw-config-btn nw-config-btn--ghost';
       del.textContent = 'Entfernen';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an del. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       del.addEventListener('click', () => {
         const t2 = _ensureThresholdCfg();
         t2.rules = (t2.rules || []).filter(x => Number(x.idx) !== Number(idx));
@@ -4343,7 +5391,12 @@ function _collectFlowPowerDpIsWFromUI() {
   // ------------------------------
   // Relaissteuerung (manuell)
   // ------------------------------
-
+  /**
+   * Code-Teil: _ensureRelayCfg
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _ensureRelayCfg() {
     currentConfig = currentConfig || {};
     currentConfig.relay = (currentConfig.relay && typeof currentConfig.relay === 'object') ? currentConfig.relay : {};
@@ -4353,11 +5406,28 @@ function _collectFlowPowerDpIsWFromUI() {
     const out = [];
     const used = new Set();
 
+    /**
+     * Code-Teil: Arrow-Funktion `normType`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: normType
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const normType = (v) => {
       const s = String(v || '').trim().toLowerCase();
       return (s === 'boolean' || s === 'bool' || s === 'switch') ? 'boolean' : 'number';
     };
-
+    /**
+     * Code-Teil: numOrNull
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const numOrNull = (v) => {
       const n = Number(v);
       return Number.isFinite(n) ? n : null;
@@ -4393,7 +5463,12 @@ function _collectFlowPowerDpIsWFromUI() {
     r.relays = out;
     return r;
   }
-
+  /**
+   * Code-Teil: _nextFreeRelayIdx
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _nextFreeRelayIdx() {
     const r = _ensureRelayCfg();
     const used = new Set((r.relays || []).map(x => Number(x && x.idx)).filter(n => Number.isFinite(n)));
@@ -4402,7 +5477,12 @@ function _collectFlowPowerDpIsWFromUI() {
     }
     return null;
   }
-
+  /**
+   * Code-Teil: buildRelayUI
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildRelayUI() {
     if (!els.relayControls) return;
 
@@ -4422,6 +5502,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return;
     }
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkHdr`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkHdr
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkHdr = (title, subtitle) => {
       const wrap = document.createElement('div');
       wrap.className = 'nw-help';
@@ -4444,6 +5536,18 @@ function _collectFlowPowerDpIsWFromUI() {
     const listWrap = document.createElement('div');
     listWrap.className = 'nw-config-list';
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkLabel`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkLabel
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkLabel = (text) => {
       const lbl = document.createElement('div');
       lbl.style.fontSize = '0.78rem';
@@ -4453,6 +5557,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return lbl;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkDpField`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkDpField
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkDpField = (labelText, inputId, value, onChange, placeholder) => {
       const wrap = document.createElement('div');
       wrap.className = 'nw-flow-ctrl-field';
@@ -4469,6 +5585,7 @@ function _collectFlowPowerDpIsWFromUI() {
       input.value = value ? String(value) : '';
       input.dataset.dpInput = '1';
       input.placeholder = placeholder || 'Datenpunkt';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       input.addEventListener('change', () => {
         onChange(String(input.value || '').trim());
         scheduleValidation(200);
@@ -4493,6 +5610,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkTextField`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkTextField
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkTextField = (labelText, inputId, value, onChange, placeholder) => {
       const wrap = document.createElement('div');
       wrap.className = 'nw-flow-ctrl-field';
@@ -4504,12 +5633,25 @@ function _collectFlowPowerDpIsWFromUI() {
       input.id = inputId;
       input.placeholder = placeholder || '';
       input.value = (value !== undefined && value !== null) ? String(value) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       input.addEventListener('change', () => onChange(String(input.value || '').trim()));
 
       wrap.appendChild(input);
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkNumField`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkNumField
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkNumField = (labelText, inputId, value, onChange, unit) => {
       const wrap = document.createElement('div');
       wrap.className = 'nw-flow-ctrl-field';
@@ -4525,6 +5667,7 @@ function _collectFlowPowerDpIsWFromUI() {
       input.type = 'number';
       input.id = inputId;
       input.value = (value !== undefined && value !== null && value !== '') ? String(value) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       input.addEventListener('change', () => {
         const n = Number(input.value);
         onChange(Number.isFinite(n) ? n : null);
@@ -4542,6 +5685,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkSelectField`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkSelectField
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkSelectField = (labelText, inputId, value, options, onChange) => {
       const wrap = document.createElement('div');
       wrap.className = 'nw-flow-ctrl-field';
@@ -4557,12 +5712,25 @@ function _collectFlowPowerDpIsWFromUI() {
         sel.appendChild(op);
       }
       sel.value = String(value || options[0].v);
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an sel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       sel.addEventListener('change', () => onChange(String(sel.value)));
 
       wrap.appendChild(sel);
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkChk`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkChk
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkChk = (labelText, inputId, checked, onChange) => {
       const wrap = document.createElement('div');
       wrap.className = 'nw-flow-ctrl-field';
@@ -4578,6 +5746,7 @@ function _collectFlowPowerDpIsWFromUI() {
       cb.type = 'checkbox';
       cb.id = inputId;
       cb.checked = !!checked;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an cb. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       cb.addEventListener('change', () => onChange(!!cb.checked));
 
       lbl.appendChild(cb);
@@ -4587,6 +5756,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `updateRelay`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: updateRelay
+     * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const updateRelay = (idx, patch) => {
       const r2 = _ensureRelayCfg();
       const it = r2.relays.find(x => Number(x.idx) === Number(idx));
@@ -4636,6 +5817,7 @@ function _collectFlowPowerDpIsWFromUI() {
       en.type = 'checkbox';
       en.checked = !!it.enabled;
       en.id = `relay_${idx}_enabled`;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an en. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       en.addEventListener('change', () => updateRelay(idx, { enabled: !!en.checked }));
       enWrap.appendChild(en);
       enWrap.appendChild(document.createTextNode('aktiv'));
@@ -4645,6 +5827,7 @@ function _collectFlowPowerDpIsWFromUI() {
       del.type = 'button';
       del.className = 'nw-config-btn nw-config-btn--ghost';
       del.textContent = 'Entfernen';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an del. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       del.addEventListener('click', () => {
         const r2 = _ensureRelayCfg();
         r2.relays = (r2.relays || []).filter(x => Number(x.idx) !== Number(idx));
@@ -4723,7 +5906,12 @@ function _collectFlowPowerDpIsWFromUI() {
 
 
   // --- Grid-Constraints / Netzlimits (Installer) ---
-
+  /**
+   * Code-Teil: _ensureGridConstraintsCfg
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _ensureGridConstraintsCfg() {
     currentConfig = currentConfig || {};
     currentConfig.gridConstraints = (currentConfig.gridConstraints && typeof currentConfig.gridConstraints === 'object') ? currentConfig.gridConstraints : {};
@@ -4747,6 +5935,18 @@ function _collectFlowPowerDpIsWFromUI() {
     if (typeof gc.pvCurtailMode !== 'string') gc.pvCurtailMode = 'auto';
 
     // Normalise strings in inverter tables
+    /**
+     * Code-Teil: Arrow-Funktion `normInv`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: normInv
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const normInv = (it) => {
       if (!it || typeof it !== 'object') return null;
       const name = String(it.name || '').trim();
@@ -4764,7 +5964,12 @@ function _collectFlowPowerDpIsWFromUI() {
 
     return gc;
   }
-
+  /**
+   * Code-Teil: buildGridConstraintsUI
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildGridConstraintsUI() {
     const meterEl = els.gridConstraintsMeter;
     const rlmEl = els.gridConstraintsRlm;
@@ -4776,6 +5981,18 @@ function _collectFlowPowerDpIsWFromUI() {
     const apps = (currentConfig && currentConfig.emsApps && currentConfig.emsApps.apps) ? currentConfig.emsApps.apps : {};
     const a = (apps && apps.grid) ? apps.grid : { installed: false, enabled: false };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkMsg`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkMsg
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkMsg = (text) => {
       const d = document.createElement('div');
       d.className = 'nw-help';
@@ -4783,6 +6000,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return d;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `clearAll`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: clearAll
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const clearAll = () => {
       if (meterEl) meterEl.innerHTML = '';
       if (rlmEl) rlmEl.innerHTML = '';
@@ -4803,6 +6032,18 @@ function _collectFlowPowerDpIsWFromUI() {
 
     const gc = _ensureGridConstraintsCfg();
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkLabel`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkLabel
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkLabel = (text) => {
       const lbl = document.createElement('div');
       lbl.style.fontSize = '0.78rem';
@@ -4812,6 +6053,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return lbl;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkFieldWrap`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkFieldWrap
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkFieldWrap = (labelText) => {
       const wrap = document.createElement('div');
       wrap.className = 'nw-flow-ctrl-field';
@@ -4819,6 +6072,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkChk`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkChk
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkChk = (labelText, inputId, checked, onChange) => {
       const wrap = mkFieldWrap(labelText);
 
@@ -4832,6 +6097,7 @@ function _collectFlowPowerDpIsWFromUI() {
       cb.type = 'checkbox';
       cb.id = inputId;
       cb.checked = !!checked;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an cb. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       cb.addEventListener('change', () => onChange(!!cb.checked));
 
       lbl.appendChild(cb);
@@ -4841,6 +6107,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkNum`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkNum
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkNum = (labelText, inputId, value, onChange, unit, placeholder) => {
       const wrap = mkFieldWrap(labelText);
 
@@ -4855,6 +6133,7 @@ function _collectFlowPowerDpIsWFromUI() {
       input.id = inputId;
       input.placeholder = placeholder || '';
       input.value = (value !== undefined && value !== null && value !== '') ? String(value) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       input.addEventListener('change', () => {
         const n = Number(input.value);
         onChange(Number.isFinite(n) ? n : 0);
@@ -4872,6 +6151,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkSelect`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkSelect
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkSelect = (labelText, inputId, value, options, onChange) => {
       const wrap = mkFieldWrap(labelText);
 
@@ -4885,12 +6176,25 @@ function _collectFlowPowerDpIsWFromUI() {
         sel.appendChild(op);
       }
       sel.value = String(value || options[0].v);
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an sel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       sel.addEventListener('change', () => onChange(String(sel.value)));
 
       wrap.appendChild(sel);
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkDpField`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkDpField
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkDpField = (labelText, inputId, value, onChange, placeholder) => {
       const wrap = mkFieldWrap(labelText);
 
@@ -4904,6 +6208,7 @@ function _collectFlowPowerDpIsWFromUI() {
       input.value = value ? String(value) : '';
       input.dataset.dpInput = '1';
       input.placeholder = placeholder || 'Datenpunkt';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       input.addEventListener('change', () => {
         onChange(String(input.value || '').trim());
         scheduleValidation(200);
@@ -4928,6 +6233,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkHint`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkHint
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkHint = (text) => {
       const h = document.createElement('div');
       h.className = 'nw-config-muted';
@@ -4955,6 +6272,18 @@ function _collectFlowPowerDpIsWFromUI() {
     }
 
     // PV Abregelung (EVU / 0‑Einspeisung)
+    /**
+     * Code-Teil: Arrow-Funktion `deriveCurtailMode`
+     * Zweck: berechnet abgeleitete Werte; Änderungen können Energiefluss/History/Regelungen beeinflussen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: deriveCurtailMode
+     * Zweck: Leitet Werte aus anderen Messwerten ab.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const deriveCurtailMode = () => {
       if (gc.pvEvuEnabled && gc.zeroExportEnabled) return 'combined';
       if (gc.pvEvuEnabled) return 'evu';
@@ -4962,6 +6291,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return 'off';
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `applyCurtailMode`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: applyCurtailMode
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const applyCurtailMode = (mode) => {
       const m = String(mode || 'off');
       gc.pvEvuEnabled = (m === 'evu' || m === 'combined');
@@ -5006,6 +6347,18 @@ function _collectFlowPowerDpIsWFromUI() {
       const showEvuGroup = (curMode === 'evu' || curMode === 'combined' || curMode === 'off');
       const showZeroGroup = (curMode === 'zero' || curMode === 'combined' || curMode === 'off');
 
+      /**
+       * Code-Teil: Arrow-Funktion `mkTitle`
+       * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: mkTitle
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const mkTitle = (text) => {
         const h = document.createElement('div');
         h.className = 'nw-config-card__divider';
@@ -5013,6 +6366,18 @@ function _collectFlowPowerDpIsWFromUI() {
         return h;
       };
 
+      /**
+       * Code-Teil: Arrow-Funktion `mkBadge`
+       * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: mkBadge
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const mkBadge = (label, ok) => {
         const b = document.createElement('span');
         b.className = 'nw-config-badge ' + (ok ? 'nw-config-badge--ok' : 'nw-config-badge--idle');
@@ -5020,6 +6385,18 @@ function _collectFlowPowerDpIsWFromUI() {
         return b;
       };
 
+      /**
+       * Code-Teil: Arrow-Funktion `mkInvItem`
+       * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: mkInvItem
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const mkInvItem = (list, idx, groupPrefix, groupLabel) => {
         const inv = list[idx];
 
@@ -5051,6 +6428,7 @@ function _collectFlowPowerDpIsWFromUI() {
         nameInput.type = 'text';
         nameInput.placeholder = 'Name';
         nameInput.value = inv.name || '';
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an nameInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         nameInput.addEventListener('change', () => {
           inv.name = String(nameInput.value || '').trim();
           t.textContent = inv.name ? inv.name : `Wechselrichter ${idx + 1}`;
@@ -5065,6 +6443,7 @@ function _collectFlowPowerDpIsWFromUI() {
         kwpInput.step = '0.01';
         kwpInput.placeholder = 'kWp';
         kwpInput.value = (inv.kwp === undefined || inv.kwp === null) ? '' : String(inv.kwp);
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an kwpInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         kwpInput.addEventListener('change', () => {
           const n = Number(String(kwpInput.value || '').replace(',', '.'));
           inv.kwp = (Number.isFinite(n) && n >= 0) ? n : 0;
@@ -5093,6 +6472,7 @@ function _collectFlowPowerDpIsWFromUI() {
         delBtn.className = 'nw-config-mini-btn';
         delBtn.type = 'button';
         delBtn.textContent = 'Entfernen';
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an delBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         delBtn.addEventListener('click', () => {
           list.splice(idx, 1);
           buildGridConstraintsUI();
@@ -5102,6 +6482,7 @@ function _collectFlowPowerDpIsWFromUI() {
         const advanced = document.createElement('div');
         advanced.className = 'nw-flow-slot__advanced';
 
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an editBtn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         editBtn.addEventListener('click', () => {
           const open = advanced.classList.toggle('is-open');
           editBtn.textContent = open ? 'Weniger' : 'Details';
@@ -5147,6 +6528,18 @@ function _collectFlowPowerDpIsWFromUI() {
         return row;
       };
 
+      /**
+       * Code-Teil: Arrow-Funktion `mkInvGroup`
+       * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+       * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+       * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+       */
+      /**
+       * Code-Teil: mkInvGroup
+       * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+       * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+       * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+       */
       const mkInvGroup = (titleText, list, groupPrefix, groupLabel, inactiveHint) => {
         pvEl.appendChild(mkTitle(titleText));
         if (inactiveHint) pvEl.appendChild(mkHint(inactiveHint));
@@ -5171,6 +6564,7 @@ function _collectFlowPowerDpIsWFromUI() {
         add.className = 'nw-config-mini-btn';
         add.type = 'button';
         add.textContent = 'Wechselrichter hinzufügen';
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an add. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         add.addEventListener('click', () => {
           list.push({ name: '', kwp: 0, pvPowerReadId: '', feedInLimitWId: '', pvLimitWId: '', pvLimitPctId: '' });
           buildGridConstraintsUI();
@@ -5235,7 +6629,12 @@ function _collectFlowPowerDpIsWFromUI() {
     { v: 'limitW', t: 'Leistung (W) begrenzen' },
     { v: 'onOff', t: 'Ein/Aus (Enable)' }
   ];
-
+  /**
+   * Code-Teil: _ensurePara14aCfg
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _ensurePara14aCfg() {
     currentConfig = currentConfig || {};
     currentConfig.installerConfig = (currentConfig.installerConfig && typeof currentConfig.installerConfig === 'object')
@@ -5280,7 +6679,12 @@ function _collectFlowPowerDpIsWFromUI() {
     ic.para14aConsumers = out;
     return ic;
   }
-
+  /**
+   * Code-Teil: _mkDpWrap
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _mkDpWrap(id, value, placeholder, onChange) {
     const dpWrap = document.createElement('div');
     dpWrap.className = 'nw-config-dp-input-wrapper';
@@ -5292,6 +6696,7 @@ function _collectFlowPowerDpIsWFromUI() {
     input.value = value ? String(value) : '';
     input.dataset.dpInput = '1';
     input.placeholder = placeholder || 'optional';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     input.addEventListener('change', () => {
       onChange(String(input.value || '').trim());
       scheduleValidation(200);
@@ -5313,7 +6718,12 @@ function _collectFlowPowerDpIsWFromUI() {
     dpWrap.appendChild(badge);
     return dpWrap;
   }
-
+  /**
+   * Code-Teil: rebuildPara14aConsumersUI
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function rebuildPara14aConsumersUI() {
     if (!els.para14aConsumers) return;
     const ic = _ensurePara14aCfg();
@@ -5362,6 +6772,7 @@ function _collectFlowPowerDpIsWFromUI() {
       en.type = 'checkbox';
       en.id = `p14a_cons_${idx}_en`;
       en.checked = !!c.enabled;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an en. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       en.addEventListener('change', () => {
         const ic2 = _ensurePara14aCfg();
         if (ic2.para14aConsumers[i]) ic2.para14aConsumers[i].enabled = !!en.checked;
@@ -5384,6 +6795,7 @@ function _collectFlowPowerDpIsWFromUI() {
       name.style.width = '180px';
       name.placeholder = 'Name';
       name.value = String(c.name || '');
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an name. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       name.addEventListener('change', () => {
         const ic2 = _ensurePara14aCfg();
         if (ic2.para14aConsumers[i]) ic2.para14aConsumers[i].name = String(name.value || '').trim();
@@ -5403,6 +6815,7 @@ function _collectFlowPowerDpIsWFromUI() {
         typeSel.appendChild(op);
       }
       typeSel.value = String(c.type || 'custom');
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an typeSel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       typeSel.addEventListener('change', () => {
         const ic2 = _ensurePara14aCfg();
         if (ic2.para14aConsumers[i]) ic2.para14aConsumers[i].type = String(typeSel.value || 'custom');
@@ -5420,6 +6833,7 @@ function _collectFlowPowerDpIsWFromUI() {
         ctlSel.appendChild(op);
       }
       ctlSel.value = String(c.controlType || 'limitW');
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an ctlSel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       ctlSel.addEventListener('change', () => {
         const ic2 = _ensurePara14aCfg();
         if (ic2.para14aConsumers[i]) ic2.para14aConsumers[i].controlType = String(ctlSel.value || 'limitW');
@@ -5433,6 +6847,7 @@ function _collectFlowPowerDpIsWFromUI() {
       maxW.style.width = '120px';
       maxW.placeholder = 'Max W';
       maxW.value = (c.maxPowerW !== undefined && c.maxPowerW !== null) ? String(c.maxPowerW) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an maxW. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       maxW.addEventListener('change', () => {
         const n = Number(maxW.value);
         const ic2 = _ensurePara14aCfg();
@@ -5447,6 +6862,7 @@ function _collectFlowPowerDpIsWFromUI() {
       pr.style.width = '110px';
       pr.placeholder = 'Prio';
       pr.value = (c.priority !== undefined && c.priority !== null) ? String(c.priority) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an pr. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       pr.addEventListener('change', () => {
         const n = Number(pr.value);
         const ic2 = _ensurePara14aCfg();
@@ -5461,7 +6877,6 @@ function _collectFlowPowerDpIsWFromUI() {
       });
       sp.style.minWidth = '360px';
       right.appendChild(sp);
-
       const enDp = _mkDpWrap(`p14a_cons_${idx}_enDp`, c.enableId, 'Enable (Write)', (v) => {
         const ic2 = _ensurePara14aCfg();
         if (ic2.para14aConsumers[i]) ic2.para14aConsumers[i].enableId = v;
@@ -5474,6 +6889,7 @@ function _collectFlowPowerDpIsWFromUI() {
       rm.type = 'button';
       rm.className = 'nw-config-btn nw-config-btn--ghost';
       rm.textContent = 'Entfernen';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an rm. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       rm.addEventListener('click', () => {
         const ic2 = _ensurePara14aCfg();
         ic2.para14aConsumers.splice(i, 1);
@@ -5486,7 +6902,12 @@ function _collectFlowPowerDpIsWFromUI() {
       els.para14aConsumers.appendChild(row);
     });
   }
-
+  /**
+   * Code-Teil: buildPara14aUI
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildPara14aUI() {
     // Panel can be absent in older builds
     if (!els.para14aMode && !els.para14aConsumers) return;
@@ -5499,6 +6920,18 @@ function _collectFlowPowerDpIsWFromUI() {
 
     // disable/enable inputs based on installed
     const disable = !installed;
+    /**
+     * Code-Teil: Arrow-Funktion `lock`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: lock
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const lock = (el) => { if (el) el.disabled = disable; };
 
     lock(els.para14aMode);
@@ -5525,13 +6958,22 @@ function _collectFlowPowerDpIsWFromUI() {
 
     rebuildPara14aConsumersUI();
   }
-
-
+  /**
+   * Code-Teil: getStorageMode
+   * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function getStorageMode() {
     const v = (els.storageControlMode && els.storageControlMode.value) ? String(els.storageControlMode.value) : 'targetPower';
     return (['targetPower','limits','enableFlags'].includes(v)) ? v : 'targetPower';
   }
-
+  /**
+   * Code-Teil: rebuildStorageTable
+   * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function rebuildStorageTable() {
     const mode = getStorageMode();
     const fields = STORAGE_DP_FIELDS.filter(f => {
@@ -5556,7 +6998,12 @@ function _collectFlowPowerDpIsWFromUI() {
   // ------------------------------
   // Speicherfarm (mehrere Speicher)
   // ------------------------------
-
+  /**
+   * Code-Teil: _ensureStorageFarmCfg
+   * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _ensureStorageFarmCfg() {
     currentConfig = currentConfig || {};
     currentConfig.storageFarm = (currentConfig.storageFarm && typeof currentConfig.storageFarm === 'object') ? currentConfig.storageFarm : {};
@@ -5627,7 +7074,12 @@ function _collectFlowPowerDpIsWFromUI() {
 
     return sf;
   }
-
+  /**
+   * Code-Teil: buildStorageFarmUI
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildStorageFarmUI() {
     if (!els.storageFarmStorages) return;
 
@@ -5681,6 +7133,18 @@ function _collectFlowPowerDpIsWFromUI() {
       els.storageFarmGroupsCard.style.display = (sf.mode === 'groups') ? '' : 'none';
     }
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkField`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkField
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkField = (labelText) => {
       const wrap = document.createElement('div');
       wrap.className = 'nw-flow-ctrl-field';
@@ -5693,6 +7157,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return { wrap, lbl };
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkDpField`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkDpField
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkDpField = (labelText, id, value, onChange, placeholder) => {
       const { wrap } = mkField(labelText);
       const dpWrap = document.createElement('div');
@@ -5705,6 +7181,7 @@ function _collectFlowPowerDpIsWFromUI() {
       input.value = value ? String(value) : '';
       input.dataset.dpInput = '1';
       input.placeholder = placeholder || 'optional';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       input.addEventListener('change', () => { onChange(String(input.value || '').trim()); scheduleValidation(200); });
 
       const b = document.createElement('button');
@@ -5726,6 +7203,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkTextField`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkTextField
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkTextField = (labelText, id, value, onChange, placeholder) => {
       const { wrap } = mkField(labelText);
       const input = document.createElement('input');
@@ -5734,11 +7223,24 @@ function _collectFlowPowerDpIsWFromUI() {
       input.id = id;
       if (placeholder) input.placeholder = placeholder;
       input.value = value ? String(value) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       input.addEventListener('change', () => { onChange(String(input.value || '').trim()); });
       wrap.appendChild(input);
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkNumField`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkNumField
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkNumField = (labelText, id, value, onChange, placeholder) => {
       const { wrap } = mkField(labelText);
       const input = document.createElement('input');
@@ -5747,6 +7249,7 @@ function _collectFlowPowerDpIsWFromUI() {
       input.id = id;
       if (placeholder) input.placeholder = placeholder;
       input.value = (value !== undefined && value !== null && value !== '') ? String(value) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       input.addEventListener('change', () => {
         const n = Number(input.value);
         onChange(Number.isFinite(n) ? n : '');
@@ -5755,6 +7258,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkSelectField`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkSelectField
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkSelectField = (labelText, id, value, options, onChange) => {
       const { wrap } = mkField(labelText);
       const sel = document.createElement('select');
@@ -5767,17 +7282,31 @@ function _collectFlowPowerDpIsWFromUI() {
         sel.appendChild(o);
       });
       sel.value = (value !== undefined && value !== null) ? String(value) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an sel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       sel.addEventListener('change', () => { onChange(String(sel.value || '')); });
       wrap.appendChild(sel);
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkCheckField`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkCheckField
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkCheckField = (labelText, id, checked, onChange) => {
       const { wrap } = mkField(labelText);
       const box = document.createElement('input');
       box.type = 'checkbox';
       box.id = id;
       box.checked = !!checked;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an box. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       box.addEventListener('change', () => { onChange(!!box.checked); });
       const lbl = document.createElement('label');
       lbl.htmlFor = id;
@@ -5792,6 +7321,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkGridDivider`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkGridDivider
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkGridDivider = (text) => {
       const d = document.createElement('div');
       d.style.gridColumn = '1 / -1';
@@ -5807,6 +7348,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return d;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkGridHelp`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkGridHelp
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkGridHelp = (text) => {
       const d = document.createElement('div');
       d.style.gridColumn = '1 / -1';
@@ -5914,6 +7467,7 @@ function _collectFlowPowerDpIsWFromUI() {
         rm.className = 'nw-config-btn nw-config-btn--ghost';
         rm.textContent = 'Entfernen';
         rm.style.marginTop = '8px';
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an rm. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         rm.addEventListener('click', () => {
           const sf2 = _ensureStorageFarmCfg();
           sf2.storages.splice(i, 1);
@@ -6010,6 +7564,7 @@ function _collectFlowPowerDpIsWFromUI() {
           rm.className = 'nw-config-btn nw-config-btn--ghost';
           rm.textContent = 'Entfernen';
           rm.style.marginTop = '8px';
+          // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an rm. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
           rm.addEventListener('click', () => {
             const sf2 = _ensureStorageFarmCfg();
             sf2.groups.splice(i, 1);
@@ -6047,7 +7602,12 @@ function _collectFlowPowerDpIsWFromUI() {
   // ------------------------------
   // MultiUse (Speicher) – SoC‑Zonen
   // ------------------------------
-
+    /**
+     * Code-Teil: _ensureStorageMultiUseCfg
+     * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function _ensureStorageMultiUseCfg() {
     currentConfig = currentConfig || {};
     currentConfig.installerConfig = (currentConfig.installerConfig && typeof currentConfig.installerConfig === 'object') ? currentConfig.installerConfig : {};
@@ -6103,7 +7663,12 @@ function _collectFlowPowerDpIsWFromUI() {
 
     return mu;
   }
-
+    /**
+     * Code-Teil: _renderStorageMultiUseSummary
+     * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function _renderStorageMultiUseSummary(mu) {
     if (!els.muStorageSummary) return;
 
@@ -6142,7 +7707,12 @@ function _collectFlowPowerDpIsWFromUI() {
       els.muStorageSummary.appendChild(div);
     }
   }
-
+    /**
+     * Code-Teil: buildStorageMultiUseUI
+     * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     function buildStorageMultiUseUI() {
     if (!els.muStorageEnabled) return;
 
@@ -6151,6 +7721,18 @@ function _collectFlowPowerDpIsWFromUI() {
 
     _ensureStorageMultiUseCfg();
 
+    /**
+     * Code-Teil: Arrow-Funktion `setDisabled`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: setDisabled
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const setDisabled = (d) => {
       if (els.muStorageEnabled) els.muStorageEnabled.disabled = d;
       if (els.muReserveEnabled) els.muReserveEnabled.disabled = d;
@@ -6168,6 +7750,18 @@ function _collectFlowPowerDpIsWFromUI() {
 
     setDisabled(!a.installed);
 
+    /**
+     * Code-Teil: Arrow-Funktion `syncFromCfgToUi`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: syncFromCfgToUi
+     * Zweck: Synchronisiert zwei Datenquellen bzw. UI und State.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const syncFromCfgToUi = () => {
       const mu2 = _ensureStorageMultiUseCfg();
 
@@ -6189,6 +7783,18 @@ function _collectFlowPowerDpIsWFromUI() {
       _renderStorageMultiUseSummary(mu2);
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `syncFromUiToCfg`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: syncFromUiToCfg
+     * Zweck: Synchronisiert zwei Datenquellen bzw. UI und State.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const syncFromUiToCfg = () => {
       const mu2 = _ensureStorageMultiUseCfg();
 
@@ -6272,26 +7878,46 @@ function _collectFlowPowerDpIsWFromUI() {
 
 
   // --- EVCS / Stations (Phase 2) ---
-
+  /**
+   * Code-Teil: _clampInt
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _clampInt(v, min, max, def) {
     const n = Number(v);
     if (!Number.isFinite(n)) return def;
     const i = Math.round(n);
     return Math.min(max, Math.max(min, i));
   }
-
+  /**
+   * Code-Teil: _ensureSettingsConfig
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _ensureSettingsConfig() {
     currentConfig = currentConfig || {};
     currentConfig.settingsConfig = (currentConfig.settingsConfig && typeof currentConfig.settingsConfig === 'object') ? currentConfig.settingsConfig : {};
     return currentConfig.settingsConfig;
   }
-
+  /**
+   * Code-Teil: _ensureChargingManagementConfig
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _ensureChargingManagementConfig() {
     currentConfig = currentConfig || {};
     currentConfig.chargingManagement = (currentConfig.chargingManagement && typeof currentConfig.chargingManagement === 'object') ? currentConfig.chargingManagement : {};
     return currentConfig.chargingManagement;
   }
-
+  /**
+   * Code-Teil: _ensureEvcsList
+   * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _ensureEvcsList(count) {
     const sc = _ensureSettingsConfig();
     const list = Array.isArray(sc.evcsList) ? sc.evcsList : [];
@@ -6300,7 +7926,12 @@ function _collectFlowPowerDpIsWFromUI() {
     sc.evcsList = list;
     return list;
   }
-
+  /**
+   * Code-Teil: _updateEvcsField
+   * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _updateEvcsField(idx, field, value) {
     const sc = _ensureSettingsConfig();
     const count = _clampInt(sc.evcsCount, 0, 50, 0);
@@ -6310,7 +7941,12 @@ function _collectFlowPowerDpIsWFromUI() {
     list[idx - 1] = row;
     sc.evcsList = list;
   }
-
+  /**
+   * Code-Teil: buildEvcsUI
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildEvcsUI() {
     if (!els.evcsList || !els.evcsCount) return;
     const sc = _ensureSettingsConfig();
@@ -6337,6 +7973,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return;
     }
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkRow`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkRow
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkRow = (label, controlEl) => {
       const row = document.createElement('div');
       row.className = 'nw-config-field-row';
@@ -6351,6 +7999,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return row;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `mkIo`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mkIo
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkIo = (id, value, onChange) => {
       const wrap = document.createElement('div');
       wrap.style.display = 'flex';
@@ -6365,12 +8025,14 @@ function _collectFlowPowerDpIsWFromUI() {
       input.placeholder = 'State-ID…';
       input.dataset.dpInput = '1';
       input.dataset.dpInput = '1';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an input. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       input.addEventListener('change', () => { onChange(String(input.value || '').trim()); scheduleValidation(200); });
 
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'nw-config-btn nw-config-btn--ghost';
       btn.textContent = 'Auswählen…';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       btn.addEventListener('click', () => openDpModal(id));
 
       wrap.appendChild(input);
@@ -6378,6 +8040,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return wrap;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `normKey`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: normKey
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const normKey = (k) => String(k || '').trim();
 
     // Determine station keys for grouping (UI only; does NOT reorder the underlying list)
@@ -6401,7 +8075,6 @@ function _collectFlowPowerDpIsWFromUI() {
       seen.add(sk);
       stationKeys.push(sk);
     }
-
     const hasUnassigned = list.some(r => !normKey(r && r.stationKey));
     if (hasUnassigned) stationKeys.push(''); // UI group for "unassigned"
 
@@ -6411,6 +8084,18 @@ function _collectFlowPowerDpIsWFromUI() {
       if (sk) groupIndexByKey.set(sk, idx);
     });
 
+    /**
+     * Code-Teil: Arrow-Funktion `ensureGroupForKey`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: ensureGroupForKey
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const ensureGroupForKey = (stationKey) => {
       const sk = normKey(stationKey);
       if (!sk) return -1;
@@ -6421,6 +8106,18 @@ function _collectFlowPowerDpIsWFromUI() {
       return idx;
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `moveStationGroup`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: moveStationGroup
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const moveStationGroup = (stationKey, dir) => {
       const sk = normKey(stationKey);
       const idx = groupIndexByKey.get(sk);
@@ -6441,6 +8138,18 @@ function _collectFlowPowerDpIsWFromUI() {
       try { buildStationGroupsUI(); } catch (_e) {}
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `renameStationKey`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: renameStationKey
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const renameStationKey = (oldKey, newKey) => {
       const ok = normKey(oldKey);
       const nk = normKey(newKey);
@@ -6468,6 +8177,18 @@ function _collectFlowPowerDpIsWFromUI() {
       try { buildStationGroupsUI(); } catch (_e) {}
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `addPortToStation`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: addPortToStation
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const addPortToStation = (stationKey) => {
       const sk = normKey(stationKey);
       const sc2 = _ensureSettingsConfig();
@@ -6485,6 +8206,18 @@ function _collectFlowPowerDpIsWFromUI() {
       buildEvcsUI();
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `movePortWithinStation`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: movePortWithinStation
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const movePortWithinStation = (portIdx, stationKey, dir) => {
       const sk = normKey(stationKey);
       const a = portIdx - 1;
@@ -6512,6 +8245,18 @@ function _collectFlowPowerDpIsWFromUI() {
       buildEvcsUI();
     };
 
+    /**
+     * Code-Teil: Arrow-Funktion `createPortCard`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: createPortCard
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const createPortCard = (i, stationKey) => {
       const rowCfg = list[i - 1] || {};
       const sk = normKey(stationKey);
@@ -6542,6 +8287,7 @@ function _collectFlowPowerDpIsWFromUI() {
       btnUp.className = 'nw-config-mini-btn';
       btnUp.textContent = '↑';
       btnUp.title = 'Innerhalb der Station nach oben';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnUp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       btnUp.addEventListener('click', () => movePortWithinStation(i, sk, -1));
 
       const btnDown = document.createElement('button');
@@ -6549,6 +8295,7 @@ function _collectFlowPowerDpIsWFromUI() {
       btnDown.className = 'nw-config-mini-btn';
       btnDown.textContent = '↓';
       btnDown.title = 'Innerhalb der Station nach unten';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnDown. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       btnDown.addEventListener('click', () => movePortWithinStation(i, sk, +1));
 
       actions.appendChild(btnUp);
@@ -6572,6 +8319,7 @@ function _collectFlowPowerDpIsWFromUI() {
       nameInput.type = 'text';
       nameInput.value = valueOrEmpty(rowCfg.name);
       nameInput.placeholder = `Name (z.B. Port ${connNo || i})`;
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an nameInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       nameInput.addEventListener('input', () => {
         const v = String(nameInput.value || '').trim();
         _updateEvcsField(i, 'name', v);
@@ -6583,6 +8331,7 @@ function _collectFlowPowerDpIsWFromUI() {
       const enabledInp = document.createElement('input');
       enabledInp.type = 'checkbox';
       enabledInp.checked = (rowCfg && rowCfg.enabled !== false);
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an enabledInp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       enabledInp.addEventListener('change', () => _updateEvcsField(i, 'enabled', !!enabledInp.checked));
       body.appendChild(mkRow('Aktiv (Regelung)', enabledInp));
 
@@ -6592,6 +8341,7 @@ function _collectFlowPowerDpIsWFromUI() {
       const tVal = String(rowCfg.chargerType || 'ac').toLowerCase();
       typeSel.innerHTML = '<option value="ac">ac</option><option value="dc">dc</option>';
       typeSel.value = (tVal === 'dc') ? 'dc' : 'ac';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an typeSel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       typeSel.addEventListener('change', () => _updateEvcsField(i, 'chargerType', String(typeSel.value)));
       body.appendChild(mkRow('Typ', typeSel));
 
@@ -6601,6 +8351,7 @@ function _collectFlowPowerDpIsWFromUI() {
       stationKeyInput.type = 'text';
       stationKeyInput.value = valueOrEmpty(rowCfg.stationKey);
       stationKeyInput.placeholder = 'Stations-Key (optional)';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an stationKeyInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       stationKeyInput.addEventListener('input', () => {
         const v = String(stationKeyInput.value || '').trim();
         _updateEvcsField(i, 'stationKey', v);
@@ -6620,6 +8371,7 @@ function _collectFlowPowerDpIsWFromUI() {
       connInput.step = '1';
       connInput.value = numOrEmpty(rowCfg.connectorNo);
       connInput.placeholder = '0';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an connInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       connInput.addEventListener('change', () => {
         _updateEvcsField(i, 'connectorNo', _clampInt(connInput.value, 0, 99, 0));
         buildEvcsUI();
@@ -6640,6 +8392,7 @@ function _collectFlowPowerDpIsWFromUI() {
         const clamped = _clampInt(raw, 1, 999, 999);
         prioInput.value = String(clamped);
       }
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an prioInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       prioInput.addEventListener('change', () => _updateEvcsField(i, 'priority', _clampInt(prioInput.value, 1, 999, 999)));
       body.appendChild(mkRow('Priorität (1..999)', prioInput));
 
@@ -6651,6 +8404,7 @@ function _collectFlowPowerDpIsWFromUI() {
         const um = String((rowCfg && rowCfg.userMode) ? rowCfg.userMode : 'auto').toLowerCase();
         modeSel.value = (um === 'pv' || um === 'minpv' || um === 'boost') ? um : 'auto';
       }
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an modeSel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       modeSel.addEventListener('change', () => _updateEvcsField(i, 'userMode', String(modeSel.value)));
       body.appendChild(mkRow('Standard-Modus', modeSel));
 
@@ -6711,6 +8465,7 @@ function _collectFlowPowerDpIsWFromUI() {
           : (cp === 'none' || cp === 'off') ? 'none'
           : 'auto';
       }
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an ctrlSel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       ctrlSel.addEventListener('change', () => _updateEvcsField(i, 'controlPreference', String(ctrlSel.value)));
       adv.appendChild(mkRow('Steuerung', ctrlSel));
 
@@ -6722,6 +8477,7 @@ function _collectFlowPowerDpIsWFromUI() {
         const p = Number(rowCfg.phases);
         phasesSel.value = (p === 1) ? '1' : '3';
       }
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an phasesSel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       phasesSel.addEventListener('change', () => _updateEvcsField(i, 'phases', _clampInt(phasesSel.value, 1, 3, 3)));
       adv.appendChild(mkRow('Phasen', phasesSel));
 
@@ -6733,6 +8489,7 @@ function _collectFlowPowerDpIsWFromUI() {
       vInput.step = '1';
       vInput.placeholder = '230';
       vInput.value = String((rowCfg && Number.isFinite(Number(rowCfg.voltageV)) && Number(rowCfg.voltageV) > 0) ? Math.round(Number(rowCfg.voltageV)) : 230);
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an vInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       vInput.addEventListener('change', () => {
         const v = Number(vInput.value);
         _updateEvcsField(i, 'voltageV', (Number.isFinite(v) && v > 0) ? Math.round(v) : 230);
@@ -6747,6 +8504,7 @@ function _collectFlowPowerDpIsWFromUI() {
       minAInput.step = '0.1';
       minAInput.placeholder = '0 = Standard';
       minAInput.value = (rowCfg && Number(rowCfg.minCurrentA) > 0 && Number.isFinite(Number(rowCfg.minCurrentA))) ? String(Number(rowCfg.minCurrentA)) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an minAInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       minAInput.addEventListener('change', () => {
         const v = Number(minAInput.value);
         _updateEvcsField(i, 'minCurrentA', (Number.isFinite(v) && v > 0) ? v : 0);
@@ -6760,6 +8518,7 @@ function _collectFlowPowerDpIsWFromUI() {
       maxAInput.step = '0.1';
       maxAInput.placeholder = '0 = Standard';
       maxAInput.value = (rowCfg && Number(rowCfg.maxCurrentA) > 0 && Number.isFinite(Number(rowCfg.maxCurrentA))) ? String(Number(rowCfg.maxCurrentA)) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an maxAInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       maxAInput.addEventListener('change', () => {
         const v = Number(maxAInput.value);
         _updateEvcsField(i, 'maxCurrentA', (Number.isFinite(v) && v > 0) ? v : 0);
@@ -6773,6 +8532,7 @@ function _collectFlowPowerDpIsWFromUI() {
       maxWInput.step = '1';
       maxWInput.placeholder = '0 = Standard';
       maxWInput.value = (rowCfg && Number(rowCfg.maxPowerW) > 0 && Number.isFinite(Number(rowCfg.maxPowerW))) ? String(Math.round(Number(rowCfg.maxPowerW))) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an maxWInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       maxWInput.addEventListener('change', () => {
         const v = Number(maxWInput.value);
         _updateEvcsField(i, 'maxPowerW', (Number.isFinite(v) && v > 0) ? Math.round(v) : 0);
@@ -6786,6 +8546,7 @@ function _collectFlowPowerDpIsWFromUI() {
       stepAInput.step = '0.1';
       stepAInput.placeholder = '0 = Standard';
       stepAInput.value = (rowCfg && Number(rowCfg.stepA) > 0 && Number.isFinite(Number(rowCfg.stepA))) ? String(Number(rowCfg.stepA)) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an stepAInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       stepAInput.addEventListener('change', () => {
         const v = Number(stepAInput.value);
         _updateEvcsField(i, 'stepA', (Number.isFinite(v) && v > 0) ? v : 0);
@@ -6799,6 +8560,7 @@ function _collectFlowPowerDpIsWFromUI() {
       stepWInput.step = '1';
       stepWInput.placeholder = '0 = Standard';
       stepWInput.value = (rowCfg && Number(rowCfg.stepW) > 0 && Number.isFinite(Number(rowCfg.stepW))) ? String(Math.round(Number(rowCfg.stepW))) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an stepWInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       stepWInput.addEventListener('change', () => {
         const v = Number(stepWInput.value);
         _updateEvcsField(i, 'stepW', (Number.isFinite(v) && v > 0) ? Math.round(v) : 0);
@@ -6809,6 +8571,7 @@ function _collectFlowPowerDpIsWFromUI() {
       const allowBoostInp = document.createElement('input');
       allowBoostInp.type = 'checkbox';
       allowBoostInp.checked = (rowCfg && rowCfg.allowBoost !== false);
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an allowBoostInp. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       allowBoostInp.addEventListener('change', () => _updateEvcsField(i, 'allowBoost', !!allowBoostInp.checked));
       adv.appendChild(mkRow('Boost erlauben', allowBoostInp));
 
@@ -6819,6 +8582,7 @@ function _collectFlowPowerDpIsWFromUI() {
       boostTInput.step = '1';
       boostTInput.placeholder = '0 = Standard';
       boostTInput.value = (rowCfg && Number(rowCfg.boostTimeoutMin) > 0 && Number.isFinite(Number(rowCfg.boostTimeoutMin))) ? String(Math.round(Number(rowCfg.boostTimeoutMin))) : '';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an boostTInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       boostTInput.addEventListener('change', () => {
         const v = Number(boostTInput.value);
         _updateEvcsField(i, 'boostTimeoutMin', (Number.isFinite(v) && v > 0) ? Math.round(v) : 0);
@@ -6886,6 +8650,7 @@ function _collectFlowPowerDpIsWFromUI() {
         btnSU.className = 'nw-config-mini-btn';
         btnSU.textContent = '↑';
         btnSU.title = 'Station in der Reihenfolge nach oben';
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnSU. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         btnSU.addEventListener('click', () => moveStationGroup(sk, -1));
 
         const btnSD = document.createElement('button');
@@ -6893,6 +8658,7 @@ function _collectFlowPowerDpIsWFromUI() {
         btnSD.className = 'nw-config-mini-btn';
         btnSD.textContent = '↓';
         btnSD.title = 'Station in der Reihenfolge nach unten';
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnSD. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         btnSD.addEventListener('click', () => moveStationGroup(sk, +1));
 
         actions.appendChild(btnSU);
@@ -6904,6 +8670,7 @@ function _collectFlowPowerDpIsWFromUI() {
       btnAddPort.className = 'nw-config-btn nw-config-btn--ghost';
       btnAddPort.textContent = '+ Port';
       btnAddPort.title = 'Neuen Ladepunkt/Port hinzufügen';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btnAddPort. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       btnAddPort.addEventListener('click', () => addPortToStation(sk));
       actions.appendChild(btnAddPort);
 
@@ -6930,6 +8697,7 @@ function _collectFlowPowerDpIsWFromUI() {
         stationKeyInput.type = 'text';
         stationKeyInput.value = sk;
         stationKeyInput.placeholder = 'stationKey';
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an stationKeyInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         stationKeyInput.addEventListener('change', () => {
           const nk = normKey(stationKeyInput.value);
           renameStationKey(sk, nk);
@@ -6941,6 +8709,7 @@ function _collectFlowPowerDpIsWFromUI() {
         nameInput.type = 'text';
         nameInput.placeholder = 'Name (optional)';
         nameInput.value = valueOrEmpty(sc.stationGroups[gi] && sc.stationGroups[gi].name);
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an nameInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         nameInput.addEventListener('input', () => {
           sc.stationGroups[gi] = sc.stationGroups[gi] || {};
           sc.stationGroups[gi].name = String(nameInput.value || '').trim();
@@ -6955,6 +8724,7 @@ function _collectFlowPowerDpIsWFromUI() {
         maxPowerKw.step = '0.1';
         maxPowerKw.placeholder = '0 = kein Cap';
         maxPowerKw.value = numOrEmpty(sc.stationGroups[gi] && sc.stationGroups[gi].maxPowerKw);
+        // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an maxPowerKw. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
         maxPowerKw.addEventListener('change', () => {
           const n = Number(maxPowerKw.value);
           sc.stationGroups[gi] = sc.stationGroups[gi] || {};
@@ -6986,7 +8756,12 @@ function _collectFlowPowerDpIsWFromUI() {
       els.evcsList.appendChild(card);
     }
   }
-
+  /**
+   * Code-Teil: buildStationGroupsUI
+   * Zweck: Erzeugt UI-/Konfigurations- oder Datenstruktur.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function buildStationGroupsUI() {
     if (!els.stationGroups) return;
     const sc = _ensureSettingsConfig();
@@ -7030,6 +8805,7 @@ function _collectFlowPowerDpIsWFromUI() {
       stationKey.type = 'text';
       stationKey.placeholder = 'stationKey';
       stationKey.value = valueOrEmpty(g && g.stationKey);
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an stationKey. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       stationKey.addEventListener('input', () => {
         sc.stationGroups[idx] = sc.stationGroups[idx] || {};
         sc.stationGroups[idx].stationKey = String(stationKey.value || '').trim();
@@ -7041,6 +8817,7 @@ function _collectFlowPowerDpIsWFromUI() {
       name.type = 'text';
       name.placeholder = 'Name (optional)';
       name.value = valueOrEmpty(g && g.name);
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an name. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       name.addEventListener('input', () => {
         sc.stationGroups[idx] = sc.stationGroups[idx] || {};
         sc.stationGroups[idx].name = String(name.value || '').trim();
@@ -7053,6 +8830,7 @@ function _collectFlowPowerDpIsWFromUI() {
       maxPowerKw.step = '0.1';
       maxPowerKw.placeholder = 'maxPowerKw';
       maxPowerKw.value = numOrEmpty(g && g.maxPowerKw);
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an maxPowerKw. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       maxPowerKw.addEventListener('change', () => {
         const n = Number(maxPowerKw.value);
         sc.stationGroups[idx] = sc.stationGroups[idx] || {};
@@ -7063,6 +8841,7 @@ function _collectFlowPowerDpIsWFromUI() {
       del.type = 'button';
       del.className = 'nw-config-btn nw-config-btn--ghost';
       del.textContent = 'Entfernen';
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an del. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       del.addEventListener('click', () => {
         sc.stationGroups.splice(idx, 1);
         buildStationGroupsUI();
@@ -7079,7 +8858,12 @@ function _collectFlowPowerDpIsWFromUI() {
       els.stationGroups.appendChild(row);
     });
   }
-
+  /**
+   * Code-Teil: collectSettingsConfigFromUI
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function collectSettingsConfigFromUI() {
     const out = deepMerge({}, (currentConfig && currentConfig.settingsConfig) ? currentConfig.settingsConfig : {});
     const count = _clampInt(els.evcsCount ? els.evcsCount.value : out.evcsCount, 0, 50, 0);
@@ -7097,8 +8881,12 @@ function _collectFlowPowerDpIsWFromUI() {
     out.stationGroups = Array.isArray(_ensureSettingsConfig().stationGroups) ? _ensureSettingsConfig().stationGroups : [];
     return out;
   }
-
-  
+  /**
+   * Code-Teil: applyConfigToUI
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function applyConfigToUI(cfg) {
     currentConfig = cfg || {};
 
@@ -7174,6 +8962,7 @@ function _collectFlowPowerDpIsWFromUI() {
           flowGridPointInput.value = valueOrEmpty(dps.gridPointPower);
           if (!flowGridPointInput.dataset.syncGeneral) {
             flowGridPointInput.dataset.syncGeneral = '1';
+            // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an flowGridPointInput. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
             flowGridPointInput.addEventListener('change', () => {
               const v = String(flowGridPointInput.value || '').trim();
               if (els.gridPointPowerId && els.gridPointPowerId.value !== v) {
@@ -7316,13 +9105,23 @@ function _collectFlowPowerDpIsWFromUI() {
   // - on demand scan of ioBroker OCPP adapter states
   // - proposes mapping for EVCS list (power/status/setpoints/online)
   // -------------------------------------------------------------------------
-
+  /**
+   * Code-Teil: fetchOcppDiscovery
+   * Zweck: Holt Daten über HTTP/API oder aus externen Quellen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function fetchOcppDiscovery() {
     const data = await fetchJson('/api/ocpp/discover');
     const connectors = Array.isArray(data.connectors) ? data.connectors : [];
     return { meta: data, connectors };
   }
-
+  /**
+   * Code-Teil: _applyOcppConnectorToRow
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _applyOcppConnectorToRow(row, c, opts) {
     const r = (row && typeof row === 'object') ? row : {};
     const ids = (c && c.ids && typeof c.ids === 'object') ? c.ids : {};
@@ -7331,6 +9130,18 @@ function _collectFlowPowerDpIsWFromUI() {
     const overwrite = !!(opts && opts.overwrite);
     const onlyEmpty = !!(opts && opts.onlyEmpty);
 
+    /**
+     * Code-Teil: Arrow-Funktion `setField`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: setField
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const setField = (k, v) => {
       const val = (v === null || v === undefined) ? '' : String(v);
       const cur = (out[k] === null || out[k] === undefined) ? '' : String(out[k]);
@@ -7372,7 +9183,12 @@ function _collectFlowPowerDpIsWFromUI() {
 
     return out;
   }
-
+  /**
+   * Code-Teil: ocppAutoDetect
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function ocppAutoDetect() {
     try {
       setStatus('OCPP: Suche nach Ladepunkten…');
@@ -7420,7 +9236,12 @@ function _collectFlowPowerDpIsWFromUI() {
       setStatus('OCPP: Erkennung fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error');
     }
   }
-
+  /**
+   * Code-Teil: ocppMapExisting
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function ocppMapExisting() {
     try {
       setStatus('OCPP: Suche Datenpunkte…');
@@ -7461,21 +9282,49 @@ function _collectFlowPowerDpIsWFromUI() {
   // ------------------------------
   // Schnell‑Inbetriebnahme: Geräteadapter (nexowatt-devices)
   // ------------------------------
-
+  /**
+   * Code-Teil: _nwNormCat
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _nwNormCat(v) {
     return String(v || '').trim().toUpperCase();
   }
+  /**
+   * Code-Teil: _isNwEvcsCategory
+   * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _isNwEvcsCategory(cat) {
     const c = _nwNormCat(cat);
     return (c === 'EVCS' || c === 'CHARGER' || c === 'DC_CHARGER' || c === 'EVSE');
   }
+  /**
+   * Code-Teil: _isNwPvInverterCategory
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _isNwPvInverterCategory(cat) {
     return _nwNormCat(cat) === 'PV_INVERTER';
   }
+  /**
+   * Code-Teil: _isNwHeatCategory
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _isNwHeatCategory(cat) {
     return _nwNormCat(cat) === 'HEAT';
   }
-
+  /**
+   * Code-Teil: _nwGetAlias
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _nwGetAlias(dev, key) {
     const a = dev && dev.aliases && typeof dev.aliases === 'object' ? dev.aliases : null;
     const dp = dev && dev.dp && typeof dev.dp === 'object' ? dev.dp : null;
@@ -7484,17 +9333,39 @@ function _collectFlowPowerDpIsWFromUI() {
     const v2 = (a && a[key]) ? String(a[key]).trim() : '';
     return v2;
   }
-
+  /**
+   * Code-Teil: _nwGetDpFallback
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _nwGetDpFallback(dev, suffix) {
     const base = String((dev && dev.baseId) || '').trim();
     if (!base || !suffix) return '';
     return base + '.' + suffix;
   }
-
+  /**
+   * Code-Teil: _applyNwDeviceToEvcsRow
+   * Zweck: Verarbeitet Wallbox-/Ladepunktdaten und Feature-Sichtbarkeit.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _applyNwDeviceToEvcsRow(row, dev, opts) {
     const onlyEmpty = !!(opts && opts.onlyEmpty);
     const out = (row && typeof row === 'object') ? { ...row } : {};
 
+    /**
+     * Code-Teil: Arrow-Funktion `setIf`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: setIf
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const setIf = (k, v) => {
       const val = String(v || '').trim();
       if (!val) return;
@@ -7528,7 +9399,12 @@ function _collectFlowPowerDpIsWFromUI() {
 
     return out;
   }
-
+  /**
+   * Code-Teil: _classifyHeatDevice
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _classifyHeatDevice(dev) {
     const name = String((dev && dev.name) || '').toLowerCase();
     const tpl = String((dev && dev.templateId) || '').toLowerCase();
@@ -7542,7 +9418,12 @@ function _collectFlowPowerDpIsWFromUI() {
     // default: generic heat consumer
     return { type: 'custom', icon: '♨️', thermalType: 'power' };
   }
-
+  /**
+   * Code-Teil: _findFreeConsumerSlot
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _findFreeConsumerSlot(range) {
     const dps = (currentConfig && currentConfig.datapoints && typeof currentConfig.datapoints === 'object') ? currentConfig.datapoints : {};
     const from = (range && range.from) ? range.from : 1;
@@ -7553,17 +9434,32 @@ function _collectFlowPowerDpIsWFromUI() {
     }
     return 0;
   }
-
+  /**
+   * Code-Teil: _isNwMeterCategory
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _isNwMeterCategory(cat) {
     const c = _nwNormCat(cat);
     return (c === 'METER' || c === 'GRID_METER' || c === 'SMART_METER');
   }
-
+  /**
+   * Code-Teil: _isNwStorageCategory
+   * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _isNwStorageCategory(cat) {
     const c = _nwNormCat(cat);
     return (c === 'ESS' || c === 'BATTERY' || c === 'BATTERY_INVERTER');
   }
-
+  /**
+   * Code-Teil: _nwDevHaystack
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _nwDevHaystack(dev) {
     return [
       String((dev && dev.name) || ''),
@@ -7573,11 +9469,21 @@ function _collectFlowPowerDpIsWFromUI() {
       String((dev && dev.manufacturer) || ''),
     ].join(' ').toLowerCase();
   }
-
+  /**
+   * Code-Teil: _nwHasAlias
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _nwHasAlias(dev, key) {
     return !!String(_nwGetAlias(dev, key) || '').trim();
   }
-
+  /**
+   * Code-Teil: _nwScoreGridMeter
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _nwScoreGridMeter(dev) {
     const cat = _nwNormCat(dev && dev.category);
     const hay = _nwDevHaystack(dev);
@@ -7592,7 +9498,12 @@ function _collectFlowPowerDpIsWFromUI() {
     if (_isNwPvInverterCategory(cat) || _isNwStorageCategory(cat)) score -= 10;
     return score;
   }
-
+  /**
+   * Code-Teil: _nwScorePvSource
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _nwScorePvSource(dev) {
     const cat = _nwNormCat(dev && dev.category);
     const hay = _nwDevHaystack(dev);
@@ -7604,7 +9515,12 @@ function _collectFlowPowerDpIsWFromUI() {
     if (/gridmeter|grid meter|grid\b|netz|nvp|verbrauch|consumption|loadmeter|lastmeter|ess|battery|akku|speicher/.test(hay)) score -= 7;
     return score;
   }
-
+  /**
+   * Code-Teil: _nwScoreStorage
+   * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _nwScoreStorage(dev) {
     const cat = _nwNormCat(dev && dev.category);
     const hay = _nwDevHaystack(dev);
@@ -7618,7 +9534,12 @@ function _collectFlowPowerDpIsWFromUI() {
     if (/gridmeter|grid meter|grid\b|netz|pvmeter|pv meter|pv\b|solar|loadmeter|lastmeter|verbrauch|consumption/.test(hay)) score -= 6;
     return score;
   }
-
+  /**
+   * Code-Teil: _nwPickBestDevice
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _nwPickBestDevice(devices, scorer, opts) {
     const minScore = Number.isFinite(Number(opts && opts.minScore)) ? Number(opts.minScore) : 1;
     const minGap = Number.isFinite(Number(opts && opts.minGap)) ? Number(opts.minGap) : 0;
@@ -7633,7 +9554,12 @@ function _collectFlowPowerDpIsWFromUI() {
     if (scored.length > 1 && minGap > 0 && (scored[0].score - scored[1].score) < minGap) return null;
     return scored[0].dev || null;
   }
-
+  /**
+   * Code-Teil: _nwApplyFlowDpIfEmpty
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _nwApplyFlowDpIfEmpty(key, value, opts) {
     const val = String(value || '').trim();
     if (!val) return false;
@@ -7658,7 +9584,12 @@ function _collectFlowPowerDpIsWFromUI() {
     }
     return true;
   }
-
+  /**
+   * Code-Teil: _nwApplyGeneralDpIfEmpty
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _nwApplyGeneralDpIfEmpty(key, value) {
     const val = String(value || '').trim();
     if (!val) return false;
@@ -7695,7 +9626,12 @@ function _collectFlowPowerDpIsWFromUI() {
 
     return false;
   }
-
+  /**
+   * Code-Teil: _nwAutoMapEnergyFlowFromDevices
+   * Zweck: Verarbeitet Energiefluss-/Budgetwerte und beeinflusst Live-Anzeige sowie History.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _nwAutoMapEnergyFlowFromDevices(devices) {
     const out = {
       changed: false,
@@ -7803,7 +9739,12 @@ function _collectFlowPowerDpIsWFromUI() {
 
     return out;
   }
-
+  /**
+   * Code-Teil: nwDevicesQuickSetup
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function nwDevicesQuickSetup() {
     try {
       setStatus('Schnell‑Inbetriebnahme: Suche Geräte…');
@@ -7816,7 +9757,6 @@ function _collectFlowPowerDpIsWFromUI() {
         setStatus('Schnell‑Inbetriebnahme: Keine Geräte unter nexowatt-devices.* gefunden.', 'error');
         return;
       }
-
       const evcsDevs = devices.filter(d => _isNwEvcsCategory(d && d.category));
       const pvDevs = devices.filter(d => _isNwPvInverterCategory(d && d.category));
       const heatDevs = devices.filter(d => _isNwHeatCategory(d && d.category));
@@ -7857,6 +9797,18 @@ function _collectFlowPowerDpIsWFromUI() {
         gc.pvCurtailInvertersZero = Array.isArray(gc.pvCurtailInvertersZero) ? gc.pvCurtailInvertersZero : [];
         const list = gc.pvCurtailInvertersZero;
 
+        /**
+         * Code-Teil: Arrow-Funktion `addOrUpdate`
+         * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+         * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: addOrUpdate
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const addOrUpdate = (dev) => {
           const name = String((dev && dev.name) || '').trim() || String((dev && dev.devId) || '').trim() || 'WR';
           const feedInLimitWId = _nwGetAlias(dev, 'ctrl.feedInLimitW') || '';
@@ -7865,7 +9817,6 @@ function _collectFlowPowerDpIsWFromUI() {
           const pvPowerReadId = _nwGetAlias(dev, 'r.pvPower') || _nwGetAlias(dev, 'r.power') || _nwGetAlias(dev, 'r.activePower') || (dev && dev.dp && dev.dp.powerW ? String(dev.dp.powerW).trim() : '') || '';
 
           if (!feedInLimitWId && !pvLimitWId && !pvLimitPctId) return;
-
           const match = list.find(it => {
             if (!it || typeof it !== 'object') return false;
             if (pvLimitPctId && String(it.pvLimitPctId || '').trim() === pvLimitPctId) return true;
@@ -7922,6 +9873,18 @@ function _collectFlowPowerDpIsWFromUI() {
         icfg.para14aConsumers = Array.isArray(icfg.para14aConsumers) ? icfg.para14aConsumers : [];
 
         // helper for para14a
+        /**
+         * Code-Teil: Arrow-Funktion `findPara14aMatch`
+         * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+         * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: findPara14aMatch
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
         const findPara14aMatch = (dev, setId, enableId) => {
           const name = String((dev && dev.name) || '').trim();
           const key = String((dev && dev.devId) || '').trim();
@@ -8060,10 +10023,12 @@ function _collectFlowPowerDpIsWFromUI() {
       setStatus('Schnell‑Inbetriebnahme fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error');
     }
   }
-
-
-
-
+  /**
+   * Code-Teil: loadConfig
+   * Zweck: Lädt Daten aus API, States oder Konfiguration.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function loadConfig() {
     setStatus('Lade Konfiguration…');
     const data = await fetchJson('/api/installer/config');
@@ -8071,8 +10036,12 @@ function _collectFlowPowerDpIsWFromUI() {
     scheduleValidation(300);
     setStatus('Konfiguration geladen.', 'ok');
   }
-
-  
+  /**
+   * Code-Teil: collectPatchFromUI
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function collectPatchFromUI() {
     const patch = {};
 
@@ -8228,7 +10197,12 @@ function _collectFlowPowerDpIsWFromUI() {
 
     return patch;
   }
-
+  /**
+   * Code-Teil: saveConfig
+   * Zweck: Speichert Benutzereingaben oder Konfiguration.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function saveConfig() {
     setStatus('Speichere…');
     const patch = collectPatchFromUI();
@@ -8242,7 +10216,12 @@ function _collectFlowPowerDpIsWFromUI() {
 
   let _activeTab = 'apps';
   let _statusTimer = null;
-
+  /**
+   * Code-Teil: _showTab
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _showTab(tabId) {
     _activeTab = tabId || 'apps';
     const btns = els.tabs ? Array.from(els.tabs.querySelectorAll('.nw-tab')) : [];
@@ -8263,11 +10242,17 @@ function _collectFlowPowerDpIsWFromUI() {
       refreshChargingDiag().catch(() => {});
     }
   }
-
+  /**
+   * Code-Teil: initTabs
+   * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function initTabs() {
     if (!els.tabs) return;
     const btns = Array.from(els.tabs.querySelectorAll('.nw-tab'));
     btns.forEach(btn => {
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an btn. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       btn.addEventListener('click', () => {
         const tabId = btn.getAttribute('data-tab') || 'apps';
         _showTab(tabId);
@@ -8277,6 +10262,12 @@ function _collectFlowPowerDpIsWFromUI() {
   }
 
   // Unter-Reiter im Energiefluss-Tab (Basis/Verbraucher/Erzeuger/Optionen)
+  /**
+   * Code-Teil: initFlowSubtabs
+   * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function initFlowSubtabs() {
     const wrap = document.getElementById('nw-flow-subtabs');
     if (!wrap) return;
@@ -8284,6 +10275,18 @@ function _collectFlowPowerDpIsWFromUI() {
     const btns = Array.from(wrap.querySelectorAll('.nw-tab'));
     const panels = Array.from(document.querySelectorAll('#nw-tabpanel-flow [data-flowpanel]'));
 
+    /**
+     * Code-Teil: Arrow-Funktion `show`
+     * Zweck: steuert sichtbare UI-Zustände, Dialoge, Menüs oder Panels.
+     * Zusammenhang: Hängt an DOM-IDs, /api/state, /config und den vom Backend veröffentlichten States; Änderungen müssen mit main.js/ems/* abgestimmt bleiben.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: show
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const show = (id) => {
       const tid = String(id || 'base');
       btns.forEach(b => {
@@ -8296,6 +10299,7 @@ function _collectFlowPowerDpIsWFromUI() {
     };
 
     btns.forEach(b => {
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       b.addEventListener('click', () => {
         show(b.getAttribute('data-flowtab') || 'base');
       });
@@ -8303,7 +10307,12 @@ function _collectFlowPowerDpIsWFromUI() {
 
     show('base');
   }
-
+  /**
+   * Code-Teil: _fmtTs
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _fmtTs(ts) {
     try {
       const d = new Date(ts);
@@ -8311,11 +10320,21 @@ function _collectFlowPowerDpIsWFromUI() {
     } catch (_e) {}
     return '';
   }
-
+  /**
+   * Code-Teil: renderEmsStatus
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function renderEmsStatus(payload) {
     if (!els.emsStatus) return;
     els.emsStatus.innerHTML = '';
-
+    /**
+     * Code-Teil: mkItem
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkItem = (titleText, subtitleText, rightHtml, statusKind) => {
       const row = document.createElement('div');
       row.className = 'nw-config-row';
@@ -8380,24 +10399,43 @@ function _collectFlowPowerDpIsWFromUI() {
       els.emsStatus.appendChild(mkItem(r.key || 'module', '', right, ok ? 'ok' : 'error'));
     }
   }
-
-
+  /**
+   * Code-Teil: _asBool
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _asBool(v) {
     if (typeof v === 'boolean') return v;
     if (typeof v === 'number') return v !== 0;
     if (typeof v === 'string') return (v.trim().toLowerCase() === 'true' || v.trim() === '1');
     return false;
   }
-
+  /**
+   * Code-Teil: _asNum
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _asNum(v, fallback) {
     const n = Number(v);
     return Number.isFinite(n) ? n : (fallback !== undefined ? fallback : 0);
   }
-
+  /**
+   * Code-Teil: renderChargingDiag
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function renderChargingDiag(payload) {
     if (!els.chargingDiag) return;
     els.chargingDiag.innerHTML = '';
-
+    /**
+     * Code-Teil: mkItem
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkItem = (titleText, subtitleText, rightHtml, statusKind) => {
       const row = document.createElement('div');
       row.className = 'nw-config-row';
@@ -8483,27 +10521,46 @@ function _collectFlowPowerDpIsWFromUI() {
       els.chargingDiag.appendChild(mkItem(title, subtitle, right, kind));
     }
   }
-
-
+  /**
+   * Code-Teil: _fmtW
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _fmtW(v) {
     const n = Number(v);
     if (!Number.isFinite(n)) return '—';
     if (Math.abs(n) >= 1000) return (n / 1000).toFixed(2) + ' kW';
     return Math.round(n) + ' W';
   }
-
+  /**
+   * Code-Teil: _fmtKwh
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _fmtKwh(v) {
     const n = Number(v);
     if (!Number.isFinite(n)) return '—';
     return n.toFixed(n >= 10 ? 1 : 2) + ' kWh';
   }
-
+  /**
+   * Code-Teil: _fmtEurKwh
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _fmtEurKwh(v) {
     const n = Number(v);
     if (!Number.isFinite(n)) return '—';
     return n.toFixed(4) + ' €/kWh';
   }
-
+  /**
+   * Code-Teil: _fmtIsoShort
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _fmtIsoShort(v) {
     const s = String(v || '').trim();
     if (!s) return '—';
@@ -8511,17 +10568,32 @@ function _collectFlowPowerDpIsWFromUI() {
     if (!Number.isFinite(d.getTime())) return s;
     return d.toLocaleString();
   }
-
+  /**
+   * Code-Teil: _fmtPct
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _fmtPct(v) {
     const n = Number(v);
     if (!Number.isFinite(n)) return '—';
     return Math.round(n) + ' %';
   }
-
+  /**
+   * Code-Teil: renderStationsDiag
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function renderStationsDiag(payload) {
     if (!els.stationsDiag) return;
     els.stationsDiag.innerHTML = '';
-
+    /**
+     * Code-Teil: mkItem
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkItem = (titleText, subtitleText, rightHtml, statusKind) => {
       const row = document.createElement('div');
       row.className = 'nw-config-row';
@@ -8583,12 +10655,21 @@ function _collectFlowPowerDpIsWFromUI() {
       els.stationsDiag.appendChild(mkItem(title, subtitle, right, kind));
     }
   }
-
-
+  /**
+   * Code-Teil: _fmtBool
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function _fmtBool(v, tTrue = 'JA', tFalse = 'NEIN') {
     return v ? tTrue : tFalse;
   }
-
+  /**
+   * Code-Teil: renderChargingBudget
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function renderChargingBudget(payload) {
     if (!els.chargingBudget) return;
     els.chargingBudget.innerHTML = '';
@@ -8612,6 +10693,12 @@ function _collectFlowPowerDpIsWFromUI() {
       return;
     }
 
+    /**
+     * Code-Teil: mkCard
+     * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+     * Zusammenhang: Gehört zu Installer/App-Center (Admin-Konfiguration, EMS-Apps, DP-Zuordnung und Installer-Funktionen) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen müssen mit main.js/native Config und EMS-Modulen synchron bleiben, sonst speichern Installerwerte falsch. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
     const mkCard = (titleText, lines, statusKind = '') => {
       const card = document.createElement('div');
       card.className = 'nw-config-card';
@@ -8671,8 +10758,19 @@ function _collectFlowPowerDpIsWFromUI() {
       card.appendChild(b);
       return card;
     };
-
+    /**
+     * Code-Teil: n
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const n = (x) => (x === null || x === undefined) ? null : Number(x);
+    /**
+     * Code-Teil: b
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const b = (x) => !!x;
 
     const budgetW = n(ctrl.budgetW);
@@ -8885,7 +10983,12 @@ function _collectFlowPowerDpIsWFromUI() {
       ], ''));
     }
   }
-
+  /**
+   * Code-Teil: refreshChargingDiag
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function refreshChargingDiag() {
     if (_activeTab !== 'status') return;
     const data = await fetchJson('/api/ems/charging/diagnostics');
@@ -8893,15 +10996,23 @@ function _collectFlowPowerDpIsWFromUI() {
     renderChargingDiag(data || {});
     renderStationsDiag(data || {});
   }
-
-
-
+  /**
+   * Code-Teil: refreshEmsStatus
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function refreshEmsStatus() {
     if (_activeTab !== 'status') return;
     const data = await fetchJson('/api/ems/status');
     renderEmsStatus(data || {});
   }
-
+  /**
+   * Code-Teil: startStatusPolling
+   * Zweck: Startet Prozess, Timer, Engine oder Verbindung.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function startStatusPolling() {
     if (_statusTimer) {
       try { clearInterval(_statusTimer); } catch (_e) {}
@@ -8915,7 +11026,12 @@ function _collectFlowPowerDpIsWFromUI() {
   }
 
   // --- DP Modal ---
-
+  /**
+   * Code-Teil: openDpModal
+   * Zweck: Öffnet Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function openDpModal(targetInputId) {
     dpTargetInputId = targetInputId;
     treePrefix = '';
@@ -8929,7 +11045,12 @@ function _collectFlowPowerDpIsWFromUI() {
     }
     refreshTree().catch(() => {});
   }
-
+  /**
+   * Code-Teil: closeDpModal
+   * Zweck: Schließt Dialoge/Seiten/Popovers.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function closeDpModal() {
     if (els.dpModal) {
       els.dpModal.setAttribute('aria-hidden', 'true');
@@ -8937,7 +11058,12 @@ function _collectFlowPowerDpIsWFromUI() {
     }
     dpTargetInputId = null;
   }
-
+  /**
+   * Code-Teil: setDpTargetValue
+   * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function setDpTargetValue(id) {
     if (!dpTargetInputId) return;
     const inp = document.getElementById(dpTargetInputId);
@@ -8946,13 +11072,23 @@ function _collectFlowPowerDpIsWFromUI() {
     inp.dispatchEvent(new Event('change'));
     closeDpModal();
   }
-
+  /**
+   * Code-Teil: renderBreadcrumb
+   * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function renderBreadcrumb() {
     if (!els.dpBreadcrumb) return;
     els.dpBreadcrumb.innerHTML = '';
 
     const parts = (treePrefix || '').split('.').filter(Boolean);
-
+    /**
+     * Code-Teil: mkCrumb
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const mkCrumb = (label, prefix, clickable) => {
       const b = document.createElement('button');
       b.type = 'button';
@@ -8962,13 +11098,19 @@ function _collectFlowPowerDpIsWFromUI() {
         b.disabled = true;
         return b;
       }
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an b. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       b.addEventListener('click', () => {
         treePrefix = prefix;
         refreshTree().catch(() => {});
       });
       return b;
     };
-
+    /**
+     * Code-Teil: sep
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const sep = () => {
       const s = document.createElement('span');
       s.className = 'nw-dp-sep';
@@ -8988,7 +11130,12 @@ function _collectFlowPowerDpIsWFromUI() {
       els.dpBreadcrumb.appendChild(mkCrumb(p, acc, i < parts.length - 1));
     }
   }
-
+  /**
+   * Code-Teil: mkDpResultRow
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function mkDpResultRow(primary, meta, onClick) {
     const row = document.createElement('div');
     row.className = 'nw-dp-result';
@@ -9001,6 +11148,7 @@ function _collectFlowPowerDpIsWFromUI() {
     row.appendChild(id);
     row.appendChild(m);
     if (typeof onClick === 'function') {
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an row. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       row.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -9009,7 +11157,12 @@ function _collectFlowPowerDpIsWFromUI() {
     }
     return row;
   }
-
+  /**
+   * Code-Teil: refreshTree
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function refreshTree() {
     const data = await fetchJson('/api/object/tree?prefix=' + encodeURIComponent(treePrefix || ''));
     const children = Array.isArray(data.children) ? data.children : [];
@@ -9069,7 +11222,12 @@ function _collectFlowPowerDpIsWFromUI() {
       }
     }
   }
-
+  /**
+   * Code-Teil: doSearch
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function doSearch() {
     const q = String(els.dpSearch.value || '').trim();
     if (!q) {
@@ -9098,7 +11256,12 @@ function _collectFlowPowerDpIsWFromUI() {
       els.dpResults.appendChild(mkDpResultRow(String(r.id || ''), meta, () => setDpTargetValue(String(r.id || ''))));
     }
   }
-
+  /**
+   * Code-Teil: upOne
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   function upOne() {
     if (!treePrefix) {
       treePrefix = '';
@@ -9119,12 +11282,14 @@ function _collectFlowPowerDpIsWFromUI() {
   try { startStatusPolling(); } catch (_e) {}
 
   if (els.gotoEvuPvTab) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.gotoEvuPvTab. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.gotoEvuPvTab.addEventListener('click', () => {
       try { _showTab('evupv'); } catch (_e) {}
     });
   }
 
   if (els.storageControlMode) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.storageControlMode. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.storageControlMode.addEventListener('change', () => {
       // Only rebuild required fields; keep currentConfig.storage.controlMode updated
       currentConfig = currentConfig || {};
@@ -9135,6 +11300,12 @@ function _collectFlowPowerDpIsWFromUI() {
   }
 
   if (els.storageCapacityKWh) {
+    /**
+     * Code-Teil: _update
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const _update = () => {
       currentConfig = currentConfig || {};
       currentConfig.storage = currentConfig.storage || {};
@@ -9145,28 +11316,40 @@ function _collectFlowPowerDpIsWFromUI() {
         delete currentConfig.storage.capacityKWh;
       }
     };
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.storageCapacityKWh. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.storageCapacityKWh.addEventListener('change', _update);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an els.storageCapacityKWh. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.storageCapacityKWh.addEventListener('input', _update);
   }
 
   if (els.storageFeneconAcMode) {
+    /**
+     * Code-Teil: _update
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
     const _update = () => {
       currentConfig = currentConfig || {};
       currentConfig.storage = currentConfig.storage || {};
       currentConfig.storage.feneconGridControlEnabled = !!els.storageFeneconAcMode.checked;
     };
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.storageFeneconAcMode. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.storageFeneconAcMode.addEventListener('change', _update);
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'input' an els.storageFeneconAcMode. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.storageFeneconAcMode.addEventListener('input', _update);
   }
 
 
   // Peak-Shaving / HLZF UI wiring
   if (els.psStrategyMode) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.psStrategyMode. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.psStrategyMode.addEventListener('change', () => {
       try { _psUpdateAtypicalFieldState(); } catch (_e) {}
     });
   }
   if (els.psAtypicalVoltageLevel) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.psAtypicalVoltageLevel. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.psAtypicalVoltageLevel.addEventListener('change', () => {
       if (els.psAtypicalThresholdPercent && !String(els.psAtypicalThresholdPercent.value || '').trim()) {
         els.psAtypicalThresholdPercent.value = String(_psThresholdForVoltage(els.psAtypicalVoltageLevel.value));
@@ -9174,6 +11357,7 @@ function _collectFlowPowerDpIsWFromUI() {
     });
   }
   if (els.psAtypicalApplyVoltageThreshold) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.psAtypicalApplyVoltageThreshold. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.psAtypicalApplyVoltageThreshold.addEventListener('click', () => {
       if (els.psAtypicalThresholdPercent) {
         els.psAtypicalThresholdPercent.value = String(_psThresholdForVoltage(els.psAtypicalVoltageLevel ? els.psAtypicalVoltageLevel.value : 'MS'));
@@ -9200,22 +11384,27 @@ function _collectFlowPowerDpIsWFromUI() {
   });
 
   if (els.psAtypicalReviewRefresh) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.psAtypicalReviewRefresh. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.psAtypicalReviewRefresh.addEventListener('click', () => { _psRefreshAtypicalReviewExportStatus().catch(() => {}); });
   }
   ['psAtypicalReviewExportFrom', 'psAtypicalReviewExportTo'].forEach((key) => {
     if (els[key]) {
+      // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els[key]. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
       els[key].addEventListener('change', () => _psRefreshAtypicalReviewExportStatus());
     }
   });
 
   if (els.psAtypicalReviewExportCsv) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.psAtypicalReviewExportCsv. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.psAtypicalReviewExportCsv.addEventListener('click', () => _psOpenAtypicalReviewExport('csv'));
   }
   if (els.psAtypicalReviewExportPdf) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.psAtypicalReviewExportPdf. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.psAtypicalReviewExportPdf.addEventListener('click', () => _psOpenAtypicalReviewExport('pdf'));
   }
 
   if (els.psAtypicalAddWindow) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.psAtypicalAddWindow. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.psAtypicalAddWindow.addEventListener('click', () => {
       const ps = _psGetPeakCfg();
       ps.atypical.highLoadWindows = _psCollectWindowRows();
@@ -9224,6 +11413,7 @@ function _collectFlowPowerDpIsWFromUI() {
       _psUpdateAtypicalFieldState();
     });
   }
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('click', (e) => {
     const t = e && e.target ? e.target : null;
     const btn = t && t.closest ? t.closest('[data-ps-window-delete]') : null;
@@ -9239,6 +11429,7 @@ function _collectFlowPowerDpIsWFromUI() {
   }, true);
 
   // Browse buttons (event delegation) – works for dynamically created fields too
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('click', (e) => {
     const t = e && e.target ? e.target : null;
     const btn = t && t.closest ? t.closest('[data-browse]') : null;
@@ -9252,6 +11443,7 @@ function _collectFlowPowerDpIsWFromUI() {
   if (els.gridPointPowerId) {
     els.gridPointPowerId.dataset.dpInput = '1';
     // Keep currentConfig.datapoints.gridPointPower in sync (so save works even without reload)
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.gridPointPowerId. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.gridPointPowerId.addEventListener('change', () => {
       currentConfig = currentConfig || {};
       currentConfig.datapoints = currentConfig.datapoints || {};
@@ -9273,6 +11465,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
   if (els.gridPointConnectedId) {
     els.gridPointConnectedId.dataset.dpInput = '1';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.gridPointConnectedId. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.gridPointConnectedId.addEventListener('change', () => {
       currentConfig = currentConfig || {};
       currentConfig.datapoints = currentConfig.datapoints || {};
@@ -9291,6 +11484,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
   if (els.gridPointWatchdogId) {
     els.gridPointWatchdogId.dataset.dpInput = '1';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.gridPointWatchdogId. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.gridPointWatchdogId.addEventListener('change', () => {
       currentConfig = currentConfig || {};
       currentConfig.datapoints = currentConfig.datapoints || {};
@@ -9310,6 +11504,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
   // §14a: standalone inputs
   if (els.para14aMode) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.para14aMode. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.para14aMode.addEventListener('change', () => {
       const ic = _ensurePara14aCfg();
       const v = String(els.para14aMode.value || 'ems').trim().toLowerCase();
@@ -9318,6 +11513,7 @@ function _collectFlowPowerDpIsWFromUI() {
   }
 
   if (els.para14aMinPerDeviceW) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.para14aMinPerDeviceW. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.para14aMinPerDeviceW.addEventListener('change', () => {
       const ic = _ensurePara14aCfg();
       const n = Number(els.para14aMinPerDeviceW.value);
@@ -9327,6 +11523,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
   if (els.para14aActiveId) {
     els.para14aActiveId.dataset.dpInput = '1';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.para14aActiveId. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.para14aActiveId.addEventListener('change', () => {
       const ic = _ensurePara14aCfg();
       ic.para14aActiveId = String(els.para14aActiveId.value || '').trim();
@@ -9336,6 +11533,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
   if (els.para14aEmsSetpointWId) {
     els.para14aEmsSetpointWId.dataset.dpInput = '1';
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.para14aEmsSetpointWId. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.para14aEmsSetpointWId.addEventListener('change', () => {
       const ic = _ensurePara14aCfg();
       ic.para14aEmsSetpointWId = String(els.para14aEmsSetpointWId.value || '').trim();
@@ -9344,6 +11542,7 @@ function _collectFlowPowerDpIsWFromUI() {
   }
 
   if (els.addPara14aConsumer) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.addPara14aConsumer. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.addPara14aConsumer.addEventListener('click', () => {
       const ic = _ensurePara14aCfg();
       ic.para14aConsumers = Array.isArray(ic.para14aConsumers) ? ic.para14aConsumers : [];
@@ -9365,6 +11564,7 @@ function _collectFlowPowerDpIsWFromUI() {
 
   // EVCS top-level inputs
   if (els.evcsCount) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.evcsCount. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.evcsCount.addEventListener('change', () => {
       const sc = _ensureSettingsConfig();
       sc.evcsCount = _clampInt(els.evcsCount.value, 0, 50, 0);
@@ -9372,6 +11572,7 @@ function _collectFlowPowerDpIsWFromUI() {
     });
   }
   if (els.evcsMaxPowerKw) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.evcsMaxPowerKw. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.evcsMaxPowerKw.addEventListener('change', () => {
       const sc = _ensureSettingsConfig();
       const kw = Number(els.evcsMaxPowerKw.value);
@@ -9380,6 +11581,7 @@ function _collectFlowPowerDpIsWFromUI() {
   }
 
   if (els.cmGoalStrategy) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.cmGoalStrategy. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.cmGoalStrategy.addEventListener('change', () => {
       const cm = _ensureChargingManagementConfig();
       const v = String(els.cmGoalStrategy.value || 'standard').trim().toLowerCase();
@@ -9387,6 +11589,7 @@ function _collectFlowPowerDpIsWFromUI() {
     });
   }
   if (els.addStationGroup) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.addStationGroup. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.addStationGroup.addEventListener('click', () => {
       const sc = _ensureSettingsConfig();
       sc.stationGroups = Array.isArray(sc.stationGroups) ? sc.stationGroups : [];
@@ -9397,30 +11600,35 @@ function _collectFlowPowerDpIsWFromUI() {
 
   
   if (els.nwDevicesQuickSetup) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.nwDevicesQuickSetup. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.nwDevicesQuickSetup.addEventListener('click', () => {
       nwDevicesQuickSetup().catch(e => setStatus('Schnell‑Inbetriebnahme fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
     });
   }
 
 if (els.ocppAutoDetect) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.ocppAutoDetect. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.ocppAutoDetect.addEventListener('click', () => {
       ocppAutoDetect().catch(e => setStatus('OCPP: Erkennung fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
     });
   }
 
   if (els.ocppMapExisting) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.ocppMapExisting. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.ocppMapExisting.addEventListener('click', () => {
       ocppMapExisting().catch(e => setStatus('OCPP: Zuordnung fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
     });
   }
 
   if (els.save) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.save. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.save.addEventListener('click', () => {
       saveConfig().catch(e => setStatus('Speichern fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
     });
   }
 
   if (els.reload) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.reload. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.reload.addEventListener('click', () => {
       loadConfig().catch(e => setStatus('Laden fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
   backupRefreshInfo().catch(() => {});
@@ -9429,6 +11637,7 @@ if (els.ocppAutoDetect) {
   }
 
   if (els.validate) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.validate. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.validate.addEventListener('click', () => {
       runValidation(true).catch(e => setStatus('Validierung fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error'));
     });
@@ -9436,6 +11645,12 @@ if (els.ocppAutoDetect) {
 
 
   // --- Backup / Export / Import (Installer config) ---
+  /**
+   * Code-Teil: backupRefreshInfo
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function backupRefreshInfo() {
     if (!els.backupInfo) return;
     try {
@@ -9462,7 +11677,12 @@ if (els.ocppAutoDetect) {
       els.backupInfo.innerHTML = '<div class="nw-config-empty">Backup-Status konnte nicht geladen werden.</div>';
     }
   }
-
+  /**
+   * Code-Teil: backupExport
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function backupExport() {
     try {
       setBackupStatus('Export wird erstellt…', '');
@@ -9481,7 +11701,12 @@ if (els.ocppAutoDetect) {
       setBackupStatus('Export fehlgeschlagen: ' + (e && e.message ? e.message : e), 'error');
     }
   }
-
+  /**
+   * Code-Teil: backupDoImportFromObj
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function backupDoImportFromObj(obj) {
     const payload = { backup: obj, restartEms: true, mode: 'replace' };
     await fetchJson('/api/installer/backup/import', { method: 'POST', body: JSON.stringify(payload) });
@@ -9489,7 +11714,12 @@ if (els.ocppAutoDetect) {
     await loadConfig();
     await backupRefreshInfo();
   }
-
+  /**
+   * Code-Teil: backupImportFromFile
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function backupImportFromFile(file) {
     try {
       if (!file) return;
@@ -9503,7 +11733,12 @@ if (els.ocppAutoDetect) {
       try { if (els.backupFile) els.backupFile.value = ''; } catch (_e) {}
     }
   }
-
+  /**
+   * Code-Teil: backupRestoreFromUserdata
+   * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+   * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+   * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+   */
   async function backupRestoreFromUserdata() {
     try {
       setBackupStatus('Lese Backup aus 0_userdata…', '');
@@ -9528,18 +11763,21 @@ if (els.ocppAutoDetect) {
 
   // Backup actions
   if (els.backupExport) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.backupExport. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.backupExport.addEventListener('click', () => {
       backupExport().catch(() => {});
     });
   }
 
   if (els.backupImport) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.backupImport. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.backupImport.addEventListener('click', () => {
       try { if (els.backupFile) els.backupFile.click(); } catch (_e) {}
     });
   }
 
   if (els.backupFile) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'change' an els.backupFile. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.backupFile.addEventListener('change', () => {
       const f = els.backupFile.files && els.backupFile.files[0];
       backupImportFromFile(f).catch(() => {});
@@ -9547,18 +11785,21 @@ if (els.ocppAutoDetect) {
   }
 
   if (els.backupRestore) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.backupRestore. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.backupRestore.addEventListener('click', () => {
       backupRestoreFromUserdata().catch(() => {});
     });
   }
 
   if (els.refreshChargingDiag) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.refreshChargingDiag. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.refreshChargingDiag.addEventListener('click', () => {
       refreshChargingDiag().catch(() => {});
     });
   }
 
   if (els.refreshChargingBudget) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.refreshChargingBudget. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.refreshChargingBudget.addEventListener('click', () => {
       // Uses the same diagnostics endpoint
       refreshChargingDiag().catch(() => {});
@@ -9566,6 +11807,7 @@ if (els.ocppAutoDetect) {
   }
 
   if (els.refreshStationsDiag) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.refreshStationsDiag. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.refreshStationsDiag.addEventListener('click', () => {
       // Uses the same diagnostics endpoint; keeps both sections in sync.
       refreshChargingDiag().catch(() => {});
@@ -9592,6 +11834,7 @@ if (els.ocppAutoDetect) {
     } catch (_e) {}
   };
 
+  // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an document. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
   document.addEventListener('click', (e) => {
     const btn = e && e.target && e.target.closest ? e.target.closest('.nw-toggle button[data-value]') : null;
     if (!btn) return;
@@ -9617,12 +11860,14 @@ if (els.ocppAutoDetect) {
   // Modal
   if (els.dpClose) els.dpClose.addEventListener('click', closeDpModal);
   if (els.dpModal) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.dpModal. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.dpModal.addEventListener('click', (e) => {
       if (e.target === els.dpModal) closeDpModal();
     });
   }
   if (els.dpSearchBtn) els.dpSearchBtn.addEventListener('click', () => doSearch().catch(() => {}));
   if (els.dpSearch) {
+    // Ereignis-Kommentar: Bindet das UI-Ereignis 'keydown' an els.dpSearch. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.dpSearch.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') doSearch().catch(() => {});
     });

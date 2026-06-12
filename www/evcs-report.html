@@ -1,4 +1,19 @@
+<!--
+  Datei: www/evcs-report.html
+  Rolle: Code-Datei
+  Zweck: Allgemeiner Projektcode; genaue Verantwortung ergibt sich aus Pfad und Funktionsnamen.
+  Wartung: HTML-IDs/Klassen sind Vertragsstellen für www/*.js und CSS. Nicht ohne Suche nach Referenzen ändern.
+-->
 <!doctype html>
+<!--
+  NexoWatt Code-Kommentar (DE)
+  Zweck: Report-Seite: Druck-/PDF-/CSV-nahe Auswertung für History, EVCS, Tarif, §14a oder RFID.
+  Zusammenhänge:
+  - Logik liegt in gleichnamiger .js-Datei und gemeinsamen Report-Hilfen.
+  - Daten kommen aus Report-APIs in main.js.
+  Wartungshinweise:
+  - Drucklayout und Tabellenbreiten beachten.
+-->
 <html lang="de">
 <head>
   <meta charset="utf-8" />
@@ -16,7 +31,8 @@
 </head>
 
 <body class="nw-cockpit-page nw-cockpit-skin nw-page-evcs-report">
-  <header class="topbar">
+  <!-- Abschnitt: Kopfbereich/Navigation. Wird durch CSS und teils durch JS-Menülogik gesteuert. -->
+<header class="topbar">
     <script>
       // Normalize base path (works with /history vs /static/history.html etc.)
       (function () {
@@ -62,7 +78,8 @@
   </section>
 
 
-  <main class="wrap report-wrap nw-subpage nw-subpage-report">
+  <!-- Abschnitt: Hauptinhalt der Seite. DOM-IDs in diesem Bereich werden durch zugehörige JS-Dateien befüllt. -->
+<main class="wrap report-wrap nw-subpage nw-subpage-report">
     <div class="report-head">
       <div class="report-head-left">
         <h2>EVCS Bericht</h2>

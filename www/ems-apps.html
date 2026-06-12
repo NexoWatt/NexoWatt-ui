@@ -1,4 +1,19 @@
+<!--
+  Datei: www/ems-apps.html
+  Rolle: Code-Datei
+  Zweck: Allgemeiner Projektcode; genaue Verantwortung ergibt sich aus Pfad und Funktionsnamen.
+  Wartung: HTML-IDs/Klassen sind Vertragsstellen für www/*.js und CSS. Nicht ohne Suche nach Referenzen ändern.
+-->
 <!DOCTYPE html>
+<!--
+  NexoWatt Code-Kommentar (DE)
+  Zweck: Installer/App-Center-Oberfläche: Konfiguration der EMS-Apps, DP-Zuordnungen und Regelungsparameter.
+  Zusammenhänge:
+  - Logik in www/ems-apps.js, Speicherung über /api/installer/config.
+  - Werte werden von ems/modules/* genutzt.
+  Wartungshinweise:
+  - Nur im Installerbereich verwenden; falsche IDs brechen Config-Speicherung.
+-->
 <html lang="de">
 <head>
   <meta charset="utf-8"/>
@@ -13,7 +28,10 @@
   <meta name="apple-mobile-web-app-title" content="NexoWatt EMS">
   <script src="/static/admin-guard.js" data-nw-admin-page="ems-apps"></script>
 </head>
+<!-- NexoWatt Detail-Kommentar (DE) -->
+<!-- Installer/App-Center. Eingabe-IDs werden von www/ems-apps.js gelesen und in die Adapter-Konfiguration geschrieben. -->
 <body class="nw-cockpit-page nw-cockpit-skin nw-installer-page nw-page-ems-apps">
+<!-- Abschnitt: Kopfbereich/Navigation. Wird durch CSS und teils durch JS-Menülogik gesteuert. -->
 <header class="topbar nw-cockpit-topbar">
   <script>
   (function () {
@@ -60,6 +78,7 @@
   </section>
 
 
+<!-- Abschnitt: Hauptinhalt der Seite. DOM-IDs in diesem Bereich werden durch zugehörige JS-Dateien befüllt. -->
 <main class="content nw-page-shell nw-appcenter-page nw-subpage">
   <div class="nw-smarthome-header">
     <div>

@@ -1,3 +1,47 @@
+# 0.7.55 - Architektur-, Datenfluss- und TypeScript-Dokumentation
+
+- Dokumentationsvertiefung ohne Funktionsänderungen.
+- Neue Dokumente ergänzt: `ARCHITECTURE_DE.md`, `DATAFLOW_DE.md`, `STATES_AND_DATAPOINTS_DE.md`, `CRITICAL_RULES_DE.md`, `TYPESCRIPT_MIGRATION_DE.md`, `MODULE_CHECKLISTS_DE.md` und `CODE_CONTRACTS_DE.md`.
+- JSDoc-Vertragsblöcke für zentrale Bereiche ergänzt: Adapter-State/API, LIVE-Dashboard, Core-Limits, Heizstab, KI-Berater, App-Center, History und SmartHome.
+- Dokumentiert wurden Datenflüsse, State-/DP-Bedeutungen, kritische Nicht-kaputt-machen-Regeln und Checklisten für spätere Änderungen.
+- Keine Änderung an Energiefluss, Heizstab, KI, Lizenz, History, SmartHome oder ioBroker-Verbindungslogik.
+- Service-Worker Cache auf `nexowatt-cache-v223` erhöht.
+
+# 0.7.54 - Detail-Kommentare für Wartbarkeit und TypeScript-Migration
+
+- Detail-Kommentare vor Funktionen, Methoden, Express-Routen und UI-Ereignisbindungen ergänzt.
+- Kommentare beschreiben Aufgabe, Zusammenhang zu APIs/States/Datenpunkten und Hinweise für die spätere TypeScript-Umstellung.
+- HTML/CSS-Vertragsstellen zusätzlich dokumentiert.
+- `docs/COMMENTING_STANDARD_DE.md` als Kommentarstandard ergänzt.
+- Keine Funktionslogik geändert.
+- Service-Worker Cache auf `nexowatt-cache-v222` erhöht.
+
+## 0.7.54 - Detaillierte deutsche Code-Kommentare
+
+- Reine Wartbarkeitsversion ohne Funktionsänderungen.
+- Deutsche Abschnittskommentare vor Klassen, Funktionen, Methoden und wichtigen Code-Teilen ergänzt.
+- Kommentare erklären Zweck, fachlichen Zusammenhang und TypeScript-Hinweise.
+- Kommentarstandard unter `docs/COMMENTING_STANDARD_DE.md` ergänzt.
+- Service-Worker Cache auf `nexowatt-cache-v222` erhöht.
+
+## 0.7.53 - Deutsche Code-Kommentare und Wartbarkeitsbasis
+
+- Reines Dokumentationsrelease ohne Funktionsänderungen.
+- Deutsche Datei-Kommentare für zentrale Backend-, EMS-, Frontend-, Admin-, Report- und Skriptdateien ergänzt.
+- Zusätzliche Abschnittskommentare in `main.js`, `www/app.js`, `www/ems-apps.js`, `www/history.js` und `www/smarthome.js` ergänzt.
+- `docs/CODEMAP_DE.md` als Code-Landkarte für Wartung und spätere TypeScript-Migration ergänzt.
+- Service-Worker Cache auf `nexowatt-cache-v221` erhöht.
+
+## 0.7.52 - info.connection Hotfix
+
+- `info.connection` wird jetzt über eine zentrale Helper-Funktion gesetzt und zusätzlich im `/api/state`/SSE-Cache gespiegelt.
+- Nach erfolgreichem HTTP-/SSE-Webserverstart bleibt der Verbindungsstatus per Heartbeat auf `true`, solange der Server erreichbar ist.
+- Optionale Teilfehler nach dem Webserverstart setzen die Verbindung nicht mehr fälschlich auf `false`; stattdessen wird eine Warnung geloggt.
+- Webserver-`error`/`close`-Events setzen `info.connection` sauber auf `false`.
+- Beim Adapter-Unload wird der Heartbeat gestoppt und `info.connection` auf `false` gesetzt.
+- Keine Änderung an Energiefluss-, Speicher-, Heizstab-, KI-, History- oder VIS-Logik.
+- Service-Worker Cache auf `nexowatt-cache-v220` erhöht.
+
 ## 0.7.51 - Lizenz-Hotfix nach ioBroker-Stabilitätsupdate
 
 - Regression aus 0.7.50 behoben: `licenseKey` wird vorübergehend wieder ohne `protectedNative`/`encryptedNative` geführt, weil maskierte ioBroker/Admin-Platzhalter gültige Lizenzschlüssel überschreiben konnten.
