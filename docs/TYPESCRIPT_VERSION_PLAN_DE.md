@@ -64,3 +64,8 @@ src-ts/backend/connection/         info.connection / Webserverstatus
 src-ts/backend/feature-visibility/ EVCS/Farm/SmartHome/Wetter/KI Sichtbarkeit
 src-ts/backend/license/            Lizenz-Schutzlogik
 ```
+
+
+## 0.7.65 – Frontend-Anzeigehelfer
+
+Die Dateien unter `src-ts/frontend/` sind für browsernahe, aber noch DOM-freie Helfer gedacht. Reine Anzeigeformatierung und Sichtbarkeitsvorbereitung liegen dort; produktive DOM-Logik bleibt bis zur gezielten Migration in `www/*.js`.

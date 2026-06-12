@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.7.64",
+  "version": "0.7.65",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -25,7 +25,7 @@
     "test:js": "node scripts/verify-publish.js",
     "ioBroker:check": "node scripts/verify-publish.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:types": "npm run verify:ts-scaffold && npm run test:api-state-feature && npm run test:api-state-feature-runtime && npm run test:backend-api-state && npm run test:energy-flow-utils && npm run test:energy-flow-resolver && npm run test:energy-flow-regression && npm run test:energy-flow-regression-runtime && npm run test:ems-budget-heating-rod && npm run test:ems-budget-heating-rod-runtime && npm run test:adapter-state-api && npm run test:adapter-state-api-runtime && npm run test:backend-api-state && npm run test:backend-api-state-runtime && npm run typecheck && npm run test:contracts",
+    "test:types": "npm run verify:ts-scaffold && npm run test:api-state-feature && npm run test:api-state-feature-runtime && npm run test:backend-api-state && npm run test:energy-flow-utils && npm run test:energy-flow-resolver && npm run test:energy-flow-regression && npm run test:energy-flow-regression-runtime && npm run test:ems-budget-heating-rod && npm run test:ems-budget-heating-rod-runtime && npm run test:adapter-state-api && npm run test:adapter-state-api-runtime && npm run test:backend-api-state && npm run test:backend-api-state-runtime && npm run test:frontend-display && npm run test:frontend-display-runtime && npm run typecheck && npm run test:contracts",
     "test:all": "npm run publish:check && npm run test:types",
     "release:check": "npm run test:all && npm run build:types && npm pack --dry-run",
     "ci:check": "npm run test:all && npm run build:types && npm pack --dry-run",
@@ -61,7 +61,9 @@
     "repo:conflict-check": "npm run git:conflicts",
     "test:repo": "npm run check:conflicts && npm run repo:conflict-check && npm run publish:check",
     "check:conflicts": "npm run git:conflicts",
-    "test:quick": "npm run publish:check"
+    "test:quick": "npm run publish:check",
+    "test:frontend-display": "node scripts/verify-ts-frontend-display.js",
+    "test:frontend-display-runtime": "npm run clean:ts && tsc -p tsconfig.frontend-display.json && node build-ts/frontend-display/tests/frontend-display-runtime.js"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",

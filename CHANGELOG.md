@@ -1,3 +1,12 @@
+## 0.7.65 - TypeScript Frontend-Anzeigehelfer
+
+- Erste reine Frontend-TypeScript-Helfer unter `src-ts/frontend/` ergänzt.
+- Anzeigeformatierung für Leistung, Energie und Prozentwerte vorbereitet.
+- Typisierte Dashboard-Wertezeilen vorbereitet, inklusive EVCS-Sichtbarkeit.
+- History-Toolbar-Verträge vorbereitet, damit EVCS PDF nur mit echter Wallbox sichtbar wird.
+- Runtime-Test für Frontend-Anzeigehelfer ergänzt.
+- Keine produktive Runtime-/VIS-Logik geändert.
+
 ## 0.7.64 - Git-Konflikt-/TypeScript-Stabilisierung
 
 - Git-Konfliktprüfung `npm run git:conflicts` ergänzt.

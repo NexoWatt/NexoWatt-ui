@@ -18,3 +18,9 @@ export interface FrontendMigrationSmokeTest {
 
 /** Marker-Wert für Typechecks ohne Laufzeitwirkung. */
 export const frontendMigrationScaffold = 'frontend-ts-scaffold-0758' as const;
+
+export * from './display-format';
+export * from './customer-feature-visibility';
+
+export * from './dashboard-display';
+export * from './history-controls';
