@@ -7,7 +7,9 @@
     "emitDeclarationOnly": true,
     "rootDir": "src-ts",
     "outDir": "build-ts/types",
-    "removeComments": false
+    "removeComments": false,
+    "module": "Node16",
+    "moduleResolution": "node16"
   },
   "include": [
     "src-ts/types/**/*.d.ts",

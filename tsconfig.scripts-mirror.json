@@ -7,7 +7,9 @@
     "sourceMap": false,
     "rootDir": "src-ts",
     "outDir": "build-ts/script-mirrors",
-    "removeComments": false
+    "removeComments": false,
+    "module": "Node16",
+    "moduleResolution": "node16"
   },
   "include": [
     "src-ts/scripts/publish-check-rules.ts"

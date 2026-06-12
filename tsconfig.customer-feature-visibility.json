@@ -3,10 +3,11 @@
   "compilerOptions": {
     "outDir": "build-ts/customer-feature-visibility",
     "rootDir": "src-ts",
-    "module": "CommonJS",
+    "module": "Node16",
     "target": "ES2020",
     "declaration": false,
-    "sourceMap": false
+    "sourceMap": false,
+    "moduleResolution": "node16"
   },
   "include": [
     "src-ts/contracts/**/*.ts",

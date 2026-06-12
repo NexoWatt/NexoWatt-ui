@@ -3,7 +3,9 @@
   "compilerOptions": {
     "noEmit": false,
     "rootDir": "src-ts",
-    "outDir": "build-ts/backend-api-state"
+    "outDir": "build-ts/backend-api-state",
+    "module": "Node16",
+    "moduleResolution": "node16"
   },
   "include": [
     "src-ts/types/**/*.d.ts",

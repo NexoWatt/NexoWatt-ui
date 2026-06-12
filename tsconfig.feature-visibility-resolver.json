@@ -5,7 +5,9 @@
     "rootDir": "src-ts",
     "outDir": "build-ts/feature-visibility-resolver",
     "declaration": false,
-    "sourceMap": false
+    "sourceMap": false,
+    "module": "Node16",
+    "moduleResolution": "node16"
   },
   "include": [
     "src-ts/types/**/*.d.ts",
@@ -16,5 +18,10 @@
     "src-ts/quality/feature-visibility-resolver-cases.ts",
     "src-ts/tests/feature-visibility-resolver-runtime.ts"
   ],
-  "exclude": ["node_modules", "build", "build-types", "build-ts"]
+  "exclude": [
+    "node_modules",
+    "build",
+    "build-types",
+    "build-ts"
+  ]
 }

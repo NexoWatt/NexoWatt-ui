@@ -1,3 +1,11 @@
+## 0.7.71 - TypeScript-7-kompatible tsconfig-Struktur
+
+- `moduleResolution: "Node"` durch moderne TypeScript-Konfiguration ersetzt.
+- Basis-tsconfig nutzt jetzt `module: "Node16"` und `moduleResolution: "Node16"`.
+- Frontend-/MJS-Spiegel nutzen bewusst `moduleResolution: "Bundler"` mit `module: "ES2022"`.
+- Neuer Check `npm run check:tsconfig-modern` ergänzt, damit keine veralteten `node10`-/`Node`-Konfigurationen zurückkommen.
+- Keine Runtime-Logik geändert.
+
 ## 0.7.70 - TypeScript Source Integrity Stabilization
 
 - Reine TS-Migrations-Stabilisierung ohne Runtime-Änderung.

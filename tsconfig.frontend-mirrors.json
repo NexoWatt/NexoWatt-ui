@@ -8,7 +8,8 @@
     "sourceMap": false,
     "rootDir": "src-ts",
     "outDir": "build-ts/frontend-mirrors",
-    "removeComments": false
+    "removeComments": false,
+    "moduleResolution": "Bundler"
   },
   "include": [
     "src-ts/frontend/display-format.ts",

@@ -6,7 +6,8 @@
       "ES2022",
       "DOM",
       "DOM.Iterable"
-    ]
+    ],
+    "moduleResolution": "node16"
   },
   "include": [
     "src-ts/types/**/*.d.ts",

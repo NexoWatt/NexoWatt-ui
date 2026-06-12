@@ -5,7 +5,9 @@
     "rootDir": "src-ts",
     "outDir": "build-ts/api-state-feature",
     "declaration": false,
-    "sourceMap": false
+    "sourceMap": false,
+    "module": "Node16",
+    "moduleResolution": "node16"
   },
   "include": [
     "src-ts/types/**/*.d.ts",

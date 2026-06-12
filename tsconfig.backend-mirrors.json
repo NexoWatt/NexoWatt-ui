@@ -7,9 +7,10 @@
     "emitDeclarationOnly": false,
     "rootDir": "src-ts",
     "outDir": "build-ts/backend-mirrors",
-    "module": "CommonJS",
+    "module": "Node16",
     "target": "ES2022",
-    "removeComments": false
+    "removeComments": false,
+    "moduleResolution": "node16"
   },
   "include": [
     "src-ts/backend/state-cache/state-cache.ts",
