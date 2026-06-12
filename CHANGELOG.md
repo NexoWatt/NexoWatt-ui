@@ -1,3 +1,12 @@
+## 0.7.69 - TypeScript Resolver-Spiegel und Runtime-Checks
+
+- TypeScript-Resolver unter `src-ts/resolvers/` werden jetzt als CommonJS-Spiegel unter `lib/ts-mirrors/resolvers/` erzeugt.
+- Neue Build-/Check-Befehle für Resolver-Spiegel ergänzt: `sync:ts-resolver-mirrors`, `check:ts-resolver-mirrors`, `test:resolver-mirrors` und `test:resolver-mirror-runtime`.
+- Runtime-Checks für Energiefluss-Resolver und Feature-Sichtbarkeit ergänzt.
+- Kritische Regeln abgesichert: 0-W-Speicherwerte bleiben gültig, Split-/Signed-DPs schlagen Bilanz-Fallback, EVCS/Farm bleiben ohne echte DPs unsichtbar.
+- Keine produktive Runtime-Logik geändert.
+- Service-Worker Cache auf `nexowatt-cache-v237` erhöht.
+
 ## 0.7.68 - Frontend-MJS-Spiegel Runtime-Check
 
 - Runtime-Importcheck für die generierten Frontend-MJS-Spiegel ergänzt.

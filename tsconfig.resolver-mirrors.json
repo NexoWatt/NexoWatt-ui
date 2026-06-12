@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "rootDir": "src-ts",
+    "outDir": "build-ts/resolver-mirrors",
+    "module": "CommonJS",
+    "target": "ES2022",
+    "removeComments": false
+  },
+  "include": [
+    "src-ts/resolvers/energy-flow-resolver.ts",
+    "src-ts/resolvers/feature-visibility-resolver.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "build-types",
+    "build-ts"
+  ]
+}
