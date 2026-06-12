@@ -38,3 +38,17 @@ src-ts/contracts
 
 Dieser Bereich enthält keine laufende Adapterlogik, sondern typisierte fachliche Verträge. Er dient als Brücke zwischen dokumentiertem JavaScript und späterer TypeScript-Migration.
 
+
+
+## Ergänzung 0.7.58 – Build-/Testbasis
+
+Mit 0.7.58 wurden mehrere TypeScript-Konfigurationen getrennt:
+
+```text
+tsconfig.base.json
+tsconfig.json
+tsconfig.build.json
+tsconfig.contracts.json
+```
+
+Außerdem gibt es Compile-only-Beispiele unter `src-ts/test-fixtures/`. Diese Beispiele laden keine Adapterlogik, prüfen aber die wichtigsten Typverträge für Energiefluss, Feature-Sichtbarkeit, KI-Berater und Lizenz.

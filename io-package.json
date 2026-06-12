@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.56",
+    "version": "0.7.58",
     "news": {
+      "0.7.58": {
+        "de": "TypeScript Build- und Testbasis ergänzt: separate tsconfig-Basis, Declaration-Build, TS-Clean-Skript und Regressionstest-Typverträge. Keine produktive Laufzeitlogik geändert.",
+        "en": "Added TypeScript build/test foundation: shared tsconfig base, declaration build, TS clean script and regression-test type contracts. No production runtime logic changed."
+      },
+      "0.7.57": {
+        "de": "TypeScript-Prüfung vom lokalen Publish-Check getrennt: npm publish läuft wieder ohne installierten tsc, während GitHub/CI weiterhin publish:check und typecheck ausführt.",
+        "en": "TypeScript check separated from local publish check: npm publish works without a locally installed tsc, while GitHub/CI still runs publish:check and typecheck."
+      },
       "0.7.56": {
         "de": "TypeScript-Migrationsbasis ergänzt: tsconfig, erste Verträge für Energiefluss, Speicher, Feature-Sichtbarkeit, KI-Berater, Lizenz und Datenpunkte. Keine Funktionslogik geändert.",
         "en": "Added TypeScript migration scaffold: tsconfig and first contracts for energy flow, storage, feature visibility, AI advisor, license and datapoints. No runtime logic changed."
@@ -22,14 +30,6 @@
       "0.7.52": {
         "en": "Hotfix: info.connection now follows the adapter HTTP/SSE service and is kept online by a heartbeat while the web server is reachable; partial optional startup errors no longer leave the customer frontend falsely offline.",
         "de": "Hotfix: info.connection folgt jetzt dem Adapter-HTTP/SSE-Dienst und wird per Heartbeat online gehalten, solange der Webserver erreichbar ist; optionale Teilfehler beim Start lassen das Kundenfrontend nicht mehr fälschlich offline stehen."
-      },
-      "0.7.51": {
-        "en": "Hotfix: license regression fixed. licenseKey native protection/encryption is temporarily disabled again because ioBroker/Admin masked values could overwrite existing keys; runtime license save now rejects masked placeholders.",
-        "de": "Hotfix: Lizenz-Regression behoben. licenseKey Native-Schutz/Verschlüsselung ist vorübergehend wieder deaktiviert, weil ioBroker/Admin maskierte Werte bestehende Schlüssel überschreiben konnten; Runtime-Speichern weist maskierte Platzhalter zurück."
-      },
-      "0.7.50": {
-        "en": "ioBroker stability maintenance: Node.js engine raised to >=22, CI prepared for Node 22/24, licenseKey protected/encrypted, info.connection implemented, native ip handling added with bind fallback, package metadata and news cleaned for adapter-checker compatibility.",
-        "de": "ioBroker-Stabilitätswartung: Node.js Engine auf >=22 angehoben, CI für Node 22/24 vorbereitet, licenseKey geschützt/verschlüsselt, info.connection implementiert, native ip mit bind-Fallback ergänzt sowie Paket-Metadaten und News für Adapter-Checker bereinigt."
       }
     },
     "title": "NexoWatt UI",

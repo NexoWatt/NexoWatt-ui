@@ -1,16 +1,30 @@
-# TypeScript-Migrationsbereich
+# NexoWatt TypeScript-Migrationsbereich
 
-Dieser Ordner enthält den ersten TypeScript-Scaffold für NexoWatt UI.
+Dieser Ordner enthält die vorbereitenden TypeScript-Dateien für die schrittweise Migration.
 
-Wichtig:
+## Aktueller Stand
 
-- Die produktive Adapter-Laufzeit bleibt aktuell JavaScript.
-- TypeScript wird zunächst für Verträge, Datenstrukturen und neue/kleine Codebereiche genutzt.
-- Kritische Laufzeitmodule wie `main.js`, `www/app.js`, `ems/modules/core-limits.js` und `ems/modules/heating-rod-control.js` werden später nur schrittweise migriert.
-- Jede Datei enthält deutsche Kommentare, damit der fachliche Zweck auch ohne tiefes TypeScript-Wissen nachvollziehbar bleibt.
+Die produktive Adapterlaufzeit nutzt weiterhin JavaScript:
 
-Prüfung:
+```text
+main.js
+www/*.js
+ems/modules/*.js
+```
+
+TypeScript wird aktuell für Typverträge, Qualitätsverträge und spätere Migration genutzt.
+
+## Wichtige Regeln
+
+1. Keine produktive Logik ungeprüft aus `src-ts` importieren.
+2. `build-ts/types` ist generierter Output und darf nicht manuell bearbeitet werden.
+3. Kritische Bereiche zuerst typisieren, dann mit Regressionstests absichern, danach erst produktiv umstellen.
+4. Deutsche Fachkommentare bleiben erhalten, damit der Code menschlich wartbar bleibt.
+
+## Aktuelle Befehle
 
 ```bash
 npm run typecheck
+npm run build:ts
+npm run test:types
 ```

@@ -155,3 +155,17 @@ src-ts/contracts
 
 Diese TS-Verträge sind die Vorlage für die spätere Migration der JavaScript-Resolver und EMS-Module. Besonders wichtig sind `StorageFlowResult`, `EnergyFlowSnapshot`, `FeatureVisibilityState` und `AiAdvisorSuggestion`.
 
+
+
+## Ergänzung 0.7.58 – Build-/Testbasis
+
+Mit 0.7.58 wurden mehrere TypeScript-Konfigurationen getrennt:
+
+```text
+tsconfig.base.json
+tsconfig.json
+tsconfig.build.json
+tsconfig.contracts.json
+```
+
+Außerdem gibt es Compile-only-Beispiele unter `src-ts/test-fixtures/`. Diese Beispiele laden keine Adapterlogik, prüfen aber die wichtigsten Typverträge für Energiefluss, Feature-Sichtbarkeit, KI-Berater und Lizenz.

@@ -4,14 +4,10 @@
     "noEmit": true
   },
   "include": [
-    "src-ts/**/*.ts"
+    "src-ts/contracts/**/*.ts"
   ],
   "exclude": [
     "node_modules",
-    "admin/react/assets",
-    "www",
-    "ems",
-    "src-admin-tab",
     "build",
     "build-types",
     "build-ts"

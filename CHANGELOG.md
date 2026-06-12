@@ -1,3 +1,25 @@
+# 0.7.58 - TypeScript Build- und Testbasis
+
+- TypeScript-Migrationsbasis stabilisiert: Basis-, Check-, Build-, Frontend-JS- und Backend-JS-Konfigurationen ergänzt.
+- `npm run typecheck` prüft weiterhin nur die TypeScript-Quellen unter `src-ts`; produktive JavaScript-Laufzeit bleibt unverändert.
+- `npm run build:ts` erzeugt nur TypeScript-Declaration-Artefakte (`.d.ts`) und keine produktive Runtime-Ausgabe.
+- `scripts/verify-ts-scaffold.js` und `scripts/clean-ts-build.js` für eine saubere Build-/Testbasis ergänzt.
+- `src-ts/contracts/testing.ts` und `tests/fixtures/regression-plan.de.json` als Grundlage für spätere Regressionstests ergänzt.
+- Dokumentation `docs/TYPESCRIPT_BUILD_BASIS_0758_DE.md` ergänzt.
+- Keine Änderung an Energiefluss, Speicher-DP, Heizstab, History, SmartHome, KI, Lizenz oder ioBroker-Verbindungslogik.
+- Service-Worker Cache auf `nexowatt-cache-v226` erhöht.
+
+## 0.7.57 - TypeScript-Publish-Check getrennt
+
+- `publish:check` wieder npm-stabil gemacht: Es prüft jetzt JSON/ioBroker-Metadaten/Konfliktmarker/JS-Syntax, ruft aber kein `tsc` mehr direkt auf.
+- `typecheck` bleibt als eigener TypeScript-Qualitätscheck erhalten.
+- Neues Skript `test:all`: `publish:check` + `typecheck` + `npm pack --dry-run`.
+- `prepublishOnly` nutzt nur `publish:check`, damit lokales `npm publish` nicht wegen fehlendem `node_modules/.bin/tsc` scheitert.
+- GitHub Actions führen weiterhin strikt `npm ci`, `publish:check`, `typecheck` und `npm pack --dry-run` aus.
+- Workflow-Fallback `npm ci || npm install` entfernt, damit CI-Fehler nicht mehr versteckt werden.
+- Neue Doku: `docs/TYPESCRIPT_PUBLISH_STRATEGY_0757_DE.md`.
+- Service-Worker Cache auf `nexowatt-cache-v225` erhöht.
+
 # 0.7.56 - TypeScript Migration Scaffold
 
 - TypeScript-Migrationsbasis ergänzt: `tsconfig.json` und erster `src-ts`-Bereich.

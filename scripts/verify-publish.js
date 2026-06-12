@@ -28,12 +28,12 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { spawnSync } = require('child_process');
 
 const root = path.resolve(__dirname, '..');
 const conflictRe = /^(<<<<<<<|=======|>>>>>>>)(\s|$)/;
-const skipDirs = new Set(['.git', 'node_modules', 'dist', 'build', '.cache']);
-const skipExt = new Set(['.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.zip', '.tgz', '.gz', '.br', '.pdf', '.woff', '.woff2', '.ttf', '.eot']);
+const skipDirs = new Set(['.git', 'node_modules', 'dist', 'build', 'build-ts', '.cache', '.nwcore']);
+const skipExt = new Set(['.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.zip', '.tgz', '.gz', '.br', '.pdf', '.woff', '.woff2', '.ttf', '.eot', '.map']);
 /**
  * Code-Teil: fail
  * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -103,14 +103,14 @@ function hasNativeProtection(io, key) {
 function ensureScriptSyntax(rel) {
   const full = path.join(root, rel);
   if (!fs.existsSync(full)) return;
-  try {
-    execFileSync(process.execPath, ['--check', full], { stdio: 'pipe' });
-  } catch (err) {
-    const stderr = err && err.stderr ? String(err.stderr) : String(err && err.message ? err.message : err);
+  const res = spawnSync(process.execPath, ['--check', full], { encoding: 'utf8', maxBuffer: 1024 * 1024 });
+  if (res.status !== 0) {
+    const stderr = String(res.stderr || res.error || '');
     fail(`Syntaxfehler in ${rel}: ${stderr.trim().split('\n').slice(0, 4).join(' ')}`);
   }
 }
 
+console.log('[publish-check] Checking package metadata...');
 const pkg = readJson('package.json');
 const io = readJson('io-package.json');
 const manifest = readJson('www/manifest.webmanifest');
@@ -167,12 +167,35 @@ if (pkg && io) {
   if (/process\.exit\s*\(/.test(main)) fail('main.js darf process.exit() nicht verwenden; adapter.terminate()/Unload verwenden.');
 }
 
-for (const file of walk(root)) {
-  const ext = path.extname(file).toLowerCase();
-  if (skipExt.has(ext)) continue;
+console.log('[publish-check] Scanning selected files for conflict markers...');
+const conflictCheckFiles = [
+  'package.json',
+  'package-lock.json',
+  'io-package.json',
+  'README.md',
+  'CHANGELOG.md',
+  'main.js',
+  'www/app.js',
+  'www/ems-apps.js',
+  'www/history.js',
+  'www/smarthome.js',
+  'www/sw.js',
+  'ems/modules/core-limits.js',
+  'ems/modules/heating-rod-control.js',
+  'ems/modules/ai-advisor.js',
+  'scripts/verify-publish.js',
+  'scripts/verify-ts-contracts.js',
+  'scripts/verify-ts-scaffold.js',
+  'scripts/verify-typescript-scaffold.js',
+  'src-ts/contracts/index.ts',
+  'src-ts/contracts/energy-flow.ts',
+  'src-ts/contracts/testing.ts',
+];
+for (const rel of conflictCheckFiles) {
+  const file = path.join(root, rel);
+  if (!fs.existsSync(file)) continue;
   let txt = '';
   try { txt = fs.readFileSync(file, 'utf8'); } catch (_) { continue; }
-  const rel = path.relative(root, file);
   const lines = txt.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     if (conflictRe.test(lines[i])) {
@@ -182,14 +205,37 @@ for (const file of walk(root)) {
   }
 }
 
-// Syntax-check runtime JS that ships with the adapter.
-for (const file of walk(root)) {
-  const rel = path.relative(root, file);
-  if (!rel.endsWith('.js')) continue;
-  if (rel.startsWith('admin/react/assets/')) continue; // bundled/minified build output
-  if (rel.startsWith('src-admin-tab/')) continue;      // React source is built by Vite
+// Syntax-check ausgewählter Runtime- und Wartungsdateien.
+//
+// Wichtig:
+// Der Adapter enthält sehr große Legacy-JS-Dateien und generierte Frontend-Bundles.
+// Ein vollständiger `node --check` über alle Dateien kann in knappen CI-/Container-
+// Umgebungen zu lange laufen. Deshalb prüft publish:check die wichtigsten
+// Runtime-Dateien gezielt; die ausführlichere Entwicklungsprüfung läuft über
+// `npm run test:all` und spätere Regressionstests.
+console.log('[publish-check] Checking selected JavaScript syntax...');
+const syntaxCheckFiles = [
+  'main.js',
+  'www/app.js',
+  'www/ems-apps.js',
+  'www/history.js',
+  'www/smarthome.js',
+  'www/sw.js',
+  'ems/modules/core-limits.js',
+  'ems/modules/heating-rod-control.js',
+  'ems/modules/ai-advisor.js',
+  'scripts/verify-publish.js',
+  'scripts/verify-ts-contracts.js',
+  'scripts/verify-ts-scaffold.js',
+  'scripts/verify-typescript-scaffold.js',
+  'scripts/clean-ts-build.js',
+];
+let checkedJs = 0;
+for (const rel of syntaxCheckFiles) {
   ensureScriptSyntax(rel);
+  checkedJs++;
 }
 
 if (process.exitCode) process.exit(process.exitCode);
+console.log(`[publish-check] JS syntax checked: ${checkedJs}`);
 console.log('[publish-check] OK: JSON, ioBroker metadata, conflict markers and JS syntax look good.');

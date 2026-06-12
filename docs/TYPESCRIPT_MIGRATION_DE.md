@@ -143,3 +143,17 @@ Diese Dateien enthalten noch keine produktive Runtime-Logik. Sie definieren zuer
 
 Regel für kommende Änderungen: Wenn ein Codebereich fachlich angefasst wird, bekommt er entweder direkt TypeScript oder mindestens einen passenden TypeScript-Vertrag.
 
+
+
+## Ergänzung 0.7.58 – Build-/Testbasis
+
+Mit 0.7.58 wurden mehrere TypeScript-Konfigurationen getrennt:
+
+```text
+tsconfig.base.json
+tsconfig.json
+tsconfig.build.json
+tsconfig.contracts.json
+```
+
+Außerdem gibt es Compile-only-Beispiele unter `src-ts/test-fixtures/`. Diese Beispiele laden keine Adapterlogik, prüfen aber die wichtigsten Typverträge für Energiefluss, Feature-Sichtbarkeit, KI-Berater und Lizenz.

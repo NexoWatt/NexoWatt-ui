@@ -25,8 +25,20 @@ export interface LicenseState {
 
 /** Ergebnis einer Lizenzprüfung. */
 export interface LicenseValidationResult {
+  /** True, wenn die Lizenz technisch gültig ist. */
   ok: boolean;
+
+  /** Alias für ältere Test-/Beispielwerte; langfristig soll ok verwendet werden. */
+  valid?: boolean;
+
   status: LicenseStatus;
   tier: LicenseTier;
   reason?: string;
+  message?: string;
+
+  /** True, wenn der eingegebene Wert nur ein Admin-Platzhalter wie ******** ist. */
+  isMaskedInput?: boolean;
+
+  /** Wenn true, darf der gelesene Lizenzwert nicht gespeichert werden (z. B. maskierter Admin-Platzhalter). */
+  mustNotStore?: boolean;
 }
