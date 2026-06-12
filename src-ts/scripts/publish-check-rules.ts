@@ -13,6 +13,13 @@
  * - Diese TypeScript-Quelle dient als verständliche, typisierte Vorlage für die
  *   spätere komplette Migration der Wartungsskripte.
  *
+ * Build-/Spiegelstrategie ab 0.7.66:
+ * - Diese TypeScript-Datei ist die fachliche Quelle für die Publish-Regeln.
+ * - `npm run build:script-mirrors` kompiliert diese Datei und aktualisiert
+ *   `scripts/publish-check-rules.js`.
+ * - `publish:check` läuft weiter ohne TypeScript-Compiler, weil es die
+ *   generierte JavaScript-Spiegeldatei nutzt.
+ *
  * Wichtig für spätere Änderungen:
  * - Diese Datei darf keine ioBroker-Runtime laden.
  * - Diese Datei darf keine produktive EMS-/VIS-Logik verändern.

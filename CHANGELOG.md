@@ -1,3 +1,13 @@
+## 0.7.66 - TypeScript Build-Output und erster JS-Spiegel
+
+- Erste reproduzierbare TypeScript-zu-JavaScript-Spiegelstrategie eingeführt.
+- `src-ts/scripts/publish-check-rules.ts` wird per TypeScript-Build zu `scripts/publish-check-rules.js` gespiegelt.
+- Neue Checks: `build:ts:script-mirrors`, `test:ts-script-mirrors` und `test:script-mirrors`.
+- `build:ts` erzeugt jetzt zuerst den JS-Spiegel und anschließend die TypeScript-Deklarationen.
+- Der generierte JS-Spiegel ist klar als automatisch erzeugt markiert.
+- Keine produktive EMS-/VIS-/Speicher-/Heizstab-/KI-/History-Logik geändert.
+- Service-Worker Cache auf `nexowatt-cache-v234` erhöht.
+
 ## 0.7.65 - TypeScript Frontend-Anzeigehelfer
 
 - Erste reine Frontend-TypeScript-Helfer unter `src-ts/frontend/` ergänzt.

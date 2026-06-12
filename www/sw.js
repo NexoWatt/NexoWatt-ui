@@ -25,7 +25,7 @@
 
 // Increment cache name on releases so browser updates JS/HTML reliably.
 // NOTE: Keep this monotonic to force SW updates on hotfixes.
-const CACHE_NAME = 'nexowatt-cache-v233';
+const CACHE_NAME = 'nexowatt-cache-v234';
 
 const OFFLINE_URLS = [
   './',

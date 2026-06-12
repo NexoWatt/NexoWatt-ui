@@ -69,3 +69,15 @@ src-ts/backend/license/            Lizenz-Schutzlogik
 ## 0.7.65 – Frontend-Anzeigehelfer
 
 Die Dateien unter `src-ts/frontend/` sind für browsernahe, aber noch DOM-freie Helfer gedacht. Reine Anzeigeformatierung und Sichtbarkeitsvorbereitung liegen dort; produktive DOM-Logik bleibt bis zur gezielten Migration in `www/*.js`.
+
+
+## 0.7.66 – Build-Output und JS-Spiegelstrategie
+
+- Erste reproduzierbare TS→JS-Spiegelung für `scripts/publish-check-rules.js`.
+- TS-Quelle bleibt `src-ts/scripts/publish-check-rules.ts`.
+- Keine produktive Runtime-Logik wird geändert.
+
+
+## 0.7.66 – Build-/Spiegelregel
+
+Ab 0.7.66 duerfen kleine, risikoarme Bereiche aus TypeScript nach JavaScript gespiegelt werden. Die Quelle liegt unter `src-ts/`, die Laufzeitdatei bleibt dort, wo Node/ioBroker sie erwartet. Produktive EMS-Logik wird erst migriert, wenn der jeweilige Bereich Regressionstests besitzt.
