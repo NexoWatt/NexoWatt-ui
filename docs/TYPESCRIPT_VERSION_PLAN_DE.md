@@ -36,3 +36,19 @@ Schrittweise Migration der großen UI- und Zusatzbereiche.
 - Geänderte Nutzung: `scripts/verify-publish.js` ruft die ausgelagerten Regeln auf.
 - Kommentarregel: Jede neue Regel hat einen deutschen Kommentar mit Zweck, Zusammenhang und TypeScript-Hinweis.
 - Risiko: niedrig, weil Energiefluss, Speicher, Heizstab, KI, History und SmartHome nicht verändert wurden.
+
+## Ergänzung ab 0.7.62: feste TS-Ordnerstruktur
+
+Ab 0.7.62 werden neue TypeScript-Dateien nach fachlichen Bereichen abgelegt:
+
+```text
+src-ts/contracts/      Typverträge
+src-ts/utils/          kleine neutrale Helfer
+src-ts/resolvers/      übergreifende Resolver
+src-ts/ems/<modul>/    EMS-Module wie Core-Limits, Heizstab, Peak-Shaving
+src-ts/quality/        fachliche Regressionstabellen
+src-ts/tests/          Smoke-/Runtime-Tests
+```
+
+Damit entsteht keine unübersichtliche Sammlung von TS-Dateien. Jede Datei muss fachlich
+an ihrem Zielbereich liegen und deutsche Kommentare direkt an den Code-Teilen enthalten.

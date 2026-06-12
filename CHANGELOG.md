@@ -1,3 +1,12 @@
+## 0.7.62 - TypeScript Core-Limits und Heizstab-Vorbereitung
+
+- TypeScript-Verträge für zentrale EMS-Budgets und Heizstab-/Thermikentscheidungen ergänzt.
+- Neue fachliche TS-Struktur unter `src-ts/ems/core-limits` und `src-ts/ems/heating-rod` eingeführt.
+- Produktionsnahe Regressionen für Speicherreserve, PV-Budget, Netzlimit und Heizstab-Stufenauswahl ergänzt.
+- Neue Checks `test:ems-budget-heating-rod` und `test:ems-budget-heating-rod-runtime` ergänzt.
+- Keine produktive Runtime-Logik geändert.
+- Service-Worker Cache auf `nexowatt-cache-v230` erhöht.
+
 # 0.7.61 - TypeScript Energiefluss-Resolver und Regressionen
 
 - Produktionsnahe TypeScript-Vorbereitung für Speicher-, Netz- und Gebäudelast-Resolver ergänzt.
