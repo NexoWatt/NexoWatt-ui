@@ -25,7 +25,7 @@ const mirrorSpecs = [
   {
     sourceRel: 'src-ts/frontend/customer-feature-visibility.ts',
     mirrorRel: 'www/static/ts-mirrors/frontend/customer-feature-visibility.mjs',
-    exports: ['hasRealEvcsProof', 'hasRealStorageFarmProof', 'buildCustomerFeatureVisibility'],
+    exports: ['hasRealEvcsProof', 'hasRealStorageFarmProof', 'decideEvcsVisibility', 'decideStorageFarmVisibility', 'explainCustomerFeatureVisibility', 'buildCustomerFeatureVisibility'],
   },
   {
     sourceRel: 'src-ts/frontend/history-controls.ts',
@@ -107,6 +107,8 @@ async function verifyModuleExports(spec) {
   if (spec.mirrorRel.includes('customer-feature-visibility')) {
     const state = mod.buildCustomerFeatureVisibility({ evcsProofs: [], storageFarmEnabled: false, storageFarmProofs: [] });
     if (!state || state.hasEvcs !== false || state.hasStorageFarm !== false) fail('customer-feature-visibility.mjs muss nicht konfigurierte Features ausblenden.');
+    const explanation = mod.explainCustomerFeatureVisibility({ evcsProofs: [], storageFarmEnabled: false, storageFarmProofs: [] });
+    if (!explanation || !Array.isArray(explanation.decisions)) fail('customer-feature-visibility.mjs muss erklärende Entscheidungen liefern.');
   }
   if (spec.mirrorRel.includes('history-controls')) {
     const toolbar = mod.buildHistoryToolbarState({ mode: 'day', hasEvcs: false, hasTariff: true, canLoad: true });
@@ -133,7 +135,24 @@ async function main() {
     await verifyModuleExports(spec);
   }
 
-  console.log('[verify-ts-frontend-mirrors] OK: Frontend-TS->MJS-Spiegel sind synchron und importierbar.');
+  requireFrontendMirrorRuntimeCheck();
+console.log('[verify-ts-frontend-mirrors] OK: Frontend-TS->MJS-Spiegel sind synchron und importierbar.');
 }
 
 main().catch((err) => fail(err && err.stack ? err.stack : String(err)));
+
+/**
+ * Code-Teil: requireFrontendMirrorRuntimeCheck
+ *
+ * Zweck:
+ * Prüft, ob der Runtime-Importcheck für die MJS-Spiegel vorhanden ist.
+ *
+ * Zusammenhang:
+ * Reine Existenz- und Hash-Prüfungen reichen nicht aus. Dieser zusätzliche Check
+ * importiert die generierten `.mjs`-Dateien wirklich und schützt uns vor kaputten
+ * Browser-Spiegeln, bevor wir sie später produktiv nutzen.
+ */
+function requireFrontendMirrorRuntimeCheck() {
+  const rel = 'scripts/verify-ts-frontend-mirror-runtime.js';
+  if (!fs.existsSync(path.join(root, rel))) fail(`${rel} fehlt.`);
+}

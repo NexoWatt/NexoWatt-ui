@@ -13,6 +13,7 @@
   "include": [
     "src-ts/frontend/display-format.ts",
     "src-ts/frontend/customer-feature-visibility.ts",
+    "src-ts/frontend/feature-visibility-diagnostics.ts",
     "src-ts/frontend/history-controls.ts"
   ],
   "exclude": [

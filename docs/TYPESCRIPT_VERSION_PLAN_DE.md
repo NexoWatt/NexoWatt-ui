@@ -81,3 +81,13 @@ Die Dateien unter `src-ts/frontend/` sind für browsernahe, aber noch DOM-freie 
 ## 0.7.66 – Build-/Spiegelregel
 
 Ab 0.7.66 duerfen kleine, risikoarme Bereiche aus TypeScript nach JavaScript gespiegelt werden. Die Quelle liegt unter `src-ts/`, die Laufzeitdatei bleibt dort, wo Node/ioBroker sie erwartet. Produktive EMS-Logik wird erst migriert, wenn der jeweilige Bereich Regressionstests besitzt.
+
+## Ergänzung 0.7.68: Backend-CJS-Spiegel
+
+Ab 0.7.68 gibt es neben Script- und Frontend-Spiegeln auch backendnahe CommonJS-Spiegel unter:
+
+```text
+lib/ts-mirrors/backend/
+```
+
+Diese Spiegel sind für spätere `main.js`-Auslagerungen gedacht. Sie dürfen erst produktiv genutzt werden, wenn für den jeweiligen Bereich Regressionstests vorhanden sind und der bisherige JS-Code über mindestens eine Version im Vergleichs-/Schattenmodus geprüft wurde.

@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "rootDir": "src-ts",
+    "outDir": "build-ts/backend-mirrors",
+    "module": "CommonJS",
+    "target": "ES2022",
+    "removeComments": false
+  },
+  "include": [
+    "src-ts/backend/state-cache/state-cache.ts",
+    "src-ts/backend/feature-visibility/feature-visibility.ts",
+    "src-ts/backend/license/license-key-safety.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "build-types",
+    "build-ts"
+  ]
+}

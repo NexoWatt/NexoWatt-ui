@@ -10,3 +10,5 @@
  */
 
 export * from './energy-flow-resolver';
+
+export * from './feature-visibility-resolver';

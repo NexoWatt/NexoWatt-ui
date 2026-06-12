@@ -1,3 +1,19 @@
+## 0.7.68 - Frontend-MJS-Spiegel Runtime-Check
+
+- Runtime-Importcheck für die generierten Frontend-MJS-Spiegel ergänzt.
+- Prüft `display-format.mjs`, `customer-feature-visibility.mjs` und `history-controls.mjs` ohne produktive VIS-Änderung.
+- Regressionsfälle für `0 W`, EVCS/Farm-Sichtbarkeit und History-EVCS-PDF ergänzt.
+- `publish:check` prüft jetzt zusätzlich, ob die MJS-Spiegel importierbar und fachlich plausibel sind.
+- Service-Worker Cache auf `nexowatt-cache-v236` erhöht.
+
+# 0.7.68 - TypeScript Feature-Visibility Regressionen
+
+- TypeScript-Regressionsfälle für kundenseitige Feature-Sichtbarkeit ergänzt.
+- EVCS-/Wallbox-Sichtbarkeit, Speicherfarm-Sichtbarkeit, Wetter-, SmartHome- und KI-Sichtbarkeit fachlich abgesichert.
+- Neuer Runtime-Test für `buildCustomerFeatureVisibility` ergänzt.
+- Keine produktive Runtime-Logik geändert.
+- Service-Worker Cache auf `nexowatt-cache-v236` erhöht.
+
 # 0.7.67 - TypeScript Frontend-Display-MJS-Spiegel
 
 - Ersten kontrollierten TS->MJS-Spiegel fuer browsernahe Frontend-Display-Helfer ergänzt.

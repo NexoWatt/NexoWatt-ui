@@ -42,6 +42,12 @@ const mirrorSpecs = [
     publicName: 'customer-feature-visibility',
   },
   {
+    sourceRel: 'src-ts/frontend/feature-visibility-diagnostics.ts',
+    builtRel: 'build-ts/frontend-mirrors/frontend/feature-visibility-diagnostics.js',
+    mirrorRel: 'www/static/ts-mirrors/frontend/feature-visibility-diagnostics.mjs',
+    publicName: 'feature-visibility-diagnostics',
+  },
+  {
     sourceRel: 'src-ts/frontend/history-controls.ts',
     builtRel: 'build-ts/frontend-mirrors/frontend/history-controls.js',
     mirrorRel: 'www/static/ts-mirrors/frontend/history-controls.mjs',

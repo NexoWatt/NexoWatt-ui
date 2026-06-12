@@ -1,4 +1,5 @@
 import type { EvcsPresenceProof, FeatureVisibilityState, StorageFarmPresenceProof } from '../../contracts/features';
+import { deriveCustomerFeatureVisibility, hasRealEvcsPresenceProof, hasRealStorageFarmPresenceProof } from '../../resolvers/feature-visibility-resolver';
 
 /**
  * Datei: src-ts/backend/visibility/feature-visibility.ts
@@ -19,14 +20,14 @@ import type { EvcsPresenceProof, FeatureVisibilityState, StorageFarmPresenceProo
 
 /** Eingabe für die Sichtbarkeitsableitung aus Config, Kundenschalter und Nachweisen. */
 export interface FeatureVisibilityInput {
-  readonly evcsEnabled?: boolean;
-  readonly smartHomeEnabled?: boolean;
-  readonly weatherEnabled?: boolean;
-  readonly aiAdvisorAppEnabled?: boolean;
-  readonly aiAdvisorCustomerEnabled?: boolean;
-  readonly storageFarmEnabled?: boolean;
-  readonly evcsProofs?: readonly EvcsPresenceProof[];
-  readonly storageFarmProofs?: readonly StorageFarmPresenceProof[];
+  readonly evcsEnabled?: boolean | undefined;
+  readonly smartHomeEnabled?: boolean | undefined;
+  readonly weatherEnabled?: boolean | undefined;
+  readonly aiAdvisorAppEnabled?: boolean | undefined;
+  readonly aiAdvisorCustomerEnabled?: boolean | undefined;
+  readonly storageFarmEnabled?: boolean | undefined;
+  readonly evcsProofs?: readonly EvcsPresenceProof[] | undefined;
+  readonly storageFarmProofs?: readonly StorageFarmPresenceProof[] | undefined;
 }
 
 /**
@@ -74,14 +75,15 @@ export function hasRealStorageFarmProof(proofs: readonly StorageFarmPresenceProo
  * zeigen, das in der Kundenanlage gar nicht vorhanden ist.
  */
 export function deriveFeatureVisibility(input: FeatureVisibilityInput): FeatureVisibilityState {
-  const hasEvcs = input.evcsEnabled === true && hasRealEvcsProof(input.evcsProofs);
-  const hasStorageFarm = input.storageFarmEnabled === true && hasRealStorageFarmProof(input.storageFarmProofs);
-
-  return {
-    hasEvcs,
-    hasStorageFarm,
-    hasSmartHome: input.smartHomeEnabled === true,
-    hasWeather: input.weatherEnabled === true,
-    hasAiAdvisor: input.aiAdvisorAppEnabled === true && input.aiAdvisorCustomerEnabled !== false,
-  };
+  return deriveCustomerFeatureVisibility({
+    evcsEnabled: input.evcsEnabled,
+    evcsProofs: input.evcsProofs,
+    storageFarmEnabled: input.storageFarmEnabled,
+    storageFarmProofs: input.storageFarmProofs,
+    smartHomeEnabled: input.smartHomeEnabled,
+    weatherEnabled: input.weatherEnabled,
+    weatherHasData: input.weatherEnabled === true,
+    aiAdvisorAppEnabled: input.aiAdvisorAppEnabled,
+    aiAdvisorCustomerEnabled: input.aiAdvisorCustomerEnabled,
+  });
 }
