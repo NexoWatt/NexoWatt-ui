@@ -144,3 +144,14 @@ Regeln:
 
 - Frontend muss fehlende States robust behandeln.
 - Backend darf keine State-Bedeutung ohne Dokumentation ändern.
+
+## Ergänzung 0.7.56 – TypeScript-Verträge
+
+Die wichtigsten Code-Verträge existieren jetzt zusätzlich als echte TypeScript-Typen unter:
+
+```text
+src-ts/contracts
+```
+
+Diese TS-Verträge sind die Vorlage für die spätere Migration der JavaScript-Resolver und EMS-Module. Besonders wichtig sind `StorageFlowResult`, `EnergyFlowSnapshot`, `FeatureVisibilityState` und `AiAdvisorSuggestion`.
+

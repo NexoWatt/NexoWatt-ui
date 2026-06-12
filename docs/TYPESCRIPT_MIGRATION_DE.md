@@ -129,3 +129,17 @@ Nicht entfernen:
 - fachliche Regeln.
 - Datenfluss-Hinweise.
 - „Nicht kaputt machen“-Hinweise.
+
+## Ergänzung 0.7.56 – erster TypeScript-Scaffold
+
+Mit Version 0.7.56 wurde der erste echte TypeScript-Migrationsbereich angelegt.
+
+```text
+tsconfig.json
+src-ts/contracts/*.ts
+```
+
+Diese Dateien enthalten noch keine produktive Runtime-Logik. Sie definieren zuerst fachliche Verträge für Energiefluss, Speicher, Feature-Sichtbarkeit, KI-Berater, Lizenz und Datenpunkte.
+
+Regel für kommende Änderungen: Wenn ein Codebereich fachlich angefasst wird, bekommt er entweder direkt TypeScript oder mindestens einen passenden TypeScript-Vertrag.
+

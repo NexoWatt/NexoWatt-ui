@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "nexowatt-ui",
-    "version": "0.7.55",
+    "version": "0.7.56",
     "news": {
+      "0.7.56": {
+        "de": "TypeScript-Migrationsbasis ergänzt: tsconfig, erste Verträge für Energiefluss, Speicher, Feature-Sichtbarkeit, KI-Berater, Lizenz und Datenpunkte. Keine Funktionslogik geändert.",
+        "en": "Added TypeScript migration scaffold: tsconfig and first contracts for energy flow, storage, feature visibility, AI advisor, license and datapoints. No runtime logic changed."
+      },
       "0.7.55": {
         "de": "Dokumentationsvertiefung: Architektur, Datenflüsse, State-/DP-Katalog, kritische Regeln, TypeScript-Migrationsplan, Modul-Checklisten und Code-Verträge ergänzt. Keine Funktionslogik geändert.",
         "en": "Documentation deepening: added architecture, data flows, state/datapoint catalog, critical rules, TypeScript migration plan, module checklists and code contracts. No functional logic changed."
@@ -26,10 +30,6 @@
       "0.7.50": {
         "en": "ioBroker stability maintenance: Node.js engine raised to >=22, CI prepared for Node 22/24, licenseKey protected/encrypted, info.connection implemented, native ip handling added with bind fallback, package metadata and news cleaned for adapter-checker compatibility.",
         "de": "ioBroker-Stabilitätswartung: Node.js Engine auf >=22 angehoben, CI für Node 22/24 vorbereitet, licenseKey geschützt/verschlüsselt, info.connection implementiert, native ip mit bind-Fallback ergänzt sowie Paket-Metadaten und News für Adapter-Checker bereinigt."
-      },
-      "0.7.49": {
-        "en": "Mobile VIS hotfix: History controls no longer overflow on smartphones; SmartHome uses a reliable mobile drawer/loading state.",
-        "de": "Mobile-VIS-Hotfix: History-Bedienleiste läuft auf Smartphones nicht mehr seitlich weg; SmartHome nutzt einen zuverlässigen mobilen Drawer/Ladezustand."
       }
     },
     "title": "NexoWatt UI",

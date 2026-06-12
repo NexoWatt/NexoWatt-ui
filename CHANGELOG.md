@@ -1,3 +1,12 @@
+# 0.7.56 - TypeScript Migration Scaffold
+
+- TypeScript-Migrationsbasis ergänzt: `tsconfig.json` und erster `src-ts`-Bereich.
+- Erste TypeScript-Verträge für Einheiten, Energiefluss, Speicherauflösung, Feature-Sichtbarkeit, KI-Berater, Lizenz, Datenpunkte und ioBroker-State-Cache ergänzt.
+- Neue npm-Skripte `typecheck` und `test:types` ergänzt; `publish:check` führt jetzt zusätzlich den TypeScript-Typecheck aus.
+- Dokumentation zur TypeScript-Migrationsbasis unter `docs/TYPESCRIPT_SCAFFOLD_0756_DE.md` ergänzt.
+- Keine Produktivlogik geändert: Energiefluss, Speicher-DP-Resolver, Heizstab, KI, History, SmartHome, Lizenz und Connection-State bleiben unverändert.
+- Service-Worker Cache auf `nexowatt-cache-v224` erhöht.
+
 # 0.7.55 - Architektur-, Datenfluss- und TypeScript-Dokumentation
 
 - Dokumentationsvertiefung ohne Funktionsänderungen.

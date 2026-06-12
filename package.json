@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.7.55",
+  "version": "0.7.56",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -18,12 +18,14 @@
     "admin:install": "npm --prefix src-admin-tab install",
     "admin:build": "npm --prefix src-admin-tab run build",
     "build": "npm run admin:build",
-    "publish:check": "node scripts/verify-publish.js",
-    "prepublishOnly": "node scripts/verify-publish.js",
-    "test": "npm run test:package",
+    "publish:check": "node scripts/verify-publish.js && npm run typecheck",
+    "prepublishOnly": "npm run publish:check",
+    "test": "npm run test:package && npm run typecheck",
     "test:package": "node scripts/verify-publish.js && npm pack --dry-run",
     "test:js": "node scripts/verify-publish.js",
-    "ioBroker:check": "node scripts/verify-publish.js"
+    "ioBroker:check": "node scripts/verify-publish.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:types": "npm run typecheck"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",
@@ -54,10 +56,14 @@
     "README.md",
     "LICENSE",
     "ems/**/*",
-    "docs/**/*"
+    "docs/**/*",
+    "src-ts/**/*",
+    "tsconfig.json"
   ],
   "devDependencies": {
     "@iobroker/testing": "^5.2.2",
-    "@iobroker/adapter-dev": "^1.5.0"
+    "@iobroker/adapter-dev": "^1.5.0",
+    "typescript": "^5.8.3",
+    "@types/node": "^22.15.32"
   }
 }

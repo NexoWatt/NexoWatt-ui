@@ -27,3 +27,14 @@ Neue Änderungen sollen künftig schrittweise nach TypeScript migriert werden. V
 - Typen für Config, State-Snapshot und API-Antworten definieren,
 - alte JS-Logik nicht gleichzeitig fachlich ändern,
 - Regression-Tests für Speicher, EVCS, Speicherfarm, Lizenz, Heizstab und History behalten.
+
+## Ergänzung 0.7.56 – neuer TypeScript-Bereich
+
+Neuer Projektbereich:
+
+```text
+src-ts/contracts
+```
+
+Dieser Bereich enthält keine laufende Adapterlogik, sondern typisierte fachliche Verträge. Er dient als Brücke zwischen dokumentiertem JavaScript und späterer TypeScript-Migration.
+
