@@ -1,10 +1,17 @@
-## 0.7.69 - TypeScript Resolver-Spiegel und Runtime-Checks
+## 0.7.70 - TypeScript Source Integrity Stabilization
 
-- TypeScript-Resolver unter `src-ts/resolvers/` werden jetzt als CommonJS-Spiegel unter `lib/ts-mirrors/resolvers/` erzeugt.
-- Neue Build-/Check-Befehle für Resolver-Spiegel ergänzt: `sync:ts-resolver-mirrors`, `check:ts-resolver-mirrors`, `test:resolver-mirrors` und `test:resolver-mirror-runtime`.
-- Runtime-Checks für Energiefluss-Resolver und Feature-Sichtbarkeit ergänzt.
-- Kritische Regeln abgesichert: 0-W-Speicherwerte bleiben gültig, Split-/Signed-DPs schlagen Bilanz-Fallback, EVCS/Farm bleiben ohne echte DPs unsichtbar.
-- Keine produktive Runtime-Logik geändert.
+- Reine TS-Migrations-Stabilisierung ohne Runtime-Änderung.
+- `scripts/verify-ts-source-syntax.js` ergänzt, um alle `src-ts/**/*.ts` gegen abgeschnittene Dateien, Syntaxfehler und kaputte Exporte zu prüfen.
+- Neuer Befehl `npm run check:ts-source-syntax`. Dieser Check benötigt vorher `npm install`/`npm ci`, bleibt aber bewusst außerhalb des schnellen `publish:check`.
+- Version und Service-Worker-Cache auf 0.7.70 / `nexowatt-cache-v238` erhöht.
+
+## 0.7.69 - TypeScript Energiefluss-Spiegel und Shadow-Vergleich-Vorstufe
+
+- CommonJS-Spiegel für TypeScript-Energiefluss-Helfer und den produktionsnahen Resolver ergänzt.
+- Neue Spiegel unter `lib/ts-mirrors/energy-flow/**` vorbereitet; sie werden noch nicht produktiv von `main.js` oder `www/app.js` genutzt.
+- Synchronitäts- und Runtime-Checks für Split-/Signed-Speicher, Fallback, Netz-Signed und 0-W-Fälle ergänzt.
+- Build-/Check-Skripte für `sync:ts-energy-flow-mirrors`, `check:ts-energy-flow-mirrors` und `test:energy-flow-mirrors` ergänzt.
+- Keine Änderung an Energiefluss-, Speicher-, Heizstab-, KI-, History-, SmartHome- oder Lizenz-Runtime.
 - Service-Worker Cache auf `nexowatt-cache-v237` erhöht.
 
 ## 0.7.68 - Frontend-MJS-Spiegel Runtime-Check
