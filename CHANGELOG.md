@@ -1,3 +1,45 @@
+# 0.7.81 - Energiefluss TS-Schaltmodus im App-Center
+
+- Energiefluss-TypeScript-Modus im App-Center sichtbar gemacht: `js`, `shadow`, `ts`.
+- Zusätzliche Sicherheitsfreigabe `energyFlowProductionAllowed` im App-Center steuerbar gemacht.
+- App-Center zeigt effektive Quelle, Freigabe, Blocker und TS-Nutzungsstatus aus der Shadow-Readiness.
+- `tsMigration` wird jetzt über die Installer-Konfiguration geladen und gespeichert.
+- Neue Prüfung `npm run test:energy-flow-mode-ui` ergänzt.
+- Service-Worker Cache auf `nexowatt-cache-v249` erhöht.
+
+# 0.7.80 - Energiefluss TS-Modus kontrolliert vorbereiten
+
+- Internen Energiefluss-TypeScript-Modus `js/shadow/ts` vorbereitet.
+- Standard bleibt `shadow`: JavaScript ist produktiv führend, TypeScript rechnet nur Diagnose.
+- `ts` wird nur als Kandidatenmodus markiert und schreibt in dieser Version noch keine produktiven Werte.
+- App-Center zeigt Energiefluss-Modus und geplante Quelle in der TS-Umschaltbereitschaft.
+- Keine Änderung an Energiefluss-, Speicher-, Core-Limits-, Heizstab-, History- oder KI-Runtime.
+
+# 0.7.79 - TS-Shadow-Diagnose auswerten und Energiefluss-Umschaltung vorbereiten
+
+- Diagnose-API erweitert: `control.tsShadowReadiness` fasst Core-Limits-, Heizstab- und Energiefluss-Shadow-Vergleiche zusammen.
+- App-Center zeigt jetzt eine eigene Karte „TS-Umschaltbereitschaft“ mit Status, Blockern und nächster Handlung.
+- Keine produktive Umschaltung: JS-Runtime bleibt weiterhin autoritativ.
+- Neuer Check `npm run test:shadow-readiness` ergänzt.
+- Service-Worker Cache auf `nexowatt-cache-v247` erhöht.
+
+## 0.7.78 - TypeScript Shadow-Diagnose im App-Center
+
+- App-Center Statusbereich um sichtbare TypeScript-Shadow-Diagnose erweitert.
+- Core-Limits-, Heizstab- und Energiefluss-Shadow-Ergebnisse werden als Karten mit OK/Abweichung/Fehler angezeigt.
+- Diagnose-API `/api/ems/charging/diagnostics` liefert die benötigten Shadow-JSON-States an das Frontend.
+- Keine produktive Runtime-Logik geändert; JS bleibt weiterhin autoritativ.
+- Neuer Check `npm run test:shadow-diagnostics-ui`.
+- Service-Worker Cache auf `nexowatt-cache-v246` erhöht.
+
+## 0.7.77 - Core-Limits/Heizstab TypeScript Shadow-Vergleich
+
+- Core-Limits-TS-Spiegel läuft jetzt parallel im Shadow-Modus und schreibt Diagnose nach `ems.budget.tsShadowJson`.
+- Heizstab-TS-Spiegel läuft parallel im Shadow-Modus und schreibt Diagnose nach `heatingRod.summary.tsShadowJson`.
+- Keine produktive Umschaltung: JavaScript-Runtime bleibt für Budgets und Heizstabentscheidungen autoritativ.
+- Neuer Check `npm run test:ems-shadow-runtime` prüft Spiegel-Importe und kritische Fachfälle.
+- Service-Worker Cache auf `nexowatt-cache-v245` erhöht.
+
 ## 0.7.76 - TypeScript EMS-Mirror für Core-Limits und Heizstab
 
 - Neue TypeScript-zu-JavaScript-Spiegel für `src-ts/ems/core-limits/core-budget.ts` und `src-ts/ems/heating-rod/heating-rod-decision.ts` ergänzt.

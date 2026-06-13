@@ -1591,6 +1591,54 @@
       <div id="chargingBudget" class="nw-config-grid"></div>
     </section>
 
+    <section class="nw-config-section">
+      <div class="nw-config-section__head">
+        <h2 class="nw-config-section__title">TypeScript Shadow‑Diagnose</h2>
+        <div class="nw-config-row__actions">
+          <button id="refreshShadowDiagnostics" type="button" class="nw-config-btn nw-config-btn--ghost">Aktualisieren</button>
+        </div>
+      </div>
+      <div class="nw-config-section__subtitle" style="margin:0 0 10px 0;opacity:.85;">
+        Lesbarer Vergleich zwischen aktueller JavaScript‑Runtime und TypeScript‑Spiegeln. Diese Kacheln zeigen, ob eine spätere TS-Umschaltung sicher vorbereitet ist.
+      </div>
+
+      <div class="nw-config-card nw-ts-energyflow-mode-card">
+        <div class="nw-config-card__header">
+          <div>
+            <div class="nw-config-card__title">Energiefluss TypeScript‑Schaltmodus</div>
+            <div class="nw-config-card__subtitle">Steuert, ob der Energiefluss nur per JS läuft, im Shadow‑Vergleich geprüft wird oder kontrolliert als TS‑Kandidat freigegeben werden darf.</div>
+          </div>
+        </div>
+        <div class="nw-config-card__body nw-ts-energyflow-mode-grid">
+          <label class="nw-config-field-row" for="energyFlowTsMode">
+            <span class="nw-config-field-label">Modus</span>
+            <span class="nw-config-field-control">
+              <select id="energyFlowTsMode" class="nw-config-input">
+                <option value="js">JS – nur alte Runtime</option>
+                <option value="shadow">Shadow – JS produktiv, TS Diagnose</option>
+                <option value="ts">TS – Kandidatenmodus</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="nw-config-checklabel nw-ts-energyflow-production-row">
+            <input id="energyFlowTsProductionAllowed" class="nw-config-checkbox" type="checkbox" />
+            <span>Produktive TS‑Freigabe erlauben</span>
+          </label>
+
+          <div class="nw-config-empty nw-ts-energyflow-safety-note">
+            Sicherheitsregel: TS wird nur produktiv genutzt, wenn Modus <b>TS</b>, diese Freigabe aktiv und der Shadow‑Vergleich ohne Blocker ist. Standard bleibt <b>Shadow</b>.
+          </div>
+
+          <div id="energyFlowTsModeStatus" class="nw-config-empty nw-ts-energyflow-mode-status">
+            Aktueller Modus wird nach dem Laden der Konfiguration angezeigt.
+          </div>
+        </div>
+      </div>
+
+      <div id="shadowDiagnostics" class="nw-config-grid"></div>
+    </section>
+
 <section class="nw-config-section">
       <div class="nw-config-section__head">
         <h2 class="nw-config-section__title">Ladepunkte – Diagnose</h2>

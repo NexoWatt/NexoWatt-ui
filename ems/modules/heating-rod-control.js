@@ -41,6 +41,45 @@
 
 
 const { BaseModule } = require('./base');
+
+
+/**
+ * Code-Teil: requireHeatingRodTsMirror
+ *
+ * Zweck:
+ * Lädt den aus TypeScript erzeugten Heizstab-Entscheidungsspiegel.
+ *
+ * Zusammenhang:
+ * In 0.7.77 dient dieser Spiegel ausschließlich zum Shadow-Vergleich. Die reale
+ * Heizstab-Schaltlogik bleibt komplett in `heating-rod-control.js`.
+ */
+function requireHeatingRodTsMirror() {
+    try {
+        return require('../../lib/ts-mirrors/ems/heating-rod/heating-rod-decision');
+    } catch (_e) {
+        return null;
+    }
+}
+
+/**
+ * Code-Teil: compareHeatingRodShadowField
+ *
+ * Zweck:
+ * Vergleicht alte JS-Entscheidung und neue TS-Entscheidung für ein Feld.
+ *
+ * Wichtig:
+ * Der Vergleich ist Diagnose. Er darf niemals eine Stufe, Leistung oder einen
+ * Ausgang überschreiben.
+ */
+function compareHeatingRodShadowField(field, jsValue, tsValue, toleranceW = 5) {
+    const js = Number(jsValue);
+    const ts = Number(tsValue);
+    if (Number.isFinite(js) || Number.isFinite(ts)) {
+        const ok = Number.isFinite(js) && Number.isFinite(ts) && Math.abs(js - ts) <= toleranceW;
+        return ok ? null : { field, js: Number.isFinite(js) ? Math.round(js) : null, ts: Number.isFinite(ts) ? Math.round(ts) : null };
+    }
+    return jsValue === tsValue ? null : { field, js: jsValue, ts: tsValue };
+}
 /**
  * Code-Teil: num
  * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -583,6 +622,7 @@ class HeatingRodControlModule extends BaseModule {
         await mk('heatingRod.summary.gridImportExceeded', 'Grid import above heating rod limit', 'boolean', 'indicator');
         await mk('heatingRod.summary.storageDischargeExceeded', 'Storage discharge above heating rod limit', 'boolean', 'indicator');
         await mk('heatingRod.summary.debugJson', 'Debug JSON', 'string', 'json');
+        await mk('heatingRod.summary.tsShadowJson', 'TypeScript Heizstab Shadow-Vergleich (JSON)', 'string', 'json');
         await mk('heatingRod.summary.zeroExportActive', 'Zero/minus feed-in logic active', 'boolean', 'indicator');
         await mk('heatingRod.summary.zeroExportCanProbe', 'Zero/minus feed-in probe allowed', 'boolean', 'indicator');
         await mk('heatingRod.summary.zeroExportReason', 'Zero/minus feed-in reason', 'string', 'text');
@@ -2693,6 +2733,79 @@ class HeatingRodControlModule extends BaseModule {
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
+
+    /**
+     * Code-Teil: _runHeatingRodTsShadowComparison
+     *
+     * Zweck:
+     * Lässt den TypeScript-Heizstab-Entscheidungsspiegel parallel rechnen und
+     * vergleicht die Zielstufe mit der alten JavaScript-Runtime.
+     *
+     * Zusammenhang:
+     * Dieser Vergleich ist die sichere Vorstufe für eine spätere TS-Umstellung der
+     * Heizstabentscheidung. In 0.7.77 bleibt die JS-Runtime autoritativ und schreibt
+     * weiterhin alle echten Ausgänge/States.
+     */
+    _runHeatingRodTsShadowComparison(entries) {
+        const mirror = requireHeatingRodTsMirror();
+        const evaluate = mirror && typeof mirror.evaluateHeatingRodDecision === 'function' ? mirror.evaluateHeatingRodDecision : null;
+        if (!evaluate) return { available: false, ok: false, source: 'missing-ts-mirror', entries: [], mismatches: [] };
+        const out = [];
+        const allMismatches = [];
+        for (const entry of Array.isArray(entries) ? entries : []) {
+            try {
+                const d = entry.device || {};
+                const stages = (Array.isArray(d.stages) ? d.stages : [])
+                    .filter(st => st && Number.isFinite(Number(st.powerW)) && Number(st.powerW) > 0)
+                    .map((st, idx) => ({ stage: Number(st.index || st.stage || (idx + 1)), powerW: Math.max(0, Math.round(Number(st.powerW) || 0)) }));
+                const input = {
+                    ts: Date.now(),
+                    device: {
+                        id: d.id || entry.deviceId || 'unknown',
+                        enabled: !!d.enabled,
+                        mode: String(d.mode || 'pvAuto'),
+                        allowGridImport: !!(entry.allowGridImport),
+                        allowStorageDischarge: !(entry.storageProtectActive),
+                        storageReserveSocPct: Number.isFinite(Number(entry.storageReserveSocPct)) ? Number(entry.storageReserveSocPct) : 0,
+                        storageReserveW: Math.max(0, Math.round(Number(entry.storageReserveW) || 0)),
+                        stages,
+                    },
+                    availablePvW: Math.max(0, Math.round(Number(entry.availablePvW) || 0)),
+                    availableTotalW: Math.max(0, Math.round(Number(entry.availableTotalW) || 0)),
+                    storageSocPct: Number.isFinite(Number(entry.storageSocPct)) ? Number(entry.storageSocPct) : null,
+                };
+                const ts = evaluate(input);
+                const mismatches = [
+                    compareHeatingRodShadowField('targetStage', entry.jsTargetStage, ts && ts.targetStage),
+                    compareHeatingRodShadowField('targetPowerW', entry.jsTargetW, ts && ts.targetPowerW),
+                ].filter(Boolean);
+                if (mismatches.length) {
+                    for (const m of mismatches) allMismatches.push({ deviceId: input.device.id, ...m });
+                }
+                out.push({
+                    deviceId: input.device.id,
+                    ok: mismatches.length === 0,
+                    mismatches,
+                    js: { targetStage: entry.jsTargetStage, targetW: entry.jsTargetW, status: entry.jsStatus || '' },
+                    ts: { targetStage: ts ? ts.targetStage : null, targetW: ts ? ts.targetPowerW : null, reason: ts ? ts.reason : '' },
+                });
+            } catch (e) {
+                allMismatches.push({ deviceId: entry && entry.deviceId || 'unknown', field: 'exception', js: null, ts: e && e.message ? e.message : String(e) });
+            }
+        }
+        const result = { available: true, source: 'ts-mirror-shadow', ok: allMismatches.length === 0, entries: out, mismatches: allMismatches };
+        if (!result.ok) {
+            const now = Date.now();
+            if (!this._heatingRodTsShadowLastWarnMs || now - this._heatingRodTsShadowLastWarnMs > 60000) {
+                this._heatingRodTsShadowLastWarnMs = now;
+                try {
+                    this.adapter.log && this.adapter.log.warn && this.adapter.log.warn(`[heating-rod-ts-shadow] JS/TS decision mismatch: ${allMismatches.map(m => `${m.deviceId}.${m.field}`).join(', ')}`);
+                } catch (_eLog) {}
+            }
+        }
+        return result;
+    }
+
     async tick() {
         if (!this._isEnabled()) return;
 
@@ -3068,6 +3181,24 @@ class HeatingRodControlModule extends BaseModule {
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, '');
         }
 
+        for (const d of this._devices || []) {
+            heatingRodTsShadowEntries.push({
+                device: d,
+                deviceId: d.id,
+                jsTargetStage: this._stateCache.get(`heatingRod.devices.${d.id}.targetStage`) ?? 0,
+                jsTargetW: this._stateCache.get(`heatingRod.devices.${d.id}.targetW`) ?? 0,
+                jsStatus: this._stateCache.get(`heatingRod.devices.${d.id}.status`) ?? '',
+                availablePvW: Math.max(0, Number(pvBase && pvBase.availableW) || 0),
+                availableTotalW: pvBase && pvBase.budgetGateEffectiveW !== null && pvBase.budgetGateEffectiveW !== undefined ? Math.max(0, Number(pvBase.budgetGateEffectiveW) || 0) : Math.max(0, Number(pvBase && pvBase.availableW) || 0),
+                allowGridImport: !!(pvBase && (pvBase.tariffGridImportPreferred || (pvBase.budgetGateTotalW !== null && pvBase.budgetGateTotalW !== undefined))),
+                storageProtectActive: !!(pvBase && pvBase.forceOff),
+                storageSocPct: pvBase ? pvBase.storageSocPct : null,
+                storageReserveSocPct: Number(this._getCfg().storageReserveSocPct || this._getCfg().storageTargetSocPct || 0) || 0,
+                storageReserveW: pvBase ? Math.max(0, Number(pvBase.storageReserveW) || 0) : 0,
+            });
+        }
+        const heatingRodTsShadow = this._runHeatingRodTsShadowComparison(heatingRodTsShadowEntries);
+
         this.adapter._heatingRodBudgetUsedW = Math.round(budgetUsedW);
 
         // Central EMS Budget & Gates reservation. Heizstab is normally a lower-priority PV consumer
@@ -3124,8 +3255,10 @@ class HeatingRodControlModule extends BaseModule {
         await this._setStateIfChanged('heatingRod.summary.pvAutomationMinW', Math.round(num(minPvAutomationW, 0)));
         await this._setStateIfChanged('heatingRod.summary.pvAutomationPvNowW', Math.round(num(pvNowForAutomationW, 0)));
         await this._setStateIfChanged('heatingRod.summary.pvAutomationAllowed', !!pvAutomationAllowedByMin);
+        await this._setStateIfChanged('heatingRod.summary.tsShadowJson', JSON.stringify(heatingRodTsShadow || {}));
         await this._setStateIfChanged('heatingRod.summary.debugJson', JSON.stringify({
             source: pvBase.source,
+            tsShadow: heatingRodTsShadow || null,
             pvAutomationMinW: Math.round(num(minPvAutomationW, 0)),
             pvAutomationPvNowW: Math.round(num(pvNowForAutomationW, 0)),
             pvAutomationAllowed: !!pvAutomationAllowedByMin,

@@ -41,6 +41,49 @@
 
 
 const { BaseModule } = require('./base');
+
+
+/**
+ * Code-Teil: requireCoreBudgetTsMirror
+ *
+ * Zweck:
+ * Lädt den aus TypeScript erzeugten CommonJS-Spiegel für Core-Limits/Budget.
+ *
+ * Zusammenhang:
+ * In 0.7.77 wird der Spiegel nur im Shadow-Modus genutzt. Die produktive
+ * `core-limits.js`-Logik bleibt führend. Der Mirror darf hier keine States
+ * überschreiben und keine Verbraucher schalten.
+ *
+ * Wartung:
+ * Wenn der Pfad oder die Exportnamen geändert werden, müssen `test:ems-shadow`
+ * und die Mirror-Checks mit angepasst werden.
+ */
+function requireCoreBudgetTsMirror() {
+    try {
+        return require('../../lib/ts-mirrors/ems/core-limits/core-budget');
+    } catch (_e) {
+        return null;
+    }
+}
+
+/**
+ * Code-Teil: compareShadowWatt
+ *
+ * Zweck:
+ * Vergleicht einen JavaScript-Runtime-Wert mit einem TypeScript-Shadow-Wert.
+ * Kleine Rundungsabweichungen werden toleriert, damit Diagnose nicht rauscht.
+ *
+ * Zusammenhang:
+ * Core-Limits-/Heizstab-Shadow-Vergleiche nutzen diese Struktur, damit spätere
+ * Auswertung im App-Center nicht jedes Feld anders interpretieren muss.
+ */
+function compareShadowWatt(field, jsValue, tsValue, toleranceW = 5) {
+    const js = Number(jsValue);
+    const ts = Number(tsValue);
+    if (!Number.isFinite(js) && !Number.isFinite(ts)) return null;
+    const ok = Number.isFinite(js) && Number.isFinite(ts) && Math.abs(js - ts) <= toleranceW;
+    return ok ? null : { field, js: Number.isFinite(js) ? Math.round(js) : null, ts: Number.isFinite(ts) ? Math.round(ts) : null };
+}
 /**
  * Code-Teil: num
  * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -438,6 +481,7 @@ class CoreLimitsModule extends BaseModule {
         await mk('ems.budget.binding', 'Budget binding source', 'string', 'text');
         await mk('ems.budget.consumersJson', 'Budget consumers (JSON)', 'string', 'text');
         await mk('ems.budget.snapshot', 'Budget snapshot (JSON)', 'string', 'text');
+        await mk('ems.budget.tsShadowJson', 'TypeScript Core-Budget Shadow-Vergleich (JSON)', 'string', 'json');
 
         // Gate D - PV Forecast. Advisory background gate for forecast-aware app decisions.
         // It does not write setpoints and does not change the instantaneous PV budget by itself.
@@ -1013,6 +1057,95 @@ class CoreLimitsModule extends BaseModule {
      * Zusammenhang: Teil von EMS-Modul: Regelung, Diagnose oder Beratung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
      * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
      */
+
+    /**
+     * Code-Teil: _runCoreBudgetTsShadowComparison
+     *
+     * Zweck:
+     * Berechnet aus den bereits vorhandenen JavaScript-Runtimewerten zusätzlich
+     * einen TypeScript-Shadow-Snapshot und vergleicht zentrale Budgetfelder.
+     *
+     * Zusammenhang:
+     * Dieser Shadow-Vergleich ist die sichere Vorstufe, bevor Core-Limits später
+     * produktiv aus TypeScript kommen dürfen. Die produktive Runtime bleibt in
+     * 0.7.77 vollständig bei der bestehenden JavaScript-Logik.
+     *
+     * Wichtig:
+     * - Es werden keine produktiven Werte überschrieben.
+     * - Abweichungen werden nur im Diagnose-JSON und als gedrosselte Warnung sichtbar.
+     * - Die Eingaben sind so gewählt, dass der TS-Spiegel die aktuelle JS-Budgetregel
+     *   nachbildet, inklusive PV-Reserve-Abzug.
+     */
+    _runCoreBudgetTsShadowComparison(budgetSnapshot) {
+        const mirror = requireCoreBudgetTsMirror();
+        const build = mirror && typeof mirror.buildCoreBudgetSnapshot === 'function' ? mirror.buildCoreBudgetSnapshot : null;
+        if (!build || !budgetSnapshot || typeof budgetSnapshot !== 'object') {
+            return { available: false, ok: false, source: 'missing-ts-mirror', mismatches: [] };
+        }
+        try {
+            const raw = budgetSnapshot.raw || {};
+            const gates = budgetSnapshot.gates || {};
+            const pv = gates.pv || {};
+            const grid = gates.grid || {};
+            const total = gates.total || {};
+            const reserveW = Number(raw.pvReserveW || pv.reserveW || 0);
+            const importForGridHeadroom = Math.max(0, Number(raw.gridImportW || 0) - Number(raw.flexUsedW || 0));
+            const ts = build({
+                ts: budgetSnapshot.ts || Date.now(),
+                pvSurplusW: Number(pv.rawW || 0),
+                storageReserveW: Number.isFinite(reserveW) ? reserveW : 0,
+                alreadyReservedW: 0,
+                // Die aktuelle JS-Logik zieht pvReserveW immer vom PV-Budget ab. Für den
+                // Vergleich erzwingen wir daher eine aktive Reserve, ohne Runtime-Verhalten
+                // zu ändern. Spätere produktive TS-Logik darf hier fachlich verfeinert werden.
+                storageSocPct: 0,
+                storageReserveSocPct: 100,
+                allowStorageDischarge: false,
+                gridImportW: importForGridHeadroom,
+                gridImportLimitW: Number(grid.importLimitW || 0),
+                allowGridImport: true,
+                peakShavingActive: false,
+                externalLimitActive: false,
+            });
+            const mismatches = [
+                compareShadowWatt('pv.rawW', pv.rawW, ts && ts.pv ? ts.pv.rawW : null),
+                compareShadowWatt('pv.effectiveW', pv.effectiveW, ts && ts.pv ? ts.pv.effectiveW : null),
+                compareShadowWatt('grid.effectiveW', grid.headroomW, ts && ts.grid ? ts.grid.effectiveW : null),
+                compareShadowWatt('total.effectiveW', total.effectiveW, ts && ts.total ? ts.total.effectiveW : null),
+            ].filter(Boolean);
+            const result = {
+                available: true,
+                ok: mismatches.length === 0,
+                source: 'ts-mirror-shadow',
+                mismatches,
+                js: {
+                    pvRawW: roundW(pv.rawW),
+                    pvEffectiveW: roundW(pv.effectiveW),
+                    gridHeadroomW: grid.headroomW === null || grid.headroomW === undefined ? null : roundW(grid.headroomW),
+                    totalEffectiveW: total.effectiveW === null || total.effectiveW === undefined ? null : roundW(total.effectiveW),
+                },
+                ts: {
+                    pvRawW: ts && ts.pv ? roundW(ts.pv.rawW) : null,
+                    pvEffectiveW: ts && ts.pv ? roundW(ts.pv.effectiveW) : null,
+                    gridEffectiveW: ts && ts.grid ? roundW(ts.grid.effectiveW) : null,
+                    totalEffectiveW: ts && ts.total ? roundW(ts.total.effectiveW) : null,
+                },
+            };
+            if (!result.ok) {
+                const now = Date.now();
+                if (!this._coreTsShadowLastWarnMs || now - this._coreTsShadowLastWarnMs > 60000) {
+                    this._coreTsShadowLastWarnMs = now;
+                    try {
+                        this.adapter.log && this.adapter.log.warn && this.adapter.log.warn(`[core-limits-ts-shadow] JS/TS budget mismatch: ${mismatches.map(m => m.field).join(', ')}`);
+                    } catch (_eLog) {}
+                }
+            }
+            return result;
+        } catch (e) {
+            return { available: true, ok: false, source: 'ts-mirror-shadow', error: e && e.message ? e.message : String(e), mismatches: [] };
+        }
+    }
+
     async tick() {
         if (!this._inited) {
             try { await this.init(); } catch { /* ignore */ }
@@ -1184,6 +1317,8 @@ class CoreLimitsModule extends BaseModule {
         };
 
         const budgetSnapshot = this._makeBudgetSnapshot(now, snapshot);
+        const coreTsShadow = this._runCoreBudgetTsShadowComparison(budgetSnapshot);
+        if (budgetSnapshot && typeof budgetSnapshot === 'object') budgetSnapshot.tsShadow = coreTsShadow;
         const budgetRuntime = makeBudgetRuntime(this.adapter, budgetSnapshot);
 
         try {
@@ -1241,6 +1376,7 @@ class CoreLimitsModule extends BaseModule {
             const consumersInit = Object.keys(b.consumers || {}).map(k => ({ key: k, ...(b.consumers[k] || {}) }));
             await this.adapter.setStateAsync('ems.budget.consumersJson', JSON.stringify(consumersInit), true);
             await this.adapter.setStateAsync('ems.budget.snapshot', JSON.stringify(b), true);
+            await this.adapter.setStateAsync('ems.budget.tsShadowJson', JSON.stringify(b.tsShadow || coreTsShadow || {}), true);
 
             const fg = (b.gates && b.gates.forecast) ? b.gates.forecast : {};
             await this.adapter.setStateAsync('ems.budget.forecast.valid', !!fg.valid, true);

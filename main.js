@@ -2770,6 +2770,10 @@ class NexoWattVis extends utils.Adapter {
     ensurePlainObj('datapoints', {});
     ensurePlainObj('installerConfig', {});
     ensurePlainObj('vis', {});
+    ensurePlainObj('tsMigration', {
+      energyFlowMode: 'shadow',
+      energyFlowProductionAllowed: false,
+    });
     ensurePlainObj('chargingManagement', {});
     ensurePlainObj('peakShaving', {});
     ensurePlainObj('gridConstraints', {});
@@ -2821,6 +2825,28 @@ class NexoWattVis extends utils.Adapter {
     // NexoLogic editor config (node/graph) – stored as installer-managed config
     ensurePlainObj('logicEditor', { version: 1, graphs: [] });
     ensurePlainObj('diagnostics', {});
+    ensurePlainObj('tsMigration', {
+      energyFlowMode: 'shadow',
+      energyFlowProductionAllowed: false,
+      // js     = reine alte JS-Runtime ohne TS-Vergleich,
+      // shadow = JS bleibt produktiv, TS rechnet nur Diagnose,
+      // ts     = technischer Kandidatenmodus; TS darf nur bei sauberem Shadow-Ergebnis als Kandidat markiert werden.
+      // Wichtig: 0.7.80 schaltet noch keine produktiven States automatisch auf TS um.
+    });
+    try {
+      const tm = this._nwIsPlainObject(out.tsMigration) ? out.tsMigration : {};
+      const allowed = ['js', 'shadow', 'ts'];
+      const mode = String(tm.energyFlowMode || '').trim().toLowerCase();
+      if (!allowed.includes(mode)) {
+        tm.energyFlowMode = 'shadow';
+        changed = true;
+      }
+      if (typeof tm.energyFlowProductionAllowed !== 'boolean') {
+        tm.energyFlowProductionAllowed = false;
+        changed = true;
+      }
+      out.tsMigration = tm;
+    } catch (_eTsMigrationDefaults) {}
 
     // Atypische Lastspitzenkappung / §19-Hochlastzeitfenster defaults.
     // Disabled by default; fields are persisted so the App-Center/raw patch can enable the logic without schema drift.
@@ -11113,6 +11139,10 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
         // Scheduler
         schedulerIntervalMs: (typeof n.schedulerIntervalMs === 'number') ? n.schedulerIntervalMs : undefined,
 
+        // TypeScript-Migration: Energiefluss-Schaltmodus für App-Center-Diagnose.
+        // Wichtig: Diese Konfiguration wird nur über die doppelte Sicherheitslogik in main.js ausgewertet.
+        tsMigration: (n.tsMigration && typeof n.tsMigration === 'object') ? n.tsMigration : { energyFlowMode: 'shadow', energyFlowProductionAllowed: false },
+
         // Plant-level
         installerConfig: (n.installerConfig && typeof n.installerConfig === 'object') ? n.installerConfig : {},
 
@@ -11195,6 +11225,10 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
           // Optional diagnostics settings
           'diagnostics',
+
+          // TypeScript-Migrationsschalter: bewusst nur im App-Center/Installer änderbar.
+          // Darf nie aus dem Kundenfrontend gesetzt werden.
+          'tsMigration',
         ]);
 
         // Build sanitized patch
@@ -12758,7 +12792,45 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           emsTariffNextNegativeFrom: await getOwn('ems.budget.tariff.nextNegativeFrom'),
           emsTariffNextNegativeTo: await getOwn('ems.budget.tariff.nextNegativeTo'),
           emsTariffStatus: await getOwn('ems.budget.tariff.status'),
+
+          /**
+           * Code-Teil: TS-Shadow-Diagnose für das App-Center bereitstellen
+           *
+           * Zweck:
+           * Reicht die Shadow-Vergleichsergebnisse aus Core-Limits, Heizstab und
+           * Energiefluss an die Statusoberfläche weiter. Dadurch kann der Installer
+           * JS- und TS-Ergebnis nebeneinander sehen, ohne in ioBroker-States oder
+           * Roh-JSON suchen zu müssen.
+           *
+           * Zusammenhang:
+           * - `ems/modules/core-limits.js` schreibt `ems.budget.tsShadowJson`.
+           * - `ems/modules/heating-rod-control.js` schreibt `heatingRod.summary.tsShadowJson`.
+           * - `main.js` schreibt beim Energiefluss `derived.core.building.inputsJson`
+           *   inklusive `tsShadow`.
+           * - `www/ems-apps.js` stellt diese Werte als Diagnosekarten dar.
+           *
+           * Wichtig:
+           * Diese Felder sind reine Diagnose. Sie überschreiben keine produktiven
+           * Budget-, Heizstab- oder Energieflusswerte.
+           */
+          emsBudgetTsShadowJson: await getOwn('ems.budget.tsShadowJson'),
+          heatingRodTsShadowJson: await getOwn('heatingRod.summary.tsShadowJson'),
+          heatingRodDebugJson: await getOwn('heatingRod.summary.debugJson'),
+          energyFlowInputsJson: await getOwn('derived.core.building.inputsJson'),
+          energyFlowTsMode: this._nwGetEnergyFlowTsMode(),
         };
+
+        /**
+         * Code-Teil: TS-Umschaltbereitschaft an die Diagnose-API anhängen
+         *
+         * Zweck:
+         * Bewertet die vorhandenen Shadow-JSONs direkt im Backend und stellt dem
+         * App-Center eine klare Freigabe-/Blocker-Liste bereit.
+         *
+         * Wichtig:
+         * Das ist weiterhin nur Diagnose. Die produktive Runtime bleibt unverändert.
+         */
+        control.tsShadowReadiness = this._nwEvaluateEnergyFlowSwitchReadinessFromControl(control);
 
         const summary = {
           totalPowerW: await getOwn('chargingManagement.summary.totalPowerW'),
@@ -15399,6 +15471,7 @@ app.get('/config', (req, res) => {
       res.json({
         units: cfg.units || { power: 'W', energy: 'kWh' },
         settings: cfg.settings || {},
+        tsMigration: cfg.tsMigration || { energyFlowMode: 'shadow', energyFlowProductionAllowed: false },
         datapointFlags,
         // TS-Migration Diagnose: Vergleich zwischen vorheriger JS-Sichtbarkeit und TS-Spiegel.
         featureVisibilityTsPreview,
@@ -20581,6 +20654,98 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       staleMs: ageInfo(),
     };
   }
+
+  /**
+   * Code-Teil: _nwNormalizeEnergyFlowTsMode
+   *
+   * Zweck:
+   * Normalisiert den internen Energiefluss-TypeScript-Modus auf `js`, `shadow` oder `ts`.
+   *
+   * Zusammenhang:
+   * Diese Funktion ist die Sicherheitsklammer für die spätere produktive TS-Umschaltung.
+   * Sie verhindert, dass Tippfehler oder alte Config-Werte versehentlich die Runtime umstellen.
+   *
+   * Wichtig:
+   * `shadow` bedeutet: JavaScript bleibt produktiv, TypeScript rechnet nur parallel.
+   */
+  _nwNormalizeEnergyFlowTsMode(value) {
+    const mode = String(value === null || value === undefined ? '' : value).trim().toLowerCase();
+    if (mode === 'ts' || mode === 'typescript') return 'ts';
+    if (mode === 'js' || mode === 'javascript') return 'js';
+    if (mode === 'shadow' || mode === 'compare' || mode === 'diagnose') return 'shadow';
+    return 'shadow';
+  }
+
+  /**
+   * Code-Teil: _nwGetEnergyFlowTsMode
+   *
+   * Zweck:
+   * Ermittelt den aktuellen Energiefluss-TS-Modus aus Config oder Environment.
+   *
+   * Reihenfolge:
+   * 1. Environment `NEXOWATT_ENERGYFLOW_TS_MODE` für Labortests.
+   * 2. `config.tsMigration.energyFlowMode` als spätere Admin-/Config-Quelle.
+   * 3. Legacy-Feld `config.energyFlowTsMode`, falls ein Teststand es bereits setzt.
+   *
+   * Sicherheitsregel:
+   * Der Default bleibt `shadow`, also JS produktiv + TS-Vergleich. Keine automatische
+   * Umschaltung auf TS ohne explizite Freigabe.
+   */
+  _nwGetEnergyFlowTsMode() {
+    try {
+      const env = process && process.env ? process.env.NEXOWATT_ENERGYFLOW_TS_MODE : '';
+      if (env) return this._nwNormalizeEnergyFlowTsMode(env);
+    } catch (_eEnv) {}
+    const cfg = (this.config && typeof this.config === 'object') ? this.config : {};
+    const tm = (cfg.tsMigration && typeof cfg.tsMigration === 'object') ? cfg.tsMigration : {};
+    return this._nwNormalizeEnergyFlowTsMode(tm.energyFlowMode || cfg.energyFlowTsMode || 'shadow');
+  }
+
+  /**
+   * Code-Teil: _nwBuildEnergyFlowTsEffectivePlan
+   *
+   * Zweck:
+   * Baut einen sicheren Umschaltplan aus JS-Runtime-Werten und TS-Shadow-Werten.
+   *
+   * Zusammenhang:
+   * 0.7.80 bereitet die produktive Umschaltung vor, ohne sie automatisch zu aktivieren.
+   * Der Plan beschreibt, welche Quelle verwendet werden dürfte, wenn der Modus auf `ts`
+   * gesetzt ist und der Shadow-Vergleich keine Abweichungen meldet.
+   *
+   * Wichtig:
+   * Diese Funktion schreibt keine States und verändert keine Runtime-Werte. Sie liefert nur
+   * Diagnose/Planung, damit eine spätere Version die Umschaltung kontrolliert übernehmen kann.
+   */
+  _nwBuildEnergyFlowTsEffectivePlan(mode, runtimeValues, tsValues, shadowResult) {
+    const normalizedMode = this._nwNormalizeEnergyFlowTsMode(mode);
+    const gate = this._nwGetEnergyFlowTsSwitchConfig ? this._nwGetEnergyFlowTsSwitchConfig() : { productionAllowed: false };
+    const tsReady = !!(shadowResult && shadowResult.available && shadowResult.ok && tsValues && typeof tsValues === 'object');
+    const wantsTs = normalizedMode === 'ts';
+    const useTsCandidate = wantsTs && tsReady && gate.productionAllowed === true;
+    const blockedReasons = [];
+    if (wantsTs && gate.productionAllowed !== true) blockedReasons.push('Sicherheitsfreigabe energyFlowProductionAllowed fehlt.');
+    if (wantsTs && !tsReady) {
+      if (!shadowResult || !shadowResult.available) blockedReasons.push('TypeScript-Energiefluss-Spiegel nicht verfügbar.');
+      if (shadowResult && shadowResult.ok === false) blockedReasons.push('Shadow-Vergleich meldet Abweichungen.');
+      if (!tsValues || typeof tsValues !== 'object') blockedReasons.push('TS-Werte fehlen.');
+    }
+    if (normalizedMode === 'js') blockedReasons.push('Modus js: TypeScript-Energiefluss ist deaktiviert.');
+    if (normalizedMode === 'shadow') blockedReasons.push('Modus shadow: JavaScript bleibt produktiv; TypeScript ist nur Diagnose.');
+    return {
+      mode: normalizedMode,
+      productionAllowed: gate.productionAllowed === true,
+      source: useTsCandidate ? 'ts-candidate' : 'js-runtime',
+      canUseTs: tsReady,
+      wouldUseTs: useTsCandidate,
+      runtimeAuthoritative: !useTsCandidate,
+      values: useTsCandidate ? tsValues : runtimeValues,
+      blockedReasons,
+      safetyText: useTsCandidate
+        ? 'TS-Werte werden nur genutzt, weil Modus ts und energyFlowProductionAllowed aktiv sind.'
+        : 'Produktiv bleibt die JavaScript-Runtime.',
+    };
+  }
+
   /**
    * Code-Teil: _nwGetEnergyFlowTsMirrorResolver
    *
@@ -20699,8 +20864,28 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
    */
   _nwRunEnergyFlowTsShadowComparison(ctx = {}) {
     try {
+      const mode = this._nwNormalizeEnergyFlowTsMode(ctx.mode || this._nwGetEnergyFlowTsMode());
+      if (mode === 'js') {
+        const runtimeValues = {
+          gridBuyW: Math.round(Number(ctx.gridBuyW) || 0),
+          gridSellW: Math.round(Number(ctx.gridSellW) || 0),
+          storageChargeW: Math.round(Number(ctx.chargeW) || 0),
+          storageDischargeW: Math.round(Number(ctx.dischargeW) || 0),
+          buildingLoadW: Math.round(Number(ctx.loadTotalW) || 0),
+        };
+        return {
+          available: false,
+          source: 'js-mode',
+          mode,
+          ok: true,
+          mismatches: [],
+          runtime: runtimeValues,
+          ts: null,
+          effectivePlan: this._nwBuildEnergyFlowTsEffectivePlan(mode, runtimeValues, null, { available: false, ok: true }),
+        };
+      }
       const resolver = this._nwGetEnergyFlowTsMirrorResolver();
-      if (!resolver || typeof resolver.buildEnergyFlowSnapshot !== 'function') return { available: false, source: 'missing' };
+      if (!resolver || typeof resolver.buildEnergyFlowSnapshot !== 'function') return { available: false, source: 'missing', mode };
       const input = this._nwBuildEnergyFlowTsShadowInput(ctx);
       const snapshot = resolver.buildEnergyFlowSnapshot(input);
       const tsValues = {
@@ -20734,7 +20919,8 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
 
       const result = {
         available: true,
-        source: 'ts-mirror-shadow',
+        source: mode === 'ts' ? 'ts-mirror-switch-candidate' : 'ts-mirror-shadow',
+        mode,
         ok: mismatches.length === 0,
         mismatches,
         runtime: runtimeValues,
@@ -20742,6 +20928,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         storageSource: snapshot && snapshot.storage ? snapshot.storage.source : '',
         gridSource: snapshot && snapshot.grid ? snapshot.grid.source : '',
       };
+      result.effectivePlan = this._nwBuildEnergyFlowTsEffectivePlan(mode, runtimeValues, tsValues, result);
 
       if (mismatches.length) {
         const hash = mismatches.join('|');
@@ -20759,6 +20946,294 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       try { this.log.debug(`[energy-flow-ts-shadow] comparison failed: ${e && e.message ? e.message : e}`); } catch (_e) {}
       return { available: false, source: 'error', error: e && e.message ? String(e.message) : String(e) };
     }
+  }
+
+
+  /**
+   * Code-Teil: _nwGetEnergyFlowTsSwitchConfig
+   *
+   * Zweck:
+   * Liest den internen Migrationsmodus für den Energiefluss.
+   *
+   * Zusammenhang:
+   * Ab 0.7.80 bereiten wir die kontrollierte Umschaltung JS → TS vor. Der
+   * Adapter darf aber nicht automatisch auf TS wechseln, nur weil ein Spiegel
+   * vorhanden ist. Diese Funktion kapselt daher den gewünschten Modus und eine
+   * zusätzliche Sicherheitsfreigabe.
+   *
+   * Wichtig:
+   * Standard ist immer `js`. `shadow` bedeutet nur Vergleich/Diagnose. `ts` wird
+   * nur wirksam, wenn zusätzlich `energyFlowProductionAllowed` explizit true ist.
+   */
+  _nwGetEnergyFlowTsSwitchConfig() {
+    const cfg = (this.config && this.config.tsMigration && typeof this.config.tsMigration === 'object') ? this.config.tsMigration : {};
+    let rawMode = '';
+    try { rawMode = process && process.env ? String(process.env.NEXOWATT_ENERGYFLOW_TS_MODE || '') : ''; } catch (_eEnv) {}
+    if (!rawMode) rawMode = String(cfg.energyFlowMode || cfg.energyFlowTsMode || cfg.flowMode || 'shadow');
+    const mode = ['js', 'shadow', 'ts'].includes(String(rawMode).trim().toLowerCase()) ? String(rawMode).trim().toLowerCase() : 'shadow';
+    const productionAllowed = cfg.energyFlowProductionAllowed === true || cfg.allowEnergyFlowTsProduction === true;
+    return { requestedMode: mode, productionAllowed };
+  }
+
+  /**
+   * Code-Teil: _nwEvaluateEnergyFlowTsSwitch
+   *
+   * Zweck:
+   * Bewertet, ob der TS-Energiefluss für diesen Tick produktiv genutzt werden
+   * dürfte.
+   *
+   * Zusammenhang:
+   * Diese Entscheidung ist die technische Vorbereitung für die spätere Umschaltung.
+   * In der Grundeinstellung bleibt JS führend. TS darf nur aktiv werden, wenn der
+   * Betreiber den Modus bewusst auf `ts` stellt, die Sicherheitsfreigabe gesetzt ist
+   * und der Shadow-Vergleich keine relevanten Abweichungen meldet.
+   *
+   * Wichtig:
+   * Diese Funktion ändert selbst keine Werte. Sie liefert nur einen Schaltplan für
+   * `updateDerivedFlowStates`, damit die Migration nachvollziehbar und rückfallfähig
+   * bleibt.
+   */
+  _nwEvaluateEnergyFlowTsSwitch(tsShadow) {
+    const cfg = this._nwGetEnergyFlowTsSwitchConfig();
+    const shadowAvailable = !!(tsShadow && tsShadow.available && tsShadow.ts);
+    const shadowOk = !!(shadowAvailable && (tsShadow.ok === true || (Array.isArray(tsShadow.mismatches) && tsShadow.mismatches.length === 0)));
+    let effectiveMode = 'js';
+    let reason = 'default-js';
+
+    if (cfg.requestedMode === 'shadow') {
+      reason = 'shadow-only';
+    } else if (cfg.requestedMode === 'ts') {
+      if (!cfg.productionAllowed) {
+        reason = 'ts-requested-without-safety-flag';
+      } else if (!shadowAvailable) {
+        reason = 'ts-mirror-unavailable';
+      } else if (!shadowOk) {
+        reason = 'ts-shadow-mismatch';
+      } else {
+        effectiveMode = 'ts';
+        reason = 'ts-shadow-ok';
+      }
+    }
+
+    return {
+      requestedMode: cfg.requestedMode,
+      productionAllowed: !!cfg.productionAllowed,
+      effectiveMode,
+      useTs: effectiveMode === 'ts',
+      shadowAvailable,
+      shadowOk,
+      reason,
+    };
+  }
+
+  /**
+   * Code-Teil: _nwBuildEffectiveEnergyFlowValues
+   *
+   * Zweck:
+   * Baut aus JS-Runtimewerten und optionalen TS-Shadowwerten die Werte, die in
+   * diesem Tick veröffentlicht werden dürfen.
+   *
+   * Zusammenhang:
+   * Dies ist die zentrale Stelle für den späteren produktiven Energiefluss-Umbau.
+   * Solange der Modus `js` oder `shadow` ist, kommen alle Werte aus der alten
+   * JavaScript-Runtime. Nur im explizit freigegebenen Modus `ts` werden die
+   * geprüften TS-Werte übernommen.
+   *
+   * Wichtig:
+   * Der Default bleibt konservativ: keine TS-Werte ohne Freigabe. So können wir
+   * Git-/Anlagenstände testen, ohne History oder Regelung unbemerkt umzuschalten.
+   */
+  _nwBuildEffectiveEnergyFlowValues(runtimeValues = {}, tsShadow = {}) {
+    const switchState = this._nwEvaluateEnergyFlowTsSwitch(tsShadow);
+    const tsValues = (tsShadow && tsShadow.ts && typeof tsShadow.ts === 'object') ? tsShadow.ts : {};
+    const finite = (v) => Number.isFinite(Number(v));
+    const pick = (key, fallbackKey = key) => {
+      const fallback = runtimeValues[fallbackKey];
+      if (!switchState.useTs) return fallback;
+      return finite(tsValues[key]) ? Math.round(Number(tsValues[key])) : fallback;
+    };
+    return {
+      switchState,
+      gridBuyW: pick('gridBuyW'),
+      gridSellW: pick('gridSellW'),
+      storageChargeW: pick('storageChargeW'),
+      storageDischargeW: pick('storageDischargeW'),
+      buildingLoadW: pick('buildingLoadW', 'loadTotalW'),
+    };
+  }
+
+
+  /**
+   * Code-Teil: _nwParseTsShadowJson
+   *
+   * Zweck:
+   * Liest ein Shadow-Diagnosefeld defensiv aus. Die Diagnose-States kommen aus
+   * Core-Limits, Heizstab und Energiefluss teilweise als JSON-String, teilweise
+   * als Objekt oder noch leerer State.
+   *
+   * Zusammenhang:
+   * Diese Hilfsfunktion ist die Grundlage für die Umschaltbereitschaft der
+   * TypeScript-Migration. Sie darf keine produktiven Werte ändern, sondern nur
+   * vorhandene Diagnose-States auswerten.
+   *
+   * Wichtig:
+   * Ungültiges JSON darf den Adapter nicht stoppen. Es wird als Diagnosefehler
+   * zurückgegeben, damit das App-Center den Zustand sichtbar machen kann.
+   */
+  _nwParseTsShadowJson(raw, fallback = null) {
+    if (raw && typeof raw === 'object') return raw;
+    const text = (raw === null || raw === undefined) ? '' : String(raw).trim();
+    if (!text) return fallback;
+    try {
+      const parsed = JSON.parse(text);
+      return (parsed && typeof parsed === 'object') ? parsed : fallback;
+    } catch (e) {
+      return { ok: false, available: false, source: 'parse-error', parseError: true, error: e && e.message ? String(e.message) : String(e), raw: text.slice(0, 500) };
+    }
+  }
+
+  /**
+   * Code-Teil: _nwCollectTsShadowMismatches
+   *
+   * Zweck:
+   * Normalisiert unterschiedliche Shadow-Strukturen zu einer einheitlichen Liste
+   * von Abweichungen. Core-Limits, Heizstab und Energiefluss benutzen noch nicht
+   * exakt dieselbe JSON-Struktur.
+   *
+   * Zusammenhang:
+   * Diese Liste entscheidet, ob ein Bereich später gefahrlos produktiv von TS
+   * übernommen werden darf. Mehr als null Abweichungen bedeutet: noch nicht
+   * umschalten.
+   */
+  _nwCollectTsShadowMismatches(shadow) {
+    const out = [];
+    if (!shadow || typeof shadow !== 'object') return out;
+    const add = (entry, idx, prefix) => {
+      if (!entry) return;
+      if (typeof entry === 'string') {
+        out.push({ label: entry, index: idx, raw: entry });
+        return;
+      }
+      if (typeof entry === 'object') {
+        out.push({
+          label: String(entry.key || entry.field || entry.path || entry.label || `${prefix || 'Abweichung'} ${idx + 1}`),
+          js: entry.js !== undefined ? entry.js : (entry.runtime !== undefined ? entry.runtime : entry.old),
+          ts: entry.ts !== undefined ? entry.ts : (entry.shadow !== undefined ? entry.shadow : entry.new),
+          diff: entry.diff !== undefined ? entry.diff : (entry.delta !== undefined ? entry.delta : ''),
+          raw: entry,
+        });
+      }
+    };
+    if (Array.isArray(shadow.mismatches)) shadow.mismatches.forEach((m, i) => add(m, i, 'Mismatch'));
+    if (Array.isArray(shadow.diffs)) shadow.diffs.forEach((m, i) => add(m, i, 'Diff'));
+    if (shadow.comparison && typeof shadow.comparison === 'object') {
+      Object.keys(shadow.comparison).forEach((key) => {
+        const v = shadow.comparison[key];
+        if (v && typeof v === 'object' && (v.match === false || v.ok === false || v.diff || v.delta)) {
+          add({ label: key, ...v }, out.length, 'Comparison');
+        }
+      });
+    }
+    if (!out.length && shadow.ok === false && shadow.error) add({ label: 'Fehler', diff: String(shadow.error) }, 0, 'Fehler');
+    return out;
+  }
+
+  /**
+   * Code-Teil: _nwEvaluateTsShadowBlock
+   *
+   * Zweck:
+   * Bewertet einen einzelnen Shadow-Block wie Core-Limits, Heizstab oder
+   * Energiefluss und erzeugt daraus eine klare Ampel für die Migration.
+   *
+   * Zusammenhang:
+   * Das Ergebnis wird an das App-Center ausgeliefert. Es ist reine Diagnose und
+   * ersetzt keine produktiven EMS-Werte.
+   */
+  _nwEvaluateTsShadowBlock(id, label, shadow, options = {}) {
+    const required = options.required !== false;
+    const maxMismatches = Number.isFinite(Number(options.maxMismatches)) ? Math.max(0, Number(options.maxMismatches)) : 0;
+    if (!shadow || typeof shadow !== 'object') {
+      return { id, label, ready: false, status: required ? 'no-data' : 'optional-missing', severity: required ? 'warn' : 'info', mismatchCount: 0, blockers: required ? ['Noch kein Shadow-Snapshot vorhanden.'] : [], warnings: required ? [] : ['Optionaler Shadow-Snapshot fehlt.'], source: 'missing' };
+    }
+    const mismatches = this._nwCollectTsShadowMismatches(shadow);
+    const blockers = [];
+    const warnings = [];
+    if (shadow.parseError) blockers.push('Shadow-JSON konnte nicht geparst werden.');
+    if (shadow.error) blockers.push(String(shadow.error));
+    if (shadow.available === false) blockers.push('TypeScript-Spiegel nicht verfügbar.');
+    if (mismatches.length > maxMismatches) blockers.push(`${mismatches.length} Abweichung(en) über erlaubtem Grenzwert ${maxMismatches}.`);
+    if (mismatches.length && mismatches.length <= maxMismatches) warnings.push(`${mismatches.length} tolerierte Abweichung(en).`);
+    const ready = blockers.length === 0 && (shadow.ok !== false || mismatches.length <= maxMismatches);
+    return {
+      id,
+      label,
+      ready,
+      status: ready ? 'ready' : 'blocked',
+      severity: ready ? 'ok' : 'warn',
+      mismatchCount: mismatches.length,
+      blockers,
+      warnings,
+      source: shadow.source || 'ts-shadow',
+      summary: ready ? 'bereit' : 'nicht bereit',
+      sampleMismatches: mismatches.slice(0, 5),
+    };
+  }
+
+  /**
+   * Code-Teil: _nwEvaluateEnergyFlowSwitchReadinessFromControl
+   *
+   * Zweck:
+   * Führt die drei sichtbaren Shadow-Diagnosen zu einer Migrationsbewertung
+   * zusammen. Dadurch wissen wir, ob Energiefluss, Core-Limits oder Heizstab für
+   * eine spätere produktive TS-Umschaltung vorbereitet sind.
+   *
+   * Zusammenhang:
+   * Diese Funktion wird in der Diagnose-API genutzt und im App-Center angezeigt.
+   * Sie ist die fachliche Brücke zwischen Shadow-Modus und späterer TS-Umschaltung.
+   *
+   * Wichtig:
+   * Auch wenn `readyForEnergyFlowSwitch` true ist, wird in dieser Version noch
+   * nichts umgeschaltet. Die Entscheidung bleibt weiterhin manuell und erfolgt
+   * erst in einer späteren Version.
+   */
+  _nwEvaluateEnergyFlowSwitchReadinessFromControl(control = {}) {
+    const coreShadow = this._nwParseTsShadowJson(control.emsBudgetTsShadowJson, null);
+    const heatingShadowRaw = this._nwParseTsShadowJson(control.heatingRodTsShadowJson, null);
+    const heatingDebug = this._nwParseTsShadowJson(control.heatingRodDebugJson, null);
+    const heatingShadow = heatingShadowRaw || (heatingDebug && heatingDebug.tsShadow ? heatingDebug.tsShadow : null);
+    const flowInputs = this._nwParseTsShadowJson(control.energyFlowInputsJson, null);
+    const flowShadow = flowInputs && flowInputs.tsShadow ? flowInputs.tsShadow : null;
+    const energyFlowMode = this._nwNormalizeEnergyFlowTsMode((flowShadow && flowShadow.mode) || control.energyFlowTsMode || this._nwGetEnergyFlowTsMode());
+    const energyFlowEffectivePlan = flowShadow && flowShadow.effectivePlan ? flowShadow.effectivePlan : null;
+
+    const core = this._nwEvaluateTsShadowBlock('coreLimits', 'Core-Limits', coreShadow, { required: true, maxMismatches: 0 });
+    const heatingRod = this._nwEvaluateTsShadowBlock('heatingRod', 'Heizstab', heatingShadow, { required: true, maxMismatches: 0 });
+    const energyFlow = this._nwEvaluateTsShadowBlock('energyFlow', 'Energiefluss', flowShadow, { required: true, maxMismatches: 0 });
+    const blocks = [core, heatingRod, energyFlow];
+    const blockers = blocks.flatMap((b) => (Array.isArray(b.blockers) ? b.blockers.map((x) => `${b.label}: ${x}`) : []));
+    const warnings = blocks.flatMap((b) => (Array.isArray(b.warnings) ? b.warnings.map((x) => `${b.label}: ${x}`) : []));
+    const readiness = {
+      version: 1,
+      source: 'shadow-readiness-v1',
+      ts: Date.now(),
+      energyFlowMode,
+      energyFlowEffectivePlan,
+      readyForEnergyFlowSwitch: !!energyFlow.ready,
+      readyForCoreLimitsSwitch: !!core.ready,
+      readyForHeatingRodSwitch: !!heatingRod.ready,
+      overallReady: blocks.every((b) => b.ready),
+      energyFlow,
+      coreLimits: core,
+      heatingRod,
+      blockers,
+      warnings,
+      nextAction: blockers.length
+        ? 'Shadow-Abweichungen zuerst auswerten; TS darf noch nicht produktiv übernehmen.'
+        : (energyFlowMode === 'ts'
+          ? 'TS-Modus ist intern gewählt und Shadow ist sauber. 0.7.80 markiert nur den Kandidaten; produktives Schreiben folgt erst nach Freigabe.'
+          : 'Shadow-Werte sind aktuell sauber. Eine kontrollierte Umschaltung kann in einer späteren Version vorbereitet werden.'),
+    };
+    return readiness;
   }
 
   /**
@@ -22396,8 +22871,37 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       evW,
       consumersW,
       consumptionMapped,
+      mode: this._nwGetEnergyFlowTsMode(),
       toleranceW: 120,
     });
+
+    /**
+     * Code-Teil: effectiveEnergyFlow
+     *
+     * Zweck:
+     * Bereitet die kontrollierte produktive TS-Umschaltung vor. Standardmäßig werden
+     * weiterhin die JavaScript-Werte veröffentlicht. Nur wenn `tsMigration.energyFlowMode`
+     * bewusst auf `ts` steht, die Sicherheitsfreigabe gesetzt ist und der Shadow-Vergleich
+     * OK meldet, dürfen TS-Werte in diesem Tick veröffentlicht werden.
+     *
+     * Wichtig:
+     * Das schützt History und Regelung vor versehentlichen Umschaltungen. Der Status wird
+     * in der Diagnose mitgeführt, damit wir später sehen, ob JS oder TS effektiv genutzt
+     * wurde.
+     */
+    const effectiveEnergyFlow = this._nwBuildEffectiveEnergyFlowValues({
+      gridBuyW: gridBuyRound,
+      gridSellW: gridSellRound,
+      storageChargeW: Math.round(chargeW),
+      storageDischargeW: Math.round(dischargeW),
+      loadTotalW: loadTotalRound,
+    }, tsShadow);
+    const publishGridBuyRound = Math.round(Number(effectiveEnergyFlow.gridBuyW) || 0);
+    const publishGridSellRound = Math.round(Number(effectiveEnergyFlow.gridSellW) || 0);
+    const publishChargeRound = Math.round(Number(effectiveEnergyFlow.storageChargeW) || 0);
+    const publishDischargeRound = Math.round(Number(effectiveEnergyFlow.storageDischargeW) || 0);
+    const publishLoadTotalRound = Math.round(Number(effectiveEnergyFlow.buildingLoadW) || 0);
+    const publishLoadRestRound = Math.max(0, Math.round(publishLoadTotalRound - evW - consumersW));
 
     // Update last-plausible cache only when the raw balance is plausible
     // (avoid locking-in 0W during active operation).
@@ -22415,13 +22919,13 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     } catch (_eHold) {}
 
     // --- Update adapter states (for App-Center mapping / debugging) ---
-    if (this._derivedFlow?.last?.loadTotalW !== loadTotalRound) {
-      this._derivedFlow.last.loadTotalW = loadTotalRound;
-      await this.setStateAsync('derived.core.building.loadTotalW', { val: loadTotalRound, ack: true });
+    if (this._derivedFlow?.last?.loadTotalW !== publishLoadTotalRound) {
+      this._derivedFlow.last.loadTotalW = publishLoadTotalRound;
+      await this.setStateAsync('derived.core.building.loadTotalW', { val: publishLoadTotalRound, ack: true });
     }
-    if (this._derivedFlow?.last?.loadRestW !== loadRestRound) {
-      this._derivedFlow.last.loadRestW = loadRestRound;
-      await this.setStateAsync('derived.core.building.loadRestW', { val: loadRestRound, ack: true });
+    if (this._derivedFlow?.last?.loadRestW !== publishLoadRestRound) {
+      this._derivedFlow.last.loadRestW = publishLoadRestRound;
+      await this.setStateAsync('derived.core.building.loadRestW', { val: publishLoadRestRound, ack: true });
     }
 
     const pvAcRound = Math.round(pvAcW);
@@ -22478,11 +22982,11 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
             mappedProductionTotal: prodTotalMapped,
             sfEnabled,
           },
-          storage: { chargeW: Math.round(chargeW), dischargeW: Math.round(dischargeW), src: storageSrc },
+          storage: { chargeW: publishChargeRound, dischargeW: publishDischargeRound, runtimeChargeW: Math.round(chargeW), runtimeDischargeW: Math.round(dischargeW), src: storageSrc },
           extraProductionW: Math.round(producerSumW),
           consumersW: Math.round(consumersW),
           evW: Math.round(evW),
-          building: { loadTotalW: loadTotalRound, loadRestW: loadRestRound },
+          building: { loadTotalW: publishLoadTotalRound, loadRestW: publishLoadRestRound, runtimeLoadTotalW: loadTotalRound, runtimeLoadRestW: loadRestRound },
           balance: {
             rawLoadTotalW: Math.round(rawLoadTotalW),
             rawLoadRestW: Math.round(Math.max(0, rawLoadRestW)),
@@ -22492,6 +22996,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
           },
           quality,
           tsShadow,
+          tsSwitch: effectiveEnergyFlow.switchState,
         };
         const json = JSON.stringify(payload);
         await this.setStateAsync('derived.core.building.inputsJson', { val: json, ack: true });
@@ -22506,19 +23011,19 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     if (gridNetRaw !== null && (!gridBuyMapped || gridBuyRaw === null)) {
       const cur = Number(this.stateCache?.gridBuyPower?.value);
       if (!Number.isFinite(cur) || cur !== gridBuyRound) {
-        this.updateValue('gridBuyPower', gridBuyRound, ts);
+        this.updateValue('gridBuyPower', publishGridBuyRound, ts);
       }
     }
     if (gridNetRaw !== null && (!gridSellMapped || gridSellRaw === null)) {
       const cur = Number(this.stateCache?.gridSellPower?.value);
       if (!Number.isFinite(cur) || cur !== gridSellRound) {
-        this.updateValue('gridSellPower', gridSellRound, ts);
+        this.updateValue('gridSellPower', publishGridSellRound, ts);
       }
     }
 
     // 2) If no direct house meter is mapped, publish as "consumptionTotal" so the energyflow can render it.
     if (!consumptionMapped) {
-      this.updateValue('consumptionTotal', loadTotalRound, ts);
+      this.updateValue('consumptionTotal', publishLoadTotalRound, ts);
     }
 
     // 3) If PV is not mapped, publish PV total as "pvPower" so the energyflow can render PV without mapping.
@@ -22546,8 +23051,8 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       const noSplitMapped = !chargeMapped && !dischargeMapped;
       const shouldMirrorBoth = !!(samePair || fromSignedOnly || (noSplitMapped && fromFarmOrBalance));
       const shouldZeroMissingSide = !!(storageFlow && !storageFlow.derived && (chargeMapped !== dischargeMapped));
-      const chargeRound = Math.round(chargeW);
-      const dischargeRound = Math.round(dischargeW);
+      const chargeRound = publishChargeRound;
+      const dischargeRound = publishDischargeRound;
       /**
        * Code-Teil: updateLocal
        * Zweck: Aktualisiert Runtime-Zustand, UI oder veröffentlichte Daten.

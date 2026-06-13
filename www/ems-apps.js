@@ -251,6 +251,14 @@
     chargingBudget: document.getElementById('chargingBudget'),
     refreshChargingBudget: document.getElementById('refreshChargingBudget'),
 
+    // TypeScript Shadow-Diagnose und kontrollierter Energiefluss-TS-Schaltmodus.
+    // Wichtig: Die produktive Freigabe wird zusätzlich im Backend gegated. Das UI setzt nur Config.
+    shadowDiagnostics: document.getElementById('shadowDiagnostics'),
+    refreshShadowDiagnostics: document.getElementById('refreshShadowDiagnostics'),
+    energyFlowTsMode: document.getElementById('energyFlowTsMode'),
+    energyFlowTsProductionAllowed: document.getElementById('energyFlowTsProductionAllowed'),
+    energyFlowTsModeStatus: document.getElementById('energyFlowTsModeStatus'),
+
     // Modal
     dpModal: document.getElementById('dpModal'),
     dpClose: document.getElementById('dpClose'),
@@ -8897,6 +8905,10 @@ function collectAiAdvisorConfigFromUI(base) {
     els.gridConnectionPower.value = numOrEmpty(currentConfig.installerConfig && currentConfig.installerConfig.gridConnectionPower);
     els.schedulerIntervalMs.value = numOrEmpty(currentConfig.schedulerIntervalMs);
 
+    // TypeScript-Migration: kontrollierter Energiefluss-Schaltmodus in die UI übernehmen.
+    // Diese Felder liegen im App-Center bewusst im Status-/Diagnosebereich und nicht im Kundenfrontend.
+    try { applyEnergyFlowTsModeToUi(currentConfig); } catch (_e) {}
+
     const dps = currentConfig.datapoints || {};
     if (els.gridPointPowerId) els.gridPointPowerId.value = valueOrEmpty(dps.gridPointPower);
 
@@ -10111,6 +10123,10 @@ function collectAiAdvisorConfigFromUI(base) {
     if (els.flowInvertEv) patch.settings.flowInvertEv = !!els.flowInvertEv.checked;
     if (els.flowGridShowNet) patch.settings.flowGridShowNet = !!els.flowGridShowNet.checked;
 
+    // TypeScript-Migration: Energiefluss-Schaltmodus aus dem App-Center speichern.
+    // Wichtig: Diese Config schaltet nicht blind um; das Backend prüft weiterhin Shadow-Status und Sicherheitsfreigabe.
+    patch.tsMigration = collectEnergyFlowTsMigrationFromUi(currentConfig && currentConfig.tsMigration);
+
     // Energiefluss: Leistungseinheiten pro DP (W vs kW)
     // Checkbox aktiv = DP liefert Watt (W).
     // Checkbox aus  = DP liefert kW (1 = 1 kW).
@@ -10665,6 +10681,302 @@ function collectAiAdvisorConfigFromUI(base) {
     return v ? tTrue : tFalse;
   }
   /**
+   * Code-Teil: _parseShadowJson
+   *
+   * Zweck:
+   * Wandelt Shadow-Diagnose-States aus JSON-Strings in Objekte um.
+   *
+   * Zusammenhang:
+   * `main.js` liefert in `/api/ems/charging/diagnostics` die Roh-States
+   * aus Core-Limits, Heizstab und Energiefluss. Die Statusoberfläche darf
+   * nicht abbrechen, wenn einer dieser States leer, alt oder ungültig ist.
+   *
+   * Wichtig:
+   * Shadow-Daten sind Diagnose-only. Diese Funktion darf keine produktiven
+   * Adapterwerte verändern oder zurückschreiben.
+   */
+  function _parseShadowJson(raw, fallback) {
+    if (raw && typeof raw === 'object') return raw;
+    const text = (raw === null || raw === undefined) ? '' : String(raw).trim();
+    if (!text) return fallback || null;
+    try {
+      const parsed = JSON.parse(text);
+      return (parsed && typeof parsed === 'object') ? parsed : (fallback || null);
+    } catch (_e) {
+      return fallback || { ok: false, parseError: true, raw: text.slice(0, 500) };
+    }
+  }
+
+  /**
+   * Code-Teil: _shadowDiffList
+   *
+   * Zweck:
+   * Normalisiert unterschiedliche Shadow-JSON-Formate zu einer Anzeige-Liste.
+   *
+   * Zusammenhang:
+   * Core-Limits, Heizstab und Energiefluss speichern ihre Shadow-Diagnose nicht
+   * exakt gleich. Das App-Center braucht dennoch einheitliche Zeilen.
+   *
+   * Wichtig:
+   * Neue Felder werden defensiv behandelt. Eine unbekannte Struktur führt nur
+   * zu einer leeren Liste, nicht zu einem UI-Fehler.
+   */
+  function _shadowDiffList(shadow) {
+    if (!shadow || typeof shadow !== 'object') return [];
+    const out = [];
+    const add = (label, jsVal, tsVal, diff) => {
+      out.push({ label: String(label || 'Wert'), js: jsVal, ts: tsVal, diff: diff !== undefined ? diff : '' });
+    };
+    const readList = (arr, prefix) => {
+      if (!Array.isArray(arr)) return;
+      arr.forEach((m, idx) => {
+        if (!m) return;
+        if (typeof m === 'string') add(m, '', '', '');
+        else add(m.key || m.field || m.path || m.label || (prefix + ' ' + (idx + 1)), m.js ?? m.runtime ?? m.old, m.ts ?? m.shadow ?? m.new, m.diff ?? m.delta ?? '');
+      });
+    };
+    readList(shadow.mismatches, 'Abweichung');
+    readList(shadow.diffs, 'Diff');
+    if (shadow.comparison && typeof shadow.comparison === 'object') {
+      Object.keys(shadow.comparison).forEach((key) => {
+        const v = shadow.comparison[key];
+        if (v && typeof v === 'object' && (v.match === false || v.ok === false || v.diff || v.delta)) {
+          add(key, v.js ?? v.runtime ?? v.old, v.ts ?? v.shadow ?? v.new, v.diff ?? v.delta ?? '');
+        }
+      });
+    }
+    if (!out.length && shadow.ok === false && shadow.error) add('Fehler', '', '', String(shadow.error));
+    return out;
+  }
+
+  /**
+   * Code-Teil: _shadowKind
+   *
+   * Zweck:
+   * Ermittelt die Ampelfarbe einer Shadow-Kachel.
+   *
+   * Zusammenhang:
+   * Wird von `renderShadowDiagnostics` genutzt. Grün bedeutet nur: keine
+   * sichtbare Abweichung im Shadow-JSON. Es bedeutet nicht automatisch, dass die
+   * TS-Logik schon produktiv freigegeben ist.
+   */
+  function _shadowKind(shadow) {
+    if (!shadow || typeof shadow !== 'object') return 'warn';
+    if (shadow.parseError || shadow.ok === false || shadow.error) return 'error';
+    if (shadow.available === false) return 'warn';
+    return _shadowDiffList(shadow).length ? 'warn' : 'ok';
+  }
+
+
+  /**
+   * Code-Teil: _normalizeEnergyFlowTsModeUi
+   *
+   * Zweck:
+   * Normalisiert den im App-Center gewählten Energiefluss-TS-Modus auf die drei
+   * erlaubten Werte `js`, `shadow` und `ts`.
+   *
+   * Zusammenhang:
+   * Diese UI-Funktion muss exakt zur Backend-Normalisierung in main.js passen.
+   * Falsche Werte werden bewusst auf `shadow` zurückgesetzt, weil Shadow der sichere
+   * Standard ist: JavaScript bleibt produktiv, TypeScript rechnet nur Diagnose.
+   */
+  function _normalizeEnergyFlowTsModeUi(value) {
+    const v = String(value || '').trim().toLowerCase();
+    return ['js', 'shadow', 'ts'].includes(v) ? v : 'shadow';
+  }
+
+  /**
+   * Code-Teil: applyEnergyFlowTsModeToUi
+   *
+   * Zweck:
+   * Schreibt die gespeicherte `tsMigration`-Konfiguration in die App-Center-Felder.
+   *
+   * Zusammenhang:
+   * Wird beim Laden der Installer-Konfiguration aufgerufen. Dadurch sieht der
+   * Installateur sofort, ob Energiefluss aktuell im JS-, Shadow- oder TS-Kandidatenmodus
+   * steht und ob die zusätzliche produktive Freigabe gesetzt ist.
+   */
+  function applyEnergyFlowTsModeToUi(cfg) {
+    const tm = (cfg && cfg.tsMigration && typeof cfg.tsMigration === 'object') ? cfg.tsMigration : {};
+    const mode = _normalizeEnergyFlowTsModeUi(tm.energyFlowMode || 'shadow');
+    if (els.energyFlowTsMode) els.energyFlowTsMode.value = mode;
+    if (els.energyFlowTsProductionAllowed) els.energyFlowTsProductionAllowed.checked = tm.energyFlowProductionAllowed === true;
+    renderEnergyFlowTsModeStatus(null);
+  }
+
+  /**
+   * Code-Teil: collectEnergyFlowTsMigrationFromUi
+   *
+   * Zweck:
+   * Sammelt den kontrollierten Energiefluss-TS-Schaltmodus aus dem App-Center.
+   *
+   * Wichtig:
+   * Diese Werte sind nur eine Konfiguration. Das Backend prüft zusätzlich Shadow-Status
+   * und Sicherheitsfreigabe, bevor TS-Werte überhaupt produktiv genutzt werden dürften.
+   */
+  function collectEnergyFlowTsMigrationFromUi(base) {
+    const out = deepMerge({}, (base && typeof base === 'object') ? base : {});
+    out.energyFlowMode = _normalizeEnergyFlowTsModeUi(els.energyFlowTsMode ? els.energyFlowTsMode.value : out.energyFlowMode);
+    out.energyFlowProductionAllowed = !!(els.energyFlowTsProductionAllowed && els.energyFlowTsProductionAllowed.checked);
+    return out;
+  }
+
+  /**
+   * Code-Teil: renderEnergyFlowTsModeStatus
+   *
+   * Zweck:
+   * Zeigt die effektive Backend-Entscheidung für den Energiefluss-TS-Modus im
+   * App-Center an. Dadurch sieht man, ob die UI-Konfiguration wirklich wirksam wäre
+   * oder ob Shadow-Blocker / fehlende Sicherheitsfreigabe TS verhindern.
+   */
+  function renderEnergyFlowTsModeStatus(readiness) {
+    if (!els.energyFlowTsModeStatus) return;
+    const tm = (currentConfig && currentConfig.tsMigration && typeof currentConfig.tsMigration === 'object') ? currentConfig.tsMigration : {};
+    const plan = readiness && readiness.energyFlowEffectivePlan ? readiness.energyFlowEffectivePlan : null;
+    const selectedMode = _normalizeEnergyFlowTsModeUi(els.energyFlowTsMode ? els.energyFlowTsMode.value : (tm.energyFlowMode || 'shadow'));
+    const productionAllowed = !!(els.energyFlowTsProductionAllowed && els.energyFlowTsProductionAllowed.checked);
+    const effectiveSource = plan && plan.source ? String(plan.source) : 'noch keine Diagnose';
+    const wouldUseTs = plan && typeof plan.wouldUseTs === 'boolean' ? (plan.wouldUseTs ? 'ja' : 'nein') : '--';
+    const blocked = plan && Array.isArray(plan.blockedReasons) && plan.blockedReasons.length ? plan.blockedReasons.join(' · ') : '';
+    els.energyFlowTsModeStatus.innerHTML = [
+      `<b>Gewählt:</b> ${escape(selectedMode)} · <b>Freigabe:</b> ${productionAllowed ? 'aktiv' : 'aus'}`,
+      `<b>Effektive Quelle:</b> ${escape(effectiveSource)} · <b>TS würde genutzt:</b> ${escape(wouldUseTs)}`,
+      blocked ? `<b>Blockiert durch:</b> ${escape(blocked)}` : '<b>Status:</b> Noch keine Blocker oder noch keine Shadow-Diagnose geladen.',
+    ].join('<br/>');
+  }
+
+
+  /**
+   * Code-Teil: _renderShadowReadinessCard
+   *
+   * Zweck:
+   * Zeigt eine zusammengefasste Umschaltbereitschaft für TypeScript an. Der
+   * Installer sieht dadurch sofort, ob Energiefluss/Core-Limits/Heizstab bereits
+   * sauber im Shadow-Vergleich laufen oder ob Blocker vorhanden sind.
+   *
+   * Zusammenhang:
+   * Die Werte kommen aus `control.tsShadowReadiness`, das vom Backend aus den
+   * Shadow-JSONs gebildet wird. Diese Anzeige ist nur Diagnose und schaltet keine
+   * Runtime von JS auf TS um.
+   */
+  function _renderShadowReadinessCard(readiness) {
+    if (!readiness || typeof readiness !== 'object') return null;
+    const escape = (v) => String(v === null || v === undefined ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const card = document.createElement('div');
+    card.className = 'nw-config-card nw-shadow-diagnostic-card nw-shadow-readiness-card';
+    const overall = !!readiness.overallReady;
+    const kind = overall ? 'ok' : 'warn';
+    const plan = readiness.energyFlowEffectivePlan && typeof readiness.energyFlowEffectivePlan === 'object' ? readiness.energyFlowEffectivePlan : null;
+    const items = [
+      ['Energiefluss', readiness.readyForEnergyFlowSwitch ? 'bereit' : 'nicht bereit'],
+      ['Energiefluss-Modus', readiness.energyFlowMode || (plan && plan.mode) || 'shadow'],
+      ['Energiefluss-Quelle', plan ? (plan.source || 'js-runtime') : 'js-runtime'],
+      ['Core‑Limits', readiness.readyForCoreLimitsSwitch ? 'bereit' : 'nicht bereit'],
+      ['Heizstab', readiness.readyForHeatingRodSwitch ? 'bereit' : 'nicht bereit'],
+    ];
+    const blockers = Array.isArray(readiness.blockers) ? readiness.blockers : [];
+    const warnings = Array.isArray(readiness.warnings) ? readiness.warnings : [];
+    card.innerHTML = `
+      <div class="nw-config-card__header">
+        <div class="nw-config-card__header-top">
+          <div class="nw-config-card__title">TS‑Umschaltbereitschaft</div>
+          <div class="nw-shadow-badge nw-shadow-badge--${kind}">${overall ? 'BEREIT' : 'PRÜFEN'}</div>
+        </div>
+        <div class="nw-config-card__subtitle">Zusammenfassung aus Core‑Limits, Heizstab und Energiefluss Shadow‑Vergleich</div>
+      </div>
+      <div class="nw-config-card__body">
+        <div class="nw-shadow-readiness-grid">
+          ${items.map(([label, value]) => `<div class="nw-config-row nw-shadow-diff-row"><div class="nw-config-row__primary">${escape(label)}</div><div class="nw-config-row__status">${escape(value)}</div></div>`).join('')}
+        </div>
+        ${(blockers.length || warnings.length) ? `<details class="nw-shadow-json-details" open><summary>Blocker / Hinweise</summary><pre>${escape([].concat(blockers, warnings).join('\n') || 'Keine Blocker')}</pre></details>` : ''}
+        <div class="nw-config-help" style="margin-top:8px;opacity:.82;line-height:1.35;">${escape(readiness.nextAction || 'Diagnose auswerten, bevor produktiv auf TypeScript umgeschaltet wird.')}</div>
+      </div>
+    `;
+    return card;
+  }
+
+  /**
+   * Code-Teil: renderShadowDiagnostics
+   *
+   * Zweck:
+   * Zeigt Core-Limits-, Heizstab- und Energiefluss-Shadow-Vergleiche als
+   * lesbare App-Center-Karten an.
+   *
+   * Zusammenhang:
+   * Diese Anzeige ist die Freigabehilfe für die TypeScript-Migration. Erst wenn
+   * reale Anlagen hier stabil keine relevanten Abweichungen zeigen, darf später
+   * ein TS-Resolver produktiv übernommen werden.
+   *
+   * Wichtig:
+   * Diese Funktion ist reine UI/Diagnose. Sie schreibt keine States und schaltet
+   * keine Verbraucher.
+   */
+  function renderShadowDiagnostics(payload) {
+    if (!els.shadowDiagnostics) return;
+    els.shadowDiagnostics.innerHTML = '';
+    const ctrl = (payload && payload.control && typeof payload.control === 'object') ? payload.control : {};
+    const coreShadow = _parseShadowJson(ctrl.emsBudgetTsShadowJson, null);
+    const heatingShadowRaw = _parseShadowJson(ctrl.heatingRodTsShadowJson, null);
+    const heatingDebug = _parseShadowJson(ctrl.heatingRodDebugJson, null);
+    const heatingShadow = heatingShadowRaw || (heatingDebug && heatingDebug.tsShadow ? heatingDebug.tsShadow : null);
+    const flowInputs = _parseShadowJson(ctrl.energyFlowInputsJson, null);
+    const flowShadow = flowInputs && flowInputs.tsShadow ? flowInputs.tsShadow : null;
+
+    const readinessCard = _renderShadowReadinessCard(ctrl.tsShadowReadiness);
+    if (readinessCard) els.shadowDiagnostics.appendChild(readinessCard);
+    try { renderEnergyFlowTsModeStatus(ctrl.tsShadowReadiness); } catch (_e) {}
+
+    const cards = [
+      { title: 'TS‑Shadow: Core‑Limits', subtitle: 'PV‑Budget, Netzbudget, Speicherreserve, Restbudget', shadow: coreShadow },
+      { title: 'TS‑Shadow: Heizstab', subtitle: 'Zielstufe, Zielleistung, Budgetgrund, Speicherreserve', shadow: heatingShadow },
+      { title: 'TS‑Shadow: Energiefluss', subtitle: 'Speicher, Netz, PV, Gebäude-Verbrauch', shadow: flowShadow },
+    ];
+
+    const escape = (v) => String(v === null || v === undefined ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    cards.forEach((item) => {
+      const kind = _shadowKind(item.shadow);
+      const diffs = _shadowDiffList(item.shadow);
+      const source = item.shadow && item.shadow.source ? String(item.shadow.source) : (item.shadow ? 'ts-shadow' : 'kein Snapshot');
+      const card = document.createElement('div');
+      card.className = 'nw-config-card nw-shadow-diagnostic-card';
+      const bodyLines = [];
+      bodyLines.push({ label: 'Status', value: item.shadow ? (diffs.length ? `${diffs.length} Abweichung(en)` : 'Keine Abweichung') : 'Noch keine Daten' });
+      bodyLines.push({ label: 'Quelle', value: source });
+      diffs.slice(0, 5).forEach((d) => {
+        bodyLines.push({ label: d.label, value: `JS ${d.js ?? '—'} · TS ${d.ts ?? '—'}${d.diff !== '' ? ' · Δ ' + d.diff : ''}` });
+      });
+      if (diffs.length > 5) bodyLines.push({ label: 'Weitere', value: `${diffs.length - 5} Abweichung(en) im JSON` });
+      card.innerHTML = `
+        <div class="nw-config-card__header">
+          <div class="nw-config-card__header-top">
+            <div class="nw-config-card__title">${escape(item.title)}</div>
+            <div class="nw-shadow-badge nw-shadow-badge--${kind}">${kind === 'ok' ? 'OK' : (kind === 'warn' ? 'ABWEICHUNG' : 'FEHLER')}</div>
+          </div>
+          <div class="nw-config-card__subtitle">${escape(item.subtitle)}</div>
+        </div>
+        <div class="nw-config-card__body"></div>
+      `;
+      const body = card.querySelector('.nw-config-card__body');
+      const grid = document.createElement('div');
+      grid.style.display = 'grid';
+      grid.style.gap = '6px';
+      bodyLines.forEach((line) => {
+        const row = document.createElement('div');
+        row.className = 'nw-config-row nw-shadow-diff-row';
+        row.style.gridTemplateColumns = 'minmax(0, 1fr) minmax(120px, auto)';
+        row.innerHTML = `<div class="nw-config-row__primary" style="font-size:.82rem;">${escape(line.label)}</div><div class="nw-config-row__status" style="font-size:.82rem;">${escape(line.value)}</div>`;
+        grid.appendChild(row);
+      });
+      body.appendChild(grid);
+      const details = document.createElement('details');
+      details.className = 'nw-shadow-json-details';
+      details.innerHTML = `<summary>JSON anzeigen</summary><pre>${escape(JSON.stringify(item.shadow || {}, null, 2))}</pre>`;
+      body.appendChild(details);
+      els.shadowDiagnostics.appendChild(card);
+    });
+  }
+
+  /**
    * Code-Teil: renderChargingBudget
    * Zweck: Erzeugt oder aktualisiert sichtbare UI-Ausgabe.
    * Zusammenhang: Teil von Installer/App-Center: Konfiguration und DP-Zuordnung; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -10993,6 +11305,7 @@ function collectAiAdvisorConfigFromUI(base) {
     if (_activeTab !== 'status') return;
     const data = await fetchJson('/api/ems/charging/diagnostics');
     renderChargingBudget(data || {});
+    renderShadowDiagnostics(data || {});
     renderChargingDiag(data || {});
     renderStationsDiag(data || {});
   }
@@ -11620,6 +11933,9 @@ if (els.ocppAutoDetect) {
     });
   }
 
+  if (els.energyFlowTsMode) els.energyFlowTsMode.addEventListener('change', () => renderEnergyFlowTsModeStatus(null));
+  if (els.energyFlowTsProductionAllowed) els.energyFlowTsProductionAllowed.addEventListener('change', () => renderEnergyFlowTsModeStatus(null));
+
   if (els.save) {
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.save. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.save.addEventListener('click', () => {
@@ -11802,6 +12118,13 @@ if (els.ocppAutoDetect) {
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.refreshChargingBudget. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.
     els.refreshChargingBudget.addEventListener('click', () => {
       // Uses the same diagnostics endpoint
+      refreshChargingDiag().catch(() => {});
+    });
+  }
+
+  if (els.refreshShadowDiagnostics) {
+    // Ereignis-Kommentar: Aktualisiert nur die sichtbaren Shadow-Diagnosekarten. Die Werte kommen aus derselben Diagnose-API.
+    els.refreshShadowDiagnostics.addEventListener('click', () => {
       refreshChargingDiag().catch(() => {});
     });
   }
