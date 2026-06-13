@@ -149,8 +149,14 @@ export function buildCoreBudgetSnapshot(input: CoreBudgetInput): CoreBudgetSnaps
   const pv = calculatePvBudgetGate(input);
   const grid = calculateGridBudgetGate(input);
   const totalRaw = pv.rawW + grid.rawW;
-  const totalEffectiveW = Math.max(0, pv.effectiveW + grid.effectiveW);
-  const limitReason = pv.reason !== 'pv-surplus' ? pv.reason : grid.reason;
+  const uncappedTotalEffectiveW = Math.max(0, pv.effectiveW + grid.effectiveW);
+  const totalCap = toNumberOrNull(input.totalBudgetCapW);
+  const totalEffectiveW = totalCap !== null && totalCap >= 0
+    ? Math.min(uncappedTotalEffectiveW, Math.max(0, totalCap))
+    : uncappedTotalEffectiveW;
+  const limitReason = totalCap !== null && totalCap >= 0 && totalEffectiveW < uncappedTotalEffectiveW
+    ? 'manual-limit'
+    : (pv.reason !== 'pv-surplus' ? pv.reason : grid.reason);
   const diagnosticText = [pv.diagnosticText, grid.diagnosticText]
     .filter((x): x is string => typeof x === 'string' && x.length > 0)
     .join(' ');

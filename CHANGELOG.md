@@ -1,3 +1,9 @@
+## 0.7.83 - App-Center Shadow-JSON Anzeige stabilisiert
+
+- JSON-Anzeige der TypeScript-Shadow-Diagnose im App-Center auf stabilen Dialog umgestellt, damit die Ansicht bei automatischem Refresh nicht sofort wieder zuklappt.
+- Shadow-Karten zeigen jetzt zusätzlich eine verständliche Erklärung, warum OK/Abweichung/Fehler angezeigt wird.
+- Keine EMS-/Runtime-Logik geändert; produktive Energiefluss-, Core-Limits- und Heizstabwerte bleiben unverändert.
+
 ## 0.7.82 - Energiefluss TS sicherer Kandidatenmodus
 
 - Energiefluss-TS-Kandidatenmodus mit zusätzlicher Kandidatenprüfung ergänzt.

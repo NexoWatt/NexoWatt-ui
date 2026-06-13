@@ -57,6 +57,18 @@ export interface CoreBudgetInput {
   /** Optionales Netzanschluss-/Peak-Limit in Watt. */
   gridImportLimitW?: unknown;
 
+  /**
+   * Optionaler oberer Gesamtbudget-Deckel in Watt.
+   *
+   * Zweck:
+   * Die bestehende JS-Core-Limits-Runtime kennt zusätzliche High-Level-Caps, die nicht
+   * identisch mit `PV-Budget + Netz-Headroom` sind. Für den Shadow-Vergleich muss die
+   * TS-Schicht diesen Deckel kennen, sonst entstehen scheinbare Abweichungen wie
+   * `JS 11000 W` gegen `TS 29700 W`, obwohl nur unterschiedliche Budgetbegriffe
+   * verglichen wurden.
+   */
+  totalBudgetCapW?: unknown;
+
   /** Aktuelle Speicher-Ladeleistung in Watt. */
   storageChargeW?: unknown;
 

@@ -814,6 +814,55 @@
   let dpTargetInputId = null;
   let treePrefix = '';
 
+  /**
+   * Code-Teil: shadowJsonDetailsOpen
+   *
+   * Zweck:
+   * Merkt sich, welche JSON-Detailblöcke in der TS-Shadow-Diagnose geöffnet sind.
+   *
+   * Zusammenhang:
+   * Die Statusseite aktualisiert sich alle paar Sekunden. Ohne diesen Merker wird das
+   * DOM neu aufgebaut und ein gerade geöffnetes JSON-Details-Fenster klappt sofort
+   * wieder zu. Genau das war auf der Anlage sichtbar: „JSON anzeigen" öffnet kurz
+   * und schließt beim nächsten Poll wieder.
+   */
+  const shadowJsonDetailsOpen = new Set();
+
+  /**
+   * Code-Teil: _decodeShadowDisplayText
+   *
+   * Zweck:
+   * Bereitet Diagnose-Texte für die Anzeige vor. Manche Backend-Texte können aus
+   * URL-/Query-Kontexten bereits mit `%20` kodierte Leerzeichen enthalten. Für den
+   * Installateur muss das lesbar als normaler Text angezeigt werden.
+   */
+  function _decodeShadowDisplayText(value) {
+    const text = String(value === null || value === undefined ? '' : value);
+    if (!/%[0-9A-Fa-f]{2}/.test(text)) return text;
+    try { return decodeURIComponent(text); } catch (_e) { return text; }
+  }
+
+  /**
+   * Code-Teil: _rememberOpenShadowDetails
+   *
+   * Zweck:
+   * Sichert den Offen/Zugeklappt-Zustand der JSON-Details vor einem Re-Render.
+   *
+   * Wichtig:
+   * Das verändert keine Diagnosewerte und keine EMS-Logik. Es verhindert nur, dass
+   * das App-Center bei automatischem Polling die Bedienung unbrauchbar macht.
+   */
+  function _rememberOpenShadowDetails() {
+    try {
+      document.querySelectorAll('.nw-shadow-json-details[data-shadow-key]').forEach((node) => {
+        const key = node.getAttribute('data-shadow-key');
+        if (!key) return;
+        if (node.open) shadowJsonDetailsOpen.add(key);
+        else shadowJsonDetailsOpen.delete(key);
+      });
+    } catch (_e) {}
+  }
+
 // ─────────────────────────────────────────────────────────────
 // Energiefluss: Einheit pro Datenpunkt (W/kW)
 // Intern arbeitet der Energiefluss mit Watt; die Live-UI zeigt kW.
@@ -10763,10 +10812,158 @@ function collectAiAdvisorConfigFromUI(base) {
    * TS-Logik schon produktiv freigegeben ist.
    */
   function _shadowKind(shadow) {
-    if (!shadow || typeof shadow !== 'object') return 'warn';
-    if (shadow.parseError || shadow.ok === false || shadow.error) return 'error';
-    if (shadow.available === false) return 'warn';
-    return _shadowDiffList(shadow).length ? 'warn' : 'ok';
+    if (!shadow || typeof shadow !== 'object') return 'wait';
+    if (shadow.parseError || shadow.error) return 'error';
+    if (shadow.available === false) return 'wait';
+    const diffs = _shadowDiffList(shadow);
+    if (diffs.length) return 'warn';
+    if (shadow.ok === false) return 'warn';
+    return 'ok';
+  }
+
+  /**
+   * Code-Teil: _shadowStatusLabel
+   *
+   * Zweck:
+   * Übersetzt technische Diagnosezustände in verständliche Ampeltexte. Eine
+   * Abweichung ist kein produktiver EMS-Fehler, sondern ein Migrationsblocker für
+   * die spätere TS-Umschaltung.
+   */
+  function _shadowStatusLabel(kind, shadow) {
+    if (kind === 'ok') return 'OK';
+    if (kind === 'warn') return 'ABWEICHUNG';
+    if (kind === 'error') return 'FEHLER';
+    if (!shadow || typeof shadow !== 'object') return 'WARTET';
+    return 'WARTET';
+  }
+
+  /**
+   * Code-Teil: _shadowHumanExplanation
+   *
+   * Zweck:
+   * Übersetzt den technischen TS-Shadow-Zustand in eine verständliche Erklärung
+   * für den Installateur. Damit muss man nicht zuerst das JSON öffnen, um zu
+   * verstehen, warum eine Kachel OK, ABWEICHUNG oder FEHLER anzeigt.
+   *
+   * Zusammenhang:
+   * Wird nur im App-Center/Statusbereich genutzt. Die Funktion ändert keine
+   * Energiefluss-, Heizstab- oder Core-Limits-Werte. Produktiv bleibt weiterhin
+   * die im Backend gewählte Runtime.
+   */
+  function _shadowHumanExplanation(title, shadow, diffs) {
+    const name = String(title || 'TS-Shadow');
+    if (!shadow || typeof shadow !== 'object') {
+      return `${name}: Noch kein Shadow-Snapshot vorhanden. Das ist meist nur ein Hinweis, dass der jeweilige EMS-Teil noch keinen Diagnose-Tick geschrieben hat.`;
+    }
+    if (shadow.parseError) return `${name}: Shadow-JSON konnte nicht gelesen werden. Produktiv bleibt die bestehende JavaScript-Logik.`;
+    if (shadow.error) return `${name}: Der TS-Spiegel hat einen Fehler gemeldet. Produktiv bleibt die bestehende JavaScript-Logik.`;
+    if (shadow.available === false) return `${name}: TypeScript-Spiegel ist nicht verfügbar. Produktiv bleibt die bestehende JavaScript-Logik.`;
+    if (Array.isArray(diffs) && diffs.length) {
+      return `${name}: ${diffs.length} Abweichung(en) zwischen JavaScript-Runtime und TypeScript-Spiegel. Das ist aktuell ein Blocker für eine TS-Umschaltung; produktiv bleibt JavaScript.`;
+    }
+    return `${name}: Keine Abweichung im aktuellen Shadow-Vergleich.`;
+  }
+
+  /**
+   * Code-Teil: _formatShadowJsonForDisplay
+   *
+   * Zweck:
+   * Formatiert Shadow-Diagnoseobjekte stabil als JSON-Text. Falls ein Objekt
+   * nicht serialisierbar sein sollte, wird eine kurze Fehlermeldung angezeigt,
+   * statt dass die UI abstürzt.
+   */
+  function _formatShadowJsonForDisplay(value) {
+    try { return JSON.stringify(value || {}, null, 2); }
+    catch (e) { return `JSON konnte nicht formatiert werden: ${e && e.message ? e.message : e}`; }
+  }
+
+  /**
+   * Code-Teil: _shadowDecodeDisplayText
+   *
+   * Zweck:
+   * Bereitet technische Shadow-Texte für die Lesbarkeit im App-Center auf.
+   * Manche Diagnosegründe können URL-kodiert wirken, z. B. `%20` statt Leerzeichen.
+   * Diese Funktion dekodiert nur für die Anzeige.
+   *
+   * Wichtig:
+   * Es wird nichts an Runtime-Werten geändert oder zurückgeschrieben.
+   */
+  function _shadowDecodeDisplayText(value) {
+    let text = String(value === null || value === undefined ? '' : value);
+    if (/%[0-9A-Fa-f]{2}/.test(text)) {
+      try { text = decodeURIComponent(text); } catch (_e) {}
+    }
+    return text;
+  }
+
+  /**
+   * Code-Teil: _shadowEscape
+   *
+   * Zweck:
+   * Escaped Shadow-Diagnosetexte für HTML und nutzt vorher die Anzeige-Dekodierung.
+   *
+   * Zusammenhang:
+   * Ersetzt in diesem Diagnosebereich den Browser-Global `escape()`, weil dieser
+   * Leerzeichen in `%20` umwandeln kann und damit unlesbare Hinweise erzeugt.
+   */
+  function _shadowEscape(value) {
+    return _shadowDecodeDisplayText(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+
+  /**
+   * Code-Teil: _openShadowJsonDialog
+   *
+   * Zweck:
+   * Öffnet die Shadow-JSON-Details in einem eigenen Dialog statt in einem
+   * <details>-Element innerhalb der automatisch aktualisierten Diagnose-Karte.
+   *
+   * Warum:
+   * Die Statusseite rendert sich regelmäßig neu. Ein <details>-Element kann dabei
+   * sofort wieder zuklappen. Der Dialog hängt außerhalb des Diagnose-Renders und
+   * bleibt deshalb offen, bis der Nutzer ihn selbst schließt.
+   */
+  function _openShadowJsonDialog(title, payload) {
+    const existing = document.getElementById('nwShadowJsonDialogBackdrop');
+    if (existing) existing.remove();
+    const backdrop = document.createElement('div');
+    backdrop.id = 'nwShadowJsonDialogBackdrop';
+    backdrop.className = 'nw-shadow-json-dialog-backdrop';
+    const jsonText = _formatShadowJsonForDisplay(payload);
+    backdrop.innerHTML = `
+      <div class="nw-shadow-json-dialog" role="dialog" aria-modal="true" aria-label="${_shadowEscape(title || 'Shadow JSON')}">
+        <div class="nw-shadow-json-dialog__head">
+          <div>
+            <div class="nw-shadow-json-dialog__eyebrow">TypeScript Shadow-Diagnose</div>
+            <h3>${_shadowEscape(title || 'JSON')}</h3>
+          </div>
+          <button type="button" class="nw-config-btn nw-config-btn--ghost" data-shadow-json-close>Schließen</button>
+        </div>
+        <textarea class="nw-shadow-json-dialog__text" spellcheck="false" readonly>${_shadowEscape(jsonText)}</textarea>
+        <div class="nw-shadow-json-dialog__foot">
+          <button type="button" class="nw-config-btn nw-config-btn--ghost" data-shadow-json-copy>JSON kopieren</button>
+          <small class="nw-muted">Nur Diagnose. Diese Anzeige verändert keine EMS-Werte.</small>
+        </div>
+      </div>`;
+    const close = () => backdrop.remove();
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop || e.target.closest('[data-shadow-json-close]')) close();
+      const copyBtn = e.target.closest('[data-shadow-json-copy]');
+      if (copyBtn) {
+        try {
+          navigator.clipboard && navigator.clipboard.writeText(jsonText);
+          copyBtn.textContent = 'Kopiert';
+          setTimeout(() => { try { copyBtn.textContent = 'JSON kopieren'; } catch (_e) {} }, 1200);
+        } catch (_e) {}
+      }
+    });
+    document.body.appendChild(backdrop);
+    const text = backdrop.querySelector('textarea');
+    if (text) { try { text.focus(); text.setSelectionRange(0, 0); } catch (_e) {} }
   }
 
 
@@ -10851,16 +11048,16 @@ function collectAiAdvisorConfigFromUI(base) {
       ? `${Number(switchState.okTicks)}/${Number(switchState.warmupTicks || warmupWanted)}`
       : `0/${warmupWanted}`;
     const candidateStable = switchState && switchState.candidateStable === true ? 'stabil' : 'nicht stabil';
-    const blocked = plan && Array.isArray(plan.blockedReasons) && plan.blockedReasons.length ? plan.blockedReasons.join(' · ') : '';
+    const blocked = plan && Array.isArray(plan.blockedReasons) && plan.blockedReasons.length ? plan.blockedReasons.map(_decodeShadowDisplayText).join(' · ') : '';
     const safety = plan && plan.candidateSafety && typeof plan.candidateSafety === 'object' ? plan.candidateSafety : null;
     const candidateLine = safety
-      ? `<b>Kandidatenprüfung:</b> ${safety.ok ? 'OK' : 'blockiert'}${Array.isArray(safety.warnings) && safety.warnings.length ? ' · Hinweis: ' + escape(safety.warnings.join(' · ')) : ''}`
-      : `<b>Kandidatenprüfung:</b> Warmup ${escape(warmupStatus)} · ${escape(candidateStable)}`;
+      ? `<b>Kandidatenprüfung:</b> ${safety.ok ? 'OK' : 'blockiert'}${Array.isArray(safety.warnings) && safety.warnings.length ? ' · Hinweis: ' + _shadowEscape(safety.warnings.join(' · ')) : ''}`
+      : `<b>Kandidatenprüfung:</b> Warmup ${_shadowEscape(warmupStatus)} · ${_shadowEscape(candidateStable)}`;
     els.energyFlowTsModeStatus.innerHTML = [
-      `<b>Gewählt:</b> ${escape(selectedMode)} · <b>Freigabe:</b> ${productionAllowed ? 'aktiv' : 'aus'} · <b>Auto-Fallback:</b> ${autoFallback ? 'aktiv' : 'aus'}`,
-      `<b>Warmup:</b> ${escape(warmupStatus)} · <b>Effektive Quelle:</b> ${escape(effectiveSource)} · <b>TS würde genutzt:</b> ${escape(wouldUseTs)}`,
+      `<b>Gewählt:</b> ${escape(_decodeShadowDisplayText(selectedMode))} · <b>Freigabe:</b> ${productionAllowed ? 'aktiv' : 'aus'} · <b>Auto-Fallback:</b> ${autoFallback ? 'aktiv' : 'aus'}`,
+      `<b>Warmup:</b> ${escape(_decodeShadowDisplayText(warmupStatus))} · <b>Effektive Quelle:</b> ${escape(_decodeShadowDisplayText(effectiveSource))} · <b>TS würde genutzt:</b> ${escape(_decodeShadowDisplayText(wouldUseTs))}`,
       candidateLine,
-      blocked ? `<b>Blockiert durch:</b> ${escape(blocked)}` : '<b>Status:</b> Noch keine Blocker oder noch keine Shadow-Diagnose geladen.',
+      blocked ? `<b>Blockiert durch:</b> ${_shadowEscape(blocked)}` : '<b>Status:</b> Noch keine Blocker oder noch keine Shadow-Diagnose geladen.',
     ].join('<br/>');
   }
 
@@ -10880,7 +11077,7 @@ function collectAiAdvisorConfigFromUI(base) {
    */
   function _renderShadowReadinessCard(readiness) {
     if (!readiness || typeof readiness !== 'object') return null;
-    const escape = (v) => String(v === null || v === undefined ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const escape = _shadowEscape;
     const card = document.createElement('div');
     card.className = 'nw-config-card nw-shadow-diagnostic-card nw-shadow-readiness-card';
     const overall = !!readiness.overallReady;
@@ -10907,8 +11104,8 @@ function collectAiAdvisorConfigFromUI(base) {
       ['Core‑Limits', readiness.readyForCoreLimitsSwitch ? 'bereit' : 'nicht bereit'],
       ['Heizstab', readiness.readyForHeatingRodSwitch ? 'bereit' : 'nicht bereit'],
     ];
-    const blockers = Array.isArray(readiness.blockers) ? readiness.blockers : [];
-    const warnings = Array.isArray(readiness.warnings) ? readiness.warnings : [];
+    const blockers = Array.isArray(readiness.blockers) ? readiness.blockers.map(_decodeShadowDisplayText) : [];
+    const warnings = Array.isArray(readiness.warnings) ? readiness.warnings.map(_decodeShadowDisplayText) : [];
     const candidateLines = candidateSafety
       ? [].concat(
           candidateSafety.ok ? ['Kandidatenprüfung: OK'] : ['Kandidatenprüfung: blockiert'],
@@ -10953,6 +11150,7 @@ function collectAiAdvisorConfigFromUI(base) {
    */
   function renderShadowDiagnostics(payload) {
     if (!els.shadowDiagnostics) return;
+    _rememberOpenShadowDetails();
     els.shadowDiagnostics.innerHTML = '';
     const ctrl = (payload && payload.control && typeof payload.control === 'object') ? payload.control : {};
     const coreShadow = _parseShadowJson(ctrl.emsBudgetTsShadowJson, null);
@@ -10966,13 +11164,18 @@ function collectAiAdvisorConfigFromUI(base) {
     if (readinessCard) els.shadowDiagnostics.appendChild(readinessCard);
     try { renderEnergyFlowTsModeStatus(ctrl.tsShadowReadiness); } catch (_e) {}
 
+    const hint = document.createElement('div');
+    hint.className = 'nw-config-help nw-shadow-diagnostics-hint';
+    hint.textContent = 'Hinweis: Shadow-Abweichung bedeutet nicht automatisch Adapterfehler. Die JavaScript-Runtime bleibt produktiv; TypeScript dient hier nur zur Migrationsprüfung.';
+    els.shadowDiagnostics.appendChild(hint);
+
     const cards = [
       { title: 'TS‑Shadow: Core‑Limits', subtitle: 'PV‑Budget, Netzbudget, Speicherreserve, Restbudget', shadow: coreShadow },
       { title: 'TS‑Shadow: Heizstab', subtitle: 'Zielstufe, Zielleistung, Budgetgrund, Speicherreserve', shadow: heatingShadow },
       { title: 'TS‑Shadow: Energiefluss', subtitle: 'Speicher, Netz, PV, Gebäude-Verbrauch', shadow: flowShadow },
     ];
 
-    const escape = (v) => String(v === null || v === undefined ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const escape = _shadowEscape;
     cards.forEach((item) => {
       const kind = _shadowKind(item.shadow);
       const diffs = _shadowDiffList(item.shadow);
@@ -10990,7 +11193,7 @@ function collectAiAdvisorConfigFromUI(base) {
         <div class="nw-config-card__header">
           <div class="nw-config-card__header-top">
             <div class="nw-config-card__title">${escape(item.title)}</div>
-            <div class="nw-shadow-badge nw-shadow-badge--${kind}">${kind === 'ok' ? 'OK' : (kind === 'warn' ? 'ABWEICHUNG' : 'FEHLER')}</div>
+            <div class="nw-shadow-badge nw-shadow-badge--${kind}">${escape(_shadowStatusLabel(kind, item.shadow))}</div>
           </div>
           <div class="nw-config-card__subtitle">${escape(item.subtitle)}</div>
         </div>
@@ -11004,14 +11207,21 @@ function collectAiAdvisorConfigFromUI(base) {
         const row = document.createElement('div');
         row.className = 'nw-config-row nw-shadow-diff-row';
         row.style.gridTemplateColumns = 'minmax(0, 1fr) minmax(120px, auto)';
-        row.innerHTML = `<div class="nw-config-row__primary" style="font-size:.82rem;">${escape(line.label)}</div><div class="nw-config-row__status" style="font-size:.82rem;">${escape(line.value)}</div>`;
+        row.innerHTML = `<div class="nw-config-row__primary" style="font-size:.82rem;">${escape(_decodeShadowDisplayText(line.label))}</div><div class="nw-config-row__status" style="font-size:.82rem;">${escape(_decodeShadowDisplayText(line.value))}</div>`;
         grid.appendChild(row);
       });
       body.appendChild(grid);
-      const details = document.createElement('details');
-      details.className = 'nw-shadow-json-details';
-      details.innerHTML = `<summary>JSON anzeigen</summary><pre>${escape(JSON.stringify(item.shadow || {}, null, 2))}</pre>`;
-      body.appendChild(details);
+      const explain = document.createElement('div');
+      explain.className = 'nw-config-empty nw-shadow-explanation';
+      explain.textContent = _shadowHumanExplanation(item.title, item.shadow, diffs);
+      body.appendChild(explain);
+
+      const jsonButton = document.createElement('button');
+      jsonButton.type = 'button';
+      jsonButton.className = 'nw-config-btn nw-config-btn--ghost nw-shadow-json-button';
+      jsonButton.textContent = 'JSON dauerhaft öffnen';
+      jsonButton.addEventListener('click', () => _openShadowJsonDialog(item.title, item.shadow || {}));
+      body.appendChild(jsonButton);
       els.shadowDiagnostics.appendChild(card);
     });
   }

@@ -11383,3 +11383,105 @@ body.nw-cockpit-page.nw-page-history .history-toolbar input[type="date"]{
 .nw-ts-energyflow-production-row{min-height:44px;align-items:center;}
 .nw-ts-energyflow-safety-note,.nw-ts-energyflow-mode-status{grid-column:1 / -1;}
 @media (max-width:760px){.nw-ts-energyflow-mode-grid{grid-template-columns:1fr;}}
+
+/* 0.7.83: Stabiler JSON-Dialog für TypeScript-Shadow-Diagnose.
+   Zweck: Die Diagnose-Karten werden regelmäßig neu gerendert. Ein normales
+   <details>-Element konnte dadurch sofort wieder zuklappen. Der Dialog hängt
+   am body und bleibt offen, bis der Nutzer ihn schließt. */
+.nw-shadow-explanation{
+  margin-top:10px;
+  line-height:1.45;
+}
+.nw-shadow-json-button{
+  margin-top:10px;
+  width:100%;
+  justify-content:center;
+}
+.nw-shadow-json-dialog-backdrop{
+  position:fixed;
+  inset:0;
+  z-index:9999;
+  display:grid;
+  place-items:center;
+  padding:18px;
+  background:rgba(0,0,0,.62);
+  backdrop-filter:blur(10px);
+}
+.nw-shadow-json-dialog{
+  width:min(980px,96vw);
+  max-height:min(86vh,920px);
+  display:grid;
+  grid-template-rows:auto minmax(240px,1fr) auto;
+  gap:12px;
+  padding:16px;
+  border:1px solid rgba(87,145,190,.36);
+  border-radius:18px;
+  background:linear-gradient(180deg,rgba(7,23,38,.98),rgba(3,13,24,.98));
+  box-shadow:0 30px 90px rgba(0,0,0,.62);
+}
+.nw-shadow-json-dialog__head,
+.nw-shadow-json-dialog__foot{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.nw-shadow-json-dialog__eyebrow{
+  color:var(--nx-green,#00e676);
+  font-size:12px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.nw-shadow-json-dialog h3{
+  margin:3px 0 0;
+}
+.nw-shadow-json-dialog__text{
+  width:100%;
+  min-height:240px;
+  resize:none;
+  overflow:auto;
+  font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+  font-size:12px;
+  line-height:1.45;
+  color:#d7eaff;
+  border:1px solid rgba(87,145,190,.28);
+  border-radius:14px;
+  background:rgba(0,7,14,.72);
+  padding:12px;
+}
+@media (max-width:720px){
+  .nw-shadow-json-dialog{width:100%;max-height:90vh;padding:12px;}
+  .nw-shadow-json-dialog__head,
+  .nw-shadow-json-dialog__foot{align-items:stretch;flex-direction:column;}
+  .nw-shadow-json-dialog__text{font-size:11px;}
+}
+
+
+/* TS-Shadow: Wartestatus für noch nicht vorhandene Snapshots (0.7.83)
+   Zweck: 'Noch keine Daten' ist kein Fehler, sondern ein erwartbarer Zustand nach Start oder bei inaktiven Modulen. */
+.nw-shadow-badge--wait{
+  color:#b6c7dc;
+  background:rgba(148,163,184,.12);
+  border-color:rgba(148,163,184,.30);
+}
+
+
+/* 0.7.83 – App-Center TS-Shadow-Diagnose verständlicher */
+.nw-shadow-diagnostics-hint {
+  grid-column: 1 / -1;
+  margin: 4px 0 8px;
+  padding: 10px 12px;
+  border: 1px dashed rgba(120, 170, 210, .28);
+  border-radius: 12px;
+  background: rgba(2, 16, 30, .44);
+  color: rgba(210, 226, 244, .86);
+}
+.nw-shadow-json-button {
+  margin-top: 10px;
+  width: 100%;
+  justify-content: center;
+}
+.nw-shadow-json-dialog__text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}

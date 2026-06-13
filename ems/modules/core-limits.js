@@ -1103,6 +1103,11 @@ class CoreLimitsModule extends BaseModule {
                 allowStorageDischarge: false,
                 gridImportW: importForGridHeadroom,
                 gridImportLimitW: Number(grid.importLimitW || 0),
+                // Shadow-Abgleich: Die bestehende JS-Runtime begrenzt das Gesamtbudget
+                // teilweise über zusätzliche High-Level-Caps. Dieser Deckel wird nur für
+                // den Vergleich an den TS-Spiegel übergeben, damit nicht unterschiedliche
+                // Budgetbegriffe fälschlich als Fehler angezeigt werden.
+                totalBudgetCapW: total.effectiveW === null || total.effectiveW === undefined ? null : Number(total.effectiveW),
                 allowGridImport: true,
                 peakShavingActive: false,
                 externalLimitActive: false,
