@@ -2773,6 +2773,8 @@ class NexoWattVis extends utils.Adapter {
     ensurePlainObj('tsMigration', {
       energyFlowMode: 'shadow',
       energyFlowProductionAllowed: false,
+      energyFlowCandidateWarmupTicks: 3,
+      energyFlowCandidateAutoFallback: true,
     });
     ensurePlainObj('chargingManagement', {});
     ensurePlainObj('peakShaving', {});
@@ -2828,6 +2830,8 @@ class NexoWattVis extends utils.Adapter {
     ensurePlainObj('tsMigration', {
       energyFlowMode: 'shadow',
       energyFlowProductionAllowed: false,
+      energyFlowCandidateWarmupTicks: 3,
+      energyFlowCandidateAutoFallback: true,
       // js     = reine alte JS-Runtime ohne TS-Vergleich,
       // shadow = JS bleibt produktiv, TS rechnet nur Diagnose,
       // ts     = technischer Kandidatenmodus; TS darf nur bei sauberem Shadow-Ergebnis als Kandidat markiert werden.
@@ -2843,6 +2847,17 @@ class NexoWattVis extends utils.Adapter {
       }
       if (typeof tm.energyFlowProductionAllowed !== 'boolean') {
         tm.energyFlowProductionAllowed = false;
+        changed = true;
+      }
+      const warmup = Math.round(Number(tm.energyFlowCandidateWarmupTicks));
+      if (!Number.isFinite(warmup) || warmup < 1 || warmup > 30) {
+        tm.energyFlowCandidateWarmupTicks = 3;
+        changed = true;
+      } else {
+        tm.energyFlowCandidateWarmupTicks = warmup;
+      }
+      if (typeof tm.energyFlowCandidateAutoFallback !== 'boolean') {
+        tm.energyFlowCandidateAutoFallback = true;
         changed = true;
       }
       out.tsMigration = tm;
@@ -11141,7 +11156,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         // TypeScript-Migration: Energiefluss-Schaltmodus für App-Center-Diagnose.
         // Wichtig: Diese Konfiguration wird nur über die doppelte Sicherheitslogik in main.js ausgewertet.
-        tsMigration: (n.tsMigration && typeof n.tsMigration === 'object') ? n.tsMigration : { energyFlowMode: 'shadow', energyFlowProductionAllowed: false },
+        tsMigration: (n.tsMigration && typeof n.tsMigration === 'object') ? n.tsMigration : { energyFlowMode: 'shadow', energyFlowProductionAllowed: false, energyFlowCandidateWarmupTicks: 3, energyFlowCandidateAutoFallback: true },
 
         // Plant-level
         installerConfig: (n.installerConfig && typeof n.installerConfig === 'object') ? n.installerConfig : {},
@@ -15471,7 +15486,7 @@ app.get('/config', (req, res) => {
       res.json({
         units: cfg.units || { power: 'W', energy: 'kWh' },
         settings: cfg.settings || {},
-        tsMigration: cfg.tsMigration || { energyFlowMode: 'shadow', energyFlowProductionAllowed: false },
+        tsMigration: cfg.tsMigration || { energyFlowMode: 'shadow', energyFlowProductionAllowed: false, energyFlowCandidateWarmupTicks: 3, energyFlowCandidateAutoFallback: true },
         datapointFlags,
         // TS-Migration Diagnose: Vergleich zwischen vorheriger JS-Sichtbarkeit und TS-Spiegel.
         featureVisibilityTsPreview,
@@ -20708,7 +20723,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
    * Baut einen sicheren Umschaltplan aus JS-Runtime-Werten und TS-Shadow-Werten.
    *
    * Zusammenhang:
-   * 0.7.80 bereitet die produktive Umschaltung vor, ohne sie automatisch zu aktivieren.
+   * 0.7.82 bereitet die produktive Umschaltung vor, ohne sie automatisch zu aktivieren.
    * Der Plan beschreibt, welche Quelle verwendet werden dürfte, wenn der Modus auf `ts`
    * gesetzt ist und der Shadow-Vergleich keine Abweichungen meldet.
    *
@@ -20720,8 +20735,9 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const normalizedMode = this._nwNormalizeEnergyFlowTsMode(mode);
     const gate = this._nwGetEnergyFlowTsSwitchConfig ? this._nwGetEnergyFlowTsSwitchConfig() : { productionAllowed: false };
     const tsReady = !!(shadowResult && shadowResult.available && shadowResult.ok && tsValues && typeof tsValues === 'object');
+    const candidateSafety = this._nwValidateEnergyFlowTsCandidate(shadowResult);
     const wantsTs = normalizedMode === 'ts';
-    const useTsCandidate = wantsTs && tsReady && gate.productionAllowed === true;
+    const useTsCandidate = wantsTs && tsReady && gate.productionAllowed === true && candidateSafety.ok === true;
     const blockedReasons = [];
     if (wantsTs && gate.productionAllowed !== true) blockedReasons.push('Sicherheitsfreigabe energyFlowProductionAllowed fehlt.');
     if (wantsTs && !tsReady) {
@@ -20729,20 +20745,85 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       if (shadowResult && shadowResult.ok === false) blockedReasons.push('Shadow-Vergleich meldet Abweichungen.');
       if (!tsValues || typeof tsValues !== 'object') blockedReasons.push('TS-Werte fehlen.');
     }
+    if (wantsTs && tsReady && candidateSafety.ok !== true) {
+      blockedReasons.push(...candidateSafety.blockers);
+    }
     if (normalizedMode === 'js') blockedReasons.push('Modus js: TypeScript-Energiefluss ist deaktiviert.');
     if (normalizedMode === 'shadow') blockedReasons.push('Modus shadow: JavaScript bleibt produktiv; TypeScript ist nur Diagnose.');
     return {
       mode: normalizedMode,
       productionAllowed: gate.productionAllowed === true,
       source: useTsCandidate ? 'ts-candidate' : 'js-runtime',
-      canUseTs: tsReady,
+      canUseTs: tsReady && candidateSafety.ok === true,
       wouldUseTs: useTsCandidate,
       runtimeAuthoritative: !useTsCandidate,
       values: useTsCandidate ? tsValues : runtimeValues,
+      candidateSafety,
       blockedReasons,
       safetyText: useTsCandidate
-        ? 'TS-Werte werden nur genutzt, weil Modus ts und energyFlowProductionAllowed aktiv sind.'
+        ? 'TS-Werte werden nur genutzt, weil Modus ts, energyFlowProductionAllowed und Kandidaten-Warmup aktiv/sauber sind.'
         : 'Produktiv bleibt die JavaScript-Runtime.',
+    };
+  }
+
+
+  /**
+   * Code-Teil: _nwValidateEnergyFlowTsCandidate
+   *
+   * Zweck:
+   * Prüft die vom TypeScript-Energiefluss-Resolver gelieferten Kandidatenwerte,
+   * bevor sie im Modus `ts` als effektive Energieflusswerte genutzt werden dürfen.
+   *
+   * Zusammenhang:
+   * Diese Prüfung ist der zusätzliche Sicherheitsgurt für 0.7.82. Der Shadow-Vergleich
+   * sagt, ob JS und TS nahe beieinander liegen; diese Funktion prüft zusätzlich, ob die
+   * TS-Kandidatenwerte selbst vollständig, nicht-negativ und plausibel sind.
+   *
+   * Wichtig:
+   * Wenn etwas unklar ist, bleibt die JavaScript-Runtime führend. So schützen wir
+   * LIVE-Werte, History und Speicher-/Netzdiagnosen vor fehlerhaften Kandidatenwerten.
+   */
+  _nwValidateEnergyFlowTsCandidate(tsShadow = {}) {
+    const values = (tsShadow && tsShadow.ts && typeof tsShadow.ts === 'object') ? tsShadow.ts : null;
+    const blockers = [];
+    const warnings = [];
+    if (!values) {
+      return { ok: false, blockers: ['TS-Kandidatenwerte fehlen.'], warnings, values: {} };
+    }
+
+    const required = [
+      ['gridBuyW', 'Netzbezug'],
+      ['gridSellW', 'Netzeinspeisung'],
+      ['storageChargeW', 'Speicher Laden'],
+      ['storageDischargeW', 'Speicher Entladen'],
+      ['buildingLoadW', 'Gebäudelast'],
+    ];
+    const normalized = {};
+    for (const [key, label] of required) {
+      const n = Number(values[key]);
+      if (!Number.isFinite(n)) {
+        blockers.push(`${label} fehlt oder ist nicht numerisch.`);
+        continue;
+      }
+      if (n < 0) blockers.push(`${label} ist negativ (${n} W).`);
+      if (Math.abs(n) > 1000000) blockers.push(`${label} ist unrealistisch groß (${n} W).`);
+      normalized[key] = Math.round(n);
+    }
+
+    if ((normalized.storageChargeW || 0) > 100 && (normalized.storageDischargeW || 0) > 100) {
+      warnings.push('Speicher meldet gleichzeitig Laden und Entladen > 100 W. Wert wird nicht blockiert, Mapping sollte aber geprüft werden.');
+    }
+    if ((normalized.gridBuyW || 0) > 100 && (normalized.gridSellW || 0) > 100) {
+      warnings.push('Netz meldet gleichzeitig Bezug und Einspeisung > 100 W. Wert wird nicht blockiert, Mapping sollte aber geprüft werden.');
+    }
+    if (tsShadow && tsShadow.ok === false) blockers.push('Shadow-Vergleich meldet Abweichungen.');
+    if (tsShadow && Array.isArray(tsShadow.mismatches) && tsShadow.mismatches.length) blockers.push('Shadow-Mismatches vorhanden.');
+
+    return {
+      ok: blockers.length === 0,
+      blockers,
+      warnings,
+      values: normalized,
     };
   }
 
@@ -20929,6 +21010,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
         gridSource: snapshot && snapshot.grid ? snapshot.grid.source : '',
       };
       result.effectivePlan = this._nwBuildEnergyFlowTsEffectivePlan(mode, runtimeValues, tsValues, result);
+      result.candidateSafety = result.effectivePlan ? result.effectivePlan.candidateSafety : null;
 
       if (mismatches.length) {
         const hash = mismatches.join('|');
@@ -20972,7 +21054,10 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     if (!rawMode) rawMode = String(cfg.energyFlowMode || cfg.energyFlowTsMode || cfg.flowMode || 'shadow');
     const mode = ['js', 'shadow', 'ts'].includes(String(rawMode).trim().toLowerCase()) ? String(rawMode).trim().toLowerCase() : 'shadow';
     const productionAllowed = cfg.energyFlowProductionAllowed === true || cfg.allowEnergyFlowTsProduction === true;
-    return { requestedMode: mode, productionAllowed };
+    const warmupRaw = Math.round(Number(cfg.energyFlowCandidateWarmupTicks));
+    const warmupTicks = Number.isFinite(warmupRaw) ? Math.max(1, Math.min(30, warmupRaw)) : 3;
+    const autoFallback = cfg.energyFlowCandidateAutoFallback !== false;
+    return { requestedMode: mode, productionAllowed, warmupTicks, autoFallback };
   }
 
   /**
@@ -20997,31 +21082,74 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const cfg = this._nwGetEnergyFlowTsSwitchConfig();
     const shadowAvailable = !!(tsShadow && tsShadow.available && tsShadow.ts);
     const shadowOk = !!(shadowAvailable && (tsShadow.ok === true || (Array.isArray(tsShadow.mismatches) && tsShadow.mismatches.length === 0)));
+    const candidateSafety = this._nwValidateEnergyFlowTsCandidate ? this._nwValidateEnergyFlowTsCandidate(tsShadow) : { ok: shadowOk, blockers: [], warnings: [], values: {} };
+    const warmupTicks = Math.max(1, Math.min(30, Math.round(Number(cfg.warmupTicks) || 3)));
+    const state = this._energyFlowTsCandidateState || { okTicks: 0, lastReason: '', lastUseTs: false, lastTs: 0 };
     let effectiveMode = 'js';
     let reason = 'default-js';
+
+    /**
+     * Code-Teil: Kandidaten-Warmup für TS-Energiefluss.
+     *
+     * Zweck:
+     * TS darf nicht direkt beim ersten sauberen Shadow-Tick produktiv werden. Erst mehrere
+     * aufeinanderfolgende saubere Vergleiche zählen als stabil. Bei Abweichung oder fehlender
+     * Freigabe wird der Zähler zurückgesetzt und die alte JS-Runtime bleibt führend.
+     *
+     * Wichtig:
+     * Dieser Zustand liegt nur im Speicher des laufenden Adapters. Nach Neustart muss der
+     * Kandidatenmodus erneut stabile Ticks sammeln. Das schützt History und Energieflusswerte
+     * vor versehentlichen Umschaltungen.
+     */
+    if (cfg.requestedMode !== 'ts') {
+      state.okTicks = 0;
+      state.lastUseTs = false;
+    }
 
     if (cfg.requestedMode === 'shadow') {
       reason = 'shadow-only';
     } else if (cfg.requestedMode === 'ts') {
       if (!cfg.productionAllowed) {
+        state.okTicks = 0;
         reason = 'ts-requested-without-safety-flag';
       } else if (!shadowAvailable) {
+        state.okTicks = 0;
         reason = 'ts-mirror-unavailable';
       } else if (!shadowOk) {
-        reason = 'ts-shadow-mismatch';
+        state.okTicks = 0;
+        reason = cfg.autoFallback === false ? 'ts-shadow-mismatch-blocked' : 'ts-shadow-mismatch-auto-fallback';
+      } else if (!candidateSafety.ok) {
+        state.okTicks = 0;
+        reason = 'ts-candidate-invalid';
       } else {
-        effectiveMode = 'ts';
-        reason = 'ts-shadow-ok';
+        state.okTicks = Math.min(warmupTicks, (Number(state.okTicks) || 0) + 1);
+        if (state.okTicks >= warmupTicks) {
+          effectiveMode = 'ts';
+          reason = 'ts-candidate-active';
+        } else {
+          reason = 'ts-candidate-warmup';
+        }
       }
     }
+
+    state.lastReason = reason;
+    state.lastUseTs = effectiveMode === 'ts';
+    state.lastTs = Date.now();
+    this._energyFlowTsCandidateState = state;
 
     return {
       requestedMode: cfg.requestedMode,
       productionAllowed: !!cfg.productionAllowed,
+      warmupTicks,
+      okTicks: Math.max(0, Number(state.okTicks) || 0),
+      candidateStable: (Number(state.okTicks) || 0) >= warmupTicks,
+      autoFallback: cfg.autoFallback !== false,
       effectiveMode,
       useTs: effectiveMode === 'ts',
       shadowAvailable,
       shadowOk,
+      candidateOk: !!candidateSafety.ok,
+      candidateSafety,
       reason,
     };
   }
@@ -21046,19 +21174,75 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
   _nwBuildEffectiveEnergyFlowValues(runtimeValues = {}, tsShadow = {}) {
     const switchState = this._nwEvaluateEnergyFlowTsSwitch(tsShadow);
     const tsValues = (tsShadow && tsShadow.ts && typeof tsShadow.ts === 'object') ? tsShadow.ts : {};
-    const finite = (v) => Number.isFinite(Number(v));
-    const pick = (key, fallbackKey = key) => {
-      const fallback = runtimeValues[fallbackKey];
-      if (!switchState.useTs) return fallback;
-      return finite(tsValues[key]) ? Math.round(Number(tsValues[key])) : fallback;
+    const candidateValues = switchState && switchState.candidateSafety && switchState.candidateSafety.values
+      ? switchState.candidateSafety.values
+      : {};
+    const sourceValues = switchState.useTs ? candidateValues : runtimeValues;
+    const valueOf = (key, fallbackKey = key) => {
+      const v = sourceValues ? sourceValues[key] : undefined;
+      if (Number.isFinite(Number(v))) return Math.round(Number(v));
+      const fallback = runtimeValues ? runtimeValues[fallbackKey] : 0;
+      return Number.isFinite(Number(fallback)) ? Math.round(Number(fallback)) : 0;
     };
+    switchState.publishedSource = switchState.useTs ? 'ts-candidate' : 'js-runtime';
     return {
       switchState,
-      gridBuyW: pick('gridBuyW'),
-      gridSellW: pick('gridSellW'),
-      storageChargeW: pick('storageChargeW'),
-      storageDischargeW: pick('storageDischargeW'),
-      buildingLoadW: pick('buildingLoadW', 'loadTotalW'),
+      candidate: this._nwBuildEnergyFlowTsCandidateAudit(runtimeValues, tsValues, switchState, tsShadow),
+      gridBuyW: valueOf('gridBuyW'),
+      gridSellW: valueOf('gridSellW'),
+      storageChargeW: valueOf('storageChargeW'),
+      storageDischargeW: valueOf('storageDischargeW'),
+      buildingLoadW: valueOf('buildingLoadW', 'loadTotalW'),
+    };
+  }
+
+
+  /**
+   * Code-Teil: _nwBuildEnergyFlowTsCandidateAudit
+   *
+   * Zweck:
+   * Baut eine lesbare Diagnose für den sicheren TS-Kandidatenmodus.
+   *
+   * Zusammenhang:
+   * Diese Diagnose landet im Energiefluss-Debug-JSON und im App-Center. Sie zeigt,
+   * ob die TS-Werte nur Kandidat sind, ob sie produktiv genutzt wurden und welche
+   * Sicherheitsgründe eine Nutzung verhindern.
+   *
+   * Wichtig:
+   * Die Funktion verändert keine Produktivwerte. Sie dokumentiert nur, warum ein Tick
+   * bei JS geblieben ist oder warum TS im ausdrücklich freigegebenen Kandidatenmodus
+   * genutzt wurde.
+   */
+  _nwBuildEnergyFlowTsCandidateAudit(runtimeValues = {}, tsValues = {}, switchState = {}, tsShadow = {}) {
+    const keys = ['gridBuyW', 'gridSellW', 'storageChargeW', 'storageDischargeW', 'buildingLoadW'];
+    const diffs = keys.map((key) => {
+      const js = Number(runtimeValues && runtimeValues[key]);
+      const ts = Number(tsValues && tsValues[key]);
+      return {
+        key,
+        js: Number.isFinite(js) ? Math.round(js) : null,
+        ts: Number.isFinite(ts) ? Math.round(ts) : null,
+        diff: (Number.isFinite(js) && Number.isFinite(ts)) ? Math.round(ts - js) : null,
+      };
+    });
+    const safety = (switchState && switchState.candidateSafety && typeof switchState.candidateSafety === 'object') ? switchState.candidateSafety : null;
+    return {
+      source: 'energy-flow-ts-candidate-audit-v1',
+      requestedMode: switchState.requestedMode || '',
+      effectiveMode: switchState.effectiveMode || 'js',
+      publishedSource: switchState.publishedSource || (switchState.useTs ? 'ts-candidate' : 'js-runtime'),
+      useTs: !!switchState.useTs,
+      reason: switchState.reason || '',
+      productionAllowed: !!switchState.productionAllowed,
+      shadowAvailable: !!switchState.shadowAvailable,
+      shadowOk: !!switchState.shadowOk,
+      candidateOk: !!(safety && safety.ok),
+      blockers: safety && Array.isArray(safety.blockers) ? safety.blockers : [],
+      warnings: safety && Array.isArray(safety.warnings) ? safety.warnings : [],
+      okTicks: Number(switchState.okTicks) || 0,
+      warmupTicks: Number(switchState.warmupTicks) || 0,
+      diffs,
+      shadowSource: tsShadow && tsShadow.source ? String(tsShadow.source) : '',
     };
   }
 
@@ -21227,10 +21411,11 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       heatingRod,
       blockers,
       warnings,
+      energyFlowCandidateSafety: energyFlowEffectivePlan && energyFlowEffectivePlan.candidateSafety ? energyFlowEffectivePlan.candidateSafety : null,
       nextAction: blockers.length
         ? 'Shadow-Abweichungen zuerst auswerten; TS darf noch nicht produktiv übernehmen.'
         : (energyFlowMode === 'ts'
-          ? 'TS-Modus ist intern gewählt und Shadow ist sauber. 0.7.80 markiert nur den Kandidaten; produktives Schreiben folgt erst nach Freigabe.'
+          ? 'TS-Modus ist intern gewählt und Shadow ist sauber. 0.7.82 nutzt den Kandidaten nur mit Modus ts, Sicherheitsfreigabe und bestandener Kandidatenprüfung.'
           : 'Shadow-Werte sind aktuell sauber. Eine kontrollierte Umschaltung kann in einer späteren Version vorbereitet werden.'),
     };
     return readiness;
@@ -22997,6 +23182,8 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
           quality,
           tsShadow,
           tsSwitch: effectiveEnergyFlow.switchState,
+          tsCandidate: effectiveEnergyFlow.candidate,
+          energyFlowSource: effectiveEnergyFlow.switchState && effectiveEnergyFlow.switchState.publishedSource ? effectiveEnergyFlow.switchState.publishedSource : 'js-runtime',
         };
         const json = JSON.stringify(payload);
         await this.setStateAsync('derived.core.building.inputsJson', { val: json, ack: true });
@@ -23074,7 +23261,19 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       // It may be derived from valid split DPs, farm totals or a calculated fallback, but
       // it must never overwrite a configured signed battery DP.
       if (!batteryMapped) {
-        const signedRound = Math.round(dischargeW - chargeW);
+        /**
+         * Code-Teil: batteryPower aus effektiven Publish-Werten spiegeln
+         *
+         * Zweck:
+         * Wenn der Energiefluss im sicheren TS-Kandidatenmodus läuft, dürfen öffentliche
+         * Convenience-Werte nicht wieder aus den alten JS-Zwischenwerten berechnet werden.
+         * Deshalb wird der interne signed `batteryPower`-Mirror aus den tatsächlich
+         * veröffentlichten Lade-/Entladeleistungen gebildet.
+         *
+         * Wichtig:
+         * Ein gemappter signed Batterie-DP wird weiterhin nicht überschrieben.
+         */
+        const signedRound = Math.round(publishDischargeRound - publishChargeRound);
         updateLocal('batteryPower', signedRound);
       }
     } catch (_eStorageMirror) {}

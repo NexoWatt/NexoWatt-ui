@@ -1626,8 +1626,20 @@
             <span>Produktive TS‑Freigabe erlauben</span>
           </label>
 
+          <label class="nw-config-field-row" for="energyFlowTsWarmupTicks">
+            <span class="nw-config-field-label">Kandidaten‑Warmup</span>
+            <span class="nw-config-field-control">
+              <input id="energyFlowTsWarmupTicks" class="nw-config-input" type="number" min="1" max="30" step="1" placeholder="3" />
+            </span>
+          </label>
+
+          <label class="nw-config-checklabel nw-ts-energyflow-fallback-row">
+            <input id="energyFlowTsAutoFallback" class="nw-config-checkbox" type="checkbox" />
+            <span>Automatisch auf JS zurückfallen, wenn Shadow abweicht</span>
+          </label>
+
           <div class="nw-config-empty nw-ts-energyflow-safety-note">
-            Sicherheitsregel: TS wird nur produktiv genutzt, wenn Modus <b>TS</b>, diese Freigabe aktiv und der Shadow‑Vergleich ohne Blocker ist. Standard bleibt <b>Shadow</b>.
+            Sicherheitsregel: TS wird nur produktiv genutzt, wenn Modus <b>TS</b>, diese Freigabe aktiv, der Shadow‑Vergleich ohne Blocker ist und der Kandidaten‑Warmup sauber durchlaufen wurde. Standard bleibt <b>Shadow</b>.
           </div>
 
           <div id="energyFlowTsModeStatus" class="nw-config-empty nw-ts-energyflow-mode-status">

@@ -1,3 +1,11 @@
+## 0.7.82 - Energiefluss TS sicherer Kandidatenmodus
+
+- Energiefluss-TS-Kandidatenmodus mit zusätzlicher Kandidatenprüfung ergänzt.
+- TS-Werte dürfen nur produktiv genutzt werden, wenn Modus `ts`, produktive Freigabe, Shadow-OK und Kandidatenprüfung OK sind.
+- Ungültige, negative, fehlende oder unplausible TS-Kandidatenwerte blockieren automatisch und lassen die JS-Runtime führend.
+- App-Center zeigt die Kandidatenprüfung jetzt in der TS-Umschaltbereitschaft an.
+- Keine sonstige EMS-/Heizstab-/History-/KI-Runtime geändert.
+
 # 0.7.81 - Energiefluss TS-Schaltmodus im App-Center
 
 - Energiefluss-TypeScript-Modus im App-Center sichtbar gemacht: `js`, `shadow`, `ts`.
@@ -5,7 +13,7 @@
 - App-Center zeigt effektive Quelle, Freigabe, Blocker und TS-Nutzungsstatus aus der Shadow-Readiness.
 - `tsMigration` wird jetzt über die Installer-Konfiguration geladen und gespeichert.
 - Neue Prüfung `npm run test:energy-flow-mode-ui` ergänzt.
-- Service-Worker Cache auf `nexowatt-cache-v249` erhöht.
+- Service-Worker Cache auf `nexowatt-cache-v250` erhöht.
 
 # 0.7.80 - Energiefluss TS-Modus kontrolliert vorbereiten
 

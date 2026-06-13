@@ -257,6 +257,8 @@
     refreshShadowDiagnostics: document.getElementById('refreshShadowDiagnostics'),
     energyFlowTsMode: document.getElementById('energyFlowTsMode'),
     energyFlowTsProductionAllowed: document.getElementById('energyFlowTsProductionAllowed'),
+    energyFlowTsWarmupTicks: document.getElementById('energyFlowTsWarmupTicks'),
+    energyFlowTsAutoFallback: document.getElementById('energyFlowTsAutoFallback'),
     energyFlowTsModeStatus: document.getElementById('energyFlowTsModeStatus'),
 
     // Modal
@@ -10801,6 +10803,8 @@ function collectAiAdvisorConfigFromUI(base) {
     const mode = _normalizeEnergyFlowTsModeUi(tm.energyFlowMode || 'shadow');
     if (els.energyFlowTsMode) els.energyFlowTsMode.value = mode;
     if (els.energyFlowTsProductionAllowed) els.energyFlowTsProductionAllowed.checked = tm.energyFlowProductionAllowed === true;
+    if (els.energyFlowTsWarmupTicks) els.energyFlowTsWarmupTicks.value = String(Math.max(1, Math.min(30, Math.round(Number(tm.energyFlowCandidateWarmupTicks) || 3))));
+    if (els.energyFlowTsAutoFallback) els.energyFlowTsAutoFallback.checked = tm.energyFlowCandidateAutoFallback !== false;
     renderEnergyFlowTsModeStatus(null);
   }
 
@@ -10818,6 +10822,9 @@ function collectAiAdvisorConfigFromUI(base) {
     const out = deepMerge({}, (base && typeof base === 'object') ? base : {});
     out.energyFlowMode = _normalizeEnergyFlowTsModeUi(els.energyFlowTsMode ? els.energyFlowTsMode.value : out.energyFlowMode);
     out.energyFlowProductionAllowed = !!(els.energyFlowTsProductionAllowed && els.energyFlowTsProductionAllowed.checked);
+    const warmup = Math.round(Number(els.energyFlowTsWarmupTicks ? els.energyFlowTsWarmupTicks.value : out.energyFlowCandidateWarmupTicks));
+    out.energyFlowCandidateWarmupTicks = Number.isFinite(warmup) ? Math.max(1, Math.min(30, warmup)) : 3;
+    out.energyFlowCandidateAutoFallback = !(els.energyFlowTsAutoFallback && els.energyFlowTsAutoFallback.checked === false);
     return out;
   }
 
@@ -10835,12 +10842,24 @@ function collectAiAdvisorConfigFromUI(base) {
     const plan = readiness && readiness.energyFlowEffectivePlan ? readiness.energyFlowEffectivePlan : null;
     const selectedMode = _normalizeEnergyFlowTsModeUi(els.energyFlowTsMode ? els.energyFlowTsMode.value : (tm.energyFlowMode || 'shadow'));
     const productionAllowed = !!(els.energyFlowTsProductionAllowed && els.energyFlowTsProductionAllowed.checked);
+    const warmupWanted = Math.max(1, Math.min(30, Math.round(Number(els.energyFlowTsWarmupTicks ? els.energyFlowTsWarmupTicks.value : (tm.energyFlowCandidateWarmupTicks || 3)) || 3)));
+    const autoFallback = !(els.energyFlowTsAutoFallback && els.energyFlowTsAutoFallback.checked === false);
     const effectiveSource = plan && plan.source ? String(plan.source) : 'noch keine Diagnose';
     const wouldUseTs = plan && typeof plan.wouldUseTs === 'boolean' ? (plan.wouldUseTs ? 'ja' : 'nein') : '--';
+    const switchState = readiness && readiness.energyFlowSwitchState ? readiness.energyFlowSwitchState : (plan && plan.switchState ? plan.switchState : null);
+    const warmupStatus = switchState && Number.isFinite(Number(switchState.okTicks))
+      ? `${Number(switchState.okTicks)}/${Number(switchState.warmupTicks || warmupWanted)}`
+      : `0/${warmupWanted}`;
+    const candidateStable = switchState && switchState.candidateStable === true ? 'stabil' : 'nicht stabil';
     const blocked = plan && Array.isArray(plan.blockedReasons) && plan.blockedReasons.length ? plan.blockedReasons.join(' · ') : '';
+    const safety = plan && plan.candidateSafety && typeof plan.candidateSafety === 'object' ? plan.candidateSafety : null;
+    const candidateLine = safety
+      ? `<b>Kandidatenprüfung:</b> ${safety.ok ? 'OK' : 'blockiert'}${Array.isArray(safety.warnings) && safety.warnings.length ? ' · Hinweis: ' + escape(safety.warnings.join(' · ')) : ''}`
+      : `<b>Kandidatenprüfung:</b> Warmup ${escape(warmupStatus)} · ${escape(candidateStable)}`;
     els.energyFlowTsModeStatus.innerHTML = [
-      `<b>Gewählt:</b> ${escape(selectedMode)} · <b>Freigabe:</b> ${productionAllowed ? 'aktiv' : 'aus'}`,
-      `<b>Effektive Quelle:</b> ${escape(effectiveSource)} · <b>TS würde genutzt:</b> ${escape(wouldUseTs)}`,
+      `<b>Gewählt:</b> ${escape(selectedMode)} · <b>Freigabe:</b> ${productionAllowed ? 'aktiv' : 'aus'} · <b>Auto-Fallback:</b> ${autoFallback ? 'aktiv' : 'aus'}`,
+      `<b>Warmup:</b> ${escape(warmupStatus)} · <b>Effektive Quelle:</b> ${escape(effectiveSource)} · <b>TS würde genutzt:</b> ${escape(wouldUseTs)}`,
+      candidateLine,
       blocked ? `<b>Blockiert durch:</b> ${escape(blocked)}` : '<b>Status:</b> Noch keine Blocker oder noch keine Shadow-Diagnose geladen.',
     ].join('<br/>');
   }
@@ -10867,15 +10886,36 @@ function collectAiAdvisorConfigFromUI(base) {
     const overall = !!readiness.overallReady;
     const kind = overall ? 'ok' : 'warn';
     const plan = readiness.energyFlowEffectivePlan && typeof readiness.energyFlowEffectivePlan === 'object' ? readiness.energyFlowEffectivePlan : null;
+    /**
+     * Code-Teil: candidateSafety vor der Anzeige berechnen
+     *
+     * Zweck:
+     * Die Umschaltbereitschaftskarte nutzt den Kandidatenstatus in der Werteübersicht
+     * und in den Detailhinweisen. Der Wert muss daher vor `items` berechnet werden,
+     * damit im Browser kein ReferenceError durch eine zu spät deklarierte Konstante entsteht.
+     *
+     * Zusammenhang:
+     * Dieser Fehler wäre nur in der App-Center-UI sichtbar gewesen, nicht im Node-Syntaxcheck.
+     * Genau deshalb bleibt dieser Kommentar als Hinweis für spätere TypeScript/DOM-Migrationen.
+     */
+    const candidateSafety = readiness.energyFlowCandidateSafety && typeof readiness.energyFlowCandidateSafety === 'object' ? readiness.energyFlowCandidateSafety : (plan && plan.candidateSafety ? plan.candidateSafety : null);
     const items = [
       ['Energiefluss', readiness.readyForEnergyFlowSwitch ? 'bereit' : 'nicht bereit'],
       ['Energiefluss-Modus', readiness.energyFlowMode || (plan && plan.mode) || 'shadow'],
       ['Energiefluss-Quelle', plan ? (plan.source || 'js-runtime') : 'js-runtime'],
+      ['TS-Kandidat', candidateSafety ? (candidateSafety.ok ? 'OK' : 'blockiert') : '--'],
       ['Core‑Limits', readiness.readyForCoreLimitsSwitch ? 'bereit' : 'nicht bereit'],
       ['Heizstab', readiness.readyForHeatingRodSwitch ? 'bereit' : 'nicht bereit'],
     ];
     const blockers = Array.isArray(readiness.blockers) ? readiness.blockers : [];
     const warnings = Array.isArray(readiness.warnings) ? readiness.warnings : [];
+    const candidateLines = candidateSafety
+      ? [].concat(
+          candidateSafety.ok ? ['Kandidatenprüfung: OK'] : ['Kandidatenprüfung: blockiert'],
+          Array.isArray(candidateSafety.blockers) ? candidateSafety.blockers.map((x) => 'Blocker: ' + x) : [],
+          Array.isArray(candidateSafety.warnings) ? candidateSafety.warnings.map((x) => 'Hinweis: ' + x) : []
+        )
+      : [];
     card.innerHTML = `
       <div class="nw-config-card__header">
         <div class="nw-config-card__header-top">
@@ -10888,7 +10928,7 @@ function collectAiAdvisorConfigFromUI(base) {
         <div class="nw-shadow-readiness-grid">
           ${items.map(([label, value]) => `<div class="nw-config-row nw-shadow-diff-row"><div class="nw-config-row__primary">${escape(label)}</div><div class="nw-config-row__status">${escape(value)}</div></div>`).join('')}
         </div>
-        ${(blockers.length || warnings.length) ? `<details class="nw-shadow-json-details" open><summary>Blocker / Hinweise</summary><pre>${escape([].concat(blockers, warnings).join('\n') || 'Keine Blocker')}</pre></details>` : ''}
+        ${(blockers.length || warnings.length || candidateLines.length) ? `<details class="nw-shadow-json-details" open><summary>Blocker / Hinweise / Kandidatenprüfung</summary><pre>${escape([].concat(blockers, warnings, candidateLines).join('\n') || 'Keine Blocker')}</pre></details>` : ''}
         <div class="nw-config-help" style="margin-top:8px;opacity:.82;line-height:1.35;">${escape(readiness.nextAction || 'Diagnose auswerten, bevor produktiv auf TypeScript umgeschaltet wird.')}</div>
       </div>
     `;
@@ -11935,6 +11975,8 @@ if (els.ocppAutoDetect) {
 
   if (els.energyFlowTsMode) els.energyFlowTsMode.addEventListener('change', () => renderEnergyFlowTsModeStatus(null));
   if (els.energyFlowTsProductionAllowed) els.energyFlowTsProductionAllowed.addEventListener('change', () => renderEnergyFlowTsModeStatus(null));
+  if (els.energyFlowTsWarmupTicks) els.energyFlowTsWarmupTicks.addEventListener('input', () => renderEnergyFlowTsModeStatus(null));
+  if (els.energyFlowTsAutoFallback) els.energyFlowTsAutoFallback.addEventListener('change', () => renderEnergyFlowTsModeStatus(null));
 
   if (els.save) {
     // Ereignis-Kommentar: Bindet das UI-Ereignis 'click' an els.save. Beim Umbau prüfen, welche DOM-Elemente/States dadurch geändert werden.

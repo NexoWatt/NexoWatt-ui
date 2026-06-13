@@ -1,6 +1,6 @@
 {
   "name": "iobroker.nexowatt-ui",
-  "version": "0.7.81",
+  "version": "0.7.82",
   "description": "Responsive NexoWatt EMS visualization adapter.",
   "author": "NexoWatt",
   "license": "UNLICENSED",
@@ -18,7 +18,7 @@
     "admin:install": "npm --prefix src-admin-tab install",
     "admin:build": "npm --prefix src-admin-tab run build",
     "build": "npm run admin:build",
-    "publish:check": "npm run git:conflicts && npm run check:tsconfig-modern && npm run check:ts-source-integrity && node scripts/verify-ts-script-mirrors.js && node scripts/verify-ts-frontend-mirrors.js && node scripts/verify-ts-backend-mirrors.js && node scripts/verify-ts-feature-visibility-preview-runtime.js && node scripts/verify-ts-feature-visibility-effective-runtime.js && node scripts/verify-ts-energy-flow-mirrors.js && node scripts/verify-ts-energy-flow-shadow-runtime.js && node scripts/verify-ts-ems-mirrors.js && node scripts/verify-ts-ems-shadow-runtime.js && node scripts/verify-ts-customer-feature-visibility.js && node scripts/verify-ts-feature-visibility-shadow.js && node scripts/verify-ts-shadow-bridges.js && node scripts/verify-ts-feature-visibility-shadow-hook.js && npm run test:ems-shadow-runtime && node scripts/verify-ts-shadow-diagnostics-ui.js && node scripts/verify-ts-shadow-readiness.js && node scripts/verify-ts-energy-flow-switch-mode.js && node scripts/verify-ts-energy-flow-mode-ui.js && node scripts/verify-publish.js",
+    "publish:check": "npm run git:conflicts && npm run check:tsconfig-modern && npm run check:ts-source-integrity && node scripts/verify-ts-script-mirrors.js && node scripts/verify-ts-frontend-mirrors.js && node scripts/verify-ts-backend-mirrors.js && node scripts/verify-ts-feature-visibility-preview-runtime.js && node scripts/verify-ts-feature-visibility-effective-runtime.js && node scripts/verify-ts-energy-flow-mirrors.js && node scripts/verify-ts-energy-flow-shadow-runtime.js && node scripts/verify-ts-ems-mirrors.js && node scripts/verify-ts-ems-shadow-runtime.js && node scripts/verify-ts-customer-feature-visibility.js && node scripts/verify-ts-feature-visibility-shadow.js && node scripts/verify-ts-shadow-bridges.js && node scripts/verify-ts-feature-visibility-shadow-hook.js && npm run test:ems-shadow-runtime && node scripts/verify-ts-shadow-diagnostics-ui.js && node scripts/verify-ts-shadow-readiness.js && node scripts/verify-ts-energy-flow-switch-mode.js && node scripts/verify-ts-energy-flow-mode-ui.js && node scripts/verify-ts-energy-flow-candidate-mode.js && node scripts/verify-ts-energy-flow-safe-candidate-mode.js && node scripts/verify-publish.js",
     "prepublishOnly": "npm run publish:check",
     "test": "npm run test:all",
     "test:package": "node scripts/verify-publish.js && npm pack --dry-run",
@@ -124,7 +124,9 @@
     "test:shadow-diagnostics-ui": "node scripts/verify-ts-shadow-diagnostics-ui.js",
     "test:shadow-readiness": "node scripts/verify-ts-shadow-readiness.js",
     "test:energy-flow-switch-mode": "node scripts/verify-ts-energy-flow-switch-mode.js",
-    "test:energy-flow-mode-ui": "node scripts/verify-ts-energy-flow-mode-ui.js"
+    "test:energy-flow-mode-ui": "node scripts/verify-ts-energy-flow-mode-ui.js",
+    "test:energy-flow-safe-candidate-mode": "node scripts/verify-ts-energy-flow-safe-candidate-mode.js",
+    "test:energy-flow-candidate-mode": "node scripts/verify-ts-energy-flow-candidate-mode.js"
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",
