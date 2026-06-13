@@ -15241,6 +15241,92 @@ app.get('/config', (req, res) => {
       // The page is visible only when the installer configured at least one active storage row.
       const storageFarmConfigured = storageRowsFromConfig.some((row) => row && row.enabled !== false);
       const storageFarmAvailable = !!(cfg.enableStorageFarm && storageFarmConfigured);
+
+      /**
+       * Code-Teil: featureVisibilityTsPreview
+       *
+       * Zweck:
+       * Führt die vorhandene JavaScript-Sichtbarkeitslogik parallel durch den neuen
+       * TypeScript-Spiegel unter `lib/ts-mirrors/backend/feature-visibility`.
+       *
+       * Zusammenhang:
+       * Das ist ein sicherer Zwischenschritt der TS-Migration. Die Antwortfelder
+       * `evcsAvailable` und `storageFarmEnabled` bleiben weiterhin aus der bewährten
+       * JS-Runtime. Der TS-Spiegel berechnet nur eine Diagnosevorschau, damit wir
+       * Abweichungen sehen, bevor wir die Runtime später produktiv umstellen.
+       *
+       * Wichtig:
+       * Diese Vorschau darf in 0.7.73 keine Kundenanzeige steuern. Sie ist nur Diagnose.
+       */
+      const featureVisibilityTsPreview = (() => {
+        try {
+          const mirror = require('./lib/ts-mirrors/backend/feature-visibility/feature-visibility');
+          if (!mirror || typeof mirror.buildFeatureVisibilityState !== 'function') {
+            return { available: false, reason: 'mirror-missing' };
+          }
+
+          const evcsProofs = rawEvcsRows.map((row) => {
+            const r = (row && typeof row === 'object') ? row : {};
+            const hasAnyRealDatapoint = evcsMappedFields.some((key) => String(r[key] || '').trim());
+            return {
+              hasAnyRealDatapoint,
+              measuredPowerDp: String(r.powerId || r.actualPowerWId || '').trim(),
+              controlDp: String(r.setPowerWId || r.setCurrentAId || r.enableWriteId || r.lockWriteId || '').trim(),
+            };
+          });
+
+          const storageFarmProofs = storageRowsFromConfig.map((row) => {
+            const r = (row && typeof row === 'object') ? row : {};
+            const hasAnyRealDatapoint = ['socId', 'chargePowerId', 'dischargePowerId', 'signedPowerId'].some((key) => String(r[key] || '').trim());
+            return {
+              hasAnyRealDatapoint,
+              socDp: String(r.socId || '').trim(),
+              chargeDp: String(r.chargePowerId || '').trim(),
+              dischargeDp: String(r.dischargePowerId || '').trim(),
+              signedPowerDp: String(r.signedPowerId || '').trim(),
+            };
+          });
+
+          const weatherHasData = !!(
+            this.stateCache && (
+              this.stateCache.weatherTempC ||
+              this.stateCache.weatherText ||
+              this.stateCache.weatherCode ||
+              this.stateCache.weatherCloudPct
+            )
+          );
+          const aiCustomerEnabled = !(
+            this.stateCache && this.stateCache['settings.aiAdvisorEnabled'] &&
+            this.stateCache['settings.aiAdvisorEnabled'].value === false
+          );
+          const visibility = mirror.buildFeatureVisibilityState({
+            evcsProofs,
+            storageFarmEnabled: !!cfg.enableStorageFarm,
+            storageFarmProofs,
+            smartHomeEnabled: !!(cfg.smartHome && cfg.smartHome.enabled),
+            weatherEnabled: !!(cfg && cfg.settings && cfg.settings.weatherEnabled) || !!(this.stateCache && this.stateCache['settings.weatherEnabled'] && this.stateCache['settings.weatherEnabled'].value === true),
+            weatherHasData,
+            aiAdvisorInstalled: !!cfg.enableAiAdvisor,
+            aiAdvisorCustomerEnabled: aiCustomerEnabled,
+          });
+          const runtime = {
+            hasEvcs: evcsAvailable,
+            hasStorageFarm: storageFarmAvailable,
+            hasSmartHome: !!(cfg.smartHome && cfg.smartHome.enabled),
+            hasWeather: visibility.hasWeather,
+            hasAiAdvisor: !!cfg.enableAiAdvisor && aiCustomerEnabled,
+          };
+          const mismatches = Object.keys(runtime).filter((key) => runtime[key] !== visibility[key]);
+          const hash = mismatches.join('|') + JSON.stringify(visibility);
+          if (mismatches.length && this._featureVisibilityTsPreviewWarnHash !== hash) {
+            this._featureVisibilityTsPreviewWarnHash = hash;
+            try { this.log.warn(`[feature-visibility-ts-preview] Runtime/TS visibility mismatch: ${mismatches.join(', ')}`); } catch (_e) {}
+          }
+          return { available: true, runtime, visibility, mismatches };
+        } catch (e) {
+          return { available: false, reason: String(e && e.message ? e.message : e) };
+        }
+      })();
       /**
        * Code-Teil: inferChargingEnabled
        * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -15259,6 +15345,8 @@ app.get('/config', (req, res) => {
         units: cfg.units || { power: 'W', energy: 'kWh' },
         settings: cfg.settings || {},
         datapointFlags,
+        // TS-Migration Diagnose: nicht autoritativ, nur Vergleich zwischen alter JS-Sichtbarkeit und TS-Spiegel.
+        featureVisibilityTsPreview,
         // Legacy compatibility for older/front-end helper code: exposing the raw mapping here
         // allows the VIS to decide which live values are authoritative.
         datapoints,

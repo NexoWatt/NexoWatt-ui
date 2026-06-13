@@ -23,14 +23,35 @@ const mirrorSpecs = [
     exports: ['formatPowerValue', 'formatEnergyValue', 'formatPercentValue', 'formatPowerW'],
   },
   {
+    sourceRel: 'src-ts/frontend/display-format-canary.ts',
+    mirrorRel: 'www/static/ts-mirrors/frontend/display-format-canary.mjs',
+    exports: ['runDisplayFormatterCanary', 'normalizeDisplayTextForCanary'],
+    valueExports: ['defaultDisplayFormatterCanaryCases'],
+  },
+  {
     sourceRel: 'src-ts/frontend/customer-feature-visibility.ts',
     mirrorRel: 'www/static/ts-mirrors/frontend/customer-feature-visibility.mjs',
     exports: ['hasRealEvcsProof', 'hasRealStorageFarmProof', 'decideEvcsVisibility', 'decideStorageFarmVisibility', 'explainCustomerFeatureVisibility', 'buildCustomerFeatureVisibility'],
   },
   {
+    sourceRel: 'src-ts/frontend/feature-visibility-diagnostics.ts',
+    mirrorRel: 'www/static/ts-mirrors/frontend/feature-visibility-diagnostics.mjs',
+    exports: ['buildCustomerFeatureDiagnostics'],
+  },
+  {
     sourceRel: 'src-ts/frontend/history-controls.ts',
     mirrorRel: 'www/static/ts-mirrors/frontend/history-controls.mjs',
     exports: ['buildHistoryToolbarState'],
+  },
+  {
+    sourceRel: 'src-ts/frontend/runtime-shadow.ts',
+    mirrorRel: 'www/static/ts-mirrors/frontend/runtime-shadow.mjs',
+    exports: ['normalizeMirrorBaseUrl', 'shouldRunFrontendTsMirrorShadow', 'runFrontendTsMirrorShadowCheck'],
+  },
+  {
+    sourceRel: 'src-ts/frontend/feature-visibility-shadow-compare.ts',
+    mirrorRel: 'www/static/ts-mirrors/frontend/feature-visibility-shadow-compare.mjs',
+    exports: ['compareFeatureVisibility', 'hasBlockingVisibilityMismatch', 'formatFeatureVisibilityShadowLog'],
   },
 ];
 
@@ -98,9 +119,9 @@ async function verifyModuleExports(spec) {
   const file = path.join(root, spec.mirrorRel);
   const mod = await import(pathToFileURL(file).href);
   for (const name of spec.exports) {
-    if (typeof mod[name] !== 'function') fail(`${spec.mirrorRel} exportiert ${name} nicht als Funktion.`);
+    if (!(name in mod)) fail(`${spec.mirrorRel} exportiert ${name} nicht.`);
   }
-  if (spec.mirrorRel.includes('display-format')) {
+  if (spec.mirrorRel.endsWith('display-format.mjs')) {
     const formatted = mod.formatPowerValue(0);
     if (!formatted || formatted.text !== '0 W') fail('display-format.mjs muss 0 W als gültigen Wert formatieren.');
   }
@@ -114,6 +135,14 @@ async function verifyModuleExports(spec) {
     const toolbar = mod.buildHistoryToolbarState({ mode: 'day', hasEvcs: false, hasTariff: true, canLoad: true });
     const evcs = toolbar.actions.find((x) => x.key === 'evcsPdf');
     if (!evcs || evcs.visible !== false) fail('history-controls.mjs muss EVCS PDF ohne Wallbox ausblenden.');
+  }
+  if (spec.mirrorRel.includes('runtime-shadow')) {
+    if (mod.shouldRunFrontendTsMirrorShadow('?tsMirror=1') !== true) fail('runtime-shadow.mjs muss ?tsMirror=1 akzeptieren.');
+    if (mod.shouldRunFrontendTsMirrorShadow('?tsMirror=0') !== false) fail('runtime-shadow.mjs darf ?tsMirror=0 nicht aktivieren.');
+  }
+  if (spec.mirrorRel.includes('feature-visibility-shadow-compare')) {
+    const result = mod.compareFeatureVisibility({ hasEvcs: true }, { hasEvcs: false });
+    if (!result || result.matches !== false || !Array.isArray(result.mismatches) || result.mismatches.length !== 1) fail('feature-visibility-shadow-compare.mjs muss EVCS-Abweichungen erkennen.');
   }
 }
 

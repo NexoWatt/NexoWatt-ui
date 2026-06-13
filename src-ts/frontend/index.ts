@@ -24,3 +24,4 @@ export * from './customer-feature-visibility';
 
 export * from './dashboard-display';
 export * from './history-controls';
+export * from './display-format-canary';

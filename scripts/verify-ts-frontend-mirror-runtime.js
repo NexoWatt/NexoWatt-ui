@@ -48,9 +48,12 @@ function assert(condition, message) {
 
 async function main() {
   const display = await importMirror('www/static/ts-mirrors/frontend/display-format.mjs');
+  const canary = await importMirror('www/static/ts-mirrors/frontend/display-format-canary.mjs');
   const visibility = await importMirror('www/static/ts-mirrors/frontend/customer-feature-visibility.mjs');
   const diagnostics = await importMirror('www/static/ts-mirrors/frontend/feature-visibility-diagnostics.mjs');
   const history = await importMirror('www/static/ts-mirrors/frontend/history-controls.mjs');
+  const runtimeShadow = await importMirror('www/static/ts-mirrors/frontend/runtime-shadow.mjs');
+  const shadow = await importMirror('www/static/ts-mirrors/frontend/feature-visibility-shadow-compare.mjs');
 
   /**
    * Code-Teil: Leistungsformatierung prüfen
@@ -58,6 +61,18 @@ async function main() {
    */
   assert(display.formatPowerValue(0).text === '0 W', 'display-format: 0 W muss gültig formatiert werden.');
   assert(display.formatPowerValue(1400).text === '1.4 kW', 'display-format: 1400 W muss 1.4 kW ergeben.');
+
+  /**
+   * Code-Teil: Display-Canary prüfen
+   * Zweck: Der MJS-Spiegel muss eine Laufzeitdiagnose liefern können, ohne die UI zu verändern.
+   */
+  const canaryReport = canary.runDisplayFormatterCanary(display, {
+    formatPower: (value) => display.formatPowerValue(value).text,
+    formatEnergyKwh: (value) => display.formatEnergyValue(value).text,
+    formatPercent: (value) => display.formatPercentValue(value).text,
+  });
+  assert(canaryReport.checked >= 4, 'display-format-canary: Es müssen mehrere Fälle geprüft werden.');
+  assert(Array.isArray(canaryReport.results), 'display-format-canary: Ergebnisliste fehlt.');
 
   /**
    * Code-Teil: Feature-Sichtbarkeit prüfen
@@ -103,6 +118,25 @@ async function main() {
   const toolbar = history.buildHistoryToolbarState({ mode: 'day', hasEvcs: false, hasTariff: true, canLoad: true });
   const evcsPdf = toolbar.actions.find((action) => action.key === 'evcsPdf');
   assert(evcsPdf && evcsPdf.visible === false, 'history-controls: EVCS PDF muss ohne Wallbox unsichtbar bleiben.');
+
+  /**
+   * Code-Teil: Runtime-Shadow-Brücke prüfen
+   * Zweck: Der neue optionale Shadow-Check muss die vorhandenen MJS-Spiegel importieren
+   * können und darf keine falsche EVCS/KI-Sichtbarkeit melden.
+   */
+  const mirrorBase = pathToFileURL(path.join(root, 'www/static/ts-mirrors/frontend/')).href;
+  const shadowReport = await runtimeShadow.runFrontendTsMirrorShadowCheck(mirrorBase);
+  assert(shadowReport && shadowReport.ok === true, 'runtime-shadow: Shadow-Check muss erfolgreich sein.');
+  assert(runtimeShadow.shouldRunFrontendTsMirrorShadow('?tsShadow=1') === true, 'runtime-shadow: ?tsShadow=1 muss aktivieren.');
+  assert(runtimeShadow.shouldRunFrontendTsMirrorShadow('?tsShadow=0') === false, 'runtime-shadow: ?tsShadow=0 darf nicht aktivieren.');
+
+  /**
+   * Code-Teil: Feature-Shadow-Vergleich prüfen
+   * Zweck: Der MJS-Spiegel muss Abweichungen zwischen alter JS-Logik und neuer TS-Logik erkennen.
+   */
+  const compare = shadow.compareFeatureVisibility({ hasEvcs: true, hasStorageFarm: false }, { hasEvcs: false, hasStorageFarm: false });
+  assert(compare.matches === false, 'feature-visibility-shadow: EVCS-Abweichung muss erkannt werden.');
+  assert(shadow.hasBlockingVisibilityMismatch(compare) === true, 'feature-visibility-shadow: EVCS-Abweichung muss blockierend sein.');
 
   console.log('[verify-ts-frontend-mirror-runtime] OK: Frontend-MJS-Spiegel liefern erwartete Runtime-Ergebnisse.');
 }

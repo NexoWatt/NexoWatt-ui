@@ -36,6 +36,12 @@ const mirrorSpecs = [
     publicName: 'display-format',
   },
   {
+    sourceRel: 'src-ts/frontend/display-format-canary.ts',
+    builtRel: 'build-ts/frontend-mirrors/frontend/display-format-canary.js',
+    mirrorRel: 'www/static/ts-mirrors/frontend/display-format-canary.mjs',
+    publicName: 'display-format-canary',
+  },
+  {
     sourceRel: 'src-ts/frontend/customer-feature-visibility.ts',
     builtRel: 'build-ts/frontend-mirrors/frontend/customer-feature-visibility.js',
     mirrorRel: 'www/static/ts-mirrors/frontend/customer-feature-visibility.mjs',
@@ -52,6 +58,18 @@ const mirrorSpecs = [
     builtRel: 'build-ts/frontend-mirrors/frontend/history-controls.js',
     mirrorRel: 'www/static/ts-mirrors/frontend/history-controls.mjs',
     publicName: 'history-controls',
+  },
+  {
+    sourceRel: 'src-ts/frontend/runtime-shadow.ts',
+    builtRel: 'build-ts/frontend-mirrors/frontend/runtime-shadow.js',
+    mirrorRel: 'www/static/ts-mirrors/frontend/runtime-shadow.mjs',
+    publicName: 'runtime-shadow',
+  },
+  {
+    sourceRel: 'src-ts/frontend/feature-visibility-shadow-compare.ts',
+    builtRel: 'build-ts/frontend-mirrors/frontend/feature-visibility-shadow-compare.js',
+    mirrorRel: 'www/static/ts-mirrors/frontend/feature-visibility-shadow-compare.mjs',
+    publicName: 'feature-visibility-shadow-compare',
   },
 ];
 

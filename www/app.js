@@ -1492,6 +1492,124 @@ function nwStorageFarmFeatureFromConfig(inputCfg, stateSnapshot) {
     return false;
   }
 }
+
+/**
+ * Code-Teil: nwTsFeatureVisibilityShadowEnabled
+ *
+ * Zweck:
+ * Aktiviert einen rein diagnostischen Vergleich zwischen der alten JS-Sichtbarkeit
+ * und dem neuen TypeScript-MJS-Spiegel.
+ *
+ * Zusammenhang:
+ * Das ist der erste vorsichtige Runtime-Kontakt mit einem TypeScript-Spiegel im
+ * Kundenfrontend. Die Anzeige wird dadurch nicht verändert. Der Vergleich läuft
+ * nur, wenn im Browser explizit `?nwTsFeatureVisibilityShadow=1` gesetzt ist oder
+ * `localStorage.nwTsFeatureVisibilityShadow = "1"` gespeichert wurde.
+ *
+ * Wichtig:
+ * Diese Funktion darf niemals produktive Feature-Sichtbarkeit umschalten. Sie ist
+ * nur ein Sicherheitsgurt vor der späteren echten Migration von EVCS/Farm/SmartHome-
+ * Sichtbarkeit auf TypeScript.
+ */
+function nwTsFeatureVisibilityShadowEnabled() {
+  try {
+    const qs = new URLSearchParams(window.location.search || '');
+    if (qs.get('nwTsFeatureVisibilityShadow') === '1') return true;
+    return String(window.localStorage && window.localStorage.getItem('nwTsFeatureVisibilityShadow') || '') === '1';
+  } catch (_e) {
+    return false;
+  }
+}
+
+/**
+ * Code-Teil: nwBuildTsFeatureVisibilityInput
+ *
+ * Zweck:
+ * Baut aus der vorhandenen `/config`-Struktur und dem aktuellen State-Snapshot die
+ * Eingabeform, die der TypeScript-Feature-Visibility-Spiegel erwartet.
+ *
+ * Zusammenhang:
+ * Diese Funktion verbindet die alte JS-Welt (`nwConfiguredEvcsRows`,
+ * `nwStorageFarmFeatureFromConfig`) mit dem neuen MJS-Spiegel unter
+ * `www/static/ts-mirrors/frontend/customer-feature-visibility.mjs`.
+ *
+ * Wichtig:
+ * Die Funktion darf keine DOM-Elemente ändern. Sie bereitet nur Diagnosedaten vor.
+ */
+function nwBuildTsFeatureVisibilityInput(inputCfg, stateSnapshot) {
+  const c = inputCfg || window.__nwCfg || {};
+  const st = stateSnapshot || window.latestState || state || {};
+  const rows = nwConfiguredEvcsRows(c);
+  const storageFarmCfg = (c.storageFarm && typeof c.storageFarm === 'object') ? c.storageFarm : {};
+  const storageFarmStorages = Array.isArray(storageFarmCfg.storages) ? storageFarmCfg.storages : [];
+
+  const evcsProofs = rows.map((row, idx) => ({
+    index: idx + 1,
+    name: String(row.name || row.label || `Ladepunkt ${idx + 1}`),
+    measuredPowerDp: String(row.powerId || row.measuredPowerDp || row.actualPowerId || '').trim() || undefined,
+    controlDp: String(row.enableWriteId || row.setCurrentAId || row.setPowerWId || row.controlDp || '').trim() || undefined,
+    hasAnyRealDatapoint: nwFeatureMappedRow(row),
+  }));
+
+  const storageFarmProofs = storageFarmStorages.map((row, idx) => ({
+    index: idx + 1,
+    name: String(row.name || row.label || `Speicher ${idx + 1}`),
+    socDp: String(row.socId || row.socDp || row.soc || '').trim() || undefined,
+    chargeDp: String(row.chargePowerId || row.chargeDp || row.powerChargeId || '').trim() || undefined,
+    dischargeDp: String(row.dischargePowerId || row.dischargeDp || row.powerDischargeId || '').trim() || undefined,
+    signedPowerDp: String(row.signedPowerId || row.powerId || row.signedPowerDp || '').trim() || undefined,
+    hasAnyRealDatapoint: !!(String(row.socId || row.socDp || row.chargePowerId || row.dischargePowerId || row.signedPowerId || row.powerId || '').trim()),
+  }));
+
+  const weatherTemp = st.weatherTempC && st.weatherTempC.value;
+  const weatherText = st.weatherText && st.weatherText.value;
+  const aiEnabled = st['aiAdvisor.enabled'] && st['aiAdvisor.enabled'].value;
+  const aiCustomer = st['settings.aiAdvisorEnabled'] && st['settings.aiAdvisorEnabled'].value;
+
+  return {
+    evcsProofs,
+    storageFarmEnabled: nwStorageFarmFeatureFromConfig(c, st),
+    storageFarmProofs,
+    smartHomeEnabled: !!(c && c.smartHome && c.smartHome.enabled),
+    weatherEnabled: nwAsBool(st['settings.weatherEnabled'] && st['settings.weatherEnabled'].value, !!(c && c.settings && c.settings.weatherEnabled)),
+    weatherHasData: (weatherTemp !== undefined && weatherTemp !== null && weatherTemp !== '') || !!String(weatherText || '').trim(),
+    aiAdvisorInstalled: nwAsBool(aiEnabled, !!(c && c.aiAdvisor && c.aiAdvisor.enabled !== false)),
+    aiAdvisorCustomerEnabled: nwAsBool(aiCustomer, true),
+  };
+}
+
+/**
+ * Code-Teil: nwRunTsFeatureVisibilityShadowCheck
+ *
+ * Zweck:
+ * Importiert den TypeScript-MJS-Spiegel und vergleicht dessen Ergebnis mit der alten
+ * JS-Feature-Sichtbarkeit.
+ *
+ * Zusammenhang:
+ * Das ist der sichere Zwischenschritt vor einer späteren produktiven Umstellung.
+ * Wenn es Abweichungen gibt, werden sie nur in die Konsole geschrieben. Das LIVE-
+ * Dashboard bleibt unverändert und nutzt weiterhin die alte JS-Logik.
+ */
+async function nwRunTsFeatureVisibilityShadowCheck(inputCfg, stateSnapshot, legacyVisibility) {
+  if (!nwTsFeatureVisibilityShadowEnabled()) return;
+  try {
+    if (!window.__nwTsFeatureVisibilityMirrorPromise) {
+      window.__nwTsFeatureVisibilityMirrorPromise = import('/static/ts-mirrors/frontend/customer-feature-visibility.mjs');
+    }
+    const mod = await window.__nwTsFeatureVisibilityMirrorPromise;
+    if (!mod || typeof mod.buildCustomerFeatureVisibility !== 'function') return;
+    const tsVisibility = mod.buildCustomerFeatureVisibility(nwBuildTsFeatureVisibilityInput(inputCfg, stateSnapshot));
+    const keys = ['hasEvcs', 'hasStorageFarm', 'hasSmartHome', 'hasWeather', 'hasAiAdvisor'];
+    const diffs = keys.filter((key) => !!(legacyVisibility && legacyVisibility[key]) !== !!(tsVisibility && tsVisibility[key]));
+    if (diffs.length) {
+      console.warn('[nw-ts-shadow] Feature-Visibility-Abweichung', { diffs, legacyVisibility, tsVisibility });
+    } else {
+      console.debug('[nw-ts-shadow] Feature-Visibility OK', tsVisibility);
+    }
+  } catch (e) {
+    console.warn('[nw-ts-shadow] Feature-Visibility-Shadowcheck fehlgeschlagen', e && e.message ? e.message : e);
+  }
+}
 /**
  * Code-Teil: nwApplyCustomerFeatureVisibility
  * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -1535,6 +1653,20 @@ function nwApplyCustomerFeatureVisibility(inputCfg, stateSnapshot) {
   const tabStorageFarm = document.getElementById('tabStorageFarm');
   if (menuStorageFarmLink) menuStorageFarmLink.classList.toggle('hidden', !storageFarmAvailable);
   if (tabStorageFarm) tabStorageFarm.classList.toggle('hidden', !storageFarmAvailable);
+
+  // TS-Migrationsschritt 0.7.73:
+  // Optionaler Shadow-Vergleich mit dem TypeScript-MJS-Spiegel. Der Vergleich ist
+  // standardmäßig aus und verändert keine Anzeige. Aktivieren nur zur Diagnose über
+  // ?nwTsFeatureVisibilityShadow=1 oder localStorage.nwTsFeatureVisibilityShadow='1'.
+  try {
+    nwRunTsFeatureVisibilityShadowCheck(c, stateSnapshot, {
+      hasEvcs: evcsAvailable,
+      hasStorageFarm: storageFarmAvailable,
+      hasSmartHome: !!(c && c.smartHome && c.smartHome.enabled),
+      hasWeather: true,
+      hasAiAdvisor: true,
+    });
+  } catch (_e) {}
 }
 /**
  * Code-Teil: nwFormatDashboardTimestamp

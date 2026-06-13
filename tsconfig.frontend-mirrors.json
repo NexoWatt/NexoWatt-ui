@@ -13,9 +13,12 @@
   },
   "include": [
     "src-ts/frontend/display-format.ts",
+    "src-ts/frontend/display-format-canary.ts",
     "src-ts/frontend/customer-feature-visibility.ts",
     "src-ts/frontend/feature-visibility-diagnostics.ts",
-    "src-ts/frontend/history-controls.ts"
+    "src-ts/frontend/history-controls.ts",
+    "src-ts/frontend/feature-visibility-shadow-compare.ts",
+    "src-ts/frontend/runtime-shadow.ts"
   ],
   "exclude": [
     "node_modules",

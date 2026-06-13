@@ -1,3 +1,10 @@
+## 0.7.73 - TypeScript Shadow-Bridge Feature-Sichtbarkeit
+
+- TypeScript Shadow-Bridge für spätere Feature-Visibility-Migration ergänzt.
+- Generierter CommonJS-Spiegel unter `lib/ts-mirrors/bridges/feature-visibility-shadow.js` ergänzt.
+- Neue Checks `sync/check/test:ts-shadow-bridges` ergänzt.
+- Keine produktive Runtime-Logik geändert.
+
 # 0.7.72 - TypeScript NodeNext-Konfiguration
 
 - TypeScript-Konfigurationen für Node-nahe Builds von `Node16/node16` auf `NodeNext/nodenext` umgestellt.
