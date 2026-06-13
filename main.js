@@ -15251,12 +15251,14 @@ app.get('/config', (req, res) => {
        *
        * Zusammenhang:
        * Das ist ein sicherer Zwischenschritt der TS-Migration. Die Antwortfelder
-       * `evcsAvailable` und `storageFarmEnabled` bleiben weiterhin aus der bewährten
-       * JS-Runtime. Der TS-Spiegel berechnet nur eine Diagnosevorschau, damit wir
-       * Abweichungen sehen, bevor wir die Runtime später produktiv umstellen.
+       * 0.7.74 macht diesen Spiegel für die Feature-Sichtbarkeit autoritativ,
+       * aber nur mit sicherem Fallback auf die bisherige JS-Runtime, falls der Spiegel
+       * nicht geladen werden kann.
        *
        * Wichtig:
-       * Diese Vorschau darf in 0.7.73 keine Kundenanzeige steuern. Sie ist nur Diagnose.
+       * Diese Umstellung betrifft nur die Sichtbarkeit von Features wie EVCS,
+       * Speicherfarm, SmartHome, Wetter und KI-Berater. Energiefluss, Speicher,
+       * Heizstab und History werden dadurch nicht fachlich berechnet.
        */
       const featureVisibilityTsPreview = (() => {
         try {
@@ -15327,6 +15329,59 @@ app.get('/config', (req, res) => {
           return { available: false, reason: String(e && e.message ? e.message : e) };
         }
       })();
+
+      /**
+       * Code-Teil: featureVisibilityEffective
+       *
+       * Zweck:
+       * Nutzt ab 0.7.74 den TypeScript-Spiegel als autoritative Quelle für die
+       * Kundensichtbarkeit von optionalen Funktionen.
+       *
+       * Zusammenhang:
+       * Diese Sichtbarkeit steuert, ob EVCS, Speicherfarm, SmartHome, Wetter und
+       * KI-Berater im Kundenfrontend erscheinen. Genau hier hatten wir früher Fehler,
+       * weil alte Default-States EVCS oder Speicherfarm sichtbar machen konnten.
+       *
+       * Sicherheitsregel:
+       * Wenn der TS-Spiegel nicht verfügbar ist, wird automatisch auf die bisherige
+       * JavaScript-Runtime zurückgefallen. Der Adapter startet dadurch weiterhin.
+       */
+      const featureVisibilityRuntimeFallback = (() => {
+        const weatherHasData = !!(
+          this.stateCache && (
+            this.stateCache.weatherTempC ||
+            this.stateCache.weatherText ||
+            this.stateCache.weatherCode ||
+            this.stateCache.weatherCloudPct
+          )
+        );
+        const aiCustomerEnabled = !(
+          this.stateCache && this.stateCache['settings.aiAdvisorEnabled'] &&
+          this.stateCache['settings.aiAdvisorEnabled'].value === false
+        );
+        return {
+          hasEvcs: evcsAvailable,
+          hasStorageFarm: storageFarmAvailable,
+          hasSmartHome: !!(cfg.smartHome && cfg.smartHome.enabled),
+          hasWeather: (!!(cfg && cfg.settings && cfg.settings.weatherEnabled) || !!(this.stateCache && this.stateCache['settings.weatherEnabled'] && this.stateCache['settings.weatherEnabled'].value === true)) && weatherHasData,
+          hasAiAdvisor: !!cfg.enableAiAdvisor && aiCustomerEnabled,
+        };
+      })();
+      const featureVisibilityEffective = (featureVisibilityTsPreview && featureVisibilityTsPreview.available && featureVisibilityTsPreview.visibility)
+        ? featureVisibilityTsPreview.visibility
+        : featureVisibilityRuntimeFallback;
+      const featureVisibilitySource = (featureVisibilityTsPreview && featureVisibilityTsPreview.available && featureVisibilityTsPreview.visibility)
+        ? 'ts-mirror'
+        : 'js-fallback';
+      const evcsAvailableEffective = !!featureVisibilityEffective.hasEvcs;
+      const evcsCountForConfigEffective = evcsAvailableEffective ? evcsCountForConfig : 0;
+      const storageFarmAvailableEffective = !!featureVisibilityEffective.hasStorageFarm;
+      const smartHomeEnabledEffective = !!featureVisibilityEffective.hasSmartHome;
+      const aiAdvisorEnabledEffective = !!featureVisibilityEffective.hasAiAdvisor;
+      if (featureVisibilitySource === 'ts-mirror' && featureVisibilityTsPreview.mismatches && featureVisibilityTsPreview.mismatches.length && this._featureVisibilityEffectiveWarnHash !== featureVisibilityTsPreview.mismatches.join('|')) {
+        this._featureVisibilityEffectiveWarnHash = featureVisibilityTsPreview.mismatches.join('|');
+        try { this.log.warn(`[feature-visibility-effective] TypeScript visibility is authoritative; previous JS mismatch: ${featureVisibilityTsPreview.mismatches.join(', ')}`); } catch (_e) {}
+      }
       /**
        * Code-Teil: inferChargingEnabled
        * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
@@ -15335,8 +15390,8 @@ app.get('/config', (req, res) => {
        */
       const inferChargingEnabled = () => {
         const v = cfg.enableChargingManagement;
-        if (typeof v === 'boolean') return v && evcsAvailable;
-        return evcsAvailable;
+        if (typeof v === 'boolean') return v && evcsAvailableEffective;
+        return evcsAvailableEffective;
       };
 
       const sess = getSession(req);
@@ -15345,8 +15400,17 @@ app.get('/config', (req, res) => {
         units: cfg.units || { power: 'W', energy: 'kWh' },
         settings: cfg.settings || {},
         datapointFlags,
-        // TS-Migration Diagnose: nicht autoritativ, nur Vergleich zwischen alter JS-Sichtbarkeit und TS-Spiegel.
+        // TS-Migration Diagnose: Vergleich zwischen vorheriger JS-Sichtbarkeit und TS-Spiegel.
         featureVisibilityTsPreview,
+        // Autoritative Kundensichtbarkeit ab 0.7.74. Fällt bei Mirror-Problemen auf JS-Fallback zurück.
+        featureVisibility: {
+          source: featureVisibilitySource,
+          hasEvcs: evcsAvailableEffective,
+          hasStorageFarm: storageFarmAvailableEffective,
+          hasSmartHome: smartHomeEnabledEffective,
+          hasWeather: !!featureVisibilityEffective.hasWeather,
+          hasAiAdvisor: aiAdvisorEnabledEffective,
+        },
         // Legacy compatibility for older/front-end helper code: exposing the raw mapping here
         // allows the VIS to decide which live values are authoritative.
         datapoints,
@@ -15627,36 +15691,36 @@ app.get('/config', (req, res) => {
             consumers: buildSlots('consumers'),
             producers: buildSlots('producers'),
             meta: {
-              evcsAvailable: evcsAvailable,
+              evcsAvailable: evcsAvailableEffective,
               evcsConfiguredCount: evcsConfiguredCount
             }
           };
         })(),
 
 settingsConfig: {
-          evcsCount: evcsCountForConfig,
+          evcsCount: evcsCountForConfigEffective,
           evcsConfiguredCount: evcsConfiguredCount,
-          evcsAvailable: evcsAvailable,
+          evcsAvailable: evcsAvailableEffective,
           evcsMaxPowerKw: (cfg && cfg.settingsConfig && Number(cfg.settingsConfig.evcsMaxPowerKw)) || 11,
-          evcsList: evcsAvailable ? evcsListForConfig : []
+          evcsList: evcsAvailableEffective ? evcsListForConfig : []
         },
         smartHome: cfg.smartHome || {},
-        smartHomeEnabled: !!(cfg.smartHome && cfg.smartHome.enabled),
-        storageFarmEnabled: storageFarmAvailable,
+        smartHomeEnabled: smartHomeEnabledEffective,
+        storageFarmEnabled: storageFarmAvailableEffective,
         ems: {
           chargingEnabled: inferChargingEnabled(),
-          evcsAvailable: evcsAvailable,
+          evcsAvailable: evcsAvailableEffective,
           peakShavingEnabled: boolOr(cfg.enablePeakShaving, false) || boolOr(cfg && cfg.peakShaving && cfg.peakShaving.atypical && cfg.peakShaving.atypical.enabled, false),
           para14aEnabled: boolOr(cfg && cfg.installerConfig && cfg.installerConfig.para14a, false),
           gridConstraintsEnabled: boolOr(cfg.enableGridConstraints, false),
           storageEnabled: boolOr(cfg.enableStorageControl, false),
-          storageFarmEnabled: storageFarmAvailable,
+          storageFarmEnabled: storageFarmAvailableEffective,
           heatingRodEnabled: boolOr(cfg.enableHeatingRodControl, false),
           thresholdEnabled: boolOr(cfg.enableThresholdControl, false),
           relayEnabled: boolOr(cfg.enableRelayControl, false),
           bhkwEnabled: boolOr(cfg.enableBhkwControl, false),
           generatorEnabled: boolOr(cfg.enableGeneratorControl, false),
-          aiAdvisorEnabled: boolOr(cfg.enableAiAdvisor, false),
+          aiAdvisorEnabled: aiAdvisorEnabledEffective,
           schedulerIntervalMs: (cfg && Number(cfg.schedulerIntervalMs)) || 1000
         },
         thresholdRules: (() => {

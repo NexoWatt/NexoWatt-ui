@@ -9,8 +9,8 @@
  *
  * Zusammenhang:
  * In main.js wird der TypeScript-Spiegel für Feature-Sichtbarkeit zunächst nur
- * als Diagnosevorschau geladen. Diese Prüfung stellt sicher, dass der Codeanker
- * vorhanden ist und nicht versehentlich produktive Felder überschreibt.
+ * als Diagnose und ab 0.7.74 als autoritative Sichtbarkeit mit Fallback geladen.
+ * Diese Prüfung stellt sicher, dass der Preview-Codeanker weiterhin vorhanden ist.
  */
 
 const fs = require('fs');
@@ -31,7 +31,7 @@ const mirrorFile = path.join(root, 'lib', 'ts-mirrors', 'backend', 'feature-visi
 requireMarker(mainFile, 'const featureVisibilityTsPreview = (() => {', 'preview calculation in main.js');
 requireMarker(mainFile, "require('./lib/ts-mirrors/backend/feature-visibility/feature-visibility')", 'backend mirror require');
 requireMarker(mainFile, 'featureVisibilityTsPreview,', 'preview field in /config response');
-requireMarker(mainFile, 'Diese Vorschau darf in 0.7.73 keine Kundenanzeige steuern.', 'German safety comment');
+requireMarker(mainFile, '0.7.74 macht diesen Spiegel für die Feature-Sichtbarkeit autoritativ', 'German migration comment');
 requireMarker(mirrorFile, 'exports.buildFeatureVisibilityState', 'backend feature visibility mirror export');
 
 console.log('[feature-visibility-preview] OK: TS preview runtime markers present.');

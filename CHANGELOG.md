@@ -1,3 +1,11 @@
+## 0.7.74 - TypeScript Feature-Sichtbarkeit autoritativ
+
+- TypeScript-Spiegel für EVCS-/Speicherfarm-/SmartHome-/Wetter-/KI-Sichtbarkeit wird in `/config` jetzt autoritativ genutzt.
+- Sicherheitsfallback auf die bisherige JavaScript-Runtime bleibt erhalten, falls der TS-Spiegel nicht geladen werden kann.
+- Neue Diagnosefelder `featureVisibility` und `featureVisibilityTsPreview` bleiben in `/config` sichtbar.
+- Neuer Check `test:feature-visibility-effective-runtime` sichert die produktive Verdrahtung ab.
+- Keine Änderungen an Energiefluss, Speicher-DP, Heizstab, KI-Logik, History oder SmartHome-Runtime.
+
 ## 0.7.73 - TypeScript Shadow-Bridge Feature-Sichtbarkeit
 
 - TypeScript Shadow-Bridge für spätere Feature-Visibility-Migration ergänzt.
