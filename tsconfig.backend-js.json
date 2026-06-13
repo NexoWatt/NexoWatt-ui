@@ -8,8 +8,8 @@
     "declaration": false,
     "declarationMap": false,
     "sourceMap": false,
-    "module": "Node16",
-    "moduleResolution": "node16"
+    "module": "NodeNext",
+    "moduleResolution": "nodenext"
   },
   "include": [
     "main.js",

@@ -75,3 +75,8 @@ Nicht geändert:
 - Lizenz
 - info.connection
 - Frontend-Design
+
+
+## Aktualisierung ab 0.7.72
+
+Die vorherige Zwischenlösung `Node16/node16` wurde durch `NodeNext/nodenext` ersetzt. Hintergrund: Für unser Ziel Node.js 22/24 gibt es in TypeScript kein `node22` oder `node24`; der moderne Node-Modus ist `nodenext`.

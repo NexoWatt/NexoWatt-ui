@@ -1,3 +1,11 @@
+# 0.7.72 - TypeScript NodeNext-Konfiguration
+
+- TypeScript-Konfigurationen für Node-nahe Builds von `Node16/node16` auf `NodeNext/nodenext` umgestellt.
+- Frontend-MJS-Mirror-Builds behalten `moduleResolution: Bundler`.
+- `verify-tsconfig-modern.js` erzwingt jetzt NodeNext/Bundler statt alter Node16/node10-Resolver.
+- Keine Runtime-Logik geändert.
+- Service-Worker Cache auf `nexowatt-cache-v240` erhöht.
+
 ## 0.7.71 - TypeScript-7-kompatible tsconfig-Struktur
 
 - `moduleResolution: "Node"` durch moderne TypeScript-Konfiguration ersetzt.

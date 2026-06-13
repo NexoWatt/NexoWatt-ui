@@ -18,3 +18,8 @@ VS Code bzw. TypeScript 6 meldet `moduleResolution=node10` als veraltet. Der alt
 ## Runtime
 
 Diese Version ändert keine produktive Adapterlogik. Es werden nur TypeScript-Konfigurationen, Checks, Version und Doku angepasst.
+
+
+## Aktualisierung ab 0.7.72
+
+Die vorherige Zwischenlösung `Node16/node16` wurde durch `NodeNext/nodenext` ersetzt. Hintergrund: Für unser Ziel Node.js 22/24 gibt es in TypeScript kein `node22` oder `node24`; der moderne Node-Modus ist `nodenext`.

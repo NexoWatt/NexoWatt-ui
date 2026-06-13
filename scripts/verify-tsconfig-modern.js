@@ -31,7 +31,7 @@ const ROOT = path.resolve(__dirname, '..');
  *
  * Zusammenhang:
  * Die TS-Migration nutzt mehrere spezialisierte Konfigurationsdateien. Alle müssen die
- * gleiche Zukunftsregel einhalten: kein `node`/`node10` Resolver, kein Warn-Verstecken.
+ * gleiche Zukunftsregel einhalten: kein `node`/`node10`/`node16` Resolver, kein Warn-Verstecken.
  */
 function findTsconfigFiles() {
   return fs.readdirSync(ROOT)
@@ -65,6 +65,9 @@ function loadJson(file) {
  *
  * Wichtig:
  * - `moduleResolution: "Node"` ist der alte node10-Modus und wird ab TS7 entfernt.
+ * - `moduleResolution: "node16"` ist zwar nicht deprecated, wirkt aber für unser Node-22/24-Ziel unnötig alt.
+ * - Für Node-nahe TS-Dateien nutzen wir `module: "NodeNext"` + `moduleResolution: "nodenext"`.
+ * - Frontend-MJS-Spiegel dürfen `moduleResolution: "Bundler"` nutzen.
  * - `ignoreDeprecations` darf hier nicht genutzt werden, weil es den Fehler nur versteckt.
  */
 function validateConfig(file) {
@@ -74,8 +77,18 @@ function validateConfig(file) {
   const moduleResolution = String(compilerOptions.moduleResolution || '').toLowerCase();
   const errors = [];
 
-  if (moduleResolution === 'node' || moduleResolution === 'node10') {
-    errors.push(`${rel}: moduleResolution=${compilerOptions.moduleResolution} ist veraltet. Nutze node16/nodenext/bundler.`);
+  const moduleKind = String(compilerOptions.module || '').toLowerCase();
+  if (moduleResolution === 'node' || moduleResolution === 'node10' || moduleResolution === 'node16') {
+    errors.push(`${rel}: moduleResolution=${compilerOptions.moduleResolution} ist für unsere TS6/TS7-Strategie nicht erlaubt. Nutze nodenext für Node-nahe Dateien oder bundler für Frontend-Mirror-Builds.`);
+  }
+  if (moduleResolution === 'nodenext' && moduleKind !== 'nodenext') {
+    errors.push(`${rel}: moduleResolution=nodenext benötigt module=NodeNext.`);
+  }
+  if (moduleResolution === 'bundler' && !['es2022', 'esnext', 'preserve'].includes(moduleKind)) {
+    errors.push(`${rel}: moduleResolution=bundler sollte nur mit module=ES2022/ESNext/Preserve genutzt werden.`);
+  }
+  if (!moduleResolution) {
+    errors.push(`${rel}: moduleResolution fehlt. Setze nodenext oder bundler explizit.`);
   }
   if (Object.prototype.hasOwnProperty.call(compilerOptions, 'ignoreDeprecations')) {
     errors.push(`${rel}: ignoreDeprecations darf nicht gesetzt werden. Wir beheben Deprecations statt sie zu verstecken.`);
@@ -98,7 +111,7 @@ function main() {
     for (const err of errors) console.error(`- ${err}`);
     process.exit(1);
   }
-  console.log('[tsconfig-modern] OK: keine veralteten TypeScript-Resolver/Deprecation-Unterdrückungen gefunden.');
+  console.log('[tsconfig-modern] OK: TypeScript-Resolver sind NodeNext/Bundler-kompatibel und ohne Deprecation-Unterdrückung.');
 }
 
 main();

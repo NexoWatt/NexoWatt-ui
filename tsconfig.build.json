@@ -8,8 +8,8 @@
     "rootDir": "src-ts",
     "outDir": "build-ts/types",
     "removeComments": false,
-    "module": "Node16",
-    "moduleResolution": "node16"
+    "module": "NodeNext",
+    "moduleResolution": "nodenext"
   },
   "include": [
     "src-ts/types/**/*.d.ts",
