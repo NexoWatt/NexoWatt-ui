@@ -20582,6 +20582,186 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     };
   }
   /**
+   * Code-Teil: _nwGetEnergyFlowTsMirrorResolver
+   *
+   * Zweck:
+   * Lädt den aus TypeScript erzeugten Energiefluss-Resolver-Spiegel für einen
+   * reinen Shadow-/Vergleichsmodus.
+   *
+   * Zusammenhang:
+   * Der produktive Energiefluss wird weiterhin durch die vorhandene JavaScript-Logik
+   * berechnet. Diese Methode lädt nur die TS-Spiegeldatei, damit wir beide Ergebnisse
+   * nebeneinander vergleichen können, ohne Anzeige, History oder Regelung zu ändern.
+   *
+   * Wichtig:
+   * Fehler beim Laden dürfen den Adapter niemals stoppen. Wenn der Spiegel fehlt oder
+   * defekt ist, bleibt die bisherige Runtime unverändert aktiv.
+   */
+  _nwGetEnergyFlowTsMirrorResolver() {
+    try {
+      if (this._energyFlowTsMirrorResolver) return this._energyFlowTsMirrorResolver;
+      if (this._energyFlowTsMirrorResolverFailed) return null;
+      const mod = require(path.join(__dirname, 'lib', 'ts-mirrors', 'energy-flow', 'resolvers', 'energy-flow-resolver.js'));
+      if (mod && typeof mod.buildEnergyFlowSnapshot === 'function') {
+        this._energyFlowTsMirrorResolver = mod;
+        return mod;
+      }
+      this._energyFlowTsMirrorResolverFailed = true;
+      return null;
+    } catch (e) {
+      this._energyFlowTsMirrorResolverFailed = true;
+      try { this.log.debug(`[energy-flow-ts-shadow] mirror unavailable: ${e && e.message ? e.message : e}`); } catch (_e) {}
+      return null;
+    }
+  }
+
+  /**
+   * Code-Teil: _nwBuildEnergyFlowTsShadowInput
+   *
+   * Zweck:
+   * Übersetzt die aktuell von der JavaScript-Runtime berechneten Eingänge in die
+   * Eingabeform des TypeScript-Energiefluss-Resolvers.
+   *
+   * Zusammenhang:
+   * Diese Funktion ist eine Brücke für den Migrationsvergleich. Sie verbindet die
+   * vorhandenen Mapping-/Cachewerte aus `main.js` mit den Typverträgen aus `src-ts`.
+   *
+   * Wichtig:
+   * Die Ausgabe dieser Funktion darf noch keine Produktivwerte ersetzen. Sie dient nur
+   * dem Vergleich, damit wir später sehen, ob der TS-Resolver wirklich identisch oder
+   * besser rechnet.
+   */
+  _nwBuildEnergyFlowTsShadowInput(ctx = {}) {
+    const dps = (this.config && this.config.datapoints && typeof this.config.datapoints === 'object') ? this.config.datapoints : {};
+    const idOf = (key) => String(dps[key] || '').trim();
+    const chargeMapped = !!idOf('storageChargePower');
+    const dischargeMapped = !!idOf('storageDischargePower');
+    const batteryMapped = !!idOf('batteryPower');
+    const sameChargeDischargeId = !!(chargeMapped && dischargeMapped && idOf('storageChargePower') === idOf('storageDischargePower'));
+    const gridBuyMapped = !!idOf('gridBuyPower');
+    const gridSellMapped = !!idOf('gridSellPower');
+    const gridSignedMapped = !!idOf('gridPointPower');
+    const storageFlow = ctx.storageFlow || {};
+    const storageSrc = String(storageFlow.src || '');
+    const storageFromFarm = storageSrc.indexOf('storageFarm') === 0;
+
+    return {
+      ts: Number(ctx.ts) || Date.now(),
+      pvW: Number.isFinite(Number(ctx.productionW)) ? Number(ctx.productionW) : 0,
+      buildingLoadW: ctx.consumptionMapped ? this._nwGetNumberFromCache('consumptionTotal') : undefined,
+      grid: {
+        hasConfiguredSplitDp: !!(gridBuyMapped || gridSellMapped),
+        hasConfiguredSignedDp: !!(gridSignedMapped && !(gridBuyMapped || gridSellMapped)),
+        importW: Number.isFinite(Number(ctx.gridBuyW)) ? Number(ctx.gridBuyW) : 0,
+        exportW: Number.isFinite(Number(ctx.gridSellW)) ? Number(ctx.gridSellW) : 0,
+        signedW: Number.isFinite(Number(ctx.gridNetRaw)) ? Number(ctx.gridNetRaw) : null,
+        signedConvention: 'positive-import',
+      },
+      storage: {
+        hasConfiguredSplitDp: !!((chargeMapped || dischargeMapped) && !sameChargeDischargeId) || storageFromFarm,
+        hasConfiguredSignedDp: !!(batteryMapped || sameChargeDischargeId) && !storageFromFarm,
+        chargeW: Number.isFinite(Number(ctx.chargeW)) ? Number(ctx.chargeW) : 0,
+        dischargeW: Number.isFinite(Number(ctx.dischargeW)) ? Number(ctx.dischargeW) : 0,
+        signedW: batteryMapped
+          ? this._nwGetRawNumberFromCache('batteryPower', null, null, Number(ctx.ts) || Date.now())
+          : (sameChargeDischargeId ? this._nwGetRawNumberFromCache('storageChargePower', null, null, Number(ctx.ts) || Date.now()) : null),
+        socPct: this._nwGetNumberFromCache('storageSoc'),
+        signedConvention: this._nwIsBatterySignInverted() ? 'positive-charge' : 'positive-discharge',
+        calculatedSignedW: (!chargeMapped && !dischargeMapped && !batteryMapped && storageFlow.derived) ? Number(storageFlow.signedW) : undefined,
+        balance: {
+          pvW: Number.isFinite(Number(ctx.productionW)) ? Number(ctx.productionW) : 0,
+          gridImportW: Number.isFinite(Number(ctx.gridBuyW)) ? Number(ctx.gridBuyW) : 0,
+          gridExportW: Number.isFinite(Number(ctx.gridSellW)) ? Number(ctx.gridSellW) : 0,
+          additionalKnownLoadW: ctx.consumptionMapped ? this._nwGetNumberFromCache('consumptionTotal') : undefined,
+        },
+      },
+      evcsW: Number.isFinite(Number(ctx.evW)) ? Number(ctx.evW) : 0,
+      heatingRodW: Number.isFinite(Number(ctx.heatingRodW)) ? Number(ctx.heatingRodW) : 0,
+      thermalW: Number.isFinite(Number(ctx.thermalW)) ? Number(ctx.thermalW) : 0,
+    };
+  }
+
+  /**
+   * Code-Teil: _nwRunEnergyFlowTsShadowComparison
+   *
+   * Zweck:
+   * Führt den neuen TypeScript-Energiefluss-Resolver parallel aus und vergleicht dessen
+   * Ergebnis mit der aktuell produktiven JavaScript-Runtime.
+   *
+   * Zusammenhang:
+   * Das ist der Sicherheitsgurt für die spätere Migration. Abweichungen werden nur
+   * diagnostiziert/geloggt. Dashboard, History, Heizstab, Core-Limits und KI verwenden
+   * weiterhin die bisher berechneten JavaScript-Werte.
+   *
+   * Wichtig:
+   * Diese Funktion darf niemals produktive Werte überschreiben. Genau deshalb bleibt
+   * 0.7.75 ein Shadow-/Vergleichsschritt und keine Umschaltung.
+   */
+  _nwRunEnergyFlowTsShadowComparison(ctx = {}) {
+    try {
+      const resolver = this._nwGetEnergyFlowTsMirrorResolver();
+      if (!resolver || typeof resolver.buildEnergyFlowSnapshot !== 'function') return { available: false, source: 'missing' };
+      const input = this._nwBuildEnergyFlowTsShadowInput(ctx);
+      const snapshot = resolver.buildEnergyFlowSnapshot(input);
+      const tsValues = {
+        gridBuyW: Math.round(Number(snapshot && snapshot.grid ? snapshot.grid.importW : 0) || 0),
+        gridSellW: Math.round(Number(snapshot && snapshot.grid ? snapshot.grid.exportW : 0) || 0),
+        storageChargeW: Math.round(Number(snapshot && snapshot.storage ? snapshot.storage.chargeW : 0) || 0),
+        storageDischargeW: Math.round(Number(snapshot && snapshot.storage ? snapshot.storage.dischargeW : 0) || 0),
+        buildingLoadW: Number.isFinite(Number(snapshot && snapshot.buildingLoadW)) ? Math.round(Number(snapshot.buildingLoadW)) : null,
+      };
+      const runtimeValues = {
+        gridBuyW: Math.round(Number(ctx.gridBuyW) || 0),
+        gridSellW: Math.round(Number(ctx.gridSellW) || 0),
+        storageChargeW: Math.round(Number(ctx.chargeW) || 0),
+        storageDischargeW: Math.round(Number(ctx.dischargeW) || 0),
+        buildingLoadW: Math.round(Number(ctx.loadTotalW) || 0),
+      };
+      const toleranceW = Number.isFinite(Number(ctx.toleranceW)) ? Math.max(0, Number(ctx.toleranceW)) : 120;
+      const mismatches = [];
+      const compare = (key, label, tol = toleranceW) => {
+        const a = runtimeValues[key];
+        const b = tsValues[key];
+        if (b === null || b === undefined || !Number.isFinite(Number(a))) return;
+        if (Math.abs(Number(a) - Number(b)) > tol) mismatches.push(`${label}: js=${a}W ts=${b}W`);
+      };
+      compare('gridBuyW', 'gridBuyW');
+      compare('gridSellW', 'gridSellW');
+      compare('storageChargeW', 'storageChargeW');
+      compare('storageDischargeW', 'storageDischargeW');
+      // Gebäudelast ist durch Anti-Spike-Hold/Fallback absichtlich weniger streng.
+      compare('buildingLoadW', 'buildingLoadW', Math.max(750, toleranceW * 4));
+
+      const result = {
+        available: true,
+        source: 'ts-mirror-shadow',
+        ok: mismatches.length === 0,
+        mismatches,
+        runtime: runtimeValues,
+        ts: tsValues,
+        storageSource: snapshot && snapshot.storage ? snapshot.storage.source : '',
+        gridSource: snapshot && snapshot.grid ? snapshot.grid.source : '',
+      };
+
+      if (mismatches.length) {
+        const hash = mismatches.join('|');
+        const now = Number(ctx.ts) || Date.now();
+        const lastHash = this._energyFlowTsShadowWarnHash;
+        const lastAt = Number(this._energyFlowTsShadowWarnAt) || 0;
+        if (hash !== lastHash || (now - lastAt) > 5 * 60 * 1000) {
+          this._energyFlowTsShadowWarnHash = hash;
+          this._energyFlowTsShadowWarnAt = now;
+          try { this.log.warn(`[energy-flow-ts-shadow] Runtime/TS mismatch: ${mismatches.join('; ')}`); } catch (_e) {}
+        }
+      }
+      return result;
+    } catch (e) {
+      try { this.log.debug(`[energy-flow-ts-shadow] comparison failed: ${e && e.message ? e.message : e}`); } catch (_e) {}
+      return { available: false, source: 'error', error: e && e.message ? String(e.message) : String(e) };
+    }
+  }
+
+  /**
    * Code-Teil: _nwResolveGridImportExportFromCache
    * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
    * Zusammenhang: Teil von Adapterkern: Lifecycle, Webserver, API, States, EMS-Engine; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
@@ -22199,6 +22379,26 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const loadTotalRound = Math.round(loadTotalW);
     const loadRestRound = Math.round(loadRestW);
 
+    const tsShadow = this._nwRunEnergyFlowTsShadowComparison({
+      ts,
+      reason,
+      productionW,
+      pvTotalW,
+      gridBuyW,
+      gridSellW,
+      gridNetRaw,
+      storageFlow,
+      chargeW,
+      dischargeW,
+      loadTotalW,
+      loadTotalRound,
+      loadRestRound,
+      evW,
+      consumersW,
+      consumptionMapped,
+      toleranceW: 120,
+    });
+
     // Update last-plausible cache only when the raw balance is plausible
     // (avoid locking-in 0W during active operation).
     try {
@@ -22291,6 +22491,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
             activityW: Math.round(activityW),
           },
           quality,
+          tsShadow,
         };
         const json = JSON.stringify(payload);
         await this.setStateAsync('derived.core.building.inputsJson', { val: json, ack: true });

@@ -91,3 +91,9 @@ lib/ts-mirrors/backend/
 ```
 
 Diese Spiegel sind für spätere `main.js`-Auslagerungen gedacht. Sie dürfen erst produktiv genutzt werden, wenn für den jeweiligen Bereich Regressionstests vorhanden sind und der bisherige JS-Code über mindestens eine Version im Vergleichs-/Schattenmodus geprüft wurde.
+## Ergänzung 0.7.76 – EMS-Spiegel
+
+- `src-ts/ems/core-limits/**` und `src-ts/ems/heating-rod/**` werden jetzt als CommonJS-Spiegel unter `lib/ts-mirrors/ems/**` gebaut.
+- Produktiv bleibt weiterhin die bestehende JS-Runtime.
+- Vor einer produktiven Umschaltung ist ein Shadow-/Vergleichsmodus Pflicht.
+

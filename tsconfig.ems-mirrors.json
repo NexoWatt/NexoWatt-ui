@@ -1,0 +1,26 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "rootDir": "src-ts",
+    "outDir": "build-ts/ems-mirrors",
+    "module": "NodeNext",
+    "target": "ES2022",
+    "removeComments": false,
+    "moduleResolution": "nodenext"
+  },
+  "include": [
+    "src-ts/utils/number.ts",
+    "src-ts/ems/core-limits/core-budget.ts",
+    "src-ts/ems/heating-rod/heating-rod-decision.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "build-types",
+    "build-ts"
+  ]
+}

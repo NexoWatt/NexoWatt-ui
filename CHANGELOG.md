@@ -1,3 +1,19 @@
+## 0.7.76 - TypeScript EMS-Mirror für Core-Limits und Heizstab
+
+- Neue TypeScript-zu-JavaScript-Spiegel für `src-ts/ems/core-limits/core-budget.ts` und `src-ts/ems/heating-rod/heating-rod-decision.ts` ergänzt.
+- Die Spiegel liegen fachlich sauber unter `lib/ts-mirrors/ems/**`; gemeinsame Zahlenhelfer liegen unter `lib/ts-mirrors/utils/number.js`.
+- Neue Prüfungen `npm run test:ems-mirrors` und `scripts/verify-ts-ems-mirrors.js` sichern Importierbarkeit und erste Core-/Heizstab-Regressionsfälle ab.
+- Keine produktive Runtime-Logik geändert: Core-Limits, Heizstab, Energiefluss, History und KI laufen weiterhin wie in 0.7.75.
+- Service-Worker Cache auf `nexowatt-cache-v244` erhöht.
+
+## 0.7.75 - TS Energy-Flow Shadow-Vergleich
+
+- TypeScript-Energiefluss-Resolver wird im Backend erstmals parallel zur produktiven JavaScript-Runtime ausgeführt.
+- Die TS-Schicht ist noch nicht autoritativ: Dashboard, History, Heizstab, Core-Limits und KI verwenden weiterhin die bisherigen JavaScript-Werte.
+- Abweichungen zwischen alter Runtime und TS-Resolver werden nur diagnostiziert/geloggt und im Debug-JSON `derived.core.building.inputsJson` unter `tsShadow` ergänzt.
+- Neuer Check `npm run test:energy-flow-shadow-runtime` prüft die Shadow-Verdrahtung.
+- Keine fachliche Änderung an Speicher-, Netz-, PV- oder Heizstablogik.
+
 ## 0.7.74 - TypeScript Feature-Sichtbarkeit autoritativ
 
 - TypeScript-Spiegel für EVCS-/Speicherfarm-/SmartHome-/Wetter-/KI-Sichtbarkeit wird in `/config` jetzt autoritativ genutzt.
