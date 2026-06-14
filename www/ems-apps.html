@@ -1638,6 +1638,25 @@
             <span>Automatisch auf JS zurückfallen, wenn Shadow abweicht</span>
           </label>
 
+          <label class="nw-config-checklabel nw-ts-energyflow-plant-row">
+            <input id="energyFlowTsRequireStablePlant" class="nw-config-checkbox" type="checkbox" />
+            <span>TS erst nach stabiler realer Anlagen-Auswertung erlauben</span>
+          </label>
+
+          <label class="nw-config-field-row" for="energyFlowTsPlantMinSamples">
+            <span class="nw-config-field-label">Mindest-Samples Anlage</span>
+            <span class="nw-config-field-control">
+              <input id="energyFlowTsPlantMinSamples" class="nw-config-input" type="number" min="1" max="120" step="1" placeholder="5" />
+            </span>
+          </label>
+
+          <label class="nw-config-field-row" for="energyFlowTsPlantMinOk">
+            <span class="nw-config-field-label">OK-Samples in Folge</span>
+            <span class="nw-config-field-control">
+              <input id="energyFlowTsPlantMinOk" class="nw-config-input" type="number" min="1" max="120" step="1" placeholder="5" />
+            </span>
+          </label>
+
           <div class="nw-config-empty nw-ts-energyflow-safety-note">
             Sicherheitsregel: TS wird nur produktiv genutzt, wenn Modus <b>TS</b>, diese Freigabe aktiv, der Shadow‑Vergleich ohne Blocker ist und der Kandidaten‑Warmup sauber durchlaufen wurde. Standard bleibt <b>Shadow</b>.
           </div>

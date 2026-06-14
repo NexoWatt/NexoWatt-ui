@@ -1,3 +1,26 @@
+# 0.7.86 - Energiefluss TS-Aktivtest auf echter Anlage beobachten
+
+- Kontrollierten Energiefluss-TypeScript-Aktivtest ergänzt: Backend protokolliert, ob TS tatsächlich als effektive Quelle genutzt wurde oder ob Sicherheitsgates korrekt auf JS zurückfallen.
+- App-Center zeigt neue Karte „Energiefluss TS‑Aktivtest“ mit Samples, TS-/JS-Zählung, letzter Quelle, Grund, Blockern und JSON-Dialog.
+- Energiefluss-Debug-JSON enthält `tsActiveTest`, damit reale Anlagenläufe nachvollziehbar bleiben.
+- Die vorhandenen Gates bleiben verbindlich: Modus, produktive Freigabe, Shadow-OK, Kandidatenprüfung, Warmup und stabile Anlagen-Auswertung.
+- Keine Änderungen an Core-Limits, Heizstab, KI, History, SmartHome, Lizenz oder info.connection.
+- Service-Worker Cache auf `nexowatt-cache-v254` erhöht.
+
+# 0.7.85 - Energiefluss TS nur nach stabiler Anlagen-Auswertung
+
+- Energiefluss-TS-Kandidatenmodus zusätzlich durch reale Anlagen-Auswertung abgesichert.
+- TS darf Energieflusswerte nur nutzen, wenn Modus `ts`, produktive Freigabe, Shadow-Vergleich, Kandidatenprüfung und stabile Anlagen-Auswertung erfüllt sind.
+- App-Center zeigt und speichert neue Sicherheitsoptionen für Anlagen-Samples und OK-Samples in Folge.
+- Keine Änderungen an produktiver EMS-/Heizstab-/KI-/History-/SmartHome-Logik außerhalb der Energiefluss-Kandidatenfreigabe.
+
+## 0.7.84 - Shadow-Diagnose echte Anlage auswerten
+
+- Backend sammelt einen kleinen Rolling-Buffer der echten TypeScript-Shadow-Diagnoseabrufe.
+- App-Center zeigt neue Karte „Reale Anlagen-Auswertung“ mit Samples, OK-Quote, OK-Ticks in Folge und Blockern.
+- JSON-Details zur Anlagen-Auswertung sind dauerhaft im Dialog öffnbar.
+- Keine produktive Umschaltung und keine Änderung an Energiefluss, Core-Limits oder Heizstab.
+
 ## 0.7.83 - App-Center Shadow-JSON Anzeige stabilisiert
 
 - JSON-Anzeige der TypeScript-Shadow-Diagnose im App-Center auf stabilen Dialog umgestellt, damit die Ansicht bei automatischem Refresh nicht sofort wieder zuklappt.

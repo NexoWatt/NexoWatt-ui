@@ -2775,6 +2775,9 @@ class NexoWattVis extends utils.Adapter {
       energyFlowProductionAllowed: false,
       energyFlowCandidateWarmupTicks: 3,
       energyFlowCandidateAutoFallback: true,
+      energyFlowRequireStablePlantEvaluation: true,
+      energyFlowPlantMinSamples: 5,
+      energyFlowPlantMinConsecutiveOk: 5,
     });
     ensurePlainObj('chargingManagement', {});
     ensurePlainObj('peakShaving', {});
@@ -2832,6 +2835,9 @@ class NexoWattVis extends utils.Adapter {
       energyFlowProductionAllowed: false,
       energyFlowCandidateWarmupTicks: 3,
       energyFlowCandidateAutoFallback: true,
+      energyFlowRequireStablePlantEvaluation: true,
+      energyFlowPlantMinSamples: 5,
+      energyFlowPlantMinConsecutiveOk: 5,
       // js     = reine alte JS-Runtime ohne TS-Vergleich,
       // shadow = JS bleibt produktiv, TS rechnet nur Diagnose,
       // ts     = technischer Kandidatenmodus; TS darf nur bei sauberem Shadow-Ergebnis als Kandidat markiert werden.
@@ -2859,6 +2865,24 @@ class NexoWattVis extends utils.Adapter {
       if (typeof tm.energyFlowCandidateAutoFallback !== 'boolean') {
         tm.energyFlowCandidateAutoFallback = true;
         changed = true;
+      }
+      if (typeof tm.energyFlowRequireStablePlantEvaluation !== 'boolean') {
+        tm.energyFlowRequireStablePlantEvaluation = true;
+        changed = true;
+      }
+      const plantMinSamples = Math.round(Number(tm.energyFlowPlantMinSamples));
+      if (!Number.isFinite(plantMinSamples) || plantMinSamples < 1 || plantMinSamples > 120) {
+        tm.energyFlowPlantMinSamples = 5;
+        changed = true;
+      } else {
+        tm.energyFlowPlantMinSamples = plantMinSamples;
+      }
+      const plantMinOk = Math.round(Number(tm.energyFlowPlantMinConsecutiveOk));
+      if (!Number.isFinite(plantMinOk) || plantMinOk < 1 || plantMinOk > 120) {
+        tm.energyFlowPlantMinConsecutiveOk = 5;
+        changed = true;
+      } else {
+        tm.energyFlowPlantMinConsecutiveOk = plantMinOk;
       }
       out.tsMigration = tm;
     } catch (_eTsMigrationDefaults) {}
@@ -11156,7 +11180,7 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
 
         // TypeScript-Migration: Energiefluss-Schaltmodus für App-Center-Diagnose.
         // Wichtig: Diese Konfiguration wird nur über die doppelte Sicherheitslogik in main.js ausgewertet.
-        tsMigration: (n.tsMigration && typeof n.tsMigration === 'object') ? n.tsMigration : { energyFlowMode: 'shadow', energyFlowProductionAllowed: false, energyFlowCandidateWarmupTicks: 3, energyFlowCandidateAutoFallback: true },
+        tsMigration: (n.tsMigration && typeof n.tsMigration === 'object') ? n.tsMigration : { energyFlowMode: 'shadow', energyFlowProductionAllowed: false, energyFlowCandidateWarmupTicks: 3, energyFlowCandidateAutoFallback: true, energyFlowRequireStablePlantEvaluation: true, energyFlowPlantMinSamples: 5, energyFlowPlantMinConsecutiveOk: 5 },
 
         // Plant-level
         installerConfig: (n.installerConfig && typeof n.installerConfig === 'object') ? n.installerConfig : {},
@@ -12832,6 +12856,10 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
           heatingRodTsShadowJson: await getOwn('heatingRod.summary.tsShadowJson'),
           heatingRodDebugJson: await getOwn('heatingRod.summary.debugJson'),
           energyFlowInputsJson: await getOwn('derived.core.building.inputsJson'),
+          energyFlowSource: await getOwn('derived.core.building.energyFlowSource'),
+          energyFlowTsLiveTestState: await getOwn('derived.core.building.tsLiveTestState'),
+          energyFlowTsSwitchJson: await getOwn('derived.core.building.tsSwitchJson'),
+          energyFlowTsCandidateJson: await getOwn('derived.core.building.tsCandidateJson'),
           energyFlowTsMode: this._nwGetEnergyFlowTsMode(),
         };
 
@@ -12846,6 +12874,43 @@ app.get('/api/smarthome/type-detect', requireInstaller, async (req, res) => {
          * Das ist weiterhin nur Diagnose. Die produktive Runtime bleibt unverändert.
          */
         control.tsShadowReadiness = this._nwEvaluateEnergyFlowSwitchReadinessFromControl(control);
+        control.tsShadowRealPlantEvaluation = this._nwBuildTsShadowRealPlantEvaluation(control);
+        /**
+         * Code-Teil: echte Anlagen-Auswertung der TS-Shadow-Diagnose
+         *
+         * Zweck:
+         * Sammelt die Shadow-Ergebnisse über mehrere Diagnose-Aktualisierungen, damit
+         * im App-Center nicht nur ein einzelner Snapshot sichtbar ist. Dadurch erkennt
+         * man, ob eine Anlage stabil bereit ist oder ob Abweichungen sporadisch auftreten.
+         *
+         * Wichtig:
+         * Diese Auswertung ist reine Diagnose. Sie schaltet keine TS-Werte produktiv.
+         */
+        control.tsShadowEvaluation = this._nwRecordAndSummarizeTsShadowEvaluation(control, control.tsShadowReadiness);
+        /**
+         * Code-Teil: TS-Shadow-Anlagenauswertung an die Diagnose-API anhängen
+         *
+         * Zweck:
+         * Verdichtet mehrere echte Diagnoseabrufe zu einer Anlagenbewertung. Ein
+         * einzelner OK-Tick reicht für eine spätere TS-Umschaltung nicht aus; wir
+         * wollen mehrere reale Samples sehen und zählen deshalb OK-/Warn-/Blocker-
+         * Ticks über einen kleinen Rolling-Buffer.
+         *
+         * Wichtig:
+         * Diese Auswertung ist weiterhin nur Diagnose. Sie schreibt keine EMS-Werte
+         * und aktiviert keine TypeScript-Produktivlogik.
+         */
+        control.tsShadowPlantEvaluation = this._nwUpdateTsShadowPlantEvaluation(control, control.tsShadowReadiness);
+        /**
+         * Code-Teil: Energiefluss-TS-Aktivtest an die Diagnose-API anhängen
+         *
+         * Zweck:
+         * Zeigt im App-Center, ob der kontrollierte TS-Kandidatenmodus wirklich als
+         * effektive Quelle genutzt wurde oder ob der Adapter sicher auf JavaScript
+         * zurückgefallen ist. Die Daten stammen aus der Laufzeitbeobachtung und sind
+         * reine Diagnose.
+         */
+        control.energyFlowTsActiveTest = this._nwSummarizeEnergyFlowTsActiveTestSamples ? this._nwSummarizeEnergyFlowTsActiveTestSamples() : null;
 
         const summary = {
           totalPowerW: await getOwn('chargingManagement.summary.totalPowerW'),
@@ -15486,7 +15551,7 @@ app.get('/config', (req, res) => {
       res.json({
         units: cfg.units || { power: 'W', energy: 'kWh' },
         settings: cfg.settings || {},
-        tsMigration: cfg.tsMigration || { energyFlowMode: 'shadow', energyFlowProductionAllowed: false, energyFlowCandidateWarmupTicks: 3, energyFlowCandidateAutoFallback: true },
+        tsMigration: cfg.tsMigration || { energyFlowMode: 'shadow', energyFlowProductionAllowed: false, energyFlowCandidateWarmupTicks: 3, energyFlowCandidateAutoFallback: true, energyFlowRequireStablePlantEvaluation: true, energyFlowPlantMinSamples: 5, energyFlowPlantMinConsecutiveOk: 5 },
         datapointFlags,
         // TS-Migration Diagnose: Vergleich zwischen vorheriger JS-Sichtbarkeit und TS-Spiegel.
         featureVisibilityTsPreview,
@@ -20736,8 +20801,9 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const gate = this._nwGetEnergyFlowTsSwitchConfig ? this._nwGetEnergyFlowTsSwitchConfig() : { productionAllowed: false };
     const tsReady = !!(shadowResult && shadowResult.available && shadowResult.ok && tsValues && typeof tsValues === 'object');
     const candidateSafety = this._nwValidateEnergyFlowTsCandidate(shadowResult);
+    const plantGate = this._nwEvaluateEnergyFlowPlantGate ? this._nwEvaluateEnergyFlowPlantGate(gate) : { required: true, ok: false, blockers: ['Reale Anlagen-Auswertung nicht verfügbar.'] };
     const wantsTs = normalizedMode === 'ts';
-    const useTsCandidate = wantsTs && tsReady && gate.productionAllowed === true && candidateSafety.ok === true;
+    const useTsCandidate = wantsTs && tsReady && gate.productionAllowed === true && candidateSafety.ok === true && (!plantGate.required || plantGate.ok === true);
     const blockedReasons = [];
     if (wantsTs && gate.productionAllowed !== true) blockedReasons.push('Sicherheitsfreigabe energyFlowProductionAllowed fehlt.');
     if (wantsTs && !tsReady) {
@@ -20747,6 +20813,9 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     }
     if (wantsTs && tsReady && candidateSafety.ok !== true) {
       blockedReasons.push(...candidateSafety.blockers);
+    }
+    if (wantsTs && tsReady && candidateSafety.ok === true && plantGate.required && plantGate.ok !== true) {
+      blockedReasons.push(...(Array.isArray(plantGate.blockers) ? plantGate.blockers : ['Reale Anlagen-Auswertung ist nicht stabil.']));
     }
     if (normalizedMode === 'js') blockedReasons.push('Modus js: TypeScript-Energiefluss ist deaktiviert.');
     if (normalizedMode === 'shadow') blockedReasons.push('Modus shadow: JavaScript bleibt produktiv; TypeScript ist nur Diagnose.');
@@ -20759,6 +20828,9 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       runtimeAuthoritative: !useTsCandidate,
       values: useTsCandidate ? tsValues : runtimeValues,
       candidateSafety,
+      plantEvaluationRequired: !!plantGate.required,
+      plantEvaluationOk: plantGate.required ? plantGate.ok === true : true,
+      plantEvaluation: plantGate,
       blockedReasons,
       safetyText: useTsCandidate
         ? 'TS-Werte werden nur genutzt, weil Modus ts, energyFlowProductionAllowed und Kandidaten-Warmup aktiv/sauber sind.'
@@ -21057,7 +21129,57 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const warmupRaw = Math.round(Number(cfg.energyFlowCandidateWarmupTicks));
     const warmupTicks = Number.isFinite(warmupRaw) ? Math.max(1, Math.min(30, warmupRaw)) : 3;
     const autoFallback = cfg.energyFlowCandidateAutoFallback !== false;
-    return { requestedMode: mode, productionAllowed, warmupTicks, autoFallback };
+    const requireStablePlantEvaluation = cfg.energyFlowRequireStablePlantEvaluation !== false;
+    const plantMinSamplesRaw = Math.round(Number(cfg.energyFlowPlantMinSamples));
+    const plantMinSamples = Number.isFinite(plantMinSamplesRaw) ? Math.max(1, Math.min(120, plantMinSamplesRaw)) : 5;
+    const plantMinOkRaw = Math.round(Number(cfg.energyFlowPlantMinConsecutiveOk));
+    const plantMinConsecutiveOk = Number.isFinite(plantMinOkRaw) ? Math.max(1, Math.min(120, plantMinOkRaw)) : 5;
+    return { requestedMode: mode, productionAllowed, warmupTicks, autoFallback, requireStablePlantEvaluation, plantMinSamples, plantMinConsecutiveOk };
+  }
+
+  /**
+   * Code-Teil: _nwEvaluateEnergyFlowPlantGate
+   *
+   * Zweck:
+   * Prüft die reale Anlagen-Auswertung als zusätzliche Freigabe für den produktiven
+   * Energiefluss-TS-Kandidatenmodus.
+   *
+   * Zusammenhang:
+   * 0.7.85 verschärft die Umschaltregel: Ein einzelner sauberer Shadow-Tick reicht
+   * nicht mehr aus. Der Adapter muss mehrere stabile Anlagen-Samples gesammelt haben,
+   * bevor TS produktiv Energieflusswerte liefern darf.
+   *
+   * Wichtig:
+   * Wenn keine Samples vorhanden sind, bleibt die JavaScript-Runtime führend. Das
+   * schützt LIVE, History und Regelungen vor einer zu frühen TS-Umschaltung.
+   */
+  _nwEvaluateEnergyFlowPlantGate(cfg = {}) {
+    const samples = Array.isArray(this._tsShadowPlantSamples) ? this._tsShadowPlantSamples : [];
+    const evaluation = this._nwSummarizeTsShadowPlantSamples ? this._nwSummarizeTsShadowPlantSamples(samples) : { stable: false, sampleCount: samples.length, consecutiveOk: 0, blockerCount: 1, mismatchCount: 0, nextAction: 'Anlagenauswertung nicht verfügbar.' };
+    const minSamples = Math.max(1, Math.min(120, Math.round(Number(cfg.plantMinSamples) || 5)));
+    const minConsecutiveOk = Math.max(1, Math.min(120, Math.round(Number(cfg.plantMinConsecutiveOk) || 5)));
+    const sampleCount = Math.max(0, Math.round(Number(evaluation.sampleCount) || 0));
+    const consecutiveOk = Math.max(0, Math.round(Number(evaluation.consecutiveOk) || 0));
+    const stableByCounts = sampleCount >= minSamples && consecutiveOk >= minConsecutiveOk && Number(evaluation.blockerCount || 0) === 0 && Number(evaluation.mismatchCount || 0) === 0;
+    const ok = evaluation.stable === true && stableByCounts;
+    const blockers = [];
+    if (sampleCount < minSamples) blockers.push(`Reale Anlagen-Auswertung: erst ${sampleCount}/${minSamples} Samples gesammelt.`);
+    if (consecutiveOk < minConsecutiveOk) blockers.push(`Reale Anlagen-Auswertung: erst ${consecutiveOk}/${minConsecutiveOk} OK-Samples in Folge.`);
+    if (Number(evaluation.blockerCount || 0) > 0) blockers.push(`Reale Anlagen-Auswertung meldet ${Number(evaluation.blockerCount || 0)} Blocker.`);
+    if (Number(evaluation.mismatchCount || 0) > 0) blockers.push(`Reale Anlagen-Auswertung meldet ${Number(evaluation.mismatchCount || 0)} Abweichungen.`);
+    if (evaluation.stable !== true && !blockers.length) blockers.push('Reale Anlagen-Auswertung ist noch nicht stabil.');
+    return {
+      required: cfg.requireStablePlantEvaluation !== false,
+      ok,
+      stable: evaluation.stable === true,
+      sampleCount,
+      consecutiveOk,
+      minSamples,
+      minConsecutiveOk,
+      evaluation,
+      blockers,
+      nextAction: evaluation.nextAction || '',
+    };
   }
 
   /**
@@ -21084,6 +21206,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const shadowOk = !!(shadowAvailable && (tsShadow.ok === true || (Array.isArray(tsShadow.mismatches) && tsShadow.mismatches.length === 0)));
     const candidateSafety = this._nwValidateEnergyFlowTsCandidate ? this._nwValidateEnergyFlowTsCandidate(tsShadow) : { ok: shadowOk, blockers: [], warnings: [], values: {} };
     const warmupTicks = Math.max(1, Math.min(30, Math.round(Number(cfg.warmupTicks) || 3)));
+    const plantGate = this._nwEvaluateEnergyFlowPlantGate ? this._nwEvaluateEnergyFlowPlantGate(cfg) : { required: true, ok: false, blockers: ['Reale Anlagen-Auswertung nicht verfügbar.'] };
     const state = this._energyFlowTsCandidateState || { okTicks: 0, lastReason: '', lastUseTs: false, lastTs: 0 };
     let effectiveMode = 'js';
     let reason = 'default-js';
@@ -21121,6 +21244,9 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       } else if (!candidateSafety.ok) {
         state.okTicks = 0;
         reason = 'ts-candidate-invalid';
+      } else if (plantGate.required && plantGate.ok !== true) {
+        state.okTicks = 0;
+        reason = 'ts-real-plant-evaluation-not-stable';
       } else {
         state.okTicks = Math.min(warmupTicks, (Number(state.okTicks) || 0) + 1);
         if (state.okTicks >= warmupTicks) {
@@ -21150,6 +21276,9 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       shadowOk,
       candidateOk: !!candidateSafety.ok,
       candidateSafety,
+      plantEvaluationRequired: !!plantGate.required,
+      plantEvaluationOk: plantGate.required ? plantGate.ok === true : true,
+      plantEvaluation: plantGate,
       reason,
     };
   }
@@ -21185,7 +21314,7 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       return Number.isFinite(Number(fallback)) ? Math.round(Number(fallback)) : 0;
     };
     switchState.publishedSource = switchState.useTs ? 'ts-candidate' : 'js-runtime';
-    return {
+    const effective = {
       switchState,
       candidate: this._nwBuildEnergyFlowTsCandidateAudit(runtimeValues, tsValues, switchState, tsShadow),
       gridBuyW: valueOf('gridBuyW'),
@@ -21193,6 +21322,142 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       storageChargeW: valueOf('storageChargeW'),
       storageDischargeW: valueOf('storageDischargeW'),
       buildingLoadW: valueOf('buildingLoadW', 'loadTotalW'),
+    };
+    effective.activeTest = this._nwRecordEnergyFlowTsActiveTestSample(effective, runtimeValues, tsValues);
+    return effective;
+  }
+
+  /**
+   * Code-Teil: _nwRecordEnergyFlowTsActiveTestSample
+   *
+   * Zweck:
+   * Protokolliert echte Energiefluss-Ticks während des kontrollierten TS-Aktivtests.
+   * Dadurch sehen wir, ob der Adapter tatsächlich TS-Werte veröffentlicht oder wegen
+   * Sicherheitsgate/Warmup/Anlagen-Auswertung weiter auf JavaScript zurückfällt.
+   *
+   * Zusammenhang:
+   * Dieser Status wird im Energiefluss-Debug-JSON und in der App-Center-Diagnose
+   * angezeigt. Die Funktion entscheidet nicht selbst über die Umschaltung; sie beobachtet
+   * nur die Entscheidung aus `_nwEvaluateEnergyFlowTsSwitch`.
+   *
+   * Wichtig:
+   * Die Liste liegt nur im RAM. Sie schreibt keine History und verändert keine EMS-Werte.
+   * Damit bleibt der Aktivtest jederzeit rückfallfähig und ohne Altlasten nach Neustart.
+   */
+  _nwRecordEnergyFlowTsActiveTestSample(effective = {}, runtimeValues = {}, tsValues = {}) {
+    const now = Date.now();
+    const sw = (effective && effective.switchState && typeof effective.switchState === 'object') ? effective.switchState : {};
+    const candidate = (effective && effective.candidate && typeof effective.candidate === 'object') ? effective.candidate : {};
+    const blockers = [];
+    if (Array.isArray(candidate.blockers)) blockers.push(...candidate.blockers.map((x) => String(x)));
+    if (Array.isArray(sw.blockedReasons)) blockers.push(...sw.blockedReasons.map((x) => String(x)));
+    if (sw.plantEvaluation && Array.isArray(sw.plantEvaluation.blockers)) blockers.push(...sw.plantEvaluation.blockers.map((x) => String(x)));
+    const uniqueBlockers = Array.from(new Set(blockers.filter(Boolean))).slice(0, 12);
+    const sample = {
+      ts: now,
+      iso: new Date(now).toISOString(),
+      requestedMode: String(sw.requestedMode || ''),
+      effectiveMode: String(sw.effectiveMode || ''),
+      publishedSource: String(sw.publishedSource || (sw.useTs ? 'ts-candidate' : 'js-runtime')),
+      useTs: sw.useTs === true,
+      reason: String(sw.reason || ''),
+      productionAllowed: sw.productionAllowed === true,
+      shadowAvailable: sw.shadowAvailable === true,
+      shadowOk: sw.shadowOk === true,
+      candidateOk: sw.candidateOk === true,
+      plantEvaluationRequired: sw.plantEvaluationRequired === true,
+      plantEvaluationOk: sw.plantEvaluationOk === true,
+      okTicks: Number(sw.okTicks) || 0,
+      warmupTicks: Number(sw.warmupTicks) || 0,
+      gridBuyW: Math.round(Number(effective.gridBuyW) || 0),
+      gridSellW: Math.round(Number(effective.gridSellW) || 0),
+      storageChargeW: Math.round(Number(effective.storageChargeW) || 0),
+      storageDischargeW: Math.round(Number(effective.storageDischargeW) || 0),
+      buildingLoadW: Math.round(Number(effective.buildingLoadW) || 0),
+      runtime: {
+        gridBuyW: Math.round(Number(runtimeValues.gridBuyW) || 0),
+        gridSellW: Math.round(Number(runtimeValues.gridSellW) || 0),
+        storageChargeW: Math.round(Number(runtimeValues.storageChargeW) || 0),
+        storageDischargeW: Math.round(Number(runtimeValues.storageDischargeW) || 0),
+        buildingLoadW: Math.round(Number(runtimeValues.buildingLoadW) || Number(runtimeValues.loadTotalW) || 0),
+      },
+      ts: {
+        gridBuyW: Number.isFinite(Number(tsValues.gridBuyW)) ? Math.round(Number(tsValues.gridBuyW)) : null,
+        gridSellW: Number.isFinite(Number(tsValues.gridSellW)) ? Math.round(Number(tsValues.gridSellW)) : null,
+        storageChargeW: Number.isFinite(Number(tsValues.storageChargeW)) ? Math.round(Number(tsValues.storageChargeW)) : null,
+        storageDischargeW: Number.isFinite(Number(tsValues.storageDischargeW)) ? Math.round(Number(tsValues.storageDischargeW)) : null,
+        buildingLoadW: Number.isFinite(Number(tsValues.buildingLoadW)) ? Math.round(Number(tsValues.buildingLoadW)) : null,
+      },
+      blockers: uniqueBlockers,
+    };
+    if (!Array.isArray(this._energyFlowTsActiveTestSamples)) this._energyFlowTsActiveTestSamples = [];
+    const samples = this._energyFlowTsActiveTestSamples;
+    const signature = JSON.stringify({ src: sample.publishedSource, r: sample.reason, ts: sample.useTs, b: sample.blockers.join('|') });
+    const last = samples.length ? samples[samples.length - 1] : null;
+    if (!last || last.signature !== signature || (now - Number(last.ts || 0)) >= 15000) {
+      samples.push({ ...sample, signature });
+      const cutoff = now - 60 * 60 * 1000;
+      while (samples.length > 240 || (samples.length && Number(samples[0].ts || 0) < cutoff)) samples.shift();
+    }
+    return this._nwSummarizeEnergyFlowTsActiveTestSamples();
+  }
+
+  /**
+   * Code-Teil: _nwSummarizeEnergyFlowTsActiveTestSamples
+   *
+   * Zweck:
+   * Verdichtet die gesammelten Energiefluss-Aktivtest-Samples zu einem lesbaren Status
+   * für das App-Center. Wir wollen sofort sehen, ob TS wirklich aktiv ist oder ob der
+   * Adapter richtigerweise weiter auf JS zurückfällt.
+   */
+  _nwSummarizeEnergyFlowTsActiveTestSamples() {
+    const samples = Array.isArray(this._energyFlowTsActiveTestSamples) ? this._energyFlowTsActiveTestSamples.slice() : [];
+    const latest = samples.length ? samples[samples.length - 1] : null;
+    let consecutiveTs = 0;
+    let consecutiveJs = 0;
+    for (let i = samples.length - 1; i >= 0; i--) {
+      if (samples[i] && samples[i].useTs) consecutiveTs++;
+      else break;
+    }
+    for (let i = samples.length - 1; i >= 0; i--) {
+      if (samples[i] && !samples[i].useTs) consecutiveJs++;
+      else break;
+    }
+    const tsCount = samples.filter((x) => x && x.useTs).length;
+    const jsCount = samples.length - tsCount;
+    const blockerCount = samples.reduce((sum, x) => sum + (Array.isArray(x && x.blockers) ? x.blockers.length : 0), 0);
+    const status = !samples.length
+      ? 'collecting'
+      : (latest && latest.useTs ? 'ts-active' : (latest && latest.requestedMode === 'ts' ? 'fallback-js' : 'shadow-or-js'));
+    const nextAction = status === 'ts-active'
+      ? 'TS ist im kontrollierten Aktivtest wirksam. Werte im LIVE-Dashboard und History-Vorschau gegen JS/Shadow beobachten.'
+      : (status === 'fallback-js'
+        ? 'Modus TS ist gewählt, aber ein Sicherheitsgate blockiert noch. Blocker/Warmup/Anlagen-Auswertung prüfen.'
+        : 'TS ist noch nicht als Produktivquelle angefordert. Shadow weiter beobachten oder Modus TS bewusst aktivieren.');
+    return {
+      version: 1,
+      source: 'energy-flow-ts-active-test-v1',
+      ts: Date.now(),
+      status,
+      sampleCount: samples.length,
+      tsCount,
+      jsCount,
+      tsRatioPct: samples.length ? Math.round((tsCount / samples.length) * 1000) / 10 : 0,
+      consecutiveTs,
+      consecutiveJs,
+      blockerCount,
+      latest,
+      recentSamples: samples.slice(-12).map((x) => ({
+        ts: x.ts,
+        iso: x.iso,
+        requestedMode: x.requestedMode,
+        effectiveMode: x.effectiveMode,
+        publishedSource: x.publishedSource,
+        useTs: x.useTs,
+        reason: x.reason,
+        blockers: x.blockers,
+      })),
+      nextAction,
     };
   }
 
@@ -21237,13 +21502,54 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       shadowAvailable: !!switchState.shadowAvailable,
       shadowOk: !!switchState.shadowOk,
       candidateOk: !!(safety && safety.ok),
-      blockers: safety && Array.isArray(safety.blockers) ? safety.blockers : [],
+      blockers: [].concat(
+        safety && Array.isArray(safety.blockers) ? safety.blockers : [],
+        switchState && switchState.plantEvaluation && Array.isArray(switchState.plantEvaluation.blockers) ? switchState.plantEvaluation.blockers : []
+      ),
       warnings: safety && Array.isArray(safety.warnings) ? safety.warnings : [],
+      plantEvaluationRequired: !!(switchState && switchState.plantEvaluationRequired),
+      plantEvaluationOk: !!(switchState && switchState.plantEvaluationOk),
+      plantEvaluation: switchState && switchState.plantEvaluation ? switchState.plantEvaluation : null,
       okTicks: Number(switchState.okTicks) || 0,
       warmupTicks: Number(switchState.warmupTicks) || 0,
       diffs,
       shadowSource: tsShadow && tsShadow.source ? String(tsShadow.source) : '',
     };
+  }
+
+
+  /**
+   * Code-Teil: _nwEnergyFlowTsLiveTestStateFromSwitch
+   *
+   * Zweck:
+   * Übersetzt die interne TS-Schaltentscheidung in einen kurzen, menschenlesbaren
+   * Status für App-Center und ioBroker-State.
+   *
+   * Zusammenhang:
+   * Der Energiefluss kann im Modus `js`, `shadow` oder `ts` laufen. Diese Funktion
+   * macht sichtbar, ob TS wirklich produktiv veröffentlicht, nur Diagnose ist oder
+   * durch Warmup/Anlagen-Gate/Sicherheitsfreigabe blockiert wird.
+   *
+   * Wichtig:
+   * Diese Funktion ändert keine Werte. Sie ist reine Diagnose für den kontrollierten
+   * Livetest und hilft, bei Problemen sofort wieder auf JS/Shadow zurückzuschalten.
+   */
+  _nwEnergyFlowTsLiveTestStateFromSwitch(switchState = {}) {
+    const requested = String(switchState.requestedMode || switchState.mode || '').toLowerCase();
+    const source = String(switchState.publishedSource || switchState.effectiveMode || '').toLowerCase();
+    const reason = String(switchState.reason || '').toLowerCase();
+    if (source.includes('ts') || switchState.useTs === true) return 'ts-active';
+    if (requested === 'ts') {
+      if (reason.includes('warmup')) return 'ts-warmup';
+      if (reason.includes('plant') || switchState.plantEvaluationOk === false) return 'ts-blocked-plant-gate';
+      if (switchState.candidateOk === false || reason.includes('candidate')) return 'ts-blocked-candidate';
+      if (switchState.shadowOk === false || reason.includes('shadow')) return 'ts-blocked-shadow';
+      if (switchState.productionAllowed !== true || reason.includes('safety')) return 'ts-blocked-safety';
+      return 'ts-blocked';
+    }
+    if (requested === 'shadow') return 'shadow-only';
+    if (requested === 'js') return 'js-only';
+    return 'js-runtime';
   }
 
 
@@ -21364,6 +21670,146 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
   }
 
   /**
+   * Code-Teil: _nwBuildTsShadowPlantSample
+   *
+   * Zweck:
+   * Erstellt aus der aktuellen Shadow-Readiness einen kompakten Messpunkt für die
+   * reale Anlagenbeobachtung. Dadurch sehen wir nicht nur einen Momentzustand,
+   * sondern ob Energiefluss/Core-Limits/Heizstab über mehrere Diagnoseabrufe
+   * stabil zusammenpassen.
+   *
+   * Zusammenhang:
+   * Wird von der App-Center-Diagnose-API genutzt. Produktiv bleibt weiterhin die
+   * bestehende Runtime; dieser Messpunkt ist nur eine Auswertungshilfe für die
+   * TypeScript-Migration.
+   */
+  _nwBuildTsShadowPlantSample(readiness = {}) {
+    const safeBlock = (block) => {
+      const b = (block && typeof block === 'object') ? block : {};
+      return {
+        ready: b.ready === true,
+        status: String(b.status || (b.ready ? 'ready' : 'missing')),
+        mismatchCount: Math.max(0, Math.round(Number(b.mismatchCount) || 0)),
+        source: String(b.source || 'unknown'),
+      };
+    };
+    const blockers = Array.isArray(readiness.blockers) ? readiness.blockers.map((x) => String(x || '')).filter(Boolean) : [];
+    const warnings = Array.isArray(readiness.warnings) ? readiness.warnings.map((x) => String(x || '')).filter(Boolean) : [];
+    const sample = {
+      ts: Date.now(),
+      overallReady: readiness && readiness.overallReady === true,
+      readyForEnergyFlowSwitch: readiness && readiness.readyForEnergyFlowSwitch === true,
+      readyForCoreLimitsSwitch: readiness && readiness.readyForCoreLimitsSwitch === true,
+      readyForHeatingRodSwitch: readiness && readiness.readyForHeatingRodSwitch === true,
+      energyFlowMode: String(readiness.energyFlowMode || ''),
+      energyFlow: safeBlock(readiness.energyFlow),
+      coreLimits: safeBlock(readiness.coreLimits),
+      heatingRod: safeBlock(readiness.heatingRod),
+      blockerCount: blockers.length,
+      warningCount: warnings.length,
+      blockers: blockers.slice(0, 8),
+      warnings: warnings.slice(0, 8),
+    };
+    sample.ok = sample.readyForEnergyFlowSwitch && sample.readyForCoreLimitsSwitch && sample.readyForHeatingRodSwitch && sample.blockerCount === 0;
+    sample.mismatchCount = sample.energyFlow.mismatchCount + sample.coreLimits.mismatchCount + sample.heatingRod.mismatchCount;
+    return sample;
+  }
+
+  /**
+   * Code-Teil: _nwSummarizeTsShadowPlantSamples
+   *
+   * Zweck:
+   * Bewertet die letzten echten Shadow-Samples. Diese Zusammenfassung zeigt dem
+   * Installer, ob die echte Anlage stabil genug wirkt, um später einen nächsten
+   * Umschaltschritt zu planen.
+   *
+   * Wichtig:
+   * Die Grenzwerte sind bewusst konservativ. Ein einzelnes gutes Sample ist nur
+   * ein Hinweis, aber noch keine Freigabe für produktiven TypeScript-Betrieb.
+   */
+  _nwSummarizeTsShadowPlantSamples(samples = []) {
+    const list = Array.isArray(samples) ? samples.filter(Boolean) : [];
+    const last = list[list.length - 1] || null;
+    let consecutiveOk = 0;
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (!list[i] || list[i].ok !== true) break;
+      consecutiveOk++;
+    }
+    const okCount = list.filter((x) => x && x.ok === true).length;
+    const blockerCount = list.reduce((sum, x) => sum + Math.max(0, Number(x && x.blockerCount) || 0), 0);
+    const warningCount = list.reduce((sum, x) => sum + Math.max(0, Number(x && x.warningCount) || 0), 0);
+    const mismatchCount = list.reduce((sum, x) => sum + Math.max(0, Number(x && x.mismatchCount) || 0), 0);
+    const okRatioPct = list.length ? Math.round(okCount / list.length * 1000) / 10 : 0;
+    const enoughSamples = list.length >= 5;
+    const stable = enoughSamples && consecutiveOk >= 5 && blockerCount === 0 && mismatchCount === 0;
+    const status = !list.length ? 'waiting' : (stable ? 'stable' : (last && last.ok ? 'observing' : 'blocked'));
+    const nextAction = !list.length
+      ? 'Diagnose-Status öffnen und einige Minuten reale Samples sammeln.'
+      : (stable
+        ? 'Anlage wirkt im Shadow stabil. Nächsten TS-Umschaltschritt nur kontrolliert und mit Rückfall auf JS planen.'
+        : (last && last.ok
+          ? 'Weitere OK-Samples sammeln; noch nicht produktiv umschalten.'
+          : 'Blocker/Abweichungen auswerten, bevor TypeScript produktiv genutzt wird.'));
+    return {
+      version: 1,
+      source: 'real-plant-shadow-evaluation-v1',
+      ts: Date.now(),
+      sampleCount: list.length,
+      okCount,
+      okRatioPct,
+      consecutiveOk,
+      blockerCount,
+      warningCount,
+      mismatchCount,
+      enoughSamples,
+      stable,
+      status,
+      lastSample: last,
+      recentSamples: list.slice(-10),
+      nextAction,
+    };
+  }
+
+  /**
+   * Code-Teil: _nwUpdateTsShadowPlantEvaluation
+   *
+   * Zweck:
+   * Aktualisiert einen kleinen In-Memory-Rolling-Buffer für die echte Anlagen-
+   * Shadow-Diagnose und liefert die Zusammenfassung an das App-Center zurück.
+   *
+   * Zusammenhang:
+   * Die Daten werden nur im laufenden Adapterprozess gehalten. Nach Neustart wird
+   * neu gesammelt. Dadurch verfälschen wir keine History und schreiben keine
+   * dauerhaften Migrationswerte in ioBroker-States.
+   */
+  _nwUpdateTsShadowPlantEvaluation(_control = {}, readiness = {}) {
+    try {
+      const sample = this._nwBuildTsShadowPlantSample(readiness || {});
+      const current = Array.isArray(this._tsShadowPlantSamples) ? this._tsShadowPlantSamples : [];
+      const next = current.concat(sample).slice(-60);
+      this._tsShadowPlantSamples = next;
+      return this._nwSummarizeTsShadowPlantSamples(next);
+    } catch (e) {
+      return {
+        version: 1,
+        source: 'real-plant-shadow-evaluation-v1',
+        ts: Date.now(),
+        status: 'error',
+        stable: false,
+        sampleCount: 0,
+        okCount: 0,
+        okRatioPct: 0,
+        consecutiveOk: 0,
+        blockerCount: 1,
+        warningCount: 0,
+        mismatchCount: 0,
+        blockers: ['Anlagenauswertung konnte nicht erstellt werden: ' + (e && e.message ? e.message : e)],
+        nextAction: 'Adapterlog prüfen; produktive TS-Umschaltung blockiert.',
+      };
+    }
+  }
+
+  /**
    * Code-Teil: _nwEvaluateEnergyFlowSwitchReadinessFromControl
    *
    * Zweck:
@@ -21419,6 +21865,225 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
           : 'Shadow-Werte sind aktuell sauber. Eine kontrollierte Umschaltung kann in einer späteren Version vorbereitet werden.'),
     };
     return readiness;
+  }
+
+
+  /**
+   * Code-Teil: _nwRecordAndSummarizeTsShadowEvaluation
+   *
+   * Zweck:
+   * Bewertet die Shadow-Diagnose nicht nur als Momentaufnahme, sondern sammelt
+   * eine kurze Laufzeit-Historie der echten Anlage. Dadurch sieht der Installer,
+   * ob Energiefluss, Core-Limits und Heizstab über mehrere Aktualisierungen stabil
+   * bleiben oder ob sporadische Abweichungen auftreten.
+   *
+   * Zusammenhang:
+   * Die Funktion wird ausschließlich in der Diagnose-API genutzt. Sie verändert
+   * keine produktiven EMS-Werte, keine Energieflusswerte und keine Schaltlogik.
+   *
+   * Wichtig:
+   * Die Auswertung ist bewusst flüchtig im RAM. Nach Adapter-Neustart beginnt die
+   * Beobachtung neu. Das verhindert, dass alte Testwerte spätere Freigaben blockieren.
+   */
+  _nwRecordAndSummarizeTsShadowEvaluation(control = {}, readiness = {}) {
+    const now = Date.now();
+    const blockSummary = (block, id) => {
+      const b = (block && typeof block === 'object') ? block : {};
+      return {
+        id,
+        ready: !!b.ready,
+        status: String(b.status || (b.ready ? 'ready' : 'unknown')),
+        mismatchCount: Number.isFinite(Number(b.mismatchCount)) ? Number(b.mismatchCount) : 0,
+        blockers: Array.isArray(b.blockers) ? b.blockers.map((x) => String(x)).slice(0, 6) : [],
+        warnings: Array.isArray(b.warnings) ? b.warnings.map((x) => String(x)).slice(0, 6) : [],
+        source: String(b.source || 'unknown'),
+      };
+    };
+
+    const energy = blockSummary(readiness.energyFlow, 'energyFlow');
+    const core = blockSummary(readiness.coreLimits, 'coreLimits');
+    const heating = blockSummary(readiness.heatingRod, 'heatingRod');
+    const allReady = !!(energy.ready && core.ready && heating.ready);
+    const sample = {
+      ts: now,
+      iso: new Date(now).toISOString(),
+      overallReady: allReady,
+      energyFlow: energy,
+      coreLimits: core,
+      heatingRod: heating,
+      energyFlowMode: String(readiness.energyFlowMode || control.energyFlowTsMode || ''),
+      blockerCount: (energy.blockers.length + core.blockers.length + heating.blockers.length),
+      mismatchCount: (energy.mismatchCount + core.mismatchCount + heating.mismatchCount),
+    };
+
+    if (!Array.isArray(this._tsShadowEvaluationSamples)) this._tsShadowEvaluationSamples = [];
+    const samples = this._tsShadowEvaluationSamples;
+    const last = samples.length ? samples[samples.length - 1] : null;
+    // Nur neue fachliche Zustände oder zeitlich sinnvolle Punkte aufnehmen, damit die Liste
+    // bei schnellem UI-Refresh nicht mit identischen Zeilen geflutet wird.
+    const signature = JSON.stringify({ r: sample.overallReady, e: energy.status, c: core.status, h: heating.status, m: sample.mismatchCount, b: sample.blockerCount });
+    const lastSignature = last ? last.signature : '';
+    if (!last || lastSignature !== signature || (now - Number(last.ts || 0)) >= 30000) {
+      samples.push({ ...sample, signature });
+      const cutoff = now - 30 * 60 * 1000;
+      while (samples.length > 120 || (samples.length && Number(samples[0].ts || 0) < cutoff)) samples.shift();
+    }
+
+    const list = samples.slice();
+    let consecutiveReady = 0;
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i] && list[i].overallReady) consecutiveReady++;
+      else break;
+    }
+    let consecutiveBlocked = 0;
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i] && !list[i].overallReady) consecutiveBlocked++;
+      else break;
+    }
+    const readyCount = list.filter((x) => x && x.overallReady).length;
+    const mismatchCountTotal = list.reduce((sum, x) => sum + Math.max(0, Number(x && x.mismatchCount) || 0), 0);
+    const firstTs = list.length ? Number(list[0].ts || 0) : 0;
+    const lastTs = list.length ? Number(list[list.length - 1].ts || 0) : 0;
+    const windowMinutes = firstTs && lastTs ? Math.max(0, Math.round((lastTs - firstTs) / 60000)) : 0;
+    const lastSample = list.length ? list[list.length - 1] : null;
+    const lastBlockers = lastSample ? []
+      .concat(lastSample.energyFlow.blockers.map((x) => `Energiefluss: ${x}`))
+      .concat(lastSample.coreLimits.blockers.map((x) => `Core-Limits: ${x}`))
+      .concat(lastSample.heatingRod.blockers.map((x) => `Heizstab: ${x}`))
+      : [];
+    const status = !list.length
+      ? 'collecting'
+      : (consecutiveReady >= 3 ? 'stable-ready' : (lastSample && lastSample.overallReady ? 'ready-once' : 'blocked'));
+    const nextAction = status === 'stable-ready'
+      ? 'Shadow-Auswertung ist über mehrere Aktualisierungen stabil. Energiefluss-TS kann als nächster Schritt kontrolliert getestet werden.'
+      : (status === 'ready-once'
+        ? 'Aktuelle Shadow-Auswertung ist sauber. Noch weitere Aktualisierungen sammeln, bevor produktiv umgeschaltet wird.'
+        : 'Blocker/Abweichungen zuerst prüfen. TypeScript darf noch nicht produktiv übernehmen.');
+
+    return {
+      version: 1,
+      source: 'real-plant-shadow-evaluation-v1',
+      ts: now,
+      status,
+      sampleCount: list.length,
+      readyCount,
+      blockedCount: Math.max(0, list.length - readyCount),
+      readyPct: list.length ? Math.round((readyCount / list.length) * 100) : 0,
+      mismatchCountTotal,
+      consecutiveReady,
+      consecutiveBlocked,
+      windowMinutes,
+      firstTs,
+      lastTs,
+      lastBlockers: lastBlockers.slice(0, 12),
+      nextAction,
+      latest: lastSample,
+      samples: list.slice(-12).map((x) => ({
+        ts: x.ts,
+        iso: x.iso,
+        overallReady: x.overallReady,
+        mismatchCount: x.mismatchCount,
+        blockerCount: x.blockerCount,
+        energyFlow: { ready: x.energyFlow.ready, mismatchCount: x.energyFlow.mismatchCount, status: x.energyFlow.status },
+        coreLimits: { ready: x.coreLimits.ready, mismatchCount: x.coreLimits.mismatchCount, status: x.coreLimits.status },
+        heatingRod: { ready: x.heatingRod.ready, mismatchCount: x.heatingRod.mismatchCount, status: x.heatingRod.status },
+      })),
+    };
+  }
+
+  /**
+   * Code-Teil: _nwBuildTsShadowRealPlantEvaluation
+   *
+   * Zweck:
+   * Verdichtet die Shadow-Diagnose aus einer echten Kundenanlage zu einer
+   * verständlichen Handlungsempfehlung. Diese Auswertung beantwortet nicht nur,
+   * ob irgendwo ein JSON-Block „OK“ meldet, sondern ob wir mit dem nächsten
+   * TypeScript-Schritt sicher weitergehen dürfen.
+   *
+   * Zusammenhang:
+   * - `tsShadowReadiness` bewertet Energiefluss, Core-Limits und Heizstab einzeln.
+   * - Das App-Center zeigt diese Auswertung zusätzlich als lesbare Karte.
+   * - Die produktive Runtime bleibt unverändert; dieser Code entscheidet nichts
+   *   für EMS, Speicher, Heizstab oder History.
+   *
+   * Wichtig:
+   * „Energiefluss bereit“ bedeutet nur, dass der Energiefluss weiter Richtung
+   * TS-Kandidatenmodus getestet werden darf. Core-Limits und Heizstab dürfen
+   * trotzdem noch weiter im Shadow bleiben, wenn deren Snapshots fehlen.
+   */
+  _nwBuildTsShadowRealPlantEvaluation(control = {}) {
+    const readiness = (control && control.tsShadowReadiness && typeof control.tsShadowReadiness === 'object')
+      ? control.tsShadowReadiness
+      : this._nwEvaluateEnergyFlowSwitchReadinessFromControl(control || {});
+
+    const section = (id, label, ready, detail) => {
+      const status = ready ? 'ready' : (detail && detail.status ? String(detail.status) : 'blocked');
+      const blockerCount = detail && Array.isArray(detail.blockers) ? detail.blockers.length : 0;
+      const warningCount = detail && Array.isArray(detail.warnings) ? detail.warnings.length : 0;
+      return {
+        id,
+        label,
+        ready: !!ready,
+        status,
+        summary: ready ? 'bereit' : (status === 'no-data' ? 'wartet auf Snapshot' : 'nicht bereit'),
+        source: detail && detail.source ? String(detail.source) : '',
+        mismatchCount: detail && Number.isFinite(Number(detail.mismatchCount)) ? Number(detail.mismatchCount) : 0,
+        blockerCount,
+        warningCount,
+      };
+    };
+
+    const sections = [
+      section('energyFlow', 'Energiefluss', readiness.readyForEnergyFlowSwitch, readiness.energyFlow),
+      section('coreLimits', 'Core-Limits', readiness.readyForCoreLimitsSwitch, readiness.coreLimits),
+      section('heatingRod', 'Heizstab', readiness.readyForHeatingRodSwitch, readiness.heatingRod),
+    ];
+
+    const blockers = Array.isArray(readiness.blockers) ? readiness.blockers.slice() : [];
+    const warnings = Array.isArray(readiness.warnings) ? readiness.warnings.slice() : [];
+    const energyReady = !!readiness.readyForEnergyFlowSwitch;
+    const allReady = sections.every((x) => x.ready);
+    const waiting = sections.filter((x) => !x.ready && x.status === 'no-data').map((x) => x.label);
+
+    let overallStatus = 'blocked';
+    let severity = 'warn';
+    let summary = 'Energiefluss-TS ist auf dieser Anlage noch nicht freigabefähig.';
+    let nextAction = 'Blocker in der Shadow-Diagnose prüfen. Produktiv bleibt JavaScript.';
+
+    if (allReady) {
+      overallStatus = 'ready-all';
+      severity = 'ok';
+      summary = 'Alle Shadow-Bereiche sind aktuell bereit.';
+      nextAction = 'Energiefluss kann im nächsten Schritt kontrolliert im TS-Kandidatenmodus weiter getestet werden. Core-Limits und Heizstab bleiben bis zur eigenen Freigabe beobachtet.';
+    } else if (energyReady) {
+      overallStatus = 'energy-ready-partial';
+      severity = 'info';
+      summary = 'Energiefluss ist bereit; Core-Limits oder Heizstab brauchen noch Beobachtung.';
+      nextAction = 'Energiefluss kann weiter Richtung TS-Kandidat geprüft werden. Core-Limits/Heizstab erst umstellen, wenn deren Shadow-Snapshots stabil OK sind.';
+      if (waiting.length) warnings.push('Noch wartende Shadow-Snapshots: ' + waiting.join(', '));
+    } else if (waiting.length && blockers.length === 0) {
+      overallStatus = 'waiting';
+      severity = 'info';
+      summary = 'Die Anlage liefert noch nicht alle Shadow-Snapshots.';
+      nextAction = 'Adapter einige Minuten laufen lassen oder betroffene Module einmal aktivieren, dann Diagnose erneut prüfen.';
+    }
+
+    return {
+      version: 1,
+      source: 'real-plant-shadow-evaluation-v1',
+      ts: Date.now(),
+      overallStatus,
+      severity,
+      summary,
+      nextAction,
+      energyFlowMayContinue: energyReady,
+      allAreasReady: allReady,
+      sections,
+      blockers,
+      warnings,
+      recommendedNextVersion: energyReady ? '0.7.85 Energiefluss-Kandidat weiter testen' : 'Shadow-Diagnose weiter stabilisieren',
+      runtimeAuthority: 'JavaScript bleibt produktiv; diese Auswertung ist nur Diagnose.',
+    };
   }
 
   /**
@@ -21600,6 +22265,67 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
       type: 'state',
       common: {
         name: 'Inputs (berechnet) – Debug JSON',
+        type: 'string',
+        role: 'json',
+        read: true,
+        write: false,
+      },
+      native: {},
+    });
+
+    /**
+     * Code-Teil: Energiefluss-TS-Livetest-States anlegen
+     *
+     * Zweck:
+     * Stellt die effektive Quelle des Energieflusses als eigene ioBroker-States bereit.
+     * Dadurch muss der Installer beim kontrollierten TS-Test nicht nur das große
+     * Debug-JSON öffnen, sondern sieht sofort, ob JS oder TS gerade veröffentlicht.
+     *
+     * Zusammenhang:
+     * Diese States werden von updateDerivedFlowStates() beschrieben und im App-Center
+     * angezeigt. Sie verändern keine Energieflusswerte, sondern dokumentieren nur die
+     * Schaltentscheidung des TS-Kandidatenmodus.
+     */
+    await this.setObjectNotExistsAsync('derived.core.building.energyFlowSource', {
+      type: 'state',
+      common: {
+        name: 'Energiefluss Quelle (JS/TS)',
+        type: 'string',
+        role: 'text',
+        read: true,
+        write: false,
+      },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync('derived.core.building.tsLiveTestState', {
+      type: 'state',
+      common: {
+        name: 'Energiefluss TS-Livetest Status',
+        type: 'string',
+        role: 'text',
+        read: true,
+        write: false,
+      },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync('derived.core.building.tsSwitchJson', {
+      type: 'state',
+      common: {
+        name: 'Energiefluss TS-Schaltentscheidung JSON',
+        type: 'string',
+        role: 'json',
+        read: true,
+        write: false,
+      },
+      native: {},
+    });
+
+    await this.setObjectNotExistsAsync('derived.core.building.tsCandidateJson', {
+      type: 'state',
+      common: {
+        name: 'Energiefluss TS-Kandidat JSON',
         type: 'string',
         role: 'json',
         read: true,
@@ -23088,6 +23814,36 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
     const publishLoadTotalRound = Math.round(Number(effectiveEnergyFlow.buildingLoadW) || 0);
     const publishLoadRestRound = Math.max(0, Math.round(publishLoadTotalRound - evW - consumersW));
 
+    /**
+     * Code-Teil: Energiefluss-TS-Liveteststatus veröffentlichen
+     *
+     * Zweck:
+     * Schreibt die effektive Energieflussquelle und die TS-Schaltentscheidung in eigene
+     * Diagnose-States. So sieht man beim echten Anlagentest sofort, ob die veröffentlichten
+     * Werte noch aus JS oder bereits aus dem TS-Kandidaten kommen.
+     *
+     * Zusammenhang:
+     * Der App-Center-Status liest diese States über die Diagnose-API. Die eigentlichen
+     * Energieflusswerte werden oben weiterhin nur über `effectiveEnergyFlow` bestimmt;
+     * dieser Block veröffentlicht ausschließlich Diagnoseinformationen.
+     */
+    const energyFlowSourceState = effectiveEnergyFlow.switchState && effectiveEnergyFlow.switchState.publishedSource
+      ? String(effectiveEnergyFlow.switchState.publishedSource)
+      : 'js-runtime';
+    const energyFlowLiveTestState = this._nwEnergyFlowTsLiveTestStateFromSwitch(effectiveEnergyFlow.switchState || {});
+    const tsSwitchJsonText = JSON.stringify(effectiveEnergyFlow.switchState || {});
+    const tsCandidateJsonText = JSON.stringify(effectiveEnergyFlow.candidate || {});
+    try {
+      if (this._derivedFlow?.last?.energyFlowSource !== energyFlowSourceState) {
+        this._derivedFlow.last.energyFlowSource = energyFlowSourceState;
+        await this.setStateAsync('derived.core.building.energyFlowSource', { val: energyFlowSourceState, ack: true });
+      }
+      if (this._derivedFlow?.last?.tsLiveTestState !== energyFlowLiveTestState) {
+        this._derivedFlow.last.tsLiveTestState = energyFlowLiveTestState;
+        await this.setStateAsync('derived.core.building.tsLiveTestState', { val: energyFlowLiveTestState, ack: true });
+      }
+    } catch (_eTsLiveState) {}
+
     // Update last-plausible cache only when the raw balance is plausible
     // (avoid locking-in 0W during active operation).
     try {
@@ -23183,10 +23939,13 @@ Technische Details: system.adapter.${c.inst}.alive=false`,
           tsShadow,
           tsSwitch: effectiveEnergyFlow.switchState,
           tsCandidate: effectiveEnergyFlow.candidate,
+          tsActiveTest: effectiveEnergyFlow.activeTest,
           energyFlowSource: effectiveEnergyFlow.switchState && effectiveEnergyFlow.switchState.publishedSource ? effectiveEnergyFlow.switchState.publishedSource : 'js-runtime',
         };
         const json = JSON.stringify(payload);
         await this.setStateAsync('derived.core.building.inputsJson', { val: json, ack: true });
+        await this.setStateAsync('derived.core.building.tsSwitchJson', { val: tsSwitchJsonText, ack: true });
+        await this.setStateAsync('derived.core.building.tsCandidateJson', { val: tsCandidateJsonText, ack: true });
       }
     } catch (_e) {}
 

@@ -259,6 +259,9 @@
     energyFlowTsProductionAllowed: document.getElementById('energyFlowTsProductionAllowed'),
     energyFlowTsWarmupTicks: document.getElementById('energyFlowTsWarmupTicks'),
     energyFlowTsAutoFallback: document.getElementById('energyFlowTsAutoFallback'),
+    energyFlowTsRequireStablePlant: document.getElementById('energyFlowTsRequireStablePlant'),
+    energyFlowTsPlantMinSamples: document.getElementById('energyFlowTsPlantMinSamples'),
+    energyFlowTsPlantMinOk: document.getElementById('energyFlowTsPlantMinOk'),
     energyFlowTsModeStatus: document.getElementById('energyFlowTsModeStatus'),
 
     // Modal
@@ -11002,6 +11005,9 @@ function collectAiAdvisorConfigFromUI(base) {
     if (els.energyFlowTsProductionAllowed) els.energyFlowTsProductionAllowed.checked = tm.energyFlowProductionAllowed === true;
     if (els.energyFlowTsWarmupTicks) els.energyFlowTsWarmupTicks.value = String(Math.max(1, Math.min(30, Math.round(Number(tm.energyFlowCandidateWarmupTicks) || 3))));
     if (els.energyFlowTsAutoFallback) els.energyFlowTsAutoFallback.checked = tm.energyFlowCandidateAutoFallback !== false;
+    if (els.energyFlowTsRequireStablePlant) els.energyFlowTsRequireStablePlant.checked = tm.energyFlowRequireStablePlantEvaluation !== false;
+    if (els.energyFlowTsPlantMinSamples) els.energyFlowTsPlantMinSamples.value = String(Math.max(1, Math.min(120, Math.round(Number(tm.energyFlowPlantMinSamples) || 5))));
+    if (els.energyFlowTsPlantMinOk) els.energyFlowTsPlantMinOk.value = String(Math.max(1, Math.min(120, Math.round(Number(tm.energyFlowPlantMinConsecutiveOk) || 5))));
     renderEnergyFlowTsModeStatus(null);
   }
 
@@ -11022,6 +11028,11 @@ function collectAiAdvisorConfigFromUI(base) {
     const warmup = Math.round(Number(els.energyFlowTsWarmupTicks ? els.energyFlowTsWarmupTicks.value : out.energyFlowCandidateWarmupTicks));
     out.energyFlowCandidateWarmupTicks = Number.isFinite(warmup) ? Math.max(1, Math.min(30, warmup)) : 3;
     out.energyFlowCandidateAutoFallback = !(els.energyFlowTsAutoFallback && els.energyFlowTsAutoFallback.checked === false);
+    out.energyFlowRequireStablePlantEvaluation = !(els.energyFlowTsRequireStablePlant && els.energyFlowTsRequireStablePlant.checked === false);
+    const plantSamples = Math.round(Number(els.energyFlowTsPlantMinSamples ? els.energyFlowTsPlantMinSamples.value : out.energyFlowPlantMinSamples));
+    out.energyFlowPlantMinSamples = Number.isFinite(plantSamples) ? Math.max(1, Math.min(120, plantSamples)) : 5;
+    const plantOk = Math.round(Number(els.energyFlowTsPlantMinOk ? els.energyFlowTsPlantMinOk.value : out.energyFlowPlantMinConsecutiveOk));
+    out.energyFlowPlantMinConsecutiveOk = Number.isFinite(plantOk) ? Math.max(1, Math.min(120, plantOk)) : 5;
     return out;
   }
 
@@ -11044,6 +11055,8 @@ function collectAiAdvisorConfigFromUI(base) {
     const effectiveSource = plan && plan.source ? String(plan.source) : 'noch keine Diagnose';
     const wouldUseTs = plan && typeof plan.wouldUseTs === 'boolean' ? (plan.wouldUseTs ? 'ja' : 'nein') : '--';
     const switchState = readiness && readiness.energyFlowSwitchState ? readiness.energyFlowSwitchState : (plan && plan.switchState ? plan.switchState : null);
+    const runtimeSource = readiness && readiness.energyFlowRuntimeSource ? String(readiness.energyFlowRuntimeSource) : '';
+    const liveTestState = readiness && readiness.energyFlowTsLiveTestState ? String(readiness.energyFlowTsLiveTestState) : '';
     const warmupStatus = switchState && Number.isFinite(Number(switchState.okTicks))
       ? `${Number(switchState.okTicks)}/${Number(switchState.warmupTicks || warmupWanted)}`
       : `0/${warmupWanted}`;
@@ -11053,14 +11066,76 @@ function collectAiAdvisorConfigFromUI(base) {
     const candidateLine = safety
       ? `<b>Kandidatenprüfung:</b> ${safety.ok ? 'OK' : 'blockiert'}${Array.isArray(safety.warnings) && safety.warnings.length ? ' · Hinweis: ' + _shadowEscape(safety.warnings.join(' · ')) : ''}`
       : `<b>Kandidatenprüfung:</b> Warmup ${_shadowEscape(warmupStatus)} · ${_shadowEscape(candidateStable)}`;
+    const plant = (plan && plan.plantEvaluation) || (switchState && switchState.plantEvaluation) || null;
+    const plantLine = plant
+      ? `<b>Anlagen-Auswertung:</b> ${plant.ok ? 'stabil' : 'blockiert'} · Samples ${Number(plant.sampleCount || 0)}/${Number(plant.minSamples || 5)} · OK-Folge ${Number(plant.consecutiveOk || 0)}/${Number(plant.minConsecutiveOk || 5)}`
+      : `<b>Anlagen-Auswertung:</b> noch keine Daten`;
     els.energyFlowTsModeStatus.innerHTML = [
       `<b>Gewählt:</b> ${escape(_decodeShadowDisplayText(selectedMode))} · <b>Freigabe:</b> ${productionAllowed ? 'aktiv' : 'aus'} · <b>Auto-Fallback:</b> ${autoFallback ? 'aktiv' : 'aus'}`,
       `<b>Warmup:</b> ${escape(_decodeShadowDisplayText(warmupStatus))} · <b>Effektive Quelle:</b> ${escape(_decodeShadowDisplayText(effectiveSource))} · <b>TS würde genutzt:</b> ${escape(_decodeShadowDisplayText(wouldUseTs))}`,
+      `<b>Live-Test:</b> ${escape(_decodeShadowDisplayText(liveTestState || 'noch keine Daten'))} · <b>Veröffentlichte Quelle:</b> ${escape(_decodeShadowDisplayText(runtimeSource || 'noch keine Daten'))}`,
       candidateLine,
+      plantLine,
       blocked ? `<b>Blockiert durch:</b> ${_shadowEscape(blocked)}` : '<b>Status:</b> Noch keine Blocker oder noch keine Shadow-Diagnose geladen.',
     ].join('<br/>');
   }
 
+
+  /**
+   * Code-Teil: _renderShadowPlantEvaluationCard
+   *
+   * Zweck:
+   * Zeigt die Auswertung echter Anlagen-Samples im App-Center. Ein einzelner
+   * Shadow-Snapshot kann zufällig OK sein; diese Karte zeigt deshalb Anzahl der
+   * Samples, OK-Quote und aufeinanderfolgende OK-Ticks.
+   *
+   * Zusammenhang:
+   * Die Daten kommen aus `control.tsShadowPlantEvaluation` der Diagnose-API. Die
+   * Anzeige ist reine Migrationshilfe und schreibt keine Konfiguration.
+   */
+  function _renderShadowPlantEvaluationCard(evaluation) {
+    if (!evaluation || typeof evaluation !== 'object') return null;
+    const escape = _shadowEscape;
+    const status = String(evaluation.status || 'waiting');
+    const kind = status === 'stable' ? 'ok' : (status === 'blocked' || status === 'error' ? 'warn' : 'wait');
+    const label = status === 'stable' ? 'STABIL' : (status === 'blocked' ? 'BLOCKIERT' : (status === 'error' ? 'FEHLER' : 'SAMMELT'));
+    const lines = [
+      ['Samples', String(evaluation.sampleCount || 0)],
+      ['OK-Quote', `${Number(evaluation.okRatioPct || 0).toFixed(1)} %`],
+      ['OK in Folge', String(evaluation.consecutiveOk || 0)],
+      ['Blocker gesamt', String(evaluation.blockerCount || 0)],
+      ['Abweichungen gesamt', String(evaluation.mismatchCount || 0)],
+      ['Genügend Samples', evaluation.enoughSamples ? 'JA' : 'NEIN'],
+    ];
+    const recent = Array.isArray(evaluation.recentSamples) ? evaluation.recentSamples.slice(-5) : [];
+    const recentText = recent.map((s) => {
+      const d = s && s.ts ? new Date(Number(s.ts)) : null;
+      const t = d && !Number.isNaN(d.getTime()) ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}` : '—';
+      return `${t} · ${s && s.ok ? 'OK' : 'Blockiert'} · Mismatches ${s && s.mismatchCount !== undefined ? s.mismatchCount : 0}`;
+    }).join('\n');
+    const card = document.createElement('div');
+    card.className = 'nw-config-card nw-shadow-readiness-card nw-shadow-plant-evaluation-card';
+    card.innerHTML = `
+      <div class="nw-config-card__header">
+        <div class="nw-config-card__header-top">
+          <div class="nw-config-card__title">Reale Anlagen-Auswertung</div>
+          <div class="nw-shadow-badge nw-shadow-badge--${kind}">${label}</div>
+        </div>
+        <div class="nw-config-card__subtitle">Rolling-Auswertung der letzten Shadow-Samples dieser echten Anlage</div>
+      </div>
+      <div class="nw-config-card__body">
+        <div class="nw-shadow-readiness-grid">
+          ${lines.map(([a,b]) => `<div class="nw-config-row nw-shadow-diff-row"><div class="nw-config-row__primary">${escape(a)}</div><div class="nw-config-row__status">${escape(b)}</div></div>`).join('')}
+        </div>
+        <div class="nw-config-help" style="margin-top:8px;opacity:.82;line-height:1.35;">${escape(evaluation.nextAction || 'Samples weiter beobachten.')}</div>
+        ${recentText ? `<details class="nw-shadow-json-details"><summary>Letzte Samples anzeigen</summary><pre>${escape(recentText)}</pre></details>` : ''}
+        <button type="button" class="nw-config-btn nw-config-btn--ghost nw-shadow-json-button" data-shadow-plant-json>JSON dauerhaft öffnen</button>
+      </div>
+    `;
+    const btn = card.querySelector('[data-shadow-plant-json]');
+    if (btn) btn.addEventListener('click', () => _openShadowJsonDialog('Reale Anlagen-Auswertung', evaluation));
+    return card;
+  }
 
   /**
    * Code-Teil: _renderShadowReadinessCard
@@ -11075,6 +11150,66 @@ function collectAiAdvisorConfigFromUI(base) {
    * Shadow-JSONs gebildet wird. Diese Anzeige ist nur Diagnose und schaltet keine
    * Runtime von JS auf TS um.
    */
+  /**
+   * Code-Teil: _renderEnergyFlowTsActiveTestCard
+   *
+   * Zweck:
+   * Zeigt den kontrollierten Energiefluss-TS-Aktivtest im App-Center an. Der Installer
+   * sieht dadurch, ob TS wirklich produktiv genutzt wurde oder ob die Sicherheitsgates
+   * korrekt auf JS zurückgefallen sind.
+   *
+   * Zusammenhang:
+   * Die Daten kommen aus `control.energyFlowTsActiveTest` der Diagnose-API. Diese Karte
+   * ist nur Beobachtung und schaltet selbst nichts um.
+   */
+  function _renderEnergyFlowTsActiveTestCard(activeTest) {
+    if (!activeTest || typeof activeTest !== 'object') return null;
+    const escape = _shadowEscape;
+    const status = String(activeTest.status || 'collecting');
+    const kind = status === 'ts-active' ? 'ok' : (status === 'fallback-js' ? 'warn' : 'wait');
+    const label = status === 'ts-active' ? 'TS AKTIV' : (status === 'fallback-js' ? 'JS FALLBACK' : 'SAMMELT');
+    const latest = activeTest.latest && typeof activeTest.latest === 'object' ? activeTest.latest : null;
+    const lines = [
+      ['Samples', String(activeTest.sampleCount || 0)],
+      ['TS genutzt', `${Number(activeTest.tsCount || 0)}× (${Number(activeTest.tsRatioPct || 0).toFixed(1)} %)`],
+      ['JS/Fallback', String(activeTest.jsCount || 0)],
+      ['TS in Folge', String(activeTest.consecutiveTs || 0)],
+      ['JS in Folge', String(activeTest.consecutiveJs || 0)],
+      ['Letzte Quelle', latest ? String(latest.publishedSource || '--') : '--'],
+      ['Letzter Grund', latest ? _decodeShadowDisplayText(String(latest.reason || '--')) : '--'],
+    ];
+    const recent = Array.isArray(activeTest.recentSamples) ? activeTest.recentSamples.slice(-6) : [];
+    const recentText = recent.map((s) => {
+      const d = s && s.ts ? new Date(Number(s.ts)) : null;
+      const t = d && !Number.isNaN(d.getTime()) ? `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}` : '—';
+      return `${t} · ${s && s.useTs ? 'TS' : 'JS'} · ${_decodeShadowDisplayText(String(s && s.reason || ''))}`;
+    }).join('\n');
+    const blockers = latest && Array.isArray(latest.blockers) ? latest.blockers.map(_decodeShadowDisplayText) : [];
+    const card = document.createElement('div');
+    card.className = 'nw-config-card nw-shadow-diagnostic-card nw-shadow-active-test-card';
+    card.innerHTML = `
+      <div class="nw-config-card__header">
+        <div class="nw-config-card__header-top">
+          <div class="nw-config-card__title">Energiefluss TS‑Aktivtest</div>
+          <div class="nw-shadow-badge nw-shadow-badge--${kind}">${label}</div>
+        </div>
+        <div class="nw-config-card__subtitle">Beobachtung, ob der TS‑Kandidatenmodus wirklich als Quelle genutzt wurde</div>
+      </div>
+      <div class="nw-config-card__body">
+        <div class="nw-shadow-readiness-grid">
+          ${lines.map(([a,b]) => `<div class="nw-config-row nw-shadow-diff-row"><div class="nw-config-row__primary">${escape(a)}</div><div class="nw-config-row__status">${escape(b)}</div></div>`).join('')}
+        </div>
+        ${blockers.length ? `<details class="nw-shadow-json-details" open><summary>Letzte Blocker</summary><pre>${escape(blockers.join('\n'))}</pre></details>` : ''}
+        ${recentText ? `<details class="nw-shadow-json-details"><summary>Letzte Aktivtest-Samples</summary><pre>${escape(recentText)}</pre></details>` : ''}
+        <div class="nw-config-help" style="margin-top:8px;opacity:.82;line-height:1.35;">${escape(activeTest.nextAction || 'Aktivtest weiter beobachten.')}</div>
+        <button type="button" class="nw-config-btn nw-config-btn--ghost nw-shadow-json-button" data-shadow-active-test-json>JSON dauerhaft öffnen</button>
+      </div>
+    `;
+    const btn = card.querySelector('[data-shadow-active-test-json]');
+    if (btn) btn.addEventListener('click', () => _openShadowJsonDialog('Energiefluss TS‑Aktivtest', activeTest));
+    return card;
+  }
+
   function _renderShadowReadinessCard(readiness) {
     if (!readiness || typeof readiness !== 'object') return null;
     const escape = _shadowEscape;
@@ -11160,8 +11295,29 @@ function collectAiAdvisorConfigFromUI(base) {
     const flowInputs = _parseShadowJson(ctrl.energyFlowInputsJson, null);
     const flowShadow = flowInputs && flowInputs.tsShadow ? flowInputs.tsShadow : null;
 
-    const readinessCard = _renderShadowReadinessCard(ctrl.tsShadowReadiness);
+    /**
+     * Code-Teil: Energiefluss-TS-Livetestdaten in die Readiness übernehmen
+     *
+     * Zweck:
+     * Die Runtime schreibt ab 0.7.86 eigene Diagnose-States für Quelle und Liveteststatus.
+     * Diese Werte werden hier in die bereits vorhandene Readiness-Struktur gelegt, damit
+     * die App-Center-Karte ohne Roh-JSON sofort zeigt, ob TS wirklich produktiv genutzt wird.
+     */
+    const readiness = (ctrl.tsShadowReadiness && typeof ctrl.tsShadowReadiness === 'object') ? Object.assign({}, ctrl.tsShadowReadiness) : null;
+    if (readiness) {
+      readiness.energyFlowRuntimeSource = ctrl.energyFlowSource || (flowInputs && flowInputs.energyFlowSource) || '';
+      readiness.energyFlowTsLiveTestState = ctrl.energyFlowTsLiveTestState || '';
+      readiness.energyFlowTsSwitch = _parseShadowJson(ctrl.energyFlowTsSwitchJson, flowInputs && flowInputs.tsSwitch ? flowInputs.tsSwitch : null);
+      readiness.energyFlowTsCandidate = _parseShadowJson(ctrl.energyFlowTsCandidateJson, flowInputs && flowInputs.tsCandidate ? flowInputs.tsCandidate : null);
+      if (readiness.energyFlowTsSwitch && typeof readiness.energyFlowTsSwitch === 'object') readiness.energyFlowSwitchState = readiness.energyFlowTsSwitch;
+    }
+
+    const readinessCard = _renderShadowReadinessCard(readiness);
     if (readinessCard) els.shadowDiagnostics.appendChild(readinessCard);
+    const plantEvaluationCard = _renderShadowPlantEvaluationCard(ctrl.tsShadowPlantEvaluation || ctrl.tsShadowRealPlantEvaluation);
+    if (plantEvaluationCard) els.shadowDiagnostics.appendChild(plantEvaluationCard);
+    const activeTestCard = _renderEnergyFlowTsActiveTestCard(ctrl.energyFlowTsActiveTest);
+    if (activeTestCard) els.shadowDiagnostics.appendChild(activeTestCard);
     try { renderEnergyFlowTsModeStatus(ctrl.tsShadowReadiness); } catch (_e) {}
 
     const hint = document.createElement('div');
