@@ -1,3 +1,48 @@
+# 0.7.91 - KI-Berater Runtime-Spiegel gezielt typisiert
+
+- Dritte große Runtime-Spiegeldatei gezielt typisiert: `src-ts/runtime-mirrors/ems/modules/ai-advisor.ts`.
+- Erste TypeScript-Verträge für Adapterzugriff, Datenpunkt-Registry, StateCache, KI-Konfiguration, Kategorien, Vorschläge, Tagesplan, Lernzustand, Snapshot und Speicher-SoC ergänzt.
+- `AiAdvisorModule` mit ersten expliziten Feldern und typisiertem Konstruktor vorbereitet.
+- `_readStorageSocPct`, `_cfg`, `_updateLearning`, `_buildSuggestions`, `_score`, `_publishDisabled` und `_publish` weiter auf spätere TypeScript-Übernahme vorbereitet.
+- Neuer Check `npm run test:ai-advisor-runtime-typing` kompiliert eine temporäre KI-Berater-Kopie ohne `@ts-nocheck` im gelockerten Migrationsmodus.
+- `sync:ts-runtime-mirrors` schützt den gezielt typisierten KI-Berater-Spiegel vor versehentlichem Überschreiben.
+- Keine produktive KI-/EMS-/Frontend-Logik geändert.
+- Service-Worker Cache auf `nexowatt-cache-v259` erhöht.
+
+# 0.7.90 - Heizstab Runtime-Spiegel gezielt typisiert
+
+- Zweite große Runtime-Spiegeldatei gezielt typisiert: `src-ts/runtime-mirrors/ems/modules/heating-rod-control.ts`.
+- Erste echte TypeScript-Verträge für Adapterzugriff, Datenpunkt-Registry, Heizstab-Geräte, Stufensteuerung und Budget-Schutz ergänzt.
+- `@ts-nocheck` bleibt im normalen Spiegel erhalten; neuer Check kompiliert eine temporäre Kopie ohne `@ts-nocheck` im gelockerten Migrationsmodus.
+- Runtime-Spiegel-Sync schützt jetzt auch den gezielt typisierten Heizstab-Spiegel vor versehentlichem Überschreiben.
+- TS-Shadow-Sammlung im produktiven Heizstab-JS lokal initialisiert, damit die Diagnose nicht durch eine fehlende Variable stolpert.
+- Service-Worker Cache auf `nexowatt-cache-v258` erhöht.
+
+# 0.7.89 - Core-Limits Runtime-Spiegel gezielt typisiert
+
+- Erster großer gezielter Typisierungsschritt an `src-ts/runtime-mirrors/ems/modules/core-limits.ts`.
+- Adapter-, State-, Consumer- und Budget-Snapshot-Verträge direkt in der Core-Limits-Spiegeldatei ergänzt.
+- `CoreLimitsModule` mit ersten expliziten TypeScript-Feldern vorbereitet.
+- Neuer Check `npm run test:core-limits-runtime-typing` kompiliert eine temporäre Core-Limits-Kopie ohne `@ts-nocheck` im gelockerten Migrationsmodus.
+- Keine produktive Runtime-Logik geändert.
+- Service-Worker Cache auf `nexowatt-cache-v257` erhöht.
+
+## 0.7.88 - Runtime-JS als parallele TypeScript-Spiegel
+
+- Großer Migrationsschritt gestartet: wichtige JavaScript-Runtime-Dateien werden parallel unter `src-ts/runtime-mirrors/` als TypeScript-Spiegel abgelegt.
+- Die Spiegel enthalten deutsche Datei- und Code-Teil-Kommentare und dienen als Grundlage für die spätere echte Typisierung.
+- Neue Prüfungen: `sync:ts-runtime-mirrors`, `check:ts-runtime-mirrors`, `test:runtime-mirrors`, `typecheck:runtime-mirrors`.
+- Keine produktive Runtime-Logik geändert; Energiefluss, Speicher, Heizstab, KI, History, SmartHome, Lizenz und `info.connection` bleiben unverändert.
+- Service-Worker Cache auf `nexowatt-cache-v256` erhöht.
+
+# 0.7.87 - TypeScript-Struktur bereinigt und kanonisiert
+
+- `src-ts/` bereinigt: versehentliches JavaScript-Artefakt unter `src-ts/scripts/` entfernt.
+- Doppelte Feature-Sichtbarkeitslogik reduziert: `src-ts/backend/visibility` ist jetzt nur noch Kompatibilitätsadapter und leitet auf die kanonische Implementierung unter `src-ts/backend/feature-visibility` weiter.
+- Neuer Strukturcheck `npm run check:ts-canonical` ergänzt, damit keine JS-Artefakte mehr in `src-ts/` landen und alte Pfade keine zweite Fachlogik enthalten.
+- Neue Dokumentation `docs/TYPESCRIPT_CLEANUP_STRATEGY_0787_DE.md` ergänzt: erklärt, welche TS-Bausteine dauerhaft bleiben, welche nur Adapter sind und wann überflüssige Bausteine entfernt werden.
+- Keine produktive Runtime-Logik geändert.
+
 # 0.7.86 - Energiefluss TS-Aktivtest auf echter Anlage beobachten
 
 - Kontrollierten Energiefluss-TypeScript-Aktivtest ergänzt: Backend protokolliert, ob TS tatsächlich als effektive Quelle genutzt wurde oder ob Sicherheitsgates korrekt auf JS zurückfallen.

@@ -3181,6 +3181,9 @@ class HeatingRodControlModule extends BaseModule {
             await this._setStateIfChanged(`heatingRod.devices.${d.id}.override`, '');
         }
 
+        // TS-Shadow-Diagnose: sammelt pro Gerät den JS-Zielzustand und die Budgetdaten.
+        // Wichtig: Dieser Block ist nur Diagnose und darf keine Ausgänge schalten.
+        const heatingRodTsShadowEntries = [];
         for (const d of this._devices || []) {
             heatingRodTsShadowEntries.push({
                 device: d,

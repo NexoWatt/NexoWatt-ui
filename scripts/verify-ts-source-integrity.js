@@ -216,9 +216,20 @@ function verifyTypeScriptSourceIntegrity() {
     if (hasGitConflictMarker(text)) {
       errors.push(`Git-Konfliktmarker in TS-Datei: ${rel}`);
     }
-    const syntaxProblem = scanBalancedSyntaxShell(text);
-    if (syntaxProblem) {
-      errors.push(`${rel}: ${syntaxProblem}`);
+    /**
+     * Code-Teil: Runtime-Spiegel von der leichten Klammerheuristik ausnehmen.
+     *
+     * Zweck:
+     * `src-ts/runtime-mirrors/` enthält große 1:1-Spiegel bestehender JavaScript-Dateien.
+     * Die einfache Heuristik kann bei komplexen Regex-/Template-String-Konstruktionen
+     * falsch anschlagen. Diese Dateien werden deshalb durch den TypeScript-Parser
+     * (`check:ts-source-syntax`) und den Mirror-Hash-Check abgesichert.
+     */
+    if (!rel.startsWith('src-ts/runtime-mirrors/')) {
+      const syntaxProblem = scanBalancedSyntaxShell(text);
+      if (syntaxProblem) {
+        errors.push(`${rel}: ${syntaxProblem}`);
+      }
     }
   }
 

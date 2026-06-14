@@ -1,0 +1,3112 @@
+// @ts-nocheck
+/**
+ * TypeScript-Parallelspiegel: .nwcore/modules/storage-control.js
+ *
+ * Zweck:
+ * Diese Datei ist die TypeScript-Vorbereitung der bestehenden JavaScript-Runtime-Datei.
+ * Sie wird noch nicht produktiv ausgeführt. Die produktive Quelle bleibt vorerst:
+ * .nwcore/modules/storage-control.js
+ *
+ * Zusammenhang:
+ * Der Spiegel hilft uns, die JS-Datei später schrittweise zu typisieren, zu testen und
+ * kontrolliert auf TypeScript umzustellen. Änderungen an der Runtime müssen aktuell noch
+ * in der JS-Datei erfolgen und danach mit diesem Spiegel synchronisiert werden.
+ *
+ * Wichtig für die Migration:
+ * - Diese Datei enthält vorübergehend @ts-nocheck.
+ * - Der nächste Schritt ist pro Modul echte Typisierung statt pauschalem No-Check.
+ * - Fachliche Kommentare markieren die Abschnitte, die später einzeln migriert werden.
+ *
+ * Original-Hash: 83af684b5939044ca24da154e4285ff31c60c285487ef09cc52ccb24cbbf4904
+ */
+
+/**
+ * Code-Teil: Runtime-Spiegel der kompletten Datei
+ *
+ * Zweck:
+ * Dieser Abschnitt enthält den ursprünglichen JavaScript-Code als TypeScript-Parallelkopie.
+ * Einzelne Funktionen werden später pro Modul weiter typisiert; Dateien ohne eigene
+ * Funktionsdeklarationen bleiben trotzdem über diesen Dateikommentar dokumentiert.
+ */
+
+/**
+ * NexoWatt Detail-Kommentar (DE)
+ * Zweck dieser Ergänzung:
+ * - Jede relevante Funktion, Methode, Route und UI-Ereignisbindung erhält einen eigenen Erklärungskommentar.
+ * - Die Kommentare beschreiben Aufgabe, Daten-/API-Zusammenhang und TypeScript-Migrationshinweise.
+ * - Es wurde keine Programmlogik geändert; diese Datei wurde nur für Wartbarkeit und spätere Typisierung dokumentiert.
+ */
+
+/**
+ * Datei: .nwcore/modules/storage-control.js
+ * Rolle im Projekt: EMS-Modul storage control.
+ * Zweck: Führt eine fachliche EMS-Funktion zyklisch aus und veröffentlicht States für Frontend/Regelung.
+ * Wartung: Die folgenden Abschnitts-Kommentare erklären die einzelnen Code-Teile.
+ * TypeScript-Plan: Beim nächsten fachlichen Umbau werden diese Blöcke schrittweise in .ts/.tsx überführt.
+ */
+/**
+ * NexoWatt Code-Kommentar (DE)
+ * Zweck: Interne EMS-Kern-/Referenzdatei im .nwcore-Bereich. Dieser Bereich spiegelt wiederverwendbare EMS-Logik.
+ * Zusammenhänge:
+ * - Die produktive Variante liegt häufig parallel unter ems/.
+ * - Änderungen müssen mit dem produktiven ems/-Pfad abgeglichen werden.
+ * Wartungshinweise:
+ * - Nicht isoliert ändern, sonst laufen .nwcore und ems auseinander.
+ */
+
+'use strict';
+
+const { BaseModule } = require('./base');
+
+
+/**
+ * Code-Teil: Klasse `RollingWindow`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+// Klassen-Kommentar: Klasse: RollingWindow. Aufgabe: kapselt eine fachliche Teilaufgabe dieser Datei. Beim TypeScript-Umbau Eingaben, Rückgaben und Seiteneffekte typisieren. Zusammenhang: Projekt-Quellcode des NexoWatt-Adapters.
+/**
+ * Klasse: RollingWindow
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
+class RollingWindow {
+    /**
+     * Code-Teil: constructor
+     * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
+     * Zusammenhang: Gehört zu NWCore-Vorlage (interner Core-/Template-Code, der mit EMS-Strukturen zusammenhängt) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können LIVE-Energiefluss, aktuelle Werte und History beeinflussen; DP-Fallbacks nur mit Regressionstest ändern. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
+    constructor(maxSeconds) {
+        this.maxSeconds = Math.max(1, Number(maxSeconds) || 120);
+        /** @type {Array<{t:number, v:number}>} */
+        this.samples = [];
+        this.sum = 0;
+    }
+
+    /**
+     * Code-Teil: Methode `setMaxSeconds`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: setMaxSeconds
+     * Zweck: Setzt Werte im DOM, Cache, State oder in der Konfiguration.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    setMaxSeconds(maxSeconds) {
+        const s = Math.max(1, Number(maxSeconds) || 120);
+        if (s !== this.maxSeconds) {
+            this.maxSeconds = s;
+            // force purge to new horizon
+            this._purge(Date.now());
+        }
+    }
+
+    /**
+     * Code-Teil: Methode `_purge`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _purge
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    _purge(nowMs) {
+        const cutoff = nowMs - this.maxSeconds * 1000;
+        while (this.samples.length && this.samples[0].t < cutoff) {
+            const s = this.samples.shift();
+            this.sum -= s.v;
+        }
+        if (this.samples.length === 0) this.sum = 0;
+    }
+
+    /**
+     * Code-Teil: Methode `push`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: push
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    push(v, nowMs) {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return;
+        const t = Number(nowMs) || Date.now();
+        this.samples.push({ t, v: n });
+        this.sum += n;
+        this._purge(t);
+    }
+
+    /**
+     * Code-Teil: Methode `mean`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: mean
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    mean() {
+        if (!this.samples.length) return null;
+        return this.sum / this.samples.length;
+    }
+    /**
+     * Code-Teil: count
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    count() {
+        return this.samples.length;
+    }
+}
+
+
+/**
+ * Hysterese-Schalter: "eins" erst oberhalb onAbove, "aus" erst unterhalb offBelow.
+ * Dazwischen bleibt der vorherige Zustand (prev) erhalten.
+ *
+ * @param {boolean|null|undefined} prev
+ * @param {number} x
+ * @param {number} offBelow
+ * @param {number} onAbove
+ * @returns {boolean}
+ */
+/**
+ * Code-Teil: hystAbove
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
+function hystAbove(prev, x, offBelow, onAbove) {
+    const p = (prev === true);
+    if (!Number.isFinite(x)) return p;
+    if (x <= offBelow) return false;
+    if (x >= onAbove) return true;
+    return p;
+}
+
+/**
+ * Hysterese-Schalter: "eins" erst unterhalb onBelow, "aus" erst oberhalb offAbove.
+ * Dazwischen bleibt der vorherige Zustand (prev) erhalten.
+ *
+ * @param {boolean|null|undefined} prev
+ * @param {number} x
+ * @param {number} onBelow
+ * @param {number} offAbove
+ * @returns {boolean}
+ */
+/**
+ * Code-Teil: hystBelow
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
+function hystBelow(prev, x, onBelow, offAbove) {
+    const p = (prev === true);
+    if (!Number.isFinite(x)) return p;
+    if (x <= onBelow) return true;
+    if (x >= offAbove) return false;
+    return p;
+}
+
+
+/**
+ * Speicher-Regelung (Schritt 2)
+ *
+ * Ziele:
+ * - Lastspitzenkappung über den Speicher (Entladen bei Überlast)
+ * - Eigenverbrauchsoptimierung (PV-Überschuss laden; optional Entladen zur Reduktion des Netzbezugs)
+ * - Notstrom-Reserve (Entladen unter Mindest-SoC verhindern; optional Reserve über PV/Netz wieder auffüllen)
+ * - Zusammenarbeit mit Tarif/VIS (manuelle Speicherleistung aus VIS berücksichtigen)
+ *
+ * Gate E (Serienreife): Multiuse-Speicherstrategie
+ * - getrennte SoC-Bereiche/Schwellen für:
+ *   - Notstrom (Reserve)
+ *   - Eigenverbrauch (Entladen optional)
+ *   - LSK (Lastspitzenkappung / Peak-Shaving)
+ * - LSK: separate Limits für Be-/Entladung (maxChargeW/maxDischargeW) möglich
+ *
+ * Hinweis:
+ * - In dieser Stufe wird aktiv nur im Modus "Sollleistung (W)" geschrieben (st.targetPowerW).
+ * - Andere Steuerungsarten bleiben zunächst Diagnose/Zuordnung (werden später erweitert).
+ */
+/**
+ * Code-Teil: Klasse `SpeicherRegelungModule`
+ * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+ * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+ * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+ */
+// Klassen-Kommentar: Klasse: SpeicherRegelungModule. Aufgabe: kapselt eine fachliche Teilaufgabe dieser Datei. Beim TypeScript-Umbau Eingaben, Rückgaben und Seiteneffekte typisieren. Zusammenhang: Projekt-Quellcode des NexoWatt-Adapters.
+/**
+ * Klasse: SpeicherRegelungModule
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
+class SpeicherRegelungModule extends BaseModule {
+    /**
+     * Code-Teil: constructor
+     * Zweck: Bereitet eine Instanz vor, legt interne Felder an und verbindet spätere Methoden mit dem Objektzustand.
+     * Zusammenhang: Gehört zu NWCore-Vorlage (interner Core-/Template-Code, der mit EMS-Strukturen zusammenhängt) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+     * Wartung/TypeScript: Änderungen können LIVE-Energiefluss, aktuelle Werte und History beeinflussen; DP-Fallbacks nur mit Regressionstest ändern. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+     */
+    constructor(adapter, dpRegistry) {
+        super(adapter, dpRegistry);
+
+        /** @type {number|null} */
+        this._lastTargetW = null;
+        /** @type {string} */
+        this._lastReason = '';
+        /** @type {string} */
+        this._lastSource = '';
+
+        // --- Anti-Oszillation / Anti-PingPong (Charge <-> Discharge) ---
+        // Hintergrund: Wenn mehrere Logiken (LSK/Peak, Eigenverbrauch, PV-Überschuss, Reserve)
+        // sehr schnell auf wechselnde NVP-Werte reagieren, kann der Sollwert (Charge/Discharge)
+        // in kurzen Abständen das Vorzeichen wechseln. Das sieht als „Springen“ aus und erzeugt
+        // unnötige Zyklen/Stress.
+        // Strategie: Vorzeichenwechsel nur über „0“ und optional mit kurzer Sperrzeit.
+        this._signLockUntilMs = 0;
+
+        // Zeitpunkt, wann zuletzt Peak/LSK aktiv entladen hat (für „Refill“/Nachladen-Delay)
+        this._lastPeakActiveMs = 0;
+
+
+        /** @type {number|null} */
+        this._lskRefillHeadroomFilteredW = null;
+        /** @type {number} */
+        this._lskRefillLastTs = 0;
+
+        /** @type {number|null} */
+        this._lskRefillHoldW = null;
+
+        /** @type {RollingWindow} */
+        this._lskRefillImportWin = new RollingWindow(120);
+
+        // --- SoC-Hysterese gegen Flattern an Grenzwerten ---
+        // Default: 0.5 %-Punkte. Ziel: Sobald ein Grenzwert erreicht ist,
+        // soll die Regelung sauber bei 0 W „stehen bleiben“ (Ruhephase) und
+        // nicht wegen Messrauschen/Quantisierung oder kleiner Gegenregelungen
+        // sofort wieder in Laden/Entladen kippen.
+        /** @type {number} */
+        this._socHystPct = 0.5;
+
+        // Letzte „Enable“-Zustände (Hysterese-Memory)
+        /** @type {boolean|null} */
+        this._socSelfDischargeEnabled = null;
+        /** @type {boolean|null} */
+        this._socLskDischargeEnabled = null;
+        /** @type {boolean|null} */
+        this._socLskRefillEnabled = null;
+        /** @type {boolean|null} */
+        this._socReserveRefillEnabled = null;
+
+        // --- Tarif-Freigaben (Phase 5): Debounce gegen Flattern ---
+        this._tariffGridChargeAllowed = true;
+        this._tariffGridChargeAllowedTrueSinceMs = 0;
+        this._tariffDischargeAllowed = true;
+        this._tariffDischargeAllowedTrueSinceMs = 0;
+
+        // FENECON-Hybrid Sondermodus.
+        // Ab 0.6.255 wird nicht mehr SetGridActivePower genutzt, weil dieser DP auf
+        // manchen FENECON/FEMS-Systemen nicht beschreibbar ist. Stattdessen gilt:
+        // - bei interner FENECON-PV >= Schwellwert: keine externe Vorgabe, FEMS regelt selbst
+        // - bei zusätzlicher externer PV: nur PV-Überschuss als Lade-Setpoint vorgeben
+        // - bei wenig/keiner PV: normale NexoWatt-Regelung (Tarif/LSK/Reserve) über den
+        //   vorhandenen Batterie-Sollleistungs-DP; dieser wird in jedem Tick erneuert
+        //   und bleibt damit innerhalb des FENECON-10s-Watchdogs.
+        this._feneconGridLastWriteMs = 0;
+        this._feneconGridLastSetpointW = null;
+        this._feneconGridWasActive = false;
+        this._feneconGridReleasedDirectTarget = false;
+        this._feneconHybridWasExternal = false;
+        this._feneconHybridLastMode = '';
+
+    }
+
+    /**
+     * Code-Teil: Methode `init`
+     * Zweck: initialisiert UI/Modul, bindet Events oder bereitet Startzustände vor.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: init
+     * Zweck: Initialisiert diesen Bereich und verbindet abhängige Startlogik.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    async init() {
+        await this._ensureStates();
+
+        // Optional: zentrale Mess-/Hilfsdatenpunkte registrieren, damit die Regelung auch ohne Peak-Shaving-Modul laufen kann.
+        await this._upsertInputsFromConfig();
+    }
+
+    /**
+     * Code-Teil: Methode `tick`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: tick
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    async tick() {
+        const cfg = this._getCfg();
+        const psCfg = this.adapter.config.peakShaving || {};
+
+        // Stale-Timeout einmal zentral berechnen (wird für VIS/Tarif und Messwerte genutzt)
+        const staleMs = Math.max(1, Math.round(num(cfg.staleTimeoutSec, 15) * 1000));
+
+        // Effektiv-Enable:
+        // - Installateur kann die Speicherregelung explizit aktivieren.
+        // - Zusätzlich wird die Regelung automatisch aktiv, sobald der Endkunde
+        //   den dynamischen Tarif in der VIS aktiviert und eine Speicherleistung
+        //   hinterlegt hat (damit "Manuell" sofort wirkt).
+        const cfgEnabled = !!this.adapter.config.enableStorageControl;
+        let autoTarifEnabled = false;
+        try {
+            // Prefer the already freshness-validated snapshot from the Tarif-Modul.
+            const tv = (this.adapter && this.adapter._tarifVis) ? this.adapter._tarifVis : null;
+			if (tv && tv.aktiv) {
+				// Bugfix (Phase 7/8): Tarif-Modul liefert die VIS-Leistungsgrenze als
+				// speicherLeistungW / speicherLeistungAbsW. In manchen Builds fehlte
+				// dieses Feld, wodurch Auto-Enable fälschlich deaktiviert wurde.
+				let sp = null;
+				if (typeof tv.speicherLeistungAbsW === 'number' && Number.isFinite(tv.speicherLeistungAbsW)) {
+					sp = Math.abs(tv.speicherLeistungAbsW);
+				} else if (typeof tv.speicherLeistungW === 'number' && Number.isFinite(tv.speicherLeistungW)) {
+					sp = Math.abs(tv.speicherLeistungW);
+				}
+				if (typeof sp === 'number') {
+					autoTarifEnabled = sp > 0;
+				} else if (this.dp) {
+					// Fallback: directly read VIS toggle (best-effort).
+					const aktiv = this.dp.getBoolean('vis.settings.dynamicTariff', false);
+					const age = this.dp.getAgeMs('vis.settings.dynamicTariff');
+					if (aktiv && (age === null || age <= staleMs)) {
+						const spAbs = Math.abs(this.dp.getNumber('vis.settings.storagePower', 0));
+						autoTarifEnabled = spAbs > 0;
+					}
+				}
+			} else if (this.dp) {
+                // Fallback: directly read VIS toggle (best-effort).
+                const aktiv = this.dp.getBoolean('vis.settings.dynamicTariff', false);
+                const age = this.dp.getAgeMs('vis.settings.dynamicTariff');
+                if (aktiv && (age === null || age <= staleMs)) {
+                    const spAbs = Math.abs(this.dp.getNumber('vis.settings.storagePower', 0));
+                    autoTarifEnabled = spAbs > 0;
+                }
+            }
+        } catch {
+            autoTarifEnabled = false;
+        }
+
+        const enabled = cfgEnabled || autoTarifEnabled;
+
+        // SoC-Hysterese optional aus Konfig lesen (falls später im Admin ergänzt).
+        // Default bleibt 0.5 %-Punkte.
+        this._socHystPct = Math.max(0, num(cfg.socHystPct, this._socHystPct));
+
+        // Diagnose: aktiv
+        await this._setIfChanged('speicher.regelung.aktiv', enabled);
+        await this._setIfChanged('speicher.regelung.aktivKonfig', cfgEnabled);
+        await this._setIfChanged('speicher.regelung.aktivAutoTarif', autoTarifEnabled);
+
+        // Wenn effektiv deaktiviert: nur Diagnose aktualisieren – KEINE Setpoints schreiben.
+        // (Wichtig, damit keine "0" als externe Vorgabe an ein Speichersystem gesendet wird.)
+        if (!enabled) {
+            await this._setIfChanged('speicher.regelung.quelle', 'aus');
+            await this._setIfChanged('speicher.regelung.grund', 'Deaktiviert');
+            await this._setIfChanged('speicher.regelung.schreibStatus', 'deaktiviert');
+            await this._setIfChanged('speicher.regelung.schreibOk', false);
+            await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+
+            // Phase 2 Diagnose: wenn deaktiviert, Request/Dispatcher auf 0 setzen
+            await this._setIfChanged('speicher.regelung.requestW', 0);
+            await this._setIfChanged('speicher.regelung.requestQuelle', 'aus');
+            await this._setIfChanged('speicher.regelung.requestGrund', 'Deaktiviert');
+            await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({ ts: Date.now(), disabled: true, reason: 'Deaktiviert' }));
+
+            // FENECON-Hybrid: Bei deaktivierter Speicherregelung nicht zyklisch auf den
+            // Batterie-Sollleistungs-DP schreiben. Dadurch kann das FEMS nach seinem Watchdog
+            // wieder vollständig in den Normalmodus gehen.
+            try {
+                if (this._isFeneconHybridControlConfigured(cfg) || this._feneconHybridWasExternal || this._feneconGridWasActive) {
+                    await this._setFeneconHybridDiag({
+                        active: false,
+                        mode: 'disabled',
+                        reason: 'Speicherregelung deaktiviert – keine externe FENECON-Vorgabe',
+                        writeMode: 'no-write',
+                    });
+                    this._feneconHybridWasExternal = false;
+                    this._feneconHybridLastMode = 'disabled';
+                    this._feneconGridWasActive = false;
+                    this._feneconGridReleasedDirectTarget = false;
+                }
+            } catch {
+                // ignore
+            }
+
+            return;
+        }
+
+        // Mindestvoraussetzungen / Sonderpfade
+        const controlMode = String(cfg.controlMode || 'targetPower');
+
+        // Speicherfarm: wenn aktiv und Setpoint-DPs pro Speicher vorhanden sind,
+        // erlauben wir die Regelung auch ohne klassische Sollleistungs-Zuordnung (st.targetPowerW).
+        const farmCfg = (this.adapter && this.adapter.config && this.adapter.config.storageFarm) ? this.adapter.config.storageFarm : {};
+        const farmEnabled = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
+        const farmRows = Array.isArray(farmCfg.storages) ? farmCfg.storages : [];
+        const hasFarmSetpoints = farmEnabled && farmRows.some(r => r && r.enabled !== false && (String(r.setSignedPowerId||'').trim() || String(r.setChargePowerId||'').trim() || String(r.setDischargePowerId||'').trim()));
+
+        const hasTarget = this.dp ? !!this.dp.getEntry('st.targetPowerW') : false;
+        const feneconHybridConfigured = this._isFeneconHybridControlConfigured(cfg);
+        const feneconHybridActive = !!(feneconHybridConfigured && !farmEnabled);
+        const feneconHybridBlockedByFarm = !!(feneconHybridConfigured && farmEnabled);
+
+        // FENECON-Hybrid ab 0.6.255:
+        // Der App-Center-Haken aktiviert keine SetGridActivePower-Netzpunktführung mehr.
+        // Die normale Speicherfarm bleibt unverändert. Bei Single-FENECON entscheidet die
+        // Policy weiter unten pro Tick, ob überhaupt auf den Batterie-Sollleistungs-DP
+        // geschrieben wird. Tagsüber mit interner FENECON-PV wird bewusst NICHT geschrieben,
+        // damit FEMS selbst regelt und nach seinem 10s-Watchdog im Normalmodus bleibt.
+        if (feneconHybridBlockedByFarm) {
+            await this._setFeneconHybridDiag({
+                active: false,
+                mode: 'blocked-by-farm',
+                reason: 'FENECON-Hybrid-Sondermodus wird bei aktiver Speicherfarm ignoriert',
+                writeMode: 'farm-standard',
+            });
+            this._feneconHybridWasExternal = false;
+            this._feneconHybridLastMode = 'blocked-by-farm';
+        }
+
+
+        if (controlMode !== 'targetPower') {
+            await this._setIfChanged('speicher.regelung.requestW', 0);
+            await this._setIfChanged('speicher.regelung.requestQuelle', 'aus');
+            await this._setIfChanged('speicher.regelung.requestGrund', 'Steuerungsart nicht unterstützt (nur Sollleistung)');
+            await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({ ts: Date.now(), reqW: 0, reason: 'Steuerungsart nicht unterstützt (nur Sollleistung)', src: 'aus' }));
+
+            await this._applyTargetW(0, 'Steuerungsart nicht unterstützt (nur Sollleistung)', 'aus');
+            return;
+        }
+
+        if (!hasTarget && !hasFarmSetpoints) {
+            await this._setIfChanged('speicher.regelung.requestW', 0);
+            await this._setIfChanged('speicher.regelung.requestQuelle', 'aus');
+            await this._setIfChanged('speicher.regelung.requestGrund', 'Sollleistung-Datenpunkt fehlt (Zuordnung)');
+            await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({ ts: Date.now(), reqW: 0, reason: 'Sollleistung-Datenpunkt fehlt (Zuordnung)', src: 'aus' }));
+
+            await this._applyTargetW(0, 'Sollleistung-Datenpunkt fehlt (Zuordnung)', 'aus');
+            return;
+        }
+
+        // Messwerte lesen
+        const now = Date.now();
+
+        // PV‑Forecast / PV‑aware Tarif‑Netzlade-Entscheidung (Debug/Policy)
+        // Wird weiter unten im Tarif-Block (want < 0) befüllt.
+        let pvAwareTariff = null;
+
+        // grid.powerW is expected to be the *filtered* NVP (Import + / Export -)
+        // grid.powerRawW is the raw signal (if available). If not, fall back to ps.gridPowerW.
+        let gridW = this.dp ? this.dp.getNumberFresh('grid.powerW', staleMs, null) : null;
+        let gridRawW = this.dp ? this.dp.getNumberFresh('grid.powerRawW', staleMs, null) : null;
+
+        if (typeof gridRawW !== 'number' && this.dp) {
+            // raw fallback (manufacturer datapoint from Peak-Shaving config)
+            gridRawW = this.dp.getNumberFresh('ps.gridPowerW', staleMs, null);
+        }
+
+        if (typeof gridW !== 'number') {
+            // If we don't have the internal filtered NVP, try Peak-Shaving effective power (avg) as fallback.
+            const eff = await this._readOwnNumber('peakShaving.control.effectivePowerW');
+            if (typeof eff === 'number') gridW = eff;
+        }
+
+        if (typeof gridW !== 'number' && typeof gridRawW === 'number') {
+            // last-resort: use raw if no filtered signal exists
+            gridW = gridRawW;
+        }
+
+        const gridAge = this.dp ? (this.dp.getEntry('grid.powerW') ? this.dp.getAgeMs('grid.powerW') : (this.dp.getEntry('ps.gridPowerW') ? this.dp.getAgeMs('ps.gridPowerW') : null)) : null;
+
+        // SoC für Reserve (bei Speicherfarm: aggregierten SoC nutzen)
+        let soc = this.dp ? this.dp.getNumberFresh('st.socPct', staleMs, null) : null;
+        let socAge = this.dp ? this.dp.getAgeMs('st.socPct') : null;
+
+        if (farmEnabled) {
+            try {
+                const stOnline = await this.adapter.getStateAsync('storageFarm.storagesOnline');
+                const stDispatch = await this.adapter.getStateAsync('storageFarm.storagesDispatchAvailable');
+                const onlineN = stOnline && stOnline.val !== undefined && stOnline.val !== null ? Number(stOnline.val) : NaN;
+                const dispatchN = stDispatch && stDispatch.val !== undefined && stDispatch.val !== null ? Number(stDispatch.val) : NaN;
+                const hasOnline = Number.isFinite(onlineN) && onlineN > 0;
+                const hasDispatchable = Number.isFinite(dispatchN) && dispatchN > 0;
+
+                if (hasOnline || hasDispatchable) {
+                    // Für die aktive Farm-Regelung bevorzugen wir frische Online-SoCs.
+                    // Wenn Systeme aber nur degraded/stale sind und trotzdem dispatchbar bleiben
+                    // (z.B. selten aktualisierte Signed-DPs), nutzen wir den stabilen Farm-SoC.
+                    let stSoc = hasOnline ? await this.adapter.getStateAsync('storageFarm.totalSocOnline') : null;
+                    let v = stSoc && stSoc.val !== undefined && stSoc.val !== null ? Number(stSoc.val) : NaN;
+                    let age = stSoc && typeof stSoc.ts === 'number' ? (now - Number(stSoc.ts)) : null;
+
+                    if (!Number.isFinite(v)) {
+                        stSoc = await this.adapter.getStateAsync('storageFarm.totalSoc');
+                        v = stSoc && stSoc.val !== undefined && stSoc.val !== null ? Number(stSoc.val) : NaN;
+                        age = stSoc && typeof stSoc.ts === 'number' ? (now - Number(stSoc.ts)) : null;
+                    }
+
+                    if (Number.isFinite(v) && (age === null || age <= staleMs)) {
+                        soc = v;
+                        socAge = age;
+                    }
+                }
+            } catch (_e) {
+                // ignore
+            }
+        }
+
+        // Istleistung Batterie (positiv = Entladung, negativ = Beladung)
+        // Wird für eine OpenEMS-ähnliche NVP-Balancing-Regelung genutzt (grid + ess - target).
+        //
+        // Wichtig (Fehlerquelle): Wenn der Installateur versehentlich den gleichen Datenpunkt
+        // für Ist- UND Sollleistung mapped (z. B. beide auf Register 706), würde die Regelung
+        // "ihre eigene Vorgabe" als Messwert lesen und dadurch massiv überschwingen.
+        // -> Deshalb ignorieren wir st.batteryPowerW, wenn er auf das gleiche Objekt wie st.targetPowerW zeigt.
+        let battPowerW = this.dp ? this.dp.getNumberFresh('st.batteryPowerW', staleMs, null) : null;
+        let battPowerAge = this.dp ? (this.dp.getEntry('st.batteryPowerW') ? this.dp.getAgeMs('st.batteryPowerW') : null) : null;
+        let battPowerInvalidReason = '';
+
+        try {
+            const eBatt = this.dp ? this.dp.getEntry('st.batteryPowerW') : null;
+            const eTarget = this.dp ? this.dp.getEntry('st.targetPowerW') : null;
+            const battObj = eBatt && eBatt.objectId ? String(eBatt.objectId) : '';
+            const targetObj = eTarget && eTarget.objectId ? String(eTarget.objectId) : '';
+            if (battObj && targetObj && battObj === targetObj) {
+                battPowerW = null;
+                battPowerAge = null;
+                battPowerInvalidReason = 'Ist-Leistung verweist auf Sollleistung (Mapping-Fehler)';
+            }
+        } catch {
+            // ignore
+        }
+
+        // Speicherfarm: aggregierte Ist-Leistung nutzen (Netto: Entladen - Laden).
+        //
+        // Hintergrund:
+        // In Farm-Setups ist st.batteryPowerW häufig nur auf einen Einzel-Speicher gemappt
+        // oder (Fehler) sogar auf einen Setpoint. Das führt bei NVP-Balancing zu einem
+        // stabilen Fehlpunkt (z. B. ~50% Netzbezug).
+        //
+        // Daher: wenn Farm aktiv ist und die abgeleiteten Summen frisch sind,
+        // überschreiben wir battPowerW mit der Farm-Nettoleistung.
+        if (farmEnabled) {
+            try {
+                const stOnline = await this.adapter.getStateAsync('storageFarm.storagesOnline');
+                const stDispatch = await this.adapter.getStateAsync('storageFarm.storagesDispatchAvailable');
+                const onlineN = stOnline && stOnline.val !== undefined && stOnline.val !== null ? Number(stOnline.val) : NaN;
+                const dispatchN = stDispatch && stDispatch.val !== undefined && stDispatch.val !== null ? Number(stDispatch.val) : NaN;
+                const hasOnline = Number.isFinite(onlineN) && onlineN > 0;
+                const hasDispatchable = Number.isFinite(dispatchN) && dispatchN > 0;
+
+                if (hasOnline || hasDispatchable) {
+                    const stChg = await this.adapter.getStateAsync('storageFarm.totalChargePowerW');
+                    const stDchg = await this.adapter.getStateAsync('storageFarm.totalDischargePowerW');
+
+                    const chg = stChg && stChg.val !== undefined && stChg.val !== null ? Number(stChg.val) : NaN;
+                    const dchg = stDchg && stDchg.val !== undefined && stDchg.val !== null ? Number(stDchg.val) : NaN;
+
+                    const ageChg = stChg && typeof stChg.ts === 'number' ? (now - Number(stChg.ts)) : null;
+                    const ageDchg = stDchg && typeof stDchg.ts === 'number' ? (now - Number(stDchg.ts)) : null;
+                    const age = (ageChg === null && ageDchg === null) ? null : Math.max(ageChg || 0, ageDchg || 0);
+
+                    if (Number.isFinite(chg) && Number.isFinite(dchg) && (age === null || age <= staleMs)) {
+                        battPowerW = dchg - chg;
+                        battPowerAge = age;
+                        battPowerInvalidReason = hasOnline
+                            ? 'Farm: aggregierte Ist-Leistung (Entladen-Laden)'
+                            : 'Farm: aggregierte Ist-Leistung, degraded/dispatchbar';
+                    }
+                }
+            } catch (_eFarm) {
+                // ignore
+            }
+        }
+
+        // Wenn Netzleistung fehlt: Standard-Systeme werden sicher auf 0 gesetzt.
+        // FENECON-Hybrid ist hier absichtlich anders: Ohne frischen NVP schreiben wir
+        // keine externe Vorgabe, damit FEMS selbst weiterregelt und nicht durch eine
+        // stale/geschätzte NexoWatt-Vorgabe festgehalten wird.
+        if (typeof gridW !== 'number') {
+            await this._setIfChanged('speicher.regelung.requestW', 0);
+            await this._setIfChanged('speicher.regelung.requestQuelle', 'aus');
+            await this._setIfChanged('speicher.regelung.requestGrund', 'Netzleistung fehlt oder zu alt');
+            await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify({ ts: Date.now(), reqW: 0, reason: 'Netzleistung fehlt oder zu alt', src: 'aus' }));
+
+            if (feneconHybridActive) {
+                await this._setNoWriteTargetDiag(0, 'FENECON Hybrid: Netzleistung fehlt – FEMS regelt selbst, keine externe Vorgabe', 'fenecon-fems', 'fenecon-fems:no-grid-no-write');
+                await this._setFeneconHybridDiag({
+                    active: true,
+                    mode: 'fems-pass-through',
+                    reason: 'Netzleistung fehlt oder zu alt',
+                    writeMode: 'no-write',
+                });
+            } else {
+                await this._applyTargetW(0, 'Netzleistung fehlt oder zu alt', 'aus');
+            }
+            await this._setIfChanged('speicher.regelung.netzLeistungW', null);
+            await this._setIfChanged('speicher.regelung.netzAlterMs', typeof gridAge === 'number' ? Math.round(gridAge) : null);
+            await this._setIfChanged('speicher.regelung.netzLadenErlaubt', null);
+            await this._setIfChanged('speicher.regelung.entladenErlaubt', null);
+            await this._setIfChanged('speicher.regelung.tarifState', '');
+            await this._setIfChanged('speicher.regelung.policyJson', JSON.stringify({ ts: Date.now(), disabled: true, reason: 'Netzleistung fehlt oder zu alt', feneconHybrid: !!feneconHybridActive }));
+            return;
+        }
+        // Show RAW if available (closer to meter), otherwise show filtered.
+        await this._setIfChanged('speicher.regelung.netzLeistungW', Math.round((typeof gridRawW === 'number') ? gridRawW : gridW));
+        await this._setIfChanged('speicher.regelung.netzAlterMs', typeof gridAge === 'number' ? Math.round(gridAge) : null);
+
+
+        // Tarif-Freigaben (aus Tarif-Modul)
+        // - gridChargeAllowed: Netzladen erlaubt (z. B. Tarif sperrt Netzladen)
+        // - dischargeAllowed: Entladen erlaubt (Tarif günstig => Entladen sperren, um Batterie nicht leerzufahren)
+        //
+        // WICHTIG (Bugfix):
+        // Diese Flags ändern sich u. U. nur selten. Wenn man sie mit einem kurzen Freshness-Timeout bewertet
+        // (z. B. 15s), werden sie nach kurzer Zeit als "stale" behandelt und fälschlich gesperrt.
+        // Für die Regelung ist deshalb der "last known value" relevant (fail-open):
+        // - fehlt der DP oder ist er ungültig => true (keine Tarif-Sperre)
+        // - sonst: nutze den gespeicherten Wert (auch wenn er lange unverändert ist)
+        let gridChargeAllowedRaw = true;
+        if (this.dp && typeof this.dp.getEntry === 'function' && this.dp.getEntry('cm.gridChargeAllowed')) {
+            gridChargeAllowedRaw = this.dp.getBoolean('cm.gridChargeAllowed', true);
+        }
+
+        let dischargeAllowedRaw = true;
+        if (this.dp && typeof this.dp.getEntry === 'function' && this.dp.getEntry('cm.dischargeAllowed')) {
+            dischargeAllowedRaw = this.dp.getBoolean('cm.dischargeAllowed', true);
+        }
+
+        // Debounce gegen Flattern (Phase 5):
+        // - Sperren (false) wirken sofort (Safety-first)
+        // - Freigaben (true) erst nach stabiler True-Phase (hold)
+        const permHoldMs = Math.round(clamp(num(cfg.tariffPermissionHoldSec, 10), 0, 3600) * 1000);
+
+        let gridChargeAllowed = gridChargeAllowedRaw;
+        let dischargeAllowed = dischargeAllowedRaw;
+
+        if (permHoldMs > 0) {
+            if (!gridChargeAllowedRaw) {
+                this._tariffGridChargeAllowed = false;
+                this._tariffGridChargeAllowedTrueSinceMs = 0;
+            } else {
+                if (!this._tariffGridChargeAllowed) {
+                    if (!this._tariffGridChargeAllowedTrueSinceMs) this._tariffGridChargeAllowedTrueSinceMs = now;
+                    if ((now - this._tariffGridChargeAllowedTrueSinceMs) >= permHoldMs) {
+                        this._tariffGridChargeAllowed = true;
+                    }
+                }
+            }
+            gridChargeAllowed = !!this._tariffGridChargeAllowed;
+
+            if (!dischargeAllowedRaw) {
+                this._tariffDischargeAllowed = false;
+                this._tariffDischargeAllowedTrueSinceMs = 0;
+            } else {
+                if (!this._tariffDischargeAllowed) {
+                    if (!this._tariffDischargeAllowedTrueSinceMs) this._tariffDischargeAllowedTrueSinceMs = now;
+                    if ((now - this._tariffDischargeAllowedTrueSinceMs) >= permHoldMs) {
+                        this._tariffDischargeAllowed = true;
+                    }
+                }
+            }
+            dischargeAllowed = !!this._tariffDischargeAllowed;
+        }
+
+        await this._setIfChanged('speicher.regelung.netzLadenErlaubt', !!gridChargeAllowed);
+        await this._setIfChanged('speicher.regelung.entladenErlaubt', !!dischargeAllowed);
+
+        // Default-Zielwert (W): Ohne Initialisierung kann es – je nach aktivierten Teil-Logiken –
+        // zu ReferenceErrors kommen, wenn am Ende targetW/reason/source verwendet werden.
+        // 0 W bedeutet: keine Be-/Entladeleistung vorgeben.
+        let targetW = 0;
+        let evcsAssistReqW = 0;
+        // Harte SoC-Grenzen (werden durch verschiedene Strategien gesetzt/verschärft)
+        let hardDischargeMinSoc = 0;
+        let hardChargeMaxSoc = 100;
+        let reason = 'Keine Aktion';
+        let source = 'idle';
+
+        const exportW = Math.max(0, -gridW); // negative Netzleistung = Einspeisung (geglättet)
+        const importW = Math.max(0, gridW);  // positive Netzleistung = Bezug (geglättet)
+        const nvpRawW = (typeof gridRawW === 'number') ? gridRawW : gridW; // Import + / Export -
+        const importRawW = Math.max(0, nvpRawW);
+        const exportRawW = Math.max(0, -nvpRawW);
+
+        // FENECON AC: Lastreferenz für den AC-Teil des Speichers.
+        // Wichtig: Die eigentliche Sollleistung wird weiter unten am NVP bilanziert,
+        // damit PV-Überschuss-/EVCS-Situationen nicht zu Batterieentladung in die Einspeisung führen.
+        // Priorität der Lastquelle:
+        // 1) derived.core.building.loadTotalW (enthält Haus + EV + Zusatzverbraucher)
+        // 2) consumptionTotal (direkter Haus-/Gesamtverbrauch)
+        // 3) derived.loadRestW + EV + Verbraucher-Slots
+        // 4) Fallback aus aktuellem Netzimport + laufender Speicher-Entladung
+        /**
+         * Code-Teil: Arrow-Funktion `readCacheNumber`
+         * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        const readCacheNumber = (key, fallback = null) => {
+            const sid = String(key || '').trim();
+            if (!sid) return fallback;
+            try {
+                if (this.adapter && typeof this.adapter._nwGetNumberFromCache === 'function') {
+                    const n = this.adapter._nwGetNumberFromCache(sid);
+                    if (typeof n === 'number' && Number.isFinite(n)) return n;
+                }
+            } catch {
+                // ignore
+            }
+            try {
+                const rec = this.adapter && this.adapter.stateCache ? this.adapter.stateCache[sid] : null;
+                const n = Number(rec && rec.value);
+                if (Number.isFinite(n)) return n;
+            } catch {
+                // ignore
+            }
+            return fallback;
+        };
+
+        let feneconAcLoadMemo = null;
+        /**
+         * Code-Teil: Arrow-Funktion `getFeneconAcLoadTargetW`
+         * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: getFeneconAcLoadTargetW
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
+        const getFeneconAcLoadTargetW = () => {
+            if (feneconAcLoadMemo) return feneconAcLoadMemo;
+
+            const loadTotalDerivedW = readCacheNumber('derived.core.building.loadTotalW', null);
+            if (typeof loadTotalDerivedW === 'number' && Number.isFinite(loadTotalDerivedW) && loadTotalDerivedW >= 0) {
+                feneconAcLoadMemo = { w: Math.max(0, loadTotalDerivedW), source: 'derived.loadTotalW' };
+                return feneconAcLoadMemo;
+            }
+
+            const loadTotalMappedW = readCacheNumber('consumptionTotal', null);
+            if (typeof loadTotalMappedW === 'number' && Number.isFinite(loadTotalMappedW) && loadTotalMappedW >= 0) {
+                feneconAcLoadMemo = { w: Math.max(0, loadTotalMappedW), source: 'consumptionTotal' };
+                return feneconAcLoadMemo;
+            }
+
+            const loadRestDerivedW = readCacheNumber('derived.core.building.loadRestW', null);
+            if (typeof loadRestDerivedW === 'number' && Number.isFinite(loadRestDerivedW) && loadRestDerivedW >= 0) {
+                const evTotalW = Math.max(0, Math.abs(num(readCacheNumber('evcs.totalPowerW', 0), 0)));
+                let consumersTotalW = 0;
+                for (let i = 1; i <= 10; i++) {
+                    const c = readCacheNumber(`consumer${i}Power`, null);
+                    if (typeof c === 'number' && Number.isFinite(c)) consumersTotalW += Math.abs(c);
+                }
+                feneconAcLoadMemo = {
+                    w: Math.max(0, loadRestDerivedW + evTotalW + consumersTotalW),
+                    source: 'derived.loadRestW+slots',
+                };
+                return feneconAcLoadMemo;
+            }
+
+            const dischargeNowW = (typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Math.max(0, battPowerW) : 0;
+            feneconAcLoadMemo = {
+                w: Math.max(0, importRawW + dischargeNowW),
+                source: 'approx.import+battery',
+            };
+            return feneconAcLoadMemo;
+        };
+
+        const feneconHybridCtx = feneconHybridActive
+            ? await this._buildFeneconHybridContext({ cfg, staleMs, readCacheNumber, gridW, gridRawW })
+            : { active: false, configured: !!feneconHybridConfigured, farmBlocked: !!feneconHybridBlockedByFarm, mode: feneconHybridBlockedByFarm ? 'blocked-by-farm' : 'standard' };
+
+        if (feneconHybridActive) {
+            await this._setFeneconHybridDiag({
+                active: true,
+                mode: feneconHybridCtx.mode,
+                reason: feneconHybridCtx.reason,
+                writeMode: feneconHybridCtx.writeMode,
+                pvW: feneconHybridCtx.pvW,
+                additionalPvW: feneconHybridCtx.additionalPvW,
+                thresholdW: feneconHybridCtx.thresholdW,
+                additionalThresholdW: feneconHybridCtx.additionalThresholdW,
+            });
+        }
+
+
+        // ------------------------------------------------------------
+        // Phase 4: Gemeinsame Netzbezug-Caps (Grid-Constraints / Peak-Shaving / Installer)
+        // ------------------------------------------------------------
+        const coreCaps = (this.adapter && this.adapter._emsCaps && typeof this.adapter._emsCaps === 'object') ? this.adapter._emsCaps : null;
+        const evPriorityCaps = (coreCaps && coreCaps.evPriority && typeof coreCaps.evPriority === 'object') ? coreCaps.evPriority : null;
+        const evPriorityBlockStorageChargeRaw = !!(evPriorityCaps && evPriorityCaps.blockStorageCharge === true);
+        const evPriorityStarvedWRaw = (evPriorityCaps && Number.isFinite(Number(evPriorityCaps.starvedW))) ? Math.max(0, Number(evPriorityCaps.starvedW)) : 0;
+        let importLimitW = null;
+        let importLimitQuelle = '';
+
+        try {
+            if (coreCaps && coreCaps.grid && typeof coreCaps.grid.gridImportLimitW_effective === 'number' && Number.isFinite(coreCaps.grid.gridImportLimitW_effective) && coreCaps.grid.gridImportLimitW_effective > 0) {
+                importLimitW = coreCaps.grid.gridImportLimitW_effective;
+                importLimitQuelle = String(coreCaps.grid.gridImportLimitW_source || '');
+            }
+        } catch {
+            // ignore
+        }
+
+        if (!(typeof importLimitW === 'number' && Number.isFinite(importLimitW) && importLimitW > 0)) {
+            // Fallback: states (best-effort)
+            const lim = await this._readOwnNumber('ems.core.gridImportLimitW_effective');
+            if (typeof lim === 'number' && Number.isFinite(lim) && lim > 0) importLimitW = lim;
+            const src = await this._readOwnString('ems.core.gridImportLimitW_source');
+            if (src) importLimitQuelle = src;
+        }
+
+        let importHeadroomW = null;
+        let importHeadroomRawW = null;
+        let importHeadroomEffW = null;
+
+        if (typeof importLimitW === 'number' && Number.isFinite(importLimitW) && importLimitW > 0) {
+            importHeadroomW = Math.max(0, importLimitW - importW);
+            importHeadroomRawW = Math.max(0, importLimitW - importRawW);
+            importHeadroomEffW = (typeof importHeadroomRawW === 'number' && typeof importHeadroomW === 'number')
+                ? Math.min(importHeadroomW, importHeadroomRawW)
+                : (typeof importHeadroomRawW === 'number' ? importHeadroomRawW : importHeadroomW);
+        }
+
+        await this._setIfChanged('speicher.regelung.importLimitW', (typeof importLimitW === 'number' && Number.isFinite(importLimitW) && importLimitW > 0) ? Math.round(importLimitW) : null);
+        await this._setIfChanged('speicher.regelung.importLimitQuelle', importLimitQuelle || '');
+        await this._setIfChanged('speicher.regelung.importHeadroomW', (typeof importHeadroomW === 'number') ? Math.round(importHeadroomW) : null);
+        await this._setIfChanged('speicher.regelung.importHeadroomRawW', (typeof importHeadroomRawW === 'number') ? Math.round(importHeadroomRawW) : null);
+
+        // Peak-Shaving Kontexte (Limit/Headroom) – wird für LSK-Entladung und für "Reserve wieder auffüllen" genutzt.
+        const peakEnabled = !!this.adapter.config.enablePeakShaving;
+        let psLimitW = null;
+        let psOverW = null;
+        let psReqRedW = null;
+        let psHeadroomW = null; // freie Leistung bis zum Peak-Shaving-Limit (nur Import)
+        if (peakEnabled) {
+            psLimitW = await this._readOwnNumber('peakShaving.control.limitW');
+            psOverW = await this._readOwnNumber('peakShaving.control.overW');
+            psReqRedW = await this._readOwnNumber('peakShaving.control.requiredReductionW');
+            // Phase 4: Wenn Peak-Shaving kein nutzbares Limit liefert, nutze globales Import-Cap (CoreLimits).
+            if (!(typeof psLimitW === 'number' && psLimitW > 0) && (typeof importLimitW === 'number' && Number.isFinite(importLimitW) && importLimitW > 0)) {
+                psLimitW = importLimitW;
+            }
+            if (typeof psLimitW === 'number' && psLimitW > 0) {
+                // NOTE: psHeadroomW is based on the filtered import signal for stable control.
+                psHeadroomW = Math.max(0, psLimitW - importW);
+            }
+        }
+
+// LSK-Refill Headroom-Filter (langes Mittelwertfenster + Update-Schwelle):
+// - Schwankungen im Netzbezug führen sonst zu stark springenden Sollwerten.
+// - Ansatz: gleitender Mittelwert am NVP (Import) über ein längeres Zeitfenster (Default 120 s)
+//   und erst bei Änderungen >= lskRefillDeadbandW (Default 500 W) den Wert "nachziehen".
+// - Für Sicherheit clampen wir später zusätzlich mit dem RAW-Headroom (Import-Spikes => sofort weniger laden).
+let psHeadroomFilteredW = null;
+let psHeadroomRawW = null;
+if (typeof psHeadroomW === 'number') {
+    if (typeof psLimitW === 'number' && psLimitW > 0) {
+        // RAW headroom based on RAW import (Import + / Export -) -> Import only
+        psHeadroomRawW = Math.max(0, psLimitW - Math.max(0, importRawW));
+    }
+
+    const avgSec = clamp(num(cfg.lskRefillAvgSeconds, 120), 5, 1800);
+    const updateDeltaW = clamp(num(cfg.lskRefillDeadbandW, 500), 0, 1000000);
+
+    // Rolling mean of import (NVP) for stable headroom calculation.
+    // We intentionally use RAW import here (Import only) to avoid double-filter artefacts.
+    if (this._lskRefillImportWin) {
+        this._lskRefillImportWin.setMaxSeconds(avgSec);
+        const importSampleW = Math.max(0, (typeof importRawW === 'number') ? importRawW : ((typeof importW === 'number') ? importW : 0));
+        this._lskRefillImportWin.push(importSampleW, now);
+        const importAvgW = this._lskRefillImportWin.mean();
+        const headroomAvgW = (typeof psLimitW === 'number' && psLimitW > 0 && typeof importAvgW === 'number')
+            ? Math.max(0, psLimitW - importAvgW)
+            : psHeadroomW;
+
+        if (typeof this._lskRefillHeadroomFilteredW !== 'number') {
+            this._lskRefillHeadroomFilteredW = headroomAvgW;
+        } else {
+            const prev = this._lskRefillHeadroomFilteredW;
+            if (headroomAvgW < prev) {
+                // decrease immediately (safety)
+                this._lskRefillHeadroomFilteredW = headroomAvgW;
+            } else if (updateDeltaW > 0 && (headroomAvgW - prev) < updateDeltaW) {
+                // hold (no update for small upward changes)
+                this._lskRefillHeadroomFilteredW = prev;
+            } else {
+                this._lskRefillHeadroomFilteredW = headroomAvgW;
+            }
+        }
+
+        psHeadroomFilteredW = this._lskRefillHeadroomFilteredW;
+    } else {
+        // fallback (should not happen)
+        psHeadroomFilteredW = psHeadroomW;
+        this._lskRefillHeadroomFilteredW = psHeadroomFilteredW;
+    }
+
+    this._lskRefillLastTs = now;
+
+    await this._setIfChanged('speicher.regelung.lskHeadroomW', Math.round(psHeadroomW));
+    await this._setIfChanged('speicher.regelung.lskHeadroomFilteredW', Math.round(psHeadroomFilteredW));
+} else {
+    this._lskRefillHeadroomFilteredW = null;
+    this._lskRefillLastTs = now;
+    if (this._lskRefillImportWin) {
+        this._lskRefillImportWin.samples = [];
+        this._lskRefillImportWin.sum = 0;
+    }
+    psHeadroomRawW = null;
+    await this._setIfChanged('speicher.regelung.lskHeadroomW', null);
+    await this._setIfChanged('speicher.regelung.lskHeadroomFilteredW', null);
+}
+
+if (typeof soc === 'number') {
+            await this._setIfChanged('speicher.regelung.socPct', Math.round(soc * 10) / 10);
+            await this._setIfChanged('speicher.regelung.socAlterMs', typeof socAge === 'number' ? Math.round(socAge) : null);
+        } else {
+            await this._setIfChanged('speicher.regelung.socPct', null);
+            await this._setIfChanged('speicher.regelung.socAlterMs', typeof socAge === 'number' ? Math.round(socAge) : null);
+        }
+
+        // ------------------------------------------------------------
+        // Gate E: Multiuse-Speicherstrategie (SoC-Zonen)
+        // ------------------------------------------------------------
+        // Notstrom-Reserve: harte Untergrenze für Entladen
+        const reserveEnabled = !!cfg.reserveEnabled;
+        const reserveMin = clamp(num(cfg.reserveMinSocPct, 20), 0, 100);
+        const reserveTarget = clamp(num(cfg.reserveTargetSocPct, reserveMin), 0, 100);
+
+        const reserveActive = reserveEnabled && (typeof soc === 'number') && (soc <= reserveMin);
+
+        // Reserve-Aufladung mit SoC-Hysterese, damit bei Erreichen des Ziel-SoC
+        // nicht permanent nachgeregelt wird.
+        if (reserveEnabled && (typeof soc === 'number')) {
+            const onBelow = Math.max(0, reserveTarget - this._socHystPct);
+            this._socReserveRefillEnabled = hystBelow(this._socReserveRefillEnabled, soc, onBelow, reserveTarget);
+        } else {
+            this._socReserveRefillEnabled = false;
+        }
+        const reserveChargeWanted = reserveEnabled && (typeof soc === 'number') && !!this._socReserveRefillEnabled;
+
+        await this._setIfChanged('speicher.regelung.reserveAktiv', !!reserveActive);
+        await this._setIfChanged('speicher.regelung.reserveMinSocPct', reserveMin);
+        await this._setIfChanged('speicher.regelung.reserveZielSocPct', reserveTarget);
+
+        // LSK (Peak-Shaving über Speicher)
+        const lskEnabledCfg = cfg.lskEnabled !== false; // Default: an (damit bestehende Installationen unverändert bleiben)
+        const lskMinSoc = clamp(num(cfg.lskMinSocPct, reserveMin), 0, 100);
+        const lskMaxSoc = clamp(num(cfg.lskMaxSocPct, 100), 0, 100);
+
+        // Eigenverbrauch (Entladen optional)
+        // FENECON-Hybrid ab 0.6.255:
+        // Der Haken aktiviert keine permanente externe AC-Lastfolger-Logik mehr.
+        // Bei interner FENECON-PV >= Schwellwert lassen wir FEMS selbst regeln.
+        // Bei wenig/keiner PV darf NexoWatt wieder über den normalen Sollleistungs-DP
+        // arbeiten, damit dynamische Tariflogik, Reserve und LSK nutzbar bleiben.
+        const feneconAcModeConfigured = !!feneconHybridConfigured;
+        const hasExplicitSelfFlag = (cfg.selfDischargeEnabled === true || cfg.selfDischargeEnabled === false);
+        const feneconAcMode = false;
+        // Farm-Verhalten bewusst unverändert lassen: ältere Farm-Setups, die den alten
+        // Haken nur als implizite Eigenverbrauchs-Freigabe genutzt haben, behalten diesen
+        // Fallback. Die neue FENECON-Hybrid-Policy selbst wirkt in der Farm nicht.
+        const farmSelfDischargeFallback = !!(farmEnabled && cfg.feneconAcMode === true && !hasExplicitSelfFlag);
+        const feneconLowPvSelfDischargeFallback = !!(feneconHybridActive && !hasExplicitSelfFlag);
+        // Alte FENECON-EV-Prioritäts-/PV-Block-Caps werden durch den neuen Modus nicht
+        // mehr aktiviert. Flexible Verbraucher bleiben in der bestehenden Standardlogik.
+        const evPriorityBlockStorageCharge = false;
+        const evPriorityStarvedW = 0;
+        const selfDischargeEnabled = hasExplicitSelfFlag
+            ? (cfg.selfDischargeEnabled === true)
+            : (farmSelfDischargeFallback || feneconLowPvSelfDischargeFallback);
+        const selfMinSoc = clamp(num(cfg.selfMinSocPct, reserveMin), 0, 100);
+        const selfMaxSoc = clamp(num(cfg.selfMaxSocPct, 100), 0, 100);
+        // Eigenverbrauchs-Optimierung: Ziel-Netzbezug am NVP.
+        // Praxis: ein kleiner Bezug (z. B. 50–150 W) ist oft stabiler als exakt 0 W
+        // (Messrauschen, Totzeiten, Geräte-Rampen).
+        // Standard-Eigenverbrauch bleibt herstellerunabhängig bei kleinem Ziel-Import.
+        // FENECON-Hybrid entscheidet später pro Tick: FEMS-No-Write, Zusatz-PV-Laden
+        // oder normale externe Vorgabe bei wenig/keiner FENECON-PV.
+        const selfTargetGridW = Math.max(0, num(cfg.selfTargetGridImportW, 50));
+        const selfImportThresholdW = Math.max(0, num(cfg.selfImportThresholdW, 50));
+
+        await this._setIfChanged('speicher.regelung.lskMinSocPct', lskMinSoc);
+        await this._setIfChanged('speicher.regelung.lskMaxSocPct', lskMaxSoc);
+        await this._setIfChanged('speicher.regelung.selfMinSocPct', selfMinSoc);
+        await this._setIfChanged('speicher.regelung.selfMaxSocPct', selfMaxSoc);
+        await this._setIfChanged('speicher.regelung.selfTargetGridImportW', selfTargetGridW);
+        await this._setIfChanged('speicher.regelung.selfImportThresholdW', selfImportThresholdW);
+        await this._setIfChanged('speicher.regelung.selfEntladenAktiviert', !!selfDischargeEnabled);
+
+        // Grenzen / Glättung
+        // maxChargeW/maxDischargeW sind *optionale* Software-Clamps.
+        // 0 => unbegrenzt (kein Clamp). Viele Speicher regeln/limitieren intern ohnehin.
+        const maxChargeLimitW_cfg = Math.max(0, num(cfg.maxChargeW, 0));        // Laden: negativ (Betrag)
+        const maxDischargeLimitW_cfg = Math.max(0, num(cfg.maxDischargeW, 0));  // Entladen: positiv
+        const maxChargeW = (maxChargeLimitW_cfg > 0) ? maxChargeLimitW_cfg : Number.POSITIVE_INFINITY;
+        const maxDischargeW = (maxDischargeLimitW_cfg > 0) ? maxDischargeLimitW_cfg : Number.POSITIVE_INFINITY;
+        const stepW = Math.max(0, num(cfg.stepW, 50));
+        const maxDelta = Math.max(0, num(cfg.maxDeltaWPerTick, 500));
+        const pvMaxDeltaCfg = Math.max(0, num(cfg.pvMaxDeltaWPerTick, 1500)); // 0 => nutzt globale Rampe
+
+        // Policy-spezifische Limits (0 => global)
+        const lskMaxChargeW_cfg = Math.max(0, num(cfg.lskMaxChargeW, 0));
+        const lskMaxDischargeW_cfg = Math.max(0, num(cfg.lskMaxDischargeW, 0));
+        const selfMaxChargeW_cfg = Math.max(0, num(cfg.selfMaxChargeW, 0));
+        const selfMaxDischargeW_cfg = Math.max(0, num(cfg.selfMaxDischargeW, 0));
+        const reserveGridChargeW = Math.max(0, num(cfg.reserveGridChargeW, 0));
+
+        const lskMaxDischargeEff = Math.min(maxDischargeW, (lskMaxDischargeW_cfg > 0 ? lskMaxDischargeW_cfg : maxDischargeW));
+        const lskMaxChargeEff = Math.min(maxChargeW, (lskMaxChargeW_cfg > 0 ? lskMaxChargeW_cfg : maxChargeW));
+        const selfMaxDischargeEff = Math.min(maxDischargeW, (selfMaxDischargeW_cfg > 0 ? selfMaxDischargeW_cfg : maxDischargeW));
+        const selfMaxChargeEff = Math.min(maxChargeW, (selfMaxChargeW_cfg > 0 ? selfMaxChargeW_cfg : maxChargeW));
+
+        // 1) Lastspitzenkappung: wenn Peak-Shaving aktiv und Grenzwert überschritten → Entladen
+        //    Wichtig: Diese Logik darf den Netzanschluss NICHT überlasten. Daher wird hier nicht "absolut" auf
+        //    (Import - Limit) gesetzt (das führt zu einem Fixpunkt), sondern als Delta/Integrator auf die bestehende
+        //    Sollleistung aufaddiert. Dadurch erreicht der Speicher das Ziel (Import <= Limit) zuverlässig.
+        if (peakEnabled && lskEnabledCfg && (cfg.lskDischargeEnabled !== false)) {
+            const limitW = (typeof psLimitW === 'number' && psLimitW > 0) ? psLimitW : null;
+
+            // Für die Schutzfunktion immer den Rohwert am Netzanschlusspunkt verwenden (keine Mittelwert-Schönung).
+            const nvpRawW = (typeof gridRawW === 'number') ? gridRawW : gridW;
+            const importNowW = Math.max(0, typeof nvpRawW === 'number' ? nvpRawW : 0);
+
+            const lastWasLsk = (this._lastSource === 'lastspitze');
+            const hasLimit = (typeof limitW === 'number');
+
+            if (hasLimit && (importNowW > limitW || lastWasLsk)) {
+                // SoC-Fenster für LSK (mit Hysterese gegen Flattern)
+                let socOk = true;
+                if (typeof soc === 'number') {
+                    this._socLskDischargeEnabled = hystAbove(
+                        this._socLskDischargeEnabled,
+                        soc,
+                        lskMinSoc,
+                        lskMinSoc + this._socHystPct,
+                    );
+                    socOk = this._socLskDischargeEnabled;
+                }
+
+                if (reserveActive) {
+                    targetW = 0;
+                    reason = 'Lastspitzenkappung: nötig, aber Notstrom-Reserve aktiv';
+                    source = 'lastspitze';
+                } else if (!socOk) {
+                    targetW = 0;
+                    reason = `Lastspitzenkappung: nötig, aber SoC <= LSK-Min (${lskMinSoc}%)`;
+                    source = 'lastspitze';
+                } else {
+                    // Regelfehler bezogen auf Netzimport: Ziel ist importNowW <= limitW
+                    const errW = importNowW - limitW;
+
+                    // Delta-Regelung: Korrektur auf bestehende Sollleistung aufaddieren.
+                    // Damit vermeiden wir das "Halbierungs"-Problem (Fixpunkt bei (L+T)/2).
+                    const curSetW = (lastWasLsk && typeof this._lastTargetW === 'number') ? Math.max(0, this._lastTargetW) : 0;
+
+                    // Release-Hysterese (unter dem Limit) aus Peak-Shaving nutzen, um Flattern zu vermeiden.
+                    const relHystW = Math.max(0, num(psCfg.hysteresisW, 200));
+                    let nextSetW = curSetW;
+
+                    if (errW > 0) {
+                        // Sofort hochregeln (Safety): jedes Watt über Limit muss weg.
+                        nextSetW = curSetW + errW;
+                    } else if (errW < -relHystW) {
+                        // Unter Limit: langsam/gedämpft zurücknehmen.
+                        nextSetW = curSetW + errW; // errW negativ => reduziert Entladen
+                    } // sonst halten (Anti-Flattern)
+
+                    nextSetW = clamp(nextSetW, 0, lskMaxDischargeEff);
+
+                    // Fast-Trip/Peak-Shaving kann zusätzliche Überlast melden (gefiltert/Trip).
+                    // Damit die LSK-Reaktion nicht "zu klein" bleibt, erzwingen wir mindestens diesen Bedarf.
+                    const needW = (typeof psReqRedW === 'number' && psReqRedW > 0) ? psReqRedW
+                        : ((typeof psOverW === 'number' && psOverW > 0) ? psOverW : 0);
+                    if (needW > 0 && nextSetW < needW) nextSetW = clamp(needW, 0, lskMaxDischargeEff);
+
+                    targetW = nextSetW;
+                    reason = `Lastspitzenkappung: entladen (Import ${Math.round(importNowW)} W > Limit ${Math.round(limitW)} W)`;
+                    source = 'lastspitze';
+                    hardDischargeMinSoc = Math.max(hardDischargeMinSoc, lskMinSoc);
+
+                    // Merken: Peak war aktiv (für Refill/Anti-PingPong)
+                    this._lastPeakActiveMs = now;
+                }
+            }
+        }
+
+        // 2) Gate C: Ladepark-Unterstützung (EVCS Boost/Auto) via Speicher-Entladung,
+        // sofern keine Lastspitzenkappung aktiv ist.
+        if (targetW === 0 && !feneconAcMode) {
+            const assistW = await this._readOwnNumber('chargingManagement.control.storageAssistW');
+            evcsAssistReqW = (typeof assistW === 'number' && Number.isFinite(assistW)) ? assistW : 0;
+            if (typeof assistW === 'number' && assistW > 0) {
+                // EVCS-Unterstützung ist "komfort" – wenn Reserve wieder aufgefüllt werden soll, blockieren wir das.
+                const reserveMinEff = reserveEnabled ? reserveMin : 0;
+                const socOk = (typeof soc !== 'number') ? true : (soc > Math.max(reserveMinEff, selfMinSoc));
+                if (typeof dischargeAllowed === 'boolean' && dischargeAllowed === false) {
+                    targetW = 0;
+                    reason = 'EVCS-Unterstützung blockiert (Tarif: Entladen gesperrt)';
+                    source = 'evcs';
+                } else if (reserveActive) {
+                    targetW = 0;
+                    reason = 'EVCS-Unterstützung nötig, aber Notstrom-Reserve aktiv';
+                    source = 'evcs';
+                } else if (reserveChargeWanted) {
+                    targetW = 0;
+                    reason = 'EVCS-Unterstützung blockiert (Reserve soll aufgefüllt werden)';
+                    source = 'evcs';
+                } else if (!socOk) {
+                    targetW = 0;
+                    reason = 'EVCS-Unterstützung blockiert (SoC unter Minimum)';
+                    source = 'evcs';
+                } else {
+                    targetW = clamp(assistW, 0, maxDischargeW);
+                    reason = `EVCS-Unterstützung: entladen (${Math.round(assistW)} W angefordert)`;
+                    source = 'evcs';
+                    hardDischargeMinSoc = Math.max(hardDischargeMinSoc, Math.max(reserveMinEff, selfMinSoc));
+                }
+            }
+        }
+
+		// 2) Tarif (dynamischer Zeittarif)
+		// - Steuerung kommt aus dem TarifVis-Modul (adapter._tarifVis)
+		// - Entladen bei "teuer" nur bis NVP = 0 W (kein Export durch Tarif)
+		let tarifState = null;
+		if (targetW === 0) {
+			const tv = (this.adapter && this.adapter._tarifVis) ? this.adapter._tarifVis : null;
+			const tvAktiv = !!(tv && tv.aktiv);
+			const tariffNegativeImportPreferred = !!(tv && (tv.negativeActive || tv.gridImportPreferred || tv.netzbezugBevorzugt));
+			tarifState = (tvAktiv && typeof tv.state === 'string') ? tv.state : null;
+
+			if (tvAktiv) {
+				const want = num(tv.speicherSollW, 0); // negativ = Laden, positiv = Entladen
+
+				// Reserve blockiert Entladen
+				if (reserveActive && want > 0) {
+					targetW = 0;
+					reason = 'Tarif: Entladen blockiert (Reserve aktiv)';
+					source = 'tarif';
+				} else if (want < 0) {
+					// Laden (Tarif günstig)
+					// PV-Überschuss wird später separat geregelt; hier geht es um Netzladen.
+					if (typeof soc === 'number' && soc >= hardChargeMaxSoc) {
+						targetW = 0;
+						reason = 'Tarif: Laden blockiert (SoC-Max erreicht)';
+						source = 'tarif';
+					} else {
+						let chargeW = Math.min(Math.abs(want), maxChargeW);
+						// Gemeinsame Import-Cap: nie über effektives Netzbezugslimit laden
+						// OpenEMS-Ansatz: Begrenzung auf Basis der *realen* Netzleistung ohne aktuelle Batterie-Leistung,
+						// um ein „Hin-und-her Springen“ (Sollwert folgt eigenem Einfluss auf den NVP) zu vermeiden.
+						//
+						// realNvpW = NVP + battPowerW  (battPowerW: +Entladen, -Laden)
+						// -> ergibt näherungsweise die Last ohne Batterieeinfluss.
+						const battSignedW = (typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Number(battPowerW) : 0;
+						const nvpNowW = (typeof gridRawW === 'number' && Number.isFinite(gridRawW)) ? Number(gridRawW) : num(gridW, 0);
+						const realNvpW = nvpNowW + battSignedW;
+						const realImportW = Math.max(0, realNvpW);
+
+						let headroomByImportCapW = null;
+						if (typeof importLimitW === 'number' && Number.isFinite(importLimitW) && importLimitW > 0) {
+							headroomByImportCapW = Math.max(0, importLimitW - realImportW);
+						} else if (typeof importHeadroomEffW === 'number') {
+							// Fallback: (ältere Builds) – headroom basiert auf NVP inkl. Batterie; kann flappen,
+							// aber ist besser als nichts.
+							headroomByImportCapW = Math.max(0, importHeadroomEffW);
+						}
+
+						if (typeof headroomByImportCapW === 'number') {
+							chargeW = Math.min(chargeW, headroomByImportCapW);
+						} else if (peakEnabled && isFinite(psLimitW) && psLimitW > 0) {
+							const headroomW = Math.max(0, psLimitW - realImportW);
+							chargeW = Math.min(chargeW, headroomW);
+						}
+
+
+						// Nicht gegen Einspeisung "anladen" – PV-Überschuss wird unten behandelt.
+						// Hinweis: Dadurch wird bei Einspeisung kein zusätzliches Netzladen erzwungen.
+						// (Bewusstes Design: PV-Überschuss-Laden übernimmt dann die Regelung.)
+						if (nvpNowW < 0 && !tariffNegativeImportPreferred) {
+							chargeW = 0;
+						}
+
+						// ------------------------------------------------------------
+						// PV‑Reserve / PV‑aware Netzladen (Tarif)
+						//
+						// Ziel: Wenn PV‑Erzeugung zu erwarten ist, soll der Speicher im
+						// günstigen Tarif‑Fenster nicht „voll“ aus dem Netz geladen werden.
+						// Stattdessen halten wir einen dynamischen Headroom frei, damit PV
+						// tagsüber in den Speicher laden kann (weniger unnötige Zyklen).
+						//
+						// Vorgehen:
+						// - Forecast -> PV Charge‑Potential (kWh) im nächsten Horizon (Default 24h)
+						// - captureFactor + confidence => erwartbar speicherbare PV‑kWh
+						// - Headroom(%) = kWh / Kapazität
+						// - Netzlade‑SoC‑Cap = socTarget - Headroom, mindestens minSocForWait
+						// - Wenn SoC >= Cap => Netzladen im Tarif blockieren.
+						// ------------------------------------------------------------
+						let pvBlockGridCharge = false;
+						let pvBlockReason = '';
+						let pvDebug = null;
+						try {
+						  const pf = (this.adapter && this.adapter._pvForecast) ? this.adapter._pvForecast : null;
+						  const pvReserveEnabled = (cfg.tariffPvReserveEnabled !== false) && !tariffNegativeImportPreferred; // default: ON, bei Negativpreis bewusst aus
+						  if (pvReserveEnabled && pf && pf.valid && Array.isArray(pf.curve) && pf.curve.length) {
+						    // Bei sehr alten Forecasts lieber keine PV‑Reserve erzwingen.
+						    const maxAgeMs = 24 * 3600000;
+						    const ageOk = (pf.ageMs === null || pf.ageMs === undefined) ? true : (pf.ageMs <= maxAgeMs);
+						    if (ageOk && typeof soc === 'number' && Number.isFinite(soc)) {
+						      // Kapazität (kWh):
+						      // - Speicherfarm: Summe aus Farm‑Konfig
+						      // - Single: installerConfig.storage.capacityKWh (optional)
+						      // - Fallback: gemappter DP (st.capacityKwh)
+						      //
+						      // Hinweis:
+						      // Damit PV‑Reserve im Nacht‑Tarif wirklich verhindert, dass der Speicher
+						      // „blind“ auf 100% aus dem Netz geladen wird, brauchen wir eine Kapazität.
+						      // Wenn sie nicht gemappt/konfiguriert ist, schätzen wir sie konservativ aus
+						      // der im Tarif angeforderten Ladeleistung (SoC‑Cap bleibt dadurch trotzdem aktiv).
+						      let capKWh = null;
+						      let capKWhSource = '';
+						      let capKWhEstimated = false;
+						      try {
+						        const farmCfg2 = (this.adapter && this.adapter.config && this.adapter.config.storageFarm) ? this.adapter.config.storageFarm : null;
+						        const farmEnabledForCapacity = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
+						        if (farmEnabledForCapacity && farmCfg2 && Array.isArray(farmCfg2.storages)) {
+						          let sum = 0;
+						          for (const s of farmCfg2.storages) {
+						            if (!s || s.enabled === false) continue;
+						            const c = Number(s.capacityKWh);
+						            if (Number.isFinite(c) && c > 0) sum += c;
+						          }
+						          if (sum > 0) {
+						            capKWh = sum;
+						            capKWhSource = 'farm';
+						          }
+						        }
+						      } catch {
+						        // ignore
+						      }
+						
+						      if (!(typeof capKWh === 'number' && Number.isFinite(capKWh) && capKWh > 0)) {
+						        const capCfg = Number(this.adapter?.config?.storage?.capacityKWh);
+						        if (Number.isFinite(capCfg) && capCfg > 0) {
+						          capKWh = capCfg;
+						          capKWhSource = 'config';
+						        }
+						      }
+						
+						      if (!(typeof capKWh === 'number' && Number.isFinite(capKWh) && capKWh > 0) && this.dp) {
+						        const capDp = this.dp.getNumber('st.capacityKwh', null);
+						        if (typeof capDp === 'number' && Number.isFinite(capDp) && capDp > 0) {
+						          capKWh = capDp;
+						          capKWhSource = 'dp';
+						        }
+						      }
+						
+						      const socTarget = (typeof hardChargeMaxSoc === 'number' && Number.isFinite(hardChargeMaxSoc)) ? hardChargeMaxSoc : 100;
+						
+						      // Horizon (h) + Heuristik‑Faktoren
+						      const horizonH = clamp(num(cfg.tariffPvReserveHorizonHours, 24), 1, 48);
+						      const captureFactor = clamp(num(cfg.tariffPvReserveCaptureFactor, 0.6), 0, 1);
+						      const confidence = clamp(num(cfg.tariffPvReserveConfidence, 0.85), 0, 1);
+						
+							      // PV-Reserve: Niemals auf extrem niedrige SoC-Werte deckeln.
+							      // Sonst blockiert sie das Tarif-/NT-Laden schon bei sehr niedrigem SoC (z.B. 10%).
+							      // Default: mindestens 20% (konfigurierbar via tariffPvReserveMinSocPct).
+							      const reserveMinEff = (typeof reserveMin === 'number' && Number.isFinite(reserveMin)) ? reserveMin : 20;
+							      const minSocForWaitCfg = num(cfg.tariffPvReserveMinSocPct, NaN);
+							      const minSocForWait = (Number.isFinite(minSocForWaitCfg))
+							        ? clamp(minSocForWaitCfg, 0, socTarget)
+							        : Math.max(reserveMinEff + 2, 20);
+						
+						      // PV Charge‑Potential (kWh) über den Horizon, limitiert durch maxChargeW (falls gesetzt).
+						      let pvChargePotentialKWh = 0;
+						      const t0 = now;
+						      const t1 = t0 + horizonH * 3600000;
+						      const limitW = (typeof maxChargeW === 'number' && Number.isFinite(maxChargeW) && maxChargeW > 0 && maxChargeW !== Number.POSITIVE_INFINITY)
+						        ? maxChargeW
+						        : null;
+						      for (const seg of pf.curve) {
+						        if (!seg || typeof seg.t !== 'number' || typeof seg.dtMs !== 'number' || typeof seg.w !== 'number') continue;
+						        const s0 = seg.t;
+						        const s1 = seg.t + seg.dtMs;
+						        if (s1 <= t0) continue;
+						        if (s0 >= t1) break;
+						        const ov0 = Math.max(s0, t0);
+						        const ov1 = Math.min(s1, t1);
+						        const ovMs = ov1 - ov0;
+						        if (ovMs <= 0) continue;
+						        const w = Math.max(0, seg.w);
+						        const wEff = (limitW ? Math.min(w, limitW) : w);
+						        pvChargePotentialKWh += (wEff * (ovMs / 3600000)) / 1000;
+						      }
+						
+						      // Erwartbar speicherbare PV‑kWh (konservativ)
+						      // Saisonfaktor (Quartale) – optional über VIS-Settings
+						      let pvSeasonEnabled = false;
+						      let pvSeasonQuarter = null;
+						      let pvSeasonFactor = 1;
+
+						      // KI-Automatik: passt den Faktor anhand PV-Forecast (Stärke) an,
+						      // damit Kunden keine Quartalswerte manuell pflegen müssen.
+						      let pvSeasonAiEnabled = false;
+						      let pvSeasonAiUsed = false;
+						      let pvSeasonBaseFactor = 1;
+						      let pvSeasonAiReason = '';
+						      try {
+						        if (this.dp) {
+						          const kEn = 'vis.settings.tariffPvSeasonEnabled';
+						          const en = this.dp.getBoolean(kEn, false);
+						          const ageEn = this.dp.getAgeMs(kEn);
+						          if (en && (ageEn === null || ageEn <= staleMs)) {
+						            pvSeasonEnabled = true;
+						            const month = new Date(now).getMonth(); // 0..11
+						            const q = Math.floor(month / 3) + 1; // 1..4
+						            pvSeasonQuarter = q;
+
+						            // Basisfaktor (manuell) je Quartal
+						            const kF = `vis.settings.tariffPvSeasonQ${q}Factor`;
+						            const ageF = this.dp.getAgeMs(kF);
+						            const fRaw = this.dp.getNumber(kF, 1);
+						            if ((ageF === null || ageF <= staleMs) && Number.isFinite(fRaw) && fRaw >= 0) {
+						              pvSeasonBaseFactor = clamp(fRaw, 0, 2);
+						            } else {
+						              pvSeasonBaseFactor = 1;
+						            }
+
+						            // KI-Automatik ist immer aktiv (Standard).
+						            // Manuelle Quartalsfaktoren bleiben optional als Basiswert (Feintuning).
+						            pvSeasonAiEnabled = true;
+
+						            // PV-Stärke aus Forecast ableiten:
+						            // - Wenn Kapazität bekannt: Verhältnis PV-kWh / Cap-kWh
+						            // - Sonst: heuristische Normierung (12 kWh ≈ "voll" in vielen Haushalten)
+						            const pvKwh = Math.max(0, Number(pvChargePotentialKWh) || 0);
+						            const capRef = (typeof capKWh === 'number' && Number.isFinite(capKWh) && capKWh > 0) ? capKWh : 12;
+						            const pvScore = clamp(pvKwh / capRef, 0, 1); // 0..1
+						            const adj = clamp(0.85 + 0.30 * pvScore, 0.75, 1.20); // 0.75..1.20
+						            const fAuto = clamp(pvSeasonBaseFactor * adj, 0, 2);
+
+						            pvSeasonFactor = fAuto;
+						            pvSeasonAiUsed = true;
+						            pvSeasonAiReason = `KI: Q${q} Basis ${pvSeasonBaseFactor.toFixed(2)} * Adj ${adj.toFixed(2)} (PV ${pvKwh.toFixed(1)} kWh, Ref ${capRef.toFixed(1)} kWh)`;
+						          }
+						        }
+						      } catch (_e) {
+						        pvSeasonEnabled = false;
+						        pvSeasonQuarter = null;
+						        pvSeasonFactor = 1;
+						        pvSeasonAiEnabled = false;
+						        pvSeasonAiUsed = false;
+						        pvSeasonBaseFactor = 1;
+						        pvSeasonAiReason = '';
+						      }
+
+						      const pvStorableKWh = pvChargePotentialKWh * captureFactor * confidence * pvSeasonFactor;
+						      // Kapazität: wenn unbekannt, grob aus Tarif‑Ladeleistung schätzen (Fallback)
+						      let capKWhEff = capKWh;
+							      if (!(typeof capKWhEff === 'number' && Number.isFinite(capKWhEff) && capKWhEff > 0)) {
+							        // Schätzung (Fallback): bewusst eher "zu groß" wählen, damit PV-Reserve nicht zu aggressiv
+							        // wird, wenn die reale Kapazität nicht konfiguriert/ermittelbar ist.
+							        // Praxis: viele Systeme liegen eher bei 4–8h @ Nennleistung.
+							        const estHours = 6;
+						        const reqW = (Number.isFinite(Math.abs(want)) && Math.abs(want) > 0) ? Math.abs(want) : null;
+						        let estKWh = (reqW && Number.isFinite(reqW)) ? (reqW / 1000) * estHours : NaN;
+						        if (Number.isFinite(estKWh) && estKWh > 0) {
+						          // Sane bounds to avoid extreme behaviour on bad configs
+							          estKWh = clamp(estKWh, 10, 500);
+						          capKWhEff = estKWh;
+						          capKWhSource = 'estimated';
+						          capKWhEstimated = true;
+						        }
+						      }
+						
+						      if (typeof capKWhEff === 'number' && Number.isFinite(capKWhEff) && capKWhEff > 0) {
+						        // Headroom in % (clamp auf sinnvolle Range)
+						        const headroomSocPctRaw = (pvStorableKWh > 0) ? (pvStorableKWh / capKWhEff) * 100 : 0;
+						        const headroomSocPct = clamp(headroomSocPctRaw, 0, socTarget);
+						
+						        // Netzlade‑SoC‑Cap: Ziel minus Headroom (mindestens minSocForWait)
+						        const capSocPct = clamp(socTarget - headroomSocPct, minSocForWait, socTarget);
+						
+						        const active = (headroomSocPct >= 0.5) && (capSocPct < (socTarget - 0.5));
+						        if (active && soc >= (capSocPct - 1e-9)) {
+						          pvBlockGridCharge = true;
+						          const capNote = capKWhEstimated ? ' (Cap geschätzt)' : '';
+						          pvBlockReason = `PV‑Reserve: Netzladen bis max ${capSocPct.toFixed(1)}%${capNote} (Headroom ${headroomSocPct.toFixed(1)}% ≈ ${pvStorableKWh.toFixed(1)} kWh) · Saison ${pvSeasonFactor.toFixed(2)}${pvSeasonAiUsed ? ' (KI)' : ''}`;
+						        }
+						
+						        pvDebug = {
+						          mode: 'pvReserveCap',
+						          ageMs: (pf.ageMs === null || pf.ageMs === undefined) ? null : Math.round(Number(pf.ageMs)),
+						          capKWh: Number(capKWhEff),
+						          capKWhSource,
+						          capKWhEstimated,
+						          socNow: soc,
+						          socTarget,
+						          horizonH,
+						          pvChargePotentialKWh: Number(pvChargePotentialKWh),
+						          captureFactor,
+						          confidence,
+						          pvSeasonEnabled,
+						          pvSeasonQuarter,
+						          pvSeasonFactor: Number(pvSeasonFactor),
+						          pvSeasonAiEnabled,
+						          pvSeasonAiUsed,
+						          pvSeasonBaseFactor: Number(pvSeasonBaseFactor),
+						          pvSeasonAiReason,
+						          pvStorableKWh: Number(pvStorableKWh),
+						          headroomSocPct: Number(headroomSocPct),
+						          capSocPct: Number(capSocPct),
+						          minSocForWait,
+						          blocked: pvBlockGridCharge,
+						          reason: pvBlockGridCharge ? pvBlockReason : '',
+						        };
+						      } else {
+						        // Kapazität nicht ermittelbar -> PV‑Reserve kann nicht sauber rechnen, aber Debug liefern.
+						        pvDebug = {
+						          mode: 'pvReserveUnavailable',
+						          ageMs: (pf.ageMs === null || pf.ageMs === undefined) ? null : Math.round(Number(pf.ageMs)),
+						          capKWh: null,
+						          capKWhSource: capKWhSource || '',
+						          capKWhEstimated: false,
+						          socNow: soc,
+						          socTarget,
+						          horizonH,
+						          pvChargePotentialKWh: Number(pvChargePotentialKWh),
+						          captureFactor,
+						          confidence,
+						          pvSeasonEnabled,
+						          pvSeasonQuarter,
+						          pvSeasonFactor: Number(pvSeasonFactor),
+						          pvSeasonAiEnabled,
+						          pvSeasonAiUsed,
+						          pvSeasonBaseFactor: Number(pvSeasonBaseFactor),
+						          pvSeasonAiReason,
+						          pvStorableKWh: Number(pvStorableKWh),
+						          headroomSocPct: null,
+						          capSocPct: null,
+						          minSocForWait,
+						          blocked: false,
+						          reason: 'PV‑Reserve: Kapazität unbekannt',
+						        };
+						      }
+						    }
+						  }
+						} catch {
+						  // ignore
+						}
+
+						if (pvDebug) {
+						  pvAwareTariff = pvDebug;
+						}
+
+						if (pvBlockGridCharge) {
+						  chargeW = 0;
+						}
+						targetW = -Math.max(0, chargeW);
+						if (pvBlockGridCharge) {
+							reason = pvBlockReason || 'Tarif: günstig – PV Forecast -> Netzladen gesperrt';
+						} else if (tariffNegativeImportPreferred) {
+							reason = (targetW === 0) ? 'Tarif: Negativpreis – Netzladen nicht möglich' : 'Tarif: Negativpreis – Netzladen bevorzugt';
+						} else {
+							reason = (targetW === 0) ? 'Tarif: günstig – Netzladen nicht möglich' : 'Tarif: günstig – Netzladen';
+						}
+						source = 'tarif';
+					}
+				} else if (want > 0) {
+					// Entladen (Tarif teuer/neutral/unbekannt): NVP-Regelung auf kleinen Netzbezug.
+					//
+					// WICHTIG (Bug-Fix):
+					// Eine reine "Sollleistung = aktueller Import" Regelung konvergiert mathematisch auf ~50% der Last
+					// (Fixpunkt: Speicher ≈ Netzbezug ≈ Last/2). Das erklärt hohe Bezüge trotz Entladen.
+					//
+					// Lösung: inkrementelle Regelung (Sollwert = letzter Sollwert + Fehler), mit Deadband.
+					// Ziel: Netzbezug nahe Zielwert halten (Default 100 W), ohne Export durch Messrauschen.
+					if (typeof soc === 'number' && soc < selfMinSoc) {
+						targetW = 0;
+						reason = 'Tarif: Entladen blockiert (SoC-Min erreicht)';
+						source = 'tarif';
+					} else {
+						const targetImportW = Math.max(0, num(cfg.tariffTargetGridImportW, selfTargetGridW));
+						const deadbandW = Math.max(0, num(cfg.tariffImportThresholdW, selfImportThresholdW));
+
+						// Tarif-Entladung regelt am NVP.
+						// Primär nutzen wir den ROH-Wert (NVP), weil eine starke Glättung zu Verzögerungen
+						// und damit zu Sollwert-Spikes/Überschwingern führen kann.
+						// Stabilisierung erfolgt über Deadband + Dispatcher (Schritt/Rampe).
+						const nvpRawW = (typeof gridRawW === 'number') ? gridRawW : gridW;
+						const nvpCtrlW = (typeof nvpRawW === 'number') ? nvpRawW : gridW;
+
+						// Basis ist entweder:
+						// - die Ist-Batterieleistung (OpenEMS-Balancing: batt + (grid-target)) oder
+						// - der letzte Sollwert (Fallback: inkrementelle Regelung), falls keine Istleistung verfügbar ist.
+						const curSetW = (typeof this._lastTargetW === 'number' && this._lastTargetW > 0) ? this._lastTargetW : 0;
+						const battWRaw = (typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Number(battPowerW) : null;
+						const battW = (typeof battWRaw === 'number') ? Math.max(0, battWRaw) : null;
+
+						let errW = (typeof nvpCtrlW === 'number') ? (nvpCtrlW - targetImportW) : 0;
+						// Wenn RAW bereits Export zeigt, sofort reduzieren.
+						if (typeof nvpRawW === 'number' && nvpRawW < (targetImportW - deadbandW)) {
+							errW = nvpRawW - targetImportW;
+						}
+
+						// Deadband gegen Flattern: erst außerhalb der Bandbreite nachregeln.
+						// WICHTIG: Innerhalb der Deadband darf der Sollwert nicht mit der Batterie-Istleistung
+						// mitwandern. Viele Speicher/Farm-DPs melden die Istleistung zeitversetzt oder leicht
+						// springend. Wenn wir bei err=0 trotzdem battIst als neuen Sollwert übernehmen,
+						// entstehen sichtbare Sollwertsprünge trotz konstantem Verbrauch.
+						const outsideDeadband = (errW > deadbandW || errW < -deadbandW);
+						const holdInDeadband = !outsideDeadband && curSetW > 0;
+						let errAdjW = outsideDeadband ? errW : 0;
+
+						// OpenEMS-Balancing (Vorbild): neuer Sollwert = battIst + (gridIst - gridZiel).
+						// Innerhalb der Deadband halten wir aber den letzten Sollwert, statt auf die
+						// zeitversetzte Istleistung zu springen.
+						// Fallback ohne Ist-Batterieleistung: inkrementelle Regelung (Soll = letzter Sollwert + Fehler).
+						// Rampe/Schrittweite/Anti-PingPong folgen im Dispatcher weiter unten.
+						let nextSetW = holdInDeadband
+							? curSetW
+							: ((typeof battW === 'number') ? (battW + errAdjW) : (curSetW + errAdjW));
+
+						// Safety-Clamp gegen unnötige Export-Spikes:
+						// Begrenze grob auf aktuelle Hauslast am NVP: Import (roh) + aktuelle Entladung (falls messbar) + Puffer.
+						// Bei aktiver Regelung zählt der letzte selbst gesetzte Sollwert als plausible Entladebasis,
+						// damit zeitversetzte/0-W-Istwerte die Farm nicht künstlich herunterziehen.
+						const importRawNowW = Math.max(0, (typeof nvpRawW === 'number') ? nvpRawW : 0);
+						const measuredDischargeNowW = (typeof battW === 'number') ? Math.max(0, battW) : 0;
+						const commandedDischargeNowW = curSetW > 0 ? curSetW : 0;
+						const dischargeNowW = Math.max(measuredDischargeNowW, commandedDischargeNowW);
+						const safetyMarginW = 200;
+						const maxByDemandW = importRawNowW + dischargeNowW + safetyMarginW;
+						if (Number.isFinite(maxByDemandW) && maxByDemandW > 0) {
+							nextSetW = Math.min(nextSetW, maxByDemandW);
+						}
+
+						// WICHTIG (Tarif-Logik / Bugfix):
+						// Die vom Endkunden in der VIS eingetragene "Speicher-Leistung" (tv.speicherSollW)
+						// soll im Tarif-Fenster ausschliesslich die Beladeleistung (Netzladen im guenstigen Fenster)
+						// begrenzen. Fuer die Entladung wird am Netzverknuepfungspunkt (NVP) geregelt,
+						// damit der Netzbezug gegen ~0 (bzw. targetImportW) faehrt.
+						//
+						// Technische Limits bleiben natuerlich aktiv (maxDischargeW + Demand-Clamp oben).
+						const maxEffW = maxDischargeW;
+						nextSetW = clamp(nextSetW, 0, maxEffW);
+
+						targetW = nextSetW;
+						reason = (targetW === 0)
+							? 'Tarif: teuer – kein Bedarf'
+							: `Tarif: teuer – NVP-Regelung (Ziel Import≈${Math.round(targetImportW)}W${(typeof battW === 'number') ? ', Balancing' : ''})`;
+						source = 'tarif';
+					}
+				}
+			}
+		}
+// 3) Eigenverbrauch: Entladen zur Netzbezug-Reduktion (optional)
+if (targetW === 0 && selfDischargeEnabled) {
+    // Wenn der dynamische Tarif im "günstig"-Fenster ist, kann es gewünscht sein,
+    // die Eigenverbrauchs-Entladung zu sperren (z.B. während aktivem Netzladen).
+    //
+    // BUGFIX (Phase 8+):
+    // In Konstellationen, in denen das Tarif-Netzladen zwar "geplant" ist, aber durch
+    // PV‑Reserve / PV‑Forecast bewusst blockiert wird (=> targetW bleibt 0), darf die
+    // Eigenverbrauchs-Entladung nicht pauschal gesperrt werden. Sonst bleibt der Speicher
+    // "eingefroren" und der Kunde zieht unnötig Netzbezug.
+    const tariffBlocksDischarge = (typeof dischargeAllowed === 'boolean' && dischargeAllowed === false);
+    const reasonTxt = (reason === null || reason === undefined) ? '' : String(reason);
+    const pvReserveBlocked = (source === 'tarif') && (
+        (reasonTxt.includes('PV') && reasonTxt.toLowerCase().includes('reserve')) ||
+        reasonTxt.toLowerCase().includes('pv forecast')
+    );
+
+    if (feneconAcMode) {
+        let socOk = true;
+        if (typeof soc === 'number') {
+            this._socSelfDischargeEnabled = hystAbove(
+                this._socSelfDischargeEnabled,
+                soc,
+                selfMinSoc,
+                selfMinSoc + this._socHystPct,
+            );
+            socOk = this._socSelfDischargeEnabled;
+        }
+
+        const allow = (!reserveActive && !reserveChargeWanted && socOk);
+        const acLoad = getFeneconAcLoadTargetW();
+        const acLoadW = (acLoad && typeof acLoad.w === 'number' && Number.isFinite(acLoad.w)) ? Math.max(0, acLoad.w) : 0;
+
+        // FENECON AC darf nicht blind der kompletten AC-Last folgen.
+        // Beispiel: PV 10,6 kW, Haus+EVCS 10,3 kW, Speicher entlädt 3,5 kW =>
+        // am NVP entstehen ~3,8 kW Export. In diesem Fall muss die AC-Entladung
+        // zurückgenommen werden. Deshalb wird der Lastfolger am NVP bilanziert:
+        // neue Entladung = aktuelle Entladung + (NVP-Ist - NVP-Ziel).
+        const feneconNvpW = (typeof nvpRawW === 'number' && Number.isFinite(nvpRawW))
+            ? nvpRawW
+            : ((typeof gridW === 'number' && Number.isFinite(gridW)) ? gridW : null);
+        const lastWasFenecon = this._lastSource === 'fenecon';
+        const currentDischargeW = (typeof battPowerW === 'number' && Number.isFinite(battPowerW))
+            ? Math.max(0, battPowerW)
+            : (lastWasFenecon && typeof this._lastTargetW === 'number' && Number.isFinite(this._lastTargetW)
+                ? Math.max(0, this._lastTargetW)
+                : 0);
+        const feneconErrW = (typeof feneconNvpW === 'number') ? (feneconNvpW - selfTargetGridW) : 0;
+        const feneconLoadLimitW = acLoadW > 0
+            ? acLoadW
+            : Math.max(0, importRawW + currentDischargeW);
+
+        let nextSetW = currentDischargeW + feneconErrW;
+
+        // Nicht aus dem Stand auf Messrauschen reagieren. Wenn die FENECON-Regelung
+        // bereits aktiv war, darf sie aber weiter fein nachregeln bzw. bei Export
+        // schnell zurückfahren.
+        if (!lastWasFenecon && feneconErrW < selfImportThresholdW) {
+            nextSetW = 0;
+        }
+
+        nextSetW = clamp(nextSetW, 0, Math.min(feneconLoadLimitW, selfMaxDischargeEff));
+
+        if (allow && nextSetW > 0) {
+            targetW = nextSetW;
+            reason = `FENECON AC: NVP-Balancing (${Math.round(targetW)} W, NVP ${Math.round(feneconNvpW || 0)} W, Ziel ${Math.round(selfTargetGridW)} W, Last ${Math.round(acLoadW)} W, Quelle ${String(acLoad && acLoad.source ? acLoad.source : 'unbekannt')})`;
+            source = 'fenecon';
+            hardDischargeMinSoc = Math.max(hardDischargeMinSoc, selfMinSoc);
+        } else if (acLoadW > 0 && (source === 'idle' || reason === 'Keine Aktion')) {
+            if (reserveActive) {
+                reason = 'FENECON AC: NVP-Balancing blockiert (Reserve aktiv)';
+                source = 'reserve';
+            } else if (reserveChargeWanted) {
+                reason = 'FENECON AC: NVP-Balancing blockiert (Reserve soll aufgefüllt werden)';
+                source = 'reserve';
+            } else if (!socOk) {
+                reason = `FENECON AC: NVP-Balancing blockiert (SoC <= ${selfMinSoc}%)`;
+                source = 'reserve';
+            } else if (typeof feneconNvpW === 'number' && feneconNvpW <= selfTargetGridW) {
+                reason = `FENECON AC: keine Entladung nötig (NVP ${Math.round(feneconNvpW)} W <= Ziel ${Math.round(selfTargetGridW)} W)`;
+                source = 'idle';
+            }
+        }
+    } else if (tariffBlocksDischarge && !pvReserveBlocked) {
+        if (source === 'idle' || reason === 'Keine Aktion') {
+            reason = 'Tarif: günstig – Eigenverbrauchs-Entladung gesperrt';
+            source = 'tarif';
+        }
+    } else {
+    // Wichtig: Bei Eigenverbrauchs-Entladung regeln wir auf den NVP.
+    // Dafür verwenden wir bewusst den ROH-Wert (NVP) ohne Glättung, um Verzögerungen zu vermeiden.
+    //
+    // Kritischer Punkt (Bug-Fix): Eine reine "Sollleistung = aktueller Import"-Logik konvergiert
+    // mathematisch auf ~50% der Last (Fixpunkt), statt den Import wirklich gegen 0 zu drücken.
+    // Lösung: Integrations-/Inkrement-Regelung (PI-light): Sollwert wird um den aktuellen Fehler angepasst.
+
+    // Eigenverbrauch regelt am Netzverknüpfungspunkt (NVP).
+    // Für die Regelung nutzen wir primär den ROH-Wert (NVP), weil eine starke Glättung
+    // (z. B. Peak‑Shaving‑Smoothing) zu Verzögerungen führt und dann genau die beobachteten
+    // Sollwert-Spikes/Überschwinger erzeugt.
+    // Stabilität kommt hier aus Deadband + Schrittweite/Rampe im Dispatcher.
+    const nvpRawW = (typeof gridRawW === 'number') ? gridRawW : gridW;      // roh (Fallback)
+    const nvpCtrlW = (typeof nvpRawW === 'number') ? nvpRawW : gridW;       // aktuell für Regelung
+    const desiredNvpW = selfTargetGridW; // typischerweise kleiner Import (Default 100 W)
+    const deadbandW = Math.max(0, selfImportThresholdW); // Start-/Stop-Schwelle gegen Flattern
+
+    // Eigenverbrauch hat einen eigenen "Integrator": nur fortsetzen, wenn wir in der letzten Runde
+    // auch aus Eigenverbrauch geregelt haben. Sonst bei 0 starten, damit LSK/Tarif nicht "nachhängt".
+    const lastWasSelf = (this._lastSource === 'eigenverbrauch');
+    const curSetW = (lastWasSelf && typeof this._lastTargetW === 'number' && this._lastTargetW > 0)
+        ? this._lastTargetW
+        : 0;
+
+        // Ist-Batterieleistung (positiv = Entladung). Falls verfügbar nutzen wir eine
+        // OpenEMS-ähnliche Balancing-Regelung: Soll = battIst + (gridIst - gridZiel).
+        // Ohne Istleistung bleibt der bisherige Fallback (inkrementell über letzten Sollwert).
+        const battWRaw = (typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Number(battPowerW) : null;
+        const battW = (typeof battWRaw === 'number') ? Math.max(0, battWRaw) : null;
+
+    // Fehler: positiver Fehler => zu viel Import => mehr entladen.
+    // negativer Fehler => Export/zu wenig Import => Entladung reduzieren.
+    // NOTE: Wenn ROH bereits Export zeigt, ist nvpCtrlW ohnehin negativ – dadurch wird sofort reduziert.
+    const errW = (typeof nvpCtrlW === 'number') ? (nvpCtrlW - desiredNvpW) : 0;
+
+    // PI-light: Inkrement-Regelung.
+    // Hinweis: Stabilisierung erfolgt über Deadband + Dispatcher (Schrittweite/Rampe/Anti-PingPong).
+    // WICHTIG: Innerhalb der Deadband den letzten Sollwert halten. Sonst wandert der
+    // Sollwert mit der zeitversetzten Batterie-/Farm-Istleistung mit und springt trotz
+    // konstantem Hausverbrauch unnötig hoch/runter.
+    const outsideDeadband = (errW > deadbandW || errW < -deadbandW);
+    const holdInDeadband = !outsideDeadband && lastWasSelf && curSetW > 0;
+    let errAdjW = outsideDeadband ? errW : 0;
+
+        // OpenEMS-Balancing (Vorbild): battIst + (gridIst - gridZiel).
+        // Innerhalb der Deadband halten wir den letzten Sollwert statt auf die
+        // zeitversetzte Istleistung zu springen.
+        // Fallback: letzter Sollwert + Fehler
+        let nextSetW = holdInDeadband
+            ? curSetW
+            : ((typeof battW === 'number') ? (battW + errAdjW) : (curSetW + errAdjW));
+
+    // Safety-Clamp gegen Überschwingen:
+    // Wenn battW nicht gemappt ist (oder NVP kurzfristig "alt" ist), kann die inkrementelle Regelung
+    // zu großen Sollwerten aufintegrieren. Wir begrenzen deshalb die Entladeleistung grob auf
+    // "aktuelle Last" am NVP: Import (roh) + aktuelle Entladung (falls messbar) + kleiner Puffer.
+    // Dadurch bleibt die Regelung im Bereich der realen Hauslast und erzeugt keine Export-Spikes.
+    // Bei aktiver Eigenverbrauchsregelung zählt der letzte selbst gesetzte Sollwert als plausible
+    // Entladebasis, damit zeitversetzte/0-W-Istwerte die Farm nicht künstlich herunterziehen.
+    const importRawNowW = Math.max(0, (typeof nvpRawW === 'number') ? nvpRawW : 0);
+    const measuredDischargeNowW = (typeof battW === 'number') ? Math.max(0, battW) : 0;
+    const commandedDischargeNowW = curSetW > 0 ? curSetW : 0;
+    const dischargeNowW = Math.max(measuredDischargeNowW, commandedDischargeNowW);
+    const safetyMarginW = 200; // bewusst konservativ; Feintuning über selfTargetGridW/Deadband/Rampe
+    const maxByDemandW = importRawNowW + dischargeNowW + safetyMarginW;
+    if (Number.isFinite(maxByDemandW) && maxByDemandW > 0) {
+        nextSetW = Math.min(nextSetW, maxByDemandW);
+    }
+
+    // Nur Entladen in diesem Block (kein Laden). Negative Werte sind hier nicht sinnvoll.
+    nextSetW = clamp(nextSetW, 0, selfMaxDischargeEff);
+
+    // SoC-Hysterese: verhindert Flattern um die Untergrenze und sorgt für eine
+    // echte Ruhephase (0 W), sobald die SoC-Grenze erreicht ist.
+    let socOk = true;
+    if (typeof soc === 'number') {
+        this._socSelfDischargeEnabled = hystAbove(
+            this._socSelfDischargeEnabled,
+            soc,
+            selfMinSoc,
+            selfMinSoc + this._socHystPct,
+        );
+        socOk = this._socSelfDischargeEnabled;
+    }
+
+    const allow = (!reserveActive && !reserveChargeWanted && socOk);
+
+    // Aktivierung: Nur wenn Import oberhalb der Schwelle liegt ODER wir bereits aktiv waren
+    // (Integrator hält den Sollwert dann stabil und passt ihn nach oben/unten an).
+    const importNowW = Math.max(0, (typeof nvpCtrlW === 'number') ? nvpCtrlW : 0);
+    const startCond = (importNowW >= deadbandW) || lastWasSelf;
+
+    if (allow && startCond && nextSetW > 0) {
+        targetW = nextSetW;
+            reason = `Eigenverbrauch: entladen (${Math.round(targetW)} W${(typeof battW === 'number') ? ', Balancing' : ''})`;
+        source = 'eigenverbrauch';
+        hardDischargeMinSoc = Math.max(hardDischargeMinSoc, selfMinSoc);
+    }
+    }
+}
+
+// 4) Eigenverbrauch: PV-Überschuss laden (wenn keine Lastspitze/Tarif/EV-Entladung aktiv)
+        if (targetW === 0 && cfg.pvEnabled !== false && !feneconAcMode) {
+            // Zero-Export (Nulleinspeisung): bei Export möglichst früh (Schwellwert) in den Speicher laden.
+            // Hinweis: Extra-Bias nur, wenn Netzladen erlaubt ist (sonst würde der Bias u.U. Netzenergie in den Speicher ziehen).
+            const zeCfg = (this.adapter.config && this.adapter.config.enableGridConstraints) ? (this.adapter.config.gridConstraints || {}) : {};
+            const zeEnabled = !!((this.adapter.config && this.adapter.config.enableGridConstraints) && zeCfg.zeroExportEnabled);
+            const zeDeadband = Math.max(0, num(zeCfg.zeroExportDeadbandW, 50));
+            const zeBias = Math.max(0, num(zeCfg.zeroExportBiasW, 80));
+
+            const thrBase = Math.max(0, num(cfg.pvExportThresholdW, 200));
+            const thr = zeEnabled ? Math.min(thrBase, zeDeadband) : thrBase;
+
+            // Max-SoC für Laden: größter Bereich (Self/LSK/Reserve-Ziel)
+            const lskMaxSocForCharge = (cfg.lskChargeEnabled !== false) ? lskMaxSoc : selfMaxSoc;
+        const maxSocForCharge = clamp(Math.max(selfMaxSoc, lskMaxSocForCharge, reserveTarget), 0, 100);
+            hardChargeMaxSoc = maxSocForCharge;
+
+            const canChargeBySoc = (typeof soc !== 'number') ? true : (soc < maxSocForCharge);
+
+            // Bereichsabhängiges Lade-Limit (Self vs LSK)
+            let chargeLimitW = maxChargeW;
+            if (typeof soc === 'number') {
+                if (soc < selfMaxSoc) {
+                    chargeLimitW = selfMaxChargeEff;
+                } else if (soc < lskMaxSoc) {
+                    chargeLimitW = lskMaxChargeEff;
+                } else {
+                    chargeLimitW = 0;
+                }
+            }
+
+            const pvChargeWouldBeActive = exportRawW >= thr && canChargeBySoc && chargeLimitW > 0;
+            if (pvChargeWouldBeActive && evPriorityBlockStorageCharge) {
+                targetW = 0;
+                reason = evPriorityStarvedW > 0
+                    ? `EV-Priorität: PV zuerst an Ladepunkte (${Math.round(evPriorityStarvedW)} W offen)`
+                    : 'EV-Priorität: PV zuerst an Ladepunkte';
+                source = 'pv';
+            } else if (pvChargeWouldBeActive) {
+                // Für die eigentliche Sollwert-Berechnung nutzen wir den geglätteten Export,
+                // damit die Ladeleistung bei wolkigem Himmel nicht "zittert".
+                const exportCtrlW = (typeof exportW === 'number') ? exportW : exportRawW;
+                const extraBias = (zeEnabled && gridChargeAllowed) ? zeBias : 0;
+                targetW = -clamp(exportCtrlW + extraBias, 0, chargeLimitW);
+                reason = zeEnabled ? 'Nulleinspeisung: Export in Speicher umleiten' : 'Eigenverbrauch: PV-Überschuss laden';
+                source = 'pv';
+            }
+        }
+
+        // 5) Notstrom: Reserve ggf. über Netz wieder auffüllen (optional)
+        // Hinweis: Standardmäßig AUS (reserveGridChargeW = 0). Aktivieren nur, wenn gewünscht.
+        // Wichtig: Bei aktivem Peak-Shaving wird die Netzladung (sofern möglich) innerhalb des Peak-Limits gehalten.
+        if (targetW === 0 && reserveChargeWanted && reserveGridChargeW > 0 && gridChargeAllowed) {
+            // Nur laden, wenn SoC unter Reserve-Ziel
+            // Reserve-Aufladung: SoC-Grenze bereits im Vorfeld mit Hysterese bewertet.
+            const canChargeBySoc = (typeof soc === 'number') ? (this._socReserveRefillEnabled === true) : false;
+            if (canChargeBySoc) {
+                let wantW = clamp(reserveGridChargeW, 0, maxChargeW);
+                if (typeof importHeadroomEffW === 'number') {
+                    wantW = Math.min(wantW, importHeadroomEffW);
+                } else if (typeof psHeadroomFilteredW === 'number') {
+                    wantW = Math.min(wantW, psHeadroomFilteredW);
+                } else if (typeof psHeadroomW === 'number') {
+                    wantW = Math.min(wantW, psHeadroomW);
+                }
+
+                if (wantW > 0) {
+                    targetW = -wantW;
+                    reason = 'Notstrom: Reserve über Netz laden';
+                    source = 'reserve';
+                    hardChargeMaxSoc = Math.max(hardChargeMaxSoc, reserveTarget);
+                }
+            }
+        }
+
+        // Effective headroom for refill:
+        // - Use filtered (average) headroom for stable setpoints
+        // - Clamp with RAW headroom for safety (Import spikes)
+        let psHeadroomEffW = (typeof psHeadroomFilteredW === 'number') ? psHeadroomFilteredW : psHeadroomW;
+        if (typeof psHeadroomEffW === 'number' && typeof psHeadroomRawW === 'number') {
+            psHeadroomEffW = Math.min(psHeadroomEffW, psHeadroomRawW);
+        }
+        // Phase 4: auch globales Import-Headroom beachten (Grid-Constraints / Installateur-Cap)
+        if (typeof importHeadroomEffW === 'number') {
+            psHeadroomEffW = (typeof psHeadroomEffW === 'number') ? Math.min(psHeadroomEffW, importHeadroomEffW) : importHeadroomEffW;
+        }
+
+        // 6) Peak-Shaving: Reserve für nächste Lastspitze aus dem Netz nachladen (Headroom)
+        // Ziel: Falls der Speicher für LSK entladen hat (oder generell unter LSK-Max liegt),
+        // darf er die "übrige" Leistung bis zum Peak-Limit zum Nachladen nutzen.
+        // Dadurch bleibt der Speicher für kommende Peaks verfügbar, ohne die Peak-Grenze zu reißen.
+        if (
+            targetW === 0 &&
+            peakEnabled &&
+            lskEnabledCfg &&
+            (cfg.lskChargeEnabled !== false) &&
+            (typeof psHeadroomEffW === 'number' && psHeadroomEffW > 0) &&
+            (gridW >= 0)
+        ) {
+            // SoC-Hysterese: Refill erst wieder starten, wenn der SoC merklich
+            // unterhalb der Grenze liegt (sonst pendelt es um den Grenzwert).
+            let canChargeBySoc = false;
+            if (typeof soc === 'number') {
+                const onBelow = Math.max(0, lskMaxSoc - this._socHystPct);
+                this._socLskRefillEnabled = hystBelow(this._socLskRefillEnabled, soc, onBelow, lskMaxSoc);
+                canChargeBySoc = !!this._socLskRefillEnabled;
+            }
+            if (canChargeBySoc) {
+                let wantW = Math.min(psHeadroomEffW, lskMaxChargeEff);
+
+                // Optional: reduce "flutter" by holding small upward adjustments.
+                // We intentionally allow fast decreases (safety), but require a minimal delta to increase.
+                const psCfg = (this.adapter.config && this.adapter.config.peakShaving) ? this.adapter.config.peakShaving : {};
+                const psReleaseDelaySec = Math.max(0, num(psCfg.releaseDelaySec, 0));
+                const psReleaseDelayMs = psReleaseDelaySec * 1000;
+                const hysteresisW = Math.max(0, num(psCfg.hysteresisW, 0));
+                // Refill nie bis exakt ans Limit fahren (sonst PingPong/Flattern): wir lassen eine Margin frei.
+                // Margin: mindestens Hysterese oder Ramp-Step.
+                const refillMarginW = Math.max(hysteresisW, stepW, 100);
+                const refillDelayActive = (psReleaseDelayMs > 0) && (this._lastPeakActiveMs > 0) && ((now - this._lastPeakActiveMs) < psReleaseDelayMs);
+
+                // Effektives Headroom für Refill (mit Margin). Mit Margin wird verhindert, dass das
+                // Nachladen die Netzanschlussgrenze "ausreizt" und dadurch direkt wieder eine LSK-
+                // Entladung getriggert wird (Ping-Pong).
+                const headroomForRefillW = Math.max(0, psHeadroomEffW - refillMarginW);
+                wantW = Math.min(headroomForRefillW, lskMaxChargeEff);
+
+                if (refillDelayActive) {
+                    // Direkt nach einem Peak nicht sofort wieder nachladen, sonst pendelt die Regelung.
+                    wantW = 0;
+                    this._lskRefillHoldW = null;
+                }
+                const deadbandW = clamp(num(cfg.lskRefillDeadbandW, num(psCfg.hysteresisW, 500)), 0, 5000);
+                if (stepW > 0) wantW = Math.round(wantW / stepW) * stepW;
+
+                if (typeof this._lskRefillHoldW === 'number') {
+                    const last = this._lskRefillHoldW;
+                    if (wantW < last) {
+                        // decrease immediately
+                        this._lskRefillHoldW = wantW;
+                    } else if (deadbandW > 0 && (wantW - last) < deadbandW) {
+                        // hold
+                        wantW = last;
+                    } else {
+                        this._lskRefillHoldW = wantW;
+                    }
+                } else {
+                    this._lskRefillHoldW = wantW;
+                }
+
+                wantW = (typeof this._lskRefillHoldW === 'number') ? this._lskRefillHoldW : wantW;
+
+                if (wantW > 0) {
+                    targetW = -wantW;
+                    reason = `LSK: Reserve über Netz nachladen (${Math.round(psHeadroomEffW)} W frei)`;
+                    source = 'lastspitze_refill';
+                    hardChargeMaxSoc = Math.max(hardChargeMaxSoc, lskMaxSoc);
+                }
+            }
+        }
+
+        
+        // 6b) Diagnose: LSK-Refill gewünscht, aber kein Grenzwert/Headroom vorhanden
+        // Damit ist im Betrieb sofort sichtbar, warum kein Netzladen erfolgt.
+        if (
+            targetW === 0 &&
+            peakEnabled &&
+            lskEnabledCfg &&
+            (cfg.lskChargeEnabled !== false) &&
+            (gridW >= 0) &&
+            (typeof soc === 'number') && (this._socLskRefillEnabled === true)
+        ) {
+            if (!(typeof psLimitW === 'number' && psLimitW > 0)) {
+                reason = 'LSK: kein Grenzwert konfiguriert (Netzanschlussleistung im EMS setzen)';
+                source = 'lastspitze_refill';
+            } else if (!(typeof psHeadroomEffW === 'number' && psHeadroomEffW > 0)) {
+                reason = `LSK: kein Headroom frei (${Math.round(importW)} / ${Math.round(psLimitW)} W)`;
+                source = 'lastspitze_refill';
+            }
+        }
+
+        // ------------------------------------------------------------
+        // Phase 2: Dispatcher-Diagnose (Policy-Request vs. finaler Setpoint)
+        // ------------------------------------------------------------
+        const _reqW = targetW;
+        const _reqQuelle = source;
+        const _reqGrund = reason;
+
+        // Grenzen anwenden
+        targetW = clamp(targetW, -maxChargeW, maxDischargeW);
+        const _clampW = targetW;
+
+        // Schrittweite
+        if (stepW > 0) {
+            targetW = Math.round(targetW / stepW) * stepW;
+        }
+        const _stepW = targetW;
+
+        // Anti-PingPong (Laden <-> Entladen) / Anti-Flattern um 0
+        // Ziel: Kleine Schwingungen und harte Richtungswechsel vermeiden, ohne die
+        // Lastspitzenkappung (Sicherheitsfunktion) zu blockieren.
+        {
+            // WICHTIG (Bug-Fix): Die Peak-Shaving Hysterese darf nicht pauschal als
+            // "Zero-Band" für alle Speicher-Policies wirken.
+            //
+            // Sonst passiert genau das beobachtete Verhalten:
+            // - peakShaving.hysteresisW ist häufig 500 W (Default)
+            // - Eigenverbrauch will z. B. 350–450 W entladen
+            // - Anti-Flattern setzt alles < 500 W auf 0 W => Speicher bleibt aus
+            //
+            // Daher: Peak-Hysterese nur für peak-bezogene Quellen (LSK/Refill).
+            const psRelevant = (source === 'lastspitze' || source === 'lastspitze_refill');
+            const psHystW = psRelevant ? Math.max(0, num(psCfg.hysteresisW, 0)) : 0;
+            // NVP-Balancing (Eigenverbrauch-/Tarif-Entladung): hier wollen wir auch kleine Leistungen zulassen,
+            // sonst bleibt ein Rest-Netzbezug (z. B. 30–90 W) dauerhaft stehen.
+            // Erkennung: Quellen mit feiner Entlade-Regelung (Eigenverbrauch, Tarif, FENECON AC).
+            const isNvpBalancing = (targetW > 0) && (source === 'eigenverbrauch' || source === 'tarif' || source === 'fenecon');
+            const zeroBandW = Math.max(psHystW, stepW, isNvpBalancing ? 20 : 100);
+
+            // Optional: Expert-Parameter. Wenn nicht gesetzt, Default 5s.
+            const cfgHoldSec = Math.max(0, num(cfg.modeHoldSec, 0));
+            const baseHoldMs = cfgHoldSec > 0 ? (cfgHoldSec * 1000) : 5000;
+            const relHoldMs = Math.max(0, num(psCfg.releaseDelaySec, 0)) * 1000;
+            const holdMs = Math.max(2000, Math.min(15000, Math.max(baseHoldMs, relHoldMs)));
+
+            const emergencyDischarge = (source === 'lastspitze') && (targetW > 0);
+
+            if (emergencyDischarge) {
+                // Sicherheitsfall: Lock aufheben, damit wir garantiert entladen können.
+                this._signLockUntilMs = 0;
+                this._signLockReason = '';
+            } else {
+                // Kleine Zielwerte um 0 => 0 (Anti-Flattern)
+                if (Math.abs(targetW) < zeroBandW) {
+                    targetW = 0;
+                    // Diagnose: Der Sollwert wurde bewusst auf 0 gesetzt.
+                    // (ohne Änderung wäre für den Betreiber nicht ersichtlich, warum keine Entladung/Ladung stattfindet)
+                    if (source && source !== 'idle') {
+                        reason = `${reason || 'Regelung'} (Deadband < ${Math.round(zeroBandW)} W)`;
+                        source = 'idle';
+                    }
+                }
+
+                // Wenn gerade eine Sperrzeit aktiv ist: Zielwert auf 0 zwingen
+                if (this._signLockUntilMs && (now < this._signLockUntilMs)) {
+                    if (targetW !== 0) {
+                        targetW = 0;
+                        if (!reason) {
+                            reason = this._signLockReason || 'Anti-PingPong aktiv (Sperrzeit)';
+                        }
+                        if (!source) {
+                            source = 'idle';
+                        }
+                    }
+                } else {
+                    // Neue Richtungsumkehr erkennen
+                    const prevW = (typeof this._lastTargetW === 'number') ? this._lastTargetW : 0;
+                    const signFlip = (prevW !== 0) && (targetW !== 0)
+                        && (Math.sign(prevW) !== Math.sign(targetW))
+                        && (Math.abs(prevW) >= zeroBandW) && (Math.abs(targetW) >= zeroBandW);
+
+                    if (signFlip) {
+                        this._signLockUntilMs = now + holdMs;
+                        this._signLockReason = 'Anti-PingPong: Richtungswechsel -> erst auf 0 gehen';
+                        targetW = 0;
+                        reason = this._signLockReason;
+                        source = 'idle';
+                    } else {
+                        this._signLockReason = '';
+                    }
+                }
+            }
+        }
+
+        const _antiW = targetW;
+
+// Rampenbegrenzung
+// Soft-Start: Wenn nach Neustart noch kein letzter Sollwert bekannt ist, starten wir von 0 W.
+// Das verhindert große Sollwert-Sprünge beim Aktivieren (z. B. Eigenverbrauch / Tarif-NVP-Regelung).
+const _prevRampW = (typeof this._lastTargetW === 'number' && Number.isFinite(this._lastTargetW)) ? this._lastTargetW : 0;
+{
+    const d = targetW - _prevRampW;
+
+    // PV-Überschuss-Laden: schneller hochfahren (mehr Laden), aber schnell zurücknehmen (sicher gegen Netzbezug)
+    if (source === 'pv' && targetW < 0) {
+        const pvMaxDelta = (pvMaxDeltaCfg > 0) ? pvMaxDeltaCfg : maxDelta;
+
+        if (pvMaxDelta > 0 && d < 0 && Math.abs(d) > pvMaxDelta) {
+            // d < 0 => stärker laden (mehr negativ) -> begrenzen
+            targetW = _prevRampW - pvMaxDelta;
+            reason = `${reason} (PV‑Rampe)`;
+        }
+        // d >= 0 => weniger laden / Richtung 0 -> bewusst ohne Rampe (schnell reagieren)
+    } else if (source === 'lastspitze' && targetW > 0) {
+	        // Lastspitzenkappung: Sollwertsprünge begrenzen, damit der Speicher nicht "nervös" regelt.
+	        // Hinweis: Für schnellere Reaktion -> "Max ΔW/Tick" erhöhen bzw. im Peak‑Shaving eine Reserve (W) setzen,
+	        // damit Lastspitzen innerhalb der Reserve abgefangen werden können.
+	        if (maxDelta > 0 && Math.abs(d) > maxDelta) {
+	            targetW = _prevRampW + Math.sign(d) * maxDelta;
+	            reason = `${reason} (LSK‑Rampe)`;
+	        }
+    } else if (source === 'fenecon' || this._lastSource === 'fenecon') {
+        // FENECON AC-Lastfolger: Lastsprünge müssen in beide Richtungen schnell übernommen werden,
+        // sonst bleibt kurz Netzbezug stehen oder es entsteht beim Lastabwurf unnötige Einspeisung.
+        // Deshalb hier bewusst keine zusätzliche Rampe.
+    } else {
+        // Standard: symmetrische Rampe
+        if (maxDelta > 0 && Math.abs(d) > maxDelta) {
+            targetW = _prevRampW + Math.sign(d) * maxDelta;
+            reason = `${reason} (Rampenbegrenzung)`;
+        }
+    }
+}
+
+        const _rampW = targetW;
+
+        // Harte SoC-Grenzen auch nach Rundung/Rampe erzwingen (wichtig gegen "Rampen-Nachlauf")
+        if (targetW > 0) {
+            // Entladen: Notstrom-Reserve immer hart
+            if (reserveActive) {
+                targetW = 0;
+                reason = 'Entladen blockiert (Notstrom-Reserve aktiv)';
+                source = 'reserve';
+            } else if ((typeof soc === 'number') && (soc <= hardDischargeMinSoc)) {
+                targetW = 0;
+                reason = `Entladen blockiert (SoC <= ${hardDischargeMinSoc}%)`;
+                source = 'reserve';
+            }
+        } else if (targetW < 0) {
+            // Laden: Max-SoC respektieren
+            if ((typeof soc === 'number') && (soc >= hardChargeMaxSoc)) {
+                targetW = 0;
+                reason = `Laden blockiert (SoC >= ${hardChargeMaxSoc}%)`;
+                source = 'pv';
+            }
+        }
+
+        // ------------------------------------------------------------
+        // FENECON-Hybrid-Policy (Single-Speicher, keine Farm)
+        // ------------------------------------------------------------
+        let feneconNoWrite = false;
+        let feneconWriteMode = '';
+        if (feneconHybridActive) {
+            const ctx = feneconHybridCtx || {};
+            const mode = String(ctx.mode || '');
+
+            if (mode === 'fems-pass-through') {
+                // Interne FENECON-PV ist aktiv und keine zusätzliche externe PV erkannt:
+                // NexoWatt schreibt nichts, FEMS regelt den Hybrid-Speicher selbst.
+                targetW = 0;
+                source = 'fenecon-fems';
+                reason = ctx.reason || 'FENECON Hybrid: PV aktiv – FEMS regelt selbst, keine externe Vorgabe';
+                feneconNoWrite = true;
+                feneconWriteMode = 'no-write';
+            } else if (mode === 'external-pv-charge-only') {
+                // Zusätzliche PV ist aktiv: Nur PV-Überschuss-Ladung darf extern vorgegeben
+                // werden. Tarif-/Entlade-/Peak-Setpoints werden während interner PV nicht
+                // gegen die FEMS-Hybridregelung gefahren.
+                if (targetW < 0 && source === 'pv') {
+                    const extraCapW = Math.max(0, Number(ctx.additionalPvW) || 0);
+                    const absTarget = Math.abs(targetW);
+                    if (extraCapW > 0) targetW = -Math.min(absTarget, extraCapW);
+                    reason = String(reason || 'PV-Überschuss laden') + ' · FENECON Zusatz-PV (' + Math.round(extraCapW) + ' W)';
+                    source = 'fenecon-extra-pv';
+                    feneconWriteMode = 'write-extra-pv-charge';
+                } else {
+                    targetW = 0;
+                    source = 'fenecon-fems';
+                    reason = ctx.reason || 'FENECON Hybrid: interne PV aktiv – nur Zusatz-PV-Laden erlaubt, sonst FEMS';
+                    feneconNoWrite = true;
+                    feneconWriteMode = 'no-write';
+                }
+            } else if (mode === 'external-control-low-pv') {
+                // Wenig/keine FENECON-PV: NexoWatt darf normal regeln. Der Sollwert
+                // wird unten per _applyTargetW in jedem Tick erneuert und bleibt damit
+                // innerhalb des FENECON-10s-Watchdogs.
+                feneconWriteMode = 'write-low-pv';
+            } else {
+                feneconWriteMode = 'standard';
+            }
+
+            await this._setFeneconHybridDiag({
+                active: true,
+                mode: mode || (feneconNoWrite ? 'fems-pass-through' : 'external-control-low-pv'),
+                reason,
+                writeMode: feneconWriteMode || (feneconNoWrite ? 'no-write' : 'write'),
+                targetW,
+                pvW: ctx.pvW,
+                additionalPvW: ctx.additionalPvW,
+                thresholdW: ctx.thresholdW,
+                additionalThresholdW: ctx.additionalThresholdW,
+                nvpW: (typeof gridRawW === 'number' && Number.isFinite(gridRawW)) ? gridRawW : gridW,
+            });
+        }
+
+        // ------------------------------------------------------------
+        // Phase 2: Dispatcher-Diagnose-Zustände schreiben
+        // ------------------------------------------------------------
+        const _finalW = targetW;
+
+        await this._setIfChanged('speicher.regelung.requestW', Number.isFinite(Number(_reqW)) ? Math.round(Number(_reqW)) : 0);
+        await this._setIfChanged('speicher.regelung.requestQuelle', String(_reqQuelle || ''));
+        await this._setIfChanged('speicher.regelung.requestGrund', String(_reqGrund || ''));
+
+        // ------------------------------------------------------------
+        // Phase 5: Policy/Audit – „wer will gerade was vom Speicher?“
+        // ------------------------------------------------------------
+        try {
+            const tvPol = (this.adapter && this.adapter._tarifVis) ? this.adapter._tarifVis : null;
+			const pol = {
+				ts: now,
+				nvp: {
+					// "ctrlW" ist der geglättete Wert (wie in der UI/Vis oft angezeigt).
+					// "rawW" ist der ungeglättete NVP.
+					// "usedW" ist der Wert, den wir in der Regelung bevorzugen (raw falls vorhanden).
+					ctrlW: (typeof gridW === 'number' && Number.isFinite(gridW)) ? Math.round(gridW) : null,
+					rawW: (typeof gridRawW === 'number' && Number.isFinite(gridRawW)) ? Math.round(gridRawW) : null,
+					usedW: (typeof gridRawW === 'number' && Number.isFinite(gridRawW)) ? Math.round(gridRawW)
+						: ((typeof gridW === 'number' && Number.isFinite(gridW)) ? Math.round(gridW) : null),
+					ageMs: (typeof gridAge === 'number' && Number.isFinite(gridAge)) ? Math.round(gridAge) : null,
+				},
+				battery: {
+					powerW: (typeof battPowerW === 'number' && Number.isFinite(battPowerW)) ? Math.round(battPowerW) : null,
+					ageMs: (typeof battPowerAge === 'number' && Number.isFinite(battPowerAge)) ? Math.round(battPowerAge) : null,
+					invalidReason: (battPowerInvalidReason && String(battPowerInvalidReason).trim()) ? String(battPowerInvalidReason).trim() : null,
+				},
+                soc: (typeof soc === 'number' && Number.isFinite(soc)) ? soc : null,
+                permissions: {
+                    gridChargeAllowed: (typeof gridChargeAllowed === 'boolean') ? gridChargeAllowed : null,
+                    dischargeAllowed: (typeof dischargeAllowed === 'boolean') ? dischargeAllowed : null,
+                },
+                tarif: {
+                    active: !!(tvPol && tvPol.aktiv),
+                    state: (tvPol && typeof tvPol.state === 'string') ? tvPol.state : null,
+                    storageWantW: (tvPol && typeof tvPol.speicherSollW === 'number') ? tvPol.speicherSollW : null,
+                },
+                pvForecast: (() => {
+                    const pf = (this.adapter && this.adapter._pvForecast) ? this.adapter._pvForecast : null;
+                    if (!pf) return null;
+                    return {
+                        valid: !!pf.valid,
+                        ageMs: (pf.ageMs === null || pf.ageMs === undefined || !Number.isFinite(Number(pf.ageMs))) ? null : Math.round(Number(pf.ageMs)),
+                        kwhNext24h: (typeof pf.kwhNext24h === 'number' && Number.isFinite(pf.kwhNext24h)) ? Number(pf.kwhNext24h) : null,
+                        peakWNext24h: (typeof pf.peakWNext24h === 'number' && Number.isFinite(pf.peakWNext24h)) ? Math.round(pf.peakWNext24h) : null,
+                        points: (typeof pf.points === 'number' && Number.isFinite(pf.points)) ? pf.points : null,
+                    };
+                })(),
+                pvAwareTarifNetzladen: pvAwareTariff ? pvAwareTariff : null,
+                evcs: {
+                    storageAssistReqW: (typeof evcsAssistReqW === 'number' && Number.isFinite(evcsAssistReqW)) ? Math.round(evcsAssistReqW) : 0,
+                },
+                evPriority: evPriorityCaps ? {
+                    active: !!(feneconAcMode && evPriorityCaps.active),
+                    blockStorageCharge: !!evPriorityBlockStorageCharge,
+                    starvedW: Math.round(evPriorityStarvedW || 0),
+                    pendingW: (feneconAcMode && Number.isFinite(Number(evPriorityCaps.pendingW))) ? Math.round(Number(evPriorityCaps.pendingW)) : 0,
+                    storageYieldW: (feneconAcMode && Number.isFinite(Number(evPriorityCaps.storageYieldW))) ? Math.round(Number(evPriorityCaps.storageYieldW)) : 0,
+                    requestedCount: (feneconAcMode && Number.isFinite(Number(evPriorityCaps.requestedCount))) ? Math.round(Number(evPriorityCaps.requestedCount)) : 0,
+                    limitedWallboxes: (feneconAcMode && Number.isFinite(Number(evPriorityCaps.limitedWallboxes))) ? Math.round(Number(evPriorityCaps.limitedWallboxes)) : 0,
+                } : null,
+                fenecon: feneconHybridConfigured ? {
+                    hybridMode: !!feneconHybridActive,
+                    configured: !!feneconHybridConfigured,
+                    farmBlocked: !!feneconHybridBlockedByFarm,
+                    mode: feneconHybridCtx && feneconHybridCtx.mode ? String(feneconHybridCtx.mode) : (feneconHybridBlockedByFarm ? 'blocked-by-farm' : 'standard'),
+                    writeMode: feneconWriteMode || '',
+                    noWrite: !!feneconNoWrite,
+                    pvW: (feneconHybridCtx && Number.isFinite(Number(feneconHybridCtx.pvW))) ? Math.round(Number(feneconHybridCtx.pvW)) : null,
+                    additionalPvW: (feneconHybridCtx && Number.isFinite(Number(feneconHybridCtx.additionalPvW))) ? Math.round(Number(feneconHybridCtx.additionalPvW)) : 0,
+                    thresholdW: (feneconHybridCtx && Number.isFinite(Number(feneconHybridCtx.thresholdW))) ? Math.round(Number(feneconHybridCtx.thresholdW)) : null,
+                    reason: feneconHybridCtx && feneconHybridCtx.reason ? String(feneconHybridCtx.reason) : '',
+                    watchdogSec: 10,
+                    setGridActivePowerUsed: false,
+                } : {
+                    hybridMode: false,
+                    configured: false,
+                    farmBlocked: false,
+                    mode: 'standard',
+                    setGridActivePowerUsed: false,
+                },
+                limits: {
+                    importLimitW: (typeof importLimitW === 'number' && Number.isFinite(importLimitW)) ? Math.round(importLimitW) : null,
+                    importHeadroomW: (typeof importHeadroomEffW === 'number' && Number.isFinite(importHeadroomEffW)) ? Math.round(importHeadroomEffW) : null,
+                },
+                reserve: {
+                    active: !!reserveActive,
+                    chargeWanted: !!reserveChargeWanted,
+                    minSocPct: reserveMin,
+                    targetSocPct: reserveTarget,
+                },
+                decision: {
+                    targetW: (typeof targetW === 'number' && Number.isFinite(targetW)) ? Math.round(targetW) : 0,
+                    source: String(source || ''),
+                    reason: String(reason || ''),
+                },
+            };
+            await this._setIfChanged('speicher.regelung.tarifState', (pol.tarif && typeof pol.tarif.state === 'string') ? pol.tarif.state : '');
+            await this._setIfChanged('speicher.regelung.tarifPvBlock', !!(pvAwareTariff && pvAwareTariff.blocked));
+            await this._setIfChanged('speicher.regelung.tarifPvBlockGrund', (pvAwareTariff && typeof pvAwareTariff.reason === 'string') ? pvAwareTariff.reason : '');
+            await this._setIfChanged('speicher.regelung.tarifPvCapSocPct', (pvAwareTariff && typeof pvAwareTariff.capSocPct === 'number' && Number.isFinite(pvAwareTariff.capSocPct)) ? Number(pvAwareTariff.capSocPct) : null);
+            await this._setIfChanged('speicher.regelung.tarifPvHeadroomSocPct', (pvAwareTariff && typeof pvAwareTariff.headroomSocPct === 'number' && Number.isFinite(pvAwareTariff.headroomSocPct)) ? Number(pvAwareTariff.headroomSocPct) : null);
+            await this._setIfChanged('speicher.regelung.tarifPvHeadroomKWh', (pvAwareTariff && typeof pvAwareTariff.pvStorableKWh === 'number' && Number.isFinite(pvAwareTariff.pvStorableKWh)) ? Number(pvAwareTariff.pvStorableKWh) : null);
+            await this._setIfChanged('speicher.regelung.policyJson', JSON.stringify(pol));
+        } catch {
+            // ignore
+        }
+
+        const _diag = {
+            ts: now,
+            reqW: Number.isFinite(Number(_reqW)) ? Math.round(Number(_reqW)) : 0,
+            clampW: Number.isFinite(Number(_clampW)) ? Math.round(Number(_clampW)) : 0,
+            stepW: Number.isFinite(Number(_stepW)) ? Math.round(Number(_stepW)) : 0,
+            antiW: Number.isFinite(Number(_antiW)) ? Math.round(Number(_antiW)) : 0,
+            rampW: Number.isFinite(Number(_rampW)) ? Math.round(Number(_rampW)) : 0,
+            finalW: Number.isFinite(Number(_finalW)) ? Math.round(Number(_finalW)) : 0,
+            reqSrc: String(_reqQuelle || ''),
+            reqReason: String(_reqGrund || ''),
+            src: String(source || ''),
+            reason: String(reason || ''),
+        };
+        await this._setIfChanged('speicher.regelung.dispatcherJson', JSON.stringify(_diag));
+
+        if (feneconNoWrite) {
+            await this._setNoWriteTargetDiag(targetW, reason, source, 'fenecon-fems:no-write');
+            this._feneconHybridWasExternal = false;
+        } else {
+            await this._applyTargetW(targetW, reason, source);
+            if (feneconHybridActive) this._feneconHybridWasExternal = true;
+        }
+
+        // Diagnose: Grenzen
+        // (0 = unbegrenzt)
+        await this._setIfChanged('speicher.regelung.maxChargeW', (maxChargeLimitW_cfg > 0) ? Math.round(maxChargeLimitW_cfg) : 0);
+        await this._setIfChanged('speicher.regelung.maxDischargeW', (maxDischargeLimitW_cfg > 0) ? Math.round(maxDischargeLimitW_cfg) : 0);
+        await this._setIfChanged('speicher.regelung.stepW', Math.round(stepW));
+        await this._setIfChanged('speicher.regelung.maxDeltaWPerTick', Math.round(maxDelta));
+        await this._setIfChanged('speicher.regelung.pvSchwelleW', Math.round(Math.max(0, num(cfg.pvExportThresholdW, 200))));
+    }
+
+    /**
+     * Code-Teil: Methode `_getCfg`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _getCfg
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    _getCfg() {
+        const storage = (this.adapter.config && this.adapter.config.storage) ? this.adapter.config.storage : {};
+        return {
+            controlMode: storage.controlMode,
+            staleTimeoutSec: storage.staleTimeoutSec,
+            socHystPct: storage.socHystPct,
+            modeHoldSec: storage.modeHoldSec,
+            tariffPermissionHoldSec: storage.tariffPermissionHoldSec,
+            maxChargeW: storage.maxChargeW,
+            maxDischargeW: storage.maxDischargeW,
+            stepW: storage.stepW,
+            maxDeltaWPerTick: storage.maxDeltaWPerTick,
+            pvMaxDeltaWPerTick: storage.pvMaxDeltaWPerTick,
+            reserveEnabled: storage.reserveEnabled,
+            reserveMinSocPct: storage.reserveMinSocPct,
+            reserveTargetSocPct: storage.reserveTargetSocPct,
+            reserveGridChargeW: storage.reserveGridChargeW,
+            pvEnabled: storage.pvEnabled,
+            pvExportThresholdW: storage.pvExportThresholdW,
+
+            // Gate E
+            lskEnabled: storage.lskEnabled,
+            lskDischargeEnabled: storage.lskDischargeEnabled,
+            lskChargeEnabled: storage.lskChargeEnabled,
+            lskMinSocPct: storage.lskMinSocPct,
+            lskMaxSocPct: storage.lskMaxSocPct,
+            lskMaxChargeW: storage.lskMaxChargeW,
+            lskMaxDischargeW: storage.lskMaxDischargeW,
+            lskRefillAvgSeconds: storage.lskRefillAvgSeconds,
+            lskRefillDeadbandW: storage.lskRefillDeadbandW,
+
+
+
+            selfDischargeEnabled: storage.selfDischargeEnabled,
+            // Legacy: feneconAcMode bleibt als Migrations-Alias erhalten.
+            // feneconGridControlEnabled ist aus UI-/Migrationsgründen der gespeicherte
+            // Haken, bedeutet ab 0.6.255 aber: FENECON-Hybrid-FEMS-Priorität.
+            feneconAcMode: storage.feneconAcMode,
+            feneconGridControlEnabled: storage.feneconGridControlEnabled,
+            feneconPvPassthroughThresholdW: storage.feneconPvPassthroughThresholdW,
+            feneconAdditionalPvThresholdW: storage.feneconAdditionalPvThresholdW,
+            feneconGridTargetW: storage.feneconGridTargetW,
+            feneconGridExportBufferW: storage.feneconGridExportBufferW,
+            feneconGridMinSetpointW: storage.feneconGridMinSetpointW,
+            feneconGridMaxSetpointW: storage.feneconGridMaxSetpointW,
+            feneconGridWriteIntervalSec: storage.feneconGridWriteIntervalSec,
+            feneconGridResetOnDisable: storage.feneconGridResetOnDisable,
+            selfMinSocPct: storage.selfMinSocPct,
+            selfMaxSocPct: storage.selfMaxSocPct,
+            selfTargetGridImportW: storage.selfTargetGridImportW,
+            selfImportThresholdW: storage.selfImportThresholdW,
+            selfMaxChargeW: storage.selfMaxChargeW,
+            selfMaxDischargeW: storage.selfMaxDischargeW,
+            capacityKWh: storage.capacityKWh,
+
+            // PV‑Reserve (Tarif‑Netzladen)
+            tariffPvReserveEnabled: storage.tariffPvReserveEnabled,
+            tariffPvReserveHorizonHours: storage.tariffPvReserveHorizonHours,
+            tariffPvReserveCaptureFactor: storage.tariffPvReserveCaptureFactor,
+            tariffPvReserveConfidence: storage.tariffPvReserveConfidence,
+            tariffPvReserveMinSocPct: storage.tariffPvReserveMinSocPct,
+
+
+            // Tarif-Entladung (NVP-Regelung)
+            tariffTargetGridImportW: storage.tariffTargetGridImportW,
+            tariffImportThresholdW: storage.tariffImportThresholdW,
+        };
+    }
+
+    /**
+     * Code-Teil: Methode `_isFeneconHybridControlConfigured`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    _isFeneconHybridControlConfigured(cfg = {}) {
+        if (cfg && typeof cfg.feneconGridControlEnabled === 'boolean') return cfg.feneconGridControlEnabled === true;
+        // Migration: ältere Installationen hatten nur storage.feneconAcMode.
+        // Ab 0.6.255 bedeutet dieser alte Haken: FENECON-Hybrid-Sondermodus
+        // (FEMS-Priorität am Tag, NexoWatt nur bei Zusatz-PV oder wenig/keiner PV).
+        return !!(cfg && cfg.feneconAcMode === true);
+    }
+
+    // Legacy-Alias für ältere interne Aufrufe.
+    /**
+     * Code-Teil: Methode `_isFeneconGridControlConfigured`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    _isFeneconGridControlConfigured(cfg = {}) {
+        return this._isFeneconHybridControlConfigured(cfg);
+    }
+    async _buildFeneconHybridContext({ cfg = {}, staleMs = 15000, readCacheNumber = null, gridW = null, gridRawW = null } = {}) {
+        const thresholdW = Math.max(0, num(cfg.feneconPvPassthroughThresholdW, 1000));
+        const additionalThresholdW = Math.max(0, num(cfg.feneconAdditionalPvThresholdW, 100));
+        const now = Date.now();
+
+        /**
+         * Code-Teil: Arrow-Funktion `readCache`
+         * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: readCache
+         * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+         * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
+        const readCache = (key) => {
+            const sid = String(key || '').trim();
+            if (!sid) return null;
+            try {
+                const rec = this.adapter && this.adapter.stateCache ? this.adapter.stateCache[sid] : null;
+                if (rec) {
+                    const age = Number.isFinite(Number(rec.ts)) ? (now - Number(rec.ts)) : 0;
+                    if (age >= 0 && age <= staleMs) {
+                        const n = Number(rec.value);
+                        if (Number.isFinite(n)) return n;
+                    }
+                    return null;
+                }
+            } catch {
+                // ignore
+            }
+            try {
+                if (typeof readCacheNumber === 'function') {
+                    const n = readCacheNumber(sid, null);
+                    if (typeof n === 'number' && Number.isFinite(n)) return n;
+                }
+            } catch {
+                // ignore
+            }
+            return null;
+        };
+
+        const candidates = [];
+        /**
+         * Code-Teil: Arrow-Funktion `pushCandidate`
+         * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        /**
+         * Code-Teil: pushCandidate
+         * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+         * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
+        const pushCandidate = (value, source) => {
+            const n = Number(value);
+            if (Number.isFinite(n)) candidates.push({ w: Math.max(0, Math.abs(n)), source });
+        };
+        /**
+         * Code-Teil: readOwnFreshNumber
+         * Zweck: Liest Werte mit Fallbacks aus Cache/State/Config.
+         * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+         * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+         */
+        const readOwnFreshNumber = async (id) => {
+            try {
+                const st = await this.adapter.getStateAsync(id);
+                if (!st) return null;
+                const age = Number.isFinite(Number(st.ts)) ? (now - Number(st.ts)) : 0;
+                if (age < 0 || age > staleMs) return null;
+                const n = Number(st.val);
+                return Number.isFinite(n) ? n : null;
+            } catch {
+                return null;
+            }
+        };
+
+        pushCandidate(await readOwnFreshNumber('derived.core.pv.totalW'), 'derived.core.pv.totalW');
+        pushCandidate(await readOwnFreshNumber('derived.core.pv.acW'), 'derived.core.pv.acW');
+        pushCandidate(readCache('pvPower'), 'pvPower');
+        pushCandidate(readCache('productionTotal'), 'productionTotal');
+        if (this.dp) {
+            pushCandidate(this.dp.getNumberFresh('ps.pvW', staleMs, null), 'ps.pvW');
+        }
+
+        let pvW = 0;
+        let pvSource = 'missing';
+        for (const c of candidates) {
+            if (c.w >= pvW) {
+                pvW = c.w;
+                pvSource = c.source;
+            }
+        }
+
+        let additionalPvW = 0;
+        let additionalCount = 0;
+        for (let i = 1; i <= 5; i++) {
+            const n = readCache('producer' + i + 'Power');
+            if (typeof n === 'number' && Number.isFinite(n)) {
+                const w = Math.max(0, Math.abs(n));
+                additionalPvW += w;
+                if (w > 0) additionalCount++;
+            }
+        }
+
+        const nvpW = (typeof gridRawW === 'number' && Number.isFinite(gridRawW))
+            ? Number(gridRawW)
+            : ((typeof gridW === 'number' && Number.isFinite(gridW)) ? Number(gridW) : null);
+        const exportW = (typeof nvpW === 'number') ? Math.max(0, -nvpW) : 0;
+
+        const internalPvActive = pvW >= thresholdW;
+        const additionalPvActive = additionalPvW >= additionalThresholdW;
+
+        let mode = 'external-control-low-pv';
+        let writeMode = 'write-low-pv';
+        let reason = 'FENECON Hybrid: PV < ' + Math.round(thresholdW) + ' W – NexoWatt-Regelung aktiv';
+
+        if (internalPvActive && additionalPvActive) {
+            mode = 'external-pv-charge-only';
+            writeMode = 'write-extra-pv-charge';
+            reason = 'FENECON Hybrid: interne PV aktiv, Zusatz-PV erkannt (' + Math.round(additionalPvW) + ' W) – nur Zusatz-PV-Laden extern';
+        } else if (internalPvActive) {
+            mode = 'fems-pass-through';
+            writeMode = 'no-write';
+            reason = 'FENECON Hybrid: PV >= ' + Math.round(thresholdW) + ' W – FEMS regelt selbst, keine externe Vorgabe';
+        }
+
+        return {
+            active: true,
+            configured: true,
+            farmBlocked: false,
+            mode,
+            writeMode,
+            reason,
+            pvW,
+            pvSource,
+            thresholdW,
+            additionalPvW,
+            additionalCount,
+            additionalThresholdW,
+            additionalPvActive,
+            internalPvActive,
+            nvpW,
+            exportW,
+        };
+    }
+
+    /**
+     * Code-Teil: Methode `_setFeneconHybridDiag`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    async _setFeneconHybridDiag(ctx = {}) {
+        const active = !!ctx.active;
+        const mode = String(ctx.mode || '');
+        const reason = String(ctx.reason || '');
+        const writeMode = String(ctx.writeMode || '');
+        /**
+         * Code-Teil: n
+         * Zweck: Kapselt einen klar abgegrenzten Verarbeitungsschritt innerhalb dieser Datei.
+         * Zusammenhang: Gehört zu NWCore-Vorlage (interner Core-/Template-Code, der mit EMS-Strukturen zusammenhängt) und wird von benachbarten UI-/API-/EMS-Bausteinen genutzt.
+         * Wartung/TypeScript: Änderungen können LIVE-Energiefluss, aktuelle Werte und History beeinflussen; DP-Fallbacks nur mit Regressionstest ändern. Beim TS-Umbau Parameter, Rückgabe und genutzte State-/Config-Objekte explizit typisieren.
+         */
+        const n = (v, fallback = null) => Number.isFinite(Number(v)) ? Math.round(Number(v)) : fallback;
+        await this._setIfChanged('speicher.regelung.feneconHybridAktiv', active);
+        await this._setIfChanged('speicher.regelung.feneconHybridModus', mode);
+        await this._setIfChanged('speicher.regelung.feneconHybridGrund', reason);
+        await this._setIfChanged('speicher.regelung.feneconHybridSchreibmodus', writeMode);
+        await this._setIfChanged('speicher.regelung.feneconHybridPvW', n(ctx.pvW));
+        await this._setIfChanged('speicher.regelung.feneconHybridZusatzPvW', n(ctx.additionalPvW, 0));
+        await this._setIfChanged('speicher.regelung.feneconHybridSchwelleW', n(ctx.thresholdW));
+        await this._setIfChanged('speicher.regelung.feneconHybridZusatzSchwelleW', n(ctx.additionalThresholdW));
+        await this._setIfChanged('speicher.regelung.feneconHybridSollW', n(ctx.targetW, 0));
+        await this._setIfChanged('speicher.regelung.feneconHybridNvpW', n(ctx.nvpW));
+
+        // Legacy-Diagnosen aus 0.6.254 neutral halten, damit alte VIS/Debug-Ansichten nicht
+        // fälschlich eine SetGridActivePower-Nutzung anzeigen.
+        await this._setIfChanged('speicher.regelung.feneconGridAktiv', false);
+        await this._setIfChanged('speicher.regelung.feneconGridQuelle', 'deprecated');
+        await this._setIfChanged('speicher.regelung.feneconGridGrund', active ? 'ab 0.6.255 nicht genutzt – FENECON-Hybrid nutzt den Sollleistungs-DP bzw. No-Write/FEMS' : reason);
+        await this._setIfChanged('speicher.regelung.feneconGridSchreibOk', false);
+        await this._setIfChanged('speicher.regelung.feneconGridSchreibStatus', 'deprecated');
+    }
+
+    /**
+     * Code-Teil: Methode `_setNoWriteTargetDiag`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _setNoWriteTargetDiag
+     * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    async _setNoWriteTargetDiag(targetW, reason, source, status) {
+        const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
+        try {
+            const e = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.targetPowerW') : null;
+            await this._setIfChanged('speicher.regelung.targetObjId', e && e.objectId ? String(e.objectId) : '');
+        } catch {
+            await this._setIfChanged('speicher.regelung.targetObjId', '');
+        }
+        await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+        await this._setIfChanged('speicher.regelung.sollW', w);
+        await this._setIfChanged('speicher.regelung.quelle', String(source || ''));
+        await this._setIfChanged('speicher.regelung.grund', String(reason || ''));
+        await this._setIfChanged('speicher.regelung.schreibOk', false);
+        await this._setIfChanged('speicher.regelung.schreibStatus', String(status || 'no-write'));
+        this._lastTargetW = 0;
+        this._lastReason = String(reason || '');
+        this._lastSource = String(source || '');
+    }
+
+    /**
+     * Code-Teil: Methode `_getFeneconGridSetpointW`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    _getFeneconGridSetpointW(_cfg = {}) {
+        // Legacy ab 0.6.255: SetGridActivePower wird nicht mehr verwendet, weil dieser DP
+        // bei real getesteten FENECON-Hybrid-Anlagen nicht beschreibbar sein kann.
+        return 0;
+    }
+    /**
+     * Code-Teil: _releaseDirectStorageTargetForFenecon
+     * Zweck: Verarbeitet Speicherwerte; signed DP, Split-DPs und Fallbacks müssen konsistent bleiben.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    async _releaseDirectStorageTargetForFenecon(reason = '') {
+        // Legacy ab 0.6.255: keine aktive Freigabe per 0-W-Schreiben.
+        // FEMS fällt nach seinem Watchdog selbst in den Normalmodus zurück, solange NexoWatt nicht schreibt.
+        await this._setIfChanged('speicher.regelung.feneconGridReleaseStatus', reason ? ('no-write: ' + String(reason)) : 'no-write');
+        return null;
+    }
+
+    /**
+     * Code-Teil: Methode `_applyFeneconGridSetpointW`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    async _applyFeneconGridSetpointW(_targetW, reason, source, _opts = {}) {
+        // Legacy ab 0.6.255: niemals auf SetGridActivePower schreiben.
+        await this._setIfChanged('speicher.regelung.feneconGridAktiv', false);
+        await this._setIfChanged('speicher.regelung.feneconGridSollW', 0);
+        await this._setIfChanged('speicher.regelung.feneconGridQuelle', String(source || 'deprecated'));
+        await this._setIfChanged('speicher.regelung.feneconGridGrund', reason ? ('deprecated/no-write: ' + String(reason)) : 'deprecated/no-write');
+        await this._setIfChanged('speicher.regelung.feneconGridSchreibOk', false);
+        await this._setIfChanged('speicher.regelung.feneconGridSchreibStatus', 'deprecated-no-write');
+        await this._setIfChanged('speicher.regelung.feneconGridTargetObjId', '');
+        await this._setIfChanged('speicher.regelung.feneconGridLastWriteRaw', null);
+        return { ok: false, wrote: false, status: 'deprecated-no-write', objectId: '', valueW: 0 };
+    }
+
+    /**
+     * Code-Teil: Methode `_readTarifVis`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _readTarifVis
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    _readTarifVis(staleMs) {
+        const aktiv = this.dp ? this.dp.getBoolean('vis.settings.dynamicTariff', false) : false;
+        const aktivVal = !!aktiv;
+        const aktivAge = this.dp ? this.dp.getAgeMs('vis.settings.dynamicTariff') : null;
+        const aktivFresh = (aktivAge === null || aktivAge === undefined) ? true : (aktivAge <= staleMs);
+
+        const modus = this.dp ? this.dp.getNumberFresh('vis.settings.tariffMode', staleMs, null) : null;
+        const storageW = this.dp ? this.dp.getNumberFresh('vis.settings.storagePower', staleMs, null) : null;
+
+        return {
+            aktiv: aktivFresh && aktivVal,
+            modus: (typeof modus === 'number') ? Math.round(modus) : null,
+            storageW: (typeof storageW === 'number') ? storageW : null,
+        };
+    }
+
+    /**
+     * Code-Teil: Methode `_applyTargetW`
+     * Zweck: überträgt neue Werte in UI/States oder synchronisiert interne Datenstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _applyTargetW
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    async _applyTargetW(targetW, reason, source) {
+        const w = Number.isFinite(Number(targetW)) ? Math.round(Number(targetW)) : 0;
+
+        // Diagnose: Ziel-Datenpunkt (Sollleistung)
+        try {
+            const e = (this.dp && this.dp.getEntry) ? this.dp.getEntry('st.targetPowerW') : null;
+            await this._setIfChanged('speicher.regelung.targetObjId', e && e.objectId ? String(e.objectId) : '');
+        } catch {
+            await this._setIfChanged('speicher.regelung.targetObjId', '');
+        }
+
+        // schreiben (Sollleistung)
+        // Wenn die Speicherfarm aktiv ist, ist die Farm-Verteilung der führende Pfad.
+        // Ein Rückfall auf den klassischen Einzel-Speicher-Sollwert ist im Farmbetrieb bewusst gesperrt,
+        // außer der Betreiber gibt ihn explizit frei. Dadurch vermeiden wir, dass ein Farm-Gesamtsollwert
+        // versehentlich auf ein einzelnes System geschrieben wird.
+        let writeResult = null;
+        let farmApplied = false;
+        let farmReason = '';
+        const farmEnabledForWrite = !!(this.adapter && this.adapter.config && this.adapter.config.enableStorageFarm);
+        const farmCfgForWrite = (this.adapter && this.adapter.config && this.adapter.config.storageFarm) ? this.adapter.config.storageFarm : {};
+        const allowSingleTargetFallback = farmEnabledForWrite && (farmCfgForWrite.allowSingleTargetFallback === true || farmCfgForWrite.allowSingleTargetFallback === 'true');
+
+        try {
+            if (farmEnabledForWrite && this.adapter && typeof this.adapter.applyStorageFarmTargetW === 'function') {
+                const res = await this.adapter.applyStorageFarmTargetW(w, { source, reason });
+                farmApplied = !!(res && res.applied);
+                farmReason = res && res.reason ? String(res.reason) : '';
+                if (farmApplied) writeResult = true;
+            }
+        } catch (eFarm) {
+            farmApplied = false;
+            farmReason = eFarm && eFarm.message ? String(eFarm.message) : 'exception';
+        }
+
+        const mayUseSingleTarget = !farmEnabledForWrite || allowSingleTargetFallback;
+
+        if (!farmApplied) {
+            if (!mayUseSingleTarget) {
+                writeResult = false;
+                await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+            } else if (this.dp && this.dp.getEntry('st.targetPowerW')) {
+                // Rohwert berechnen (Skalierung/Offset/Invert), damit der Installateur den Weg bis zum Endgerät nachvollziehen kann.
+                try {
+                    const e = this.dp.getEntry('st.targetPowerW');
+                    const scale = (e && Number.isFinite(Number(e.scale)) && Number(e.scale) !== 0) ? Number(e.scale) : 1;
+                    const offset = (e && Number.isFinite(Number(e.offset))) ? Number(e.offset) : 0;
+                    let raw = (w - offset) / scale;
+                    if (e && e.invert) raw = -raw;
+                    if (e && Number.isFinite(Number(e.min))) raw = Math.max(Number(e.min), raw);
+                    if (e && Number.isFinite(Number(e.max))) raw = Math.min(Number(e.max), raw);
+                    await this._setIfChanged('speicher.regelung.lastWriteRaw', Math.round(raw));
+                } catch {
+                    await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+                }
+
+                try {
+                    writeResult = await this.dp.writeNumber('st.targetPowerW', w, false);
+                } catch (e) {
+                    writeResult = false;
+                }
+            } else {
+                await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+            }
+        } else {
+            // Bei Speicherfarm werden Setpoints pro Speicher geschrieben.
+            await this._setIfChanged('speicher.regelung.lastWriteRaw', null);
+        }
+
+        // Diagnose-Zustände schreiben
+        await this._setIfChanged('speicher.regelung.sollW', w);
+        await this._setIfChanged('speicher.regelung.quelle', String(source || ''));
+        await this._setIfChanged('speicher.regelung.grund', String(reason || ''));
+        await this._setIfChanged('speicher.regelung.schreibOk', writeResult === true);
+        const writeStatus = farmApplied
+            ? 'farm'
+            : (farmEnabledForWrite && !allowSingleTargetFallback
+                ? ('farm-nicht-moeglich' + (farmReason ? ':' + farmReason : ''))
+                : ((writeResult === null) ? 'unverändert' : (writeResult === true ? 'geschrieben' : 'nicht möglich')));
+        await this._setIfChanged('speicher.regelung.schreibStatus', writeStatus);
+
+        this._lastTargetW = w;
+        this._lastReason = String(reason || '');
+        this._lastSource = String(source || '');
+    }
+
+    /**
+     * Code-Teil: Methode `_upsertInputsFromConfig`
+     * Zweck: enthält eine fachliche Teilfunktion dieser Datei und sollte beim TypeScript-Umbau gezielt typisiert werden.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _upsertInputsFromConfig
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    async _upsertInputsFromConfig() {
+        if (!this.dp || typeof this.dp.upsert !== 'function') return;
+
+        // Peak-Shaving-Konfig (Messungen) als Fallback registrieren
+        const cfg = (this.adapter.config && this.adapter.config.peakShaving) ? this.adapter.config.peakShaving : {};
+        const gridId = String(cfg.gridPointPowerId || '').trim();
+        const pvId = String(cfg.pvPowerId || '').trim();
+        const baseId = String(cfg.baseLoadPowerId || '').trim();
+        const battId = String(cfg.batteryPowerId || '').trim();
+
+        if (gridId) await this.dp.upsert({ key: 'ps.gridPowerW', objectId: gridId, dataType: 'number', direction: 'in', unit: 'W', useAliveForStale: true });
+        if (pvId) await this.dp.upsert({ key: 'ps.pvW', objectId: pvId });
+        if (baseId) await this.dp.upsert({ key: 'ps.baseLoadW', objectId: baseId });
+        if (battId) await this.dp.upsert({ key: 'ps.batteryW', objectId: battId });
+    }
+
+    /**
+     * Code-Teil: Methode `_ensureStates`
+     * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _ensureStates
+     * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    async _ensureStates() {
+        await this.adapter.setObjectNotExistsAsync('speicher', {
+            type: 'channel',
+            common: { name: 'Speicher' },
+            native: {},
+        });
+        await this.adapter.setObjectNotExistsAsync('speicher.regelung', {
+            type: 'channel',
+            common: { name: 'Speicher-Regelung' },
+            native: {},
+        });
+
+        /**
+         * Code-Teil: Arrow-Funktion `mk`
+         * Zweck: stellt Objekte/States/Strukturen sicher, ohne bestehende Konfiguration unnötig zu überschreiben.
+         * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+         * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+         */
+        const mk = async (id, name, type, role, def = null) => {
+            await this.adapter.setObjectNotExistsAsync(id, {
+                type: 'state',
+                common: { name, type, role, read: true, write: false, def },
+                native: {},
+            });
+            if (def !== null && def !== undefined) {
+                try { await this.adapter.setStateAsync(id, def, true); } catch { /* ignore */ }
+            }
+        };
+
+        await mk('speicher.regelung.aktiv', 'Speicher-Regelung aktiv (effektiv)', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.aktivKonfig', 'Speicher-Regelung aktiv (Konfiguration)', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.aktivAutoTarif', 'Auto-Aktivierung durch Tarif', 'boolean', 'indicator', false);
+
+        // Phase 2: Dispatcher-Diagnose
+        await mk('speicher.regelung.dispatcherVersion', 'Dispatcher-Version', 'string', 'text', '2.0');
+        await mk('speicher.regelung.requestW', 'Requestleistung Speicher (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.requestQuelle', 'Request Quelle', 'string', 'text', '');
+        await mk('speicher.regelung.requestGrund', 'Request Grund', 'string', 'text', '');
+        await mk('speicher.regelung.dispatcherJson', 'Dispatcher Details (JSON)', 'string', 'text', '');
+
+        await mk('speicher.regelung.sollW', 'Sollleistung Speicher (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.quelle', 'Quelle', 'string', 'text', '');
+        await mk('speicher.regelung.grund', 'Grund', 'string', 'text', '');
+        await mk('speicher.regelung.schreibStatus', 'Schreibstatus', 'string', 'text', '');
+        await mk('speicher.regelung.schreibOk', 'Schreiben OK', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.targetObjId', 'Sollleistung Ziel-Datenpunkt (Objekt-ID)', 'string', 'text', '');
+        await mk('speicher.regelung.lastWriteRaw', 'Letzter Rohwert (Setpoint)', 'number', 'value');
+
+        await mk('speicher.regelung.feneconGridAktiv', 'FENECON Legacy Netzpunktführung aktiv (nicht genutzt)', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.feneconGridSollW', 'FENECON Legacy SetGridActivePower Sollwert (nicht genutzt)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.feneconGridQuelle', 'FENECON Legacy Netzpunktführung Quelle', 'string', 'text', '');
+        await mk('speicher.regelung.feneconGridGrund', 'FENECON Legacy Netzpunktführung Grund', 'string', 'text', '');
+        await mk('speicher.regelung.feneconGridSchreibOk', 'FENECON Legacy SetGridActivePower Schreiben OK', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.feneconGridSchreibStatus', 'FENECON Legacy SetGridActivePower Schreibstatus', 'string', 'text', '');
+        await mk('speicher.regelung.feneconGridTargetObjId', 'FENECON Legacy SetGridActivePower Datenpunkt (nicht genutzt)', 'string', 'text', '');
+        await mk('speicher.regelung.feneconGridLastWriteRaw', 'FENECON Legacy letzter Rohwert (nicht genutzt)', 'number', 'value');
+        await mk('speicher.regelung.feneconGridReleaseStatus', 'FENECON Legacy Freigabestatus', 'string', 'text', '');
+        await mk('speicher.regelung.feneconHybridAktiv', 'FENECON Hybrid Sondermodus aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.feneconHybridModus', 'FENECON Hybrid Modus', 'string', 'text', '');
+        await mk('speicher.regelung.feneconHybridGrund', 'FENECON Hybrid Grund', 'string', 'text', '');
+        await mk('speicher.regelung.feneconHybridSchreibmodus', 'FENECON Hybrid Schreibmodus', 'string', 'text', '');
+        await mk('speicher.regelung.feneconHybridPvW', 'FENECON Hybrid erkannte PV-Leistung', 'number', 'value.power', null);
+        await mk('speicher.regelung.feneconHybridZusatzPvW', 'FENECON Hybrid erkannte Zusatz-PV-Leistung', 'number', 'value.power', 0);
+        await mk('speicher.regelung.feneconHybridSchwelleW', 'FENECON Hybrid PV-Schwellwert', 'number', 'value.power', 1000);
+        await mk('speicher.regelung.feneconHybridZusatzSchwelleW', 'FENECON Hybrid Zusatz-PV-Schwellwert', 'number', 'value.power', 100);
+        await mk('speicher.regelung.feneconHybridSollW', 'FENECON Hybrid angewendeter Sollwert', 'number', 'value.power', 0);
+        await mk('speicher.regelung.feneconHybridNvpW', 'FENECON Hybrid Netzpunktleistung', 'number', 'value.power', null);
+
+        await mk('speicher.regelung.netzLeistungW', 'Netzleistung (W)', 'number', 'value.power');
+        await mk('speicher.regelung.netzAlterMs', 'Netzleistung Alter (ms)', 'number', 'value.interval');
+        await mk('speicher.regelung.netzLadenErlaubt', 'Netzladen erlaubt', 'boolean', 'indicator', true);
+        await mk('speicher.regelung.entladenErlaubt', 'Entladen erlaubt', 'boolean', 'indicator', true);
+        await mk('speicher.regelung.tarifState', 'Tarif Zustand', 'string', 'text', '');
+        await mk('speicher.regelung.tarifPvBlock', 'Tarif-Netzladen durch PV-Forecast gesperrt', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.tarifPvBlockGrund', 'PV-Forecast Sperrgrund', 'string', 'text', '');
+        await mk('speicher.regelung.tarifPvCapSocPct', 'Tarif PV‑Reserve: Netzlade-SoC-Cap (%)', 'number', 'value', null);
+        await mk('speicher.regelung.tarifPvHeadroomSocPct', 'Tarif PV‑Reserve: Headroom (%)', 'number', 'value', null);
+        await mk('speicher.regelung.tarifPvHeadroomKWh', 'Tarif PV‑Reserve: erwartbare PV-Ladung (kWh)', 'number', 'value.energy', null);
+
+        await mk('speicher.regelung.policyJson', 'Policy/Audit (JSON)', 'string', 'text', '');
+
+        await mk('speicher.regelung.importLimitW', 'Netzbezug-Limit effektiv (W)', 'number', 'value.power');
+        await mk('speicher.regelung.importLimitQuelle', 'Netzbezug-Limit Quelle', 'string', 'text');
+        await mk('speicher.regelung.importHeadroomW', 'Netzbezug Headroom (W)', 'number', 'value.power');
+        await mk('speicher.regelung.importHeadroomRawW', 'Netzbezug Headroom RAW (W)', 'number', 'value.power');
+
+        await mk('speicher.regelung.lskHeadroomW', 'LSK Headroom (W)', 'number', 'value.power');
+        await mk('speicher.regelung.lskHeadroomFilteredW', 'LSK Headroom gefiltert (W)', 'number', 'value.power');
+        await mk('speicher.regelung.socPct', 'SoC (%)', 'number', 'value.battery');
+        await mk('speicher.regelung.socAlterMs', 'SoC Alter (ms)', 'number', 'value.interval');
+
+        await mk('speicher.regelung.reserveAktiv', 'Reserve aktiv', 'boolean', 'indicator', false);
+        await mk('speicher.regelung.reserveMinSocPct', 'Mindest-SoC (%)', 'number', 'value', 0);
+        await mk('speicher.regelung.reserveZielSocPct', 'Reserve Ziel-SoC (%)', 'number', 'value', 0);
+
+        await mk('speicher.regelung.lskMinSocPct', 'LSK Min-SoC (%)', 'number', 'value', 0);
+        await mk('speicher.regelung.lskMaxSocPct', 'LSK Max-SoC (%)', 'number', 'value', 0);
+        await mk('speicher.regelung.selfMinSocPct', 'Eigenverbrauch Min-SoC (%)', 'number', 'value', 0);
+        await mk('speicher.regelung.selfMaxSocPct', 'Eigenverbrauch Max-SoC (%)', 'number', 'value', 0);
+        await mk('speicher.regelung.selfTargetGridImportW', 'Eigenverbrauch Ziel-Netzbezug (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.selfImportThresholdW', 'Eigenverbrauch Deadband (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.selfEntladenAktiviert', 'Eigenverbrauch-Entladen aktiviert', 'boolean', 'indicator', false);
+
+        await mk('speicher.regelung.maxChargeW', 'Max Ladeleistung (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.maxDischargeW', 'Max Entladeleistung (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.stepW', 'Schrittweite (W)', 'number', 'value', 0);
+        await mk('speicher.regelung.maxDeltaWPerTick', 'Max Änderung je Takt (W)', 'number', 'value.power', 0);
+        await mk('speicher.regelung.pvSchwelleW', 'PV-Überschuss-Schwelle (W)', 'number', 'value.power', 0);
+    }
+
+    /**
+     * Code-Teil: Methode `_setIfChanged`
+     * Zweck: schreibt Werte in ioBroker-States, DOM-Felder oder lokale Laufzeitstrukturen.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _setIfChanged
+     * Zweck: Schreibt interne States oder veröffentlichte Runtime-Werte.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    async _setIfChanged(id, val) {
+        const v = (val === undefined) ? null : val;
+        try {
+            const cur = await this.adapter.getStateAsync(id);
+            const curVal = cur ? cur.val : null;
+            if (cur && curVal === v) return;
+            await this.adapter.setStateAsync(id, v, true);
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    /**
+     * Code-Teil: Methode `_readOwnNumber`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _readOwnNumber
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    async _readOwnNumber(id) {
+        try {
+            const s = await this.adapter.getStateAsync(id);
+            const n = Number(s ? s.val : NaN);
+            return Number.isFinite(n) ? n : null;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Code-Teil: Methode `_readOwnString`
+     * Zweck: liest/ermittelt Werte und kapselt Fallback- oder Mapping-Logik.
+     * Zusammenhang: Hängt fachlich an Adapter-StateCache, Mapping/Datapoints und den EMS-Modulen; Änderungen können LIVE, History und Regelungslogik beeinflussen.
+     * TypeScript-Hinweis: Beim TypeScript-Umbau Parameter, Rückgabewert und verwendete State-/Config-Struktur explizit typisieren.
+     */
+    /**
+     * Code-Teil: _readOwnString
+     * Zweck: Liest interne Werte mit Fallbacks aus Cache/State/Config.
+     * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+     * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+     */
+    async _readOwnString(id) {
+        try {
+            const s = await this.adapter.getStateAsync(id);
+            if (!s) return '';
+            const v = s.val;
+            if (v === null || v === undefined) return '';
+            return String(v);
+        } catch {
+            return '';
+        }
+    }
+}
+/**
+ * Code-Teil: num
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
+function num(v, dflt = 0) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : dflt;
+}
+/**
+ * Code-Teil: clamp
+ * Zweck: Kapselt einen lokalen Verarbeitungsschritt, damit Aufrufer nicht direkt in Detaildaten eingreifen.
+ * Zusammenhang: Teil von Adapter-/Frontend-Code; Aufrufstellen und abhängige States/APIs beim Ändern mitprüfen.
+ * TypeScript: Parameter, Rückgabewert und verwendete Config-/State-Objekte später explizit typisieren.
+ */
+function clamp(n, min, max) {
+    if (!Number.isFinite(n)) return n;
+    if (Number.isFinite(min)) n = Math.max(min, n);
+    if (Number.isFinite(max)) n = Math.min(max, n);
+    return n;
+}
+
+module.exports = { SpeicherRegelungModule };
